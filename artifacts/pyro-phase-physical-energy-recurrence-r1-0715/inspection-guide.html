@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Physical Visible-Energy Recurrence Falsifier</title>
+  <style>
+    :root { color-scheme: dark; background: #101214; color: #eef1f3; font-family: ui-sans-serif, system-ui, sans-serif; }
+    body { margin: 0 auto; max-width: 1400px; padding: 24px; line-height: 1.45; }
+    h1, h2 { letter-spacing: 0; }
+    h2 { margin-top: 40px; border-top: 1px solid #3d454b; padding-top: 24px; }
+    p, li { max-width: 1000px; }
+    .verdict { border-left: 4px solid #ffb547; padding: 8px 16px; background: #1b1f22; }
+    .roles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 18px 0; }
+    .roles div { background: #20262a; border: 1px solid #49545c; padding: 10px; }
+    video, img { display: block; width: 100%; height: auto; background: #000; }
+    figure { margin: 20px 0 36px; }
+    figcaption { background: #1b1f22; border: 1px solid #3d454b; border-top: 0; padding: 12px 14px; }
+    code { color: #ffd28a; }
+    table { border-collapse: collapse; width: min(100%, 900px); }
+    th, td { border: 1px solid #49545c; padding: 8px 10px; text-align: left; }
+    @media (max-width: 760px) { .roles { grid-template-columns: 1fr 1fr; } body { padding: 12px; } }
+  </style>
+</head>
+<body>
+  <h1>Physical Visible-Energy Recurrence Falsifier</h1>
+  <p class="verdict"><strong>Verdict:</strong> the corrected loss does not remove the recurrent white-sheet collapse. It preserves identical support, raises cohort energy slightly, and makes the same late failure marginally brighter.</p>
+
+  <h2>How To Read Every Panel</h2>
+  <div class="roles">
+    <div><strong>REFERENCE</strong><br>Exact heldout live-simulator target at the displayed time.</div>
+    <div><strong>FROZEN</strong><br>Raw frame-zero present state, pixel-identical for all 63 frames.</div>
+    <div><strong>LEGACY</strong><br>The named model with unconstrained <code>one-step-ratio</code> support. Here legacy means support-budget mode, not the defective checkpoint.</div>
+    <div><strong>ENVELOPE</strong><br>The same model with the frozen training-episode support ceiling.</div>
+  </div>
+  <p>The videos and contacts run for 63 non-looping prediction steps at 160 ms per step. Contact rows run top to bottom: step 1 at 0.16 s, step 16 at 2.56 s, step 32 at 5.12 s, step 48 at 7.68 s, and step 63 at 10.08 s.</p>
+
+  <h2>Corrected Model: Moving Beauty</h2>
+  <figure>
+    <video controls preload="metadata" src="recurrent-envelope-comparison.mp4"></video>
+    <figcaption>Correct physical objective, checkpoint SHA <code>48c7bb6a...</code>. Judge whether either prediction follows reference motion, whether the frozen panel stays static, and when the bright diagonal begins to dominate. The envelope suppresses support growth but does not stop state convergence.</figcaption>
+  </figure>
+
+  <h2>Defective Predecessor: Moving Beauty</h2>
+  <figure>
+    <video controls preload="metadata" src="defective-recurrent-envelope-comparison.mp4"></video>
+    <figcaption>Matched predecessor checkpoint trained with the historically misindexed energy channels. Camera, corpus, cadence, occupancy model, support modes, and role order match the corrected video. This is the direct old-model comparator.</figcaption>
+  </figure>
+
+  <h2>Corrected Five-Time Beauty Contact</h2>
+  <figure>
+    <img src="images/corrected-five-time-contact.png" alt="Corrected model four-role beauty contact at steps 1, 16, 32, 48, and 63">
+    <figcaption>Rows are steps 1 / 16 / 32 / 48 / 63 from top to bottom. The late corrected legacy and envelope panels retain the same orange rim but develop a saturated diagonal/central mass. Late envelope white area is <code>8.3837%</code>.</figcaption>
+  </figure>
+
+  <h2>Defective Five-Time Beauty Contact</h2>
+  <figure>
+    <img src="images/defective-five-time-contact.png" alt="Defective model four-role beauty contact at steps 1, 16, 32, 48, and 63">
+    <figcaption>The exact same row and column semantics for the defective checkpoint. Its late envelope white area is <code>8.0043%</code>. The visible failure class is unchanged; the corrected run is slightly brighter, not more coherent.</figcaption>
+  </figure>
+
+  <h2>Corrected Moving Debug Surface</h2>
+  <figure>
+    <video controls preload="metadata" src="recurrent-envelope-debug-comparison.mp4"></video>
+    <figcaption>Same corrected states and cadence with additive display-only cohort debug gain <code>0.625</code>. The debug color does not alter opacity, selection, or recurrence. Use it to inspect stable, transported, born, and unmatched/death structure.</figcaption>
+  </figure>
+
+  <h2>Defective Moving Debug Surface</h2>
+  <figure>
+    <video controls preload="metadata" src="defective-recurrent-envelope-debug-comparison.mp4"></video>
+    <figcaption>Matched old-model debug sequence. It shows the same support topology because support selections are identical before and after the physical-loss correction.</figcaption>
+  </figure>
+
+  <h2>Debug Contacts</h2>
+  <figure>
+    <img src="images/corrected-five-time-debug-contact.png" alt="Corrected model debug contact at five named times">
+    <figcaption>Corrected model, rows 1 / 16 / 32 / 48 / 63. The brighter state attractor accumulates inside unchanged support topology.</figcaption>
+  </figure>
+  <figure>
+    <img src="images/defective-five-time-debug-contact.png" alt="Defective model debug contact at five named times">
+    <figcaption>Defective predecessor with the same row/time and role layout. Differences are payload-scale details rather than support or topology recovery.</figcaption>
+  </figure>
+
+  <h2>Measured Difference</h2>
+  <table>
+    <thead><tr><th>Role</th><th>Defective late white</th><th>Corrected late white</th><th>Direction</th></tr></thead>
+    <tbody>
+      <tr><td>Legacy support mode</td><td>13.3061%</td><td>13.7234%</td><td>Worse</td></tr>
+      <tr><td>Envelope support mode</td><td>8.0043%</td><td>8.3837%</td><td>Worse</td></tr>
+    </tbody>
+  </table>
+  <p>Terminal support and IoU are byte-for-byte behaviorally identical between models. The corrected envelope's late RGB MSE to reference rises from <code>3234.86</code> to <code>3268.30</code>. Full receipts are under <code>receipts/</code>.</p>
+
+  <h2>Claim Boundary</h2>
+  <p>This one-basin result falsifies physical visible-energy channel correction as a mitigation for this matched long-horizon recurrence. It does not reject the corrected objective for one-step learning, other rollout curricula, larger models, or other basins. No live renderer or runtime composition was changed.</p>
+</body>
+</html>

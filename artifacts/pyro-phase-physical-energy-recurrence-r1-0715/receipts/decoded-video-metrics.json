@@ -1,0 +1,100 @@
+{
+  "defective": {
+    "reference": {
+      "uniqueFrameCount": 63,
+      "whiteFractionAll": 0.027262111441798943,
+      "whiteFractionLate49to63": 0.026998263888888888,
+      "mseToReferenceAll": 0.0,
+      "mseToReferenceLate49to63": 0.0,
+      "psnrToReferenceAll": 168.13080360867912,
+      "psnrToReferenceLate49to63": 168.13080360867912
+    },
+    "frozen": {
+      "uniqueFrameCount": 63,
+      "whiteFractionAll": 0.02296875,
+      "whiteFractionLate49to63": 0.02296875,
+      "mseToReferenceAll": 1637.3045654296875,
+      "mseToReferenceLate49to63": 1836.83154296875,
+      "psnrToReferenceAll": 15.989508880641326,
+      "psnrToReferenceLate49to63": 15.490110321689507
+    },
+    "legacy": {
+      "uniqueFrameCount": 63,
+      "whiteFractionAll": 0.08739748677248678,
+      "whiteFractionLate49to63": 0.1296267361111111,
+      "mseToReferenceAll": 3224.12890625,
+      "mseToReferenceLate49to63": 4658.435546875,
+      "psnrToReferenceAll": 13.046679635432044,
+      "psnrToReferenceLate49to63": 11.448402698076201
+    },
+    "envelope": {
+      "uniqueFrameCount": 63,
+      "whiteFractionAll": 0.06552269345238096,
+      "whiteFractionLate49to63": 0.07704513888888889,
+      "mseToReferenceAll": 2686.0224609375,
+      "mseToReferenceLate49to63": 3234.8564453125,
+      "psnrToReferenceAll": 13.839707208820382,
+      "psnrToReferenceLate49to63": 13.032253483182046
+    }
+  },
+  "corrected": {
+    "reference": {
+      "uniqueFrameCount": 63,
+      "whiteFractionAll": 0.027236483134920636,
+      "whiteFractionLate49to63": 0.026885416666666665,
+      "mseToReferenceAll": 0.0,
+      "mseToReferenceLate49to63": 0.0,
+      "psnrToReferenceAll": 168.13080360867912,
+      "psnrToReferenceLate49to63": 168.13080360867912
+    },
+    "frozen": {
+      "uniqueFrameCount": 63,
+      "whiteFractionAll": 0.022955729166666668,
+      "whiteFractionLate49to63": 0.022955729166666668,
+      "mseToReferenceAll": 1637.509033203125,
+      "mseToReferenceLate49to63": 1837.070068359375,
+      "psnrToReferenceAll": 15.988966564425933,
+      "psnrToReferenceLate49to63": 15.48954639661994
+    },
+    "legacy": {
+      "uniqueFrameCount": 63,
+      "whiteFractionAll": 0.09080129794973545,
+      "whiteFractionLate49to63": 0.1338689236111111,
+      "mseToReferenceAll": 3255.903564453125,
+      "mseToReferenceLate49to63": 4702.58935546875,
+      "psnrToReferenceAll": 13.004088276870174,
+      "psnrToReferenceLate49to63": 11.407433043927952
+    },
+    "envelope": {
+      "uniqueFrameCount": 63,
+      "whiteFractionAll": 0.06883267195767195,
+      "whiteFractionLate49to63": 0.08103298611111111,
+      "mseToReferenceAll": 2716.07470703125,
+      "mseToReferenceLate49to63": 3268.302001953125,
+      "psnrToReferenceAll": 13.791386496021484,
+      "psnrToReferenceLate49to63": 12.987581809016964
+    }
+  },
+  "correctedVsDefective": {
+    "reference": {
+      "mseAll": 5.6881537437438965,
+      "mseLate49to63": 5.8680291175842285,
+      "maxAbsPixelDelta": 34.0
+    },
+    "frozen": {
+      "mseAll": 0.47631964087486267,
+      "mseLate49to63": 0.4912274181842804,
+      "maxAbsPixelDelta": 60.0
+    },
+    "legacy": {
+      "mseAll": 2.44868803024292,
+      "mseLate49to63": 2.625295400619507,
+      "maxAbsPixelDelta": 28.0
+    },
+    "envelope": {
+      "mseAll": 2.3529601097106934,
+      "mseLate49to63": 2.493199348449707,
+      "maxAbsPixelDelta": 22.0
+    }
+  }
+}

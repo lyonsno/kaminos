@@ -1,0 +1,4360 @@
+{
+  "schema": "kaminos-boundary-splat-motion-cohort-witness-v0",
+  "status": "completed",
+  "configuration": {
+    "authority": "legacy-vs-training-episode-envelope-physical-energy-v1",
+    "witnessMode": "raw-recurrent-envelope-comparison"
+  },
+  "source": {
+    "audit": {
+      "path": "/private/tmp/kaminos-phase-physical-energy-witness-r1-0715/legacy-source/motion-cohort-audit.json",
+      "sha256": "3a6763fa59fe7a1a2d817746d83491dc59315c0755516b66dcf1b93c91982061"
+    },
+    "envelopeAudit": {
+      "path": "/private/tmp/kaminos-phase-physical-energy-witness-r1-0715/envelope-source/motion-cohort-audit.json",
+      "sha256": "71a79bcc7fd19eb327121ee4d73f9b7021b08e8f28c2fc886f2daaca71723e2e"
+    },
+    "manifest": {
+      "path": "/private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json",
+      "bytes": 421170,
+      "sha256": "d38028655e038df55af0fb5f1c9cfc5c40f3464992ebd26b106c29b234f88c78"
+    },
+    "legacy": {
+      "predictions": {
+        "path": "/private/tmp/kaminos-phase-physical-energy-support-legacy-r1-0715/transport-predictions.json",
+        "bytes": 218809,
+        "sha256": "37be222bd4aa8052572b8b57373bcf1af4b36e84ab5036b9983dbe73a6bdf4ee"
+      },
+      "trainingReport": {
+        "path": "/private/tmp/kaminos-phase-physical-energy-support-legacy-r1-0715/training-report.json",
+        "bytes": 161277,
+        "sha256": "ca77d0898f0641ea3d7760173b62dcf798b38a308c32796ad840f4cfca7eed7d"
+      },
+      "greenroomReceipt": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/done/d533c0d6039a/receipt.json",
+        "bytes": 1722,
+        "sha256": "adab1de337f4f9a7bd56e70b5288768a34030244be62f8aae790e1e8cfc6fa66",
+        "jobId": "d533c0d6039a",
+        "status": "done",
+        "exitCode": 0,
+        "effectiveRoute": "/private/tmp/kaminos-pyro-phase-audit-venv-0714/bin/python -u boundary-splat-phase-transport-mlx.py --manifest /private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json --model /private/tmp/kaminos-phase-transport-eulerian-full-r1-0714/transport-model.json --state-model /private/tmp/kaminos-phase-destination-state-physical-energy-anchored-online-h12-w1-r1-0715/destination-state-model.json --state-recurrence-mode protected-splat --support-budget-mode one-step-ratio --out-dir /private/tmp/kaminos-phase-physical-energy-support-legacy-r1-0715 --inference-start 0 --inference-steps 63 --grid-size 160 --batch-size 4096",
+        "startedAt": 1784132478.698857,
+        "finishedAt": 1784132594.1500852
+      },
+      "backend": {
+        "backend": "mlx",
+        "device": "Device(gpu, 0)",
+        "effectiveRunner": "/private/tmp/kaminos-pyro-phase-audit-venv-0714/bin/python",
+        "fallbackReason": null
+      }
+    },
+    "envelope": {
+      "predictions": {
+        "path": "/private/tmp/kaminos-phase-physical-energy-support-envelope-r1-0715/transport-predictions.json",
+        "bytes": 224395,
+        "sha256": "94e3f9e680fd4d7c16634b8c25d86b4323bd7213c6f82f0b4c084bc1366112d5"
+      },
+      "trainingReport": {
+        "path": "/private/tmp/kaminos-phase-physical-energy-support-envelope-r1-0715/training-report.json",
+        "bytes": 166608,
+        "sha256": "74b8fa9df8ed1dacd1ef9eee51f136bce578fc156bc14ed34a9276e98020d715"
+      },
+      "greenroomReceipt": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/done/f1a19c5759b9/receipt.json",
+        "bytes": 1737,
+        "sha256": "b8ddc28a80ee741752cf7ba7214af959eb5f4f4337d70d2abbd1412f54eb7df5",
+        "jobId": "f1a19c5759b9",
+        "status": "done",
+        "exitCode": 0,
+        "effectiveRoute": "/private/tmp/kaminos-pyro-phase-audit-venv-0714/bin/python -u boundary-splat-phase-transport-mlx.py --manifest /private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json --model /private/tmp/kaminos-phase-transport-eulerian-full-r1-0714/transport-model.json --state-model /private/tmp/kaminos-phase-destination-state-physical-energy-anchored-online-h12-w1-r1-0715/destination-state-model.json --state-recurrence-mode protected-splat --support-budget-mode training-episode-envelope --out-dir /private/tmp/kaminos-phase-physical-energy-support-envelope-r1-0715 --inference-start 0 --inference-steps 63 --grid-size 160 --batch-size 4096",
+        "startedAt": 1784132594.166236,
+        "finishedAt": 1784132713.6514401
+      },
+      "backend": {
+        "backend": "mlx",
+        "device": "Device(gpu, 0)",
+        "effectiveRunner": "/private/tmp/kaminos-pyro-phase-audit-venv-0714/bin/python",
+        "fallbackReason": null
+      }
+    },
+    "sharedIdentity": {
+      "occupancyModelSha256": "e51c23d25eb38ec778c65774aae46c78bbcb02808d582539843417b10043c073",
+      "destinationStateModelSha256": "48c7bb6ad4ce0fedbac6e4cecb92d3f5cbc619a9bc718775f87b49867fb38e65",
+      "destinationStateTraining": {
+        "authority": "protected-splat-anchored-online-scheduled-exposure-training-v0",
+        "mode": "protected-anchored-online-rollout"
+      },
+      "destinationStateTrainingLoss": {
+        "authority": "candidate-splat-physical-visible-energy-weighted-loss-v1",
+        "candidateChannelCount": 16,
+        "splatChannelCount": 9,
+        "visibleEnergy": "max(opacity,0)*max(rec709-luminance,0)",
+        "visibleEnergyChannels": {
+          "color": [
+            17,
+            18,
+            19
+          ],
+          "opacity": 20
+        },
+        "weights": {
+          "candidate": 0.1,
+          "splat": 1,
+          "visibleEnergy": 0.25
+        },
+        "responseAnchor": {
+          "authority": "frozen-teacher-response-on-current-model-exposed-inputs-v0",
+          "scope": "predicted-splat-exposure-rows-only",
+          "weight": 1
+        },
+        "splatAttributeOrder": [
+          "splat.support",
+          "splat.color.r",
+          "splat.color.g",
+          "splat.color.b",
+          "splat.opacity",
+          "splat.shape.x",
+          "splat.shape.y",
+          "splat.ridge",
+          "splat.fireSignal"
+        ],
+        "visibleEnergyScale": 0.012048063369294182
+      },
+      "destinationStateCorpora": {
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1",
+        "evaluationManifestSha256": "d38028655e038df55af0fb5f1c9cfc5c40f3464992ebd26b106c29b234f88c78"
+      },
+      "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1",
+      "inferenceFrameZero": {
+        "count": 60259,
+        "referenceFrameId": "frame-0"
+      }
+    }
+  },
+  "playback": {
+    "authority": "finite-complete-heldout-recurrent-support-envelope-comparison-v0",
+    "frameCount": 63,
+    "controlledStepDeltaMs": 160,
+    "simulatorDurationSeconds": 10.08,
+    "requestedFps": 6.25,
+    "effectiveFps": 6.25,
+    "encodedDurationSeconds": 10.08,
+    "loops": false
+  },
+  "emphasis": {
+    "authority": "raw-product-view-no-cohort-attenuation-v0",
+    "staticCohorts": [],
+    "motionCohorts": [],
+    "staticAttenuation": 1,
+    "unmatchedAttenuation": 1,
+    "thresholdSelection": "none; every full splat retains original opacity"
+  },
+  "roles": {
+    "reference": "exact-heldout-full-splat-state-v0",
+    "control": "frozen-current-full-splat-state-v0",
+    "legacy": "one-step-ratio-learned-recurrent-full-splat-state-v0",
+    "envelope": "training-episode-envelope-learned-recurrent-full-splat-state-v0"
+  },
+  "roleEvidence": {
+    "reference": [
+      {
+        "step": 1,
+        "sha256": "314507a63a1c65cef91e083c068aa85be5c3a70e7c87abd886bae7c23e2a2c3b",
+        "inputSplatCount": 60014,
+        "projectedSplatCount": 50412,
+        "nonBackgroundPixelCount": 56172,
+        "maxLuminance": 1
+      },
+      {
+        "step": 2,
+        "sha256": "3c7c198678132ab0421bb5e07be5125f86d2f7350dba3eaf4f45f784ece213c3",
+        "inputSplatCount": 60597,
+        "projectedSplatCount": 51145,
+        "nonBackgroundPixelCount": 58329,
+        "maxLuminance": 1
+      },
+      {
+        "step": 3,
+        "sha256": "77e3ee7ad58257564434e03b349a040078b19adf3cd41ab599044e660f37cbe4",
+        "inputSplatCount": 60940,
+        "projectedSplatCount": 51417,
+        "nonBackgroundPixelCount": 58697,
+        "maxLuminance": 1
+      },
+      {
+        "step": 4,
+        "sha256": "e31f478727ccbc767296ce578d5b76e544b806d4e2d8bfe6aa5d5de0d878f03c",
+        "inputSplatCount": 61547,
+        "projectedSplatCount": 51864,
+        "nonBackgroundPixelCount": 59413,
+        "maxLuminance": 1
+      },
+      {
+        "step": 5,
+        "sha256": "849de421780d946cd9c1bb3c47f605574df23f95a313f2aea48bb68cef014aee",
+        "inputSplatCount": 62908,
+        "projectedSplatCount": 53418,
+        "nonBackgroundPixelCount": 60036,
+        "maxLuminance": 1
+      },
+      {
+        "step": 6,
+        "sha256": "5ca1905ab0696bcf2fc146c74f6f788d8a7a105116452cef34b89d7028401613",
+        "inputSplatCount": 63871,
+        "projectedSplatCount": 54446,
+        "nonBackgroundPixelCount": 61685,
+        "maxLuminance": 1
+      },
+      {
+        "step": 7,
+        "sha256": "0e2453c93f56fad8b54d7c2316f22d8e70b902cb8277bd8e7da61a97e9bd7cfa",
+        "inputSplatCount": 64940,
+        "projectedSplatCount": 55653,
+        "nonBackgroundPixelCount": 63048,
+        "maxLuminance": 1
+      },
+      {
+        "step": 8,
+        "sha256": "dae8bd36743d27b2c068c124c264cb54481d3ed977ee1a703e03cba6f7434826",
+        "inputSplatCount": 67084,
+        "projectedSplatCount": 57893,
+        "nonBackgroundPixelCount": 64014,
+        "maxLuminance": 1
+      },
+      {
+        "step": 9,
+        "sha256": "995d8bd49d0e3c35c2a1f9407ad1194eb9fbe97441534715f741ee2f06932f3a",
+        "inputSplatCount": 68577,
+        "projectedSplatCount": 59405,
+        "nonBackgroundPixelCount": 66146,
+        "maxLuminance": 1
+      },
+      {
+        "step": 10,
+        "sha256": "aba66e84ca19837c265761db13e609a884b5da5c5a74c63982ed906ce32981a3",
+        "inputSplatCount": 69816,
+        "projectedSplatCount": 60402,
+        "nonBackgroundPixelCount": 67468,
+        "maxLuminance": 1
+      },
+      {
+        "step": 11,
+        "sha256": "7cdc3f5d2b0c79bfe0fb9087aae0cfa581a79efc8b53edec9ef0ef07179f6385",
+        "inputSplatCount": 70393,
+        "projectedSplatCount": 60668,
+        "nonBackgroundPixelCount": 66865,
+        "maxLuminance": 1
+      },
+      {
+        "step": 12,
+        "sha256": "54ec1985c575d2f934f6326d65939ff2531508f5ec76ef6fb6985622a77ffde5",
+        "inputSplatCount": 70931,
+        "projectedSplatCount": 61031,
+        "nonBackgroundPixelCount": 67141,
+        "maxLuminance": 1
+      },
+      {
+        "step": 13,
+        "sha256": "6e235d81fbf4ff0923f62337d2098d9f2e2ea61d8a25eda7cf394227e79dc71a",
+        "inputSplatCount": 71041,
+        "projectedSplatCount": 60981,
+        "nonBackgroundPixelCount": 66538,
+        "maxLuminance": 1
+      },
+      {
+        "step": 14,
+        "sha256": "dd4e48de84b7b90020b69b89b6c9bf00a6172162a6f361ce517d1a64d6a98050",
+        "inputSplatCount": 70870,
+        "projectedSplatCount": 60588,
+        "nonBackgroundPixelCount": 66825,
+        "maxLuminance": 1
+      },
+      {
+        "step": 15,
+        "sha256": "7228dd704ce423cf001727f239ef5eede4e731ec90680ee7343e09ceebbc32c7",
+        "inputSplatCount": 70703,
+        "projectedSplatCount": 60184,
+        "nonBackgroundPixelCount": 66048,
+        "maxLuminance": 1
+      },
+      {
+        "step": 16,
+        "sha256": "9dcb9c589409fd17b39426927179d48e7d03368b6e94711add79d8ac2729ec71",
+        "inputSplatCount": 69965,
+        "projectedSplatCount": 59289,
+        "nonBackgroundPixelCount": 65223,
+        "maxLuminance": 1
+      },
+      {
+        "step": 17,
+        "sha256": "cb67b5207820aa3533129dfa99f9f8e8782151c09fbcc339dcd3ff7f752c4b86",
+        "inputSplatCount": 69823,
+        "projectedSplatCount": 58895,
+        "nonBackgroundPixelCount": 64777,
+        "maxLuminance": 1
+      },
+      {
+        "step": 18,
+        "sha256": "d0a9f38e768af3cb607b001e8d78123e623a80f76726aa45100646b6c16ad5da",
+        "inputSplatCount": 70012,
+        "projectedSplatCount": 59012,
+        "nonBackgroundPixelCount": 66545,
+        "maxLuminance": 1
+      },
+      {
+        "step": 19,
+        "sha256": "3aa8f7fd5489a2890a45ce305da17b4623f393db38974c72bae114ec50945bea",
+        "inputSplatCount": 69758,
+        "projectedSplatCount": 58943,
+        "nonBackgroundPixelCount": 67462,
+        "maxLuminance": 1
+      },
+      {
+        "step": 20,
+        "sha256": "1f35894a471d4fd79bad26f8991b2684e1f55c5895c85b4b14570950141fa935",
+        "inputSplatCount": 70461,
+        "projectedSplatCount": 59974,
+        "nonBackgroundPixelCount": 69693,
+        "maxLuminance": 1
+      },
+      {
+        "step": 21,
+        "sha256": "ffbca126f393b6992b9236521faa88fe46a82f8b0ce986bba48f3d697ebac2e1",
+        "inputSplatCount": 71726,
+        "projectedSplatCount": 61043,
+        "nonBackgroundPixelCount": 71752,
+        "maxLuminance": 1
+      },
+      {
+        "step": 22,
+        "sha256": "332bcec5ca385007369859469a7c2292e2e21d7f44727f2161efb0077ab5ce17",
+        "inputSplatCount": 71677,
+        "projectedSplatCount": 60813,
+        "nonBackgroundPixelCount": 72240,
+        "maxLuminance": 1
+      },
+      {
+        "step": 23,
+        "sha256": "63a6cd5ff25db08a30479d8c08c1bb3aa3a851e44856ee4517abbbdfb4d3a9a0",
+        "inputSplatCount": 71481,
+        "projectedSplatCount": 60858,
+        "nonBackgroundPixelCount": 71491,
+        "maxLuminance": 1
+      },
+      {
+        "step": 24,
+        "sha256": "673e9c3d97609c11ce822ce646db9fe99e620ccbd3074a3eb6bec816207b1b3a",
+        "inputSplatCount": 70978,
+        "projectedSplatCount": 60883,
+        "nonBackgroundPixelCount": 71147,
+        "maxLuminance": 1
+      },
+      {
+        "step": 25,
+        "sha256": "1ed382fab4267429f7a89b1d7c65d9c76241592be0d7b0be0d014bb27912c0b3",
+        "inputSplatCount": 70631,
+        "projectedSplatCount": 60717,
+        "nonBackgroundPixelCount": 70199,
+        "maxLuminance": 1
+      },
+      {
+        "step": 26,
+        "sha256": "1ac6f053d0b960302595172fbb9c3da9a5155c8eacc723979748e7f72bdc71e4",
+        "inputSplatCount": 70729,
+        "projectedSplatCount": 60939,
+        "nonBackgroundPixelCount": 69557,
+        "maxLuminance": 1
+      },
+      {
+        "step": 27,
+        "sha256": "93a0d4dc7fcd2f0e5aff99dbf07580ff36941f838ac6af550a576224907a24b5",
+        "inputSplatCount": 71812,
+        "projectedSplatCount": 62126,
+        "nonBackgroundPixelCount": 69923,
+        "maxLuminance": 1
+      },
+      {
+        "step": 28,
+        "sha256": "7231358db17b47e6d7a7e5a1715da39b388df76b36452ef45d1437cca38c00a9",
+        "inputSplatCount": 71798,
+        "projectedSplatCount": 62037,
+        "nonBackgroundPixelCount": 69581,
+        "maxLuminance": 1
+      },
+      {
+        "step": 29,
+        "sha256": "d887541e2aa59221a314c90febe1ca74ae237883613999460fcf8b837d44fddc",
+        "inputSplatCount": 71998,
+        "projectedSplatCount": 62478,
+        "nonBackgroundPixelCount": 67071,
+        "maxLuminance": 1
+      },
+      {
+        "step": 30,
+        "sha256": "2d605c0c4b4836b4615d3354fb26656c37ee49f8796dcfaeb9ac8be3e6354c34",
+        "inputSplatCount": 72486,
+        "projectedSplatCount": 63009,
+        "nonBackgroundPixelCount": 66102,
+        "maxLuminance": 1
+      },
+      {
+        "step": 31,
+        "sha256": "fea8cc4fd37e3bac9453f1cdd9c0177f09ac5832bb5423547d6c830830b5a01e",
+        "inputSplatCount": 73212,
+        "projectedSplatCount": 63785,
+        "nonBackgroundPixelCount": 65042,
+        "maxLuminance": 1
+      },
+      {
+        "step": 32,
+        "sha256": "b3ff95fc8a33e88b0509d533eeafff2b7992881d41411d62389ddf7a50416772",
+        "inputSplatCount": 73045,
+        "projectedSplatCount": 63880,
+        "nonBackgroundPixelCount": 66309,
+        "maxLuminance": 1
+      },
+      {
+        "step": 33,
+        "sha256": "09c07c4d0811ff493486d3c0219c789cf9877a8ecfb4a8aa7f67f2d5e780b2cd",
+        "inputSplatCount": 72620,
+        "projectedSplatCount": 63458,
+        "nonBackgroundPixelCount": 65709,
+        "maxLuminance": 1
+      },
+      {
+        "step": 34,
+        "sha256": "d4d22c8bc11c9e341b9f883d8aca1b6486ae6f4895dadd54085f8fb971a85754",
+        "inputSplatCount": 72494,
+        "projectedSplatCount": 63100,
+        "nonBackgroundPixelCount": 65644,
+        "maxLuminance": 1
+      },
+      {
+        "step": 35,
+        "sha256": "82a90d881d4e358f837129705da38b2d6d171ef087bfd5272a1b7e94bd9e039c",
+        "inputSplatCount": 72177,
+        "projectedSplatCount": 62654,
+        "nonBackgroundPixelCount": 64684,
+        "maxLuminance": 1
+      },
+      {
+        "step": 36,
+        "sha256": "7d7ae1e90866171ef7c09e5b9b3b79b9c5bddd67a162e214f64bb377ad36513f",
+        "inputSplatCount": 71690,
+        "projectedSplatCount": 61815,
+        "nonBackgroundPixelCount": 63893,
+        "maxLuminance": 1
+      },
+      {
+        "step": 37,
+        "sha256": "394abb6a03b86f3e5ae4db26c1738e6791a3ae2a62e8c181b24f6b7aad8a9805",
+        "inputSplatCount": 71100,
+        "projectedSplatCount": 60850,
+        "nonBackgroundPixelCount": 63132,
+        "maxLuminance": 1
+      },
+      {
+        "step": 38,
+        "sha256": "0328fba4a647401e483f39ca86141fef5f449af58ec186125ed80ff91a281406",
+        "inputSplatCount": 70188,
+        "projectedSplatCount": 59685,
+        "nonBackgroundPixelCount": 62962,
+        "maxLuminance": 1
+      },
+      {
+        "step": 39,
+        "sha256": "da89a8d7d48a3c48b5bb0e8d3be25fa3c4a1a5cc0646ecb7858c837e120fff77",
+        "inputSplatCount": 70454,
+        "projectedSplatCount": 59850,
+        "nonBackgroundPixelCount": 65643,
+        "maxLuminance": 1
+      },
+      {
+        "step": 40,
+        "sha256": "d50ca1b92fa276de067f10b9befad4f5aa8a12615b6b4ab2913bb59b79c3f3dc",
+        "inputSplatCount": 70663,
+        "projectedSplatCount": 60189,
+        "nonBackgroundPixelCount": 66714,
+        "maxLuminance": 1
+      },
+      {
+        "step": 41,
+        "sha256": "6e10e6035dffd30063cf71967ef5cf8993da1608da5fc2ae0c22d14cdf03e2a6",
+        "inputSplatCount": 70468,
+        "projectedSplatCount": 60219,
+        "nonBackgroundPixelCount": 67182,
+        "maxLuminance": 1
+      },
+      {
+        "step": 42,
+        "sha256": "6775037e952a233d613c0bcdeec1c9a39d6ec6bd66ed90580a82ca521bfa9b13",
+        "inputSplatCount": 70829,
+        "projectedSplatCount": 60643,
+        "nonBackgroundPixelCount": 66316,
+        "maxLuminance": 1
+      },
+      {
+        "step": 43,
+        "sha256": "b6ec8d6412f13d203535cefcfb0167340ea68957ba9a3d94a2f6f36548736ce8",
+        "inputSplatCount": 70268,
+        "projectedSplatCount": 60184,
+        "nonBackgroundPixelCount": 66659,
+        "maxLuminance": 1
+      },
+      {
+        "step": 44,
+        "sha256": "4eb7eedbb67c0718836c80f8f0d6bd91057b545685c63ab46e1befcc49276716",
+        "inputSplatCount": 70153,
+        "projectedSplatCount": 59922,
+        "nonBackgroundPixelCount": 67697,
+        "maxLuminance": 1
+      },
+      {
+        "step": 45,
+        "sha256": "d032c3ac7531cf6803e450bed17e180c8de86c37ab9bb5b55bdec741766bd338",
+        "inputSplatCount": 70214,
+        "projectedSplatCount": 59779,
+        "nonBackgroundPixelCount": 68507,
+        "maxLuminance": 1
+      },
+      {
+        "step": 46,
+        "sha256": "6d233b3147646c082636227bb2c75f1917dd789e8b10c675e5f9fa03820ede66",
+        "inputSplatCount": 70045,
+        "projectedSplatCount": 59501,
+        "nonBackgroundPixelCount": 68085,
+        "maxLuminance": 1
+      },
+      {
+        "step": 47,
+        "sha256": "2aff26ed50807e5ec141a5d2e0ab8262091e7245eb6f36f4662fd9dce003d5cf",
+        "inputSplatCount": 69595,
+        "projectedSplatCount": 59470,
+        "nonBackgroundPixelCount": 69215,
+        "maxLuminance": 1
+      },
+      {
+        "step": 48,
+        "sha256": "090cfb841d4b7a57540f308aebf98f7fe1bf017f20ce82788a2efc0649e2597a",
+        "inputSplatCount": 69010,
+        "projectedSplatCount": 58962,
+        "nonBackgroundPixelCount": 68237,
+        "maxLuminance": 1
+      },
+      {
+        "step": 49,
+        "sha256": "c69457a4e50ac756e61b05fa49688a295fb0bf0deac6b0f30c5d1615220c9bd5",
+        "inputSplatCount": 68992,
+        "projectedSplatCount": 58852,
+        "nonBackgroundPixelCount": 67477,
+        "maxLuminance": 1
+      },
+      {
+        "step": 50,
+        "sha256": "c7558256cd55c6ed4dac134f8ead96c2c6b30507cbbbfc9e4a86bbfefda30680",
+        "inputSplatCount": 69625,
+        "projectedSplatCount": 59522,
+        "nonBackgroundPixelCount": 67349,
+        "maxLuminance": 1
+      },
+      {
+        "step": 51,
+        "sha256": "4ddccc6e8321200efebd9b66db9df776eddd23da56b369e4800eeadae192ffc9",
+        "inputSplatCount": 69160,
+        "projectedSplatCount": 59016,
+        "nonBackgroundPixelCount": 66037,
+        "maxLuminance": 1
+      },
+      {
+        "step": 52,
+        "sha256": "1966d8067c55b0a1b251dbe8a4339e227fb66669ce6111f7720d8fd3ddad79c6",
+        "inputSplatCount": 68431,
+        "projectedSplatCount": 58245,
+        "nonBackgroundPixelCount": 65572,
+        "maxLuminance": 1
+      },
+      {
+        "step": 53,
+        "sha256": "1d31a1948fec65450a3d1f3212f2d8ab0ccea68c1b3763032fd4615a1e82fee9",
+        "inputSplatCount": 68340,
+        "projectedSplatCount": 58074,
+        "nonBackgroundPixelCount": 65219,
+        "maxLuminance": 1
+      },
+      {
+        "step": 54,
+        "sha256": "818c1c32571b8c96fc48377f53dedfce51cddb5b53847db84c783d0594c2bb4e",
+        "inputSplatCount": 68400,
+        "projectedSplatCount": 58105,
+        "nonBackgroundPixelCount": 63695,
+        "maxLuminance": 1
+      },
+      {
+        "step": 55,
+        "sha256": "bc8105f2875b2aad9a2263ce5c2359c69e1ef48ece9b112e050b219b4b82e556",
+        "inputSplatCount": 68553,
+        "projectedSplatCount": 58241,
+        "nonBackgroundPixelCount": 63051,
+        "maxLuminance": 1
+      },
+      {
+        "step": 56,
+        "sha256": "7cd7305f0122fbfd295cdd366a44f04b3980a0105d1fe34f56a28b8469b6f240",
+        "inputSplatCount": 68658,
+        "projectedSplatCount": 58639,
+        "nonBackgroundPixelCount": 62909,
+        "maxLuminance": 1
+      },
+      {
+        "step": 57,
+        "sha256": "b376157a71609d4798f7c713d5846b5ba35c3ee00d1b61db217a797d106e2ded",
+        "inputSplatCount": 69517,
+        "projectedSplatCount": 59455,
+        "nonBackgroundPixelCount": 63576,
+        "maxLuminance": 1
+      },
+      {
+        "step": 58,
+        "sha256": "9f644a7bf2d50ef6911ff5d1f5e7e34997b51434773aa8adc5ebea993f388493",
+        "inputSplatCount": 69955,
+        "projectedSplatCount": 59995,
+        "nonBackgroundPixelCount": 65366,
+        "maxLuminance": 1
+      },
+      {
+        "step": 59,
+        "sha256": "cfc9e8f0fd7fe7abd5083a8e57f38d58cb074ec4bf504783ac455887f37cf0f4",
+        "inputSplatCount": 69968,
+        "projectedSplatCount": 60202,
+        "nonBackgroundPixelCount": 66974,
+        "maxLuminance": 1
+      },
+      {
+        "step": 60,
+        "sha256": "f839f3d7c4703040b88d138532f37c98107ec277a7519aa969e8dfedfaf2a29a",
+        "inputSplatCount": 70464,
+        "projectedSplatCount": 60668,
+        "nonBackgroundPixelCount": 66786,
+        "maxLuminance": 1
+      },
+      {
+        "step": 61,
+        "sha256": "0c1d8482833323a793f67ec812dd7a3e7f5c8867d3c7010a622f3ebfdea918e0",
+        "inputSplatCount": 70074,
+        "projectedSplatCount": 60350,
+        "nonBackgroundPixelCount": 64796,
+        "maxLuminance": 1
+      },
+      {
+        "step": 62,
+        "sha256": "7e6250255f8d4a1d7d9452007484cfa4ca5bec2f131537d29ab985efd1f609f5",
+        "inputSplatCount": 70098,
+        "projectedSplatCount": 60345,
+        "nonBackgroundPixelCount": 64457,
+        "maxLuminance": 1
+      },
+      {
+        "step": 63,
+        "sha256": "7dc3de57ed509c3ac9a3b015882f2869d1fc703f9d2ad3700379ada4f287e664",
+        "inputSplatCount": 70612,
+        "projectedSplatCount": 60521,
+        "nonBackgroundPixelCount": 64498,
+        "maxLuminance": 1
+      }
+    ],
+    "control": [
+      {
+        "step": 1,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 2,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 3,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 4,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 5,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 6,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 7,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 8,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 9,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 10,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 11,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 12,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 13,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 14,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 15,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 16,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 17,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 18,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 19,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 20,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 21,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 22,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 23,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 24,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 25,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 26,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 27,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 28,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 29,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 30,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 31,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 32,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 33,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 34,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 35,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 36,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 37,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 38,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 39,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 40,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 41,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 42,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 43,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 44,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 45,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 46,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 47,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 48,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 49,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 50,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 51,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 52,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 53,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 54,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 55,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 56,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 57,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 58,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 59,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 60,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 61,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 62,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 63,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      }
+    ],
+    "legacy": [
+      {
+        "step": 1,
+        "sha256": "5dd950111c68f862e24f4f2989416534835bb2bcd3af9fc11ac0e8fc5c716086",
+        "inputSplatCount": 60679,
+        "projectedSplatCount": 50512,
+        "nonBackgroundPixelCount": 48757,
+        "maxLuminance": 1
+      },
+      {
+        "step": 2,
+        "sha256": "89ae0525c9034105150947a5be37222ab36c557926bf536f5a2b00f9ada30802",
+        "inputSplatCount": 61102,
+        "projectedSplatCount": 50702,
+        "nonBackgroundPixelCount": 43627,
+        "maxLuminance": 1
+      },
+      {
+        "step": 3,
+        "sha256": "cd69c4548490a837ee4dcec916f6448e9f317818e0135972ed558ed27bf7bb1e",
+        "inputSplatCount": 61528,
+        "projectedSplatCount": 51033,
+        "nonBackgroundPixelCount": 39831,
+        "maxLuminance": 1
+      },
+      {
+        "step": 4,
+        "sha256": "ae02f8e16cf8aa4f97aeac4f0648c4b17ff54b69089f34d00bb0b5816f2fa287",
+        "inputSplatCount": 61957,
+        "projectedSplatCount": 51395,
+        "nonBackgroundPixelCount": 37631,
+        "maxLuminance": 1
+      },
+      {
+        "step": 5,
+        "sha256": "cbb86b3c1c22a61751db84654e2ce879240ebf0617019998d3862a282af50ebc",
+        "inputSplatCount": 62389,
+        "projectedSplatCount": 51795,
+        "nonBackgroundPixelCount": 35707,
+        "maxLuminance": 1
+      },
+      {
+        "step": 6,
+        "sha256": "d5594de3f4bc4b878abee886c594f837c6d9e5b207df130f7460226499c46eb9",
+        "inputSplatCount": 62824,
+        "projectedSplatCount": 52202,
+        "nonBackgroundPixelCount": 34161,
+        "maxLuminance": 1
+      },
+      {
+        "step": 7,
+        "sha256": "e957ea30a6daf1941135aa610679c996b9d651cc619e7092e6fb37a9e374c0c4",
+        "inputSplatCount": 63262,
+        "projectedSplatCount": 52607,
+        "nonBackgroundPixelCount": 33147,
+        "maxLuminance": 1
+      },
+      {
+        "step": 8,
+        "sha256": "b22a3600fec7091109835d26fe73f8cd99b3e5526a8dbb1d1723e16d31dad460",
+        "inputSplatCount": 63703,
+        "projectedSplatCount": 53023,
+        "nonBackgroundPixelCount": 32393,
+        "maxLuminance": 1
+      },
+      {
+        "step": 9,
+        "sha256": "48d5f067a531a3c646ee63c328c89ca7879abafb075ffb5aad1d19770a4b302a",
+        "inputSplatCount": 64147,
+        "projectedSplatCount": 53441,
+        "nonBackgroundPixelCount": 31527,
+        "maxLuminance": 1
+      },
+      {
+        "step": 10,
+        "sha256": "e70e8c366f57e214ebcf4b51cdd2ffda38240b11ea88291470f9a2f4f67bc4dc",
+        "inputSplatCount": 64594,
+        "projectedSplatCount": 53874,
+        "nonBackgroundPixelCount": 31203,
+        "maxLuminance": 1
+      },
+      {
+        "step": 11,
+        "sha256": "679410230a571f53109bce82131bfeea7180f7b23bfbd520073165ea578f977f",
+        "inputSplatCount": 65044,
+        "projectedSplatCount": 54306,
+        "nonBackgroundPixelCount": 31178,
+        "maxLuminance": 1
+      },
+      {
+        "step": 12,
+        "sha256": "09772da4446885f4ebfc50b381fac2dcd5ecf6dee9f405689c0bcb9cba155673",
+        "inputSplatCount": 65498,
+        "projectedSplatCount": 54739,
+        "nonBackgroundPixelCount": 31179,
+        "maxLuminance": 1
+      },
+      {
+        "step": 13,
+        "sha256": "586139d334a9ccff1d148c96ec92cc7b4c9b89ac6b593166c2581d33c7a1190f",
+        "inputSplatCount": 65955,
+        "projectedSplatCount": 55182,
+        "nonBackgroundPixelCount": 31165,
+        "maxLuminance": 1
+      },
+      {
+        "step": 14,
+        "sha256": "0e1c56af276e526d4c6e2d61bf8b7fab94059b1aaaa19200f078bad2cbd5d8db",
+        "inputSplatCount": 66415,
+        "projectedSplatCount": 55633,
+        "nonBackgroundPixelCount": 31164,
+        "maxLuminance": 1
+      },
+      {
+        "step": 15,
+        "sha256": "e46cff3ba4922a09ac39f7b185798d8459533edeb19194c2e010fc58fa892c11",
+        "inputSplatCount": 66878,
+        "projectedSplatCount": 56079,
+        "nonBackgroundPixelCount": 31087,
+        "maxLuminance": 1
+      },
+      {
+        "step": 16,
+        "sha256": "81024bf63af612ed0990d5095a8da6f0460b8db0e8be005ba6cb4528670c8d6e",
+        "inputSplatCount": 67344,
+        "projectedSplatCount": 56526,
+        "nonBackgroundPixelCount": 30985,
+        "maxLuminance": 1
+      },
+      {
+        "step": 17,
+        "sha256": "3b1178cfb1f5e9a9e127426db5e4d61d10929911196d9000609ab597f73952a7",
+        "inputSplatCount": 67814,
+        "projectedSplatCount": 56969,
+        "nonBackgroundPixelCount": 30862,
+        "maxLuminance": 1
+      },
+      {
+        "step": 18,
+        "sha256": "e86f4084df28567e9fe68fd2790b3f962220b39be634aef5d1c15c01a3c96143",
+        "inputSplatCount": 68287,
+        "projectedSplatCount": 57418,
+        "nonBackgroundPixelCount": 30868,
+        "maxLuminance": 1
+      },
+      {
+        "step": 19,
+        "sha256": "53c1c56e0dc594b28a8bbf10dbb29aade39c8fb3a95b229e0ffbef4be0e27b5c",
+        "inputSplatCount": 68763,
+        "projectedSplatCount": 57876,
+        "nonBackgroundPixelCount": 30868,
+        "maxLuminance": 1
+      },
+      {
+        "step": 20,
+        "sha256": "a0715cae03cda35f6e1ebf4b1ff18b6384993b47320a3cdc77469f222397b01b",
+        "inputSplatCount": 69243,
+        "projectedSplatCount": 58338,
+        "nonBackgroundPixelCount": 30870,
+        "maxLuminance": 1
+      },
+      {
+        "step": 21,
+        "sha256": "2191b08175fe087e3132d83db8be27ada5b31098054b19ede01f68508839d4f6",
+        "inputSplatCount": 69726,
+        "projectedSplatCount": 58816,
+        "nonBackgroundPixelCount": 30871,
+        "maxLuminance": 1
+      },
+      {
+        "step": 22,
+        "sha256": "b27f84163942c715c8fa21d5d6741be3796cabb873933ab66e52a0a05af78f6e",
+        "inputSplatCount": 70212,
+        "projectedSplatCount": 59296,
+        "nonBackgroundPixelCount": 30870,
+        "maxLuminance": 1
+      },
+      {
+        "step": 23,
+        "sha256": "84e1604531af79f602483e903e5b44e4a0d31d7471f798ceb15971acb5f31b9b",
+        "inputSplatCount": 70702,
+        "projectedSplatCount": 59778,
+        "nonBackgroundPixelCount": 30870,
+        "maxLuminance": 1
+      },
+      {
+        "step": 24,
+        "sha256": "c29b2136b82e3fa3b6940de737995d9b906a8a6db6bd7601ccedfec4ed0716e6",
+        "inputSplatCount": 71195,
+        "projectedSplatCount": 60266,
+        "nonBackgroundPixelCount": 30874,
+        "maxLuminance": 1
+      },
+      {
+        "step": 25,
+        "sha256": "651a01d01f48276b5c5ae4bdf494f998a97f6532ca37535ebaef605551e2f15f",
+        "inputSplatCount": 71692,
+        "projectedSplatCount": 60755,
+        "nonBackgroundPixelCount": 30878,
+        "maxLuminance": 1
+      },
+      {
+        "step": 26,
+        "sha256": "f8b3d20c673c6d250e7e627672156f38b12e6c264fdf947078613c7ff28496c2",
+        "inputSplatCount": 72192,
+        "projectedSplatCount": 61253,
+        "nonBackgroundPixelCount": 30884,
+        "maxLuminance": 1
+      },
+      {
+        "step": 27,
+        "sha256": "109b48465258729c9b89b4a18412ed65204316661381bd6ad0ba03e7bc645e45",
+        "inputSplatCount": 72695,
+        "projectedSplatCount": 61751,
+        "nonBackgroundPixelCount": 30884,
+        "maxLuminance": 1
+      },
+      {
+        "step": 28,
+        "sha256": "b38c6c7611fe9b2ca9e26817d01a1de59eba4d7c19dd005ec7058d6a19e405d7",
+        "inputSplatCount": 73202,
+        "projectedSplatCount": 62257,
+        "nonBackgroundPixelCount": 30881,
+        "maxLuminance": 1
+      },
+      {
+        "step": 29,
+        "sha256": "77e44fc5d8d1fa4fba70d7b3431c078943cc74379fd0755e80621fb3338fb8c2",
+        "inputSplatCount": 73713,
+        "projectedSplatCount": 62769,
+        "nonBackgroundPixelCount": 30887,
+        "maxLuminance": 1
+      },
+      {
+        "step": 30,
+        "sha256": "d644ec7afa3b37d42133454364ae133892e18b4736851cada0d33b12381ad13e",
+        "inputSplatCount": 74227,
+        "projectedSplatCount": 63283,
+        "nonBackgroundPixelCount": 30890,
+        "maxLuminance": 1
+      },
+      {
+        "step": 31,
+        "sha256": "b1dd59fb0df846c30dc5e3557687363ca7e22ec2a27c32ad75e7ceeff15b6c85",
+        "inputSplatCount": 74745,
+        "projectedSplatCount": 63803,
+        "nonBackgroundPixelCount": 30895,
+        "maxLuminance": 1
+      },
+      {
+        "step": 32,
+        "sha256": "4f020a68a411adb2afbb8f6404ac3581f9c25726e8990e4b352939efad3d4ad8",
+        "inputSplatCount": 75266,
+        "projectedSplatCount": 64326,
+        "nonBackgroundPixelCount": 30896,
+        "maxLuminance": 1
+      },
+      {
+        "step": 33,
+        "sha256": "752eff42ba5e458f774bd8b5713f15dd563f7740b427db437b98507318e96890",
+        "inputSplatCount": 75791,
+        "projectedSplatCount": 64854,
+        "nonBackgroundPixelCount": 30896,
+        "maxLuminance": 1
+      },
+      {
+        "step": 34,
+        "sha256": "691c1d35f1c8674ae413ad8856e6cce07179f5bfc3bfbad21c0fe41ae8f92405",
+        "inputSplatCount": 76320,
+        "projectedSplatCount": 65382,
+        "nonBackgroundPixelCount": 30897,
+        "maxLuminance": 1
+      },
+      {
+        "step": 35,
+        "sha256": "af5e9bba3bef939a5ea4f0198ccab32affd111c13b48e5f48be28bf32de5a2e7",
+        "inputSplatCount": 76852,
+        "projectedSplatCount": 65917,
+        "nonBackgroundPixelCount": 30899,
+        "maxLuminance": 1
+      },
+      {
+        "step": 36,
+        "sha256": "1faa2d28bc263288f8feffc7b53f69818122365b0630967539ee704ee8bcc790",
+        "inputSplatCount": 77388,
+        "projectedSplatCount": 66454,
+        "nonBackgroundPixelCount": 30905,
+        "maxLuminance": 1
+      },
+      {
+        "step": 37,
+        "sha256": "598816a0c3638b9d940bbe669bfea252add28a3ca6d7e719604ca867bab076ff",
+        "inputSplatCount": 77928,
+        "projectedSplatCount": 66994,
+        "nonBackgroundPixelCount": 30904,
+        "maxLuminance": 1
+      },
+      {
+        "step": 38,
+        "sha256": "af5901b02bdd66891afc71aeefb3e8bee14007e0c668d77629a7b54d438b4ee7",
+        "inputSplatCount": 78471,
+        "projectedSplatCount": 67535,
+        "nonBackgroundPixelCount": 30906,
+        "maxLuminance": 1
+      },
+      {
+        "step": 39,
+        "sha256": "c8236d9c18c2474d89f8074c7b427f17650715e066cfc717d5c6d88688cd2aa3",
+        "inputSplatCount": 79018,
+        "projectedSplatCount": 68079,
+        "nonBackgroundPixelCount": 30925,
+        "maxLuminance": 1
+      },
+      {
+        "step": 40,
+        "sha256": "25a1fd3f71cd3d55be2ef8f74a18fa7c2bd8bbf99b906499c17a11e723fd6f2b",
+        "inputSplatCount": 79569,
+        "projectedSplatCount": 68628,
+        "nonBackgroundPixelCount": 30941,
+        "maxLuminance": 1
+      },
+      {
+        "step": 41,
+        "sha256": "1283d558c904ea33a1ce06a659636122f282c337c32edc519816e98628503063",
+        "inputSplatCount": 80124,
+        "projectedSplatCount": 69181,
+        "nonBackgroundPixelCount": 30946,
+        "maxLuminance": 1
+      },
+      {
+        "step": 42,
+        "sha256": "405c2f9f36e26915268e48145094f98088c74e8361b5f028ec3aa6a9418824a4",
+        "inputSplatCount": 80683,
+        "projectedSplatCount": 69741,
+        "nonBackgroundPixelCount": 30953,
+        "maxLuminance": 1
+      },
+      {
+        "step": 43,
+        "sha256": "718d846e5cea343e37f5188e774d336c2862b26b803f60fd14d75a41637bc256",
+        "inputSplatCount": 81246,
+        "projectedSplatCount": 70303,
+        "nonBackgroundPixelCount": 30966,
+        "maxLuminance": 1
+      },
+      {
+        "step": 44,
+        "sha256": "ba4af07ff25e8318a8384d5f3c381e2cdfd36ad9bce892f2afd2f12c7465c4eb",
+        "inputSplatCount": 81813,
+        "projectedSplatCount": 70868,
+        "nonBackgroundPixelCount": 30994,
+        "maxLuminance": 1
+      },
+      {
+        "step": 45,
+        "sha256": "1019b8425150f9bccd03cc00d92466b566f1e4b4c13795eaf745f7398f8d0928",
+        "inputSplatCount": 82384,
+        "projectedSplatCount": 71439,
+        "nonBackgroundPixelCount": 31030,
+        "maxLuminance": 1
+      },
+      {
+        "step": 46,
+        "sha256": "27a2cb834dc73920924b538ecf7d7fd273aa5157324ad66f8a667fe416519117",
+        "inputSplatCount": 82959,
+        "projectedSplatCount": 72013,
+        "nonBackgroundPixelCount": 31118,
+        "maxLuminance": 1
+      },
+      {
+        "step": 47,
+        "sha256": "153593e5e89e90554be2aa84694b1891caf7d98d082ffcffc643a0b4078660ed",
+        "inputSplatCount": 83538,
+        "projectedSplatCount": 72589,
+        "nonBackgroundPixelCount": 31268,
+        "maxLuminance": 1
+      },
+      {
+        "step": 48,
+        "sha256": "ac8465dffa624409dc1d139af1e66ce0adb1cd75a900c97e9a05eaba5a4eaacc",
+        "inputSplatCount": 84121,
+        "projectedSplatCount": 73172,
+        "nonBackgroundPixelCount": 31433,
+        "maxLuminance": 1
+      },
+      {
+        "step": 49,
+        "sha256": "8e66a00169c50498e592a96b8d2fb34a99aee7e68e711eab37ff6ae93a062c3d",
+        "inputSplatCount": 84708,
+        "projectedSplatCount": 73757,
+        "nonBackgroundPixelCount": 31622,
+        "maxLuminance": 1
+      },
+      {
+        "step": 50,
+        "sha256": "c86c4a597f7f9a83b10ec9e4b8e7196c6ec430efd66bb477685795f07b19b48f",
+        "inputSplatCount": 85299,
+        "projectedSplatCount": 74345,
+        "nonBackgroundPixelCount": 31811,
+        "maxLuminance": 1
+      },
+      {
+        "step": 51,
+        "sha256": "84d39c27e1e932d54ff2fb0cf506753d83463c09bddcb451957b9c9a7f62c2f7",
+        "inputSplatCount": 85894,
+        "projectedSplatCount": 74938,
+        "nonBackgroundPixelCount": 32014,
+        "maxLuminance": 1
+      },
+      {
+        "step": 52,
+        "sha256": "f38ac6a4ca297c68cbb3442699c4bbde1f6385535c912765661508d8a3bab7e9",
+        "inputSplatCount": 86493,
+        "projectedSplatCount": 75538,
+        "nonBackgroundPixelCount": 32206,
+        "maxLuminance": 1
+      },
+      {
+        "step": 53,
+        "sha256": "22c3f5064b7e0469cdd5c239aa013f788655dd83e87357a5919f820d8e759c90",
+        "inputSplatCount": 87096,
+        "projectedSplatCount": 76136,
+        "nonBackgroundPixelCount": 32395,
+        "maxLuminance": 1
+      },
+      {
+        "step": 54,
+        "sha256": "ba3ae01f874ce1039539a0480909ac6dad3e96635710290fb4e937ebf37dd07c",
+        "inputSplatCount": 87703,
+        "projectedSplatCount": 76743,
+        "nonBackgroundPixelCount": 32610,
+        "maxLuminance": 1
+      },
+      {
+        "step": 55,
+        "sha256": "ecb07755bd3e8149aee7ecedeaee6451df685e5301db72817ab2d70add7fa5a2",
+        "inputSplatCount": 88315,
+        "projectedSplatCount": 77353,
+        "nonBackgroundPixelCount": 32807,
+        "maxLuminance": 1
+      },
+      {
+        "step": 56,
+        "sha256": "82854ce7aad5f7f3b916ba7b36961ecb0914c90527764f7081b939595f6d9bc5",
+        "inputSplatCount": 88931,
+        "projectedSplatCount": 77969,
+        "nonBackgroundPixelCount": 33000,
+        "maxLuminance": 1
+      },
+      {
+        "step": 57,
+        "sha256": "9a2f19a2f255b864d1fbcb4942b34cd4060d1a39ca2431d66662407cc5f6cfcd",
+        "inputSplatCount": 89551,
+        "projectedSplatCount": 78588,
+        "nonBackgroundPixelCount": 33203,
+        "maxLuminance": 1
+      },
+      {
+        "step": 58,
+        "sha256": "e5d6ed8b12140a17daf1b465f57b9a360223cb76d90b23f4258c67612cdcf0cf",
+        "inputSplatCount": 90176,
+        "projectedSplatCount": 79213,
+        "nonBackgroundPixelCount": 33396,
+        "maxLuminance": 1
+      },
+      {
+        "step": 59,
+        "sha256": "3636a7232a70f7a20ebc1e5acebf3aafd731b4c8d1017e95c01a3493157d8de7",
+        "inputSplatCount": 90805,
+        "projectedSplatCount": 79843,
+        "nonBackgroundPixelCount": 33574,
+        "maxLuminance": 1
+      },
+      {
+        "step": 60,
+        "sha256": "2c1685df90e2dc8af518963af98195df81e3453ba82fe6151c8d2cda79204ba4",
+        "inputSplatCount": 91438,
+        "projectedSplatCount": 80478,
+        "nonBackgroundPixelCount": 33792,
+        "maxLuminance": 1
+      },
+      {
+        "step": 61,
+        "sha256": "e3711a578fbed27395e0c21f43d09fc6db0343883f01c968f36750ffb66add45",
+        "inputSplatCount": 92076,
+        "projectedSplatCount": 81115,
+        "nonBackgroundPixelCount": 34010,
+        "maxLuminance": 1
+      },
+      {
+        "step": 62,
+        "sha256": "4753c1227953db65615d578a6d4afab4a843b1f7d1befb304a3f928a54f9d6e5",
+        "inputSplatCount": 92718,
+        "projectedSplatCount": 81754,
+        "nonBackgroundPixelCount": 34210,
+        "maxLuminance": 1
+      },
+      {
+        "step": 63,
+        "sha256": "e81aa08399dc35c52a1231c46b8eb78a62c0fde7c2e27a5fdc498e9aa7489196",
+        "inputSplatCount": 93365,
+        "projectedSplatCount": 82401,
+        "nonBackgroundPixelCount": 34433,
+        "maxLuminance": 1
+      }
+    ],
+    "envelope": [
+      {
+        "step": 1,
+        "sha256": "64e9196106f688b150470f3693255c8a129010ee91c2519bfe46a207eb142594",
+        "inputSplatCount": 60679,
+        "projectedSplatCount": 50512,
+        "nonBackgroundPixelCount": 48757,
+        "maxLuminance": 1
+      },
+      {
+        "step": 2,
+        "sha256": "7c21a72059821be69c596351b7d39b7b75bc89dd9f3fe5ab4f89954be74c47b2",
+        "inputSplatCount": 61102,
+        "projectedSplatCount": 50702,
+        "nonBackgroundPixelCount": 43627,
+        "maxLuminance": 1
+      },
+      {
+        "step": 3,
+        "sha256": "4643bccdc1bcde93fafaa3c91fe9c726860569002c2b1f8a7528b64dba8bf577",
+        "inputSplatCount": 61528,
+        "projectedSplatCount": 51033,
+        "nonBackgroundPixelCount": 39831,
+        "maxLuminance": 1
+      },
+      {
+        "step": 4,
+        "sha256": "27022e8c4910fcd32ad27d83fcf1d2bafbf59f236dc96950529e3a0086c502dd",
+        "inputSplatCount": 61957,
+        "projectedSplatCount": 51395,
+        "nonBackgroundPixelCount": 37631,
+        "maxLuminance": 1
+      },
+      {
+        "step": 5,
+        "sha256": "d558b61c3ca2595d6dcdce86fa6e3e24249182c7b0055d7809f752ae75a5d486",
+        "inputSplatCount": 62389,
+        "projectedSplatCount": 51795,
+        "nonBackgroundPixelCount": 35707,
+        "maxLuminance": 1
+      },
+      {
+        "step": 6,
+        "sha256": "f91cf6f640bd1d86449f8eead1019f757a345ebb18e30012fc05e0b00be2c006",
+        "inputSplatCount": 62824,
+        "projectedSplatCount": 52202,
+        "nonBackgroundPixelCount": 34161,
+        "maxLuminance": 1
+      },
+      {
+        "step": 7,
+        "sha256": "e658a6cb6366926ed07c750cf87af9f3e89175df019fc2610c6414e4902715c9",
+        "inputSplatCount": 63262,
+        "projectedSplatCount": 52607,
+        "nonBackgroundPixelCount": 33147,
+        "maxLuminance": 1
+      },
+      {
+        "step": 8,
+        "sha256": "2d93edb1b5651b17de3c756857d7466a234adc8bf4c1a7ea1142e8975caf070b",
+        "inputSplatCount": 63703,
+        "projectedSplatCount": 53023,
+        "nonBackgroundPixelCount": 32393,
+        "maxLuminance": 1
+      },
+      {
+        "step": 9,
+        "sha256": "9445eb4a3d8c30c65b7820072637ca0aa308a5f60ad04c50f6772d3a762e280c",
+        "inputSplatCount": 64147,
+        "projectedSplatCount": 53441,
+        "nonBackgroundPixelCount": 31527,
+        "maxLuminance": 1
+      },
+      {
+        "step": 10,
+        "sha256": "088c91740208725b2eb43e62f48e9c5ae794527759cad98baafe44cc1ea5358c",
+        "inputSplatCount": 64594,
+        "projectedSplatCount": 53874,
+        "nonBackgroundPixelCount": 31203,
+        "maxLuminance": 1
+      },
+      {
+        "step": 11,
+        "sha256": "0579a1ccb35d7e5e8b686f3bbc43c9b9835d134a57d901edb6a2f2526b37abc5",
+        "inputSplatCount": 65044,
+        "projectedSplatCount": 54306,
+        "nonBackgroundPixelCount": 31178,
+        "maxLuminance": 1
+      },
+      {
+        "step": 12,
+        "sha256": "345f6fea2724dce7f8decf7ef10c870138cb1e3be2567444cc872f6ca2a8a422",
+        "inputSplatCount": 65498,
+        "projectedSplatCount": 54739,
+        "nonBackgroundPixelCount": 31179,
+        "maxLuminance": 1
+      },
+      {
+        "step": 13,
+        "sha256": "90bf8fa9b0a5d267adeb664224b53aa1a1367e7351a46f133259cc471d984da2",
+        "inputSplatCount": 65955,
+        "projectedSplatCount": 55182,
+        "nonBackgroundPixelCount": 31165,
+        "maxLuminance": 1
+      },
+      {
+        "step": 14,
+        "sha256": "2f2117ee8c81aa186df1591f66b75743866cda5873673b3502ee4d232090d17f",
+        "inputSplatCount": 66415,
+        "projectedSplatCount": 55633,
+        "nonBackgroundPixelCount": 31164,
+        "maxLuminance": 1
+      },
+      {
+        "step": 15,
+        "sha256": "0dfef0c19b88e5fd1883356d990c6c0206ba33662ec399c826f6554e770f7e83",
+        "inputSplatCount": 66878,
+        "projectedSplatCount": 56079,
+        "nonBackgroundPixelCount": 31087,
+        "maxLuminance": 1
+      },
+      {
+        "step": 16,
+        "sha256": "acb5142495fac4bc5a32f2cb962cf8890e5a722de1c88e7cb6ab1c6932158eba",
+        "inputSplatCount": 67344,
+        "projectedSplatCount": 56526,
+        "nonBackgroundPixelCount": 30985,
+        "maxLuminance": 1
+      },
+      {
+        "step": 17,
+        "sha256": "58677973655c0d4ecc5de73f2d91e3e81f05395db18d29b92bedf8cae5ffec9f",
+        "inputSplatCount": 67814,
+        "projectedSplatCount": 56969,
+        "nonBackgroundPixelCount": 30862,
+        "maxLuminance": 1
+      },
+      {
+        "step": 18,
+        "sha256": "117240561eb433e484906d841fd94810e4387e7416a948837f80e970d23a4362",
+        "inputSplatCount": 68287,
+        "projectedSplatCount": 57418,
+        "nonBackgroundPixelCount": 30868,
+        "maxLuminance": 1
+      },
+      {
+        "step": 19,
+        "sha256": "3d420ca464236602969af5736775218b7ef90232454a0a30163bcf1eb67acfad",
+        "inputSplatCount": 68763,
+        "projectedSplatCount": 57876,
+        "nonBackgroundPixelCount": 30868,
+        "maxLuminance": 1
+      },
+      {
+        "step": 20,
+        "sha256": "244dff2acd4e050865f69323acf300d0062d993038e0e4331d258263c3a06f63",
+        "inputSplatCount": 69243,
+        "projectedSplatCount": 58338,
+        "nonBackgroundPixelCount": 30870,
+        "maxLuminance": 1
+      },
+      {
+        "step": 21,
+        "sha256": "fd8673b384369f519ff5f6f4985ee852c6183dd9ea28a1b0f3aeb5b3a58125dd",
+        "inputSplatCount": 69726,
+        "projectedSplatCount": 58816,
+        "nonBackgroundPixelCount": 30871,
+        "maxLuminance": 1
+      },
+      {
+        "step": 22,
+        "sha256": "111e107b18d93e47747670edcc108909344b08bccce1039a4959e69057ef603f",
+        "inputSplatCount": 70212,
+        "projectedSplatCount": 59296,
+        "nonBackgroundPixelCount": 30870,
+        "maxLuminance": 1
+      },
+      {
+        "step": 23,
+        "sha256": "7778838c4605a12e7ba11349bf9a03d8293062c172314c6ee748e4ef68b5c7a6",
+        "inputSplatCount": 70702,
+        "projectedSplatCount": 59778,
+        "nonBackgroundPixelCount": 30870,
+        "maxLuminance": 1
+      },
+      {
+        "step": 24,
+        "sha256": "c97bd6f8772721a51533518dabb7edec70daa5d68fce508afd35761e42537b9c",
+        "inputSplatCount": 71195,
+        "projectedSplatCount": 60266,
+        "nonBackgroundPixelCount": 30874,
+        "maxLuminance": 1
+      },
+      {
+        "step": 25,
+        "sha256": "2355f59172b99ebc708ebdf825eb163e60d4bd101eb5bea2aad5e00341e976d1",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60651,
+        "nonBackgroundPixelCount": 30878,
+        "maxLuminance": 1
+      },
+      {
+        "step": 26,
+        "sha256": "6bc4d5043dbe14f69b2c18d9d21cbef261911b08ec4a85653e3c859b2d0ac2c3",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60651,
+        "nonBackgroundPixelCount": 30884,
+        "maxLuminance": 1
+      },
+      {
+        "step": 27,
+        "sha256": "03b6b9892224be40629bed6f03c8515427bc337fba7cb10fd740ae075433eb89",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60647,
+        "nonBackgroundPixelCount": 30884,
+        "maxLuminance": 1
+      },
+      {
+        "step": 28,
+        "sha256": "0655a08966f8ccb88739f27c2d0bae2a2156d019db5bb9c901444a0cf195a0ad",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60646,
+        "nonBackgroundPixelCount": 30881,
+        "maxLuminance": 1
+      },
+      {
+        "step": 29,
+        "sha256": "a0685606cb6acbc6ff430c1e8dd8d9e43c448f432ca2c1261263e36bb0665b62",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60647,
+        "nonBackgroundPixelCount": 30887,
+        "maxLuminance": 1
+      },
+      {
+        "step": 30,
+        "sha256": "2a90c7cbe181a41a9f0cfe1a5b53418f744fa09549e6cd4e99d700be57dad52e",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60647,
+        "nonBackgroundPixelCount": 30890,
+        "maxLuminance": 1
+      },
+      {
+        "step": 31,
+        "sha256": "ce505d5b26eb6b0e5f90161279c06b0c850269234b48c17286687a3c2ff37b05",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60649,
+        "nonBackgroundPixelCount": 30895,
+        "maxLuminance": 1
+      },
+      {
+        "step": 32,
+        "sha256": "0f07fc726da3ba196d6519fed13ca8b6dc05f5c0d397380b277b8ae9b256836d",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60651,
+        "nonBackgroundPixelCount": 30896,
+        "maxLuminance": 1
+      },
+      {
+        "step": 33,
+        "sha256": "7467ad5ff76bb5e9006070d8dfed1c54952016ab9f1a6ee85baeab951525c543",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60654,
+        "nonBackgroundPixelCount": 30896,
+        "maxLuminance": 1
+      },
+      {
+        "step": 34,
+        "sha256": "3189a61cdda202557d37d4349c28f7b8052188264df155435c5744c778353ce6",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60653,
+        "nonBackgroundPixelCount": 30897,
+        "maxLuminance": 1
+      },
+      {
+        "step": 35,
+        "sha256": "2e67c9737f07a0dfb7f07d753363d6c991a2b6654faebbbd0c97e3fe2936542a",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60656,
+        "nonBackgroundPixelCount": 30899,
+        "maxLuminance": 1
+      },
+      {
+        "step": 36,
+        "sha256": "5c8344aa324c8097285d9ac83a8525bebd05c09a9ac42868796c213a7e7220b0",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60657,
+        "nonBackgroundPixelCount": 30905,
+        "maxLuminance": 1
+      },
+      {
+        "step": 37,
+        "sha256": "3cc53fdc305acfc15c6a162f03e01be8d8f083719268c958523d379704175dea",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60657,
+        "nonBackgroundPixelCount": 30904,
+        "maxLuminance": 1
+      },
+      {
+        "step": 38,
+        "sha256": "ce3abfab34f26cca4d771324b84be8edb82a65ecb0b4bf8dbce6a4610106c67d",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60655,
+        "nonBackgroundPixelCount": 30904,
+        "maxLuminance": 1
+      },
+      {
+        "step": 39,
+        "sha256": "922ec47183ea60a841e33290815d223c310252e8e617b248ba8d99e4460a2ebe",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60652,
+        "nonBackgroundPixelCount": 30907,
+        "maxLuminance": 1
+      },
+      {
+        "step": 40,
+        "sha256": "13ef655dce457f337d7cba20cbec7596aa9d5c430eb6ac4fc5f690fb93958374",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60650,
+        "nonBackgroundPixelCount": 30914,
+        "maxLuminance": 1
+      },
+      {
+        "step": 41,
+        "sha256": "9fe4b4e6544244975060c31e5f98adcacb9f4e5560185837a7d2f73a0dd35d5f",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60648,
+        "nonBackgroundPixelCount": 30913,
+        "maxLuminance": 1
+      },
+      {
+        "step": 42,
+        "sha256": "7745643e10a145ef49488f5ab39348d0404ca541ef7ccb47d60b15f26cc23a11",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60649,
+        "nonBackgroundPixelCount": 30914,
+        "maxLuminance": 1
+      },
+      {
+        "step": 43,
+        "sha256": "42552536eef68c82093709ba2deb5bc053bfb14bf70604cdad2fb2803623c87a",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60648,
+        "nonBackgroundPixelCount": 30914,
+        "maxLuminance": 1
+      },
+      {
+        "step": 44,
+        "sha256": "20963a008b2fe40b7cb37fe9466a2cc2b8051ab77a6554d4ffdd8bec13ec551f",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60646,
+        "nonBackgroundPixelCount": 30915,
+        "maxLuminance": 1
+      },
+      {
+        "step": 45,
+        "sha256": "fb5bde01d36520d7fb9f5d707fa67724116efd503ef7b5a3aa5a581a3326aba1",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60646,
+        "nonBackgroundPixelCount": 30917,
+        "maxLuminance": 1
+      },
+      {
+        "step": 46,
+        "sha256": "2fa4b45a2cec899a286c9106cbab40dd7276a6de64298b399a708169c5a4b4b5",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60645,
+        "nonBackgroundPixelCount": 30922,
+        "maxLuminance": 1
+      },
+      {
+        "step": 47,
+        "sha256": "522cc649e674eb094b578ad6d096e554e1d2f3ca176771b0f851c055f417a001",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60642,
+        "nonBackgroundPixelCount": 30929,
+        "maxLuminance": 1
+      },
+      {
+        "step": 48,
+        "sha256": "344824dad375df258319c820ec7a40111775b58d2c59861aa15428f7e5f1d8f1",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60642,
+        "nonBackgroundPixelCount": 30926,
+        "maxLuminance": 1
+      },
+      {
+        "step": 49,
+        "sha256": "ffa73489f08556c67f549f4b364691c3bf9327772086b929face316a7c007812",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60640,
+        "nonBackgroundPixelCount": 30927,
+        "maxLuminance": 1
+      },
+      {
+        "step": 50,
+        "sha256": "219b2a92bdf26468175e535a1a6b4cbfdf4e9a12bcf989609645ad1b1041723c",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60637,
+        "nonBackgroundPixelCount": 30928,
+        "maxLuminance": 1
+      },
+      {
+        "step": 51,
+        "sha256": "b85471d7e4e62938af33e0dfa76fdc300872d1266e5956634b783c887583a173",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60635,
+        "nonBackgroundPixelCount": 30929,
+        "maxLuminance": 1
+      },
+      {
+        "step": 52,
+        "sha256": "a878d529cb0c4cd795f385ce0795a1e6afdd3c8112f72a20fe1bca0e126b20e5",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60636,
+        "nonBackgroundPixelCount": 30933,
+        "maxLuminance": 1
+      },
+      {
+        "step": 53,
+        "sha256": "2a8599d2f61a7d0583489c2e4ef711dc86a2230ff1cc0b9c95733d5aa1cc1253",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60631,
+        "nonBackgroundPixelCount": 30935,
+        "maxLuminance": 1
+      },
+      {
+        "step": 54,
+        "sha256": "e644ee7c55cf266288957e60af4adef2bc94d6c72ac2fa42b40dd07ae2e10a1f",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60631,
+        "nonBackgroundPixelCount": 30936,
+        "maxLuminance": 1
+      },
+      {
+        "step": 55,
+        "sha256": "1068b90b03e07337ae3a9f87e52d062e66cdfb07ae942ceec8cfe89373382811",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60629,
+        "nonBackgroundPixelCount": 30938,
+        "maxLuminance": 1
+      },
+      {
+        "step": 56,
+        "sha256": "ae385b002e0bdfa26f8194c934bc6373419106579abcad51fcd21948c07f6a4c",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60629,
+        "nonBackgroundPixelCount": 30944,
+        "maxLuminance": 1
+      },
+      {
+        "step": 57,
+        "sha256": "70224541346ad43ebe82118a79e3620ed935430071b602ec7804c2cdb7b73916",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60628,
+        "nonBackgroundPixelCount": 30946,
+        "maxLuminance": 1
+      },
+      {
+        "step": 58,
+        "sha256": "052b95a83275d11c209966fe285f0695cb605fa4baafb991eeca8386e024ff48",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60628,
+        "nonBackgroundPixelCount": 30952,
+        "maxLuminance": 1
+      },
+      {
+        "step": 59,
+        "sha256": "0776810024af3750b4d3c9685556b945c95418be0cb6380cff99c8ca6b56ac72",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60629,
+        "nonBackgroundPixelCount": 30951,
+        "maxLuminance": 1
+      },
+      {
+        "step": 60,
+        "sha256": "820084e7e79377d123d20865b7efc6ebde545d8333121bf243d0a4dc3d8ef713",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60631,
+        "nonBackgroundPixelCount": 30952,
+        "maxLuminance": 1
+      },
+      {
+        "step": 61,
+        "sha256": "348802e56cc7d1d8c681a69dc69028bfbec67d63b725e120cabc08ef763b20b6",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60630,
+        "nonBackgroundPixelCount": 30957,
+        "maxLuminance": 1
+      },
+      {
+        "step": 62,
+        "sha256": "ab043968cbf0edc1d7d294a2b1c6076f2f73cee58114f8deb81cd4b68970da12",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60627,
+        "nonBackgroundPixelCount": 30958,
+        "maxLuminance": 1
+      },
+      {
+        "step": 63,
+        "sha256": "02a738b1308f0f5fd6dfcb167c2bae01801b7297fe2958a7953d2dab189595e6",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60627,
+        "nonBackgroundPixelCount": 30961,
+        "maxLuminance": 1
+      }
+    ]
+  },
+  "controlFrameIdentity": {
+    "authority": "pixel-identical-frozen-control-v0",
+    "frameCount": 63,
+    "uniqueFrameCount": 1,
+    "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b"
+  },
+  "supportBudgetComparison": {
+    "authority": "paired-recurrent-support-budget-accounting-v0",
+    "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1",
+    "inferenceFrameZero": {
+      "count": 60259,
+      "referenceFrameId": "frame-0"
+    },
+    "legacy": {
+      "mode": "one-step-ratio",
+      "steps": [
+        {
+          "step": 1,
+          "requested": 60679,
+          "effective": 60679,
+          "predictedCount": 60679,
+          "clamped": false
+        },
+        {
+          "step": 2,
+          "requested": 61102,
+          "effective": 61102,
+          "predictedCount": 61102,
+          "clamped": false
+        },
+        {
+          "step": 3,
+          "requested": 61528,
+          "effective": 61528,
+          "predictedCount": 61528,
+          "clamped": false
+        },
+        {
+          "step": 4,
+          "requested": 61957,
+          "effective": 61957,
+          "predictedCount": 61957,
+          "clamped": false
+        },
+        {
+          "step": 5,
+          "requested": 62389,
+          "effective": 62389,
+          "predictedCount": 62389,
+          "clamped": false
+        },
+        {
+          "step": 6,
+          "requested": 62824,
+          "effective": 62824,
+          "predictedCount": 62824,
+          "clamped": false
+        },
+        {
+          "step": 7,
+          "requested": 63262,
+          "effective": 63262,
+          "predictedCount": 63262,
+          "clamped": false
+        },
+        {
+          "step": 8,
+          "requested": 63703,
+          "effective": 63703,
+          "predictedCount": 63703,
+          "clamped": false
+        },
+        {
+          "step": 9,
+          "requested": 64147,
+          "effective": 64147,
+          "predictedCount": 64147,
+          "clamped": false
+        },
+        {
+          "step": 10,
+          "requested": 64594,
+          "effective": 64594,
+          "predictedCount": 64594,
+          "clamped": false
+        },
+        {
+          "step": 11,
+          "requested": 65044,
+          "effective": 65044,
+          "predictedCount": 65044,
+          "clamped": false
+        },
+        {
+          "step": 12,
+          "requested": 65498,
+          "effective": 65498,
+          "predictedCount": 65498,
+          "clamped": false
+        },
+        {
+          "step": 13,
+          "requested": 65955,
+          "effective": 65955,
+          "predictedCount": 65955,
+          "clamped": false
+        },
+        {
+          "step": 14,
+          "requested": 66415,
+          "effective": 66415,
+          "predictedCount": 66415,
+          "clamped": false
+        },
+        {
+          "step": 15,
+          "requested": 66878,
+          "effective": 66878,
+          "predictedCount": 66878,
+          "clamped": false
+        },
+        {
+          "step": 16,
+          "requested": 67344,
+          "effective": 67344,
+          "predictedCount": 67344,
+          "clamped": false
+        },
+        {
+          "step": 17,
+          "requested": 67814,
+          "effective": 67814,
+          "predictedCount": 67814,
+          "clamped": false
+        },
+        {
+          "step": 18,
+          "requested": 68287,
+          "effective": 68287,
+          "predictedCount": 68287,
+          "clamped": false
+        },
+        {
+          "step": 19,
+          "requested": 68763,
+          "effective": 68763,
+          "predictedCount": 68763,
+          "clamped": false
+        },
+        {
+          "step": 20,
+          "requested": 69243,
+          "effective": 69243,
+          "predictedCount": 69243,
+          "clamped": false
+        },
+        {
+          "step": 21,
+          "requested": 69726,
+          "effective": 69726,
+          "predictedCount": 69726,
+          "clamped": false
+        },
+        {
+          "step": 22,
+          "requested": 70212,
+          "effective": 70212,
+          "predictedCount": 70212,
+          "clamped": false
+        },
+        {
+          "step": 23,
+          "requested": 70702,
+          "effective": 70702,
+          "predictedCount": 70702,
+          "clamped": false
+        },
+        {
+          "step": 24,
+          "requested": 71195,
+          "effective": 71195,
+          "predictedCount": 71195,
+          "clamped": false
+        },
+        {
+          "step": 25,
+          "requested": 71692,
+          "effective": 71692,
+          "predictedCount": 71692,
+          "clamped": false
+        },
+        {
+          "step": 26,
+          "requested": 72192,
+          "effective": 72192,
+          "predictedCount": 72192,
+          "clamped": false
+        },
+        {
+          "step": 27,
+          "requested": 72695,
+          "effective": 72695,
+          "predictedCount": 72695,
+          "clamped": false
+        },
+        {
+          "step": 28,
+          "requested": 73202,
+          "effective": 73202,
+          "predictedCount": 73202,
+          "clamped": false
+        },
+        {
+          "step": 29,
+          "requested": 73713,
+          "effective": 73713,
+          "predictedCount": 73713,
+          "clamped": false
+        },
+        {
+          "step": 30,
+          "requested": 74227,
+          "effective": 74227,
+          "predictedCount": 74227,
+          "clamped": false
+        },
+        {
+          "step": 31,
+          "requested": 74745,
+          "effective": 74745,
+          "predictedCount": 74745,
+          "clamped": false
+        },
+        {
+          "step": 32,
+          "requested": 75266,
+          "effective": 75266,
+          "predictedCount": 75266,
+          "clamped": false
+        },
+        {
+          "step": 33,
+          "requested": 75791,
+          "effective": 75791,
+          "predictedCount": 75791,
+          "clamped": false
+        },
+        {
+          "step": 34,
+          "requested": 76320,
+          "effective": 76320,
+          "predictedCount": 76320,
+          "clamped": false
+        },
+        {
+          "step": 35,
+          "requested": 76852,
+          "effective": 76852,
+          "predictedCount": 76852,
+          "clamped": false
+        },
+        {
+          "step": 36,
+          "requested": 77388,
+          "effective": 77388,
+          "predictedCount": 77388,
+          "clamped": false
+        },
+        {
+          "step": 37,
+          "requested": 77928,
+          "effective": 77928,
+          "predictedCount": 77928,
+          "clamped": false
+        },
+        {
+          "step": 38,
+          "requested": 78471,
+          "effective": 78471,
+          "predictedCount": 78471,
+          "clamped": false
+        },
+        {
+          "step": 39,
+          "requested": 79018,
+          "effective": 79018,
+          "predictedCount": 79018,
+          "clamped": false
+        },
+        {
+          "step": 40,
+          "requested": 79569,
+          "effective": 79569,
+          "predictedCount": 79569,
+          "clamped": false
+        },
+        {
+          "step": 41,
+          "requested": 80124,
+          "effective": 80124,
+          "predictedCount": 80124,
+          "clamped": false
+        },
+        {
+          "step": 42,
+          "requested": 80683,
+          "effective": 80683,
+          "predictedCount": 80683,
+          "clamped": false
+        },
+        {
+          "step": 43,
+          "requested": 81246,
+          "effective": 81246,
+          "predictedCount": 81246,
+          "clamped": false
+        },
+        {
+          "step": 44,
+          "requested": 81813,
+          "effective": 81813,
+          "predictedCount": 81813,
+          "clamped": false
+        },
+        {
+          "step": 45,
+          "requested": 82384,
+          "effective": 82384,
+          "predictedCount": 82384,
+          "clamped": false
+        },
+        {
+          "step": 46,
+          "requested": 82959,
+          "effective": 82959,
+          "predictedCount": 82959,
+          "clamped": false
+        },
+        {
+          "step": 47,
+          "requested": 83538,
+          "effective": 83538,
+          "predictedCount": 83538,
+          "clamped": false
+        },
+        {
+          "step": 48,
+          "requested": 84121,
+          "effective": 84121,
+          "predictedCount": 84121,
+          "clamped": false
+        },
+        {
+          "step": 49,
+          "requested": 84708,
+          "effective": 84708,
+          "predictedCount": 84708,
+          "clamped": false
+        },
+        {
+          "step": 50,
+          "requested": 85299,
+          "effective": 85299,
+          "predictedCount": 85299,
+          "clamped": false
+        },
+        {
+          "step": 51,
+          "requested": 85894,
+          "effective": 85894,
+          "predictedCount": 85894,
+          "clamped": false
+        },
+        {
+          "step": 52,
+          "requested": 86493,
+          "effective": 86493,
+          "predictedCount": 86493,
+          "clamped": false
+        },
+        {
+          "step": 53,
+          "requested": 87096,
+          "effective": 87096,
+          "predictedCount": 87096,
+          "clamped": false
+        },
+        {
+          "step": 54,
+          "requested": 87703,
+          "effective": 87703,
+          "predictedCount": 87703,
+          "clamped": false
+        },
+        {
+          "step": 55,
+          "requested": 88315,
+          "effective": 88315,
+          "predictedCount": 88315,
+          "clamped": false
+        },
+        {
+          "step": 56,
+          "requested": 88931,
+          "effective": 88931,
+          "predictedCount": 88931,
+          "clamped": false
+        },
+        {
+          "step": 57,
+          "requested": 89551,
+          "effective": 89551,
+          "predictedCount": 89551,
+          "clamped": false
+        },
+        {
+          "step": 58,
+          "requested": 90176,
+          "effective": 90176,
+          "predictedCount": 90176,
+          "clamped": false
+        },
+        {
+          "step": 59,
+          "requested": 90805,
+          "effective": 90805,
+          "predictedCount": 90805,
+          "clamped": false
+        },
+        {
+          "step": 60,
+          "requested": 91438,
+          "effective": 91438,
+          "predictedCount": 91438,
+          "clamped": false
+        },
+        {
+          "step": 61,
+          "requested": 92076,
+          "effective": 92076,
+          "predictedCount": 92076,
+          "clamped": false
+        },
+        {
+          "step": 62,
+          "requested": 92718,
+          "effective": 92718,
+          "predictedCount": 92718,
+          "clamped": false
+        },
+        {
+          "step": 63,
+          "requested": 93365,
+          "effective": 93365,
+          "predictedCount": 93365,
+          "clamped": false
+        }
+      ]
+    },
+    "envelope": {
+      "mode": "training-episode-envelope",
+      "steps": [
+        {
+          "step": 1,
+          "requested": 60679,
+          "effective": 60679,
+          "predictedCount": 60679,
+          "clamped": false
+        },
+        {
+          "step": 2,
+          "requested": 61102,
+          "effective": 61102,
+          "predictedCount": 61102,
+          "clamped": false
+        },
+        {
+          "step": 3,
+          "requested": 61528,
+          "effective": 61528,
+          "predictedCount": 61528,
+          "clamped": false
+        },
+        {
+          "step": 4,
+          "requested": 61957,
+          "effective": 61957,
+          "predictedCount": 61957,
+          "clamped": false
+        },
+        {
+          "step": 5,
+          "requested": 62389,
+          "effective": 62389,
+          "predictedCount": 62389,
+          "clamped": false
+        },
+        {
+          "step": 6,
+          "requested": 62824,
+          "effective": 62824,
+          "predictedCount": 62824,
+          "clamped": false
+        },
+        {
+          "step": 7,
+          "requested": 63262,
+          "effective": 63262,
+          "predictedCount": 63262,
+          "clamped": false
+        },
+        {
+          "step": 8,
+          "requested": 63703,
+          "effective": 63703,
+          "predictedCount": 63703,
+          "clamped": false
+        },
+        {
+          "step": 9,
+          "requested": 64147,
+          "effective": 64147,
+          "predictedCount": 64147,
+          "clamped": false
+        },
+        {
+          "step": 10,
+          "requested": 64594,
+          "effective": 64594,
+          "predictedCount": 64594,
+          "clamped": false
+        },
+        {
+          "step": 11,
+          "requested": 65044,
+          "effective": 65044,
+          "predictedCount": 65044,
+          "clamped": false
+        },
+        {
+          "step": 12,
+          "requested": 65498,
+          "effective": 65498,
+          "predictedCount": 65498,
+          "clamped": false
+        },
+        {
+          "step": 13,
+          "requested": 65955,
+          "effective": 65955,
+          "predictedCount": 65955,
+          "clamped": false
+        },
+        {
+          "step": 14,
+          "requested": 66415,
+          "effective": 66415,
+          "predictedCount": 66415,
+          "clamped": false
+        },
+        {
+          "step": 15,
+          "requested": 66878,
+          "effective": 66878,
+          "predictedCount": 66878,
+          "clamped": false
+        },
+        {
+          "step": 16,
+          "requested": 67344,
+          "effective": 67344,
+          "predictedCount": 67344,
+          "clamped": false
+        },
+        {
+          "step": 17,
+          "requested": 67814,
+          "effective": 67814,
+          "predictedCount": 67814,
+          "clamped": false
+        },
+        {
+          "step": 18,
+          "requested": 68287,
+          "effective": 68287,
+          "predictedCount": 68287,
+          "clamped": false
+        },
+        {
+          "step": 19,
+          "requested": 68763,
+          "effective": 68763,
+          "predictedCount": 68763,
+          "clamped": false
+        },
+        {
+          "step": 20,
+          "requested": 69243,
+          "effective": 69243,
+          "predictedCount": 69243,
+          "clamped": false
+        },
+        {
+          "step": 21,
+          "requested": 69726,
+          "effective": 69726,
+          "predictedCount": 69726,
+          "clamped": false
+        },
+        {
+          "step": 22,
+          "requested": 70212,
+          "effective": 70212,
+          "predictedCount": 70212,
+          "clamped": false
+        },
+        {
+          "step": 23,
+          "requested": 70702,
+          "effective": 70702,
+          "predictedCount": 70702,
+          "clamped": false
+        },
+        {
+          "step": 24,
+          "requested": 71195,
+          "effective": 71195,
+          "predictedCount": 71195,
+          "clamped": false
+        },
+        {
+          "step": 25,
+          "requested": 71692,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 26,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 27,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 28,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 29,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 30,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 31,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 32,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 33,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 34,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 35,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 36,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 37,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 38,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 39,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 40,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 41,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 42,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 43,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 44,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 45,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 46,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 47,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 48,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 49,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 50,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 51,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 52,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 53,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 54,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 55,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 56,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 57,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 58,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 59,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 60,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 61,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 62,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        },
+        {
+          "step": 63,
+          "requested": 72087,
+          "effective": 71588,
+          "predictedCount": 71588,
+          "clamped": true
+        }
+      ]
+    }
+  },
+  "artifact": {
+    "path": "/private/tmp/kaminos-phase-physical-energy-witness-r1-0715/recurrent-envelope-comparison.mp4",
+    "bytes": 616338,
+    "sha256": "8dc9997f9e08e83ceb7fca1a0d0fd54e8a18e7f6c9026bd47e8a3231f5f23e49",
+    "probe": {
+      "width": 1280,
+      "height": 240,
+      "fps": 6.25,
+      "frameCount": 63,
+      "duration": 10.08
+    },
+    "command": [
+      "ffmpeg",
+      "-y",
+      "-framerate",
+      "6.25",
+      "-i",
+      "/private/tmp/kaminos-phase-physical-energy-witness-r1-0715/legacy-source/beauty/reference/frame-%03d.png",
+      "-framerate",
+      "6.25",
+      "-i",
+      "/private/tmp/kaminos-phase-physical-energy-witness-r1-0715/legacy-source/beauty/control/frame-%03d.png",
+      "-framerate",
+      "6.25",
+      "-i",
+      "/private/tmp/kaminos-phase-physical-energy-witness-r1-0715/legacy-source/beauty/predicted/frame-%03d.png",
+      "-framerate",
+      "6.25",
+      "-i",
+      "/private/tmp/kaminos-phase-physical-energy-witness-r1-0715/envelope-source/beauty/predicted/frame-%03d.png",
+      "-filter_complex",
+      "[0:v][1:v][2:v][3:v]hstack=inputs=4[out]",
+      "-map",
+      "[out]",
+      "-frames:v",
+      "63",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "slow",
+      "-crf",
+      "18",
+      "-pix_fmt",
+      "yuv420p",
+      "-movflags",
+      "+faststart",
+      "/private/tmp/kaminos-phase-physical-energy-witness-r1-0715/recurrent-envelope-comparison.mp4"
+    ]
+  },
+  "partialFlowDebug": {
+    "authority": "display-only-motion-cohort-debug-mix-v0",
+    "requestedGain": 0.625,
+    "effectiveGain": 0.625,
+    "stateMutation": false,
+    "artifact": {
+      "path": "/private/tmp/kaminos-phase-physical-energy-witness-r1-0715/recurrent-envelope-debug-comparison.mp4",
+      "bytes": 1107996,
+      "sha256": "6d525754083326f1c2feadacf48090ccd5c0255932071d164c38e256cf254187",
+      "probe": {
+        "width": 1280,
+        "height": 240,
+        "fps": 6.25,
+        "frameCount": 63,
+        "duration": 10.08
+      },
+      "command": [
+        "ffmpeg",
+        "-y",
+        "-framerate",
+        "6.25",
+        "-i",
+        "/private/tmp/kaminos-phase-physical-energy-witness-r1-0715/legacy-source/debug/reference/frame-%03d.png",
+        "-framerate",
+        "6.25",
+        "-i",
+        "/private/tmp/kaminos-phase-physical-energy-witness-r1-0715/legacy-source/debug/control/frame-%03d.png",
+        "-framerate",
+        "6.25",
+        "-i",
+        "/private/tmp/kaminos-phase-physical-energy-witness-r1-0715/legacy-source/debug/predicted/frame-%03d.png",
+        "-framerate",
+        "6.25",
+        "-i",
+        "/private/tmp/kaminos-phase-physical-energy-witness-r1-0715/envelope-source/debug/predicted/frame-%03d.png",
+        "-filter_complex",
+        "[0:v][1:v][2:v][3:v]hstack=inputs=4[out]",
+        "-map",
+        "[out]",
+        "-frames:v",
+        "63",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "slow",
+        "-crf",
+        "18",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        "/private/tmp/kaminos-phase-physical-energy-witness-r1-0715/recurrent-envelope-debug-comparison.mp4"
+      ]
+    }
+  },
+  "metrics": {
+    "authority": "accepted-training-report-support-and-same-corpus-iou-v0",
+    "summary": {
+      "legacy": {
+        "terminalPredictedCount": 93365,
+        "terminalExactCount": 70612,
+        "terminalCountError": 22753,
+        "terminalPredictionIoU": 0.12643228093314648,
+        "terminalIdentityIoU": 0.12233504279368129,
+        "terminalPredictionToIdentityRatio": 1.033491941850016,
+        "beatsIdentitySteps": 63,
+        "clampCount": 0,
+        "firstClampStep": null
+      },
+      "envelope": {
+        "terminalPredictedCount": 71588,
+        "terminalExactCount": 70612,
+        "terminalCountError": 976,
+        "terminalPredictionIoU": 0.13922225248754225,
+        "terminalIdentityIoU": 0.12233504279368129,
+        "terminalPredictionToIdentityRatio": 1.1380406571021626,
+        "beatsIdentitySteps": 63,
+        "clampCount": 39,
+        "firstClampStep": 25
+      }
+    },
+    "legacyHoldout": [
+      {
+        "beatsIdentity": true,
+        "exactCount": 60014,
+        "identityIoU": 0.43477638469705465,
+        "predictionCount": 60679,
+        "predictionIoU": 0.48042342320241394,
+        "predictionToIdentityRatio": 1.1049896915104196,
+        "step": 1
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 60597,
+        "identityIoU": 0.2951123589485303,
+        "predictionCount": 61102,
+        "predictionIoU": 0.35649159570199296,
+        "predictionToIdentityRatio": 1.2079859920884155,
+        "step": 2
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 60940,
+        "identityIoU": 0.22214603353870666,
+        "predictionCount": 61528,
+        "predictionIoU": 0.277731408062766,
+        "predictionToIdentityRatio": 1.2502199730447774,
+        "step": 3
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 61547,
+        "identityIoU": 0.18439936990723635,
+        "predictionCount": 61957,
+        "predictionIoU": 0.22858990300920168,
+        "predictionToIdentityRatio": 1.2396457923050157,
+        "step": 4
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 62908,
+        "identityIoU": 0.1637643501677139,
+        "predictionCount": 62389,
+        "predictionIoU": 0.20057682725844161,
+        "predictionToIdentityRatio": 1.2247893210764578,
+        "step": 5
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 63871,
+        "identityIoU": 0.14584006424753765,
+        "predictionCount": 62824,
+        "predictionIoU": 0.17848140121108394,
+        "predictionToIdentityRatio": 1.2238159804163513,
+        "step": 6
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 64940,
+        "identityIoU": 0.13565364101447697,
+        "predictionCount": 63262,
+        "predictionIoU": 0.16412868778773598,
+        "predictionToIdentityRatio": 1.2099099335654409,
+        "step": 7
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 67084,
+        "identityIoU": 0.12686936976797691,
+        "predictionCount": 63703,
+        "predictionIoU": 0.15110148830741338,
+        "predictionToIdentityRatio": 1.1910005431866888,
+        "step": 8
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 68577,
+        "identityIoU": 0.12020589334933181,
+        "predictionCount": 64147,
+        "predictionIoU": 0.14298016723934517,
+        "predictionToIdentityRatio": 1.1894605435344903,
+        "step": 9
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69816,
+        "identityIoU": 0.11637028390950599,
+        "predictionCount": 64594,
+        "predictionIoU": 0.1390774498088967,
+        "predictionToIdentityRatio": 1.1951285597708834,
+        "step": 10
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70393,
+        "identityIoU": 0.11338167997477566,
+        "predictionCount": 65044,
+        "predictionIoU": 0.1342182396784189,
+        "predictionToIdentityRatio": 1.1837736017695168,
+        "step": 11
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70931,
+        "identityIoU": 0.11202468340481801,
+        "predictionCount": 65498,
+        "predictionIoU": 0.13248221534170618,
+        "predictionToIdentityRatio": 1.1826162887955844,
+        "step": 12
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71041,
+        "identityIoU": 0.11120514556533515,
+        "predictionCount": 65955,
+        "predictionIoU": 0.13094589462908846,
+        "predictionToIdentityRatio": 1.1775165075626401,
+        "step": 13
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70870,
+        "identityIoU": 0.11140399203288553,
+        "predictionCount": 66415,
+        "predictionIoU": 0.1310161308925541,
+        "predictionToIdentityRatio": 1.1760452071940044,
+        "step": 14
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70703,
+        "identityIoU": 0.11396345820149026,
+        "predictionCount": 66878,
+        "predictionIoU": 0.13475417137484225,
+        "predictionToIdentityRatio": 1.1824331544642448,
+        "step": 15
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69965,
+        "identityIoU": 0.11537077958785139,
+        "predictionCount": 67344,
+        "predictionIoU": 0.13569555759575858,
+        "predictionToIdentityRatio": 1.1761692005594058,
+        "step": 16
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69823,
+        "identityIoU": 0.11840770355085548,
+        "predictionCount": 67814,
+        "predictionIoU": 0.13666919926004228,
+        "predictionToIdentityRatio": 1.1542255711541909,
+        "step": 17
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70012,
+        "identityIoU": 0.11825400231769603,
+        "predictionCount": 68287,
+        "predictionIoU": 0.13474240422721268,
+        "predictionToIdentityRatio": 1.1394320833659366,
+        "step": 18
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69758,
+        "identityIoU": 0.1170997010001031,
+        "predictionCount": 68763,
+        "predictionIoU": 0.1333742431680576,
+        "predictionToIdentityRatio": 1.1389802196671721,
+        "step": 19
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70461,
+        "identityIoU": 0.11774262505344164,
+        "predictionCount": 69243,
+        "predictionIoU": 0.13381379041682898,
+        "predictionToIdentityRatio": 1.1364940297202721,
+        "step": 20
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71726,
+        "identityIoU": 0.12077750038212666,
+        "predictionCount": 69726,
+        "predictionIoU": 0.13472059554942323,
+        "predictionToIdentityRatio": 1.115444475363227,
+        "step": 21
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71677,
+        "identityIoU": 0.1272245717459097,
+        "predictionCount": 70212,
+        "predictionIoU": 0.14177999517180334,
+        "predictionToIdentityRatio": 1.1144073289157022,
+        "step": 22
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71481,
+        "identityIoU": 0.13528838944855698,
+        "predictionCount": 70702,
+        "predictionIoU": 0.14944582326167974,
+        "predictionToIdentityRatio": 1.1046463327032663,
+        "step": 23
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70978,
+        "identityIoU": 0.14032862095632,
+        "predictionCount": 71195,
+        "predictionIoU": 0.1541046684363052,
+        "predictionToIdentityRatio": 1.0981699056550498,
+        "step": 24
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70631,
+        "identityIoU": 0.14357356911329144,
+        "predictionCount": 71692,
+        "predictionIoU": 0.15566941665583994,
+        "predictionToIdentityRatio": 1.0842484282953493,
+        "step": 25
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70729,
+        "identityIoU": 0.1450100088287485,
+        "predictionCount": 72192,
+        "predictionIoU": 0.15779880429675475,
+        "predictionToIdentityRatio": 1.0881925018231626,
+        "step": 26
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71812,
+        "identityIoU": 0.1381702545717782,
+        "predictionCount": 72695,
+        "predictionIoU": 0.1558525699476892,
+        "predictionToIdentityRatio": 1.1279748338794962,
+        "step": 27
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71798,
+        "identityIoU": 0.13478328120166364,
+        "predictionCount": 73202,
+        "predictionIoU": 0.15547055542274285,
+        "predictionToIdentityRatio": 1.153485462266843,
+        "step": 28
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71998,
+        "identityIoU": 0.128723095567276,
+        "predictionCount": 73713,
+        "predictionIoU": 0.1532695930223355,
+        "predictionToIdentityRatio": 1.1906922557050414,
+        "step": 29
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 72486,
+        "identityIoU": 0.12636080541012956,
+        "predictionCount": 74227,
+        "predictionIoU": 0.149275010379376,
+        "predictionToIdentityRatio": 1.181339497598751,
+        "step": 30
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 73212,
+        "identityIoU": 0.12143541313078694,
+        "predictionCount": 74745,
+        "predictionIoU": 0.14416845817158236,
+        "predictionToIdentityRatio": 1.1872027644548113,
+        "step": 31
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 73045,
+        "identityIoU": 0.1176658002850675,
+        "predictionCount": 75266,
+        "predictionIoU": 0.14001199114500062,
+        "predictionToIdentityRatio": 1.1899123688089086,
+        "step": 32
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 72620,
+        "identityIoU": 0.11480347330005453,
+        "predictionCount": 75791,
+        "predictionIoU": 0.13588250151159142,
+        "predictionToIdentityRatio": 1.1836096731711592,
+        "step": 33
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 72494,
+        "identityIoU": 0.11178761358402077,
+        "predictionCount": 76320,
+        "predictionIoU": 0.13282837894416322,
+        "predictionToIdentityRatio": 1.1882209010958802,
+        "step": 34
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 72177,
+        "identityIoU": 0.1128795072393133,
+        "predictionCount": 76852,
+        "predictionIoU": 0.13367108636284109,
+        "predictionToIdentityRatio": 1.1841926814886605,
+        "step": 35
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71690,
+        "identityIoU": 0.11297709923664122,
+        "predictionCount": 77388,
+        "predictionIoU": 0.1311698067394587,
+        "predictionToIdentityRatio": 1.1610300461398033,
+        "step": 36
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71100,
+        "identityIoU": 0.11328734151467897,
+        "predictionCount": 77928,
+        "predictionIoU": 0.13137417155697942,
+        "predictionToIdentityRatio": 1.1596544662490547,
+        "step": 37
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70188,
+        "identityIoU": 0.11227926568268828,
+        "predictionCount": 78471,
+        "predictionIoU": 0.12930156945562832,
+        "predictionToIdentityRatio": 1.1516068320311843,
+        "step": 38
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70454,
+        "identityIoU": 0.11385404594723567,
+        "predictionCount": 79018,
+        "predictionIoU": 0.12933496532027744,
+        "predictionToIdentityRatio": 1.135971622652885,
+        "step": 39
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70663,
+        "identityIoU": 0.11436256234785422,
+        "predictionCount": 79569,
+        "predictionIoU": 0.1279864249996246,
+        "predictionToIdentityRatio": 1.1191286936220524,
+        "step": 40
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70468,
+        "identityIoU": 0.1148378403731846,
+        "predictionCount": 80124,
+        "predictionIoU": 0.1253157178939188,
+        "predictionToIdentityRatio": 1.0912406353749302,
+        "step": 41
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70829,
+        "identityIoU": 0.115737509575283,
+        "predictionCount": 80683,
+        "predictionIoU": 0.12400961452862103,
+        "predictionToIdentityRatio": 1.0714729821273485,
+        "step": 42
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70268,
+        "identityIoU": 0.11836829117828501,
+        "predictionCount": 81246,
+        "predictionIoU": 0.12250885329461098,
+        "predictionToIdentityRatio": 1.0349803319377948,
+        "step": 43
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70153,
+        "identityIoU": 0.11994503843016016,
+        "predictionCount": 81813,
+        "predictionIoU": 0.12544064934680216,
+        "predictionToIdentityRatio": 1.045817742764257,
+        "step": 44
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70214,
+        "identityIoU": 0.12086354420810282,
+        "predictionCount": 82384,
+        "predictionIoU": 0.12753254813873413,
+        "predictionToIdentityRatio": 1.0551779610165049,
+        "step": 45
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70045,
+        "identityIoU": 0.12350405242283152,
+        "predictionCount": 82959,
+        "predictionIoU": 0.12848123672409723,
+        "predictionToIdentityRatio": 1.0402997650977936,
+        "step": 46
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69595,
+        "identityIoU": 0.12453993574255454,
+        "predictionCount": 83538,
+        "predictionIoU": 0.1300828007615899,
+        "predictionToIdentityRatio": 1.044506727789658,
+        "step": 47
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69010,
+        "identityIoU": 0.12423467612885271,
+        "predictionCount": 84121,
+        "predictionIoU": 0.12997631293490852,
+        "predictionToIdentityRatio": 1.0462160564583494,
+        "step": 48
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 68992,
+        "identityIoU": 0.12335517738879521,
+        "predictionCount": 84708,
+        "predictionIoU": 0.13278745310761111,
+        "predictionToIdentityRatio": 1.0764643683263242,
+        "step": 49
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69625,
+        "identityIoU": 0.11956418677217208,
+        "predictionCount": 85299,
+        "predictionIoU": 0.1321377939521492,
+        "predictionToIdentityRatio": 1.1051619846997827,
+        "step": 50
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69160,
+        "identityIoU": 0.12077282135217757,
+        "predictionCount": 85894,
+        "predictionIoU": 0.1322934466692956,
+        "predictionToIdentityRatio": 1.0953908767563152,
+        "step": 51
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 68431,
+        "identityIoU": 0.11996866977068013,
+        "predictionCount": 86493,
+        "predictionIoU": 0.13164987837926678,
+        "predictionToIdentityRatio": 1.097368826635448,
+        "step": 52
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 68340,
+        "identityIoU": 0.1208447365209964,
+        "predictionCount": 87096,
+        "predictionIoU": 0.13150519396379148,
+        "predictionToIdentityRatio": 1.0882161503239562,
+        "step": 53
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 68400,
+        "identityIoU": 0.12086945158339504,
+        "predictionCount": 87703,
+        "predictionIoU": 0.13200145032632343,
+        "predictionToIdentityRatio": 1.0920993567613546,
+        "step": 54
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 68553,
+        "identityIoU": 0.12047459160418225,
+        "predictionCount": 88315,
+        "predictionIoU": 0.12981475612918095,
+        "predictionToIdentityRatio": 1.07752808621826,
+        "step": 55
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 68658,
+        "identityIoU": 0.11720916528008875,
+        "predictionCount": 88931,
+        "predictionIoU": 0.12598155147652493,
+        "predictionToIdentityRatio": 1.0748438586306222,
+        "step": 56
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69517,
+        "identityIoU": 0.11637189457022916,
+        "predictionCount": 89551,
+        "predictionIoU": 0.1262567617321363,
+        "predictionToIdentityRatio": 1.0849420489235202,
+        "step": 57
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69955,
+        "identityIoU": 0.11634645885308162,
+        "predictionCount": 90176,
+        "predictionIoU": 0.12608120842182247,
+        "predictionToIdentityRatio": 1.0836703554599247,
+        "step": 58
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69968,
+        "identityIoU": 0.11691753505724946,
+        "predictionCount": 90805,
+        "predictionIoU": 0.12591653652489967,
+        "predictionToIdentityRatio": 1.0769687922623736,
+        "step": 59
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70464,
+        "identityIoU": 0.1169946424451641,
+        "predictionCount": 91438,
+        "predictionIoU": 0.12692545956969936,
+        "predictionToIdentityRatio": 1.0848826657100121,
+        "step": 60
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70074,
+        "identityIoU": 0.11684961909903425,
+        "predictionCount": 92076,
+        "predictionIoU": 0.127161000159881,
+        "predictionToIdentityRatio": 1.0882448838117946,
+        "step": 61
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70098,
+        "identityIoU": 0.11979967528841776,
+        "predictionCount": 92718,
+        "predictionIoU": 0.1278392363588504,
+        "predictionToIdentityRatio": 1.0671083711293656,
+        "step": 62
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70612,
+        "identityIoU": 0.12233504279368129,
+        "predictionCount": 93365,
+        "predictionIoU": 0.12643228093314648,
+        "predictionToIdentityRatio": 1.033491941850016,
+        "step": 63
+      }
+    ],
+    "envelopeHoldout": [
+      {
+        "beatsIdentity": true,
+        "exactCount": 60014,
+        "identityIoU": 0.43477638469705465,
+        "predictionCount": 60679,
+        "predictionIoU": 0.48042342320241394,
+        "predictionToIdentityRatio": 1.1049896915104196,
+        "step": 1
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 60597,
+        "identityIoU": 0.2951123589485303,
+        "predictionCount": 61102,
+        "predictionIoU": 0.35649159570199296,
+        "predictionToIdentityRatio": 1.2079859920884155,
+        "step": 2
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 60940,
+        "identityIoU": 0.22214603353870666,
+        "predictionCount": 61528,
+        "predictionIoU": 0.277731408062766,
+        "predictionToIdentityRatio": 1.2502199730447774,
+        "step": 3
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 61547,
+        "identityIoU": 0.18439936990723635,
+        "predictionCount": 61957,
+        "predictionIoU": 0.22858990300920168,
+        "predictionToIdentityRatio": 1.2396457923050157,
+        "step": 4
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 62908,
+        "identityIoU": 0.1637643501677139,
+        "predictionCount": 62389,
+        "predictionIoU": 0.20057682725844161,
+        "predictionToIdentityRatio": 1.2247893210764578,
+        "step": 5
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 63871,
+        "identityIoU": 0.14584006424753765,
+        "predictionCount": 62824,
+        "predictionIoU": 0.17848140121108394,
+        "predictionToIdentityRatio": 1.2238159804163513,
+        "step": 6
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 64940,
+        "identityIoU": 0.13565364101447697,
+        "predictionCount": 63262,
+        "predictionIoU": 0.16412868778773598,
+        "predictionToIdentityRatio": 1.2099099335654409,
+        "step": 7
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 67084,
+        "identityIoU": 0.12686936976797691,
+        "predictionCount": 63703,
+        "predictionIoU": 0.15110148830741338,
+        "predictionToIdentityRatio": 1.1910005431866888,
+        "step": 8
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 68577,
+        "identityIoU": 0.12020589334933181,
+        "predictionCount": 64147,
+        "predictionIoU": 0.14298016723934517,
+        "predictionToIdentityRatio": 1.1894605435344903,
+        "step": 9
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69816,
+        "identityIoU": 0.11637028390950599,
+        "predictionCount": 64594,
+        "predictionIoU": 0.1390774498088967,
+        "predictionToIdentityRatio": 1.1951285597708834,
+        "step": 10
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70393,
+        "identityIoU": 0.11338167997477566,
+        "predictionCount": 65044,
+        "predictionIoU": 0.1342182396784189,
+        "predictionToIdentityRatio": 1.1837736017695168,
+        "step": 11
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70931,
+        "identityIoU": 0.11202468340481801,
+        "predictionCount": 65498,
+        "predictionIoU": 0.13248221534170618,
+        "predictionToIdentityRatio": 1.1826162887955844,
+        "step": 12
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71041,
+        "identityIoU": 0.11120514556533515,
+        "predictionCount": 65955,
+        "predictionIoU": 0.13094589462908846,
+        "predictionToIdentityRatio": 1.1775165075626401,
+        "step": 13
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70870,
+        "identityIoU": 0.11140399203288553,
+        "predictionCount": 66415,
+        "predictionIoU": 0.1310161308925541,
+        "predictionToIdentityRatio": 1.1760452071940044,
+        "step": 14
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70703,
+        "identityIoU": 0.11396345820149026,
+        "predictionCount": 66878,
+        "predictionIoU": 0.13475417137484225,
+        "predictionToIdentityRatio": 1.1824331544642448,
+        "step": 15
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69965,
+        "identityIoU": 0.11537077958785139,
+        "predictionCount": 67344,
+        "predictionIoU": 0.13569555759575858,
+        "predictionToIdentityRatio": 1.1761692005594058,
+        "step": 16
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69823,
+        "identityIoU": 0.11840770355085548,
+        "predictionCount": 67814,
+        "predictionIoU": 0.13666919926004228,
+        "predictionToIdentityRatio": 1.1542255711541909,
+        "step": 17
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70012,
+        "identityIoU": 0.11825400231769603,
+        "predictionCount": 68287,
+        "predictionIoU": 0.13474240422721268,
+        "predictionToIdentityRatio": 1.1394320833659366,
+        "step": 18
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69758,
+        "identityIoU": 0.1170997010001031,
+        "predictionCount": 68763,
+        "predictionIoU": 0.1333742431680576,
+        "predictionToIdentityRatio": 1.1389802196671721,
+        "step": 19
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70461,
+        "identityIoU": 0.11774262505344164,
+        "predictionCount": 69243,
+        "predictionIoU": 0.13381379041682898,
+        "predictionToIdentityRatio": 1.1364940297202721,
+        "step": 20
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71726,
+        "identityIoU": 0.12077750038212666,
+        "predictionCount": 69726,
+        "predictionIoU": 0.13472059554942323,
+        "predictionToIdentityRatio": 1.115444475363227,
+        "step": 21
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71677,
+        "identityIoU": 0.1272245717459097,
+        "predictionCount": 70212,
+        "predictionIoU": 0.14177999517180334,
+        "predictionToIdentityRatio": 1.1144073289157022,
+        "step": 22
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71481,
+        "identityIoU": 0.13528838944855698,
+        "predictionCount": 70702,
+        "predictionIoU": 0.14944582326167974,
+        "predictionToIdentityRatio": 1.1046463327032663,
+        "step": 23
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70978,
+        "identityIoU": 0.14032862095632,
+        "predictionCount": 71195,
+        "predictionIoU": 0.1541046684363052,
+        "predictionToIdentityRatio": 1.0981699056550498,
+        "step": 24
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70631,
+        "identityIoU": 0.14357356911329144,
+        "predictionCount": 71588,
+        "predictionIoU": 0.15578220235676554,
+        "predictionToIdentityRatio": 1.0850339886294842,
+        "step": 25
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70729,
+        "identityIoU": 0.1450100088287485,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1583766757014138,
+        "predictionToIdentityRatio": 1.0921775467819663,
+        "step": 26
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71812,
+        "identityIoU": 0.1381702545717782,
+        "predictionCount": 71588,
+        "predictionIoU": 0.15691811214199275,
+        "predictionToIdentityRatio": 1.1356866398510919,
+        "step": 27
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71798,
+        "identityIoU": 0.13478328120166364,
+        "predictionCount": 71588,
+        "predictionIoU": 0.15696384336698055,
+        "predictionToIdentityRatio": 1.164564640121279,
+        "step": 28
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71998,
+        "identityIoU": 0.128723095567276,
+        "predictionCount": 71588,
+        "predictionIoU": 0.15511041390129118,
+        "predictionToIdentityRatio": 1.2049928819511964,
+        "step": 29
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 72486,
+        "identityIoU": 0.12636080541012956,
+        "predictionCount": 71588,
+        "predictionIoU": 0.15114616042250933,
+        "predictionToIdentityRatio": 1.1961474915574801,
+        "step": 30
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 73212,
+        "identityIoU": 0.12143541313078694,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1459776027858019,
+        "predictionToIdentityRatio": 1.2021007630499254,
+        "step": 31
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 73045,
+        "identityIoU": 0.1176658002850675,
+        "predictionCount": 71588,
+        "predictionIoU": 0.14171028015250905,
+        "predictionToIdentityRatio": 1.2043455261357956,
+        "step": 32
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 72620,
+        "identityIoU": 0.11480347330005453,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13787933782568212,
+        "predictionToIdentityRatio": 1.2010031914741437,
+        "step": 33
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 72494,
+        "identityIoU": 0.11178761358402077,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13460220964020506,
+        "predictionToIdentityRatio": 1.2040887655145853,
+        "step": 34
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 72177,
+        "identityIoU": 0.1128795072393133,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13562936924839053,
+        "predictionToIdentityRatio": 1.2015411172981625,
+        "step": 35
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71690,
+        "identityIoU": 0.11297709923664122,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1330175474667278,
+        "predictionToIdentityRatio": 1.1773850485230637,
+        "step": 36
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71100,
+        "identityIoU": 0.11328734151467897,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13336192790989532,
+        "predictionToIdentityRatio": 1.1772006132972521,
+        "step": 37
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70188,
+        "identityIoU": 0.11227926568268828,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1326494743233311,
+        "predictionToIdentityRatio": 1.1814244911274263,
+        "step": 38
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70454,
+        "identityIoU": 0.11385404594723567,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13405880990970132,
+        "predictionToIdentityRatio": 1.1774619759391713,
+        "step": 39
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70663,
+        "identityIoU": 0.11436256234785422,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13320321835417828,
+        "predictionToIdentityRatio": 1.1647449621583053,
+        "step": 40
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70468,
+        "identityIoU": 0.1148378403731846,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13098308971051878,
+        "predictionToIdentityRatio": 1.1405917185909062,
+        "step": 41
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70829,
+        "identityIoU": 0.115737509575283,
+        "predictionCount": 71588,
+        "predictionIoU": 0.12954062371117667,
+        "predictionToIdentityRatio": 1.1192622356101005,
+        "step": 42
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70268,
+        "identityIoU": 0.11836829117828501,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1291390728476821,
+        "predictionToIdentityRatio": 1.0909938089177469,
+        "step": 43
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70153,
+        "identityIoU": 0.11994503843016016,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1330487541667666,
+        "predictionToIdentityRatio": 1.1092476679995085,
+        "step": 44
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70214,
+        "identityIoU": 0.12086354420810282,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13591540833900748,
+        "predictionToIdentityRatio": 1.1245360148051622,
+        "step": 45
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70045,
+        "identityIoU": 0.12350405242283152,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13692956050571944,
+        "predictionToIdentityRatio": 1.1087050005203394,
+        "step": 46
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69595,
+        "identityIoU": 0.12453993574255454,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13858176275615125,
+        "predictionToIdentityRatio": 1.1127495925694355,
+        "step": 47
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69010,
+        "identityIoU": 0.12423467612885271,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13851909435429016,
+        "predictionToIdentityRatio": 1.1149793171322155,
+        "step": 48
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 68992,
+        "identityIoU": 0.12335517738879521,
+        "predictionCount": 71588,
+        "predictionIoU": 0.14166450103950104,
+        "predictionToIdentityRatio": 1.148427686930382,
+        "step": 49
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69625,
+        "identityIoU": 0.11956418677217208,
+        "predictionCount": 71588,
+        "predictionIoU": 0.14035031049881697,
+        "predictionToIdentityRatio": 1.173849078790228,
+        "step": 50
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69160,
+        "identityIoU": 0.12077282135217757,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1411475688954832,
+        "predictionToIdentityRatio": 1.1687030849754863,
+        "step": 51
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 68431,
+        "identityIoU": 0.11996866977068013,
+        "predictionCount": 71588,
+        "predictionIoU": 0.14146544274697145,
+        "predictionToIdentityRatio": 1.1791865577686438,
+        "step": 52
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 68340,
+        "identityIoU": 0.1208447365209964,
+        "predictionCount": 71588,
+        "predictionIoU": 0.14372588766102137,
+        "predictionToIdentityRatio": 1.1893433822502435,
+        "step": 53
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 68400,
+        "identityIoU": 0.12086945158339504,
+        "predictionCount": 71588,
+        "predictionIoU": 0.14483390307332472,
+        "predictionToIdentityRatio": 1.1982672310992921,
+        "step": 54
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 68553,
+        "identityIoU": 0.12047459160418225,
+        "predictionCount": 71588,
+        "predictionIoU": 0.14297249023333958,
+        "predictionToIdentityRatio": 1.1867439294010964,
+        "step": 55
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 68658,
+        "identityIoU": 0.11720916528008875,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1383603896103896,
+        "predictionToIdentityRatio": 1.1804570852437763,
+        "step": 56
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69517,
+        "identityIoU": 0.11637189457022916,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13818219949344218,
+        "predictionToIdentityRatio": 1.187419007001306,
+        "step": 57
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69955,
+        "identityIoU": 0.11634645885308162,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13798842257597685,
+        "predictionToIdentityRatio": 1.1860130848522341,
+        "step": 58
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69968,
+        "identityIoU": 0.11691753505724946,
+        "predictionCount": 71588,
+        "predictionIoU": 0.138367511057499,
+        "predictionToIdentityRatio": 1.1834624377750218,
+        "step": 59
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70464,
+        "identityIoU": 0.1169946424451641,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1392047732850017,
+        "predictionToIdentityRatio": 1.1898388710427281,
+        "step": 60
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70074,
+        "identityIoU": 0.11684961909903425,
+        "predictionCount": 71588,
+        "predictionIoU": 0.139898290900898,
+        "predictionToIdentityRatio": 1.1972507225918227,
+        "step": 61
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70098,
+        "identityIoU": 0.11979967528841776,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1404125852174403,
+        "predictionToIdentityRatio": 1.1720614841350525,
+        "step": 62
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70612,
+        "identityIoU": 0.12233504279368129,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13922225248754225,
+        "predictionToIdentityRatio": 1.1380406571021626,
+        "step": 63
+      }
+    ]
+  },
+  "claimBoundary": "Offline same-raster diagnostic only; it does not establish analytical-raymarch image error, authorize runtime composition, or prove cross-basin generalization."
+}

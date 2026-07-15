@@ -1,0 +1,31 @@
+{
+  "job_id": "f1a19c5759b9",
+  "job_type": "kaminos_phase_transport_support_envelope_mlx_infer",
+  "status": "done",
+  "input_path": "/private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json",
+  "output_dir": "/private/tmp/kaminos-phase-physical-energy-support-envelope-r1-0715",
+  "effective_route": "/private/tmp/kaminos-pyro-phase-audit-venv-0714/bin/python -u boundary-splat-phase-transport-mlx.py --manifest /private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json --model /private/tmp/kaminos-phase-transport-eulerian-full-r1-0714/transport-model.json --state-model /private/tmp/kaminos-phase-destination-state-physical-energy-anchored-online-h12-w1-r1-0715/destination-state-model.json --state-recurrence-mode protected-splat --support-budget-mode training-episode-envelope --out-dir /private/tmp/kaminos-phase-physical-energy-support-envelope-r1-0715 --inference-start 0 --inference-steps 63 --grid-size 160 --batch-size 4096",
+  "effective_cwd": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713",
+  "effective_env": {
+    "PYTHONPATH": "."
+  },
+  "effective_defaults": {
+    "batch_size": "4096",
+    "grid_size": "160",
+    "inference_start": "0",
+    "inference_steps": "63",
+    "model": "/private/tmp/kaminos-phase-transport-eulerian-full-r1-0714/transport-model.json",
+    "state_model": "/private/tmp/kaminos-phase-destination-state-anchored-online-h12-w1-r1-0715/destination-state-model.json",
+    "support_budget_mode": "one-step-ratio"
+  },
+  "effective_timeout": null,
+  "ignored_params": null,
+  "started_at": 1784132594.166236,
+  "finished_at": 1784132713.6514401,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "warnings": [
+    "volatile_output"
+  ]
+}

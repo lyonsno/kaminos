@@ -1,0 +1,4576 @@
+{
+  "completedAt": 1784132713.321283,
+  "countDriftGate": {
+    "allStepsNotWorseThanIdentity": false,
+    "authority": "every-recurrent-step-count-drift-versus-identity-v0",
+    "evaluatedStepCount": 63,
+    "firstWorseThanIdentityStep": 1,
+    "manualToleranceApplied": false,
+    "maximumAbsolutePredictedCountError": 5433,
+    "maximumPredictedToExactRatio": 1.0475270705297044,
+    "steps": [
+      {
+        "exactCount": 60014,
+        "identityCountError": 245,
+        "notWorseThanIdentity": false,
+        "predictedCount": 60679,
+        "predictedCountError": 665,
+        "predictedToExactRatio": 1.0110807478255073,
+        "sourceCount": 60259,
+        "step": 1
+      },
+      {
+        "exactCount": 60597,
+        "identityCountError": 338,
+        "notWorseThanIdentity": false,
+        "predictedCount": 61102,
+        "predictedCountError": 505,
+        "predictedToExactRatio": 1.0083337458950112,
+        "sourceCount": 60259,
+        "step": 2
+      },
+      {
+        "exactCount": 60940,
+        "identityCountError": 681,
+        "notWorseThanIdentity": true,
+        "predictedCount": 61528,
+        "predictedCountError": 588,
+        "predictedToExactRatio": 1.0096488349195931,
+        "sourceCount": 60259,
+        "step": 3
+      },
+      {
+        "exactCount": 61547,
+        "identityCountError": 1288,
+        "notWorseThanIdentity": true,
+        "predictedCount": 61957,
+        "predictedCountError": 410,
+        "predictedToExactRatio": 1.0066615757063708,
+        "sourceCount": 60259,
+        "step": 4
+      },
+      {
+        "exactCount": 62908,
+        "identityCountError": 2649,
+        "notWorseThanIdentity": true,
+        "predictedCount": 62389,
+        "predictedCountError": 519,
+        "predictedToExactRatio": 0.9917498569339352,
+        "sourceCount": 60259,
+        "step": 5
+      },
+      {
+        "exactCount": 63871,
+        "identityCountError": 3612,
+        "notWorseThanIdentity": true,
+        "predictedCount": 62824,
+        "predictedCountError": 1047,
+        "predictedToExactRatio": 0.9836075840365737,
+        "sourceCount": 60259,
+        "step": 6
+      },
+      {
+        "exactCount": 64940,
+        "identityCountError": 4681,
+        "notWorseThanIdentity": true,
+        "predictedCount": 63262,
+        "predictedCountError": 1678,
+        "predictedToExactRatio": 0.9741607637819526,
+        "sourceCount": 60259,
+        "step": 7
+      },
+      {
+        "exactCount": 67084,
+        "identityCountError": 6825,
+        "notWorseThanIdentity": true,
+        "predictedCount": 63703,
+        "predictedCountError": 3381,
+        "predictedToExactRatio": 0.9496005008645877,
+        "sourceCount": 60259,
+        "step": 8
+      },
+      {
+        "exactCount": 68577,
+        "identityCountError": 8318,
+        "notWorseThanIdentity": true,
+        "predictedCount": 64147,
+        "predictedCountError": 4430,
+        "predictedToExactRatio": 0.9354010819954212,
+        "sourceCount": 60259,
+        "step": 9
+      },
+      {
+        "exactCount": 69816,
+        "identityCountError": 9557,
+        "notWorseThanIdentity": true,
+        "predictedCount": 64594,
+        "predictedCountError": 5222,
+        "predictedToExactRatio": 0.9252033917726595,
+        "sourceCount": 60259,
+        "step": 10
+      },
+      {
+        "exactCount": 70393,
+        "identityCountError": 10134,
+        "notWorseThanIdentity": true,
+        "predictedCount": 65044,
+        "predictedCountError": 5349,
+        "predictedToExactRatio": 0.9240123307715256,
+        "sourceCount": 60259,
+        "step": 11
+      },
+      {
+        "exactCount": 70931,
+        "identityCountError": 10672,
+        "notWorseThanIdentity": true,
+        "predictedCount": 65498,
+        "predictedCountError": 5433,
+        "predictedToExactRatio": 0.9234044352962738,
+        "sourceCount": 60259,
+        "step": 12
+      },
+      {
+        "exactCount": 71041,
+        "identityCountError": 10782,
+        "notWorseThanIdentity": true,
+        "predictedCount": 65955,
+        "predictedCountError": 5086,
+        "predictedToExactRatio": 0.9284075393082868,
+        "sourceCount": 60259,
+        "step": 13
+      },
+      {
+        "exactCount": 70870,
+        "identityCountError": 10611,
+        "notWorseThanIdentity": true,
+        "predictedCount": 66415,
+        "predictedCountError": 4455,
+        "predictedToExactRatio": 0.9371384224636659,
+        "sourceCount": 60259,
+        "step": 14
+      },
+      {
+        "exactCount": 70703,
+        "identityCountError": 10444,
+        "notWorseThanIdentity": true,
+        "predictedCount": 66878,
+        "predictedCountError": 3825,
+        "predictedToExactRatio": 0.9459004568405867,
+        "sourceCount": 60259,
+        "step": 15
+      },
+      {
+        "exactCount": 69965,
+        "identityCountError": 9706,
+        "notWorseThanIdentity": true,
+        "predictedCount": 67344,
+        "predictedCountError": 2621,
+        "predictedToExactRatio": 0.9625384120631745,
+        "sourceCount": 60259,
+        "step": 16
+      },
+      {
+        "exactCount": 69823,
+        "identityCountError": 9564,
+        "notWorseThanIdentity": true,
+        "predictedCount": 67814,
+        "predictedCountError": 2009,
+        "predictedToExactRatio": 0.9712272460364063,
+        "sourceCount": 60259,
+        "step": 17
+      },
+      {
+        "exactCount": 70012,
+        "identityCountError": 9753,
+        "notWorseThanIdentity": true,
+        "predictedCount": 68287,
+        "predictedCountError": 1725,
+        "predictedToExactRatio": 0.9753613666228647,
+        "sourceCount": 60259,
+        "step": 18
+      },
+      {
+        "exactCount": 69758,
+        "identityCountError": 9499,
+        "notWorseThanIdentity": true,
+        "predictedCount": 68763,
+        "predictedCountError": 995,
+        "predictedToExactRatio": 0.9857364029932051,
+        "sourceCount": 60259,
+        "step": 19
+      },
+      {
+        "exactCount": 70461,
+        "identityCountError": 10202,
+        "notWorseThanIdentity": true,
+        "predictedCount": 69243,
+        "predictedCountError": 1218,
+        "predictedToExactRatio": 0.9827138416996637,
+        "sourceCount": 60259,
+        "step": 20
+      },
+      {
+        "exactCount": 71726,
+        "identityCountError": 11467,
+        "notWorseThanIdentity": true,
+        "predictedCount": 69726,
+        "predictedCountError": 2000,
+        "predictedToExactRatio": 0.9721161085241056,
+        "sourceCount": 60259,
+        "step": 21
+      },
+      {
+        "exactCount": 71677,
+        "identityCountError": 11418,
+        "notWorseThanIdentity": true,
+        "predictedCount": 70212,
+        "predictedCountError": 1465,
+        "predictedToExactRatio": 0.9795610865410104,
+        "sourceCount": 60259,
+        "step": 22
+      },
+      {
+        "exactCount": 71481,
+        "identityCountError": 11222,
+        "notWorseThanIdentity": true,
+        "predictedCount": 70702,
+        "predictedCountError": 779,
+        "predictedToExactRatio": 0.9891019991326366,
+        "sourceCount": 60259,
+        "step": 23
+      },
+      {
+        "exactCount": 70978,
+        "identityCountError": 10719,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71195,
+        "predictedCountError": 217,
+        "predictedToExactRatio": 1.0030572853560258,
+        "sourceCount": 60259,
+        "step": 24
+      },
+      {
+        "exactCount": 70631,
+        "identityCountError": 10372,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 957,
+        "predictedToExactRatio": 1.0135492913876343,
+        "sourceCount": 60259,
+        "step": 25
+      },
+      {
+        "exactCount": 70729,
+        "identityCountError": 10470,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 859,
+        "predictedToExactRatio": 1.0121449476169606,
+        "sourceCount": 60259,
+        "step": 26
+      },
+      {
+        "exactCount": 71812,
+        "identityCountError": 11553,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 224,
+        "predictedToExactRatio": 0.9968807441653206,
+        "sourceCount": 60259,
+        "step": 27
+      },
+      {
+        "exactCount": 71798,
+        "identityCountError": 11539,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 210,
+        "predictedToExactRatio": 0.9970751274408758,
+        "sourceCount": 60259,
+        "step": 28
+      },
+      {
+        "exactCount": 71998,
+        "identityCountError": 11739,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 410,
+        "predictedToExactRatio": 0.9943053973721492,
+        "sourceCount": 60259,
+        "step": 29
+      },
+      {
+        "exactCount": 72486,
+        "identityCountError": 12227,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 898,
+        "predictedToExactRatio": 0.9876114008222278,
+        "sourceCount": 60259,
+        "step": 30
+      },
+      {
+        "exactCount": 73212,
+        "identityCountError": 12953,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 1624,
+        "predictedToExactRatio": 0.9778178440692783,
+        "sourceCount": 60259,
+        "step": 31
+      },
+      {
+        "exactCount": 73045,
+        "identityCountError": 12786,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 1457,
+        "predictedToExactRatio": 0.9800533917448149,
+        "sourceCount": 60259,
+        "step": 32
+      },
+      {
+        "exactCount": 72620,
+        "identityCountError": 12361,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 1032,
+        "predictedToExactRatio": 0.9857890388322776,
+        "sourceCount": 60259,
+        "step": 33
+      },
+      {
+        "exactCount": 72494,
+        "identityCountError": 12235,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 906,
+        "predictedToExactRatio": 0.9875024139928822,
+        "sourceCount": 60259,
+        "step": 34
+      },
+      {
+        "exactCount": 72177,
+        "identityCountError": 11918,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 589,
+        "predictedToExactRatio": 0.9918395056596977,
+        "sourceCount": 60259,
+        "step": 35
+      },
+      {
+        "exactCount": 71690,
+        "identityCountError": 11431,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 102,
+        "predictedToExactRatio": 0.9985772074208398,
+        "sourceCount": 60259,
+        "step": 36
+      },
+      {
+        "exactCount": 71100,
+        "identityCountError": 10841,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 488,
+        "predictedToExactRatio": 1.0068635724331927,
+        "sourceCount": 60259,
+        "step": 37
+      },
+      {
+        "exactCount": 70188,
+        "identityCountError": 9929,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 1400,
+        "predictedToExactRatio": 1.0199464295891036,
+        "sourceCount": 60259,
+        "step": 38
+      },
+      {
+        "exactCount": 70454,
+        "identityCountError": 10195,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 1134,
+        "predictedToExactRatio": 1.0160956084821302,
+        "sourceCount": 60259,
+        "step": 39
+      },
+      {
+        "exactCount": 70663,
+        "identityCountError": 10404,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 925,
+        "predictedToExactRatio": 1.013090301855285,
+        "sourceCount": 60259,
+        "step": 40
+      },
+      {
+        "exactCount": 70468,
+        "identityCountError": 10209,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 1120,
+        "predictedToExactRatio": 1.0158937390021003,
+        "sourceCount": 60259,
+        "step": 41
+      },
+      {
+        "exactCount": 70829,
+        "identityCountError": 10570,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 759,
+        "predictedToExactRatio": 1.0107159496816276,
+        "sourceCount": 60259,
+        "step": 42
+      },
+      {
+        "exactCount": 70268,
+        "identityCountError": 10009,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 1320,
+        "predictedToExactRatio": 1.018785222291797,
+        "sourceCount": 60259,
+        "step": 43
+      },
+      {
+        "exactCount": 70153,
+        "identityCountError": 9894,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 1435,
+        "predictedToExactRatio": 1.0204552905791626,
+        "sourceCount": 60259,
+        "step": 44
+      },
+      {
+        "exactCount": 70214,
+        "identityCountError": 9955,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 1374,
+        "predictedToExactRatio": 1.019568746973538,
+        "sourceCount": 60259,
+        "step": 45
+      },
+      {
+        "exactCount": 70045,
+        "identityCountError": 9786,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 1543,
+        "predictedToExactRatio": 1.0220286958383895,
+        "sourceCount": 60259,
+        "step": 46
+      },
+      {
+        "exactCount": 69595,
+        "identityCountError": 9336,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 1993,
+        "predictedToExactRatio": 1.028637114735254,
+        "sourceCount": 60259,
+        "step": 47
+      },
+      {
+        "exactCount": 69010,
+        "identityCountError": 8751,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 2578,
+        "predictedToExactRatio": 1.0373569047964064,
+        "sourceCount": 60259,
+        "step": 48
+      },
+      {
+        "exactCount": 68992,
+        "identityCountError": 8733,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 2596,
+        "predictedToExactRatio": 1.0376275510204083,
+        "sourceCount": 60259,
+        "step": 49
+      },
+      {
+        "exactCount": 69625,
+        "identityCountError": 9366,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 1963,
+        "predictedToExactRatio": 1.0281938958707362,
+        "sourceCount": 60259,
+        "step": 50
+      },
+      {
+        "exactCount": 69160,
+        "identityCountError": 8901,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 2428,
+        "predictedToExactRatio": 1.035106998264893,
+        "sourceCount": 60259,
+        "step": 51
+      },
+      {
+        "exactCount": 68431,
+        "identityCountError": 8172,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 3157,
+        "predictedToExactRatio": 1.0461340620479023,
+        "sourceCount": 60259,
+        "step": 52
+      },
+      {
+        "exactCount": 68340,
+        "identityCountError": 8081,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 3248,
+        "predictedToExactRatio": 1.0475270705297044,
+        "sourceCount": 60259,
+        "step": 53
+      },
+      {
+        "exactCount": 68400,
+        "identityCountError": 8141,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 3188,
+        "predictedToExactRatio": 1.046608187134503,
+        "sourceCount": 60259,
+        "step": 54
+      },
+      {
+        "exactCount": 68553,
+        "identityCountError": 8294,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 3035,
+        "predictedToExactRatio": 1.044272314851283,
+        "sourceCount": 60259,
+        "step": 55
+      },
+      {
+        "exactCount": 68658,
+        "identityCountError": 8399,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 2930,
+        "predictedToExactRatio": 1.04267528911416,
+        "sourceCount": 60259,
+        "step": 56
+      },
+      {
+        "exactCount": 69517,
+        "identityCountError": 9258,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 2071,
+        "predictedToExactRatio": 1.0297912740768445,
+        "sourceCount": 60259,
+        "step": 57
+      },
+      {
+        "exactCount": 69955,
+        "identityCountError": 9696,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 1633,
+        "predictedToExactRatio": 1.0233435780144378,
+        "sourceCount": 60259,
+        "step": 58
+      },
+      {
+        "exactCount": 69968,
+        "identityCountError": 9709,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 1620,
+        "predictedToExactRatio": 1.0231534415732906,
+        "sourceCount": 60259,
+        "step": 59
+      },
+      {
+        "exactCount": 70464,
+        "identityCountError": 10205,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 1124,
+        "predictedToExactRatio": 1.0159514078110807,
+        "sourceCount": 60259,
+        "step": 60
+      },
+      {
+        "exactCount": 70074,
+        "identityCountError": 9815,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 1514,
+        "predictedToExactRatio": 1.0216057310842823,
+        "sourceCount": 60259,
+        "step": 61
+      },
+      {
+        "exactCount": 70098,
+        "identityCountError": 9839,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 1490,
+        "predictedToExactRatio": 1.021255955947388,
+        "sourceCount": 60259,
+        "step": 62
+      },
+      {
+        "exactCount": 70612,
+        "identityCountError": 10353,
+        "notWorseThanIdentity": true,
+        "predictedCount": 71588,
+        "predictedCountError": 976,
+        "predictedToExactRatio": 1.0138220132555373,
+        "sourceCount": 60259,
+        "step": 63
+      }
+    ],
+    "stepsMayBeTruncated": false
+  },
+  "destinationStateModel": {
+    "evaluationManifest": {
+      "bytes": 421170,
+      "controlledStepDeltaMs": 160,
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "frameCount": 64,
+      "path": "/private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json",
+      "sha256": "d38028655e038df55af0fb5f1c9cfc5c40f3464992ebd26b106c29b234f88c78"
+    },
+    "path": "/private/tmp/kaminos-phase-destination-state-physical-energy-anchored-online-h12-w1-r1-0715/destination-state-model.json",
+    "schema": "kaminos-boundary-splat-phase-destination-state-model-v0",
+    "sha256": "48c7bb6ad4ce0fedbac6e4cecb92d3f5cbc619a9bc718775f87b49867fb38e65",
+    "trainingManifest": {
+      "bytes": 90735,
+      "controlledStepDeltaMs": 160,
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "frameCount": 13,
+      "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/phase-corpus.json",
+      "sha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+    }
+  },
+  "holdoutMetrics": [
+    {
+      "beatsIdentity": true,
+      "exactCount": 60014,
+      "identityIoU": 0.43477638469705465,
+      "predictionCount": 60679,
+      "predictionIoU": 0.48042342320241394,
+      "predictionToIdentityRatio": 1.1049896915104196,
+      "step": 1
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 60597,
+      "identityIoU": 0.2951123589485303,
+      "predictionCount": 61102,
+      "predictionIoU": 0.35649159570199296,
+      "predictionToIdentityRatio": 1.2079859920884155,
+      "step": 2
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 60940,
+      "identityIoU": 0.22214603353870666,
+      "predictionCount": 61528,
+      "predictionIoU": 0.277731408062766,
+      "predictionToIdentityRatio": 1.2502199730447774,
+      "step": 3
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 61547,
+      "identityIoU": 0.18439936990723635,
+      "predictionCount": 61957,
+      "predictionIoU": 0.22858990300920168,
+      "predictionToIdentityRatio": 1.2396457923050157,
+      "step": 4
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 62908,
+      "identityIoU": 0.1637643501677139,
+      "predictionCount": 62389,
+      "predictionIoU": 0.20057682725844161,
+      "predictionToIdentityRatio": 1.2247893210764578,
+      "step": 5
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 63871,
+      "identityIoU": 0.14584006424753765,
+      "predictionCount": 62824,
+      "predictionIoU": 0.17848140121108394,
+      "predictionToIdentityRatio": 1.2238159804163513,
+      "step": 6
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 64940,
+      "identityIoU": 0.13565364101447697,
+      "predictionCount": 63262,
+      "predictionIoU": 0.16412868778773598,
+      "predictionToIdentityRatio": 1.2099099335654409,
+      "step": 7
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 67084,
+      "identityIoU": 0.12686936976797691,
+      "predictionCount": 63703,
+      "predictionIoU": 0.15110148830741338,
+      "predictionToIdentityRatio": 1.1910005431866888,
+      "step": 8
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 68577,
+      "identityIoU": 0.12020589334933181,
+      "predictionCount": 64147,
+      "predictionIoU": 0.14298016723934517,
+      "predictionToIdentityRatio": 1.1894605435344903,
+      "step": 9
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69816,
+      "identityIoU": 0.11637028390950599,
+      "predictionCount": 64594,
+      "predictionIoU": 0.1390774498088967,
+      "predictionToIdentityRatio": 1.1951285597708834,
+      "step": 10
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70393,
+      "identityIoU": 0.11338167997477566,
+      "predictionCount": 65044,
+      "predictionIoU": 0.1342182396784189,
+      "predictionToIdentityRatio": 1.1837736017695168,
+      "step": 11
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70931,
+      "identityIoU": 0.11202468340481801,
+      "predictionCount": 65498,
+      "predictionIoU": 0.13248221534170618,
+      "predictionToIdentityRatio": 1.1826162887955844,
+      "step": 12
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 71041,
+      "identityIoU": 0.11120514556533515,
+      "predictionCount": 65955,
+      "predictionIoU": 0.13094589462908846,
+      "predictionToIdentityRatio": 1.1775165075626401,
+      "step": 13
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70870,
+      "identityIoU": 0.11140399203288553,
+      "predictionCount": 66415,
+      "predictionIoU": 0.1310161308925541,
+      "predictionToIdentityRatio": 1.1760452071940044,
+      "step": 14
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70703,
+      "identityIoU": 0.11396345820149026,
+      "predictionCount": 66878,
+      "predictionIoU": 0.13475417137484225,
+      "predictionToIdentityRatio": 1.1824331544642448,
+      "step": 15
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69965,
+      "identityIoU": 0.11537077958785139,
+      "predictionCount": 67344,
+      "predictionIoU": 0.13569555759575858,
+      "predictionToIdentityRatio": 1.1761692005594058,
+      "step": 16
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69823,
+      "identityIoU": 0.11840770355085548,
+      "predictionCount": 67814,
+      "predictionIoU": 0.13666919926004228,
+      "predictionToIdentityRatio": 1.1542255711541909,
+      "step": 17
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70012,
+      "identityIoU": 0.11825400231769603,
+      "predictionCount": 68287,
+      "predictionIoU": 0.13474240422721268,
+      "predictionToIdentityRatio": 1.1394320833659366,
+      "step": 18
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69758,
+      "identityIoU": 0.1170997010001031,
+      "predictionCount": 68763,
+      "predictionIoU": 0.1333742431680576,
+      "predictionToIdentityRatio": 1.1389802196671721,
+      "step": 19
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70461,
+      "identityIoU": 0.11774262505344164,
+      "predictionCount": 69243,
+      "predictionIoU": 0.13381379041682898,
+      "predictionToIdentityRatio": 1.1364940297202721,
+      "step": 20
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 71726,
+      "identityIoU": 0.12077750038212666,
+      "predictionCount": 69726,
+      "predictionIoU": 0.13472059554942323,
+      "predictionToIdentityRatio": 1.115444475363227,
+      "step": 21
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 71677,
+      "identityIoU": 0.1272245717459097,
+      "predictionCount": 70212,
+      "predictionIoU": 0.14177999517180334,
+      "predictionToIdentityRatio": 1.1144073289157022,
+      "step": 22
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 71481,
+      "identityIoU": 0.13528838944855698,
+      "predictionCount": 70702,
+      "predictionIoU": 0.14944582326167974,
+      "predictionToIdentityRatio": 1.1046463327032663,
+      "step": 23
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70978,
+      "identityIoU": 0.14032862095632,
+      "predictionCount": 71195,
+      "predictionIoU": 0.1541046684363052,
+      "predictionToIdentityRatio": 1.0981699056550498,
+      "step": 24
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70631,
+      "identityIoU": 0.14357356911329144,
+      "predictionCount": 71588,
+      "predictionIoU": 0.15578220235676554,
+      "predictionToIdentityRatio": 1.0850339886294842,
+      "step": 25
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70729,
+      "identityIoU": 0.1450100088287485,
+      "predictionCount": 71588,
+      "predictionIoU": 0.1583766757014138,
+      "predictionToIdentityRatio": 1.0921775467819663,
+      "step": 26
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 71812,
+      "identityIoU": 0.1381702545717782,
+      "predictionCount": 71588,
+      "predictionIoU": 0.15691811214199275,
+      "predictionToIdentityRatio": 1.1356866398510919,
+      "step": 27
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 71798,
+      "identityIoU": 0.13478328120166364,
+      "predictionCount": 71588,
+      "predictionIoU": 0.15696384336698055,
+      "predictionToIdentityRatio": 1.164564640121279,
+      "step": 28
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 71998,
+      "identityIoU": 0.128723095567276,
+      "predictionCount": 71588,
+      "predictionIoU": 0.15511041390129118,
+      "predictionToIdentityRatio": 1.2049928819511964,
+      "step": 29
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 72486,
+      "identityIoU": 0.12636080541012956,
+      "predictionCount": 71588,
+      "predictionIoU": 0.15114616042250933,
+      "predictionToIdentityRatio": 1.1961474915574801,
+      "step": 30
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 73212,
+      "identityIoU": 0.12143541313078694,
+      "predictionCount": 71588,
+      "predictionIoU": 0.1459776027858019,
+      "predictionToIdentityRatio": 1.2021007630499254,
+      "step": 31
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 73045,
+      "identityIoU": 0.1176658002850675,
+      "predictionCount": 71588,
+      "predictionIoU": 0.14171028015250905,
+      "predictionToIdentityRatio": 1.2043455261357956,
+      "step": 32
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 72620,
+      "identityIoU": 0.11480347330005453,
+      "predictionCount": 71588,
+      "predictionIoU": 0.13787933782568212,
+      "predictionToIdentityRatio": 1.2010031914741437,
+      "step": 33
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 72494,
+      "identityIoU": 0.11178761358402077,
+      "predictionCount": 71588,
+      "predictionIoU": 0.13460220964020506,
+      "predictionToIdentityRatio": 1.2040887655145853,
+      "step": 34
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 72177,
+      "identityIoU": 0.1128795072393133,
+      "predictionCount": 71588,
+      "predictionIoU": 0.13562936924839053,
+      "predictionToIdentityRatio": 1.2015411172981625,
+      "step": 35
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 71690,
+      "identityIoU": 0.11297709923664122,
+      "predictionCount": 71588,
+      "predictionIoU": 0.1330175474667278,
+      "predictionToIdentityRatio": 1.1773850485230637,
+      "step": 36
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 71100,
+      "identityIoU": 0.11328734151467897,
+      "predictionCount": 71588,
+      "predictionIoU": 0.13336192790989532,
+      "predictionToIdentityRatio": 1.1772006132972521,
+      "step": 37
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70188,
+      "identityIoU": 0.11227926568268828,
+      "predictionCount": 71588,
+      "predictionIoU": 0.1326494743233311,
+      "predictionToIdentityRatio": 1.1814244911274263,
+      "step": 38
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70454,
+      "identityIoU": 0.11385404594723567,
+      "predictionCount": 71588,
+      "predictionIoU": 0.13405880990970132,
+      "predictionToIdentityRatio": 1.1774619759391713,
+      "step": 39
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70663,
+      "identityIoU": 0.11436256234785422,
+      "predictionCount": 71588,
+      "predictionIoU": 0.13320321835417828,
+      "predictionToIdentityRatio": 1.1647449621583053,
+      "step": 40
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70468,
+      "identityIoU": 0.1148378403731846,
+      "predictionCount": 71588,
+      "predictionIoU": 0.13098308971051878,
+      "predictionToIdentityRatio": 1.1405917185909062,
+      "step": 41
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70829,
+      "identityIoU": 0.115737509575283,
+      "predictionCount": 71588,
+      "predictionIoU": 0.12954062371117667,
+      "predictionToIdentityRatio": 1.1192622356101005,
+      "step": 42
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70268,
+      "identityIoU": 0.11836829117828501,
+      "predictionCount": 71588,
+      "predictionIoU": 0.1291390728476821,
+      "predictionToIdentityRatio": 1.0909938089177469,
+      "step": 43
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70153,
+      "identityIoU": 0.11994503843016016,
+      "predictionCount": 71588,
+      "predictionIoU": 0.1330487541667666,
+      "predictionToIdentityRatio": 1.1092476679995085,
+      "step": 44
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70214,
+      "identityIoU": 0.12086354420810282,
+      "predictionCount": 71588,
+      "predictionIoU": 0.13591540833900748,
+      "predictionToIdentityRatio": 1.1245360148051622,
+      "step": 45
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70045,
+      "identityIoU": 0.12350405242283152,
+      "predictionCount": 71588,
+      "predictionIoU": 0.13692956050571944,
+      "predictionToIdentityRatio": 1.1087050005203394,
+      "step": 46
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69595,
+      "identityIoU": 0.12453993574255454,
+      "predictionCount": 71588,
+      "predictionIoU": 0.13858176275615125,
+      "predictionToIdentityRatio": 1.1127495925694355,
+      "step": 47
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69010,
+      "identityIoU": 0.12423467612885271,
+      "predictionCount": 71588,
+      "predictionIoU": 0.13851909435429016,
+      "predictionToIdentityRatio": 1.1149793171322155,
+      "step": 48
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 68992,
+      "identityIoU": 0.12335517738879521,
+      "predictionCount": 71588,
+      "predictionIoU": 0.14166450103950104,
+      "predictionToIdentityRatio": 1.148427686930382,
+      "step": 49
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69625,
+      "identityIoU": 0.11956418677217208,
+      "predictionCount": 71588,
+      "predictionIoU": 0.14035031049881697,
+      "predictionToIdentityRatio": 1.173849078790228,
+      "step": 50
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69160,
+      "identityIoU": 0.12077282135217757,
+      "predictionCount": 71588,
+      "predictionIoU": 0.1411475688954832,
+      "predictionToIdentityRatio": 1.1687030849754863,
+      "step": 51
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 68431,
+      "identityIoU": 0.11996866977068013,
+      "predictionCount": 71588,
+      "predictionIoU": 0.14146544274697145,
+      "predictionToIdentityRatio": 1.1791865577686438,
+      "step": 52
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 68340,
+      "identityIoU": 0.1208447365209964,
+      "predictionCount": 71588,
+      "predictionIoU": 0.14372588766102137,
+      "predictionToIdentityRatio": 1.1893433822502435,
+      "step": 53
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 68400,
+      "identityIoU": 0.12086945158339504,
+      "predictionCount": 71588,
+      "predictionIoU": 0.14483390307332472,
+      "predictionToIdentityRatio": 1.1982672310992921,
+      "step": 54
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 68553,
+      "identityIoU": 0.12047459160418225,
+      "predictionCount": 71588,
+      "predictionIoU": 0.14297249023333958,
+      "predictionToIdentityRatio": 1.1867439294010964,
+      "step": 55
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 68658,
+      "identityIoU": 0.11720916528008875,
+      "predictionCount": 71588,
+      "predictionIoU": 0.1383603896103896,
+      "predictionToIdentityRatio": 1.1804570852437763,
+      "step": 56
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69517,
+      "identityIoU": 0.11637189457022916,
+      "predictionCount": 71588,
+      "predictionIoU": 0.13818219949344218,
+      "predictionToIdentityRatio": 1.187419007001306,
+      "step": 57
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69955,
+      "identityIoU": 0.11634645885308162,
+      "predictionCount": 71588,
+      "predictionIoU": 0.13798842257597685,
+      "predictionToIdentityRatio": 1.1860130848522341,
+      "step": 58
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69968,
+      "identityIoU": 0.11691753505724946,
+      "predictionCount": 71588,
+      "predictionIoU": 0.138367511057499,
+      "predictionToIdentityRatio": 1.1834624377750218,
+      "step": 59
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70464,
+      "identityIoU": 0.1169946424451641,
+      "predictionCount": 71588,
+      "predictionIoU": 0.1392047732850017,
+      "predictionToIdentityRatio": 1.1898388710427281,
+      "step": 60
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70074,
+      "identityIoU": 0.11684961909903425,
+      "predictionCount": 71588,
+      "predictionIoU": 0.139898290900898,
+      "predictionToIdentityRatio": 1.1972507225918227,
+      "step": 61
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70098,
+      "identityIoU": 0.11979967528841776,
+      "predictionCount": 71588,
+      "predictionIoU": 0.1404125852174403,
+      "predictionToIdentityRatio": 1.1720614841350525,
+      "step": 62
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70612,
+      "identityIoU": 0.12233504279368129,
+      "predictionCount": 71588,
+      "predictionIoU": 0.13922225248754225,
+      "predictionToIdentityRatio": 1.1380406571021626,
+      "step": 63
+    }
+  ],
+  "manifest": {
+    "bytes": 421170,
+    "path": "/private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json",
+    "sha256": "d38028655e038df55af0fb5f1c9cfc5c40f3464992ebd26b106c29b234f88c78"
+  },
+  "mode": "frozen-model-inference",
+  "model": {
+    "path": "/private/tmp/kaminos-phase-transport-eulerian-full-r1-0714/transport-model.json",
+    "schema": "kaminos-boundary-splat-phase-transport-model-v0",
+    "sha256": "e51c23d25eb38ec778c65774aae46c78bbcb02808d582539843417b10043c073"
+  },
+  "modelTrainingManifest": {
+    "bytes": 90735,
+    "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/phase-corpus.json",
+    "sha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+  },
+  "predictions": {
+    "path": "/private/tmp/kaminos-phase-physical-energy-support-envelope-r1-0715/transport-predictions.json",
+    "sha256": "94e3f9e680fd4d7c16634b8c25d86b4323bd7213c6f82f0b4c084bc1366112d5"
+  },
+  "recurrent": [
+    {
+      "activatedDeathCount": 6429,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 53830,
+      "destinationCandidateCount": 242045,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 3.1439666748046875,
+        "meanAbsoluteSplatResidual": 0.07473268125524928,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 60679
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2797652,
+        "denseCellBudget": 15426304,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 60679,
+      "requestedTargetSupportBudget": 60679,
+      "selectedBirthCount": 6849,
+      "sourceCount": 60259,
+      "stableAttributeCount": 53830,
+      "step": 1,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": false,
+        "currentCount": 60259,
+        "effectiveBudget": 60679,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 60679,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": false,
+      "targetSupportBudget": 60679,
+      "thresholdQualifiedBirthCount": 43916,
+      "transportedAttributeCount": 6849
+    },
+    {
+      "activatedDeathCount": 2839,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 57840,
+      "destinationCandidateCount": 213842,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 3.3519415855407715,
+        "meanAbsoluteSplatResidual": 0.028487716860871846,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 61102
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2738736,
+        "denseCellBudget": 15533824,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 61102,
+      "requestedTargetSupportBudget": 61102,
+      "selectedBirthCount": 3262,
+      "sourceCount": 60679,
+      "stableAttributeCount": 57840,
+      "step": 2,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": false,
+        "currentCount": 60679,
+        "effectiveBudget": 61102,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 61102,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": false,
+      "targetSupportBudget": 61102,
+      "thresholdQualifiedBirthCount": 38841,
+      "transportedAttributeCount": 3262
+    },
+    {
+      "activatedDeathCount": 1482,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 59620,
+      "destinationCandidateCount": 201584,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 2.4092395305633545,
+        "meanAbsoluteSplatResidual": 0.017904198386042142,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 61528
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2680128,
+        "denseCellBudget": 15642112,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 61528,
+      "requestedTargetSupportBudget": 61528,
+      "selectedBirthCount": 1908,
+      "sourceCount": 61102,
+      "stableAttributeCount": 59620,
+      "step": 3,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": false,
+        "currentCount": 61102,
+        "effectiveBudget": 61528,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 61528,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": false,
+      "targetSupportBudget": 61528,
+      "thresholdQualifiedBirthCount": 36820,
+      "transportedAttributeCount": 1908
+    },
+    {
+      "activatedDeathCount": 858,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 60670,
+      "destinationCandidateCount": 194700,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 2.398704767227173,
+        "meanAbsoluteSplatResidual": 0.012213949396605068,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 61957
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2583320,
+        "denseCellBudget": 15751168,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 61957,
+      "requestedTargetSupportBudget": 61957,
+      "selectedBirthCount": 1287,
+      "sourceCount": 61528,
+      "stableAttributeCount": 60670,
+      "step": 4,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": false,
+        "currentCount": 61528,
+        "effectiveBudget": 61957,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 61957,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": false,
+      "targetSupportBudget": 61957,
+      "thresholdQualifiedBirthCount": 35865,
+      "transportedAttributeCount": 1287
+    },
+    {
+      "activatedDeathCount": 533,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 61424,
+      "destinationCandidateCount": 191155,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 2.5408174991607666,
+        "meanAbsoluteSplatResidual": 0.008908606872305911,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 62389
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2583320,
+        "denseCellBudget": 15860992,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 62389,
+      "requestedTargetSupportBudget": 62389,
+      "selectedBirthCount": 965,
+      "sourceCount": 61957,
+      "stableAttributeCount": 61424,
+      "step": 5,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": false,
+        "currentCount": 61957,
+        "effectiveBudget": 62389,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 62389,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": false,
+      "targetSupportBudget": 62389,
+      "thresholdQualifiedBirthCount": 35354,
+      "transportedAttributeCount": 965
+    },
+    {
+      "activatedDeathCount": 355,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 62034,
+      "destinationCandidateCount": 189265,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 2.5063588619232178,
+        "meanAbsoluteSplatResidual": 0.006766767271782029,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 62824
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2583320,
+        "denseCellBudget": 15971584,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 62824,
+      "requestedTargetSupportBudget": 62824,
+      "selectedBirthCount": 790,
+      "sourceCount": 62389,
+      "stableAttributeCount": 62034,
+      "step": 6,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": false,
+        "currentCount": 62389,
+        "effectiveBudget": 62824,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 62824,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": false,
+      "targetSupportBudget": 62824,
+      "thresholdQualifiedBirthCount": 35049,
+      "transportedAttributeCount": 790
+    },
+    {
+      "activatedDeathCount": 254,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 62570,
+      "destinationCandidateCount": 188046,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 2.3914942741394043,
+        "meanAbsoluteSplatResidual": 0.005561524067431838,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 63262
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2429586,
+        "denseCellBudget": 16082944,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 63262,
+      "requestedTargetSupportBudget": 63262,
+      "selectedBirthCount": 692,
+      "sourceCount": 62824,
+      "stableAttributeCount": 62570,
+      "step": 7,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": false,
+        "currentCount": 62824,
+        "effectiveBudget": 63262,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 63262,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": false,
+      "targetSupportBudget": 63262,
+      "thresholdQualifiedBirthCount": 34880,
+      "transportedAttributeCount": 692
+    },
+    {
+      "activatedDeathCount": 195,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 63067,
+      "destinationCandidateCount": 187490,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 2.151038646697998,
+        "meanAbsoluteSplatResidual": 0.004821204239916367,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 63703
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2410752,
+        "denseCellBudget": 16195072,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 63703,
+      "requestedTargetSupportBudget": 63703,
+      "selectedBirthCount": 636,
+      "sourceCount": 63262,
+      "stableAttributeCount": 63067,
+      "step": 8,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": false,
+        "currentCount": 63262,
+        "effectiveBudget": 63703,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 63703,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": false,
+      "targetSupportBudget": 63703,
+      "thresholdQualifiedBirthCount": 34838,
+      "transportedAttributeCount": 636
+    },
+    {
+      "activatedDeathCount": 137,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 63566,
+      "destinationCandidateCount": 187252,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 2.144584894180298,
+        "meanAbsoluteSplatResidual": 0.004246843447476663,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 64147
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2389632,
+        "denseCellBudget": 16307968,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 64147,
+      "requestedTargetSupportBudget": 64147,
+      "selectedBirthCount": 581,
+      "sourceCount": 63703,
+      "stableAttributeCount": 63566,
+      "step": 9,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": false,
+        "currentCount": 63703,
+        "effectiveBudget": 64147,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 64147,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": false,
+      "targetSupportBudget": 64147,
+      "thresholdQualifiedBirthCount": 34811,
+      "transportedAttributeCount": 581
+    },
+    {
+      "activatedDeathCount": 102,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 64045,
+      "destinationCandidateCount": 187311,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 2.198254346847534,
+        "meanAbsoluteSplatResidual": 0.003823074344667429,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 64594
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2389632,
+        "denseCellBudget": 16421632,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 64594,
+      "requestedTargetSupportBudget": 64594,
+      "selectedBirthCount": 549,
+      "sourceCount": 64147,
+      "stableAttributeCount": 64045,
+      "step": 10,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": false,
+        "currentCount": 64147,
+        "effectiveBudget": 64594,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 64594,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": false,
+      "targetSupportBudget": 64594,
+      "thresholdQualifiedBirthCount": 34844,
+      "transportedAttributeCount": 549
+    },
+    {
+      "activatedDeathCount": 70,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 64524,
+      "destinationCandidateCount": 187657,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 2.1582274436950684,
+        "meanAbsoluteSplatResidual": 0.0034443651126018285,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 65044
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2405888,
+        "denseCellBudget": 16536064,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 65044,
+      "requestedTargetSupportBudget": 65044,
+      "selectedBirthCount": 520,
+      "sourceCount": 64594,
+      "stableAttributeCount": 64524,
+      "step": 11,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": false,
+        "currentCount": 64594,
+        "effectiveBudget": 65044,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 65044,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": false,
+      "targetSupportBudget": 65044,
+      "thresholdQualifiedBirthCount": 34959,
+      "transportedAttributeCount": 520
+    },
+    {
+      "activatedDeathCount": 53,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 64991,
+      "destinationCandidateCount": 188060,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 2.1888318061828613,
+        "meanAbsoluteSplatResidual": 0.0031690430966662686,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 65498
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2405888,
+        "denseCellBudget": 16651264,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 65498,
+      "requestedTargetSupportBudget": 65498,
+      "selectedBirthCount": 507,
+      "sourceCount": 65044,
+      "stableAttributeCount": 64991,
+      "step": 12,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": false,
+        "currentCount": 65044,
+        "effectiveBudget": 65498,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 65498,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": false,
+      "targetSupportBudget": 65498,
+      "thresholdQualifiedBirthCount": 35049,
+      "transportedAttributeCount": 507
+    },
+    {
+      "activatedDeathCount": 47,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 65451,
+      "destinationCandidateCount": 188538,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 2.5727083683013916,
+        "meanAbsoluteSplatResidual": 0.002956183789878502,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 65955
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2422144,
+        "denseCellBudget": 16767488,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 65955,
+      "requestedTargetSupportBudget": 65955,
+      "selectedBirthCount": 504,
+      "sourceCount": 65498,
+      "stableAttributeCount": 65451,
+      "step": 13,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": false,
+        "currentCount": 65498,
+        "effectiveBudget": 65955,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 65955,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": false,
+      "targetSupportBudget": 65955,
+      "thresholdQualifiedBirthCount": 35153,
+      "transportedAttributeCount": 504
+    },
+    {
+      "activatedDeathCount": 35,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 65920,
+      "destinationCandidateCount": 189058,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 1.9986517429351807,
+        "meanAbsoluteSplatResidual": 0.0028701519229801255,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 66415
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2422144,
+        "denseCellBudget": 16884480,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 66415,
+      "requestedTargetSupportBudget": 66415,
+      "selectedBirthCount": 495,
+      "sourceCount": 65955,
+      "stableAttributeCount": 65920,
+      "step": 14,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": false,
+        "currentCount": 65955,
+        "effectiveBudget": 66415,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 66415,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": false,
+      "targetSupportBudget": 66415,
+      "thresholdQualifiedBirthCount": 35322,
+      "transportedAttributeCount": 495
+    },
+    {
+      "activatedDeathCount": 27,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 66388,
+      "destinationCandidateCount": 189537,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 1.987432599067688,
+        "meanAbsoluteSplatResidual": 0.002687716826788319,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 66878
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 17002240,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 66878,
+      "requestedTargetSupportBudget": 66878,
+      "selectedBirthCount": 490,
+      "sourceCount": 66415,
+      "stableAttributeCount": 66388,
+      "step": 15,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": false,
+        "currentCount": 66415,
+        "effectiveBudget": 66878,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 66878,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": false,
+      "targetSupportBudget": 66878,
+      "thresholdQualifiedBirthCount": 35462,
+      "transportedAttributeCount": 490
+    },
+    {
+      "activatedDeathCount": 17,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 66861,
+      "destinationCandidateCount": 190136,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 2.0267295837402344,
+        "meanAbsoluteSplatResidual": 0.0026016978837195143,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 67344
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 17120768,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 67344,
+      "requestedTargetSupportBudget": 67344,
+      "selectedBirthCount": 483,
+      "sourceCount": 66878,
+      "stableAttributeCount": 66861,
+      "step": 16,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": false,
+        "currentCount": 66878,
+        "effectiveBudget": 67344,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 67344,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": false,
+      "targetSupportBudget": 67344,
+      "thresholdQualifiedBirthCount": 35654,
+      "transportedAttributeCount": 483
+    },
+    {
+      "activatedDeathCount": 12,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 67332,
+      "destinationCandidateCount": 190705,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 2.3842294216156006,
+        "meanAbsoluteSplatResidual": 0.002488542874110077,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 67814
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 17240064,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 67814,
+      "requestedTargetSupportBudget": 67814,
+      "selectedBirthCount": 482,
+      "sourceCount": 67344,
+      "stableAttributeCount": 67332,
+      "step": 17,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": false,
+        "currentCount": 67344,
+        "effectiveBudget": 67814,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 67814,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": false,
+      "targetSupportBudget": 67814,
+      "thresholdQualifiedBirthCount": 35848,
+      "transportedAttributeCount": 482
+    },
+    {
+      "activatedDeathCount": 8,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 67806,
+      "destinationCandidateCount": 191331,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 2.1518726348876953,
+        "meanAbsoluteSplatResidual": 0.0024302764109903536,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 68287
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 17360384,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 68287,
+      "requestedTargetSupportBudget": 68287,
+      "selectedBirthCount": 481,
+      "sourceCount": 67814,
+      "stableAttributeCount": 67806,
+      "step": 18,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": false,
+        "currentCount": 67814,
+        "effectiveBudget": 68287,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 68287,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": false,
+      "targetSupportBudget": 68287,
+      "thresholdQualifiedBirthCount": 36081,
+      "transportedAttributeCount": 481
+    },
+    {
+      "activatedDeathCount": 8,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 68279,
+      "destinationCandidateCount": 191957,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 2.32608699798584,
+        "meanAbsoluteSplatResidual": 0.002330116890043634,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 68763
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 17481472,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 68763,
+      "requestedTargetSupportBudget": 68763,
+      "selectedBirthCount": 484,
+      "sourceCount": 68287,
+      "stableAttributeCount": 68279,
+      "step": 19,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": false,
+        "currentCount": 68287,
+        "effectiveBudget": 68763,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 68763,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": false,
+      "targetSupportBudget": 68763,
+      "thresholdQualifiedBirthCount": 36266,
+      "transportedAttributeCount": 484
+    },
+    {
+      "activatedDeathCount": 5,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 68758,
+      "destinationCandidateCount": 192581,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 2.5869321823120117,
+        "meanAbsoluteSplatResidual": 0.002277051477283437,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 69243
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 17603328,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 69243,
+      "requestedTargetSupportBudget": 69243,
+      "selectedBirthCount": 485,
+      "sourceCount": 68763,
+      "stableAttributeCount": 68758,
+      "step": 20,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": false,
+        "currentCount": 68763,
+        "effectiveBudget": 69243,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 69243,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": false,
+      "targetSupportBudget": 69243,
+      "thresholdQualifiedBirthCount": 36400,
+      "transportedAttributeCount": 485
+    },
+    {
+      "activatedDeathCount": 6,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 69237,
+      "destinationCandidateCount": 193219,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 1.900261402130127,
+        "meanAbsoluteSplatResidual": 0.002234254508479474,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 69726
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 17726208,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 69726,
+      "requestedTargetSupportBudget": 69726,
+      "selectedBirthCount": 489,
+      "sourceCount": 69243,
+      "stableAttributeCount": 69237,
+      "step": 21,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": false,
+        "currentCount": 69243,
+        "effectiveBudget": 69726,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 69726,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": false,
+      "targetSupportBudget": 69726,
+      "thresholdQualifiedBirthCount": 36562,
+      "transportedAttributeCount": 489
+    },
+    {
+      "activatedDeathCount": 2,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 69724,
+      "destinationCandidateCount": 193879,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 1.798478603363037,
+        "meanAbsoluteSplatResidual": 0.002217471377288265,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 70212
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 17849856,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 70212,
+      "requestedTargetSupportBudget": 70212,
+      "selectedBirthCount": 488,
+      "sourceCount": 69726,
+      "stableAttributeCount": 69724,
+      "step": 22,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": false,
+        "currentCount": 69726,
+        "effectiveBudget": 70212,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 70212,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": false,
+      "targetSupportBudget": 70212,
+      "thresholdQualifiedBirthCount": 36720,
+      "transportedAttributeCount": 488
+    },
+    {
+      "activatedDeathCount": 4,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 70208,
+      "destinationCandidateCount": 194550,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 2.0979132652282715,
+        "meanAbsoluteSplatResidual": 0.002132443550015969,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 70702
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 17974272,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 70702,
+      "requestedTargetSupportBudget": 70702,
+      "selectedBirthCount": 494,
+      "sourceCount": 70212,
+      "stableAttributeCount": 70208,
+      "step": 23,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": false,
+        "currentCount": 70212,
+        "effectiveBudget": 70702,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 70702,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": false,
+      "targetSupportBudget": 70702,
+      "thresholdQualifiedBirthCount": 36899,
+      "transportedAttributeCount": 494
+    },
+    {
+      "activatedDeathCount": 2,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 70700,
+      "destinationCandidateCount": 195254,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 2.386091470718384,
+        "meanAbsoluteSplatResidual": 0.00214032422438254,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71195
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18099712,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71195,
+      "requestedTargetSupportBudget": 71195,
+      "selectedBirthCount": 495,
+      "sourceCount": 70702,
+      "stableAttributeCount": 70700,
+      "step": 24,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": false,
+        "currentCount": 70702,
+        "effectiveBudget": 71195,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 71195,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": false,
+      "targetSupportBudget": 71195,
+      "thresholdQualifiedBirthCount": 37087,
+      "transportedAttributeCount": 495
+    },
+    {
+      "activatedDeathCount": 1,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71194,
+      "destinationCandidateCount": 195891,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 1.8009800910949707,
+        "meanAbsoluteSplatResidual": 0.002014639120026678,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18225920,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 71692,
+      "selectedBirthCount": 394,
+      "sourceCount": 71195,
+      "stableAttributeCount": 71194,
+      "step": 25,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71195,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 71692,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37250,
+      "transportedAttributeCount": 394
+    },
+    {
+      "activatedDeathCount": 2,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71586,
+      "destinationCandidateCount": 196365,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 1.5960688591003418,
+        "meanAbsoluteSplatResidual": 0.0015136764643478447,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 2,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71586,
+      "step": 26,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37373,
+      "transportedAttributeCount": 2
+    },
+    {
+      "activatedDeathCount": 1,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71587,
+      "destinationCandidateCount": 196362,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 1.0915395021438599,
+        "meanAbsoluteSplatResidual": 0.0008045284536740455,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 1,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71587,
+      "step": 27,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37372,
+      "transportedAttributeCount": 1
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.9233916997909546,
+        "meanAbsoluteSplatResidual": 0.0005982074144292098,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 28,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.8275235295295715,
+        "meanAbsoluteSplatResidual": 0.0005166146003637276,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 29,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.7545673847198486,
+        "meanAbsoluteSplatResidual": 0.00047992046516113444,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 30,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.7494297027587891,
+        "meanAbsoluteSplatResidual": 0.00045840847663659287,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 31,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.7485904097557068,
+        "meanAbsoluteSplatResidual": 0.0004445417761236829,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 32,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.7439085841178894,
+        "meanAbsoluteSplatResidual": 0.0004347076038483791,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 33,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.7434725165367126,
+        "meanAbsoluteSplatResidual": 0.0004273559318880835,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 34,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.7390769720077515,
+        "meanAbsoluteSplatResidual": 0.0004213984460085329,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 35,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.73870450258255,
+        "meanAbsoluteSplatResidual": 0.00041668128934264426,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 36,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.7342222929000854,
+        "meanAbsoluteSplatResidual": 0.00041241979268575896,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 37,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.7339076995849609,
+        "meanAbsoluteSplatResidual": 0.00040885638632227596,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 38,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.7295737862586975,
+        "meanAbsoluteSplatResidual": 0.00040556443231115174,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 39,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.7293812036514282,
+        "meanAbsoluteSplatResidual": 0.0004027515148109236,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 40,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.725179135799408,
+        "meanAbsoluteSplatResidual": 0.00040006812542342567,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 41,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.7250843644142151,
+        "meanAbsoluteSplatResidual": 0.0003977340016428645,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 42,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.7210863828659058,
+        "meanAbsoluteSplatResidual": 0.00039549138424086947,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 43,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.7210701704025269,
+        "meanAbsoluteSplatResidual": 0.0003934865138649209,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 44,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.7169154286384583,
+        "meanAbsoluteSplatResidual": 0.0003915592492372804,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 45,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.716622531414032,
+        "meanAbsoluteSplatResidual": 0.00038984866294312974,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 46,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.7121859788894653,
+        "meanAbsoluteSplatResidual": 0.00038815554469205047,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 47,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.7116219401359558,
+        "meanAbsoluteSplatResidual": 0.0003867512393560957,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 48,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.7070093750953674,
+        "meanAbsoluteSplatResidual": 0.000385341871316966,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 49,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.7062702178955078,
+        "meanAbsoluteSplatResidual": 0.00038414468774617576,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 50,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.7015543580055237,
+        "meanAbsoluteSplatResidual": 0.00038292728306542643,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 51,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.7007097601890564,
+        "meanAbsoluteSplatResidual": 0.00038182420004151884,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 52,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.6959446668624878,
+        "meanAbsoluteSplatResidual": 0.00038073915643089715,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 53,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.6950457096099854,
+        "meanAbsoluteSplatResidual": 0.0003797580467419094,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 54,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.6902707815170288,
+        "meanAbsoluteSplatResidual": 0.00037875340889870343,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 55,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.6893550157546997,
+        "meanAbsoluteSplatResidual": 0.0003778835203249074,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 56,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.684459388256073,
+        "meanAbsoluteSplatResidual": 0.0003769614033570155,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 57,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.6834871172904968,
+        "meanAbsoluteSplatResidual": 0.00037616121864389234,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 58,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.6784818172454834,
+        "meanAbsoluteSplatResidual": 0.0003753246308866172,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 59,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.6774505972862244,
+        "meanAbsoluteSplatResidual": 0.0003745916162613284,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 60,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.6725231409072876,
+        "meanAbsoluteSplatResidual": 0.0003737907417091248,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 61,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.6715001463890076,
+        "meanAbsoluteSplatResidual": 0.00037308194415444407,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 62,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "protected-occupancy-with-splat-only-state-recurrence-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71588,
+      "destinationCandidateCount": 196361,
+      "destinationState": {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "candidateStateProtected": true,
+        "maximumAbsoluteSplatResidual": 0.6666247844696045,
+        "meanAbsoluteSplatResidual": 0.000372340943608536,
+        "occupancyFeedbackEnabled": false,
+        "supportChanged": false,
+        "updatedCount": 71588
+      },
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18326528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71588,
+      "requestedTargetSupportBudget": 72087,
+      "selectedBirthCount": 0,
+      "sourceCount": 71588,
+      "stableAttributeCount": 71588,
+      "step": 63,
+      "supportBudget": {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "clamped": true,
+        "currentCount": 71588,
+        "effectiveBudget": 71588,
+        "envelopeAuthority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "inferenceFrameZero": {
+          "count": 60259,
+          "referenceFrameId": "frame-0"
+        },
+        "inferenceInitialCount": 60259,
+        "maximumBudget": 71588,
+        "minimumBudget": 60259,
+        "mode": "training-episode-envelope",
+        "oneStepRatio": 1.0069738643029396,
+        "requestedBudget": 72087,
+        "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      },
+      "supportBudgetClamped": true,
+      "targetSupportBudget": 71588,
+      "thresholdQualifiedBirthCount": 37374,
+      "transportedAttributeCount": 0
+    }
+  ],
+  "rolloutGate": {
+    "aggregateOrEarlyStepCanCloseClaim": false,
+    "allStepsBeatIdentity": true,
+    "authority": "every-recurrent-step-support-advantage-gate-v0",
+    "beatStepCount": 63,
+    "evaluatedStepCount": 63,
+    "firstIdentityLossStep": null,
+    "minimumPredictionToIdentityRatio": 1.0850339886294842
+  },
+  "route": {
+    "backend": "mlx",
+    "device": "Device(gpu, 0)",
+    "effectiveRunner": "/private/tmp/kaminos-pyro-phase-audit-venv-0714/bin/python",
+    "fallbackReason": null
+  },
+  "schema": "kaminos-boundary-splat-phase-transport-training-v0",
+  "startedAt": 1784132594.297976,
+  "status": "completed",
+  "supportBudget": {
+    "authority": "explicit-recurrent-support-budget-mode-v0",
+    "inferenceFrameZero": {
+      "count": 60259,
+      "referenceFrameId": "frame-0"
+    },
+    "inferenceInitialCount": 60259,
+    "legacyBehaviorPreservedByDefault": false,
+    "mode": "training-episode-envelope",
+    "trainingEnvelope": {
+      "authority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+      "frameCount": 13,
+      "frameZeroCount": 59683,
+      "maximumCount": 70904,
+      "maximumRatio": 1.1880099860931923,
+      "minimumCount": 59683,
+      "minimumRatio": 1.0,
+      "trainingManifest": {
+        "bytes": 90735,
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/phase-corpus.json",
+        "sha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      }
+    },
+    "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+  }
+}

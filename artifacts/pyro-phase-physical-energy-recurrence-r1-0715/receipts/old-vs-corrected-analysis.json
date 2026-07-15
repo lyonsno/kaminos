@@ -1,0 +1,494 @@
+{
+  "defective": {
+    "video": {
+      "reference": {
+        "middleStep32WhiteFraction": 0.026979166666666665,
+        "late49to63WhiteFraction": 0.02526128472222222,
+        "terminalStep63WhiteFraction": 0.033294270833333334
+      },
+      "frozen": {
+        "middleStep32WhiteFraction": 0.021848958333333335,
+        "late49to63WhiteFraction": 0.021848958333333335,
+        "terminalStep63WhiteFraction": 0.021848958333333335
+      },
+      "legacy": {
+        "middleStep32WhiteFraction": 0.10149739583333334,
+        "late49to63WhiteFraction": 0.13306076388888888,
+        "terminalStep63WhiteFraction": 0.14303385416666667
+      },
+      "envelope": {
+        "middleStep32WhiteFraction": 0.08106770833333334,
+        "late49to63WhiteFraction": 0.08004253472222222,
+        "terminalStep63WhiteFraction": 0.0796875
+      }
+    },
+    "legacyAudit": {
+      "aggregate": {
+        "stable-q1": {
+          "predictionSupportRecall": 0.5465735738370708,
+          "predictionMeanStateMse": 0.32507013126790507,
+          "controlMeanStateMse": 0.3841039370410906,
+          "predictionToControlStateMseRatio": 0.8463077305899361,
+          "predictionEnergyRetention": 0.4789643482327895,
+          "controlEnergyRetention": 0.42815817680824186
+        },
+        "stable-q2": {
+          "predictionSupportRecall": 0.3659277521258592,
+          "predictionMeanStateMse": 0.5685111168971209,
+          "controlMeanStateMse": 0.6439258569086634,
+          "predictionToControlStateMseRatio": 0.8828828828623361,
+          "predictionEnergyRetention": 0.32986694884241885,
+          "controlEnergyRetention": 0.278199102580547
+        },
+        "stable-q3": {
+          "predictionSupportRecall": 0.31009585251915794,
+          "predictionMeanStateMse": 0.716591461320042,
+          "controlMeanStateMse": 0.8101091424828119,
+          "predictionToControlStateMseRatio": 0.8845616272442525,
+          "predictionEnergyRetention": 0.28806852042002884,
+          "controlEnergyRetention": 0.22760670757264923
+        },
+        "stable-q4": {
+          "predictionSupportRecall": 0.2890662053374619,
+          "predictionMeanStateMse": 1.350155918138904,
+          "controlMeanStateMse": 1.4501415754167184,
+          "predictionToControlStateMseRatio": 0.9310511063383021,
+          "predictionEnergyRetention": 0.2437923664437283,
+          "controlEnergyRetention": 0.18710399525835417
+        },
+        "transported": {
+          "predictionSupportRecall": 0.1974583193633759,
+          "predictionMeanStateMse": 0.9811327674427616,
+          "controlMeanStateMse": 1.0473507221033664,
+          "predictionToControlStateMseRatio": 0.9367757588139901,
+          "predictionEnergyRetention": 0.19501356561531658,
+          "controlEnergyRetention": 0.14810935380153267
+        },
+        "birth": {
+          "predictionSupportRecall": 0.1518856653889206,
+          "predictionMeanStateMse": 1.0242286610526412,
+          "controlMeanStateMse": 1.062474756536759,
+          "predictionToControlStateMseRatio": 0.964002819597536,
+          "predictionEnergyRetention": 0.19294401576039963,
+          "controlEnergyRetention": 0.14419141047388287
+        }
+      },
+      "late49to63": {
+        "stable-q1": {
+          "predictionSupportRecall": 0.5043810099895923,
+          "predictionMeanStateMse": 0.3799577074490672,
+          "controlMeanStateMse": 0.4458336013142787,
+          "predictionToControlStateMseRatio": 0.8522410745376412,
+          "predictionEnergyRetention": 0.439792266485781,
+          "controlEnergyRetention": 0.3872350793522773
+        },
+        "stable-q2": {
+          "predictionSupportRecall": 0.3452064299757141,
+          "predictionMeanStateMse": 0.634294375348367,
+          "controlMeanStateMse": 0.7067880258149228,
+          "predictionToControlStateMseRatio": 0.8974322600004845,
+          "predictionEnergyRetention": 0.3040925106564085,
+          "controlEnergyRetention": 0.24656751112046055
+        },
+        "stable-q3": {
+          "predictionSupportRecall": 0.2905395187474981,
+          "predictionMeanStateMse": 0.797584661780515,
+          "controlMeanStateMse": 0.8704254103217891,
+          "predictionToControlStateMseRatio": 0.916315921298362,
+          "predictionEnergyRetention": 0.2660116876712877,
+          "controlEnergyRetention": 0.1954536149465655
+        },
+        "stable-q4": {
+          "predictionSupportRecall": 0.27048137571503555,
+          "predictionMeanStateMse": 1.3800288782466454,
+          "controlMeanStateMse": 1.4026921318947,
+          "predictionToControlStateMseRatio": 0.9838430307458543,
+          "predictionEnergyRetention": 0.2228775946044285,
+          "controlEnergyRetention": 0.15592174508386877
+        },
+        "transported": {
+          "predictionSupportRecall": 0.20677236158501583,
+          "predictionMeanStateMse": 1.0617883937129353,
+          "controlMeanStateMse": 1.052278616916554,
+          "predictionToControlStateMseRatio": 1.0090373182952699,
+          "predictionEnergyRetention": 0.20586736205706516,
+          "controlEnergyRetention": 0.14462890369704764
+        },
+        "birth": {
+          "predictionSupportRecall": 0.16837360085158543,
+          "predictionMeanStateMse": 1.1408253620272828,
+          "controlMeanStateMse": 1.0993553661070377,
+          "predictionToControlStateMseRatio": 1.037722102605544,
+          "predictionEnergyRetention": 0.21246163625119302,
+          "controlEnergyRetention": 0.14446559023934416
+        }
+      }
+    },
+    "envelopeAudit": {
+      "aggregate": {
+        "stable-q1": {
+          "predictionSupportRecall": 0.5457776050741442,
+          "predictionMeanStateMse": 0.3231066648703901,
+          "controlMeanStateMse": 0.3841039370410906,
+          "predictionToControlStateMseRatio": 0.8411959204568759,
+          "predictionEnergyRetention": 0.4777292405810337,
+          "controlEnergyRetention": 0.42815817680824186
+        },
+        "stable-q2": {
+          "predictionSupportRecall": 0.363752794434114,
+          "predictionMeanStateMse": 0.5622959183197201,
+          "controlMeanStateMse": 0.6439258569086634,
+          "predictionToControlStateMseRatio": 0.8732308421642991,
+          "predictionEnergyRetention": 0.3273657398281342,
+          "controlEnergyRetention": 0.278199102580547
+        },
+        "stable-q3": {
+          "predictionSupportRecall": 0.30685132413527993,
+          "predictionMeanStateMse": 0.7071981698239128,
+          "controlMeanStateMse": 0.8101091424828119,
+          "predictionToControlStateMseRatio": 0.8729665334432607,
+          "predictionEnergyRetention": 0.28448620034352995,
+          "controlEnergyRetention": 0.22760670757264923
+        },
+        "stable-q4": {
+          "predictionSupportRecall": 0.28518627629189935,
+          "predictionMeanStateMse": 1.3382158424825965,
+          "controlMeanStateMse": 1.4501415754167184,
+          "predictionToControlStateMseRatio": 0.9228173753297443,
+          "predictionEnergyRetention": 0.24028602505021057,
+          "controlEnergyRetention": 0.18710399525835417
+        },
+        "transported": {
+          "predictionSupportRecall": 0.1918292723046265,
+          "predictionMeanStateMse": 0.951649028763211,
+          "controlMeanStateMse": 1.0473507221033664,
+          "predictionToControlStateMseRatio": 0.9086249798463305,
+          "predictionEnergyRetention": 0.18885030819745344,
+          "controlEnergyRetention": 0.14810935380153267
+        },
+        "birth": {
+          "predictionSupportRecall": 0.1473522262045147,
+          "predictionMeanStateMse": 0.9931956270657917,
+          "controlMeanStateMse": 1.062474756536759,
+          "predictionToControlStateMseRatio": 0.9347945642522469,
+          "predictionEnergyRetention": 0.1863120668987963,
+          "controlEnergyRetention": 0.14419141047388287
+        }
+      },
+      "late49to63": {
+        "stable-q1": {
+          "predictionSupportRecall": 0.5026375014455109,
+          "predictionMeanStateMse": 0.37454265817615157,
+          "controlMeanStateMse": 0.4458336013142787,
+          "predictionToControlStateMseRatio": 0.8400951769270696,
+          "predictionEnergyRetention": 0.43707119801435734,
+          "controlEnergyRetention": 0.3872350793522773
+        },
+        "stable-q2": {
+          "predictionSupportRecall": 0.33995783330812823,
+          "predictionMeanStateMse": 0.6169445601237985,
+          "controlMeanStateMse": 0.7067880258149228,
+          "predictionToControlStateMseRatio": 0.872884850323355,
+          "predictionEnergyRetention": 0.2979917276330266,
+          "controlEnergyRetention": 0.24656751112046055
+        },
+        "stable-q3": {
+          "predictionSupportRecall": 0.2835564648845795,
+          "predictionMeanStateMse": 0.7739306181090823,
+          "controlMeanStateMse": 0.8704254103217891,
+          "predictionToControlStateMseRatio": 0.8891406534454991,
+          "predictionEnergyRetention": 0.2581463135762887,
+          "controlEnergyRetention": 0.1954536149465655
+        },
+        "stable-q4": {
+          "predictionSupportRecall": 0.26102466928216217,
+          "predictionMeanStateMse": 1.3396908818648183,
+          "controlMeanStateMse": 1.4026921318947,
+          "predictionToControlStateMseRatio": 0.9550854755670567,
+          "predictionEnergyRetention": 0.2140128148688513,
+          "controlEnergyRetention": 0.15592174508386877
+        },
+        "transported": {
+          "predictionSupportRecall": 0.19189134849893208,
+          "predictionMeanStateMse": 0.9808931830107207,
+          "controlMeanStateMse": 1.052278616916554,
+          "predictionToControlStateMseRatio": 0.9321610904581421,
+          "predictionEnergyRetention": 0.18926967362608094,
+          "controlEnergyRetention": 0.14462890369704764
+        },
+        "birth": {
+          "predictionSupportRecall": 0.1561683494080836,
+          "predictionMeanStateMse": 1.0661388375511227,
+          "controlMeanStateMse": 1.0993553661070377,
+          "predictionToControlStateMseRatio": 0.9697854492005265,
+          "predictionEnergyRetention": 0.1945544946114539,
+          "controlEnergyRetention": 0.14446559023934416
+        }
+      }
+    },
+    "legacyTerminalSupport": {
+      "beatsIdentity": true,
+      "exactCount": 70612,
+      "identityIoU": 0.12233504279368129,
+      "predictionCount": 93365,
+      "predictionIoU": 0.12643228093314648,
+      "predictionToIdentityRatio": 1.033491941850016,
+      "step": 63
+    },
+    "envelopeTerminalSupport": {
+      "beatsIdentity": true,
+      "exactCount": 70612,
+      "identityIoU": 0.12233504279368129,
+      "predictionCount": 71588,
+      "predictionIoU": 0.13922225248754225,
+      "predictionToIdentityRatio": 1.1380406571021626,
+      "step": 63
+    }
+  },
+  "corrected": {
+    "video": {
+      "reference": {
+        "middleStep32WhiteFraction": 0.027005208333333332,
+        "late49to63WhiteFraction": 0.025285590277777777,
+        "terminalStep63WhiteFraction": 0.033294270833333334
+      },
+      "frozen": {
+        "middleStep32WhiteFraction": 0.021940104166666665,
+        "late49to63WhiteFraction": 0.021940104166666665,
+        "terminalStep63WhiteFraction": 0.021940104166666665
+      },
+      "legacy": {
+        "middleStep32WhiteFraction": 0.1051171875,
+        "late49to63WhiteFraction": 0.137234375,
+        "terminalStep63WhiteFraction": 0.147109375
+      },
+      "envelope": {
+        "middleStep32WhiteFraction": 0.08450520833333333,
+        "late49to63WhiteFraction": 0.08383680555555556,
+        "terminalStep63WhiteFraction": 0.08354166666666667
+      }
+    },
+    "legacyAudit": {
+      "aggregate": {
+        "stable-q1": {
+          "predictionSupportRecall": 0.5465735738370708,
+          "predictionMeanStateMse": 0.3250349860438546,
+          "controlMeanStateMse": 0.3841039370410906,
+          "predictionToControlStateMseRatio": 0.8462162313350178,
+          "predictionEnergyRetention": 0.48071151695092007,
+          "controlEnergyRetention": 0.42815817680824186
+        },
+        "stable-q2": {
+          "predictionSupportRecall": 0.3659277521258592,
+          "predictionMeanStateMse": 0.5686850526282055,
+          "controlMeanStateMse": 0.6439258569086634,
+          "predictionToControlStateMseRatio": 0.8831530004996672,
+          "predictionEnergyRetention": 0.33236258193516555,
+          "controlEnergyRetention": 0.278199102580547
+        },
+        "stable-q3": {
+          "predictionSupportRecall": 0.31009585251915794,
+          "predictionMeanStateMse": 0.7170056106420931,
+          "controlMeanStateMse": 0.8101091424828119,
+          "predictionToControlStateMseRatio": 0.8850728538189604,
+          "predictionEnergyRetention": 0.2911326726321155,
+          "controlEnergyRetention": 0.22760670757264923
+        },
+        "stable-q4": {
+          "predictionSupportRecall": 0.2890662053374619,
+          "predictionMeanStateMse": 1.3503942499462933,
+          "controlMeanStateMse": 1.4501415754167184,
+          "predictionToControlStateMseRatio": 0.9312154570551077,
+          "predictionEnergyRetention": 0.24643018648138285,
+          "controlEnergyRetention": 0.18710399525835417
+        },
+        "transported": {
+          "predictionSupportRecall": 0.1974583193633759,
+          "predictionMeanStateMse": 0.981462461740326,
+          "controlMeanStateMse": 1.0473507221033664,
+          "predictionToControlStateMseRatio": 0.9370905476336343,
+          "predictionEnergyRetention": 0.19713929090494642,
+          "controlEnergyRetention": 0.14810935380153267
+        },
+        "birth": {
+          "predictionSupportRecall": 0.1518856653889206,
+          "predictionMeanStateMse": 1.0248991938946612,
+          "controlMeanStateMse": 1.062474756536759,
+          "predictionToControlStateMseRatio": 0.9646339243253375,
+          "predictionEnergyRetention": 0.19535972673174484,
+          "controlEnergyRetention": 0.14419141047388287
+        }
+      },
+      "late49to63": {
+        "stable-q1": {
+          "predictionSupportRecall": 0.5043810099895923,
+          "predictionMeanStateMse": 0.37977901749170556,
+          "controlMeanStateMse": 0.4458336013142787,
+          "predictionToControlStateMseRatio": 0.8518402748741908,
+          "predictionEnergyRetention": 0.44111933525834557,
+          "controlEnergyRetention": 0.3872350793522773
+        },
+        "stable-q2": {
+          "predictionSupportRecall": 0.3452064299757141,
+          "predictionMeanStateMse": 0.6345501841164078,
+          "controlMeanStateMse": 0.7067880258149228,
+          "predictionToControlStateMseRatio": 0.8977941913840077,
+          "predictionEnergyRetention": 0.30644207604550916,
+          "controlEnergyRetention": 0.24656751112046055
+        },
+        "stable-q3": {
+          "predictionSupportRecall": 0.2905395187474981,
+          "predictionMeanStateMse": 0.7982329316911226,
+          "controlMeanStateMse": 0.8704254103217891,
+          "predictionToControlStateMseRatio": 0.9170606949491772,
+          "predictionEnergyRetention": 0.2690573946652457,
+          "controlEnergyRetention": 0.1954536149465655
+        },
+        "stable-q4": {
+          "predictionSupportRecall": 0.27048137571503555,
+          "predictionMeanStateMse": 1.3804938325647094,
+          "controlMeanStateMse": 1.4026921318947,
+          "predictionToControlStateMseRatio": 0.984174503566933,
+          "predictionEnergyRetention": 0.2255983343434243,
+          "controlEnergyRetention": 0.15592174508386877
+        },
+        "transported": {
+          "predictionSupportRecall": 0.20677236158501583,
+          "predictionMeanStateMse": 1.0622168913236363,
+          "controlMeanStateMse": 1.052278616916554,
+          "predictionToControlStateMseRatio": 1.0094445275683772,
+          "predictionEnergyRetention": 0.20834539209350497,
+          "controlEnergyRetention": 0.14462890369704764
+        },
+        "birth": {
+          "predictionSupportRecall": 0.16837360085158543,
+          "predictionMeanStateMse": 1.141551616587275,
+          "controlMeanStateMse": 1.0993553661070377,
+          "predictionToControlStateMseRatio": 1.0383827211665504,
+          "predictionEnergyRetention": 0.21535631337937639,
+          "controlEnergyRetention": 0.14446559023934416
+        }
+      }
+    },
+    "envelopeAudit": {
+      "aggregate": {
+        "stable-q1": {
+          "predictionSupportRecall": 0.5457776050741442,
+          "predictionMeanStateMse": 0.3230767578400913,
+          "controlMeanStateMse": 0.3841039370410906,
+          "predictionToControlStateMseRatio": 0.8411180586402823,
+          "predictionEnergyRetention": 0.4794474341212759,
+          "controlEnergyRetention": 0.42815817680824186
+        },
+        "stable-q2": {
+          "predictionSupportRecall": 0.363752794434114,
+          "predictionMeanStateMse": 0.5624893410052164,
+          "controlMeanStateMse": 0.6439258569086634,
+          "predictionToControlStateMseRatio": 0.8735312225317297,
+          "predictionEnergyRetention": 0.3298021788826485,
+          "controlEnergyRetention": 0.278199102580547
+        },
+        "stable-q3": {
+          "predictionSupportRecall": 0.30685132413527993,
+          "predictionMeanStateMse": 0.7076466704785379,
+          "controlMeanStateMse": 0.8101091424828119,
+          "predictionToControlStateMseRatio": 0.8735201633569418,
+          "predictionEnergyRetention": 0.2874638985756457,
+          "controlEnergyRetention": 0.22760670757264923
+        },
+        "stable-q4": {
+          "predictionSupportRecall": 0.28518627629189935,
+          "predictionMeanStateMse": 1.3384857422002443,
+          "controlMeanStateMse": 1.4501415754167184,
+          "predictionToControlStateMseRatio": 0.9230034948936705,
+          "predictionEnergyRetention": 0.24283763221845092,
+          "controlEnergyRetention": 0.18710399525835417
+        },
+        "transported": {
+          "predictionSupportRecall": 0.1918292723046265,
+          "predictionMeanStateMse": 0.9520852998725602,
+          "controlMeanStateMse": 1.0473507221033664,
+          "predictionToControlStateMseRatio": 0.90904152714051,
+          "predictionEnergyRetention": 0.19082271498238856,
+          "controlEnergyRetention": 0.14810935380153267
+        },
+        "birth": {
+          "predictionSupportRecall": 0.1473522262045147,
+          "predictionMeanStateMse": 0.9939604891359513,
+          "controlMeanStateMse": 1.062474756536759,
+          "predictionToControlStateMseRatio": 0.9355144515394073,
+          "predictionEnergyRetention": 0.18856027572456238,
+          "controlEnergyRetention": 0.14419141047388287
+        }
+      },
+      "late49to63": {
+        "stable-q1": {
+          "predictionSupportRecall": 0.5026375014455109,
+          "predictionMeanStateMse": 0.374375952387665,
+          "controlMeanStateMse": 0.4458336013142787,
+          "predictionToControlStateMseRatio": 0.8397212576262473,
+          "predictionEnergyRetention": 0.43833023004549726,
+          "controlEnergyRetention": 0.3872350793522773
+        },
+        "stable-q2": {
+          "predictionSupportRecall": 0.33995783330812823,
+          "predictionMeanStateMse": 0.6172472208140822,
+          "controlMeanStateMse": 0.7067880258149228,
+          "predictionToControlStateMseRatio": 0.8733130702128117,
+          "predictionEnergyRetention": 0.3001995811354137,
+          "controlEnergyRetention": 0.24656751112046055
+        },
+        "stable-q3": {
+          "predictionSupportRecall": 0.2835564648845795,
+          "predictionMeanStateMse": 0.7746632541473548,
+          "controlMeanStateMse": 0.8704254103217891,
+          "predictionToControlStateMseRatio": 0.8899823522626347,
+          "predictionEnergyRetention": 0.26100312567113726,
+          "controlEnergyRetention": 0.1954536149465655
+        },
+        "stable-q4": {
+          "predictionSupportRecall": 0.26102466928216217,
+          "predictionMeanStateMse": 1.3402557313480872,
+          "controlMeanStateMse": 1.4026921318947,
+          "predictionToControlStateMseRatio": 0.9554881651312349,
+          "predictionEnergyRetention": 0.21651932518867606,
+          "controlEnergyRetention": 0.15592174508386877
+        },
+        "transported": {
+          "predictionSupportRecall": 0.19189134849893208,
+          "predictionMeanStateMse": 0.9816093202444032,
+          "controlMeanStateMse": 1.052278616916554,
+          "predictionToControlStateMseRatio": 0.9328416490309096,
+          "predictionEnergyRetention": 0.1913452056459153,
+          "controlEnergyRetention": 0.14462890369704764
+        },
+        "birth": {
+          "predictionSupportRecall": 0.1561683494080836,
+          "predictionMeanStateMse": 1.0670668112593698,
+          "controlMeanStateMse": 1.0993553661070377,
+          "predictionToControlStateMseRatio": 0.9706295563353586,
+          "predictionEnergyRetention": 0.19699853971475612,
+          "controlEnergyRetention": 0.14446559023934416
+        }
+      }
+    },
+    "legacyTerminalSupport": {
+      "beatsIdentity": true,
+      "exactCount": 70612,
+      "identityIoU": 0.12233504279368129,
+      "predictionCount": 93365,
+      "predictionIoU": 0.12643228093314648,
+      "predictionToIdentityRatio": 1.033491941850016,
+      "step": 63
+    },
+    "envelopeTerminalSupport": {
+      "beatsIdentity": true,
+      "exactCount": 70612,
+      "identityIoU": 0.12233504279368129,
+      "predictionCount": 71588,
+      "predictionIoU": 0.13922225248754225,
+      "predictionToIdentityRatio": 1.1380406571021626,
+      "step": 63
+    }
+  }
+}
