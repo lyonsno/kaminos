@@ -1,6 +1,7 @@
 import importlib.util
 import copy
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -597,6 +598,72 @@ class TransportDatasetContracts(unittest.TestCase):
                 training_manifest_sha256="f" * 64,
                 inference_frame_zero={"referenceFrameId": "heldout-frame-2", "count": 100},
             )
+
+    def test_frozen_inference_main_binds_nonzero_start_in_both_budget_modes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+
+            def write_artifact(name, values, stride):
+                path = root / name
+                data = np.asarray(values, dtype="<f4").reshape(-1, stride).tobytes()
+                path.write_bytes(data)
+                return {
+                    "path": str(path), "bytes": len(data), "sha256": MODULE.sha256_bytes(data),
+                    "count": len(values), "strideFloats": stride, "dtype": "float32-le",
+                }
+
+            frames = []
+            for index in range(4):
+                candidate = [[0.2 + channel * 0.01 for channel in range(16)]]
+                splat = [[index * 0.0125, 0.0, 0.0, 1.0, 1.0, 0.5, 0.2, 0.8, 0.03, 0.03, 0.0, 1.0]]
+                frames.append({
+                    "id": f"frame-{index}",
+                    "controlledStepFrameIndex": index,
+                    "controlledStepDeltaMs": 160,
+                    "candidates": write_artifact(f"frame-{index}.candidates.f32", candidate, 16),
+                    "splats": write_artifact(f"frame-{index}.splats.f32", splat, 12),
+                })
+            manifest = {
+                "schema": "kaminos-boundary-splat-phase-candidate-corpus-v0",
+                "featureOrder": list(MODULE.FEATURES),
+                "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+                "requestedRoute": "http://127.0.0.1/?volume_resolution=160",
+                "frames": frames,
+            }
+            manifest_path = root / "phase-corpus.json"
+            manifest_bytes = (json.dumps(manifest, sort_keys=True) + "\n").encode("utf8")
+            manifest_path.write_bytes(manifest_bytes)
+
+            model_document = frozen_model_document()
+            model_document["manifest"] = {
+                "path": str(manifest_path),
+                "bytes": len(manifest_bytes),
+                "sha256": MODULE.sha256_bytes(manifest_bytes),
+            }
+            model_path = root / "transport-model.json"
+            model_path.write_text(json.dumps(model_document), encoding="utf8")
+
+            for mode in MODULE.SUPPORT_BUDGET_MODES:
+                out_dir = root / mode
+                argv = [
+                    str(MODULE_PATH), "--manifest", str(manifest_path), "--model", str(model_path),
+                    "--out-dir", str(out_dir), "--inference-start", "2", "--inference-steps", "1",
+                    "--grid-size", "160", "--batch-size", "1", "--support-budget-mode", mode,
+                ]
+                with patch.object(sys, "argv", argv), patch("builtins.print"):
+                    MODULE.main()
+                report = json.loads((out_dir / "training-report.json").read_text(encoding="utf8"))
+                prediction = json.loads((out_dir / "transport-predictions.json").read_text(encoding="utf8"))
+                expected_anchor = {"referenceFrameId": "frame-2", "count": 1}
+                self.assertEqual(report["supportBudget"]["inferenceFrameZero"], expected_anchor)
+                self.assertEqual(prediction["supportBudget"]["inferenceFrameZero"], expected_anchor)
+                self.assertNotEqual(report["supportBudget"]["inferenceFrameZero"]["referenceFrameId"], "frame-0")
+                self.assertEqual(len(report["recurrent"]), 1)
+                self.assertEqual(report["recurrent"][0]["supportBudget"]["inferenceFrameZero"], expected_anchor)
+                self.assertEqual(
+                    report["recurrent"][0]["supportBudget"]["trainingManifestSha256"],
+                    model_document["manifest"]["sha256"],
+                )
 
     def test_eulerian_composer_honors_absolute_support_budget_before_birth_admission(self):
         source = frame([
