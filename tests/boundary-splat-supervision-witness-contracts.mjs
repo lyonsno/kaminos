@@ -9,12 +9,24 @@ assert.match(witness, /--boundary-splat-supervision-frames/, 'witness exposes a 
 assert.match(witness, /--boundary-splat-supervision-step-delta-ms/, 'witness exposes deterministic simulator time spacing between supervision frames');
 assert.match(witness, /--boundary-splat-supervision-raw-sidecar/, 'witness exposes native raw sidecar supervision as an explicit requested surface');
 assert.match(witness, /--boundary-splat-supervision-min-sim-step/, 'witness exposes an uncapped simulator warmup floor');
+assert.match(witness, /--boundary-splat-supervision-operation-timeout-ms/, 'witness exposes a caller-configured per-operation CDP deadline instead of a hidden total batch cap');
+assert.match(witness, /boundarySplatSupervisionOperationTimeoutMsRequested/, 'witness preserves the requested supervision operation deadline');
+assert.match(witness, /boundarySplatSupervisionOperationTimeoutMsEffective\s*=\s*boundarySplatSupervisionOperationTimeoutMsRequested/, 'witness does not silently clamp a lawful caller deadline below the requested value');
+assert.match(witness, /operationTimeoutMs[\s\S]*setTimeout[\s\S]*CDP operation timed out/, 'CDP requests cleanly reject when one protocol operation stops answering');
+assert.match(witness, /supervisionWsRequest[\s\S]*operationTimeoutMs:\s*boundarySplatSupervisionOperationTimeoutMsEffective/, 'every supervision CDP request routes through the configured operation deadline');
 assert.match(witness, /live-single-browser-sim-step-floor-v0/, 'witness records truthful one-browser warmup authority');
 assert.match(witness, /while \(warmupSimStepCount\s*<\s*boundarySplatSupervisionMinSimStep\)/, 'witness warms the live simulator until the requested step floor instead of sleeping blindly');
 assert.match(witness, /warmup-progress-stalled|warmup.*stalled/i, 'witness fails loud if simulator warmup stops making progress');
 assert.match(witness, /captureBoundarySplatSupervisionFrame/, 'witness invokes the dedicated same-state live capture API');
-assert.match(witness, /captureBoundarySidecarRawFrame\?\.\(\{[\s\S]*sameStateCaptureId:\s*capture\.sameStateCaptureId/, 'raw sidecar capture is tied to the candidate and raymarch same-state identity');
+assert.match(witness, /captureBoundarySidecarRawFrameWithDeadline\?\.\(\{[\s\S]*sameStateCaptureId:\s*\$\{JSON\.stringify\(capture\.sameStateCaptureId\)\}/, 'raw sidecar capture is tied to the candidate and raymarch same-state identity');
+assert.ok(witness.includes('deadlineMs: ${JSON.stringify(boundarySplatSupervisionOperationTimeoutMsEffective)}'), 'raw sidecar capture receives the literal browser-owned deadline so a host timeout cannot orphan retained capture state');
+assert.match(witness, /boundarySplatSupervisionRawCaptureResponseGraceMs[\s\S]*operationTimeoutMs:\s*boundarySplatSupervisionOperationTimeoutMsEffective\s*\+\s*boundarySplatSupervisionRawCaptureResponseGraceMs/, 'host CDP custody outlives the browser deadline long enough to receive the cleanup-scheduled receipt');
+assert.match(witness, /browserSessionDisposition\s*===\s*'poisoned-close-required'[\s\S]*browserSessionPoisoned\s*=\s*true/, 'a non-cancelable raw capture deadline poisons the browser session instead of pretending the page remains reusable');
+assert.match(witness, /async function closeBrowserSession\(browserSession, options = \{\}\)[\s\S]*const force\s*=\s*options\.force\s*===\s*true[\s\S]*if \(!force && browserSession\?\.keepBrowserOpen\)\s*\{[\s\S]*kept-open-by-request/, 'forced poison cleanup overrides keep-browser-open while ordinary cleanup preserves it');
+assert.match(witness, /async function requestAttachedBrowserClose\(\)[\s\S]*Browser\.close[\s\S]*async function closeBrowserSession[\s\S]*requestAttachedBrowserClose\(\)/, 'poison cleanup closes an attached shared browser through browser-level CDP when no child process handle exists');
+assert.match(witness, /closeBrowserSession\(browserSession,\s*\{[\s\S]*force:\s*err\?\.browserSessionPoisoned\s*===\s*true/, 'outer failure custody forces browser teardown when the supervision capture marks the session poisoned');
 assert.match(core, /const sameStateCaptureId = options\.sameStateCaptureId[\s\S]*boundarySidecarRawCapture = \{[\s\S]*sameStateCaptureId,[\s\S]*return \{[\s\S]*sameStateCaptureId,/, 'core preserves same-state identity through retained raw sidecar capture metadata');
+assert.match(core, /async function captureBoundarySidecarRawFrameWithDeadline[\s\S]*runBoundarySidecarCaptureWithDeadline[\s\S]*captureBoundarySidecarRawFrameWithDeadline,/, 'core publishes the browser-owned deadline wrapper and late-release helper');
 assert.match(witness, /for \(let frameIndex = 0; frameIndex < boundarySplatSupervisionFrames; frameIndex \+= 1\)/, 'one browser session captures every requested supervision frame');
 assert.match(witness, /frameIndex > 0[\s\S]*sampleFrame\?\.\(\{[\s\S]*advanceSim:\s*true/, 'subsequent supervision frames advance the live simulator explicitly instead of reopening the browser');
 assert.match(witness, /frame-\$\{String\(frameIndex\)\.padStart\(3, '0'\)\}\.candidates\.f32/, 'multi-frame candidate artifacts have stable distinct names');
@@ -51,6 +63,10 @@ assert.match(witness, /targetVisualMetrics\.litPixels\s*<\s*80/, 'witness reject
 assert.match(witness, /targetVisualMetrics\.litFraction\s*>\s*0\.72/, 'witness rejects broad slab targets that illuminate nearly the entire sampled viewport');
 assert.match(witness, /targetVisualMetrics/, 'witness preserves target visual diagnostics in its corpus receipt');
 assert.match(witness, /phase:\s*supervisionPhase/, 'supervision failure reports preserve the last trustworthy phase');
+assert.match(witness, /lastTrustworthyEvidence/, 'supervision failure reports preserve the last trustworthy route and simulator evidence');
+assert.match(witness, /operationDeadline:[\s\S]*requestedMs:[\s\S]*effectiveMs:/, 'supervision reports state requested and effective operation deadline identity');
+assert.match(witness, /supervisionFailureReport/, 'inner supervision evidence survives the outer witness failure report');
+assert.match(witness, /const supervisionFailureReport\s*=\s*err\?\.supervisionFailureReport[\s\S]*if \(supervisionFailureReport\) \{[\s\S]*state\s*=\s*supervisionFailureReport\.lastTrustworthyEvidence/, 'a supervision timeout bypasses generic CDP recovery so the outer report cannot hang on the same dead runtime');
 assert.match(witness, /error\.supervisionPhase\s*=\s*supervisionPhase/, 'supervision failures carry their exact inner phase through the outer witness');
 assert.match(witness, /phase:\s*err\?\.supervisionPhase\s*\|\|\s*phase/, 'outer failure reporting does not overwrite the supervision failure phase');
 assert.match(

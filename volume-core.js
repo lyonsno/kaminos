@@ -16,6 +16,7 @@ import {
   SELECTIVE_HEAD_LIVE_ROUTE,
   createSelectiveHeadLiveRuntime,
 } from './selective-head-live-runtime.mjs';
+import { runBoundarySidecarCaptureWithDeadline } from './boundary-sidecar-capture-deadline.mjs';
 
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
@@ -12494,6 +12495,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
   }
 
+  async function captureBoundarySidecarRawFrameWithDeadline(options = {}) {
+    const captureOptions = { ...options };
+    delete captureOptions.deadlineMs;
+    return runBoundarySidecarCaptureWithDeadline({
+      capture: () => captureBoundarySidecarRawFrame(captureOptions),
+      release: captureId => releaseBoundarySidecarRawCapture(captureId),
+      deadlineMs: options.deadlineMs,
+    });
+  }
+
   function readBoundarySidecarRawCaptureChunk(captureId, field, byteOffset = 0, byteLength = null) {
     if (!boundarySidecarRawCapture || boundarySidecarRawCapture.captureId !== String(captureId)) {
       return { ok: false, reason: 'boundary-sidecar-raw-capture-not-found', captureId: String(captureId || '') };
@@ -13732,6 +13743,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     releaseDebugFullFieldExport,
     captureBoundarySplatSupervisionFrame,
     captureBoundarySidecarRawFrame,
+    captureBoundarySidecarRawFrameWithDeadline,
     readBoundarySidecarRawCaptureChunk,
     releaseBoundarySidecarRawCapture,
     sampleRenderScaleSet,

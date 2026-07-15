@@ -7,6 +7,10 @@ assert.match(script, /SCHEMA\s*=\s*["']kaminos\.boundary-splat-radiance-training
 assert.match(script, /kaminos-boundary-splat-supervision-corpus-v0/, 'radiance trainer accepts only the fixed-candidate supervision corpus');
 assert.match(script, /live-simulator-frozen-state-candidate-raymarch-v0/, 'radiance trainer requires frozen-state live-simulator authority');
 assert.match(script, /candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0/, 'radiance trainer accepts only the exact candidate-support-gated intrinsic unit-gain native raymarch target decomposition');
+assert.match(script, /from boundary_splat_native_sidecar import/, 'radiance trainer imports the dependency-free native sidecar context adapter');
+assert.match(script, /native-sidecar-pyramid/, 'radiance trainer exposes native raw sidecar pyramid conditioning');
+assert.match(script, /complete-native-sidecar-multi-radius-axial-context-v0/, 'native sidecar training receipts distinguish complete-grid context from candidate-only adjacency');
+assert.match(script, /structuralSupervision/, 'native sidecar conditioning is loaded from verified structural supervision artifacts');
 assert.match(script, /BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER/, 'radiance trainer preserves the exact candidate layout');
 assert.match(script, /candidateCount.*strideFloats|strideFloats.*candidateCount/s, 'radiance trainer verifies the complete uncapped candidate payload');
 assert.match(script, /live-support-h64-v0\/model-artifact\.json/, 'radiance trainer warm-starts the proven live-support attribute head');
@@ -51,7 +55,7 @@ assert.match(script, /class\s+CandidateAttributeTable\(nn\.Module\)/, 'candidate
 assert.match(script, /per-candidate-free-attribute-oracle-v0/, 'candidate oracle receipts distinguish diagnostic authority from deployable MLP authority');
 assert.match(script, /candidate oracle requires exactly one corpus frame/, 'candidate oracle rejects ambiguous cross-frame candidate identity');
 assert.match(script, /--context-mode/, 'radiance trainer exposes explicit spatial conditioning rather than silently changing the live feature contract');
-assert.match(script, /choices=\["none", "world-xyz", "world-fourier", "world-grid-neighborhood", "world-grid-pyramid"\]/, 'spatial conditioning distinguishes pointwise position, local-grid, and multiscale grid context');
+assert.match(script, /choices=\["none", "world-xyz", "world-fourier", "world-grid-neighborhood", "world-grid-pyramid", "native-sidecar-pyramid"\]/, 'spatial conditioning distinguishes pointwise position, candidate-grid, and complete native-sidecar context');
 assert.match(script, /--fourier-frequencies/, 'Fourier conditioning exposes its exact frequency ladder');
 assert.match(script, /--hidden-size/, 'spatial trainer exposes an explicit hidden-width experiment control');
 assert.match(script, /--spatial-mixing/, 'spatial trainer exposes an explicit learned mixing family instead of conflating it with handcrafted context');
@@ -99,6 +103,6 @@ assert.match(script, /GRID_PYRAMID_RADII\s*=\s*\(1,\s*2,\s*4,\s*8\)/, 'multiscal
 assert.match(script, /multi-radius-axial-grid-context-v0/, 'multiscale grid receipts identify their wider receptive-field authority');
 assert.match(script, /zero-delta-local-grid-context-expansion-v0/, 'local-grid context starts as an exact zero-delta extension of the proven Fourier head');
 assert.match(script, /zero-delta-active-hidden-width-expansion-v0/, 'wider spatial heads begin as exact zero-output-delta extensions with active new hidden features');
-assert.match(script, /args\.context_mode in \("world-fourier", "world-grid-neighborhood", "world-grid-pyramid"\)/, 'grid-context receipts preserve the Fourier frequency contract used by their encoder');
+assert.match(script, /args\.context_mode in \("world-fourier", "world-grid-neighborhood", "world-grid-pyramid", "native-sidecar-pyramid"\)/, 'grid-context receipts preserve the Fourier frequency contract used by their encoder');
 
 console.log('boundary splat radiance training contracts passed');

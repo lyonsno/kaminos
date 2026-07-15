@@ -13,6 +13,13 @@ import mlx.optimizers as optim
 import numpy as np
 from PIL import Image
 
+from boundary_splat_native_sidecar import (
+    NATIVE_SIDECAR_CHANNELS,
+    NATIVE_SIDECAR_PYRAMID_RADII,
+    native_sidecar_pyramid_channels,
+    native_sidecar_pyramid_feature_names,
+)
+
 
 SCHEMA = "kaminos.boundary-splat-radiance-training.v0"
 CORPUS_SCHEMA = "kaminos-boundary-splat-supervision-corpus-v0"
@@ -119,7 +126,50 @@ def resolve_frame_splits(frame_ids, train_value, evaluation_value):
     }
 
 
-def load_corpus(manifest_value):
+def load_native_sidecar(manifest_path, frame, label):
+    structural = frame.get("structuralSupervision")
+    if not isinstance(structural, dict):
+        raise ValueError(f"{label} native sidecar context requires structuralSupervision")
+    grid = int(frame["grid"])
+    if structural.get("identity") != "native-boundary-sidecar-structural-supervision-v0":
+        raise ValueError(f"{label} structural supervision identity is invalid")
+    if structural.get("authority") != "live-native-boundary-sidecar-frozen-sim-state-v0":
+        raise ValueError(f"{label} structural supervision authority is invalid")
+    if structural.get("sameStateCaptureId") != frame.get("sameStateCaptureId"):
+        raise ValueError(f"{label} structural supervision state identity does not match candidates and target")
+    if structural.get("simStepCount") != frame.get("simStepCount"):
+        raise ValueError(f"{label} structural supervision simulator step does not match candidates and target")
+    if structural.get("requestedRoute") != frame.get("requestedRoute") or structural.get("effectiveRoute") != frame.get("effectiveRoute"):
+        raise ValueError(f"{label} structural supervision route identity does not match the frame")
+    if not str(structural.get("backend", "")).startswith("WebGPU:") or structural.get("fallbackReason") is not None:
+        raise ValueError(f"{label} structural supervision must preserve native WebGPU authority without fallback")
+    if structural.get("dtype") != "float32-le" or structural.get("grid") != [grid, grid, grid]:
+        raise ValueError(f"{label} structural supervision layout does not match the exact frame grid")
+    release = structural.get("release") or {}
+    if release.get("released") is not True or release.get("captureId") != structural.get("captureId") or release.get("sameStateCaptureId") != frame.get("sameStateCaptureId"):
+        raise ValueError(f"{label} structural supervision release receipt is missing or mismatched")
+    structure = structural.get("fields", {}).get("structure") or {}
+    meta = structural.get("fields", {}).get("meta") or {}
+    if structure.get("channels") != list(NATIVE_SIDECAR_CHANNELS[:4]) or meta.get("channels") != list(NATIVE_SIDECAR_CHANNELS[4:]):
+        raise ValueError(f"{label} structural supervision channel order is invalid")
+    structure_path, structure_bytes = read_verified_artifact(manifest_path, structure, f"{label} sidecar structure")
+    meta_path, meta_bytes = read_verified_artifact(manifest_path, meta, f"{label} sidecar meta")
+    expected_bytes = grid ** 3 * 4 * 4
+    if len(structure_bytes) != expected_bytes or len(meta_bytes) != expected_bytes:
+        raise ValueError(f"{label} structural supervision fields must each contain {expected_bytes} bytes")
+    structure_values = np.frombuffer(structure_bytes, dtype="<f4").reshape(grid ** 3, 4)
+    meta_values = np.frombuffer(meta_bytes, dtype="<f4").reshape(grid ** 3, 4)
+    if not np.all(np.isfinite(structure_values)) or not np.all(np.isfinite(meta_values)):
+        raise ValueError(f"{label} structural supervision contains non-finite values")
+    return {
+        "authority": "complete-native-sidecar-multi-radius-axial-context-v0",
+        "fields": np.concatenate([structure_values, meta_values], axis=1),
+        "structurePath": str(structure_path),
+        "metaPath": str(meta_path),
+    }
+
+
+def load_corpus(manifest_value, require_native_sidecar=False):
     manifest_path = Path(manifest_value).resolve()
     manifest_bytes = manifest_path.read_bytes()
     manifest = json.loads(manifest_bytes)
@@ -171,6 +221,7 @@ def load_corpus(manifest_value):
         sharpness = float(splat_controls.get("sharpness", 0))
         if not np.isfinite(radius) or radius <= 0 or not np.isfinite(sharpness) or sharpness <= 0:
             raise ValueError(f"{label} splat controls must be positive and finite")
+        native_sidecar = load_native_sidecar(manifest_path, frame, label) if require_native_sidecar else None
         frames.append({
             "id": frame["id"],
             "sameStateCaptureId": frame["sameStateCaptureId"],
@@ -193,6 +244,7 @@ def load_corpus(manifest_value):
             "viewport": viewport,
             "radius": radius,
             "sharpness": sharpness,
+            "nativeSidecar": native_sidecar,
         })
     if not frames:
         raise ValueError("corpus must contain at least one frame")
@@ -434,15 +486,15 @@ def load_warm_start(path_value, requested_context_mode, requested_frequencies, r
         warm_context_mode = artifact.get("contextMode")
         warm_frequencies = [float(value) for value in artifact.get("fourierFrequencies", [])]
         warm_spatial_mixing = "none"
-        if warm_context_mode in ("world-fourier", "world-grid-neighborhood", "world-grid-pyramid") and not warm_frequencies:
+        if warm_context_mode in ("world-fourier", "world-grid-neighborhood", "world-grid-pyramid", "native-sidecar-pyramid") and not warm_frequencies:
             recovered_frequencies = infer_fourier_frequencies(artifact.get("features") or [])
             warm_frequencies = recovered_frequencies
-        context_expansion = warm_context_mode == "world-fourier" and requested_context_mode == "world-grid-neighborhood"
+        context_expansion = warm_context_mode == "world-fourier" and requested_context_mode in ("world-grid-neighborhood", "native-sidecar-pyramid")
         if warm_context_mode != requested_context_mode and not context_expansion:
             raise ValueError(
                 f"warm start context mode {warm_context_mode!r} does not match requested context mode {requested_context_mode!r}"
             )
-        if warm_context_mode in ("world-fourier", "world-grid-neighborhood", "world-grid-pyramid") and warm_frequencies != requested_frequencies:
+        if warm_context_mode in ("world-fourier", "world-grid-neighborhood", "world-grid-pyramid", "native-sidecar-pyramid") and warm_frequencies != requested_frequencies:
             raise ValueError(
                 f"warm start Fourier frequencies {warm_frequencies!r} do not match requested Fourier frequencies {requested_frequencies!r}"
             )
@@ -464,13 +516,13 @@ def load_warm_start(path_value, requested_context_mode, requested_frequencies, r
     context_expansion = (
         warm_context_mode == "none" and requested_context_mode != "none"
     ) or (
-        warm_context_mode == "world-fourier" and requested_context_mode == "world-grid-neighborhood"
+        warm_context_mode == "world-fourier" and requested_context_mode in ("world-grid-neighborhood", "native-sidecar-pyramid")
     )
     if warm_context_mode != requested_context_mode and not context_expansion:
         raise ValueError(
             f"warm start context mode {warm_context_mode!r} does not match requested context mode {requested_context_mode!r}"
         )
-    if warm_context_mode in ("world-fourier", "world-grid-neighborhood", "world-grid-pyramid") and warm_frequencies != requested_frequencies:
+    if warm_context_mode in ("world-fourier", "world-grid-neighborhood", "world-grid-pyramid", "native-sidecar-pyramid") and warm_frequencies != requested_frequencies:
         raise ValueError(
             f"warm start Fourier frequencies {warm_frequencies!r} do not match requested Fourier frequencies {requested_frequencies!r}"
         )
@@ -524,7 +576,7 @@ def load_warm_start(path_value, requested_context_mode, requested_frequencies, r
         "continuation": schema in (SPATIAL_MODEL_SCHEMA, GRID_MESSAGE_MODEL_SCHEMA),
         "spatialMixing": warm_spatial_mixing,
         "legacyFrequencyRecoveryAuthority": "exact-complete-feature-name-groups-v0" if recovered_frequencies else None,
-        "contextExpansionAuthority": "zero-delta-local-grid-context-expansion-v0" if warm_context_mode == "world-fourier" and requested_context_mode == "world-grid-neighborhood" else None,
+        "contextExpansionAuthority": "zero-delta-complete-grid-context-expansion-v0" if warm_context_mode == "world-fourier" and requested_context_mode == "native-sidecar-pyramid" else "zero-delta-local-grid-context-expansion-v0" if warm_context_mode == "world-fourier" and requested_context_mode == "world-grid-neighborhood" else None,
         "spatialMixingExpansionAuthority": (
             "zero-delta-three-round-sparse-grid-residual-v0"
             if mixing_expansion and requested_spatial_mixing == "sparse-grid-residual"
@@ -542,9 +594,9 @@ def parse_fourier_frequencies(value):
 
 def context_feature_names(context_mode, frequencies):
     names = list(FEATURES)
-    if context_mode in ("world-xyz", "world-fourier", "world-grid-neighborhood", "world-grid-pyramid"):
+    if context_mode in ("world-xyz", "world-fourier", "world-grid-neighborhood", "world-grid-pyramid", "native-sidecar-pyramid"):
         names.extend(["position.x", "position.y", "position.z"])
-    if context_mode in ("world-fourier", "world-grid-neighborhood", "world-grid-pyramid"):
+    if context_mode in ("world-fourier", "world-grid-neighborhood", "world-grid-pyramid", "native-sidecar-pyramid"):
         for frequency in frequencies:
             label = format(frequency, "g")
             names.extend([f"position.sin.{axis}.{label}" for axis in "xyz"])
@@ -554,6 +606,8 @@ def context_feature_names(context_mode, frequencies):
     if context_mode == "world-grid-pyramid":
         for radius in GRID_PYRAMID_RADII:
             names.extend(grid_neighborhood_feature_names(f"neighbor.r{radius}"))
+    if context_mode == "native-sidecar-pyramid":
+        names.extend(native_sidecar_pyramid_feature_names())
     return names
 
 
@@ -640,13 +694,13 @@ def local_grid_pyramid_channels(candidates, grid):
     ], axis=1)
 
 
-def encode_candidate_inputs(candidates, context_mode, frequencies, grid=None):
+def encode_candidate_inputs(candidates, context_mode, frequencies, grid=None, native_sidecar=None):
     features = mx.array(candidates[:, 3:].astype(np.float32))
     if context_mode == "none":
         return features
     positions = mx.array(candidates[:, :3].astype(np.float32))
     channels = [features, positions]
-    if context_mode in ("world-fourier", "world-grid-neighborhood", "world-grid-pyramid"):
+    if context_mode in ("world-fourier", "world-grid-neighborhood", "world-grid-pyramid", "native-sidecar-pyramid"):
         for frequency in frequencies:
             channels.append(mx.sin(positions * frequency * 2.0 * np.pi))
             channels.append(mx.cos(positions * frequency * 2.0 * np.pi))
@@ -654,6 +708,10 @@ def encode_candidate_inputs(candidates, context_mode, frequencies, grid=None):
         channels.append(mx.array(local_grid_neighborhood_channels(candidates, grid)))
     if context_mode == "world-grid-pyramid":
         channels.append(mx.array(local_grid_pyramid_channels(candidates, grid)))
+    if context_mode == "native-sidecar-pyramid":
+        if native_sidecar is None or native_sidecar.get("authority") != "complete-native-sidecar-multi-radius-axial-context-v0":
+            raise ValueError("native-sidecar-pyramid requires verified complete native sidecar fields")
+        channels.append(mx.array(native_sidecar_pyramid_channels(candidates, grid, native_sidecar["fields"])))
     return mx.concatenate(channels, axis=1)
 
 
@@ -804,7 +862,7 @@ def build_sparse_geometry(frame, render_width, depth_bins, max_radius, context_m
         "width": render_width,
         "height": render_height,
         "features": mx.array(features.astype(np.float32)),
-        "inputs": encode_candidate_inputs(frame["candidates"], context_mode, frequencies, frame["grid"]),
+        "inputs": encode_candidate_inputs(frame["candidates"], context_mode, frequencies, frame["grid"], frame.get("nativeSidecar")),
         "neighborRows": (
             mx.array(
                 local_grid_neighbor_rows_26(frame["candidates"], frame["grid"])
@@ -1034,7 +1092,7 @@ def serialize_spatial_model(model, output_ranges, feature_names, context_mode, f
         "hiddenSize": int(model.hidden.weight.shape[0]),
         "outputRanges": output_ranges.astype(float).tolist(),
         "contextMode": context_mode,
-        "fourierFrequencies": frequencies if context_mode in ("world-fourier", "world-grid-neighborhood", "world-grid-pyramid") else [],
+        "fourierFrequencies": frequencies if context_mode in ("world-fourier", "world-grid-neighborhood", "world-grid-pyramid", "native-sidecar-pyramid") else [],
         "deployable": False,
         "layers": [
             {
@@ -1128,7 +1186,7 @@ def parse_args():
     parser.add_argument("--radius-preservation", type=float, default=0.18)
     parser.add_argument("--depth-bins", type=int, default=1)
     parser.add_argument("--edge-weight", type=float, default=0.0)
-    parser.add_argument("--context-mode", choices=["none", "world-xyz", "world-fourier", "world-grid-neighborhood", "world-grid-pyramid"], default="none")
+    parser.add_argument("--context-mode", choices=["none", "world-xyz", "world-fourier", "world-grid-neighborhood", "world-grid-pyramid", "native-sidecar-pyramid"], default="none")
     parser.add_argument("--fourier-frequencies", default="1,2,4,8")
     parser.add_argument("--hidden-size", type=int, default=0)
     parser.add_argument("--spatial-mixing", choices=["none", "six-neighbor-hidden-residual", "sparse-grid-residual"], default="none")
@@ -1167,7 +1225,7 @@ def main():
             raise ValueError("base-path freezing requires an explicit residual spatial mixer")
         feature_names = context_feature_names(args.context_mode, frequencies)
         phase = "corpus"
-        corpus = load_corpus(args.corpus)
+        corpus = load_corpus(args.corpus, require_native_sidecar=args.context_mode == "native-sidecar-pyramid")
         frame_split = resolve_frame_splits(
             [frame["id"] for frame in corpus["frames"]],
             args.train_frame_indices,
@@ -1177,6 +1235,8 @@ def main():
             raise ValueError("screen-unet requires an explicit disjoint frame holdout")
         if args.spatial_mixing == "sparse-grid-residual" and frame_split["authority"] != "explicit-disjoint-frame-holdout-v0":
             raise ValueError("sparse-grid-residual requires an explicit disjoint frame holdout")
+        if args.context_mode == "native-sidecar-pyramid" and frame_split["authority"] != "explicit-disjoint-frame-holdout-v0":
+            raise ValueError("native-sidecar-pyramid requires an explicit disjoint frame holdout")
         if args.optical_decoder != "none" and args.candidate_table_oracle:
             raise ValueError("optical decoding cannot be combined with the candidate table oracle")
         if args.optical_decoder != "none" and args.spatial_mixing != "none":
@@ -1208,7 +1268,7 @@ def main():
         initial_attributes = [
             predict_numpy(
                 base_model,
-                np.asarray(encode_candidate_inputs(frame["candidates"], warm_context_mode, warm_frequencies, frame["grid"])),
+                np.asarray(encode_candidate_inputs(frame["candidates"], warm_context_mode, warm_frequencies, frame["grid"], frame.get("nativeSidecar"))),
                 output_ranges,
                 local_grid_neighbor_rows(frame["candidates"], frame["grid"])
                 if warm_spatial_mixing == "six-neighbor-hidden-residual"
@@ -1473,7 +1533,11 @@ def main():
                     else (
                         "shared-multi-radius-grid-conditioned-feature-mlp-v0"
                         if args.context_mode == "world-grid-pyramid"
-                        else "shared-position-conditioned-feature-mlp-v0"
+                        else (
+                            "complete-native-sidecar-conditioned-feature-mlp-v0"
+                            if args.context_mode == "native-sidecar-pyramid"
+                            else "shared-position-conditioned-feature-mlp-v0"
+                        )
                     )
                 ),
                 "deployable": False,
@@ -1538,8 +1602,12 @@ def main():
                     if warm_spatial_mixing == "none" and args.spatial_mixing == "six-neighbor-hidden-residual"
                     else None
                 ),
-                "fourierFrequencies": frequencies if args.context_mode in ("world-fourier", "world-grid-neighborhood", "world-grid-pyramid") else [],
-                "gridContextAuthority": "multi-radius-axial-grid-context-v0" if args.context_mode == "world-grid-pyramid" else None,
+                "fourierFrequencies": frequencies if args.context_mode in ("world-fourier", "world-grid-neighborhood", "world-grid-pyramid", "native-sidecar-pyramid") else [],
+                "gridContextAuthority": (
+                    "complete-native-sidecar-multi-radius-axial-context-v0"
+                    if args.context_mode == "native-sidecar-pyramid"
+                    else "multi-radius-axial-grid-context-v0" if args.context_mode == "world-grid-pyramid" else None
+                ),
                 "inputChannels": len(feature_names),
                 "warmHiddenSize": warm_hidden_size,
                 "hiddenSize": requested_hidden_size,

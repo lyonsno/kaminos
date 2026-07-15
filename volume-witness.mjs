@@ -144,6 +144,11 @@ const boundarySplatSupervisionFrames = Math.max(1, Math.floor(Number(args.get('-
 const boundarySplatSupervisionStepDeltaMs = Math.max(0, Number(args.get('--boundary-splat-supervision-step-delta-ms') || 220));
 const boundarySplatSupervisionRawSidecar = args.has('--boundary-splat-supervision-raw-sidecar');
 const boundarySplatSupervisionMinSimStep = Math.max(0, Math.floor(Number(args.get('--boundary-splat-supervision-min-sim-step') || 120)));
+const boundarySplatSupervisionOperationTimeoutMsRequested = args.has('--boundary-splat-supervision-operation-timeout-ms')
+  ? Number(args.get('--boundary-splat-supervision-operation-timeout-ms'))
+  : 180_000;
+const boundarySplatSupervisionOperationTimeoutMsEffective = boundarySplatSupervisionOperationTimeoutMsRequested;
+const boundarySplatSupervisionRawCaptureResponseGraceMs = 5_000;
 const out = resolve(args.get('--out') || '/tmp/kaminos-volume-witness.png');
 const reportPath = resolve(args.get('--report') || (boundarySplatSupervisionDir
   ? join(boundarySplatSupervisionDir, 'report.json')
@@ -1829,17 +1834,94 @@ async function attachOrLaunchSharedBrowser() {
   };
 }
 
-function closeBrowserSession(browserSession) {
-  if (browserSession?.keepBrowserOpen) return;
-  browserSession?.process?.kill('SIGTERM');
+function browserListenerPids(debugPort) {
+  try {
+    return execFileSync('lsof', ['-nP', `-iTCP:${debugPort}`, '-sTCP:LISTEN', '-t'], { encoding: 'utf8' })
+      .split(/\s+/)
+      .map(value => Number(value))
+      .filter(value => Number.isInteger(value) && value > 1 && value !== process.pid);
+  } catch {
+    return [];
+  }
 }
 
-function wsRequest(ws, method, params = {}) {
+async function requestAttachedBrowserClose() {
+  const version = await cdpFetch('/json/version');
+  if (!version?.webSocketDebuggerUrl) throw new Error('attached browser omitted browser-level CDP endpoint');
+  const ws = new WebSocket(version.webSocketDebuggerUrl);
+  await waitForWebSocketOpen(ws);
+  ws.send(JSON.stringify({ id: 1, method: 'Browser.close' }));
+  await delay(150);
+  try {
+    ws.close();
+  } catch {
+    // Browser.close commonly tears down the socket before the client can close it.
+  }
+}
+
+async function closeBrowserSession(browserSession, options = {}) {
+  const force = options.force === true;
+  const reason = options.reason || (force ? 'forced-browser-session-close' : 'ordinary-browser-session-close');
+  if (!force && browserSession?.keepBrowserOpen) {
+    return { closed: false, disposition: 'kept-open-by-request', force, reason };
+  }
+
+  let childSignalSent = false;
+  if (browserSession?.process) {
+    childSignalSent = browserSession.process.kill('SIGTERM');
+  }
+  if (!force) {
+    return { closed: childSignalSent, disposition: childSignalSent ? 'child-process-signaled' : 'no-live-child-process', force, reason };
+  }
+
+  await delay(150);
+  let browserCloseRequested = false;
+  let browserCloseError = null;
+  if (await cdpAvailable()) {
+    try {
+      await requestAttachedBrowserClose();
+      browserCloseRequested = true;
+    } catch (error) {
+      browserCloseError = error?.message || String(error);
+    }
+  }
+
+  for (let attempt = 0; attempt < 10 && await cdpAvailable(); attempt += 1) {
+    await delay(100);
+  }
+  let listenerPids = [];
+  if (await cdpAvailable()) {
+    listenerPids = browserListenerPids(browserSession?.port ?? port);
+    for (const listenerPid of listenerPids) process.kill(listenerPid, 'SIGTERM');
+    for (let attempt = 0; attempt < 20 && await cdpAvailable(); attempt += 1) {
+      await delay(100);
+    }
+  }
+  if (await cdpAvailable()) {
+    throw new Error(`poisoned browser session remained reachable on CDP port ${browserSession?.port ?? port}`);
+  }
+  return {
+    closed: true,
+    disposition: 'poisoned-session-terminated',
+    force,
+    reason,
+    childSignalSent,
+    browserCloseRequested,
+    browserCloseError,
+    listenerPids,
+  };
+}
+
+function wsRequest(ws, method, params = {}, options = {}) {
   const id = ws._nextId = (ws._nextId || 0) + 1;
   const keepAlive = setInterval(() => {}, 1000);
   return new Promise((resolveReq, rejectReq) => {
+    const operationTimeoutMs = Number(options.operationTimeoutMs);
+    const operationLabel = String(options.operationLabel || method);
+    let operationTimeout = null;
     const cleanup = () => {
       clearInterval(keepAlive);
+      if (operationTimeout) clearTimeout(operationTimeout);
       ws.removeEventListener('message', onMessage);
       ws.removeEventListener('close', onClose);
       ws.removeEventListener('error', onError);
@@ -1859,6 +1941,15 @@ function wsRequest(ws, method, params = {}) {
     ws.addEventListener('message', onMessage);
     ws.addEventListener('close', onClose, { once: true });
     ws.addEventListener('error', onError, { once: true });
+    if (Number.isFinite(operationTimeoutMs) && operationTimeoutMs > 0) {
+      operationTimeout = setTimeout(() => {
+        const error = new Error(`${method}: CDP operation timed out after ${operationTimeoutMs}ms during ${operationLabel}`);
+        error.cdpMethod = method;
+        error.operationLabel = operationLabel;
+        error.operationTimeoutMs = operationTimeoutMs;
+        settle(rejectReq, error);
+      }, operationTimeoutMs);
+    }
     try {
       ws.send(JSON.stringify({ id, method, params }));
     } catch (err) {
@@ -2275,13 +2366,13 @@ async function recoverIdentityFrameState(ws, state) {
   };
 }
 
-async function readCachedBrowserBytes(ws, cacheName, expectedLength, label) {
+async function readCachedBrowserBytes(ws, cacheName, expectedLength, label, request = wsRequest) {
   assert.ok(Number.isInteger(expectedLength) && expectedLength > 0, `${label} expected length must be positive`);
   const transportChunkBytes = 256 * 1024;
   const chunks = [];
   for (let offset = 0; offset < expectedLength; offset += transportChunkBytes) {
     const length = Math.min(transportChunkBytes, expectedLength - offset);
-    const chunkEval = await wsRequest(ws, 'Runtime.evaluate', {
+    const chunkEval = await request(ws, 'Runtime.evaluate', {
       expression: `(() => {
         const bytes = window[${JSON.stringify(cacheName)}];
         if (!(bytes instanceof Uint8Array) || bytes.length !== ${expectedLength}) {
@@ -2310,13 +2401,13 @@ async function readCachedBrowserBytes(ws, cacheName, expectedLength, label) {
   return { bytes, chunkBytes: transportChunkBytes, chunkCount: chunks.length };
 }
 
-async function readBoundarySidecarRawField(ws, captureId, sameStateCaptureId, field, expectedBytes, label) {
+async function readBoundarySidecarRawField(ws, captureId, sameStateCaptureId, field, expectedBytes, label, request = wsRequest) {
   assert.ok(Number.isInteger(expectedBytes) && expectedBytes > 0, `${label} expected bytes must be positive`);
   const transportChunkBytes = 256 * 1024;
   const chunks = [];
   for (let offset = 0; offset < expectedBytes; offset += transportChunkBytes) {
     const length = Math.min(transportChunkBytes, expectedBytes - offset);
-    const chunkEval = await wsRequest(ws, 'Runtime.evaluate', {
+    const chunkEval = await request(ws, 'Runtime.evaluate', {
       expression: `window.__kaminosVolumePrototype?.readBoundarySidecarRawCaptureChunk?.(${JSON.stringify(captureId)}, ${JSON.stringify(field)}, ${offset}, ${length})`,
       returnByValue: true,
     });
@@ -2342,23 +2433,47 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
   let supervisionPhase = 'initialize-sequence';
   let capturedFrameCount = 0;
   let warmupReceipt = null;
+  let lastTrustworthyEvidence = {
+    authority: 'boundary-splat-supervision-last-trustworthy-evidence-v0',
+    requestedRoute: url,
+    effectiveRoute: null,
+    backend: null,
+    fallbackReason: null,
+    lastSimStepCount: null,
+    lastFrameId: null,
+    capturedFrameCount: 0,
+  };
+  const supervisionWsRequest = (requestWs, method, params = {}, requestOptions = {}) => wsRequest(requestWs, method, params, {
+    operationTimeoutMs: requestOptions.operationTimeoutMs ?? boundarySplatSupervisionOperationTimeoutMsEffective,
+    operationLabel: supervisionPhase,
+  });
   try {
     const hash = bytes => createHash('sha256').update(bytes).digest('hex');
+    if (!Number.isFinite(boundarySplatSupervisionOperationTimeoutMsEffective) || boundarySplatSupervisionOperationTimeoutMsEffective <= 0) {
+      throw new Error(`boundary splat supervision operation timeout must be a positive finite number, received ${args.get('--boundary-splat-supervision-operation-timeout-ms')}`);
+    }
     if (boundarySplatSupervisionRawSidecar && expectedGrid !== 160) {
       throw new Error(`fixed-candidate supervision raw sidecar requires exact grid 160, received ${expectedGrid}`);
     }
     supervisionPhase = 'warmup-live-simulator';
-    const warmupStateEval = await wsRequest(ws, 'Runtime.evaluate', {
+    const warmupStateEval = await supervisionWsRequest(ws, 'Runtime.evaluate', {
       expression: 'window.__kaminosVolumePrototype?.debugState?.()',
       returnByValue: true,
     });
     let warmupState = warmupStateEval.result.value;
+    lastTrustworthyEvidence = {
+      ...lastTrustworthyEvidence,
+      effectiveRoute: warmupState?.effectiveRoute || null,
+      backend: warmupState?.backend || null,
+      fallbackReason: warmupState?.fallbackReason || null,
+      lastSimStepCount: Number.isFinite(Number(warmupState?.simStepCount)) ? Number(warmupState.simStepCount) : null,
+    };
     let warmupSimStepCount = Number(warmupState?.simStepCount || 0);
     const warmupStartSimStepCount = warmupSimStepCount;
     let warmupAdvancedFrames = 0;
     let consecutiveWarmupStalls = 0;
     while (warmupSimStepCount < boundarySplatSupervisionMinSimStep) {
-      const warmupEval = await wsRequest(ws, 'Runtime.evaluate', {
+      const warmupEval = await supervisionWsRequest(ws, 'Runtime.evaluate', {
         expression: `(async () => {
           const prototype = window.__kaminosVolumePrototype;
           const before = prototype?.debugState?.();
@@ -2381,6 +2496,13 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
       if (warmupEval.exceptionDetails) throw new Error(`fixed-candidate supervision warmup failed: ${warmupEval.exceptionDetails.text || 'runtime exception'}`);
       const warmupStep = warmupEval.result.value;
       warmupState = warmupStep?.after;
+      lastTrustworthyEvidence = {
+        ...lastTrustworthyEvidence,
+        effectiveRoute: warmupState?.effectiveRoute || lastTrustworthyEvidence.effectiveRoute,
+        backend: warmupState?.backend || lastTrustworthyEvidence.backend,
+        fallbackReason: warmupState?.fallbackReason ?? lastTrustworthyEvidence.fallbackReason,
+        lastSimStepCount: Number.isFinite(Number(warmupState?.simStepCount)) ? Number(warmupState.simStepCount) : lastTrustworthyEvidence.lastSimStepCount,
+      };
       const nextSimStepCount = Number(warmupState?.simStepCount || 0);
       if (warmupStep?.ok !== true || warmupStep.sampleAuthority !== 'sim-advanced-frame-readback') {
         throw new Error(`fixed-candidate supervision warmup rejected: ${JSON.stringify(warmupStep)}`);
@@ -2400,7 +2522,7 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
       advancedFrameCount: warmupAdvancedFrames,
       uncapped: true,
     };
-    const sequenceStartEval = await wsRequest(ws, 'Runtime.evaluate', {
+    const sequenceStartEval = await supervisionWsRequest(ws, 'Runtime.evaluate', {
       expression: 'performance.now()',
       returnByValue: true,
     });
@@ -2415,7 +2537,7 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
       let stepReceipt = null;
       if (frameIndex > 0) {
         supervisionPhase = `advance-simulator-${frameId}`;
-        const stepEval = await wsRequest(ws, 'Runtime.evaluate', {
+        const stepEval = await supervisionWsRequest(ws, 'Runtime.evaluate', {
           expression: `(async () => {
             const prototype = window.__kaminosVolumePrototype;
             const before = prototype?.debugState?.();
@@ -2451,7 +2573,7 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
       }
 
       supervisionPhase = `invoke-live-capture-${frameId}`;
-      const captureEval = await wsRequest(ws, 'Runtime.evaluate', {
+      const captureEval = await supervisionWsRequest(ws, 'Runtime.evaluate', {
         expression: `(async () => {
           const capture = await window.__kaminosVolumePrototype?.captureBoundarySplatSupervisionFrame?.({
             renderScale: 1,
@@ -2505,6 +2627,14 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
       assert.equal(capture?.authority, 'live-simulator-frozen-state-candidate-raymarch-v0', 'wrong supervision capture authority');
       assert.equal(capture?.candidates?.rendererIdentity, 'live-boundary-sidecar-analytic-splats-v0', 'wrong supervision candidate renderer');
       assert.equal(capture?.target?.rendererIdentity, 'native-3d-compute-fluid-raymarch-v0', 'wrong supervision target renderer');
+      lastTrustworthyEvidence = {
+        ...lastTrustworthyEvidence,
+        effectiveRoute: capture?.effectiveRoute || lastTrustworthyEvidence.effectiveRoute,
+        backend: capture?.backend || lastTrustworthyEvidence.backend,
+        fallbackReason: capture?.fallbackReason ?? lastTrustworthyEvidence.fallbackReason,
+        lastSimStepCount: Number.isFinite(Number(capture?.baseSimStepCount)) ? Number(capture.baseSimStepCount) : lastTrustworthyEvidence.lastSimStepCount,
+        lastFrameId: frameId,
+      };
 
       supervisionPhase = `transport-candidates-${frameId}`;
       const candidateTransport = await readCachedBrowserBytes(
@@ -2512,6 +2642,7 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
         '__kaminosBoundarySplatSupervisionCandidates',
         Number(capture.candidates.expectedLength),
         `fixed-candidate supervision candidates ${frameId}`,
+        supervisionWsRequest,
       );
       supervisionPhase = `transport-target-${frameId}`;
       const targetTransport = await readCachedBrowserBytes(
@@ -2519,6 +2650,7 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
         '__kaminosBoundarySplatSupervisionTarget',
         Number(capture.target.expectedLength),
         `fixed-candidate supervision target ${frameId}`,
+        supervisionWsRequest,
       );
       supervisionPhase = `transport-flow-debug-${frameId}`;
       const flowDebugTransport = await readCachedBrowserBytes(
@@ -2526,6 +2658,7 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
         '__kaminosBoundarySplatSupervisionFlowDebug',
         Number(capture.flowDebug.expectedLength),
         `fixed-candidate supervision flow debug ${frameId}`,
+        supervisionWsRequest,
       );
 
       let structuralSupervision = null;
@@ -2535,17 +2668,27 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
         let rawRelease = null;
         let rawFailure = null;
         try {
-          const rawCaptureEval = await wsRequest(ws, 'Runtime.evaluate', {
-            expression: `(async () => window.__kaminosVolumePrototype?.captureBoundarySidecarRawFrame?.({
+          const rawCaptureEval = await supervisionWsRequest(ws, 'Runtime.evaluate', {
+            expression: `(async () => window.__kaminosVolumePrototype?.captureBoundarySidecarRawFrameWithDeadline?.({
               resumeRenderLoop: false,
               now: ${JSON.stringify(controlledNowMs)},
               sameStateCaptureId: ${JSON.stringify(capture.sameStateCaptureId)},
+              deadlineMs: ${JSON.stringify(boundarySplatSupervisionOperationTimeoutMsEffective)},
             }))()`,
             awaitPromise: true,
             returnByValue: true,
+          }, {
+            operationTimeoutMs: boundarySplatSupervisionOperationTimeoutMsEffective + boundarySplatSupervisionRawCaptureResponseGraceMs,
           });
           if (rawCaptureEval.exceptionDetails) throw new Error(`fixed-candidate supervision raw sidecar capture failed: ${rawCaptureEval.exceptionDetails.text || 'runtime exception'}`);
           rawCapture = rawCaptureEval.result.value;
+          if (rawCapture?.browserSessionDisposition === 'poisoned-close-required') {
+            const poisonError = new Error(`fixed-candidate supervision raw sidecar capture poisoned browser session: ${JSON.stringify(rawCapture)}`);
+            poisonError.browserSessionPoisoned = true;
+            poisonError.browserSessionPoisonReason = rawCapture.reason || 'boundary-sidecar-raw-capture-deadline-exceeded';
+            poisonError.browserSessionPoisonReceipt = rawCapture;
+            throw poisonError;
+          }
           if (rawCapture?.ok !== true || rawCapture.identity !== 'boundary-sidecar-raw-two-buffer-export-v0') {
             throw new Error(`fixed-candidate supervision raw sidecar capture rejected: ${JSON.stringify(rawCapture)}`);
           }
@@ -2566,6 +2709,7 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
             'structure',
             Number(rawCapture.fields?.structure?.bytes),
             `fixed-candidate supervision raw structure ${frameId}`,
+            supervisionWsRequest,
           );
           supervisionPhase = `transport-raw-sidecar-meta-${frameId}`;
           const metaTransport = await readBoundarySidecarRawField(
@@ -2575,6 +2719,7 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
             'meta',
             Number(rawCapture.fields?.meta?.bytes),
             `fixed-candidate supervision raw meta ${frameId}`,
+            supervisionWsRequest,
           );
           const structurePath = join(outputDir, `frame-${String(frameIndex).padStart(3, '0')}.sidecar-structure.f32`);
           const metaPath = join(outputDir, `frame-${String(frameIndex).padStart(3, '0')}.sidecar-meta.f32`);
@@ -2630,7 +2775,7 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
                 primaryPhase: primaryFailurePhase,
                 releasePhase,
                 release: async () => {
-                  const releaseEval = await wsRequest(ws, 'Runtime.evaluate', {
+                  const releaseEval = await supervisionWsRequest(ws, 'Runtime.evaluate', {
                     expression: `window.__kaminosVolumePrototype?.releaseBoundarySidecarRawCapture?.(${JSON.stringify(rawCapture.captureId)})`,
                     returnByValue: true,
                   });
@@ -2742,6 +2887,13 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
         structuralSupervision,
       });
       capturedFrameCount = frames.length;
+      const capturedFrame = frames[frames.length - 1];
+      lastTrustworthyEvidence = {
+        ...lastTrustworthyEvidence,
+        lastSimStepCount: Number(capturedFrame.simStepCount),
+        lastFrameId: capturedFrame.id,
+        capturedFrameCount,
+      };
     }
 
     const captureIds = new Set(frames.map(frame => frame.sameStateCaptureId));
@@ -2787,6 +2939,13 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
       stepDeltaMs: boundarySplatSupervisionStepDeltaMs,
       sameBrowserSequenceSuitable,
       warmup: warmupReceipt,
+      operationDeadline: {
+        authority: 'caller-configured-per-cdp-operation-deadline-v0',
+        requestedMs: boundarySplatSupervisionOperationTimeoutMsRequested,
+        effectiveMs: boundarySplatSupervisionOperationTimeoutMsEffective,
+        rawCaptureResponseGraceMs: boundarySplatSupervisionRawCaptureResponseGraceMs,
+        totalBatchTimeout: null,
+      },
       rawSidecarRequested: boundarySplatSupervisionRawSidecar,
       structuralFrameCount: validation.structuralFrameCount,
       requestedRoute: frames[0].requestedRoute,
@@ -2810,12 +2969,34 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
       requestedFrameCount: boundarySplatSupervisionFrames,
       capturedFrameCount,
       warmup: warmupReceipt,
+      operationDeadline: {
+        authority: 'caller-configured-per-cdp-operation-deadline-v0',
+        requestedMs: boundarySplatSupervisionOperationTimeoutMsRequested,
+        effectiveMs: boundarySplatSupervisionOperationTimeoutMsEffective,
+        rawCaptureResponseGraceMs: boundarySplatSupervisionRawCaptureResponseGraceMs,
+        totalBatchTimeout: null,
+      },
+      lastTrustworthyEvidence: {
+        ...lastTrustworthyEvidence,
+        capturedFrameCount,
+        warmup: warmupReceipt,
+      },
+      failedOperation: error?.operationTimeoutMs ? {
+        method: error.cdpMethod || null,
+        label: error.operationLabel || supervisionPhase,
+        timeoutMs: error.operationTimeoutMs,
+      } : null,
       rawSidecarRequested: boundarySplatSupervisionRawSidecar,
+      browserSessionPoisoned: error?.browserSessionPoisoned === true,
+      browserSessionPoisonReason: error?.browserSessionPoisonReason || null,
+      browserSessionPoisonReceipt: error?.browserSessionPoisonReceipt || null,
       error: error?.message || String(error),
       rawSidecarReleaseError: error?.rawSidecarReleaseError || null,
     };
     writeFileSync(supervisionReportPath, JSON.stringify(failure, null, 2));
     error.supervisionPhase = supervisionPhase;
+    error.supervisionFailureReport = failure;
+    error.browserSessionPoisoned = error?.browserSessionPoisoned === true;
     throw error;
   }
 }
@@ -2920,7 +3101,7 @@ async function main() {
       }
       const report = await captureBoundarySplatSupervisionArtifacts(ws, boundarySplatSupervisionDir, replayedCaptureCamera);
       ws.close();
-      closeBrowserSession(browserSession);
+      await closeBrowserSession(browserSession);
       console.log(JSON.stringify(report, null, 2));
       return;
     }
@@ -3078,7 +3259,7 @@ async function main() {
       };
       writeFileSync(reportPath, JSON.stringify(report, null, 2));
       ws.close();
-      closeBrowserSession(browserSession);
+      await closeBrowserSession(browserSession);
       return;
     }
     assert.equal(state.volumeScene, expectedVolumeScene, 'volume scene route/control did not apply');
@@ -3208,7 +3389,7 @@ async function main() {
         };
         writeFileSync(reportPath, JSON.stringify(report, null, 2));
         ws.close();
-        closeBrowserSession(browserSession);
+        await closeBrowserSession(browserSession);
         console.log(JSON.stringify(report, null, 2));
         return;
       }
@@ -4993,29 +5174,45 @@ async function main() {
     };
     writeFileSync(reportPath, JSON.stringify(report, null, 2));
     ws.close();
-    closeBrowserSession(browserSession);
+    await closeBrowserSession(browserSession);
     console.log(JSON.stringify(report, null, 2));
   } catch (err) {
+    const supervisionFailureReport = err?.supervisionFailureReport || null;
     let state = null;
-    try {
-      const targets = await cdpFetch('/json/list');
-      const page = targets.find(t => t.type === 'page' && t.url.includes('kaminos_volume_smoke=1')) || targets.find(t => t.type === 'page');
-      if (page?.webSocketDebuggerUrl) {
-        const ws = new WebSocket(page.webSocketDebuggerUrl);
-        await waitForWebSocketOpen(ws);
-        await wsRequest(ws, 'Page.enable');
-        await captureViewportScreenshot(ws, fullScreenshot);
-        const stateEval = await wsRequest(ws, 'Runtime.evaluate', {
-          expression: 'window.__kaminosVolumePrototype?.debugState?.()',
-          returnByValue: true,
-        });
-        state = stateEval.result.value || null;
-        ws.close();
+    if (supervisionFailureReport) {
+      state = supervisionFailureReport.lastTrustworthyEvidence || null;
+    } else {
+      try {
+        const targets = await cdpFetch('/json/list');
+        const page = targets.find(t => t.type === 'page' && t.url.includes('kaminos_volume_smoke=1')) || targets.find(t => t.type === 'page');
+        if (page?.webSocketDebuggerUrl) {
+          const ws = new WebSocket(page.webSocketDebuggerUrl);
+          await waitForWebSocketOpen(ws);
+          await wsRequest(ws, 'Page.enable');
+          await captureViewportScreenshot(ws, fullScreenshot);
+          const stateEval = await wsRequest(ws, 'Runtime.evaluate', {
+            expression: 'window.__kaminosVolumePrototype?.debugState?.()',
+            returnByValue: true,
+          });
+          state = stateEval.result.value || null;
+          ws.close();
+        }
+      } catch {
+        state = null;
       }
-    } catch {
-      state = null;
+    }
+    let browserSessionClose = null;
+    let browserSessionCloseError = null;
+    try {
+      browserSessionClose = await closeBrowserSession(browserSession, {
+        force: err?.browserSessionPoisoned === true,
+        reason: err?.browserSessionPoisonReason || err?.message || 'volume-witness-failure',
+      });
+    } catch (closeError) {
+      browserSessionCloseError = closeError?.message || String(closeError);
     }
     const report = {
+      ...(supervisionFailureReport || {}),
       requestedRoute: url,
       captureReplay: isCaptureReplay ? {
         path: captureReplay.path,
@@ -5043,10 +5240,13 @@ async function main() {
         port: browserSession.port,
         userDataDir: browserSession.userDataDir,
         keepBrowserOpen: browserSession.keepBrowserOpen,
+        poisoned: err?.browserSessionPoisoned === true,
+        poisonReason: err?.browserSessionPoisonReason || null,
+        close: browserSessionClose,
+        closeError: browserSessionCloseError,
       },
     };
     writeFileSync(reportPath, JSON.stringify(report, null, 2));
-    closeBrowserSession(browserSession);
     console.error(JSON.stringify(report, null, 2));
     process.exit(1);
   }
