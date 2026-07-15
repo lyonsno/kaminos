@@ -1109,6 +1109,25 @@ class TransportDatasetContracts(unittest.TestCase):
             self.assertTrue(all(row["targetConsultedAfterPrediction"] for row in prediction["supportMetrics"]))
             self.assertEqual(len(report["recurrent"]), 2)
 
+    def test_unsupported_inference_mode_writes_durable_argument_failure_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out_dir = Path(directory) / "bad-mode"
+            argv = [
+                str(MODULE_PATH),
+                "--manifest", str(Path(directory) / "not-read.json"),
+                "--out-dir", str(out_dir),
+                "--inference-mode", "alternating_anchor",
+            ]
+            with patch.object(sys, "argv", argv), patch("sys.stderr"):
+                with self.assertRaises(SystemExit):
+                    MODULE.main()
+            report = json.loads((out_dir / "training-report.json").read_text(encoding="utf8"))
+            self.assertEqual(report["status"], "failed")
+            self.assertEqual(report["failurePhase"], "argument-validation")
+            self.assertEqual(report["lastTrustworthy"]["requestedInferenceMode"], "alternating_anchor")
+            self.assertEqual(report["lastTrustworthy"]["requestedOutDir"], str(out_dir))
+            self.assertEqual(report["lastTrustworthy"]["requestedManifestPath"], str(Path(directory) / "not-read.json"))
+
     def test_eulerian_composer_honors_absolute_support_budget_before_birth_admission(self):
         source = frame([
             ((0.0, 0.0, 0.0), 1.0),
@@ -1532,14 +1551,19 @@ class TransportDatasetContracts(unittest.TestCase):
             predict_from_anchor,
         )
 
+        self.assertNotIn("visibleRoles", sequence)
         self.assertEqual(
-            sequence["visibleRoles"],
+            sequence["producedSequenceRoles"],
+            ["exact-even-anchor", "causal-odd-prediction"],
+        )
+        self.assertEqual(
+            sequence["plannedWitnessRoles"],
             [
-                "natural-full-rate",
-                "hold-half-rate",
-                "causal-predicted",
-                "oracle-scaffold",
-                "interpolated",
+                {"role": "natural-full-rate", "producedByEvaluator": False, "source": "exact-inference-manifest"},
+                {"role": "hold-half-rate", "producedByEvaluator": False, "source": "downstream-witness-plan"},
+                {"role": "causal-predicted", "producedByEvaluator": True, "source": "alternating-sequence-frames"},
+                {"role": "oracle-scaffold", "producedByEvaluator": False, "source": "separate-offline-evaluation"},
+                {"role": "interpolated", "producedByEvaluator": False, "source": "downstream-noncausal-composition"},
             ],
         )
         self.assertEqual(sequence["controlledStepDeltaMs"], 16.667)

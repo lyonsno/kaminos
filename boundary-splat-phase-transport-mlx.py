@@ -64,6 +64,13 @@ def write_json(path, payload):
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def requested_cli_value(argv, option):
+    for index, value in enumerate(argv):
+        if value == option and index + 1 < len(argv) and not argv[index + 1].startswith("--"):
+            return argv[index + 1]
+    return None
+
+
 def sha256_bytes(data):
     return hashlib.sha256(data).hexdigest()
 
@@ -1975,12 +1982,13 @@ def build_alternating_anchor_sequence(frame_docs, exact_frames, predict_from_anc
         "exactAnchorParity": "even",
         "heldoutTargetParity": "odd",
         "targetFramesAvailableToPredictor": False,
-        "visibleRoles": [
-            "natural-full-rate",
-            "hold-half-rate",
-            "causal-predicted",
-            "oracle-scaffold",
-            "interpolated",
+        "producedSequenceRoles": ["exact-even-anchor", "causal-odd-prediction"],
+        "plannedWitnessRoles": [
+            {"role": "natural-full-rate", "producedByEvaluator": False, "source": "exact-inference-manifest"},
+            {"role": "hold-half-rate", "producedByEvaluator": False, "source": "downstream-witness-plan"},
+            {"role": "causal-predicted", "producedByEvaluator": True, "source": "alternating-sequence-frames"},
+            {"role": "oracle-scaffold", "producedByEvaluator": False, "source": "separate-offline-evaluation"},
+            {"role": "interpolated", "producedByEvaluator": False, "source": "downstream-noncausal-composition"},
         ],
         "frames": sequence_frames,
         "recurrent": recurrent_rows,
@@ -2352,13 +2360,39 @@ def parse_args():
 
 
 def main():
-    args = parse_args()
+    started_at = time.time()
+    requested_out_dir = requested_cli_value(sys.argv[1:], "--out-dir")
+    requested_manifest_path = requested_cli_value(sys.argv[1:], "--manifest")
+    requested_inference_mode = requested_cli_value(sys.argv[1:], "--inference-mode")
+    argument_report_path = None
+    if requested_out_dir:
+        argument_out_dir = Path(requested_out_dir).resolve()
+        argument_out_dir.mkdir(parents=True, exist_ok=True)
+        argument_report_path = argument_out_dir / "training-report.json"
+    try:
+        args = parse_args()
+    except SystemExit as error:
+        if argument_report_path is not None and int(error.code or 0) != 0:
+            write_json(argument_report_path, {
+                "schema": SCHEMA,
+                "status": "failed",
+                "mode": "argument-validation-failure",
+                "startedAt": started_at,
+                "completedAt": time.time(),
+                "failurePhase": "argument-validation",
+                "error": f"argument parsing exited with status {error.code}",
+                "lastTrustworthy": {
+                    "requestedOutDir": requested_out_dir,
+                    "requestedManifestPath": requested_manifest_path,
+                    "requestedInferenceMode": requested_inference_mode,
+                },
+            })
+        raise
     out_dir = Path(args.out_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     report_path = out_dir / "training-report.json"
     failure_phase = "argument-validation"
     last_trustworthy = {"manifestPath": str(Path(args.manifest).resolve())}
-    started_at = time.time()
     try:
         if args.holdout_steps < 1 or args.hidden_size < 1 or args.epochs < 1 or args.batch_size < 1:
             raise ValueError("holdout, model, epoch, and batch dimensions must be positive")
