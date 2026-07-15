@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -116,6 +116,55 @@ await assert.rejects(
     reportPath: join(root, 'duplicate-report.json'),
   }),
   /cohort labels must be unique/,
+);
+
+const relativeBroadDir = join(root, 'relative-broad');
+const relativeNarrowDir = join(root, 'relative-narrow');
+await mkdir(relativeBroadDir);
+await mkdir(relativeNarrowDir);
+const relativeFrame = inputRadius => ({
+  ...corpus(inputRadius).frames[0],
+  candidates: { path: 'frame.candidates.f32' },
+  target: { path: 'frame.target.png' },
+  flowDebug: { path: 'frame.flow-debug.png' },
+  structuralSupervision: {
+    fields: {
+      structure: { path: 'frame.sidecar-structure.f32' },
+      meta: { path: 'frame.sidecar-meta.f32' },
+    },
+  },
+});
+const relativeBroadPath = join(relativeBroadDir, 'corpus.json');
+const relativeNarrowPath = join(relativeNarrowDir, 'corpus.json');
+await writeFile(relativeBroadPath, `${JSON.stringify({ ...corpus(0.68), frames: [relativeFrame(0.68)] }, null, 2)}\n`);
+await writeFile(relativeNarrowPath, `${JSON.stringify({ ...corpus(0.12), frames: [relativeFrame(0.12)] }, null, 2)}\n`);
+const relativeOutPath = join(root, 'relative-combined.json');
+await composeBoundarySplatSupervisionCorpora({
+  cohorts: [
+    { label: 'broad', manifestPath: relativeBroadPath },
+    { label: 'narrow', manifestPath: relativeNarrowPath },
+  ],
+  outPath: relativeOutPath,
+  reportPath: join(root, 'relative-report.json'),
+});
+const relativeCombined = JSON.parse(await readFile(relativeOutPath, 'utf8'));
+assert.equal(relativeCombined.frames[0].candidates.path, join(relativeBroadDir, 'frame.candidates.f32'));
+assert.equal(relativeCombined.frames[0].target.path, join(relativeBroadDir, 'frame.target.png'));
+assert.equal(relativeCombined.frames[0].flowDebug.path, join(relativeBroadDir, 'frame.flow-debug.png'));
+assert.equal(relativeCombined.frames[0].structuralSupervision.fields.structure.path, join(relativeBroadDir, 'frame.sidecar-structure.f32'));
+assert.equal(relativeCombined.frames[1].structuralSupervision.fields.meta.path, join(relativeNarrowDir, 'frame.sidecar-meta.f32'));
+
+const aliasedPath = join(root, 'aliased-output.json');
+await assert.rejects(
+  composeBoundarySplatSupervisionCorpora({
+    cohorts: [
+      { label: 'broad', manifestPath: broadPath },
+      { label: 'narrow', manifestPath: narrowPath },
+    ],
+    outPath: aliasedPath,
+    reportPath: aliasedPath,
+  }),
+  /output and report paths must differ/,
 );
 
 console.log('boundary splat supervision compose contracts passed');

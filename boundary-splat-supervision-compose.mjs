@@ -74,6 +74,24 @@ function validateManifest(manifest, label, reference) {
   }
 }
 
+function rebaseArtifact(artifact, manifestPath) {
+  if (!artifact || typeof artifact !== 'object' || typeof artifact.path !== 'string') return artifact;
+  return { ...artifact, path: resolve(dirname(manifestPath), artifact.path) };
+}
+
+function rebaseFrameArtifacts(frame, manifestPath) {
+  const rebased = structuredClone(frame);
+  rebased.candidates = rebaseArtifact(rebased.candidates, manifestPath);
+  rebased.target = rebaseArtifact(rebased.target, manifestPath);
+  rebased.flowDebug = rebaseArtifact(rebased.flowDebug, manifestPath);
+  const fields = rebased.structuralSupervision?.fields;
+  if (fields) {
+    fields.structure = rebaseArtifact(fields.structure, manifestPath);
+    fields.meta = rebaseArtifact(fields.meta, manifestPath);
+  }
+  return rebased;
+}
+
 export async function composeBoundarySplatSupervisionCorpora({ cohorts, outPath, reportPath }) {
   let failurePhase = 'arguments';
   let lastTrustworthyEvidence = null;
@@ -81,6 +99,7 @@ export async function composeBoundarySplatSupervisionCorpora({ cohorts, outPath,
     validateCohorts(cohorts);
     if (typeof outPath !== 'string' || outPath.length === 0) throw new Error('output path must be nonblank');
     if (typeof reportPath !== 'string' || reportPath.length === 0) throw new Error('report path must be nonblank');
+    if (resolve(outPath) === resolve(reportPath)) throw new Error('output and report paths must differ');
 
     failurePhase = 'input-read';
     const sources = [];
@@ -124,7 +143,7 @@ export async function composeBoundarySplatSupervisionCorpora({ cohorts, outPath,
         const id = `${source.label}/${frame.id}`;
         if (combinedFrameIds.has(id)) throw new Error(`composed frame identity collision: ${id}`);
         combinedFrameIds.add(id);
-        frames.push({ ...frame, id, cohort: source.label });
+        frames.push({ ...rebaseFrameArtifacts(frame, source.manifestPath), id, cohort: source.label });
       }
     }
     const first = sources[0].manifest;
