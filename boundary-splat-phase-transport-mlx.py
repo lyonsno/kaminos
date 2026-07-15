@@ -28,6 +28,7 @@ LEGACY_OBJECTIVE_FAMILY = "population-weighted-carrier-and-residual-birth-v0"
 MOTION_BALANCED_OBJECTIVE_FAMILY = "motion-balanced-static-scaffold-v0"
 EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY = "motion-balanced-eulerian-destination-occupancy-v0"
 STATE_RECURRENCE_MODES = ("coupled", "protected-splat")
+SUPPORT_BUDGET_MODES = ("one-step-ratio", "training-episode-envelope")
 FEATURES = (
     "sidecar.support", "sidecar.coverage", "sidecar.ridge", "sidecar.footprint",
     "material.density", "material.heat", "material.fuel", "material.detail",
@@ -64,6 +65,106 @@ def write_json(path, payload):
 
 def sha256_bytes(data):
     return hashlib.sha256(data).hexdigest()
+
+
+def load_training_support_envelope(identity):
+    if (
+        not isinstance(identity, dict)
+        or not isinstance(identity.get("path"), str)
+        or not identity["path"]
+        or not isinstance(identity.get("bytes"), int)
+        or identity["bytes"] <= 0
+        or not isinstance(identity.get("sha256"), str)
+        or len(identity["sha256"]) != 64
+    ):
+        raise ValueError("frozen model training manifest identity is missing or malformed")
+    path = Path(identity["path"]).resolve()
+    try:
+        data = path.read_bytes()
+    except OSError as error:
+        raise ValueError("frozen model training manifest identity cannot be read") from error
+    if len(data) != identity["bytes"] or sha256_bytes(data) != identity["sha256"]:
+        raise ValueError("frozen model training manifest identity byte/hash mismatch")
+    document = json.loads(data)
+    if (
+        document.get("schema") != "kaminos-boundary-splat-phase-candidate-corpus-v0"
+        or document.get("featureOrder") != list(FEATURES)
+        or document.get("effectiveRoute") != "native-3d-compute-fluid-raymarch-v0"
+    ):
+        raise ValueError("frozen model training manifest corpus contract mismatch")
+    frames = sorted(document.get("frames", []), key=lambda frame: int(frame.get("controlledStepFrameIndex", -1)))
+    indices = [int(frame.get("controlledStepFrameIndex", -1)) for frame in frames]
+    counts = [frame.get("splats", {}).get("count") for frame in frames]
+    if (
+        len(frames) < 2
+        or indices != list(range(len(frames)))
+        or any(not isinstance(count, int) or count <= 0 for count in counts)
+    ):
+        raise ValueError("frozen model training manifest support sequence mismatch")
+    frame_zero_count = counts[0]
+    minimum_count = min(counts)
+    maximum_count = max(counts)
+    return {
+        "authority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+        "trainingManifest": dict(identity),
+        "frameCount": len(counts),
+        "frameZeroCount": frame_zero_count,
+        "minimumCount": minimum_count,
+        "maximumCount": maximum_count,
+        "minimumRatio": minimum_count / frame_zero_count,
+        "maximumRatio": maximum_count / frame_zero_count,
+    }
+
+
+def resolve_recurrent_support_budget(mode, inference_initial_count, current_count, one_step_ratio, envelope=None):
+    if mode not in SUPPORT_BUDGET_MODES:
+        raise ValueError("recurrent support budget mode is unsupported")
+    if (
+        not isinstance(inference_initial_count, int)
+        or inference_initial_count <= 0
+        or not isinstance(current_count, int)
+        or current_count <= 0
+        or not math.isfinite(one_step_ratio)
+        or one_step_ratio <= 0
+    ):
+        raise ValueError("recurrent support budget inputs are invalid")
+    requested_budget = max(1, round(current_count * one_step_ratio))
+    minimum_budget = None
+    maximum_budget = None
+    effective_budget = requested_budget
+    envelope_authority = None
+    training_manifest_sha256 = None
+    if mode == "training-episode-envelope":
+        if (
+            not isinstance(envelope, dict)
+            or envelope.get("authority") != "frozen-model-training-episode-frame-zero-relative-support-envelope-v0"
+            or not math.isfinite(envelope.get("minimumRatio", math.nan))
+            or not math.isfinite(envelope.get("maximumRatio", math.nan))
+            or envelope["minimumRatio"] <= 0
+            or envelope["maximumRatio"] < envelope["minimumRatio"]
+            or not isinstance(envelope.get("trainingManifest"), dict)
+            or not isinstance(envelope["trainingManifest"].get("sha256"), str)
+        ):
+            raise ValueError("recurrent training support envelope is missing or malformed")
+        minimum_budget = max(1, round(inference_initial_count * envelope["minimumRatio"]))
+        maximum_budget = max(minimum_budget, round(inference_initial_count * envelope["maximumRatio"]))
+        effective_budget = max(minimum_budget, min(maximum_budget, requested_budget))
+        envelope_authority = envelope["authority"]
+        training_manifest_sha256 = envelope["trainingManifest"]["sha256"]
+    return {
+        "authority": "explicit-recurrent-support-budget-mode-v0",
+        "mode": mode,
+        "inferenceInitialCount": inference_initial_count,
+        "currentCount": current_count,
+        "oneStepRatio": float(one_step_ratio),
+        "requestedBudget": requested_budget,
+        "minimumBudget": minimum_budget,
+        "maximumBudget": maximum_budget,
+        "effectiveBudget": effective_budget,
+        "clamped": effective_budget != requested_budget,
+        "envelopeAuthority": envelope_authority,
+        "trainingManifestSha256": training_manifest_sha256,
+    }
 
 
 def stable_key(position):
@@ -1221,6 +1322,7 @@ def compose_eulerian_destination_occupancy(
     birth_threshold,
     target_support_ratio,
     destination_inputs=None,
+    target_support_budget=None,
 ):
     destination_keys = [stable_key(key) for key in destination_keys]
     carrier_probabilities = np.asarray(carrier_probabilities, dtype=np.float32)
@@ -1288,8 +1390,16 @@ def compose_eulerian_destination_occupancy(
             class_index,
         ))
 
-    target_support_budget = max(1, round(len(source["keys"]) * target_support_ratio))
-    birth_budget = max(0, target_support_budget - len(claims))
+    requested_target_support_budget = max(1, round(len(source["keys"]) * target_support_ratio))
+    if target_support_budget is None:
+        effective_target_support_budget = requested_target_support_budget
+    elif not isinstance(target_support_budget, int) or target_support_budget <= 0:
+        raise ValueError("Eulerian absolute support budget is invalid")
+    else:
+        effective_target_support_budget = target_support_budget
+        if len(claims) > effective_target_support_budget:
+            raise ValueError("Eulerian scaffold claims exceed the absolute support budget")
+    birth_budget = max(0, effective_target_support_budget - len(claims))
     birth_candidates.sort(key=lambda row: (-row[0], row[1]))
     for occupancy, key, source_index, class_index in birth_candidates[:birth_budget]:
         claims[key] = (occupancy, source_index, class_index, "birth")
@@ -1328,7 +1438,9 @@ def compose_eulerian_destination_occupancy(
         "invalidDonorCount": int(np.sum(~has_donor)),
         "birthThreshold": float(birth_threshold),
         "deathMarginThreshold": float(death_margin_threshold),
-        "targetSupportBudget": target_support_budget,
+        "requestedTargetSupportBudget": requested_target_support_budget,
+        "targetSupportBudget": effective_target_support_budget,
+        "supportBudgetClamped": effective_target_support_budget != requested_target_support_budget,
         "thresholdQualifiedBirthCount": len(birth_rows),
         "selectedBirthCount": selected_birth_count,
     }
@@ -1346,6 +1458,7 @@ def recurrent_predict(
     action_calibration=None,
     destination_death_calibration=None,
     destination_state_bundle=None,
+    target_support_budget=None,
 ):
     grid_plan = local_grid_plan(source, grid_step)
     if destination_death_calibration is not None:
@@ -1364,6 +1477,7 @@ def recurrent_predict(
             float(birth_calibration["threshold"]),
             float(target_support_calibration["medianRatio"]),
             destination_inputs,
+            target_support_budget,
         )
         accounting["gridLookup"] = {
             "authority": grid_plan["authority"],
@@ -1415,12 +1529,17 @@ def recurrent_predict(
     birth_keys = prediction_universe(source, grid_step, grid_plan)
     birth_inputs = make_directional_inputs(birth_keys, source, grid_step, grid_plan)
     _, birth_probabilities = predict_model(model, birth_inputs, input_mean, input_scale, batch_size)
-    target_support_budget = max(1, round(len(source["keys"]) * target_support_calibration["medianRatio"]))
+    requested_target_support_budget = max(1, round(len(source["keys"]) * target_support_calibration["medianRatio"]))
+    effective_target_support_budget = requested_target_support_budget if target_support_budget is None else target_support_budget
+    if not isinstance(effective_target_support_budget, int) or effective_target_support_budget <= 0:
+        raise ValueError("recurrent absolute support budget is invalid")
+    if target_support_budget is not None and len(claims) > effective_target_support_budget:
+        raise ValueError("recurrent carrier claims exceed the absolute support budget")
     selected_births = select_ranked_births(
         birth_keys,
         birth_probabilities,
         set(claims),
-        target_support_budget,
+        effective_target_support_budget,
         len(claims),
     )
     threshold_qualified_birth_count = int(np.sum(birth_probabilities >= birth_calibration["threshold"]))
@@ -1467,7 +1586,9 @@ def recurrent_predict(
             "denseCellBudget": grid_plan["denseCellBudget"],
         },
         "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
-        "targetSupportBudget": target_support_budget,
+        "requestedTargetSupportBudget": requested_target_support_budget,
+        "targetSupportBudget": effective_target_support_budget,
+        "supportBudgetClamped": effective_target_support_budget != requested_target_support_budget,
         "thresholdQualifiedBirthCount": threshold_qualified_birth_count,
         "selectedBirthCount": len(result["keys"]) - len(claims),
     }
@@ -1613,6 +1734,7 @@ def protected_splat_recurrent_predict(
     batch_size,
     destination_death_calibration,
     destination_state_bundle,
+    target_support_budget=None,
 ):
     if destination_death_calibration is None or destination_state_bundle is None:
         raise ValueError("protected splat recurrence requires Eulerian occupancy and destination-state models")
@@ -1626,6 +1748,7 @@ def protected_splat_recurrent_predict(
         target_support_calibration,
         batch_size,
         destination_death_calibration=destination_death_calibration,
+        target_support_budget=target_support_budget,
     )
     appearance_next, state_accounting = apply_protected_splat_destination_state_model(
         destination_state_bundle["model"],
@@ -1791,7 +1914,7 @@ def write_frame_artifacts(out_dir, label, frame):
 
 def build_prediction_document(
     *, inference_manifest, training_manifest, model, route, temporal, frames, recurrent, support_metrics,
-    state_model=None, state_recurrence=None, count_drift_gate=None,
+    state_model=None, state_recurrence=None, count_drift_gate=None, support_budget=None,
 ):
     return {
         "schema": PREDICTION_SCHEMA,
@@ -1801,6 +1924,7 @@ def build_prediction_document(
         "model": model,
         **({"destinationStateModel": state_model} if state_model is not None else {}),
         **({"stateRecurrence": state_recurrence} if state_recurrence is not None else {}),
+        **({"supportBudget": support_budget} if support_budget is not None else {}),
         "route": route,
         "temporal": temporal,
         "frames": frames,
@@ -1827,6 +1951,7 @@ def parse_args():
     parser.add_argument("--model", default="")
     parser.add_argument("--state-model", default="")
     parser.add_argument("--state-recurrence-mode", choices=STATE_RECURRENCE_MODES, default="coupled")
+    parser.add_argument("--support-budget-mode", choices=SUPPORT_BUDGET_MODES, default="one-step-ratio")
     parser.add_argument("--inference-start", type=int, default=0)
     parser.add_argument("--inference-steps", type=int, default=0)
     parser.add_argument("--holdout-start", type=int, default=6)
@@ -1863,6 +1988,8 @@ def main():
             raise ValueError("holdout, model, epoch, and batch dimensions must be positive")
         if args.state_model and not args.model:
             raise ValueError("destination-state model is valid only during frozen transport inference")
+        if args.support_budget_mode != "one-step-ratio" and not args.model:
+            raise ValueError("training-episode support envelope is valid only during frozen model inference")
         failure_phase = "manifest-validation"
         manifest_path = Path(args.manifest).resolve()
         manifest_bytes = manifest_path.read_bytes()
@@ -1975,6 +2102,19 @@ def main():
             inference_metrics = []
             birth_calibration = frozen_model_document["calibration"]["birth"]
             target_support_calibration = frozen_model_document["calibration"]["targetSupport"]
+            training_support_envelope = (
+                load_training_support_envelope(frozen_model_document["manifest"])
+                if args.support_budget_mode == "training-episode-envelope"
+                else None
+            )
+            support_budget_contract = {
+                "authority": "explicit-recurrent-support-budget-mode-v0",
+                "mode": args.support_budget_mode,
+                "inferenceInitialCount": len(prediction_frames[0]["keys"]),
+                "trainingEnvelope": training_support_envelope,
+                "legacyBehaviorPreservedByDefault": args.support_budget_mode == "one-step-ratio",
+            }
+            last_trustworthy["supportBudget"] = support_budget_contract
             action_calibration = (
                 frozen_model_document["calibration"]["carrierAction"]
                 if objective_family == MOTION_BALANCED_OBJECTIVE_FAMILY
@@ -1986,6 +2126,18 @@ def main():
                 else None
             )
             for step_index in range(1, len(inference_docs)):
+                support_budget = resolve_recurrent_support_budget(
+                    args.support_budget_mode,
+                    len(prediction_frames[0]["keys"]),
+                    len(canonical_current["keys"] if state_recurrence["mode"] == "protected-splat" else current["keys"]),
+                    float(target_support_calibration["medianRatio"]),
+                    training_support_envelope,
+                )
+                absolute_support_budget = (
+                    support_budget["effectiveBudget"]
+                    if args.support_budget_mode == "training-episode-envelope"
+                    else None
+                )
                 if state_recurrence["mode"] == "protected-splat":
                     canonical_current, predicted, recurrent = protected_splat_recurrent_predict(
                         frozen_model,
@@ -1999,6 +2151,7 @@ def main():
                         args.batch_size,
                         destination_death_calibration,
                         destination_state_bundle,
+                        absolute_support_budget,
                     )
                     appearance_current = predicted
                 else:
@@ -2014,10 +2167,11 @@ def main():
                         action_calibration,
                         destination_death_calibration,
                         destination_state_bundle,
+                        absolute_support_budget,
                     )
                     current = predicted
                 exact = frames[inference_docs[step_index]["id"]]
-                recurrent_rows.append({"step": step_index, **recurrent})
+                recurrent_rows.append({"step": step_index, **recurrent, "supportBudget": support_budget})
                 inference_metrics.append({"step": step_index, **support_metrics(prediction_frames[0], predicted, exact)})
                 prediction_frames.append(predicted)
             failure_phase = "prediction-write"
@@ -2055,6 +2209,7 @@ def main():
                 state_model=state_model_receipt,
                 state_recurrence=state_recurrence,
                 count_drift_gate=count_drift_gate,
+                support_budget=support_budget_contract,
             )
             prediction_path = out_dir / "transport-predictions.json"
             write_json(prediction_path, prediction_artifact)
@@ -2074,6 +2229,7 @@ def main():
                 "holdoutMetrics": inference_metrics,
                 "rolloutGate": summarize_rollout_gate(inference_metrics),
                 "countDriftGate": count_drift_gate,
+                "supportBudget": support_budget_contract,
                 "recurrent": recurrent_rows,
             }
             write_json(report_path, report)

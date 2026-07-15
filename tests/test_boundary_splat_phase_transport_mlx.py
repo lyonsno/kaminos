@@ -1,7 +1,10 @@
 import importlib.util
 import copy
+import json
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 
@@ -504,6 +507,129 @@ class TransportDatasetContracts(unittest.TestCase):
             accounting["compositionAuthority"],
             "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
         )
+
+    def test_training_support_envelope_is_bound_to_exact_frozen_model_manifest(self):
+        manifest = {
+            "schema": "kaminos-boundary-splat-phase-candidate-corpus-v0",
+            "featureOrder": list(MODULE.FEATURES),
+            "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+            "frames": [
+                {"controlledStepFrameIndex": index, "splats": {"count": count}}
+                for index, count in enumerate((100, 90, 120, 110))
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "phase-corpus.json"
+            data = json.dumps(manifest, separators=(",", ":")).encode("utf8")
+            path.write_bytes(data)
+            identity = {"path": str(path), "bytes": len(data), "sha256": MODULE.sha256_bytes(data)}
+            envelope = MODULE.load_training_support_envelope(identity)
+            self.assertEqual(envelope, {
+                "authority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+                "trainingManifest": identity,
+                "frameCount": 4,
+                "frameZeroCount": 100,
+                "minimumCount": 90,
+                "maximumCount": 120,
+                "minimumRatio": 0.9,
+                "maximumRatio": 1.2,
+            })
+
+            stale = copy.deepcopy(identity)
+            stale["sha256"] = "f" * 64
+            with self.assertRaisesRegex(ValueError, "training manifest.*identity"):
+                MODULE.load_training_support_envelope(stale)
+            missing = copy.deepcopy(identity)
+            del missing["bytes"]
+            with self.assertRaisesRegex(ValueError, "training manifest.*identity"):
+                MODULE.load_training_support_envelope(missing)
+
+    def test_recurrent_support_budget_preserves_legacy_and_clamps_opt_in_envelope(self):
+        envelope = {
+            "authority": "frozen-model-training-episode-frame-zero-relative-support-envelope-v0",
+            "trainingManifest": {"path": "/training/corpus.json", "bytes": 1, "sha256": "0" * 64},
+            "frameCount": 4,
+            "frameZeroCount": 100,
+            "minimumCount": 90,
+            "maximumCount": 120,
+            "minimumRatio": 0.9,
+            "maximumRatio": 1.2,
+        }
+        legacy = MODULE.resolve_recurrent_support_budget(
+            "one-step-ratio", inference_initial_count=100, current_count=120,
+            one_step_ratio=1.1, envelope=None,
+        )
+        self.assertEqual(legacy["requestedBudget"], 132)
+        self.assertEqual(legacy["effectiveBudget"], 132)
+        self.assertFalse(legacy["clamped"])
+        self.assertIsNone(legacy["minimumBudget"])
+        self.assertIsNone(legacy["maximumBudget"])
+
+        upper = MODULE.resolve_recurrent_support_budget(
+            "training-episode-envelope", inference_initial_count=100, current_count=120,
+            one_step_ratio=1.1, envelope=envelope,
+        )
+        self.assertEqual(upper["requestedBudget"], 132)
+        self.assertEqual(upper["minimumBudget"], 90)
+        self.assertEqual(upper["maximumBudget"], 120)
+        self.assertEqual(upper["effectiveBudget"], 120)
+        self.assertTrue(upper["clamped"])
+
+        lower = MODULE.resolve_recurrent_support_budget(
+            "training-episode-envelope", inference_initial_count=100, current_count=80,
+            one_step_ratio=0.9, envelope=envelope,
+        )
+        self.assertEqual(lower["requestedBudget"], 72)
+        self.assertEqual(lower["effectiveBudget"], 90)
+
+    def test_eulerian_composer_honors_absolute_support_budget_before_birth_admission(self):
+        source = frame([
+            ((0.0, 0.0, 0.0), 1.0),
+            ((2.0, 0.0, 0.0), 2.0),
+        ])
+        destination_keys = [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (2.0, 0.0, 0.0), (3.0, 0.0, 0.0)]
+        probabilities = np.zeros((4, MODULE.DEATH_CLASS + 1), dtype=np.float32)
+        stable_class = MODULE.displacement_class((0, 0, 0))
+        right_class = MODULE.displacement_class((1, 0, 0))
+        probabilities[0, stable_class] = 0.9
+        probabilities[0, MODULE.DEATH_CLASS] = 0.1
+        probabilities[1, right_class] = 0.9
+        probabilities[1, MODULE.DEATH_CLASS] = 0.1
+        probabilities[2, stable_class] = 0.1
+        probabilities[2, MODULE.DEATH_CLASS] = 0.9
+        probabilities[3, right_class] = 0.8
+        probabilities[3, MODULE.DEATH_CLASS] = 0.1
+        occupancy = np.asarray([1.0, 0.9, 0.0, 0.8], dtype=np.float32)
+
+        predicted, accounting = MODULE.compose_eulerian_destination_occupancy(
+            source, destination_keys, probabilities, occupancy,
+            grid_step=1.0, death_margin_threshold=0.1, birth_threshold=0.7,
+            target_support_ratio=2.0, target_support_budget=2,
+        )
+        self.assertEqual(len(predicted["keys"]), 2)
+        self.assertEqual(accounting["requestedTargetSupportBudget"], 4)
+        self.assertEqual(accounting["targetSupportBudget"], 2)
+        self.assertTrue(accounting["supportBudgetClamped"])
+        self.assertEqual(accounting["selectedBirthCount"], 1)
+
+    def test_protected_recurrence_forwards_absolute_support_budget(self):
+        canonical = frame([((0.0, 0.0, 0.0), 1.0)])
+        carried = frame([((0.0, 0.0, 0.0), 1.0)])
+        carried["donorClasses"] = np.asarray([MODULE.displacement_class((0, 0, 0))], dtype=np.int32)
+        with (
+            patch.object(MODULE, "recurrent_predict", return_value=(carried, {})) as recurrent,
+            patch.object(MODULE, "apply_protected_splat_destination_state_model", return_value=(carried, {})),
+        ):
+            MODULE.protected_splat_recurrent_predict(
+                model=object(), canonical_source=canonical, appearance_source=canonical,
+                grid_step=1.0, input_mean=np.zeros(64), input_scale=np.ones(64),
+                birth_calibration={"threshold": 0.5},
+                target_support_calibration={"medianRatio": 1.1}, batch_size=1,
+                destination_death_calibration={"threshold": 0.1},
+                destination_state_bundle={"model": object(), "normalization": {}},
+                target_support_budget=7,
+            )
+        self.assertEqual(recurrent.call_args.kwargs["target_support_budget"], 7)
 
     def test_frozen_destination_state_model_is_separate_and_hydrates_exact_residual(self):
         document = frozen_state_model_document()
