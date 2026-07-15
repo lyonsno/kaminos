@@ -9,6 +9,7 @@ import { materializeSmokeOracleTeacherFrameExport } from '../smoke-oracle-teache
 import {
   assessMinimumRadiusMaturityCandidate,
   buildMinimumRadiusTeacherContract,
+  buildRadiusCandidateTeacherContract,
   validateMinimumRadiusEffectiveState,
 } from '../smoke-oracle-minimum-radius-teacher.mjs';
 
@@ -548,6 +549,11 @@ const attachWithoutNavigate = args.has('--attach-without-navigate');
 const controlledStep = !args.has('--no-controlled-step');
 const probeUntilMature = args.has('--probe-until-mature');
 const heldManifestPath = args.get('--held-manifest') ? resolve(String(args.get('--held-manifest'))) : null;
+const candidateInputRadius = args.has('--candidate-radius') ? Number(args.get('--candidate-radius')) : null;
+const candidateRadiusBracket = candidateInputRadius === null ? null : {
+  lower: Number(args.get('--radius-lower') ?? 0.08),
+  upper: Number(args.get('--radius-upper') ?? 0.68),
+};
 const routeRenderScale = Number(new URL(requestedRoute).searchParams.get('volume_render_scale'));
 const teacherRenderScale = Math.max(0.1, Math.min(1, Number.isFinite(Number(args.get('--teacher-render-scale')))
   ? Number(args.get('--teacher-render-scale'))
@@ -556,14 +562,57 @@ cdpRequestTimeoutMs = Math.max(5000, Math.floor(Number(args.get('--cdp-timeout-m
 cdpStartupTimeoutMs = Math.max(1000, Math.floor(Number(args.get('--cdp-startup-timeout-ms') || cdpStartupTimeoutMs)));
 cdpProbeTimeoutMs = Math.max(250, Math.floor(Number(args.get('--cdp-probe-timeout-ms') || Math.min(1000, cdpStartupTimeoutMs))));
 
+const preflightReport = {
+  schema: 'kaminos.smoke-oracle-teacher-capture-report.v0',
+  status: 'running',
+  phase: 'contract-preflight',
+  requestedRoute,
+  outDir,
+  reportPath,
+  heldManifestPath,
+  candidateInputRadius,
+  candidateRadiusBracket,
+  failures: [],
+  createdAt: new Date().toISOString(),
+};
+await writeJson(reportPath, preflightReport);
+
 let teacherContract = null;
-if (heldManifestPath) {
-  const heldManifestBytes = await readFile(heldManifestPath);
-  teacherContract = buildMinimumRadiusTeacherContract({
-    heldManifest: JSON.parse(heldManifestBytes),
-    heldManifestIdentity: `sha256:${sha256(heldManifestBytes)}`,
-    requestedRoute,
+try {
+  if (candidateInputRadius !== null && !heldManifestPath) {
+    throw new Error('--candidate-radius requires --held-manifest');
+  }
+  if (heldManifestPath) {
+    const heldManifestBytes = await readFile(heldManifestPath);
+    const contractInputs = {
+      heldManifest: JSON.parse(heldManifestBytes),
+      heldManifestIdentity: `sha256:${sha256(heldManifestBytes)}`,
+      requestedRoute,
+    };
+    teacherContract = candidateInputRadius === null
+      ? buildMinimumRadiusTeacherContract(contractInputs)
+      : buildRadiusCandidateTeacherContract({
+        ...contractInputs,
+        candidateInputRadius,
+        bracket: candidateRadiusBracket,
+      });
+  }
+} catch (error) {
+  preflightReport.status = 'failed';
+  preflightReport.failurePhase = 'contract-preflight';
+  preflightReport.updatedAt = new Date().toISOString();
+  preflightReport.failures.push({
+    message: error?.message || String(error),
+    stack: error?.stack || null,
+    lastTrustworthyEvidence: {
+      requestedRoute,
+      heldManifestPath,
+      candidateInputRadius,
+      candidateRadiusBracket,
+    },
   });
+  await writeJson(reportPath, preflightReport);
+  throw error;
 }
 if (probeUntilMature && !teacherContract) {
   throw new Error('--probe-until-mature requires --held-manifest so maturity cannot detach from source authority');
@@ -613,6 +662,8 @@ const report = {
   controlledStep,
   probeUntilMature,
   heldManifestPath,
+  candidateInputRadius,
+  candidateRadiusBracket,
   teacherContract,
   maturityProbes: [],
   teacherRenderScale,

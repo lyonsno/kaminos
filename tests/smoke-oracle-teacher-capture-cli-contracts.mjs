@@ -68,6 +68,24 @@ assert.match(
 
 assert.match(
   source,
+  /--candidate-radius/,
+  'radius-bracket capture must receive the candidate radius as an invocation-scoped input',
+);
+
+assert.match(
+  source,
+  /buildRadiusCandidateTeacherContract/,
+  'an intermediate-radius run must use the exact one-field candidate contract rather than impersonating the minimum-radius receipt',
+);
+
+assert.match(
+  source,
+  /candidateInputRadius/,
+  'the capture report must preserve the requested radius independently of the held manifest',
+);
+
+assert.match(
+  source,
   /validateMinimumRadiusEffectiveState/,
   'minimum-radius teacher capture must reject a second effective control change or camera drift',
 );

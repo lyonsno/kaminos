@@ -4,6 +4,7 @@ import {
   admitMinimumRadiusTeacherWindow,
   assessMinimumRadiusMaturityCandidate,
   buildMinimumRadiusTeacherContract,
+  buildRadiusCandidateTeacherContract,
   validateMinimumRadiusEffectiveState,
 } from '../smoke-oracle-minimum-radius-teacher.mjs';
 
@@ -46,6 +47,48 @@ assert.deepEqual(contract.manifestDiff, [
 assert.equal(contract.expectedControls.density, 5.05);
 assert.equal(contract.expectedControls.inputRadius, 0.08);
 assert.match(contract.cameraIdentity, /^sha256:[a-f0-9]{64}$/);
+
+const bracketRadius = Math.sqrt(0.08 * 0.68);
+const bracketRoute = `http://127.0.0.1:8097/?volume_input_radius=${bracketRadius}`;
+const bracketContract = buildRadiusCandidateTeacherContract({
+  heldManifest,
+  heldManifestIdentity: 'sha256:' + 'b'.repeat(64),
+  requestedRoute: bracketRoute,
+  candidateInputRadius: bracketRadius,
+  bracket: { lower: 0.08, upper: 0.68 },
+});
+assert.equal(bracketContract.schema, 'kaminos.smoke-oracle-radius-candidate-teacher-contract.v0');
+assert.equal(bracketContract.corrected.inputRadius, bracketRadius);
+assert.deepEqual(bracketContract.manifestDiff, [
+  { path: 'controls.inputRadius', before: 0.68, after: bracketRadius },
+]);
+assert.deepEqual(bracketContract.bracket, { lower: 0.08, upper: 0.68 });
+assert.equal(bracketContract.expectedControls.inputRadius, bracketRadius);
+assert.equal(bracketContract.expectedControls.density, heldManifest.controls.density);
+
+assert.throws(
+  () => buildRadiusCandidateTeacherContract({
+    heldManifest,
+    heldManifestIdentity: 'sha256:' + 'b'.repeat(64),
+    requestedRoute: 'http://127.0.0.1:8097/?volume_input_radius=0.24',
+    candidateInputRadius: bracketRadius,
+    bracket: { lower: 0.08, upper: 0.68 },
+  }),
+  /requested route must carry the candidate volume_input_radius/,
+  'a stale/default route radius must fail before an expensive source probe',
+);
+
+assert.throws(
+  () => buildRadiusCandidateTeacherContract({
+    heldManifest,
+    heldManifestIdentity: 'sha256:' + 'b'.repeat(64),
+    requestedRoute: 'http://127.0.0.1:8097/?volume_input_radius=0.7',
+    candidateInputRadius: 0.7,
+    bracket: { lower: 0.08, upper: 0.68 },
+  }),
+  /candidate inputRadius must be inside the active bracket/,
+  'a candidate outside the measured starved/saturated bracket must fail',
+);
 
 const effectiveState = {
   effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',

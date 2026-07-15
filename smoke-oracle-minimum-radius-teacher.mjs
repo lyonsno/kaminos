@@ -74,11 +74,12 @@ function validateCamera(camera, label = 'camera') {
   };
 }
 
-export function buildMinimumRadiusTeacherContract({
+export function buildRadiusCandidateTeacherContract({
   heldManifest,
   heldManifestIdentity,
   requestedRoute,
-  correctedInputRadius = MINIMUM_INPUT_RADIUS,
+  candidateInputRadius,
+  bracket = { lower: MINIMUM_INPUT_RADIUS, upper: BASELINE_INPUT_RADIUS },
 } = {}) {
   const held = requireObject(heldManifest, 'heldManifest');
   if (held.schema !== 'kaminos.volume.operator-basin-replay.v0' || held.status !== 'captured') {
@@ -91,11 +92,19 @@ export function buildMinimumRadiusTeacherContract({
   if (!Number.isFinite(Number(held.controls?.inputRadius)) || Number(held.controls.inputRadius) !== BASELINE_INPUT_RADIUS) {
     throw new Error(`held manifest inputRadius must be ${BASELINE_INPUT_RADIUS}`);
   }
-  const correctedRadius = finiteNumber(correctedInputRadius, 'correctedInputRadius');
-  if (correctedRadius !== MINIMUM_INPUT_RADIUS) throw new Error(`corrected inputRadius must be ${MINIMUM_INPUT_RADIUS}`);
+  const correctedRadius = finiteNumber(candidateInputRadius, 'candidateInputRadius');
+  const activeBracket = requireObject(bracket, 'bracket');
+  const lower = finiteNumber(activeBracket.lower, 'bracket.lower');
+  const upper = finiteNumber(activeBracket.upper, 'bracket.upper');
+  if (lower < MINIMUM_INPUT_RADIUS || upper > BASELINE_INPUT_RADIUS || lower >= upper) {
+    throw new Error(`radius bracket must stay inside [${MINIMUM_INPUT_RADIUS}, ${BASELINE_INPUT_RADIUS}]`);
+  }
+  if (correctedRadius < lower || correctedRadius >= upper) {
+    throw new Error('candidate inputRadius must be inside the active bracket');
+  }
   const route = new URL(String(requestedRoute || ''));
   if (Number(route.searchParams.get('volume_input_radius')) !== correctedRadius) {
-    throw new Error('requested route must carry the corrected volume_input_radius');
+    throw new Error('requested route must carry the candidate volume_input_radius');
   }
   if (!/^sha256:[a-f0-9]{64}$/i.test(String(heldManifestIdentity || ''))) {
     throw new Error('held manifest identity must be checksum-bound');
@@ -104,18 +113,40 @@ export function buildMinimumRadiusTeacherContract({
   expectedControls.inputRadius = correctedRadius;
   const expectedCamera = validateCamera(held.camera, 'heldManifest.camera');
   return {
-    schema: 'kaminos.smoke-oracle-minimum-radius-teacher-contract.v0',
-    identity: 'held-r160-single-control-radius-correction-v0',
+    schema: 'kaminos.smoke-oracle-radius-candidate-teacher-contract.v0',
+    identity: 'held-r160-single-control-radius-candidate-v0',
     heldManifestIdentity,
     requestedRoute: route.href,
     effectiveRouteRequired: NATIVE_ROUTE,
     baseline: { inputRadius: BASELINE_INPUT_RADIUS },
     corrected: { inputRadius: correctedRadius },
+    bracket: { lower, upper },
     manifestDiff: [{ path: 'controls.inputRadius', before: BASELINE_INPUT_RADIUS, after: correctedRadius }],
     expectedControls,
     expectedCamera,
     cameraIdentity: sha256Identity(expectedCamera),
     admissionAuthority: 'machine-candidate-plus-agent-original-resolution-visual-disposition-v0',
+  };
+}
+
+export function buildMinimumRadiusTeacherContract({
+  heldManifest,
+  heldManifestIdentity,
+  requestedRoute,
+  correctedInputRadius = MINIMUM_INPUT_RADIUS,
+} = {}) {
+  const correctedRadius = finiteNumber(correctedInputRadius, 'correctedInputRadius');
+  if (correctedRadius !== MINIMUM_INPUT_RADIUS) throw new Error(`corrected inputRadius must be ${MINIMUM_INPUT_RADIUS}`);
+  const { bracket: _bracket, ...contract } = buildRadiusCandidateTeacherContract({
+    heldManifest,
+    heldManifestIdentity,
+    requestedRoute,
+    candidateInputRadius: correctedRadius,
+  });
+  return {
+    ...contract,
+    schema: 'kaminos.smoke-oracle-minimum-radius-teacher-contract.v0',
+    identity: 'held-r160-single-control-radius-correction-v0',
   };
 }
 
