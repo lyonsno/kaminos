@@ -83,6 +83,16 @@ assert.match(core, /setSelectiveHeadLiveCapturePaused/, 'live route exposes witn
 assert.match(core, /stepSelectiveHeadLiveCaptureFrame/, 'live route admits exactly one paused render and waits for GPU completion');
 assert.match(core, /checksum-bound-exact-basin-step96-field-anchor-v0/, 'live route reports exact field-anchor authority');
 assert.match(core, /SELECTIVE_HEAD_LIVE_MODEL_URL/, 'live route loads the checksum-bound packed model');
+assert.match(
+  core,
+  /function rebuildSelectiveHeadLiveBindGroups\(\)[\s\S]*!boundarySidecarBuffer[\s\S]*!boundarySidecarMetaBuffer[\s\S]*const makeRole/,
+  'selective-head role bind groups wait for the sidecar metadata buffer required by the shared fluid layout',
+);
+assert.match(
+  core,
+  /const makeRole = \(role, fluid, front\) => \(\{[\s\S]*render: device\.createBindGroup\([\s\S]*\{ binding: 10, resource: \{ buffer: boundarySidecarBuffer \} \},[\s\S]*\{ binding: 11, resource: \{ buffer: boundarySidecarMetaBuffer \} \}/,
+  'every selective-head render role binds the sidecar metadata slot required by the shared fluid layout',
+);
 
 const page = readFileSync(pagePath, 'utf8');
 assert.match(page, /Truth high/);

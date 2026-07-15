@@ -6574,6 +6574,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       || !externalEmitterBuffer
       || !oracleActivityCueBuffer
       || !boundarySidecarBuffer
+      || !boundarySidecarMetaBuffer
       || !boundarySplatBuffer
       || !boundarySplatDrawBuffer
       || !boundarySplatCameraBuffer
@@ -6598,6 +6599,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           { binding: 8, resource: { buffer: frontBuffers[0] } },
           { binding: 9, resource: { buffer: oracleActivityCueBuffer } },
           { binding: 10, resource: { buffer: boundarySidecarBuffer } },
+          { binding: 11, resource: { buffer: boundarySidecarMetaBuffer } },
         ],
       }),
       majorant: device.createBindGroup({
