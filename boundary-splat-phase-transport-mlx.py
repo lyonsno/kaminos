@@ -47,6 +47,9 @@ EULERIAN_DESTINATION_COHORTS = (
     "transported", "birth", "death", "empty",
 )
 DESTINATION_STATE_COHORTS = ("stable-q3", "stable-q4", "transported", "birth")
+SUPPORTED_DESTINATION_STATE_COHORTS = (
+    "stable-q1", "stable-q2", "stable-q3", "stable-q4", "transported", "birth",
+)
 DESTINATION_STATE_ATTRIBUTE_COUNT = len(FEATURES) + 9
 DESTINATION_STATE_INPUT_COUNT = 64 + DESTINATION_STATE_ATTRIBUTE_COUNT + len(DISPLACEMENTS)
 POSITION_PRECISION = 6
@@ -445,9 +448,16 @@ def build_eulerian_pair_dataset(source, target, grid_step, radius_cells=1):
     }
 
 
-def build_destination_state_dataset(source, target, grid_step, radius_cells=1):
+def build_destination_state_dataset(source, target, grid_step, radius_cells=1, state_cohorts=None):
     eulerian = build_eulerian_pair_dataset(source, target, grid_step, radius_cells)
-    cohort_order = {cohort: index for index, cohort in enumerate(DESTINATION_STATE_COHORTS)}
+    state_cohorts = tuple(state_cohorts or DESTINATION_STATE_COHORTS)
+    if (
+        not state_cohorts
+        or len(set(state_cohorts)) != len(state_cohorts)
+        or any(cohort not in SUPPORTED_DESTINATION_STATE_COHORTS for cohort in state_cohorts)
+    ):
+        raise ValueError("destination-state supervision cohorts must be unique supported destinations")
+    cohort_order = {cohort: index for index, cohort in enumerate(state_cohorts)}
     selected = [
         index
         for index, cohort in enumerate(eulerian["destinationCohorts"])
@@ -458,7 +468,7 @@ def build_destination_state_dataset(source, target, grid_step, radius_cells=1):
         eulerian["destinationKeys"][index],
     ))
     if not selected:
-        raise ValueError("destination-state supervision requires motion-bearing supported destinations")
+        raise ValueError("destination-state supervision requires selected supported destinations")
 
     donor_indices = eulerian["destinationDonorIndices"][selected]
     target_indices = eulerian["destinationTargetIndices"][selected]

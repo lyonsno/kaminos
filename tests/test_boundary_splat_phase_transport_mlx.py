@@ -369,6 +369,19 @@ class TransportDatasetContracts(unittest.TestCase):
         donor_code = dataset["stateInputs"][birth_row, 64 + 25:]
         self.assertEqual(int(np.sum(donor_code)), 1)
 
+        deployed_dataset = MODULE.build_destination_state_dataset(
+            source,
+            target,
+            grid_step=1.0,
+            state_cohorts=(
+                "stable-q1", "stable-q2", "stable-q3", "stable-q4", "transported", "birth",
+            ),
+        )
+        self.assertEqual(deployed_dataset["stateCohorts"].tolist(), [
+            "stable-q1", "stable-q2", "stable-q3", "stable-q4", "transported", "birth",
+        ])
+        self.assertEqual(deployed_dataset["stateInputs"].shape, (6, 64 + 25 + MODULE.DEATH_CLASS))
+
     def test_destination_state_sampler_balances_only_motion_bearing_cohorts(self):
         cohorts = np.asarray(
             ["stable-q3"] * 100

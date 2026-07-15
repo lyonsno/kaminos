@@ -23,6 +23,8 @@ REPORT_SCHEMA = "kaminos-boundary-splat-phase-destination-state-training-v0"
 INPUT_AUTHORITY = CORE.DESTINATION_STATE_INPUT_AUTHORITY
 OUTPUT_AUTHORITY = CORE.DESTINATION_STATE_OUTPUT_AUTHORITY
 ARCHITECTURE_AUTHORITY = CORE.DESTINATION_STATE_ARCHITECTURE_AUTHORITY
+TRAINING_MODES = ("teacher-forced", "protected-rollout")
+ROLLOUT_STATE_COHORTS = CORE.SUPPORTED_DESTINATION_STATE_COHORTS
 SPLAT_ATTRIBUTE_ORDER = (
     "splat.scale.x", "splat.scale.y", "splat.scale.z",
     "splat.color.r", "splat.color.g", "splat.color.b",
@@ -41,7 +43,167 @@ def parse_args(argv=None):
     parser.add_argument("--learning-rate", type=float, default=0.0015)
     parser.add_argument("--weight-decay", type=float, default=0.0001)
     parser.add_argument("--seed", type=int, default=713)
+    parser.add_argument("--training-mode", choices=TRAINING_MODES, default="teacher-forced")
+    parser.add_argument("--rollout-seed-model")
+    parser.add_argument("--rollout-horizon", type=int, default=4)
+    parser.add_argument("--predicted-input-fraction", type=float, default=0.625)
+    parser.add_argument("--candidate-loss-weight", type=float, default=0.1)
+    parser.add_argument("--splat-loss-weight", type=float, default=1.0)
+    parser.add_argument("--energy-loss-weight", type=float, default=0.25)
     return parser.parse_args(argv)
+
+
+def build_rollout_loss_contract(candidate_weight, splat_weight, energy_weight):
+    return {
+        "authority": "candidate-splat-visible-energy-weighted-loss-v0",
+        "candidateChannelCount": len(CORE.FEATURES),
+        "splatChannelCount": len(SPLAT_ATTRIBUTE_ORDER),
+        "visibleEnergy": "max(opacity,0)*max(rec709-luminance,0)",
+        "weights": {
+            "candidate": float(candidate_weight),
+            "splat": float(splat_weight),
+            "visibleEnergy": float(energy_weight),
+        },
+    }
+
+
+def build_teacher_forced_loss_contract():
+    return {
+        "authority": "normalized-residual-aggregate-mse-v0",
+        "channelCount": CORE.DESTINATION_STATE_ATTRIBUTE_COUNT,
+    }
+
+
+def build_training_loss_receipt(training_config, visible_energy_scale):
+    receipt = dict(training_config["loss"])
+    if training_config["mode"] == "protected-rollout":
+        receipt["visibleEnergyScale"] = float(visible_energy_scale)
+    return receipt
+
+
+def validate_rollout_training_config(
+    training_mode,
+    rollout_seed_model,
+    rollout_horizon,
+    predicted_input_fraction,
+    candidate_loss_weight,
+    splat_loss_weight,
+    energy_loss_weight,
+):
+    if training_mode not in TRAINING_MODES:
+        raise ValueError("destination-state training mode is unsupported")
+    if rollout_horizon < 1:
+        raise ValueError("rollout horizon must be positive")
+    if not 0 <= predicted_input_fraction <= 1:
+        raise ValueError("predicted input fraction must be inside [0, 1]")
+    weights = (candidate_loss_weight, splat_loss_weight, energy_loss_weight)
+    if any(not math.isfinite(value) or value < 0 for value in weights) or splat_loss_weight <= 0:
+        raise ValueError("rollout loss weights must be finite and include positive splat weight")
+    if training_mode == "protected-rollout" and not rollout_seed_model:
+        raise ValueError("protected rollout training requires an explicit seed model")
+    return {
+        "authority": (
+            "protected-splat-scheduled-exposure-training-v0"
+            if training_mode == "protected-rollout"
+            else "adjacent-pair-teacher-forcing-v0"
+        ),
+        "mode": training_mode,
+        "rolloutSeedModel": str(Path(rollout_seed_model).resolve()) if rollout_seed_model else None,
+        "rolloutHorizon": int(rollout_horizon),
+        "predictedInputFraction": float(predicted_input_fraction),
+        "candidateStateExposed": False,
+        "occupancyFeedbackEnabled": False,
+        "loss": (
+            build_rollout_loss_contract(*weights)
+            if training_mode == "protected-rollout"
+            else build_teacher_forced_loss_contract()
+        ),
+    }
+
+
+def visible_energy_numpy(states):
+    states = np.asarray(states, dtype=np.float32)
+    if states.ndim != 2 or states.shape[1] != CORE.DESTINATION_STATE_ATTRIBUTE_COUNT:
+        raise ValueError("visible energy requires aligned 25-attribute states")
+    luminance = (
+        states[:, 19] * 0.2126
+        + states[:, 20] * 0.7152
+        + states[:, 21] * 0.0722
+    )
+    return np.maximum(states[:, 22], 0) * np.maximum(luminance, 0)
+
+
+def apply_protected_splat_exposure(inputs, baselines, targets, predicted_splats, exposure_mask):
+    inputs = np.asarray(inputs, dtype=np.float32)
+    baselines = np.asarray(baselines, dtype=np.float32)
+    targets = np.asarray(targets, dtype=np.float32)
+    predicted_splats = np.asarray(predicted_splats, dtype=np.float32)
+    exposure_mask = np.asarray(exposure_mask, dtype=bool)
+    row_count = len(baselines)
+    if (
+        inputs.shape != (row_count, CORE.DESTINATION_STATE_INPUT_COUNT)
+        or baselines.shape != (row_count, CORE.DESTINATION_STATE_ATTRIBUTE_COUNT)
+        or targets.shape != baselines.shape
+        or predicted_splats.shape != (row_count, len(SPLAT_ATTRIBUTE_ORDER))
+        or exposure_mask.shape != (row_count,)
+    ):
+        raise ValueError("protected splat exposure rows violate the destination-state contract")
+    exposed_inputs = inputs.copy()
+    exposed_baselines = baselines.copy()
+    exposed_baselines[exposure_mask, len(CORE.FEATURES):] = predicted_splats[exposure_mask]
+    baseline_start = 64
+    baseline_end = baseline_start + CORE.DESTINATION_STATE_ATTRIBUTE_COUNT
+    exposed_inputs[:, baseline_start:baseline_end] = exposed_baselines
+    return {
+        "authority": "canonical-candidate-splat-only-predicted-exposure-v0",
+        "stateInputs": exposed_inputs,
+        "stateBaselines": exposed_baselines,
+        "stateTargets": targets.copy(),
+        "stateResidualTargets": (targets - exposed_baselines).astype(np.float32),
+        "predictedExposureCount": int(np.sum(exposure_mask)),
+        "candidateStateExposed": False,
+        "occupancyFeedbackEnabled": False,
+    }
+
+
+def load_rollout_seed_model(path):
+    model_path = Path(path).resolve()
+    data = model_path.read_bytes()
+    document = json.loads(data)
+    model, normalization = CORE.hydrate_frozen_destination_state_model_document(document)
+    return model, normalization, {
+        "path": str(model_path),
+        "bytes": len(data),
+        "sha256": CORE.sha256_bytes(data),
+        "schema": CORE.DESTINATION_STATE_MODEL_SCHEMA,
+        "route": document["route"],
+    }
+
+
+def resolve_training_normalization(training_mode, state_inputs, residual_targets, seed_normalization=None):
+    if training_mode == "protected-rollout":
+        if seed_normalization is None:
+            raise ValueError("protected rollout normalization requires the frozen seed model")
+        return {
+            "authority": "frozen-rollout-seed-normalization-v0",
+            "inputMean": seed_normalization["inputMean"].copy(),
+            "inputScale": seed_normalization["inputScale"].copy(),
+            "residualMean": seed_normalization["residualMean"].copy(),
+            "residualScale": seed_normalization["residualScale"].copy(),
+        }
+    input_mean = np.mean(state_inputs, axis=0, dtype=np.float64).astype(np.float32)
+    input_scale = np.std(state_inputs, axis=0, dtype=np.float64).astype(np.float32)
+    input_scale[input_scale < 1e-6] = 1.0
+    residual_mean = np.mean(residual_targets, axis=0, dtype=np.float64).astype(np.float32)
+    residual_scale = np.std(residual_targets, axis=0, dtype=np.float64).astype(np.float32)
+    residual_scale[residual_scale < 1e-6] = 1.0
+    return {
+        "authority": "training-corpus-channel-normalization-v0",
+        "inputMean": input_mean,
+        "inputScale": input_scale,
+        "residualMean": residual_mean,
+        "residualScale": residual_scale,
+    }
 
 
 def validate_training_route(device, fallback_reason=None):
@@ -122,7 +284,8 @@ def load_corpus_manifest(path):
     return document, frame_documents, frames, 2.0 / grid_size, receipt
 
 
-def build_adjacent_state_datasets(frame_documents, frames, grid_step):
+def build_adjacent_state_datasets(frame_documents, frames, grid_step, state_cohorts=None):
+    reported_cohorts = tuple(state_cohorts or CORE.DESTINATION_STATE_COHORTS)
     datasets = []
     pair_reports = []
     for source_document, target_document in zip(frame_documents, frame_documents[1:]):
@@ -130,6 +293,7 @@ def build_adjacent_state_datasets(frame_documents, frames, grid_step):
             frames[source_document["id"]],
             frames[target_document["id"]],
             grid_step,
+            state_cohorts=state_cohorts,
         )
         datasets.append(dataset)
         pair_reports.append({
@@ -138,10 +302,156 @@ def build_adjacent_state_datasets(frame_documents, frames, grid_step):
             "sampleCount": len(dataset["stateCohorts"]),
             "cohortCounts": {
                 cohort: int(np.sum(dataset["stateCohorts"] == cohort))
-                for cohort in CORE.DESTINATION_STATE_COHORTS
+                for cohort in reported_cohorts
             },
         })
     return datasets, pair_reports
+
+
+def build_state_sampling_pools(cohorts, cohort_order):
+    cohorts = np.asarray(cohorts)
+    cohort_order = tuple(cohort_order)
+    if not cohort_order or np.any(~np.isin(cohorts, cohort_order)):
+        raise ValueError("state sampling received an unsupported cohort")
+    pools = {cohort: np.flatnonzero(cohorts == cohort) for cohort in cohort_order}
+    if any(not len(indices) for indices in pools.values()):
+        raise ValueError("state sampling requires every configured cohort")
+    return pools
+
+
+def sample_state_balanced_indices(rng, pools, cohort_order, batch_size):
+    cohort_order = tuple(cohort_order)
+    if tuple(pools) != cohort_order or batch_size < len(cohort_order):
+        raise ValueError("state sampling pools or batch size violate configured cohort balance")
+    base, remainder = divmod(int(batch_size), len(cohort_order))
+    sampled = []
+    for cohort_index, cohort in enumerate(cohort_order):
+        indices = pools[cohort]
+        count = base + (1 if cohort_index < remainder else 0)
+        sampled.append(rng.choice(indices, size=count, replace=True))
+    result = np.concatenate(sampled).astype(np.int64)
+    rng.shuffle(result)
+    return result
+
+
+def build_protected_rollout_datasets(
+    datasets,
+    frame_documents,
+    frames,
+    seed_model,
+    seed_normalization,
+    predicted_input_fraction,
+    rollout_horizon,
+    batch_size,
+    rng,
+):
+    if len(datasets) != len(frame_documents) - 1:
+        raise ValueError("protected rollout datasets must align with adjacent frame pairs")
+    result = []
+    pair_reports = []
+    prior_appearance_by_key = {}
+    total_eligible = 0
+    total_exposed = 0
+    for pair_index, dataset in enumerate(datasets):
+        if pair_index % rollout_horizon == 0:
+            prior_appearance_by_key = {}
+        source_document = frame_documents[pair_index]
+        target_document = frame_documents[pair_index + 1]
+        source = frames[source_document["id"]]
+        predicted_splats = dataset["stateBaselines"][:, len(CORE.FEATURES):].copy()
+        eligible = np.zeros(len(predicted_splats), dtype=bool)
+        for row_index, donor_index in enumerate(dataset["stateDonorIndices"]):
+            donor_key = source["keys"][int(donor_index)]
+            prior = prior_appearance_by_key.get(donor_key)
+            if prior is not None:
+                eligible[row_index] = True
+                predicted_splats[row_index] = prior
+        exposure_mask = eligible & (rng.random(len(eligible)) < predicted_input_fraction)
+        exposed = apply_protected_splat_exposure(
+            dataset["stateInputs"],
+            dataset["stateBaselines"],
+            dataset["stateTargets"],
+            predicted_splats,
+            exposure_mask,
+        )
+        exposed_dataset = {
+            **dataset,
+            "stateInputs": exposed["stateInputs"],
+            "stateBaselines": exposed["stateBaselines"],
+            "stateResidualTargets": exposed["stateResidualTargets"],
+        }
+        result.append(exposed_dataset)
+        predicted_residuals = CORE.predict_destination_state_model(
+            seed_model,
+            exposed_dataset["stateInputs"],
+            seed_normalization["inputMean"],
+            seed_normalization["inputScale"],
+            seed_normalization["residualMean"],
+            seed_normalization["residualScale"],
+            batch_size,
+        )
+        predicted_states = exposed_dataset["stateBaselines"] + predicted_residuals
+        prior_appearance_by_key = {
+            key: predicted_states[row_index, len(CORE.FEATURES):].copy()
+            for row_index, key in enumerate(exposed_dataset["stateDestinationKeys"])
+        }
+        eligible_count = int(np.sum(eligible))
+        exposed_count = int(np.sum(exposure_mask))
+        total_eligible += eligible_count
+        total_exposed += exposed_count
+        pair_reports.append({
+            "step": pair_index + 1,
+            "sourceFrameId": source_document["id"],
+            "targetFrameId": target_document["id"],
+            "sequenceStep": pair_index % rollout_horizon,
+            "sequenceReset": pair_index % rollout_horizon == 0,
+            "sampleCount": len(exposure_mask),
+            "eligiblePredictedInputCount": eligible_count,
+            "predictedExposureCount": exposed_count,
+            "candidateStateExposed": False,
+        })
+    return result, {
+        "authority": "frozen-one-step-seed-protected-splat-scheduled-exposure-v0",
+        "rolloutHorizon": int(rollout_horizon),
+        "requestedPredictedInputFraction": float(predicted_input_fraction),
+        "eligiblePredictedInputCount": total_eligible,
+        "predictedExposureCount": total_exposed,
+        "effectivePredictedInputFraction": total_exposed / max(1, total_eligible),
+        "candidateStateExposed": False,
+        "occupancyFeedbackEnabled": False,
+        "pairReports": pair_reports,
+        "sampleCap": None,
+    }
+
+
+def visible_energy_mlx(states):
+    luminance = states[:, 19] * 0.2126 + states[:, 20] * 0.7152 + states[:, 21] * 0.0722
+    return mx.maximum(states[:, 22], 0) * mx.maximum(luminance, 0)
+
+
+def rollout_destination_state_loss(
+    model,
+    inputs,
+    normalized_targets,
+    baselines,
+    residual_mean,
+    residual_scale,
+    energy_scale,
+    candidate_weight,
+    splat_weight,
+    energy_weight,
+):
+    normalized_predictions = model(inputs)
+    squared = (normalized_predictions - normalized_targets) ** 2
+    candidate_loss = mx.mean(squared[:, :len(CORE.FEATURES)])
+    splat_loss = mx.mean(squared[:, len(CORE.FEATURES):])
+    predicted_states = baselines + normalized_predictions * residual_scale + residual_mean
+    target_states = baselines + normalized_targets * residual_scale + residual_mean
+    energy_loss = mx.mean(
+        ((visible_energy_mlx(predicted_states) - visible_energy_mlx(target_states)) / energy_scale) ** 2,
+    )
+    total = candidate_weight * candidate_loss + splat_weight * splat_loss + energy_weight * energy_loss
+    return total, (candidate_loss, splat_loss, energy_loss)
 
 
 def combine_metric_scopes(metric_documents, scope):
@@ -249,6 +559,9 @@ def main(argv=None):
         "evaluationManifestPath": str(Path(args.evaluation_manifest).resolve()),
         "requestedEpochs": args.epochs,
         "requestedBatchSize": args.batch_size,
+        "requestedTrainingMode": args.training_mode,
+        "requestedRolloutHorizon": args.rollout_horizon,
+        "requestedPredictedInputFraction": args.predicted_input_fraction,
     }
     def checkpoint(phase):
         nonlocal failure_phase
@@ -257,8 +570,24 @@ def main(argv=None):
 
     checkpoint("training-manifest-validation")
     try:
-        if args.hidden_size < 1 or args.epochs < 1 or args.batch_size < len(CORE.DESTINATION_STATE_COHORTS):
-            raise ValueError("model, epoch, and batch dimensions must be positive and cover every state cohort")
+        if args.hidden_size < 1 or args.epochs < 1:
+            raise ValueError("model and epoch dimensions must be positive")
+        training_config = validate_rollout_training_config(
+            args.training_mode,
+            args.rollout_seed_model,
+            args.rollout_horizon,
+            args.predicted_input_fraction,
+            args.candidate_loss_weight,
+            args.splat_loss_weight,
+            args.energy_loss_weight,
+        )
+        training_cohorts = (
+            ROLLOUT_STATE_COHORTS
+            if args.training_mode == "protected-rollout"
+            else CORE.DESTINATION_STATE_COHORTS
+        )
+        if args.batch_size < len(training_cohorts):
+            raise ValueError("batch size must cover every configured state cohort")
         _, training_documents, training_frames, training_grid_step, training_receipt = load_corpus_manifest(
             args.training_manifest,
         )
@@ -284,53 +613,124 @@ def main(argv=None):
             training_documents,
             training_frames,
             training_grid_step,
+            state_cohorts=training_cohorts,
         )
+        rollout_seed_model = None
+        rollout_seed_normalization = None
+        rollout_seed_receipt = None
+        rollout_exposure = None
+        rng = np.random.default_rng(args.seed)
+        if args.training_mode == "protected-rollout":
+            checkpoint("rollout-seed-model-validation")
+            rollout_seed_model, rollout_seed_normalization, rollout_seed_receipt = load_rollout_seed_model(
+                args.rollout_seed_model,
+            )
+            if rollout_seed_normalization["hiddenSize"] != args.hidden_size:
+                raise ValueError("rollout seed model hidden size must match requested training capacity")
+            last_trustworthy["rolloutSeedModelSha256"] = rollout_seed_receipt["sha256"]
+            last_trustworthy["rolloutSeedRoute"] = rollout_seed_receipt["route"]
+            last_trustworthy["rolloutSeedFallbackReason"] = rollout_seed_receipt["route"]["fallbackReason"]
+            checkpoint("protected-rollout-dataset-construction")
+            datasets, rollout_exposure = build_protected_rollout_datasets(
+                datasets,
+                training_documents,
+                training_frames,
+                rollout_seed_model,
+                rollout_seed_normalization,
+                args.predicted_input_fraction,
+                args.rollout_horizon,
+                args.batch_size,
+                rng,
+            )
+            last_trustworthy.update({
+                "eligiblePredictedInputCount": rollout_exposure["eligiblePredictedInputCount"],
+                "predictedExposureCount": rollout_exposure["predictedExposureCount"],
+                "effectivePredictedInputFraction": rollout_exposure["effectivePredictedInputFraction"],
+            })
         state_inputs = np.concatenate([dataset["stateInputs"] for dataset in datasets])
+        state_baselines = np.concatenate([dataset["stateBaselines"] for dataset in datasets])
+        state_targets = np.concatenate([dataset["stateTargets"] for dataset in datasets])
         residual_targets = np.concatenate([dataset["stateResidualTargets"] for dataset in datasets])
         cohorts = np.concatenate([dataset["stateCohorts"] for dataset in datasets])
-        sampling_pools = CORE.build_destination_state_sampling_pools(cohorts)
-        input_mean = np.mean(state_inputs, axis=0, dtype=np.float64).astype(np.float32)
-        input_scale = np.std(state_inputs, axis=0, dtype=np.float64).astype(np.float32)
-        input_scale[input_scale < 1e-6] = 1.0
-        residual_mean = np.mean(residual_targets, axis=0, dtype=np.float64).astype(np.float32)
-        residual_scale = np.std(residual_targets, axis=0, dtype=np.float64).astype(np.float32)
-        residual_scale[residual_scale < 1e-6] = 1.0
+        sampling_pools = build_state_sampling_pools(cohorts, training_cohorts)
+        normalization = resolve_training_normalization(
+            args.training_mode,
+            state_inputs,
+            residual_targets,
+            rollout_seed_normalization,
+        )
+        input_mean = normalization["inputMean"]
+        input_scale = normalization["inputScale"]
+        residual_mean = normalization["residualMean"]
+        residual_scale = normalization["residualScale"]
         normalized_inputs = ((state_inputs - input_mean) / input_scale).astype(np.float32)
         normalized_targets = ((residual_targets - residual_mean) / residual_scale).astype(np.float32)
+        target_energy = visible_energy_numpy(state_targets)
+        energy_scale = max(float(np.sqrt(np.mean(target_energy ** 2, dtype=np.float64))), 1e-6)
         last_trustworthy.update({
             "trainingPairCount": len(training_pairs),
             "trainingSampleCount": len(cohorts),
             "trainingCohortCounts": {
                 cohort: int(np.sum(cohorts == cohort))
-                for cohort in CORE.DESTINATION_STATE_COHORTS
+                for cohort in training_cohorts
             },
         })
 
         checkpoint("model-training")
-        rng = np.random.default_rng(args.seed)
         mx.random.seed(args.seed)
-        model = CORE.DestinationStateModel(args.hidden_size)
+        model = rollout_seed_model if rollout_seed_model is not None else CORE.DestinationStateModel(args.hidden_size)
         mx.eval(model.parameters())
         optimizer = optim.AdamW(learning_rate=args.learning_rate, weight_decay=args.weight_decay)
-        loss_and_grad = nn.value_and_grad(model, CORE.destination_state_loss)
+        loss_and_grad = nn.value_and_grad(
+            model,
+            rollout_destination_state_loss if args.training_mode == "protected-rollout" else CORE.destination_state_loss,
+        )
         steps_per_epoch = math.ceil(len(cohorts) / args.batch_size)
         step_count = steps_per_epoch * args.epochs
         losses = []
         for step in range(step_count):
-            indices = CORE.sample_destination_state_balanced_indices(
+            indices = sample_state_balanced_indices(
                 rng,
                 sampling_pools,
+                training_cohorts,
                 args.batch_size,
             )
-            loss, gradients = loss_and_grad(
-                model,
-                mx.array(normalized_inputs[indices]),
-                mx.array(normalized_targets[indices]),
-            )
+            if args.training_mode == "protected-rollout":
+                (loss, components), gradients = loss_and_grad(
+                    model,
+                    mx.array(normalized_inputs[indices]),
+                    mx.array(normalized_targets[indices]),
+                    mx.array(state_baselines[indices]),
+                    mx.array(residual_mean),
+                    mx.array(residual_scale),
+                    mx.array(energy_scale),
+                    args.candidate_loss_weight,
+                    args.splat_loss_weight,
+                    args.energy_loss_weight,
+                )
+            else:
+                loss, gradients = loss_and_grad(
+                    model,
+                    mx.array(normalized_inputs[indices]),
+                    mx.array(normalized_targets[indices]),
+                )
+                components = None
             optimizer.update(model, gradients)
-            mx.eval(model.parameters(), optimizer.state, loss)
+            if components is None:
+                mx.eval(model.parameters(), optimizer.state, loss)
+            else:
+                mx.eval(model.parameters(), optimizer.state, loss, *components)
             if step == 0 or step == step_count - 1 or (step + 1) % steps_per_epoch == 0:
-                losses.append({"step": step + 1, "mse": float(loss.item())})
+                loss_row = {"step": step + 1, "total": float(loss.item())}
+                if components is None:
+                    loss_row["mse"] = loss_row["total"]
+                else:
+                    loss_row.update({
+                        "candidate": float(components[0].item()),
+                        "splat": float(components[1].item()),
+                        "visibleEnergy": float(components[2].item()),
+                    })
+                losses.append(loss_row)
 
         checkpoint("cross-episode-evaluation")
         evaluation_metrics, evaluation_pairs = evaluate_cross_episode(
@@ -376,8 +776,14 @@ def main(argv=None):
                 ],
             },
             "training": {
-                "samplingAuthority": "uniform-with-replacement-across-q3-q4-transported-birth-v0",
+                "samplingAuthority": "uniform-with-replacement-across-configured-state-cohorts-v0",
                 "supportAssignmentAuthority": "exact-training-correspondence-and-local-birth-donor-v0",
+                "trainedCohorts": list(training_cohorts),
+                "distribution": training_config,
+                "rolloutSeedModel": rollout_seed_receipt,
+                "rolloutExposure": rollout_exposure,
+                "loss": build_training_loss_receipt(training_config, energy_scale),
+                "normalizationAuthority": normalization["authority"],
                 "sampleCount": len(cohorts),
                 "pairCount": len(training_pairs),
                 "pairReports": training_pairs,
@@ -397,7 +803,12 @@ def main(argv=None):
             "evaluation": evaluation_metrics,
             "claimBoundary": (
                 "offline cross-episode destination-state residual prediction after exact heldout support and donor assignment; "
-                "does not yet apply state residuals to predicted support or modify the deployed occupancy model"
+                + (
+                    "training includes bounded frozen-seed predicted splat exposure with canonical candidate state and explicit energy loss; "
+                    if args.training_mode == "protected-rollout"
+                    else "training uses adjacent-pair teacher forcing; "
+                )
+                + "does not modify the deployed occupancy model or prove long-horizon recurrent stability"
             ),
         }
         model_path = out_dir / "destination-state-model.json"
