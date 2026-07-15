@@ -422,6 +422,16 @@ async function main() {
     if (interfaceCarrier.malformedRecordCount !== 0) throw new Error(`interface carrier contains malformed records: ${JSON.stringify(interfaceCarrier)}`);
     if (interfaceCarrier.contactRecordCount < 64) throw new Error(`interface carrier lacks material contact coverage: ${JSON.stringify(interfaceCarrier)}`);
     if (interfaceCarrier.minimumContactSupportAlignment < -0.001) throw new Error(`interface carrier contains a support-facing contact normal: ${JSON.stringify(interfaceCarrier)}`);
+    const liquidFireContactDescriptor = lastDebugState.runtime?.liquidFireContactDescriptor;
+    if (liquidFireContactDescriptor?.schema !== 'kaminos.liquid-fire-contact-descriptor.v0') throw new Error(`liquid/fire contact descriptor schema mismatch: ${liquidFireContactDescriptor?.schema}`);
+    if (!liquidFireContactDescriptor.valid || !liquidFireContactDescriptor.complete) throw new Error(`liquid/fire contact descriptor was not sealed: ${JSON.stringify(liquidFireContactDescriptor)}`);
+    if (liquidFireContactDescriptor.capacity !== lastDebugState.runtime.particleCount || liquidFireContactDescriptor.candidateCapMode !== 'uncapped_exact_particle_population_capacity') throw new Error(`liquid/fire contact capacity is capped or misidentified: ${JSON.stringify(liquidFireContactDescriptor)}`);
+    if (liquidFireContactDescriptor.overflowCount !== 0) throw new Error(`liquid/fire contact descriptor overflowed: ${JSON.stringify(liquidFireContactDescriptor)}`);
+    if (liquidFireContactDescriptor.sourceCount !== liquidFireContactDescriptor.transformedCount + liquidFireContactDescriptor.rejectedCount) throw new Error(`liquid/fire contact accounting mismatch: ${JSON.stringify(liquidFireContactDescriptor)}`);
+    if (liquidFireContactDescriptor.sourceCount !== interfaceCarrier.activeCount) throw new Error(`public contact source count does not reconcile with dense interface carrier: ${JSON.stringify({ liquidFireContactDescriptor, interfaceCarrier })}`);
+    if (liquidFireContactDescriptor.contactCount !== interfaceCarrier.contactRecordCount) throw new Error(`public contact count does not reconcile with dense contact census: ${JSON.stringify({ liquidFireContactDescriptor, interfaceCarrier })}`);
+    if (liquidFireContactDescriptor.transformedCount !== liquidFireContactDescriptor.contactCount) throw new Error(`identity transform rejected real liquid contacts: ${JSON.stringify(liquidFireContactDescriptor)}`);
+    if (liquidFireContactDescriptor.writeTick > liquidFireContactDescriptor.diagnosticsStepCount || liquidFireContactDescriptor.writeTick < liquidFireContactDescriptor.diagnosticsStepCount - 1) throw new Error(`liquid/fire contact write tick is stale or impossible: ${JSON.stringify(liquidFireContactDescriptor)}`);
     if (!Array.isArray(interfaceCarrier.sampleRecords) || interfaceCarrier.sampleRecords.length < 4) throw new Error(`interface carrier sampleRecords missing: ${JSON.stringify(interfaceCarrier)}`);
     const sampleIds = new Set();
     for (const record of interfaceCarrier.sampleRecords) {

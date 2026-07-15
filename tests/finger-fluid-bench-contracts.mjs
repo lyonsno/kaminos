@@ -109,6 +109,14 @@ assert.match(webgpuCoreSource, /getLiquidFireContactDescriptor,/, 'the public so
 assert.match(webgpuCoreSource, /adapter\.limits\.maxStorageBuffersPerShaderStage < requiredStorageBindings/, 'unsupported contact-buffer binding capacity fails loud before device creation');
 assert.match(webgpuCoreSource, /requiredLimits:\s*\{ maxStorageBuffersPerShaderStage:\s*requiredStorageBindings \}/, 'device creation requests the measured storage-binding capacity used by the public ABI');
 assert.match(webgpuCoreSource, /label:\s*'kaminos-liquid-fire-contact-header',[\s\S]*GPUBufferUsage\.COPY_DST/, 'the initialized contact header explicitly declares copy-destination usage');
+assert.match(webgpuCoreSource, /label:\s*'kaminos-liquid-fire-contact-header-readback'/, 'explicit diagnostics own a dedicated public-header readback buffer');
+assert.match(webgpuCoreSource, /copyBufferToBuffer\(liquidFireContactHeaderBuffer, 0, liquidFireContactHeaderReadbackBuffer, 0, LIQUID_FIRE_CONTACT_HEADER_BYTES\)/, 'explicit diagnostics copy the complete GPU contact header');
+assert.match(webgpuCoreSource, /const liquidFireContactHeaderWords = new Uint32Array\(liquidFireContactHeaderReadbackBuffer\.getMappedRange\(\)\)/, 'diagnostics parse the GPU-written header without consulting projected JavaScript state');
+assert.match(webgpuCoreSource, /const liquidFireContactDescriptor = validateLiquidFireContactDescriptorHeader\(/, 'diagnostics validate the authoritative GPU header before publishing it');
+assert.match(webgpuCoreSource, /sourceCount:\s*liquidFireContactHeaderWords\[8\]/, 'public diagnostics expose the exact GPU source count');
+assert.match(webgpuCoreSource, /transformedCount:\s*liquidFireContactHeaderWords\[9\]/, 'public diagnostics expose the exact GPU transformed count');
+assert.match(webgpuCoreSource, /contactCount:\s*liquidFireContactHeaderWords\[10\]/, 'public diagnostics expose the exact GPU contact count');
+assert.match(webgpuCoreSource, /rejectedCount:\s*liquidFireContactHeaderWords\[11\]/, 'public diagnostics expose the exact GPU rejection count');
 assert.match(webgpuCoreSource, /const PLAYGROUND_WGSL\s*=\s*\/\* wgsl \*\//, 'one WGSL playground source feeds collision and rendering');
 assert.match(webgpuCoreSource, /\$\{PLAYGROUND_WGSL\}[\s\S]*?const RENDER_SHADER[\s\S]*?\$\{PLAYGROUND_WGSL\}/, 'compute and render shaders consume the same playground geometry source');
 assert.match(webgpuCoreSource, /source_shelf[\s\S]*spillway[\s\S]*shallow_pool[\s\S]*deep_pool[\s\S]*obstacle_channel[\s\S]*catch_basin/, 'playground names every load-bearing flow regime');
@@ -281,6 +289,11 @@ assert.match(benchWitnessSource, /interfaceCarrier\.sampleRecords/, 'bench witne
 assert.match(benchWitnessSource, /validatedRecordCount !== interfaceCarrier\.activeCount/, 'bench witness requires complete active-carrier validation');
 assert.match(benchWitnessSource, /malformedRecordCount !== 0/, 'bench witness rejects any malformed active interface record');
 assert.match(benchWitnessSource, /contactRecordCount < 64/, 'bench witness requires material contact coverage rather than conditional validation');
+assert.match(benchWitnessSource, /kaminos\.liquid-fire-contact-descriptor\.v0/, 'bench witness requires the public liquid/fire contact descriptor');
+assert.match(benchWitnessSource, /liquidFireContactDescriptor\.contactCount !== interfaceCarrier\.contactRecordCount/, 'bench witness reconciles public contact output with the complete dense contact census');
+assert.match(benchWitnessSource, /liquidFireContactDescriptor\.sourceCount !== liquidFireContactDescriptor\.transformedCount \+ liquidFireContactDescriptor\.rejectedCount/, 'bench witness rejects public contact accounting mismatch');
+assert.match(benchWitnessSource, /liquidFireContactDescriptor\.writeTick > liquidFireContactDescriptor\.diagnosticsStepCount/, 'bench witness rejects impossible future contact write ticks');
+assert.match(benchWitnessSource, /liquidFireContactDescriptor\.overflowCount !== 0/, 'bench witness rejects public descriptor overflow');
 assert.match(benchWitnessSource, /minimumContactSupportAlignment < -0\.001/, 'bench witness rejects inward support alignment anywhere in the active contact carrier');
 assert.match(benchWitnessSource, /activeExtent3d/, 'bench witness requires non-flat 3D extent evidence');
 assert.match(benchWitnessSource, /maxSpeed\s*>\s*3\.35/, 'bench witness rejects energetic solver blow-up');
@@ -351,6 +364,8 @@ assert.equal(typeof webgpuMod.validateLiquidFireContactDescriptorHeader, 'functi
 const validContactHeader = {
   schema: webgpuMod.KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_SCHEMA,
   packing: webgpuMod.KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_PACKING,
+  magic: 0x4b4c4643,
+  version: 0,
   allocationGeneration: 7,
   epoch: 11,
   writeTick: 29,

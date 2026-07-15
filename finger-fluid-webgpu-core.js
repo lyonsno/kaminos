@@ -94,6 +94,7 @@ export function validateLiquidFireContactDescriptorHeader(header, {
 } = {}) {
   if (!header || header.schema !== KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_SCHEMA) throw new Error('Liquid fire contact descriptor schema mismatch');
   if (header.packing !== KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_PACKING) throw new Error('Liquid fire contact descriptor packing mismatch');
+  if (header.magic !== LIQUID_FIRE_CONTACT_MAGIC || header.version !== LIQUID_FIRE_CONTACT_VERSION) throw new Error('Liquid fire contact descriptor GPU header identity mismatch');
   if (!header.valid) throw new Error('Liquid fire contact descriptor is not valid');
   if (!header.complete) throw new Error('Liquid fire contact descriptor is not complete');
   if (header.allocationGeneration !== allocationGeneration) throw new Error('Liquid fire contact descriptor allocation generation mismatch');
@@ -1588,6 +1589,11 @@ export async function createWebGPUFingerFluidSolver({
     size: safeParticleCount * MATERIAL_TRACER_BYTES,
     usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
   });
+  const liquidFireContactHeaderReadbackBuffer = device.createBuffer({
+    label: 'kaminos-liquid-fire-contact-header-readback',
+    size: LIQUID_FIRE_CONTACT_HEADER_BYTES,
+    usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+  });
   device.queue.writeBuffer(particleBuffer, 0, particleData);
   device.queue.writeBuffer(interfaceCountersBuffer, 0, new Uint32Array(3));
   device.queue.writeBuffer(liquidFireContactHeaderBuffer, 0, new Uint32Array(LIQUID_FIRE_CONTACT_HEADER_WORDS));
@@ -1913,7 +1919,7 @@ export async function createWebGPUFingerFluidSolver({
     diagnosticsPending = true;
     diagnosticsRequestCount += 1;
     const diagnosticsStartedAtMs = performance.now();
-    const readbackBuffers = [diagnosticsBuffer, interfaceCountersReadbackBuffer, interfaceRecordsReadbackBuffer, restStateReadbackBuffer, neighborTopologyReadbackBuffer, materialTracerReadbackBuffer];
+    const readbackBuffers = [diagnosticsBuffer, interfaceCountersReadbackBuffer, interfaceRecordsReadbackBuffer, restStateReadbackBuffer, neighborTopologyReadbackBuffer, materialTracerReadbackBuffer, liquidFireContactHeaderReadbackBuffer];
     try {
       const diagnosticsStepCount = stepCount;
       const diagnosticsCapturedAtMs = performance.now();
@@ -1924,6 +1930,7 @@ export async function createWebGPUFingerFluidSolver({
       encoder.copyBufferToBuffer(restStateBuffer, 0, restStateReadbackBuffer, 0, safeParticleCount * REST_STATE_BYTES);
       encoder.copyBufferToBuffer(neighborTopologyBuffer, 0, neighborTopologyReadbackBuffer, 0, safeParticleCount * NEIGHBOR_TOPOLOGY_BYTES);
       encoder.copyBufferToBuffer(materialTracerBuffer, 0, materialTracerReadbackBuffer, 0, safeParticleCount * MATERIAL_TRACER_BYTES);
+      encoder.copyBufferToBuffer(liquidFireContactHeaderBuffer, 0, liquidFireContactHeaderReadbackBuffer, 0, LIQUID_FIRE_CONTACT_HEADER_BYTES);
       device.queue.submit([encoder.finish()]);
       const mapResults = await Promise.allSettled(readbackBuffers.map(buffer => buffer.mapAsync(GPUMapMode.READ)));
       const failedMap = mapResults.find(result => result.status === 'rejected');
@@ -1935,6 +1942,7 @@ export async function createWebGPUFingerFluidSolver({
       const topologyRange = neighborTopologyReadbackBuffer.getMappedRange();
       const topologyValues = new Float32Array(topologyRange);
       const materialTracerValues = new Float32Array(materialTracerReadbackBuffer.getMappedRange());
+      const liquidFireContactHeaderWords = new Uint32Array(liquidFireContactHeaderReadbackBuffer.getMappedRange());
       const min = [Infinity, Infinity, Infinity];
       const max = [-Infinity, -Infinity, -Infinity];
       let speedSum = 0;
@@ -2017,6 +2025,34 @@ export async function createWebGPUFingerFluidSolver({
       const diffusionMassDrift = chemistryMass - initialChemistryMass - sourceResetMassAdjustment;
       const chemistryMassTolerance = Math.max(0.02, safeParticleCount * 0.000002);
       const activeInterfaceCount = Math.min(interfaceCounters[0], safeParticleCount);
+      const liquidFireContactDescriptor = validateLiquidFireContactDescriptorHeader({
+        schema: KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_SCHEMA,
+        packing: KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_PACKING,
+        magic: liquidFireContactHeaderWords[0],
+        version: liquidFireContactHeaderWords[1],
+        allocationGeneration: liquidFireContactHeaderWords[2],
+        epoch: liquidFireContactHeaderWords[3],
+        writeTick: liquidFireContactHeaderWords[4],
+        valid: liquidFireContactHeaderWords[5] === 1,
+        complete: liquidFireContactHeaderWords[6] === 1,
+        transformHash: liquidFireContactHeaderWords[7],
+        transformId: liquidFireContactHeaderWords[7] === LIQUID_FIRE_CONTACT_TRANSFORM_HASH ? LIQUID_FIRE_CONTACT_TRANSFORM_ID : 'unknown-transform',
+        sourceCount: liquidFireContactHeaderWords[8],
+        transformedCount: liquidFireContactHeaderWords[9],
+        contactCount: liquidFireContactHeaderWords[10],
+        rejectedCount: liquidFireContactHeaderWords[11],
+        capacity: liquidFireContactHeaderWords[12],
+        overflowCount: liquidFireContactHeaderWords[13],
+        recordWords: liquidFireContactHeaderWords[14],
+        flags: liquidFireContactHeaderWords[15],
+        diagnosticsStepCount,
+        candidateCapMode: 'uncapped_exact_particle_population_capacity',
+      }, {
+        allocationGeneration: liquidFireContactAllocationGeneration,
+        epoch: liquidFireContactEpoch,
+        minimumWriteTick: Math.max(0, diagnosticsStepCount - 1),
+        transformId: LIQUID_FIRE_CONTACT_TRANSFORM_ID,
+      });
       const sampleRecordCount = Math.min(activeInterfaceCount, INTERFACE_SAMPLE_COUNT);
       const readInterfaceRecord = recordIndex => {
         const offset = recordIndex * INTERFACE_RECORD_FLOATS;
@@ -2133,6 +2169,7 @@ export async function createWebGPUFingerFluidSolver({
           sampleCoverageMode: 'stratified_across_active_compacted_population_v0',
           sampleRecords,
         },
+        liquidFireContactDescriptor,
       };
       diagnosticsCompletionCount += 1;
       return diagnostics;
@@ -2220,7 +2257,7 @@ export async function createWebGPUFingerFluidSolver({
         qualifyingThreshold: INTERFACE_THRESHOLD,
         sampleRecords: [],
       },
-      liquidFireContactDescriptor: {
+      liquidFireContactDescriptor: diagnostics?.liquidFireContactDescriptor || {
         schema: KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_SCHEMA,
         packing: KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_PACKING,
         sourceFrame: 'kaminos/finger-fluid-bench:gpu-simulation-frame',
@@ -2237,6 +2274,8 @@ export async function createWebGPUFingerFluidSolver({
         recordFloats: LIQUID_FIRE_CONTACT_RECORD_FLOATS,
         recordBytes: LIQUID_FIRE_CONTACT_RECORD_BYTES,
         completionMode: 'gpu_ordered_clear_compact_finalize_same_compute_pass_v0',
+        valid: false,
+        complete: false,
       },
       playgroundZoneDiagnostics: diagnostics?.playgroundZoneDiagnostics || null,
       sourceRecirculationMode: 'material_tagged_finite_particle_loop_v0',
@@ -2302,6 +2341,7 @@ export async function createWebGPUFingerFluidSolver({
     restStateReadbackBuffer.destroy();
     neighborTopologyReadbackBuffer.destroy();
     materialTracerReadbackBuffer.destroy();
+    liquidFireContactHeaderReadbackBuffer.destroy();
     renderParamsBuffer.destroy();
     depthTexture?.destroy();
   }
