@@ -33,6 +33,11 @@ assert.match(witness, /failurePhase/);
 assert.match(witness, /lastTrustworthyEvidence/);
 assert.match(witness, /Page\.captureScreenshot/);
 assert.match(witness, /ffmpeg/);
+assert.match(witness, /operatorPage/);
+assert.match(witness, /Native 96 control/);
+assert.match(witness, /128-trained zero-shot/);
+assert.match(witness, /96-trained deployment-grid/);
+assert.match(witness, /<video[\s\S]*autoplay[\s\S]*loop[\s\S]*controls/);
 assert.doesNotMatch(witness, /Math\.min\([^\n]*requestedFrameCount/, 'caller frame count must not be silently capped');
 
 const failureRoot = mkdtempSync(join(tmpdir(), 'kaminos-native-low-long-sequence-contract-'));

@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { createHash, randomInt } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { basename, dirname, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
 const SCHEMA = 'kaminos.volume.native-low-transfer-long-sequence-witness.v0';
@@ -27,6 +27,7 @@ let url = null;
 const out = resolve(String(args.get('--out') || '/tmp/kaminos-native-low-transfer-long-sequence.mp4'));
 const reportPath = resolve(String(args.get('--report') || '/tmp/kaminos-native-low-transfer-long-sequence.json'));
 const contactPath = resolve(String(args.get('--contact') || out.replace(/\.mp4$/i, '-contact.png')));
+const pagePath = resolve(String(args.get('--page') || `${dirname(out)}/index.html`));
 const requestedFrameCount = integerArg('--frames', 150);
 const playbackFps = numberArg('--fps', 30);
 const timeoutMs = numberArg('--timeout-ms', 900000);
@@ -84,6 +85,7 @@ try {
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
   mkdirSync(dirname(contactPath), { recursive: true });
+  mkdirSync(dirname(pagePath), { recursive: true });
 
   failurePhase = 'browser-launch';
   browser = spawn(chromeExecutable(), [
@@ -195,6 +197,10 @@ try {
   assert.equal(contactResult.code, 0, `contact sheet failed: ${contactResult.stderr}`);
   assert.ok(existsSync(contactPath) && readFileSync(contactPath).byteLength > 0, 'contact sheet is missing or blank');
 
+  failurePhase = 'operator-page';
+  writeOperatorPage();
+  assert.ok(existsSync(pagePath) && readFileSync(pagePath).byteLength > 0, 'operator page is missing or blank');
+
   state = await evaluate(socket, 'window.__kaminosNativeLowSelectiveLive.debugState()');
   const report = {
     schema: SCHEMA,
@@ -225,6 +231,7 @@ try {
     frames,
     video: artifact(out),
     contactSheet: artifact(contactPath),
+    operatorPage: artifact(pagePath),
     lastTrustworthyEvidence,
   };
   writeReport(report);
@@ -233,6 +240,7 @@ try {
     report: reportPath,
     video: out,
     contactSheet: contactPath,
+    operatorPage: pagePath,
     capturedFrameCount: frames.length,
     playbackSeconds: report.playbackSeconds,
   }, null, 2));
@@ -367,6 +375,18 @@ function artifact(path) {
     byteLength: bytes.byteLength,
     sha256: createHash('sha256').update(bytes).digest('hex'),
   };
+}
+
+function writeOperatorPage() {
+  const videoName = basename(out);
+  const contactName = basename(contactPath);
+  writeFileSync(pagePath, `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Native 96 two-model long motion</title><style>
+:root{color-scheme:dark;font-family:Inter,system-ui,sans-serif;background:#080a0b;color:#eef2f3}*{box-sizing:border-box}body{margin:0;background:#080a0b}header{padding:12px 16px;border-bottom:1px solid #30383a;background:#111516}h1{font-size:17px;margin:0 0 4px}p{font-size:12px;color:#aab5b8;margin:0}.roles{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#30383a}.role{padding:9px 12px;background:#121617}.role strong{display:block;font-size:13px}.role span{display:block;color:#98a6a9;font-size:10px;margin-top:2px}main{padding:0 0 18px}video{display:block;width:100%;height:auto;background:#000}nav{padding:12px 16px}a{color:#8fd4ff}@media(max-width:760px){.roles{grid-template-columns:1fr}.role{min-height:48px}}
+</style></head><body><header><h1>Native 96 control vs both learned transfer models</h1><p>${requestedFrameCount} consecutive simulation steps at ${playbackFps} fps. Splat-only. No native-phase high-grid truth target.</p></header>
+<section class="roles"><div class="role"><strong>Native 96 control</strong><span>No learned residual</span></div><div class="role"><strong>128-trained zero-shot</strong><span>${MODELS.baseline128Trained.identity}</span></div><div class="role"><strong>96-trained deployment-grid</strong><span>${MODELS.candidate96Trained.identity}</span></div></section>
+<main><video autoplay loop controls muted playsinline src="./${videoName}"></video><nav><a href="./${contactName}">Open first / middle / last contact sheet</a></nav></main></body></html>\n`);
 }
 
 function parseArgs(argv) {
