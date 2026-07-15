@@ -24,6 +24,10 @@ const FULL_FIELD_IMPORT_IDENTITY = 'kaminos.volume.full-field-import.v0';
 const COARSE_RECEIVER_INITIALIZATION_AUTHORITY = 'receiver-initialized-from-filtered-high-t-v0';
 const SELECTIVE_COMPOSITION_AUTHORITY = 'learned-selective-head-composition-not-filtered-high-truth-v0';
 const SELECTIVE_COMPOSITION_APPLICATION_IDENTITY = 'learned-selective-head-application-v0';
+const NATIVE_LOW_HELD_INITIALIZATION_AUTHORITY = 'native-low-simulator-held-control-v0';
+const NATIVE_LOW_HELD_APPLICATION_IDENTITY = 'native-low-held-render-application-v0';
+const NATIVE_LOW_SELECTIVE_INITIALIZATION_AUTHORITY = 'frozen-exact-basin-heads-applied-to-native-low-state-v0';
+const NATIVE_LOW_SELECTIVE_APPLICATION_IDENTITY = 'native-low-selective-held-render-application-v0';
 const PHASE_ALIGNED_TRUTH_HELD_AUTHORITY = 'offline-high-truth-held-render-only-v0';
 const PHASE_ALIGNED_LOW_HELD_AUTHORITY = 'downsampled-same-high-history-held-control-v0';
 const PHASE_ALIGNED_HELD_APPLICATION_IDENTITY = 'phase-aligned-held-render-application-v0';
@@ -9357,7 +9361,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       payload.initializationAuthority === PHASE_ALIGNED_TRUTH_HELD_AUTHORITY
       || payload.initializationAuthority === PHASE_ALIGNED_LOW_HELD_AUTHORITY
     ) && payload.filterIdentity === PHASE_ALIGNED_HELD_APPLICATION_IDENTITY;
-    if (!isCoarseReceiver && !isSelectiveComposition && !isPhaseAlignedHeld) {
+    const isNativeLowHeld = payload.initializationAuthority === NATIVE_LOW_HELD_INITIALIZATION_AUTHORITY
+      && payload.filterIdentity === NATIVE_LOW_HELD_APPLICATION_IDENTITY;
+    const isNativeLowSelective = payload.initializationAuthority === NATIVE_LOW_SELECTIVE_INITIALIZATION_AUTHORITY
+      && payload.filterIdentity === NATIVE_LOW_SELECTIVE_APPLICATION_IDENTITY;
+    if (!isCoarseReceiver && !isSelectiveComposition && !isPhaseAlignedHeld && !isNativeLowHeld && !isNativeLowSelective) {
       return fullFieldImportFailure('begin', 'initialization-authority-mismatch', {
         requestedInitializationAuthority: payload.initializationAuthority || null,
         requestedFilterIdentity: payload.filterIdentity || null,

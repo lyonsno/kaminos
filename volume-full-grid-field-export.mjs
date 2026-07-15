@@ -15,6 +15,11 @@ const COARSE_RECEIVER_FILTER = 'volume-overlap-box-filter-high-to-receiver-v0';
 const SELECTIVE_COMPOSITION_SCHEMA = 'kaminos.volume.exact-basin-selective-composition.v0';
 const SELECTIVE_COMPOSITION_AUTHORITY = 'learned-selective-head-composition-not-filtered-high-truth-v0';
 const SELECTIVE_COMPOSITION_APPLICATION = 'learned-selective-head-application-v0';
+const NATIVE_LOW_SELECTIVE_SCHEMA = 'kaminos.volume.native-low-selective-composition.v0';
+const NATIVE_LOW_SELECTIVE_AUTHORITY = 'frozen-exact-basin-heads-applied-to-native-low-state-v0';
+const NATIVE_LOW_INPUT_AUTHORITY = 'native-low-simulator-state-no-synthetic-downsample-v0';
+const NATIVE_LOW_HELD_SCHEMA = 'kaminos.volume.native-low-held-field.v0';
+const NATIVE_LOW_HELD_AUTHORITY = 'native-low-simulator-held-control-v0';
 const PHASE_ALIGNED_HELD_SCHEMA = 'kaminos.volume.phase-aligned-held-field.v0';
 const PHASE_ALIGNED_HELD_APPLICATION = 'phase-aligned-held-render-application-v0';
 const PHASE_ALIGNED_HELD_ROLES = {
@@ -109,8 +114,10 @@ function resolveInitialFieldManifest() {
   if (manifest.failurePhase !== null) throw new Error('initial field manifest carries a failure phase');
   const isCoarseReceiver = manifest.schema === COARSE_RECEIVER_SCHEMA;
   const isSelectiveComposition = manifest.schema === SELECTIVE_COMPOSITION_SCHEMA;
+  const isNativeLowSelective = manifest.schema === NATIVE_LOW_SELECTIVE_SCHEMA;
+  const isNativeLowHeld = manifest.schema === NATIVE_LOW_HELD_SCHEMA;
   const isPhaseAlignedHeld = manifest.schema === PHASE_ALIGNED_HELD_SCHEMA;
-  if (!isCoarseReceiver && !isSelectiveComposition && !isPhaseAlignedHeld) {
+  if (!isCoarseReceiver && !isSelectiveComposition && !isNativeLowSelective && !isNativeLowHeld && !isPhaseAlignedHeld) {
     throw new Error(`unsupported initial field manifest: ${manifest.schema || '(missing)'}/${manifest.status || '(missing)'}`);
   }
   if (isCoarseReceiver && manifest.initializationAuthority !== COARSE_RECEIVER_AUTHORITY) {
@@ -127,6 +134,29 @@ function resolveInitialFieldManifest() {
       || !String(manifest.consumptionContract?.mustNotBeAcceptedAs || '').includes('coarse-receiver-initial')) {
       throw new Error('selective composition mustNotBeAcceptedAs filtered-high receiver state');
     }
+  }
+  if (isNativeLowSelective) {
+    if (manifest.compositionAuthority !== NATIVE_LOW_SELECTIVE_AUTHORITY
+      || manifest.inputAuthority !== NATIVE_LOW_INPUT_AUTHORITY
+      || manifest.runtimeTruthAvailable !== false
+      || manifest.relationship?.syntheticDownsampleApplied !== false
+      || manifest.relationship?.highTruthUse !== 'unavailable; not loaded and not used for application or metrics') {
+      throw new Error('native-low selective authority or no-truth application contract mismatch');
+    }
+    if (manifest.consumptionContract?.requiresExplicitSchemaAdmission !== true
+      || !String(manifest.consumptionContract?.mustNotBeAcceptedAs || '').includes('filtered-high initialization truth')
+      || manifest.consumptionContract?.receiverAdvance !== 'held render only; simulation advance is forbidden for this assay') {
+      throw new Error('native-low selective composition held-only contract mismatch');
+    }
+  }
+  if (isNativeLowHeld && (
+    manifest.initializationAuthority !== NATIVE_LOW_HELD_AUTHORITY
+    || manifest.inputAuthority !== NATIVE_LOW_INPUT_AUTHORITY
+    || manifest.runtimeTruthAvailable !== false
+    || manifest.renderOnly !== true
+    || manifest.consumptionContract?.receiverAdvance !== 'held render only; simulation advance is forbidden for this assay'
+  )) {
+    throw new Error('native-low held control authority mismatch');
   }
   const heldRole = isPhaseAlignedHeld ? PHASE_ALIGNED_HELD_ROLES[manifest.role] : null;
   if (isPhaseAlignedHeld && (
@@ -161,18 +191,31 @@ function resolveInitialFieldManifest() {
     manifestPath: initialFieldManifestPath,
     manifestSha256: sha256(raw),
     grid,
-    initializationAuthority: isSelectiveComposition
+    initializationAuthority: isNativeLowHeld
+      ? NATIVE_LOW_HELD_AUTHORITY
+      : isNativeLowSelective
+      ? NATIVE_LOW_SELECTIVE_AUTHORITY
+      : isSelectiveComposition
       ? SELECTIVE_COMPOSITION_AUTHORITY
       : isPhaseAlignedHeld
         ? heldRole.authority
         : COARSE_RECEIVER_AUTHORITY,
-    filterIdentity: isSelectiveComposition || isPhaseAlignedHeld
-      ? isPhaseAlignedHeld ? PHASE_ALIGNED_HELD_APPLICATION : SELECTIVE_COMPOSITION_APPLICATION
+    filterIdentity: isSelectiveComposition || isNativeLowSelective || isNativeLowHeld || isPhaseAlignedHeld
+      ? isPhaseAlignedHeld
+        ? PHASE_ALIGNED_HELD_APPLICATION
+        : isNativeLowHeld
+          ? 'native-low-held-render-application-v0'
+        : isNativeLowSelective
+          ? 'native-low-selective-held-render-application-v0'
+          : SELECTIVE_COMPOSITION_APPLICATION
       : COARSE_RECEIVER_FILTER,
     layoutIdentity,
     source: manifest.source || null,
     receiverInitialSimStepCount: Number(manifest.receiver?.initialSimStepCount || 0),
-    heldOnly: isSelectiveComposition || isPhaseAlignedHeld,
+    heldOnly: isSelectiveComposition || isNativeLowSelective || isNativeLowHeld || isPhaseAlignedHeld,
+    heldOnlyFailure: isNativeLowSelective || isNativeLowHeld
+      ? 'native-low-selective-composition-held-only'
+      : 'selective-composition-held-only',
     fluid: validateArtifact(fluid, 'initial fluid', [grid, grid, grid, 16], fluidChannels),
     front: validateArtifact(front, 'initial front', [grid, grid, grid, 1], ['frontTopology']),
   };
@@ -546,7 +589,7 @@ async function main() {
       throw new Error('--initial-field-manifest requires explicit --advance-imported-steps, including 0 for a held control');
     }
     if (initialField?.heldOnly && advanceImportedSteps > 0) {
-      throw new Error('selective-composition-held-only: --advance-imported-steps must be 0');
+      throw new Error(`${initialField.heldOnlyFailure}: --advance-imported-steps must be 0`);
     }
     if (renderPngPath && !initialField) throw new Error('--render-png requires --initial-field-manifest');
     if (renderOnly && (!initialField || !renderPngPath)) {
