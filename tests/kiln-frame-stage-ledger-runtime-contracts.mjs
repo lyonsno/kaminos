@@ -12,6 +12,8 @@ const liveFrame = core.slice(core.indexOf('function renderLiveFrame'), core.inde
 const hybridEncoder = core.slice(core.indexOf('function encodeBoundarySplatSmokeHybrid'), core.indexOf('function encodeBoundarySplatTelemetry'));
 const holdoverActuator = core.slice(core.indexOf('async function actuateSingleFlameHistoryHoldoverFrame'), core.indexOf('function renderLiveFrame'));
 const holdoverRenderer = core.slice(core.indexOf('async function renderBoundarySplatHistorySlotToCanvas'), core.indexOf('function publishPyroDynamicDetail'));
+const activeSetter = core.slice(core.indexOf('async setActive(active)'), core.indexOf('debugState()'));
+const fireEpisodeCloser = page.slice(page.indexOf('async function endSharpBreathingRoomKilnFire'), page.indexOf('window.kaminosSharpBreathingRoomKilnFireDebug'));
 
 assert.match(
   core,
@@ -52,6 +54,22 @@ assert.match(
   holdoverRenderer,
   /'holdover-pre-render-drain'[\s\S]*'history-metadata-readback'[\s\S]*'queue-submit'[\s\S]*'queue-drain'[\s\S]*'draw-state-readback'/,
   'held frames must expose every known synchronization/readback boundary around the shared compositor',
+);
+assert.match(
+  renderLoop,
+  /activeHoldoverRenderPromise\s*=\s*holdoverFramePromise[\s\S]*holdoverFramePromise\.finally/,
+  'the runtime must retain the active asynchronous held frame until its full ledger row closes',
+);
+assert.match(
+  activeSetter,
+  /state\.active\s*=\s*false[\s\S]*cancelAnimationFrame\(raf\)[\s\S]*await activeHoldoverRenderPromise/,
+  'deactivation must prevent another RAF and await the active held frame before returning',
+);
+const quiesceIndex = fireEpisodeCloser.indexOf('await volumePrototype.setActive(false)');
+const ledgerCloseIndex = fireEpisodeCloser.indexOf('volumePrototype.endFireEpisode');
+assert.ok(
+  quiesceIndex >= 0 && ledgerCloseIndex >= 0 && quiesceIndex < ledgerCloseIndex,
+  'the page must quiesce an active volume before closing the exact firing ledger',
 );
 assert.match(
   core,

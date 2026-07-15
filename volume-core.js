@@ -5874,6 +5874,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   });
   let kilnFrameStageLedgerRecording = false;
   let lastKilnFrameStageId = null;
+  let activeHoldoverRenderPromise = null;
 
   function recordKilnFrameStage(frameId, stage, startMs, authority, detail = null) {
     if (!kilnFrameStageLedgerRecording || !frameId) return null;
@@ -10746,7 +10747,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     );
     if (useHoldover) {
       raf = 0;
-      void actuateSingleFlameHistoryHoldoverFrame(now, { stageLedgerFrameId })
+      const holdoverFramePromise = actuateSingleFlameHistoryHoldoverFrame(now, { stageLedgerFrameId })
         .then(result => {
           if (!result.ok && state.active) {
             renderLiveFrame(now, { preserveContinuityDecision: true, stageLedgerFrameId });
@@ -10758,6 +10759,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           if (state.active) raf = requestAnimationFrame(render);
         })
         .catch(stopVolumeRenderOnError);
+      activeHoldoverRenderPromise = holdoverFramePromise;
+      void holdoverFramePromise.finally(() => {
+        if (activeHoldoverRenderPromise === holdoverFramePromise) {
+          activeHoldoverRenderPromise = null;
+        }
+      });
       return;
     }
     raf = requestAnimationFrame(render);
@@ -13451,6 +13458,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         state.active = false;
         canvas.classList.remove('active');
         cancelAnimationFrame(raf);
+        if (activeHoldoverRenderPromise) await activeHoldoverRenderPromise;
         emitStatus({ phase: 'inactive' });
       }
     },

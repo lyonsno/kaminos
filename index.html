@@ -14176,6 +14176,9 @@ async function endSharpBreathingRoomKilnFire(phase = 'complete', options = {}) {
   fireState.phase = phase;
   fireState.finishedAt = new Date().toISOString();
   const foregroundHeartbeat = activeForegroundKilnHeartbeat;
+  if (volumePrototype?.debugState?.().active === true) {
+    await volumePrototype.setActive(false);
+  }
   try {
     fireState.fireEpisodeHooks = volumePrototype.endFireEpisode({
       firingId: fireState.firingId,
