@@ -181,7 +181,8 @@ export function validateWitnessPixelSequence(pngs) {
   try {
     const initialToCombustion = phaseDifference(phases.initial.decoded, phases.combustion.decoded);
     const initialToFinal = phaseDifference(phases.initial.decoded, phases.final.decoded);
-    result.deltas = { initialToCombustion, initialToFinal };
+    const combustionToFinal = phaseDifference(phases.combustion.decoded, phases.final.decoded);
+    result.deltas = { initialToCombustion, initialToFinal, combustionToFinal };
     const minimumWood = Math.max(20, Math.floor(phases.initial.totalPixels * 0.004));
     const minimumText = Math.max(8, Math.floor(phases.initial.totalPixels * 0.00001));
     for (const [name, phase] of Object.entries(phases)) {
@@ -202,8 +203,10 @@ export function validateWitnessPixelSequence(pngs) {
     );
     assert.notEqual(phases.initial.sha256, phases.combustion.sha256, 'combustion screenshot is stale');
     assert.notEqual(phases.initial.sha256, phases.final.sha256, 'fallen screenshot is stale');
+    assert.notEqual(phases.combustion.sha256, phases.final.sha256, 'final screenshot repeats the stale combustion frame');
     assert.ok(initialToCombustion.changedRatio > 0.0005, 'combustion visual lacks a material pixel delta');
     assert.ok(initialToFinal.changedRatio > 0.001, 'fallen visual lacks a material collapse delta');
+    assert.ok(combustionToFinal.changedRatio > 0.001, 'combustion-to-final visual lacks a material collapse delta');
     result.status = 'ok';
     return result;
   } catch (error) {

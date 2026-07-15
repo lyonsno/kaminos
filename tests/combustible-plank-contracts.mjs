@@ -72,6 +72,15 @@ const pixelProof = validateWitnessPixelSequence({
 assert.equal(pixelProof.method, 'decoded-composed-png-phase-regions-v0');
 assert.ok(pixelProof.phases.combustion.flamePixels > pixelProof.phases.initial.flamePixels);
 assert.ok(pixelProof.deltas.initialToFinal.changedRatio > 0, 'pixel proof records visible collapse delta');
+assert.throws(
+  () => validateWitnessPixelSequence({
+    initial: syntheticPng('initial'),
+    combustion: syntheticPng('combustion'),
+    final: syntheticPng('combustion'),
+  }),
+  /combustion.*final|final.*combustion|stale|collapse/i,
+  'a stale combustion frame substituted as final cannot close the witness',
+);
 let blankPixelError = null;
 try {
   validateWitnessPixelSequence({
