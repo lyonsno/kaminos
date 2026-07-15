@@ -130,15 +130,18 @@ const initialState = {
 const state = JSON.parse(JSON.stringify(initialState));
 let diagnosticReadback = null;
 let diagnosticReadbackEncoded = new Map();
+let visualOutput = null;
 
 function resetInvocationState() {
   for (const key of Object.keys(state)) delete state[key];
   Object.assign(state, JSON.parse(JSON.stringify(initialState)));
   diagnosticReadback = null;
   diagnosticReadbackEncoded = new Map();
+  visualOutput = null;
 }
 
 window.samMaskIslandParitySmokeState = () => JSON.parse(JSON.stringify(state));
+window.samMaskIslandVisualOutput = () => visualOutput;
 
 const params = new URLSearchParams(window.location.search);
 const initialManifestUrl = params.get('manifest') || '/oracle/tensor-manifest.json';
@@ -273,7 +276,7 @@ function configureStaticModelPackage(manifest) {
 
 async function resolveBrowserManifest(rootManifest) {
   return resolveSam3BrowserPackageManifest(rootManifest, {
-    readArtifactText: file => fetchText(resolveManifestFile(file)),
+    readArtifactText: file => fetchTextRaw(resolveManifestFile(file)),
     sha256Text,
   });
 }
@@ -3453,12 +3456,51 @@ async function loadPromptFpnPayload(manifest) {
   };
 }
 
-async function main(manifestUrl = initialManifestUrl) {
+async function main(manifestUrl = initialManifestUrl, invocationOptions = {}) {
   try {
+    const verificationMode = invocationOptions.verificationMode || 'reference-parity';
+    if (!['reference-parity', 'execution-only'].includes(verificationMode)) {
+      throw new Error(`unsupported SAM3 verification mode: ${verificationMode}`);
+    }
+    const verificationAttached = verificationMode === 'reference-parity';
+    const hasDynamicInput = Object.hasOwn(invocationOptions, 'promptText') || Object.hasOwn(invocationOptions, 'sourceImage');
+    if (verificationAttached && hasDynamicInput) {
+      throw new Error('dynamic SAM3 input requires verificationMode execution-only');
+    }
+    const invocationId = invocationOptions.invocationId || crypto.randomUUID();
     activeManifestUrl = manifestUrl;
     setStatus('load-oracle-packet');
     const rootManifest = await fetchJson(manifestUrl);
     const { manifest, evidence: packageInvocationEvidence } = await resolveBrowserManifest(rootManifest);
+    if (!verificationAttached) {
+      const promptText = String(invocationOptions.promptText || '').trim();
+      const sourceImage = invocationOptions.sourceImage;
+      if (!promptText) throw new Error('execution-only SAM3 invocation requires a non-empty promptText');
+      if (!sourceImage?.url || !sourceImage?.sha256 || !sourceImage?.artifactId || !Array.isArray(sourceImage?.encodedResolution)) {
+        throw new Error('execution-only SAM3 invocation requires sourceImage url, sha256, artifactId, and encodedResolution');
+      }
+      const sourceImageUrl = new URL(sourceImage.url, window.location.href);
+      if (sourceImageUrl.origin !== window.location.origin) {
+        throw new Error(`execution-only SAM3 source image must be same-origin: ${sourceImageUrl.origin}`);
+      }
+      manifest.prompt = {
+        text: promptText,
+        sha256: await sha256Text(promptText),
+        runtimeOwner: 'browser-workbench',
+      };
+      manifest.sourceImage = {
+        file: sourceImageUrl.href,
+        artifactId: sourceImage.artifactId,
+        sha256: sourceImage.sha256,
+        encodedResolution: sourceImage.encodedResolution,
+        resolution: manifest.sourceImage?.resolution,
+        runtimeOwner: 'browser-workbench',
+      };
+    }
+    state.invocationId = invocationId;
+    state.verificationMode = verificationMode;
+    state.verificationState = verificationAttached ? 'attached' : 'not-attached';
+    state.requestedPromptText = manifest.prompt?.text || null;
     state.packageInvocationEvidence = packageInvocationEvidence;
     if (packageInvocationEvidence) configureStaticModelPackage(manifest);
     if (!SUPPORTED_ROUTE_IDS.has(manifest.routeId)) {
@@ -3498,7 +3540,11 @@ async function main(manifestUrl = initialManifestUrl) {
     const expectedPredLogits = payload.expectedPredLogits;
     const visualShape = payload.maskShape || manifest.shape;
     const hasMaskOutput = Boolean(expectedBinary);
-    const sourceImageUrl = manifest.sourceImage?.file ? resolveManifestFile(manifest.sourceImage.file) : null;
+    const sourceImageUrl = manifest.sourceImage?.file
+      ? manifest.sourceImage.runtimeOwner === 'browser-workbench'
+        ? manifest.sourceImage.file
+        : resolveManifestFile(manifest.sourceImage.file)
+      : null;
     const sourceImageAsset = sourceImageUrl ? await loadSourceImageAsset(sourceImageUrl, manifest.sourceImage) : null;
     const sourceImage = sourceImageAsset?.image || null;
     if (sourceImageAsset) {
@@ -4102,7 +4148,8 @@ async function main(manifestUrl = initialManifestUrl) {
         pixelEmbed: result.debugReadback.pixelEmbed ? Array.from(new Float32Array(result.debugReadback.pixelEmbed).slice(0, 16)) : undefined,
       },
     } : null;
-    if (
+    if (verificationAttached) {
+      if (
       (parity.encoderHiddenStatesMaxAbsDiff ?? 0) > gpuEncoderTolerance
       || (parity.decoderHiddenStatesMaxAbsDiff ?? 0) > gpuDecoderHiddenStatesTolerance
       || (parity.lastHsMaxAbsDiff ?? 0) > gpuLastHsTolerance
@@ -4141,11 +4188,63 @@ async function main(manifestUrl = initialManifestUrl) {
       || (parity.selectedScoreMaxAbsDiff ?? 0) > selectedScoreTolerance
       || (parity.selectedBoxMaxAbsDiff ?? 0) > selectedBoxTolerance
       || parity.binaryMismatchCount > binaryTolerance
-    ) {
-      throw new Error(`WebGPU parity mismatch: ${JSON.stringify(parity)}`);
+      ) {
+        throw new Error(`WebGPU parity mismatch: ${JSON.stringify(parity)}`);
+      }
     }
 
-    if (hasMaskOutput) {
+    const selectionKeep = result.debugReadback.selectionKeep
+      ? new Uint32Array(result.debugReadback.selectionKeep)
+      : null;
+    const selectedCandidateCount = selectionKeep
+      ? selectionKeep.reduce((count, keep) => count + (keep ? 1 : 0), 0)
+      : null;
+    if (!verificationAttached && !gpuBinary) {
+      throw new Error('execution-only SAM3 invocation produced no binary mask readback');
+    }
+    if (gpuBinary) {
+      const maskElementCount = visualShape.height * visualShape.width;
+      const selectedMaskOffset = selectedMaskIndex * maskElementCount;
+      const selectedMask = selectedCandidateCount === 0
+        ? new Uint32Array(maskElementCount)
+        : gpuBinary.slice(selectedMaskOffset, selectedMaskOffset + maskElementCount);
+      const selectedLogits = selectedCandidateCount === 0
+        ? new Float32Array(maskElementCount)
+        : gpuLogits?.slice(selectedMaskOffset, selectedMaskOffset + maskElementCount) || null;
+      const executionAuthority = {
+        outputAuthority: 'actual-webgpu-readback',
+        verificationState: 'not-attached',
+      };
+      visualOutput = {
+        schema: 'kaminos.sam3-semantic-mask-visual-output.v0',
+        invocationId,
+        ...executionAuthority,
+        promptText: manifest.prompt?.text || null,
+        promptSha256: manifest.prompt?.sha256 || null,
+        sourceImage: manifest.sourceImage || null,
+        requestedRouteId: manifest.routeId,
+        effectiveRouteId: result.receipt.effectiveRouteId,
+        receiptChain: (result.compositionRouteReceipts || []).map(receipt => receipt.effectiveRouteId),
+        selectedCandidateCount,
+        selectedMaskIndex: selectedCandidateCount === 0 ? null : selectedMaskIndex,
+        selectedMaskIndexSource,
+        selectedScore: selectedCandidateCount === 0 ? 0 : debugReadbackSamples.selectedScore?.[0] ?? null,
+        selectedBox: selectedCandidateCount === 0
+          ? [0, 0, 0, 0]
+          : result.debugReadback.selectedBox
+            ? Array.from(new Float32Array(result.debugReadback.selectedBox).slice(0, 4))
+            : null,
+        width: visualShape.width,
+        height: visualShape.height,
+        mask: selectedMask,
+        logits: selectedLogits,
+        foregroundPixelCount: selectedMask.reduce((count, value) => count + (value ? 1 : 0), 0),
+        completedAt: new Date().toISOString(),
+      };
+      if (verificationAttached) visualOutput.verificationState = 'verified-passed';
+    }
+
+    if (verificationAttached && hasMaskOutput) {
       drawVisualWitness({
         sourceImage,
         sourceImageIdentity: manifest.sourceImage || null,
@@ -4154,7 +4253,7 @@ async function main(manifestUrl = initialManifestUrl) {
         shape: visualShape,
         selectedMaskIndex,
       });
-    } else {
+    } else if (verificationAttached) {
       drawScoringWitness({
         sourceImage,
         sourceImageIdentity: manifest.sourceImage || null,
@@ -4162,7 +4261,7 @@ async function main(manifestUrl = initialManifestUrl) {
         actual: gpuPredLogits,
       });
     }
-    state.status = 'passed';
+    state.status = verificationAttached ? 'passed' : 'executed';
     state.effectiveRouteId = result.receipt.effectiveRouteId;
     state.sourceImage = manifest.sourceImage || null;
     state.selectedMaskIndex = selectedMaskIndex;
@@ -4236,7 +4335,13 @@ async function main(manifestUrl = initialManifestUrl) {
       logitsDiff: parity.maskLogitsMaxAbsDiff ?? parity.predLogitsMaxAbsDiff,
       binaryMismatch: parity.binaryMismatchCount,
     });
-    setStatus('passed', 'WebGPU parity passed');
+    setStatus(
+      state.status,
+      verificationAttached
+        ? 'WebGPU parity passed'
+        : 'WebGPU execution completed; reference verification not attached',
+    );
+    return visualOutput;
   } catch (error) {
     state.status = 'failed';
     state.error = String(error?.stack || error?.message || error);
@@ -4247,10 +4352,10 @@ async function main(manifestUrl = initialManifestUrl) {
 }
 
 let invocationPromise = null;
-window.runSam3Invocation = manifestUrl => {
+window.runSam3Invocation = (manifestUrl, invocationOptions = {}) => {
   if (invocationPromise) throw new Error('SAM3 browser invocation already in flight');
   resetInvocationState();
-  const run = main(manifestUrl);
+  const run = main(manifestUrl, invocationOptions);
   invocationPromise = run;
   const clearInvocation = () => {
     if (invocationPromise === run) invocationPromise = null;
@@ -4259,4 +4364,4 @@ window.runSam3Invocation = manifestUrl => {
   return run;
 };
 
-window.runSam3Invocation(initialManifestUrl);
+if (params.get('autorun') !== '0') window.runSam3Invocation(initialManifestUrl);
