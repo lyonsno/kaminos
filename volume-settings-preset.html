@@ -29,7 +29,8 @@
     const status = document.getElementById('status');
     const params = new URLSearchParams(location.search);
     const presetId = params.get('preset');
-    const view = params.get('view');
+    const requestedView = params.get('view');
+    const view = requestedView || 'splat-only';
 
     async function loadPreset() {
       if (!presetId) throw new Error('settings preset id is required');
@@ -41,10 +42,10 @@
       if (!response.ok) throw new Error(artifact.error || `settings preset lookup failed: ${response.status}`);
       if (!schemaResponse.ok) throw new Error(`settings preset schema lookup failed: ${schemaResponse.status}`);
       const receipt = validateVolumeSettingsPresetDocument(artifact, presetId, schema);
-      const target = view
-        ? buildVolumeSettingsPresetVisualTarget(receipt, location.origin, view)
-        : buildVolumeSettingsPresetTarget(receipt, location.origin);
-      status.textContent = `${receipt.label || presetId} | requested ${presetId} | effective ${receipt.presetId} | ${receipt.sourcePresetAuthority} | ${receipt.routeVolumeEntries.length} exact volume settings | ${view || 'ordinary-live'} view`;
+      const target = view === 'ordinary-live'
+        ? buildVolumeSettingsPresetTarget(receipt, location.origin)
+        : buildVolumeSettingsPresetVisualTarget(receipt, location.origin, view);
+      status.textContent = `${receipt.label || presetId} | requested ${presetId} | effective ${receipt.presetId} | ${receipt.sourcePresetAuthority} | ${receipt.routeVolumeEntries.length} exact volume settings | requested ${requestedView || 'default'} / effective ${view} view`;
       location.replace(target);
     }
 

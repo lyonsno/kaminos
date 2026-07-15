@@ -287,7 +287,7 @@ def write_volume_settings_preset(store_path, label, payload, source, schema=None
             "controlCount": schema["controlCount"],
             "idempotent": idempotent,
         },
-        "presetUrl": f"/volume-settings-preset.html?preset={preset_id}",
+        "presetUrl": f"/volume-settings-preset.html?preset={preset_id}&view=splat-only",
     }
 
 

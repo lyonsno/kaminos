@@ -12048,7 +12048,7 @@ function selectedVolumeSettingsPresetUrl() {
   const presetId = document.getElementById('settings-preset-select')?.value;
   const entry = volumeSettingsPresetIndex?.entries?.find(candidate => candidate.presetId === presetId);
   if (!entry) throw new Error('select a saved volume settings preset');
-  return `/volume-settings-preset.html?preset=${encodeURIComponent(entry.presetId)}`;
+  return `/volume-settings-preset.html?preset=${encodeURIComponent(entry.presetId)}&view=splat-only`;
 }
 
 function navigateToSelectedVolumeSettingsPreset(openFresh = false) {

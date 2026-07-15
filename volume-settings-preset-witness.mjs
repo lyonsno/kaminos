@@ -13,6 +13,41 @@ const reportPath = resolve(String(args.get('--report') || '/tmp/kaminos-volume-s
 const timeoutMs = Number(args.get('--timeout-ms') || 180000);
 const debugPort = Number(args.get('--debug-port') || randomInt(42000, 62000));
 const label = String(args.get('--label') || 'Automated settings witness').trim();
+const liveDebugExpression = `(() => {
+  return window.__kaminosSelectiveHeadLive?.debugState?.() || null;
+})()`;
+
+function assertSelectiveSplatOnlyState(state, phase, expectedPresetId = null) {
+  assert.equal(state?.routeIdentity, 'exact-basin-selective-head-live-v0', `${phase}: wrong effective route`);
+  assert.equal(state?.status, 'running', `${phase}: selective wrapper is not running`);
+  assert.equal(state?.requestedRole, 'truthHigh', `${phase}: wrong requested role`);
+  assert.equal(state?.effectiveRole, 'truthHigh', `${phase}: requested role silently fell back`);
+  assert.equal(state?.roleAuthority, 'current-high-field-reference-no-learned-composition-v0', `${phase}: wrong role authority`);
+  assert.equal(state?.requestedComposition, 'splat-only-v0', `${phase}: wrong requested composition`);
+  assert.equal(state?.effectiveComposition, 'splat-only-v0', `${phase}: requested composition silently fell back`);
+  assert.equal(state?.fallbackReason, null, `${phase}: selective route reported fallback`);
+  assert.equal(state?.compositionFallbackReason, null, `${phase}: selective composition reported fallback`);
+  assert.equal(state?.boundarySplatFallbackReason, null, `${phase}: boundary splat route reported fallback`);
+  assert.equal(state?.sourceSettingsPresetAuthority, 'shared-volume-settings-preset-v2', `${phase}: settings preset authority is missing`);
+  assert.ok(state?.sourceSettingsPresetStorePath, `${phase}: shared settings store path is missing`);
+  if (expectedPresetId) assert.equal(state?.sourceSettingsPresetId, expectedPresetId, `${phase}: wrong immutable settings preset`);
+  const receipt = state?.selectiveHeadLivePassReceipt;
+  assert.equal(receipt?.identity, 'selective-head-live-render-pass-receipt-v0', `${phase}: pass receipt identity mismatch`);
+  assert.equal(receipt?.composition, 'splat-only-v0', `${phase}: pass receipt composition mismatch`);
+  assert.equal(receipt?.splatEncoded, true, `${phase}: splat pass was not encoded`);
+  assert.equal(receipt?.splatApplied, true, `${phase}: splat pass was not applied`);
+  assert.equal(receipt?.raymarchEncoded, false, `${phase}: raymarch pass was unexpectedly encoded`);
+  assert.equal(receipt?.raymarchApplied, false, `${phase}: raymarch pass was unexpectedly applied`);
+  assert.equal(receipt?.fallbackReason, null, `${phase}: pass receipt reported fallback`);
+}
+
+function operatorContext(body) {
+  return `(() => {
+    const operatorWindow = document.querySelector('#basin')?.contentWindow || window;
+    const operatorDocument = operatorWindow.document;
+    return (${body});
+  })()`;
+}
 let failurePhase = 'argument-validation';
 let lastTrustworthyEvidence = {};
 let browser = null;
@@ -90,24 +125,25 @@ try {
 
   failurePhase = 'source-live-settle';
   const initialState = await waitForValue(initialSocket, `(() => {
-    const state = window.__kaminosVolumePrototype?.debugState?.();
-    if (!state?.active || Number(state.frameCount) < 2) return null;
-    return { frameCount: state.frameCount, simStepCount: state.simStepCount, volumeScene: state.volumeScene };
+    const state = ${liveDebugExpression};
+    if (state?.status !== 'running' || Number(state.frameCount) < 2) return null;
+    return state;
   })()`, timeoutMs);
-  const button = await evaluate(initialSocket, `(() => {
-    const element = document.getElementById('settings-preset-save');
+  assertSelectiveSplatOnlyState(initialState, 'source live target');
+  const button = await evaluate(initialSocket, operatorContext(`(() => {
+    const element = operatorDocument.getElementById('settings-preset-save');
     if (!element || element.disabled || element.dataset.commandWired !== 'true') return null;
     const rect = element.getBoundingClientRect();
     return { width: rect.width, height: rect.height, text: element.textContent };
-  })()`);
+  })()`));
   assert.ok(button?.width > 0 && button?.height > 0, 'settings preset button was unavailable');
   assert.equal(button.text.trim(), 'Save');
-  const labelState = await evaluate(initialSocket, `(() => {
-    const input = document.getElementById('settings-preset-label');
+  const labelState = await evaluate(initialSocket, operatorContext(`(() => {
+    const input = operatorDocument.getElementById('settings-preset-label');
     if (!input) return null;
     input.value = ${JSON.stringify(label)};
     return { value: input.value, width: input.getBoundingClientRect().width };
-  })()`);
+  })()`));
   assert.equal(labelState?.value, label, 'settings preset label input did not accept the requested label');
   assert.ok(labelState?.width > 0, 'settings preset label input was not visible');
   lastTrustworthyEvidence = { initialState, button, labelState };
@@ -115,17 +151,17 @@ try {
   const initialTargetIds = new Set((await targetList()).map(target => target.id));
   failurePhase = 'operator-command';
   const command = await initialSocket.call('Runtime.evaluate', {
-    expression: `(async () => window.__kaminosSaveVolumeSettingsPreset())()`,
+    expression: operatorContext(`operatorWindow.__kaminosSaveVolumeSettingsPreset()`),
     returnByValue: true,
     userGesture: true,
     awaitPromise: true,
   });
   if (command.exceptionDetails) throw new Error(command.exceptionDetails.text || 'settings preset command threw');
   const commandResult = command.result?.value;
-  const commandDiagnostic = await evaluate(initialSocket, `(() => ({
-    captureState: document.getElementById('volume-settings-preset-state')?.textContent || null,
-    info: document.getElementById('info')?.textContent || null,
-  }))()`);
+  const commandDiagnostic = await evaluate(initialSocket, operatorContext(`({
+    captureState: operatorDocument.getElementById('volume-settings-preset-state')?.textContent || null,
+    info: operatorDocument.getElementById('info')?.textContent || null,
+  })`));
   lastTrustworthyEvidence.commandResult = commandResult ?? null;
   lastTrustworthyEvidence.commandDiagnostic = commandDiagnostic;
   assert.ok(commandResult?.effective?.presetId, 'settings preset command completed without an immutable preset id');
@@ -137,7 +173,7 @@ try {
   lastTrustworthyEvidence.cockpitScreenshot = cockpitOut;
 
   const navigation = await initialSocket.call('Runtime.evaluate', {
-    expression: `window.__kaminosNavigateToSelectedVolumeSettingsPreset(true)`,
+    expression: operatorContext(`operatorWindow.__kaminosNavigateToSelectedVolumeSettingsPreset(true)`),
     returnByValue: true,
     userGesture: true,
   });
@@ -155,7 +191,10 @@ try {
   const sourcePresetAuthority = liveUrl.searchParams.get('settings_preset_authority');
   assert.equal(sourcePresetId, commandResult.effective.presetId);
   assert.equal(sourcePresetAuthority, 'shared-volume-settings-preset-v2');
-  for (const forbidden of ['role', 'composition', 'warmup_steps', 'basin_capture', 'basin_source_authority']) {
+  assert.equal(liveUrl.searchParams.get('role'), 'truthHigh');
+  assert.equal(liveUrl.searchParams.get('composition'), 'splat-only-v0');
+  assert.equal(liveUrl.searchParams.get('warmup_steps'), '0');
+  for (const forbidden of ['basin_capture', 'basin_source_authority']) {
     assert.equal(liveUrl.searchParams.has(forbidden), false, `live settings target invented renderer parameter ${forbidden}`);
   }
 
@@ -163,10 +202,11 @@ try {
   await liveSocket.call('Page.enable');
   await liveSocket.call('Runtime.enable');
   const startState = await waitForValue(liveSocket, `(() => {
-    const state = window.__kaminosVolumePrototype?.debugState?.();
-    if (!state?.active || Number(state.frameCount) < 2) return null;
+    const state = ${liveDebugExpression};
+    if (state?.status !== 'running' || Number(state.frameCount) < 2) return null;
     return state;
   })()`, timeoutMs);
+  assertSelectiveSplatOnlyState(startState, 'reopened live target', sourcePresetId);
 
   failurePhase = 'preset-artifact-verification';
   const presetResponse = await fetch(new URL(`/api/volume-settings-preset?id=${encodeURIComponent(sourcePresetId)}`, url));
@@ -180,7 +220,7 @@ try {
     assert.equal(Object.hasOwn(presetDocument.preset, field), false, `settings preset persisted forbidden state field ${field}`);
   }
   const savedRoute = new URL(presetDocument.preset.route);
-  for (const [key, value] of savedRoute.searchParams) {
+  for (const [key, value] of [...savedRoute.searchParams].filter(([key]) => key.startsWith('volume_'))) {
     assert.deepEqual(liveUrl.searchParams.getAll(key), [value], `effective live route changed saved setting ${key}`);
   }
   const savedVolumeKeys = [...savedRoute.searchParams].filter(([key]) => key.startsWith('volume_')).map(([key]) => key);
@@ -189,7 +229,8 @@ try {
 
   failurePhase = 'continuous-observation';
   await delay(5000);
-  const endState = await evaluate(liveSocket, 'window.__kaminosVolumePrototype.debugState()');
+  const endState = await evaluate(liveSocket, liveDebugExpression);
+  assertSelectiveSplatOnlyState(endState, 'reopened live target after observation', sourcePresetId);
   const continuousFrameDelta = Number(endState.frameCount) - Number(startState.frameCount);
   const continuousSimStepDelta = Number(endState.simStepCount) - Number(startState.simStepCount);
   assert.ok(continuousFrameDelta >= 2, 'live render frames did not advance');

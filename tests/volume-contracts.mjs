@@ -140,7 +140,7 @@ assert.match(index, /Bonfire plume \(superseded\)/, 'Bonfire plume remains visib
 assert.match(index, /saveVolumeSettingsPreset/, 'Shared settings persistence uses a named durable orchestration path');
 assert.match(index, /refreshVolumeSettingsPresetList/, 'Shared settings persistence refreshes a server-backed index');
 assert.match(index, /navigateToSelectedVolumeSettingsPreset/, 'Shared settings loading uses one fresh-navigation path for current and new tabs');
-assert.match(index, /preset=\$\{encodeURIComponent\(entry\.presetId\)\}/, 'Load Here and Open Fresh navigate by immutable preset id rather than a mutable alias');
+assert.match(index, /preset=\$\{encodeURIComponent\(entry\.presetId\)\}&view=splat-only/, 'Load Here and Open Fresh navigate by immutable preset id with an explicit operator render view');
 assert.match(index, /validateVolumeSettingsPresetDocument[\s\S]*validateVolumeSettingsPresetTarget/, 'The ordinary live target imports exact preset admission');
 assert.match(index, /async function admitVolumeSettingsPresetRoute[\s\S]*validateVolumeSettingsPresetTarget\(receipt, params\)/, 'The ordinary live target re-reads and validates preset authority instead of trusting route text');
 assert.match(index, /async function initKaminosVolumeRoute\(\) \{[\s\S]*?await admitVolumeSettingsPresetRoute\(params\);[\s\S]*?routedBonfireAblationControls/, 'Preset admission completes before any route settings are applied');
@@ -175,7 +175,15 @@ assert.match(settingsPresetWitness, /failurePhase/, 'Settings witness records it
 assert.match(settingsPresetWitness, /sourcePresetId/, 'Settings witness verifies durable preset identity at the live target');
 assert.match(settingsPresetWitness, /continuousSimStepDelta/, 'Settings witness rejects static live output');
 assert.match(settingsPresetWitness, /visualAuthority:\s*'not-evaluated-settings-persistence-only'/, 'Settings witness does not present ordinary-route screenshots as renderer evidence');
-assert.match(settingsPresetWitness, /window\.__kaminosSaveVolumeSettingsPreset\(\)/, 'Settings witness invokes the exact shared-store UI command implementation');
+assert.match(settingsPresetWitness, /operatorWindow\.__kaminosSaveVolumeSettingsPreset\(\)/, 'Settings witness invokes the exact shared-store UI command implementation');
+const settingsWitnessLiveDebugBlock = settingsPresetWitness.match(/const liveDebugExpression[\s\S]*?\}\)\(\)`;/)?.[0] || '';
+assert.match(settingsWitnessLiveDebugBlock, /window\.__kaminosSelectiveHeadLive\?\.debugState/, 'Settings witness reads renderer evidence from the selective-head wrapper');
+assert.doesNotMatch(settingsWitnessLiveDebugBlock, /__kaminosVolumePrototype/, 'Settings witness cannot substitute an advancing inner prototype for wrapper pass evidence');
+assert.match(settingsPresetWitness, /function assertSelectiveSplatOnlyState[\s\S]*exact-basin-selective-head-live-v0[\s\S]*truthHigh[\s\S]*splat-only-v0/, 'Settings witness requires the exact selective route, role, and composition');
+assert.match(settingsPresetWitness, /assertSelectiveSplatOnlyState[\s\S]*selectiveHeadLivePassReceipt[\s\S]*splatApplied[\s\S]*raymarchApplied/, 'Settings witness verifies the applied splat-only pass tuple');
+assert.match(settingsPresetWitness, /assertSelectiveSplatOnlyState[\s\S]*fallbackReason[\s\S]*compositionFallbackReason[\s\S]*boundarySplatFallbackReason/, 'Settings witness rejects every selective wrapper fallback surface');
+assert.match(settingsPresetWitness, /function operatorContext[\s\S]*querySelector\('#basin'\)[\s\S]*contentWindow/, 'Settings witness locates operator controls inside the wrapper-backed product view');
+assert.match(settingsPresetWitness, /operatorWindow\.__kaminosSaveVolumeSettingsPreset/, 'Settings witness saves through the product view inner window');
 assert.match(settingsPresetWitness, /awaitPromise:\s*true/, 'Settings witness waits for the persistence receipt before following its popup');
 assert.match(settingsPresetWitness, /commandResult\.presetUrl/, 'Settings witness rejects command completion without a durable live route');
 assert.match(settingsPresetWitness, /commandDiagnostic[\s\S]*volume-settings-preset-state/, 'Settings witness preserves the operator-visible save failure when the command returns no artifact');

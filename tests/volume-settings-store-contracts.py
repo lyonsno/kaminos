@@ -105,7 +105,9 @@ def main():
         repeated = serve.write_volume_settings_preset(store, "Operator Basin", payload, source_b, schema)
         assert repeated["effective"]["presetId"] == first["effective"]["presetId"]
         assert repeated["effective"]["idempotent"] is True
-        assert repeated["presetUrl"].endswith(first["effective"]["presetId"])
+        assert repeated["presetUrl"] == (
+            f"/volume-settings-preset.html?preset={first['effective']['presetId']}&view=splat-only"
+        )
 
         create_once_path = store / "create-once-contract.json"
         assert serve._atomic_create_json(create_once_path, {"owner": "first"}) is True

@@ -227,5 +227,15 @@ assert.match(
   /buildVolumeSettingsPresetVisualTarget[\s\S]*params\.get\('view'\)/,
   'an explicit splat-only smoke view is separate from the renderer-agnostic default preset target',
 );
+assert.match(
+  settingsLoader,
+  /const requestedView = params\.get\('view'\);[\s\S]*const view = requestedView \|\| 'splat-only'/,
+  'operator preset loading defaults explicitly to the visible splat-only view',
+);
+assert.match(
+  settingsLoader,
+  /view === 'ordinary-live'[\s\S]*buildVolumeSettingsPresetTarget[\s\S]*buildVolumeSettingsPresetVisualTarget/,
+  'renderer-unspecified ordinary live remains an explicit diagnostic instead of an unlabeled operator default',
+);
 
 console.log('volume settings preset contracts passed');
