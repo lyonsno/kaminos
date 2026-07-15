@@ -448,6 +448,217 @@ function buildGaussians({ samples, assignments, centers, cellSize }) {
   });
 }
 
+function cellCoordinates(cellIndex, grid) {
+  const plane = grid * grid;
+  const z = Math.floor(cellIndex / plane);
+  const remainder = cellIndex - z * plane;
+  const y = Math.floor(remainder / grid);
+  return [remainder - y * grid, y, z];
+}
+
+function extractDenseSmokeIndices(frame, densityThreshold) {
+  const { field, grid, worldSpace } = frame;
+  const minimum = worldSpace.bounds?.minimum || [-1, -1, -1];
+  const maximum = worldSpace.bounds?.maximum || [1, 1, 1];
+  const cellSize = minimum.map((value, axis) => (maximum[axis] - value) / grid);
+  const admitted = new Int32Array(grid ** 3);
+  let activeVoxelCount = 0;
+  let totalSmokeExtinction = 0;
+  let maxSmokeDensity = 0;
+  const stride = KAMINOS_FLUID_CHANNEL_ORDER.length;
+  for (let cellIndex = 0; cellIndex < grid ** 3; cellIndex += 1) {
+    const density = field[cellIndex * stride + CHANNEL.smokeDensity];
+    if (!(density > densityThreshold)) continue;
+    admitted[activeVoxelCount] = cellIndex;
+    activeVoxelCount += 1;
+    totalSmokeExtinction += density;
+    maxSmokeDensity = Math.max(maxSmokeDensity, density);
+  }
+  if (activeVoxelCount === 0) throw new Error(`teacher frame has no smoke samples above density threshold ${densityThreshold}`);
+  return {
+    frame,
+    indices: admitted.slice(0, activeVoxelCount),
+    totalSmokeExtinction,
+    maxSmokeDensity,
+    activeVoxelCount,
+    cellSize,
+    bounds: { minimum, maximum },
+  };
+}
+
+function gaussianForDenseIndices(source, indices) {
+  const { frame, cellSize, bounds } = source;
+  const { field, grid } = frame;
+  const stride = KAMINOS_FLUID_CHANNEL_ORDER.length;
+  const first = [0, 0, 0];
+  const second = [0, 0, 0, 0, 0, 0];
+  const velocity = [0, 0, 0];
+  let mass = 0;
+  let densityMass = 0;
+  let heatMass = 0;
+  for (const cellIndex of indices) {
+    const [x, y, z] = cellCoordinates(cellIndex, grid);
+    const position = [x, y, z].map((coordinate, axis) => bounds.minimum[axis] + (coordinate + 0.5) * cellSize[axis]);
+    const offset = cellIndex * stride;
+    const weight = field[offset + CHANNEL.smokeDensity];
+    mass += weight;
+    first[0] += position[0] * weight;
+    first[1] += position[1] * weight;
+    first[2] += position[2] * weight;
+    second[0] += position[0] * position[0] * weight;
+    second[1] += position[0] * position[1] * weight;
+    second[2] += position[0] * position[2] * weight;
+    second[3] += position[1] * position[1] * weight;
+    second[4] += position[1] * position[2] * weight;
+    second[5] += position[2] * position[2] * weight;
+    velocity[0] += field[offset + CHANNEL.velocityX] * weight;
+    velocity[1] += field[offset + CHANNEL.velocityY] * weight;
+    velocity[2] += field[offset + CHANNEL.velocityZ] * weight;
+    densityMass += weight * weight;
+    heatMass += field[offset + CHANNEL.heat] * weight;
+  }
+  const position = first.map(value => value / mass);
+  const covariance = [
+    second[0] / mass - position[0] * position[0],
+    second[1] / mass - position[0] * position[1],
+    second[2] / mass - position[0] * position[2],
+    second[3] / mass - position[1] * position[1],
+    second[4] / mass - position[1] * position[2],
+    second[5] / mass - position[2] * position[2],
+  ];
+  const rawTrace = covariance[0] + covariance[3] + covariance[5];
+  const minVariance = Math.min(...cellSize.map(size => size * size)) / 12;
+  covariance[0] = Math.max(covariance[0], minVariance);
+  covariance[3] = Math.max(covariance[3], minVariance);
+  covariance[5] = Math.max(covariance[5], minVariance);
+  const eigen = jacobiEigenbasis3x3(covariance);
+  return {
+    gaussian: {
+      position,
+      covariance,
+      eigenValues: eigen.values,
+      orientation: eigen.vectors,
+      radii: eigen.values.map(value => Math.sqrt(Math.max(value, minVariance))),
+      extinctionMass: mass,
+      densityWitness: densityMass / mass,
+      temperatureWitness: heatMass / mass,
+      velocityWitness: velocity.map(value => value / mass),
+      sourceVoxelCount: indices.length,
+    },
+    massWeightedSse: Math.max(0, rawTrace) * mass,
+  };
+}
+
+function makeDenseLeaf(source, indices) {
+  const moment = gaussianForDenseIndices(source, indices);
+  return { indices, ...moment };
+}
+
+function splitDenseLeaf(source, leaf) {
+  const { grid, field } = source.frame;
+  const stride = KAMINOS_FLUID_CHANNEL_ORDER.length;
+  const axisOrder = [0, 1, 2].sort((left, right) => leaf.gaussian.covariance[[0, 3, 5][right]] - leaf.gaussian.covariance[[0, 3, 5][left]]);
+  for (const axis of axisOrder) {
+    const counts = new Uint32Array(grid);
+    const masses = new Float64Array(grid);
+    let totalMass = 0;
+    for (const cellIndex of leaf.indices) {
+      const coordinate = cellCoordinates(cellIndex, grid)[axis];
+      const weight = field[cellIndex * stride + CHANNEL.smokeDensity];
+      counts[coordinate] += 1;
+      masses[coordinate] += weight;
+      totalMass += weight;
+    }
+    let leftCount = 0;
+    let leftMass = 0;
+    let cut = -1;
+    for (let coordinate = 0; coordinate < grid - 1; coordinate += 1) {
+      leftCount += counts[coordinate];
+      leftMass += masses[coordinate];
+      if (leftCount > 0 && leftCount < leaf.indices.length && leftMass >= totalMass / 2) {
+        cut = coordinate;
+        break;
+      }
+    }
+    if (cut < 0) continue;
+    const left = new Int32Array(leftCount);
+    const right = new Int32Array(leaf.indices.length - leftCount);
+    let leftIndex = 0;
+    let rightIndex = 0;
+    for (const cellIndex of leaf.indices) {
+      if (cellCoordinates(cellIndex, grid)[axis] <= cut) {
+        left[leftIndex] = cellIndex;
+        leftIndex += 1;
+      } else {
+        right[rightIndex] = cellIndex;
+        rightIndex += 1;
+      }
+    }
+    return [makeDenseLeaf(source, left), makeDenseLeaf(source, right)];
+  }
+  throw new Error(`cannot split dense smoke leaf containing ${leaf.indices.length} distinct voxels`);
+}
+
+async function recursiveMomentBudgetCurve({ frame, requestedBudgets, densityThreshold, outDir }) {
+  const source = extractDenseSmokeIndices(frame, densityThreshold);
+  const maximumBudget = Math.max(...requestedBudgets);
+  if (maximumBudget > source.activeVoxelCount) {
+    throw new Error(`requested budget ${maximumBudget} exceeds active smoke sample count ${source.activeVoxelCount}; refusing to substitute a hidden cap`);
+  }
+  const requested = new Set(requestedBudgets);
+  const leaves = [makeDenseLeaf(source, source.indices)];
+  const budgetCurve = [];
+  while (leaves.length <= maximumBudget) {
+    if (requested.has(leaves.length)) {
+      const gaussians = leaves.map(leaf => leaf.gaussian).sort((left, right) => (
+        left.position[0] - right.position[0]
+        || left.position[1] - right.position[1]
+        || left.position[2] - right.position[2]
+      ));
+      const totalAssignedExtinction = gaussians.reduce((sum, gaussian) => sum + gaussian.extinctionMass, 0);
+      const artifact = await writeGaussianArtifact(outDir, leaves.length, gaussians);
+      budgetCurve.push({
+        requestedBudget: leaves.length,
+        activeGaussianCount: gaussians.length,
+        iterationCount: 0,
+        splitCount: leaves.length - 1,
+        totalAssignedExtinction,
+        massWeightedSse: leaves.reduce((sum, leaf) => sum + leaf.massWeightedSse, 0),
+        meanSquaredErrorPerExtinction: leaves.reduce((sum, leaf) => sum + leaf.massWeightedSse, 0) / Math.max(source.totalSmokeExtinction, 1e-12),
+        extinctionAccounting: {
+          teacherTotalExtinction: source.totalSmokeExtinction,
+          representedExtinction: totalAssignedExtinction,
+          absoluteError: Math.abs(totalAssignedExtinction - source.totalSmokeExtinction),
+          relativeError: Math.abs(totalAssignedExtinction - source.totalSmokeExtinction) / Math.max(source.totalSmokeExtinction, 1e-12),
+        },
+        covariance: {
+          axisSystem: 'jacobi-eigenbasis-3x3-v0',
+          minRadius: Math.min(...gaussians.flatMap(gaussian => gaussian.radii)),
+          maxRadius: Math.max(...gaussians.flatMap(gaussian => gaussian.radii)),
+          maxEigenValue: Math.max(...gaussians.flatMap(gaussian => gaussian.eigenValues)),
+        },
+        support: supportDiagnostics(gaussians, source.bounds),
+        artifact,
+        preview: gaussians.slice(0, 8),
+      });
+    }
+    if (leaves.length === maximumBudget) break;
+    let splitIndex = -1;
+    let maximumSse = -Infinity;
+    for (let index = 0; index < leaves.length; index += 1) {
+      if (leaves[index].indices.length <= 1) continue;
+      if (leaves[index].massWeightedSse > maximumSse) {
+        maximumSse = leaves[index].massWeightedSse;
+        splitIndex = index;
+      }
+    }
+    if (splitIndex < 0) throw new Error(`cannot reach requested budget ${maximumBudget} without substituting active count`);
+    const children = splitDenseLeaf(source, leaves[splitIndex]);
+    leaves.splice(splitIndex, 1, ...children);
+  }
+  return { source, budgetCurve };
+}
+
 function packGaussians(gaussians) {
   const channelOrder = [
     'positionX', 'positionY', 'positionZ',
@@ -562,27 +773,40 @@ export async function fitSmokeGaussianOracleFrame({
   budgets = [8, 16, 32, 64],
   maxIterations = 12,
   densityThreshold = 0,
+  optimizerStrategy = 'weighted-kmeans',
 } = {}) {
+  const startedAt = performance.now();
   if (!manifestPath) throw new Error('manifestPath is required');
   if (!outDir) throw new Error('outDir is required');
   const requestedBudgets = normalizeBudgets(budgets);
   const iterations = Math.max(1, Math.floor(Number(maxIterations) || 12));
   const threshold = Math.max(0, Number(densityThreshold) || 0);
+  if (!['weighted-kmeans', 'recursive-moment-split'].includes(optimizerStrategy)) throw new Error(`unsupported optimizer strategy ${optimizerStrategy}`);
   await mkdir(outDir, { recursive: true });
   const frame = await loadTeacherFrame(resolve(manifestPath), expectedManifestSha256);
-  const smoke = extractSmokeSamples(frame, threshold);
-  const budgetCurve = [];
-  for (const budget of requestedBudgets) {
-    budgetCurve.push(await fitBudget({
-      samples: smoke.samples,
-      budget,
-      maxIterations: iterations,
-      cellSize: smoke.cellSize,
-      bounds: smoke.bounds,
-      outDir,
-      totalSmokeExtinction: smoke.totalSmokeExtinction,
-    }));
+  const sourceLoadedAt = performance.now();
+  let smoke;
+  let budgetCurve;
+  if (optimizerStrategy === 'recursive-moment-split') {
+    const recursive = await recursiveMomentBudgetCurve({ frame, requestedBudgets, densityThreshold: threshold, outDir });
+    smoke = recursive.source;
+    budgetCurve = recursive.budgetCurve;
+  } else {
+    smoke = extractSmokeSamples(frame, threshold);
+    budgetCurve = [];
+    for (const budget of requestedBudgets) {
+      budgetCurve.push(await fitBudget({
+        samples: smoke.samples,
+        budget,
+        maxIterations: iterations,
+        cellSize: smoke.cellSize,
+        bounds: smoke.bounds,
+        outDir,
+        totalSmokeExtinction: smoke.totalSmokeExtinction,
+      }));
+    }
   }
+  const productsBuiltAt = performance.now();
   const report = {
     schema: 'kaminos.smoke-gaussian-oracle-static-fit-report.v0',
     identity: SMOKE_GAUSSIAN_ORACLE_FIT_IDENTITY,
@@ -611,11 +835,20 @@ export async function fitSmokeGaussianOracleFrame({
     requestedBudgets,
     hiddenBudgetCapApplied: false,
     optimizer: {
-      identity: 'deterministic-weighted-kmeans-anisotropic-moment-fit-v0',
-      maxIterations: iterations,
+      identity: optimizerStrategy === 'recursive-moment-split'
+        ? 'recursive-weighted-moment-split-v0'
+        : 'deterministic-weighted-kmeans-anisotropic-moment-fit-v0',
+      maxIterations: optimizerStrategy === 'recursive-moment-split' ? 0 : iterations,
       densityThreshold: threshold,
       positionAuthority: 'continuous-mass-weighted-world-centroids',
       covarianceAuthority: 'cluster-smoke-density-weighted-world-covariance',
+      sampleSelectionAuthority: 'all-voxels-above-explicit-density-threshold-no-subsampling-v0',
+    },
+    costs: {
+      authority: 'cpu-wall-clock-performance-now-v0',
+      sourceLoadAndValidateMs: sourceLoadedAt - startedAt,
+      optimizerAndProductBuildMs: productsBuiltAt - sourceLoadedAt,
+      totalMs: productsBuiltAt - startedAt,
     },
     budgetCurve,
   };
@@ -655,6 +888,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     .filter(value => value || value === 0);
   const maxIterations = Number(args.get('--max-iterations') || 12);
   const densityThreshold = Number(args.get('--density-threshold') || 0);
+  const optimizerStrategy = args.get('--optimizer') || 'weighted-kmeans';
   try {
     const report = await fitSmokeGaussianOracleFrame({
       manifestPath,
@@ -663,6 +897,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       budgets,
       maxIterations,
       densityThreshold,
+      optimizerStrategy,
     });
     console.log(JSON.stringify(report, null, 2));
   } catch (error) {

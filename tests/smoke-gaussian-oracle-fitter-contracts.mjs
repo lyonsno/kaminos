@@ -193,6 +193,22 @@ try {
   assert.ok(report.budgetCurve[2].massWeightedSse <= report.budgetCurve[0].massWeightedSse);
   assert.ok(existsSync(report.budgetCurve[0].artifact.path), 'each budget writes a concrete Gaussian artifact');
 
+  const recursiveReport = await fitSmokeGaussianOracleFrame({
+    manifestPath,
+    outDir: join(directory, 'recursive-fit'),
+    budgets: [1, 2, 4],
+    densityThreshold: 0.000001,
+    optimizerStrategy: 'recursive-moment-split',
+  });
+  assert.equal(recursiveReport.optimizer.identity, 'recursive-weighted-moment-split-v0');
+  assert.equal(recursiveReport.optimizer.sampleSelectionAuthority, 'all-voxels-above-explicit-density-threshold-no-subsampling-v0');
+  assert.ok(recursiveReport.costs.sourceLoadAndValidateMs >= 0);
+  assert.ok(recursiveReport.costs.optimizerAndProductBuildMs >= 0);
+  assert.ok(recursiveReport.costs.totalMs >= recursiveReport.costs.optimizerAndProductBuildMs);
+  assert.equal(recursiveReport.budgetCurve.every(entry => entry.activeGaussianCount === entry.requestedBudget), true);
+  assert.equal(recursiveReport.budgetCurve.every(entry => entry.extinctionAccounting.relativeError < 1e-6), true);
+  assert.ok(recursiveReport.budgetCurve[2].massWeightedSse <= recursiveReport.budgetCurve[0].massWeightedSse);
+
   await assert.rejects(
     () => fitSmokeGaussianOracleFrame({
       manifestPath,
