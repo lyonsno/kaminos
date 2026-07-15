@@ -12,8 +12,83 @@ assert.equal(kit.SAM31_BROWSER_TRACKER_SESSION_SCHEMA, 'kaminos.sam31-browser-tr
 assert.equal(typeof kit.createSam31BrowserTrackerSession, 'function', 'the inference kit must export the package-backed tracker session');
 assert.equal(typeof kit.runSam31TwoImageBackbone, 'function', 'the inference kit must export the promoted two-image backbone');
 assert.equal(typeof kit.runSam31BrowserTrackerPackageInvocation, 'function', 'the inference kit must export the package-backed invocation driver');
+assert.equal(typeof kit.evaluateSam31TrackerDownstreamParity, 'function', 'the inference kit must export the compound downstream parity evaluator');
 assert.equal(kit.createSam31BrowserTrackerSessionForTest, undefined, 'the lifecycle test seam must not be part of the package API');
 assert.equal(kit.createSam31BrowserTrackerPackageAuthority, undefined, 'the raw runtime authority helper must not be part of the package API');
+
+if (typeof kit.evaluateSam31TrackerDownstreamParity === 'function') {
+  const summary = ({ maxAbsDiff, meanAbsDiff, rootMeanSquareDiff, expectedAtMaxAbsDiff }) => ({
+    elementCount: 1024,
+    maxAbsDiff,
+    meanAbsDiff,
+    rootMeanSquareDiff,
+    maxAbsExpected: Math.abs(expectedAtMaxAbsDiff),
+    maxAbsActual: Math.abs(expectedAtMaxAbsDiff),
+    maxAbsDiffIndex: 7,
+    expectedAtMaxAbsDiff,
+    actualAtMaxAbsDiff: expectedAtMaxAbsDiff + maxAbsDiff,
+  });
+  const tolerances = {
+    memory: { maxAbsDiff: 0.0008, meanAbsDiff: 0.000025, rootMeanSquareDiff: 0.00005, relativeDiffAtMaxAbsDiff: 0.004 },
+    position: { maxAbsDiff: 0.000005, meanAbsDiff: 0.0000001, rootMeanSquareDiff: 0.0000002, relativeDiffAtMaxAbsDiff: 0 },
+    attention: { maxAbsDiff: 0.002, meanAbsDiff: 0.00006, rootMeanSquareDiff: 0.000125, relativeDiffAtMaxAbsDiff: 0.0012 },
+    selectedMasks: { maxAbsDiff: 0.0025, meanAbsDiff: 0.000275, rootMeanSquareDiff: 0.000425, relativeDiffAtMaxAbsDiff: 0.0005 },
+    objectScores: { maxAbsDiff: 0.00015, meanAbsDiff: 0.0003, rootMeanSquareDiff: 0.00035, relativeDiffAtMaxAbsDiff: 0.0001 },
+    objectPointers: { maxAbsDiff: 0.00005, meanAbsDiff: 0.00003, rootMeanSquareDiff: 0.000045, relativeDiffAtMaxAbsDiff: 0.0003 },
+  };
+  const diagnostics = {
+    frame0Memory: {
+      features: summary({ maxAbsDiff: 0.0019183158874511719, meanAbsDiff: 0.0000163027471420385, rootMeanSquareDiff: 0.0000345334655447844, expectedAtMaxAbsDiff: 0.40148764848709106 }),
+      position: summary({ maxAbsDiff: 4.76837158203125e-7, meanAbsDiff: 2.6377142248396393e-8, rootMeanSquareDiff: 5.0456245131076384e-8, expectedAtMaxAbsDiff: -0.29088088870048523 }),
+    },
+    temporalBank: {
+      memoryImage: summary({ maxAbsDiff: 0.0019121766090393066, meanAbsDiff: 0.000023816006377161457, rootMeanSquareDiff: 0.000043751815821820305, expectedAtMaxAbsDiff: -0.49984779953956604 }),
+      memory: summary({ maxAbsDiff: 0.0019183158874511719, meanAbsDiff: 0.000016122087383070475, rootMeanSquareDiff: 0.00003427531686709912, expectedAtMaxAbsDiff: 0.40148764848709106 }),
+      memoryImagePosition: summary({ maxAbsDiff: 4.76837158203125e-7, meanAbsDiff: 2.6689406240620883e-8, rootMeanSquareDiff: 5.5356739058342276e-8, expectedAtMaxAbsDiff: -0.5267646312713623 }),
+      memoryPosition: summary({ maxAbsDiff: 0.000003337860107421875, meanAbsDiff: 3.049080987693742e-8, rootMeanSquareDiff: 8.397723665356406e-8, expectedAtMaxAbsDiff: 6.349081993103027 }),
+    },
+    frame1Attention: summary({ maxAbsDiff: 0.0032601356506347656, meanAbsDiff: 0.00004259872047839225, rootMeanSquareDiff: 0.00008923158881220331, expectedAtMaxAbsDiff: -1.8377070426940918 }),
+    frame1Decoder: {
+      selectedMasks: summary({ maxAbsDiff: 0.004762172698974609, meanAbsDiff: 0.00020913046037987493, rootMeanSquareDiff: 0.00032128836594632904, expectedAtMaxAbsDiff: -7.485759258270264 }),
+      objectScores: summary({ maxAbsDiff: 0.000385284423828125, meanAbsDiff: 0.00022513419389724731, rootMeanSquareDiff: 0.00026561371449116734, expectedAtMaxAbsDiff: 3.3998336791992188 }),
+      objectPointers: summary({ maxAbsDiff: 0.0001850724220275879, meanAbsDiff: 0.00001784950393401985, rootMeanSquareDiff: 0.00002690295763449788, expectedAtMaxAbsDiff: 0.5780418515205383 }),
+    },
+  };
+  const accepted = kit.evaluateSam31TrackerDownstreamParity({ diagnostics, tolerances });
+  assert.equal(accepted.passed, true, 'the measured authenticated 448 downstream distribution must pass the compound FP32 gate');
+  assert.deepEqual(accepted.failedCheckpoints, []);
+  assert.equal(accepted.checkpoints.length, 10, 'every memory, position, attention, and decoder tensor must be checked independently');
+
+  const broadDrift = structuredClone(diagnostics);
+  broadDrift.frame1Decoder.selectedMasks.meanAbsDiff = 0.0003;
+  assert.equal(
+    kit.evaluateSam31TrackerDownstreamParity({ diagnostics: broadDrift, tolerances }).passed,
+    false,
+    'a broadly shifted decoder distribution must fail even when its maximum remains accepted',
+  );
+
+  const sparseOverage = structuredClone(diagnostics);
+  sparseOverage.frame1Attention.maxAbsDiff = 0.0043;
+  assert.equal(
+    kit.evaluateSam31TrackerDownstreamParity({ diagnostics: sparseOverage, tolerances }).passed,
+    false,
+    'a sparse attention outlier beyond the absolute-plus-relative allowance must fail',
+  );
+
+  const auxiliaryOverage = structuredClone(diagnostics);
+  auxiliaryOverage.frame1Decoder.objectPointers.rootMeanSquareDiff = 0.00005;
+  assert.equal(
+    kit.evaluateSam31TrackerDownstreamParity({ diagnostics: auxiliaryOverage, tolerances }).passed,
+    false,
+    'decoder pointer drift must not hide behind the selected-mask distribution',
+  );
+
+  assert.equal(
+    kit.evaluateSam31TrackerDownstreamParity({ diagnostics, tolerances: { decoderMaxAbsDiff: 0.01 } }).passed,
+    false,
+    'legacy absolute-only tolerances must not silently authorize the compound gate',
+  );
+}
 
 function packageRuntimeAuthorityFixture({ verificationAttached, componentAuthorities = null }) {
   const packageId = 'sam31-tracker-model-package:test';

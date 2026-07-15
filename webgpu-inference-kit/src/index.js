@@ -188,6 +188,8 @@ export {
   stableSam3Gelu,
 } from './sam-image-vit-block-stack-phase-program.js';
 
+export { evaluateSam31TrackerDownstreamParity } from './sam31-tracker-parity.js';
+
 export {
   SAM31_IMAGE_PROPAGATION_NECK_PHASE_PROGRAM_ROUTE_ID,
   SAM31_INTERACTIVE_NECK_PHASE_PROGRAM_ROUTE_ID,

@@ -4,6 +4,7 @@ import {
   createSam31BrowserTrackerDualInvocationEvidence,
   createSam31BrowserTrackerPackageCache,
   createSam31BrowserTrackerSession,
+  evaluateSam31TrackerDownstreamParity,
   createRouteInvocationRequest,
   createSam31TrackerState,
   createSam31MemoryAttentionPhaseProgramRouteDefinition,
@@ -645,6 +646,12 @@ async function runInvocation(packageRoot = null, invocationIndex = 0, execution 
       decoderFromAttention: finiteRatio(frame1Decoder.diagnostics.selectedMasks.maxAbsDiff, attentionDiagnostics.maxAbsDiff),
     },
   } : null;
+  const downstreamCompoundParity = verificationAttached
+    ? evaluateSam31TrackerDownstreamParity({
+        diagnostics: downstreamParityDiagnostics,
+        tolerances: episode.tolerances.downstreamCompound,
+      })
+    : null;
   const routeChainPassed = receipts.every((receipt, index) => receipt.status === 'real' && receipt.fallbackReason == null && receipt.effectiveRouteId === requestedRouteIds[index]);
   const suppressionPassed = !verificationAttached
     ? isMaskConditioned && suppression.suppressedAbsentMaskCount === 0 && suppression.semanticsPassed
@@ -667,7 +674,7 @@ async function runInvocation(packageRoot = null, invocationIndex = 0, execution 
   const frame0ProducerParityPassed = !verificationAttached || (isMaskConditioned
     ? maximums.frame0MaskConditioning <= frame0Tolerance && pointerParityPassed
     : maximums.frame0Decoder <= frame0Tolerance);
-  const parityPassed = !verificationAttached || ((imageBackbone?.parityPassed ?? true) && suppressionParity <= frame0Tolerance && frame0ProducerParityPassed && maximums.frame0Memory <= episode.tolerances.memoryMaxAbsDiff && maximums.temporalBank <= episode.tolerances.bankMaxAbsDiff && maximums.frame1Attention <= episode.tolerances.conditionedMaxAbsDiff && maximums.frame1Decoder <= episode.tolerances.decoderMaxAbsDiff);
+  const parityPassed = !verificationAttached || ((imageBackbone?.parityPassed ?? true) && suppressionParity <= frame0Tolerance && frame0ProducerParityPassed && downstreamCompoundParity.passed);
   const packetAuthorityPassed = packetAuthority.passed === true && packetAuthority.verifiedPackets.length === (isTwoImage ? 6 : isMaskConditioned ? 5 : 4);
   const ingressBindingsPassed = !verificationAttached || !isTwoImage || packetAuthority.packets.episode.ingressBindingsPassed === true;
   const evidence = { packetAuthorityPassed, ingressBindingsPassed, pointerPacketInputDigestPassed, pointerPacketOutputDigestPassed, adapterPassed: adapterInfo.isFallbackAdapter === false, routeChainPassed, persistentStatePassed, stateTransitionPassed, parityPassed, verificationContractPassed: verificationAttached ? parityPassed : activePackageRuntime?.packageResolution?.verification?.attached === false, errorsPassed: errors.length === 0 };
@@ -681,7 +688,7 @@ async function runInvocation(packageRoot = null, invocationIndex = 0, execution 
     browserNativeMaskConditioning: trackerStateSnapshot.claims.browserNativeMaskConditioning,
     bridgeDebt: trackerStateSnapshot.bridgeDebt,
   };
-  const final = { invocationIndex, episodeMode, verificationAttached, deviceLoss: execution.deviceLoss || null, packageRuntime: activePackageRuntime ? { rootUrl: activePackageRuntime.rootUrl, packageId: activePackageRuntime.packageId, invocationId: activePackageRuntime.invocationId, verificationId: activePackageRuntime.verificationId, sourceImageSha256: activePackageRuntime.sourceImageSha256, encodedSourceImageSha256: activePackageRuntime.encodedSourceImageSha256, rgbaSourceImageSha256: activePackageRuntime.rgbaSourceImageSha256, initialMaskSha256: activePackageRuntime.initialMaskSha256, session: activePackageRuntime.session, packageResolution: activePackageRuntime.packageResolution, cacheEvidence: activePackageRuntime.cacheEvidence() } : null, packetAuthority, trackerState: trackerStateSnapshot, adapterInfo, requestIds, requestedRouteIds, effectiveRouteIds, receipts, parity: verificationAttached ? { imageBackbone: imageBackbone?.parity ?? null, maximums, downstreamParityDiagnostics, frame0Decoder: frame0Decoder?.parity ?? null, frame0MaskConditioning: frame0MaskConditioning?.parity ?? null, frame0InteractivePointer: frame0InteractivePointer?.parity ?? null, frame0MaskSuppression: { maxAbsDiff: suppressionParity, suppressedAbsentMaskCount: suppression.suppressedAbsentMaskCount, semanticsPassed: suppression.semanticsPassed, memoryInputMaskSha256: memoryInputMaskHash }, frame0Memory: memoryParity, temporalBank: bankParity, frame1Attention: conditionedParity, frame1Decoder: frame1Decoder.parity } : null, imageBackbone: imageBackbone ? { routeChainPassed: imageBackbone.routeChainPassed, parityPassed: imageBackbone.parityPassed, parityMaximum: imageBackbone.parityMaximum, sourceImageSha256: imageBackbone.sourceImageSha256 } : null, stateTransition: effectiveStateTransition, referenceStateTransition, effectiveStateTransition, pointerDigestPassed, pointerPacketInputDigestPassed, pointerPacketOutputDigestPassed, evidence, uncapturedErrors: errors, manifest: { reference: episode.reference, shape: episode.shape, plan: episode.plan } };
+  const final = { invocationIndex, episodeMode, verificationAttached, deviceLoss: execution.deviceLoss || null, packageRuntime: activePackageRuntime ? { rootUrl: activePackageRuntime.rootUrl, packageId: activePackageRuntime.packageId, invocationId: activePackageRuntime.invocationId, verificationId: activePackageRuntime.verificationId, sourceImageSha256: activePackageRuntime.sourceImageSha256, encodedSourceImageSha256: activePackageRuntime.encodedSourceImageSha256, rgbaSourceImageSha256: activePackageRuntime.rgbaSourceImageSha256, initialMaskSha256: activePackageRuntime.initialMaskSha256, session: activePackageRuntime.session, packageResolution: activePackageRuntime.packageResolution, cacheEvidence: activePackageRuntime.cacheEvidence() } : null, packetAuthority, trackerState: trackerStateSnapshot, adapterInfo, requestIds, requestedRouteIds, effectiveRouteIds, receipts, parity: verificationAttached ? { imageBackbone: imageBackbone?.parity ?? null, maximums, downstreamParityDiagnostics, downstreamCompoundParity, frame0Decoder: frame0Decoder?.parity ?? null, frame0MaskConditioning: frame0MaskConditioning?.parity ?? null, frame0InteractivePointer: frame0InteractivePointer?.parity ?? null, frame0MaskSuppression: { maxAbsDiff: suppressionParity, suppressedAbsentMaskCount: suppression.suppressedAbsentMaskCount, semanticsPassed: suppression.semanticsPassed, memoryInputMaskSha256: memoryInputMaskHash }, frame0Memory: memoryParity, temporalBank: bankParity, frame1Attention: conditionedParity, frame1Decoder: frame1Decoder.parity } : null, imageBackbone: imageBackbone ? { routeChainPassed: imageBackbone.routeChainPassed, parityPassed: imageBackbone.parityPassed, parityMaximum: imageBackbone.parityMaximum, sourceImageSha256: imageBackbone.sourceImageSha256 } : null, stateTransition: effectiveStateTransition, referenceStateTransition, effectiveStateTransition, pointerDigestPassed, pointerPacketInputDigestPassed, pointerPacketOutputDigestPassed, evidence, uncapturedErrors: errors, manifest: { reference: episode.reference, shape: episode.shape, plan: episode.plan } };
   if (!evidence.passed) throw Object.assign(new Error(`two-frame tracker evidence failed: ${JSON.stringify(evidence)}`), { evidenceState: final });
   return final;
 }

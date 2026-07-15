@@ -52,6 +52,8 @@ for (const token of [
   'summarizeSam3TensorParityCheckpoint',
   'Float32Array.from',
   'downstreamParityDiagnostics',
+  'evaluateSam31TrackerDownstreamParity',
+  'downstreamCompoundParity.passed',
   'memoryFromPropagation',
   'temporalFromMemory',
   'attentionFromTemporal',
@@ -96,6 +98,7 @@ for (const token of [
   'referenceStateTransition',
   'effectiveStateTransition',
   'parityPassed',
+  'downstreamCompoundParity',
   'packetAuthorityPassed',
   'verifiedPackets.length === (isTwoImage ? 6 : isMaskConditioned ? 5 : 4)',
 ]) {

@@ -82,6 +82,14 @@ assert.deepEqual(manifest.tolerances, {
   memoryMaxAbsDiff: 0.0008,
   bankMaxAbsDiff: 0.0005,
   conditionedMaxAbsDiff: 0.002,
+  downstreamCompound: {
+    memory: { maxAbsDiff: 0.0008, meanAbsDiff: 0.000025, rootMeanSquareDiff: 0.00005, relativeDiffAtMaxAbsDiff: 0.004 },
+    position: { maxAbsDiff: 0.000005, meanAbsDiff: 0.0000001, rootMeanSquareDiff: 0.0000002, relativeDiffAtMaxAbsDiff: 0.0 },
+    attention: { maxAbsDiff: 0.002, meanAbsDiff: 0.00006, rootMeanSquareDiff: 0.000125, relativeDiffAtMaxAbsDiff: 0.0012 },
+    selectedMasks: { maxAbsDiff: 0.0025, meanAbsDiff: 0.000275, rootMeanSquareDiff: 0.000425, relativeDiffAtMaxAbsDiff: 0.0005 },
+    objectScores: { maxAbsDiff: 0.00015, meanAbsDiff: 0.0003, rootMeanSquareDiff: 0.00035, relativeDiffAtMaxAbsDiff: 0.0001 },
+    objectPointers: { maxAbsDiff: 0.00005, meanAbsDiff: 0.00003, rootMeanSquareDiff: 0.000045, relativeDiffAtMaxAbsDiff: 0.0003 },
+  },
 }, 'measured 224px budgets must preserve memory and exact mask-conditioning parity');
 
 const queryHeight = ingressManifest.shape.patchHeight;
