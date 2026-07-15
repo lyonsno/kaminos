@@ -18,10 +18,6 @@ function exactArray(actual, expected, label) {
   }
 }
 
-function exactObject(actual, expected, label) {
-  if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`${label} must match across source corpora`);
-}
-
 async function atomicJsonWrite(path, value) {
   const outputPath = resolve(path);
   await mkdir(dirname(outputPath), { recursive: true });
@@ -30,6 +26,23 @@ async function atomicJsonWrite(path, value) {
   await writeFile(temporaryPath, bytes);
   await rename(temporaryPath, outputPath);
   return { path: outputPath, bytes, sha256: sha256(bytes) };
+}
+
+function validateWarmup(warmup, label, reference = null) {
+  if (!warmup || typeof warmup !== 'object') throw new Error(`${label} corpus warmup receipt is missing`);
+  if (warmup.authority !== 'live-single-browser-sim-step-floor-v0') throw new Error(`${label} warmup authority is invalid`);
+  if (!Number.isInteger(warmup.requestedMinSimStepCount) || warmup.requestedMinSimStepCount < 0) {
+    throw new Error(`${label} warmup requested floor is invalid`);
+  }
+  if (!Number.isInteger(warmup.achievedSimStepCount) || warmup.achievedSimStepCount < warmup.requestedMinSimStepCount) {
+    throw new Error(`${label} warmup achieved floor is invalid`);
+  }
+  if (warmup.uncapped !== true) throw new Error(`${label} warmup must be uncapped`);
+  if (reference && (warmup.authority !== reference.authority
+    || warmup.requestedMinSimStepCount !== reference.requestedMinSimStepCount
+    || warmup.uncapped !== reference.uncapped)) {
+    throw new Error(`${label} warmup policy must match across source corpora`);
+  }
 }
 
 function validateCohorts(cohorts) {
@@ -55,11 +68,10 @@ function validateManifest(manifest, label, reference) {
   if (!Array.isArray(manifest.candidateOrder) || manifest.candidateOrder.length === 0) throw new Error(`${label} candidate order is missing`);
   if (!Array.isArray(manifest.featureOrder) || manifest.featureOrder.length === 0) throw new Error(`${label} feature order is missing`);
   if (!Array.isArray(manifest.frames) || manifest.frames.length === 0) throw new Error(`${label} corpus frames are missing`);
-  if (!manifest.warmup || typeof manifest.warmup !== 'object') throw new Error(`${label} corpus warmup receipt is missing`);
+  validateWarmup(manifest.warmup, label, reference?.warmup);
   if (reference) {
     exactArray(manifest.candidateOrder, reference.candidateOrder, `${label} candidate`);
     exactArray(manifest.featureOrder, reference.featureOrder, `${label} feature`);
-    exactObject(manifest.warmup, reference.warmup, `${label} warmup receipt`);
   }
   const frameIds = new Set();
   for (const [index, frame] of manifest.frames.entries()) {
@@ -132,6 +144,7 @@ export async function composeBoundarySplatSupervisionCorpora({ cohorts, outPath,
         path: source.manifestPath,
         sha256: source.sha256,
         frameCount: source.manifest.frames.length,
+        warmup: structuredClone(source.manifest.warmup),
       })),
     };
 
@@ -148,6 +161,13 @@ export async function composeBoundarySplatSupervisionCorpora({ cohorts, outPath,
     }
     const first = sources[0].manifest;
     const stepDeltas = new Set(sources.map(source => source.manifest.stepDeltaMs));
+    const warmup = {
+      authority: first.warmup.authority,
+      requestedMinSimStepCount: first.warmup.requestedMinSimStepCount,
+      achievedSimStepCount: Math.min(...sources.map(source => source.manifest.warmup.achievedSimStepCount)),
+      uncapped: true,
+      compositionIdentity: 'minimum-achieved-floor-across-source-corpora-v0',
+    };
     const manifest = {
       schema: SCHEMA,
       authority: AUTHORITY,
@@ -157,7 +177,7 @@ export async function composeBoundarySplatSupervisionCorpora({ cohorts, outPath,
       sameBrowserSequenceSuitable: false,
       sequenceAuthority: SEQUENCE_AUTHORITY,
       stepDeltaMs: stepDeltas.size === 1 ? first.stepDeltaMs : null,
-      warmup: first.warmup,
+      warmup,
       composition: {
         identity: COMPOSITION_IDENTITY,
         authority: 'source-hashed-cohort-concatenation-v0',

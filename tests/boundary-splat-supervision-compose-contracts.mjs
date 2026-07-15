@@ -12,8 +12,17 @@ const featureOrder = ['feature'];
 const warmup = {
   authority: 'live-single-browser-sim-step-floor-v0',
   requestedMinSimStepCount: 240,
+  startSimStepCount: 20,
   achievedSimStepCount: 242,
+  advancedFrameCount: 111,
   uncapped: true,
+};
+
+const narrowWarmup = {
+  ...warmup,
+  startSimStepCount: 11,
+  achievedSimStepCount: 241,
+  advancedFrameCount: 115,
 };
 
 function corpus(inputRadius, id = 'frame-000') {
@@ -55,7 +64,7 @@ const narrowPath = join(root, 'narrow.json');
 const outPath = join(root, 'combined.json');
 const reportPath = join(root, 'report.json');
 await writeFile(broadPath, `${JSON.stringify(corpus(0.68), null, 2)}\n`);
-await writeFile(narrowPath, `${JSON.stringify(corpus(0.12), null, 2)}\n`);
+await writeFile(narrowPath, `${JSON.stringify({ ...corpus(0.12), warmup: narrowWarmup }, null, 2)}\n`);
 
 const receipt = await composeBoundarySplatSupervisionCorpora({
   cohorts: [
@@ -75,10 +84,17 @@ assert.equal(combined.sequenceAuthority, 'explicit-multi-corpus-cohort-compositi
 assert.deepEqual(combined.frames.map(frame => frame.id), ['broad/frame-000', 'narrow/frame-000']);
 assert.deepEqual(combined.frames.map(frame => frame.cohort), ['broad', 'narrow']);
 assert.deepEqual(combined.frames.map(frame => frame.controlConditioning.values.inputRadius), [0.68, 0.12]);
-assert.deepEqual(combined.warmup, warmup);
+assert.deepEqual(combined.warmup, {
+  authority: 'live-single-browser-sim-step-floor-v0',
+  requestedMinSimStepCount: 240,
+  achievedSimStepCount: 241,
+  uncapped: true,
+  compositionIdentity: 'minimum-achieved-floor-across-source-corpora-v0',
+});
 assert.equal(combined.composition.structuralValidationOnly, true);
 assert.equal(combined.composition.sources.length, 2);
 assert.match(combined.composition.sources[0].sha256, /^[0-9a-f]{64}$/);
+assert.deepEqual(combined.composition.sources.map(source => source.warmup), [warmup, narrowWarmup]);
 assert.equal(receipt.status, 'composed');
 assert.equal(receipt.output.frameCount, 2);
 
