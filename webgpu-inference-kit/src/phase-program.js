@@ -154,6 +154,7 @@ export function defineWebGpuPhaseProgram(input = {}, options = {}) {
         dispatch: normalizeDispatch(phase.dispatch ?? phase.kernel?.dispatch),
         yieldAfter: phase.yieldAfter ?? input.yieldPolicy?.afterEachKernel ?? false,
         yieldReason: phase.yieldReason || `${input.name}.${phase.name}.post-submit`,
+        commandDuty: clone(phase.commandDuty || {}),
         metadata: clone(phase.metadata || {}),
       };
     }
@@ -202,6 +203,7 @@ export async function runWebGpuPhaseProgram(program, options = {}) {
         dispatch: phase.dispatch,
         yieldAfter: phase.yieldAfter,
         yieldReason: phase.yieldReason,
+        commandDuty: phase.commandDuty,
         metadata: {
           ...phase.metadata,
           phaseMetadata: clone(phase.metadata || {}),

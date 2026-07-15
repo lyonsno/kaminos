@@ -10,6 +10,9 @@ import {
   createWebGpuHostPhaseRecorder,
 } from './host-phase-recorder.js';
 import {
+  createWebGpuCommandDutyRecorder,
+} from './command-duty-descriptor.js';
+import {
   createWebGpuRuntimeProfile,
 } from './runtime-profile.js';
 import {
@@ -312,7 +315,16 @@ async function readBufferViaStaging(runtime, tensor, options = {}) {
   await runOptionalHostPhase(
     runtime,
     WEBGPU_HOST_PHASE.queueSubmission,
-    () => runtime.queue.submit([commandBuffer]),
+    () => runOptionalCommandDuty(runtime, {
+      ...(options.commandDuty || {}),
+      phase: options.commandDuty?.phase || `${tensor.name || 'tensor'}.readback`,
+      kind: 'copy',
+      metadata: {
+        ...(options.commandDuty?.metadata || {}),
+        operation: 'tensor-readback-copy',
+        tensorName: tensor.name || null,
+      },
+    }, () => runtime.queue.submit([commandBuffer])),
     { detail: { operation: 'tensor-readback-copy', tensor: tensor.name || null } },
   );
   const mapped = await runOptionalHostPhase(
@@ -337,7 +349,13 @@ function runOptionalHostPhase(runtime, phase, fn, options = {}) {
   return runtime.hostPhases ? runtime.runHostPhase(phase, fn, options) : fn();
 }
 
-function createStageFacade(runtime, stageState) {
+function runOptionalCommandDuty(runtime, descriptor, submit) {
+  return runtime.commandDuties
+    ? runtime.commandDuties.measureSubmission(descriptor, submit)
+    : submit();
+}
+
+function createStageFacade(runtime, stageState, stageName, stageMetadata) {
   return {
     getShaderModule: runtime.getShaderModule,
     getComputePipeline: runtime.getComputePipeline,
@@ -346,7 +364,19 @@ function createStageFacade(runtime, stageState) {
     readBuffer: runtime.readBuffer,
     createTensor: runtime.createTensor,
     uploadTensor: runtime.uploadTensor,
-    readTensor: runtime.readTensor,
+    readTensor(tensor, options = {}) {
+      return runtime.readTensor(tensor, {
+        ...options,
+        commandDuty: {
+          ...(options.commandDuty || {}),
+          phase: options.commandDuty?.phase || stageName,
+          metadata: {
+            ...(options.commandDuty?.metadata || {}),
+            ...clone(stageMetadata),
+          },
+        },
+      });
+    },
     createUniformBuffer: runtime.createUniformBuffer,
     defineComputeKernel: runtime.defineComputeKernel,
     defineProgram: runtime.defineProgram,
@@ -410,6 +440,16 @@ export async function createWebGpuInferenceRuntime(input = {}) {
         routeId: input.routeId,
         now: input.hostPhases.now || now,
       });
+  if (input.commandDuties != null && (!input.commandDuties || typeof input.commandDuties !== 'object')) {
+    throw new TypeError('commandDuties must be an object when provided');
+  }
+  const commandDuties = input.commandDuties == null
+    ? null
+    : createWebGpuCommandDutyRecorder({
+        ...input.commandDuties,
+        routeId: input.routeId,
+        now: input.commandDuties.now || now,
+      });
 
   const runtime = {
     schema: WEBGPU_INFERENCE_RUNTIME_SCHEMA,
@@ -423,6 +463,7 @@ export async function createWebGpuInferenceRuntime(input = {}) {
     profile: stagedProfile,
     caches: resourceCaches,
     hostPhases,
+    commandDuties,
 
     getShaderModule(label, code, descriptor) {
       return resourceCaches.getShaderModule(label, code, descriptor);
@@ -517,6 +558,13 @@ export async function createWebGpuInferenceRuntime(input = {}) {
       return hostPhases.finish();
     },
 
+    finishCommandDuties() {
+      if (!commandDuties) {
+        throw new Error('command duty recording is not configured for this runtime');
+      }
+      return commandDuties.finish();
+    },
+
     async runKernel(kernelDefinition, options = {}) {
       if (!kernelDefinition || typeof kernelDefinition !== 'object') {
         throw new Error('kernelDefinition must be an object');
@@ -572,7 +620,16 @@ export async function createWebGpuInferenceRuntime(input = {}) {
           await runOptionalHostPhase(
             runtime,
             WEBGPU_HOST_PHASE.queueSubmission,
-            () => queue.submit([commandBuffer]),
+            () => runOptionalCommandDuty(runtime, {
+              ...(options.commandDuty || {}),
+              phase: options.commandDuty?.phase || stageName,
+              kind: 'compute',
+              metadata: {
+                ...(options.commandDuty?.metadata || {}),
+                ...metadata,
+                operation: 'kernel-dispatch',
+              },
+            }, () => queue.submit([commandBuffer])),
             { detail: { operation: 'kernel-dispatch', kernelName: kernelDefinition.name } },
           );
         }
@@ -595,7 +652,7 @@ export async function createWebGpuInferenceRuntime(input = {}) {
 
       const stageState = { yields: [] };
       const startMs = now();
-      const result = await fn(createStageFacade(runtime, stageState));
+      const result = await fn(createStageFacade(runtime, stageState, name, metadata));
       const endMs = now();
       addStagedSubmitStage(stagedProfile, {
         name,

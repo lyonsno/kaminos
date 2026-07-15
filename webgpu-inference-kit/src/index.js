@@ -84,6 +84,9 @@ export {
 export {
   WEBGPU_COMMAND_DUTY_DESCRIPTOR_SCHEMA,
   WEBGPU_COMMAND_DUTY_OBSERVATION_SCHEMA,
+  WEBGPU_COMMAND_DUTY_REPORT_SCHEMA,
+  createWebGpuCommandDutyObservationFromReport,
+  createWebGpuCommandDutyRecorder,
   createWebGpuCommandDutyDescriptor,
   createWebGpuCommandDutyObservation,
 } from './command-duty-descriptor.js';
