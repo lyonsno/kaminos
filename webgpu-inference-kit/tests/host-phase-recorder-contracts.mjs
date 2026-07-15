@@ -37,6 +37,16 @@ assert.equal(liveSnapshot.runId, runId);
 assert.deepEqual(liveSnapshot.clock, clock);
 
 recorder.end(preprocessing, { detail: { outputShape: [1, 3, 512, 512] } });
+assert.throws(
+  () => projectWebGpuHostPhaseEvents(recorder.snapshot(), {
+    firingId: 'kiln-firing-prefix',
+    expectedRouteId: routeId,
+    expectedRunId: runId,
+    expectedClockId: clock.clockId,
+  }),
+  /terminal host phase report/,
+  'a between-phase recording prefix must not project as complete foreground evidence',
+);
 const encoded = await recorder.measure(
   WEBGPU_HOST_PHASE.commandEncoding,
   async () => 'encoded',
@@ -92,6 +102,39 @@ assert.deepEqual(report.intervals[0].detail, {
   outputShape: [1, 3, 512, 512],
 });
 
+const originalOperationError = new Error('original readback failure');
+const failingClockTicks = [1, 2, 10, 5];
+const recorderFailure = createWebGpuHostPhaseRecorder({
+  routeId,
+  runId: 'recorder-failure-run',
+  clock,
+  now: () => failingClockTicks.shift(),
+});
+const trustworthyPhase = recorderFailure.begin(WEBGPU_HOST_PHASE.cpuPreprocess);
+recorderFailure.end(trustworthyPhase);
+await assert.rejects(
+  () => recorderFailure.measure(
+    WEBGPU_HOST_PHASE.readback,
+    async () => {
+      throw originalOperationError;
+    },
+  ),
+  error => error === originalOperationError,
+  'instrumentation failure must not replace the exact measured operation error',
+);
+const recorderFailureSnapshot = recorderFailure.snapshot();
+assert.equal(recorderFailureSnapshot.activeIntervalCount, 0);
+assert.equal(recorderFailureSnapshot.intervalCount, 1);
+assert.deepEqual(recorderFailureSnapshot.lastTrustworthyInterval, recorderFailureSnapshot.intervals[0]);
+assert.equal(recorderFailureSnapshot.lastTrustworthyInterval.phase, 'cpu-preprocess');
+assert.deepEqual(recorderFailureSnapshot.failure, {
+  intervalId: 'recorder-failure-run:host-phase:1',
+  phase: 'readback',
+  error: { name: 'Error', message: 'original readback failure' },
+  recordingError: { name: 'Error', message: 'host phase clock moved backwards; interval was not recorded' },
+});
+assert.equal(recorderFailure.finish().status, 'failed');
+
 const projected = projectWebGpuHostPhaseEvents(report, {
   firingId: 'kiln-firing-a',
   expectedRouteId: routeId,
@@ -131,6 +174,25 @@ assert.deepEqual(
     endEpochMs: interval.endEpochMs,
   })),
 );
+
+for (const [name, mutate, pattern] of [
+  ['phase', interval => { interval.phase = 'bogus-phase'; }, /phase is invalid/],
+  ['outcome', interval => { interval.outcome = 'teleported'; }, /outcome is invalid/],
+  ['duration', interval => { interval.durationMs = 999; }, /duration is invalid/],
+]) {
+  const corrupted = JSON.parse(JSON.stringify(report));
+  mutate(corrupted.intervals[0]);
+  assert.throws(
+    () => projectWebGpuHostPhaseEvents(corrupted, {
+      firingId: `kiln-firing-corrupt-${name}`,
+      expectedRouteId: routeId,
+      expectedRunId: runId,
+      expectedClockId: clock.clockId,
+    }),
+    pattern,
+    `${name} corruption must fail before projection is marked verified`,
+  );
+}
 
 for (const [name, options, pattern] of [
   ['route', { expectedRouteId: 'stale-route', expectedRunId: runId, expectedClockId: clock.clockId }, /route identity mismatch/],

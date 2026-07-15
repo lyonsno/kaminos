@@ -133,6 +133,7 @@ export function createWebGpuHostPhaseRecorder(input = {}) {
       detail,
     };
     if (outcome === 'failed') interval.error = normalizeError(options.error);
+    const result = clone(interval);
 
     active.delete(token);
     intervals.push(interval);
@@ -143,7 +144,25 @@ export function createWebGpuHostPhaseRecorder(input = {}) {
         error: clone(interval.error),
       };
     }
-    return clone(interval);
+    return result;
+  }
+
+  function recordFailure(token, error, options = {}) {
+    const pending = active.get(token);
+    if (!pending) return closeInterval(token, 'failed', { ...options, error });
+    try {
+      return closeInterval(token, 'failed', { ...options, error });
+    } catch (recordingError) {
+      active.delete(token);
+      const fallback = {
+        intervalId: pending.intervalId,
+        phase: pending.phase,
+        error: normalizeError(error),
+        recordingError: normalizeError(recordingError),
+      };
+      if (failure === null) failure = fallback;
+      return { recorded: false, failure: clone(fallback) };
+    }
   }
 
   function snapshot() {
@@ -175,7 +194,7 @@ export function createWebGpuHostPhaseRecorder(input = {}) {
     },
 
     fail(token, error, options = {}) {
-      return closeInterval(token, 'failed', { ...options, error });
+      return recordFailure(token, error, options);
     },
 
     async measure(phase, fn, options = {}) {
@@ -186,7 +205,7 @@ export function createWebGpuHostPhaseRecorder(input = {}) {
         closeInterval(token, 'succeeded', options.finish || {});
         return result;
       } catch (error) {
-        closeInterval(token, 'failed', { ...(options.failure || {}), error });
+        recordFailure(token, error, options.failure || {});
         throw error;
       }
     },
@@ -217,6 +236,9 @@ export function projectWebGpuHostPhaseEvents(report, options = {}) {
   if (!report || report.schema !== WEBGPU_HOST_PHASE_RECORDER_SCHEMA) {
     throw new TypeError('host phase recorder report schema is required');
   }
+  if (report.status !== 'succeeded' && report.status !== 'failed') {
+    throw new Error('terminal host phase report status is required before projection');
+  }
   const firingId = validateIdentity('firingId', options.firingId);
   assertProjectionIdentity(report, options);
   if (report.retention !== 'uncapped' || report.intervalCount !== report.intervals?.length) {
@@ -230,12 +252,19 @@ export function projectWebGpuHostPhaseEvents(report, options = {}) {
     if (interval.routeId !== report.routeId) throw new Error('host phase interval route identity mismatch');
     if (interval.runId !== report.runId) throw new Error('host phase interval run identity mismatch');
     if (interval.clockId !== report.clock.clockId) throw new Error('host phase interval clock identity mismatch');
+    if (!HOST_PHASES.has(interval.phase)) throw new Error('host phase interval phase is invalid');
+    if (interval.outcome !== 'succeeded' && interval.outcome !== 'failed') {
+      throw new Error('host phase interval outcome is invalid');
+    }
     if (!Number.isFinite(interval.startMs)
       || !Number.isFinite(interval.endMs)
       || interval.endMs < interval.startMs
       || interval.startEpochMs !== report.clock.timeOriginEpochMs + interval.startMs
       || interval.endEpochMs !== report.clock.timeOriginEpochMs + interval.endMs) {
       throw new Error('host phase interval timing is invalid');
+    }
+    if (!Number.isFinite(interval.durationMs) || interval.durationMs !== interval.endMs - interval.startMs) {
+      throw new Error('host phase interval duration is invalid');
     }
     return {
       eventId: interval.intervalId,
