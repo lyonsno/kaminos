@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { deflateSync } from 'node:zlib';
 import { KAMINOS_FLUID_CHANNEL_ORDER } from './smoke-splat-field-hierarchy.mjs';
 
 export const SMOKE_GAUSSIAN_ORACLE_FIT_IDENTITY = 'smoke-gaussian-oracle-static-fit-v0';
@@ -259,6 +260,337 @@ function extractSmokeSamples(frame, densityThreshold) {
     cellSize,
     bounds: { minimum, maximum },
   };
+}
+
+function normalizeTomographyThresholds(thresholds) {
+  if (!Array.isArray(thresholds) || thresholds.length === 0) {
+    throw new Error('at least one smoke tomography threshold is required');
+  }
+  const normalized = thresholds.map(value => Number(value));
+  if (!normalized.every(value => Number.isFinite(value) && value >= 0)) {
+    throw new Error('smoke tomography thresholds must be finite and nonnegative');
+  }
+  for (let index = 1; index < normalized.length; index += 1) {
+    if (!(normalized[index] > normalized[index - 1])) {
+      throw new Error('smoke tomography thresholds must be strictly increasing');
+    }
+  }
+  return normalized;
+}
+
+function worldBoundsForGridBounds(gridBounds, worldBounds, grid) {
+  if (!gridBounds) return null;
+  const minimum = worldBounds?.minimum || [-1, -1, -1];
+  const maximum = worldBounds?.maximum || [1, 1, 1];
+  return {
+    minimum: gridBounds.minimum.map((value, axis) => (
+      minimum[axis] + (value / grid) * (maximum[axis] - minimum[axis])
+    )),
+    maximum: gridBounds.maximum.map((value, axis) => (
+      minimum[axis] + ((value + 1) / grid) * (maximum[axis] - minimum[axis])
+    )),
+  };
+}
+
+function countMask(mask) {
+  let count = 0;
+  for (const value of mask) count += value !== 0 ? 1 : 0;
+  return count;
+}
+
+export function analyzeSmokeFieldTomography(frame, { thresholds = [0, 0.001, 0.01, 0.05, 0.1, 0.25, 0.5, 1] } = {}) {
+  const grid = Number(frame?.grid);
+  if (!Number.isInteger(grid) || grid <= 0) throw new Error(`tomography grid is invalid: ${frame?.grid}`);
+  const field = frame?.field;
+  const expectedLength = grid * grid * grid * KAMINOS_FLUID_CHANNEL_ORDER.length;
+  if (!(field instanceof Float32Array) || field.length !== expectedLength) {
+    throw new Error(`tomography field length mismatch: ${field?.length ?? '(missing)'} != ${expectedLength}`);
+  }
+  const requestedThresholds = normalizeTomographyThresholds(thresholds);
+  const projectionPixels = grid * grid;
+  const states = requestedThresholds.map(threshold => ({
+    threshold,
+    occupiedVoxelCount: 0,
+    retainedSmokeExtinction: 0,
+    minimum: [grid, grid, grid],
+    maximum: [-1, -1, -1],
+    boundaryShellOccupiedVoxelCount: 0,
+    masks: {
+      xy: new Uint8Array(projectionPixels),
+      xz: new Uint8Array(projectionPixels),
+      yz: new Uint8Array(projectionPixels),
+    },
+    occupiedVoxelsByAxisSlice: {
+      x: new Uint32Array(grid),
+      y: new Uint32Array(grid),
+      z: new Uint32Array(grid),
+    },
+  }));
+  let totalSmokeExtinction = 0;
+  let maxSmokeDensity = 0;
+  let nonzeroSmokeVoxelCount = 0;
+
+  for (let z = 0; z < grid; z += 1) {
+    for (let y = 0; y < grid; y += 1) {
+      for (let x = 0; x < grid; x += 1) {
+        const offset = ((z * grid * grid) + (y * grid) + x) * KAMINOS_FLUID_CHANNEL_ORDER.length;
+        const density = Math.max(0, field[offset + CHANNEL.smokeDensity]);
+        if (density > 0) {
+          nonzeroSmokeVoxelCount += 1;
+          totalSmokeExtinction += density;
+          maxSmokeDensity = Math.max(maxSmokeDensity, density);
+        }
+        for (const state of states) {
+          if (!(density > state.threshold)) break;
+          state.occupiedVoxelCount += 1;
+          state.retainedSmokeExtinction += density;
+          state.minimum[0] = Math.min(state.minimum[0], x);
+          state.minimum[1] = Math.min(state.minimum[1], y);
+          state.minimum[2] = Math.min(state.minimum[2], z);
+          state.maximum[0] = Math.max(state.maximum[0], x);
+          state.maximum[1] = Math.max(state.maximum[1], y);
+          state.maximum[2] = Math.max(state.maximum[2], z);
+          if (x === 0 || y === 0 || z === 0 || x === grid - 1 || y === grid - 1 || z === grid - 1) {
+            state.boundaryShellOccupiedVoxelCount += 1;
+          }
+          state.masks.xy[(y * grid) + x] = 1;
+          state.masks.xz[(z * grid) + x] = 1;
+          state.masks.yz[(z * grid) + y] = 1;
+          state.occupiedVoxelsByAxisSlice.x[x] += 1;
+          state.occupiedVoxelsByAxisSlice.y[y] += 1;
+          state.occupiedVoxelsByAxisSlice.z[z] += 1;
+        }
+      }
+    }
+  }
+
+  const totalVoxelCount = grid ** 3;
+  const worldBounds = frame.worldSpace?.bounds || { minimum: [-1, -1, -1], maximum: [1, 1, 1] };
+  const thresholdSweep = states.map(state => {
+    const gridBounds = state.occupiedVoxelCount > 0
+      ? { minimum: state.minimum, maximum: state.maximum }
+      : null;
+    const projections = Object.fromEntries(Object.entries(state.masks).map(([axis, mask]) => {
+      const occupiedPixelCount = countMask(mask);
+      return [axis, {
+        width: grid,
+        height: grid,
+        occupiedPixelCount,
+        occupiedPixelFraction: occupiedPixelCount / projectionPixels,
+        mask,
+      }];
+    }));
+    return {
+      threshold: state.threshold,
+      occupiedVoxelCount: state.occupiedVoxelCount,
+      occupiedVoxelFraction: state.occupiedVoxelCount / totalVoxelCount,
+      retainedSmokeExtinction: state.retainedSmokeExtinction,
+      retainedSmokeExtinctionFraction: state.retainedSmokeExtinction / Math.max(totalSmokeExtinction, Number.EPSILON),
+      boundaryShellOccupiedVoxelCount: state.boundaryShellOccupiedVoxelCount,
+      boundaryShellFractionOfOccupied: state.boundaryShellOccupiedVoxelCount / Math.max(state.occupiedVoxelCount, 1),
+      gridBounds,
+      worldBounds: worldBoundsForGridBounds(gridBounds, worldBounds, grid),
+      occupiedVoxelsByAxisSlice: state.occupiedVoxelsByAxisSlice,
+      projections,
+    };
+  });
+
+  return {
+    identity: 'smoke-held-field-tomography-v0',
+    grid,
+    channel: 'smokeDensity',
+    channelIndex: CHANNEL.smokeDensity,
+    requestedThresholds,
+    effectiveThresholds: [...requestedThresholds],
+    hiddenThresholdCapApplied: false,
+    totalVoxelCount,
+    nonzeroSmokeVoxelCount,
+    nonzeroSmokeVoxelFraction: nonzeroSmokeVoxelCount / totalVoxelCount,
+    totalSmokeExtinction,
+    maxSmokeDensity,
+    thresholdSweep,
+  };
+}
+
+function crc32(buffer) {
+  let crc = 0xffffffff;
+  for (const byte of buffer) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type, data) {
+  const typeBytes = Buffer.from(type, 'ascii');
+  const chunk = Buffer.alloc(12 + data.length);
+  chunk.writeUInt32BE(data.length, 0);
+  typeBytes.copy(chunk, 4);
+  data.copy(chunk, 8);
+  chunk.writeUInt32BE(crc32(Buffer.concat([typeBytes, data])), data.length + 8);
+  return chunk;
+}
+
+export function renderSmokeFieldTomographyPng(tomography, { cellScale = 2, gap = 2 } = {}) {
+  const scale = Math.max(1, Math.floor(Number(cellScale) || 1));
+  const panelGap = Math.max(0, Math.floor(Number(gap) || 0));
+  const grid = tomography?.grid;
+  const rows = tomography?.thresholdSweep;
+  if (!Number.isInteger(grid) || !Array.isArray(rows) || rows.length === 0) {
+    throw new Error('valid smoke tomography result is required for rendering');
+  }
+  const projectionKeys = ['xy', 'xz', 'yz'];
+  const panelSize = grid * scale;
+  const width = (projectionKeys.length * panelSize) + ((projectionKeys.length - 1) * panelGap);
+  const height = (rows.length * panelSize) + ((rows.length - 1) * panelGap);
+  const stride = width * 4;
+  const rgba = Buffer.alloc(width * height * 4);
+  for (let offset = 0; offset < rgba.length; offset += 4) {
+    rgba[offset] = 6;
+    rgba[offset + 1] = 8;
+    rgba[offset + 2] = 10;
+    rgba[offset + 3] = 255;
+  }
+  rows.forEach((row, rowIndex) => {
+    projectionKeys.forEach((projectionKey, columnIndex) => {
+      const mask = row.projections?.[projectionKey]?.mask;
+      if (!(mask instanceof Uint8Array) || mask.length !== grid * grid) {
+        throw new Error(`tomography ${projectionKey} projection mask is invalid`);
+      }
+      const originX = columnIndex * (panelSize + panelGap);
+      const originY = rowIndex * (panelSize + panelGap);
+      const rowMix = rows.length === 1 ? 0 : rowIndex / (rows.length - 1);
+      const color = [255, Math.round(116 + (84 * rowMix)), Math.round(42 + (82 * rowMix))];
+      for (let sourceY = 0; sourceY < grid; sourceY += 1) {
+        for (let sourceX = 0; sourceX < grid; sourceX += 1) {
+          if (mask[(sourceY * grid) + sourceX] === 0) continue;
+          for (let dy = 0; dy < scale; dy += 1) {
+            for (let dx = 0; dx < scale; dx += 1) {
+              const targetX = originX + (sourceX * scale) + dx;
+              const targetY = originY + ((grid - 1 - sourceY) * scale) + dy;
+              const targetOffset = (targetY * stride) + (targetX * 4);
+              rgba[targetOffset] = color[0];
+              rgba[targetOffset + 1] = color[1];
+              rgba[targetOffset + 2] = color[2];
+              rgba[targetOffset + 3] = 255;
+            }
+          }
+        }
+      }
+    });
+  });
+  const raw = Buffer.alloc((stride + 1) * height);
+  for (let y = 0; y < height; y += 1) {
+    raw[y * (stride + 1)] = 0;
+    rgba.copy(raw, (y * (stride + 1)) + 1, y * stride, (y + 1) * stride);
+  }
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8;
+  header[9] = 6;
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', header),
+    pngChunk('IDAT', deflateSync(raw)),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+function serializableTomography(tomography) {
+  return {
+    ...tomography,
+    thresholdSweep: tomography.thresholdSweep.map(row => ({
+      ...row,
+      occupiedVoxelsByAxisSlice: Object.fromEntries(
+        Object.entries(row.occupiedVoxelsByAxisSlice).map(([axis, values]) => [axis, Array.from(values)]),
+      ),
+      projections: Object.fromEntries(
+        Object.entries(row.projections).map(([axis, projection]) => [axis, {
+          width: projection.width,
+          height: projection.height,
+          occupiedPixelCount: projection.occupiedPixelCount,
+          occupiedPixelFraction: projection.occupiedPixelFraction,
+        }]),
+      ),
+    })),
+  };
+}
+
+export async function writeSmokeFieldTomographyWitness({
+  manifestPath,
+  expectedManifestSha256,
+  outDir,
+  thresholds = [0, 0.001, 0.01, 0.05, 0.1, 0.25, 0.5, 1],
+  cellScale = 2,
+} = {}) {
+  if (!outDir) throw new Error('outDir is required');
+  await mkdir(outDir, { recursive: true });
+  const requestedThresholds = Array.isArray(thresholds) ? thresholds.map(Number) : thresholds;
+  let failurePhase = 'load-source';
+  try {
+    const frame = await loadChecksumBoundSmokeTeacherFrame(resolve(manifestPath), expectedManifestSha256);
+    failurePhase = 'analyze-field';
+    const tomography = analyzeSmokeFieldTomography(frame, { thresholds });
+    if (tomography.thresholdSweep[0].occupiedVoxelCount === 0) {
+      throw new Error('lowest requested threshold produced blank smoke support');
+    }
+    failurePhase = 'render-witness';
+    const png = renderSmokeFieldTomographyPng(tomography, { cellScale });
+    const imagePath = join(outDir, 'tomography.png');
+    await writeFile(imagePath, png);
+    const report = {
+      schema: 'kaminos.smoke-held-field-tomography-report.v0',
+      identity: 'smoke-held-field-tomography-witness-v0',
+      status: 'passed',
+      failurePhase: null,
+      createdAt: new Date().toISOString(),
+      source: {
+        manifestPath: frame.manifestPath,
+        manifestIdentity: frame.manifestIdentity,
+        sourceSchema: frame.sourceSchema,
+        captureId: frame.captureId,
+        simStepCount: frame.simStepCount,
+        sourceCaptureIdentity: frame.sourceCaptureIdentity,
+        fluidPath: frame.fluidPath,
+        fluidIdentity: frame.fluidIdentity,
+        cameraIdentity: frame.cameraIdentity,
+        effectiveRoute: frame.manifest.effectiveRoute,
+        prototypeIdentity: frame.manifest.prototypeIdentity,
+        backend: frame.manifest.backend,
+        grid: frame.grid,
+        worldSpace: frame.worldSpace,
+      },
+      requestedThresholds: [...tomography.requestedThresholds],
+      effectiveThresholds: [...tomography.effectiveThresholds],
+      hiddenThresholdCapApplied: false,
+      tomography: serializableTomography(tomography),
+      witness: {
+        path: imagePath,
+        identity: `sha256:${sha256(png)}`,
+        projectionOrder: ['xy', 'xz', 'yz'],
+        thresholdRowOrder: [...tomography.effectiveThresholds],
+        cellScale: Math.max(1, Math.floor(Number(cellScale) || 1)),
+        registration: 'grid-cell-exact-orthographic-occupancy-mask-v0',
+      },
+    };
+    await writeFile(join(outDir, 'tomography-report.json'), `${JSON.stringify(report, null, 2)}\n`);
+    return report;
+  } catch (error) {
+    const failure = {
+      schema: 'kaminos.smoke-held-field-tomography-report.v0',
+      identity: 'smoke-held-field-tomography-witness-v0',
+      status: 'failed',
+      failurePhase,
+      createdAt: new Date().toISOString(),
+      requestedThresholds,
+      hiddenThresholdCapApplied: false,
+      message: error?.message || String(error),
+      stack: error?.stack || null,
+    };
+    await writeFile(join(outDir, 'tomography-report.json'), `${JSON.stringify(failure, null, 2)}\n`);
+    throw error;
+  }
 }
 
 function squaredDistance(left, right) {
