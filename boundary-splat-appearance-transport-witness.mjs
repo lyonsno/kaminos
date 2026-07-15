@@ -115,7 +115,7 @@ async function loadFloatArtifact(artifact, stride, label, authority) {
   }
   const view = new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4);
   if (view.length !== artifact.count * stride) throw new Error(`${label} count mismatch`);
-  return { values: new Float32Array(view), count: artifact.count };
+  return { values: new Float32Array(view), raw: bytes, count: artifact.count };
 }
 
 async function loadRole(pair, role) {
@@ -128,11 +128,26 @@ async function loadRole(pair, role) {
   if (candidates.count !== splats.count) throw new Error(`${role} candidate/splat count mismatch`);
   return {
     count: splats.count,
+    candidateBytes: candidates.raw,
+    splatBytes: splats.raw,
     sites: Array.from({ length: splats.count }, (_, index) => ({
       candidate: Array.from(candidates.values.subarray(index * 16, (index + 1) * 16)),
       splat: Array.from(splats.values.subarray(index * 12, (index + 1) * 12)),
     })),
   };
+}
+
+function sameOrderedWorldPositions(reference, role) {
+  if (reference.count !== role.count) return false;
+  const strideBytes = 12 * 4;
+  const positionBytes = 3 * 4;
+  for (let index = 0; index < reference.count; index += 1) {
+    const offset = index * strideBytes;
+    if (!reference.splatBytes.subarray(offset, offset + positionBytes).equals(
+      role.splatBytes.subarray(offset, offset + positionBytes),
+    )) return false;
+  }
+  return true;
 }
 
 async function loadCohorts(artifact, expectedCount) {
@@ -346,6 +361,12 @@ export async function writeAppearanceTransportWitness(evaluationPathValue, optio
       const matchedCount = roleStates.reference.count;
       if (DEBUG_ROLES.some(role => roleStates[role].count !== matchedCount)) {
         throw new Error(`pair ${pair.step} matched role support mismatch`);
+      }
+      if (DEBUG_ROLES.some(role => !roleStates.reference.candidateBytes.equals(roleStates[role].candidateBytes))) {
+        throw new Error(`pair ${pair.step} matched role candidate state mismatch`);
+      }
+      if (DEBUG_ROLES.some(role => !sameOrderedWorldPositions(roleStates.reference, roleStates[role]))) {
+        throw new Error(`pair ${pair.step} matched role world position mismatch`);
       }
       if (
         pair.supportAccounting?.supportChanged

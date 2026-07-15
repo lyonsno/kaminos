@@ -91,9 +91,9 @@ try {
   };
   const writeRole = async (pairIndex, role, authority, colorGain) => {
     const candidates = new Float32Array(16);
-    candidates[8] = pairIndex + colorGain;
+    candidates[8] = pairIndex + (role === 'sourceReuse' ? colorGain : 0);
     const splats = new Float32Array([
-      pairIndex * 0.08, 0, 0, 1,
+      pairIndex * 0.08 + (role === 'sourceReuse' ? colorGain * 0.01 : 0), 0, 0, 1,
       0.5 + colorGain * 0.03, 0.25 + pairIndex * 0.1, 0.1, 0.9,
       0.22, 0.22, 0, 0,
     ]);
@@ -178,6 +178,47 @@ try {
   assert.equal(report.playback.frameCount, 2);
   assert.equal((await readFile(join(outDir, 'appearance-transport-beauty.mp4'))).byteLength > 0, true);
   assert.equal((await readFile(join(outDir, 'appearance-transport-debug.mp4'))).byteLength > 0, true);
+
+  const writeFloatOverride = async (name, artifact, mutate) => {
+    const sourceBytes = await readFile(artifact.path);
+    const values = new Float32Array(sourceBytes.buffer, sourceBytes.byteOffset, sourceBytes.byteLength / 4).slice();
+    mutate(values);
+    const path = join(root, name);
+    const bytes = Buffer.from(values.buffer, values.byteOffset, values.byteLength);
+    await writeFile(path, bytes);
+    return { ...artifact, path, bytes: bytes.byteLength, sha256: hash(bytes) };
+  };
+  const badCandidateEvaluation = structuredClone(fullEvaluation);
+  badCandidateEvaluation.pairs[0].oracleDonor.candidates = await writeFloatOverride(
+    'bad-oracle-candidates.f32',
+    fullEvaluation.pairs[0].oracleDonor.candidates,
+    values => { values[8] += 1; },
+  );
+  const badCandidatePath = join(root, 'bad-candidate-evaluation.json');
+  await writeFile(badCandidatePath, `${JSON.stringify(badCandidateEvaluation)}\n`);
+  await assert.rejects(
+    witness.writeAppearanceTransportWitness(badCandidatePath, {
+      outDir: join(root, 'bad-candidate-witness'), width: 48, height: 48,
+    }),
+    /pair 1 matched role candidate state mismatch/,
+    'matched roles with different raw candidate state must not produce completed evidence',
+  );
+
+  const badPositionEvaluation = structuredClone(fullEvaluation);
+  badPositionEvaluation.pairs[0].learnedDonor.splats = await writeFloatOverride(
+    'bad-learned-position.f32',
+    fullEvaluation.pairs[0].learnedDonor.splats,
+    values => { values[0] += 0.25; },
+  );
+  const badPositionPath = join(root, 'bad-position-evaluation.json');
+  await writeFile(badPositionPath, `${JSON.stringify(badPositionEvaluation)}\n`);
+  await assert.rejects(
+    witness.writeAppearanceTransportWitness(badPositionPath, {
+      outDir: join(root, 'bad-position-witness'), width: 48, height: 48,
+    }),
+    /pair 1 matched role world position mismatch/,
+    'matched roles with different ordered world positions must not produce completed evidence',
+  );
 } finally {
   await rm(root, { recursive: true, force: true });
 }
