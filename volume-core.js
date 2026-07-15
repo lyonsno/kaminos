@@ -7493,7 +7493,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatHistoryDepthPlan = boundarySplatHistoryDepthAllocationPlan({
       requestedDepth: controlsSnapshot.boundarySplatHistoryDepth,
       requestedCandidateCapacity: boundarySplatCapacity,
-      observedSourceCandidateCount: state.boundarySplatSourceCandidateCount,
+      observedSourceCandidateCount: state.boundarySplatCandidateCount,
       candidateStrideBytes: BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES,
       maxBufferSize: device?.limits?.maxBufferSize,
       maxStorageBufferBindingSize: device?.limits?.maxStorageBufferBindingSize,

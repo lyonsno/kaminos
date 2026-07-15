@@ -160,6 +160,11 @@ assert.match(
   'measured history capacity must consume the uncapped atomic candidate total, not the capped archived source count',
 );
 assert.match(
+  coreSource.match(/function ensureBoundarySplatBuffers[\s\S]*?\n  function rebuildBoundarySplatBindGroups/)?.[0] || '',
+  /observedSourceCandidateCount:\s*state\.boundarySplatCandidateCount/,
+  'buffer rebuild admission must consume the uncapped atomic candidate total instead of stale capped archive telemetry',
+);
+assert.match(
   indexSource,
   /<input type="number" id="volume-boundary-splat-history-depth" min="4" step="1" value="4">/,
   'operator history-depth control must accept an explicit uncapped numeric request',
