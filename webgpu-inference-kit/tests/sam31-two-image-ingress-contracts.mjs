@@ -7,6 +7,7 @@ import { maximumSam31ParityValue, resolveSam31SpatialPositionEmbeddings } from '
 const root = new URL('../', import.meta.url);
 const packageJson = JSON.parse(readFileSync(new URL('package.json', root), 'utf8'));
 const backboneSource = readFileSync(new URL('smokes/sam31-two-image-backbone.js', root), 'utf8');
+const promotedBackboneSource = readFileSync(new URL('src/sam31-two-image-backbone.js', root), 'utf8');
 const trackerDriverSource = readFileSync(new URL('tools/sam31-two-frame-tracker-browser-parity-smoke.mjs', root), 'utf8');
 const trackerSmokeSource = readFileSync(new URL('smokes/sam31-two-frame-tracker-parity.js', root), 'utf8');
 const ingressExporterSource = readFileSync(new URL('tools/sam31-two-image-ingress-meta-packet.py', root), 'utf8');
@@ -30,6 +31,13 @@ assert.match(backboneSource, /expectedLayerCheckpoints:\s*expectedLayerCheckpoin
 assert.match(backboneSource, /expectedPhaseCheckpoints:\s*expectedPhaseCheckpoints/, 'browser backbone must bind selected official phase checkpoints into the WebGPU block stack');
 assert.match(backboneSource, /parity\.vitPhases = Object\.fromEntries/, 'browser evidence must preserve numeric phase parity under the existing tolerance gate');
 assert.match(backboneSource, /parity\.vitLayers = Object\.fromEntries/, 'browser evidence must preserve per-layer numeric parity without diagnostic metadata contamination');
+assert.match(backboneSource, /parity\.vitLayerDiagnostics = Object\.fromEntries/, 'browser evidence must preserve selected-layer error distributions beside the numeric tolerance map');
+assert.match(backboneSource, /diagnostics: layerDiagnostics/, 'failed browser evidence must durably expose selected-layer error distributions');
+for (const source of [backboneSource, promotedBackboneSource]) {
+  assert.match(source, /summarizeSam3LayerParityCheckpoint/, 'two-image backbone must measure final ViT error distribution against the official tensor');
+  assert.match(source, /passesSam3LayerParityCheckpoint/, 'two-image backbone must apply the compound FP32 parity contract');
+  assert.match(source, /vitBackboneDiagnostics/, 'two-image backbone must preserve final ViT distribution evidence');
+}
 
 const spatialPositions = resolveSam31SpatialPositionEmbeddings({
   values: new Float32Array([100, 101, 1, 2, 3, 4, 5, 6, 7, 8]),

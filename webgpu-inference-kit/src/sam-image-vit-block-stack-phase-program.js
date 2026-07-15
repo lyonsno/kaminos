@@ -989,11 +989,58 @@ export function summarizeSam3LayerParityCheckpoint(layerIndex, isGlobal, expecte
   if (expected.length !== actual.length) {
     throw new Error(`layer parity length mismatch: expected ${expected.length}, received ${actual.length}`);
   }
-  let maxAbsDiff = 0;
+  let maxAbsDiff = -1;
+  let maxAbsDiffIndex = -1;
+  let maxAbsExpected = 0;
+  let maxAbsActual = 0;
+  let sumAbsDiff = 0;
+  let sumSquaredDiff = 0;
   for (let index = 0; index < expected.length; index += 1) {
-    maxAbsDiff = Math.max(maxAbsDiff, Math.abs(expected[index] - actual[index]));
+    const absExpected = Math.abs(expected[index]);
+    const absActual = Math.abs(actual[index]);
+    const absDiff = Math.abs(expected[index] - actual[index]);
+    if (absDiff > maxAbsDiff) {
+      maxAbsDiff = absDiff;
+      maxAbsDiffIndex = index;
+    }
+    maxAbsExpected = Math.max(maxAbsExpected, absExpected);
+    maxAbsActual = Math.max(maxAbsActual, absActual);
+    sumAbsDiff += absDiff;
+    sumSquaredDiff += absDiff * absDiff;
   }
-  return { layerIndex, isGlobal, elementCount: actual.length, maxAbsDiff };
+  return {
+    layerIndex,
+    isGlobal,
+    elementCount: actual.length,
+    maxAbsDiff,
+    meanAbsDiff: sumAbsDiff / actual.length,
+    rootMeanSquareDiff: Math.sqrt(sumSquaredDiff / actual.length),
+    maxAbsExpected,
+    maxAbsActual,
+    maxAbsDiffIndex,
+    expectedAtMaxAbsDiff: expected[maxAbsDiffIndex],
+    actualAtMaxAbsDiff: actual[maxAbsDiffIndex],
+  };
+}
+
+export function passesSam3LayerParityCheckpoint(summary, tolerance) {
+  if (!summary || !tolerance) return false;
+  const fields = [
+    summary.maxAbsDiff,
+    summary.meanAbsDiff,
+    summary.rootMeanSquareDiff,
+    summary.expectedAtMaxAbsDiff,
+    tolerance.maxAbsDiff,
+    tolerance.meanAbsDiff,
+    tolerance.rootMeanSquareDiff,
+    tolerance.relativeDiffAtMaxAbsDiff,
+  ];
+  if (!fields.every(Number.isFinite)) return false;
+  const maximumAllowed = tolerance.maxAbsDiff
+    + tolerance.relativeDiffAtMaxAbsDiff * Math.abs(summary.expectedAtMaxAbsDiff);
+  return summary.maxAbsDiff <= maximumAllowed
+    && summary.meanAbsDiff <= tolerance.meanAbsDiff
+    && summary.rootMeanSquareDiff <= tolerance.rootMeanSquareDiff;
 }
 
 export function summarizeSam3FinitePhaseOutputs(outputs) {

@@ -84,6 +84,7 @@ const {
   summarizeSam3FiniteValues,
   summarizeSam3FinitePhaseOutputs,
   summarizeSam3LayerParityCheckpoint,
+  passesSam3LayerParityCheckpoint,
   normalizeSam3ExpectedLayerCheckpoints,
   summarizeSam3PhaseParityCheckpoints,
   stableSam3Gelu,
@@ -176,14 +177,51 @@ for (const [phase, entry] of Object.entries(dispatch1008Global)) {
 
 assert.deepEqual(
   summarizeSam3LayerParityCheckpoint(3, true, new Float32Array([1, -2, 4]), new Float32Array([1.25, -2.125, 4])),
-  { layerIndex: 3, isGlobal: true, elementCount: 3, maxAbsDiff: 0.25 },
-  'layer parity checkpoint must preserve layer identity and the maximum absolute MLX/WebGPU error',
+  {
+    layerIndex: 3,
+    isGlobal: true,
+    elementCount: 3,
+    maxAbsDiff: 0.25,
+    meanAbsDiff: 0.125,
+    rootMeanSquareDiff: Math.sqrt((0.25 ** 2 + 0.125 ** 2) / 3),
+    maxAbsExpected: 4,
+    maxAbsActual: 4,
+    maxAbsDiffIndex: 0,
+    expectedAtMaxAbsDiff: 1,
+    actualAtMaxAbsDiff: 1.25,
+  },
+  'layer parity checkpoint must preserve layer identity and diagnose the absolute MLX/WebGPU error distribution',
 );
 assert.throws(
   () => summarizeSam3LayerParityCheckpoint(3, true, new Float32Array([1]), new Float32Array([1, 2])),
   /length mismatch/,
   'layer parity checkpoint must reject partial expected tensors',
 );
+
+const compoundParityTolerance = {
+  maxAbsDiff: 0.02,
+  meanAbsDiff: 0.0001,
+  rootMeanSquareDiff: 0.0003,
+  relativeDiffAtMaxAbsDiff: 0.002,
+};
+assert.equal(passesSam3LayerParityCheckpoint({
+  maxAbsDiff: 0.093,
+  meanAbsDiff: 0.000063,
+  rootMeanSquareDiff: 0.000189,
+  expectedAtMaxAbsDiff: -89,
+}, compoundParityTolerance), true, 'compound parity must admit sparse FP32 amplification inside independent max, mean, and RMS bounds');
+assert.equal(passesSam3LayerParityCheckpoint({
+  maxAbsDiff: 0.093,
+  meanAbsDiff: 0.0002,
+  rootMeanSquareDiff: 0.000189,
+  expectedAtMaxAbsDiff: -89,
+}, compoundParityTolerance), false, 'compound parity must reject broad error hidden behind a lawful relative outlier');
+assert.equal(passesSam3LayerParityCheckpoint({
+  maxAbsDiff: 0.03,
+  meanAbsDiff: 0.00001,
+  rootMeanSquareDiff: 0.00002,
+  expectedAtMaxAbsDiff: 0,
+}, compoundParityTolerance), false, 'compound parity must retain its absolute bound near zero');
 
 assert.equal(stableSam3Gelu(-Number.MAX_VALUE), 0, 'stable GELU must saturate extreme negative finite inputs to zero');
 assert.equal(stableSam3Gelu(Number.MAX_VALUE), Number.MAX_VALUE, 'stable GELU must preserve extreme positive finite inputs');

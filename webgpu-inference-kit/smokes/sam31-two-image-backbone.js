@@ -14,6 +14,8 @@ import {
   runSam31DecoderHighResolutionProjectionPhaseProgramRoute,
   runSam31ImagePropagationNeckPhaseProgramRoute,
   runSam31InteractiveNeckPhaseProgramRoute,
+  passesSam3LayerParityCheckpoint,
+  summarizeSam3LayerParityCheckpoint,
   verifySam31PacketFloat32Bytes,
 } from '../src/index.js';
 
@@ -51,6 +53,15 @@ function maxAbs(left, right) {
     maximum = Math.max(maximum, Math.abs(left[index] - right[index]));
   }
   return maximum;
+}
+
+function passesVitBackboneParity(summary, tolerances) {
+  return passesSam3LayerParityCheckpoint(summary, {
+    maxAbsDiff: tolerances.vitBackboneMaxAbsDiff,
+    meanAbsDiff: tolerances.vitBackboneMeanAbsDiff,
+    rootMeanSquareDiff: tolerances.vitBackboneRootMeanSquareDiff,
+    relativeDiffAtMaxAbsDiff: tolerances.vitBackboneRelativeDiffAtMaxAbsDiff,
+  });
 }
 
 async function sha256Bytes(values) {
@@ -266,10 +277,16 @@ async function runFrameTrunk({ frameIndex, manifest, tensorsByRole, weightsByRol
     model: { ...model, weightsHash: blockWeightsHash }, kernel: stackRoute.kernel, tensors: { hiddenStates: prefixHiddenStates, weights: blockWeights, shape: blockShape }, expectedLayerCheckpoints: expectedLayerCheckpoints, expectedPhaseCheckpoints: expectedPhaseCheckpoints, includeReadback: true, validateFiniteCheckpoints: true, validateFinitePhaseLayerIndex: manifest.diagnosticVitPhaseLayer,
   });
   const backboneHiddenStates = new Float32Array(stackResult.debugReadback.vitBlockStackHiddenStates);
-  parity.vitBackbone = await compareExpected(backboneHiddenStates, tensorsByRole.get(`frame-${frameIndex}-vit-backbone-hidden-states`), loadFloat32, verificationAttached);
+  parity.vitBackboneDiagnostics = verificationAttached
+    ? summarizeSam3LayerParityCheckpoint(31, true, await loadFloat32(tensorsByRole.get(`frame-${frameIndex}-vit-backbone-hidden-states`)), backboneHiddenStates)
+    : null;
+  parity.vitBackbone = parity.vitBackboneDiagnostics?.maxAbsDiff ?? null;
   parity.vitLayers = Object.fromEntries(stackResult.finiteCheckpoints
     .filter(checkpoint => checkpoint.maxAbsDiff != null)
     .map(checkpoint => [String(checkpoint.layerIndex), checkpoint.maxAbsDiff]));
+  parity.vitLayerDiagnostics = Object.fromEntries(stackResult.finiteCheckpoints
+    .filter(checkpoint => checkpoint.maxAbsDiff != null)
+    .map(checkpoint => [String(checkpoint.layerIndex), checkpoint]));
   parity.vitPhases = Object.fromEntries((stackResult.finitePhaseCheckpoints.find(checkpoint => checkpoint.layerIndex === manifest.diagnosticVitPhaseLayer)?.parity || [])
     .map(checkpoint => [checkpoint.phase, checkpoint.maxAbsDiff]));
   receipts.push(stackResult.receipt); routes.push(stackRoute.routeId);
@@ -411,23 +428,29 @@ export async function runSam31TwoImageBackbone({
     interactive.route.routeId, propagation[0].route.routeId, propagation[1].route.routeId,
     frame0High.route.routeId, frame1High.route.routeId,
   ];
+  const { vitLayerDiagnostics: frame0LayerDiagnostics, vitBackboneDiagnostics: frame0BackboneDiagnostics, ...frame0Parity } = backbones[0].parity;
+  const { vitLayerDiagnostics: frame1LayerDiagnostics, vitBackboneDiagnostics: frame1BackboneDiagnostics, ...frame1Parity } = backbones[1].parity;
+  const layerDiagnostics = {
+    frame0: { vitBackbone: frame0BackboneDiagnostics, vitLayers: frame0LayerDiagnostics },
+    frame1: { vitBackbone: frame1BackboneDiagnostics, vitLayers: frame1LayerDiagnostics },
+  };
   const maximums = {
-    frame0: { ...backbones[0].parity, interactive: interactive.parity, propagation: propagation[0].parity, highResolution: frame0High.parity },
-    frame1: { ...backbones[1].parity, propagation: propagation[1].parity, highResolution: frame1High.parity },
+    frame0: { ...frame0Parity, interactive: interactive.parity, propagation: propagation[0].parity, highResolution: frame0High.parity },
+    frame1: { ...frame1Parity, propagation: propagation[1].parity, highResolution: frame1High.parity },
   };
   const parityMaximum = maximumSam31ParityValue(maximums);
   const routeChainPassed = receipts.every((receipt, index) => receipt.status === 'real' && receipt.fallbackReason == null && receipt.effectiveRouteId === requestedRouteIds[index]);
   const tolerances = manifest.tolerances;
-  const parityPassed = !verificationAttached || (backbones.every(frame => frame.parity.pixelValues <= tolerances.pixelValuesMaxAbsDiff && frame.parity.patchEmbeddings <= tolerances.patchEmbeddingsMaxAbsDiff && frame.parity.vitPrefix <= tolerances.vitPrefixMaxAbsDiff && frame.parity.vitBackbone <= tolerances.vitBackboneMaxAbsDiff && Object.values(frame.parity.vitLayers).every(value => value <= tolerances.vitBackboneMaxAbsDiff) && Object.values(frame.parity.vitPhases).every(value => value <= tolerances.vitBackboneMaxAbsDiff))
+  const parityPassed = !verificationAttached || (backbones.every(frame => frame.parity.pixelValues <= tolerances.pixelValuesMaxAbsDiff && frame.parity.patchEmbeddings <= tolerances.patchEmbeddingsMaxAbsDiff && frame.parity.vitPrefix <= tolerances.vitPrefixMaxAbsDiff && passesVitBackboneParity(frame.parity.vitBackboneDiagnostics, tolerances) && Object.values(frame.parity.vitLayers).every(value => value <= tolerances.vitBackboneMaxAbsDiff) && Object.values(frame.parity.vitPhases).every(value => value <= tolerances.vitBackboneMaxAbsDiff))
     && Object.values(interactive.parity).every(value => value <= (value === interactive.parity.position2 ? tolerances.positionMaxAbsDiff : tolerances.neckMaxAbsDiff))
     && propagation.every(neck => Object.entries(neck.parity).every(([name, value]) => value <= (name === 'position2' ? tolerances.positionMaxAbsDiff : tolerances.neckMaxAbsDiff)))
     && [frame0High, frame1High].every(item => Object.values(item.parity).every(value => value <= tolerances.highResolutionMaxAbsDiff)));
   if (errors.length) throw new Error(`two-image backbone uncaptured WebGPU errors: ${errors.join('; ')}`);
-  if (!routeChainPassed || !parityPassed) throw Object.assign(new Error(`two-image backbone evidence failed: ${JSON.stringify({ routeChainPassed, parityPassed, maximums })}`), { backboneEvidence: { routeChainPassed, parityPassed, maximums } });
+  if (!routeChainPassed || !parityPassed) throw Object.assign(new Error(`two-image backbone evidence failed: ${JSON.stringify({ routeChainPassed, parityPassed, maximums, diagnostics: layerDiagnostics })}`), { backboneEvidence: { routeChainPassed, parityPassed, maximums, diagnostics: layerDiagnostics } });
   return {
     frame0: { interactiveEmbedding: interactive.features[2], interactivePosition: interactive.position2, interactiveHighResolutionS0: frame0High.highResolutionS0, interactiveHighResolutionS1: frame0High.highResolutionS1, propagationEmbedding: propagation[0].features[2], propagationPosition: propagation[0].position2 },
     frame1: { propagationEmbedding: propagation[1].features[2], propagationPosition: propagation[1].position2, highResolutionS0: frame1High.highResolutionS0, highResolutionS1: frame1High.highResolutionS1 },
-    receipts, requestIds, requestedRouteIds, effectiveRouteIds: receipts.map(receipt => receipt.effectiveRouteId), parity: verificationAttached ? maximums : null, parityMaximum: verificationAttached ? parityMaximum : null, routeChainPassed, parityPassed, verificationAttached,
+    receipts, requestIds, requestedRouteIds, effectiveRouteIds: receipts.map(receipt => receipt.effectiveRouteId), parity: verificationAttached ? maximums : null, parityDiagnostics: verificationAttached ? layerDiagnostics : null, parityMaximum: verificationAttached ? parityMaximum : null, routeChainPassed, parityPassed, verificationAttached,
     sourceImageSha256: manifest.sourceImages.map(image => image.rgbaSha256),
   };
 }
