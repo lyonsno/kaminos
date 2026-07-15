@@ -12,6 +12,7 @@ import {
   supportEnvelopeBudget,
   validateSupportEnvelopeReport,
 } from '../boundary-splat-phase-support-envelope-witness.mjs';
+import { addBitmapLabel } from '../boundary-splat-moving-phase-witness.mjs';
 
 const calibration = calibrateSupportCountEnvelope([100, 110, 90, 120]);
 assert.deepEqual(calibration, {
@@ -71,13 +72,40 @@ const roles = {
   physicalSupport: 'training-envelope-top-physical-splat-support-v0',
   visibleEnergy: 'training-envelope-top-physical-visible-energy-v0',
 };
+const selectionAccounting = Object.fromEntries(Object.keys(SUPPORT_ENVELOPE_SELECTORS).map(selector => [
+  selector,
+  Array.from({ length: 2 }, (_, index) => ({
+    step: index + 1,
+    ceilingBudget: 120,
+    authority: 'deterministic-state-local-support-envelope-selection-v0',
+    selector,
+    inputCount: 100,
+    budget: 100,
+    selectedCount: 100,
+    droppedCount: 0,
+    scoreMinimum: 0,
+    scoreMaximum: 1,
+  })),
+]));
 const validReport = {
   schema: 'kaminos-boundary-splat-phase-support-envelope-witness-v0',
   status: 'completed',
   source: {
-    trainingManifest: { sha256: hash('train') },
-    evaluationManifest: { sha256: hash('eval') },
-    predictions: { sha256: hash('pred') },
+    trainingManifest: { path: '/tmp/train.json', bytes: 100, sha256: hash('train') },
+    evaluationManifest: { path: '/tmp/eval.json', bytes: 100, sha256: hash('eval') },
+    predictions: { path: '/tmp/pred.json', bytes: 100, sha256: hash('pred') },
+    occupancyModel: {
+      path: '/tmp/occupancy-model.json',
+      schema: 'kaminos-boundary-splat-phase-transport-model-v0',
+      sha256: hash('occupancy-model'),
+    },
+    destinationStateModel: {
+      path: '/tmp/destination-state-model.json',
+      schema: 'kaminos-boundary-splat-phase-destination-state-model-v0',
+      sha256: hash('destination-state-model'),
+      trainingManifest: { path: '/tmp/train.json', bytes: 100, sha256: hash('train') },
+      evaluationManifest: { path: '/tmp/eval.json', bytes: 100, sha256: hash('eval') },
+    },
     requestedRoute: 'crosswind',
     effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
     backend: { backend: 'mlx', device: 'Device(gpu, 0)', fallbackReason: null },
@@ -91,19 +119,30 @@ const validReport = {
     unmatchedAttenuation: 1,
     envelope: calibration,
     selectors: Object.keys(SUPPORT_ENVELOPE_SELECTORS),
+    frameZeroEvaluationCount: 100,
+    ceilingBudget: 120,
+    oneStepMedianRatio: 1.01,
+    counterfactualBudgetAtCeiling: 120,
     retrained: false,
     recurrenceRegenerated: false,
   },
   playback: { frameCount: 2, effectiveFps: 6.25, encodedDurationSeconds: 0.32, loops: false },
   roles,
   roleEvidence: Object.fromEntries(Object.keys(roles).map(role => [role, frameEvidence(role)])),
+  selectionAccounting,
   frozenControlEvidence: [{ ...frameEvidence('frozen')[0] }, { ...frameEvidence('frozen')[0], step: 2 }],
   frozenControlIdentity: { authority: 'pixel-identical-frozen-control-v0', frameCount: 2, uniqueFrameCount: 1, sha256: frameEvidence('frozen')[0].sha256 },
   artifact: { sha256: hash('video'), bytes: 100, probe: { frameCount: 2, width: 1920, height: 240, fps: 6.25, duration: 0.32 } },
   metrics: { authority: 'same-raster-full-frame-error-v0', roles: Object.fromEntries(Object.keys(roles).map(role => [role, { lateMse: 1 }])) },
-  claimBoundary: 'post-composition diagnostic only',
+  claimBoundary: 'post-composition diagnostic only; cannot prove recurrent stability, a deployable predictor, or runtime integration',
 };
 assert.doesNotThrow(() => validateSupportEnvelopeReport(validReport));
+const decayingOneStepContext = structuredClone(validReport);
+decayingOneStepContext.configuration.oneStepMedianRatio = 0.5;
+assert.doesNotThrow(
+  () => validateSupportEnvelopeReport(decayingOneStepContext),
+  'post-composition selector budget depends on the training ceiling, not the recorded one-step ratio',
+);
 const capped = structuredClone(validReport);
 capped.configuration.effectiveFrameCount = 1;
 assert.throws(() => validateSupportEnvelopeReport(capped), /frame count/i);
@@ -125,6 +164,46 @@ assert.throws(() => validateSupportEnvelopeReport(cached), /cached|static/i);
 const dishonest = structuredClone(validReport);
 dishonest.configuration.recurrenceRegenerated = true;
 assert.throws(() => validateSupportEnvelopeReport(dishonest), /post-composition/i);
+
+const missingOccupancyModel = structuredClone(validReport);
+delete missingOccupancyModel.source.occupancyModel;
+assert.throws(() => validateSupportEnvelopeReport(missingOccupancyModel), /occupancy model identity/i);
+const badDestinationModel = structuredClone(validReport);
+badDestinationModel.source.destinationStateModel.sha256 = 'not-a-sha';
+assert.throws(() => validateSupportEnvelopeReport(badDestinationModel), /destination state model identity/i);
+const staleDestinationTraining = structuredClone(validReport);
+staleDestinationTraining.source.destinationStateModel.trainingManifest.sha256 = hash('stale-train');
+assert.throws(() => validateSupportEnvelopeReport(staleDestinationTraining), /destination state model.*training/i);
+const badRoleStep = structuredClone(validReport);
+badRoleStep.roleEvidence.prediction[1].step = 9;
+assert.throws(() => validateSupportEnvelopeReport(badRoleStep), /role evidence step/i);
+const badFrozenStep = structuredClone(validReport);
+badFrozenStep.frozenControlEvidence[1].step = 9;
+assert.throws(() => validateSupportEnvelopeReport(badFrozenStep), /frozen control step/i);
+const partialSelectionAccounting = structuredClone(validReport);
+partialSelectionAccounting.selectionAccounting.candidateSupport.pop();
+assert.throws(() => validateSupportEnvelopeReport(partialSelectionAccounting), /selection accounting/i);
+const badSelectedCount = structuredClone(validReport);
+badSelectedCount.selectionAccounting.physicalSupport[0].selectedCount = 99;
+assert.throws(() => validateSupportEnvelopeReport(badSelectedCount), /selection accounting/i);
+const badBudget = structuredClone(validReport);
+badBudget.selectionAccounting.visibleEnergy[0].budget = 99;
+assert.throws(() => validateSupportEnvelopeReport(badBudget), /selection accounting/i);
+const badDroppedCount = structuredClone(validReport);
+badDroppedCount.selectionAccounting.candidateSupport[0].droppedCount = 1;
+assert.throws(() => validateSupportEnvelopeReport(badDroppedCount), /selection accounting/i);
+const blankClaimBoundary = structuredClone(validReport);
+blankClaimBoundary.claimBoundary = '';
+assert.throws(() => validateSupportEnvelopeReport(blankClaimBoundary), /claim boundary/i);
+const deployableClaimBoundary = structuredClone(validReport);
+deployableClaimBoundary.claimBoundary = 'post-composition evidence proves recurrent stability and authorizes runtime integration';
+assert.throws(() => validateSupportEnvelopeReport(deployableClaimBoundary), /claim boundary/i);
+
+const blankRendered = { width: 180, height: 16, rgba: Buffer.alloc(180 * 16 * 4) };
+for (const label of ['REFERENCE', 'FROZEN', 'PREDICTED', 'CANDIDATE SUPPORT', 'PHYSICAL SUPPORT', 'VISIBLE ENERGY']) {
+  assert.doesNotThrow(() => addBitmapLabel(blankRendered, label), `label must render completely: ${label}`);
+}
+assert.throws(() => addBitmapLabel(blankRendered, 'UNSUPPORTED?'), /unsupported bitmap label character/i);
 
 const root = resolve(import.meta.dirname, '..');
 const failedOut = await mkdtemp(join(tmpdir(), 'kaminos-support-envelope-failure-'));

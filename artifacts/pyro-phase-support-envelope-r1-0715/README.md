@@ -4,6 +4,8 @@ Question: can a training-derived support-count envelope remove the recurrent whi
 
 Result: no. All three selectors improve the unmodified recurrence, proving support-count inflation contributes to the failure, but none removes the sheet or beats frozen present reuse. Physical-splat-support ranking gives the best late same-raster MSE (`4615.0416 -> 4088.2655`); protected-candidate-support ranking gives the best late white-pixel reduction (`10.0497% -> 8.0301%`). Frozen present remains much better at late MSE `1786.4463` and late white-pixel fraction `0.3216%`.
 
+Evidence repair: fresh review found that the original in-frame bitmap font silently omitted unsupported letters. The complete 63-frame media and contacts were regenerated from the same source corpus, predictions, models, camera, cadence, and raster configuration after adding fail-loud glyph coverage. Stable receipt content, metrics, and selector accounting are unchanged; only label-dependent frame/control/video hashes, encoded bytes, and generated paths changed. The report validator now also rejects missing or malformed model identity, noncontiguous frame identity, and non-budget-exact selector accounting.
+
 ## Inspect First
 
 Open `inspection-guide.html` and play the finite `10.08 s` video. The six fixed columns are:
@@ -33,7 +35,7 @@ This witness filters each already-generated frame independently. It therefore ca
 ## Route
 
 - Repo/worktree: `/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713`
-- Branch/base head at generation: `cc/pyro-phase-lag-counterfeiter-0713` / `5fbc912`
+- Branch/base head at original generation: `cc/pyro-phase-lag-counterfeiter-0713` / `5fbc912`; label repair regenerated on the same branch under the reviewed artifact-repair commit
 - Training corpus SHA-256: `f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1`
 - Evaluation corpus SHA-256: `d38028655e038df55af0fb5f1c9cfc5c40f3464992ebd26b106c29b234f88c78`
 - Predictions SHA-256: `0399ad81f1e0b33488136de228896d47dfb7287230afb077445e8ec294a89571`
@@ -48,7 +50,7 @@ node boundary-splat-phase-support-envelope-witness.mjs \
   --training-manifest /private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/phase-corpus.json \
   --evaluation-manifest /private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json \
   --predictions /private/tmp/kaminos-phase-transport-anchored-online-h12-w1-protected-r1-0715/transport-predictions.json \
-  --out-dir /private/tmp/kaminos-phase-support-envelope-r1-0715 \
+  --out-dir /private/tmp/kaminos-phase-support-envelope-label-repair-r1-0715 \
   --width 320 --height 240 \
   --ffmpeg /opt/homebrew/bin/ffmpeg \
   --ffprobe /opt/homebrew/bin/ffprobe

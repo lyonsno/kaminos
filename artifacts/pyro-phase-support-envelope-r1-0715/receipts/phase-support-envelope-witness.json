@@ -541,441 +541,441 @@
     "candidateSupport": [
       {
         "step": 1,
-        "sha256": "90bf140e0e2f9aedb6b5970ccf4af03a5e1a41422f4469d28c11ba752023a9e2",
+        "sha256": "3f23c06542508d6aed47619151399b8e4e4463de033cdb3dc97eebd242c7dac9",
         "inputSplatCount": 60679,
         "projectedSplatCount": 50512,
         "nonBackgroundPixelCount": 48744
       },
       {
         "step": 2,
-        "sha256": "ee9662b941ec5b3075783778864b59627b09efd8ded334068d2a8e1c1c1518ee",
+        "sha256": "86f38b6a6209c31edc1157966fe4014741f18bf02f880f01beb6e0dec1484298",
         "inputSplatCount": 61102,
         "projectedSplatCount": 50701,
         "nonBackgroundPixelCount": 43622
       },
       {
         "step": 3,
-        "sha256": "f48c3b6299fad042afddbd20d38a08e3b353e7b0ca031422c562806255a2f512",
+        "sha256": "e7ceb267f95d91efea90753e1a857d43e5d6396f054b15fd3e1b9abd25e5b679",
         "inputSplatCount": 61528,
         "projectedSplatCount": 51033,
         "nonBackgroundPixelCount": 39831
       },
       {
         "step": 4,
-        "sha256": "9fa928a129eaa3854670a92fcd2888459192dab631608a5be4ab1208599b77c6",
+        "sha256": "1c1e2383df747b0c862b470a37e41e9834d9d32c203ab8ddbe3598d793f96605",
         "inputSplatCount": 61957,
         "projectedSplatCount": 51393,
         "nonBackgroundPixelCount": 37629
       },
       {
         "step": 5,
-        "sha256": "1c82fa039096bf1b5be3ca56a41d23a6b86aaef4d93394b3d8f3fd26bd53020a",
+        "sha256": "f194a66ffac4fbaef94116a01fd77395b862df0bb90fbe701c147814d691c3f3",
         "inputSplatCount": 62389,
         "projectedSplatCount": 51792,
         "nonBackgroundPixelCount": 35707
       },
       {
         "step": 6,
-        "sha256": "2f9e19cae39d2de72b82d217ef085c627a64bbcc95a732ec028ffd2d16658e98",
+        "sha256": "e25b36354cf7a391631919c0b06e8e2b068bb448124ee0e675a8a02dae9b802a",
         "inputSplatCount": 62824,
         "projectedSplatCount": 52201,
         "nonBackgroundPixelCount": 34158
       },
       {
         "step": 7,
-        "sha256": "36e2d30b537974490f94e48490cca1383c31cdb3428ca6aebfb8ffd82e79c9fd",
+        "sha256": "7f18738ac03a1efb2d38674aafe011aae823676a9ca5eb1b0460e134679b4129",
         "inputSplatCount": 63262,
         "projectedSplatCount": 52601,
         "nonBackgroundPixelCount": 33148
       },
       {
         "step": 8,
-        "sha256": "09b73b7309beb1dd2386e0aa8041274c5f396bb6a231849b005bc6e4471c191e",
+        "sha256": "16727c24e373a28b5bd851b3a6e9bbab69e9b40d6f3e3668e3e89e1da71bade4",
         "inputSplatCount": 63703,
         "projectedSplatCount": 53019,
         "nonBackgroundPixelCount": 32394
       },
       {
         "step": 9,
-        "sha256": "382b555fda05768e0ed82e34b6ebd02f987c429b550482459ee005e12f4c80ca",
+        "sha256": "82ffcd988b3c11c3074dd3570edab402353bc231788ed2d15c694af28fcec8ff",
         "inputSplatCount": 64147,
         "projectedSplatCount": 53438,
         "nonBackgroundPixelCount": 31530
       },
       {
         "step": 10,
-        "sha256": "5e084d67ba511a25ede16c496fcbf4a8261c4dfab17076c6475b15648aeb74c7",
+        "sha256": "f90e16f0f8d2ea5153b75751083d73d266fa637fbd05ed0d943f1542406f5d2c",
         "inputSplatCount": 64594,
         "projectedSplatCount": 53870,
         "nonBackgroundPixelCount": 31205
       },
       {
         "step": 11,
-        "sha256": "292d25da912d90f508c81d9d70ef163a039b4be332c26e39c2473e40b1dd5ca0",
+        "sha256": "c26a65fd4208e935d9dd2795f4b28efedec341f23f58d34a8b9aab269a9b916d",
         "inputSplatCount": 65044,
         "projectedSplatCount": 54303,
         "nonBackgroundPixelCount": 31185
       },
       {
         "step": 12,
-        "sha256": "77c2742e42738e59a60be16a5991154713fe2bddbaffcfb933fb781365d3dbe3",
+        "sha256": "0d06993f8f56c9a6548c6e91f4d0d4f3a80dfdec30a2de8d97d716f0a571339d",
         "inputSplatCount": 65498,
         "projectedSplatCount": 54736,
         "nonBackgroundPixelCount": 31189
       },
       {
         "step": 13,
-        "sha256": "0bf4463cb5f07ff5f5634ded52f0ba279764dfe523895d640b3685ecabb7030c",
+        "sha256": "d7e6cecb0fc9f381377e42fc02bbe57f669aecfb99c3cfedc508eabe13e7cf71",
         "inputSplatCount": 65955,
         "projectedSplatCount": 55178,
         "nonBackgroundPixelCount": 31170
       },
       {
         "step": 14,
-        "sha256": "147b9cf9cc48494065477c41cd68a9a46bc17e167690f80b3c4dc4fe1febb5cf",
+        "sha256": "d717c001ce85cc177680484a985a8a86aa2dbff5f7966bd3cccd433d63824bbf",
         "inputSplatCount": 66415,
         "projectedSplatCount": 55629,
         "nonBackgroundPixelCount": 31165
       },
       {
         "step": 15,
-        "sha256": "6650b801a97adaeed246c1dedbe34d06244a40c8abfbf7a15ced446f67630278",
+        "sha256": "a75fbf90c55523cde48e48f4072370583f04cacc9fef2640240418e46166e0fa",
         "inputSplatCount": 66878,
         "projectedSplatCount": 56074,
         "nonBackgroundPixelCount": 31089
       },
       {
         "step": 16,
-        "sha256": "aff30e25a0ec3287fd97b1c984b88373e2336a0f017b8225c6c9162611dfa2ff",
+        "sha256": "33825f7924f4473ebc557dfb446a97f306ae17e4d0cd7fd033672b21970b8eab",
         "inputSplatCount": 67344,
         "projectedSplatCount": 56522,
         "nonBackgroundPixelCount": 30985
       },
       {
         "step": 17,
-        "sha256": "dde758ecf2329e3ee02479e428caee73092e7d68a05e9750d10bef90c883ed2a",
+        "sha256": "b253ee9ad2b54fe501d3baff670c711b36317addd79c629a345616f61331f793",
         "inputSplatCount": 67814,
         "projectedSplatCount": 56966,
         "nonBackgroundPixelCount": 30862
       },
       {
         "step": 18,
-        "sha256": "b598981f263a8358bf26b07fb8b8f95d022e35dfa428e611769f343d6308ec9e",
+        "sha256": "944c593404e063e7cf5ac7d362f29ac1f89fba9925ac2c95ed933f3a4ca5286b",
         "inputSplatCount": 68287,
         "projectedSplatCount": 57417,
         "nonBackgroundPixelCount": 30860
       },
       {
         "step": 19,
-        "sha256": "f3ccd2d83a70714c747660167aa6f2eb731cf3f1e8245fa9f663216e7a8622f7",
+        "sha256": "0e1226c8db504a51c1f116d28d452a99275b90011e3e6027d4357a42a5401a39",
         "inputSplatCount": 68763,
         "projectedSplatCount": 57873,
         "nonBackgroundPixelCount": 30870
       },
       {
         "step": 20,
-        "sha256": "3479660b3ee21ad8861c2f445cb5e21943ea8c5350af2174302eb81403e31d71",
+        "sha256": "079484459e3f400264d09c5234c38b76e1e5b9e695f3d94f3cb035d86dc675b0",
         "inputSplatCount": 69243,
         "projectedSplatCount": 58336,
         "nonBackgroundPixelCount": 30869
       },
       {
         "step": 21,
-        "sha256": "a016ba58f2524e31e6b165c982416527d12080ac290344d2e6e6b426eabc762d",
+        "sha256": "f06ef0117f1606d2a73e1d516adae397b1acca6006f03b5644216d91100794fc",
         "inputSplatCount": 69726,
         "projectedSplatCount": 58813,
         "nonBackgroundPixelCount": 30872
       },
       {
         "step": 22,
-        "sha256": "1de07734ab30f328e669aa1681a64ced438c8dede1fe32566fb346e74fa225e8",
+        "sha256": "7e7c49d6ed2d174cd8e127c9f212d03ddae91138182def63018fb42f9fbc9b7a",
         "inputSplatCount": 70212,
         "projectedSplatCount": 59293,
         "nonBackgroundPixelCount": 30870
       },
       {
         "step": 23,
-        "sha256": "9c0f2b1036fbee475d26c249bc8484ad18f5ca7b35b24df9f54f67ab1a106d95",
+        "sha256": "84923fdac9a0cf54e0b4b6594346d89fbd334a73a61e6a3280e199c41b5cb7cc",
         "inputSplatCount": 70702,
         "projectedSplatCount": 59774,
         "nonBackgroundPixelCount": 30876
       },
       {
         "step": 24,
-        "sha256": "af0eaacc2f688ae3fbbd0da50eb9f03335e04f07c235c73d87952582cfd533ac",
+        "sha256": "69afb553f679b9e441dfc664012e7fe4b1d2075ea959c8f7886dc48cd3d32354",
         "inputSplatCount": 71195,
         "projectedSplatCount": 60262,
         "nonBackgroundPixelCount": 30883
       },
       {
         "step": 25,
-        "sha256": "9086f3ca72e7f479a6a47d87966d86ce8d2c637aa48abc17f2e9305c22970d55",
+        "sha256": "ab1d07a5e3a74943573f852df87028bf74a28a58bb087a0d4856a86d61e4f09a",
         "inputSplatCount": 71588,
         "projectedSplatCount": 60707,
         "nonBackgroundPixelCount": 30881
       },
       {
         "step": 26,
-        "sha256": "7d56363ac56db955402cadadc4866ee129ed097697a0f5b0c6a44924d8d6bc77",
+        "sha256": "81972342188ee17c67b0afd0703be0c56e312ef4c9ea30f3c9ef4a11fef56257",
         "inputSplatCount": 71588,
         "projectedSplatCount": 60945,
         "nonBackgroundPixelCount": 30885
       },
       {
         "step": 27,
-        "sha256": "8f4f5093a100b6f71829c93cb958c56752f1ba11f01911e48e8497d1d0579d69",
+        "sha256": "3cf8fa782aad2bdff74de0dcee68862b877193b157a468538e160de02f3c76dd",
         "inputSplatCount": 71588,
         "projectedSplatCount": 61146,
         "nonBackgroundPixelCount": 30886
       },
       {
         "step": 28,
-        "sha256": "e01fcc4dc0d3a432d03ed6247cb247ea6dc86f2251ca721bb92d51c3dbbbabe9",
+        "sha256": "7b37527db55426a25e6b1ae1c4da35cf07f8c5ec60299010ae7e408968405d65",
         "inputSplatCount": 71588,
         "projectedSplatCount": 61381,
         "nonBackgroundPixelCount": 30889
       },
       {
         "step": 29,
-        "sha256": "48c72d06ebcde9e01aedebc9c7f52e3e1c3c70b9388a720d2cbbbee22ac81209",
+        "sha256": "28b7550e85c7b25fa6e97d6335bf9b6345c1157541b0c7bb6268a32d82960223",
         "inputSplatCount": 71588,
         "projectedSplatCount": 61623,
         "nonBackgroundPixelCount": 30893
       },
       {
         "step": 30,
-        "sha256": "e0b5493dfea2d95d151eaf6a519a8f80d8f7c3f8410cf3cd0c4855c60aee331c",
+        "sha256": "fbae2779628f55ef85bb7491860e48e69946a9a760b0937aff3a58ffa183ae35",
         "inputSplatCount": 71588,
         "projectedSplatCount": 61844,
         "nonBackgroundPixelCount": 30896
       },
       {
         "step": 31,
-        "sha256": "1e66edae35bee36cf6c74c6a4933ea3cb7004d462b8775b1f14117938d4e9afe",
+        "sha256": "f01bf50ff167fb4107ea0124767b2d98e0a8adc49a87555e964b1a4762831354",
         "inputSplatCount": 71588,
         "projectedSplatCount": 62040,
         "nonBackgroundPixelCount": 30899
       },
       {
         "step": 32,
-        "sha256": "0c62ea5746d007fabaf7202c21b2db49095136beb4ff3f4158c5b6186fbc2663",
+        "sha256": "e42a6edd93f716e6943c76e3a7954dcee4680d1be4bbd3a0b6ed0c2428789dfc",
         "inputSplatCount": 71588,
         "projectedSplatCount": 62230,
         "nonBackgroundPixelCount": 30899
       },
       {
         "step": 33,
-        "sha256": "77f68d3d916e7978280f2676a42413386cc55a8a3ae252ae3e6ea174167585a5",
+        "sha256": "ea7528907118832ccb8a78749458dc73c49e00cf55c2cc996ec4a01687106f1d",
         "inputSplatCount": 71588,
         "projectedSplatCount": 62414,
         "nonBackgroundPixelCount": 30875
       },
       {
         "step": 34,
-        "sha256": "09c921807a40c994fa129f11062676d1dd4fb9855c38fd328eecd633aa958416",
+        "sha256": "188a5e34a3914b6b193b2123921a2a5c243c03b121843c64a09ac2217ee2a2b4",
         "inputSplatCount": 71588,
         "projectedSplatCount": 62573,
         "nonBackgroundPixelCount": 30874
       },
       {
         "step": 35,
-        "sha256": "e77da4299920b215e72709d709ca8a096125203d05e50b3b98bed9da72a40299",
+        "sha256": "6d7f1a418a46aba4967655d4bbe4aec0b975f7d8c1bccb1316d8e74173897d5c",
         "inputSplatCount": 71588,
         "projectedSplatCount": 62704,
         "nonBackgroundPixelCount": 30876
       },
       {
         "step": 36,
-        "sha256": "3e5bd349d3e69202e5e13266949a82a383c550d64eb8ae6c8315590e653f7c9a",
+        "sha256": "92b651037bdcc97c7fa656367fc06697c4bb24925a9f89ebb7ce3476eb9dbf17",
         "inputSplatCount": 71588,
         "projectedSplatCount": 62838,
         "nonBackgroundPixelCount": 30877
       },
       {
         "step": 37,
-        "sha256": "2aef418e70b7f5327a2568584afd604d0cb297253c74ab3211d26ed96d790c10",
+        "sha256": "40508a1ed116e3b47225ebc241e08ceedcc163ec5a8e5789fbdf8a1a9af396e2",
         "inputSplatCount": 71588,
         "projectedSplatCount": 62958,
         "nonBackgroundPixelCount": 30868
       },
       {
         "step": 38,
-        "sha256": "ccb6fdace1489099f545dd6aa1735f7e157c4b5e1bc987fa97ea9ad6ffa2144e",
+        "sha256": "5022864d73c9f5d5cf314915eb9c224e20904e04f5a0b8d826a6ec3488724669",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63068,
         "nonBackgroundPixelCount": 30868
       },
       {
         "step": 39,
-        "sha256": "dbd10a3509a871d4985e84a7a44a2fcb9931ce8a0a36494da97e90281af59aef",
+        "sha256": "30015d59f6adcbb99555eb8e1b6b96f093c4d6a0a0afc2766f229d68bf16d457",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63182,
         "nonBackgroundPixelCount": 30883
       },
       {
         "step": 40,
-        "sha256": "eaca9447a3a1c237bddce2e25b847273f5634a3e39d35b0ffa9d0389eb7cbd4e",
+        "sha256": "41ced7a4f00897607d220555a58192d98da17f2a79bebbe2130d551f15425db8",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63272,
         "nonBackgroundPixelCount": 30877
       },
       {
         "step": 41,
-        "sha256": "a8453fd75153e06e2d7cfb71522bd949b2829309e98d0754609c746ec93590d5",
+        "sha256": "b5822c2f59043154e52dc5177e3722112c21498dd0deac1d44da63fefa42d356",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63358,
         "nonBackgroundPixelCount": 30876
       },
       {
         "step": 42,
-        "sha256": "eacafd463f7579b6d699834a18745d77de8e9b8a12b4d0b3d5cd607c187a34f3",
+        "sha256": "496fbab342ac0a49e76130078303877a97c95cef4b80feb203a7e57d014e4775",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63466,
         "nonBackgroundPixelCount": 30883
       },
       {
         "step": 43,
-        "sha256": "e46c4e27b7b87a9f0e9a50532f2340b5fb3f372660b07a2805062090b22630ac",
+        "sha256": "dd9bfe6702b833f9f6830b9cf77c31e3dca0cc9eb8584631125eadfbaf1b0ff9",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63533,
         "nonBackgroundPixelCount": 30897
       },
       {
         "step": 44,
-        "sha256": "a772235dc0041e45d981395e4baa170656edda04dd4096c82e1b37ff650c07ad",
+        "sha256": "aaf95c2166198836621ab0c08e30e4746313113c2956802319b278cae1523f89",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63610,
         "nonBackgroundPixelCount": 30918
       },
       {
         "step": 45,
-        "sha256": "42b7c76aa863a1c080cc8e685ffc0131ca0553301019381265c5b20960b8a497",
+        "sha256": "49b09201c090b24f3526827e3fe5ed7c67093dad6feec0e822955b142fd0025b",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63764,
         "nonBackgroundPixelCount": 30945
       },
       {
         "step": 46,
-        "sha256": "7908cd5eb9e92bb4595cd77930c024c99841cbf3b200cdea3e0a6ff5e89e756d",
+        "sha256": "7248d4592bfd3b60fa94f940af5c03df50b0cda725db80b9d8624616e367dd7c",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63804,
         "nonBackgroundPixelCount": 31032
       },
       {
         "step": 47,
-        "sha256": "ec73677f8c6eb8e836201af74060d92951302dda1054045e1baf102c5baff684",
+        "sha256": "b6ea15c2768b576af0749135a869ee3bab12c8b85e7ba814cd8cfe5e8a396949",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63803,
         "nonBackgroundPixelCount": 31176
       },
       {
         "step": 48,
-        "sha256": "99789ff35316da1579f301928d4d1f56b4535b15253bcef78dbd0aa61a08f8f7",
+        "sha256": "dce82da4571b78633df9d49a96c75113c95314c573ecfb85417b3038ceb16f86",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63804,
         "nonBackgroundPixelCount": 31345
       },
       {
         "step": 49,
-        "sha256": "dd929be242733afa147be72cd67a8ee6adfbb2984b53ab67f1399a6abf08f342",
+        "sha256": "6b89c95bba5d729aed36d872a578a873b5770a7a192d575e34b5e5089defb3da",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63803,
         "nonBackgroundPixelCount": 31534
       },
       {
         "step": 50,
-        "sha256": "760b6f61cda1f08ad5a244df52bbb66e520202ea48df632c351736f5c4b7c9ab",
+        "sha256": "c5f1e9c1e84911c7507072c778a95a0c13bcaae3a9532d8e003e997c4be9809b",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63875,
         "nonBackgroundPixelCount": 31717
       },
       {
         "step": 51,
-        "sha256": "5a7527b6602b69cf212f291944a5a220c9b6bee243cfd60ae1a155b437f009c0",
+        "sha256": "dc04fdec84f05897d94c683b83c5fbeffde926160f33a04954668e32ce573960",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63921,
         "nonBackgroundPixelCount": 31925
       },
       {
         "step": 52,
-        "sha256": "e0c36065b63de1853f2e0016ad56ccd6a2ee5a7bffecd9baee3eddb71c695ae2",
+        "sha256": "3780e10fdda60f85554578b0070f36cac590e1565f10eecfaf24ede72120f8a7",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63920,
         "nonBackgroundPixelCount": 32116
       },
       {
         "step": 53,
-        "sha256": "6265e197d6260faf8163c8f3033a3ecb7728136c0a3a06a01a649156aeb32483",
+        "sha256": "773e5785d2047da6c5a24e90edd65346ed114063c423274e4455acb65141d939",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63919,
         "nonBackgroundPixelCount": 32303
       },
       {
         "step": 54,
-        "sha256": "2e00d2fda640cc9aedc2b420ad117ee064ce3f69581906543cc70c96730eeef0",
+        "sha256": "0ac2eac9e2e38c43044ca358cc26be3b78aaa435f0acc80090ceffabcd2d672b",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63920,
         "nonBackgroundPixelCount": 32520
       },
       {
         "step": 55,
-        "sha256": "6ef256d06cd458318f64c3b7617734ab7b4687e7ba47d2ca165541e7a7e51933",
+        "sha256": "fc985f5a4966c02379b6445507f3b26d8f827232c15b822317c3eb2c453d92cb",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63923,
         "nonBackgroundPixelCount": 32721
       },
       {
         "step": 56,
-        "sha256": "804a42b406a8c2dc6ef1d20218c7e87f60ea5b7554669a7379f553589677710d",
+        "sha256": "709e1b6ecf208c22301139767e462d126eaf1f417035e035265fde7d8d2fa15c",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63995,
         "nonBackgroundPixelCount": 32911
       },
       {
         "step": 57,
-        "sha256": "b70d250768c50f0ed81db232525ed879e23f469083f4c722845d322d27742f1d",
+        "sha256": "eec956a89c597d1cb14c32c605a72923655bc43c0bdd27471ff95c58ee8f9474",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63994,
         "nonBackgroundPixelCount": 33116
       },
       {
         "step": 58,
-        "sha256": "87e9cf0c380340083311a9f5949089d75d40e3ab43e358855eccd54fc783ac27",
+        "sha256": "e2fecdf3d5ba11516a044625de15bbb9a222c05fceeaff3edb7c25dae8c06a4a",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64060,
         "nonBackgroundPixelCount": 33288
       },
       {
         "step": 59,
-        "sha256": "405a8d559aefc9ce5f92141d0eb8c341ebc4a1aa6de99ef32f508cd09c1e7b57",
+        "sha256": "d193b461686fc8b119b82bc76beea9bb7b36129010e5335745ea79c83e351a64",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64125,
         "nonBackgroundPixelCount": 33476
       },
       {
         "step": 60,
-        "sha256": "5c4b18c79467ed3ef050aab565604082b515535bb38b0521b33cdfbbd74366fc",
+        "sha256": "5c4a54240faa4a7465efe03a633ddcb785a010d0a56a75b0b75323099e99ba92",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64188,
         "nonBackgroundPixelCount": 33680
       },
       {
         "step": 61,
-        "sha256": "dd231f3873272e48236297973a26d67c2bcc2edb585515f8894a12e89765cf1b",
+        "sha256": "a4729324b2f61b419fdfa1717e73e7e40a14eb403ed6e48d38b0c49fad30ba5c",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64260,
         "nonBackgroundPixelCount": 33825
       },
       {
         "step": 62,
-        "sha256": "19c202cb53b481f5840f07523be72c1f8cf1500981eb12dbef36ef34ab1aab7e",
+        "sha256": "009e5e83d755df1a840339c484d6ca3c7466438bea4287687541798c275827fa",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64318,
         "nonBackgroundPixelCount": 34018
       },
       {
         "step": 63,
-        "sha256": "6fc14461380591a0297b69190f157499830dfa7779d6407a7ac76f9e34dfa84b",
+        "sha256": "0b4fcf3c8c5e2088fb50b1521ae6bfc621a26bea0540c41c69c3753c986586ef",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64367,
         "nonBackgroundPixelCount": 34246
@@ -984,441 +984,441 @@
     "physicalSupport": [
       {
         "step": 1,
-        "sha256": "d35084d8d2fc8c0fc775e45774fa9c0ccb718f179186c6bafa1b6f2f0f3ad079",
+        "sha256": "55c6a30fbc85527228ee4560b4d5f8a049031ac867ff76efba0daa9eb5484fdc",
         "inputSplatCount": 60679,
         "projectedSplatCount": 50512,
         "nonBackgroundPixelCount": 48744
       },
       {
         "step": 2,
-        "sha256": "f98893b83da139e40d4dd70407020055bfc74e2aad4bdc50e17ceec1e260a9c2",
+        "sha256": "1707663d65b7488a9a7809919eb6a5dc237440887d630f0489c27ae4cff30560",
         "inputSplatCount": 61102,
         "projectedSplatCount": 50701,
         "nonBackgroundPixelCount": 43622
       },
       {
         "step": 3,
-        "sha256": "8b7da31b9e2d2b9d9867c6f076688a59b0313ed7dde2c7b408db311641edfe18",
+        "sha256": "5779b241223a52fbfcc45779d1ce94c591c52d19cb484e658fb6203bd5d374f5",
         "inputSplatCount": 61528,
         "projectedSplatCount": 51033,
         "nonBackgroundPixelCount": 39831
       },
       {
         "step": 4,
-        "sha256": "ee16060063ce5eeb67699e3075554437016772186fc07fc0226cf9028eec79bf",
+        "sha256": "c71bea691eef4968c9d0f19d9de74ddd9ef4d74ce3c43dd8d36b431e33f66eb6",
         "inputSplatCount": 61957,
         "projectedSplatCount": 51393,
         "nonBackgroundPixelCount": 37629
       },
       {
         "step": 5,
-        "sha256": "19c6be149d3842d1c43a6ea867c539c089ad432b0e1220d88db64d133bbdc678",
+        "sha256": "d3204e05ca9a1209a3a0d7b97e1093493d52f20b0edfdf21554c22b38b9c6489",
         "inputSplatCount": 62389,
         "projectedSplatCount": 51792,
         "nonBackgroundPixelCount": 35707
       },
       {
         "step": 6,
-        "sha256": "d0b48213815ca2d043f09a952e6d179adf8280f379a2beebcd1cbc57624cf69f",
+        "sha256": "6f7feeb4dcf0677d83986610a2f78ea1d75af41c391804406a9ae9f3918071fd",
         "inputSplatCount": 62824,
         "projectedSplatCount": 52201,
         "nonBackgroundPixelCount": 34158
       },
       {
         "step": 7,
-        "sha256": "2efe4d2a2af3d0a7d511b41e8bc139e2451e610bd2b916653336ccb952ab67e8",
+        "sha256": "db08c87abffdf9521a2f6b0222b7b35cb685e2103d2d081e84bad40888b508fb",
         "inputSplatCount": 63262,
         "projectedSplatCount": 52601,
         "nonBackgroundPixelCount": 33148
       },
       {
         "step": 8,
-        "sha256": "04bda40207a2ad2f5dee6b6b8b2b5eafc1a8d1f6d04d0e4cb3d5cf67c3ffe959",
+        "sha256": "00b5370eac81505ec5e8e4a65e20849dc3214452c29fb185c892c060d0dd8881",
         "inputSplatCount": 63703,
         "projectedSplatCount": 53019,
         "nonBackgroundPixelCount": 32394
       },
       {
         "step": 9,
-        "sha256": "ae10b41b15677ec482e5d48ab70a1375b597531e57bcc6b02e95f0abb6665781",
+        "sha256": "1a26ba616b2c749e7572b38fa64b7638fa41471245d1a92fa3ab437392baca55",
         "inputSplatCount": 64147,
         "projectedSplatCount": 53438,
         "nonBackgroundPixelCount": 31530
       },
       {
         "step": 10,
-        "sha256": "f120d90b4a593d836e4af2a897969b1232a77601cbeca29d83cc4c636508c9c1",
+        "sha256": "9ed911ae0c34f87e78c4539e01b80ef018bc5e72451d3b64692f361c88dbd934",
         "inputSplatCount": 64594,
         "projectedSplatCount": 53870,
         "nonBackgroundPixelCount": 31205
       },
       {
         "step": 11,
-        "sha256": "54de7079ebe3cf737c9b29c98c65d1816cf867b43358acc9a3c4708f8747d858",
+        "sha256": "7276c0131c9a2cf5747f749fb1720b4ffb43abfde8e17909cfa58fab9fde0c2c",
         "inputSplatCount": 65044,
         "projectedSplatCount": 54303,
         "nonBackgroundPixelCount": 31185
       },
       {
         "step": 12,
-        "sha256": "bbc66be9bd4e234aae09db952acb886fa66248f716f19252083b8924e0d9574e",
+        "sha256": "e404b3b5e20c827ea2fae57e41bda753f5830c2e35b01eb2c843525deb2dc56e",
         "inputSplatCount": 65498,
         "projectedSplatCount": 54736,
         "nonBackgroundPixelCount": 31189
       },
       {
         "step": 13,
-        "sha256": "ca30a3b5f6e5c9a87702d2a313b57864ee03573fdc20ededcaf17a26dd159868",
+        "sha256": "a5c6fa42ace6145c5f7510fdac18fa276eeedd1af2d72ee78a8995d15c8eb73e",
         "inputSplatCount": 65955,
         "projectedSplatCount": 55178,
         "nonBackgroundPixelCount": 31170
       },
       {
         "step": 14,
-        "sha256": "4da3dcd108659375ae3f2dee54751fb632db9cd80fe61e14e8c3abe9f31da1ed",
+        "sha256": "bba379fb80c8b5920359b26b7714a116a0f11859e0d2901badad4818d94b72a6",
         "inputSplatCount": 66415,
         "projectedSplatCount": 55629,
         "nonBackgroundPixelCount": 31165
       },
       {
         "step": 15,
-        "sha256": "c7e0a50837d55fa2b383cbcf115be4e8deb7b80bbbf5c603dfbdebd16197d4d3",
+        "sha256": "d58ba073f7aaad3d83d8626dd9b4b28e2b441534de601a4f7b76501ace312e77",
         "inputSplatCount": 66878,
         "projectedSplatCount": 56074,
         "nonBackgroundPixelCount": 31089
       },
       {
         "step": 16,
-        "sha256": "799e2a4014bf39b2942b5070eda74a2eca96d3f9a8abe6e424befa530ee9826c",
+        "sha256": "764529e2c0a431107aef70d42da89dc66984a35841b205529ab9e412a88778bb",
         "inputSplatCount": 67344,
         "projectedSplatCount": 56522,
         "nonBackgroundPixelCount": 30985
       },
       {
         "step": 17,
-        "sha256": "73e31ab6ef6bcc35f4cb2ef776cecab519959b72a068b1f4e394af6fe69f8dd3",
+        "sha256": "ce69150daa13656010cc0ef25c042ecf824e0983a82023319e6c4f551fc1c82c",
         "inputSplatCount": 67814,
         "projectedSplatCount": 56966,
         "nonBackgroundPixelCount": 30862
       },
       {
         "step": 18,
-        "sha256": "26c8314735bfa7bbfd304c09d8061ae1be29238a1cf07c2e123b6a2ffb84c872",
+        "sha256": "eee32d8b8f0f6f647eb2f318be67abb0189d22486d375531b99aff0fccbd28eb",
         "inputSplatCount": 68287,
         "projectedSplatCount": 57417,
         "nonBackgroundPixelCount": 30860
       },
       {
         "step": 19,
-        "sha256": "c8fa4aafef94f5d24e53b66b5478386f0cb730ced803bfc1ca23a56a1bb0b4ac",
+        "sha256": "b5ea9c5260bd691ac2d64bc892e5b867d4585b89927b7c1c9d937ea2f0144a43",
         "inputSplatCount": 68763,
         "projectedSplatCount": 57873,
         "nonBackgroundPixelCount": 30870
       },
       {
         "step": 20,
-        "sha256": "7f8c25b8f37601133462895840ed0666f05998fe8a1323a31e6252ffe9dd44d5",
+        "sha256": "b5542df36d1d51defa0ef53f4218f95f9b06aeb86f5b8fba49e67eabe8ab7df5",
         "inputSplatCount": 69243,
         "projectedSplatCount": 58336,
         "nonBackgroundPixelCount": 30869
       },
       {
         "step": 21,
-        "sha256": "69a6d1412b1ff04cff05470e7b9a56caa13775367f62e9a001ec475e1ec166f1",
+        "sha256": "2da47e93d1e5dac088f74df5829938f365a45b8e02e82e85f6211ba8e8397af7",
         "inputSplatCount": 69726,
         "projectedSplatCount": 58813,
         "nonBackgroundPixelCount": 30872
       },
       {
         "step": 22,
-        "sha256": "28bf92ad9ae4b49a2da558e7d0e6eedb9d10db61ef5fb72a2473cf2dc7118570",
+        "sha256": "6762089ba4cc9e8e72a004fbf1c53d451485e3e9661c6be57e53b06fc9afd352",
         "inputSplatCount": 70212,
         "projectedSplatCount": 59293,
         "nonBackgroundPixelCount": 30870
       },
       {
         "step": 23,
-        "sha256": "723f66267cf586a7b04ebc30f9513367b4366d62e911fcfbe74c9a1d60f77f97",
+        "sha256": "0b7bffa40ae425ab956d3c7269db88462b9e2bb84e2c94544cd88d531f2a8dc4",
         "inputSplatCount": 70702,
         "projectedSplatCount": 59774,
         "nonBackgroundPixelCount": 30876
       },
       {
         "step": 24,
-        "sha256": "7c52fa79e5e6be9ce171ac84d1e2d31ff880e54cfe197d4ebb8424de1dd56f5e",
+        "sha256": "df50d2bd3d4edad1a7058d6a4e7fc99c0ad2c06737c4d5cdc7d4457e38c0a4e7",
         "inputSplatCount": 71195,
         "projectedSplatCount": 60262,
         "nonBackgroundPixelCount": 30883
       },
       {
         "step": 25,
-        "sha256": "180e80229fe22c0d415e633be5ab22b40a479ce25347d31635ae7d560c7d6343",
+        "sha256": "fbd94ced9ec2fdea8d2996dc128b483129a7dc103b4f6a8e087602647fe703e7",
         "inputSplatCount": 71588,
         "projectedSplatCount": 60703,
         "nonBackgroundPixelCount": 30877
       },
       {
         "step": 26,
-        "sha256": "1c5b2a0d296c0b0d6d897d8b6674104cac0fccc4460595446babb5b0ee56c89d",
+        "sha256": "89c437ed71bdfe23ba75020327fac2670efd5b80b0643f9e3055d2fd21b23b31",
         "inputSplatCount": 71588,
         "projectedSplatCount": 60946,
         "nonBackgroundPixelCount": 30858
       },
       {
         "step": 27,
-        "sha256": "3b17824224e3e916d1eff8732ffc99b4d0a0c5cdfd022b38eca18fa76761d691",
+        "sha256": "9744b04412dec753b6a0b0be2ad92f3b493417dffad28c0bd3431319d4df05f3",
         "inputSplatCount": 71588,
         "projectedSplatCount": 61155,
         "nonBackgroundPixelCount": 30830
       },
       {
         "step": 28,
-        "sha256": "8c83ce4515bef1c803a9d809a9b815385d320bdb11590f32f856fc284e0889d0",
+        "sha256": "5dc62ba2fec0fc03b3038c69af9940aecce097073b08cf8ff0166254c2b0c0d3",
         "inputSplatCount": 71588,
         "projectedSplatCount": 61348,
         "nonBackgroundPixelCount": 30781
       },
       {
         "step": 29,
-        "sha256": "5d1fbfbab4cdbd5c6ee207e173d7d499a9e96e774133a2d95be7ab707f6d6ca6",
+        "sha256": "406c9d0768f6529caf0823a10da72b2ef8c22a0e182a8228e079d8388330781b",
         "inputSplatCount": 71588,
         "projectedSplatCount": 61534,
         "nonBackgroundPixelCount": 30605
       },
       {
         "step": 30,
-        "sha256": "05bf9ab89f0f89c3e63e3256f1147360614fc4f329ca65ae6eef1a5841e9789b",
+        "sha256": "2c1d3387391cc34f5249c19cd921a547caa040f9545814663b67d8b28ced2f1a",
         "inputSplatCount": 71588,
         "projectedSplatCount": 61705,
         "nonBackgroundPixelCount": 30535
       },
       {
         "step": 31,
-        "sha256": "48c06bb8b83af609baad984849c905be66c4f92a77ba8e6d51bc5fd68da789bf",
+        "sha256": "632fb5d35812e5cfc3d57f31a752fcfde4839047ea73330da4b60b53a5ab748c",
         "inputSplatCount": 71588,
         "projectedSplatCount": 61856,
         "nonBackgroundPixelCount": 30430
       },
       {
         "step": 32,
-        "sha256": "756e8cfbdbd76e7682ac479ff42cb6cc9d6b1c0ce71c8900650db50054fffb2e",
+        "sha256": "f120d9939b8fb91e2748624901888f1d131554eeaf993628cb5c071a4fb75d34",
         "inputSplatCount": 71588,
         "projectedSplatCount": 61994,
         "nonBackgroundPixelCount": 30394
       },
       {
         "step": 33,
-        "sha256": "22c9bd336102818b7795f9a3ebdd49503ca7fd52d6dd86d8aa385fd38b3ea740",
+        "sha256": "289958e21096e2b7800da36d50fa5eff711819f1ac69ed2649e8bea20e69f6f7",
         "inputSplatCount": 71588,
         "projectedSplatCount": 62135,
         "nonBackgroundPixelCount": 30188
       },
       {
         "step": 34,
-        "sha256": "722a17cefbe11c9ed82702deb019ffe2020b2149737c9f3f0fcea7c4d5c9789a",
+        "sha256": "be66fc052c0a4bdddea67e3d067a1c21141e9ae644a57c5ec3be9c0a40abd625",
         "inputSplatCount": 71588,
         "projectedSplatCount": 62264,
         "nonBackgroundPixelCount": 30064
       },
       {
         "step": 35,
-        "sha256": "8ddbef4f5065015c094db06969c172a00e4bf2457835d4aa4e5fb319bad2e85b",
+        "sha256": "6b8826e93376a78e95ab63a056976955a3cd0c5b7f4f4ed1eb530b259f9db653",
         "inputSplatCount": 71588,
         "projectedSplatCount": 62404,
         "nonBackgroundPixelCount": 29974
       },
       {
         "step": 36,
-        "sha256": "30fe3d9e682b51e999e747b995b8d519506f61fea091fb928d935380e6e8a380",
+        "sha256": "8957c8a6c3475c8b421b3f3f443e8a1eaeda7545bec3bd94c3ac7e5500aa56fa",
         "inputSplatCount": 71588,
         "projectedSplatCount": 62532,
         "nonBackgroundPixelCount": 29971
       },
       {
         "step": 37,
-        "sha256": "c8c35d983a4dcd309bdc4d48188761ec95e0fba0d45e9cf75553ec66aa34755a",
+        "sha256": "77e4c3fb3fe7dd5821639ac6a6c87ce4f5b1e71354a758a5d55e37d2b4db5929",
         "inputSplatCount": 71588,
         "projectedSplatCount": 62671,
         "nonBackgroundPixelCount": 29687
       },
       {
         "step": 38,
-        "sha256": "4102bf9d422e8d5189ce3551c07d1f64424f147f7d7f8b0523df6f7c57c2ffd5",
+        "sha256": "6aeba62393119864b2b1e5d93b7e4374115d2dd4216d5fd8465bfaa7a32e5bf1",
         "inputSplatCount": 71588,
         "projectedSplatCount": 62791,
         "nonBackgroundPixelCount": 29587
       },
       {
         "step": 39,
-        "sha256": "1a1271c6da6715128daa525ea47783a592a1e89bcc29de0e6642496c1c9fe9e5",
+        "sha256": "3569d42d9a4542051dab0dc73f9c516922bd1843e7c0ca793a3a4cd8a77f9a2b",
         "inputSplatCount": 71588,
         "projectedSplatCount": 62887,
         "nonBackgroundPixelCount": 29430
       },
       {
         "step": 40,
-        "sha256": "3391e1de2d76002bf17530b3ed60f48259658504077772cdfbbe07ecab4db0f9",
+        "sha256": "82c6ac1950667a3de2522d12008bcb644bea7e1f88d0286476b0cfe9394218d5",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63002,
         "nonBackgroundPixelCount": 29398
       },
       {
         "step": 41,
-        "sha256": "46a6c53e6d487b8d974f7c9848f7a32655e4fb32a46e89d6f3acb10c41951d93",
+        "sha256": "6e71478ae51779d2d617bc937d7773b34b806f0d7c75e8c46d034ed193ad6f55",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63093,
         "nonBackgroundPixelCount": 29400
       },
       {
         "step": 42,
-        "sha256": "784b964ab44726fc4b4e12e7315a3122b1aee8f9138d9aeaed68b36cd914923d",
+        "sha256": "5e41c0b0f4bfaabe0e3d68f22ab85a1e77b2c69302259698efdcfe4495073ad9",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63195,
         "nonBackgroundPixelCount": 29202
       },
       {
         "step": 43,
-        "sha256": "f90a3a52cd492350bbbe37000acd2567e5c551a59c18ef27fd67037733b55272",
+        "sha256": "55296b4eea3294efe5d66420502ff77c137f082b9ea269987867a483d82ab376",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63315,
         "nonBackgroundPixelCount": 29154
       },
       {
         "step": 44,
-        "sha256": "c0210944ab361e4aa07605d1d4e7308b50fa1838c34cd65b46c26c5017ef5715",
+        "sha256": "790217989f8ce7a4b0d454d6c780eab90ad4954fa18da98e9b19db3bf877875e",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63408,
         "nonBackgroundPixelCount": 29096
       },
       {
         "step": 45,
-        "sha256": "dde03bc77d96a0af5722aff3f1165e7f39ed493abbf7808046de05e32c937d7b",
+        "sha256": "66cb52d65d7100baa7b266a5f4928dbc893cd4a34e982bb1ac6f6426eaa38bb9",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63505,
         "nonBackgroundPixelCount": 28902
       },
       {
         "step": 46,
-        "sha256": "f42e8fdf5e3409fc7d647ce6ec4d6c057fed5f42426061d0c4c6935cc9535e3b",
+        "sha256": "016ce8f6d70059a063f85ba719bff593f1bcc014125e07a812017a5f79b55483",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63584,
         "nonBackgroundPixelCount": 28943
       },
       {
         "step": 47,
-        "sha256": "4bc73a1df99fefcb4a4c335761ffc137bfcd1778250a395a547761f84d0f6409",
+        "sha256": "6b13803784864d8bef490eacc4b5db45721ff7605150aa9a98e8c10905b93f73",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63681,
         "nonBackgroundPixelCount": 29028
       },
       {
         "step": 48,
-        "sha256": "bf1d0176696082f89e800d5425563e71da1db9779826d2707b913b058fd1fa5d",
+        "sha256": "085d469956a7d430e977a62cfcc2a94c5083aa00e98d0abf10a56bbf5a25ce3d",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63765,
         "nonBackgroundPixelCount": 29171
       },
       {
         "step": 49,
-        "sha256": "09ed231639f0a845d1393d0afa6b40aeed5d969d6abd9347d67234175e7b14d2",
+        "sha256": "a701e6336a49268b46dbd41aedd27d23fa45e97fc9a6691a5b2eb64ef0de6807",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63832,
         "nonBackgroundPixelCount": 29316
       },
       {
         "step": 50,
-        "sha256": "44e970f260116e54dc04e5d5fe2dd306a0061ee794a0bbd3d68a0966ecfd3e93",
+        "sha256": "e0fc5455207577c15c58067601dcd940548278edb700623fa124ff90f4ebc45b",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63916,
         "nonBackgroundPixelCount": 29501
       },
       {
         "step": 51,
-        "sha256": "eebdb95a5cc19eac4e9c3bc30fdfd79606901690666eadcb3884c08ae68383ce",
+        "sha256": "aa0e7ccdd6b57dbbaefe010b88888a2c231c5d0337c5ceb72cdf45b2b5399dd8",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63997,
         "nonBackgroundPixelCount": 29633
       },
       {
         "step": 52,
-        "sha256": "a3cb66b52be4f976d18363173595fef1999bc3ac3a40376bd98f28886717ef19",
+        "sha256": "27ad25afa7de73818c09439c8c28a42a54813f2e229a2ddf09d487b1a285c6cf",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64082,
         "nonBackgroundPixelCount": 29808
       },
       {
         "step": 53,
-        "sha256": "0e753418513e21665ed4d3f9be87cc650fd745924b52eb2e7922b201c939b6df",
+        "sha256": "a8e42549df006fedaf631c4429c70fd8c88c52a653e327989afc8d38e211c4a7",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64165,
         "nonBackgroundPixelCount": 29940
       },
       {
         "step": 54,
-        "sha256": "0a95f9d1a001de5c8a8e2a8359c1d0e4f36370e1d58c74e6bdd952acf6c0133e",
+        "sha256": "fb03ec8a7fd3915c41f5964745cbe86c67a3fe9128938a53823f0330089b317c",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64225,
         "nonBackgroundPixelCount": 30051
       },
       {
         "step": 55,
-        "sha256": "7bc7e7b7226d50ba7890622266901a933c7aa21bb192336381f4a6cc5be111e4",
+        "sha256": "d36c9d340361214bbdf50a7ac7e87c6ebddead1f4dab941994527c25af4af695",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64288,
         "nonBackgroundPixelCount": 30244
       },
       {
         "step": 56,
-        "sha256": "092bf275daa05017e139b29c4a6a8960b599809334c5172acb59d8b7fdfaedc3",
+        "sha256": "f2096f14e77d491904f2c3b9575e2ad4e04dc1463da711d1812ea234425b48b1",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64323,
         "nonBackgroundPixelCount": 30297
       },
       {
         "step": 57,
-        "sha256": "b74df053ca290569427de5c19fd1afa06521f77a0bfc2270b948aeec019934d9",
+        "sha256": "4a1103b6c89aeb5ebcab4c4da73dec38b69de69a1b0e52b50adc729a31c2797a",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64369,
         "nonBackgroundPixelCount": 30367
       },
       {
         "step": 58,
-        "sha256": "78ca9d827e0ea1b846f63c97f7e2e66a1469191772fe4d3dce3d0b8b0b47a735",
+        "sha256": "44534aac8157b625a73b9d685dabe24eb659714b9ada8fff4abd4cf53371c96e",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64418,
         "nonBackgroundPixelCount": 30512
       },
       {
         "step": 59,
-        "sha256": "1b3871d79457f2edc7bdb4d930d401dc8507373f442f25f67ebda8f8d1745a7a",
+        "sha256": "b2bafe9fa76b30783b3a6801b4bd2bde9ab1b4cb8fd064e3d48b878fe0d7c625",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64468,
         "nonBackgroundPixelCount": 30673
       },
       {
         "step": 60,
-        "sha256": "7cc15bce3e2ce9a4b9f4a6b36fed0623fab903185009b13e96774cc032f99ab3",
+        "sha256": "08dca4f5d4e6cc2dc0c7534ed55fb96e685423a23976677d945d8aa16bd00faf",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64519,
         "nonBackgroundPixelCount": 30677
       },
       {
         "step": 61,
-        "sha256": "7fb7bc10bb1307311c6384412036499653c60f8abb96d8c5b8a8430cac848137",
+        "sha256": "20ad101352535d8d2218025040c3636c652289dc6d8c9ff92f8077f0a4b23826",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64559,
         "nonBackgroundPixelCount": 31013
       },
       {
         "step": 62,
-        "sha256": "0c62336ca6a45adf45f6e787aaa27e8cd10afb0282e92f8245919a9d1b1993ff",
+        "sha256": "56c70282c8db256277b6e5334906603650d47b07f928f0482c592f75193e3173",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64592,
         "nonBackgroundPixelCount": 30716
       },
       {
         "step": 63,
-        "sha256": "6022220cd53541358212d51427ebcef63fccfef52107205f820b4fa3e3b3f8ec",
+        "sha256": "3b37766a5182cbf2b75540a84aa873f18cd7d1c714e383ea88c194a8227dc4e7",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64632,
         "nonBackgroundPixelCount": 30694
@@ -1427,441 +1427,441 @@
     "visibleEnergy": [
       {
         "step": 1,
-        "sha256": "b04f43c0dff0f052a26045c8f649471123e97062a719c403695b19dfd419ba84",
+        "sha256": "2556668dbac2ba69fc008e9705c8281f9c01ae97905615a56ff059a80b1f8ec2",
         "inputSplatCount": 60679,
         "projectedSplatCount": 50512,
         "nonBackgroundPixelCount": 48744
       },
       {
         "step": 2,
-        "sha256": "f699f8500daaeeb8d8a8ef6018eaec62b8b96db5d07d84ca0d5c1626164acc83",
+        "sha256": "db0f6941a13ae7fe425d20b3791dffd0e81c203e4da682e406efd6652d6392f9",
         "inputSplatCount": 61102,
         "projectedSplatCount": 50701,
         "nonBackgroundPixelCount": 43622
       },
       {
         "step": 3,
-        "sha256": "16c9b0c0c15c6b10f17b5d1c925821df50bc21256a5018bd7dd58afcc53e3091",
+        "sha256": "29ca068a7e030ce12b48ac0f3be74ccbf59c946ae57b72d5fe9cbc6256a0706e",
         "inputSplatCount": 61528,
         "projectedSplatCount": 51033,
         "nonBackgroundPixelCount": 39831
       },
       {
         "step": 4,
-        "sha256": "5518bb891a748040cdba54ed55d82ba7e702872261340830e8ebd00605530087",
+        "sha256": "13a4697262f5887263a147a4f9099207f3699311e734f2dfacda169ae13e0b48",
         "inputSplatCount": 61957,
         "projectedSplatCount": 51393,
         "nonBackgroundPixelCount": 37629
       },
       {
         "step": 5,
-        "sha256": "1cac6629e1335ed421d0235b9fc69149f1e5d9a393952cc84e9aabe4e61f6d91",
+        "sha256": "adc81606e83278d6bee3b321cc0ec1a074ce019c10f7866b01e3789d1deb8e80",
         "inputSplatCount": 62389,
         "projectedSplatCount": 51792,
         "nonBackgroundPixelCount": 35707
       },
       {
         "step": 6,
-        "sha256": "ded4d9014e7b143ef6dca8a0b542ec727274ee6900a3fe1f5357f6cbc321ad53",
+        "sha256": "82de313d43ac371088d7ef706de1e2fc96a619523b6aa6e7a7595c08150d3253",
         "inputSplatCount": 62824,
         "projectedSplatCount": 52201,
         "nonBackgroundPixelCount": 34158
       },
       {
         "step": 7,
-        "sha256": "34849417570d74fba6d7d264bdb856e7713dbb61f1d3bff5242f3f74a8ca4368",
+        "sha256": "7d14aaf4ec584a3030143709e0ec8f56a4a475aeaf1c0edad9c6057377feff23",
         "inputSplatCount": 63262,
         "projectedSplatCount": 52601,
         "nonBackgroundPixelCount": 33148
       },
       {
         "step": 8,
-        "sha256": "023c3bc5b05e17ad311af69c26b84c89f560886a17c26252b662b09cd738c5f3",
+        "sha256": "412e4206aac5050ae7a01a9a36edb32ac617c35151d1665afd39db4cd7601ca9",
         "inputSplatCount": 63703,
         "projectedSplatCount": 53019,
         "nonBackgroundPixelCount": 32394
       },
       {
         "step": 9,
-        "sha256": "13c03ed76b87e7fc44def08718468c4ba717209e2f5a68860657c83889aee159",
+        "sha256": "4925af6e307a534fd583d581180b172f63405054508db12917ab12ebda0321e5",
         "inputSplatCount": 64147,
         "projectedSplatCount": 53438,
         "nonBackgroundPixelCount": 31530
       },
       {
         "step": 10,
-        "sha256": "375ed1da72d950e6a884a942421483873f039d0c2f997817003d3d6c6b1296f6",
+        "sha256": "6b5ade3787cf5708d4d567a92f1b9feeaea519e81331d937207404f6fe9a9142",
         "inputSplatCount": 64594,
         "projectedSplatCount": 53870,
         "nonBackgroundPixelCount": 31205
       },
       {
         "step": 11,
-        "sha256": "66674da255d009ecb1cbc7712c8764bb5539fd7d85f5802d324fba70a14ce44e",
+        "sha256": "5ff67249bf9d246ec6bcfcb5b3e8f7c677619295153c77f6b44a2b83f17bb3d4",
         "inputSplatCount": 65044,
         "projectedSplatCount": 54303,
         "nonBackgroundPixelCount": 31185
       },
       {
         "step": 12,
-        "sha256": "0e88ec51a142b19b19d90a98bd68a0feaa85e2154fefb2a0f70d38a1092807f7",
+        "sha256": "f40c22c9a932f816ab61c3610e239c12ea01ff6e3035b1a5ce7d205a53a86311",
         "inputSplatCount": 65498,
         "projectedSplatCount": 54736,
         "nonBackgroundPixelCount": 31189
       },
       {
         "step": 13,
-        "sha256": "256d41e333828527cc7202da9226a6842045f21871205c7b9d162800632f1664",
+        "sha256": "395bb31060dc95eee4644ce897a92435ad4ec2aaa8d60c3a615d94d39f2909db",
         "inputSplatCount": 65955,
         "projectedSplatCount": 55178,
         "nonBackgroundPixelCount": 31170
       },
       {
         "step": 14,
-        "sha256": "3b50b5e26903e738dd0299d02d34fb8a8428adf213d6513bbefdd6ad3a4f43fc",
+        "sha256": "6e2ccd2bee85fb12b268d25ce543d6d4801f58e54fda252b5b095adfc50970ce",
         "inputSplatCount": 66415,
         "projectedSplatCount": 55629,
         "nonBackgroundPixelCount": 31165
       },
       {
         "step": 15,
-        "sha256": "b7bf840514f490038ec3bc50de1ec49d4fbe383e71732a933a058136ad04f229",
+        "sha256": "a5d005aceab814d9bcb926c09e22bbab771e7f7b81f2b4d28dccbf6fa971152b",
         "inputSplatCount": 66878,
         "projectedSplatCount": 56074,
         "nonBackgroundPixelCount": 31089
       },
       {
         "step": 16,
-        "sha256": "e3b21ba5947f4b502051051f6abb9c8d6766e6f1a0cda924262935ee5d2600d8",
+        "sha256": "20aeb6b2017dc59e544ab7f5b3000542b613ba0b4507dc960ca55199f794e891",
         "inputSplatCount": 67344,
         "projectedSplatCount": 56522,
         "nonBackgroundPixelCount": 30985
       },
       {
         "step": 17,
-        "sha256": "3f96149687aa477736930c2ad115a807f7a8e09340cbde83eea6387939bb3ce7",
+        "sha256": "eebdce5b0158c3ad5a4f5cd9cd6547c3945353794040bf95b101ee1ffa9a0385",
         "inputSplatCount": 67814,
         "projectedSplatCount": 56966,
         "nonBackgroundPixelCount": 30862
       },
       {
         "step": 18,
-        "sha256": "f89c3e3e28141661e5dd198ae14b2891ec750bae3ce7d0965fca7e02eefdff70",
+        "sha256": "9bff5f6f8b93dfada8f9b92527527ba614c0e235d98088f600867d951c71e351",
         "inputSplatCount": 68287,
         "projectedSplatCount": 57417,
         "nonBackgroundPixelCount": 30860
       },
       {
         "step": 19,
-        "sha256": "7a0bd2a17b06742dec50761d7a97054c435647a5dd413fed631e0971b1f43980",
+        "sha256": "877a34063a750ad1d79fcdb71592160289f5ede8d45f66f9240cfb4596a45e7e",
         "inputSplatCount": 68763,
         "projectedSplatCount": 57873,
         "nonBackgroundPixelCount": 30870
       },
       {
         "step": 20,
-        "sha256": "0669d048d3dcc58c6ed4e9d26e0057dad6bf5a42e342608543c7f9dbd6b8328d",
+        "sha256": "1615cb938255d0d121dc3b32292782ac13e153991f23158bc43c1910d147073f",
         "inputSplatCount": 69243,
         "projectedSplatCount": 58336,
         "nonBackgroundPixelCount": 30869
       },
       {
         "step": 21,
-        "sha256": "69ef57534b6da66a0c10b659f183f5cd930b6587512a1d6e29adceba70b9040b",
+        "sha256": "00b407ef017d0212bb0bbbfa661462b3a15bc2d8404a231e72cfc2bcf9d1d1de",
         "inputSplatCount": 69726,
         "projectedSplatCount": 58813,
         "nonBackgroundPixelCount": 30872
       },
       {
         "step": 22,
-        "sha256": "07343bb4f9265fb5cdd19b090fff8a8e787a3b328365e87f877f4450fcde70ed",
+        "sha256": "0fed89d7d39e602078b7ce1625f830bfbe5b1ab3fa9a2f13146ad662662fef5a",
         "inputSplatCount": 70212,
         "projectedSplatCount": 59293,
         "nonBackgroundPixelCount": 30870
       },
       {
         "step": 23,
-        "sha256": "39292ae9d84d359d22f5c1a24955f37e5328cfc7c7fdf49727a1531f5bbc5cea",
+        "sha256": "893642e44ec6158d6b9937bfe472c048a7b961bfb0a2de8e3c6587a4f3381948",
         "inputSplatCount": 70702,
         "projectedSplatCount": 59774,
         "nonBackgroundPixelCount": 30876
       },
       {
         "step": 24,
-        "sha256": "d42ec0b740a9eaa4f2429ac334537a3b4081bf8b5b6860e7379bece41c19dacb",
+        "sha256": "aa5de86378f8bad15e681253544ede2eb7a2e05cbb05a110e43a7015b84450fa",
         "inputSplatCount": 71195,
         "projectedSplatCount": 60262,
         "nonBackgroundPixelCount": 30883
       },
       {
         "step": 25,
-        "sha256": "f91f1d48cacd3165db2a316c850cccb9f44152194b64eaaff06034d2d9d9b5a7",
+        "sha256": "939135e42c0bc835fc27235ce1554513437ba4c5835e8199fe130d5ca157e64a",
         "inputSplatCount": 71588,
         "projectedSplatCount": 60695,
         "nonBackgroundPixelCount": 30881
       },
       {
         "step": 26,
-        "sha256": "6debacb93572f66aa610ae07c9e453d05a65fdcd90025ed95f0ea29c98a3c445",
+        "sha256": "6eb990bc197ee6d1e38582ec18ce44c402fbf740ba2f86a550d8139d2380e60c",
         "inputSplatCount": 71588,
         "projectedSplatCount": 60937,
         "nonBackgroundPixelCount": 30883
       },
       {
         "step": 27,
-        "sha256": "bbfdebc7c15410a40c5e86675b7d50e79c6286dda12c508b47e9c940083ccc9c",
+        "sha256": "f876309ca00eb8d3bde01072f98a8e1c3b3095481d840b81e027598b5762b05d",
         "inputSplatCount": 71588,
         "projectedSplatCount": 61163,
         "nonBackgroundPixelCount": 30884
       },
       {
         "step": 28,
-        "sha256": "0e07816d571eb4b818fb4a7cc3ef1aa9446ea1797e327c416a767fdc7493cb61",
+        "sha256": "21d10733a9c503d04f3d366a9bbb4f31d1cd03d0ce29fe5a0fe23236bf015516",
         "inputSplatCount": 71588,
         "projectedSplatCount": 61396,
         "nonBackgroundPixelCount": 30883
       },
       {
         "step": 29,
-        "sha256": "7f29bf2dd5ecc4a0939cfd14fa7c2a1ce67ad4761ac6531cc9269863f7b93901",
+        "sha256": "a6ef3ee74489b06d3b5ce1a8ff1a3946af960dfe4cc33e66865843eba8778838",
         "inputSplatCount": 71588,
         "projectedSplatCount": 61648,
         "nonBackgroundPixelCount": 30887
       },
       {
         "step": 30,
-        "sha256": "33c355c86ee67a313fb5de2634153deea92d2d08a99b2f81e990a755d40a87f9",
+        "sha256": "996be6f700fffd562ff493adfc733d8ee352317579b02ad97282f594b68afb8f",
         "inputSplatCount": 71588,
         "projectedSplatCount": 61877,
         "nonBackgroundPixelCount": 30890
       },
       {
         "step": 31,
-        "sha256": "2a4c80ebd26553d7803e7316f44709f63b160eefa592bd893b577b3306b65eec",
+        "sha256": "cbbf773c520e394b30756c9e02ee2ccf134e196d391bfe466eeb49cd74c911bc",
         "inputSplatCount": 71588,
         "projectedSplatCount": 62086,
         "nonBackgroundPixelCount": 30893
       },
       {
         "step": 32,
-        "sha256": "1e65bcb15db607e1255e0d9b5aed268f0b7652722652e3bab0204994881cf68d",
+        "sha256": "e86d67ae4dd793340e06421fd882c45a0f4e53472d88daf334253c527367d630",
         "inputSplatCount": 71588,
         "projectedSplatCount": 62298,
         "nonBackgroundPixelCount": 30888
       },
       {
         "step": 33,
-        "sha256": "c5e7a713b960991d65b8b03d8790f0c54df4f5c4da8b4d9669a5cdaf251837c2",
+        "sha256": "53ce382a77bb000cd59e9aaf69963b84a44c5e7b746fe238d9def90a84a0a514",
         "inputSplatCount": 71588,
         "projectedSplatCount": 62505,
         "nonBackgroundPixelCount": 30863
       },
       {
         "step": 34,
-        "sha256": "866d25f21961cd122d8bd70eb82f008d426abf6d87e6ab5c54ffed95211782f7",
+        "sha256": "f1ed1e4696e9e1b4140ed52ccb08610b3d385190e6e4f69521a05135432810da",
         "inputSplatCount": 71588,
         "projectedSplatCount": 62686,
         "nonBackgroundPixelCount": 30842
       },
       {
         "step": 35,
-        "sha256": "dcf32952fcc0ea9bd2352b9efc7ca2f879a4c62f8a7726f66dc4d024a03f17f7",
+        "sha256": "8dc3ee5df8ce548145aac17f687e1022188292d4ff95a947b6c9c80761bcfe45",
         "inputSplatCount": 71588,
         "projectedSplatCount": 62870,
         "nonBackgroundPixelCount": 30833
       },
       {
         "step": 36,
-        "sha256": "bba2bdde8d790afbc4c6f9d8af5b538120e49336611fed42e205fdb2b5a6be19",
+        "sha256": "5b9e7db58fdc80a9480e3eed8cef72a8f4af3a471ab22faa2c4e80281f57da2f",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63022,
         "nonBackgroundPixelCount": 30822
       },
       {
         "step": 37,
-        "sha256": "5e292c926bf9e6bfea248128a8bf8298f7548185fc37ac80e0d51bf474ac3520",
+        "sha256": "044e641c53dbda3063c43e0097d8932fdd9ba548ffbf839614e9c3b0d26a2eef",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63174,
         "nonBackgroundPixelCount": 30815
       },
       {
         "step": 38,
-        "sha256": "72e8bb41fb5520c5c964c863534a1e2be951be8e3357e5f79b9af093d0ee27b6",
+        "sha256": "f0d091dc3197e7677b4f61683f6a6ed7431eb394a973c51d19518d797222dda9",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63316,
         "nonBackgroundPixelCount": 30818
       },
       {
         "step": 39,
-        "sha256": "3f49cb342376851ed1166b4995233c9d61a8ccc49408b3e63c9baa31e25dbf93",
+        "sha256": "7c814d5047d42cdb09aacb8c47bddf51e6ffae2a6d98f92be70c9795178462eb",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63452,
         "nonBackgroundPixelCount": 30831
       },
       {
         "step": 40,
-        "sha256": "7e1d11f33c8cf3e0ce299f37d7cfcbbc3bd76e62ef4744eaa146a855ed1c5438",
+        "sha256": "a9b3f006bdb4c25ee68c911d14e95f6455dbe0f925cae558a86cb95fe465200f",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63613,
         "nonBackgroundPixelCount": 30824
       },
       {
         "step": 41,
-        "sha256": "b9fd976fb146c50a73f641ac6da5eb04e0dcbbfffb054f607a3646087a499e2e",
+        "sha256": "e20153874d762b3d63960509a6f371c9719cb9bae446764a4f0f19d00232aaa0",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63761,
         "nonBackgroundPixelCount": 30802
       },
       {
         "step": 42,
-        "sha256": "04e199d25d98282c4697c5738bd164393af08406ecb6b57bd5626ef98e1fc964",
+        "sha256": "476b5c00f1d126073aa8c6c00071b3ce347019bb633f259993beb5f432bf782e",
         "inputSplatCount": 71588,
         "projectedSplatCount": 63904,
         "nonBackgroundPixelCount": 30788
       },
       {
         "step": 43,
-        "sha256": "4460e1c1546528239b1d09362583a1dec9b1e8c9a3f37e9e06e62a643c69d5dd",
+        "sha256": "651c59978fcb6c58d10fe0b8f36dbfde1cd0a7e23e5adf50486aaf3802b99e7b",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64031,
         "nonBackgroundPixelCount": 30769
       },
       {
         "step": 44,
-        "sha256": "25680c7edf4efc646346dfd959d2fc6761632f3bc9e3275d13c883745a941832",
+        "sha256": "9c57821dd5ec7efaa6be703d16227f0f89b1971676e5ba26e749a0ec84a42244",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64131,
         "nonBackgroundPixelCount": 30708
       },
       {
         "step": 45,
-        "sha256": "a440d52f9a992f39b726e5754705c34226795489752509b9c7d31a3c24258766",
+        "sha256": "1680647a11a94685c115fc6bba7f3b53b7493cedc52ac44ec790930689d6afff",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64240,
         "nonBackgroundPixelCount": 30449
       },
       {
         "step": 46,
-        "sha256": "bccfc6cbcbba3fb2b922d35fdaec1a0d62a75bc40d24d96af328e938d7c29602",
+        "sha256": "855253b5c756059db23728eb71c2e5b7521a19226f65a24cf63132ba53989cbd",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64357,
         "nonBackgroundPixelCount": 30366
       },
       {
         "step": 47,
-        "sha256": "c2f3e56e7b66ffa502ab6f0d8114a1e57973a8ada9bf856ad855df53bace0ce0",
+        "sha256": "7b83cb9528edd3db9b4dc186b8aa33c640ba2a884f613ad2e591665118f22fc2",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64437,
         "nonBackgroundPixelCount": 30297
       },
       {
         "step": 48,
-        "sha256": "6f190f2ec0ba4240c06dbede423c501a47a000df8ed2b544465057e26dd51502",
+        "sha256": "cec20ef1b11ee1960a3cec6db0cb8e3b20345f92fd84f9325a930aacca28b0a5",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64540,
         "nonBackgroundPixelCount": 30419
       },
       {
         "step": 49,
-        "sha256": "e98c1b0166470d21f39161206c910c183796e07ffe54e98001faaa8ab81f5d5d",
+        "sha256": "280d45b3878c261f1f2949c9118515ebf648533b35d5eac2a9d03c5444b96c70",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64632,
         "nonBackgroundPixelCount": 30478
       },
       {
         "step": 50,
-        "sha256": "d13e048b10931f672b2dbc4352b4c01c106c8473e726d13a5fc8f1adbdc95730",
+        "sha256": "bdde97b2534e4b13c88178a140fbaa629414cbda5259a42c31dcd5a6777fadbb",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64743,
         "nonBackgroundPixelCount": 30451
       },
       {
         "step": 51,
-        "sha256": "0c812ca20da33627bb3fd464bc4c51dfcda4f95c1cd5166e55dd02db84403106",
+        "sha256": "d3dea427cb98dd61a1f2478a2e6c097238c26dc96ca6d1b8147c71aa99d331d8",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64815,
         "nonBackgroundPixelCount": 30586
       },
       {
         "step": 52,
-        "sha256": "e788b69e31937cbbcba789f8ab0006e51b5aeec74d4b9c88792bce11b025669f",
+        "sha256": "a112574ef601c0c34f8eca4b315393c7253a57428a341315f45405288798bfd0",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64875,
         "nonBackgroundPixelCount": 30750
       },
       {
         "step": 53,
-        "sha256": "fa33b8f11943dbf3884558bf9736e362f31be3546bf629f04c5cd0da32f5e2e6",
+        "sha256": "bac211fe86aa9fda892b72307a9adc6f381f9cfbb2471e8926c403231a4d317d",
         "inputSplatCount": 71588,
         "projectedSplatCount": 64961,
         "nonBackgroundPixelCount": 30888
       },
       {
         "step": 54,
-        "sha256": "de6e1b3c446936dee7aeece85f88dd237f268ec3ed4ecc50fce674f88da3e9d1",
+        "sha256": "f1460966b440d995a985f0e984663b9bf84c9a2d44b1370d781eab0319085b17",
         "inputSplatCount": 71588,
         "projectedSplatCount": 65032,
         "nonBackgroundPixelCount": 30998
       },
       {
         "step": 55,
-        "sha256": "0366f34c5cbda8481cbf9e6ce6b71c0e66d11e14a04cd40aa0ae9bad11d8e16e",
+        "sha256": "d92e6f43087d9ac7fa38f09d599cb3b05e11d47aebed4bad5077f2f8c56d3088",
         "inputSplatCount": 71588,
         "projectedSplatCount": 65094,
         "nonBackgroundPixelCount": 30926
       },
       {
         "step": 56,
-        "sha256": "ee0b1c0876c293f178049e7f32060b913656edcd862000f1e91fe1e0cab93468",
+        "sha256": "8f48c20a73e7c65464037a2142974d66a1e320e314a5401174c6cbf858d58b08",
         "inputSplatCount": 71588,
         "projectedSplatCount": 65162,
         "nonBackgroundPixelCount": 31080
       },
       {
         "step": 57,
-        "sha256": "5645cb3feffcfe42f8dd339ecaabd4b8da9879a623abad6864d53bc487efa961",
+        "sha256": "331e5581071a460c4f4c9ae1e400a3bb0081b814ff6b45f7de55a63d17cd7b4f",
         "inputSplatCount": 71588,
         "projectedSplatCount": 65221,
         "nonBackgroundPixelCount": 31226
       },
       {
         "step": 58,
-        "sha256": "ca35eb9c10a203367407169fbea44ccf63e77d3bb4b75f5d2ca27710e909d88c",
+        "sha256": "d82bee875857a03dafe9d11f4e7a3fc0f858ffa4331d65a27621b7ab4733e290",
         "inputSplatCount": 71588,
         "projectedSplatCount": 65285,
         "nonBackgroundPixelCount": 31347
       },
       {
         "step": 59,
-        "sha256": "93a020f88001e1ebc09d45aad82822c75cda77ec46eb0dec2359f238620effec",
+        "sha256": "2c3603048be1e9abd667272852f3422fb97e06b76e590a594ba5a526825d3ec2",
         "inputSplatCount": 71588,
         "projectedSplatCount": 65335,
         "nonBackgroundPixelCount": 31469
       },
       {
         "step": 60,
-        "sha256": "145e51082665338d482dc628b115aac8a93a35721d066c251784a65e10f6f541",
+        "sha256": "f80559d524a243fb284202f882fc23646f8225bf94ab20ff933c16e65475fa93",
         "inputSplatCount": 71588,
         "projectedSplatCount": 65372,
         "nonBackgroundPixelCount": 31635
       },
       {
         "step": 61,
-        "sha256": "a61afb068a027e3fa88c8a91a18b6b165cb94fab802382212d5c124ac50dd77f",
+        "sha256": "52055e94f5a6f9268b8b98fc23b30e8083b87e92a2d0cc5ebd6bc4fe0f14f700",
         "inputSplatCount": 71588,
         "projectedSplatCount": 65426,
         "nonBackgroundPixelCount": 31618
       },
       {
         "step": 62,
-        "sha256": "03a76e28184c8e042e2a46a18d536961355b94ffe3eaeaedb5935a23ab5ce858",
+        "sha256": "d43f4f116b3e45aa5ef833aaecbf0f048505fc028703c0d4a3849a8547144578",
         "inputSplatCount": 71588,
         "projectedSplatCount": 65497,
         "nonBackgroundPixelCount": 31753
       },
       {
         "step": 63,
-        "sha256": "5350cbabe7e5d68a220c66b5c2736735b50abe8f0d198681c7753c39fc9ca872",
+        "sha256": "7dabbbc130a5fb1561e6d3308df5af798997d39c3db4b648448f080c47bcd5eb",
         "inputSplatCount": 71588,
         "projectedSplatCount": 65542,
         "nonBackgroundPixelCount": 31722
@@ -1871,441 +1871,441 @@
   "frozenControlEvidence": [
     {
       "step": 1,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 2,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 3,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 4,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 5,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 6,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 7,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 8,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 9,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 10,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 11,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 12,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 13,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 14,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 15,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 16,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 17,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 18,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 19,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 20,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 21,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 22,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 23,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 24,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 25,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 26,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 27,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 28,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 29,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 30,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 31,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 32,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 33,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 34,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 35,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 36,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 37,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 38,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 39,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 40,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 41,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 42,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 43,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 44,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 45,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 46,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 47,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 48,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 49,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 50,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 51,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 52,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 53,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 54,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 55,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 56,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 57,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 58,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 59,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 60,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 61,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 62,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
     },
     {
       "step": 63,
-      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
       "inputSplatCount": 60259,
       "projectedSplatCount": 50584,
       "nonBackgroundPixelCount": 55380
@@ -2315,7 +2315,7 @@
     "authority": "pixel-identical-frozen-control-v0",
     "frameCount": 63,
     "uniqueFrameCount": 1,
-    "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7"
+    "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b"
   },
   "selectionAccounting": {
     "candidateSupport": [
@@ -4594,9 +4594,9 @@
     ]
   },
   "artifact": {
-    "path": "/private/tmp/kaminos-phase-support-envelope-r1-0715/phase-support-envelope.mp4",
-    "bytes": 763557,
-    "sha256": "49ed05e80dd0832ad382de96d9c6465cec4cc888f8e8e5fb6fce725f4b217bea",
+    "path": "/private/tmp/kaminos-phase-support-envelope-label-repair-r1-0715/phase-support-envelope.mp4",
+    "bytes": 764655,
+    "sha256": "57c26b00644ef2cf82cac7bd5c4e63fafed829c5f61148ffbaa02eee2b9c314e",
     "probe": {
       "width": 1920,
       "height": 240,
@@ -4610,27 +4610,27 @@
       "-framerate",
       "6.25",
       "-i",
-      "/private/tmp/kaminos-phase-support-envelope-r1-0715/frames/reference/frame-%03d.png",
+      "/private/tmp/kaminos-phase-support-envelope-label-repair-r1-0715/frames/reference/frame-%03d.png",
       "-framerate",
       "6.25",
       "-i",
-      "/private/tmp/kaminos-phase-support-envelope-r1-0715/frames/frozen/frame-%03d.png",
+      "/private/tmp/kaminos-phase-support-envelope-label-repair-r1-0715/frames/frozen/frame-%03d.png",
       "-framerate",
       "6.25",
       "-i",
-      "/private/tmp/kaminos-phase-support-envelope-r1-0715/frames/prediction/frame-%03d.png",
+      "/private/tmp/kaminos-phase-support-envelope-label-repair-r1-0715/frames/prediction/frame-%03d.png",
       "-framerate",
       "6.25",
       "-i",
-      "/private/tmp/kaminos-phase-support-envelope-r1-0715/frames/candidateSupport/frame-%03d.png",
+      "/private/tmp/kaminos-phase-support-envelope-label-repair-r1-0715/frames/candidateSupport/frame-%03d.png",
       "-framerate",
       "6.25",
       "-i",
-      "/private/tmp/kaminos-phase-support-envelope-r1-0715/frames/physicalSupport/frame-%03d.png",
+      "/private/tmp/kaminos-phase-support-envelope-label-repair-r1-0715/frames/physicalSupport/frame-%03d.png",
       "-framerate",
       "6.25",
       "-i",
-      "/private/tmp/kaminos-phase-support-envelope-r1-0715/frames/visibleEnergy/frame-%03d.png",
+      "/private/tmp/kaminos-phase-support-envelope-label-repair-r1-0715/frames/visibleEnergy/frame-%03d.png",
       "-filter_complex",
       "[0:v][1:v][2:v][3:v][4:v][5:v]hstack=inputs=6[out]",
       "-map",
@@ -4647,7 +4647,7 @@
       "yuv420p",
       "-movflags",
       "+faststart",
-      "/private/tmp/kaminos-phase-support-envelope-r1-0715/phase-support-envelope.mp4"
+      "/private/tmp/kaminos-phase-support-envelope-label-repair-r1-0715/phase-support-envelope.mp4"
     ]
   },
   "metrics": {

@@ -50,6 +50,21 @@ function isSha256(value) {
   return /^[0-9a-f]{64}$/i.test(String(value));
 }
 
+function validateArtifactIdentity(identity, label) {
+  if (
+    !identity || typeof identity.path !== 'string' || !identity.path
+    || !Number.isInteger(identity.bytes) || identity.bytes <= 0
+    || !isSha256(identity.sha256)
+  ) throw new Error(`support envelope ${label} identity mismatch`);
+}
+
+function validateModelIdentity(identity, label, schema) {
+  if (
+    !identity || typeof identity.path !== 'string' || !identity.path
+    || identity.schema !== schema || !isSha256(identity.sha256)
+  ) throw new Error(`support envelope ${label} identity mismatch`);
+}
+
 export function calibrateSupportCountEnvelope(frameCounts) {
   const counts = Array.from(frameCounts, Number);
   if (counts.length < 2 || counts.some(count => !Number.isInteger(count) || count <= 0)) {
@@ -249,11 +264,24 @@ function guide(report) {
 
 export function validateSupportEnvelopeReport(report) {
   if (report?.schema !== SCHEMA || report.status !== 'completed') throw new Error('support envelope schema/status mismatch');
+  validateArtifactIdentity(report.source?.trainingManifest, 'training manifest');
+  validateArtifactIdentity(report.source?.evaluationManifest, 'evaluation manifest');
+  validateArtifactIdentity(report.source?.predictions, 'predictions');
+  validateModelIdentity(report.source?.occupancyModel, 'occupancy model', 'kaminos-boundary-splat-phase-transport-model-v0');
+  validateModelIdentity(report.source?.destinationStateModel, 'destination state model', 'kaminos-boundary-splat-phase-destination-state-model-v0');
+  const destinationModel = report.source.destinationStateModel;
+  validateArtifactIdentity(destinationModel.trainingManifest, 'destination state model training manifest');
+  validateArtifactIdentity(destinationModel.evaluationManifest, 'destination state model evaluation manifest');
   if (
-    !isSha256(report.source?.trainingManifest?.sha256)
-    || !isSha256(report.source?.evaluationManifest?.sha256)
-    || !isSha256(report.source?.predictions?.sha256)
-  ) throw new Error('support envelope source identity mismatch');
+    destinationModel.trainingManifest.path !== report.source.trainingManifest.path
+    || destinationModel.trainingManifest.bytes !== report.source.trainingManifest.bytes
+    || destinationModel.trainingManifest.sha256 !== report.source.trainingManifest.sha256
+  ) throw new Error('support envelope destination state model training identity mismatch');
+  if (
+    destinationModel.evaluationManifest.path !== report.source.evaluationManifest.path
+    || destinationModel.evaluationManifest.bytes !== report.source.evaluationManifest.bytes
+    || destinationModel.evaluationManifest.sha256 !== report.source.evaluationManifest.sha256
+  ) throw new Error('support envelope destination state model evaluation identity mismatch');
   if (
     !report.source.requestedRoute
     || report.source.effectiveRoute !== 'native-3d-compute-fluid-raymarch-v0'
@@ -270,7 +298,20 @@ export function validateSupportEnvelopeReport(report) {
     || JSON.stringify(config.selectors) !== JSON.stringify(Object.keys(SUPPORT_ENVELOPE_SELECTORS))
   ) throw new Error('support envelope full opacity/frame count configuration mismatch');
   if (config.retrained !== false || config.recurrenceRegenerated !== false) throw new Error('support envelope post-composition authority mismatch');
-  if (config.envelope?.authority !== 'training-episode-frame-zero-relative-support-envelope-v0') throw new Error('support envelope calibration mismatch');
+  const envelope = config.envelope;
+  if (
+    envelope?.authority !== 'training-episode-frame-zero-relative-support-envelope-v0'
+    || !Number.isInteger(envelope.frameCount) || envelope.frameCount < 2
+    || !Number.isInteger(envelope.frameZeroCount) || envelope.frameZeroCount <= 0
+    || !Number.isInteger(envelope.minimumCount) || envelope.minimumCount <= 0
+    || !Number.isInteger(envelope.maximumCount) || envelope.maximumCount < envelope.minimumCount
+    || envelope.minimumRatio !== envelope.minimumCount / envelope.frameZeroCount
+    || envelope.maximumRatio !== envelope.maximumCount / envelope.frameZeroCount
+    || !Number.isInteger(config.frameZeroEvaluationCount) || config.frameZeroEvaluationCount <= 0
+    || !Number.isFinite(config.oneStepMedianRatio) || config.oneStepMedianRatio <= 0
+    || config.ceilingBudget !== Math.round(config.frameZeroEvaluationCount * envelope.maximumRatio)
+    || config.counterfactualBudgetAtCeiling !== config.ceilingBudget
+  ) throw new Error('support envelope calibration mismatch');
   const frameCount = report.playback?.frameCount;
   if (
     !Number.isInteger(frameCount) || frameCount <= 1 || frameCount !== config.effectiveFrameCount
@@ -280,18 +321,43 @@ export function validateSupportEnvelopeReport(report) {
   for (const role of Object.keys(ROLE_AUTHORITIES)) {
     const evidence = report.roleEvidence?.[role];
     if (!Array.isArray(evidence) || evidence.length !== frameCount) throw new Error(`support envelope role evidence mismatch for ${role}`);
+    if (evidence.some((frame, index) => frame.step !== index + 1)) throw new Error(`support envelope role evidence step mismatch for ${role}`);
     if (evidence.some(frame => !isSha256(frame.sha256) || frame.nonBackgroundPixelCount <= 0 || frame.projectedSplatCount <= 0)) {
       throw new Error(`support envelope blank role evidence for ${role}`);
     }
   }
   if (new Set(report.roleEvidence.prediction.map(frame => frame.sha256)).size <= 1) throw new Error('support envelope prediction is cached or static');
   const controlHashes = report.frozenControlEvidence?.map(frame => frame.sha256) ?? [];
+  if (report.frozenControlEvidence?.some((frame, index) => frame.step !== index + 1)) {
+    throw new Error('support envelope frozen control step mismatch');
+  }
   const identity = report.frozenControlIdentity;
   if (
     controlHashes.length !== frameCount || controlHashes.some(hash => !isSha256(hash)) || new Set(controlHashes).size !== 1
     || identity?.authority !== 'pixel-identical-frozen-control-v0' || identity.frameCount !== frameCount
     || identity.uniqueFrameCount !== 1 || identity.sha256 !== controlHashes[0]
   ) throw new Error('support envelope frozen control identity mismatch');
+  for (const selector of Object.keys(SUPPORT_ENVELOPE_SELECTORS)) {
+    const rows = report.selectionAccounting?.[selector];
+    if (!Array.isArray(rows) || rows.length !== frameCount) throw new Error(`support envelope selection accounting mismatch for ${selector}`);
+    for (let index = 0; index < rows.length; index += 1) {
+      const row = rows[index];
+      const expectedBudget = Number.isInteger(row?.inputCount) && row.inputCount > 0
+        ? Math.min(row.inputCount, config.ceilingBudget)
+        : NaN;
+      if (
+        row?.step !== index + 1
+        || row.ceilingBudget !== config.ceilingBudget
+        || row.authority !== 'deterministic-state-local-support-envelope-selection-v0'
+        || row.selector !== selector
+        || row.budget !== expectedBudget
+        || row.selectedCount !== row.budget
+        || row.droppedCount !== row.inputCount - row.selectedCount
+        || !Number.isFinite(row.scoreMinimum) || !Number.isFinite(row.scoreMaximum)
+        || row.scoreMinimum > row.scoreMaximum
+      ) throw new Error(`support envelope selection accounting mismatch for ${selector} step ${index + 1}`);
+    }
+  }
   const probe = report.artifact?.probe;
   if (
     !isSha256(report.artifact?.sha256) || report.artifact.bytes <= 0 || probe?.frameCount !== frameCount
@@ -301,6 +367,14 @@ export function validateSupportEnvelopeReport(report) {
     report.metrics?.authority !== 'same-raster-full-frame-error-v0'
     || Object.keys(ROLE_AUTHORITIES).some(role => !Number.isFinite(report.metrics.roles?.[role]?.lateMse))
   ) throw new Error('support envelope metrics mismatch');
+  const claimBoundary = String(report.claimBoundary ?? '').trim();
+  if (
+    !/post-composition/i.test(claimBoundary)
+    || !/(?:does not regenerate recurrence|cannot prove (?:recurrent|recurrence) stability)/i.test(claimBoundary)
+    || !/(?:does not[^.]*\b(?:establish|prove)[^.]*future occupancy stability|cannot prove (?:recurrent|recurrence) stability)/i.test(claimBoundary)
+    || !/(?:does not[^.]*authorize runtime|cannot prove[^.]*runtime|does not[^.]*runtime integration)/i.test(claimBoundary)
+    || /\b(?:this|it|evidence|result|witness) proves? (?:recurrent|recurrence) stability|authorizes? runtime integration/i.test(claimBoundary)
+  ) throw new Error('support envelope claim boundary mismatch');
 }
 
 export async function writeSupportEnvelopeWitness(trainingPathValue, evaluationPathValue, predictionsPathValue, options = {}) {
