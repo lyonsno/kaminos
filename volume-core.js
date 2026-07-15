@@ -12569,12 +12569,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function writeArrayBufferToTargets(targets, bytes, expectedBytes, label) {
     if (bytes.byteLength !== expectedBytes) throw new Error(`${label}-write-byte-length-mismatch:${bytes.byteLength}:${expectedBytes}`);
     const chunkBytes = 16 * 1024 * 1024;
+    let writeCount = 0;
     for (const target of targets) {
       for (let offset = 0; offset < bytes.byteLength; offset += chunkBytes) {
         const byteLength = Math.min(chunkBytes, bytes.byteLength - offset);
         device.queue.writeBuffer(target, offset, new Uint8Array(bytes, offset, byteLength));
+        writeCount += 1;
       }
     }
+    return {
+      label,
+      targetCount: targets.length,
+      sourceByteLength: bytes.byteLength,
+      totalWriteBytes: bytes.byteLength * targets.length,
+      chunkWriteCount: writeCount,
+    };
   }
 
   async function fetchNative64FieldPair(manifestUrl, manifestRole, grid, fieldRoot) {
@@ -12636,8 +12645,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       rebuildFluidState(64, sourceMajorantGrid, 'native-64-cross-grid-control-materialize', { skipInitialFluid: true });
       const controlRebuildMs = performance.now() - controlRebuildStart;
       const controlWriteStart = performance.now();
-      writeArrayBufferToTargets(fluidBuffers, source.fluidFetch.bytes, fluidBufferBytes(64), 'native64-control-fluid');
-      writeArrayBufferToTargets(frontBuffers, source.frontFetch.bytes, frontFieldBufferBytes(64), 'native64-control-front');
+      const controlFluidWrite = writeArrayBufferToTargets([fluidBuffers[currentFluid]], source.fluidFetch.bytes, fluidBufferBytes(64), 'native64-control-fluid-current-buffer');
+      const controlFrontWrite = writeArrayBufferToTargets([frontBuffers[currentFront]], source.frontFetch.bytes, frontFieldBufferBytes(64), 'native64-control-front-current-buffer');
       if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
       setSharedDeviceCopiedState(nativeStep, 0);
       const controlWriteMs = performance.now() - controlWriteStart;
@@ -12663,8 +12672,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       rebuildFluidState(160, sourceMajorantGrid, 'native-64-cross-grid-treatment-materialize', { skipInitialFluid: true });
       const treatmentRebuildMs = performance.now() - treatmentRebuildStart;
       const treatmentWriteStart = performance.now();
-      writeArrayBufferToTargets(fluidBuffers, prediction.fluidFetch.bytes, fluidBufferBytes(160), 'native64-treatment-fluid');
-      writeArrayBufferToTargets(frontBuffers, prediction.frontFetch.bytes, frontFieldBufferBytes(160), 'native64-treatment-front');
+      const treatmentFluidWrite = writeArrayBufferToTargets([fluidBuffers[currentFluid]], prediction.fluidFetch.bytes, fluidBufferBytes(160), 'native64-treatment-fluid-current-buffer');
+      const treatmentFrontWrite = writeArrayBufferToTargets([frontBuffers[currentFront]], prediction.frontFetch.bytes, frontFieldBufferBytes(160), 'native64-treatment-front-current-buffer');
       if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
       setSharedDeviceCopiedState(nativeStep, 0);
       const treatmentWriteMs = performance.now() - treatmentWriteStart;
@@ -12693,6 +12702,25 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const supportThreshold = Number(prediction.manifest?.support?.threshold || 0);
       const treatmentSplatInstanceCount = treatmentRender.boundarySplatInstanceCount ?? state.boundarySplatInstanceCount;
       const controlSplatInstanceCount = controlRender.boundarySplatInstanceCount ?? state.boundarySplatInstanceCount;
+      const native64ManifestMaterializationProfile = {
+        identity: 'native-low-cross-grid-64-manifest-materialization-profile-v0',
+        authority: 'static-manifest-render-current-buffer-only-v0',
+        writeCurrentBuffersOnly: true,
+        hiddenReceiverCopy: false,
+        droppedInputChannels: false,
+        control: {
+          grid: 64,
+          fluid: controlFluidWrite,
+          front: controlFrontWrite,
+          totalWriteBytes: controlFluidWrite.totalWriteBytes + controlFrontWrite.totalWriteBytes,
+        },
+        treatment: {
+          grid: 160,
+          fluid: treatmentFluidWrite,
+          front: treatmentFrontWrite,
+          totalWriteBytes: treatmentFluidWrite.totalWriteBytes + treatmentFrontWrite.totalWriteBytes,
+        },
+      };
       const receipt = {
         ok: true,
         status: 'captured',
@@ -12767,6 +12795,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         treatmentWriteMs,
         treatmentRenderMs,
         endToEndFrameMs: performance.now() - startedAt,
+        native64ManifestMaterializationProfile,
         stageTiming: { manifestFetchMs, controlRebuildMs, controlWriteMs, controlMaterializeMs, controlRenderMs, treatmentRebuildMs, treatmentWriteMs, treatmentMaterializeMs, treatmentRenderMs },
         blankTreatmentAttribution: supportPositiveCount <= 0 ? 'model-support-zero' : treatmentSplatInstanceCount <= 0 ? 'splat-materialization-zero' : 'macro-structure-visual-discriminant',
         visuals: {

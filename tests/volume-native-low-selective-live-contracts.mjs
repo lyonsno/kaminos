@@ -91,6 +91,7 @@ assert.match(combined, /native-low-cross-grid-64-shared-device-manifest-v0/, 'na
 assert.match(combined, /native64CrossGridDiscriminant[\s\S]*native64NoModelControl[\s\S]*native64SelectivePredicted/, 'native-64 route preserves no-model control and predicted treatment identities');
 assert.match(combined, /macroStructureDecision[\s\S]*coarseMacroStructurePreserved[\s\S]*templateReplacementRisk/, 'native-64 route exposes macro-structure decision fields');
 assert.match(combined, /predictedPositiveCount[\s\S]*131573[\s\S]*supportThreshold[\s\S]*0\.98/, 'native-64 route preserves parent support count and threshold');
+assert.match(combined, /native64ManifestMaterializationProfile[\s\S]*writeCurrentBuffersOnly[\s\S]*hiddenReceiverCopy[\s\S]*false/, 'native-64 manifest route exposes write-scope materialization receipts without hidden receiver copies');
 assert.match(core, /nativeLowSelectiveSharedDevice/, 'renderer debug state exposes native-low shared-device transfer receipts');
 assert.match(core, /supportPositiveCount/, 'shared-device route reports model support count for blank-treatment attribution');
 assert.match(core, /supportPrevalence/, 'shared-device route reports model support prevalence for blank-treatment attribution');
@@ -127,5 +128,6 @@ assert.match(witness, /headCostTimingAuthority[\s\S]*webgpu-timestamp-query-stag
 assert.match(native64Witness, /native-low-cross-grid-64-witness-v0/, 'native-64 witness names evidence authority');
 assert.match(native64Witness, /native64CrossGridDiscriminant[\s\S]*native64NoModelControl[\s\S]*native64SelectivePredicted/, 'native-64 witness preserves cross-grid discriminant and both panes');
 assert.match(native64Witness, /macroStructureDecision[\s\S]*blankFrameRejection[\s\S]*cachedFrameRejection/, 'native-64 witness preserves visual decision and false-closure checks');
+assert.match(native64Witness, /native64ManifestMaterializationProfile[\s\S]*writeCurrentBuffersOnly/, 'native-64 witness preserves manifest materialization write-scope receipts');
 
 console.log('native-low selective live route contracts passed');

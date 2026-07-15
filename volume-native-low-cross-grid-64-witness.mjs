@@ -143,6 +143,8 @@ try {
       && !state?.controlTreatmentCausalDivergence
       && Number(state?.treatmentSplatInstanceCount) > 0
       && Number(state?.controlSplatInstanceCount) >= 0
+      && state?.native64ManifestMaterializationProfile?.writeCurrentBuffersOnly === true
+      && state?.native64ManifestMaterializationProfile?.hiddenReceiverCopy === false
       && Number(state?.treatmentMaterializeMs) >= 0
       && Number(state?.treatmentRenderMs) >= 0
       && Number(state?.endToEndFrameMs) >= 0
@@ -173,6 +175,8 @@ try {
   assert.equal(state?.sourceStepDrift, null, 'source-step drift detected');
   assert.equal(state?.controlTreatmentCausalDivergence, null, 'control/treatment causal divergence detected');
   assert.ok(Number(state?.treatmentSplatInstanceCount) > 0, 'splat materialization produced no treatment splats');
+  assert.equal(state?.native64ManifestMaterializationProfile?.writeCurrentBuffersOnly, true, 'native-64 manifest route did not use current-buffer-only writes');
+  assert.equal(state?.native64ManifestMaterializationProfile?.hiddenReceiverCopy, false, 'native-64 manifest route used a hidden receiver copy');
 
   failurePhase = 'blankFrameRejection';
   const capture = await socket.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
@@ -206,6 +210,7 @@ try {
     requestedCalibration: state.requestedCalibration,
     effectiveCalibration: state.effectiveCalibration,
     nativeLowTreatmentSplatCalibration: state.nativeLowTreatmentSplatCalibration,
+    native64ManifestMaterializationProfile: state.native64ManifestMaterializationProfile,
     modelOutputMutation: state.modelOutputMutation,
     requestedBackend: state.requestedBackend,
     effectiveBackend: state.effectiveBackend,
