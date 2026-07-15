@@ -142,6 +142,13 @@
       return basin.contentWindow?.__kaminosVolumePrototype || null;
     }
 
+    Object.defineProperty(window, '__kaminosVolumePrototype', {
+      get: () => basin.contentWindow?.__kaminosVolumePrototype || null,
+    });
+    Object.defineProperty(window, '__kaminosVolumeBridge', {
+      get: () => basin.contentWindow?.__kaminosVolumeBridge || null,
+    });
+
     function setRole(role) {
       if (!roles.includes(role)) return;
       requestedRole = role;

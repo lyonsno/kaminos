@@ -90,6 +90,21 @@ assert.match(page, /Low phase-aligned control/);
 assert.match(page, /Selective full residual/);
 assert.match(page, /Continuous same-history live assay/);
 assert.match(page, /window\.__kaminosSelectiveHeadLive/);
+assert.match(
+  page,
+  /Object\.defineProperty\(window,\s*'__kaminosVolumePrototype',[\s\S]*get:\s*\(\)\s*=>\s*basin\.contentWindow\?\.__kaminosVolumePrototype\s*\|\|\s*null/,
+  'exact same-origin wrapper dynamically forwards the native volume prototype expected by generic witnesses',
+);
+assert.match(
+  page,
+  /Object\.defineProperty\(window,\s*'__kaminosVolumeBridge',[\s\S]*get:\s*\(\)\s*=>\s*basin\.contentWindow\?\.__kaminosVolumeBridge\s*\|\|\s*null/,
+  'exact same-origin wrapper dynamically forwards the native renderer bridge expected by generic witnesses',
+);
+assert.doesNotMatch(
+  page,
+  /querySelector\(['"]iframe['"]\)|frames\[0\]/,
+  'wrapper forwarding never guesses an arbitrary iframe when resolving evidence authority',
+);
 assert.match(page, /setCapturePaused/, 'operator page relays the frame-lock pause handshake');
 assert.match(page, /stepCaptureFrame/, 'operator page relays renderer-internal single-step capture');
 assert.match(page, /data-composition="smoke-raymarch-under-splats-v0"/, 'operator page exposes smoke-hybrid renderer composition');
