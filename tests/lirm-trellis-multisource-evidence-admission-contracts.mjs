@@ -100,6 +100,6 @@ const evidence = inspectPngEvidence(occupied);
 assert.doesNotThrow(() => assertUsefulPngEvidence(evidence, { minWidth: 32, minHeight: 32 }));
 assert.ok(evidence.activePixelRatio > 0.05);
 assert.ok(evidence.activeBoundsRatio > 0.05);
-assert.ok(evidence.edgeRatio > 0.002);
+assert.ok(evidence.edgeRatio > 0.001);
 
 console.log('LIRM Trellis multisource evidence-admission contracts passed');

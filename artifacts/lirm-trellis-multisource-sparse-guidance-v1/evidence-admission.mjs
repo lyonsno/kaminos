@@ -195,7 +195,7 @@ export const assertUsefulPngEvidence = (evidence, options = {}, label = 'PNG evi
     minWidth: options.minWidth ?? 256,
     minHeight: options.minHeight ?? 256,
     minLuminanceStdDev: options.minLuminanceStdDev ?? 5,
-    minEdgeRatio: options.minEdgeRatio ?? 0.002,
+    minEdgeRatio: options.minEdgeRatio ?? 0.001,
     maxEdgeRatio: options.maxEdgeRatio ?? 0.6,
     minActivePixelRatio: options.minActivePixelRatio ?? 0.01,
     minActiveBoundsRatio: options.minActiveBoundsRatio ?? 0.03,

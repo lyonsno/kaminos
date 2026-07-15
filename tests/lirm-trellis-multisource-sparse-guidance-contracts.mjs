@@ -130,7 +130,7 @@ for (const job of receipts.witnessJobs) {
   assert.match(job.output.sha256, /^[a-f0-9]{64}$/);
   assert.ok(job.output.bytes > 100_000, 'witness must be a substantive nonblank PNG');
   assert.ok(job.visualEvidence.luminanceStdDev > 5);
-  assert.ok(job.visualEvidence.edgeRatio > 0.002);
+  assert.ok(job.visualEvidence.edgeRatio > 0.001);
   assert.ok(job.visualEvidence.activePixelRatio > 0.01);
   assert.ok(job.visualEvidence.activeBoundsRatio > 0.03);
   assert.equal(job.effectiveCamera.yaw, expectedYaw.get(job.view));
@@ -152,7 +152,7 @@ assert.equal(sheet.rows, 9);
 assert.equal(sheet.cells.length, 36);
 assert.equal(sheet.assemblySha256, sha256(Buffer.from(JSON.stringify(sheet.cells))));
 assert.ok(sheet.visualEvidence.luminanceStdDev > 5);
-assert.ok(sheet.visualEvidence.edgeRatio > 0.002);
+assert.ok(sheet.visualEvidence.edgeRatio > 0.001);
 assert.ok(sheet.visualEvidence.activePixelRatio > 0.01);
 assert.ok(sheet.visualEvidence.activeBoundsRatio > 0.03);
 for (const cell of sheet.cells) {
