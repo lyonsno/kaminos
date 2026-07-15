@@ -3483,6 +3483,9 @@ async function main(manifestUrl = initialManifestUrl, invocationOptions = {}) {
       if (sourceImageUrl.origin !== window.location.origin) {
         throw new Error(`execution-only SAM3 source image must be same-origin: ${sourceImageUrl.origin}`);
       }
+      if (!sourceImageUrl.pathname.startsWith('/sam3-samples/')) {
+        throw new Error(`execution-only SAM3 source image must use the authenticated sample namespace: ${sourceImageUrl.pathname}`);
+      }
       manifest.prompt = {
         text: promptText,
         sha256: await sha256Text(promptText),

@@ -106,6 +106,11 @@ async function evaluate(cdp, expression) {
   return result.result?.value;
 }
 
+async function settleForVisualCapture() {
+  await evaluate(cdp, 'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+  await delay(500);
+}
+
 function canvasInspectionExpression() {
   return `(() => {
     const summarize = id => {
@@ -168,7 +173,7 @@ try {
   report.routeRegistration = await fetchJson(routeUrl);
   if (report.routeRegistration.registrationState !== 'mounted') throw new Error(`route registration is ${report.routeRegistration.registrationState || 'missing'}`);
   const effectiveRegisteredUrl = new URL(report.routeRegistration.effectiveUrl);
-  if (effectiveRegisteredUrl.origin !== requestedUrl.origin || effectiveRegisteredUrl.pathname !== requestedUrl.pathname) {
+  if (requestedUrl.href !== effectiveRegisteredUrl.href) {
     throw new Error(`requested route does not match registered route: ${requestedUrl.href} != ${effectiveRegisteredUrl.href}`);
   }
 
@@ -222,6 +227,7 @@ try {
   if (terminal.state === 'failed') throw new Error(`workbench failed: ${terminal.text}`);
 
   report.failurePhase = 'visual-inspection';
+  await settleForVisualCapture();
   report.workbench = terminal;
   report.visualEvidence = await evaluate(cdp, canvasInspectionExpression());
   const { output, canvases } = report.visualEvidence;
@@ -256,6 +262,7 @@ try {
         : null;
     })()`), 'SAM3 negative-control execution');
     if (negativeTerminal.state === 'failed') throw new Error(`negative control failed: ${negativeTerminal.text}`);
+    await settleForVisualCapture();
     const negativeVisualEvidence = await evaluate(cdp, canvasInspectionExpression());
     const negativeOutput = negativeVisualEvidence.output;
     if (negativeOutput?.outputAuthority !== 'actual-webgpu-readback') throw new Error(`negative output authority is ${negativeOutput?.outputAuthority || 'missing'}`);

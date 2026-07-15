@@ -109,11 +109,20 @@ const server = createServer((request, response) => {
       send(response, 403, 'forbidden\n', 'text/plain; charset=utf-8');
       return;
     }
-    if (!existsSync(filePath) || !statSync(filePath).isFile()) {
+    if (!existsSync(filePath)) {
       send(response, 404, `missing ${url.pathname}\n`, 'text/plain; charset=utf-8');
       return;
     }
-    send(response, 200, readFileSync(filePath), contentType(filePath));
+    const realFilePath = realpathSync(filePath);
+    if (realFilePath !== root && !realFilePath.startsWith(`${root}/`)) {
+      send(response, 403, 'forbidden\n', 'text/plain; charset=utf-8');
+      return;
+    }
+    if (!statSync(realFilePath).isFile()) {
+      send(response, 404, `missing ${url.pathname}\n`, 'text/plain; charset=utf-8');
+      return;
+    }
+    send(response, 200, readFileSync(realFilePath), contentType(realFilePath));
   } catch (error) {
     send(response, 500, `${String(error?.stack || error)}\n`, 'text/plain; charset=utf-8');
   }
