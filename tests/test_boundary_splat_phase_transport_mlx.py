@@ -506,6 +506,128 @@ class TransportDatasetContracts(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, error_pattern):
                         MODULE.load_rollout_seed_model(**arguments)
 
+    def test_rollout_seed_cli_failure_preserves_requested_and_effective_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+
+            def write_artifact(name, values, stride):
+                path = root / name
+                data = np.asarray(values, dtype="<f4").reshape(-1, stride).tobytes()
+                path.write_bytes(data)
+                return {
+                    "path": str(path),
+                    "bytes": len(data),
+                    "sha256": MODULE.sha256_bytes(data),
+                    "count": len(values),
+                    "strideFloats": stride,
+                    "dtype": "float32-le",
+                }
+
+            frame_docs = []
+            for index in range(13):
+                frame_docs.append({
+                    "id": f"frame-{index}",
+                    "controlledStepFrameIndex": index,
+                    "controlledStepDeltaMs": 160,
+                    "candidates": write_artifact(
+                        f"frame-{index}.candidates.f32",
+                        [[0.2 + channel * 0.01 for channel in range(16)]],
+                        16,
+                    ),
+                    "splats": write_artifact(
+                        f"frame-{index}.splats.f32",
+                        [[0.0, 0.0, 0.0, 1.0, 1.0, 0.5, 0.2, 0.8, 0.03, 0.03, 0.0, 1.0]],
+                        12,
+                    ),
+                })
+            manifest = {
+                "schema": "kaminos-boundary-splat-phase-candidate-corpus-v0",
+                "featureOrder": list(MODULE.FEATURES),
+                "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+                "requestedRoute": "http://127.0.0.1/?volume_resolution=160",
+                "frames": frame_docs,
+            }
+            manifest_path = root / "phase-corpus.json"
+            manifest_bytes = (json.dumps(manifest, sort_keys=True) + "\n").encode("utf8")
+            manifest_path.write_bytes(manifest_bytes)
+            manifest_receipt = {
+                "path": str(manifest_path),
+                "bytes": len(manifest_bytes),
+                "sha256": MODULE.sha256_bytes(manifest_bytes),
+            }
+
+            model_document = frozen_model_document(hidden_size=2)
+            model_document["manifest"] = manifest_receipt
+            model_document["training"] = {
+                "objectiveFamily": MODULE.EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY,
+            }
+            model_document["calibration"]["destinationDeath"] = {
+                "authority": "training-eulerian-source-death-margin-f1-v0",
+                "threshold": 0.25,
+                "precision": 0.5,
+                "recall": 0.5,
+            }
+            model_path = root / "seed-model.json"
+            model_bytes = json.dumps(model_document, sort_keys=True).encode("utf8")
+            model_path.write_bytes(model_bytes)
+            effective_sha256 = MODULE.sha256_bytes(model_bytes)
+            requested_sha256 = "f" * 64
+            out_dir = root / "out"
+            argv = [
+                str(MODULE_PATH),
+                "--manifest", str(manifest_path),
+                "--out-dir", str(out_dir),
+                "--rollout-seed-model", str(model_path),
+                "--rollout-seed-model-sha256", requested_sha256,
+                "--objective-family", MODULE.EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY,
+                "--hidden-size", "2",
+            ]
+            with patch.object(sys, "argv", argv), patch("builtins.print"):
+                with self.assertRaisesRegex(ValueError, "byte/hash mismatch"):
+                    MODULE.main()
+
+            report = json.loads((out_dir / "training-report.json").read_text(encoding="utf8"))
+            self.assertEqual(report["status"], "failed")
+            self.assertEqual(report["failurePhase"], "rollout-seed-model-validation")
+            self.assertEqual(report["lastTrustworthyEvidence"]["rolloutSeedRequest"], {
+                "path": str(model_path.resolve()),
+                "sha256": requested_sha256,
+            })
+            self.assertEqual(report["lastTrustworthyEvidence"]["rolloutSeedEffective"], {
+                "path": str(model_path.resolve()),
+                "bytes": len(model_bytes),
+                "sha256": effective_sha256,
+            })
+
+    def test_completed_report_identity_projects_effective_seed_training_contract(self):
+        rollout_seed = {"authority": "seed", "sha256": "1" * 64}
+        rollout_exposure = {"authority": "exposure", "pairCount": 12, "sampleCap": None}
+        identity = MODULE.build_model_training_identity({
+            "input": {
+                "normalizationAuthority": "frozen-seed-model-input-normalization-v0",
+            },
+            "training": {
+                "objectiveFamily": MODULE.EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY,
+                "initializationAuthority": "frozen-seed-model-weights-v0",
+                "requestedHiddenSize": 64,
+                "effectiveHiddenSize": 64,
+                "calibrationPopulationAuthority": "exact-plus-frozen-seed-recurrent-exposure-v0",
+                "rolloutSeedModel": rollout_seed,
+                "rolloutExposure": rollout_exposure,
+            },
+        })
+        self.assertEqual(identity, {
+            "authority": "completed-transport-model-training-identity-v0",
+            "objectiveFamily": MODULE.EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY,
+            "initializationAuthority": "frozen-seed-model-weights-v0",
+            "requestedHiddenSize": 64,
+            "effectiveHiddenSize": 64,
+            "normalizationAuthority": "frozen-seed-model-input-normalization-v0",
+            "calibrationPopulationAuthority": "exact-plus-frozen-seed-recurrent-exposure-v0",
+            "rolloutSeedModel": rollout_seed,
+            "rolloutExposure": rollout_exposure,
+        })
+
     def test_transport_training_exposure_combines_exact_and_recurrent_authorities(self):
         docs = [
             {"id": f"frame-{index}", "controlledStepFrameIndex": index}

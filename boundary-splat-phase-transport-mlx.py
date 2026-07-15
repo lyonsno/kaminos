@@ -1330,6 +1330,7 @@ def load_rollout_seed_model(
     manifest_receipt,
     objective_family,
     requested_hidden_size,
+    model_bytes=None,
 ):
     if objective_family != EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY:
         raise ValueError("rollout seed model requires the Eulerian occupancy objective")
@@ -1340,7 +1341,7 @@ def load_rollout_seed_model(
     ):
         raise ValueError("rollout seed model expected SHA-256 is malformed")
     model_path = Path(model_path).resolve()
-    model_bytes = model_path.read_bytes()
+    model_bytes = model_path.read_bytes() if model_bytes is None else bytes(model_bytes)
     model_sha256 = sha256_bytes(model_bytes)
     if model_sha256.lower() != expected_sha256.lower():
         raise ValueError("rollout seed model byte/hash mismatch")
@@ -1388,6 +1389,60 @@ def load_rollout_seed_model(
             "hiddenSize": validated["hiddenSize"],
             "normalizationAuthority": "frozen-seed-model-input-normalization-v0",
         },
+    }
+
+
+def build_model_training_identity(model_artifact):
+    training = model_artifact.get("training", {})
+    input_document = model_artifact.get("input", {})
+    required_strings = {
+        "objectiveFamily": training.get("objectiveFamily"),
+        "initializationAuthority": training.get("initializationAuthority"),
+        "normalizationAuthority": input_document.get("normalizationAuthority"),
+        "calibrationPopulationAuthority": training.get("calibrationPopulationAuthority"),
+    }
+    if any(not isinstance(value, str) or not value.strip() for value in required_strings.values()):
+        raise ValueError("completed model training identity string contract mismatch")
+    if required_strings["objectiveFamily"] not in (
+        LEGACY_OBJECTIVE_FAMILY,
+        MOTION_BALANCED_OBJECTIVE_FAMILY,
+        EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY,
+    ):
+        raise ValueError("completed model training identity objective mismatch")
+    requested_hidden_size = training.get("requestedHiddenSize")
+    effective_hidden_size = training.get("effectiveHiddenSize")
+    if (
+        not isinstance(requested_hidden_size, int)
+        or isinstance(requested_hidden_size, bool)
+        or requested_hidden_size < 1
+        or not isinstance(effective_hidden_size, int)
+        or isinstance(effective_hidden_size, bool)
+        or effective_hidden_size < 1
+    ):
+        raise ValueError("completed model training identity hidden size mismatch")
+    rollout_seed = training.get("rolloutSeedModel")
+    rollout_exposure = training.get("rolloutExposure")
+    if (rollout_seed is None) != (rollout_exposure is None):
+        raise ValueError("completed model training identity rollout receipt mismatch")
+    if rollout_seed is not None and (
+        not isinstance(rollout_seed, dict)
+        or not isinstance(rollout_seed.get("authority"), str)
+        or not rollout_seed["authority"].strip()
+        or not isinstance(rollout_exposure, dict)
+        or not isinstance(rollout_exposure.get("authority"), str)
+        or not rollout_exposure["authority"].strip()
+    ):
+        raise ValueError("completed model training identity rollout receipt mismatch")
+    return {
+        "authority": "completed-transport-model-training-identity-v0",
+        **required_strings,
+        "requestedHiddenSize": requested_hidden_size,
+        "effectiveHiddenSize": effective_hidden_size,
+        **(
+            {"rolloutSeedModel": rollout_seed, "rolloutExposure": rollout_exposure}
+            if rollout_seed is not None
+            else {}
+        ),
     }
 
 
@@ -2291,12 +2346,24 @@ def main():
         rollout_seed_bundle = None
         if args.rollout_seed_model:
             failure_phase = "rollout-seed-model-validation"
+            rollout_seed_path = Path(args.rollout_seed_model).resolve()
+            last_trustworthy["rolloutSeedRequest"] = {
+                "path": str(rollout_seed_path),
+                "sha256": args.rollout_seed_model_sha256,
+            }
+            rollout_seed_bytes = rollout_seed_path.read_bytes()
+            last_trustworthy["rolloutSeedEffective"] = {
+                "path": str(rollout_seed_path),
+                "bytes": len(rollout_seed_bytes),
+                "sha256": sha256_bytes(rollout_seed_bytes),
+            }
             rollout_seed_bundle = load_rollout_seed_model(
-                args.rollout_seed_model,
+                rollout_seed_path,
                 args.rollout_seed_model_sha256,
                 manifest_receipt,
                 args.objective_family,
                 args.hidden_size,
+                model_bytes=rollout_seed_bytes,
             )
             last_trustworthy.update({
                 "rolloutSeedModelPath": rollout_seed_bundle["receipt"]["path"],
@@ -2748,6 +2815,7 @@ def main():
                 "ambiguityRecorded": True,
             },
         }
+        model_training_identity = build_model_training_identity(model_artifact)
         model_path = out_dir / "transport-model.json"
         write_json(model_path, model_artifact)
         failure_phase = "heldout-recurrent-inference"
@@ -2813,6 +2881,7 @@ def main():
             "model": {"path": str(model_path), "sha256": sha256_bytes(model_path.read_bytes())},
             "predictions": {"path": str(prediction_path), "sha256": sha256_bytes(prediction_path.read_bytes())},
             "trainingPairs": pair_reports,
+            "modelTrainingIdentity": model_training_identity,
             **(
                 {
                     "rolloutSeedModel": rollout_seed_bundle["receipt"],
