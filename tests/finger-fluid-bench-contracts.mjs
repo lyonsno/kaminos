@@ -91,6 +91,24 @@ assert.match(webgpuCoreSource, /supportedRestingParticleCount/, 'runtime diagnos
 assert.match(webgpuCoreSource, /activeTransportParticleCount/, 'runtime diagnostics independently preserve active transport population');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_PLAYGROUND_CONTRACT\s*=\s*'wgsl-shared-multi-regime-toy-playground-v0'/, 'multi-regime toy playground contract is explicit');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_SCHEMA\s*=\s*'kaminos\.liquid-interface-carrier\.v0'/, 'compact liquid-interface carrier schema is explicit');
+assert.match(webgpuCoreSource, /KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_SCHEMA\s*=\s*'kaminos\.liquid-fire-contact-descriptor\.v0'/, 'fire composition owns a public sparse liquid-contact descriptor schema');
+assert.match(webgpuCoreSource, /KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_PACKING\s*=\s*'gpu-sparse-liquid-fire-contact-vec4x8-v0'/, 'contact descriptor publishes an explicit record packing identity');
+assert.match(webgpuCoreSource, /struct LiquidFireContactRecord\s*\{[\s\S]*worldPositionId:[\s\S]*receiverPositionConfidence:[\s\S]*normalThickness:[\s\S]*velocityNormalSpeed:[\s\S]*tangentVelocitySpeed:[\s\S]*wetnessMaterialTracerVolume:[\s\S]*sourceGenerationEpochTick:[\s\S]*supportTransformFlags:/, 'public contact records preserve world and receiver geometry, motion, material, tracer, volume, source identity, and transform flags');
+assert.match(webgpuCoreSource, /struct LiquidFireContactHeader\s*\{[\s\S]*magic:[\s\S]*version:[\s\S]*allocationGeneration:[\s\S]*epoch:[\s\S]*writeTick:[\s\S]*valid:[\s\S]*complete:[\s\S]*transformHash:[\s\S]*sourceCount:[\s\S]*transformedCount:[\s\S]*contactCount:[\s\S]*rejectedCount:[\s\S]*capacity:[\s\S]*overflowCount:[\s\S]*recordWords:[\s\S]*flags:/, 'GPU contact header carries identity, completion, exact accounting, capacity, and overflow');
+assert.match(webgpuCoreSource, /liquidFireContactRecords:\s*array<LiquidFireContactRecord>/, 'sparse contact records remain GPU resident');
+assert.match(webgpuCoreSource, /liquidFireContactHeader:\s*LiquidFireContactHeader/, 'contact accounting and validity remain GPU resident');
+assert.match(webgpuCoreSource, /pipelineFor\('clear_liquid_fire_contact_descriptor'\)/, 'each write tick invalidates and clears the public contact descriptor on GPU');
+assert.match(webgpuCoreSource, /pipelineFor\('compact_liquid_fire_contacts'\)/, 'contact-qualified liquid records are compacted into the public ABI on GPU');
+assert.match(webgpuCoreSource, /pipelineFor\('finalize_liquid_fire_contact_descriptor'\)/, 'a distinct producer completion dispatch seals the descriptor after compaction');
+assert.match(webgpuCoreSource, /liquidFireContactCapacity:\s*safeParticleCount/, 'fire contact capacity covers the complete liquid population without a hidden cap');
+assert.match(webgpuCoreSource, /candidateCapMode:\s*'uncapped_exact_particle_population_capacity'/, 'fire contact descriptor discloses its uncapped capacity mode');
+assert.match(webgpuCoreSource, /function getLiquidFireContactDescriptor\(\)/, 'the solver exposes a same-device GPU descriptor without CPU transcription');
+assert.match(webgpuCoreSource, /device,[\s\S]*queue:\s*device\.queue,[\s\S]*headerBuffer:\s*liquidFireContactHeaderBuffer,[\s\S]*recordsBuffer:\s*liquidFireContactRecordsBuffer/, 'descriptor consumers receive the exact device, queue, header, and record buffers');
+assert.match(webgpuCoreSource, /dispatch\(pass, pipelines\.clearLiquidFireContacts, 1\);[\s\S]*dispatch\(pass, pipelines\.compactLiquidFireContacts, safeParticleCount\);[\s\S]*dispatch\(pass, pipelines\.finalizeLiquidFireContacts, 1\);/, 'producer invalidation, compaction, and completion execute in one ordered compute pass');
+assert.match(webgpuCoreSource, /getLiquidFireContactDescriptor,/, 'the public solver API exports the same-device contact descriptor handle');
+assert.match(webgpuCoreSource, /adapter\.limits\.maxStorageBuffersPerShaderStage < requiredStorageBindings/, 'unsupported contact-buffer binding capacity fails loud before device creation');
+assert.match(webgpuCoreSource, /requiredLimits:\s*\{ maxStorageBuffersPerShaderStage:\s*requiredStorageBindings \}/, 'device creation requests the measured storage-binding capacity used by the public ABI');
+assert.match(webgpuCoreSource, /label:\s*'kaminos-liquid-fire-contact-header',[\s\S]*GPUBufferUsage\.COPY_DST/, 'the initialized contact header explicitly declares copy-destination usage');
 assert.match(webgpuCoreSource, /const PLAYGROUND_WGSL\s*=\s*\/\* wgsl \*\//, 'one WGSL playground source feeds collision and rendering');
 assert.match(webgpuCoreSource, /\$\{PLAYGROUND_WGSL\}[\s\S]*?const RENDER_SHADER[\s\S]*?\$\{PLAYGROUND_WGSL\}/, 'compute and render shaders consume the same playground geometry source');
 assert.match(webgpuCoreSource, /source_shelf[\s\S]*spillway[\s\S]*shallow_pool[\s\S]*deep_pool[\s\S]*obstacle_channel[\s\S]*catch_basin/, 'playground names every load-bearing flow regime');
@@ -327,6 +345,36 @@ assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_SUPPORT_TRANSPORT_CONTRACT, 'wgsl-su
 assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_TOPOLOGY_CONTRACT, 'wgsl-four-neighbor-topology-retention-v0');
 assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_PARTICLE_SHIFT_CONTRACT, 'wgsl-opt-in-support-tangential-particle-shift-v0');
 assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_CHEMISTRY_CONTRACT, 'wgsl-passive-material-tracer-diffusion-v0');
+assert.equal(webgpuMod.KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_SCHEMA, 'kaminos.liquid-fire-contact-descriptor.v0');
+assert.equal(webgpuMod.KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_PACKING, 'gpu-sparse-liquid-fire-contact-vec4x8-v0');
+assert.equal(typeof webgpuMod.validateLiquidFireContactDescriptorHeader, 'function');
+const validContactHeader = {
+  schema: webgpuMod.KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_SCHEMA,
+  packing: webgpuMod.KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_PACKING,
+  allocationGeneration: 7,
+  epoch: 11,
+  writeTick: 29,
+  valid: true,
+  complete: true,
+  sourceCount: 91,
+  transformedCount: 80,
+  contactCount: 80,
+  rejectedCount: 11,
+  capacity: 24576,
+  overflowCount: 0,
+  transformId: 'liquid-world-to-pyro-domain-v0',
+};
+assert.deepEqual(webgpuMod.validateLiquidFireContactDescriptorHeader(validContactHeader, {
+  allocationGeneration: 7,
+  epoch: 11,
+  minimumWriteTick: 29,
+  transformId: 'liquid-world-to-pyro-domain-v0',
+}), validContactHeader, 'complete source-honest contact headers pass unchanged');
+assert.throws(() => webgpuMod.validateLiquidFireContactDescriptorHeader({ ...validContactHeader, complete: false }, { allocationGeneration: 7, epoch: 11, minimumWriteTick: 29, transformId: validContactHeader.transformId }), /not complete/, 'incomplete producer writes fail closed');
+assert.throws(() => webgpuMod.validateLiquidFireContactDescriptorHeader({ ...validContactHeader, writeTick: 28 }, { allocationGeneration: 7, epoch: 11, minimumWriteTick: 29, transformId: validContactHeader.transformId }), /stale write tick/, 'stale contact descriptors fail closed');
+assert.throws(() => webgpuMod.validateLiquidFireContactDescriptorHeader({ ...validContactHeader, allocationGeneration: 6 }, { allocationGeneration: 7, epoch: 11, minimumWriteTick: 29, transformId: validContactHeader.transformId }), /allocation generation/, 'wrong-generation contact descriptors fail closed');
+assert.throws(() => webgpuMod.validateLiquidFireContactDescriptorHeader({ ...validContactHeader, transformId: 'fallback-transform' }, { allocationGeneration: 7, epoch: 11, minimumWriteTick: 29, transformId: validContactHeader.transformId }), /transform identity/, 'fallback transforms cannot impersonate the requested receiver frame');
+assert.throws(() => webgpuMod.validateLiquidFireContactDescriptorHeader({ ...validContactHeader, transformedCount: 79 }, { allocationGeneration: 7, epoch: 11, minimumWriteTick: 29, transformId: validContactHeader.transformId }), /accounting/, 'source, transformed, and rejected counts must reconcile exactly');
 assert.deepEqual(webgpuMod.KAMINOS_FINGER_FLUID_COLOR_MODES, ['phase', 'particle_id', 'speed', 'density', 'surface', 'neighbor_retention', 'chemistry']);
 assert.equal(typeof webgpuMod.measureNeighborRetention, 'function');
 assert.equal(webgpuMod.measureNeighborRetention([1, 2, 3, 4], [1, 2, 3, 4]), 1);

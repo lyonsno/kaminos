@@ -11,6 +11,8 @@ export const KAMINOS_FINGER_FLUID_CHEMISTRY_CONTRACT = 'wgsl-passive-material-tr
 export const KAMINOS_FINGER_FLUID_OBSTACLE_CONTRACT = 'shared-solver-render-obstacle-v0';
 export const KAMINOS_FINGER_FLUID_PLAYGROUND_CONTRACT = 'wgsl-shared-multi-regime-toy-playground-v0';
 export const KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_SCHEMA = 'kaminos.liquid-interface-carrier.v0';
+export const KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_SCHEMA = 'kaminos.liquid-fire-contact-descriptor.v0';
+export const KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_PACKING = 'gpu-sparse-liquid-fire-contact-vec4x8-v0';
 export const KAMINOS_FINGER_FLUID_GPU_RENDERER_ROUTE = 'webgpu-particle-sphere-renderer-v0';
 export const KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE = 'wgsl-pbf-linked-cell-fluid-v0';
 export const KAMINOS_FINGER_FLUID_RENDER_SHADER_ROUTE = 'wgsl-fluid-particle-sphere-v0';
@@ -20,6 +22,14 @@ const PARTICLE_FLOATS = 16;
 const PARTICLE_BYTES = PARTICLE_FLOATS * 4;
 const INTERFACE_RECORD_FLOATS = 20;
 const INTERFACE_RECORD_BYTES = INTERFACE_RECORD_FLOATS * 4;
+const LIQUID_FIRE_CONTACT_RECORD_FLOATS = 32;
+const LIQUID_FIRE_CONTACT_RECORD_BYTES = LIQUID_FIRE_CONTACT_RECORD_FLOATS * 4;
+const LIQUID_FIRE_CONTACT_HEADER_WORDS = 16;
+const LIQUID_FIRE_CONTACT_HEADER_BYTES = LIQUID_FIRE_CONTACT_HEADER_WORDS * 4;
+const LIQUID_FIRE_CONTACT_MAGIC = 0x4b4c4643;
+const LIQUID_FIRE_CONTACT_VERSION = 0;
+const LIQUID_FIRE_CONTACT_TRANSFORM_ID = 'identity-liquid-world-to-pyro-domain-v0';
+const LIQUID_FIRE_CONTACT_TRANSFORM_HASH = 0x6c2673d1;
 const INTERFACE_SAMPLE_COUNT = 16;
 const WORKGROUP_SIZE = 64;
 const DEFAULT_PARTICLE_COUNT = 24_576;
@@ -48,6 +58,7 @@ const NEIGHBOR_TOPOLOGY_BYTES = NEIGHBOR_TOPOLOGY_WORDS * 4;
 const MATERIAL_TRACER_FLOATS = 4;
 const MATERIAL_TRACER_BYTES = MATERIAL_TRACER_FLOATS * 4;
 const INVALID_NEIGHBOR_ID = 0xffffffff;
+let nextLiquidFireContactAllocationGeneration = 1;
 
 export const KAMINOS_FINGER_FLUID_COLOR_MODES = Object.freeze(['phase', 'particle_id', 'speed', 'density', 'surface', 'neighbor_retention', 'chemistry']);
 
@@ -73,6 +84,29 @@ export function resolveFingerFluidChemistryDiffusion(value = 0) {
     throw new RangeError(`Finger fluid chemistry diffusion strength must be in [0, 1], received: ${value}`);
   }
   return strength;
+}
+
+export function validateLiquidFireContactDescriptorHeader(header, {
+  allocationGeneration,
+  epoch,
+  minimumWriteTick,
+  transformId,
+} = {}) {
+  if (!header || header.schema !== KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_SCHEMA) throw new Error('Liquid fire contact descriptor schema mismatch');
+  if (header.packing !== KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_PACKING) throw new Error('Liquid fire contact descriptor packing mismatch');
+  if (!header.valid) throw new Error('Liquid fire contact descriptor is not valid');
+  if (!header.complete) throw new Error('Liquid fire contact descriptor is not complete');
+  if (header.allocationGeneration !== allocationGeneration) throw new Error('Liquid fire contact descriptor allocation generation mismatch');
+  if (header.epoch !== epoch) throw new Error('Liquid fire contact descriptor epoch mismatch');
+  if (header.writeTick < minimumWriteTick) throw new Error('Liquid fire contact descriptor has a stale write tick');
+  if (header.transformId !== transformId) throw new Error('Liquid fire contact descriptor transform identity mismatch');
+  const counts = ['sourceCount', 'transformedCount', 'contactCount', 'rejectedCount', 'capacity', 'overflowCount'];
+  if (!counts.every(field => Number.isSafeInteger(header[field]) && header[field] >= 0)) throw new Error('Liquid fire contact descriptor accounting contains invalid counts');
+  if (header.sourceCount !== header.transformedCount + header.rejectedCount || header.contactCount < header.transformedCount || header.contactCount > header.sourceCount) {
+    throw new Error('Liquid fire contact descriptor accounting does not reconcile');
+  }
+  if (header.transformedCount > header.capacity || header.overflowCount !== 0) throw new Error('Liquid fire contact descriptor overflowed its declared capacity');
+  return header;
 }
 
 export function diffusePassiveScalarStep(values, weightedPairs, coefficient, dt) {
@@ -163,6 +197,36 @@ struct InterfaceRecord {
   stabilityAgeSource: vec4<f32>,
 }
 
+struct LiquidFireContactRecord {
+  worldPositionId: vec4<f32>,
+  receiverPositionConfidence: vec4<f32>,
+  normalThickness: vec4<f32>,
+  velocityNormalSpeed: vec4<f32>,
+  tangentVelocitySpeed: vec4<f32>,
+  wetnessMaterialTracerVolume: vec4<f32>,
+  sourceGenerationEpochTick: vec4<f32>,
+  supportTransformFlags: vec4<f32>,
+}
+
+struct LiquidFireContactHeader {
+  magic: atomic<u32>,
+  version: atomic<u32>,
+  allocationGeneration: atomic<u32>,
+  epoch: atomic<u32>,
+  writeTick: atomic<u32>,
+  valid: atomic<u32>,
+  complete: atomic<u32>,
+  transformHash: atomic<u32>,
+  sourceCount: atomic<u32>,
+  transformedCount: atomic<u32>,
+  contactCount: atomic<u32>,
+  rejectedCount: atomic<u32>,
+  capacity: atomic<u32>,
+  overflowCount: atomic<u32>,
+  recordWords: atomic<u32>,
+  flags: atomic<u32>,
+}
+
 struct Params {
   dt: f32,
   particleCount: u32,
@@ -175,6 +239,7 @@ struct Params {
   forces: vec4<f32>,
   particleShift: vec4<f32>,
   chemistry: vec4<f32>,
+  contactIdentity: vec4<u32>,
 }
 
 @group(0) @binding(0) var<storage, read_write> particles: array<Particle>;
@@ -186,6 +251,8 @@ struct Params {
 @group(0) @binding(6) var<storage, read_write> restStates: array<vec4<f32>>;
 @group(0) @binding(7) var<storage, read_write> neighborTopology: array<NeighborTopologyState>;
 @group(0) @binding(8) var<storage, read_write> materialTracers: array<MaterialTracerState>;
+@group(0) @binding(9) var<storage, read_write> liquidFireContactRecords: array<LiquidFireContactRecord>;
+@group(0) @binding(10) var<storage, read_write> liquidFireContactHeader: LiquidFireContactHeader;
 
 ${PLAYGROUND_WGSL}
 
@@ -907,6 +974,83 @@ fn compact_interface_records(@builtin(global_invocation_id) gid: vec3<u32>) {
   interfaceRecords[slot].thicknessContactWetnessMaterial = vec4<f32>(thickness, contact, surfaceFactor, particle.velocity.w);
   interfaceRecords[slot].stabilityAgeSource = vec4<f32>(1.0 - clamp(speed / ${MAX_FLUID_SPEED}, 0.0, 1.0), interfaceAge, f32(params.frameIndex), supportAlignment);
 }
+
+@compute @workgroup_size(1)
+fn clear_liquid_fire_contact_descriptor(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (gid.x != 0u) { return; }
+  atomicStore(&liquidFireContactHeader.magic, ${LIQUID_FIRE_CONTACT_MAGIC}u);
+  atomicStore(&liquidFireContactHeader.version, ${LIQUID_FIRE_CONTACT_VERSION}u);
+  atomicStore(&liquidFireContactHeader.allocationGeneration, params.contactIdentity.x);
+  atomicStore(&liquidFireContactHeader.epoch, params.contactIdentity.y);
+  atomicStore(&liquidFireContactHeader.writeTick, params.frameIndex);
+  atomicStore(&liquidFireContactHeader.valid, 0u);
+  atomicStore(&liquidFireContactHeader.complete, 0u);
+  atomicStore(&liquidFireContactHeader.transformHash, params.contactIdentity.z);
+  atomicStore(&liquidFireContactHeader.sourceCount, 0u);
+  atomicStore(&liquidFireContactHeader.transformedCount, 0u);
+  atomicStore(&liquidFireContactHeader.contactCount, 0u);
+  atomicStore(&liquidFireContactHeader.rejectedCount, 0u);
+  atomicStore(&liquidFireContactHeader.capacity, params.particleCount);
+  atomicStore(&liquidFireContactHeader.overflowCount, 0u);
+  atomicStore(&liquidFireContactHeader.recordWords, ${LIQUID_FIRE_CONTACT_RECORD_FLOATS}u);
+  atomicStore(&liquidFireContactHeader.flags, 1u);
+}
+
+@compute @workgroup_size(${WORKGROUP_SIZE})
+fn compact_liquid_fire_contacts(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let sourceIndex = gid.x;
+  let activeInterfaceCount = min(atomicLoad(&interfaceCounters[0]), params.particleCount);
+  if (sourceIndex >= activeInterfaceCount) { return; }
+  atomicAdd(&liquidFireContactHeader.sourceCount, 1u);
+  let source = interfaceRecords[sourceIndex];
+  let contact = source.thicknessContactWetnessMaterial.y;
+  if (contact < 0.5) {
+    atomicAdd(&liquidFireContactHeader.rejectedCount, 1u);
+    return;
+  }
+  atomicAdd(&liquidFireContactHeader.contactCount, 1u);
+  let receiverPosition = source.positionId.xyz;
+  let inReceiverDomain = all(receiverPosition >= params.boundsMin.xyz) && all(receiverPosition <= params.boundsMax.xyz);
+  if (!inReceiverDomain) {
+    atomicAdd(&liquidFireContactHeader.rejectedCount, 1u);
+    return;
+  }
+  let slot = atomicAdd(&liquidFireContactHeader.transformedCount, 1u);
+  if (slot >= params.particleCount) {
+    atomicAdd(&liquidFireContactHeader.overflowCount, 1u);
+    atomicAdd(&liquidFireContactHeader.rejectedCount, 1u);
+    return;
+  }
+  let particleId = min(u32(source.positionId.w), params.particleCount - 1u);
+  let velocity = source.velocityConfidence.xyz;
+  let normal = normalize(source.normalCurvature.xyz + vec3<f32>(0.000001));
+  let normalSpeed = dot(velocity, normal);
+  let tangentVelocity = velocity - normal * normalSpeed;
+  let thickness = source.thicknessContactWetnessMaterial.x;
+  let tracer = materialTracers[particleId].concentrationDeltaRecipeSource.x;
+  let volumeProxy = thickness * params.fluid.x * params.fluid.x;
+  liquidFireContactRecords[slot].worldPositionId = source.positionId;
+  liquidFireContactRecords[slot].receiverPositionConfidence = vec4<f32>(receiverPosition, source.velocityConfidence.w);
+  liquidFireContactRecords[slot].normalThickness = vec4<f32>(normal, thickness);
+  liquidFireContactRecords[slot].velocityNormalSpeed = vec4<f32>(velocity, normalSpeed);
+  liquidFireContactRecords[slot].tangentVelocitySpeed = vec4<f32>(tangentVelocity, length(tangentVelocity));
+  liquidFireContactRecords[slot].wetnessMaterialTracerVolume = vec4<f32>(source.thicknessContactWetnessMaterial.z, source.thicknessContactWetnessMaterial.w, tracer, volumeProxy);
+  liquidFireContactRecords[slot].sourceGenerationEpochTick = vec4<f32>(f32(params.contactIdentity.x), f32(params.contactIdentity.y), f32(params.frameIndex), f32(sourceIndex));
+  liquidFireContactRecords[slot].supportTransformFlags = vec4<f32>(source.stabilityAgeSource.w, source.stabilityAgeSource.x, source.stabilityAgeSource.y, 1.0);
+}
+
+@compute @workgroup_size(1)
+fn finalize_liquid_fire_contact_descriptor(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (gid.x != 0u) { return; }
+  let sourceCount = atomicLoad(&liquidFireContactHeader.sourceCount);
+  let transformedCount = atomicLoad(&liquidFireContactHeader.transformedCount);
+  let rejectedCount = atomicLoad(&liquidFireContactHeader.rejectedCount);
+  let overflowCount = atomicLoad(&liquidFireContactHeader.overflowCount);
+  let accountingMatches = sourceCount == transformedCount + rejectedCount;
+  let valid = accountingMatches && overflowCount == 0u && transformedCount <= params.particleCount && params.contactIdentity.z != 0u;
+  atomicStore(&liquidFireContactHeader.valid, select(0u, 1u, valid));
+  atomicStore(&liquidFireContactHeader.complete, 1u);
+}
 `;
 
 const RENDER_SHADER = /* wgsl */`
@@ -1337,7 +1481,13 @@ export async function createWebGPUFingerFluidSolver({
   if (!globalThis.navigator?.gpu) return createUnavailableSolver('navigator.gpu unavailable');
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
   if (!adapter) return createUnavailableSolver('WebGPU adapter unavailable');
-  const device = await adapter.requestDevice();
+  const requiredStorageBindings = 10;
+  if (adapter.limits.maxStorageBuffersPerShaderStage < requiredStorageBindings) {
+    return createUnavailableSolver(`WebGPU adapter exposes ${adapter.limits.maxStorageBuffersPerShaderStage} storage buffers per shader stage; liquid/fire composition requires ${requiredStorageBindings}`);
+  }
+  const device = await adapter.requestDevice({
+    requiredLimits: { maxStorageBuffersPerShaderStage: requiredStorageBindings },
+  });
   const context = canvas.getContext('webgpu');
   if (!context) return createUnavailableSolver('GPUCanvasContext unavailable');
 
@@ -1347,6 +1497,9 @@ export async function createWebGPUFingerFluidSolver({
   const safeColorMode = resolveFingerFluidColorMode(colorMode);
   const safeParticleShiftStrength = resolveFingerFluidParticleShiftStrength(particleShiftStrength);
   const safeChemistryDiffusion = resolveFingerFluidChemistryDiffusion(chemistryDiffusion);
+  const liquidFireContactAllocationGeneration = nextLiquidFireContactAllocationGeneration;
+  nextLiquidFireContactAllocationGeneration = (nextLiquidFireContactAllocationGeneration % 0x00fffffe) + 1;
+  const liquidFireContactEpoch = 1;
   const particleData = createInitialParticles(safeParticleCount);
   const materialTracerData = createInitialMaterialTracers(particleData, safeParticleCount);
   const initialChemistryMass = materialTracerData.reduce((sum, value, index) => sum + (index % MATERIAL_TRACER_FLOATS === 0 ? value : 0), 0);
@@ -1367,7 +1520,7 @@ export async function createWebGPUFingerFluidSolver({
   });
   const paramsBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-params',
-    size: 128,
+    size: 144,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
   const diagnosticsBuffer = device.createBuffer({
@@ -1383,6 +1536,16 @@ export async function createWebGPUFingerFluidSolver({
   const interfaceCountersBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-interface-counters',
     size: 12,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+  });
+  const liquidFireContactRecordsBuffer = device.createBuffer({
+    label: 'kaminos-liquid-fire-contact-records',
+    size: safeParticleCount * LIQUID_FIRE_CONTACT_RECORD_BYTES,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+  });
+  const liquidFireContactHeaderBuffer = device.createBuffer({
+    label: 'kaminos-liquid-fire-contact-header',
+    size: LIQUID_FIRE_CONTACT_HEADER_BYTES,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
   });
   const restStateBuffer = device.createBuffer({
@@ -1427,6 +1590,7 @@ export async function createWebGPUFingerFluidSolver({
   });
   device.queue.writeBuffer(particleBuffer, 0, particleData);
   device.queue.writeBuffer(interfaceCountersBuffer, 0, new Uint32Array(3));
+  device.queue.writeBuffer(liquidFireContactHeaderBuffer, 0, new Uint32Array(LIQUID_FIRE_CONTACT_HEADER_WORDS));
   device.queue.writeBuffer(restStateBuffer, 0, new Float32Array(safeParticleCount * REST_STATE_FLOATS));
   const initialTopology = new Uint32Array(safeParticleCount * NEIGHBOR_TOPOLOGY_WORDS);
   for (let index = 0; index < safeParticleCount; index += 1) {
@@ -1448,6 +1612,8 @@ export async function createWebGPUFingerFluidSolver({
       { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
       { binding: 7, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
       { binding: 8, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      { binding: 9, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      { binding: 10, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
     ],
   });
   const computePipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [computeLayout] });
@@ -1478,6 +1644,9 @@ export async function createWebGPUFingerFluidSolver({
       applyParticleShift: await pipelineFor('apply_support_particle_shift'),
       computeChemistry: await pipelineFor('compute_material_tracer_diffusion'),
       applyChemistry: await pipelineFor('apply_material_tracer_diffusion'),
+      clearLiquidFireContacts: await pipelineFor('clear_liquid_fire_contact_descriptor'),
+      compactLiquidFireContacts: await pipelineFor('compact_liquid_fire_contacts'),
+      finalizeLiquidFireContacts: await pipelineFor('finalize_liquid_fire_contact_descriptor'),
     };
   } catch (error) {
     return createUnavailableSolver(`WebGPU compute pipeline validation failed: ${error.message || String(error)}`);
@@ -1495,6 +1664,8 @@ export async function createWebGPUFingerFluidSolver({
       { binding: 6, resource: { buffer: restStateBuffer } },
       { binding: 7, resource: { buffer: neighborTopologyBuffer } },
       { binding: 8, resource: { buffer: materialTracerBuffer } },
+      { binding: 9, resource: { buffer: liquidFireContactRecordsBuffer } },
+      { binding: 10, resource: { buffer: liquidFireContactHeaderBuffer } },
     ],
   });
 
@@ -1554,6 +1725,7 @@ export async function createWebGPUFingerFluidSolver({
   let topologyMeasurementPassCount = 0;
   let particleShiftPassCount = 0;
   let chemistryDiffusionPassCount = 0;
+  let liquidFireContactCompactionPassCount = 0;
   let directRenderFrameCount = 0;
   let lastFrameCpuMs = 0;
   let diagnosticsPending = false;
@@ -1583,7 +1755,7 @@ export async function createWebGPUFingerFluidSolver({
   }
 
   function writeSimulationParams(dt) {
-    const buffer = new ArrayBuffer(128);
+    const buffer = new ArrayBuffer(144);
     const view = new DataView(buffer);
     view.setFloat32(0, dt, true);
     view.setUint32(4, safeParticleCount, true);
@@ -1605,6 +1777,10 @@ export async function createWebGPUFingerFluidSolver({
     view.setFloat32(92, 0.025, true);
     view.setFloat32(96, safeParticleShiftStrength, true);
     view.setFloat32(112, safeChemistryDiffusion, true);
+    view.setUint32(128, liquidFireContactAllocationGeneration, true);
+    view.setUint32(132, liquidFireContactEpoch, true);
+    view.setUint32(136, LIQUID_FIRE_CONTACT_TRANSFORM_HASH, true);
+    view.setUint32(140, 1, true);
     device.queue.writeBuffer(paramsBuffer, 0, buffer);
   }
 
@@ -1658,6 +1834,10 @@ export async function createWebGPUFingerFluidSolver({
       dispatch(pass, pipelines.clearInterface, 1);
       dispatch(pass, pipelines.compactInterface, safeParticleCount);
       interfaceCompactionPassCount += 1;
+      dispatch(pass, pipelines.clearLiquidFireContacts, 1);
+      dispatch(pass, pipelines.compactLiquidFireContacts, safeParticleCount);
+      dispatch(pass, pipelines.finalizeLiquidFireContacts, 1);
+      liquidFireContactCompactionPassCount += 1;
       if (safeParticleShiftStrength > 0) {
         dispatch(pass, pipelines.computeParticleShift, safeParticleCount);
         dispatch(pass, pipelines.applyParticleShift, safeParticleCount);
@@ -1965,6 +2145,33 @@ export async function createWebGPUFingerFluidSolver({
     }
   }
 
+  function getLiquidFireContactDescriptor() {
+    return {
+      schema: KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_SCHEMA,
+      packing: KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_PACKING,
+      device,
+      queue: device.queue,
+      headerBuffer: liquidFireContactHeaderBuffer,
+      recordsBuffer: liquidFireContactRecordsBuffer,
+      headerBytes: LIQUID_FIRE_CONTACT_HEADER_BYTES,
+      recordFloats: LIQUID_FIRE_CONTACT_RECORD_FLOATS,
+      recordBytes: LIQUID_FIRE_CONTACT_RECORD_BYTES,
+      liquidFireContactCapacity: safeParticleCount,
+      capacity: safeParticleCount,
+      candidateCapMode: 'uncapped_exact_particle_population_capacity',
+      allocationGeneration: liquidFireContactAllocationGeneration,
+      epoch: liquidFireContactEpoch,
+      writeTick: Math.max(0, frameIndex - 1),
+      sourceFrame: 'kaminos/finger-fluid-bench:gpu-simulation-frame',
+      receiverFrame: 'kaminos/pyro:receiver-domain-frame',
+      transformId: LIQUID_FIRE_CONTACT_TRANSFORM_ID,
+      transformHash: LIQUID_FIRE_CONTACT_TRANSFORM_HASH,
+      transformMode: 'explicit_identity_world_to_receiver_v0',
+      completionMode: 'gpu_ordered_clear_compact_finalize_same_compute_pass_v0',
+      validitySource: 'gpu_header_only_fail_closed_v0',
+    };
+  }
+
   function getDebugState() {
     return {
       available: true,
@@ -2013,6 +2220,24 @@ export async function createWebGPUFingerFluidSolver({
         qualifyingThreshold: INTERFACE_THRESHOLD,
         sampleRecords: [],
       },
+      liquidFireContactDescriptor: {
+        schema: KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_SCHEMA,
+        packing: KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_PACKING,
+        sourceFrame: 'kaminos/finger-fluid-bench:gpu-simulation-frame',
+        receiverFrame: 'kaminos/pyro:receiver-domain-frame',
+        transformId: LIQUID_FIRE_CONTACT_TRANSFORM_ID,
+        transformHash: LIQUID_FIRE_CONTACT_TRANSFORM_HASH,
+        allocationGeneration: liquidFireContactAllocationGeneration,
+        epoch: liquidFireContactEpoch,
+        writeTick: Math.max(0, frameIndex - 1),
+        liquidFireContactCapacity: safeParticleCount,
+        capacity: safeParticleCount,
+        candidateCapMode: 'uncapped_exact_particle_population_capacity',
+        headerBytes: LIQUID_FIRE_CONTACT_HEADER_BYTES,
+        recordFloats: LIQUID_FIRE_CONTACT_RECORD_FLOATS,
+        recordBytes: LIQUID_FIRE_CONTACT_RECORD_BYTES,
+        completionMode: 'gpu_ordered_clear_compact_finalize_same_compute_pass_v0',
+      },
       playgroundZoneDiagnostics: diagnostics?.playgroundZoneDiagnostics || null,
       sourceRecirculationMode: 'material_tagged_finite_particle_loop_v0',
       sourceRecirculationCount: diagnostics?.sourceRecirculationCount || 0,
@@ -2038,6 +2263,7 @@ export async function createWebGPUFingerFluidSolver({
       topologyMeasurementPassCount,
       particleShiftPassCount,
       chemistryDiffusionPassCount,
+      liquidFireContactCompactionPassCount,
       diagnosticsPending,
       diagnosticsRequestCount,
       diagnosticsCompletionCount,
@@ -2066,6 +2292,8 @@ export async function createWebGPUFingerFluidSolver({
     diagnosticsBuffer.destroy();
     interfaceRecordsBuffer.destroy();
     interfaceCountersBuffer.destroy();
+    liquidFireContactRecordsBuffer.destroy();
+    liquidFireContactHeaderBuffer.destroy();
     restStateBuffer.destroy();
     neighborTopologyBuffer.destroy();
     materialTracerBuffer.destroy();
@@ -2090,6 +2318,7 @@ export async function createWebGPUFingerFluidSolver({
     step,
     render,
     requestDiagnostics,
+    getLiquidFireContactDescriptor,
     getDebugState,
     destroy,
   };
