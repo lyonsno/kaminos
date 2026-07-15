@@ -9,6 +9,7 @@ const coreSource = readFileSync(new URL('../volume-core.js', import.meta.url), '
 const indexSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const planHistory = volumeCore.boundarySplatHistoryDepthAllocationPlan;
 const selectRuntimeDepth = volumeCore.boundarySplatHistoryDepthRuntimeSelection;
+const selectLiveDepthTransition = volumeCore.boundarySplatHistoryDepthLiveControlTransition;
 
 assert.equal(
   typeof planHistory,
@@ -19,6 +20,11 @@ assert.equal(
   typeof selectRuntimeDepth,
   'function',
   'runtime must resolve requested and physically allocated depth before any GPU indexing',
+);
+assert.equal(
+  typeof selectLiveDepthTransition,
+  'function',
+  'live controls must expose whether a history-depth request requires a GPU history-buffer rebuild',
 );
 
 assert.deepEqual(selectRuntimeDepth(32, 32), {
@@ -49,6 +55,30 @@ assert.deepEqual(selectRuntimeDepth(64, 64, ['observed-source-candidate-count-ex
   activeDepth: 0,
   refusalReasons: ['observed-source-candidate-count-exceeds-history-capacity'],
 }, 'a measured source-capacity refusal must gate live GPU addressing even when requested and allocated depth agree');
+assert.deepEqual(selectLiveDepthTransition(80, 64), {
+  identity: 'boundary-splat-history-depth-live-control-transition-v0',
+  requestedDepth: 80,
+  allocatedDepth: 64,
+  reallocationRequired: true,
+  reason: 'requested-depth-exceeds-live-allocation-rebuild-required',
+  refusalReasons: [],
+}, 'a live request above the allocated ring must trigger reallocation instead of collapsing active depth to zero');
+assert.deepEqual(selectLiveDepthTransition(32, 64), {
+  identity: 'boundary-splat-history-depth-live-control-transition-v0',
+  requestedDepth: 32,
+  allocatedDepth: 64,
+  reallocationRequired: false,
+  reason: null,
+  refusalReasons: [],
+}, 'a lower live request can reuse the existing physical ring');
+assert.deepEqual(selectLiveDepthTransition(80, 0), {
+  identity: 'boundary-splat-history-depth-live-control-transition-v0',
+  requestedDepth: 80,
+  allocatedDepth: 0,
+  reallocationRequired: false,
+  reason: null,
+  refusalReasons: ['history-depth-allocation-unavailable'],
+}, 'unallocated startup state must not masquerade as a live-growth reallocation');
 
 const limits = {
   maxBufferSize: 268_435_456,
@@ -163,6 +193,21 @@ assert.match(
   coreSource.match(/function ensureBoundarySplatBuffers[\s\S]*?\n  function rebuildBoundarySplatBindGroups/)?.[0] || '',
   /observedSourceCandidateCount:\s*state\.boundarySplatCandidateCount/,
   'buffer rebuild admission must consume the uncapped atomic candidate total instead of stale capped archive telemetry',
+);
+assert.match(
+  coreSource.match(/setControls\(next\) \{[\s\S]*?state\.gridOverlay/)?.[0] || '',
+  /boundarySplatHistoryDepthLiveControlTransition/,
+  'live control changes must explicitly detect when requested history depth exceeds the current physical ring',
+);
+assert.match(
+  coreSource.match(/setControls\(next\) \{[\s\S]*?state\.gridOverlay/)?.[0] || '',
+  /releaseBoundarySplatBuffersForHistoryDepthReallocation/,
+  'live history-depth growth must release splat buffers so the next frame reallocates instead of refusing into fallback',
+);
+assert.match(
+  coreSource,
+  /boundarySplatHistoryDepthReallocation/,
+  'runtime telemetry must record live history-depth reallocation instead of presenting the fallback as authoritative',
 );
 assert.match(
   indexSource,

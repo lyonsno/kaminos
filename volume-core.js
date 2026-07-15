@@ -787,6 +787,25 @@ export function boundarySplatHistoryDepthRuntimeSelection(requestedValue, alloca
   };
 }
 
+export function boundarySplatHistoryDepthLiveControlTransition(requestedValue, allocatedValue, externalRefusalReasons = []) {
+  const requestedDepth = requestedBoundarySplatHistoryDepth(requestedValue);
+  const allocatedDepth = Math.max(0, Math.floor(Number(allocatedValue) || 0));
+  const refusalReasons = Array.isArray(externalRefusalReasons)
+    ? externalRefusalReasons.filter(reason => typeof reason === 'string' && reason.length > 0)
+    : [];
+  if (allocatedDepth <= 0) refusalReasons.push('history-depth-allocation-unavailable');
+  const uniqueRefusalReasons = [...new Set(refusalReasons)];
+  const reallocationRequired = uniqueRefusalReasons.length === 0 && requestedDepth > allocatedDepth;
+  return {
+    identity: 'boundary-splat-history-depth-live-control-transition-v0',
+    requestedDepth,
+    allocatedDepth,
+    reallocationRequired,
+    reason: reallocationRequired ? 'requested-depth-exceeds-live-allocation-rebuild-required' : null,
+    refusalReasons: uniqueRefusalReasons,
+  };
+}
+
 function normalizeBoundarySplatHistoryFrameStride(value) {
   const requested = Math.round(Number(value));
   if (!Number.isFinite(requested)) return 1;
@@ -7413,6 +7432,60 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
   }
 
+  function releaseBoundarySplatBuffersForHistoryDepthReallocation(transition) {
+    const requestedDepth = requestedBoundarySplatHistoryDepth(
+      transition?.requestedDepth ?? controlsSnapshot.boundarySplatHistoryDepth,
+    );
+    const previousAllocatedDepth = Math.max(
+      0,
+      Math.floor(Number(transition?.allocatedDepth ?? boundarySplatHistoryDepthPlan?.allocatedDepth) || 0),
+    );
+    boundarySplatBuffer?.destroy();
+    boundarySplatDrawBuffer?.destroy();
+    boundarySplatDrawGroupBuffer?.destroy();
+    boundarySplatIndirectBuffer?.destroy();
+    boundarySplatCameraBuffer?.destroy();
+    boundarySplatInstanceDescriptorBuffer?.destroy();
+    boundarySplatHistoryBuffer?.destroy();
+    boundarySplatHistoryArchiveControlBuffer?.destroy();
+    boundarySplatHistorySlotMetadataBuffer?.destroy();
+    boundarySplatReadbackBuffer?.destroy();
+    boundarySplatFeatureBuffer?.destroy();
+    boundarySplatBuffer = null;
+    boundarySplatDrawBuffer = null;
+    boundarySplatDrawGroupBuffer = null;
+    boundarySplatIndirectBuffer = null;
+    boundarySplatCameraBuffer = null;
+    boundarySplatInstanceDescriptorBuffer = null;
+    boundarySplatHistoryBuffer = null;
+    boundarySplatHistoryArchiveControlBuffer = null;
+    boundarySplatHistorySlotMetadataBuffer = null;
+    boundarySplatReadbackBuffer = null;
+    boundarySplatFeatureBuffer = null;
+    boundarySplatFeatureBufferCapacity = 0;
+    boundarySplatComputeBindGroups = [];
+    boundarySplatRenderBindGroup = null;
+    boundarySplatPbrSceneBindGroup = null;
+    boundarySplatTelemetryCopyPending = false;
+    boundarySplatTelemetryMapPending = false;
+    boundarySplatTelemetryLodModePending = null;
+    boundarySplatHistoryDepthPlan = null;
+    boundarySplatHistoryArchiveWriteSequence = 0;
+    boundarySplatHistoryLastArchivedAllocationGeneration = 0;
+    boundarySplatHistoryLastArchivedSourceCandidateGeneration = 0;
+    boundarySplatValidatedHistorySelection = null;
+    state.boundarySplatHistoryEffectiveDepth = 0;
+    state.boundarySplatHistoryDepthReallocation = {
+      identity: 'boundary-splat-history-depth-reallocation-v0',
+      requestedDepth,
+      previousAllocatedDepth,
+      reason: transition?.reason || 'history-depth-control-reallocation',
+      renderFrameCount: state.frameCount,
+      simStepCount: state.simStepCount,
+    };
+    state.boundarySplatFallbackReason = null;
+  }
+
   function currentBoundarySplatHistoryDepthSelection() {
     const measuredPlan = boundarySplatHistoryDepthPlan
       ? boundarySplatHistoryDepthAllocationPlan({
@@ -10482,9 +10555,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatTelemetryCopyPending = false;
     boundarySplatTelemetryMapPending = true;
     const telemetryLodMode = boundarySplatTelemetryLodModePending;
+    const readbackBuffer = boundarySplatReadbackBuffer;
     try {
-      await boundarySplatReadbackBuffer.mapAsync(GPUMapMode.READ);
-      const mappedRange = boundarySplatReadbackBuffer.getMappedRange();
+      await readbackBuffer.mapAsync(GPUMapMode.READ);
+      const mappedRange = readbackBuffer.getMappedRange();
       const drawState = new Uint32Array(mappedRange, 0, 16);
       const groupState = new Uint32Array(mappedRange, 64, BOUNDARY_SPLAT_DRAW_GROUP_COUNT * 8);
       state.boundarySplatInstanceCount = drawState[1];
@@ -10515,12 +10589,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.boundarySplatHistoryFrameStride = normalizeBoundarySplatHistoryFrameStride(controlsSnapshot.boundarySplatHistoryFrameStride);
       state.boundarySplatEffectiveHistoryWindowFrames = Math.max(0, state.boundarySplatHistoryDepth - 1) * state.boundarySplatHistoryFrameStride;
       state.boundarySplatPhaseSourceIdentity = state.boundarySplatPhaseModeIdentity;
-      boundarySplatReadbackBuffer.unmap();
+      readbackBuffer.unmap();
       if (overflowCount > 0) growBoundarySplatCapacity(candidateCount);
     } catch (error) {
-      state.boundarySplatCandidateCount = null;
-      state.boundarySplatOverflowCount = null;
-      state.boundarySplatFallbackReason = `count-readback-failed:${error?.message || String(error)}`;
+      if (readbackBuffer === boundarySplatReadbackBuffer) {
+        state.boundarySplatCandidateCount = null;
+        state.boundarySplatOverflowCount = null;
+        state.boundarySplatFallbackReason = `count-readback-failed:${error?.message || String(error)}`;
+      }
     } finally {
       boundarySplatTelemetryMapPending = false;
       boundarySplatTelemetryLodModePending = null;
@@ -14030,6 +14106,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const previousControlSignature = lastTemporalControlSignature || temporalControlSignature(controlsSnapshot);
       const previousCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
       controlsSnapshot = applyRuntimeQualityControls({ ...controlsSnapshot, ...next });
+      const historyDepthTransition = boundarySplatHistoryDepthLiveControlTransition(
+        controlsSnapshot.boundarySplatHistoryDepth,
+        boundarySplatHistoryDepthPlan?.allocatedDepth ?? 0,
+        boundarySplatHistoryDepthPlan?.refusalReasons || [],
+      );
       const nextControlSignature = temporalControlSignature(controlsSnapshot);
       const nextCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
       if (previousControlSignature !== nextControlSignature) {
@@ -14048,6 +14129,29 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       } else if (sourceStateResetNeeded) {
         rebuildFluidState(requestedGrid, requestedMajorantGrid, 'canonical-source-control-change');
       } else {
+        const boundarySplatBuffersMissing = boundarySplatRequested()
+          && (!boundarySplatBuffer
+            || !boundarySplatDrawBuffer
+            || !boundarySplatDrawGroupBuffer
+            || !boundarySplatIndirectBuffer
+            || !boundarySplatCameraBuffer
+            || !boundarySplatInstanceDescriptorBuffer
+            || !boundarySplatHistoryBuffer
+            || !boundarySplatHistoryArchiveControlBuffer
+            || !boundarySplatHistorySlotMetadataBuffer
+            || !boundarySplatReadbackBuffer
+            || !boundarySplatFeatureBuffer);
+        if (device && (historyDepthTransition.reallocationRequired || boundarySplatBuffersMissing)) {
+          if (historyDepthTransition.reallocationRequired) {
+            releaseBoundarySplatBuffersForHistoryDepthReallocation(historyDepthTransition);
+          }
+          try {
+            ensureBoundarySplatBuffers();
+            rebuildBoundarySplatBindGroups();
+          } catch (error) {
+            state.boundarySplatFallbackReason = `history-depth-reallocation-failed:${error?.message || String(error)}`;
+          }
+        }
         gridSize = requestedGrid;
         majorantGridSize = requestedMajorantGrid;
         state.simGrid = gridSize;
