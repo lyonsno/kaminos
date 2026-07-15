@@ -74,11 +74,89 @@ assert.ok(receipt.bodies[0].renderStats.hitPixelCount > 100);
 assert.ok(receipt.bodies[0].renderStats.distinctDepthLevels > 8, 'depth must vary across the actual 3D surface');
 assert.ok(receipt.bodies[0].renderStats.distinctNormalColors > 16, 'normal map must encode curved 3D surface variation');
 assert.equal(receipt.falseClosureGuards.flatMaskRelabeledAsDepth, 'rejected');
+for (const kind of ['clay', 'depth', 'normal']) {
+  const contactSheet = receipt.outputInventory.contactSheets[kind];
+  assert.match(contactSheet.hash, /^sha256:/, `${kind} contact sheet must be hash-bound`);
+  const contactSheetBytes = readFileSync(join(outDir, contactSheet.path));
+  assert.ok(contactSheetBytes.length > 100, `${kind} contact sheet must be nonblank`);
+  assert.equal(
+    contactSheet.hash,
+    `sha256:${createHash('sha256').update(contactSheetBytes).digest('hex')}`,
+    `${kind} contact sheet hash must bind its exact bytes`,
+  );
+}
 for (const kind of ['clay', 'depth', 'normal', 'mask']) {
   const path = join(outDir, receipt.bodies[0].outputs[kind].path);
   assert.ok(existsSync(path), `${kind} output must exist`);
   assert.ok(readFileSync(path).length > 100, `${kind} output must be nonblank`);
 }
+
+const latentSourceDir = await mkdtemp(join(tmpdir(), 'kaminos-silhouette-extrusion-latent-source-'));
+await mkdir(join(latentSourceDir, 'generated'));
+await writeFile(join(latentSourceDir, 'generated', 'prior-shape-0000.pgm'), pgm);
+const normalizedSdf = new Float32Array(sdf.length);
+for (let index = 0; index < sdf.length; index += 1) normalizedSdf[index] = sdf[index] / 40;
+await writeFile(join(latentSourceDir, 'generated', 'prior-shape-0000.f32'), Buffer.from(normalizedSdf.buffer));
+const narrowSdf = new Float32Array(size * size);
+const narrowMask = new Uint8Array(size * size);
+for (let y = 0; y < size; y += 1) {
+  for (let x = 0; x < size; x += 1) {
+    const dx = (x - 24) / 5;
+    const dy = (y - 24) / 12;
+    const value = (1 - Math.sqrt(dx * dx + dy * dy)) / 8;
+    narrowSdf[y * size + x] = value;
+    narrowMask[y * size + x] = value >= 0 ? 255 : 0;
+  }
+}
+const narrowPgm = Buffer.concat([Buffer.from(`P5\n${size} ${size}\n255\n`), Buffer.from(narrowMask)]);
+await writeFile(join(latentSourceDir, 'generated', 'prior-shape-0001.pgm'), narrowPgm);
+await writeFile(join(latentSourceDir, 'receipt.json'), `${JSON.stringify({
+  schema: 'kaminos.lirm-silhouette-latent-sample.v0',
+  status: 'complete',
+  phase: 'witness_written',
+  routeIdentity: {
+    requestedRoute: 'kaminos/lirm-speciation-armature/silhouette-latent-sample-v0',
+    effectiveRoute: 'mlx-sdf-vae-prior-sample-v0',
+  },
+  generatedSampleCount: 2,
+  acceptedSampleCount: 2,
+  generations: [{
+    generationId: 'prior-shape-0000',
+    acceptedForDownstream: true,
+    noveltyAssay: { copied: false },
+    maskPath: 'generated/prior-shape-0000.pgm',
+    signedDistancePath: 'generated/prior-shape-0000.f32',
+  }, {
+    generationId: 'prior-shape-0001',
+    acceptedForDownstream: true,
+    noveltyAssay: { copied: false },
+    maskPath: 'generated/prior-shape-0001.pgm',
+    signedDistancePath: 'generated/prior-shape-0001.f32',
+  }],
+}, null, 2)}\n`);
+const latentOutDir = await mkdtemp(join(tmpdir(), 'kaminos-silhouette-extrusion-latent-out-'));
+const latentRun = spawnSync('python3', [
+  script.pathname,
+  '--shape-space-dir', latentSourceDir,
+  '--generation-ids', 'prior-shape-0000,prior-shape-0001',
+  '--out-dir', latentOutDir,
+  '--resolution', '96',
+], { encoding: 'utf8' });
+assert.equal(latentRun.status, 0, `latent silhouette extrusion failed: ${latentRun.stderr || latentRun.stdout}`);
+const latentReceipt = JSON.parse(readFileSync(join(latentOutDir, 'receipt.json'), 'utf8'));
+assert.equal(latentReceipt.status, 'complete');
+assert.equal(latentReceipt.sourceRouteIdentity.effectiveRoute, 'mlx-sdf-vae-prior-sample-v0');
+assert.match(latentReceipt.sourceReceiptHash, /^sha256:/);
+assert.equal(latentReceipt.generatedBodyCount, 2);
+assert.equal(latentReceipt.bodies[0].generationId, 'prior-shape-0000');
+assert.equal(latentReceipt.bodies[0].source.receiptHash, latentReceipt.sourceReceiptHash);
+assert.equal(latentReceipt.bodies[0].volume.sourceDistanceKind, 'mask-derived-chamfer-signed-distance');
+assert.equal(latentReceipt.outputInventory.contactSheets.clay.path, 'clay-contact-sheet.png');
+const latentHitFractions = latentReceipt.bodies.map((body) => body.renderStats.hitPixelFraction);
+assert.ok(
+  Math.max(...latentHitFractions) - Math.min(...latentHitFractions) > 0.08,
+  'distinct latent silhouettes must remain geometrically distinct after extrusion',
+);
 
 const copiedDir = await mkdtemp(join(tmpdir(), 'kaminos-silhouette-extrusion-copied-'));
 await writeFile(join(copiedDir, 'receipt.json'), readFileSync(join(sourceDir, 'receipt.json')));

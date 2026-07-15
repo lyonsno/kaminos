@@ -18,6 +18,7 @@ PACKET_SCHEMA = "kaminos.lirm-silhouette-extrusion-conditioning-packet.v0"
 REQUESTED_ROUTE = "kaminos/lirm-speciation-armature/silhouette-extrusion-conditioning-v0"
 EFFECTIVE_ROUTE = "cpu-sdf-raymarch-rounded-extrusion-v0"
 EXPECTED_SOURCE_ROUTE = "numpy-local-sdf-pca-topology-neighborhood-v0"
+LATENT_SAMPLE_SOURCE_ROUTE = "mlx-sdf-vae-prior-sample-v0"
 
 
 def read_pgm(path: Path) -> np.ndarray:
@@ -41,6 +42,47 @@ def read_sdf(path: Path, width: int, height: int) -> np.ndarray:
     if values.size != width * height:
         raise ValueError(f"{path} contains {values.size} of {width * height} float32 values")
     return values.reshape((height, width)).astype(np.float64)
+
+
+def chamfer_distance_to(features: np.ndarray) -> np.ndarray:
+    features = np.asarray(features, dtype=bool)
+    if not features.any():
+        raise ValueError("distance transform requires at least one feature pixel")
+    height, width = features.shape
+    distance = np.where(features, 0.0, np.inf)
+    diagonal = math.sqrt(2.0)
+    for y in range(height):
+        for x in range(width):
+            best = distance[y, x]
+            if x > 0:
+                best = min(best, distance[y, x - 1] + 1.0)
+            if y > 0:
+                best = min(best, distance[y - 1, x] + 1.0)
+                if x > 0:
+                    best = min(best, distance[y - 1, x - 1] + diagonal)
+                if x + 1 < width:
+                    best = min(best, distance[y - 1, x + 1] + diagonal)
+            distance[y, x] = best
+    for y in range(height - 1, -1, -1):
+        for x in range(width - 1, -1, -1):
+            best = distance[y, x]
+            if x + 1 < width:
+                best = min(best, distance[y, x + 1] + 1.0)
+            if y + 1 < height:
+                best = min(best, distance[y + 1, x] + 1.0)
+                if x > 0:
+                    best = min(best, distance[y + 1, x - 1] + diagonal)
+                if x + 1 < width:
+                    best = min(best, distance[y + 1, x + 1] + diagonal)
+            distance[y, x] = best
+    return distance
+
+
+def metric_signed_distance(mask: np.ndarray) -> np.ndarray:
+    foreground = np.asarray(mask, dtype=bool)
+    if not foreground.any() or foreground.all():
+        raise ValueError("metric silhouette distance requires nonempty foreground and background")
+    return chamfer_distance_to(~foreground) - chamfer_distance_to(foreground)
 
 
 def normalize(vector: np.ndarray) -> np.ndarray:
@@ -199,6 +241,23 @@ def write_png(path: Path, image: np.ndarray) -> None:
     )
 
 
+def compose_contact_sheet(images: list[np.ndarray], columns: int = 4) -> tuple[np.ndarray, int, int]:
+    if not images:
+        raise ValueError("contact sheet requires at least one image")
+    height, width, channels = images[0].shape
+    if any(image.shape != (height, width, channels) for image in images):
+        raise ValueError("contact sheet images must share dimensions and channels")
+    column_count = min(columns, len(images))
+    row_count = math.ceil(len(images) / column_count)
+    sheet = np.empty((row_count * height, column_count * width, channels), dtype=np.uint8)
+    sheet[:] = images[0][0, 0]
+    for index, image in enumerate(images):
+        row = index // column_count
+        column = index % column_count
+        sheet[row * height:(row + 1) * height, column * width:(column + 1) * width] = image
+    return sheet, column_count, row_count
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Render actual 3D rounded silhouette extrusion conditioning maps.")
     parser.add_argument("--shape-space-dir", required=True, type=Path)
@@ -208,6 +267,41 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--thickness", type=float, default=0.28)
     parser.add_argument("--roundness", type=float, default=0.05)
     return parser.parse_args()
+
+
+def accepted_source_rows(source_dir: Path, source_receipt: dict) -> tuple[dict[str, dict], str]:
+    effective_route = source_receipt.get("routeIdentity", {}).get("effectiveRoute")
+    if source_receipt.get("status") != "complete":
+        raise ValueError("silhouette source is not complete")
+    if effective_route == EXPECTED_SOURCE_ROUTE:
+        rows = [
+            json.loads(line)
+            for line in (source_dir / "accepted-generation-index.jsonl").read_text().splitlines()
+            if line.strip()
+        ]
+        accepted = {
+            row["generationId"]: row
+            for row in rows
+            if not row.get("noveltyAssay", {}).get("copied", True)
+        }
+        return accepted, effective_route
+    if effective_route == LATENT_SAMPLE_SOURCE_ROUTE:
+        if source_receipt.get("phase") != "witness_written":
+            raise ValueError("latent silhouette source is not complete at witness_written")
+        rows = source_receipt.get("generations", [])
+        generated_count = int(source_receipt.get("generatedSampleCount", -1))
+        accepted_count = int(source_receipt.get("acceptedSampleCount", -1))
+        if generated_count != len(rows):
+            raise ValueError(f"latent source claims {generated_count} samples but contains {len(rows)} generations")
+        if accepted_count != sum(bool(row.get("acceptedForDownstream")) for row in rows):
+            raise ValueError("latent source accepted sample count does not reconcile")
+        accepted = {
+            row["generationId"]: row
+            for row in rows
+            if row.get("acceptedForDownstream") and not row.get("noveltyAssay", {}).get("copied", True)
+        }
+        return accepted, effective_route
+    raise ValueError(f"unsupported silhouette source route {effective_route!r}")
 
 
 def main() -> int:
@@ -223,16 +317,10 @@ def main() -> int:
     receipt_path = args.out_dir / "receipt.json"
     receipt_path.write_text(json.dumps(initialized, indent=2) + "\n")
     try:
-        source_receipt = json.loads((args.shape_space_dir / "receipt.json").read_text())
-        effective_source_route = source_receipt.get("routeIdentity", {}).get("effectiveRoute")
-        if source_receipt.get("status") != "complete" or effective_source_route != EXPECTED_SOURCE_ROUTE:
-            raise ValueError("shape-space source is not a complete topology-local silhouette witness")
-        accepted_rows = [
-            json.loads(line)
-            for line in (args.shape_space_dir / "accepted-generation-index.jsonl").read_text().splitlines()
-            if line.strip()
-        ]
-        accepted = {row["generationId"]: row for row in accepted_rows if not row.get("noveltyAssay", {}).get("copied", True)}
+        source_receipt_path = args.shape_space_dir / "receipt.json"
+        source_receipt = json.loads(source_receipt_path.read_text())
+        accepted, effective_source_route = accepted_source_rows(args.shape_space_dir, source_receipt)
+        source_receipt_hash = f"sha256:{hashlib.sha256(source_receipt_path.read_bytes()).hexdigest()}"
         requested_ids = [value.strip() for value in args.generation_ids.split(",") if value.strip()]
         if not requested_ids:
             raise ValueError("generation-ids must name at least one silhouette")
@@ -242,13 +330,23 @@ def main() -> int:
         if args.resolution < 64:
             raise ValueError("resolution must be at least 64")
         bodies = []
+        contact_sheet_images = {kind: [] for kind in ("clay", "depth", "normal")}
         for generation_id in requested_ids:
             row = accepted[generation_id]
             mask_path = args.shape_space_dir / row["maskPath"]
             mask_bytes = mask_path.read_bytes()
             mask_hash = f"sha256:{hashlib.sha256(mask_bytes).hexdigest()}"
             mask = read_pgm(mask_path)
-            source_sdf = read_sdf(args.shape_space_dir / row["signedDistancePath"], mask.shape[1], mask.shape[0])
+            if effective_source_route == LATENT_SAMPLE_SOURCE_ROUTE:
+                source_sdf = metric_signed_distance(mask)
+                source_distance_kind = "mask-derived-chamfer-signed-distance"
+            else:
+                source_sdf = read_sdf(
+                    args.shape_space_dir / row["signedDistancePath"],
+                    mask.shape[1],
+                    mask.shape[0],
+                )
+                source_distance_kind = "source-signed-distance"
             volume = RoundedSilhouetteExtrusion(source_sdf, args.thickness, args.roundness)
             images, render_stats = render_volume(volume, args.resolution)
             body_dir = args.out_dir / generation_id
@@ -262,6 +360,8 @@ def main() -> int:
             }
             for kind, filename in output_paths.items():
                 write_png(body_dir / filename, images[kind])
+            for kind in contact_sheet_images:
+                contact_sheet_images[kind].append(images[kind])
             outputs = {
                 kind: {
                     "path": f"{generation_id}/{filename}",
@@ -277,6 +377,7 @@ def main() -> int:
                 "generationId": generation_id,
                 "source": {
                     "shapeSpaceRoute": effective_source_route,
+                    "receiptHash": source_receipt_hash,
                     "maskHash": mask_hash,
                     "parentShapeIds": row.get("parentShapeIds", []),
                     "noveltyAssay": row["noveltyAssay"],
@@ -284,6 +385,7 @@ def main() -> int:
                 "volume": {
                     "kind": "rounded_silhouette_extrusion_sdf",
                     "actual3dStructure": True,
+                    "sourceDistanceKind": source_distance_kind,
                     "thickness": args.thickness,
                     "roundness": args.roundness,
                     "camera": "orthographic-three-quarter-v0",
@@ -298,17 +400,34 @@ def main() -> int:
             }
             (body_dir / "conditioning-packet.json").write_text(json.dumps(packet, indent=2) + "\n")
             bodies.append(packet)
+        contact_sheets = {}
+        for kind, images in contact_sheet_images.items():
+            sheet, column_count, row_count = compose_contact_sheet(images)
+            filename = f"{kind}-contact-sheet.png"
+            path = args.out_dir / filename
+            write_png(path, sheet)
+            contact_sheets[kind] = {
+                "path": filename,
+                "hash": f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}",
+                "width": int(sheet.shape[1]),
+                "height": int(sheet.shape[0]),
+                "columns": column_count,
+                "rows": row_count,
+                "bodyCount": len(images),
+            }
         receipt = {
             "schema": SCHEMA,
             "status": "complete",
             "phase": "witness_written",
             "routeIdentity": {"requestedRoute": REQUESTED_ROUTE, "effectiveRoute": EFFECTIVE_ROUTE},
             "sourceRouteIdentity": source_receipt["routeIdentity"],
+            "sourceReceiptHash": source_receipt_hash,
             "sourceShapeSpace": str(args.shape_space_dir),
             "requestedGenerationIds": requested_ids,
             "generatedBodyCount": len(bodies),
             "resolution": args.resolution,
             "bodies": bodies,
+            "outputInventory": {"contactSheets": contact_sheets},
             "falseClosureGuards": {
                 "flatMaskRelabeledAsDepth": "rejected",
                 "copiedSilhouetteAccepted": "false",

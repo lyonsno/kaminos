@@ -1,0 +1,3507 @@
+{
+  "schema": "kaminos.lirm-silhouette-latent-sample.v0",
+  "status": "complete",
+  "phase": "witness_written",
+  "routeIdentity": {
+    "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-latent-sample-v0",
+    "effectiveRoute": "mlx-sdf-vae-prior-sample-v0"
+  },
+  "requestedConfig": {
+    "samples": 96,
+    "seed": 991,
+    "temperature": 0.7,
+    "batchSize": 32,
+    "copyThreshold": 0.94
+  },
+  "effectiveConfig": {
+    "samples": 96,
+    "seed": 991,
+    "temperature": 0.7,
+    "batchSize": 32,
+    "copyThreshold": 0.94,
+    "inputShape": [
+      128,
+      128,
+      1
+    ],
+    "latentDim": 32,
+    "channels": [
+      16,
+      32,
+      64
+    ],
+    "maskDecode": "normalized_sdf > 0"
+  },
+  "sourceModel": {
+    "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-vae-beta001-30e-20260714",
+    "receiptHash": "sha256:409bda0f52afd99f13ac40e4d681396826846faab01aa7381902e4793a8adee4",
+    "checkpointHash": "sha256:4d8648debc8a61eb9364cdcc0415a5f9eea7b5be76c63930249be55f7875370b",
+    "receiptMaskDecode": "normalized_sdf < 0"
+  },
+  "falseClosureGuards": {
+    "sourceCheckpointValidated": true,
+    "sourceModelRouteValidated": true,
+    "generatedFieldCount": 96,
+    "contactSheetRasterWritten": true
+  },
+  "generatedSampleCount": 96,
+  "acceptedSampleCount": 94,
+  "generations": [
+    {
+      "generationId": "prior-shape-0000",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:4dcf477a8b9cb307bf75e22e8824985e17717715088d21608cfa5b544ef4d771",
+      "maskHash": "sha256:00354395fcce77ff2a79e7216ac91848143c3329b29099c98f99d7dfb12719f6",
+      "foregroundOccupancy": 0.39502,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 2340,
+          "similarity": 0.803863,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.39502,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 3,
+        "largestComponentFraction": 0.999691
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0000.pgm",
+      "signedDistancePath": "generated/prior-shape-0000.f32"
+    },
+    {
+      "generationId": "prior-shape-0001",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:a45139990eb3e2add85af41140020d4c318bdb3000880e0c0a75bf16b2841d63",
+      "maskHash": "sha256:c89100b729257f4b3155bf325a17ecbefcd6c61e53d4085227d8af92d6c45a56",
+      "foregroundOccupancy": 0.456604,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1682,
+          "similarity": 0.796211,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.456604,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0001.pgm",
+      "signedDistancePath": "generated/prior-shape-0001.f32"
+    },
+    {
+      "generationId": "prior-shape-0002",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:394a6da1f88ee357d7deeda4de53e612aec074ed1802c42c036a236ec3c18c0c",
+      "maskHash": "sha256:e101d0e677b95f65126b3da9efd915ddcab54fb99c968c2752ae10a9896ffbfa",
+      "foregroundOccupancy": 0.537903,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 738,
+          "similarity": 0.856384,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.537903,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0002.pgm",
+      "signedDistancePath": "generated/prior-shape-0002.f32"
+    },
+    {
+      "generationId": "prior-shape-0003",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:10ebf1cfc322b48ad30940f9b139e4fa8846c9f41c2c98476375d8bf4f4edf94",
+      "maskHash": "sha256:2daf22ff11373a10c4167aee05aa7115d294954f5315101998fbf01655952a0b",
+      "foregroundOccupancy": 0.468567,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1641,
+          "similarity": 0.813194,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.468567,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0003.pgm",
+      "signedDistancePath": "generated/prior-shape-0003.f32"
+    },
+    {
+      "generationId": "prior-shape-0004",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:e56df66d9d4f2e15de5c500ab5f9166e17b60352a655fa8c2b553bcbe923b95c",
+      "maskHash": "sha256:495281e6824096543c52d0cfcca14b3585a05e779320fac29f73a3d2435fa181",
+      "foregroundOccupancy": 0.46521,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 2164,
+          "similarity": 0.814309,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.46521,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0004.pgm",
+      "signedDistancePath": "generated/prior-shape-0004.f32"
+    },
+    {
+      "generationId": "prior-shape-0005",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:bb853c8cb84d46a54904e534a6b6416afaa14bfaa68042f5707c061ec843a0a3",
+      "maskHash": "sha256:7126dfaaa15dba55e2b46e74698f6457a34200fdd63924741488cbdd4e08ca2f",
+      "foregroundOccupancy": 0.329651,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1465,
+          "similarity": 0.771728,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.329651,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0005.pgm",
+      "signedDistancePath": "generated/prior-shape-0005.f32"
+    },
+    {
+      "generationId": "prior-shape-0006",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:0c5e69bddb6cbf4aace12920736a2b618757a6a54957429379f68e8849426230",
+      "maskHash": "sha256:5304bdb1ed8bc3cc965d0df98f6fee4d5b4a7a2cffe6d54f7a1f7e0ef30f9c3c",
+      "foregroundOccupancy": 0.462219,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1835,
+          "similarity": 0.798251,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": false,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": true,
+        "foregroundOccupancy": 0.462219,
+        "borderForegroundFraction": 0.007874,
+        "componentCount": 5,
+        "largestComponentFraction": 0.998547
+      },
+      "acceptedForDownstream": false,
+      "maskPath": "generated/prior-shape-0006.pgm",
+      "signedDistancePath": "generated/prior-shape-0006.f32"
+    },
+    {
+      "generationId": "prior-shape-0007",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:697da9cc35ba2df1257e7be8bf4eeb162fe5f7eea8dbf462975fed60d483cdab",
+      "maskHash": "sha256:b0dd113f00e7c32cdba011fba618719608b60713532d71209ff333101e4ba05d",
+      "foregroundOccupancy": 0.362183,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1140,
+          "similarity": 0.766321,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.362183,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0007.pgm",
+      "signedDistancePath": "generated/prior-shape-0007.f32"
+    },
+    {
+      "generationId": "prior-shape-0008",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:8c64d603b2cd34dbfde882e6f1b839ab1037eab02b0de7b5c66f93817dab7148",
+      "maskHash": "sha256:d3ff73226d3693a53453fd3236cc80ea531303370114610006ecc9f124f3faed",
+      "foregroundOccupancy": 0.508667,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 397,
+          "similarity": 0.836637,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.508667,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0008.pgm",
+      "signedDistancePath": "generated/prior-shape-0008.f32"
+    },
+    {
+      "generationId": "prior-shape-0009",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:21934b315b1674102feabedb4705884abf35c5c518e2509f3a67aa22729702a5",
+      "maskHash": "sha256:4876d707834cf3200f1ae38f1965c1b7bcdcc45c4d99c403afba60895c387764",
+      "foregroundOccupancy": 0.40625,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 2189,
+          "similarity": 0.784194,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.40625,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.99985
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0009.pgm",
+      "signedDistancePath": "generated/prior-shape-0009.f32"
+    },
+    {
+      "generationId": "prior-shape-0010",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:81ae06609002b204760d25251d717e663a763ccefbd249e9f351efe6314ea9e5",
+      "maskHash": "sha256:e8ebf3621b37d91fa07193f8a69f66a9d2f11292ab312c393f77facf418ea5b0",
+      "foregroundOccupancy": 0.275146,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 540,
+          "similarity": 0.695113,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.275146,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.999778
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0010.pgm",
+      "signedDistancePath": "generated/prior-shape-0010.f32"
+    },
+    {
+      "generationId": "prior-shape-0011",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:da43eb2a1efb1e2f91ae8a20e3087d05379e8c808e41df0af365d887b6c58db8",
+      "maskHash": "sha256:88aa2db9e9ef3d3758486843e573386f3719039b5a4423caefb372a123f6e7ed",
+      "foregroundOccupancy": 0.389893,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1569,
+          "similarity": 0.779476,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.389893,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0011.pgm",
+      "signedDistancePath": "generated/prior-shape-0011.f32"
+    },
+    {
+      "generationId": "prior-shape-0012",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:59998e484048be12cb9edc5403c106b1f8d70ca53f870469c3b27227b1627436",
+      "maskHash": "sha256:04f30627b44875f622b07619db49d80ce84b4926292d741525fb50d0f3e4dac4",
+      "foregroundOccupancy": 0.38739,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1875,
+          "similarity": 0.777176,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.38739,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 3,
+        "largestComponentFraction": 0.999685
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0012.pgm",
+      "signedDistancePath": "generated/prior-shape-0012.f32"
+    },
+    {
+      "generationId": "prior-shape-0013",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:b134da9b0e9e586060ae856638f036dc6dfac118b0c3dbbc90cae5218301f4d3",
+      "maskHash": "sha256:a6e3dde174685639bd95ce52e0ccf83b0e890dde88cdca198293f43112bae76a",
+      "foregroundOccupancy": 0.531799,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 748,
+          "similarity": 0.840069,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.531799,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 4,
+        "largestComponentFraction": 0.999426
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0013.pgm",
+      "signedDistancePath": "generated/prior-shape-0013.f32"
+    },
+    {
+      "generationId": "prior-shape-0014",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:7da4c251f7c9fffa6aab1f0ae22e1505912a9e336a6c4f06d50a4cb722d8e10c",
+      "maskHash": "sha256:c8b1f91b927b75d6d711cae58cf231b5e7782bd2c55fabe998a6843a0aeaac6b",
+      "foregroundOccupancy": 0.515076,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 206,
+          "similarity": 0.803603,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.515076,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0014.pgm",
+      "signedDistancePath": "generated/prior-shape-0014.f32"
+    },
+    {
+      "generationId": "prior-shape-0015",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:6c65ae3e1bba09ef7670439fbc85c968c51d03a62a970a01ca01047bc661c4a1",
+      "maskHash": "sha256:f6527577ed69cc3c228a9c003a680a533aaa0ba03bb946e4f8676e61df3acf2d",
+      "foregroundOccupancy": 0.410645,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 2408,
+          "similarity": 0.785277,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.410645,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0015.pgm",
+      "signedDistancePath": "generated/prior-shape-0015.f32"
+    },
+    {
+      "generationId": "prior-shape-0016",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:ecbd0d07ec21bbee6e88809b9190cb18984ee055874947fda78000e8c77c6ac9",
+      "maskHash": "sha256:90d516d0e5915b1cfa97c40dc3d016febcef405dc2814d4ab3c7aaf48be6c14f",
+      "foregroundOccupancy": 0.430298,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1717,
+          "similarity": 0.789276,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.430298,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0016.pgm",
+      "signedDistancePath": "generated/prior-shape-0016.f32"
+    },
+    {
+      "generationId": "prior-shape-0017",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:28d101661b3048487569ae822c5e49c0cf16884b2ad265272386f60c17d8136a",
+      "maskHash": "sha256:565e3f197436f84f790771e4e19337e91e4c66385c300104703ebb8799e5372b",
+      "foregroundOccupancy": 0.46051,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 297,
+          "similarity": 0.799886,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.46051,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.999867
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0017.pgm",
+      "signedDistancePath": "generated/prior-shape-0017.f32"
+    },
+    {
+      "generationId": "prior-shape-0018",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:bac487506edc25bd6fbf3fa371cbe673f00d595ef71caf6a1fa8c706fee726b7",
+      "maskHash": "sha256:b83b29639964a49396ab237c8887aa342b35be648b05f3fd1371c7f6d3fefe8a",
+      "foregroundOccupancy": 0.448547,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1743,
+          "similarity": 0.84506,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.448547,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.999864
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0018.pgm",
+      "signedDistancePath": "generated/prior-shape-0018.f32"
+    },
+    {
+      "generationId": "prior-shape-0019",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:c0868a182dee0b708f68e436895209ab8ea4cdc9b6c1d5188c7d5b93f0694c8b",
+      "maskHash": "sha256:ae0c199b4af568ffe7ec01caf3f392bf04f0ec4bb4d3282bb16393ed74a89c26",
+      "foregroundOccupancy": 0.478516,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 134,
+          "similarity": 0.814713,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.478516,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 5,
+        "largestComponentFraction": 0.99949
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0019.pgm",
+      "signedDistancePath": "generated/prior-shape-0019.f32"
+    },
+    {
+      "generationId": "prior-shape-0020",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:5f3b0e70ccd3a4d02e23c327417053fd19e4926bb20fd885a67dcd2652c56a74",
+      "maskHash": "sha256:dcba340648bc0a5c2dd1f0d23695537b603964f56db2a82d53bb24442c7a40ab",
+      "foregroundOccupancy": 0.419739,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1717,
+          "similarity": 0.794292,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.419739,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.999564
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0020.pgm",
+      "signedDistancePath": "generated/prior-shape-0020.f32"
+    },
+    {
+      "generationId": "prior-shape-0021",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:3a111e5365b2fef9dce88f96f14194beed3967d6ee2c770f40b921a2aaefc45f",
+      "maskHash": "sha256:dbd672330d759c05a2aa8821055fe6e9090aad48a4f893a3665f1842befbd8cb",
+      "foregroundOccupancy": 0.456299,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1332,
+          "similarity": 0.812713,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.456299,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0021.pgm",
+      "signedDistancePath": "generated/prior-shape-0021.f32"
+    },
+    {
+      "generationId": "prior-shape-0022",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:8a5f22fee5cca6a01adeda43bcf55e32c8a6706ce590d0eace03e7a6c430caeb",
+      "maskHash": "sha256:725f8a2b6ec89473c5d2dea73453a834b62ef34bdcbfe140ae5afe041d49c988",
+      "foregroundOccupancy": 0.539307,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1379,
+          "similarity": 0.775296,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.539307,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0022.pgm",
+      "signedDistancePath": "generated/prior-shape-0022.f32"
+    },
+    {
+      "generationId": "prior-shape-0023",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:9f0490cc03450a8bd1e9fa25086b35846487b4a21e46dcd4fb132b9b0c7f1bb0",
+      "maskHash": "sha256:634f4dadda3b4db7d6c5b240f8320090b5724df14ce81208154f50d29d8a727e",
+      "foregroundOccupancy": 0.428955,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 268,
+          "similarity": 0.816356,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.428955,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0023.pgm",
+      "signedDistancePath": "generated/prior-shape-0023.f32"
+    },
+    {
+      "generationId": "prior-shape-0024",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:1d8b379529aa800b56b81e35512f98cd6c76eb95a36e6a1a3b2d4c88e65781fc",
+      "maskHash": "sha256:0d126add9e592f36bcbe3e0ca4332c3e9633ff63fab4d398e19d41611e36c3e3",
+      "foregroundOccupancy": 0.479919,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 346,
+          "similarity": 0.83856,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.479919,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0024.pgm",
+      "signedDistancePath": "generated/prior-shape-0024.f32"
+    },
+    {
+      "generationId": "prior-shape-0025",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:7a7c18126454a050349b56acb3632e34caf8ee78fa83b4cf3ff3cd6e18a2f614",
+      "maskHash": "sha256:d486d3220c390bd57783b2b59bba4ee91e631c1d45c68cc789bf15bc7cf9c554",
+      "foregroundOccupancy": 0.389893,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1259,
+          "similarity": 0.774888,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.389893,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0025.pgm",
+      "signedDistancePath": "generated/prior-shape-0025.f32"
+    },
+    {
+      "generationId": "prior-shape-0026",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:3bef091b44a9d38e755f3def2e74089de5a1ca3584375006eca52bcd9956d3f1",
+      "maskHash": "sha256:30332293793fb87c4b55c84f18e5c138c7d16e6934f2e53166b329f1e5abeade",
+      "foregroundOccupancy": 0.345886,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 526,
+          "similarity": 0.769954,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.345886,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0026.pgm",
+      "signedDistancePath": "generated/prior-shape-0026.f32"
+    },
+    {
+      "generationId": "prior-shape-0027",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:82c5ee1b9efd8f39cafeff35b2165a31360d270fcd2beb3856f11358852326ea",
+      "maskHash": "sha256:602f56b7c11b52ad8854a5fa986cef51904386f4542b59e61688988d289affdf",
+      "foregroundOccupancy": 0.41095,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1128,
+          "similarity": 0.801363,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.41095,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0027.pgm",
+      "signedDistancePath": "generated/prior-shape-0027.f32"
+    },
+    {
+      "generationId": "prior-shape-0028",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:0d8baaa3802767f526f621f5a2d4b4a1098fe76077f58c763437d96c186e25f4",
+      "maskHash": "sha256:e3ac12e888b14b4c930568e0a4f35bff1306b5a19dda1c5a56be792ff9aa7579",
+      "foregroundOccupancy": 0.429077,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 737,
+          "similarity": 0.789314,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.429077,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0028.pgm",
+      "signedDistancePath": "generated/prior-shape-0028.f32"
+    },
+    {
+      "generationId": "prior-shape-0029",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:426bea788e29073334bd5c7f5f9c557dd0aec82cd602d3ea291246fdc15da91b",
+      "maskHash": "sha256:98b4ed5678e0d3f0236edc2dbe295fe1e5f291446529035d59d30a9291d16575",
+      "foregroundOccupancy": 0.474365,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1412,
+          "similarity": 0.826791,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.474365,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0029.pgm",
+      "signedDistancePath": "generated/prior-shape-0029.f32"
+    },
+    {
+      "generationId": "prior-shape-0030",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:ccfb162b2d85415c41ebfe0eaed2e61245d49f7eec2852d965617761a6bbe70e",
+      "maskHash": "sha256:f33748585e1f04deda0c79b0582233900e86ffd80a1e675ec13e5dd004e26d03",
+      "foregroundOccupancy": 0.424866,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1935,
+          "similarity": 0.811771,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.424866,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0030.pgm",
+      "signedDistancePath": "generated/prior-shape-0030.f32"
+    },
+    {
+      "generationId": "prior-shape-0031",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:e730cdef7402a5d46e20ee38d362cc1937b0b6d0826ec45348cc19bbd0af93cc",
+      "maskHash": "sha256:d4ad41790792535375e2b258fb628b43a8a2357022a7c6d7b02ec5fa157352b4",
+      "foregroundOccupancy": 0.421692,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 193,
+          "similarity": 0.78,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.421692,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0031.pgm",
+      "signedDistancePath": "generated/prior-shape-0031.f32"
+    },
+    {
+      "generationId": "prior-shape-0032",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:e1a113bd9892057eeb5e33a0f5422e3b1f20d54c85cb7efbe1733603f8ecb3d2",
+      "maskHash": "sha256:9a7f7fb50248caf73175eb2ac6de183a24bc8b7415666898d92783139c976c66",
+      "foregroundOccupancy": 0.309875,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1651,
+          "similarity": 0.691984,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.309875,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0032.pgm",
+      "signedDistancePath": "generated/prior-shape-0032.f32"
+    },
+    {
+      "generationId": "prior-shape-0033",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:d8bf5f9ee4364f8f838d9ba05f5a8c229fdcb27ee7f58d8d7f431a0099c621ab",
+      "maskHash": "sha256:fed04183f42fdf43f8943458a013103864c3311c94bf8086d6d57f92451fc071",
+      "foregroundOccupancy": 0.429016,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1090,
+          "similarity": 0.810854,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.429016,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0033.pgm",
+      "signedDistancePath": "generated/prior-shape-0033.f32"
+    },
+    {
+      "generationId": "prior-shape-0034",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:085bd896c29f32e02fe2371dc0c4f869a79a135517dc53834252a69ce8e754f3",
+      "maskHash": "sha256:2e40b98033b9cf5dae093a3d694eecb6a1c50e0d6cd2b01ac8fc5a453002ea5c",
+      "foregroundOccupancy": 0.579529,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 831,
+          "similarity": 0.822091,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.579529,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.999895
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0034.pgm",
+      "signedDistancePath": "generated/prior-shape-0034.f32"
+    },
+    {
+      "generationId": "prior-shape-0035",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:60de15bae068c2e107fa060b2c7754333a75d7fa484f831e22c7930ffd46fbc1",
+      "maskHash": "sha256:e833b493c22e66bfd9e7b5f622643259109f55fccc890f8f89872e5a1a6a585b",
+      "foregroundOccupancy": 0.496277,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 643,
+          "similarity": 0.799931,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.496277,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0035.pgm",
+      "signedDistancePath": "generated/prior-shape-0035.f32"
+    },
+    {
+      "generationId": "prior-shape-0036",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:f210cd4afc93ed50d19000032685ad76460a76208aa0ed8d3cf958ecef251b39",
+      "maskHash": "sha256:a0ce970a577cd81e1cfaea6bb9e72a24f4b34a4d3987fda30da217f149ea7f76",
+      "foregroundOccupancy": 0.454651,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 134,
+          "similarity": 0.853857,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.454651,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.999866
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0036.pgm",
+      "signedDistancePath": "generated/prior-shape-0036.f32"
+    },
+    {
+      "generationId": "prior-shape-0037",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:3d95234ff11d4eca650be012efcd6a6ec49eaa8074c28e2d136f4ab04d16732e",
+      "maskHash": "sha256:d36fd96e07ae57e593000e8a0dac41aaff13805e6491e607ce8d8b567cb22bed",
+      "foregroundOccupancy": 0.497009,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1302,
+          "similarity": 0.771238,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.497009,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0037.pgm",
+      "signedDistancePath": "generated/prior-shape-0037.f32"
+    },
+    {
+      "generationId": "prior-shape-0038",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:64f6ddae156876e5e9fa45bce4af024412999c6a39c9a766d7b8476413d83338",
+      "maskHash": "sha256:a2bbdf72db3446ec3edd1402ccdc9a8c0bbf999958019f78391c687d825093d3",
+      "foregroundOccupancy": 0.575317,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 993,
+          "similarity": 0.814578,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.575317,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0038.pgm",
+      "signedDistancePath": "generated/prior-shape-0038.f32"
+    },
+    {
+      "generationId": "prior-shape-0039",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:5700d0f2b74f399be559a2ef5d24cafd00aa22f4b0a3f1bea627cc1ec85ad7e1",
+      "maskHash": "sha256:bc908b7cfd1cc95c79f5b4c1de579600495a66f79f374b0be8ada28961257ada",
+      "foregroundOccupancy": 0.46936,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1762,
+          "similarity": 0.77327,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.46936,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0039.pgm",
+      "signedDistancePath": "generated/prior-shape-0039.f32"
+    },
+    {
+      "generationId": "prior-shape-0040",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:896f593f5b428581b1b32e1793cd6ef658990287ba4dbccdf082689dfc31260b",
+      "maskHash": "sha256:784c6d2736cda2d84c20d5c844f22475fb319b9ae8260716d7ce38e7f8dfbf41",
+      "foregroundOccupancy": 0.503296,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 45,
+          "similarity": 0.83267,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.503296,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0040.pgm",
+      "signedDistancePath": "generated/prior-shape-0040.f32"
+    },
+    {
+      "generationId": "prior-shape-0041",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:093e7c9a13461af77758153fd7fe33d5ea31e8d73d57435b48c2c622d77b404d",
+      "maskHash": "sha256:434e237b70f4b399b500dc7c7df62f0f4c557253e47733544f7eb521169470d0",
+      "foregroundOccupancy": 0.434265,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1951,
+          "similarity": 0.75881,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.434265,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.999859
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0041.pgm",
+      "signedDistancePath": "generated/prior-shape-0041.f32"
+    },
+    {
+      "generationId": "prior-shape-0042",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:a7907adb8395e9b577a9ee901a59c11c471c8d903365c16384622e4bee6feb1d",
+      "maskHash": "sha256:8ef242ff5796ddc43f172871b082d5344774e964991652f06367897288488c1a",
+      "foregroundOccupancy": 0.484619,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1432,
+          "similarity": 0.839786,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.484619,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.999874
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0042.pgm",
+      "signedDistancePath": "generated/prior-shape-0042.f32"
+    },
+    {
+      "generationId": "prior-shape-0043",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:53ecf1dcc3ec84cc07a54e770a3ad1fe0cc06ef899a3dba431faa143f44390c5",
+      "maskHash": "sha256:0535ec16efd120f89dd89508087da2ab1670ea4623267e3745bd25e7208c43e4",
+      "foregroundOccupancy": 0.348083,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1611,
+          "similarity": 0.797855,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.348083,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0043.pgm",
+      "signedDistancePath": "generated/prior-shape-0043.f32"
+    },
+    {
+      "generationId": "prior-shape-0044",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:27937f55454eda7828f13081b8e9134766148273ee3953c04a37ff296d4f9c46",
+      "maskHash": "sha256:92b50530ca90fa4f8cabe685b4e64b2ef4b95ee80e348de8c5c10b1e9b9c2c9e",
+      "foregroundOccupancy": 0.26001,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1282,
+          "similarity": 0.682193,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.26001,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0044.pgm",
+      "signedDistancePath": "generated/prior-shape-0044.f32"
+    },
+    {
+      "generationId": "prior-shape-0045",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:6032f91288298c4be1d2c32ec769797069546dd5492a684ca50d98fe4ab82665",
+      "maskHash": "sha256:ef50de0bddb8e4cd8e5ff7a397edb7e5d86c059c81809a1037e593dca73582e7",
+      "foregroundOccupancy": 0.516235,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 365,
+          "similarity": 0.817849,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.516235,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 3,
+        "largestComponentFraction": 0.999645
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0045.pgm",
+      "signedDistancePath": "generated/prior-shape-0045.f32"
+    },
+    {
+      "generationId": "prior-shape-0046",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:e4c01ffcd5d3f6dd2d6e7b7c2c9d3bfe2d9ff34f2f93fbe8864c72a228eb9ce9",
+      "maskHash": "sha256:575859e88957bbf39616bd10cd04ab9abf6d6e3dca7035890dfb4786440f8157",
+      "foregroundOccupancy": 0.513794,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 747,
+          "similarity": 0.843963,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.513794,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0046.pgm",
+      "signedDistancePath": "generated/prior-shape-0046.f32"
+    },
+    {
+      "generationId": "prior-shape-0047",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:ef9a17f0ea0baabc11e83257c3130b38b6ae5fca0fab7978eb99136c0d905d22",
+      "maskHash": "sha256:4d64b4725327f9cb3b43c7a39aceeba59016ad256a5e3c80734f2aada4e9d0ef",
+      "foregroundOccupancy": 0.377441,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1641,
+          "similarity": 0.764894,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.377441,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0047.pgm",
+      "signedDistancePath": "generated/prior-shape-0047.f32"
+    },
+    {
+      "generationId": "prior-shape-0048",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:127b2ee0594bb99b67c99e79b173ee6e5ee1ec51b44b95966074a02e8fd252e2",
+      "maskHash": "sha256:090fff39201af5425402bb5f15fe5ef5cde7cc3783116b07d8ab62c3813d8d1a",
+      "foregroundOccupancy": 0.439453,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 737,
+          "similarity": 0.768861,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.439453,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0048.pgm",
+      "signedDistancePath": "generated/prior-shape-0048.f32"
+    },
+    {
+      "generationId": "prior-shape-0049",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:f561f37ff5b8d90f95120ab7bd0c3641b2e47ccc9e4d7eadce678333d8de69f6",
+      "maskHash": "sha256:2231db3ca3df39fb05af882dd805b01c3dc59c83eaf0f6f2d58dc1231c434943",
+      "foregroundOccupancy": 0.466248,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1951,
+          "similarity": 0.823144,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.466248,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.999869
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0049.pgm",
+      "signedDistancePath": "generated/prior-shape-0049.f32"
+    },
+    {
+      "generationId": "prior-shape-0050",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:c3a45fb023e10e77540dce546a30a87809e633e5083950c98863d8a67061b47c",
+      "maskHash": "sha256:df0637f18c19e6ac06cebc26f30cb53603663193d3ce45af2ab7d9f22252258f",
+      "foregroundOccupancy": 0.387695,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 647,
+          "similarity": 0.737073,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.387695,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 7,
+        "largestComponentFraction": 0.996222
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0050.pgm",
+      "signedDistancePath": "generated/prior-shape-0050.f32"
+    },
+    {
+      "generationId": "prior-shape-0051",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:6ca9e2d79087aac64a480d9aa606b017a438717518d15815455199d1bfaa73c3",
+      "maskHash": "sha256:44e0373f0911285c885f8961b468cddf11cc4ffa814e405900b435824862fcc2",
+      "foregroundOccupancy": 0.467041,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1579,
+          "similarity": 0.786854,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.467041,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0051.pgm",
+      "signedDistancePath": "generated/prior-shape-0051.f32"
+    },
+    {
+      "generationId": "prior-shape-0052",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:97717351b3f49ef43d3e434acc1710a41beacb163e777bb02c962cba067b10ca",
+      "maskHash": "sha256:fefa869050d8071173f3897e5baa085b618fedaa408c28a7a8106a42a5911671",
+      "foregroundOccupancy": 0.297119,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 799,
+          "similarity": 0.699619,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.297119,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.999795
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0052.pgm",
+      "signedDistancePath": "generated/prior-shape-0052.f32"
+    },
+    {
+      "generationId": "prior-shape-0053",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:e147b62cf24fa000598db6effacdea9c6b57c0197557d485ea9eb7ef9cf5e1e3",
+      "maskHash": "sha256:0ba09ef07123cce7b1969bead19093b0993c2eaa54ba9d7edc4ad9b14a8e78f4",
+      "foregroundOccupancy": 0.536072,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1429,
+          "similarity": 0.867539,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": false,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": true,
+        "foregroundOccupancy": 0.536072,
+        "borderForegroundFraction": 0.001969,
+        "componentCount": 2,
+        "largestComponentFraction": 0.999886
+      },
+      "acceptedForDownstream": false,
+      "maskPath": "generated/prior-shape-0053.pgm",
+      "signedDistancePath": "generated/prior-shape-0053.f32"
+    },
+    {
+      "generationId": "prior-shape-0054",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:a30bbf4c9b5388d33690d1292790e0d1a9b6f564797d059484748dee749510c3",
+      "maskHash": "sha256:60a3c1190c2c887c9f21e1b08301008e3c46765e71f54f8cdf87dedf9e40f3b8",
+      "foregroundOccupancy": 0.43811,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 2056,
+          "similarity": 0.791934,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.43811,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.999861
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0054.pgm",
+      "signedDistancePath": "generated/prior-shape-0054.f32"
+    },
+    {
+      "generationId": "prior-shape-0055",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:4f60ca3e3653326333a314447a8d126e4be5fe8638095134691921d795de54b0",
+      "maskHash": "sha256:fd7ddd37c30bb495ea0e7f98c4ea4010c1af1c63cacc9b3b60d8da7bfe25b624",
+      "foregroundOccupancy": 0.499695,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1429,
+          "similarity": 0.874017,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.499695,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0055.pgm",
+      "signedDistancePath": "generated/prior-shape-0055.f32"
+    },
+    {
+      "generationId": "prior-shape-0056",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:81936871679a048eba4d50af479a99326b55a20137709159c18555895aedc904",
+      "maskHash": "sha256:70d56323db218708b93fd4fc62fe7d09e4e2bb2b23b370d2aaf7ef51315577b7",
+      "foregroundOccupancy": 0.348389,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 759,
+          "similarity": 0.712722,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.348389,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.99965
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0056.pgm",
+      "signedDistancePath": "generated/prior-shape-0056.f32"
+    },
+    {
+      "generationId": "prior-shape-0057",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:7f66b328d33900a31eb8075dd342075cdcb0df584b3f6078605cbbd0b00b6863",
+      "maskHash": "sha256:5ca5695ee7d380b62eb7108cc40186a0bd1aa738419114227f207bb96f232491",
+      "foregroundOccupancy": 0.487854,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1340,
+          "similarity": 0.835427,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.487854,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0057.pgm",
+      "signedDistancePath": "generated/prior-shape-0057.f32"
+    },
+    {
+      "generationId": "prior-shape-0058",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:804af47f936599a9512c184a909dee9c6bad44973d91de0fa54890b6cbf463d6",
+      "maskHash": "sha256:eac849f343c0ece1b12f6abaef40f51ba92659ff9054cfaac973659c20c1dd32",
+      "foregroundOccupancy": 0.355591,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1072,
+          "similarity": 0.77175,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.355591,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0058.pgm",
+      "signedDistancePath": "generated/prior-shape-0058.f32"
+    },
+    {
+      "generationId": "prior-shape-0059",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:c2bd71219f5b99b1103f89f911862a796d39befee048a4d1ce8171c9e476e2bc",
+      "maskHash": "sha256:c2f5db9778735bca97ed31ef7657833424562a4a2d277c361ca2c77046ef1552",
+      "foregroundOccupancy": 0.433777,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 69,
+          "similarity": 0.834247,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.433777,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0059.pgm",
+      "signedDistancePath": "generated/prior-shape-0059.f32"
+    },
+    {
+      "generationId": "prior-shape-0060",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:02982649351e540165e7e64d2955fd271877eabad00da8d30bba1221ab84e7eb",
+      "maskHash": "sha256:a752c1f0ef7d87b90db54e1712651c28080eab32d4fc76a1766b2b40c052795f",
+      "foregroundOccupancy": 0.395081,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 303,
+          "similarity": 0.796529,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.395081,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0060.pgm",
+      "signedDistancePath": "generated/prior-shape-0060.f32"
+    },
+    {
+      "generationId": "prior-shape-0061",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:33bb127d3d9b5e72e5693441545ceb4da5d7e4317fbfa2f89804469c17df41f4",
+      "maskHash": "sha256:862ef8e82c78a06a82772823e31a16849f517625ddd5a295765347ea2f8d8cd4",
+      "foregroundOccupancy": 0.45697,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1920,
+          "similarity": 0.799424,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.45697,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0061.pgm",
+      "signedDistancePath": "generated/prior-shape-0061.f32"
+    },
+    {
+      "generationId": "prior-shape-0062",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:3c51609057ef718870a8d2e9f013093073594853251ccec8d666dd9b437b034e",
+      "maskHash": "sha256:937e73b9afbfa95cd63fe05ea5d063868ef51eb3b2df61ba6406a90d8c354262",
+      "foregroundOccupancy": 0.501282,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1429,
+          "similarity": 0.828443,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.501282,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 3,
+        "largestComponentFraction": 0.999756
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0062.pgm",
+      "signedDistancePath": "generated/prior-shape-0062.f32"
+    },
+    {
+      "generationId": "prior-shape-0063",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:06f42f4677f1df49021fa34ece56df34e40c2974b96b6c9f00c28b5b9d5a88dd",
+      "maskHash": "sha256:0402ff13c95e6509942fd4452d2145296f234ab23cd46658334280284edf20f5",
+      "foregroundOccupancy": 0.33075,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 818,
+          "similarity": 0.765068,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.33075,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0063.pgm",
+      "signedDistancePath": "generated/prior-shape-0063.f32"
+    },
+    {
+      "generationId": "prior-shape-0064",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:e605659582f1e44400d99dd40d5e579192e52bfc87e22ec7d53a1396b850db1d",
+      "maskHash": "sha256:2ba0ad00eaab9120871d72201ac566e84a6c510490e6cfca2e2b93e75b4926ae",
+      "foregroundOccupancy": 0.466187,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 2246,
+          "similarity": 0.808481,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.466187,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0064.pgm",
+      "signedDistancePath": "generated/prior-shape-0064.f32"
+    },
+    {
+      "generationId": "prior-shape-0065",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:12a91b140f95b49a7220d0c52de8ae62d110d4865d4c7c605a1da6021cf4d409",
+      "maskHash": "sha256:7d5d201c3debf4461ad7597cf5c5efabd6c1761e27f8f920838920b49239b325",
+      "foregroundOccupancy": 0.349487,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 715,
+          "similarity": 0.750406,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.349487,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0065.pgm",
+      "signedDistancePath": "generated/prior-shape-0065.f32"
+    },
+    {
+      "generationId": "prior-shape-0066",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:d27e567274dfd24f4c369cef50cce16ad80a773e348ea0d7d94b63300f8085e6",
+      "maskHash": "sha256:8043fbf4a6e733877a840b4057ee0e0ea85ead8abc4330bd5e1ec01adcb325a1",
+      "foregroundOccupancy": 0.312988,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1204,
+          "similarity": 0.676679,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.312988,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.853159
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0066.pgm",
+      "signedDistancePath": "generated/prior-shape-0066.f32"
+    },
+    {
+      "generationId": "prior-shape-0067",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:0f0bbdc30b9fdf869a7143799bbc7736b632707b696727ee903a0a0df85bfec8",
+      "maskHash": "sha256:484e073e541ecefd3e44187cc9da8ca9056bcc3bd6174916a96c9371e459c741",
+      "foregroundOccupancy": 0.411011,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1952,
+          "similarity": 0.811478,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.411011,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0067.pgm",
+      "signedDistancePath": "generated/prior-shape-0067.f32"
+    },
+    {
+      "generationId": "prior-shape-0068",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:4b66f2176cdbd278532283089ebce95d1f1ea1eac26b538fb18987fc031833ed",
+      "maskHash": "sha256:772caa09694e2c32bfeb5ca53bb32cdb4b4721fbb522bd20b7f532dd57531f58",
+      "foregroundOccupancy": 0.491028,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1429,
+          "similarity": 0.828265,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.491028,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0068.pgm",
+      "signedDistancePath": "generated/prior-shape-0068.f32"
+    },
+    {
+      "generationId": "prior-shape-0069",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:21da310448b7d7956a4e63326d461602458a0fb4d4c3c111fd5202cd1fc02985",
+      "maskHash": "sha256:c19e6dcbe9a8f8867d07af733e197c828e2adc479770906f9b9ae1abb40159f9",
+      "foregroundOccupancy": 0.448914,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 34,
+          "similarity": 0.741444,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.448914,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.999864
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0069.pgm",
+      "signedDistancePath": "generated/prior-shape-0069.f32"
+    },
+    {
+      "generationId": "prior-shape-0070",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:5a7ae299d1e93f7177c4fc40c7963116a27ec0cae53a79d752fd8a57c4b6703b",
+      "maskHash": "sha256:074e1439e70a3e46e057d829623c6657ccced676b14d2fb5d42569609b0acaa4",
+      "foregroundOccupancy": 0.515198,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 473,
+          "similarity": 0.835864,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.515198,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0070.pgm",
+      "signedDistancePath": "generated/prior-shape-0070.f32"
+    },
+    {
+      "generationId": "prior-shape-0071",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:69bfef22cf804d4ff37137c1e4ad3fa40591b509a94773c2b7ea9af5d37b1f01",
+      "maskHash": "sha256:4fe854d7658e61dea4eabce543b227aeb69b40a487b48dc6378ba2e2fbe10905",
+      "foregroundOccupancy": 0.440308,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1982,
+          "similarity": 0.809587,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.440308,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0071.pgm",
+      "signedDistancePath": "generated/prior-shape-0071.f32"
+    },
+    {
+      "generationId": "prior-shape-0072",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:123e68950e0f44c5e8dc0fb4c977ccc5c5f537a366b4f21fccd73d5c4953a0ea",
+      "maskHash": "sha256:b4c7ada3cdd59bee7c46b261ad9a84a63f7f4e235f70578154b2e7ba701053a7",
+      "foregroundOccupancy": 0.596619,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1457,
+          "similarity": 0.843286,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.596619,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0072.pgm",
+      "signedDistancePath": "generated/prior-shape-0072.f32"
+    },
+    {
+      "generationId": "prior-shape-0073",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:de7e2160d93f85de55d026d895c84210201baa52bcc9280b09e2f77df2c06ac7",
+      "maskHash": "sha256:3b24bdd6b8fdda53dcc22fec7a9babc414a41b49d0fbf8aa315a065239f81906",
+      "foregroundOccupancy": 0.346375,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1852,
+          "similarity": 0.750351,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.346375,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0073.pgm",
+      "signedDistancePath": "generated/prior-shape-0073.f32"
+    },
+    {
+      "generationId": "prior-shape-0074",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:346487fde1bd657ae98280a790901e2f532e8484a1c3be6096684c7315280d23",
+      "maskHash": "sha256:4ad345875f663502e24ab4704aefdfa7887b2cc3ef625ca01ca0e7743186b9ba",
+      "foregroundOccupancy": 0.398743,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1569,
+          "similarity": 0.848998,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.398743,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0074.pgm",
+      "signedDistancePath": "generated/prior-shape-0074.f32"
+    },
+    {
+      "generationId": "prior-shape-0075",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:846287b717b032b92b245d544873472edc0e299070f3482ae0c5c42e616af942",
+      "maskHash": "sha256:377aaeb1f379c67510661a460a73b3490938708c6a631c3861a13d6cb05d59d0",
+      "foregroundOccupancy": 0.54126,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 738,
+          "similarity": 0.829698,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.54126,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0075.pgm",
+      "signedDistancePath": "generated/prior-shape-0075.f32"
+    },
+    {
+      "generationId": "prior-shape-0076",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:f28dffe902413a7fa2bd0bb95489025a8290d6ce213f4ed2f4bae5216643923d",
+      "maskHash": "sha256:62251c10ba999a196d9b4449199dc2fb7b6f70825f90e05f187f6c936284a477",
+      "foregroundOccupancy": 0.445557,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 346,
+          "similarity": 0.857979,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.445557,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 3,
+        "largestComponentFraction": 0.999726
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0076.pgm",
+      "signedDistancePath": "generated/prior-shape-0076.f32"
+    },
+    {
+      "generationId": "prior-shape-0077",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:935df5bece8c28a44c276de6ec8b5ca0f929b45292df149ba39c702b6c7b9534",
+      "maskHash": "sha256:1bc119500073248cd627c03c2a57488b7017679e071214895c6989a6b9a3574d",
+      "foregroundOccupancy": 0.339172,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 920,
+          "similarity": 0.712378,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.339172,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.99982
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0077.pgm",
+      "signedDistancePath": "generated/prior-shape-0077.f32"
+    },
+    {
+      "generationId": "prior-shape-0078",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:07d2cb44dfe92704c6d917d9e2adc82d4551f8ec67937eeb9519313682c8843b",
+      "maskHash": "sha256:8f25170782bc3938eae5ef5ad38d0e947f7949f5ae81d76e3b007473393a00c5",
+      "foregroundOccupancy": 0.521851,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 34,
+          "similarity": 0.842951,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.521851,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0078.pgm",
+      "signedDistancePath": "generated/prior-shape-0078.f32"
+    },
+    {
+      "generationId": "prior-shape-0079",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:5372dabe6250fa4ed69f8aa4d54d8be922a13e2a337a7d83e5fcf7fc98872ea0",
+      "maskHash": "sha256:073ecfcf801bd206dfc0155fcfb88a732c42fe6af582cc5a5c996fe380738ef3",
+      "foregroundOccupancy": 0.403076,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 54,
+          "similarity": 0.778224,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.403076,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0079.pgm",
+      "signedDistancePath": "generated/prior-shape-0079.f32"
+    },
+    {
+      "generationId": "prior-shape-0080",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:0e12a7caa883d5a9fedd0dd1b0bb1da5ebc403e6bc4ecfc73bc558285887e2bb",
+      "maskHash": "sha256:9ad7f9671ec596ee3b7c486ed7a73789984ca93f840774ce2b220de56290d1cf",
+      "foregroundOccupancy": 0.491455,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1818,
+          "similarity": 0.836153,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.491455,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0080.pgm",
+      "signedDistancePath": "generated/prior-shape-0080.f32"
+    },
+    {
+      "generationId": "prior-shape-0081",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:eec8b0f74c7c2f1cfca6ccf388338f9e61176a3d2f481adb71280c418c5fe0c8",
+      "maskHash": "sha256:148a11f1b430ae5aa7fd1c0b0ddd60fd335f27292a63262d19bbbbb29106ba3b",
+      "foregroundOccupancy": 0.381409,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 807,
+          "similarity": 0.78322,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.381409,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0081.pgm",
+      "signedDistancePath": "generated/prior-shape-0081.f32"
+    },
+    {
+      "generationId": "prior-shape-0082",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:324f8f63090381ae7fdb5f956392f339fbaaa50d16907db4cddf45d0c091a156",
+      "maskHash": "sha256:93c71ea2dc77d281ec6c1f5387740a7d380bfb32afe9adc1d689580a3adb23f7",
+      "foregroundOccupancy": 0.347107,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 484,
+          "similarity": 0.807628,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.347107,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0082.pgm",
+      "signedDistancePath": "generated/prior-shape-0082.f32"
+    },
+    {
+      "generationId": "prior-shape-0083",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:51e5f70629a9df65728e218cf24adea488e47a3bd07dd40a4a8a36d0646147d9",
+      "maskHash": "sha256:f74fd8861203b2edeb161e30861d1418df03f0bd787f56725f97fe2391116d59",
+      "foregroundOccupancy": 0.24762,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 830,
+          "similarity": 0.655558,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.24762,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 4,
+        "largestComponentFraction": 0.999261
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0083.pgm",
+      "signedDistancePath": "generated/prior-shape-0083.f32"
+    },
+    {
+      "generationId": "prior-shape-0084",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:56a5d6e93c99eb8717e0cfac2ddd2e2370b51af561b183323ecfa753fb06fee1",
+      "maskHash": "sha256:9993acf0a3cb02bb071e6733f2eb48e82bf3170ad655fc77749c74b5ab7c17cd",
+      "foregroundOccupancy": 0.410095,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 297,
+          "similarity": 0.764407,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.410095,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0084.pgm",
+      "signedDistancePath": "generated/prior-shape-0084.f32"
+    },
+    {
+      "generationId": "prior-shape-0085",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:27d2c9adb844421b28b5b79178b26e177b3a66ee33e68a7dbd84dfbcacb0320f",
+      "maskHash": "sha256:423fa20749adfa141ae3452a941a05910c9db9b2d5d2983c75bbf8cb96e94e4b",
+      "foregroundOccupancy": 0.489807,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 747,
+          "similarity": 0.816125,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.489807,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0085.pgm",
+      "signedDistancePath": "generated/prior-shape-0085.f32"
+    },
+    {
+      "generationId": "prior-shape-0086",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:ba0d7a6fcc2883b83ef798194e7d5a37805f4b2798a7be9cd84b15d4dd12a2c2",
+      "maskHash": "sha256:96f04677ab47b31316d69415aedcaf7089cc6ebb46200a4e6efca4e3318c9f9e",
+      "foregroundOccupancy": 0.364258,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 556,
+          "similarity": 0.790677,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.364258,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0086.pgm",
+      "signedDistancePath": "generated/prior-shape-0086.f32"
+    },
+    {
+      "generationId": "prior-shape-0087",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:9a64e2e92e99b88ba2a6e93a4c30957a7b5eee537d2d92d5a9d11b5bd98ae8e5",
+      "maskHash": "sha256:39cab7d39395bebda2d0848ba6e717ed9c92e12811de903e56257b828e48c50f",
+      "foregroundOccupancy": 0.463623,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1951,
+          "similarity": 0.764893,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.463623,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.999868
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0087.pgm",
+      "signedDistancePath": "generated/prior-shape-0087.f32"
+    },
+    {
+      "generationId": "prior-shape-0088",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:cdbd5f64f8eaf5f4cf4c5f5f8e8c0fb79c97f0d1db767dabd985bdad9a348eed",
+      "maskHash": "sha256:b73ca968e9c14b3b7e8c460d067ab2d7f386eb9f879ab2266bf291e88e45a8ab",
+      "foregroundOccupancy": 0.340759,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 131,
+          "similarity": 0.71563,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.340759,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0088.pgm",
+      "signedDistancePath": "generated/prior-shape-0088.f32"
+    },
+    {
+      "generationId": "prior-shape-0089",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:5b5741008609054fc05350b1aa768f852647c91bbde01dbb46c7eab546061096",
+      "maskHash": "sha256:9f483fc13718517be7a1b2368ede17d138a47599efef6ea70ca65dbe354af7aa",
+      "foregroundOccupancy": 0.391907,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 2180,
+          "similarity": 0.73681,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.391907,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.999844
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0089.pgm",
+      "signedDistancePath": "generated/prior-shape-0089.f32"
+    },
+    {
+      "generationId": "prior-shape-0090",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:723d7ebb2d069ace54558846005c02f307f32cc6d9b2a016ba0d53681be3e5ee",
+      "maskHash": "sha256:8fb5c730994bd525355ebaa07c94a1f3c8178835ca3c4f30144f92e5646187f7",
+      "foregroundOccupancy": 0.383423,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1632,
+          "similarity": 0.73558,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.383423,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 3,
+        "largestComponentFraction": 0.999682
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0090.pgm",
+      "signedDistancePath": "generated/prior-shape-0090.f32"
+    },
+    {
+      "generationId": "prior-shape-0091",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:6f133785e04a9cfc337f13f72f68b155ec73246e58afc6c84c6f4c845c3dfead",
+      "maskHash": "sha256:e6b9eefcbbe6935d66c632056627690df42d77157052d49bb5640e03edf2fd94",
+      "foregroundOccupancy": 0.405823,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 425,
+          "similarity": 0.818145,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.405823,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.99985
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0091.pgm",
+      "signedDistancePath": "generated/prior-shape-0091.f32"
+    },
+    {
+      "generationId": "prior-shape-0092",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:24e01093069fb9e3d56c4fbd6ecf37e8a0fca997e1ef5a1b02268d2a6425994f",
+      "maskHash": "sha256:524ed14a19843380e8516b41d207de9ac92d40ef90f758f379e10b68d5be31ad",
+      "foregroundOccupancy": 0.485291,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1168,
+          "similarity": 0.818828,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.485291,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0092.pgm",
+      "signedDistancePath": "generated/prior-shape-0092.f32"
+    },
+    {
+      "generationId": "prior-shape-0093",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:0a04833d86a14cb18237240918b20698f485de3ecdd46b7061e52639ebe0446e",
+      "maskHash": "sha256:028065739a0174d766f995fed2e91a3ed74fbccefa575d1483d845ab76480c9e",
+      "foregroundOccupancy": 0.414917,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1717,
+          "similarity": 0.801434,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.414917,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.999853
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0093.pgm",
+      "signedDistancePath": "generated/prior-shape-0093.f32"
+    },
+    {
+      "generationId": "prior-shape-0094",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:ef59303fea75a1c3aa5c0748ef9c933bfdf5dd6c2ead201872acf328b5580536",
+      "maskHash": "sha256:36239ac67e113ddf6bb7dd398be79f0edbfecffffa9b8d21ed5fbbf9a1c83496",
+      "foregroundOccupancy": 0.539062,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 242,
+          "similarity": 0.859759,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.539062,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0094.pgm",
+      "signedDistancePath": "generated/prior-shape-0094.f32"
+    },
+    {
+      "generationId": "prior-shape-0095",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "latentHash": "sha256:22616e442645175d42dce22773143ac9ed78a02e7076c6b4e2e3be4281950592",
+      "maskHash": "sha256:59733233fd6f78fbdb352a6580baa26b3dc0117f70382c090bdfa636d59807fc",
+      "foregroundOccupancy": 0.264343,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 530,
+          "similarity": 0.703664,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.264343,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.999769
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/prior-shape-0095.pgm",
+      "signedDistancePath": "generated/prior-shape-0095.f32"
+    }
+  ]
+}
