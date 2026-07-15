@@ -31,6 +31,8 @@ assert.match(matchedCostSource, /framePreserved/, 'matched cost evidence must pr
 assert.match(matchedCostSource, /sampleBoundarySplatDrawState\(\)/, 'each cost row must retain fresh physical draw authority');
 assert.match(matchedCostSource, /gpu-indirect-command-buffer-post-submit-readback-v0/, 'matched cost rows must require physical command authority');
 assert.match(matchedCostSource, /controlsSnapshot = controlsBefore/, 'matched cost sampling must restore ambient live controls');
+assert.match(matchedCostSource, /resumeRenderLoopAfterSampling\s*=\s*!boundarySplatWitnessPaused/, 'direct cost sampling must remember whether it owns loop restoration');
+assert.match(matchedCostSource, /resumeRenderLoopAfterSampling[\s\S]*requestAnimationFrame\(render\)/, 'direct cost sampling must restart only a loop it paused');
 
 assert.equal(existsSync(witnessUrl), true, 'the Greenroom matched-state comparator witness must exist');
 assert.match(witness, /captureBoundarySplatWitnessFrame/, 'witness must pause one exact live source before either variant');
@@ -51,6 +53,9 @@ assert.match(witness, /fallback-route/, 'fallback rendering must be rejected');
 assert.match(witness, /sameBrowserTargetPreserved/, 'the existing persistent browser target must survive the witness');
 assert.match(witness, /comparisonSurfaceImage/, 'witness must retain an inspectable screenshot of the generated comparator UI');
 assert.match(witness, /comparison-surface\.png/, 'comparator UI evidence must have a stable image name');
+assert.match(witness, /sourceFrozen\s*=\s*true/, 'witness must record successful source-freeze custody');
+assert.match(witness, /bestEffortResumeAfterFailure/, 'post-freeze failure cleanup must attempt to resume the existing live loop');
+assert.match(witness, /cleanupFailure/, 'cleanup failure must be recorded without replacing the primary failure');
 assert.doesNotMatch(witness, /spawn\(/, 'the comparator must never launch a second browser');
 assert.doesNotMatch(witness, /slice\(0,\s*\d+\)/, 'the comparator must not hide caller-owned samples behind a cap');
 
@@ -69,6 +74,7 @@ assert.match(witness, /data-view="residual"/, 'comparison surface must expose an
 assert.match(witness, /residualGain/, 'residual amplification must expose its effective gain');
 assert.match(witness, /Raw A[\s\S]*Raw B/, 'amplified diagnostics must retain direct access to untouched evidence');
 assert.match(witness, /class="tag a">A<[\s\S]*class="tag b">B</, 'primary side-by-side view must visibly label the randomized A/B halves');
+assert.match(witness, /capture\.boundarySplatHistoryWriteSlot\s*!==\s*frozen\.historyWriteSlot/, 'each accepted variant must enforce frozen history-slot equality');
 assert.match(witness, /crypto\.getRandomValues/, 'A/B presentation must randomize labels in the browser');
 
 console.log('boundary splat matched comparator contracts passed');

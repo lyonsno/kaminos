@@ -26,6 +26,8 @@ let ws = null;
 let browser = null;
 let browserPageId = null;
 let failurePhase = 'startup';
+let sourceFrozen = false;
+let cleanupFailure = null;
 const lastTrustworthyEvidence = {};
 mkdirSync(outDir, { recursive: true });
 
@@ -71,6 +73,7 @@ try {
   if (frozen?.ok !== true || frozen?.exactDrawState?.indirectCommandAgreement !== true) {
     throw new Error(`exact-source-freeze-failed:${JSON.stringify(frozen)}`);
   }
+  sourceFrozen = true;
   const sameStateCaptureId = `matched-f${frozen.frameCount}-s${frozen.simStepCount}-h${frozen.historyWriteSlot}`;
   const fixedNow = await evaluate('performance.now()');
   lastTrustworthyEvidence.frozen = frozen;
@@ -130,6 +133,7 @@ try {
   failurePhase = 'resume-and-present';
   const resumed = await evaluate('window.__kaminosVolumePrototype.resumeBoundarySplatWitnessFrame()');
   if (resumed?.ok !== true) throw new Error(`live-loop-resume-failed:${JSON.stringify(resumed)}`);
+  sourceFrozen = false;
   await wsRequest('Page.navigate', { url: comparisonUrl });
   await delay(500);
   const comparisonState = await evaluate('window.__kaminosMatchedComparator');
@@ -180,6 +184,11 @@ try {
     lastTrustworthyEvidence,
   });
 } catch (error) {
+  if (sourceFrozen) {
+    cleanupFailure = await bestEffortResumeAfterFailure();
+    lastTrustworthyEvidence.failureCleanup = cleanupFailure || { ok: true, resumed: true };
+    sourceFrozen = false;
+  }
   writeReport({
     schema: SCHEMA,
     status: 'failed',
@@ -191,6 +200,7 @@ try {
     requestedRoute,
     browser,
     browserPageId,
+    cleanupFailure,
     lastTrustworthyEvidence,
   });
   console.error(error?.stack || error);
@@ -203,6 +213,9 @@ function validateVariantCapture(capture, frozen, lodMode, sameStateCaptureId) {
   if (capture?.ok !== true || capture?.sampleAuthority !== 'render-only-frozen-sim-state') throw new Error(`variant-render-failed:${JSON.stringify(capture)}`);
   if (capture.sameStateCaptureId !== sameStateCaptureId || capture.frameCount !== frozen.frameCount || capture.simStepCount !== frozen.simStepCount) {
     throw new Error(`variant-source-state-mismatch:${JSON.stringify(capture)}`);
+  }
+  if (capture.boundarySplatHistoryWriteSlot !== frozen.historyWriteSlot) {
+    throw new Error(`variant-history-slot-mismatch:${JSON.stringify({ expected: frozen.historyWriteSlot, effective: capture.boundarySplatHistoryWriteSlot })}`);
   }
   if (capture.boundarySplatLodMode !== lodMode || capture.boundarySplatTelemetryLodMode !== lodMode) {
     throw new Error(`stale-or-default-comparator-config:${JSON.stringify({ lodMode, capture })}`);
@@ -272,6 +285,7 @@ function validateEffectiveState(state) {
 }
 
 function compactState(state) { return { active: state?.active, backend: state?.backend, effectiveRoute: state?.effectiveRoute, rendererIdentity: state?.boundarySplatRendererIdentity, modelIdentity: state?.boundarySplatAttributeModelIdentity, sourceAuthority: state?.boundarySplatSourceAuthority, phaseSourceIdentity: state?.boundarySplatPhaseSourceIdentity, frameCount: state?.frameCount, simStepCount: state?.simStepCount, sourceCandidateCount: state?.boundarySplatSourceCandidateCount, requestedInstanceCount: state?.boundarySplatRequestedInstanceCount, overflowCount: state?.boundarySplatOverflowCount, candidateCopyBytes: state?.boundarySplatCopyBytesThisFrame, fallbackReason: state?.boundarySplatFallbackReason }; }
+async function bestEffortResumeAfterFailure(){try{const result=await evaluate('window.__kaminosVolumePrototype?.resumeBoundarySplatWitnessFrame?.()');if(result?.ok===true)return null;return{ok:false,resumed:false,reason:result?.reason||'resume-returned-non-ok',result}}catch(error){return{ok:false,resumed:false,reason:error?.message||String(error)}}}
 async function waitForPrototype(){for(let i=0;i<240;i+=1){const s=await debugState();if(s?.active&&s?.backend)return s;await delay(125)}throw new Error('volume-prototype-did-not-become-active')}
 async function waitForTelemetry(){for(let i=0;i<240;i+=1){const s=await debugState();if(Number(s?.boundarySplatSourceCandidateCount)>0&&s?.boundarySplatFallbackReason==null)return s;await delay(125)}throw new Error('comparator-telemetry-did-not-settle')}
 async function debugState(){return evaluate('window.__kaminosVolumePrototype?.debugState?.()')}

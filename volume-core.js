@@ -10911,6 +10911,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const controlsBefore = { ...controlsSnapshot };
     const simStepCountBefore = state.simStepCount;
     const frameCountBefore = state.frameCount;
+    const resumeRenderLoopAfterSampling = !boundarySplatWitnessPaused;
     const rows = [];
     cancelAnimationFrame(raf);
     if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
@@ -10956,6 +10957,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     } finally {
       controlsSnapshot = controlsBefore;
       updateUniforms(fixedNow);
+      if (resumeRenderLoopAfterSampling && state.active) raf = requestAnimationFrame(render);
     }
     const simStepCountAfter = state.simStepCount;
     const frameCountAfter = state.frameCount;
