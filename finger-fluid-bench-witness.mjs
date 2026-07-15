@@ -21,6 +21,7 @@ const settleMs = Number(args.get('--settle-ms') || 10000);
 const preContactSettleMs = Number(args.get('--pre-contact-settle-ms') || 3800);
 const hookWaitMs = Number(args.get('--hook-wait-ms') || Math.max(settleMs, 15000));
 const cadenceMs = Number(args.get('--cadence-ms') || 4200);
+const CAMERA_DELTA_EPSILON = 1e-4;
 
 let phase = 'initializing';
 let stderr = '';
@@ -398,29 +399,80 @@ async function main() {
 
     if (new URL(url).searchParams.get('finger_fluid_pyro_composition') === '1') {
       phase = 'read_liquid_fire_composition';
-      cameraWitness = await evaluate(ws, `(() => {
+      const cameraInputRoute = await evaluate(ws, `(() => {
         const read = window.kaminosFingerFluidCompositionCameraState;
         const surface = document.querySelector('#finger-fluid-bench-operator-panel #kaminos-volume-canvas.active');
         if (typeof read !== 'function') throw new Error('missing composition camera witness hook');
         if (!surface) throw new Error('missing active topmost Pyro composition canvas');
-        const before = read();
-        surface.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 41, clientX: 520, clientY: 420 }));
-        surface.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerId: 41, clientX: 590, clientY: 455 }));
-        surface.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 41, clientX: 590, clientY: 455 }));
-        surface.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 180 }));
-        const after = read();
+        const rect = surface.getBoundingClientRect();
+        const start = { x: rect.left + rect.width * 0.45, y: rect.top + rect.height * 0.35 };
+        const hitTarget = document.elementFromPoint(start.x, start.y);
+        const eventCapture = { pointerDowns: [], dragMoves: [], wheelEvents: [] };
+        window.__kaminosCompositionCameraInputWitnessEvents = eventCapture;
+        const panel = document.getElementById('finger-fluid-bench-operator-panel');
+        panel.addEventListener('pointerdown', event => {
+          eventCapture.pointerDowns.push({ clientX: event.clientX, clientY: event.clientY, buttons: event.buttons });
+        }, { capture: true });
+        panel.addEventListener('pointermove', event => {
+          if (event.buttons === 1) eventCapture.dragMoves.push({ clientX: event.clientX, clientY: event.clientY, buttons: event.buttons });
+        }, { capture: true });
+        panel.addEventListener('wheel', event => {
+          eventCapture.wheelEvents.push({ deltaX: event.deltaX, deltaY: event.deltaY, deltaMode: event.deltaMode });
+        }, { capture: true });
         return {
-          surface: 'topmost-pyro-composition-canvas',
-          before,
-          after,
-          orbitChanged: before.yaw !== after.yaw && before.pitch !== after.pitch,
-          zoomChanged: before.distance !== after.distance,
-          targetUnchanged: JSON.stringify(before.target) === JSON.stringify(after.target),
+          inputOwner: 'physical-browser-hit-target-v0',
+          hitTargetId: hitTarget?.id || null,
+          start,
+          end: { x: start.x + 70, y: start.y + 35 },
+          before: read(),
         };
       })()`);
+      if (cameraInputRoute?.hitTargetId !== 'kaminos-volume-canvas') {
+        throw new Error(`composition physical hit target mismatch: ${JSON.stringify(cameraInputRoute)}`);
+      }
+      await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x: cameraInputRoute.start.x, y: cameraInputRoute.start.y });
+      await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mousePressed', x: cameraInputRoute.start.x, y: cameraInputRoute.start.y, button: 'left', buttons: 1, clickCount: 1 });
+      await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x: cameraInputRoute.end.x, y: cameraInputRoute.end.y, button: 'left', buttons: 1 });
+      await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: cameraInputRoute.end.x, y: cameraInputRoute.end.y, button: 'left', buttons: 0, clickCount: 1 });
+      await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseWheel', x: cameraInputRoute.end.x, y: cameraInputRoute.end.y, deltaX: 0, deltaY: 90 });
+      const cameraResult = await evaluate(ws, `({
+        after: window.kaminosFingerFluidCompositionCameraState(),
+        inputEvents: window.__kaminosCompositionCameraInputWitnessEvents,
+      })`);
+      const { pointerDowns, dragMoves, wheelEvents } = cameraResult.inputEvents;
+      if (pointerDowns.length !== 1 || dragMoves.length !== 1) {
+        throw new Error(`composition physical drag delivery count mismatch: ${JSON.stringify(cameraResult.inputEvents)}`);
+      }
+      if (wheelEvents.length !== 1) {
+        throw new Error(`composition physical wheel delivery count mismatch: ${JSON.stringify(cameraResult.inputEvents)}`);
+      }
+      const cameraAfter = cameraResult.after;
+      const dragDeltaX = dragMoves[0].clientX - pointerDowns[0].clientX;
+      const dragDeltaY = dragMoves[0].clientY - pointerDowns[0].clientY;
+      const expectedYaw = cameraInputRoute.before.yaw - dragDeltaX * 0.006;
+      const expectedPitch = Math.max(-0.2, Math.min(1.25, cameraInputRoute.before.pitch + dragDeltaY * 0.006));
+      const expectedDistance = Math.max(4.0, Math.min(14, cameraInputRoute.before.distance * Math.exp(wheelEvents[0].deltaY * 0.0012)));
+      cameraWitness = {
+        ...cameraInputRoute,
+        inputEvents: cameraResult.inputEvents,
+        after: cameraAfter,
+        expected: { yaw: expectedYaw, pitch: expectedPitch, distance: expectedDistance },
+        yawDeltaError: Math.abs(cameraAfter.yaw - expectedYaw),
+        pitchDeltaError: Math.abs(cameraAfter.pitch - expectedPitch),
+        distanceDeltaError: Math.abs(cameraAfter.distance - expectedDistance),
+        orbitChanged: cameraInputRoute.before.yaw !== cameraAfter.yaw && cameraInputRoute.before.pitch !== cameraAfter.pitch,
+        zoomChanged: cameraInputRoute.before.distance !== cameraAfter.distance,
+        targetUnchanged: JSON.stringify(cameraInputRoute.before.target) === JSON.stringify(cameraAfter.target),
+      };
       if (cameraWitness?.orbitChanged !== true) throw new Error('composition camera orbit input produced no yaw/pitch delta');
       if (cameraWitness?.zoomChanged !== true) throw new Error('composition camera wheel input produced no distance delta');
       if (cameraWitness?.targetUnchanged !== true) throw new Error('composition camera orbit/zoom path unexpectedly panned its target');
+      if (cameraWitness.yawDeltaError > CAMERA_DELTA_EPSILON || cameraWitness.pitchDeltaError > CAMERA_DELTA_EPSILON) {
+        throw new Error(`composition camera orbit input was applied more or less than once: ${JSON.stringify(cameraWitness)}`);
+      }
+      if (cameraWitness.distanceDeltaError > CAMERA_DELTA_EPSILON) {
+        throw new Error(`composition camera zoom input was applied more or less than once: ${JSON.stringify(cameraWitness)}`);
+      }
       const compositionDeadline = Date.now() + 5000;
       while (Date.now() < compositionDeadline) {
         compositionWitness = await evaluate(ws, `(async () => {
