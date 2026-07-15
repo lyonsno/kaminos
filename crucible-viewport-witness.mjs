@@ -96,12 +96,25 @@ function bestKnownEffectiveIdentity() {
   const evidence = lastTrustworthyEvidence || {};
   const route = evidence.fullRoute || null;
   const replay = evidence.replayedCast || replayCastEvidence || null;
-  const sourceAssetId = evidence.sourceSelectionExercise?.effectiveAssetId
+  const workroomSourceAssetId = evidence.sourceSelectionExercise?.effectiveAssetId
     ?? evidence.workroom?.effectiveState?.source?.assetId
     ?? null;
+  const replaySource = replay?.sourceArtifact || null;
   const output = route?.output || replay?.artifact || null;
   return {
-    sourceAssetId,
+    sourceAssetId: replaySource ? null : workroomSourceAssetId,
+    workroomSourceAssetId,
+    source: replaySource ? {
+      authority: 'pipeline-input-artifact',
+      role: replaySource.role ?? null,
+      status: replaySource.status ?? null,
+      path: replaySource.path ?? null,
+      bytes: replaySource.bytes ?? null,
+      sha256: replaySource.sha256 ?? null,
+    } : (workroomSourceAssetId ? {
+      authority: 'workroom-source-selection',
+      assetId: workroomSourceAssetId,
+    } : null),
     requestedPipelineId: route?.requestedPipelineId ?? replay?.requestedPipelineId ?? null,
     effectiveRouteId: route?.effectiveRouteId
       ?? replay?.effectiveRouteId
@@ -202,9 +215,17 @@ function validatedReplayCastReport(document, reportPath) {
     throw new Error('Replay cast report must use kaminos.pipeline-witness.v0');
   }
   const outputRoot = document.effectiveRouteConfig?.outputRoot;
+  const sourceArtifact = document.artifacts?.input;
   const artifact = document.artifacts?.splat;
   if (!outputRoot || !outputRoot.startsWith('/')) throw new Error('Replay cast report is missing an absolute output root');
   if (!artifact?.path || !artifact.path.startsWith('/')) throw new Error('Replay cast report is missing an absolute splat path');
+  if (sourceArtifact?.role !== 'source-image' || !sourceArtifact?.path?.startsWith('/')) {
+    throw new Error('Replay cast report is missing an absolute source image artifact');
+  }
+  if (!sourceArtifact.sha256) throw new Error('Replay cast source artifact is missing SHA-256 identity');
+  if (!Number.isFinite(sourceArtifact.bytes) || sourceArtifact.bytes <= 0) {
+    throw new Error('Replay cast source artifact must be nonempty');
+  }
   if (artifact.status !== 'real') throw new Error('Replay cast artifact must carry status real');
   if (!artifact.sha256) throw new Error('Replay cast artifact is missing SHA-256 identity');
   if (!Number.isFinite(artifact.bytes) || artifact.bytes <= 0) throw new Error('Replay cast artifact must be nonempty');
@@ -231,6 +252,7 @@ function validatedReplayCastReport(document, reportPath) {
     requestedPipelineId: document.requestedPipelineId,
     effectiveRouteId: document.effectiveRouteConfig.routeId,
     outputRoot: normalizedRoot,
+    sourceArtifact: { ...sourceArtifact, path: normalize(sourceArtifact.path) },
     artifact: { ...artifact, path: normalizedArtifactPath },
   };
 }
@@ -1280,6 +1302,7 @@ try {
         reportPath: replay.reportPath,
         requestedPipelineId: replay.requestedPipelineId,
         effectiveRouteId: replay.effectiveRouteId,
+        sourceArtifact: replay.sourceArtifact,
         artifact: replay.artifact,
         castTargetSceneObjectId: replayResult.record?.id || null,
         receiptReportPath: replayResult.receipt?.reportPath || null,

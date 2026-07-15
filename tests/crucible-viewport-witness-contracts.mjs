@@ -90,6 +90,8 @@ try {
   });
   assert.deepEqual(argumentFailureDocument.effectiveIdentity, {
     sourceAssetId: null,
+    workroomSourceAssetId: null,
+    source: null,
     requestedPipelineId: null,
     effectiveRouteId: null,
     scheduler: null,
@@ -233,6 +235,13 @@ const replayReport = {
     outputRoot: '/tmp/pipeline-runs/run-real',
   },
   artifacts: {
+    input: {
+      role: 'source-image',
+      status: 'requested',
+      path: '/tmp/input-assets/s_15_img.png',
+      bytes: 2292233,
+      sha256: '68e9363e',
+    },
     splat: {
       role: 'splat-candidate',
       status: 'real',
@@ -250,6 +259,7 @@ assert.deepEqual(
     requestedPipelineId: 'sharp-image-to-splat-live-v0',
     effectiveRouteId: 'adapter.sharp-image-to-splat-live.v0',
     outputRoot: '/tmp/pipeline-runs/run-real',
+    sourceArtifact: replayReport.artifacts.input,
     artifact: replayReport.artifacts.splat,
   },
   'a replay must preserve the exact source report, route, containment root, hash, byte count, and real status',
@@ -259,11 +269,38 @@ for (const [mutate, expected] of [
   [report => { delete report.artifacts.splat.sha256; }, /SHA-256/],
   [report => { report.artifacts.splat.bytes = 0; }, /nonempty/],
   [report => { report.artifacts.splat.path = '/tmp/elsewhere/output.ply'; }, /outside recorded output root/],
+  [report => { delete report.artifacts.input.sha256; }, /source.*SHA-256/i],
 ]) {
   const invalid = JSON.parse(JSON.stringify(replayReport));
   mutate(invalid);
   assert.throws(() => validatedReplayCastReport(invalid, '/tmp/report.json'), expected);
 }
+const effectiveIdentitySource = witness.match(
+  /function bestKnownEffectiveIdentity\(\)[\s\S]*?\n}\n(?=\nfunction )/,
+);
+assert.ok(effectiveIdentitySource, 'witness must expose a testable compact effective identity projector');
+const bestKnownEffectiveIdentity = vm.runInNewContext(
+  `((lastTrustworthyEvidence, replayCastEvidence) => (${effectiveIdentitySource[0]})())`,
+);
+const replayIdentity = JSON.parse(JSON.stringify(bestKnownEffectiveIdentity({
+  sourceSelectionExercise: { effectiveAssetId: 'image-inbox:21_img.png' },
+  replayedCast: {
+    requestedPipelineId: 'sharp-image-to-splat-live-v0',
+    effectiveRouteId: 'adapter.sharp-image-to-splat-live.v0',
+    sourceArtifact: replayReport.artifacts.input,
+    artifact: replayReport.artifacts.splat,
+  },
+}, null)));
+assert.equal(replayIdentity.sourceAssetId, null, 'a replay output must not inherit the unrelated current workroom plate');
+assert.equal(replayIdentity.workroomSourceAssetId, 'image-inbox:21_img.png');
+assert.deepEqual(replayIdentity.source, {
+  authority: 'pipeline-input-artifact',
+  role: 'source-image',
+  status: 'requested',
+  path: '/tmp/input-assets/s_15_img.png',
+  bytes: 2292233,
+  sha256: '68e9363e',
+});
 const compactSummarySource = witness.match(
   /function compactWitnessSummary\([\s\S]*?\n}\n(?=\nfunction validateVolumeReleaseEvidence)/,
 );
