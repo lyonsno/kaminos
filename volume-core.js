@@ -13266,6 +13266,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const controlRenderMs = performance.now() - controlRenderStart;
       const controlSplatCandidateCount = controlRender.boundarySplatCandidateCount ?? state.boundarySplatCandidateCount;
       const controlSplatInstanceCount = controlRender.boundarySplatInstanceCount ?? state.boundarySplatInstanceCount;
+      const controlSplatOverflowCount = controlRender.boundarySplatOverflowCount ?? state.boundarySplatOverflowCount;
       const nativeLowMaterializationProfile = {
         identity: 'native-low-shared-device-materialization-profile-v0',
         transportMode: 'shared-device-gpu-buffers-no-readback-import-v0',
@@ -13659,6 +13660,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         treatmentSplatInstanceCount,
         controlSplatCandidateCount,
         controlSplatInstanceCount,
+        controlSplatOverflowCount,
         calibrationGain: calibration.calibrationGain,
         calibrationAuthority: calibration.authority,
         requestedCalibration: calibration.requestedCalibration,

@@ -810,6 +810,9 @@
     }
 
     function nativeControlRoleReceipt(receipt) {
+      const candidateCount = receipt?.controlSplatCandidateCount ?? null;
+      const instanceCount = receipt?.controlSplatInstanceCount ?? null;
+      const overflowCount = receipt?.controlSplatOverflowCount ?? null;
       return {
         identity: 'native96Control',
         role: 'native96Control',
@@ -824,6 +827,23 @@
         effectiveComposition: receipt?.effectiveComposition || null,
         splatCandidateCount: receipt?.controlSplatCandidateCount ?? null,
         splatInstanceCount: receipt?.controlSplatInstanceCount ?? null,
+        candidateCount,
+        instanceCount,
+        overflowCount,
+        fallbackReason: receipt?.fallbackBackend || null,
+        staleFrameReason: null,
+      };
+    }
+
+    function normalizedModelPackages() {
+      const routes = nativeLowTrainedPackageRouteRegistry().routes;
+      const model = routeId => {
+        const route = routes.find(candidate => candidate.routeId === routeId);
+        return route ? { identity: route.modelIdentity, sha256: route.modelSha256 } : null;
+      };
+      return {
+        baseline128Trained: model(NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE),
+        candidate96Trained: model(NATIVE_LOW_TRANSFER_160_TO_96_DEPLOYMENT_GRID_ROUTE),
       };
     }
 
@@ -887,6 +907,11 @@
       const candidateRole = trainedRoleReceipt('candidate96Trained', candidate96);
       const native96Control = nativeControlRoleReceipt(baseline128);
       const sameNativeStateIdentity = `native-96-shared-source:${baseline128.sourceStepIdentity}:composition-${requestedComposition}:transport-${NATIVE_LOW_TRANSPORT_MODE}`;
+      for (const role of [native96Control, baselineRole, candidateRole]) {
+        role.sameNativeStateIdentity = sameNativeStateIdentity;
+        role.fallbackReason = role.fallbackReason || role.fallbackBackend || null;
+        role.staleFrameReason = role.stalePredictionRejection?.stalePrediction === true ? 'stale-prediction' : null;
+      }
       const candidateEqualityOk = baselineRole.candidateCount === baselineRole.instanceCount
         && candidateRole.candidateCount === candidateRole.instanceCount
         && baselineRole.overflowCount === 0
@@ -897,6 +922,8 @@
         identity: 'native-low-dual-trained-package-manual-capture-v0',
         routeRegistryIdentity: NATIVE_LOW_TRAINED_PACKAGE_ROUTE_REGISTRY_IDENTITY,
         routeRegistry: nativeLowTrainedPackageRouteRegistry(),
+        nativeGrid: 96,
+        simulationStep: baseline128.sourceStep,
         sourceStepIdentity: baseline128.sourceStepIdentity,
         sameNativeStateIdentity,
         singleNative96StepAdvanced: true,
@@ -908,6 +935,11 @@
         sourceStepDelta: baseline128.simulationSteppingReceipt?.simStepDelta ?? null,
         secondPackageSourceStepDelta: candidate96.simulationSteppingReceipt?.simStepDelta ?? null,
         visualRoles: {
+          native96Control,
+          baseline128Trained: baselineRole,
+          candidate96Trained: candidateRole,
+        },
+        roles: {
           native96Control,
           baseline128Trained: baselineRole,
           candidate96Trained: candidateRole,
@@ -924,6 +956,7 @@
             packageSha256: candidateRole.packageSha256,
           },
         },
+        models: normalizedModelPackages(),
         requestedRoute: NATIVE_LOW_SELECTIVE_LIVE_ROUTE,
         effectiveRoute: NATIVE_LOW_SHARED_DEVICE_ROUTE,
         requestedBackend: 'WebGPU',
@@ -931,6 +964,8 @@
         fallbackBackend: baseline128.fallbackBackend || candidate96.fallbackBackend || null,
         requestedComposition,
         effectiveComposition: baseline128.effectiveComposition === candidate96.effectiveComposition ? baseline128.effectiveComposition : null,
+        fallbackReason: null,
+        staleFrameReason: null,
         compositionMismatch: baseline128.effectiveComposition !== requestedComposition || candidate96.effectiveComposition !== requestedComposition ? compositionMismatch : null,
         stalePredictionRejection: {
           baseline128Trained: baseline128.stalePredictionRejection || null,
@@ -971,6 +1006,11 @@
         failurePhase,
         routeIdentity: NATIVE_LOW_SELECTIVE_LIVE_ROUTE,
         sharedDeviceRoute: NATIVE_LOW_SHARED_DEVICE_ROUTE,
+        nativeGrid: manualDualCaptureMode ? 96 : (native64ManifestMode ? 64 : 128),
+        capturePaused,
+        requestedRoute: NATIVE_LOW_SELECTIVE_LIVE_ROUTE,
+        effectiveRoute: NATIVE_LOW_SHARED_DEVICE_ROUTE,
+        modelPackages: normalizedModelPackages(),
         runtimeBuildIdentity: NATIVE_LOW_RUNTIME_BUILD_IDENTITY,
         runtimeBuildCacheKey: `${NATIVE_LOW_RUNTIME_BUILD_IDENTITY}:${location.search}`,
         transportMode: receipt.transportMode || NATIVE_LOW_TRANSPORT_MODE,

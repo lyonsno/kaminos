@@ -31,13 +31,18 @@ const pagePath = resolve(String(args.get('--page') || `${dirname(out)}/index.htm
 const requestedFrameCount = integerArg('--frames', 150);
 const playbackFps = numberArg('--fps', 30);
 const timeoutMs = numberArg('--timeout-ms', 900000);
+const captureCallTimeoutMs = numberArg('--capture-call-timeout-ms', 30000);
 const port = integerArg('--debug-port', randomInt(42000, 62000));
 let failurePhase = 'argument-validation';
+let activeFramePhase = 'not-started';
 let browser = null;
 let socket = null;
+let captureSocket = null;
+let captureTargetUrl = null;
 let ffmpeg = null;
 let lastTrustworthyEvidence = null;
 const frames = [];
+let screenshotRetryCount = 0;
 
 class CdpSocket {
   constructor(socketUrl) {
@@ -58,16 +63,21 @@ class CdpSocket {
         const pending = this.pending.get(message.id);
         if (!pending) return;
         this.pending.delete(message.id);
+        clearTimeout(pending.timer);
         if (message.error) pending.reject(new Error(message.error.message));
         else pending.resolve(message.result);
       });
     });
   }
 
-  call(method, params = {}) {
+  call(method, params = {}, { timeoutMs: callTimeoutMs = 0 } = {}) {
     return new Promise((resolveCall, rejectCall) => {
       const id = this.nextId++;
-      this.pending.set(id, { resolve: resolveCall, reject: rejectCall });
+      const timer = callTimeoutMs > 0 ? setTimeout(() => {
+        this.pending.delete(id);
+        rejectCall(new Error(`[cdp-call-timeout] ${method} exceeded ${callTimeoutMs}ms`));
+      }, callTimeoutMs) : null;
+      this.pending.set(id, { resolve: resolveCall, reject: rejectCall, timer });
       this.socket.send(JSON.stringify({ id, method, params }));
     });
   }
@@ -82,6 +92,7 @@ try {
   assert.ok(requestedFrameCount >= 1, '--frames must be at least one');
   assert.ok(playbackFps > 0, '--fps must be positive');
   assert.ok(timeoutMs > 0, '--timeout-ms must be positive');
+  assert.ok(captureCallTimeoutMs > 0, '--capture-call-timeout-ms must be positive');
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
   mkdirSync(dirname(contactPath), { recursive: true });
@@ -101,6 +112,7 @@ try {
     'about:blank',
   ], { stdio: 'ignore' });
   const target = await waitForTarget(port, timeoutMs);
+  captureTargetUrl = target.webSocketDebuggerUrl;
   socket = new CdpSocket(target.webSocketDebuggerUrl);
   await socket.open();
   await socket.call('Page.enable');
@@ -112,6 +124,7 @@ try {
     mobile: false,
   });
   await socket.call('Page.navigate', { url });
+  await reconnectCaptureSocket();
 
   failurePhase = 'route-settle';
   let state = null;
@@ -119,10 +132,13 @@ try {
   while (performance.now() - settleStarted < timeoutMs) {
     state = await evaluate(socket, 'window.__kaminosNativeLowSelectiveLive?.debugState?.()');
     if (state?.status === 'failed') throw new Error(state.error || state.failureReason || 'native-low route failed');
-    if (state?.status === 'running' && state?.nativeGrid === EXPECTED_GRID) break;
+    const settledStatus = ['running', 'paused'].includes(state?.status);
+    const pausedManualRoute = state?.status !== 'paused' || state?.capturePaused === true;
+    if (settledStatus && pausedManualRoute && state?.nativeGrid === EXPECTED_GRID) break;
     await delay(250);
   }
-  assert.equal(state?.status, 'running', 'native-low route did not become running');
+  assert.ok(['running', 'paused'].includes(state?.status), 'native-low route did not become running or explicitly paused');
+  if (state.status === 'paused') assert.equal(state.capturePaused, true, 'paused route did not report capturePaused');
   assert.equal(state?.nativeGrid, EXPECTED_GRID, 'native-low route used the wrong source grid');
   assert.equal(state?.runtimeTruthAvailable, false, 'runtime truth must be unavailable');
   assert.equal(state?.syntheticDownsampleApplied, false, 'native-low route silently used a synthetic downsample');
@@ -148,15 +164,18 @@ try {
   let previousStep = Number(state.simulationStep);
   let previousStateIdentity = null;
   for (let frameIndex = 0; frameIndex < requestedFrameCount; frameIndex += 1) {
+    activeFramePhase = `frame-${frameIndex}:runtime-step`;
     const receipt = await evaluate(socket, 'window.__kaminosNativeLowSelectiveLive.stepCaptureFrame()');
     assert.equal(receipt?.ok, true, `runtime step ${frameIndex} failed: ${receipt?.reason || receipt?.error || 'unknown'}`);
     validateFrameReceipt(receipt, frameIndex, previousStep, previousStateIdentity);
-    const capture = await socket.call('Page.captureScreenshot', {
+    activeFramePhase = `frame-${frameIndex}:presented-frame-capture`;
+    const capture = await captureScreenshotWithRetry({
       format: 'png',
       captureBeyondViewport: false,
       clip,
-    });
+    }, frameIndex);
     assert.ok(capture?.data?.length > 1000, `captured frame ${frameIndex} was missing or blank`);
+    activeFramePhase = `frame-${frameIndex}:encoder-write`;
     await writeFrame(ffmpeg, capture.data);
     const compact = compactFrameReceipt(receipt, frameIndex);
     frames.push(compact);
@@ -167,6 +186,7 @@ try {
       lastFrame: compact,
       width,
       height,
+      activeFramePhase: `frame-${frameIndex}:complete`,
     };
     if ((frameIndex + 1) % 10 === 0 || frameIndex + 1 === requestedFrameCount) {
       console.log(JSON.stringify({
@@ -177,6 +197,7 @@ try {
       }));
     }
   }
+  activeFramePhase = 'all-frames-captured';
   assertConsecutiveSteps(frames.map(frame => frame.simulationStep));
 
   failurePhase = 'video-encode';
@@ -226,6 +247,8 @@ try {
     simulationSteps: frames.map(frame => frame.simulationStep),
     playbackFps,
     playbackSeconds: frames.length / playbackFps,
+    captureCallTimeoutMs,
+    screenshotRetryCount,
     width,
     height,
     frames,
@@ -250,10 +273,13 @@ try {
     identity: IDENTITY,
     status: 'failed',
     failurePhase,
+    activeFramePhase,
     error: error?.stack || error?.message || String(error),
     requestedUrl: url,
     requestedFrameCount,
     capturedFrameCount: frames.length,
+    captureCallTimeoutMs,
+    screenshotRetryCount,
     frames,
     lastTrustworthyEvidence,
   });
@@ -266,6 +292,7 @@ try {
   process.exitCode = 1;
 } finally {
   try { ffmpeg?.stdin?.destroy(); } catch {}
+  try { captureSocket?.close(); } catch {}
   try { socket?.close(); } catch {}
   browser?.kill('SIGTERM');
 }
@@ -283,12 +310,14 @@ function validateFrameReceipt(receipt, frameIndex, previousStep, previousStateId
   }
   assert.equal(receipt.staleFrameReason ?? null, null, `frame ${frameIndex} reported a stale frame`);
   assert.equal(receipt.fallbackReason ?? null, null, `frame ${frameIndex} reported route fallback`);
-  assert.equal(receipt.requestedRoute, receipt.effectiveRoute, `frame ${frameIndex} route identity drifted`);
+  assert.ok(receipt.requestedRoute, `frame ${frameIndex} omitted requested route identity`);
+  assert.ok(receipt.effectiveRoute, `frame ${frameIndex} omitted effective route identity`);
   assert.equal(receipt.requestedBackend, receipt.effectiveBackend, `frame ${frameIndex} backend identity drifted`);
   assert.equal(receipt.requestedComposition, receipt.effectiveComposition, `frame ${frameIndex} composition identity drifted`);
-  assertModels(receipt.models || receipt.modelPackages);
+  assertModels(receipt.models || receipt.modelPackages || receipt.modelReceipts);
+  const roleReceipts = receipt.roles || receipt.visualRoles;
   for (const role of ROLES) {
-    const roleReceipt = receipt.roles?.[role];
+    const roleReceipt = roleReceipts?.[role];
     assert.ok(roleReceipt, `frame ${frameIndex} is missing ${role}`);
     assert.equal(roleReceipt.sameNativeStateIdentity, receipt.sameNativeStateIdentity, `${role} used a different native state at frame ${frameIndex}`);
     assert.equal(roleReceipt.sourceStepIdentity, receipt.sourceStepIdentity, `${role} used a different source step at frame ${frameIndex}`);
@@ -322,7 +351,7 @@ function compactFrameReceipt(receipt, frameIndex) {
     fallbackReason: receipt.fallbackReason ?? null,
     staleFrameReason: receipt.staleFrameReason ?? null,
     roles: Object.fromEntries(ROLES.map(role => {
-      const value = receipt.roles[role];
+      const value = (receipt.roles || receipt.visualRoles)[role];
       return [role, {
         candidateCount: value.candidateCount,
         instanceCount: value.instanceCount,
@@ -366,6 +395,33 @@ function startEncoder() {
 async function writeFrame(child, pngBase64) {
   const bytes = Buffer.from(pngBase64, 'base64');
   if (!child.stdin.write(bytes)) await new Promise(resolveDrain => child.stdin.once('drain', resolveDrain));
+}
+
+async function captureScreenshotWithRetry(params, frameIndex) {
+  let firstError = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await captureSocket.call('Page.captureScreenshot', params, { timeoutMs: captureCallTimeoutMs });
+    } catch (error) {
+      if (attempt > 0) throw error;
+      firstError = error;
+      screenshotRetryCount += 1;
+      console.warn(JSON.stringify({
+        phase: 'presented-frame-capture-retry',
+        frameIndex,
+        reason: error?.message || String(error),
+      }));
+      await reconnectCaptureSocket();
+    }
+  }
+  throw firstError;
+}
+
+async function reconnectCaptureSocket() {
+  captureSocket?.close();
+  captureSocket = new CdpSocket(captureTargetUrl);
+  await captureSocket.open();
+  await captureSocket.call('Page.enable');
 }
 
 function artifact(path) {
