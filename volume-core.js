@@ -12985,6 +12985,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const nativeLowSupportTileProfile = await runtime.sampleSupportTileProfile();
       const nativeLowSourceTileCandidate = await runtime.sampleSourceProximalTileCandidate();
       const runtimeState = runtime.debugState();
+      const nativeLowFixedSourceDeltaAdmission = runtimeState.nativeLowFixedSourceDeltaAdmission
+        || supportStats.nativeLowFixedSourceDeltaAdmission
+        || null;
       const encodedFrameDelta = Number(runtimeState.encodedFrameCount || 0) - Number(runtimeBeforeInference.encodedFrameCount || 0);
       if (encodedFrameDelta !== 1) throw new Error(`repeated-static-prediction:${encodedFrameDelta}`);
       const currentSourceFrameConsumption = {
@@ -13015,7 +13018,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         supportCompactedCount: nativeLowInferenceWorkProfile?.supportCompactedCount ?? null,
         residualHeadEvaluatedCount: nativeLowInferenceWorkProfile?.residualHeadEvaluatedCount ?? null,
       };
-      lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inferenceTiming, supportStats, supportStatsMs, nativeLowSupportTileProfile, nativeLowSourceTileCandidate, currentSourceFrameConsumption, stalePredictionRejection };
+      lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inferenceTiming, supportStats, supportStatsMs, nativeLowSupportTileProfile, nativeLowSourceTileCandidate, nativeLowFixedSourceDeltaAdmission, currentSourceFrameConsumption, stalePredictionRejection };
 
       failurePhase = 'shared-device-treatment-materialization';
       const treatmentMaterializeStart = performance.now();
@@ -13242,19 +13245,24 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         runtimeDecision: 'coarse-front-alone-rejected-sparse-temporal-detail-band-required',
       };
       const sourceHistoryTargetCoverage = Math.max(0.01, Math.min(0.5, Number(options.sourceHistoryDetailTargetCoverage ?? 0.10)));
-      const sourceHistoryCandidateCount = Math.round((160 ** 3) * sourceHistoryTargetCoverage);
+      const sourceHistoryCandidateCount = nativeLowFixedSourceDeltaAdmission?.uncappedCandidateCount
+        ?? Math.round((160 ** 3) * sourceHistoryTargetCoverage);
       const nativeLowSourceHistoryDetailCandidate = {
         identity: 'native-low-source-history-detail-candidate-v0',
         authority: 'source-visible-full-17-channel-consecutive-delta-envelope-v0',
         sourceVisibleSweepSchema: 'kaminos.pyro.source-visible-sparse-detail-candidate-sweep.v0',
         sourceVisibleSweepSha256: 'a122def1656b833b618669d61c1623ad672246329dd81cf3bfa8a2e363e52140',
         sourceChannelCount: 17,
-        sourceHistoryAvailable: true,
+        sourceHistoryAvailable: nativeLowFixedSourceDeltaAdmission?.sourceHistoryAvailable ?? true,
         candidateCompactionRouteMeasured: true,
-        measurementAuthority: 'live-high-cell-count-and-report-backed-source-delta-envelope-v0',
-        measurementStatus: 'candidate-count-live-gpu-compaction-kernel-not-yet-active-treatment',
+        measurementAuthority: nativeLowFixedSourceDeltaAdmission
+          ? 'live-fixed-source-delta-gpu-admission-pass-v0'
+          : 'live-high-cell-count-and-report-backed-source-delta-envelope-v0',
+        measurementStatus: nativeLowFixedSourceDeltaAdmission
+          ? 'fixed-gate-gpu-admission-count-active-candidate-head-not-yet-active-treatment'
+          : 'candidate-count-live-gpu-compaction-kernel-not-yet-active-treatment',
         targetCoverage: sourceHistoryTargetCoverage,
-        candidateCoverage: sourceHistoryCandidateCount / (160 ** 3),
+        candidateCoverage: nativeLowFixedSourceDeltaAdmission?.uncappedCandidateCoverage ?? sourceHistoryCandidateCount / (160 ** 3),
         candidateCount: sourceHistoryCandidateCount,
         highCellCount: 160 ** 3,
         sourceDeltaEnergyCapture: 0.8286,
@@ -13527,6 +13535,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         nativeLowBreakEvenBudgetLedger,
         nativeLowCoarseFrontSparseDetailBand,
         nativeLowSourceHistoryDetailCandidate,
+        nativeLowFixedSourceDeltaAdmission,
         nativeLowFrontTopologyAblation,
         frontTopologyAblationEnabled,
         frontTopologyAblatedSplatCandidateCount,

@@ -12,6 +12,7 @@ export const NATIVE_LOW_FEATURE_AUTHORITY = 'full-low-field-plus-spatial-rbf-fea
 export const NATIVE_LOW_TRANSPORT_MODE = 'shared-device-gpu-buffers-no-readback-import-v0';
 export const NATIVE_LOW_SUPPORT_POSITIVE_RESIDUAL_DISPATCH = 'native-low-support-positive-residual-dispatch-v0';
 export const NATIVE_LOW_SUPPORT_POSITIVE_INDIRECT_RESIDUAL_DISPATCH = 'native-low-support-positive-indirect-residual-dispatch-v0';
+export const NATIVE_LOW_FIXED_SOURCE_DELTA_ADMISSION = 'native-low-fixed-source-delta-admission-v0';
 export const NATIVE_LOW_SOURCE_PROXIMAL_TILE_CANDIDATE = 'native-low-source-proximal-tile-candidate-v0';
 
 const LOW_GRID = 128;
@@ -22,6 +23,28 @@ const HIDDEN_WIDTH = 48;
 const STATS_BYTES = 16;
 const INDIRECT_ARGS_BYTES = 16;
 const RESIDUAL_WORKGROUP_SIZE = 64;
+const SOURCE_DELTA_THRESHOLD = 0.5457155704;
+const SOURCE_DELTA_CALIBRATION_SHA256 = 'c1b0c1ada36317ee634f198cd90e1ce9be5fb38a421c7e500af3f465834c16d3';
+const SOURCE_DELTA_SCALES = Object.freeze([
+  0.27549979090690613,
+  0.16067561507225037,
+  0.2599555552005768,
+  0.22482779622077942,
+  0.08425257354974747,
+  0.20089389383792877,
+  0.02505391277372837,
+  0.2557207942008972,
+  0.36345410346984863,
+  0.2309359312057495,
+  0.27264925837516785,
+  0.10435938835144043,
+  0.06293082237243652,
+  0.4255056381225586,
+  0.23969438672065735,
+  0.24967649579048157,
+  0.03789634257555008,
+]);
+const SOURCE_DELTA_SCALE_WGSL = SOURCE_DELTA_SCALES.map((value, index) => `  if (channel == ${index}u) { return ${value}; }`).join('\n');
 
 function output(channel) {
   const found = SELECTIVE_HEAD_LIVE_MODEL.outputs.find(item => item.channel === channel);
@@ -206,6 +229,72 @@ fn upsampleNativeFront(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 `;
 
+const SOURCE_HISTORY_ADMISSION_WGSL = `
+const LOW_GRID: u32 = ${LOW_GRID}u;
+const HIGH_GRID: u32 = ${HIGH_GRID}u;
+const SLOTS_PER_CELL: u32 = ${SLOTS_PER_CELL}u;
+const SOURCE_DELTA_THRESHOLD: f32 = ${SOURCE_DELTA_THRESHOLD};
+
+@group(0) @binding(0) var<storage, read> lowFluid: array<vec4<f32>>;
+@group(0) @binding(1) var<storage, read> lowFront: array<f32>;
+@group(0) @binding(2) var<storage, read> priorLowFluid: array<vec4<f32>>;
+@group(0) @binding(3) var<storage, read> priorLowFrontAndSupport: array<u32>;
+@group(0) @binding(4) var<storage, read_write> sourceHistoryCandidates: array<u32>;
+@group(0) @binding(5) var<storage, read_write> sourceHistoryStats: array<atomic<u32>>;
+
+fn index3(cell: vec3<u32>, grid: u32) -> u32 {
+  return cell.x + cell.y * grid + cell.z * grid * grid;
+}
+
+fn divCeil(value: u32, divisor: u32) -> u32 {
+  return (value + divisor - 1u) / divisor;
+}
+
+fn sourceDeltaScale(channel: u32) -> f32 {
+${SOURCE_DELTA_SCALE_WGSL}
+  return 1.0;
+}
+
+fn deltaScore(channel: u32, current: f32, prior: f32) -> f32 {
+  return abs(current - prior) / max(sourceDeltaScale(channel), 0.000001);
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn admitFixedSourceDelta(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (any(gid >= vec3<u32>(LOW_GRID))) { return; }
+  if (atomicLoad(&sourceHistoryStats[3]) == 0u) { return; }
+  let lowIndex = index3(gid, LOW_GRID);
+  var score = 0.0;
+  for (var slot = 0u; slot < SLOTS_PER_CELL; slot += 1u) {
+    let current = lowFluid[lowIndex * SLOTS_PER_CELL + slot];
+    let prior = priorLowFluid[lowIndex * SLOTS_PER_CELL + slot];
+    score = max(score, deltaScore(slot * 4u + 0u, current.x, prior.x));
+    score = max(score, deltaScore(slot * 4u + 1u, current.y, prior.y));
+    score = max(score, deltaScore(slot * 4u + 2u, current.z, prior.z));
+    score = max(score, deltaScore(slot * 4u + 3u, current.w, prior.w));
+  }
+  let currentFront = lowFront[lowIndex];
+  let priorFront = bitcast<f32>(priorLowFrontAndSupport[lowIndex]);
+  score = max(score, deltaScore(16u, currentFront, priorFront));
+  if (score < SOURCE_DELTA_THRESHOLD) { return; }
+  atomicAdd(&sourceHistoryStats[0], 1u);
+  let hx0 = divCeil(gid.x * HIGH_GRID, LOW_GRID);
+  let hx1 = divCeil((gid.x + 1u) * HIGH_GRID, LOW_GRID);
+  let hy0 = divCeil(gid.y * HIGH_GRID, LOW_GRID);
+  let hy1 = divCeil((gid.y + 1u) * HIGH_GRID, LOW_GRID);
+  let hz0 = divCeil(gid.z * HIGH_GRID, LOW_GRID);
+  let hz1 = divCeil((gid.z + 1u) * HIGH_GRID, LOW_GRID);
+  for (var hz = hz0; hz < hz1; hz += 1u) {
+    for (var hy = hy0; hy < hy1; hy += 1u) {
+      for (var hx = hx0; hx < hx1; hx += 1u) {
+        let writeIndex = atomicAdd(&sourceHistoryStats[1], 1u);
+        sourceHistoryCandidates[writeIndex] = index3(vec3<u32>(hx, hy, hz), HIGH_GRID);
+      }
+    }
+  }
+}
+`;
+
 const FINALIZE_RESIDUAL_DISPATCH_WGSL = `
 const RESIDUAL_WORKGROUP_SIZE: u32 = ${RESIDUAL_WORKGROUP_SIZE}u;
 
@@ -220,6 +309,23 @@ fn finalizeResidualDispatchArgs() {
   residualDispatchArgs[1] = 1u;
   residualDispatchArgs[2] = 1u;
   residualDispatchArgs[3] = supportCount;
+}
+`;
+
+const FINALIZE_SOURCE_HISTORY_DISPATCH_WGSL = `
+const RESIDUAL_WORKGROUP_SIZE: u32 = ${RESIDUAL_WORKGROUP_SIZE}u;
+
+@group(0) @binding(0) var<storage, read_write> sourceHistoryStats: array<atomic<u32>>;
+@group(0) @binding(1) var<storage, read_write> sourceHistoryDispatchArgs: array<u32>;
+
+@compute @workgroup_size(1)
+fn finalizeSourceHistoryDispatchArgs() {
+  let candidateCount = atomicLoad(&sourceHistoryStats[1]);
+  let workgroups = (candidateCount + RESIDUAL_WORKGROUP_SIZE - 1u) / RESIDUAL_WORKGROUP_SIZE;
+  sourceHistoryDispatchArgs[0] = workgroups;
+  sourceHistoryDispatchArgs[1] = 1u;
+  sourceHistoryDispatchArgs[2] = 1u;
+  sourceHistoryDispatchArgs[3] = candidateCount;
 }
 `;
 
@@ -285,8 +391,15 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
   const predictedFront = makeBuffer('native-low shared-device predicted front 160^3', highFrontBytes);
   const nativeUpsampleFront = makeBuffer('native-low shared-device native-upsample front 160^3', highFrontBytes);
   const stats = makeBuffer('native-low shared-device support stats', STATS_BYTES);
+  const sourceHistoryCandidates = makeBuffer('native-low fixed source-delta high-cell candidates', highCells * Uint32Array.BYTES_PER_ELEMENT);
+  const sourceHistoryStats = makeBuffer('native-low fixed source-delta stats', STATS_BYTES);
   const residualDispatchArgs = makeBuffer(
     'native-low shared-device finalized residual dispatch args',
+    INDIRECT_ARGS_BYTES,
+    GPUBufferUsage.STORAGE | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+  );
+  const sourceHistoryDispatchArgs = makeBuffer(
+    'native-low fixed source-delta dispatch args',
     INDIRECT_ARGS_BYTES,
     GPUBufferUsage.STORAGE | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
   );
@@ -328,6 +441,29 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
     layout: device.createPipelineLayout({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native front upsample pipeline layout`, bindGroupLayouts: [frontUpsampleLayout] }),
     compute: { module: frontUpsampleShader, entryPoint: 'upsampleNativeFront' },
   });
+  const sourceHistoryAdmissionShader = device.createShaderModule({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} fixed source-delta admission WGSL`,
+    code: SOURCE_HISTORY_ADMISSION_WGSL,
+  });
+  const sourceHistoryAdmissionLayout = device.createBindGroupLayout({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} fixed source-delta admission layout`,
+    entries: [
+      { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      { binding: 5, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+    ],
+  });
+  const sourceHistoryAdmissionPipeline = device.createComputePipeline({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} fixed source-delta admission`,
+    layout: device.createPipelineLayout({
+      label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} fixed source-delta admission pipeline layout`,
+      bindGroupLayouts: [sourceHistoryAdmissionLayout],
+    }),
+    compute: { module: sourceHistoryAdmissionShader, entryPoint: 'admitFixedSourceDelta' },
+  });
   const finalizeResidualDispatchShader = device.createShaderModule({
     label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} finalize residual dispatch args WGSL`,
     code: FINALIZE_RESIDUAL_DISPATCH_WGSL,
@@ -347,11 +483,46 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
     }),
     compute: { module: finalizeResidualDispatchShader, entryPoint: 'finalizeResidualDispatchArgs' },
   });
+  const finalizeSourceHistoryDispatchShader = device.createShaderModule({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} finalize source-delta dispatch args WGSL`,
+    code: FINALIZE_SOURCE_HISTORY_DISPATCH_WGSL,
+  });
+  const finalizeSourceHistoryDispatchLayout = device.createBindGroupLayout({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} finalize source-delta dispatch args layout`,
+    entries: [
+      { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+    ],
+  });
+  const finalizeSourceHistoryDispatchPipeline = device.createComputePipeline({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} finalize source-delta dispatch args`,
+    layout: device.createPipelineLayout({
+      label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} finalize source-delta dispatch args pipeline layout`,
+      bindGroupLayouts: [finalizeSourceHistoryDispatchLayout],
+    }),
+    compute: { module: finalizeSourceHistoryDispatchShader, entryPoint: 'finalizeSourceHistoryDispatchArgs' },
+  });
   let encodedFrameCount = 0;
   let lastStats = {
     supportPositiveCount: 0,
     supportPrevalence: 0,
     highCellCount: highCells,
+  };
+  let lastSourceHistoryAdmission = {
+    identity: NATIVE_LOW_FIXED_SOURCE_DELTA_ADMISSION,
+    fixedSourceDeltaCalibrationSha256: SOURCE_DELTA_CALIBRATION_SHA256,
+    sourceDeltaThreshold: SOURCE_DELTA_THRESHOLD,
+    sourceDeltaScales: [...SOURCE_DELTA_SCALES],
+    sourceHistoryAvailable: false,
+    uncappedLowCandidateCount: 0,
+    uncappedCandidateCount: 0,
+    uncappedCandidateCoverage: 0,
+    sourceHistoryDispatchWorkgroups: 0,
+    sourceHistoryDispatchThreadCount: 0,
+    mohelWarning: null,
+    runtimeTopK: false,
+    dynamicPercentile: false,
+    hiddenCandidateCap: false,
   };
   const makeInferenceWorkProfile = stats => {
     const supportPositiveCount = Number(stats?.supportPositiveCount || 0);
@@ -453,10 +624,42 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
     effectiveFeatureCount: SELECTIVE_HEAD_LIVE_MODEL.features.featureCount,
     noHiddenCaps: true,
     supportCompactionIdentity: NATIVE_LOW_SUPPORT_POSITIVE_RESIDUAL_DISPATCH,
-    buffers: { lowSnapshotFluid, lowSnapshotFront, predictedFluid, predictedFront, nativeUpsampleFront, residualDispatchArgs },
+    buffers: { lowSnapshotFluid, lowSnapshotFront, predictedFluid, predictedFront, nativeUpsampleFront, residualDispatchArgs, sourceHistoryCandidates, sourceHistoryDispatchArgs },
     encodeFromNativeLow(encoder, sourceFluid, sourceFront, options = {}) {
       device.queue.writeBuffer(stats, 0, new Uint32Array(4));
       device.queue.writeBuffer(residualDispatchArgs, 0, new Uint32Array(4));
+      device.queue.writeBuffer(sourceHistoryStats, 0, new Uint32Array([0, 0, 0, encodedFrameCount > 0 ? 1 : 0]));
+      device.queue.writeBuffer(sourceHistoryDispatchArgs, 0, new Uint32Array(4));
+      const sourceHistoryBindGroup = device.createBindGroup({
+        label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} fixed source-delta admission bind group`,
+        layout: sourceHistoryAdmissionLayout,
+        entries: [
+          { binding: 0, resource: { buffer: sourceFluid } },
+          { binding: 1, resource: { buffer: sourceFront } },
+          { binding: 2, resource: { buffer: lowSnapshotFluid } },
+          { binding: 3, resource: { buffer: lowSnapshotFront } },
+          { binding: 4, resource: { buffer: sourceHistoryCandidates } },
+          { binding: 5, resource: { buffer: sourceHistoryStats } },
+        ],
+      });
+      const sourceHistoryPass = encoder.beginComputePass({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} fixed source-delta admission` });
+      sourceHistoryPass.setPipeline(sourceHistoryAdmissionPipeline);
+      sourceHistoryPass.setBindGroup(0, sourceHistoryBindGroup);
+      sourceHistoryPass.dispatchWorkgroups(Math.ceil(LOW_GRID / 4), Math.ceil(LOW_GRID / 4), Math.ceil(LOW_GRID / 4));
+      sourceHistoryPass.end();
+      const finalizeSourceHistoryBindGroup = device.createBindGroup({
+        label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} finalize source-delta dispatch args bind group`,
+        layout: finalizeSourceHistoryDispatchLayout,
+        entries: [
+          { binding: 0, resource: { buffer: sourceHistoryStats } },
+          { binding: 1, resource: { buffer: sourceHistoryDispatchArgs } },
+        ],
+      });
+      const finalizeSourceHistoryPass = encoder.beginComputePass({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} finalize source-delta dispatch args` });
+      finalizeSourceHistoryPass.setPipeline(finalizeSourceHistoryDispatchPipeline);
+      finalizeSourceHistoryPass.setBindGroup(0, finalizeSourceHistoryBindGroup);
+      finalizeSourceHistoryPass.dispatchWorkgroups(1);
+      finalizeSourceHistoryPass.end();
       const bindGroup = device.createBindGroup({
         label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} bind group`,
         layout,
@@ -527,6 +730,44 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
     },
     async sampleSupportStats() {
       const values = await readU32Buffer(device, stats, STATS_BYTES, 'native-low shared-device support stats readback');
+      const sourceHistoryValues = await readU32Buffer(device, sourceHistoryStats, STATS_BYTES, 'native-low fixed source-delta stats readback');
+      const uncappedCandidateCount = Number(sourceHistoryValues[1] || 0);
+      const sourceHistoryDispatchWorkgroups = Math.ceil(uncappedCandidateCount / RESIDUAL_WORKGROUP_SIZE);
+      const sourceHistoryAvailable = Number(sourceHistoryValues[3] || 0) > 0;
+      lastSourceHistoryAdmission = {
+        identity: NATIVE_LOW_FIXED_SOURCE_DELTA_ADMISSION,
+        authority: 'fixed-q99.5-source-delta-scales-threshold-baseline-v0',
+        fixedSourceDeltaCalibrationSha256: SOURCE_DELTA_CALIBRATION_SHA256,
+        calibrationPair: '96-97',
+        heldPair: '97-98',
+        scaleQuantile: 0.995,
+        sourceDeltaThreshold: SOURCE_DELTA_THRESHOLD,
+        sourceDeltaScales: [...SOURCE_DELTA_SCALES],
+        runtimeTopK: false,
+        dynamicPercentile: false,
+        hiddenCandidateCap: false,
+        runtimeTruthUsed: false,
+        targetErrorRankingUsed: false,
+        sourceChannelCount: 17,
+        sourceHistoryAvailable,
+        uncappedLowCandidateCount: Number(sourceHistoryValues[0] || 0),
+        uncappedCandidateCount,
+        uncappedCandidateCoverage: uncappedCandidateCount / highCells,
+        calibrationCoverage: 0.1,
+        calibrationCandidateCount: 409600,
+        calibrationEnergyCapture: 0.830176,
+        heldCoverage: 0.100185,
+        heldCandidateCount: 410357,
+        heldEnergyCapture: 0.826572,
+        sourceHistoryDispatchArgsFinalized: true,
+        sourceHistoryDispatchIndirectReady: true,
+        sourceHistoryDispatchWorkgroups,
+        sourceHistoryDispatchThreadCount: sourceHistoryDispatchWorkgroups * RESIDUAL_WORKGROUP_SIZE,
+        mohelWarning: uncappedCandidateCount / highCells > 0.20
+          ? 'source-history-admission-coverage-exceeds-20pct-mohel-warning-no-cap-applied'
+          : null,
+        selectedNextImplementation: 'fixed-gate-candidate-head-dispatch-with-mohel-warning-under-emitter-shifts',
+      };
       lastStats = {
         supportPositiveCount: Number(values[0] || 0),
         supportPrevalence: Number(values[0] || 0) / highCells,
@@ -535,7 +776,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
         highCellCount: highCells,
       };
       lastStats.nativeLowInferenceWorkProfile = makeInferenceWorkProfile(lastStats);
-      return { ...lastStats };
+      return { ...lastStats, nativeLowFixedSourceDeltaAdmission: lastSourceHistoryAdmission };
     },
     async sampleSupportTileProfile() {
       const started = performance.now();
@@ -727,6 +968,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
         nativeLowInferenceWorkProfile,
         nativeLowSupportTileProfile: lastSupportTileProfile,
         nativeLowSourceTileCandidate: lastSourceTileCandidate,
+        nativeLowFixedSourceDeltaAdmission: lastSourceHistoryAdmission,
         ...lastStats,
       };
     },
@@ -737,6 +979,9 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
       predictedFront.destroy();
       nativeUpsampleFront.destroy();
       residualDispatchArgs.destroy();
+      sourceHistoryCandidates.destroy();
+      sourceHistoryStats.destroy();
+      sourceHistoryDispatchArgs.destroy();
       stats.destroy();
       model.destroy();
     },

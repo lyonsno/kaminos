@@ -111,6 +111,11 @@ assert.match(combined, /sourceDeltaEnergyCapture[\s\S]*0\.8286[\s\S]*transition9
 assert.match(combined, /coarseDeltaGradientCapture[\s\S]*0\.716[\s\S]*supportProbabilityEnergyCapture[\s\S]*0\.205[\s\S]*supportProbabilityAdmission:\s*false/, 'detail admission rejects support probability and records coarse-delta/source-delta discriminant');
 assert.match(combined, /detailAdmissionSwitches[\s\S]*sourceHistoryDetailAdmissionEnabled[\s\S]*supportCarrierDispatchIndependent[\s\S]*coarseFrontScaffoldIndependent/, 'detail admission exposes independent switches for source history, support/carriers, and coarse front');
 assert.match(witness, /nativeLowSourceHistoryDetailCandidate[\s\S]*candidateCompactionRouteMeasured[\s\S]*candidateCount[\s\S]*sourceHistoryAvailable/, 'witness preserves source-history detail candidate measurement receipt');
+assert.match(combined, /native-low-fixed-source-delta-admission-v0/, 'route records fixed-calibration source-delta admission baseline');
+assert.match(combined, /fixedSourceDeltaCalibrationSha256[\s\S]*c1b0c1ada36317ee634f198cd90e1ce9be5fb38a421c7e500af3f465834c16d3/, 'fixed source-delta admission records calibration artifact checksum');
+assert.match(combined, /sourceDeltaThreshold[\s\S]*0\.5457155704[\s\S]*sourceDeltaScales/, 'fixed source-delta admission records frozen threshold and per-channel scales');
+assert.match(combined, /runtimeTopK:\s*false[\s\S]*dynamicPercentile:\s*false[\s\S]*hiddenCandidateCap:\s*false/, 'fixed source-delta admission forbids runtime top-K, dynamic percentile, and hidden caps');
+assert.match(combined, /uncappedCandidateCount[\s\S]*uncappedCandidateCoverage[\s\S]*mohelWarning/, 'fixed source-delta admission exposes uncapped count/coverage and Mohel warning');
 assert.match(combined, /native-low-front-topology-ablation-v0/, 'route records shared-device learned frontTopology visual ablation');
 assert.match(combined, /fullFrozenTreatmentReference[\s\S]*frontTopologyAblatedTreatment[\s\S]*nativeLowControl/, 'frontTopology ablation keeps native control, full frozen reference, and ablated treatment');
 assert.match(combined, /native-low-nearest-normalized-front-upsampling-no-learned-front-residual-v0/, 'frontTopology ablation labels native-low upsample authority with no learned front residual');

@@ -121,6 +121,18 @@
           coarseFrontScaffoldIndependent: true,
         },
       },
+      nativeLowFixedSourceDeltaAdmission: {
+        identity: 'native-low-fixed-source-delta-admission-v0',
+        fixedSourceDeltaCalibrationSha256: 'c1b0c1ada36317ee634f198cd90e1ce9be5fb38a421c7e500af3f465834c16d3',
+        sourceDeltaThreshold: 0.5457155704,
+        sourceDeltaScales: [0.27549979090690613, 0.16067561507225037, 0.2599555552005768, 0.22482779622077942, 0.08425257354974747, 0.20089389383792877, 0.02505391277372837, 0.2557207942008972, 0.36345410346984863, 0.2309359312057495, 0.27264925837516785, 0.10435938835144043, 0.06293082237243652, 0.4255056381225586, 0.23969438672065735, 0.24967649579048157, 0.03789634257555008],
+        runtimeTopK: false,
+        dynamicPercentile: false,
+        hiddenCandidateCap: false,
+        uncappedCandidateCount: 0,
+        uncappedCandidateCoverage: 0,
+        mohelWarning: null,
+      },
     });
     const requestedComposition = 'splat-only-v0';
     const runtimeTruthAvailable = false;
@@ -402,6 +414,7 @@
         nativeLowBreakEvenBudgetLedger: receipt.nativeLowBreakEvenBudgetLedger || null,
         nativeLowCoarseFrontSparseDetailBand: receipt.nativeLowCoarseFrontSparseDetailBand || null,
         nativeLowSourceHistoryDetailCandidate: receipt.nativeLowSourceHistoryDetailCandidate || null,
+        nativeLowFixedSourceDeltaAdmission: receipt.nativeLowFixedSourceDeltaAdmission || null,
         endToEndFrameMs: receipt.endToEndFrameMs ?? null,
         simulationSteppingReceipt: receipt.simulationSteppingReceipt || null,
         currentSourceFrameConsumption: receipt.currentSourceFrameConsumption || null,

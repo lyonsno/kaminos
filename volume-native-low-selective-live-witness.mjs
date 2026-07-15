@@ -21,6 +21,11 @@ const WITNESS_CONTRACT_MARKERS = Object.freeze({
   candidateCompactionRouteMeasured: 'candidateCompactionRouteMeasured',
   candidateCount: 'candidateCount',
   sourceHistoryAvailable: 'sourceHistoryAvailable',
+  nativeLowFixedSourceDeltaAdmission: 'native-low-fixed-source-delta-admission-v0',
+  fixedSourceDeltaCalibrationSha256: 'c1b0c1ada36317ee634f198cd90e1ce9be5fb38a421c7e500af3f465834c16d3',
+  runtimeTopK: false,
+  dynamicPercentile: false,
+  hiddenCandidateCap: false,
   sameSourceStepIdentity: 'same-source-step-required',
   offlineImporterUsed: false,
 });
@@ -184,6 +189,13 @@ try {
       && state?.nativeLowSourceHistoryDetailCandidate?.sourceHistoryAvailable === true
       && state?.nativeLowSourceHistoryDetailCandidate?.supportProbabilityAdmission === false
       && state?.nativeLowSourceHistoryDetailCandidate?.detailAdmissionSwitches?.supportCarrierDispatchIndependent === true
+      && state?.nativeLowFixedSourceDeltaAdmission?.identity === 'native-low-fixed-source-delta-admission-v0'
+      && state?.nativeLowFixedSourceDeltaAdmission?.fixedSourceDeltaCalibrationSha256 === 'c1b0c1ada36317ee634f198cd90e1ce9be5fb38a421c7e500af3f465834c16d3'
+      && Number(state?.nativeLowFixedSourceDeltaAdmission?.sourceDeltaThreshold) > 0.545
+      && state?.nativeLowFixedSourceDeltaAdmission?.runtimeTopK === false
+      && state?.nativeLowFixedSourceDeltaAdmission?.dynamicPercentile === false
+      && state?.nativeLowFixedSourceDeltaAdmission?.hiddenCandidateCap === false
+      && Number(state?.nativeLowFixedSourceDeltaAdmission?.uncappedCandidateCount) >= 0
       && (!frontTopologyAblationRequested
         || (
           state?.nativeLowFrontTopologyAblation?.identity === 'native-low-front-topology-ablation-v0'
@@ -283,6 +295,14 @@ try {
   assert.equal(state?.nativeLowSourceHistoryDetailCandidate?.detailAdmissionSwitches?.sourceHistoryDetailAdmissionEnabled, true, 'source-history detail admission switch missing');
   assert.equal(state?.nativeLowSourceHistoryDetailCandidate?.detailAdmissionSwitches?.supportCarrierDispatchIndependent, true, 'detail admission is not independent of support/carrier dispatch');
   assert.equal(state?.nativeLowSourceHistoryDetailCandidate?.detailAdmissionSwitches?.coarseFrontScaffoldIndependent, true, 'detail admission is not independent of coarse front');
+  assert.equal(state?.nativeLowFixedSourceDeltaAdmission?.identity, 'native-low-fixed-source-delta-admission-v0', 'fixed source-delta admission receipt missing');
+  assert.equal(state?.nativeLowFixedSourceDeltaAdmission?.fixedSourceDeltaCalibrationSha256, 'c1b0c1ada36317ee634f198cd90e1ce9be5fb38a421c7e500af3f465834c16d3', 'fixed source-delta calibration checksum missing');
+  assert.equal(Number(state?.nativeLowFixedSourceDeltaAdmission?.sourceDeltaThreshold).toFixed(10), '0.5457155704', 'fixed source-delta threshold drifted');
+  assert.equal(state?.nativeLowFixedSourceDeltaAdmission?.runtimeTopK, false, 'runtime top-K used for fixed source-delta admission');
+  assert.equal(state?.nativeLowFixedSourceDeltaAdmission?.dynamicPercentile, false, 'dynamic percentile used for fixed source-delta admission');
+  assert.equal(state?.nativeLowFixedSourceDeltaAdmission?.hiddenCandidateCap, false, 'hidden candidate cap used for fixed source-delta admission');
+  assert.ok(Number(state?.nativeLowFixedSourceDeltaAdmission?.uncappedCandidateCount) >= 0, 'uncapped candidate count missing');
+  assert.ok(Number(state?.nativeLowFixedSourceDeltaAdmission?.uncappedCandidateCoverage) >= 0, 'uncapped candidate coverage missing');
   if (frontTopologyAblationRequested) {
     assert.equal(state?.nativeLowFrontTopologyAblation?.identity, 'native-low-front-topology-ablation-v0', 'frontTopology ablation missing');
     assert.equal(state?.nativeLowFrontTopologyAblation?.offlineImporterUsed, false, 'offline importer was used for frontTopology ablation');
@@ -350,6 +370,7 @@ try {
     nativeLowBreakEvenBudgetLedger: endState.nativeLowBreakEvenBudgetLedger,
     nativeLowCoarseFrontSparseDetailBand: endState.nativeLowCoarseFrontSparseDetailBand,
     nativeLowSourceHistoryDetailCandidate: endState.nativeLowSourceHistoryDetailCandidate,
+    nativeLowFixedSourceDeltaAdmission: endState.nativeLowFixedSourceDeltaAdmission,
     nativeLowFrontTopologyAblation: endState.nativeLowFrontTopologyAblation,
     fullFrozenTreatmentReference: endState.fullFrozenTreatmentReference,
     frontTopologyAblatedTreatment: endState.frontTopologyAblatedTreatment,
