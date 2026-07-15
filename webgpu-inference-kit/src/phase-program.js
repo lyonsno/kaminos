@@ -9,6 +9,41 @@ function clone(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
 }
 
+function stableSerialize(value) {
+  if (Array.isArray(value)) return `[${value.map(stableSerialize).join(',')}]`;
+  if (value != null && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${stableSerialize(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function resolveCommandDuty(commandDuty, schedulerInvocation) {
+  const resolved = clone(commandDuty || {});
+  const control = resolved.chunkControl;
+  if (control == null || schedulerInvocation == null || schedulerInvocation.bounds == null) return resolved;
+  const controlId = control.controlId;
+  const declaredBounds = schedulerInvocation.bounds?.phaseChunkSize?.[controlId];
+  if (!declaredBounds) throw new Error(`undeclared scheduler control ${controlId || '<missing>'}`);
+  if (stableSerialize(control.bounds) !== stableSerialize(declaredBounds)) {
+    throw new Error(`phase command duty bounds mismatch for scheduler control ${controlId}`);
+  }
+  resolved.chunkControl.current = schedulerInvocation.getControl(controlId);
+  return resolved;
+}
+
+function publicSchedulerInvocation(invocation) {
+  if (invocation == null) return null;
+  return {
+    schema: invocation.schema,
+    routeId: invocation.routeId,
+    invocationId: invocation.invocationId,
+    schedulerRevision: invocation.schedulerRevision,
+    scheduler: clone(invocation.scheduler),
+    bounds: clone(invocation.bounds),
+    applicationAuthority: invocation.applicationAuthority,
+  };
+}
+
 function normalizeDispatch(dispatch) {
   if (!Array.isArray(dispatch) || dispatch.length < 1 || dispatch.length > 3) {
     throw new Error('phase dispatch must be an array with 1 to 3 dimensions');
@@ -196,6 +231,7 @@ export async function runWebGpuPhaseProgram(program, options = {}) {
 
   const outputs = {};
   const phaseResults = [];
+  const schedulerInvocation = options.schedulerInvocation || null;
   for (const phase of program.phases) {
     if (phase.kind === 'kernel') {
       const commandBuffer = await runtime.runKernel(phase.kernel, {
@@ -203,7 +239,8 @@ export async function runWebGpuPhaseProgram(program, options = {}) {
         dispatch: phase.dispatch,
         yieldAfter: phase.yieldAfter,
         yieldReason: phase.yieldReason,
-        commandDuty: phase.commandDuty,
+        commandDuty: resolveCommandDuty(phase.commandDuty, schedulerInvocation),
+        schedulerInvocation,
         metadata: {
           ...phase.metadata,
           phaseMetadata: clone(phase.metadata || {}),
@@ -245,5 +282,6 @@ export async function runWebGpuPhaseProgram(program, options = {}) {
     phaseNames: phaseResults.map(phase => phase.name),
     phases: phaseResults,
     outputs,
+    schedulerInvocation: publicSchedulerInvocation(schedulerInvocation),
   };
 }

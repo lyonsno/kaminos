@@ -25,6 +25,9 @@ import {
   runWebGpuPhaseProgram,
 } from './phase-program.js';
 import {
+  createWebGpuSchedulerApplication,
+} from './scheduler-application.js';
+import {
   WEBGPU_BUFFER_USAGE,
   assertTensorDataByteLength,
   createGpuTensor,
@@ -40,6 +43,12 @@ function isNonEmptyString(value) {
 
 function clone(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
+function deepFreeze(value) {
+  if (value == null || typeof value !== 'object' || Object.isFrozen(value)) return value;
+  for (const child of Object.values(value)) deepFreeze(child);
+  return Object.freeze(value);
 }
 
 function defaultNow() {
@@ -383,8 +392,8 @@ function createStageFacade(runtime, stageState, stageName, stageMetadata) {
     runProgram: runtime.runProgram,
     hostPhases: runtime.hostPhases,
     runHostPhase: runtime.runHostPhase,
-    async yieldToBrowser(metadata = {}) {
-      const event = await runtime.yieldToBrowser(metadata);
+    async yieldToBrowser(metadata = {}, options = {}) {
+      const event = await runtime.yieldToBrowser(metadata, options.schedulerInvocation || null);
       stageState.yields.push(event);
       return event;
     },
@@ -423,10 +432,12 @@ export async function createWebGpuInferenceRuntime(input = {}) {
     timestampQueryValidatedAgainstStaged: Boolean(input.timestampQueryValidatedAgainstStaged),
   });
   const now = input.now || defaultNow;
-  const yieldToBrowser = input.yield || createCooperativeYield({
+  const configuredYield = input.yield || null;
+  const baselineYield = createCooperativeYield({
     queue,
     yieldMs: input.yieldMs ?? 0,
     waitForSubmittedWorkDone: input.waitForSubmittedWorkDone,
+    sleep: input.sleep,
     now,
   });
   const kernel = normalizeKernel(input.kernel);
@@ -450,6 +461,72 @@ export async function createWebGpuInferenceRuntime(input = {}) {
         routeId: input.routeId,
         now: input.commandDuties.now || now,
       });
+  const schedulerApplication = input.schedulerApplication == null
+    ? null
+    : (typeof input.schedulerApplication.beginInvocation === 'function'
+        && typeof input.schedulerApplication.endInvocation === 'function'
+        && typeof input.schedulerApplication.applyDecision === 'function'
+        && typeof input.schedulerApplication.snapshot === 'function'
+      ? input.schedulerApplication
+      : createWebGpuSchedulerApplication({
+          ...input.schedulerApplication,
+          routeId: input.schedulerApplication.routeId || input.routeId,
+        }));
+  if (schedulerApplication && schedulerApplication.snapshot().routeId !== input.routeId) {
+    throw new Error('schedulerApplication route mismatch');
+  }
+  let invocationSequence = 0;
+
+  function fallbackInvocation(invocationId) {
+    if (!isNonEmptyString(invocationId)) {
+      throw new Error('invocationId must be a non-empty caller-owned identity');
+    }
+    const scheduler = deepFreeze({
+      mode: 'cooperative',
+      yieldMs: input.yieldMs ?? 0,
+      waitForSubmittedWorkDone: Boolean(input.waitForSubmittedWorkDone),
+      phaseChunkSize: clone(input.phaseChunkSize || {}),
+    });
+    return {
+      schema: 'kaminos.webgpu-scheduler-invocation.v0',
+      routeId: input.routeId,
+      invocationId,
+      schedulerRevision: null,
+      scheduler,
+      bounds: null,
+      applicationAuthority: 'static-runtime-invocation-snapshot',
+      getControl(controlId) {
+        if (!Object.hasOwn(scheduler.phaseChunkSize, controlId)) {
+          throw new Error(`undeclared scheduler control ${controlId || '<missing>'}`);
+        }
+        return scheduler.phaseChunkSize[controlId];
+      },
+    };
+  }
+
+  async function performYield(metadata = {}, schedulerInvocation = null) {
+    const applicationSnapshot = schedulerInvocation == null && schedulerApplication
+      ? schedulerApplication.snapshot()
+      : null;
+    const invocation = schedulerInvocation || (applicationSnapshot
+      ? { ...applicationSnapshot, schedulerRevision: applicationSnapshot.revision }
+      : null);
+    const scheduler = invocation?.scheduler || null;
+    const enrichedMetadata = scheduler == null ? metadata : {
+      ...metadata,
+      schedulerRevision: invocation.schedulerRevision ?? invocation.revision,
+      scheduler: clone(scheduler),
+    };
+    if (configuredYield) return configuredYield(enrichedMetadata);
+    if (!scheduler) return baselineYield(enrichedMetadata);
+    return createCooperativeYield({
+      queue,
+      yieldMs: scheduler.yieldMs,
+      waitForSubmittedWorkDone: scheduler.waitForSubmittedWorkDone,
+      sleep: input.sleep,
+      now,
+    })(enrichedMetadata);
+  }
 
   const runtime = {
     schema: WEBGPU_INFERENCE_RUNTIME_SCHEMA,
@@ -464,6 +541,7 @@ export async function createWebGpuInferenceRuntime(input = {}) {
     caches: resourceCaches,
     hostPhases,
     commandDuties,
+    schedulerApplication,
 
     getShaderModule(label, code, descriptor) {
       return resourceCaches.getShaderModule(label, code, descriptor);
@@ -541,7 +619,40 @@ export async function createWebGpuInferenceRuntime(input = {}) {
     },
 
     runProgram(program, options = {}) {
-      return runWebGpuPhaseProgram(program, { runtime, ...options });
+      invocationSequence += 1;
+      const invocationId = options.invocationId
+        || `${runtime.runtimeLabel}:${program?.name || 'program'}:${invocationSequence}`;
+      return runtime.runInvocation({ invocationId }, invocation => (
+        runWebGpuPhaseProgram(program, { runtime, ...options, schedulerInvocation: invocation })
+      ));
+    },
+
+    async runInvocation(invocationInput = {}, fn) {
+      if (typeof fn !== 'function') throw new Error('invocation function must be a function');
+      const invocation = schedulerApplication
+        ? schedulerApplication.beginInvocation(invocationInput)
+        : fallbackInvocation(invocationInput.invocationId);
+      const context = {
+        ...invocation,
+        async yieldToBrowser(metadata = {}) {
+          return performYield(metadata, invocation);
+        },
+      };
+      try {
+        return await fn(context);
+      } finally {
+        if (schedulerApplication) schedulerApplication.endInvocation(invocation);
+      }
+    },
+
+    applySchedulerDecision(decision) {
+      if (!schedulerApplication) throw new Error('scheduler application is not configured for this runtime');
+      return schedulerApplication.applyDecision(decision);
+    },
+
+    schedulerSnapshot() {
+      if (!schedulerApplication) throw new Error('scheduler application is not configured for this runtime');
+      return schedulerApplication.snapshot();
     },
 
     runHostPhase(phase, fn, options = {}) {
@@ -636,14 +747,14 @@ export async function createWebGpuInferenceRuntime(input = {}) {
         if (options.yieldAfter === true) {
           await stage.yieldToBrowser({
             reason: options.yieldReason || `${kernelDefinition.name}.post-submit`,
-          });
+          }, { schedulerInvocation: options.schedulerInvocation });
         }
         return commandBuffer;
       }, metadata);
     },
 
-    yieldToBrowser(metadata = {}) {
-      return yieldToBrowser(metadata);
+    yieldToBrowser(metadata = {}, schedulerInvocation = null) {
+      return performYield(metadata, schedulerInvocation);
     },
 
     async runStage(name, fn, metadata = {}) {

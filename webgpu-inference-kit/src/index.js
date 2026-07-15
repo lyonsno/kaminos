@@ -82,6 +82,13 @@ export {
 } from './foreground-budget-governor.js';
 
 export {
+  WEBGPU_SCHEDULER_APPLICATION_SCHEMA,
+  WEBGPU_SCHEDULER_DECISION_APPLICATION_SCHEMA,
+  WEBGPU_SCHEDULER_INVOCATION_SCHEMA,
+  createWebGpuSchedulerApplication,
+} from './scheduler-application.js';
+
+export {
   WEBGPU_COMMAND_DUTY_DESCRIPTOR_SCHEMA,
   WEBGPU_COMMAND_DUTY_OBSERVATION_SCHEMA,
   WEBGPU_COMMAND_DUTY_REPORT_SCHEMA,

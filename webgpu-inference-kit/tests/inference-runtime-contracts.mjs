@@ -133,6 +133,15 @@ assert.equal(runtime.backendIdentity.adapterName, 'Test WebGPU Adapter');
 assert.deepEqual(runtime.backendIdentity.features, ['shader-f16']);
 assert.equal(runtime.hostPhases.runId, 'sam3-run-host-phase-a');
 
+await runtime.runInvocation({ invocationId: 'sam3-static-invocation-a' }, async invocation => {
+  assert.throws(
+    () => { invocation.scheduler.yieldMs = 99; },
+    /read only|readonly|not extensible|Cannot assign/i,
+    'static runtime invocations must expose an immutable scheduler snapshot too',
+  );
+  assert.equal(invocation.scheduler.yieldMs, 0);
+});
+
 const preprocessed = await runtime.runHostPhase(
   WEBGPU_HOST_PHASE.cpuPreprocess,
   async () => 'preprocessed',
