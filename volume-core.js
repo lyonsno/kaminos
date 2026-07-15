@@ -5364,6 +5364,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     liquidFireContactAccumulationLayout: LIQUID_FIRE_CONTACT_ACCUMULATION_LAYOUT,
     liquidFireContactStatus: 'unbound',
     liquidFireContactDispatchCount: 0,
+    liquidFireContactTransferEnabled: true,
+    liquidFireContactTransferGateReason: 'default-enabled',
+    liquidFireContactSuppressedFrameCount: 0,
+    liquidFireContactTransferEnabledAtMs: null,
+    liquidFireContactFirstDispatchAtMs: null,
     liquidFireContactSourceGeneration: null,
     liquidFireContactSourceEpoch: null,
     liquidFireContactSourceFrameHash: null,
@@ -5783,6 +5788,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let liquidFireContactStatsBuffer = null;
   let liquidFireContactParamsBuffer = null;
   let liquidFireContactBindGroups = [];
+  let liquidFireContactTransferEnabled = true;
+  let liquidFireContactSuppressedFrameCount = 0;
   let volumePrimitives = [];
   let majorantBuffer = null;
   let boundarySidecarBuffer = null;
@@ -6813,7 +6820,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         { binding: 5, resource: { buffer: fluidBuffer } },
       ],
     }));
-    state.liquidFireContactStatus = 'bound-gpu-sparse-source';
+    state.liquidFireContactStatus = liquidFireContactTransferEnabled
+      ? 'bound-gpu-sparse-source'
+      : 'staged-awaiting-contact-window';
     state.liquidFireContactSourceGeneration = descriptor.allocationGeneration;
     state.liquidFireContactSourceEpoch = descriptor.epoch;
     state.liquidFireContactSourceFrameHash = descriptor.sourceFrameHash;
@@ -6828,6 +6837,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       !liquidFireContactFinalizePipeline ||
       liquidFireContactBindGroups.length !== 2
     ) return;
+    if (!liquidFireContactTransferEnabled) {
+      liquidFireContactSuppressedFrameCount += 1;
+      state.liquidFireContactSuppressedFrameCount = liquidFireContactSuppressedFrameCount;
+      state.liquidFireContactStatus = 'staged-awaiting-contact-window';
+      return;
+    }
     const bindGroup = liquidFireContactBindGroups[currentFluid];
     const pass = encoder.beginComputePass({ label: 'kaminos liquid-fire contact transfer pass' });
     pass.setBindGroup(0, bindGroup);
@@ -6841,6 +6856,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pass.dispatchWorkgroups(1);
     pass.end();
     state.liquidFireContactDispatchCount += 1;
+    if (state.liquidFireContactFirstDispatchAtMs === null) {
+      state.liquidFireContactFirstDispatchAtMs = performance.now();
+    }
     state.liquidFireContactStatus = 'gpu-dispatched-awaiting-header-gate';
   }
 
@@ -6883,6 +6901,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       receiverScale: [1 / 24, 1 / 7, 1 / 24],
       receiverOffset: [0.66, 0.34, 0.5],
       dispatchCount: state.liquidFireContactDispatchCount,
+      transferEnabled: liquidFireContactTransferEnabled,
+      transferGateReason: state.liquidFireContactTransferGateReason,
+      suppressedFrameCount: liquidFireContactSuppressedFrameCount,
+      transferEnabledAtMs: state.liquidFireContactTransferEnabledAtMs,
+      firstDispatchAtMs: state.liquidFireContactFirstDispatchAtMs,
     };
   }
 
@@ -13233,6 +13256,33 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         sourceFrameHash: descriptor.sourceFrameHash,
         sourceFrameId: descriptor.sourceFrameId,
         receiverTransformId: LIQUID_FIRE_CONTACT_RECEIVER_TRANSFORM_ID,
+      };
+    },
+    setLiquidFireContactTransferEnabled(enabled, { reason = 'host-control' } = {}) {
+      liquidFireContactTransferEnabled = enabled === true;
+      state.liquidFireContactTransferEnabled = liquidFireContactTransferEnabled;
+      state.liquidFireContactTransferGateReason = String(reason || 'host-control');
+      if (liquidFireContactTransferEnabled) {
+        state.liquidFireContactTransferEnabledAtMs = performance.now();
+        state.liquidFireContactStatus = liquidFireContactDescriptor
+          ? 'bound-gpu-sparse-source'
+          : 'unbound';
+      } else {
+        liquidFireContactSuppressedFrameCount = 0;
+        state.liquidFireContactSuppressedFrameCount = 0;
+        state.liquidFireContactTransferEnabledAtMs = null;
+        state.liquidFireContactFirstDispatchAtMs = null;
+        state.liquidFireContactStatus = liquidFireContactDescriptor
+          ? 'staged-awaiting-contact-window'
+          : 'unbound';
+      }
+      emitStatus({
+        phase: liquidFireContactTransferEnabled ? 'liquid-fire-contact-transfer-enabled' : 'liquid-fire-contact-transfer-staged',
+      });
+      return {
+        enabled: liquidFireContactTransferEnabled,
+        reason: state.liquidFireContactTransferGateReason,
+        status: state.liquidFireContactStatus,
       };
     },
     setExternalEmitters(payload = {}) {
