@@ -464,7 +464,7 @@ export async function loadWebGpuModelResources(input = {}) {
   }
 
   const allocationById = new Map(allocations.map(allocation => [allocation.allocationId, allocation]));
-  const tensors = {};
+  const tensors = Object.create(null);
   for (const manifestAllocation of manifest.allocations) {
     const allocation = allocationById.get(manifestAllocation.allocationId);
     for (const tensor of manifestAllocation.tensors) {

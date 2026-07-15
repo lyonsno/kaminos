@@ -145,7 +145,7 @@ export function createWebGpuResourceFactory(input = {}) {
       .then(resource => {
         if (invalidation || flight.waiters.size === 0) {
           flight.status = invalidation ? 'invalidated' : 'cancelled';
-          if (!invalidation) request.dispose(resource);
+          request.dispose(resource);
           return;
         }
         let first = true;

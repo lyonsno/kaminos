@@ -21,6 +21,13 @@ function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+}
+
 function manifestFor(bytes, overrides = {}) {
   return defineWebGpuModelResourceManifest({
     modelId: 'acme/vision-model',
@@ -234,6 +241,35 @@ assert.deepEqual(
 );
 mutationModel.release();
 
+const magicBundle = new Uint8Array(4);
+const magicManifest = defineWebGpuModelResourceManifest({
+  modelId: 'acme/magic-name',
+  revision: 'r1',
+  bundle: { byteLength: 4, sha256: sha256(magicBundle) },
+  allocations: [{
+    allocationId: 'magic',
+    byteOffset: 0,
+    byteLength: 4,
+    usage: WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst,
+    tensors: [{ name: '__proto__', dtype: 'u32', shape: [1], byteOffset: 0, byteLength: 4 }],
+  }],
+});
+const magicResidency = createWebGpuResourceResidency({ sessionId: 'magic' });
+const magicModel = await loadWebGpuModelResources({
+  manifest: magicManifest,
+  bundle: magicBundle,
+  route: routeFixture({
+    routeId: 'magic-route',
+    runtime: runtimeFixture(),
+    residency: magicResidency,
+    factory: createWebGpuResourceFactory({ sessionId: 'magic', residency: magicResidency }),
+  }),
+});
+assert.equal(Object.hasOwn(magicModel.tensors, '__proto__'), true);
+assert.deepEqual(Object.keys(magicModel.tensors), ['__proto__']);
+assert.equal(magicModel.tensors.__proto__.name, '__proto__');
+magicModel.release();
+
 const partialResidency = createWebGpuResourceResidency({ sessionId: 'partial-model' });
 const partialFactory = createWebGpuResourceFactory({ sessionId: 'partial-model', residency: partialResidency });
 const partialRuntime = runtimeFixture({ failLabel: 'decoder' });
@@ -328,5 +364,33 @@ assert.throws(
   () => sessionRoute.loadModelResources({ manifest, bundle }),
   /detached|unregistered/i,
 );
+
+const lossDuringCreate = deferred();
+let lossBufferDestroyCount = 0;
+const lossSession = await kit.createWebGpuInferenceSession({
+  sessionId: 'loss-during-model-create',
+  device: {
+    queue: { writeBuffer() {} },
+    createBuffer() {
+      lossDuringCreate.resolve({ reason: 'lost-during-create', message: 'fixture loss' });
+      return {
+        destroy() { lossBufferDestroyCount += 1; },
+      };
+    },
+    features: new Set(),
+    limits: {},
+    lost: lossDuringCreate.promise,
+  },
+  adapterName: 'fixture-adapter',
+});
+const lossRoute = await lossSession.registerRoute({ routeId: 'loss-route' });
+await assert.rejects(
+  () => lossRoute.loadModelResources({ manifest: magicManifest, bundle: magicBundle }),
+  /device-lost|invalidated|lost-during-create/i,
+);
+await lossSession.deviceLost;
+await lossSession.resourceFactory.drain();
+assert.equal(lossSession.resourceFactory.snapshot().flights[0].status, 'invalidated');
+assert.equal(lossBufferDestroyCount, 1, 'managed model buffer rejected by invalidation must be destroyed exactly once');
 
 console.log('model resource manifest contracts passed');
