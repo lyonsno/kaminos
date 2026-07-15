@@ -23,6 +23,9 @@ const SCALAR_ACTIVITY_CUE_APPLICATION = 'learned-fire-flow-visibility-carrier-v0
 const BOUNDARY_SPLAT_DISPLACEMENT_SCHEMA = 'kaminos.volume.boundary-splat-displacement-probe.v0';
 const BOUNDARY_SPLAT_DISPLACEMENT_AUTHORITY = 'validation-selected-vacancy-gated-offset-class-grid-v0';
 const BOUNDARY_SPLAT_DISPLACEMENT_APPLICATION = 'render-only-vacancy-gated-one-cell-splat-displacement-v0';
+const BOUNDARY_SPLAT_SURVIVAL_SCHEMA = 'kaminos.volume.boundary-splat-survival-probe.v0';
+const BOUNDARY_SPLAT_SURVIVAL_AUTHORITY = 'validation-selected-candidate-survival-mask-v0';
+const BOUNDARY_SPLAT_SURVIVAL_APPLICATION = 'survival-only-remove-rejected-low-candidates-v0';
 const SCALAR_ACTIVITY_CUE_AUTHORITIES = new Set([
   'exact-high-field-renderer-coupled-derived-target-v0',
   'native-low-derived-then-nearest-upsampled-control-v0',
@@ -58,6 +61,9 @@ const scalarActivityCueManifestPath = args.has('--scalar-activity-cue-manifest')
 const scalarActivityCueRole = args.has('--scalar-activity-cue-role') ? String(args.get('--scalar-activity-cue-role')) : null;
 const boundarySplatDisplacementManifestPath = args.has('--boundary-splat-displacement-manifest')
   ? resolve(String(args.get('--boundary-splat-displacement-manifest')))
+  : null;
+const boundarySplatSurvivalManifestPath = args.has('--boundary-splat-survival-manifest')
+  ? resolve(String(args.get('--boundary-splat-survival-manifest')))
   : null;
 const renderPngPath = args.has('--render-png') ? resolve(String(args.get('--render-png'))) : null;
 const renderOnly = args.has('--render-only');
@@ -324,6 +330,91 @@ function resolveBoundarySplatDisplacementManifest() {
     manifestPath: boundarySplatDisplacementManifestPath,
     manifestSha256: sha256(raw),
     role: 'globalVacancyGatedOffsetClass',
+    grid,
+    path,
+    sha256: artifact.sha256,
+    actualSha256,
+    byteLength: expectedByteLength,
+    channelOrder: artifact.channelOrder,
+    cueAuthority: artifact.authority,
+  };
+}
+
+function resolveBoundarySplatSurvivalManifest(initialField) {
+  if (!boundarySplatSurvivalManifestPath) return null;
+  if (scalarActivityCueManifestPath || scalarActivityCueRole || boundarySplatDisplacementManifestPath) {
+    throw new Error('--boundary-splat-survival-manifest cannot be combined with another scalar cue manifest');
+  }
+  const raw = readFileSync(boundarySplatSurvivalManifestPath, 'utf8');
+  const manifest = JSON.parse(raw);
+  if (manifest.schema !== BOUNDARY_SPLAT_SURVIVAL_SCHEMA
+    || manifest.status !== 'captured'
+    || manifest.failurePhase !== null) {
+    throw new Error(`unsupported boundary splat survival manifest: ${manifest.schema || '(missing)'}/${manifest.status || '(missing)'}`);
+  }
+  if (manifest.checkpoint?.replay?.status !== 'source-target-bound-verified'
+    || manifest.checkpoint?.replay?.sourceBindingParity !== true
+    || manifest.checkpoint?.replay?.targetBindingParity !== true
+    || manifest.checkpoint?.replay?.thresholdParity !== true
+    || manifest.checkpoint?.replay?.probabilityParity !== true
+    || manifest.checkpoint?.replay?.keepMaskParity !== true) {
+    throw new Error('boundary splat survival checkpoint replay contract mismatch');
+  }
+  const lowManifestPath = resolve(String(manifest.source?.lowManifest?.path || ''));
+  const lowManifestRaw = readFileSync(lowManifestPath);
+  const lowManifestSha256 = sha256(lowManifestRaw);
+  if (lowManifestSha256 !== manifest.source?.lowManifest?.sha256) {
+    throw new Error(`boundary splat survival low-manifest SHA-256 mismatch: ${lowManifestSha256}/${manifest.source?.lowManifest?.sha256}`);
+  }
+  const lowManifest = JSON.parse(lowManifestRaw.toString('utf8'));
+  const boundInitialFieldSha256 = lowManifest.initialFieldImport?.requested?.manifestSha256;
+  if (lowManifest.schema !== MANIFEST_SCHEMA
+    || lowManifest.status !== 'captured'
+    || lowManifest.failurePhase !== null
+    || !initialField
+    || boundInitialFieldSha256 !== initialField.manifestSha256) {
+    throw new Error(`boundary splat survival source field mismatch: ${boundInitialFieldSha256 || '(missing)'}/${initialField?.manifestSha256 || '(missing)'}`);
+  }
+  const artifact = manifest.denseOutputs?.boundarySplatSurvivalMask;
+  const shape = artifact?.shape;
+  const grid = Number(shape?.[0]);
+  if (!Number.isInteger(grid) || JSON.stringify(shape) !== JSON.stringify([grid, grid, grid, 1])) {
+    throw new Error(`boundary splat survival shape mismatch: ${JSON.stringify(shape)}`);
+  }
+  if (JSON.stringify(artifact.channelOrder) !== JSON.stringify(['boundarySplatSurvivalMask'])) {
+    throw new Error('boundary splat survival channel order mismatch');
+  }
+  if (artifact.authority !== BOUNDARY_SPLAT_SURVIVAL_AUTHORITY
+    || artifact.applicationIdentity !== BOUNDARY_SPLAT_SURVIVAL_APPLICATION
+    || artifact.candidateMutationPolicy !== 'keep-or-remove only; no birth, move, or attribute mutation') {
+    throw new Error('boundary splat survival authority or mutation policy mismatch');
+  }
+  const path = resolve(String(artifact.path || ''));
+  const expectedByteLength = grid * grid * grid * Float32Array.BYTES_PER_ELEMENT;
+  if (Number(artifact.byteLength) !== expectedByteLength || statSync(path).size !== expectedByteLength) {
+    throw new Error(`boundary splat survival byte length mismatch: ${artifact.byteLength}/${statSync(path).size}/${expectedByteLength}`);
+  }
+  const actualSha256 = sha256File(path);
+  if (actualSha256 !== artifact.sha256 || manifest.checkpoint.replay.outputSha256 !== artifact.sha256) {
+    throw new Error(`boundary splat survival SHA-256 mismatch: ${actualSha256}/${artifact.sha256}/${manifest.checkpoint.replay.outputSha256}`);
+  }
+  const maskBytes = readFileSync(path);
+  for (let byteOffset = 0; byteOffset < maskBytes.byteLength; byteOffset += Float32Array.BYTES_PER_ELEMENT) {
+    const value = maskBytes.readFloatLE(byteOffset);
+    if (!Number.isFinite(value) || (value !== 0 && value !== 1)) {
+      throw new Error(`boundary splat survival mask must contain finite binary values: offset=${byteOffset} value=${value}`);
+    }
+  }
+  return {
+    applicationIdentity: BOUNDARY_SPLAT_SURVIVAL_APPLICATION,
+    manifestPath: boundarySplatSurvivalManifestPath,
+    manifestSha256: sha256(raw),
+    sourceBinding: {
+      lowManifestPath,
+      lowManifestSha256,
+      initialFieldManifestSha256: boundInitialFieldSha256,
+    },
+    role: 'validationSelectedCandidateSurvivalMask',
     grid,
     path,
     sha256: artifact.sha256,
@@ -638,6 +729,7 @@ async function main() {
   let scalarActivityCue = null;
   let scalarActivityCueImport = null;
   let boundarySplatDisplacement = null;
+  let boundarySplatSurvival = null;
   const renderWarmups = [];
   let renderControlOverrides = {};
   let browserSession = null;
@@ -660,7 +752,8 @@ async function main() {
     phase = 'source-capture-validation';
     initialField = resolveInitialFieldManifest();
     boundarySplatDisplacement = resolveBoundarySplatDisplacementManifest();
-    scalarActivityCue = boundarySplatDisplacement || resolveScalarActivityCueManifest();
+    boundarySplatSurvival = resolveBoundarySplatSurvivalManifest(initialField);
+    scalarActivityCue = boundarySplatSurvival || boundarySplatDisplacement || resolveScalarActivityCueManifest();
     if (initialField && !args.has('--advance-imported-steps')) {
       throw new Error('--initial-field-manifest requires explicit --advance-imported-steps, including 0 for a held control');
     }
@@ -674,7 +767,27 @@ async function main() {
     if (renderOnly && (!initialField || !renderPngPath)) {
       throw new Error('--render-only requires --initial-field-manifest and --render-png');
     }
-    if (boundarySplatDisplacement) {
+    if (boundarySplatSurvival) {
+      if (!renderOnly || !initialField || advanceImportedSteps !== 0) {
+        throw new Error('boundary splat survival assay requires --render-only, --initial-field-manifest, and --advance-imported-steps 0');
+      }
+      if (renderComposition === 'raymarch-only-v0') {
+        throw new Error('boundary splat survival assay requires a splat render composition');
+      }
+      renderControlOverrides = {
+        ...renderControlOverrides,
+        oracleActivityCue: 0,
+        oracleActivityDisplay: 0,
+        oracleActivityCurlNoise: 0,
+        oracleActivityVorticity: 0,
+        oracleActivityMaterial: 0,
+        oracleActivityFireDetail: 0,
+        oracleActivitySplatOpacity: 0,
+        oracleActivitySplatRadiusConcentration: 0,
+        oracleActivitySplatDisplacement: 0,
+        oracleActivitySplatSurvival: 1,
+      };
+    } else if (boundarySplatDisplacement) {
       if (!renderOnly || !initialField || advanceImportedSteps !== 0) {
         throw new Error('boundary splat displacement assay requires --render-only, --initial-field-manifest, and --advance-imported-steps 0');
       }
@@ -1009,6 +1122,20 @@ async function main() {
               })}`);
             }
           }
+          if (boundarySplatSurvival) {
+            const requestedSurvival = Number(renderControlOverrides.oracleActivitySplatSurvival || 0);
+            if (
+              renderReceipt.oracleActivitySplatSurvivalRequested !== requestedSurvival
+              || renderReceipt.oracleActivitySplatSurvivalEffective !== requestedSurvival
+              || renderReceipt.oracleActivitySplatSurvivalApplicationIdentity !== BOUNDARY_SPLAT_SURVIVAL_APPLICATION
+            ) {
+              throw new Error(`boundary-splat-survival-gain-mismatch: requested=${requestedSurvival} receipt=${JSON.stringify({
+                oracleActivitySplatSurvivalRequested: renderReceipt.oracleActivitySplatSurvivalRequested,
+                oracleActivitySplatSurvivalEffective: renderReceipt.oracleActivitySplatSurvivalEffective,
+                oracleActivitySplatSurvivalApplicationIdentity: renderReceipt.oracleActivitySplatSurvivalApplicationIdentity,
+              })}`);
+            }
+          }
         }
         phase = 'post-render-canvas-geometry';
         const postRenderCanvasMount = await evaluateByValue(ws, `(() => {
@@ -1227,6 +1354,7 @@ async function main() {
       requestedScalarActivityCueManifest: scalarActivityCueManifestPath,
       requestedScalarActivityCueRole: scalarActivityCueRole,
       requestedBoundarySplatDisplacementManifest: boundarySplatDisplacementManifestPath,
+      requestedBoundarySplatSurvivalManifest: boundarySplatSurvivalManifestPath,
       initialFieldImport,
       importedAdvance,
       scalarActivityCueImport,

@@ -43,6 +43,8 @@ const TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY = 'truth-high-diagnostic-activity-proj
 const FIRE_FLOW_VISIBILITY_CARRIER_APPLICATION_IDENTITY = 'learned-fire-flow-visibility-carrier-v0';
 const BOUNDARY_SPLAT_DISPLACEMENT_CUE_AUTHORITY = 'validation-selected-vacancy-gated-offset-class-grid-v0';
 const BOUNDARY_SPLAT_DISPLACEMENT_APPLICATION_IDENTITY = 'render-only-vacancy-gated-one-cell-splat-displacement-v0';
+const BOUNDARY_SPLAT_SURVIVAL_CUE_AUTHORITY = 'validation-selected-candidate-survival-mask-v0';
+const BOUNDARY_SPLAT_SURVIVAL_APPLICATION_IDENTITY = 'survival-only-remove-rejected-low-candidates-v0';
 const SCALAR_ACTIVITY_CUE_AUTHORITIES = new Set([
   TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
   'exact-high-field-renderer-coupled-derived-target-v0',
@@ -56,9 +58,13 @@ const SCALAR_ACTIVITY_CUE_AUTHORITIES = new Set([
   'frozen-earlier-replay-source-selected-gate-derived-carrier-v0',
   'frozen-earlier-replay-constant-residual-scale-derived-carrier-v0',
   BOUNDARY_SPLAT_DISPLACEMENT_CUE_AUTHORITY,
+  BOUNDARY_SPLAT_SURVIVAL_CUE_AUTHORITY,
 ]);
 
 function scalarActivityCueChannelOrderForAuthority(cueAuthority) {
+  if (cueAuthority === BOUNDARY_SPLAT_SURVIVAL_CUE_AUTHORITY) {
+    return ['boundarySplatSurvivalMask'];
+  }
   if (cueAuthority === BOUNDARY_SPLAT_DISPLACEMENT_CUE_AUTHORITY) {
     return ['boundarySplatOffsetClassNormalized'];
   }
@@ -546,7 +552,8 @@ function clampFinite(value, min, max, fallback) {
   return Math.max(min, Math.min(max, number));
 }
 
-function normalizeScalarActivityReceiverControls(snapshot = {}) {
+function normalizeScalarActivityReceiverControls(snapshot = {}, cueAuthority = null) {
+  const survivalOnly = cueAuthority === BOUNDARY_SPLAT_SURVIVAL_CUE_AUTHORITY;
   return {
     enabled: clampFinite(snapshot.oracleActivityCue, 0, 1, 0),
     display: clampFinite(snapshot.oracleActivityDisplay, 0, 1, 0),
@@ -554,9 +561,10 @@ function normalizeScalarActivityReceiverControls(snapshot = {}) {
     vorticityGain: clampFinite(snapshot.oracleActivityVorticity, 0, 3, 0),
     materialGain: clampFinite(snapshot.oracleActivityMaterial, 0, 3, 0),
     fireDetailGain: clampFinite(snapshot.oracleActivityFireDetail, -2, 2, 0),
-    splatOpacityGain: clampFinite(snapshot.oracleActivitySplatOpacity, -2, 2, 0),
-    splatRadiusConcentrationGain: clampFinite(snapshot.oracleActivitySplatRadiusConcentration, -2, 2, 0),
-    splatDisplacementEnabled: clampFinite(snapshot.oracleActivitySplatDisplacement, 0, 1, 0),
+    splatOpacityGain: survivalOnly ? 0 : clampFinite(snapshot.oracleActivitySplatOpacity, -2, 2, 0),
+    splatRadiusConcentrationGain: survivalOnly ? 0 : clampFinite(snapshot.oracleActivitySplatRadiusConcentration, -2, 2, 0),
+    splatDisplacementEnabled: survivalOnly ? 0 : clampFinite(snapshot.oracleActivitySplatDisplacement, 0, 1, 0),
+    splatSurvivalEnabled: survivalOnly ? clampFinite(snapshot.oracleActivitySplatSurvival, 0, 1, 0) : 0,
   };
 }
 
@@ -5029,6 +5037,11 @@ fn boundarySplatDecodedOffset(cell: vec3<u32>) -> vec3<i32> {
   return vec3<i32>(dx, dy, dz);
 }
 
+fn boundarySplatSurvives(cell: vec3<u32>) -> bool {
+  if (boundarySplatCamera.activityControls.w < 0.5) { return true; }
+  return scalarActivityCue[boundarySplatCellIndex(cell)] >= 0.5;
+}
+
 fn boundarySplatAttributeFeatures(
   sidecar: vec4<f32>,
   material: vec4<f32>,
@@ -5083,6 +5096,7 @@ fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
   let fireSignal = fire.x * 1.25 + fire.z * 0.52 + fire.w * 0.86 + micro.z * 0.72 + material.y * 0.24;
   let structuralSignal = sidecar.z * smoothstep(0.055, 0.32, sidecar.y) * smoothstep(0.018, 0.16, fireSignal);
   if (structuralSignal < 0.11) { return; }
+  if (!boundarySplatSurvives(gid)) { return; }
   let candidateIndex = atomicAdd(&boundarySplatDraw.candidateCount, 1u);
   if (candidateIndex >= boundarySplatDraw.capacity) {
     atomicAdd(&boundarySplatDraw.overflowCount, 1u);
@@ -5931,15 +5945,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function scalarActivityReceiverDebug() {
-    const controls = normalizeScalarActivityReceiverControls(controlsSnapshot);
     const externalCueActive = oracleActivityCueUpload.status === 'uploaded' && oracleActivityCueUpload.externalCueCellCount > 0;
+    const effectiveCueAuthority = externalCueActive ? oracleActivityCueUpload.effectiveCueAuthority : PROCEDURAL_ACTIVITY_CUE_AUTHORITY;
+    const controls = normalizeScalarActivityReceiverControls(controlsSnapshot, effectiveCueAuthority);
     return {
       identity: TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY,
       hookIdentity: SCALAR_ACTIVITY_RECEIVER_HOOK_IDENTITY,
       applicationIdentity: oracleActivityCueUpload.applicationIdentity || null,
       displayIdentity: SCALAR_ACTIVITY_CUE_DISPLAY_IDENTITY,
       requestedCueAuthority: oracleActivityCueUpload.requestedCueAuthority,
-      effectiveCueAuthority: externalCueActive ? oracleActivityCueUpload.effectiveCueAuthority : PROCEDURAL_ACTIVITY_CUE_AUTHORITY,
+      effectiveCueAuthority,
       enabled: controls.enabled,
       display: controls.display,
       curlNoiseGain: controls.curlNoiseGain,
@@ -7489,8 +7504,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       splatCamera.set([cameraMatrix[0], cameraMatrix[1], cameraMatrix[2], 0], 16);
       splatCamera.set([cameraMatrix[4], cameraMatrix[5], cameraMatrix[6], 0], 20);
       splatCamera.set([normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius), boundarySplatLearnedAttributesRequested() ? 1 : 0, state.boundarySplatFeatureCaptureEffective ? 1 : 0, normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness)], 24);
-      const scalarActivityReceiver = normalizeScalarActivityReceiverControls(controlsSnapshot);
-      splatCamera.set([scalarActivityReceiver.splatOpacityGain, scalarActivityReceiver.splatRadiusConcentrationGain, scalarActivityReceiver.splatDisplacementEnabled, 0], 28);
+      const scalarActivityReceiver = normalizeScalarActivityReceiverControls(controlsSnapshot, oracleActivityCueUpload.effectiveCueAuthority);
+      splatCamera.set([scalarActivityReceiver.splatOpacityGain, scalarActivityReceiver.splatRadiusConcentrationGain, scalarActivityReceiver.splatDisplacementEnabled, scalarActivityReceiver.splatSurvivalEnabled], 28);
       device.queue.writeBuffer(boundarySplatCameraBuffer, 0, splatCamera);
     }
     const { renderPhaseTimeMs, renderPhaseFrame } = updateRenderPhaseState(now, state, lookFreeze);
@@ -7796,7 +7811,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[313] = 0;
     uniforms[314] = 0;
     uniforms[315] = 0;
-    const scalarActivityReceiver = normalizeScalarActivityReceiverControls(controlsSnapshot);
+    const scalarActivityReceiver = normalizeScalarActivityReceiverControls(controlsSnapshot, oracleActivityCueUpload.effectiveCueAuthority);
     const externalCueActive = oracleActivityCueUpload.status === 'uploaded' && oracleActivityCueUpload.externalCueCellCount > 0;
     uniforms[316] = scalarActivityReceiver.enabled;
     uniforms[317] = scalarActivityReceiver.curlNoiseGain;
@@ -11961,6 +11976,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const oracleActivitySplatDisplacementRequested = Object.hasOwn(controlOverrides, 'oracleActivitySplatDisplacement')
       ? Number(controlOverrides.oracleActivitySplatDisplacement)
       : 0;
+    const oracleActivitySplatSurvivalRequested = Object.hasOwn(controlOverrides, 'oracleActivitySplatSurvival')
+      ? Number(controlOverrides.oracleActivitySplatSurvival)
+      : 0;
     const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
     const sameStateCaptureId = options.sameStateCaptureId ? String(options.sameStateCaptureId) : null;
     const baseFrameCount = Number.isFinite(Number(options.baseFrameCount)) ? Number(options.baseFrameCount) : state.frameCount;
@@ -11971,10 +11989,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         ...controlOverrides,
         renderScale,
       });
-      const oracleActivityFireDetailEffective = normalizeScalarActivityReceiverControls(controlsSnapshot).fireDetailGain;
-      const oracleActivitySplatOpacityEffective = normalizeScalarActivityReceiverControls(controlsSnapshot).splatOpacityGain;
-      const oracleActivitySplatRadiusConcentrationEffective = normalizeScalarActivityReceiverControls(controlsSnapshot).splatRadiusConcentrationGain;
-      const oracleActivitySplatDisplacementEffective = normalizeScalarActivityReceiverControls(controlsSnapshot).splatDisplacementEnabled;
+      const scalarActivityReceiver = normalizeScalarActivityReceiverControls(controlsSnapshot, oracleActivityCueUpload.effectiveCueAuthority);
+      const oracleActivityFireDetailEffective = scalarActivityReceiver.fireDetailGain;
+      const oracleActivitySplatOpacityEffective = scalarActivityReceiver.splatOpacityGain;
+      const oracleActivitySplatRadiusConcentrationEffective = scalarActivityReceiver.splatRadiusConcentrationGain;
+      const oracleActivitySplatDisplacementEffective = scalarActivityReceiver.splatDisplacementEnabled;
+      const oracleActivitySplatSurvivalEffective = scalarActivityReceiver.splatSurvivalEnabled;
       resetTemporalHistory('same-state-render-scale-canvas-capture');
       updateUniforms(fixedNow);
       const encoder = device.createCommandEncoder({ label: 'kaminos frozen render-scale canvas capture' });
@@ -12172,6 +12192,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         oracleActivitySplatDisplacementRequested,
         oracleActivitySplatDisplacementEffective,
         oracleActivitySplatDisplacementApplicationIdentity: 'render-only-vacancy-gated-one-cell-splat-displacement-v0',
+        oracleActivitySplatSurvivalRequested,
+        oracleActivitySplatSurvivalEffective,
+        oracleActivitySplatSurvivalApplicationIdentity: 'survival-only-remove-rejected-low-candidates-v0',
         boundarySplatCompositionRequestedRaw,
         boundarySplatCompositionRequested,
         boundarySplatCompositionEffective,

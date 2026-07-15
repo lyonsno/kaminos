@@ -690,13 +690,13 @@ assert.match(
 );
 assert.match(
   core,
-  /splatOpacityGain:\s*clampFinite\(snapshot\.oracleActivitySplatOpacity,\s*-2,\s*2,\s*0\)/,
-  'render-only scalar activity splat opacity gain is signed, bounded, and inert by default',
+  /splatOpacityGain:\s*survivalOnly\s*\?\s*0\s*:\s*clampFinite\(snapshot\.oracleActivitySplatOpacity,\s*-2,\s*2,\s*0\)/,
+  'render-only scalar activity splat opacity gain is signed, bounded, inert by default, and disabled for survival-only authority',
 );
 assert.match(
   core,
-  /splatRadiusConcentrationGain:\s*clampFinite\(snapshot\.oracleActivitySplatRadiusConcentration,\s*-2,\s*2,\s*0\)/,
-  'render-only scalar activity splat radius concentration is signed, bounded, and inert by default',
+  /splatRadiusConcentrationGain:\s*survivalOnly\s*\?\s*0\s*:\s*clampFinite\(snapshot\.oracleActivitySplatRadiusConcentration,\s*-2,\s*2,\s*0\)/,
+  'render-only scalar activity splat radius concentration is signed, bounded, inert by default, and disabled for survival-only authority',
 );
 assert.match(
   core,
