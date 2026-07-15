@@ -15,6 +15,21 @@ assert.match(source, /unsupported births are excluded from all three roles/i, 'g
 assert.doesNotMatch(source, /-stream_loop/, 'encoding must not loop frames or clips');
 assert.doesNotMatch(source, /slice\(0,\s*\d+\)/, 'witness must not silently cap the temporal sequence');
 
+const sortedRoleAuthorities = {
+  control: 'oracle-support-carried-donor-control-v0',
+  predicted: 'frozen-destination-state-one-step-on-oracle-support-v0',
+  reference: 'exact-heldout-valid-local-donor-support-v0',
+};
+assert.doesNotThrow(
+  () => witness.validateRoleAuthorities(sortedRoleAuthorities),
+  'JSON key sorting must not invalidate structurally exact role authority',
+);
+assert.throws(
+  () => witness.validateRoleAuthorities({ ...sortedRoleAuthorities, predicted: 'copied-control' }),
+  /role authority mismatch/,
+  'role authority substitution must still fail',
+);
+
 assert.equal(witness.detectExactPeriod(['a', 'b', 'a', 'b']), 2, 'exact periodic replay must be detected');
 assert.equal(witness.detectExactPeriod(['a', 'b', 'c', 'd']), null, 'nonrepeating bounded motion must remain nonperiodic evidence');
 

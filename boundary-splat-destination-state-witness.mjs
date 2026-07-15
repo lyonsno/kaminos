@@ -201,13 +201,22 @@ function aggregateSupportAccounting(pairs) {
   return Object.fromEntries(fields.map(field => [field, pairs.reduce((sum, pair) => sum + Number(pair.supportAccounting?.[field] || 0), 0)]));
 }
 
+export function validateRoleAuthorities(roles) {
+  if (
+    !roles
+    || typeof roles !== 'object'
+    || Array.isArray(roles)
+    || Object.keys(roles).length !== Object.keys(ROLE_AUTHORITIES).length
+    || Object.entries(ROLE_AUTHORITIES).some(([role, authority]) => roles[role] !== authority)
+  ) throw new Error('destination-state role authority mismatch');
+  return roles;
+}
+
 function validateEvaluation(evaluation, evaluationBytes) {
   if (evaluation?.schema !== EVALUATION_SCHEMA || evaluation.status !== 'completed') {
     throw new Error('destination-state evaluation schema/status mismatch');
   }
-  if (JSON.stringify(evaluation.roles) !== JSON.stringify(ROLE_AUTHORITIES)) {
-    throw new Error('destination-state role authority mismatch');
-  }
+  validateRoleAuthorities(evaluation.roles);
   if (
     evaluation.route?.backend !== 'mlx'
     || !/^Device\(gpu,\s*\d+\)$/i.test(String(evaluation.route?.device))
