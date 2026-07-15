@@ -26,6 +26,8 @@ assert.match(source, /boundarySplatOffsetClassNormalized/, 'probe emits a render
 assert.match(source, /global-vacancy-election-then-role-slice-v0/, 'probe evaluates every role from one deployment-identical global vacancy election');
 assert.match(source, /source-fire-active-best-noncenter-proposal-v0/, 'probe can admit fire-active non-center proposals even when center has the highest probability');
 assert.match(source, /two-cell-125-class-offset-v0/, 'probe gives radius-two labels a distinct identity and class contract');
+assert.match(source, /factorized-coarse-residual-two-head-v0/, 'probe names the factorized radius-two head policy');
+assert.match(source, /factorized-two-cell-two-head-offset-v0/, 'probe gives factorized radius-two output a distinct identity');
 assert.match(source, /postOffsetUniqueOverlap/, 'probe reports collision-aware unique support overlap');
 assert.match(source, /duplicateDestinationCount/, 'probe reports candidate collapse explicitly');
 assert.match(source, /failurePhase/, 'probe writes durable failure-phase reports');
@@ -115,6 +117,63 @@ assert.ok(radiusTwoContract.split.testRows > 0);
 assert.ok(radiusTwoContract.split.validationRows > 0);
 assert.ok(radiusTwoContract.split.trainRows > 0);
 
+const factorizationContractRun = spawnSync('python3', ['-c', `
+import importlib.util
+import json
+import numpy as np
+spec = importlib.util.spec_from_file_location("displacement_probe", ${JSON.stringify(probePath)})
+probe = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(probe)
+probe.configure_offset_radius(2)
+classes = np.arange(probe.CLASS_COUNT, dtype=np.int64)
+coarse, residual, receipt = probe.factorize_offset_labels(classes)
+reconstructed = probe.compose_factorized_classes(coarse, residual)
+coarse_probabilities = np.eye(probe.FACTORIZED_HEAD_CLASS_COUNT, dtype=np.float32)[coarse]
+residual_probabilities = np.eye(probe.FACTORIZED_HEAD_CLASS_COUNT, dtype=np.float32)[residual]
+joint = probe.factorized_offset_probabilities(coarse_probabilities, residual_probabilities)
+uniform_head = np.full((1, probe.FACTORIZED_HEAD_CLASS_COUNT), 1.0 / probe.FACTORIZED_HEAD_CLASS_COUNT, dtype=np.float32)
+uniform_joint = probe.factorized_offset_probabilities(uniform_head, uniform_head)
+probe.configure_model_head_policy(probe.FACTORIZED_MODEL_HEAD_POLICY)
+factorized_identities = [probe.IDENTITY, probe.MLP_IDENTITY, probe.GATED_MLP_IDENTITY]
+probe.configure_model_head_policy(probe.FLAT_MODEL_HEAD_POLICY)
+flat_identities = [probe.IDENTITY, probe.MLP_IDENTITY, probe.GATED_MLP_IDENTITY]
+print(json.dumps({
+    "receipt": receipt,
+    "reconstructed": reconstructed.tolist(),
+    "argmax": np.argmax(joint, axis=1).astype(np.int64).tolist(),
+    "rowSums": np.sum(joint, axis=1).tolist(),
+    "uniformJoint": uniform_joint[0].tolist(),
+    "uniformJointRowSum": float(np.sum(uniform_joint[0])),
+    "factorizedIdentities": factorized_identities,
+    "flatIdentities": flat_identities,
+}))
+`], { encoding: 'utf8' });
+assert.equal(factorizationContractRun.status, 0, `factorized offset contract succeeds: ${factorizationContractRun.stderr}`);
+const factorizationContract = JSON.parse(factorizationContractRun.stdout);
+assert.equal(factorizationContract.receipt.identity, 'factorized-coarse-residual-two-head-v0');
+assert.equal(factorizationContract.receipt.headClassCount, 27);
+assert.equal(factorizationContract.receipt.headCenterClass, 13);
+assert.equal(factorizationContract.receipt.offsetClassCount, 125);
+assert.equal(factorizationContract.receipt.exactReconstruction, true);
+assert.deepEqual(factorizationContract.reconstructed, Array.from({ length: 125 }, (_, index) => index));
+assert.deepEqual(factorizationContract.argmax, factorizationContract.reconstructed);
+assert.ok(factorizationContract.rowSums.every(value => Math.abs(value - 1) < 1e-6));
+assert.ok(Math.abs(factorizationContract.uniformJointRowSum - 1) < 1e-6);
+assert.ok(
+  factorizationContract.uniformJoint.every(value => Math.abs(value - (1 / 125)) < 1e-6),
+  'canonical factorized projection renormalizes discarded noncanonical probability mass',
+);
+assert.deepEqual(factorizationContract.factorizedIdentities, [
+  'factorized-two-cell-two-head-offset-v0',
+  'factorized-two-softmax-mlp-offset-v0',
+  'factorized-two-softmax-mlp-vacancy-gated-offset-v0',
+]);
+assert.deepEqual(factorizationContract.flatIdentities, [
+  'two-cell-125-class-offset-v0',
+  'tiny-softmax-mlp-offset-v0',
+  'tiny-softmax-mlp-vacancy-gated-offset-v0',
+]);
+
 const fixtureRoot = mkdtempSync(join(tmpdir(), 'kaminos-boundary-splat-displacement-'));
 const grid = 8;
 const cells = grid ** 3;
@@ -200,25 +259,26 @@ const lowBoundaryDesc = writeF32('low-boundary.f32', lowBoundary);
 const lowSplatDesc = writeF32('low-splats.f32', splatRows(lowIndexes));
 const highSplatDesc = writeF32('high-splats.f32', splatRows(highIndexes));
 
-function manifest(path, identity, fluid, front, boundary, splats) {
+function manifest(path, identity, fluid, front, boundary, splats, manifestGrid = grid) {
+  const manifestCells = manifestGrid ** 3;
   writeFileSync(path, `${JSON.stringify({
     schema: 'kaminos.volume.full-grid-field-export.v0',
     identity,
     status: 'captured',
     failurePhase: null,
-    grid,
-    cellCount: cells,
+    grid: manifestGrid,
+    cellCount: manifestCells,
     completeFieldCoverage: true,
     effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
     backend: 'WebGPU:fixture',
     sourceCapture: { payloadSha256: 'a'.repeat(64), hashMatches: true },
     sidecars: {
-      fluid: { ...fluid, shape: [grid, grid, grid, 16] },
-      front: { ...front, shape: [grid, grid, grid, 1] },
+      fluid: { ...fluid, shape: [manifestGrid, manifestGrid, manifestGrid, 16] },
+      front: { ...front, shape: [manifestGrid, manifestGrid, manifestGrid, 1] },
     },
     boundarySidecar: {
       authority: 'band-limited-support-coverage-ridge-proximity-footprint-v1',
-      sidecars: { boundary: { ...boundary, shape: [grid, grid, grid, 4] } },
+      sidecars: { boundary: { ...boundary, shape: [manifestGrid, manifestGrid, manifestGrid, 4] } },
     },
     boundarySplats: {
       identity: 'live-boundary-sidecar-learned-attribute-splats-v0',
@@ -329,6 +389,19 @@ const displacementValues = new Float32Array(
 );
 assert.ok(displacementValues.every(value => Number.isFinite(value) && value >= 0 && value <= 1));
 assert.ok(existsSync(join(outDir, 'displacement-model.npz')), 'probe persists the fitted displacement model');
+const flatCheckpointContractRun = spawnSync('python3', ['-c', `
+import json
+import numpy as np
+with np.load(${JSON.stringify(join(outDir, 'displacement-model.npz'))}, allow_pickle=False) as checkpoint:
+    print(json.dumps({"keys": sorted(checkpoint.files), "modelHeadPolicy": str(checkpoint["modelHeadPolicy"][0])}))
+`], { encoding: 'utf8' });
+assert.equal(flatCheckpointContractRun.status, 0, `flat checkpoint contract is readable: ${flatCheckpointContractRun.stderr}`);
+const flatCheckpointContract = JSON.parse(flatCheckpointContractRun.stdout);
+assert.equal(flatCheckpointContract.modelHeadPolicy, 'flat');
+for (const key of ['mlpW1', 'mlpB1', 'mlpW2', 'mlpB2']) {
+  assert.ok(flatCheckpointContract.keys.includes(key), `flat checkpoint retains legacy ${key}`);
+}
+assert.ok(!flatCheckpointContract.keys.includes('coarseMlpW1'), 'flat checkpoint does not require factorized head keys');
 
 const coverageOutDir = join(fixtureRoot, 'probe-maximum-coverage-positive-net');
 const coverageRun = spawnSync('python3', [
@@ -363,6 +436,126 @@ assert.ok(
 );
 assert.equal(coverageReport.checkpoint.replay.status, 'source-bound-verified');
 assert.equal(coverageReport.checkpoint.replay.classParity, true);
+
+const factorizedOutDir = join(fixtureRoot, 'probe-factorized-radius-two');
+const factorizedGrid = 20;
+const factorizedCells = factorizedGrid ** 3;
+const factorizedLowFluid = new Float32Array(factorizedCells * 16);
+const factorizedLowFront = new Float32Array(factorizedCells);
+const factorizedLowBoundary = new Float32Array(factorizedCells * 4);
+const factorizedLowIndexes = [];
+const factorizedHighIndexes = [];
+const factorizedIndex = (x, y, z) => x + y * factorizedGrid + z * factorizedGrid * factorizedGrid;
+for (const x of [2, 6, 10, 14]) {
+  for (let y = 1; y < factorizedGrid - 1; y += 1) {
+    for (let z = 1; z < factorizedGrid - 1; z += 1) {
+      const lowCell = factorizedIndex(x, y, z);
+      factorizedLowIndexes.push(lowCell);
+      const displacement = x % 8 === 2 ? 1 : 2;
+      factorizedHighIndexes.push(factorizedIndex(x + displacement, y, z));
+      const feature = (x + y + z) / (factorizedGrid * 3);
+      factorizedLowFluid[lowCell * 16 + 3] = feature;
+      factorizedLowFluid[lowCell * 16 + 5] = y / factorizedGrid;
+      factorizedLowFluid[lowCell * 16 + 8] = 0.3 + feature;
+      factorizedLowFluid[lowCell * 16 + 10] = z / factorizedGrid;
+      factorizedLowBoundary[lowCell * 4 + 0] = 1;
+      factorizedLowBoundary[lowCell * 4 + 1] = feature;
+      factorizedLowBoundary[lowCell * 4 + 2] = 0.7;
+      factorizedLowBoundary[lowCell * 4 + 3] = 0.5;
+    }
+  }
+}
+function factorizedSplatRows(indexes) {
+  const values = new Float32Array(indexes.length * 12);
+  indexes.forEach((cell, row) => {
+    const x = cell % factorizedGrid;
+    const y = Math.floor(cell / factorizedGrid) % factorizedGrid;
+    const z = Math.floor(cell / (factorizedGrid * factorizedGrid));
+    values[row * 12 + 0] = ((x + 0.5) / factorizedGrid) * 2 - 1;
+    values[row * 12 + 1] = ((y + 0.5) / factorizedGrid) * 2 - 1;
+    values[row * 12 + 2] = ((z + 0.5) / factorizedGrid) * 2 - 1;
+    values[row * 12 + 3] = 0.5;
+    values[row * 12 + 4] = 1;
+    values[row * 12 + 5] = 0.4;
+    values[row * 12 + 6] = 0.1;
+    values[row * 12 + 7] = 0.03;
+    values[row * 12 + 8] = 0.1;
+    values[row * 12 + 9] = 0.12;
+    values[row * 12 + 10] = 0.6;
+    values[row * 12 + 11] = 0.7;
+  });
+  return values;
+}
+const factorizedFluidDesc = writeF32('factorized-low-fluid.f32', factorizedLowFluid);
+const factorizedFrontDesc = writeF32('factorized-low-front.f32', factorizedLowFront);
+const factorizedBoundaryDesc = writeF32('factorized-low-boundary.f32', factorizedLowBoundary);
+const factorizedLowSplatDesc = writeF32('factorized-low-splats.f32', factorizedSplatRows(factorizedLowIndexes));
+const factorizedHighSplatDesc = writeF32('factorized-high-splats.f32', factorizedSplatRows(factorizedHighIndexes));
+const factorizedLowManifest = join(fixtureRoot, 'factorized-low.json');
+const factorizedHighManifest = join(fixtureRoot, 'factorized-high.json');
+manifest(
+  factorizedLowManifest,
+  'factorized-displacement-low-fixture',
+  factorizedFluidDesc,
+  factorizedFrontDesc,
+  factorizedBoundaryDesc,
+  factorizedLowSplatDesc,
+  factorizedGrid,
+);
+manifest(
+  factorizedHighManifest,
+  'factorized-displacement-high-fixture',
+  factorizedFluidDesc,
+  factorizedFrontDesc,
+  factorizedBoundaryDesc,
+  factorizedHighSplatDesc,
+  factorizedGrid,
+);
+const factorizedRun = spawnSync('python3', [
+  probePath,
+  '--low-manifest', factorizedLowManifest,
+  '--high-manifest', factorizedHighManifest,
+  '--out-dir', factorizedOutDir,
+  '--spatial-block-size', '7',
+  '--epochs', '10',
+  '--hidden-width', '16',
+  '--batch-size', '32',
+  '--seed', '9412',
+  '--offset-radius', '2',
+  '--model-head-policy', 'factorized-coarse-residual-two-head-v0',
+  '--move-gate-selection', 'maximum-coverage-positive-net',
+], { encoding: 'utf8' });
+assert.equal(factorizedRun.status, 0, `factorized radius-two fixture probe succeeds: ${factorizedRun.stderr}`);
+const factorizedReport = JSON.parse(readFileSync(join(factorizedOutDir, 'manifest.json'), 'utf8'));
+assert.equal(factorizedReport.identity, 'factorized-two-cell-two-head-offset-v0');
+assert.equal(factorizedReport.dataset.modelHeadPolicy, 'factorized-coarse-residual-two-head-v0');
+assert.equal(factorizedReport.dataset.offsetClassCount, 125);
+assert.equal(factorizedReport.dataset.factorization.headClassCount, 27);
+assert.equal(factorizedReport.dataset.factorization.headCenterClass, 13);
+assert.equal(factorizedReport.dataset.factorization.exactReconstruction, true);
+assert.ok(factorizedReport.dataset.offsetHistogram['1,0,0'] > 0);
+assert.ok(factorizedReport.dataset.offsetHistogram['2,0,0'] > 0);
+assert.equal(factorizedReport.models.mlp.identity, 'factorized-two-softmax-mlp-offset-v0');
+assert.equal(factorizedReport.models.mlp.training.heads.coarse.classCount, 27);
+assert.equal(factorizedReport.models.mlp.training.heads.residual.classCount, 27);
+assert.notDeepEqual(
+  factorizedReport.models.mlp.training.heads.coarse.labelClassHistogram,
+  factorizedReport.models.mlp.training.heads.residual.labelClassHistogram,
+  'end-to-end training evidence proves coarse and residual heads consumed distinct labels',
+);
+assert.equal(factorizedReport.models.mlpVacancyGated.all.duplicateDestinationCount, 0);
+assert.equal(factorizedReport.checkpoint.modelHeadPolicy, 'factorized-coarse-residual-two-head-v0');
+assert.equal(factorizedReport.checkpoint.replay.status, 'source-bound-verified');
+assert.equal(factorizedReport.checkpoint.replay.modelHeadPolicyParity, true);
+assert.equal(factorizedReport.checkpoint.replay.factorizedHeadContractParity, true);
+assert.equal(factorizedReport.checkpoint.replay.proposalReceiptParity, true);
+assert.equal(factorizedReport.checkpoint.replay.classParity, true);
+assert.equal(
+  factorizedReport.checkpoint.replay.outputSha256,
+  factorizedReport.denseOutputs.boundarySplatOffsetClass.sha256,
+);
+assert.equal(factorizedReport.denseOutputs.boundarySplatOffsetClass.offsetRadius, 2);
+assert.equal(factorizedReport.denseOutputs.boundarySplatOffsetClass.offsetClassCount, 125);
 
 const fireAdmissionOutDir = join(fixtureRoot, 'probe-source-fire-best-noncenter');
 const fireAdmissionRun = spawnSync('python3', [

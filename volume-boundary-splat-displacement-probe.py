@@ -37,6 +37,19 @@ ARGMAX_NONCENTER_PROPOSAL_IDENTITY = "argmax-noncenter-only-proposal-v0"
 FIRE_ACTIVE_BEST_NONCENTER_PROPOSAL_POLICY = "source-fire-active-best-noncenter"
 FIRE_ACTIVE_BEST_NONCENTER_PROPOSAL_IDENTITY = "source-fire-active-best-noncenter-proposal-v0"
 FIRE_ACTIVE_SELECTION_AUTHORITY = "source-field-fire-channel-positive-support-v0"
+FLAT_MODEL_HEAD_POLICY = "flat"
+FACTORIZED_MODEL_HEAD_POLICY = "factorized-coarse-residual-two-head-v0"
+FACTORIZED_IDENTITY = "factorized-two-cell-two-head-offset-v0"
+FACTORIZED_MLP_IDENTITY = "factorized-two-softmax-mlp-offset-v0"
+FACTORIZED_GATED_MLP_IDENTITY = "factorized-two-softmax-mlp-vacancy-gated-offset-v0"
+FACTORIZED_HEAD_OFFSETS = np.asarray([
+    (dx, dy, dz)
+    for dz in (-1, 0, 1)
+    for dy in (-1, 0, 1)
+    for dx in (-1, 0, 1)
+], dtype=np.int8)
+FACTORIZED_HEAD_CENTER_CLASS = 13
+FACTORIZED_HEAD_CLASS_COUNT = 27
 FEATURE_ORDER = [
     "sidecar.support", "sidecar.coverage", "sidecar.ridge", "sidecar.footprint",
     "material.smokeDensity", "material.heat", "material.fuel", "material.detail",
@@ -88,6 +101,94 @@ def configure_offset_radius(radius: int) -> None:
     CENTER_CLASS = int(center_rows[0])
     CLASS_COUNT = int(offsets.shape[0])
     OFFSET_RADIUS = radius
+
+
+def configure_model_head_policy(policy: str) -> None:
+    global IDENTITY, MLP_IDENTITY, GATED_MLP_IDENTITY
+    if policy == FLAT_MODEL_HEAD_POLICY:
+        IDENTITY = "one-cell-27-class-offset-v0" if OFFSET_RADIUS == 1 else "two-cell-125-class-offset-v0"
+        MLP_IDENTITY = "tiny-softmax-mlp-offset-v0"
+        GATED_MLP_IDENTITY = "tiny-softmax-mlp-vacancy-gated-offset-v0"
+        return
+    if policy != FACTORIZED_MODEL_HEAD_POLICY:
+        raise ProbeFailure("arguments", "unsupported model head policy", {"modelHeadPolicy": policy})
+    if OFFSET_RADIUS != 2:
+        raise ProbeFailure("arguments", "factorized heads require offset radius two", {
+            "modelHeadPolicy": policy,
+            "offsetRadius": OFFSET_RADIUS,
+        })
+    IDENTITY = FACTORIZED_IDENTITY
+    MLP_IDENTITY = FACTORIZED_MLP_IDENTITY
+    GATED_MLP_IDENTITY = FACTORIZED_GATED_MLP_IDENTITY
+
+
+def factorize_offset_labels(classes: np.ndarray) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
+    if OFFSET_RADIUS != 2 or CLASS_COUNT != 125:
+        raise ProbeFailure("dataset-construction", "factorized labels require the radius-two offset contract")
+    classes = np.asarray(classes, dtype=np.int64)
+    if np.any((classes < 0) | (classes >= CLASS_COUNT)):
+        raise ProbeFailure("dataset-construction", "factorized labels contain an invalid offset class")
+    offsets = OFFSETS[classes].astype(np.int8)
+    coarse_offsets = np.clip(offsets, -1, 1).astype(np.int8)
+    residual_offsets = (offsets - coarse_offsets).astype(np.int8)
+    head_lookup = {tuple(int(value) for value in offset): index for index, offset in enumerate(FACTORIZED_HEAD_OFFSETS.tolist())}
+    coarse = np.asarray([head_lookup[tuple(int(value) for value in offset)] for offset in coarse_offsets], dtype=np.int64)
+    residual = np.asarray([head_lookup[tuple(int(value) for value in offset)] for offset in residual_offsets], dtype=np.int64)
+    reconstructed = FACTORIZED_HEAD_OFFSETS[coarse] + FACTORIZED_HEAD_OFFSETS[residual]
+    exact = bool(np.array_equal(reconstructed.astype(np.int8), offsets))
+    if not exact:
+        raise ProbeFailure("dataset-construction", "factorized offset labels do not reconstruct exactly")
+    return coarse, residual, {
+        "identity": FACTORIZED_MODEL_HEAD_POLICY,
+        "headClassCount": FACTORIZED_HEAD_CLASS_COUNT,
+        "headCenterClass": FACTORIZED_HEAD_CENTER_CLASS,
+        "offsetClassCount": CLASS_COUNT,
+        "coarseRule": "clip each target offset component to [-1, 1]",
+        "residualRule": "target offset minus coarse offset",
+        "secondCellLabelCount": int(np.count_nonzero(residual != FACTORIZED_HEAD_CENTER_CLASS)),
+        "exactReconstruction": exact,
+    }
+
+
+def compose_factorized_classes(coarse: np.ndarray, residual: np.ndarray) -> np.ndarray:
+    coarse = np.asarray(coarse, dtype=np.int64)
+    residual = np.asarray(residual, dtype=np.int64)
+    if coarse.shape != residual.shape:
+        raise ProbeFailure("evaluation", "factorized class heads have different shapes")
+    if np.any((coarse < 0) | (coarse >= FACTORIZED_HEAD_CLASS_COUNT)) or np.any(
+        (residual < 0) | (residual >= FACTORIZED_HEAD_CLASS_COUNT)
+    ):
+        raise ProbeFailure("evaluation", "factorized class head contains an invalid class")
+    composed_offsets = FACTORIZED_HEAD_OFFSETS[coarse] + FACTORIZED_HEAD_OFFSETS[residual]
+    offset_lookup = {tuple(int(value) for value in offset): index for index, offset in enumerate(OFFSETS.tolist())}
+    try:
+        return np.asarray([
+            offset_lookup[tuple(int(value) for value in offset)] for offset in composed_offsets
+        ], dtype=np.int64)
+    except KeyError as error:
+        raise ProbeFailure("evaluation", "factorized heads composed outside the radius-two contract", {
+            "offset": list(error.args[0]),
+        }) from error
+
+
+def factorized_offset_probabilities(
+    coarse_probabilities: np.ndarray,
+    residual_probabilities: np.ndarray,
+) -> np.ndarray:
+    if coarse_probabilities.shape != residual_probabilities.shape:
+        raise ProbeFailure("evaluation", "factorized probability heads have different shapes")
+    if coarse_probabilities.ndim != 2 or coarse_probabilities.shape[1] != FACTORIZED_HEAD_CLASS_COUNT:
+        raise ProbeFailure("evaluation", "factorized probability head does not have 27 classes")
+    canonical_classes = np.arange(CLASS_COUNT, dtype=np.int64)
+    coarse_classes, residual_classes, _receipt = factorize_offset_labels(canonical_classes)
+    joint = (
+        coarse_probabilities[:, coarse_classes]
+        * residual_probabilities[:, residual_classes]
+    ).astype(np.float32)
+    normalization = np.sum(joint, axis=1, keepdims=True)
+    if np.any(normalization <= np.float32(0.0)):
+        raise ProbeFailure("evaluation", "factorized canonical joint has zero probability mass")
+    return (joint / normalization).astype(np.float32, copy=False)
 
 
 class ProbeFailure(RuntimeError):
@@ -369,10 +470,11 @@ def standardize(train: np.ndarray, *others: np.ndarray) -> tuple[np.ndarray, lis
     )
 
 
-def class_weights(labels: np.ndarray) -> np.ndarray:
-    counts = np.bincount(labels, minlength=CLASS_COUNT).astype(np.float64)
+def class_weights(labels: np.ndarray, class_count: int | None = None) -> np.ndarray:
+    effective_class_count = CLASS_COUNT if class_count is None else int(class_count)
+    counts = np.bincount(labels, minlength=effective_class_count).astype(np.float64)
     nonzero = counts > 0
-    weights = np.ones(CLASS_COUNT, dtype=np.float64)
+    weights = np.ones(effective_class_count, dtype=np.float64)
     weights[nonzero] = np.sqrt(labels.size / (np.count_nonzero(nonzero) * counts[nonzero]))
     sample_mean = float(np.mean(weights[labels]))
     weights /= max(1.0e-12, sample_mean)
@@ -405,12 +507,24 @@ def predict_ridge(x: np.ndarray, state: dict[str, Any]) -> np.ndarray:
     return np.argmax(x @ state["weights"] + state["bias"], axis=1).astype(np.int64)
 
 
-def train_mlp(x: np.ndarray, labels: np.ndarray, args: argparse.Namespace, rng: np.random.Generator) -> tuple[dict[str, Any], dict[str, Any]]:
+def train_mlp(
+    x: np.ndarray,
+    labels: np.ndarray,
+    args: argparse.Namespace,
+    rng: np.random.Generator,
+    class_count: int | None = None,
+    identity: str | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    effective_class_count = CLASS_COUNT if class_count is None else int(class_count)
+    active_labels, active_counts = np.unique(labels, return_counts=True)
+    label_class_histogram = {
+        str(int(label)): int(count) for label, count in zip(active_labels.tolist(), active_counts.tolist())
+    }
     hidden = max(4, int(args.hidden_width))
     w1 = rng.normal(0.0, math.sqrt(2.0 / x.shape[1]), size=(x.shape[1], hidden)).astype(np.float32)
     b1 = np.zeros((1, hidden), dtype=np.float32)
-    w2 = rng.normal(0.0, math.sqrt(2.0 / hidden), size=(hidden, CLASS_COUNT)).astype(np.float32)
-    b2 = np.zeros((1, CLASS_COUNT), dtype=np.float32)
+    w2 = rng.normal(0.0, math.sqrt(2.0 / hidden), size=(hidden, effective_class_count)).astype(np.float32)
+    b2 = np.zeros((1, effective_class_count), dtype=np.float32)
     params = [w1, b1, w2, b2]
     moments = [np.zeros_like(value) for value in params]
     variances = [np.zeros_like(value) for value in params]
@@ -418,7 +532,7 @@ def train_mlp(x: np.ndarray, labels: np.ndarray, args: argparse.Namespace, rng: 
     learning_rate = np.float32(max(1.0e-6, float(args.learning_rate)))
     weight_decay = np.float32(max(0.0, float(args.weight_decay)))
     batch_size = max(16, int(args.batch_size))
-    weights_per_class = class_weights(labels)
+    weights_per_class = class_weights(labels, effective_class_count)
     step = 0
     final_loss = 0.0
     for _epoch in range(max(1, int(args.epochs))):
@@ -458,7 +572,7 @@ def train_mlp(x: np.ndarray, labels: np.ndarray, args: argparse.Namespace, rng: 
             total_rows += rows.size
         final_loss = total_loss / max(1, total_rows)
     return {
-        "identity": MLP_IDENTITY,
+        "identity": identity or MLP_IDENTITY,
         "w1": w1, "b1": b1, "w2": w2, "b2": b2,
         "classWeights": weights_per_class,
     }, {
@@ -469,6 +583,8 @@ def train_mlp(x: np.ndarray, labels: np.ndarray, args: argparse.Namespace, rng: 
         "weightDecay": float(weight_decay),
         "finalTrainLoss": float(final_loss),
         "loss": "class-weighted-softmax-cross-entropy",
+        "classCount": effective_class_count,
+        "labelClassHistogram": label_class_histogram,
     }
 
 
@@ -831,6 +947,11 @@ def main() -> int:
     parser.add_argument("--weight-decay", type=float, default=1.0e-5)
     parser.add_argument("--offset-radius", type=int, choices=[1, 2], default=1)
     parser.add_argument(
+        "--model-head-policy",
+        choices=[FLAT_MODEL_HEAD_POLICY, FACTORIZED_MODEL_HEAD_POLICY],
+        default=FLAT_MODEL_HEAD_POLICY,
+    )
+    parser.add_argument(
         "--move-gate-selection",
         choices=[MAXIMUM_UNIQUE_OVERLAP_SELECTION, MAXIMUM_COVERAGE_POSITIVE_NET_SELECTION],
         default=MAXIMUM_UNIQUE_OVERLAP_SELECTION,
@@ -842,6 +963,7 @@ def main() -> int:
     )
     args = parser.parse_args()
     configure_offset_radius(args.offset_radius)
+    configure_model_head_policy(args.model_head_policy)
     out_dir = Path(args.out_dir).resolve()
     manifest_path = out_dir / "manifest.json"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -888,8 +1010,43 @@ def main() -> int:
 
         phase = "mlp-training"
         rng = np.random.default_rng(args.seed)
-        mlp_state, mlp_training = train_mlp(train_features, labels[train_mask], args, rng)
-        mlp_probability_rows = {role: mlp_probabilities(role_features[role], mlp_state) for role in role_features}
+        factorization_receipt = None
+        if args.model_head_policy == FACTORIZED_MODEL_HEAD_POLICY:
+            coarse_labels, residual_labels, factorization_receipt = factorize_offset_labels(labels)
+            coarse_state, coarse_training = train_mlp(
+                train_features,
+                coarse_labels[train_mask],
+                args,
+                rng,
+                FACTORIZED_HEAD_CLASS_COUNT,
+                "factorized-coarse-softmax-mlp-head-v0",
+            )
+            residual_state, residual_training = train_mlp(
+                train_features,
+                residual_labels[train_mask],
+                args,
+                rng,
+                FACTORIZED_HEAD_CLASS_COUNT,
+                "factorized-residual-softmax-mlp-head-v0",
+            )
+            mlp_state = {"coarse": coarse_state, "residual": residual_state}
+            mlp_training = {
+                "identity": FACTORIZED_MLP_IDENTITY,
+                "policy": FACTORIZED_MODEL_HEAD_POLICY,
+                "factorization": factorization_receipt,
+                "heads": {"coarse": coarse_training, "residual": residual_training},
+                "jointProjection": "normalized canonical product over 125 exact coarse/residual pairs",
+            }
+            mlp_probability_rows = {
+                role: factorized_offset_probabilities(
+                    mlp_probabilities(role_features[role], coarse_state),
+                    mlp_probabilities(role_features[role], residual_state),
+                )
+                for role in role_features
+            }
+        else:
+            mlp_state, mlp_training = train_mlp(train_features, labels[train_mask], args, rng)
+            mlp_probability_rows = {role: mlp_probabilities(role_features[role], mlp_state) for role in role_features}
         mlp_predictions = {role: np.argmax(values, axis=1).astype(np.int64) for role, values in mlp_probability_rows.items()}
         move_proposal_classes, proposal_admission = move_proposals(
             mlp_probability_rows["all"], low, low_indexes, args.move_proposal_policy,
@@ -943,59 +1100,108 @@ def main() -> int:
         source_candidate_indexes_sha = sha256_bytes(low_indexes.astype("<i8", copy=False).tobytes(order="C"))
         proposal_admission_sha = sha256_json(proposal_admission)
         checkpoint_path = out_dir / "displacement-model.npz"
-        np.savez_compressed(
-            checkpoint_path,
-            schema=np.asarray([SCHEMA]),
-            identity=np.asarray([IDENTITY]),
-            offsets=OFFSETS,
-            offsetRadius=np.asarray([OFFSET_RADIUS], dtype=np.int32),
-            offsetClassCount=np.asarray([CLASS_COUNT], dtype=np.int32),
-            centerClass=np.asarray([CENTER_CLASS], dtype=np.int32),
-            normalizationMean=normalization["mean"],
-            normalizationStd=normalization["std"],
-            ridgeWeights=ridge_state["weights"],
-            ridgeBias=ridge_state["bias"],
-            ridgeAlpha=np.asarray([ridge_state["alpha"]], dtype=np.float32),
-            mlpW1=mlp_state["w1"], mlpB1=mlp_state["b1"],
-            mlpW2=mlp_state["w2"], mlpB2=mlp_state["b2"],
-            moveGateIdentity=np.asarray([MOVE_GATE_IDENTITY]),
-            moveGateSelectionPolicy=np.asarray([args.move_gate_selection]),
-            moveGateThreshold=np.asarray([calibration["threshold"]], dtype=np.float32),
-            moveProposalPolicy=np.asarray([args.move_proposal_policy]),
-            sourceManifestSha256=np.asarray([low["sha256"]]),
-            sourcePayloadSha256=np.asarray([source_pair["payloadSha256"]]),
-            sourceCandidateIndexesSha256=np.asarray([source_candidate_indexes_sha]),
-            proposalAdmissionSha256=np.asarray([proposal_admission_sha]),
-        )
+        checkpoint_arrays: dict[str, np.ndarray] = {
+            "schema": np.asarray([SCHEMA]),
+            "identity": np.asarray([IDENTITY]),
+            "modelHeadPolicy": np.asarray([args.model_head_policy]),
+            "offsets": OFFSETS,
+            "offsetRadius": np.asarray([OFFSET_RADIUS], dtype=np.int32),
+            "offsetClassCount": np.asarray([CLASS_COUNT], dtype=np.int32),
+            "centerClass": np.asarray([CENTER_CLASS], dtype=np.int32),
+            "normalizationMean": normalization["mean"],
+            "normalizationStd": normalization["std"],
+            "ridgeWeights": ridge_state["weights"],
+            "ridgeBias": ridge_state["bias"],
+            "ridgeAlpha": np.asarray([ridge_state["alpha"]], dtype=np.float32),
+            "moveGateIdentity": np.asarray([MOVE_GATE_IDENTITY]),
+            "moveGateSelectionPolicy": np.asarray([args.move_gate_selection]),
+            "moveGateThreshold": np.asarray([calibration["threshold"]], dtype=np.float32),
+            "moveProposalPolicy": np.asarray([args.move_proposal_policy]),
+            "sourceManifestSha256": np.asarray([low["sha256"]]),
+            "sourcePayloadSha256": np.asarray([source_pair["payloadSha256"]]),
+            "sourceCandidateIndexesSha256": np.asarray([source_candidate_indexes_sha]),
+            "proposalAdmissionSha256": np.asarray([proposal_admission_sha]),
+        }
+        if args.model_head_policy == FACTORIZED_MODEL_HEAD_POLICY:
+            checkpoint_arrays.update({
+                "factorizedHeadOffsets": FACTORIZED_HEAD_OFFSETS,
+                "factorizedHeadClassCount": np.asarray([FACTORIZED_HEAD_CLASS_COUNT], dtype=np.int32),
+                "factorizedHeadCenterClass": np.asarray([FACTORIZED_HEAD_CENTER_CLASS], dtype=np.int32),
+                "coarseMlpW1": mlp_state["coarse"]["w1"],
+                "coarseMlpB1": mlp_state["coarse"]["b1"],
+                "coarseMlpW2": mlp_state["coarse"]["w2"],
+                "coarseMlpB2": mlp_state["coarse"]["b2"],
+                "residualMlpW1": mlp_state["residual"]["w1"],
+                "residualMlpB1": mlp_state["residual"]["b1"],
+                "residualMlpW2": mlp_state["residual"]["w2"],
+                "residualMlpB2": mlp_state["residual"]["b2"],
+            })
+        else:
+            checkpoint_arrays.update({
+                "mlpW1": mlp_state["w1"], "mlpB1": mlp_state["b1"],
+                "mlpW2": mlp_state["w2"], "mlpB2": mlp_state["b2"],
+            })
+        np.savez_compressed(checkpoint_path, **checkpoint_arrays)
         phase = "checkpoint-replay"
         with np.load(checkpoint_path, allow_pickle=False) as replay:
             replay_mean = replay["normalizationMean"].astype(np.float32)
             replay_std = replay["normalizationStd"].astype(np.float32)
             replay_features = ((features - replay_mean) / replay_std).astype(np.float32)
-            replay_state = {
-                "w1": replay["mlpW1"].astype(np.float32),
-                "b1": replay["mlpB1"].astype(np.float32),
-                "w2": replay["mlpW2"].astype(np.float32),
-                "b2": replay["mlpB2"].astype(np.float32),
-            }
-            replay_probabilities = mlp_probabilities(replay_features, replay_state)
+            replay_model_head_policy = str(replay["modelHeadPolicy"][0])
+            if replay_model_head_policy == FACTORIZED_MODEL_HEAD_POLICY:
+                replay_coarse_state = {
+                    "w1": replay["coarseMlpW1"].astype(np.float32),
+                    "b1": replay["coarseMlpB1"].astype(np.float32),
+                    "w2": replay["coarseMlpW2"].astype(np.float32),
+                    "b2": replay["coarseMlpB2"].astype(np.float32),
+                }
+                replay_residual_state = {
+                    "w1": replay["residualMlpW1"].astype(np.float32),
+                    "b1": replay["residualMlpB1"].astype(np.float32),
+                    "w2": replay["residualMlpW2"].astype(np.float32),
+                    "b2": replay["residualMlpB2"].astype(np.float32),
+                }
+                replay_probabilities = factorized_offset_probabilities(
+                    mlp_probabilities(replay_features, replay_coarse_state),
+                    mlp_probabilities(replay_features, replay_residual_state),
+                )
+            else:
+                replay_state = {
+                    "w1": replay["mlpW1"].astype(np.float32),
+                    "b1": replay["mlpB1"].astype(np.float32),
+                    "w2": replay["mlpW2"].astype(np.float32),
+                    "b2": replay["mlpB2"].astype(np.float32),
+                }
+                replay_probabilities = mlp_probabilities(replay_features, replay_state)
             replay_radius = int(replay["offsetRadius"][0])
             replay_class_count = int(replay["offsetClassCount"][0])
             replay_center_class = int(replay["centerClass"][0])
             replay_offsets = replay["offsets"].astype(np.int8)
+            head_contract_parity = True
+            if replay_model_head_policy == FACTORIZED_MODEL_HEAD_POLICY:
+                head_contract_parity = bool(
+                    int(replay["factorizedHeadClassCount"][0]) == FACTORIZED_HEAD_CLASS_COUNT
+                    and int(replay["factorizedHeadCenterClass"][0]) == FACTORIZED_HEAD_CENTER_CLASS
+                    and np.array_equal(replay["factorizedHeadOffsets"].astype(np.int8), FACTORIZED_HEAD_OFFSETS)
+                )
             if (
-                replay_radius != OFFSET_RADIUS
+                replay_model_head_policy != args.model_head_policy
+                or replay_radius != OFFSET_RADIUS
                 or replay_class_count != CLASS_COUNT
                 or replay_center_class != CENTER_CLASS
                 or not np.array_equal(replay_offsets, OFFSETS)
+                or not head_contract_parity
             ):
                 raise ProbeFailure("checkpoint-replay", "serialized checkpoint offset contract differs", {
+                    "expectedModelHeadPolicy": args.model_head_policy,
+                    "actualModelHeadPolicy": replay_model_head_policy,
                     "expectedRadius": OFFSET_RADIUS,
                     "actualRadius": replay_radius,
                     "expectedClassCount": CLASS_COUNT,
                     "actualClassCount": replay_class_count,
                     "expectedCenterClass": CENTER_CLASS,
                     "actualCenterClass": replay_center_class,
+                    "factorizedHeadContractParity": head_contract_parity,
                 })
             replay_source_binding = {
                 "lowManifestSha256": str(replay["sourceManifestSha256"][0]),
@@ -1074,6 +1280,8 @@ def main() -> int:
             "targetDataUsedForTraining": True,
             "targetDataUsedForCalibration": True,
             "targetLabelsUsedForModelSelection": True,
+            "modelHeadPolicy": args.model_head_policy,
+            "factorization": factorization_receipt,
             "offsetRadius": OFFSET_RADIUS,
             "offsetClassCount": CLASS_COUNT,
             "centerClass": CENTER_CLASS,
@@ -1091,6 +1299,8 @@ def main() -> int:
                 "sourceBindingParity": source_binding_parity,
                 "proposalReceiptParity": proposal_receipt_parity,
                 "proposalParity": proposal_parity,
+                "modelHeadPolicyParity": replay_model_head_policy == args.model_head_policy,
+                "factorizedHeadContractParity": head_contract_parity,
                 "classParity": class_parity,
                 "globalGateDuplicateDestinationCount": replay_gate["duplicateDestinationCount"],
                 "outputSha256": displacement_artifact["sha256"],
@@ -1100,6 +1310,8 @@ def main() -> int:
         overlap = len(low_set & high_set)
         dataset_receipt = {
             "identity": IDENTITY,
+            "modelHeadPolicy": args.model_head_policy,
+            "factorization": factorization_receipt,
             "featureAuthority": feature_receipt,
             "lowCandidateCount": int(low_indexes.size),
             "highCandidateCount": int(high_indexes.size),
