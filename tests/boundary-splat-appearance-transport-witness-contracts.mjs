@@ -14,6 +14,43 @@ const roles = {
   learnedPredicted: 'forced-support-learned-displacement-plus-frozen-splat-residual-v0',
 };
 
+const identity = { path: '/artifact.json', bytes: 1, sha256: 'a'.repeat(64) };
+const pair = (oracle, learned) => ({
+  metrics: {
+    oracleTransport: { aggregate: { predictionMse: oracle } },
+    learnedTransport: { aggregate: { predictionMse: learned } },
+  },
+});
+const evaluation = {
+  schema: 'kaminos-boundary-splat-phase-appearance-transport-evaluation-v0',
+  status: 'completed',
+  roles,
+  route: { backend: 'mlx', device: 'Device(gpu, 0)', fallbackReason: null },
+  model: identity,
+  transportModel: identity,
+  evaluationManifest: identity,
+  temporal: { evaluatedPairCount: 2, pairCap: null, sampleCap: null },
+  evaluation: {
+    authority: 'all-adjacent-matched-appearance-transport-comparisons-v0',
+    pairCount: 2,
+    oracleAggregatePredictionMse: 0.2,
+    learnedAggregatePredictionMse: 0.3,
+    oracleBeatsLearnedPairCount: 1,
+    pairCap: null,
+    sampleCap: null,
+  },
+  pairs: [pair(0.1, 0.4), pair(0.3, 0.2)],
+};
+assert.doesNotThrow(() => witness.validateAppearanceTransportEvaluation(evaluation, Buffer.from('{}')));
+assert.throws(
+  () => witness.validateAppearanceTransportEvaluation({
+    ...evaluation,
+    evaluation: { ...evaluation.evaluation, oracleBeatsLearnedPairCount: 2 },
+  }, Buffer.from('{}')),
+  /metric recomputation mismatch/,
+  'a stale or edited headline must not survive pairwise metric recomputation',
+);
+
 assert.deepEqual(witness.validateAppearanceTransportRoles(roles), roles);
 assert.throws(
   () => witness.validateAppearanceTransportRoles({ ...roles, learnedPredicted: roles.oraclePredicted }),

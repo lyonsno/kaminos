@@ -159,7 +159,7 @@ function validateIdentity(identity, label) {
   return identity;
 }
 
-function validateEvaluation(evaluation, bytes) {
+export function validateAppearanceTransportEvaluation(evaluation, bytes) {
   if (evaluation?.schema !== EVALUATION_SCHEMA || evaluation.status !== 'completed') {
     throw new Error('appearance transport evaluation schema/status mismatch');
   }
@@ -181,6 +181,27 @@ function validateEvaluation(evaluation, bytes) {
   validateIdentity(evaluation.model, 'appearance model');
   validateIdentity(evaluation.transportModel, 'transport model');
   validateIdentity(evaluation.evaluationManifest, 'evaluation corpus');
+  const oracleRows = evaluation.pairs.map(pair => Number(pair.metrics?.oracleTransport?.aggregate?.predictionMse));
+  const learnedRows = evaluation.pairs.map(pair => Number(pair.metrics?.learnedTransport?.aggregate?.predictionMse));
+  if (
+    evaluation.evaluation?.authority !== 'all-adjacent-matched-appearance-transport-comparisons-v0'
+    || evaluation.evaluation?.pairCount !== evaluation.pairs.length
+    || oracleRows.some(value => !Number.isFinite(value) || value < 0)
+    || learnedRows.some(value => !Number.isFinite(value) || value < 0)
+  ) throw new Error('appearance transport pair metrics are incomplete');
+  const mean = values => values.reduce((sum, value) => sum + value, 0) / values.length;
+  const recomputed = {
+    oracleAggregatePredictionMse: mean(oracleRows),
+    learnedAggregatePredictionMse: mean(learnedRows),
+    oracleBeatsLearnedPairCount: oracleRows.reduce(
+      (count, oracle, index) => count + Number(oracle < learnedRows[index]), 0,
+    ),
+  };
+  if (
+    Math.abs(Number(evaluation.evaluation.oracleAggregatePredictionMse) - recomputed.oracleAggregatePredictionMse) > 1e-12
+    || Math.abs(Number(evaluation.evaluation.learnedAggregatePredictionMse) - recomputed.learnedAggregatePredictionMse) > 1e-12
+    || evaluation.evaluation.oracleBeatsLearnedPairCount !== recomputed.oracleBeatsLearnedPairCount
+  ) throw new Error('appearance transport metric recomputation mismatch');
   return { path: null, bytes: bytes.byteLength, sha256: sha256(bytes), schema: EVALUATION_SCHEMA };
 }
 
@@ -294,7 +315,7 @@ export async function writeAppearanceTransportWitness(evaluationPathValue, optio
     failurePhase = 'evaluation-validation';
     const evaluationBytes = await readFile(evaluationPath);
     const evaluation = JSON.parse(evaluationBytes.toString('utf8'));
-    const evaluationIdentity = validateEvaluation(evaluation, evaluationBytes);
+    const evaluationIdentity = validateAppearanceTransportEvaluation(evaluation, evaluationBytes);
     evaluationIdentity.path = evaluationPath;
     await Promise.all([
       validateSourceBytes(evaluation.model, 'appearance model'),
