@@ -49,6 +49,12 @@ assert.doesNotMatch(
   'the direct browser transaction must not retain fixed 28px memory, attention, or temporal request geometry',
 );
 for (const token of [
+  'summarizeSam3TensorParityCheckpoint',
+  'downstreamParityDiagnostics',
+  'memoryFromPropagation',
+  'temporalFromMemory',
+  'attentionFromTemporal',
+  'decoderFromAttention',
   'runSam31MultiplexMaskDecoderPhaseProgramRoute',
   'runSam31MemoryEncoderPhaseProgramRoute',
   'runSam31MaskConditioningPhaseProgramRoute',

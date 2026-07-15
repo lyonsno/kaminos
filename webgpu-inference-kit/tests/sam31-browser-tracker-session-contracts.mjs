@@ -293,6 +293,14 @@ await assert.rejects(
 
 const smokeSource = await readFile(new URL('../smokes/sam31-two-frame-tracker-parity.js', import.meta.url), 'utf8');
 const driverSource = await readFile(new URL('../src/sam31-browser-tracker-session-driver.js', import.meta.url), 'utf8');
+for (const token of [
+  'summarizeSam3TensorParityCheckpoint',
+  'downstreamParityDiagnostics',
+  'memoryFromPropagation',
+  'temporalFromMemory',
+  'attentionFromTemporal',
+  'decoderFromAttention',
+]) assert.match(driverSource, new RegExp(token), `package tracker driver must preserve downstream parity evidence through ${token}`);
 assert.match(smokeSource, /createSam31BrowserTrackerSession/, 'package smoke must consume the exported session');
 assert.doesNotMatch(smokeSource, /invocations\.push\(await runInvocation\(packageRoots\[index\]/, 'package smoke must not bypass the exported session with its private invocation function');
 assert.match(smokeSource, /runtimeSession:\s*\{/, 'package smoke must preserve public session identity in each invocation row');
