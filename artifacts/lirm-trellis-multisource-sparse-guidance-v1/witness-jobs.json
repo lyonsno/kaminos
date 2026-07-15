@@ -1,5 +1,11 @@
 {
   "0066/prior-hybrid-0p0": ["96548f5a749d", "1d044df7d7b7", "99a3b7b9d370", "ba9609316b9f"],
   "0066/hybrid-0p25": ["82340abf6cce", "4bee2d5e8c7a", "d13a6fa81cde", "222985a85d52"],
-  "0066/hybrid-0p50": ["5c6a4dfeb4c9", "127e7454dd31", "f34c42b526c2", "1c1344c06c1c"]
+  "0066/hybrid-0p50": ["5c6a4dfeb4c9", "127e7454dd31", "f34c42b526c2", "1c1344c06c1c"],
+  "0032/prior-hybrid-0p0": ["3c306bb02adc", "63473c5d5c9c", "643c8f2d5e12", "f81c719d1fdd"],
+  "0032/hybrid-0p25": ["296d4dcc5600", "aebcd1752ae5", "24b738cb924b", "80f4c2520dbd"],
+  "0032/hybrid-0p50": ["19158857b004", "5e8e838b0c2e", "8eee0755066d", "e19cb76112bb"],
+  "0087/prior-hybrid-0p0": ["57f08f37f129", "686ebd295c7a", "08bebc1607fb", "1f823ea05110"],
+  "0087/hybrid-0p25": ["4bc69976622f", "fab9d2d657dc", "482f0b68b211", "986e3ff18326"],
+  "0087/hybrid-0p50": ["f932b9cd519b", "fc839ef9259c", "54db87033597", "e2727a46baf0"]
 }
