@@ -15,7 +15,7 @@ const consumer = await import(consumerUrl);
 assert.equal(consumer.LIQUID_FIRE_CONTACT_CONSUMER_SCHEMA, 'kaminos.pyro-liquid-contact-consumer.v0');
 assert.equal(consumer.LIQUID_FIRE_CONTACT_SOURCE_SCHEMA, 'kaminos.liquid-fire-contact-descriptor.v1');
 assert.equal(consumer.LIQUID_FIRE_CONTACT_SOURCE_PACKING, 'gpu-sparse-liquid-fire-contact-source-vec4x8-v1');
-assert.equal(consumer.LIQUID_FIRE_CONTACT_RECEIVER_TRANSFORM_ID, 'affine-liquid-world-to-pyro-near-domain-v0');
+assert.equal(consumer.LIQUID_FIRE_CONTACT_RECEIVER_TRANSFORM_ID, 'shared-world-unit-cube-to-pyro-near-domain-v0');
 assert.equal(consumer.LIQUID_FIRE_CONTACT_ACCUMULATION_LAYOUT, 'atomic-u32-wetness-heat-flame-vapor-per-near-cell-v0');
 
 const sharedDevice = { queue: {} };
@@ -65,6 +65,15 @@ assert.throws(
   /positive capacity/,
   'blank sparse products cannot masquerade as evidence',
 );
+
+const sharedWorldParams = consumer.liquidFireContactConsumerParams({
+  allocationGeneration: 7,
+  epoch: 3,
+  sourceFrameHash: 0x6c2673d1,
+});
+const sharedWorldFloats = new Float32Array(sharedWorldParams);
+assert.deepEqual(Array.from(sharedWorldFloats.slice(4, 7)), [0.5, 0.5, 0.5], 'contact positions scale from the rendered shared-world cube into Pyro unit coordinates');
+assert.deepEqual(Array.from(sharedWorldFloats.slice(8, 11)), [0.5, 0.5, 0.5], 'contact positions offset the rendered shared-world cube into Pyro unit coordinates');
 
 assert.deepEqual(
   consumer.applyLiquidFireContactCellReference(
@@ -117,6 +126,16 @@ assert.equal(staleReferenceTransfer.removedFlame, 0);
 assert.equal(staleReferenceTransfer.addedVapor, 0);
 assert.deepEqual(staleReferenceTransfer.cell, firstReferenceTransfer.cell, 'the repeated tick does not mutate the Pyro cell again');
 
+assert.equal(typeof consumer.advanceLiquidFireQuenchReference, 'function', 'consumer exports a deterministic persistent-quench reference');
+let sustainedQuench = { quench: 0, heat: 1, fuel: 1, flame: 1 };
+for (let step = 0; step < 8; step += 1) {
+  sustainedQuench = consumer.advanceLiquidFireQuenchReference(sustainedQuench, { wetness: 0.75 });
+}
+assert.ok(sustainedQuench.quench > 0.8, `sustained water must saturate persistent quench state: ${JSON.stringify(sustainedQuench)}`);
+assert.ok(sustainedQuench.heat < 0.08 && sustainedQuench.fuel < 0.08 && sustainedQuench.flame < 0.03, `sustained water must defeat source replenishment: ${JSON.stringify(sustainedQuench)}`);
+const retainedQuench = consumer.advanceLiquidFireQuenchReference({ ...sustainedQuench, heat: 1, fuel: 1, flame: 1 }, { wetness: 0 });
+assert.ok(retainedQuench.flame < 0.08, 'persistent wetness suppresses immediate source reignition after one dry frame');
+
 assert.match(consumerSource, /atomicLoad\(&sourceHeader\.valid\)\s*==\s*1u/, 'GPU scatter requires a valid producer header');
 assert.match(consumerSource, /atomicLoad\(&sourceHeader\.complete\)\s*==\s*1u/, 'GPU scatter requires a complete producer header');
 assert.match(consumerSource, /writeTick\s*<=\s*atomicLoad\(&consumerStats\.lastConsumedTick\)/, 'GPU scatter rejects repeated or stale write ticks');
@@ -132,6 +151,20 @@ assert.match(consumerSource, /cell1\.y\s*=\s*max\(0\.0,\s*cell1\.y\s*-\s*removed
 assert.match(consumerSource, /cell1\.z\s*=\s*max\(0\.0,\s*cell1\.z\s*-\s*removedFuel\)/, 'apply pass removes local fuel');
 assert.match(consumerSource, /cell2\.x\s*=\s*max\(0\.0,\s*cell2\.x\s*-\s*removedFlame\)/, 'apply pass removes local flame');
 assert.match(consumerSource, /cell1\.x\s*=\s*min\([^;]+\+\s*addedVapor/, 'apply pass adds local vapor/smoke');
+assert.match(consumerSource, /@group\(0\) @binding\(6\) var<storage, read_write> quenchField:\s*array<atomic<u32>>/, 'contact consumer owns a persistent fixed-point Pyro wetness field');
+assert.match(consumerSource, /atomicStore\(&quenchField\[cellIndex\],\s*fixedPoint\(depositedQuench\)\)/, 'liquid contact deposits persistent wetness instead of discarding it each frame');
+assert.match(consumerSource, /requestedHeatRemoval\s*=\s*max\([^;]*quenchStrength/, 'persistent quench can remove reinjected source heat decisively');
+assert.match(consumerSource, /requestedFlameRemoval\s*=\s*max\([^;]*quenchStrength/, 'persistent quench can remove all visible fire carriers decisively');
+assert.equal(consumer.LIQUID_FIRE_CONTACT_STATS_WORDS, 15, 'consumer telemetry includes persistent-quench deposition, suppressed-cell, and source-quench evidence');
+assert.match(consumerSource, /quenchDeposited:\s*atomic<u32>/, 'consumer telemetry records newly deposited persistent quench mass');
+assert.match(consumerSource, /quenchedCells:\s*atomic<u32>/, 'consumer telemetry records cells under material combustion suppression');
+assert.match(consumerSource, /atomicAdd\(&consumerStats\.quenchDeposited,\s*fixedPoint\(depositedQuench\s*-\s*priorQuench\)\)/, 'quench telemetry counts deposition rather than repeatedly counting retained state');
+assert.match(consumerSource, /@group\(0\) @binding\(6\) var<storage, read_write> quenchField:\s*array<atomic<u32>>/, 'consumer uses atomic fixed-point quench storage shared with the simulator');
+assert.match(consumerSource, /distance\(receiverUnit,\s*consumerParams\.sourceQuench\.xyz\)/, 'source quench is gated by physical contact with the authored burner neighborhood');
+assert.match(consumerSource, /atomicMax\(&quenchField\[GRID_CELL_COUNT\],\s*fixedPoint/, 'burner contact latches source quench in the reserved field sentinel instead of adding a storage binding');
+assert.match(volumeSource, /quenchDeposited:\s*words\[12\]/, 'composition witness exposes persistent-quench deposition');
+assert.match(volumeSource, /quenchedCells:\s*words\[13\]/, 'composition witness exposes the suppressed-cell population');
+assert.match(volumeSource, /sourceQuench:\s*words\[14\]/, 'composition witness exposes the latched source-quench strength');
 
 assert.match(volumeSource, /sharedGpuContext\s*=\s*null/, 'Pyro constructor accepts an explicitly shared GPU context');
 assert.match(volumeSource, /transparentCanvas\s*=\s*false/, 'Pyro canvas transparency is an explicit route-owned option');
@@ -168,6 +201,15 @@ assert.match(indexSource, /fingerFluidBenchCamera\.yaw\s*-=/, 'composition point
 assert.match(indexSource, /fingerFluidBenchCamera\.pitch\s*=\s*Math\.max/, 'composition pointer drag changes camera pitch');
 assert.match(indexSource, /fingerFluidBenchCamera\.distance\s*=\s*Math\.max/, 'composition wheel input changes bounded camera distance');
 assert.match(volumeSource, /setLiquidFireContactTransferEnabled\(enabled/, 'Pyro exposes an explicit liquid contact transfer gate');
+assert.match(volumeSource, /@group\(0\) @binding\(11\) var<storage, read> quenchSrc:\s*array<u32>/, 'Pyro simulation reads persistent fixed-point quench state');
+assert.match(volumeSource, /@group\(0\) @binding\(12\) var<storage, read_write> quenchDst:\s*array<u32>/, 'Pyro simulation transports persistent fixed-point quench state');
+assert.match(volumeSource, /quenchBuffers\s*=\s*\[0,\s*1\]\.map/, 'Pyro allocates ping-ponged quench fields with the simulation state');
+assert.match(volumeSource, /gridCellCount\(gridSize\)\s*\+\s*1/, 'quench allocation reserves one source-latch sentinel without adding a storage buffer');
+assert.match(volumeSource, /let localQuenchSuppression\s*=\s*smoothstep/, 'simulator derives a continuous combustion suppression strength from persistent wetness');
+assert.match(volumeSource, /sourceQuenchIndex\s*=\s*GRID\s*\*\s*GRID\s*\*\s*GRID[\s\S]*quenchSrc\[sourceQuenchIndex\]/, 'simulator reads the persistent burner-quench latch from the resolution-correct reserved quench sentinel');
+assert.match(volumeSource, /max\(localQuenchSuppression,\s*sourceQuenchSuppression\)/, 'latched burner quench defeats continuous source reinjection throughout the flame manifold');
+assert.match(volumeSource, /flame\s*=\s*flame\s*\*\s*\(1\.0\s*-\s*quenchSuppression/, 'persistent wetness suppresses source-replenished flame inside the simulation');
+assert.match(volumeSource, /combustionFrontTopology\s*=\s*combustionFrontTopology\s*\*\s*\(1\.0\s*-\s*quenchSuppression/, 'persistent wetness suppresses transported combustion-front topology');
 assert.match(volumeSource, /if\s*\(!liquidFireContactTransferEnabled\)[\s\S]*liquidFireContactSuppressedFrameCount\s*\+=\s*1[\s\S]*return;/, 'disabled transfer suppresses GPU contact dispatch and counts uncoupled frames');
 assert.match(indexSource, /FINGER_FLUID_PYRO_CONTACT_DELAY_MS\s*=\s*5500/, 'composition owns an inspectable pre-contact observation window');
 assert.match(indexSource, /setLiquidFireContactTransferEnabled\(false/, 'composition starts with liquid/fire transfer disabled');
@@ -212,11 +254,16 @@ assert.match(witnessSource, /wheelEvents\.length\s*!==\s*1/, 'visual witness rej
 assert.match(witnessSource, /wheelEvents\[0\]\.deltaY/, 'visual witness derives expected zoom from the DOM delta actually delivered by the browser');
 assert.match(witnessSource, /yawDeltaError[^\n]+CAMERA_DELTA_EPSILON/, 'visual witness rejects doubled or otherwise incorrect orbit deltas');
 assert.match(witnessSource, /distanceDeltaError[^\n]+CAMERA_DELTA_EPSILON/, 'visual witness rejects doubled or otherwise incorrect zoom deltas');
+assert.match(witnessSource, /cameraWitness\.restoredError[^\n]+CAMERA_DELTA_EPSILON/, 'visual witness restores the original camera before comparing flame states');
+assert.match(witnessSource, /postContactComposedSample/, 'visual witness samples the actual composed fire product after sustained contact');
+assert.match(witnessSource, /postFireRatio[^\n]+0\.15/, 'visual witness requires decisive fixed-camera luminous-fire collapse rather than ordinary flame variance');
+assert.match(witnessSource, /consumerWitness\.quenchDeposited\s*>\s*0/, 'visual witness requires persistent-quench deposition evidence');
+assert.match(witnessSource, /consumerWitness\.quenchedCells\s*>\s*0/, 'visual witness requires materially suppressed Pyro cells');
+assert.match(witnessSource, /consumerWitness\.sourceQuench\s*>=\s*0\.8/, 'visual witness requires the persistent burner-quench latch to engage materially');
 assert.match(witnessSource, /sameDevice[^\n]+true/, 'visual witness rejects cross-device composition');
+assert.match(witnessSource, /receiverTransformId\s*!==\s*'shared-world-unit-cube-to-pyro-near-domain-v0'/, 'visual witness rejects a receiver transform fallback');
 assert.match(witnessSource, /acceptedContacts[^\n]+0/, 'visual witness requires consumed sparse contacts');
 assert.match(witnessSource, /touchedCells[^\n]+0/, 'visual witness requires spatially touched Pyro cells');
-assert.match(witnessSource, /removedHeat[^\n]+0/, 'visual witness requires local heat removal');
-assert.match(witnessSource, /removedFlame[^\n]+0/, 'visual witness requires local flame removal');
 assert.match(witnessSource, /addedVapor[^\n]+0/, 'visual witness requires local vapor addition');
 
 console.log('liquid/fire contact consumer contracts: ok');
