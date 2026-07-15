@@ -5050,6 +5050,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let liquidFireContactClearPipeline = null;
   let liquidFireContactScatterPipeline = null;
   let liquidFireContactApplyPipeline = null;
+  let liquidFireContactFinalizePipeline = null;
   let liquidFireContactAccumulationBuffer = null;
   let liquidFireContactStatsBuffer = null;
   let liquidFireContactParamsBuffer = null;
@@ -5710,6 +5711,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     liquidFireContactClearPipeline = null;
     liquidFireContactScatterPipeline = null;
     liquidFireContactApplyPipeline = null;
+    liquidFireContactFinalizePipeline = null;
     liquidFireContactBindGroups = [];
   }
 
@@ -5783,6 +5785,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       'apply_liquid_fire_contact_transfer',
       'kaminos apply local liquid quench and vapor transfer',
     );
+    liquidFireContactFinalizePipeline = makePipeline(
+      'finalize_liquid_fire_contact_transfer',
+      'kaminos finalize liquid-fire contact transfer evidence',
+    );
     liquidFireContactBindGroups = fluidBuffers.map((fluidBuffer, index) => device.createBindGroup({
       label: `kaminos liquid-fire contact consumer bind group ${gridSize}^3 ${index}`,
       layout: liquidFireContactBindGroupLayout,
@@ -5807,6 +5813,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       !liquidFireContactClearPipeline ||
       !liquidFireContactScatterPipeline ||
       !liquidFireContactApplyPipeline ||
+      !liquidFireContactFinalizePipeline ||
       liquidFireContactBindGroups.length !== 2
     ) return;
     const bindGroup = liquidFireContactBindGroups[currentFluid];
@@ -5818,6 +5825,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pass.dispatchWorkgroups(Math.ceil(liquidFireContactDescriptor.capacity / 64));
     pass.setPipeline(liquidFireContactApplyPipeline);
     pass.dispatchWorkgroups(Math.ceil(gridCellCount(gridSize) / 64));
+    pass.setPipeline(liquidFireContactFinalizePipeline);
+    pass.dispatchWorkgroups(1);
     pass.end();
     state.liquidFireContactDispatchCount += 1;
     state.liquidFireContactStatus = 'gpu-dispatched-awaiting-header-gate';
@@ -5839,7 +5848,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const words = new Uint32Array(readback.getMappedRange()).slice();
     readback.unmap();
     readback.destroy();
-    const statusLabels = ['unset', 'applied', 'invalid-source-header', 'stale-source-tick'];
+    const statusLabels = ['unset', 'applied', 'invalid-source-header', 'stale-source-tick', 'fresh-source-tick', 'fresh-no-exchange'];
     return {
       ok: words[1] === 1,
       schema: LIQUID_FIRE_CONTACT_CONSUMER_SCHEMA,

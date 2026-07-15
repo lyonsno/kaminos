@@ -73,6 +73,52 @@ export function applyLiquidFireContactCellReference(cell, contact) {
   };
 }
 
+export function consumeLiquidFireContactTickReference(state = {}, source = {}) {
+  const lastConsumedTick = nonnegativeInteger(state.lastConsumedTick || 0, 'Last consumed liquid fire contact tick');
+  const writeTick = nonnegativeInteger(source.writeTick, 'Liquid fire contact write tick');
+  const cell = { ...(state.cell || {}) };
+  const evidence = {
+    acceptedContacts: 0,
+    rejectedContacts: 0,
+    touchedCells: 0,
+    removedHeat: 0,
+    removedFuel: 0,
+    removedFlame: 0,
+    addedVapor: 0,
+  };
+  if (source.valid !== true) {
+    return { ok: false, status: 'invalid-source-header', lastConsumedTick, cell, ...evidence };
+  }
+  if (writeTick <= lastConsumedTick) {
+    return { ok: false, status: 'stale-source-tick', lastConsumedTick, cell, ...evidence };
+  }
+  if (!source.contact) {
+    return { ok: false, status: 'fresh-no-exchange', lastConsumedTick: writeTick, cell, ...evidence };
+  }
+  const transfer = applyLiquidFireContactCellReference(cell, source.contact);
+  const nextCell = {
+    density: transfer.density,
+    smoke: transfer.smoke,
+    heat: transfer.heat,
+    fuel: transfer.fuel,
+    flame: transfer.flame,
+    microSmoke: transfer.microSmoke,
+  };
+  return {
+    ok: true,
+    status: 'applied',
+    lastConsumedTick: writeTick,
+    cell: nextCell,
+    acceptedContacts: 1,
+    rejectedContacts: 0,
+    touchedCells: 1,
+    removedHeat: transfer.removedHeat,
+    removedFuel: transfer.removedFuel,
+    removedFlame: transfer.removedFlame,
+    addedVapor: transfer.addedVapor,
+  };
+}
+
 export function createLiquidFireContactConsumerShaderWGSL(gridSize) {
   const grid = nonnegativeInteger(gridSize, 'Pyro near-field grid');
   if (grid < 4) throw new Error('Pyro near-field grid must be at least 4');
@@ -178,6 +224,16 @@ fn sourceHeaderIsConsumable() -> bool {
 fn clear_liquid_fire_contact_consumer_stats(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (gid.x != 0u) { return; }
   atomicStore(&consumerStats.status, 0u);
+  atomicStore(&consumerStats.acceptedContacts, 0u);
+  atomicStore(&consumerStats.rejectedContacts, 0u);
+  atomicStore(&consumerStats.touchedCells, 0u);
+  atomicStore(&consumerStats.removedHeat, 0u);
+  atomicStore(&consumerStats.removedFuel, 0u);
+  atomicStore(&consumerStats.removedFlame, 0u);
+  atomicStore(&consumerStats.addedVapor, 0u);
+  atomicStore(&consumerStats.sourceGeneration, 0u);
+  atomicStore(&consumerStats.sourceEpoch, 0u);
+  atomicStore(&consumerStats.sourceFrameHash, 0u);
 }
 
 @compute @workgroup_size(64)
@@ -192,6 +248,7 @@ fn scatter_liquid_fire_contacts(@builtin(global_invocation_id) gid: vec3<u32>) {
     if (sourceIndex == 0u) { atomicStore(&consumerStats.status, 3u); }
     return;
   }
+  if (sourceIndex == 0u) { atomicStore(&consumerStats.status, 4u); }
   let count = min(atomicLoad(&sourceHeader.packedCount), atomicLoad(&sourceHeader.capacity));
   if (sourceIndex >= count) { return; }
   let record = sourceRecords[sourceIndex];
@@ -227,18 +284,12 @@ fn scatter_liquid_fire_contacts(@builtin(global_invocation_id) gid: vec3<u32>) {
 fn apply_liquid_fire_contact_transfer(@builtin(global_invocation_id) gid: vec3<u32>) {
   let cellIndex = gid.x;
   if (cellIndex >= GRID_CELL_COUNT) { return; }
+  if (atomicLoad(&consumerStats.status) != 4u) { return; }
   let wetness = min(0.24, floatPoint(atomicExchange(&accumulation[cellIndex].wetness, 0u)));
   let requestedHeatRemoval = min(0.010, floatPoint(atomicExchange(&accumulation[cellIndex].heatRemoval, 0u)));
   let requestedFlameRemoval = min(0.012, floatPoint(atomicExchange(&accumulation[cellIndex].flameRemoval, 0u)));
   let addedVapor = min(0.020, floatPoint(atomicExchange(&accumulation[cellIndex].vapor, 0u)));
   if (wetness <= 0.0 && addedVapor <= 0.0) {
-    if (cellIndex == 0u && sourceHeaderIsConsumable()) {
-      atomicStore(&consumerStats.lastConsumedTick, atomicLoad(&sourceHeader.writeTick));
-      atomicStore(&consumerStats.sourceGeneration, atomicLoad(&sourceHeader.allocationGeneration));
-      atomicStore(&consumerStats.sourceEpoch, atomicLoad(&sourceHeader.epoch));
-      atomicStore(&consumerStats.sourceFrameHash, atomicLoad(&sourceHeader.sourceFrameHash));
-      atomicStore(&consumerStats.status, 1u);
-    }
     return;
   }
   let base = cellIndex * 4u;
@@ -273,12 +324,20 @@ fn apply_liquid_fire_contact_transfer(@builtin(global_invocation_id) gid: vec3<u
   atomicAdd(&consumerStats.removedFuel, fixedPoint(removedFuel));
   atomicAdd(&consumerStats.removedFlame, fixedPoint(removedVisibleFire));
   atomicAdd(&consumerStats.addedVapor, fixedPoint(addedVapor));
-  if (cellIndex == 0u && sourceHeaderIsConsumable()) {
-    atomicStore(&consumerStats.lastConsumedTick, atomicLoad(&sourceHeader.writeTick));
-    atomicStore(&consumerStats.sourceGeneration, atomicLoad(&sourceHeader.allocationGeneration));
-    atomicStore(&consumerStats.sourceEpoch, atomicLoad(&sourceHeader.epoch));
-    atomicStore(&consumerStats.sourceFrameHash, atomicLoad(&sourceHeader.sourceFrameHash));
+}
+
+@compute @workgroup_size(1)
+fn finalize_liquid_fire_contact_transfer(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (gid.x != 0u || atomicLoad(&consumerStats.status) != 4u) { return; }
+  atomicStore(&consumerStats.lastConsumedTick, atomicLoad(&sourceHeader.writeTick));
+  atomicStore(&consumerStats.sourceGeneration, atomicLoad(&sourceHeader.allocationGeneration));
+  atomicStore(&consumerStats.sourceEpoch, atomicLoad(&sourceHeader.epoch));
+  atomicStore(&consumerStats.sourceFrameHash, atomicLoad(&sourceHeader.sourceFrameHash));
+  let acceptedContacts = atomicLoad(&consumerStats.acceptedContacts);
+  if (acceptedContacts > 0u) {
     atomicStore(&consumerStats.status, 1u);
+  } else {
+    atomicStore(&consumerStats.status, 5u);
   }
 }
 `;

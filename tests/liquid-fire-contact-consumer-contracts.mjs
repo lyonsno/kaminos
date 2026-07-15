@@ -86,9 +86,46 @@ assert.deepEqual(
   'reference transfer removes local combustion carriers and adds bounded vapor',
 );
 
+assert.equal(typeof consumer.consumeLiquidFireContactTickReference, 'function', 'consumer exports a deterministic freshness reference');
+const initialReferenceState = {
+  lastConsumedTick: 0,
+  cell: { density: 0.4, smoke: 0.25, heat: 0.8, fuel: 0.7, flame: 0.9, microSmoke: 0.1 },
+};
+const firstReferenceTransfer = consumer.consumeLiquidFireContactTickReference(initialReferenceState, {
+  writeTick: 17,
+  valid: true,
+  contact: { wetness: 0.75, volume: 0.5 },
+});
+assert.equal(firstReferenceTransfer.ok, true, 'a fresh valid tick applies once');
+assert.equal(firstReferenceTransfer.status, 'applied');
+assert.equal(firstReferenceTransfer.lastConsumedTick, 17);
+assert.equal(firstReferenceTransfer.acceptedContacts, 1);
+assert.ok(firstReferenceTransfer.removedHeat > 0 && firstReferenceTransfer.addedVapor > 0);
+const staleReferenceTransfer = consumer.consumeLiquidFireContactTickReference(firstReferenceTransfer, {
+  writeTick: 17,
+  valid: true,
+  contact: { wetness: 0.75, volume: 0.5 },
+});
+assert.equal(staleReferenceTransfer.ok, false, 'the same source tick fails closed on second consumption');
+assert.equal(staleReferenceTransfer.status, 'stale-source-tick');
+assert.equal(staleReferenceTransfer.lastConsumedTick, 17);
+assert.equal(staleReferenceTransfer.acceptedContacts, 0);
+assert.equal(staleReferenceTransfer.touchedCells, 0);
+assert.equal(staleReferenceTransfer.removedHeat, 0);
+assert.equal(staleReferenceTransfer.removedFuel, 0);
+assert.equal(staleReferenceTransfer.removedFlame, 0);
+assert.equal(staleReferenceTransfer.addedVapor, 0);
+assert.deepEqual(staleReferenceTransfer.cell, firstReferenceTransfer.cell, 'the repeated tick does not mutate the Pyro cell again');
+
 assert.match(consumerSource, /atomicLoad\(&sourceHeader\.valid\)\s*==\s*1u/, 'GPU scatter requires a valid producer header');
 assert.match(consumerSource, /atomicLoad\(&sourceHeader\.complete\)\s*==\s*1u/, 'GPU scatter requires a complete producer header');
 assert.match(consumerSource, /writeTick\s*<=\s*atomicLoad\(&consumerStats\.lastConsumedTick\)/, 'GPU scatter rejects repeated or stale write ticks');
+assert.match(consumerSource, /atomicStore\(&consumerStats\.acceptedContacts,\s*0u\)/, 'each transfer clears prior accepted-contact evidence');
+assert.match(consumerSource, /atomicStore\(&consumerStats\.addedVapor,\s*0u\)/, 'each transfer clears prior vapor evidence');
+assert.match(consumerSource, /atomicStore\(&consumerStats\.status,\s*4u\)/, 'freshness is published as an explicit scatter-to-apply gate');
+assert.match(consumerSource, /atomicLoad\(&consumerStats\.status\)\s*!=\s*4u[\s\S]*return;/, 'apply preserves invalid and stale source status rather than overwriting it');
+assert.match(consumerSource, /acceptedContacts\s*>\s*0u[\s\S]*atomicStore\(&consumerStats\.status,\s*1u\)/, 'applied status requires current-transfer accepted contacts');
+assert.match(consumerSource, /fn finalize_liquid_fire_contact_transfer/, 'status and source receipts finalize in a distinct ordered dispatch');
 assert.match(consumerSource, /atomicAdd\(&accumulation\[cellIndex\]\.wetness/, 'contacts scatter wetness into local Pyro cells');
 assert.match(consumerSource, /atomicExchange\(&accumulation\[cellIndex\]\.heatRemoval/, 'apply pass consumes and clears transient heat removal');
 assert.match(consumerSource, /cell1\.y\s*=\s*max\(0\.0,\s*cell1\.y\s*-\s*removedHeat\)/, 'apply pass removes local heat');
@@ -103,6 +140,7 @@ assert.match(volumeSource, /mix\(1\.0,\s*0\.0,\s*TRANSPARENT_CANVAS\)/, 'ray mis
 assert.match(volumeSource, /alphaMode:\s*transparentCanvas\s*\?\s*'premultiplied'\s*:\s*'opaque'/, 'only composition routes opt into browser alpha blending');
 assert.match(volumeSource, /setLiquidFireContactDescriptor\(descriptor/, 'Pyro exposes the sparse contact binding API');
 assert.match(volumeSource, /encodeLiquidFireContactTransfer\(encoder\);[\s\S]*encodeMajorant\(encoder\)/, 'liquid transfer is ordered after simulation and before majorant/render');
+assert.match(volumeSource, /setPipeline\(liquidFireContactApplyPipeline\)[\s\S]*dispatchWorkgroups\(Math\.ceil\(gridCellCount\(gridSize\) \/ 64\)\)[\s\S]*setPipeline\(liquidFireContactFinalizePipeline\)[\s\S]*dispatchWorkgroups\(1\)/, 'a separate one-thread finalize dispatch runs after every apply workgroup');
 assert.match(volumeSource, /device\s*!==\s*descriptor\.device[\s\S]*same GPUDevice/, 'Pyro rejects a descriptor from another device');
 assert.match(indexSource, /finger_fluid_pyro_composition/, 'the composition route is explicit and inspectable');
 assert.match(indexSource, /transparentCanvas:\s*fingerFluidPyroCompositionRequested\(\)/, 'composition route requests transparent Pyro output explicitly');
