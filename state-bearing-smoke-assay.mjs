@@ -3,7 +3,8 @@ export const STATE_BEARING_SMOKE_ASSAY_SCHEMA = 'kaminos.state-bearing-smoke-ass
 const CURRENT_STATE_AUTHORITY = 'held-current-state-only-v0';
 const PHASE_HISTORY_AUTHORITY = 'phase-offset-history-v0';
 const REQUIRED_FIELD_KINDS = ['fluid', 'front'];
-const CANONICAL_CELL_IDS = ['A', 'B', 'D'];
+const CANONICAL_CELL_IDS = ['A', 'B', 'C', 'D'];
+const OPEN_BLOCKER_CLASSES = new Set(['dataset', 'owner', 'compute', 'abi']);
 
 function object(value, label) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError(`${label} must be an object`);
@@ -137,6 +138,16 @@ function validateOutput(candidate, cellId) {
 function validateCell(candidate, source) {
   const cell = object(candidate, 'assay cell');
   const id = identity(cell.id, 'assay cell id');
+  if (cell.status === 'open') {
+    if (id !== 'C') throw new Error(`only route C may remain open in the first assay; cell ${id} must be captured`);
+    if (cell.sourceIdentity !== source.identity) throw new Error('open cell C source identity does not match the common source');
+    const blocker = object(cell.blocker, 'open cell C blocker');
+    if (!OPEN_BLOCKER_CLASSES.has(blocker.class)) {
+      throw new Error('open cell C blocker class must be dataset, owner, compute, or abi');
+    }
+    identity(blocker.detail, 'open cell C blocker detail');
+    return cell;
+  }
   if (cell.status !== 'captured') throw new Error(`cell ${id} is partial or missing`);
   if (cell.sourceIdentity !== source.identity) throw new Error(`cell ${id} source identity does not match the common source`);
   const cellCamera = validateCamera(cell.camera, `cell ${id} camera`);
@@ -163,7 +174,7 @@ function validateCell(candidate, source) {
 export function validateStateBearingSmokeAssay(candidate) {
   const assay = object(candidate, 'state-bearing smoke assay');
   if (assay.schema !== STATE_BEARING_SMOKE_ASSAY_SCHEMA) throw new Error('state-bearing smoke assay schema mismatch');
-  if (assay.status !== 'captured') throw new Error('state-bearing smoke assay is not captured');
+  if (!['captured', 'incomplete'].includes(assay.status)) throw new Error('state-bearing smoke assay status must be captured or incomplete');
   identity(assay.identity, 'state-bearing smoke assay identity');
 
   const source = object(assay.source, 'common source');
@@ -196,7 +207,7 @@ export function validateStateBearingSmokeAssay(candidate) {
   const requiredCells = assay.requiredCells.map((id, index) => identity(id, `required cell ${index}`));
   if (new Set(requiredCells).size !== requiredCells.length) throw new Error('state-bearing smoke assay has duplicate required cells');
   if (!CANONICAL_CELL_IDS.every(id => requiredCells.includes(id))) {
-    throw new Error('state-bearing smoke assay must require the canonical A/B/D cells');
+    throw new Error('state-bearing smoke assay must require the canonical A/B/C/D cells');
   }
   if (!Array.isArray(assay.cells) || assay.cells.length === 0) throw new Error('state-bearing smoke assay cells must be non-empty');
   const cells = assay.cells.map(cell => validateCell(cell, source));
@@ -204,6 +215,13 @@ export function validateStateBearingSmokeAssay(candidate) {
   if (new Set(cellIds).size !== cellIds.length) throw new Error('state-bearing smoke assay has duplicate cell ids');
   for (const id of requiredCells) {
     if (!cellIds.includes(id)) throw new Error(`required cell ${id} is missing from the state-bearing assay`);
+  }
+  const openCells = cells.filter(cell => cell.status === 'open');
+  if (openCells.length > 0 && assay.status !== 'incomplete') {
+    throw new Error('a captured state-bearing smoke assay cannot contain an open route; status must remain incomplete');
+  }
+  if (openCells.length === 0 && assay.status !== 'captured') {
+    throw new Error('an incomplete state-bearing smoke assay must contain an explicit open route');
   }
   return assay;
 }

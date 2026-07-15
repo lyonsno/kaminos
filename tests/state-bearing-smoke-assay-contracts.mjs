@@ -107,10 +107,11 @@ function validAssay() {
       ],
       camera,
     },
-    requiredCells: ['A', 'B', 'D'],
+    requiredCells: ['A', 'B', 'C', 'D'],
     cells: [
-      cell('A', 'analytical-fixed-grid-smoke-v0'),
+      cell('A', 'analytical-adaptive-smoke-v0'),
       cell('B', 'bounded-learned-smoke-product-v0'),
+      cell('C', 'neural-history-smoke-decoder-v0'),
       cell('D', 'raymarched-smoke-control-v0'),
     ],
   };
@@ -193,8 +194,50 @@ narrowedMatrix.requiredCells = ['A', 'D'];
 narrowedMatrix.cells = narrowedMatrix.cells.filter(entry => entry.id !== 'B');
 assert.throws(
   () => validateStateBearingSmokeAssay(narrowedMatrix),
-  /canonical A\/B\/D|required cell B/i,
+  /canonical A\/B\/C\/D|required cell B/i,
   'the producer cannot redefine the canonical comparison matrix around a missing B cell',
+);
+
+const abdOnly = validAssay();
+abdOnly.requiredCells = ['A', 'B', 'D'];
+abdOnly.cells = abdOnly.cells.filter(entry => entry.id !== 'C');
+assert.throws(
+  () => validateStateBearingSmokeAssay(abdOnly),
+  /canonical A\/B\/C\/D|required cell C/i,
+  'route C cannot disappear from the source-authorized comparison table',
+);
+
+const openC = validAssay();
+openC.status = 'incomplete';
+openC.cells[2] = {
+  id: 'C',
+  status: 'open',
+  sourceIdentity: openC.source.identity,
+  blocker: {
+    class: 'abi',
+    detail: 'oracle Gaussian product has no production smoke GPU product adapter yet',
+  },
+};
+assert.equal(
+  validateStateBearingSmokeAssay(openC).status,
+  'incomplete',
+  'the first table may preserve C as an exact open cell without rejecting the completed routes',
+);
+
+const missingCBlocker = structuredClone(openC);
+missingCBlocker.cells[2].blocker.detail = '';
+assert.throws(
+  () => validateStateBearingSmokeAssay(missingCBlocker),
+  /open cell C.*blocker|blocker detail/i,
+  'an open C cell must name its exact blocker rather than acting as a decorative placeholder',
+);
+
+const openCClaimedComplete = structuredClone(openC);
+openCClaimedComplete.status = 'captured';
+assert.throws(
+  () => validateStateBearingSmokeAssay(openCClaimedComplete),
+  /captured.*open|incomplete/i,
+  'an open route keeps the top-level assay explicitly incomplete',
 );
 
 const representationFallback = validAssay();
@@ -231,13 +274,13 @@ const failedReport = JSON.parse(await readFile(reportPath, 'utf8'));
 assert.equal(failedReport.status, 'failed');
 assert.equal(failedReport.failurePhase, 'validation');
 assert.equal(failedReport.lastTrustworthyEvidence.sourceIdentity, invalid.source.identity);
-assert.equal(failedReport.lastTrustworthyEvidence.receivedCellIds.length, 3);
+assert.equal(failedReport.lastTrustworthyEvidence.receivedCellIds.length, 4);
 assert.equal(
   Array.isArray(failedReport.lastTrustworthyEvidence.cells),
   true,
   'failed reports preserve compact per-cell last-trustworthy evidence',
 );
-assert.equal(failedReport.lastTrustworthyEvidence.cells.length, 3);
+assert.equal(failedReport.lastTrustworthyEvidence.cells.length, 4);
 assert.deepEqual(failedReport.lastTrustworthyEvidence.cells[0].route, invalid.cells[0].route);
 assert.equal(
   failedReport.lastTrustworthyEvidence.cells[0].representation.requested,
