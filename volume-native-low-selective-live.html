@@ -1,0 +1,1153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kaminos Native-Low Selective Live Transfer</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #050707; color: #edf4f5; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; overflow: hidden; background: #050707; }
+    #toolbar { position: fixed; z-index: 20; inset: 10px 10px auto; min-height: 58px; display: grid; grid-template-columns: minmax(240px, 340px) minmax(0, 1fr); gap: 10px; align-items: center; padding: 9px 10px; border: 1px solid rgba(188, 215, 218, .28); background: rgba(7, 10, 10, .92); backdrop-filter: blur(8px); border-radius: 6px; box-shadow: 0 8px 26px rgba(0, 0, 0, .32); }
+    #title strong { display: block; font-size: 13px; line-height: 1.25; }
+    #title span { display: block; color: #91a3a8; font-size: 10px; margin-top: 2px; }
+    #status { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #a8b7bb; font: 10px/1.35 "SF Mono", Menlo, monospace; }
+    #status.bad { color: #ff9d8d; }
+    #panes { width: 100vw; height: 100vh; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; background: #162024; }
+    body.front-topology-ablation #panes { grid-template-columns: 1fr 1fr 1fr; }
+    .pane { min-width: 0; min-height: 0; position: relative; display: grid; place-items: center; background: #000; }
+    .pane[hidden] { display: none; }
+    .pane img { width: 100%; height: 100%; object-fit: cover; display: block; background: #000; }
+    .pane-label { position: absolute; z-index: 5; left: 12px; bottom: 12px; max-width: calc(100% - 24px); padding: 7px 9px; border: 1px solid rgba(190, 215, 220, .22); background: rgba(5, 8, 8, .78); border-radius: 5px; font-size: 11px; color: #dbe8ea; }
+    .pane-label span { display: block; margin-top: 2px; color: #90a1a6; font-size: 10px; }
+    #runner-wrap { position: fixed; left: -2200px; top: 0; width: 900px; height: 640px; opacity: .01; pointer-events: none; }
+    #runner { width: 100%; height: 100%; border: 0; display: block; background: #000; }
+    @media (max-width: 900px) { #toolbar { grid-template-columns: 1fr; } #panes, body.front-topology-ablation #panes { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; } body.front-topology-ablation #panes { grid-template-rows: 1fr 1fr 1fr; } }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <div id="title">
+      <strong>Native 128 control vs frozen 128-to-160 treatment</strong>
+      <span>Same native state, shared-device WebGPU buffers, splat-only-v0</span>
+    </div>
+    <div id="status">Starting shared-device native-low route...</div>
+  </div>
+  <main id="panes">
+    <section class="pane">
+      <img id="controlImage" alt="nativeLowControl">
+      <div class="pane-label">nativeLowControl<span>Untouched native 128^3 simulator, splat-only-v0</span></div>
+    </section>
+    <section class="pane">
+      <img id="treatmentImage" alt="nativeLowSelectivePredicted">
+      <div class="pane-label">nativeLowSelectivePredicted<span>Frozen model 160^3 materialized in the same WebGPU device, splat-only-v0</span></div>
+    </section>
+    <section id="frontTopologyAblatedPane" class="pane" hidden>
+      <img id="frontTopologyAblatedImage" alt="frontTopologyAblatedTreatment">
+      <div class="pane-label">frontTopologyAblatedTreatment<span>Learned support/carrier residuals, native-low upsampled front, no learned frontTopology residual</span></div>
+    </section>
+  </main>
+  <div id="runner-wrap"><iframe id="runner" title="sharedDeviceNativeLowRenderer"></iframe></div>
+  <script type="module">
+    import {
+      NATIVE_LOW_INPUT_AUTHORITY,
+      NATIVE_LOW_FEATURE_AUTHORITY,
+      NATIVE_LOW_RUNTIME_BUILD_IDENTITY,
+      NATIVE_LOW_SELECTIVE_LIVE_ROUTE,
+      NATIVE_LOW_SHARED_DEVICE_ROUTE,
+      NATIVE_LOW_TRANSPORT_MODE,
+      NATIVE_LOW_TRAINED_PACKAGE_ROUTE_REGISTRY_IDENTITY,
+      NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE,
+      NATIVE_LOW_TRANSFER_160_TO_96_DEPLOYMENT_GRID_ROUTE,
+      SELECTIVE_HEAD_LIVE_MODEL,
+      SELECTIVE_HEAD_LIVE_MODEL_URL,
+      nativeLowTrainedPackageRouteRegistry,
+    } from './native-low-selective-live-runtime.mjs';
+    import {
+      VIVISECTOR_CANDIDATE_HEAD_PACKAGE_SCHEMA,
+      VIVISECTOR_CANDIDATE_HEAD_RECEIVER_IDENTITY,
+      sha256HexFromText,
+      validateVivisectorCandidateHeadPackage,
+    } from './native-low-candidate-head-package.mjs';
+
+    const REPORT_SCHEMA = 'kaminos.volume.native-low-selective-live-comparison.v0';
+    const CONTRACT_MARKERS = Object.freeze({
+      routeIdentity: 'native-low-live-browser-webgpu-inference-v0',
+      sharedDeviceRoute: 'native-low-shared-device-buffer-inference-v0',
+      runtimeBuildIdentity: 'native-low-resident-cue-buffer-lifecycle-stress-v1',
+      schema: REPORT_SCHEMA,
+      modelIdentity: 'exact-basin-selective-carrier-heads-160-to-128-v0',
+      modelSha256: 'dc1886384f87c4e51015f6ffd5ac8c0a48ac6f32b6f02a238ac5e3c3bd883dc9',
+      modelUrlSymbol: 'SELECTIVE_HEAD_LIVE_MODEL_URL',
+      inputAuthority: 'native-low-simulator-state-no-synthetic-downsample-v0',
+      runtimeTruthAvailable: false,
+      syntheticDownsampleApplied: false,
+      requestedComposition: 'splat-only-v0',
+      effectiveComposition: 'splat-only-v0',
+      requestedBackend: 'WebGPU',
+      effectiveBackend: 'WebGPU',
+      modelChecksumMismatch: null,
+      sourceStepDrift: null,
+      controlTreatmentCausalDivergence: null,
+      compositionMismatch: null,
+      fallbackBackend: null,
+      effectiveFeatureCount: 185,
+      noHiddenCaps: true,
+      inferenceGpuMs: null,
+      uploadDispatchMs: null,
+      endToEndFrameMs: null,
+      durationSeconds: 0,
+      blankFrameRejection: 'blankFrameRejection',
+      cachedFrameRejection: 'cachedFrameRejection',
+      frameCacheKey: 'native-step+model-sha+composition+backend+transport',
+      failurePhase: null,
+      lastTrustworthyEvidence: null,
+      transportMode: 'shared-device-gpu-buffers-no-readback-import-v0',
+      requestedCalibration: 'native-low-learned-splat-calibration-v0',
+      effectiveCalibration: 'native-low-learned-splat-calibration-v0',
+      treatmentSplatRadianceGain: 1.12,
+      treatmentSplatOpacityGain: 1.05,
+      modelOutputMutation: false,
+      nativeLowCoarseFrontSparseDetailBand: {
+        identity: 'native-low-coarse-front-sparse-detail-band-v0',
+        coarseFrontScaffold: { spatialCorrelation: 0.9875, ridgeTop10Recall: 0.7563 },
+        sparseTemporalDetailBand: { consecutiveDeltaEnergyRetained: 0.1205, top5CellEnergy: 0.9088, top10CellEnergy: 0.97 },
+        trueCompactCarrierDispatch: { required: true, profitableTargetMs: 10, credibleBreakEvenTargetMs: 15, outerKillBoundaryMs: 24 },
+        candidatePathScope: { noJsVisibleDenseArrays: true, noCpuReadback: true, noFull160Materialization: true },
+      },
+      nativeLowSourceHistoryDetailCandidate: {
+        identity: 'native-low-source-history-detail-candidate-v0',
+        sourceChannelCount: 17,
+        targetCoverage: 0.10,
+        candidateCoverage: 0.10,
+        sourceDeltaEnergyCapture: 0.8286,
+        transition96To97Capture: 0.8302,
+        transition97To98Capture: 0.8271,
+        coarseDeltaGradientCapture: 0.716,
+        supportProbabilityEnergyCapture: 0.205,
+        supportProbabilityAdmission: false,
+        detailAdmissionSwitches: {
+          sourceHistoryDetailAdmissionEnabled: true,
+          supportCarrierDispatchIndependent: true,
+          coarseFrontScaffoldIndependent: true,
+        },
+      },
+      nativeLowFixedSourceDeltaAdmission: {
+        identity: 'native-low-fixed-source-delta-admission-v0',
+        fixedSourceDeltaCalibrationSha256: 'c1b0c1ada36317ee634f198cd90e1ce9be5fb38a421c7e500af3f465834c16d3',
+        sourceDeltaThreshold: 0.5457155704,
+        sourceDeltaScales: [0.27549979090690613, 0.16067561507225037, 0.2599555552005768, 0.22482779622077942, 0.08425257354974747, 0.20089389383792877, 0.02505391277372837, 0.2557207942008972, 0.36345410346984863, 0.2309359312057495, 0.27264925837516785, 0.10435938835144043, 0.06293082237243652, 0.4255056381225586, 0.23969438672065735, 0.24967649579048157, 0.03789634257555008],
+        runtimeTopK: false,
+        dynamicPercentile: false,
+        hiddenCandidateCap: false,
+        uncappedCandidateCount: 0,
+        uncappedCandidateCoverage: 0,
+        mohelWarning: null,
+      },
+      nativeLowCandidateHeadCostMicrobenchmark: {
+        identity: 'native-low-candidate-head-cost-microbenchmark-v0',
+        authority: 'synthetic-deterministic-candidate-head-cost-substrate-not-learned-evidence-v0',
+        coarseLatentAuthority: 'deterministic-synthetic-coarse-latent-v0',
+        benchmarkWidths: [16, 24, 32],
+        candidateInputs: { currentSourceChannels: 17, sourceDeltaChannels: 17, normalizedPositionAndSubcell: true },
+        outputSchema: { identity: 'compact-renderer-facing-cue-record-v0', cueRecordStrideBytes: 32 },
+        pathExclusions: { noJsCandidateList: true, productionPathCpuReadback: false, dense160ReceiverMaterialization: false, hiddenCandidateCap: false },
+        frozenDenseHeadsControl: 'arithmetic-control-only',
+      },
+      nativeLowResidentCueBufferLifecycleStress: {
+        identity: 'native-low-resident-cue-buffer-lifecycle-stress-v0',
+        claimScope: 'lifecycle-cost-substrate-not-fidelity-or-visual-evidence-v0',
+        observedCandidateCountTarget: 209000,
+        candidateCueRecordCapacity: 160 ** 3,
+        candidateCueRecordCapacityBytes: (160 ** 3) * 32,
+        candidateCueRecordAllocationCount: 1,
+        candidateCueRecordReuseCount: 0,
+        candidateCueRecordGrowthCount: 0,
+        candidateListSource: 'real-uncapped-fixed-gate-sourceHistoryCandidates-v0',
+        dispatchMode: 'dispatchWorkgroupsIndirect-sourceHistoryDispatchArgs-v0',
+        syntheticWeightsAuthority: 'synthetic-deterministic-candidate-head-cost-substrate-not-learned-evidence-v0',
+        staleCueRowsRetained: false,
+        hiddenCandidateCap: false,
+      },
+      nativeLowTrainedPackageRouteRegistry: {
+        identity: 'native-low-trained-package-route-registry-v0',
+        routes: ['native-low-transfer-160-to-128-zero-shot-v0', 'native-low-transfer-160-to-96-deployment-grid-v0'],
+        dispatchIdentity: 'native-low-support-positive-indirect-residual-dispatch-v0',
+        sourceHistoryDispatchIdentity: 'sourceHistoryDispatchArgs',
+      },
+      nativeLowDualTrainedPackageManualCapture: {
+        identity: 'native-low-dual-trained-package-manual-capture-v0',
+        api: ['setCapturePaused', 'debugState', 'stepCaptureFrame'],
+        visualRoles: ['native96Control', 'baseline128Trained', 'candidate96Trained'],
+        modelReceipts: {
+          baseline128Trained: 'dc1886384f87c4e51015f6ffd5ac8c0a48ac6f32b6f02a238ac5e3c3bd883dc9',
+          candidate96Trained: 'baa54236f04c28eab278cf60e4a60745cd3c0160a985a9adbb1e06db7958f6e8',
+        },
+        singleSourceStep: true,
+        secondPackageAdvanceSourceStep: false,
+        candidateInstanceEqualityOk: true,
+        candidateCount: 0,
+        instanceCount: 0,
+        overflowCount: 0,
+        fallbackFields: 'fallbackFields',
+        stalePredictionRejection: 'stalePredictionRejection',
+        fallbackBackend: null,
+        staleFallbackFieldsRequired: true,
+      },
+      nativeLowVivisectorCandidateHeadPackageReceiver: {
+        identity: 'native-low-vivisector-candidate-head-package-receiver-v0',
+        schema: 'kaminos.native-low.vivisector-candidate-head-width32-package.v0',
+        trainedRouteRequested: false,
+        syntheticBenchmarkWeightsRejected: true,
+        syntheticBenchmarkLatentRejected: true,
+        candidateListSource: 'real-uncapped-fixed-gate-sourceHistoryCandidates-v0',
+        dispatchMode: 'dispatchWorkgroupsIndirect-sourceHistoryDispatchArgs-v0',
+        outputSchema: { identity: 'compact-renderer-facing-cue-record-v0', cueRecordStrideBytes: 32 },
+        failurePhase: null,
+      },
+    });
+    const requestedComposition = 'splat-only-v0';
+    const runtimeTruthAvailable = false;
+    const syntheticDownsampleApplied = false;
+    const sourceStepDrift = 'sourceStepDrift';
+    const controlTreatmentCausalDivergence = 'controlTreatmentCausalDivergence';
+    const compositionMismatch = 'compositionMismatch';
+    const fallbackBackend = null;
+    const blankFrameRejection = 'blankFrameRejection';
+    const cachedFrameRejection = 'cachedFrameRejection';
+    const noHiddenCaps = true;
+    const params = new URLSearchParams(location.search);
+    const targetSeconds = Math.max(5, Math.min(30, Number(params.get('seconds') || 8)));
+    const stepIntervalMs = Math.max(100, Number(params.get('step_ms') || 500));
+    const treatmentSplatRadianceGain = Math.max(0, Math.min(8, Number(params.get('treatment_splat_radiance_gain') || 1.12)));
+    const treatmentSplatOpacityGain = Math.max(0, Math.min(8, Number(params.get('treatment_splat_opacity_gain') || 1.05)));
+    const native64SourceManifestUrl = params.get('native64_source_manifest') || '';
+    const native64PredictionManifestUrl = params.get('native64_prediction_manifest') || '';
+    const native64ManifestMode = Boolean(native64SourceManifestUrl && native64PredictionManifestUrl);
+    const frontTopologyAblationMode = !native64ManifestMode && params.get('front_topology_ablation') === '1';
+    const fixedGateDiscontinuityAssayMode = !native64ManifestMode && params.get('fixed_gate_discontinuity_assay') === '1';
+    const candidateHeadBenchmarkEnabled = !native64ManifestMode && params.get('candidate_head_benchmark') === '1';
+    const cueBufferLifecycleStressMode = !native64ManifestMode && params.get('cue_buffer_lifecycle_stress') === '1';
+    const manualDualCaptureMode = !native64ManifestMode && (params.get('manual_dual_capture') === '1' || params.get('capture_paused') === '1');
+    const requestedTransferRouteId = params.get('native_low_transfer_route') || NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE;
+    const vivisectorCandidateHeadPackageUrl = params.get('vivisector_candidate_head_package') || '';
+    const vivisectorCandidateHeadTrainedRouteRequested = !native64ManifestMode
+      && (Boolean(vivisectorCandidateHeadPackageUrl) || params.get('candidate_head_trained_route') === 'vivisector-width32');
+    const sourceHistoryDetailAdmissionEnabled = !native64ManifestMode && params.get('source_history_detail_candidate') !== '0';
+    const sourceHistoryDetailTargetCoverage = Math.max(0.01, Math.min(0.5, Number(params.get('source_history_detail_coverage') || 0.10)));
+    const supportProbabilityDetailAdmissionEnabled = params.get('support_detail_admission') === '1';
+    const coarseFrontDetailAdmissionEnabled = params.get('coarse_front_detail_admission') !== '0';
+    const requestedCalibration = 'native-low-learned-splat-calibration-v0';
+    const status = document.getElementById('status');
+    const title = document.getElementById('title');
+    const runnerFrame = document.getElementById('runner');
+    const controlImage = document.getElementById('controlImage');
+    const treatmentImage = document.getElementById('treatmentImage');
+    const frontTopologyAblatedImage = document.getElementById('frontTopologyAblatedImage');
+    const frontTopologyAblatedPane = document.getElementById('frontTopologyAblatedPane');
+    let routeStatus = 'starting';
+    let failurePhase = null;
+    let lastTrustworthyEvidence = {};
+    let startedAtMs = performance.now();
+    let lastFrameAtMs = 0;
+    let frameIndex = 0;
+    let latestReceipt = null;
+    let latestRunnerState = null;
+    let latestDiscontinuityAssay = null;
+    let latestCueBufferLifecycleStress = null;
+    let latestManualDualCapture = null;
+    let capturePaused = manualDualCaptureMode;
+    let vivisectorCandidateHeadPackageReceipt = {
+      identity: VIVISECTOR_CANDIDATE_HEAD_RECEIVER_IDENTITY,
+      schema: VIVISECTOR_CANDIDATE_HEAD_PACKAGE_SCHEMA,
+      trainedRouteRequested: vivisectorCandidateHeadTrainedRouteRequested,
+      packageUrl: vivisectorCandidateHeadPackageUrl || null,
+      packageValidationBeforeGpuWork: true,
+      gpuWorkStarted: false,
+      failurePhase: null,
+    };
+    let lastControlObjectUrl = null;
+    let lastTreatmentObjectUrl = null;
+    let lastFrontTopologyAblatedObjectUrl = null;
+
+    if (frontTopologyAblationMode) {
+      document.body.classList.add('front-topology-ablation');
+      frontTopologyAblatedPane.hidden = false;
+      title.querySelector('strong').textContent = 'Native control vs full frozen vs no-learned-front ablation';
+      title.querySelector('span').textContent = 'Same source step/camera, shared-device WebGPU, splat-only-v0';
+      document.querySelector('#treatmentImage + .pane-label').innerHTML = 'fullFrozenTreatmentReference<span>Frozen support + learned frontTopology + carrier residuals, splat-only-v0</span>';
+    }
+
+    if (native64ManifestMode) {
+      title.querySelector('strong').textContent = 'Native 64 control vs frozen 128-trained prediction';
+      title.querySelector('span').textContent = 'Manifest-backed same source state, shared-device WebGPU buffers, splat-only-v0';
+      document.querySelector('#controlImage + .pane-label').innerHTML = 'native64NoModelControl<span>Untouched native 64^3 source field, splat-only-v0</span>';
+      document.querySelector('#treatmentImage + .pane-label').innerHTML = 'native64SelectivePredicted<span>Frozen 128-trained model prediction at 160^3, splat-only-v0</span>';
+    }
+
+    if (manualDualCaptureMode) {
+      document.body.classList.add('front-topology-ablation');
+      frontTopologyAblatedPane.hidden = false;
+      title.querySelector('strong').textContent = 'Native 96 control vs both trained transfer candidates';
+      title.querySelector('span').textContent = 'Paused one-step manual capture, shared native source state, splat-only-v0';
+      document.querySelector('#controlImage + .pane-label').innerHTML = 'native96Control<span>Untouched native 96^3 simulator, splat-only-v0</span>';
+      document.querySelector('#treatmentImage + .pane-label').innerHTML = 'baseline128Trained<span>160->128 zero-shot package applied to native 96 source, splat-only-v0</span>';
+      document.querySelector('#frontTopologyAblatedImage + .pane-label').innerHTML = 'candidate96Trained<span>160->96 deployment-grid package applied to the same native 96 source, splat-only-v0</span>';
+    }
+
+    const baseControls = {
+      kaminos_volume_smoke: '1',
+      volume_scene: 'tall_plume',
+      volume_tall_preset: 'rgb_upscale_basin_0711',
+      volume_resolution: native64ManifestMode ? '64' : manualDualCaptureMode ? '96' : '128',
+      volume_majorant_grid: '24',
+      volume_boundary_sidecar_source: 'baked',
+      volume_boundary_sidecar_view: 'off',
+      volume_boundary_splat_mode: 'learned',
+      volume_boundary_sidecar_blur: '0',
+      volume_boundary_sidecar_width: '0',
+      volume_boundary_sidecar_ridge: '0.46',
+      volume_render_scale: '1',
+      volume_density: '6',
+      volume_fire: '1.9',
+      volume_radiance: '0',
+      volume_absorption: '1.6',
+      volume_glow: '0',
+      volume_smoke: '2.8',
+      volume_curl: '3.2',
+      volume_microdetail: '2.5',
+      volume_interface_shred: '5',
+      volume_fire_licks: '5',
+      volume_projection: '1.5',
+      volume_speed: '3.35',
+      volume_fire_scale: '1.3',
+      volume_detail_scale: '0.45',
+      volume_plume_height: '2.2',
+      volume_wind_strength: '1.25',
+      volume_wind_angle: '-65',
+      volume_wind_height: '-0.8',
+      volume_input_radius: '0.53',
+      volume_flow_rate: '1',
+      volume_steps: '88',
+      volume_adaptive_rays: '1',
+      volume_occupancy_skip: '1',
+      volume_majorant_skip: '0',
+      volume_majorant_smooth: '1',
+      volume_majorant_guard: '1',
+      volume_temporal_accum: '0',
+      volume_temporal_jitter: '0',
+      volume_history_clamp: '0',
+      volume_quality_reason: native64ManifestMode ? 'native-low-cross-grid-64-shared-device-manifest' : 'native-low-selective-shared-device-transfer',
+    };
+
+    function delay(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async function validateVivisectorCandidateHeadPackageForRoute() {
+      if (!vivisectorCandidateHeadTrainedRouteRequested) return vivisectorCandidateHeadPackageReceipt;
+      failurePhase = 'vivisector-candidate-package-validation';
+      if (!vivisectorCandidateHeadPackageUrl) {
+        const result = validateVivisectorCandidateHeadPackage(null, { requestedUrl: null });
+        vivisectorCandidateHeadPackageReceipt = result.report;
+        lastTrustworthyEvidence = { nativeLowVivisectorCandidateHeadPackageReceiver: result.report };
+        throw new Error(`${result.failurePhase}:${result.error}`);
+      }
+      const response = await fetch(vivisectorCandidateHeadPackageUrl, { cache: 'no-store' });
+      if (!response.ok) {
+        const result = {
+          ok: false,
+          failurePhase: 'vivisector-candidate-package-validation',
+          error: `package fetch failed:${response.status}`,
+          report: {
+            schema: 'kaminos.volume.native-low-vivisector-candidate-head-package-failure.v0',
+            identity: VIVISECTOR_CANDIDATE_HEAD_RECEIVER_IDENTITY,
+            status: 'failed',
+            failurePhase: 'vivisector-candidate-package-validation',
+            error: `package fetch failed:${response.status}`,
+            requestedUrl: vivisectorCandidateHeadPackageUrl,
+            trainedRouteRequested: true,
+            gpuWorkStarted: false,
+            durableFailureReportRequired: true,
+          },
+        };
+        vivisectorCandidateHeadPackageReceipt = result.report;
+        lastTrustworthyEvidence = { nativeLowVivisectorCandidateHeadPackageReceiver: result.report };
+        throw new Error(`${result.failurePhase}:${result.error}`);
+      }
+      const packageText = await response.text();
+      const observedPackageSha256 = await sha256HexFromText(packageText);
+      const result = validateVivisectorCandidateHeadPackage(packageText, {
+        requestedUrl: vivisectorCandidateHeadPackageUrl,
+        observedPackageSha256,
+      });
+      vivisectorCandidateHeadPackageReceipt = result.ok ? result.receiver : result.report;
+      lastTrustworthyEvidence = { nativeLowVivisectorCandidateHeadPackageReceiver: vivisectorCandidateHeadPackageReceipt };
+      if (!result.ok) throw new Error(`${result.failurePhase}:${result.error}`);
+      return result.receiver;
+    }
+
+    function proto() {
+      return runnerFrame.contentWindow?.__kaminosVolumePrototype || null;
+    }
+
+    async function waitForPrototype() {
+      const started = performance.now();
+      while (performance.now() - started < 120000) {
+        const candidate = proto();
+        if (candidate?.debugState?.()?.active) return candidate;
+        await delay(100);
+      }
+      throw new Error('shared-device renderer prototype did not activate');
+    }
+
+    function replaceImageUrls(receipt) {
+      if (receipt?.visuals?.controlObjectUrl) {
+        if (lastControlObjectUrl) URL.revokeObjectURL(lastControlObjectUrl);
+        lastControlObjectUrl = receipt.visuals.controlObjectUrl;
+        controlImage.src = lastControlObjectUrl;
+      }
+      if (receipt?.visuals?.treatmentObjectUrl) {
+        if (lastTreatmentObjectUrl) URL.revokeObjectURL(lastTreatmentObjectUrl);
+        lastTreatmentObjectUrl = receipt.visuals.treatmentObjectUrl;
+        treatmentImage.src = lastTreatmentObjectUrl;
+      }
+      if (receipt?.visuals?.frontTopologyAblatedObjectUrl) {
+        if (lastFrontTopologyAblatedObjectUrl) URL.revokeObjectURL(lastFrontTopologyAblatedObjectUrl);
+        lastFrontTopologyAblatedObjectUrl = receipt.visuals.frontTopologyAblatedObjectUrl;
+        frontTopologyAblatedImage.src = lastFrontTopologyAblatedObjectUrl;
+      }
+    }
+
+    async function tick() {
+      failurePhase = 'shared-device-capture';
+      const prototype = proto();
+      if (native64ManifestMode && !prototype?.captureNativeLowCrossGridManifestFrame) {
+        throw new Error('captureNativeLowCrossGridManifestFrame missing from renderer prototype');
+      }
+      if (!native64ManifestMode && !prototype?.captureNativeLowSelectiveSharedDeviceFrame) {
+        throw new Error('captureNativeLowSelectiveSharedDeviceFrame missing from renderer prototype');
+      }
+      const captureOptions = {
+        boundarySplatComposition: requestedComposition,
+        now: performance.now(),
+        captureVisuals: true,
+        frontTopologyAblation: frontTopologyAblationMode,
+        sourceHistoryDetailAdmissionEnabled,
+        sourceHistoryDetailTargetCoverage,
+        supportProbabilityDetailAdmissionEnabled,
+        coarseFrontDetailAdmissionEnabled,
+        treatmentSplatRadianceGain,
+        treatmentSplatOpacityGain,
+        transferRouteId: requestedTransferRouteId,
+        candidateHeadBenchmarkEnabled: candidateHeadBenchmarkEnabled || cueBufferLifecycleStressMode,
+        candidateCueBufferLifecycleStressEnabled: cueBufferLifecycleStressMode,
+      };
+      const receipt = native64ManifestMode
+        ? await prototype.captureNativeLowCrossGridManifestFrame({
+          ...captureOptions,
+          sourceManifestUrl: native64SourceManifestUrl,
+          predictionManifestUrl: native64PredictionManifestUrl,
+        })
+        : await prototype.captureNativeLowSelectiveSharedDeviceFrame(captureOptions);
+      if (!receipt?.ok) throw new Error(`${receipt?.failurePhase || 'shared-device-capture'}:${receipt?.error || receipt?.reason || 'unknown'}`);
+      replaceImageUrls(receipt);
+      latestReceipt = receipt;
+      latestRunnerState = prototype.debugState?.() || null;
+      if (latestRunnerState?.backend && receipt.effectiveBackend === 'WebGPU') {
+        receipt.effectiveBackend = latestRunnerState.backend;
+      }
+      frameIndex += 1;
+      lastTrustworthyEvidence = { frameIndex, receipt, runner: latestRunnerState };
+      if (native64ManifestMode) {
+        status.textContent = `native64 step ${receipt.sourceStep} | support ${receipt.predictedPositiveCount}/${Math.round(160 ** 3)} @ ${receipt.supportThreshold} | splats ${receipt.treatmentSplatInstanceCount} | ${receipt.macroStructureDecision} | ${Math.round(receipt.endToEndFrameMs)} ms`;
+      } else {
+        const ablationText = frontTopologyAblationMode ? ` | ablated ${receipt.frontTopologyAblatedSplatInstanceCount}` : '';
+        status.textContent = `frame ${frameIndex} | support ${receipt.supportPositiveCount} | splats ${receipt.treatmentSplatInstanceCount}${ablationText} | cal ${receipt.treatmentSplatRadianceGain}/${receipt.treatmentSplatOpacityGain} | ${Math.round(receipt.endToEndFrameMs)} ms`;
+      }
+      return receipt;
+    }
+
+    function fixedGateFrameReceipt(kind, receipt, runnerBefore = null, runnerAfter = null) {
+      const admission = receipt?.nativeLowFixedSourceDeltaAdmission || {};
+      const headCost = receipt?.nativeLowHeadCostProfile || {};
+      return {
+        kind,
+        sourceStepIdentity: receipt?.sourceStepIdentity || null,
+        sourceStepDelta: receipt?.simulationSteppingReceipt?.simStepDelta ?? null,
+        runtimeBuildIdentity: NATIVE_LOW_RUNTIME_BUILD_IDENTITY,
+        requestedBackend: receipt?.requestedBackend || 'WebGPU',
+        effectiveBackend: receipt?.effectiveBackend || null,
+        requestedComposition: receipt?.requestedComposition || requestedComposition,
+        effectiveComposition: receipt?.effectiveComposition || null,
+        fixedSourceDeltaCalibrationSha256: admission.fixedSourceDeltaCalibrationSha256 || null,
+        sourceDeltaThreshold: admission.sourceDeltaThreshold ?? null,
+        sourceDeltaScales: admission.sourceDeltaScales || null,
+        sourceDeltaAdmissionGpuMs: headCost.sourceDeltaAdmissionGpuMs ?? null,
+        inferenceGpuMs: headCost.inferenceGpuMs ?? receipt?.inferenceGpuMs ?? null,
+        sourceHistoryAvailable: admission.sourceHistoryAvailable ?? null,
+        historyEpochIdentity: admission.historyEpochIdentity || null,
+        priorHistoryEpochIdentity: admission.priorHistoryEpochIdentity || null,
+        currentHistoryEpochIdentity: admission.currentHistoryEpochIdentity || null,
+        historyEpochChanged: admission.historyEpochChanged ?? null,
+        historyEpochValidForAdmission: admission.historyEpochValidForAdmission ?? null,
+        sourceHistoryResetReason: admission.sourceHistoryResetReason || null,
+        callerResetReason: admission.callerResetReason || null,
+        uncappedLowCandidateCount: admission.uncappedLowCandidateCount ?? null,
+        uncappedCandidateCount: admission.uncappedCandidateCount ?? null,
+        uncappedCandidateCoverage: admission.uncappedCandidateCoverage ?? null,
+        mohelWarningThresholdMode: admission.mohelWarningThresholdMode || null,
+        mohelWarningThresholdMultiple: admission.mohelWarningThresholdMultiple ?? null,
+        mohelWarningBoundaryCoverage: admission.mohelWarningBoundaryCoverage ?? null,
+        mohelWarningCoverageRatio: admission.mohelWarningCoverageRatio ?? null,
+        mohelWarning: admission.mohelWarning || null,
+        candidateHeadCostMicrobenchmark: receipt?.nativeLowCandidateHeadCostMicrobenchmark || null,
+        candidateCueBufferLifecycle: receipt?.nativeLowCandidateCueBufferLifecycle || null,
+        runtimeTopK: admission.runtimeTopK ?? null,
+        dynamicPercentile: admission.dynamicPercentile ?? null,
+        hiddenCandidateCap: admission.hiddenCandidateCap ?? null,
+        sourceHistoryStatsReadbackAuthority: admission.sourceHistoryStatsReadbackAuthority || null,
+        productionCandidateNoCpuReadback: admission.productionCandidateNoCpuReadback ?? null,
+        fixedSourceDeltaLongStripSha256: admission.fixedSourceDeltaLongStripSha256 || null,
+        normalBasinCoverageRange: admission.normalBasinCoverageRange || null,
+        normalBasinCoverageMean: admission.normalBasinCoverageMean ?? null,
+        runnerEpochBefore: runnerBefore?.nativeLowSourceHistoryEpochCount ?? null,
+        runnerEpochAfter: runnerAfter?.nativeLowSourceHistoryEpochCount ?? null,
+        runnerResetReasonBefore: runnerBefore?.nativeLowSourceHistoryEpochReason || null,
+        runnerResetReasonAfter: runnerAfter?.nativeLowSourceHistoryEpochReason || null,
+      };
+    }
+
+    function numericStats(values) {
+      const clean = values.map(Number).filter(Number.isFinite);
+      if (!clean.length) return { min: null, max: null, mean: null };
+      return {
+        min: Math.min(...clean),
+        max: Math.max(...clean),
+        mean: clean.reduce((sum, value) => sum + value, 0) / clean.length,
+      };
+    }
+
+    function stripStats(frames) {
+      const coverage = numericStats(frames.map(frame => frame.uncappedCandidateCoverage));
+      const counts = numericStats(frames.map(frame => frame.uncappedCandidateCount));
+      const sourceDeltaAdmissionGpuMs = numericStats(frames.map(frame => frame.sourceDeltaAdmissionGpuMs));
+      const warningFrames = frames.filter(frame => frame.mohelWarning).length;
+      return {
+        minimumValidHistoryFrames: 4,
+        validHistoryFrameCount: frames.length,
+        coverageMin: coverage.min,
+        coverageMax: coverage.max,
+        coverageMean: coverage.mean,
+        candidateCountMin: counts.min,
+        candidateCountMax: counts.max,
+        candidateCountMean: counts.mean,
+        mohelWarningFrameCount: warningFrames,
+        sourceDeltaAdmissionGpuMsMin: sourceDeltaAdmissionGpuMs.min,
+        sourceDeltaAdmissionGpuMsMax: sourceDeltaAdmissionGpuMs.max,
+        sourceDeltaAdmissionGpuMsMean: sourceDeltaAdmissionGpuMs.mean,
+      };
+    }
+
+    async function runFixedGateDiscontinuityAssay(prototype) {
+      const assayFrames = [];
+      const preShiftFrames = [];
+      let guard = 0;
+      while (preShiftFrames.length < 4 && guard < 8) {
+        guard += 1;
+        const before = prototype.debugState?.() || null;
+        const receipt = await tick();
+        const after = prototype.debugState?.() || null;
+        const frame = fixedGateFrameReceipt('steady-pre-shift-valid-history-v0', receipt, before, after);
+        assayFrames.push(frame);
+        if (frame.historyEpochValidForAdmission === true && frame.sourceHistoryAvailable === true) preShiftFrames.push(frame);
+      }
+      const beforeShift = prototype.debugState?.() || null;
+      prototype.setControls({
+        inputRadius: 0.18,
+        flowRate: 1.5,
+        windStrength: 0.15,
+        windAngle: 72,
+        plumeHeight: 0.72,
+        runtimeQualityReason: 'fixed-gate-discontinuity-no-rebuild-source-shape-shift',
+      });
+      const shiftReceipt = await tick();
+      const afterShift = prototype.debugState?.() || null;
+      const noRebuildShift = fixedGateFrameReceipt('no-rebuild-violent-source-shape-shift-v0', shiftReceipt, beforeShift, afterShift);
+      assayFrames.push(noRebuildShift);
+
+      prototype.setControls({ resolution: 96, runtimeQualityReason: 'fixed-gate-discontinuity-grid-epoch-probe-96' });
+      prototype.setControls({ resolution: 128, runtimeQualityReason: 'fixed-gate-discontinuity-grid-epoch-probe-128' });
+      const beforeRebuildCapture = prototype.debugState?.() || null;
+      const rebuildReceipt = await tick();
+      const afterRebuildCapture = prototype.debugState?.() || null;
+      const rebuildInvalidated = fixedGateFrameReceipt('actual-basin-grid-scene-rebuild-v0', rebuildReceipt, beforeRebuildCapture, afterRebuildCapture);
+      assayFrames.push(rebuildInvalidated);
+
+      const beforePostRebuild = prototype.debugState?.() || null;
+      const postRebuildReceipt = await tick();
+      const afterPostRebuild = prototype.debugState?.() || null;
+      const postRebuildValid = fixedGateFrameReceipt('post-rebuild-consecutive-valid-frame-v0', postRebuildReceipt, beforePostRebuild, afterPostRebuild);
+      assayFrames.push(postRebuildValid);
+
+      const preShiftStripStats = stripStats(preShiftFrames);
+      const benchmarkFrames = preShiftFrames.map(frame => frame.candidateHeadCostMicrobenchmark).filter(Boolean);
+      const benchmarkCandidateCounts = numericStats(benchmarkFrames.map(benchmark => benchmark.candidateCount));
+      latestDiscontinuityAssay = {
+        identity: 'native-low-fixed-source-delta-discontinuity-assay-v0',
+        assayClaimScope: 'routing-cost-discontinuity-receipt-not-visual-robustness-claim-v0',
+        runtimeBuildIdentity: NATIVE_LOW_RUNTIME_BUILD_IDENTITY,
+        servedSourceBundleSha256: params.get('served_source_bundle_sha256') || null,
+        fixedSourceDeltaCalibrationSha256: noRebuildShift.fixedSourceDeltaCalibrationSha256,
+        sourceDeltaThreshold: noRebuildShift.sourceDeltaThreshold,
+        sourceDeltaScales: noRebuildShift.sourceDeltaScales,
+        steadyPreShiftStrip: {
+          minimumValidHistoryFrames: 4,
+          validHistoryFrameCount: preShiftStripStats.validHistoryFrameCount,
+          coverageMin: preShiftStripStats.coverageMin,
+          coverageMax: preShiftStripStats.coverageMax,
+          coverageMean: preShiftStripStats.coverageMean,
+          candidateCountMin: preShiftStripStats.candidateCountMin,
+          candidateCountMax: preShiftStripStats.candidateCountMax,
+          candidateCountMean: preShiftStripStats.candidateCountMean,
+          sourceDeltaAdmissionGpuMsMin: preShiftStripStats.sourceDeltaAdmissionGpuMsMin,
+          sourceDeltaAdmissionGpuMsMax: preShiftStripStats.sourceDeltaAdmissionGpuMsMax,
+          sourceDeltaAdmissionGpuMsMean: preShiftStripStats.sourceDeltaAdmissionGpuMsMean,
+          mohelWarningFrameCount: preShiftStripStats.mohelWarningFrameCount,
+          sourceDeltaAdmissionContentionRangeMs: {
+            priorObservedR26: [1.043567, 9.699227],
+            currentObserved: [preShiftStripStats.sourceDeltaAdmissionGpuMsMin, preShiftStripStats.sourceDeltaAdmissionGpuMsMax],
+            smoothingApplied: false,
+          },
+          frames: preShiftFrames,
+        },
+        preShiftWorkloadPressure: {
+          phaseAlignedLongStripCoverageRange: [0.099875, 0.100891],
+          phaseAlignedLongStripCoverageMean: 0.100226,
+          mohelWarningThresholdMode: noRebuildShift.mohelWarningThresholdMode,
+          mohelWarningThresholdMultiple: noRebuildShift.mohelWarningThresholdMultiple,
+          mohelWarningBoundaryCoverage: noRebuildShift.mohelWarningBoundaryCoverage,
+          observedCoverageMin: preShiftStripStats.coverageMin,
+          observedCoverageMax: preShiftStripStats.coverageMax,
+          observedCoverageMean: preShiftStripStats.coverageMean,
+          observedCoverageMaxToNormalMeanRatio: preShiftStripStats.coverageMax / 0.100226,
+          provisionalOldRuntimeR20Coverage: 0.157384,
+          retargetedToTenPercent: false,
+          hiddenCapApplied: false,
+        },
+        candidateHeadCostMicrobenchmarkStrip: {
+          enabled: candidateHeadBenchmarkEnabled,
+          identity: 'native-low-candidate-head-cost-microbenchmark-v0',
+          claimScope: 'gpu-cost-microbenchmark-not-visual-or-fidelity-evidence-v0',
+          observedCandidateCountTargets: [554000, 609000, 761000],
+          benchmarkFrameCount: benchmarkFrames.length,
+          candidateCountMin: benchmarkCandidateCounts.min,
+          candidateCountMax: benchmarkCandidateCounts.max,
+          candidateCountMean: benchmarkCandidateCounts.mean,
+          frames: benchmarkFrames,
+        },
+        noRebuildViolentSourceShapeShift: noRebuildShift,
+        actualBasinGridSceneRebuild: rebuildInvalidated,
+        postRebuildConsecutiveValidFrame: postRebuildValid,
+        frames: assayFrames,
+        noHiddenCaps: true,
+        runtimeTopK: false,
+        dynamicPercentile: false,
+        failurePhase: null,
+      };
+      status.textContent = `fixed-gate assay | pre ${preShiftFrames.length} | shift ${(noRebuildShift.uncappedCandidateCoverage * 100).toFixed(2)}% | rebuild ${rebuildInvalidated.sourceHistoryResetReason}`;
+      return latestDiscontinuityAssay;
+    }
+
+    function lifecycleStressFrame(receipt, runnerBefore = null, runnerAfter = null) {
+      const lifecycle = receipt?.nativeLowCandidateCueBufferLifecycle || {};
+      return {
+        kind: 'resident-cue-buffer-lifecycle-frame-v0',
+        sourceStepIdentity: receipt?.sourceStepIdentity || null,
+        runtimeBuildIdentity: NATIVE_LOW_RUNTIME_BUILD_IDENTITY,
+        requestedBackend: receipt?.requestedBackend || 'WebGPU',
+        effectiveBackend: receipt?.effectiveBackend || null,
+        requestedComposition: receipt?.requestedComposition || requestedComposition,
+        effectiveComposition: receipt?.effectiveComposition || null,
+        candidateCount: lifecycle.candidateCount ?? receipt?.nativeLowFixedSourceDeltaAdmission?.uncappedCandidateCount ?? null,
+        previousCandidateCount: lifecycle.previousCandidateCount ?? null,
+        candidateCountChanged: lifecycle.candidateCountChanged ?? null,
+        candidateCountDecrease: lifecycle.candidateCountDecrease ?? null,
+        candidateCueRecordCapacity: lifecycle.candidateCueRecordCapacity ?? null,
+        candidateCueRecordCapacityBytes: lifecycle.candidateCueRecordCapacityBytes ?? null,
+        candidateCueRecordAllocationCount: lifecycle.candidateCueRecordAllocationCount ?? null,
+        candidateCueRecordReuseCount: lifecycle.candidateCueRecordReuseCount ?? null,
+        candidateCueRecordGrowthCount: lifecycle.candidateCueRecordGrowthCount ?? null,
+        activeRowsChecked: lifecycle.activeRowsChecked ?? null,
+        activeTokenMismatchCount: lifecycle.activeTokenMismatchCount ?? null,
+        staleTailRowsChecked: lifecycle.staleTailRowsChecked ?? null,
+        staleTailNonzeroCount: lifecycle.staleTailNonzeroCount ?? null,
+        staleCueRowsRetained: lifecycle.staleCueRowsRetained ?? null,
+        hiddenCandidateCap: lifecycle.hiddenCandidateCap ?? null,
+        noReallocation: lifecycle.noReallocation ?? null,
+        noLeak: lifecycle.noLeak ?? null,
+        syntheticWeightsAuthority: lifecycle.syntheticWeightsAuthority || null,
+        claimScope: lifecycle.claimScope || null,
+        candidateListSource: lifecycle.candidateListSource || null,
+        dispatchMode: lifecycle.dispatchMode || null,
+        sourceBundleSha256: params.get('served_source_bundle_sha256') || null,
+        runnerFrameBefore: runnerBefore?.frameCount ?? null,
+        runnerFrameAfter: runnerAfter?.frameCount ?? null,
+      };
+    }
+
+    async function runCueBufferLifecycleStress(prototype) {
+      const frames = [];
+      const controlSchedule = [
+        { inputRadius: 0.53, flowRate: 1.0, windStrength: 1.25, runtimeQualityReason: 'cue-buffer-lifecycle-baseline-a' },
+        { inputRadius: 0.18, flowRate: 1.5, windStrength: 0.15, windAngle: 72, runtimeQualityReason: 'cue-buffer-lifecycle-small-source' },
+        { inputRadius: 0.64, flowRate: 0.85, windStrength: 1.8, windAngle: -45, runtimeQualityReason: 'cue-buffer-lifecycle-wide-source' },
+        { inputRadius: 0.28, flowRate: 1.25, windStrength: 0.55, windAngle: 18, runtimeQualityReason: 'cue-buffer-lifecycle-mid-source' },
+      ];
+      for (const controls of controlSchedule) {
+        const before = prototype.debugState?.() || null;
+        prototype.setControls(controls);
+        const receipt = await tick();
+        const after = prototype.debugState?.() || null;
+        frames.push(lifecycleStressFrame(receipt, before, after));
+      }
+      prototype.setControls({ resolution: 96, runtimeQualityReason: 'cue-buffer-lifecycle-grid-reset-96' });
+      prototype.setControls({ resolution: 128, runtimeQualityReason: 'cue-buffer-lifecycle-grid-reset-128' });
+      const beforeReset = prototype.debugState?.() || null;
+      const resetReceipt = await tick();
+      const afterReset = prototype.debugState?.() || null;
+      frames.push({ ...lifecycleStressFrame(resetReceipt, beforeReset, afterReset), kind: 'resident-cue-buffer-lifecycle-reset-frame-v0' });
+      const beforeRecovery = prototype.debugState?.() || null;
+      const recoveryReceipt = await tick();
+      const afterRecovery = prototype.debugState?.() || null;
+      frames.push({ ...lifecycleStressFrame(recoveryReceipt, beforeRecovery, afterRecovery), kind: 'resident-cue-buffer-lifecycle-post-reset-frame-v0' });
+
+      const counts = frames.map(frame => Number(frame.candidateCount)).filter(Number.isFinite);
+      const maxCount = counts.length ? Math.max(...counts) : null;
+      const minCount = counts.length ? Math.min(...counts) : null;
+      const distinctCounts = [...new Set(counts)];
+      const staleTailRowsChecked = frames.reduce((sum, frame) => sum + Number(frame.staleTailRowsChecked || 0), 0);
+      const activeTokenMismatchCount = frames.reduce((sum, frame) => sum + Number(frame.activeTokenMismatchCount || 0), 0);
+      const staleTailNonzeroCount = frames.reduce((sum, frame) => sum + Number(frame.staleTailNonzeroCount || 0), 0);
+      const allocationCounts = frames.map(frame => Number(frame.candidateCueRecordAllocationCount)).filter(Number.isFinite);
+      const growthCounts = frames.map(frame => Number(frame.candidateCueRecordGrowthCount)).filter(Number.isFinite);
+      const reuseCounts = frames.map(frame => Number(frame.candidateCueRecordReuseCount)).filter(Number.isFinite);
+      const capacity = frames.find(frame => Number.isFinite(Number(frame.candidateCueRecordCapacity)))?.candidateCueRecordCapacity ?? 160 ** 3;
+      latestCueBufferLifecycleStress = {
+        identity: 'native-low-resident-cue-buffer-lifecycle-stress-v0',
+        claimScope: 'lifecycle-cost-substrate-not-fidelity-or-visual-evidence-v0',
+        runtimeBuildIdentity: NATIVE_LOW_RUNTIME_BUILD_IDENTITY,
+        sourceBundleSha256: params.get('served_source_bundle_sha256') || null,
+        requestedBackend: 'WebGPU',
+        effectiveBackend: frames.find(frame => frame.effectiveBackend)?.effectiveBackend || null,
+        requestedComposition,
+        effectiveComposition: frames.find(frame => frame.effectiveComposition)?.effectiveComposition || null,
+        candidateListSource: 'real-uncapped-fixed-gate-sourceHistoryCandidates-v0',
+        dispatchMode: 'dispatchWorkgroupsIndirect-sourceHistoryDispatchArgs-v0',
+        syntheticWeightsAuthority: 'synthetic-deterministic-candidate-head-cost-substrate-not-learned-evidence-v0',
+        observedCandidateCountTarget: 209000,
+        candidateCountMin: minCount,
+        candidateCountMax: maxCount,
+        candidateCountMean: counts.length ? counts.reduce((sum, value) => sum + value, 0) / counts.length : null,
+        distinctCandidateCountCount: distinctCounts.length,
+        countDecreaseObserved: frames.some(frame => frame.candidateCountDecrease === true),
+        candidateCueRecordCapacity: capacity,
+        candidateCueRecordCapacityBytes: capacity * 32,
+        candidateCueRecordAllocationCount: allocationCounts.length ? Math.max(...allocationCounts) : 1,
+        candidateCueRecordReuseCount: reuseCounts.length ? Math.max(...reuseCounts) : 0,
+        candidateCueRecordGrowthCount: growthCounts.length ? Math.max(...growthCounts) : 0,
+        noReallocation: allocationCounts.every(value => value === 1),
+        noLeak: growthCounts.every(value => value === 0),
+        hiddenCandidateCap: false,
+        staleTailRowsChecked,
+        activeTokenMismatchCount,
+        staleTailNonzeroCount,
+        staleCueRowsRetained: staleTailNonzeroCount > 0,
+        fidelityClaim: false,
+        visualClaim: false,
+        frameCount: frames.length,
+        frames,
+        failurePhase: null,
+      };
+      status.textContent = `cue lifecycle | frames ${frames.length} | count ${minCount}-${maxCount} | stale ${staleTailNonzeroCount}`;
+      return latestCueBufferLifecycleStress;
+    }
+
+    function trainedRoleReceipt(role, receipt) {
+      const route = receipt?.nativeLowTrainedPackageRoute || {};
+      const equality = receipt?.candidateInstanceEquality || route.candidateInstanceEquality || {};
+      return {
+        identity: role,
+        role,
+        sourceStepIdentity: receipt?.sourceStepIdentity || null,
+        sameNativeStateIdentity: receipt?.sameNativeStateIdentity || null,
+        modelIdentity: route.modelIdentity || receipt?.modelIdentity || null,
+        modelSha256: route.modelSha256 || receipt?.modelSha256 || null,
+        packageSha256: route.packageSha256 || null,
+        requestedTransferRouteId: route.requestedTransferRouteId || receipt?.requestedTransferRouteId || null,
+        effectiveTransferRouteId: route.effectiveTransferRouteId || receipt?.effectiveTransferRouteId || null,
+        trainedLowGrid: route.trainedLowGrid ?? null,
+        effectiveSourceGrid: route.effectiveSourceGrid ?? null,
+        requestedBackend: receipt?.requestedBackend || route.requestedBackend || 'WebGPU',
+        effectiveBackend: receipt?.effectiveBackend || route.effectiveBackend || null,
+        fallbackBackend: receipt?.fallbackBackend || route.fallbackBackend || null,
+        requestedComposition: receipt?.requestedComposition || requestedComposition,
+        effectiveComposition: receipt?.effectiveComposition || route.effectiveComposition || null,
+        candidateCount: equality.candidateCount ?? receipt?.treatmentSplatCandidateCount ?? null,
+        instanceCount: equality.instanceCount ?? receipt?.treatmentSplatInstanceCount ?? null,
+        overflowCount: equality.overflowCount ?? null,
+        candidateInstanceEquality: {
+          ...equality,
+          equal: equality.equal ?? equality.candidateCount === equality.instanceCount,
+          overflowZero: equality.overflowZero ?? equality.overflowCount === 0,
+          hiddenCandidateCap: false,
+        },
+        stageTiming: receipt?.stageTiming || null,
+        modelSpecificTiming: route.modelSpecificTiming || null,
+        stalePredictionRejection: receipt?.stalePredictionRejection || null,
+      };
+    }
+
+    function nativeControlRoleReceipt(receipt) {
+      return {
+        identity: 'native96Control',
+        role: 'native96Control',
+        authority: 'untouched-native-96-control-sanity-baseline-v0',
+        grid: 96,
+        sourceStepIdentity: receipt?.sourceStepIdentity || null,
+        sameNativeStateIdentity: receipt?.sameNativeStateIdentity || null,
+        requestedBackend: receipt?.requestedBackend || 'WebGPU',
+        effectiveBackend: receipt?.effectiveBackend || null,
+        fallbackBackend: receipt?.fallbackBackend || null,
+        requestedComposition: receipt?.requestedComposition || requestedComposition,
+        effectiveComposition: receipt?.effectiveComposition || null,
+        splatCandidateCount: receipt?.controlSplatCandidateCount ?? null,
+        splatInstanceCount: receipt?.controlSplatInstanceCount ?? null,
+      };
+    }
+
+    function setCapturePaused(paused) {
+      capturePaused = Boolean(paused);
+      routeStatus = capturePaused ? 'paused' : 'running';
+      proto()?.setSelectiveHeadLiveCapturePaused?.(capturePaused);
+      if (!capturePaused) requestAnimationFrame(loop);
+      return { ok: true, paused: capturePaused, identity: 'native-low-manual-capture-pause-control-v0' };
+    }
+
+    async function stepCaptureFrame() {
+      failurePhase = 'manual-dual-capture';
+      capturePaused = true;
+      const prototype = await waitForPrototype();
+      if (!prototype?.captureNativeLowSelectiveSharedDeviceFrame) {
+        throw new Error('captureNativeLowSelectiveSharedDeviceFrame missing from renderer prototype');
+      }
+      prototype.setSelectiveHeadLiveCapturePaused?.(true);
+      prototype.setControls({
+        resolution: 96,
+        boundarySplatMode: 'learned',
+        selectiveHeadLiveRole: 'off',
+        selectiveHeadLiveRenderComposition: requestedComposition,
+        runtimeQualityReason: 'native-low-dual-trained-package-manual-capture',
+      });
+      const sharedOptions = {
+        boundarySplatComposition: requestedComposition,
+        now: performance.now(),
+        captureVisuals: true,
+        sourceHistoryDetailAdmissionEnabled,
+        sourceHistoryDetailTargetCoverage,
+        supportProbabilityDetailAdmissionEnabled,
+        coarseFrontDetailAdmissionEnabled,
+        treatmentSplatRadianceGain,
+        treatmentSplatOpacityGain,
+      };
+      const runnerBefore = prototype.debugState?.() || null;
+      const baseline128 = await prototype.captureNativeLowSelectiveSharedDeviceFrame({
+        ...sharedOptions,
+        transferRouteId: NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE,
+        advanceSourceStep: true,
+      });
+      if (!baseline128?.ok) throw new Error(`${baseline128?.failurePhase || 'baseline128Trained'}:${baseline128?.error || 'unknown'}`);
+      const candidate96 = await prototype.captureNativeLowSelectiveSharedDeviceFrame({
+        ...sharedOptions,
+        transferRouteId: NATIVE_LOW_TRANSFER_160_TO_96_DEPLOYMENT_GRID_ROUTE,
+        advanceSourceStep: false,
+        expectedSourceStepIdentity: baseline128.sourceStepIdentity,
+      });
+      if (!candidate96?.ok) throw new Error(`${candidate96?.failurePhase || 'candidate96Trained'}:${candidate96?.error || 'unknown'}`);
+      replaceImageUrls({
+        visuals: {
+          controlObjectUrl: baseline128.visuals?.controlObjectUrl,
+          treatmentObjectUrl: baseline128.visuals?.treatmentObjectUrl,
+          frontTopologyAblatedObjectUrl: candidate96.visuals?.treatmentObjectUrl,
+        },
+      });
+      frameIndex += 1;
+      const baselineRole = trainedRoleReceipt('baseline128Trained', baseline128);
+      const candidateRole = trainedRoleReceipt('candidate96Trained', candidate96);
+      const native96Control = nativeControlRoleReceipt(baseline128);
+      const sameNativeStateIdentity = `native-96-shared-source:${baseline128.sourceStepIdentity}:composition-${requestedComposition}:transport-${NATIVE_LOW_TRANSPORT_MODE}`;
+      const candidateEqualityOk = baselineRole.candidateCount === baselineRole.instanceCount
+        && candidateRole.candidateCount === candidateRole.instanceCount
+        && baselineRole.overflowCount === 0
+        && candidateRole.overflowCount === 0;
+      latestManualDualCapture = {
+        ok: candidateEqualityOk,
+        status: candidateEqualityOk ? 'captured' : 'failed',
+        identity: 'native-low-dual-trained-package-manual-capture-v0',
+        routeRegistryIdentity: NATIVE_LOW_TRAINED_PACKAGE_ROUTE_REGISTRY_IDENTITY,
+        routeRegistry: nativeLowTrainedPackageRouteRegistry(),
+        sourceStepIdentity: baseline128.sourceStepIdentity,
+        sameNativeStateIdentity,
+        singleNative96StepAdvanced: true,
+        secondPackageAdvanceSourceStep: false,
+        independentPages: false,
+        sharedSourceStateEncoding: true,
+        runnerFrameBefore: runnerBefore?.frameCount ?? null,
+        runnerFrameAfter: prototype.debugState?.()?.frameCount ?? null,
+        sourceStepDelta: baseline128.simulationSteppingReceipt?.simStepDelta ?? null,
+        secondPackageSourceStepDelta: candidate96.simulationSteppingReceipt?.simStepDelta ?? null,
+        visualRoles: {
+          native96Control,
+          baseline128Trained: baselineRole,
+          candidate96Trained: candidateRole,
+        },
+        modelReceipts: {
+          baseline128Trained: {
+            modelIdentity: baselineRole.modelIdentity,
+            modelSha256: baselineRole.modelSha256,
+            packageSha256: baselineRole.packageSha256,
+          },
+          candidate96Trained: {
+            modelIdentity: candidateRole.modelIdentity,
+            modelSha256: candidateRole.modelSha256,
+            packageSha256: candidateRole.packageSha256,
+          },
+        },
+        requestedRoute: NATIVE_LOW_SELECTIVE_LIVE_ROUTE,
+        effectiveRoute: NATIVE_LOW_SHARED_DEVICE_ROUTE,
+        requestedBackend: 'WebGPU',
+        effectiveBackend: baseline128.effectiveBackend || candidate96.effectiveBackend || null,
+        fallbackBackend: baseline128.fallbackBackend || candidate96.fallbackBackend || null,
+        requestedComposition,
+        effectiveComposition: baseline128.effectiveComposition === candidate96.effectiveComposition ? baseline128.effectiveComposition : null,
+        compositionMismatch: baseline128.effectiveComposition !== requestedComposition || candidate96.effectiveComposition !== requestedComposition ? compositionMismatch : null,
+        stalePredictionRejection: {
+          baseline128Trained: baseline128.stalePredictionRejection || null,
+          candidate96Trained: candidate96.stalePredictionRejection || null,
+          repeatedStaticPrediction: false,
+          stalePrediction: false,
+        },
+        fallbackFields: {
+          baselineFallbackBackend: baseline128.fallbackBackend || null,
+          candidateFallbackBackend: candidate96.fallbackBackend || null,
+          baselineCompositionMismatch: baseline128.compositionMismatch || null,
+          candidateCompositionMismatch: candidate96.compositionMismatch || null,
+          staleFrameRejected: false,
+        },
+        candidateInstanceEqualityOk: candidateEqualityOk,
+        failurePhase: candidateEqualityOk ? null : 'manual-dual-candidate-instance-equality',
+      };
+      latestReceipt = latestManualDualCapture;
+      latestRunnerState = prototype.debugState?.() || null;
+      lastTrustworthyEvidence = { latestManualDualCapture, runner: latestRunnerState };
+      status.textContent = `manual dual | step ${baseline128.sourceStep} | 128 ${baselineRole.instanceCount}/${baselineRole.candidateCount} | 96 ${candidateRole.instanceCount}/${candidateRole.candidateCount}`;
+      return latestManualDualCapture;
+    }
+
+    function debugState() {
+      const durationSeconds = (performance.now() - startedAtMs) / 1000;
+      const receipt = latestReceipt || {};
+      const runner = latestRunnerState || proto()?.debugState?.() || null;
+      const effectiveComposition = receipt.effectiveComposition || null;
+      const drift = receipt.sourceStepDrift || null;
+      const frameCacheKey = receipt.sameNativeStateIdentity
+        ? `${receipt.sameNativeStateIdentity}:frame-${frameIndex}`
+        : CONTRACT_MARKERS.frameCacheKey;
+      return {
+        schema: REPORT_SCHEMA,
+        identity: NATIVE_LOW_SELECTIVE_LIVE_ROUTE,
+        status: routeStatus,
+        failurePhase,
+        routeIdentity: NATIVE_LOW_SELECTIVE_LIVE_ROUTE,
+        sharedDeviceRoute: NATIVE_LOW_SHARED_DEVICE_ROUTE,
+        runtimeBuildIdentity: NATIVE_LOW_RUNTIME_BUILD_IDENTITY,
+        runtimeBuildCacheKey: `${NATIVE_LOW_RUNTIME_BUILD_IDENTITY}:${location.search}`,
+        transportMode: receipt.transportMode || NATIVE_LOW_TRANSPORT_MODE,
+        modelIdentity: SELECTIVE_HEAD_LIVE_MODEL.identity,
+        modelSha256: SELECTIVE_HEAD_LIVE_MODEL.packed.sha256,
+        modelUrl: SELECTIVE_HEAD_LIVE_MODEL_URL,
+        requestedTransferRouteId,
+        nativeLowTrainedPackageRouteRegistry: nativeLowTrainedPackageRouteRegistry(),
+        nativeLowTrainedPackageRoute: receipt.nativeLowTrainedPackageRoute || null,
+        nativeLowDualTrainedPackageManualCapture: latestManualDualCapture,
+        native96Control: latestManualDualCapture?.visualRoles?.native96Control || null,
+        baseline128Trained: latestManualDualCapture?.visualRoles?.baseline128Trained || null,
+        candidate96Trained: latestManualDualCapture?.visualRoles?.candidate96Trained || null,
+        modelChecksumMismatch: null,
+        inputAuthority: NATIVE_LOW_INPUT_AUTHORITY,
+        featureAuthority: NATIVE_LOW_FEATURE_AUTHORITY,
+        runtimeTruthAvailable,
+        syntheticDownsampleApplied,
+        nativeLowControl: { grid: native64ManifestMode ? 64 : 128, step: receipt.controlStep ?? null, backend: runner?.backend || null },
+        nativeLowSelectivePredicted: { grid: 160, step: receipt.treatmentStep ?? null, backend: runner?.backend || null },
+        fullFrozenTreatmentReference: receipt.fullFrozenTreatmentReference || null,
+        frontTopologyAblatedTreatment: receipt.frontTopologyAblatedTreatment || null,
+        nativeLowFrontTopologyAblation: receipt.nativeLowFrontTopologyAblation || null,
+        native64CrossGridDiscriminant: receipt.native64CrossGridDiscriminant || null,
+        native64NoModelControl: receipt.native64NoModelControl || null,
+        native64SelectivePredicted: receipt.native64SelectivePredicted || null,
+        native64ManifestMaterializationProfile: receipt.native64ManifestMaterializationProfile || null,
+        macroStructureDecision: receipt.macroStructureDecision || null,
+        coarseMacroStructurePreserved: receipt.coarseMacroStructurePreserved ?? null,
+        templateReplacementRisk: receipt.templateReplacementRisk || null,
+        native64SourceManifestUrl: native64ManifestMode ? native64SourceManifestUrl : null,
+        native64PredictionManifestUrl: native64ManifestMode ? native64PredictionManifestUrl : null,
+        sourceManifestSha256: receipt.sourceManifestSha256 || null,
+        predictionManifestSha256: receipt.predictionManifestSha256 || null,
+        sameNativeStateIdentity: receipt.sameNativeStateIdentity || null,
+        sourceStepIdentity: receipt.sourceStepIdentity || null,
+        sourceStepDrift: drift,
+        controlTreatmentCausalDivergence: drift ? controlTreatmentCausalDivergence : null,
+        requestedComposition,
+        effectiveComposition,
+        compositionMismatch: effectiveComposition && effectiveComposition !== requestedComposition ? compositionMismatch : null,
+        requestedCalibration,
+        effectiveCalibration: receipt.effectiveCalibration || null,
+        treatmentSplatRadianceGain: receipt.treatmentSplatRadianceGain ?? treatmentSplatRadianceGain,
+        treatmentSplatOpacityGain: receipt.treatmentSplatOpacityGain ?? treatmentSplatOpacityGain,
+        modelOutputMutation: receipt.modelOutputMutation ?? false,
+        nativeLowTreatmentSplatCalibration: receipt.nativeLowTreatmentSplatCalibration || null,
+        requestedBackend: receipt.requestedBackend || 'WebGPU',
+        effectiveBackend: receipt.effectiveBackend || null,
+        fallbackBackend,
+        effectiveFeatureCount: receipt.effectiveFeatureCount || SELECTIVE_HEAD_LIVE_MODEL.features.featureCount,
+        noHiddenCaps,
+        nativeLowInferenceWorkProfile: receipt.nativeLowInferenceWorkProfile || null,
+        nativeLowHeadCostProfile: receipt.nativeLowHeadCostProfile || null,
+        headCostTimingAuthority: receipt.headCostTimingAuthority || null,
+        nativeLowSupportTileProfile: receipt.nativeLowSupportTileProfile || null,
+        nativeLowSourceTileCandidate: receipt.nativeLowSourceTileCandidate || null,
+        supportPositiveCount: receipt.supportPositiveCount ?? null,
+        supportThreshold: receipt.supportThreshold ?? null,
+        predictedPositiveCount: receipt.predictedPositiveCount ?? null,
+        supportPrevalence: receipt.supportPrevalence ?? null,
+        treatmentSplatCandidateCount: receipt.treatmentSplatCandidateCount ?? null,
+        treatmentSplatInstanceCount: receipt.treatmentSplatInstanceCount ?? null,
+        frontTopologyAblatedSplatCandidateCount: receipt.frontTopologyAblatedSplatCandidateCount ?? null,
+        frontTopologyAblatedSplatInstanceCount: receipt.frontTopologyAblatedSplatInstanceCount ?? null,
+        controlSplatCandidateCount: receipt.controlSplatCandidateCount ?? null,
+        controlSplatInstanceCount: receipt.controlSplatInstanceCount ?? null,
+        calibrationGain: receipt.calibrationGain ?? 1,
+        calibrationAuthority: receipt.calibrationAuthority || 'none-truth-free-calibration-not-applied-v0',
+        blankTreatmentAttribution: receipt.blankTreatmentAttribution || null,
+        nativeStepMs: receipt.nativeStepMs ?? null,
+        inferenceGpuMs: receipt.inferenceGpuMs ?? null,
+        inferenceTimingAuthority: receipt.inferenceTimingAuthority || null,
+        uploadDispatchMs: receipt.uploadDispatchMs ?? null,
+        supportStatsMs: receipt.supportStatsMs ?? null,
+        treatmentMaterializeMs: receipt.treatmentMaterializeMs ?? null,
+        treatmentRebuildMs: receipt.treatmentRebuildMs ?? null,
+        treatmentCopyMs: receipt.treatmentCopyMs ?? null,
+        treatmentRenderMs: receipt.treatmentRenderMs ?? null,
+        frontTopologyAblatedMaterializeMs: receipt.frontTopologyAblatedMaterializeMs ?? null,
+        frontTopologyAblatedRenderMs: receipt.frontTopologyAblatedRenderMs ?? null,
+        restoreMaterializeMs: receipt.restoreMaterializeMs ?? null,
+        restoreRebuildMs: receipt.restoreRebuildMs ?? null,
+        restoreCopyMs: receipt.restoreCopyMs ?? null,
+        controlRenderMs: receipt.controlRenderMs ?? null,
+        nativeLowMaterializationProfile: receipt.nativeLowMaterializationProfile || null,
+        nativeLowProductionStageLedger: receipt.nativeLowProductionStageLedger || null,
+        nativeLowBreakEvenBudgetLedger: receipt.nativeLowBreakEvenBudgetLedger || null,
+        nativeLowCoarseFrontSparseDetailBand: receipt.nativeLowCoarseFrontSparseDetailBand || null,
+        nativeLowSourceHistoryDetailCandidate: receipt.nativeLowSourceHistoryDetailCandidate || null,
+        nativeLowFixedSourceDeltaAdmission: receipt.nativeLowFixedSourceDeltaAdmission || null,
+        nativeLowCandidateHeadCostMicrobenchmark: receipt.nativeLowCandidateHeadCostMicrobenchmark || null,
+        nativeLowResidentCueBufferLifecycleStress: latestCueBufferLifecycleStress,
+        nativeLowCandidateCueBufferLifecycle: receipt.nativeLowCandidateCueBufferLifecycle || null,
+        nativeLowVivisectorCandidateHeadPackageReceiver: vivisectorCandidateHeadPackageReceipt,
+        nativeLowFixedGateDiscontinuityAssay: latestDiscontinuityAssay,
+        endToEndFrameMs: receipt.endToEndFrameMs ?? null,
+        simulationSteppingReceipt: receipt.simulationSteppingReceipt || null,
+        currentSourceFrameConsumption: receipt.currentSourceFrameConsumption || null,
+        stalePredictionRejection: receipt.stalePredictionRejection || null,
+        stageTiming: receipt.stageTiming || null,
+        durationSeconds,
+        targetSeconds,
+        frameIndex,
+        blankFrameRejection,
+        cachedFrameRejection,
+        frameCacheKey,
+        lastTrustworthyEvidence,
+        runner,
+      };
+    }
+
+    async function initialize() {
+      await validateVivisectorCandidateHeadPackageForRoute();
+      failurePhase = 'route-initialize';
+      runnerFrame.src = `./?${new URLSearchParams(baseControls)}`;
+      const prototype = await waitForPrototype();
+      prototype.setControls({
+        resolution: native64ManifestMode ? 64 : manualDualCaptureMode ? 96 : 128,
+        boundarySplatMode: 'learned',
+        selectiveHeadLiveRole: 'off',
+        selectiveHeadLiveRenderComposition: requestedComposition,
+      });
+      prototype.setSelectiveHeadLiveCapturePaused?.(true);
+      startedAtMs = performance.now();
+      if (manualDualCaptureMode) {
+        routeStatus = 'paused';
+        failurePhase = null;
+        status.textContent = 'manual capture paused | call window.__kaminosNativeLowSelectiveLive.stepCaptureFrame()';
+        return;
+      }
+      await tick();
+      if (native64ManifestMode) {
+        routeStatus = 'captured';
+        failurePhase = null;
+        return;
+      }
+      if (fixedGateDiscontinuityAssayMode) {
+        routeStatus = 'assay-running';
+        await runFixedGateDiscontinuityAssay(prototype);
+      }
+      if (cueBufferLifecycleStressMode) {
+        routeStatus = 'cue-buffer-lifecycle-stress-running';
+        await runCueBufferLifecycleStress(prototype);
+      }
+      routeStatus = 'running';
+      failurePhase = null;
+      requestAnimationFrame(loop);
+    }
+
+    async function loop() {
+      if (routeStatus !== 'running') return;
+      if (capturePaused) return;
+      try {
+        if (performance.now() - lastFrameAtMs >= stepIntervalMs) {
+          lastFrameAtMs = performance.now();
+          await tick();
+        }
+      } catch (error) {
+        routeStatus = 'failed';
+        failurePhase = failurePhase || 'route-loop';
+        lastTrustworthyEvidence = { ...lastTrustworthyEvidence, error: error?.message || String(error), state: debugState() };
+        status.textContent = error?.message || String(error);
+        status.classList.add('bad');
+        return;
+      }
+      requestAnimationFrame(loop);
+    }
+
+    window.__kaminosNativeLowSelectiveLive = { setCapturePaused, debugState, stepCaptureFrame };
+    initialize().catch(error => {
+      routeStatus = 'failed';
+      failurePhase = failurePhase || 'route-initialize';
+      lastTrustworthyEvidence = { ...lastTrustworthyEvidence, error: error?.stack || error?.message || String(error) };
+      status.textContent = error?.message || String(error);
+      status.classList.add('bad');
+    });
+  </script>
+</body>
+</html>

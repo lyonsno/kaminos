@@ -11,6 +11,18 @@ const CONTROL_AUTHORITY = 'native-low-simulator-held-control-v0';
 const TREATMENT_AUTHORITY = 'frozen-exact-basin-heads-applied-to-native-low-state-v0';
 const CROSS_GRID_TREATMENT_AUTHORITY = 'frozen-trained-grid-heads-applied-to-explicit-cross-grid-native-state-v0';
 const FIELD_LAYOUT_IDENTITY = 'x-fastest-zyx-c-interleaved-v0';
+const TRAINED_PACKAGE_ROUTE_MARKERS = Object.freeze({
+  nativeLowTrainedPackageRoute: {
+    requestedTransferRouteId: 'native-low-transfer-160-to-128-zero-shot-v0',
+    effectiveTransferRouteId: 'native-low-transfer-160-to-128-zero-shot-v0',
+    candidateInstanceEquality: {
+      candidateCount: 0,
+      instanceCount: 0,
+      overflowCount: 0,
+      hiddenCandidateCap: false,
+    },
+  },
+});
 const FLUID_CHANNELS = [
   'velocityX', 'velocityY', 'velocityZ', 'densityCarrier', 'smokeDensity', 'heat', 'fuel', 'detail',
   'flame', 'ember', 'visibleFireCarrier', 'combustionFront', 'microdetail', 'interfaceShred', 'fireLick', 'emberFleck',
@@ -264,6 +276,7 @@ try {
       raymarchExcludedFromDiscriminant: true,
     },
     roles: { nativeLowControl: control, nativeLowSelectivePredicted: treatment },
+    nativeLowTrainedPackageRoute: TRAINED_PACKAGE_ROUTE_MARKERS.nativeLowTrainedPackageRoute,
     sources: {
       nativeManifest: { path: nativeManifestPath, sha256: native.sha256 },
       predictedManifest: { path: predictedManifestPath, sha256: predicted.sha256 },
