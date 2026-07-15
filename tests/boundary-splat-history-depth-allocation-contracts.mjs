@@ -6,13 +6,42 @@ import { readFileSync } from 'node:fs';
 import * as volumeCore from '../volume-core.js';
 
 const coreSource = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+const indexSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const planHistory = volumeCore.boundarySplatHistoryDepthAllocationPlan;
+const selectRuntimeDepth = volumeCore.boundarySplatHistoryDepthRuntimeSelection;
 
 assert.equal(
   typeof planHistory,
   'function',
   'runtime must expose a deterministic requested/allocated history-depth plan before allocating GPU buffers',
 );
+assert.equal(
+  typeof selectRuntimeDepth,
+  'function',
+  'runtime must resolve requested and physically allocated depth before any GPU indexing',
+);
+
+assert.deepEqual(selectRuntimeDepth(32, 32), {
+  ok: true,
+  requestedDepth: 32,
+  allocatedDepth: 32,
+  activeDepth: 32,
+  refusalReasons: [],
+});
+assert.deepEqual(selectRuntimeDepth(16, 64), {
+  ok: true,
+  requestedDepth: 16,
+  allocatedDepth: 64,
+  activeDepth: 16,
+  refusalReasons: [],
+}, 'a lower runtime request may lawfully address a prefix of the physical ring');
+assert.deepEqual(selectRuntimeDepth(65, 64), {
+  ok: false,
+  requestedDepth: 65,
+  allocatedDepth: 64,
+  activeDepth: 0,
+  refusalReasons: ['requested-history-depth-exceeds-allocated-depth-runtime-reload-required'],
+}, 'a larger runtime request must fail loud rather than index beyond the physical ring');
 
 const limits = {
   maxBufferSize: 268_435_456,
@@ -65,6 +94,16 @@ assert.equal(depth64.measuredUpperDepthAtObservedSource, 774);
 assert.equal(depth64.limitingReason, 'candidate-capacity-reduced-for-requested-history-depth');
 assert.deepEqual(depth64.refusalReasons, []);
 
+const observedOverflow = planHistory({
+  ...limits,
+  requestedDepth: 64,
+  observedSourceCandidateCount: 90_000,
+});
+assert.equal(observedOverflow.ok, false, 'allocation must refuse if its reduced candidate capacity cannot contain the observed live source');
+assert.equal(observedOverflow.allocatedDepth, 0);
+assert.equal(observedOverflow.allocatedCandidateCapacity, 0);
+assert.ok(observedOverflow.refusalReasons.includes('observed-source-candidate-count-exceeds-history-capacity'));
+
 const impossible = planHistory({
   ...limits,
   requestedDepth: 6_000_000,
@@ -98,5 +137,25 @@ assert.match(coreSource, /boundarySplatHistoryActiveDepth/, 'telemetry must expo
 assert.match(coreSource, /boundarySplatHistoryEffectiveDepth/, 'telemetry must expose GPU-ready effective depth separately');
 assert.match(coreSource, /boundarySplatHistoryDepthRefusalReasons/, 'telemetry must fail loud with exact allocation refusal reasons');
 assert.match(coreSource, /boundarySplatHistoryMeasuredUpperDepth/, 'telemetry must expose the uncapped upper rung derived from observed source count and device limits');
+assert.match(
+  coreSource.match(/function makeBoundarySplatInstanceDescriptors[\s\S]*?\n  function writeBoundarySplatInstanceDescriptors/)?.[0] || '',
+  /currentBoundarySplatHistoryDepthSelection\(\)/,
+  'instance descriptors must address the active physical history selection',
+);
+assert.match(
+  coreSource.match(/function encodeBoundarySplats[\s\S]*?\n  function encodeBoundarySplatPbrScene/)?.[0] || '',
+  /currentBoundarySplatHistoryDepthSelection\(\)/,
+  'the live archive encoder must refuse mismatched requested and allocated depths before GPU indexing',
+);
+assert.match(
+  indexSource,
+  /<input type="number" id="volume-boundary-splat-history-depth" min="4" step="1" value="4">/,
+  'operator history-depth control must accept an explicit uncapped numeric request',
+);
+assert.doesNotMatch(
+  indexSource,
+  /id="volume-boundary-splat-history-depth"[^>]*max="16"/,
+  'operator history-depth control must not silently restore the old 16-slot ceiling',
+);
 
 console.log('boundary splat history depth allocation contracts passed');

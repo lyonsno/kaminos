@@ -1208,7 +1208,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       </div>
       <div class="slider-row">
         <span class="slider-label">History depth</span>
-        <input type="range" id="volume-boundary-splat-history-depth" min="4" max="16" step="1" value="4">
+        <input type="number" id="volume-boundary-splat-history-depth" min="4" step="1" value="4">
         <span class="slider-val" id="volume-boundary-splat-history-depth-val">4</span>
       </div>
       <div class="slider-row">
@@ -11906,7 +11906,7 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
   { key: 'boundarySplatInstances', id: 'volume-boundary-splat-instances', param: 'volume_boundary_splat_instances', min: 1, max: 128, decimals: 0 },
   { key: 'boundarySplatCandidateBudget', id: 'volume-boundary-splat-candidate-budget', param: 'volume_boundary_splat_candidate_budget', min: 0, max: 12800, decimals: 0 },
   { key: 'boundarySplatPhaseStride', id: 'volume-boundary-splat-phase-stride', param: 'volume_boundary_splat_phase_stride', min: 1, max: 15, decimals: 0 },
-  { key: 'boundarySplatHistoryDepth', id: 'volume-boundary-splat-history-depth', param: 'volume_boundary_splat_history_depth', min: 4, max: 16, decimals: 0 },
+  { key: 'boundarySplatHistoryDepth', id: 'volume-boundary-splat-history-depth', param: 'volume_boundary_splat_history_depth', min: 4, max: null, decimals: 0 },
   { key: 'boundarySplatHistoryFrameStride', id: 'volume-boundary-splat-history-frame-stride', param: 'volume_boundary_splat_history_frame_stride', min: 1, max: 16, decimals: 0 },
   { key: 'boundarySidecarBlur', id: 'volume-boundary-sidecar-blur', param: 'volume_boundary_sidecar_blur', min: 0, max: 1, decimals: 2 },
   { key: 'boundarySidecarWidth', id: 'volume-boundary-sidecar-width', param: 'volume_boundary_sidecar_width', min: 0, max: 2, decimals: 2 },
@@ -11984,7 +11984,8 @@ function normalizeBoundarySplatLodMode(value) {
 }
 
 function clampVolumeControlValue(value, field) {
-  return Math.max(field.min, Math.min(field.max, value));
+  const upperBounded = Number.isFinite(field.max) ? Math.min(field.max, value) : value;
+  return Math.max(field.min, upperBounded);
 }
 
 const VOLUME_BASIN_ROUTE_FIELDS = [
