@@ -7,10 +7,12 @@ import { spawn } from 'node:child_process';
 
 const SCHEMA = 'kaminos.volume.native-low-transfer-long-sequence-witness.v0';
 const IDENTITY = 'native-low-two-model-long-sequence-witness-v0';
-const SEQUENCE_AUTHORITY = 'frame-locked-consecutive-native-96-simulation-steps-v0';
 const PRESENTED_FRAME_AUTHORITY = 'cdp-presented-three-role-frame-after-one-native-step-v0';
-const EXPECTED_GRID = 96;
-const ROLES = Object.freeze(['native96Control', 'baseline128Trained', 'candidate96Trained']);
+const args = parseArgs(process.argv.slice(2));
+const expectedGrid = integerArg('--expected-grid', 96);
+const controlRole = `native${expectedGrid}Control`;
+const SEQUENCE_AUTHORITY = `frame-locked-consecutive-native-${expectedGrid}-simulation-steps-v0`;
+const ROLES = Object.freeze([controlRole, 'baseline128Trained', 'candidate96Trained']);
 const MODELS = Object.freeze({
   baseline128Trained: Object.freeze({
     identity: 'exact-basin-selective-carrier-heads-160-to-128-v0',
@@ -22,7 +24,6 @@ const MODELS = Object.freeze({
   }),
 });
 
-const args = parseArgs(process.argv.slice(2));
 let url = null;
 const out = resolve(String(args.get('--out') || '/tmp/kaminos-native-low-transfer-long-sequence.mp4'));
 const reportPath = resolve(String(args.get('--report') || '/tmp/kaminos-native-low-transfer-long-sequence.json'));
@@ -93,6 +94,7 @@ try {
   assert.ok(playbackFps > 0, '--fps must be positive');
   assert.ok(timeoutMs > 0, '--timeout-ms must be positive');
   assert.ok(captureCallTimeoutMs > 0, '--capture-call-timeout-ms must be positive');
+  assert.ok([64, 96].includes(expectedGrid), '--expected-grid must be 64 or 96');
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
   mkdirSync(dirname(contactPath), { recursive: true });
@@ -134,12 +136,12 @@ try {
     if (state?.status === 'failed') throw new Error(state.error || state.failureReason || 'native-low route failed');
     const settledStatus = ['running', 'paused'].includes(state?.status);
     const pausedManualRoute = state?.status !== 'paused' || state?.capturePaused === true;
-    if (settledStatus && pausedManualRoute && state?.nativeGrid === EXPECTED_GRID) break;
+    if (settledStatus && pausedManualRoute && state?.nativeGrid === expectedGrid) break;
     await delay(250);
   }
   assert.ok(['running', 'paused'].includes(state?.status), 'native-low route did not become running or explicitly paused');
   if (state.status === 'paused') assert.equal(state.capturePaused, true, 'paused route did not report capturePaused');
-  assert.equal(state?.nativeGrid, EXPECTED_GRID, 'native-low route used the wrong source grid');
+  assert.equal(state?.nativeGrid, expectedGrid, 'native-low route used the wrong source grid');
   assert.equal(state?.runtimeTruthAvailable, false, 'runtime truth must be unavailable');
   assert.equal(state?.syntheticDownsampleApplied, false, 'native-low route silently used a synthetic downsample');
   assertModels(state.models || state.modelPackages);
@@ -235,7 +237,7 @@ try {
     effectiveBackend: state.effectiveBackend,
     requestedComposition: state.requestedComposition,
     effectiveComposition: state.effectiveComposition,
-    nativeGrid: EXPECTED_GRID,
+    nativeGrid: expectedGrid,
     runtimeTruthAvailable: false,
     syntheticDownsampleApplied: false,
     roles: ROLES,
@@ -358,6 +360,8 @@ function compactFrameReceipt(receipt, frameIndex) {
         overflowCount: value.overflowCount,
         modelIdentity: value.modelIdentity || null,
         modelSha256: value.modelSha256 || null,
+        stageTiming: value.stageTiming || null,
+        modelSpecificTiming: value.modelSpecificTiming || null,
       }];
     })),
   };
@@ -438,10 +442,10 @@ function writeOperatorPage() {
   const contactName = basename(contactPath);
   writeFileSync(pagePath, `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Native 96 two-model long motion</title><style>
+<title>Native ${expectedGrid} two-model long motion</title><style>
 :root{color-scheme:dark;font-family:Inter,system-ui,sans-serif;background:#080a0b;color:#eef2f3}*{box-sizing:border-box}body{margin:0;background:#080a0b}header{padding:12px 16px;border-bottom:1px solid #30383a;background:#111516}h1{font-size:17px;margin:0 0 4px}p{font-size:12px;color:#aab5b8;margin:0}.roles{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#30383a}.role{padding:9px 12px;background:#121617}.role strong{display:block;font-size:13px}.role span{display:block;color:#98a6a9;font-size:10px;margin-top:2px}main{padding:0 0 18px}video{display:block;width:100%;height:auto;background:#000}nav{padding:12px 16px}a{color:#8fd4ff}@media(max-width:760px){.roles{grid-template-columns:1fr}.role{min-height:48px}}
-</style></head><body><header><h1>Native 96 control vs both learned transfer models</h1><p>${requestedFrameCount} consecutive simulation steps at ${playbackFps} fps. Splat-only. No native-phase high-grid truth target.</p></header>
-<section class="roles"><div class="role"><strong>Native 96 control</strong><span>No learned residual</span></div><div class="role"><strong>128-trained zero-shot</strong><span>${MODELS.baseline128Trained.identity}</span></div><div class="role"><strong>96-trained deployment-grid</strong><span>${MODELS.candidate96Trained.identity}</span></div></section>
+</style></head><body><header><h1>Native ${expectedGrid} control vs both learned transfer models</h1><p>${requestedFrameCount} consecutive simulation steps at ${playbackFps} fps. Splat-only. No native-phase high-grid truth target.</p></header>
+<section class="roles"><div class="role"><strong>Native ${expectedGrid} control</strong><span>No learned residual</span></div><div class="role"><strong>128-trained zero-shot</strong><span>${MODELS.baseline128Trained.identity}</span></div><div class="role"><strong>96-trained zero-shot</strong><span>${MODELS.candidate96Trained.identity}</span></div></section>
 <main><video autoplay loop controls muted playsinline src="./${videoName}"></video><nav><a href="./${contactName}">Open first / middle / last contact sheet</a></nav></main></body></html>\n`);
 }
 

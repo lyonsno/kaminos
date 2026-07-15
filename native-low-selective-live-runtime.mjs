@@ -42,7 +42,7 @@ export const NATIVE_LOW_TRAINED_PACKAGE_ROUTES = Object.freeze({
     modelSha256: NATIVE_LOW_TRANSFER_160_TO_128_MODEL_SHA256,
     trainedLowGrid: 128,
     trainedHighGrid: 160,
-    effectiveSourceGrid: 'native-96-or-native-128-runtime-selected-v0',
+    effectiveSourceGrid: 'native-64-native-96-or-native-128-runtime-selected-v0',
     promotionRole: 'existing-zero-shot-product-candidate',
     dispatchIdentity: NATIVE_LOW_SUPPORT_POSITIVE_INDIRECT_RESIDUAL_DISPATCH,
     sourceHistoryDispatchIdentity: 'sourceHistoryDispatchArgs',
@@ -59,7 +59,7 @@ export const NATIVE_LOW_TRAINED_PACKAGE_ROUTES = Object.freeze({
     modelSha256: NATIVE_LOW_TRANSFER_160_TO_96_MODEL_SHA256,
     trainedLowGrid: 96,
     trainedHighGrid: 160,
-    effectiveSourceGrid: 'native-96-or-native-128-runtime-selected-v0',
+    effectiveSourceGrid: 'native-64-native-96-or-native-128-runtime-selected-v0',
     promotionRole: 'deployment-grid-product-candidate',
     trainingInputAuthority: SELECTIVE_HEAD_LIVE_MODEL_160_TO_96.source.trainingInputAuthority,
     trainingInputSyntheticDownsample: SELECTIVE_HEAD_LIVE_MODEL_160_TO_96.source.trainingInputSyntheticDownsample,
@@ -614,7 +614,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
   const selectedModel = route.model;
   const selectedModelUrl = route.modelUrl;
   const lowGrid = Number(sourceGrid);
-  if (![96, 128].includes(lowGrid)) throw new Error(`unsupportedEffectiveSourceGrid:${sourceGrid}`);
+  if (![64, 96, 128].includes(lowGrid)) throw new Error(`unsupportedEffectiveSourceGrid:${sourceGrid}`);
   const response = await fetch(selectedModelUrl, { cache: 'no-store' });
   if (!response.ok) throw new Error(`modelFetchFailed:${response.status}`);
   const modelBytes = await response.arrayBuffer();

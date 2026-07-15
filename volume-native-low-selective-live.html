@@ -230,6 +230,9 @@
     const candidateHeadBenchmarkEnabled = !native64ManifestMode && params.get('candidate_head_benchmark') === '1';
     const cueBufferLifecycleStressMode = !native64ManifestMode && params.get('cue_buffer_lifecycle_stress') === '1';
     const manualDualCaptureMode = !native64ManifestMode && (params.get('manual_dual_capture') === '1' || params.get('capture_paused') === '1');
+    const manualSourceGrid = Number(params.get('manual_source_grid') || 96);
+    const manualSourceGridSupported = [64, 96].includes(manualSourceGrid);
+    const nativeControlRoleIdentity = `native${manualSourceGrid}Control`;
     const requestedTransferRouteId = params.get('native_low_transfer_route') || NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE;
     const vivisectorCandidateHeadPackageUrl = params.get('vivisector_candidate_head_package') || '';
     const vivisectorCandidateHeadTrainedRouteRequested = !native64ManifestMode
@@ -289,18 +292,18 @@
     if (manualDualCaptureMode) {
       document.body.classList.add('front-topology-ablation');
       frontTopologyAblatedPane.hidden = false;
-      title.querySelector('strong').textContent = 'Native 96 control vs both trained transfer candidates';
+      title.querySelector('strong').textContent = `Native ${manualSourceGrid} control vs both trained transfer candidates`;
       title.querySelector('span').textContent = 'Paused one-step manual capture, shared native source state, splat-only-v0';
-      document.querySelector('#controlImage + .pane-label').innerHTML = 'native96Control<span>Untouched native 96^3 simulator, splat-only-v0</span>';
-      document.querySelector('#treatmentImage + .pane-label').innerHTML = 'baseline128Trained<span>160->128 zero-shot package applied to native 96 source, splat-only-v0</span>';
-      document.querySelector('#frontTopologyAblatedImage + .pane-label').innerHTML = 'candidate96Trained<span>160->96 deployment-grid package applied to the same native 96 source, splat-only-v0</span>';
+      document.querySelector('#controlImage + .pane-label').innerHTML = `${nativeControlRoleIdentity}<span>Untouched native ${manualSourceGrid}^3 simulator, splat-only-v0</span>`;
+      document.querySelector('#treatmentImage + .pane-label').innerHTML = `baseline128Trained<span>160->128 package applied zero-shot to native ${manualSourceGrid} source, splat-only-v0</span>`;
+      document.querySelector('#frontTopologyAblatedImage + .pane-label').innerHTML = `candidate96Trained<span>160->96 package applied zero-shot to the same native ${manualSourceGrid} source, splat-only-v0</span>`;
     }
 
     const baseControls = {
       kaminos_volume_smoke: '1',
       volume_scene: 'tall_plume',
       volume_tall_preset: 'rgb_upscale_basin_0711',
-      volume_resolution: native64ManifestMode ? '64' : manualDualCaptureMode ? '96' : '128',
+      volume_resolution: native64ManifestMode ? '64' : manualDualCaptureMode ? String(manualSourceGrid) : '128',
       volume_majorant_grid: '24',
       volume_boundary_sidecar_source: 'baked',
       volume_boundary_sidecar_view: 'off',
@@ -809,15 +812,16 @@
       };
     }
 
-    function nativeControlRoleReceipt(receipt) {
+    function nativeControlRoleReceipt(receipt, sourceGrid) {
       const candidateCount = receipt?.controlSplatCandidateCount ?? null;
       const instanceCount = receipt?.controlSplatInstanceCount ?? null;
       const overflowCount = receipt?.controlSplatOverflowCount ?? null;
+      const role = `native${sourceGrid}Control`;
       return {
-        identity: 'native96Control',
-        role: 'native96Control',
-        authority: 'untouched-native-96-control-sanity-baseline-v0',
-        grid: 96,
+        identity: role,
+        role,
+        authority: `untouched-native-${sourceGrid}-control-sanity-baseline-v0`,
+        grid: sourceGrid,
         sourceStepIdentity: receipt?.sourceStepIdentity || null,
         sameNativeStateIdentity: receipt?.sameNativeStateIdentity || null,
         requestedBackend: receipt?.requestedBackend || 'WebGPU',
@@ -864,7 +868,7 @@
       }
       prototype.setSelectiveHeadLiveCapturePaused?.(true);
       prototype.setControls({
-        resolution: 96,
+        resolution: manualSourceGrid,
         boundarySplatMode: 'learned',
         selectiveHeadLiveRole: 'off',
         selectiveHeadLiveRenderComposition: requestedComposition,
@@ -905,9 +909,9 @@
       frameIndex += 1;
       const baselineRole = trainedRoleReceipt('baseline128Trained', baseline128);
       const candidateRole = trainedRoleReceipt('candidate96Trained', candidate96);
-      const native96Control = nativeControlRoleReceipt(baseline128);
-      const sameNativeStateIdentity = `native-96-shared-source:${baseline128.sourceStepIdentity}:composition-${requestedComposition}:transport-${NATIVE_LOW_TRANSPORT_MODE}`;
-      for (const role of [native96Control, baselineRole, candidateRole]) {
+      const nativeControl = nativeControlRoleReceipt(baseline128, manualSourceGrid);
+      const sameNativeStateIdentity = `native-${manualSourceGrid}-shared-source:${baseline128.sourceStepIdentity}:composition-${requestedComposition}:transport-${NATIVE_LOW_TRANSPORT_MODE}`;
+      for (const role of [nativeControl, baselineRole, candidateRole]) {
         role.sameNativeStateIdentity = sameNativeStateIdentity;
         role.fallbackReason = role.fallbackReason || role.fallbackBackend || null;
         role.staleFrameReason = role.stalePredictionRejection?.stalePrediction === true ? 'stale-prediction' : null;
@@ -922,11 +926,11 @@
         identity: 'native-low-dual-trained-package-manual-capture-v0',
         routeRegistryIdentity: NATIVE_LOW_TRAINED_PACKAGE_ROUTE_REGISTRY_IDENTITY,
         routeRegistry: nativeLowTrainedPackageRouteRegistry(),
-        nativeGrid: 96,
+        nativeGrid: manualSourceGrid,
         simulationStep: baseline128.sourceStep,
         sourceStepIdentity: baseline128.sourceStepIdentity,
         sameNativeStateIdentity,
-        singleNative96StepAdvanced: true,
+        singleNativeSourceStepAdvanced: true,
         secondPackageAdvanceSourceStep: false,
         independentPages: false,
         sharedSourceStateEncoding: true,
@@ -935,12 +939,12 @@
         sourceStepDelta: baseline128.simulationSteppingReceipt?.simStepDelta ?? null,
         secondPackageSourceStepDelta: candidate96.simulationSteppingReceipt?.simStepDelta ?? null,
         visualRoles: {
-          native96Control,
+          [nativeControlRoleIdentity]: nativeControl,
           baseline128Trained: baselineRole,
           candidate96Trained: candidateRole,
         },
         roles: {
-          native96Control,
+          [nativeControlRoleIdentity]: nativeControl,
           baseline128Trained: baselineRole,
           candidate96Trained: candidateRole,
         },
@@ -1006,7 +1010,7 @@
         failurePhase,
         routeIdentity: NATIVE_LOW_SELECTIVE_LIVE_ROUTE,
         sharedDeviceRoute: NATIVE_LOW_SHARED_DEVICE_ROUTE,
-        nativeGrid: manualDualCaptureMode ? 96 : (native64ManifestMode ? 64 : 128),
+        nativeGrid: manualDualCaptureMode ? manualSourceGrid : (native64ManifestMode ? 64 : 128),
         capturePaused,
         requestedRoute: NATIVE_LOW_SELECTIVE_LIVE_ROUTE,
         effectiveRoute: NATIVE_LOW_SHARED_DEVICE_ROUTE,
@@ -1021,7 +1025,9 @@
         nativeLowTrainedPackageRouteRegistry: nativeLowTrainedPackageRouteRegistry(),
         nativeLowTrainedPackageRoute: receipt.nativeLowTrainedPackageRoute || null,
         nativeLowDualTrainedPackageManualCapture: latestManualDualCapture,
-        native96Control: latestManualDualCapture?.visualRoles?.native96Control || null,
+        nativeControl: latestManualDualCapture?.visualRoles?.[nativeControlRoleIdentity] || null,
+        native64Control: manualSourceGrid === 64 ? latestManualDualCapture?.visualRoles?.native64Control || null : null,
+        native96Control: manualSourceGrid === 96 ? latestManualDualCapture?.visualRoles?.native96Control || null : null,
         baseline128Trained: latestManualDualCapture?.visualRoles?.baseline128Trained || null,
         candidate96Trained: latestManualDualCapture?.visualRoles?.candidate96Trained || null,
         modelChecksumMismatch: null,
@@ -1029,7 +1035,7 @@
         featureAuthority: NATIVE_LOW_FEATURE_AUTHORITY,
         runtimeTruthAvailable,
         syntheticDownsampleApplied,
-        nativeLowControl: { grid: native64ManifestMode ? 64 : 128, step: receipt.controlStep ?? null, backend: runner?.backend || null },
+        nativeLowControl: { grid: manualDualCaptureMode ? manualSourceGrid : (native64ManifestMode ? 64 : 128), step: receipt.controlStep ?? null, backend: runner?.backend || null },
         nativeLowSelectivePredicted: { grid: 160, step: receipt.treatmentStep ?? null, backend: runner?.backend || null },
         fullFrozenTreatmentReference: receipt.fullFrozenTreatmentReference || null,
         frontTopologyAblatedTreatment: receipt.frontTopologyAblatedTreatment || null,
@@ -1124,12 +1130,15 @@
     }
 
     async function initialize() {
+      if (manualDualCaptureMode && !manualSourceGridSupported) {
+        throw new Error(`unsupportedManualSourceGrid:${manualSourceGrid}`);
+      }
       await validateVivisectorCandidateHeadPackageForRoute();
       failurePhase = 'route-initialize';
       runnerFrame.src = `./?${new URLSearchParams(baseControls)}`;
       const prototype = await waitForPrototype();
       prototype.setControls({
-        resolution: native64ManifestMode ? 64 : manualDualCaptureMode ? 96 : 128,
+        resolution: native64ManifestMode ? 64 : manualDualCaptureMode ? manualSourceGrid : 128,
         boundarySplatMode: 'learned',
         selectiveHeadLiveRole: 'off',
         selectiveHeadLiveRenderComposition: requestedComposition,

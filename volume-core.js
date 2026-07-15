@@ -12926,7 +12926,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const sourceSimStepBefore = state.simStepCount;
     try {
       if (!state.active || !device) throw new Error('inactive');
-      if (![96, 128].includes(sourceGrid)) throw new Error(`native-low-shared-device-grid-mismatch:${sourceGrid}`);
+      if (![64, 96, 128].includes(sourceGrid)) throw new Error(`native-low-shared-device-grid-mismatch:${sourceGrid}`);
       if (requestedComposition !== 'splat-only-v0') throw new Error(`unsupported-native-low-shared-device-composition:${requestedComposition}`);
       cancelAnimationFrame(raf);
       raf = 0;
