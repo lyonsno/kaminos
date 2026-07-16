@@ -2,7 +2,7 @@
 
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const SMOKE_ORACLE_HOSTILE_CAMERA_SPLIT_IDENTITY = 'smoke-oracle-hostile-camera-split-v0';
@@ -111,6 +111,14 @@ function validateSourceFit(report) {
   return camera;
 }
 
+function anchorArtifactPaths(report, sourcePath) {
+  for (const curve of report.budgetCurve || []) {
+    const artifactPath = curve?.artifact?.path;
+    if (typeof artifactPath !== 'string' || artifactPath.length === 0) continue;
+    curve.artifact.path = isAbsolute(artifactPath) ? artifactPath : resolve(dirname(sourcePath), artifactPath);
+  }
+}
+
 export async function buildSmokeOracleHostileCameraSplit({ fitReportPath, outDir } = {}) {
   if (!fitReportPath) throw new Error('fitReportPath is required');
   if (!outDir) throw new Error('outDir is required');
@@ -131,6 +139,7 @@ export async function buildSmokeOracleHostileCameraSplit({ fitReportPath, outDir
     const productDirectory = join(outDir, entry.cameraId);
     const productPath = join(productDirectory, 'oracle-fit-report.json');
     const product = structuredClone(source);
+    anchorArtifactPaths(product, sourcePath);
     product.teacher.camera = entry.camera;
     product.teacher.cameraIdentity = cameraIdentity;
     product.cameraEvaluation = {
@@ -142,6 +151,7 @@ export async function buildSmokeOracleHostileCameraSplit({ fitReportPath, outDir
       sourceFitReportIdentity: `sha256:${sha256(sourceBytes)}`,
       fitAuthority: 'world-space-state-fit-camera-independent-v0',
       cameraAuthority: entry.role === 'calibration' ? 'checksum-bound-recorded-camera-v0' : 'deterministic-hostile-camera-derived-from-recorded-v0',
+      artifactPathAuthority: 'absolute-path-anchored-to-source-fit-report-v0',
     };
     await mkdir(productDirectory, { recursive: true });
     await writeFile(productPath, `${JSON.stringify(product, null, 2)}\n`);

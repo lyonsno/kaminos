@@ -1791,12 +1791,16 @@ function compareLuma(teacher, render) {
   let union = 0;
   let renderMean = 0;
   let teacherMean = 0;
+  let nonzeroRenderPixels = 0;
+  let maximumRenderLuma = 0;
   for (let index = 0; index < teacher.length; index += 1) {
     const diff = render[index] - teacher[index];
     mse += diff * diff;
     mae += Math.abs(diff);
     renderMean += render[index];
     teacherMean += teacher[index];
+    if (render[index] > 0) nonzeroRenderPixels += 1;
+    maximumRenderLuma = Math.max(maximumRenderLuma, render[index]);
     const renderActive = render[index] > 0.04;
     const teacherActive = teacher[index] > 0.04;
     if (renderActive) renderActivePixels += 1;
@@ -1810,6 +1814,8 @@ function compareLuma(teacher, render) {
     renderMeanLuma: renderMean / teacher.length,
     teacherMeanLuma: teacherMean / teacher.length,
     renderActivePixels,
+    nonzeroRenderPixels,
+    maximumRenderLuma,
     teacherActivePixels,
     activePixelIoU: union ? intersection / union : 0,
   };
@@ -1858,7 +1864,7 @@ async function renderBudget({ reportPath, report, raymarch, teacherLuma, entry, 
     }
   }
   const renderMs = performance.now() - started;
-  if (best.metrics.renderActivePixels <= 0) throw new Error(`budget ${budget} rendered blank output`);
+  if (best.metrics.nonzeroRenderPixels <= 0 || best.metrics.maximumRenderLuma <= 0) throw new Error(`budget ${budget} rendered blank output`);
   const renderRgba = lumaToRgba(best.luma);
   const diffRgba = lumaToRgba(diffLuma(teacherLuma, best.luma), 'diff');
   const imagePrefix = projectionMode === 'native-camera' ? 'perspective' : 'orthographic';

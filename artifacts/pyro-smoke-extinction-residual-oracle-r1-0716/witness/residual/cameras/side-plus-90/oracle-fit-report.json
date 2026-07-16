@@ -1,0 +1,582 @@
+{
+  "schema": "kaminos.smoke-gaussian-oracle-static-fit-report.v0",
+  "identity": "smoke-gaussian-oracle-static-fit-v0",
+  "status": "passed",
+  "createdAt": "2026-07-16T15:41:13.300Z",
+  "hiddenBudgetCapApplied": false,
+  "teacher": {
+    "manifestPath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v7-m24/sim-step-45.manifest.json",
+    "manifestIdentity": "sha256:ab980bee692fbf6e91a3868201893e95e7ba2f170a036905a1b1eca4312f1d1a",
+    "sourceSchema": "kaminos.volume.full-grid-field-export.v0",
+    "captureId": null,
+    "simStepCount": 45,
+    "sourceCaptureIdentity": null,
+    "cameraIdentity": "sha256:3bd0a7873986b8caaf12384d92766e4d763b2148b861677080aedffc6b41ff20",
+    "camera": {
+      "position": [
+        2.049999999999998,
+        0.28,
+        -1.179999999999999
+      ],
+      "target": [
+        0,
+        0.02,
+        0
+      ],
+      "projectionMatrix": [
+        2.9306425807515972,
+        0,
+        0,
+        0,
+        0,
+        2.7474774194546225,
+        0,
+        0,
+        0,
+        0,
+        -1.0002000200020003,
+        -1,
+        0,
+        0,
+        -0.020002000200020003,
+        0
+      ],
+      "matrixWorldInverse": [
+        -0.49886822524329355,
+        -0.09469497576016458,
+        0.8614890338294439,
+        0,
+        0,
+        0.9940129828903272,
+        0.10926202380275885,
+        0,
+        -0.86667784893962,
+        0.0545073519009728,
+        -0.49588149264328973,
+        0,
+        0,
+        -0.019880259657806598,
+        -2.381786047334212,
+        1
+      ]
+    },
+    "fluidPath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v7-m24/sim-step-45.fluid.f32",
+    "fluidIdentity": "sha256:b9015d0d577ee99b48a3e5bebe207e5024a4e9ef63bd42a8192e65042c9540ee",
+    "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+    "prototypeIdentity": "kaminos-volume-prototype-v0",
+    "backend": "WebGPU:apple",
+    "grid": 160,
+    "worldSpace": {
+      "coordinateFrame": "kaminos-volume-world-v0",
+      "transformAuthority": "native-volume-grid-world-transform-v0",
+      "bounds": {
+        "minimum": [
+          -1,
+          -1,
+          -1
+        ],
+        "maximum": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    "activeSmokeVoxelCount": 2559621,
+    "totalSmokeExtinction": 1472.7960008141977,
+    "maxSmokeDensity": 0.3464003801345825
+  },
+  "requestedBudgets": [
+    49536
+  ],
+  "optimizer": {
+    "identity": "fixed-coarse-plus-uncapped-local-extinction-residual-oracle-v0",
+    "sampleSelectionAuthority": "all-positive-explicit-blocks-no-subsampling-v0",
+    "role": "residual-oracle"
+  },
+  "warmStart": null,
+  "costs": {
+    "authority": "producer-report-only-v0"
+  },
+  "budgetCurve": [
+    {
+      "requestedBudget": 49536,
+      "activeGaussianCount": 49536,
+      "iterationCount": 0,
+      "totalAssignedExtinction": 1472.7960019877476,
+      "extinctionAccounting": {
+        "teacherTotalExtinction": 1472.7960008141977,
+        "representedExtinction": 1472.7960019877476,
+        "absoluteError": 0.0000011735498901543906,
+        "relativeError": 7.968176784195662e-10
+      },
+      "support": {
+        "supportLeakageGaussianCount": null,
+        "supportLeakageFraction": null,
+        "authority": "not-evaluated-by-product-writer-v0"
+      },
+      "artifact": {
+        "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-smoke-extinction-residual-oracle-r1-0716/source-step45/residual-oracle.gaussians.f32",
+        "sha256": "sha256:014ada06bb754e6e086821443354cfe6a4d8f3936d45a8d913fefd4645a97e2d",
+        "byteLength": 5548032,
+        "dtype": "float32",
+        "byteOrder": "little-endian",
+        "shape": [
+          49536,
+          28
+        ],
+        "channelOrder": [
+          "positionX",
+          "positionY",
+          "positionZ",
+          "covXX",
+          "covXY",
+          "covXZ",
+          "covYY",
+          "covYZ",
+          "covZZ",
+          "axis0X",
+          "axis0Y",
+          "axis0Z",
+          "axis1X",
+          "axis1Y",
+          "axis1Z",
+          "axis2X",
+          "axis2Y",
+          "axis2Z",
+          "radius0",
+          "radius1",
+          "radius2",
+          "extinctionMass",
+          "densityWitness",
+          "temperatureWitness",
+          "velocityX",
+          "velocityY",
+          "velocityZ",
+          "sourceVoxelCount"
+        ]
+      },
+      "preview": [
+        {
+          "position": [
+            -0.25955983371431013,
+            -0.9568071100615303,
+            -0.9587283491891395
+          ],
+          "covariance": [
+            0.000056608757370871975,
+            0,
+            0,
+            0.000019674337481857173,
+            0,
+            0.000040909923340171815
+          ],
+          "orientation": [
+            [
+              1,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ],
+          "radii": [
+            0.007523879143824147,
+            0.004435576341565679,
+            0.006396086564468293
+          ],
+          "extinctionMass": 1.4337609804786584e-36,
+          "densityWitness": 1.4018257449794783e-38,
+          "temperatureWitness": 0,
+          "velocityWitness": [
+            2.4024077065446207e-24,
+            1.9320819306223704e-24,
+            8.591404941977022e-24
+          ],
+          "sourceVoxelCount": 11,
+          "residualBlock": [
+            14,
+            0,
+            0
+          ]
+        },
+        {
+          "position": [
+            -0.21487475599278552,
+            -0.958489490048739,
+            -0.9571037685249254
+          ],
+          "covariance": [
+            0.00012148229145629371,
+            0,
+            0,
+            0.00004149561169509782,
+            0,
+            0.000023379033444748863
+          ],
+          "orientation": [
+            [
+              1,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ],
+          "radii": [
+            0.011021900537397973,
+            0.006441708755842492,
+            0.00483518701238627
+          ],
+          "extinctionMass": 1.2823324239257027e-34,
+          "densityWitness": 1.0538342238136135e-37,
+          "temperatureWitness": 0,
+          "velocityWitness": [
+            6.5791522859239776e-24,
+            6.910692391751045e-24,
+            3.1130038526308666e-23
+          ],
+          "sourceVoxelCount": 34,
+          "residualBlock": [
+            15,
+            0,
+            0
+          ]
+        },
+        {
+          "position": [
+            -0.18194777877393903,
+            -0.9583300307897077,
+            -0.9570999744212886
+          ],
+          "covariance": [
+            0.00015678483022755143,
+            0,
+            0,
+            0.000038838079886039566,
+            0,
+            0.000023379746930907906
+          ],
+          "orientation": [
+            [
+              1,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ],
+          "radii": [
+            0.012521374933590616,
+            0.006232020529975777,
+            0.0048352607924400425
+          ],
+          "extinctionMass": 3.009144499566557e-34,
+          "densityWitness": 3.253890510475853e-37,
+          "temperatureWitness": 0,
+          "velocityWitness": [
+            1.0439788665274456e-23,
+            1.380654793155268e-23,
+            6.265587214832432e-23
+          ],
+          "sourceVoxelCount": 38,
+          "residualBlock": [
+            16,
+            0,
+            0
+          ]
+        },
+        {
+          "position": [
+            -0.12449672796021252,
+            -0.9579037430008054,
+            -0.9568443160491881
+          ],
+          "covariance": [
+            0.0002074401860506361,
+            0,
+            0,
+            0.00003361514958079089,
+            0,
+            0.000020497371994177748
+          ],
+          "orientation": [
+            [
+              1,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ],
+          "radii": [
+            0.01440278396875535,
+            0.005797857326701899,
+            0.00452740234507358
+          ],
+          "extinctionMass": 2.916897889645904e-35,
+          "densityWitness": 1.4798356776383737e-36,
+          "temperatureWitness": 0,
+          "velocityWitness": [
+            1.5025812842451254e-23,
+            3.2929827518748207e-23,
+            1.5081594077068362e-22
+          ],
+          "sourceVoxelCount": 32,
+          "residualBlock": [
+            17,
+            0,
+            0
+          ]
+        },
+        {
+          "position": [
+            -0.08007074849916189,
+            -0.9585386998552002,
+            -0.9573709968905324
+          ],
+          "covariance": [
+            0.000194922441522865,
+            0,
+            0,
+            0.000041681113560299764,
+            0,
+            0.000027805889525568027
+          ],
+          "orientation": [
+            [
+              1,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ],
+          "radii": [
+            0.013961462728627864,
+            0.006456091198263836,
+            0.005273129007104608
+          ],
+          "extinctionMass": 1.564311219470978e-35,
+          "densityWitness": 2.8519973389248246e-36,
+          "temperatureWitness": 0,
+          "velocityWitness": [
+            1.2081201839595524e-23,
+            4.631835079719865e-23,
+            2.1185902429037615e-22
+          ],
+          "sourceVoxelCount": 35,
+          "residualBlock": [
+            18,
+            0,
+            0
+          ]
+        },
+        {
+          "position": [
+            -0.01195758129132627,
+            -0.9570652590686214,
+            -0.9576891063199736
+          ],
+          "covariance": [
+            0.00010846744866418656,
+            0,
+            0,
+            0.000024241358886135288,
+            0,
+            0.00003148343593818511
+          ],
+          "orientation": [
+            [
+              1,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ],
+          "radii": [
+            0.01041477069666858,
+            0.004923551450542107,
+            0.0056110102422099635
+          ],
+          "extinctionMass": 6.451762800687937e-35,
+          "densityWitness": 5.020112597760384e-36,
+          "temperatureWitness": 0,
+          "velocityWitness": [
+            4.520469712332516e-25,
+            6.148876644035327e-23,
+            2.639488031510592e-22
+          ],
+          "sourceVoxelCount": 38,
+          "residualBlock": [
+            19,
+            0,
+            0
+          ]
+        },
+        {
+          "position": [
+            0.02471629318875571,
+            -0.9566227120266662,
+            -0.956955214800559
+          ],
+          "covariance": [
+            0.00018396365224264402,
+            0,
+            0,
+            0.00001786378982727784,
+            0,
+            0.000021816594325885973
+          ],
+          "orientation": [
+            [
+              1,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ],
+          "radii": [
+            0.013563320103965843,
+            0.004226557680580952,
+            0.004670823730980005
+          ],
+          "extinctionMass": 4.070283896712543e-34,
+          "densityWitness": 5.029666406404455e-36,
+          "temperatureWitness": 0,
+          "velocityWitness": [
+            -6.2232365498334796e-24,
+            6.362445178978544e-23,
+            2.6045230629006128e-22
+          ],
+          "sourceVoxelCount": 36,
+          "residualBlock": [
+            20,
+            0,
+            0
+          ]
+        },
+        {
+          "position": [
+            0.07604712898336376,
+            -0.9565948900708393,
+            -0.9580307497426351
+          ],
+          "covariance": [
+            0.00020754902802291313,
+            0,
+            0,
+            0.000017561432708380252,
+            0,
+            0.000033660700102922846
+          ],
+          "orientation": [
+            [
+              1,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ],
+          "radii": [
+            0.014406561977894418,
+            0.004190636313065148,
+            0.005801784217197572
+          ],
+          "extinctionMass": 2.4280243153485596e-34,
+          "densityWitness": 3.026197755563979e-36,
+          "temperatureWitness": 0,
+          "velocityWitness": [
+            -1.1734231687518386e-23,
+            4.9024535977915274e-23,
+            1.9142441170386812e-22
+          ],
+          "sourceVoxelCount": 35,
+          "residualBlock": [
+            21,
+            0,
+            0
+          ]
+        }
+      ]
+    }
+  ],
+  "cameraEvaluation": {
+    "identity": "smoke-oracle-camera-evaluation-product-v0",
+    "cameraId": "side-plus-90",
+    "role": "held-out",
+    "transform": "world-y-azimuth-plus-90-degrees",
+    "sourceFitReportPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-smoke-extinction-residual-oracle-r1-0716/source-step45/residual-oracle.fit-report.json",
+    "sourceFitReportIdentity": "sha256:2732c46d6c323a621037161fe953318aa6b0404b2250f06484912cf7ac67836a",
+    "fitAuthority": "world-space-state-fit-camera-independent-v0",
+    "cameraAuthority": "deterministic-hostile-camera-derived-from-recorded-v0",
+    "artifactPathAuthority": "absolute-path-anchored-to-source-fit-report-v0"
+  }
+}

@@ -12,7 +12,15 @@ export const SMOKE_DENSE_RAYMARCH_TEACHER_IDENTITY = 'smoke-dense-state-raymarch
 const FIT_IDENTITY = 'smoke-gaussian-oracle-static-fit-v0';
 const EXPECTED_ROUTE = 'native-3d-compute-fluid-raymarch-v0';
 const EXPECTED_PROTOTYPE = 'kaminos-volume-prototype-v0';
-const SMOKE_CHANNEL = KAMINOS_FLUID_CHANNEL_ORDER.indexOf('smokeDensity');
+const EXTINCTION_FIELD_MODELS = Object.freeze({
+  'smoke-density-v0': Object.freeze({ smokeDensity: 1 }),
+  'physical-smoke-extinction-v0': Object.freeze({
+    smokeDensity: 0.74,
+    microdetail: 0.42,
+    interfaceShred: 0.34,
+    detail: 0.12,
+  }),
+});
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -151,7 +159,19 @@ function intersectBounds(origin, direction, minimum, maximum) {
   return end > start ? [start, end] : null;
 }
 
-function sampleSmokeTrilinear(field, grid, minimum, maximum, point) {
+function resolveExtinctionFieldModel(model) {
+  const identity = String(model || 'smoke-density-v0');
+  const weights = EXTINCTION_FIELD_MODELS[identity];
+  if (!weights) throw new Error(`unsupported extinction field model: ${identity}`);
+  const weightedChannels = Object.entries(weights).map(([channel, coefficient]) => {
+    const channelIndex = KAMINOS_FLUID_CHANNEL_ORDER.indexOf(channel);
+    if (channelIndex < 0) throw new Error(`extinction field channel is absent from the exact contract: ${channel}`);
+    return [channelIndex, coefficient];
+  });
+  return { identity, weights, weightedChannels };
+}
+
+function sampleExtinctionTrilinear(field, grid, minimum, maximum, point, weightedChannels) {
   const coordinate = point.map((value, axis) => ((value - minimum[axis]) / (maximum[axis] - minimum[axis])) * grid - 0.5);
   const base = coordinate.map(value => Math.floor(value));
   const fraction = coordinate.map((value, axis) => value - base[axis]);
@@ -166,7 +186,12 @@ function sampleSmokeTrilinear(field, grid, minimum, maximum, point) {
           * (dy ? fraction[1] : 1 - fraction[1])
           * (dz ? fraction[2] : 1 - fraction[2]);
         const cellIndex = z * grid * grid + y * grid + x;
-        density += field[cellIndex * KAMINOS_FLUID_CHANNEL_ORDER.length + SMOKE_CHANNEL] * weight;
+        const cellOffset = cellIndex * KAMINOS_FLUID_CHANNEL_ORDER.length;
+        let extinction = 0;
+        for (const [channelIndex, coefficient] of weightedChannels) {
+          extinction += Math.max(0, field[cellOffset + channelIndex]) * coefficient;
+        }
+        density += extinction * weight;
       }
     }
   }
@@ -239,6 +264,7 @@ export async function renderDenseSmokeRaymarchTeacher({
   width = 640,
   height = 455,
   samplesPerCell = 1,
+  extinctionFieldModel = 'smoke-density-v0',
 } = {}) {
   if (!fitReportPath) throw new Error('fitReportPath is required');
   if (!outDir) throw new Error('outDir is required');
@@ -246,6 +272,7 @@ export async function renderDenseSmokeRaymarchTeacher({
   const renderHeight = positiveInteger(height, 'height');
   const requestedSamplesPerCell = Number(samplesPerCell);
   if (!(requestedSamplesPerCell > 0) || !Number.isFinite(requestedSamplesPerCell)) throw new Error('samplesPerCell must be positive and finite');
+  const extinctionField = resolveExtinctionFieldModel(extinctionFieldModel);
   const startedAt = performance.now();
   await mkdir(outDir, { recursive: true });
   const source = await loadSource(fitReportPath);
@@ -277,7 +304,14 @@ export async function renderDenseSmokeRaymarchTeacher({
         const segment = Math.min(stepWorld, interval[1] - distance);
         const midpoint = distance + segment / 2;
         const point = source.camera.position.map((value, axis) => value + direction[axis] * midpoint);
-        depth += sampleSmokeTrilinear(source.field, source.grid, source.minimum, source.maximum, point) * segment;
+        depth += sampleExtinctionTrilinear(
+          source.field,
+          source.grid,
+          source.minimum,
+          source.maximum,
+          point,
+          extinctionField.weightedChannels,
+        ) * segment;
         totalSamples += 1;
       }
       opticalDepth[index] = depth;
@@ -330,6 +364,8 @@ export async function renderDenseSmokeRaymarchTeacher({
       height: renderHeight,
       totalSamples,
       extinctionCoefficient: 1,
+      extinctionFieldModel: extinctionField.identity,
+      extinctionFieldWeights: extinctionField.weights,
       radianceModel: 'single-channel-one-minus-transmittance-v0',
       productionCompositorAuthority: false,
     },
@@ -413,6 +449,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       width: Number(args.get('--width') || 640),
       height: Number(args.get('--height') || 455),
       samplesPerCell: Number(args.get('--samples-per-cell') || 1),
+      extinctionFieldModel: args.get('--extinction-field-model') || 'smoke-density-v0',
     });
     console.log(JSON.stringify({ status: report.status, reportPath: report.reportPath, costs: report.costs, pixelStats: report.pixelStats }, null, 2));
   } catch (error) {

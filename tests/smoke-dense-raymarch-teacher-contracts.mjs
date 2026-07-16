@@ -25,7 +25,7 @@ function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
-async function writeFitSource(directory, { blank = false, native = false } = {}) {
+async function writeFitSource(directory, { blank = false, native = false, physicalResidual = false } = {}) {
   await mkdir(directory, { recursive: true });
   const grid = 12;
   const values = new Float32Array(grid ** 3 * channels.length);
@@ -36,7 +36,14 @@ async function writeFitSource(directory, { blank = false, native = false } = {})
         const ny = (y + 0.5) / grid * 2 - 1;
         const nz = (z + 0.5) / grid * 2 - 1;
         const offset = ((z * grid * grid) + (y * grid) + x) * channels.length;
-        if (!blank && nx * nx + ny * ny + nz * nz < 0.28) values[offset + 4] = 0.8;
+        if (!blank && nx * nx + ny * ny + nz * nz < 0.28) {
+          values[offset + 4] = 0.8;
+          if (physicalResidual) {
+            values[offset + 7] = 0.5;
+            values[offset + 12] = 0.6;
+            values[offset + 13] = 0.7;
+          }
+        }
       }
     }
   }
@@ -111,6 +118,48 @@ try {
   assert.equal(report.artifacts.linearRadiance.byteLength, 48 * 48 * 4);
   assert.ok(existsSync(report.artifacts.displayPng.path));
   assert.equal((await readFile(report.artifacts.displayPng.path)).readUInt32BE(0), 0x89504e47, 'display witness must be a valid PNG');
+
+  const physicalSource = await writeFitSource(join(directory, 'physical-source'), { physicalResidual: true });
+  const smokeDensityReport = await renderDenseSmokeRaymarchTeacher({
+    fitReportPath: physicalSource.fitReportPath,
+    outDir: join(directory, 'smoke-density-teacher'),
+    width: 32,
+    height: 32,
+    samplesPerCell: 1,
+    extinctionFieldModel: 'smoke-density-v0',
+  });
+  const physicalReport = await renderDenseSmokeRaymarchTeacher({
+    fitReportPath: physicalSource.fitReportPath,
+    outDir: join(directory, 'physical-extinction-teacher'),
+    width: 32,
+    height: 32,
+    samplesPerCell: 1,
+    extinctionFieldModel: 'physical-smoke-extinction-v0',
+  });
+  assert.equal(smokeDensityReport.raymarch.extinctionFieldModel, 'smoke-density-v0');
+  assert.deepEqual(smokeDensityReport.raymarch.extinctionFieldWeights, { smokeDensity: 1 });
+  assert.equal(physicalReport.raymarch.extinctionFieldModel, 'physical-smoke-extinction-v0');
+  assert.deepEqual(physicalReport.raymarch.extinctionFieldWeights, {
+    smokeDensity: 0.74,
+    microdetail: 0.42,
+    interfaceShred: 0.34,
+    detail: 0.12,
+  });
+  assert.ok(
+    physicalReport.pixelStats.centerOpticalDepth > smokeDensityReport.pixelStats.centerOpticalDepth,
+    'the physical teacher must integrate omitted smoke carriers instead of silently falling back to smokeDensity',
+  );
+  await assert.rejects(
+    () => renderDenseSmokeRaymarchTeacher({
+      fitReportPath: physicalSource.fitReportPath,
+      outDir: join(directory, 'unknown-extinction-model'),
+      width: 16,
+      height: 16,
+      extinctionFieldModel: 'unknown-v0',
+    }),
+    /extinction field model/i,
+    'an unknown extinction model must fail loud instead of selecting a default field',
+  );
 
   const nativeSource = await writeFitSource(join(directory, 'native-source'), { native: true });
   const nativeReport = await renderDenseSmokeRaymarchTeacher({

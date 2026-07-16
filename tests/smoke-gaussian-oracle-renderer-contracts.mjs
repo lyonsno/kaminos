@@ -482,6 +482,19 @@ try {
   assert.ok(existsSync(report.contactSheet.path));
   assert.equal((await readFile(report.contactSheet.path)).readUInt32BE(0), 0x89504e47, 'contact sheet must be a PNG');
 
+  const lowRadianceReport = await renderSmokeGaussianOracleWitness({
+    fitReportPath: reportPath,
+    raymarchPngPath: raymarchPath,
+    outDir: join(directory, 'low-radiance-render'),
+    budgets: [2],
+    extinctionScales: [0.0001],
+    coverageScales: [1],
+  });
+  assert.equal(lowRadianceReport.status, 'passed', 'numerically nonzero low-radiance roles must not be mislabeled as blank');
+  assert.equal(lowRadianceReport.budgetCurve[0].metrics.renderActivePixels, 0, 'semantic support occupancy remains thresholded independently');
+  assert.ok(lowRadianceReport.budgetCurve[0].metrics.nonzeroRenderPixels > 0);
+  assert.ok(lowRadianceReport.budgetCurve[0].metrics.maximumRenderLuma > 0);
+
   const heldCamera = {
     position: [0, 0, 2],
     target: [0, 0, 0],

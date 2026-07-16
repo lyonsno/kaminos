@@ -1,0 +1,157 @@
+{
+  "schema": "kaminos.smoke-dense-raymarch-teacher-report.v0",
+  "identity": "smoke-dense-state-raymarch-teacher-v0",
+  "status": "passed",
+  "createdAt": "2026-07-16T15:42:14.470Z",
+  "source": {
+    "fitReportPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-smoke-extinction-residual-oracle-r1-0716/witness/coarse/cameras/side-plus-90/oracle-fit-report.json",
+    "manifestIdentity": "sha256:ab980bee692fbf6e91a3868201893e95e7ba2f170a036905a1b1eca4312f1d1a",
+    "fluidPath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v7-m24/sim-step-45.fluid.f32",
+    "fluidIdentity": "sha256:b9015d0d577ee99b48a3e5bebe207e5024a4e9ef63bd42a8192e65042c9540ee",
+    "cameraIdentity": "sha256:3bd0a7873986b8caaf12384d92766e4d763b2148b861677080aedffc6b41ff20",
+    "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+    "prototypeIdentity": "kaminos-volume-prototype-v0",
+    "backend": "WebGPU:apple",
+    "grid": 160,
+    "worldSpace": {
+      "coordinateFrame": "kaminos-volume-world-v0",
+      "transformAuthority": "native-volume-grid-world-transform-v0",
+      "bounds": {
+        "minimum": [
+          -1,
+          -1,
+          -1
+        ],
+        "maximum": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    "camera": {
+      "position": [
+        2.049999999999998,
+        0.28,
+        -1.179999999999999
+      ],
+      "target": [
+        0,
+        0.02,
+        0
+      ],
+      "projectionMatrix": [
+        2.9306425807515972,
+        0,
+        0,
+        0,
+        0,
+        2.7474774194546225,
+        0,
+        0,
+        0,
+        0,
+        -1.0002000200020003,
+        -1,
+        0,
+        0,
+        -0.020002000200020003,
+        0
+      ],
+      "matrixWorldInverse": [
+        -0.49886822524329355,
+        -0.09469497576016458,
+        0.8614890338294439,
+        0,
+        0,
+        0.9940129828903272,
+        0.10926202380275885,
+        0,
+        -0.86667784893962,
+        0.0545073519009728,
+        -0.49588149264328973,
+        0,
+        0,
+        -0.019880259657806598,
+        -2.381786047334212,
+        1
+      ]
+    }
+  },
+  "raymarch": {
+    "identity": "cpu-dense-smoke-optical-depth-ray-integral-v0",
+    "interpolation": "trilinear-cell-centered-smoke-density-v0",
+    "requestedSamplesPerCell": 1,
+    "effectiveSamplesPerCell": 1,
+    "stepWorld": 0.0125,
+    "width": 640,
+    "height": 455,
+    "totalSamples": 48138373,
+    "extinctionCoefficient": 1,
+    "extinctionFieldModel": "physical-smoke-extinction-v0",
+    "extinctionFieldWeights": {
+      "smokeDensity": 0.74,
+      "microdetail": 0.42,
+      "interfaceShred": 0.34,
+      "detail": 0.12
+    },
+    "radianceModel": "single-channel-one-minus-transmittance-v0",
+    "productionCompositorAuthority": false
+  },
+  "pixelStats": {
+    "blank": false,
+    "nonzeroOpticalPixels": 127262,
+    "maximumOpticalDepth": 0.06299059214996042,
+    "centerOpticalDepth": 0.038690514862537384,
+    "cornerOpticalDepth": 0
+  },
+  "costs": {
+    "authority": "cpu-wall-clock-performance-now-v0",
+    "sourceLoadAndValidateMs": 136.982417,
+    "raymarchMs": 14556.586583,
+    "artifactWriteMs": 24.805457999998907,
+    "totalMs": 14718.374457999998
+  },
+  "artifacts": {
+    "opticalDepth": {
+      "path": "artifacts/pyro-smoke-extinction-residual-oracle-r1-0716/witness/teachers/side-plus-90/optical-depth.f32",
+      "sha256": "sha256:f3378c7e13746ecac7feba1d331b22ea2e561bdfcfdfde732b2527923b043745",
+      "dtype": "float32",
+      "byteOrder": "little-endian",
+      "shape": [
+        455,
+        640
+      ],
+      "byteLength": 1164800
+    },
+    "transmittance": {
+      "path": "artifacts/pyro-smoke-extinction-residual-oracle-r1-0716/witness/teachers/side-plus-90/transmittance.f32",
+      "sha256": "sha256:d843d3f1ed9185bc3685e4a0c4ec9dc8177234ff0ac5a7b21a3fada099082f48",
+      "dtype": "float32",
+      "byteOrder": "little-endian",
+      "shape": [
+        455,
+        640
+      ],
+      "byteLength": 1164800
+    },
+    "linearRadiance": {
+      "path": "artifacts/pyro-smoke-extinction-residual-oracle-r1-0716/witness/teachers/side-plus-90/linear-smoke-radiance.f32",
+      "sha256": "sha256:38b96e715bbd4a8764cefdb19fc0e4554b7f55e981969d8582994a89ddd23344",
+      "dtype": "float32",
+      "byteOrder": "little-endian",
+      "shape": [
+        455,
+        640
+      ],
+      "byteLength": 1164800
+    },
+    "displayPng": {
+      "path": "artifacts/pyro-smoke-extinction-residual-oracle-r1-0716/witness/teachers/side-plus-90/dense-raymarch-smoke.png",
+      "sha256": "sha256:421360053ab62d0068f674d8be2c6dc9b6acfd6b85fc2d61200d4219a712d622",
+      "width": 640,
+      "height": 455,
+      "byteLength": 8022
+    }
+  }
+}

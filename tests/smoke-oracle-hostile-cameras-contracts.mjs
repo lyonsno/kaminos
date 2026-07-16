@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { isAbsolute, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const moduleUrl = new URL('../smoke-oracle-hostile-cameras.mjs', import.meta.url);
@@ -34,8 +34,14 @@ try {
       cameraIdentity: `sha256:${sha256(Buffer.from(JSON.stringify(camera)))}`,
     },
     requestedBudgets: [1024],
-    budgetCurve: [{ requestedBudget: 1024, activeGaussianCount: 1024 }],
+    budgetCurve: [{
+      requestedBudget: 1024,
+      activeGaussianCount: 1024,
+      artifact: { path: 'budget-1024.gaussians.f32' },
+    }],
   };
+  const artifactPath = join(directory, 'budget-1024.gaussians.f32');
+  await writeFile(artifactPath, Buffer.alloc(1024 * 28 * 4));
   const fitReportPath = join(directory, 'oracle-fit-report.json');
   await writeFile(fitReportPath, `${JSON.stringify(fit, null, 2)}\n`);
   const originalBytes = await readFile(fitReportPath);
@@ -55,6 +61,8 @@ try {
     assert.equal(derived.teacher.fluidIdentity, fit.teacher.fluidIdentity);
     assert.equal(derived.cameraEvaluation.cameraId, product.cameraId);
     assert.equal(derived.cameraEvaluation.fitAuthority, 'world-space-state-fit-camera-independent-v0');
+    assert.equal(isAbsolute(derived.budgetCurve[0].artifact.path), true, 'derived camera reports must not strand relative artifact paths under deeper directories');
+    assert.equal(derived.budgetCurve[0].artifact.path, resolve(artifactPath));
     if (product.cameraId !== 'elevated-plus-35') {
       const radius = Math.hypot(...derived.teacher.camera.position.map((value, axis) => value - camera.target[axis]));
       assert.ok(Math.abs(radius - sourceRadius) < 1e-10, `${product.cameraId} must preserve camera radius`);
