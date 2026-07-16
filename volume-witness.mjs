@@ -162,6 +162,11 @@ const controlledStepDir = resolve(args.get('--controlled-step-dir') || renderSca
 const controlledStepPrefix = String(args.get('--controlled-step-prefix') || 'controlled-step-sequence');
 const freezeIntegrityProbeRequested = args.has('--freeze-integrity-probe') && !['0', 'false', 'no'].includes(String(args.get('--freeze-integrity-probe') || '1').toLowerCase());
 const freezeIntegrityProbeOnly = freezeIntegrityProbeRequested && args.has('--freeze-integrity-probe-only') && !['0', 'false', 'no'].includes(String(args.get('--freeze-integrity-probe-only') || '1').toLowerCase());
+const simProfileOnly = args.has('--sim-profile-only') && !['0', 'false', 'no'].includes(String(args.get('--sim-profile-only') || '1').toLowerCase());
+const requestedSimProfileSamples = Math.max(1, Math.floor(Number(args.get('--sim-profile-samples') || 1)));
+const simProfilePressureDisabled = args.has('--sim-profile-pressure-disabled') && !['0', 'false', 'no'].includes(String(args.get('--sim-profile-pressure-disabled') || '1').toLowerCase());
+const simProfileIterationSweep = [...new Set(parseNumberList(args.get('--sim-profile-iteration-sweep'))
+  .map(value => Math.max(0, Math.min(12, Math.round(value)))))];
 const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance', 'pyro-material', 'no-fire-volume']);
 const evidenceMode = args.get('--evidence-mode') || 'fire-volume';
 if (!VALID_EVIDENCE_MODES.has(evidenceMode)) {
@@ -2345,6 +2350,174 @@ async function main() {
       state.frameCount > 5,
       `volume route did not render enough frames (${state.frameCount || 0} frames at ${state.displayWidth || 0}x${state.displayHeight || 0})`,
     );
+    if (simProfileOnly) {
+      phase = 'sim-gpu-profile';
+      assert.equal(expectedSimProfile, true, '--sim-profile-only requires volume_sim_profile=1');
+      assert.equal(state.volumeScene, expectedVolumeScene, 'volume scene route/control did not apply');
+      assert.equal(state.simGrid, expectedGrid, `fluid sim is not running on the expected ${expectedGrid}^3 grid`);
+      assert.equal(state.controls?.pressureStrategy, 'global', 'isolated simulation GPU timing requires global pressure');
+      const profileIterations = simProfileIterationSweep.length > 0
+        ? simProfileIterationSweep
+        : [simProfilePressureDisabled ? 0 : expectedPressureIterations];
+      if (simProfileIterationSweep.length === 0 && !simProfilePressureDisabled) {
+        assert.equal(state.pressureProjectionEnabled, expectedPressureIterations > 0, 'pressure projection enabled state does not match requested iteration count');
+        assert.equal(Number(state.pressureProjectionIterations), expectedPressureIterations, 'effective pressure iteration count does not match request');
+      }
+      if (profileIterations.every(iterations => iterations > 0)) {
+        assert.equal(state.pressureBufferHistoryStrategy, 'persistent-final-pressure-buffer-v0', 'global pressure history is not persistent-final ownership');
+      }
+      const simGpuProfileSamples = [];
+      for (let sampleIndex = 0; sampleIndex < requestedSimProfileSamples; sampleIndex += 1) {
+        const rotation = sampleIndex % profileIterations.length;
+        const rotatedIterations = [...profileIterations.slice(rotation), ...profileIterations.slice(0, rotation)];
+        for (const expectedProfilePressureIterations of rotatedIterations) {
+          const pressureDisabledCounterfactual = expectedProfilePressureIterations === 0;
+          const simGpuProfileEval = await wsRequest(ws, 'Runtime.evaluate', {
+            expression: `(async () => {
+              const prototype = window.__kaminosVolumePrototype;
+              const current = prototype.debugState();
+              prototype.setControls({
+                ...(current.controls || {}),
+                pressureStrategy: 'global',
+                pressureIterations: ${Math.max(1, expectedProfilePressureIterations)},
+                pressureEffectiveLabel: ${JSON.stringify(expectedProfilePressureIterations === 0 ? 'Profile P0 counterfactual' : `Profile P${expectedProfilePressureIterations}`)},
+              });
+              return prototype.sampleSimGpuProfile({ pressureDisabledCounterfactual: ${pressureDisabledCounterfactual} });
+            })()`,
+            awaitPromise: true,
+            returnByValue: true,
+          });
+          const sampleProfile = simGpuProfileEval.result.value;
+          if (
+            sampleProfile?.identity !== 'fluid-pressure-stage-gpu-timestamp-profile-v0' ||
+            sampleProfile?.timestampStatus !== 'available' ||
+            sampleProfile?.reason !== 'timestamp-query-sampled' ||
+            sampleProfile?.effectiveRoute !== state.effectiveRoute ||
+            Number(sampleProfile?.grid) !== expectedGrid ||
+            sampleProfile?.pressureStrategy !== 'global' ||
+            Number(sampleProfile?.pressureIterations) !== expectedProfilePressureIterations ||
+            sampleProfile?.counterfactual !== (pressureDisabledCounterfactual ? 'pressure-disabled-counterfactual' : null) ||
+            sampleProfile?.queueIsolationStrategy !== 'drain-prior-work-and-suspend-live-raf-submission-v0' ||
+            (expectedProfilePressureIterations > 0 && sampleProfile?.pressureBufferHistoryStrategy !== 'persistent-final-pressure-buffer-v0') ||
+            (expectedProfilePressureIterations > 0 && ![0, 1].includes(sampleProfile?.pressureBufferStartIndex)) ||
+            (expectedProfilePressureIterations > 0 && ![0, 1].includes(sampleProfile?.pressureBufferFinalIndex)) ||
+            !Number.isFinite(sampleProfile?.stages?.mainFluid?.ms) || sampleProfile.stages.mainFluid.ms < 0 ||
+            !Number.isFinite(sampleProfile?.stages?.pressureJacobi?.ms) || sampleProfile.stages.pressureJacobi.ms < 0 ||
+            !Number.isFinite(sampleProfile?.stages?.pressureProjection?.ms) || sampleProfile.stages.pressureProjection.ms < 0 ||
+            !Number.isFinite(sampleProfile?.stages?.total?.ms) || sampleProfile.stages.total.ms <= 0 ||
+            !Number.isFinite(sampleProfile?.stageOverlap?.mainFluidPressureJacobiMs) || sampleProfile.stageOverlap.mainFluidPressureJacobiMs < 0 ||
+            !Number.isFinite(sampleProfile?.stageOverlap?.pressureJacobiProjectionMs) || sampleProfile.stageOverlap.pressureJacobiProjectionMs < 0 ||
+            !Number.isFinite(sampleProfile?.pressureWorkMs) || sampleProfile.pressureWorkMs < 0 ||
+            !Number.isFinite(sampleProfile?.pressureWindowMs) || sampleProfile.pressureWindowMs < 0 ||
+            !Number.isFinite(sampleProfile?.pressureTailMs) || sampleProfile.pressureTailMs < 0 ||
+            (expectedProfilePressureIterations === 0 && sampleProfile.stages.pressureJacobi.status !== 'disabled') ||
+            (expectedProfilePressureIterations === 0 && sampleProfile.stages.pressureProjection.status !== 'disabled') ||
+            !Number.isFinite(sampleProfile?.pressureFraction) || sampleProfile.pressureFraction < 0 || sampleProfile.pressureFraction > 1
+          ) {
+            throw new Error(`Isolated simulation GPU timing sample ${sampleIndex + 1}/${requestedSimProfileSamples} P${expectedProfilePressureIterations} is unavailable or incomplete: ${JSON.stringify(sampleProfile)}`);
+          }
+          simGpuProfileSamples.push({ ...sampleProfile, sweepIteration: expectedProfilePressureIterations, sweepRound: sampleIndex });
+        }
+      }
+      const summarizeSamples = values => {
+        const sorted = [...values].sort((a, b) => a - b);
+        const valueAt = fraction => sorted[Math.min(sorted.length - 1, Math.floor(fraction * sorted.length))];
+        return {
+          min: sorted[0],
+          p50: valueAt(0.50),
+          p95: valueAt(0.95),
+          max: sorted[sorted.length - 1],
+        };
+      };
+      const summarizeProfileSamples = (profileSamples, iterations) => ({
+        identity: 'fluid-pressure-stage-gpu-timestamp-summary-v0',
+        pressureIterations: iterations,
+        sampleCount: profileSamples.length,
+        requestedSampleCount: requestedSimProfileSamples,
+        counterfactual: iterations === 0 ? 'pressure-disabled-counterfactual' : null,
+        mohelIndicator: requestedSimProfileSamples > 100 ? 'high-uncapped-sample-count' : 'nominal',
+        stages: {
+          mainFluidMs: summarizeSamples(profileSamples.map(sampleProfile => sampleProfile.stages.mainFluid.ms)),
+          pressureJacobiMs: summarizeSamples(profileSamples.map(sampleProfile => sampleProfile.stages.pressureJacobi.ms)),
+          pressureProjectionMs: summarizeSamples(profileSamples.map(sampleProfile => sampleProfile.stages.pressureProjection.ms)),
+          totalMs: summarizeSamples(profileSamples.map(sampleProfile => sampleProfile.stages.total.ms)),
+        },
+        stageOverlap: {
+          mainFluidPressureJacobiMs: summarizeSamples(profileSamples.map(sampleProfile => sampleProfile.stageOverlap.mainFluidPressureJacobiMs)),
+          pressureJacobiProjectionMs: summarizeSamples(profileSamples.map(sampleProfile => sampleProfile.stageOverlap.pressureJacobiProjectionMs)),
+        },
+        pressureWorkMs: summarizeSamples(profileSamples.map(sampleProfile => sampleProfile.pressureWorkMs)),
+        pressureWindowMs: summarizeSamples(profileSamples.map(sampleProfile => sampleProfile.pressureWindowMs)),
+        pressureTailMs: summarizeSamples(profileSamples.map(sampleProfile => sampleProfile.pressureTailMs)),
+        pressureMs: summarizeSamples(profileSamples.map(sampleProfile => sampleProfile.pressureMs)),
+        pressureWorkFraction: summarizeSamples(profileSamples.map(sampleProfile => sampleProfile.pressureWorkFraction)),
+        pressureWindowFraction: summarizeSamples(profileSamples.map(sampleProfile => sampleProfile.pressureWindowFraction)),
+        pressureFraction: summarizeSamples(profileSamples.map(sampleProfile => sampleProfile.pressureFraction)),
+      });
+      const simGpuProfileSweep = Object.fromEntries(profileIterations.map(iterations => [
+        `p${iterations}`,
+        summarizeProfileSamples(simGpuProfileSamples.filter(sampleProfile => sampleProfile.sweepIteration === iterations), iterations),
+      ]));
+      const simGpuProfileSummary = profileIterations.length === 1
+        ? simGpuProfileSweep[`p${profileIterations[0]}`]
+        : {
+            identity: 'fluid-pressure-stage-gpu-timestamp-interleaved-summary-v0',
+            treatmentOrder: profileIterations,
+            roundCount: requestedSimProfileSamples,
+            totalSampleCount: simGpuProfileSamples.length,
+            rotationStrategy: 'round-robin-left-rotation-v0',
+            treatments: simGpuProfileSweep,
+          };
+      const simGpuProfile = simGpuProfileSamples[simGpuProfileSamples.length - 1];
+      const screenshot = await captureViewportScreenshot(ws, out);
+      const screenshotMetrics = measureScreenshot(readFileSync(screenshot));
+      if (screenshotMetrics.litPixels < 1000 || screenshotMetrics.meanLuma < 1.2) {
+        throw new Error(`simulation profile context screenshot missing visible volume: ${JSON.stringify(screenshotMetrics)}`);
+      }
+      const fullScreenshotPath = fullScreenshot && fullScreenshot !== out
+        ? await captureViewportScreenshot(ws, fullScreenshot)
+        : screenshot;
+      const refreshedStateEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: 'window.__kaminosVolumePrototype?.debugState?.()',
+        returnByValue: true,
+      });
+      state = refreshedStateEval.result.value || state;
+      const report = {
+        identity: 'kaminos-volume-sim-gpu-profile-witness-v0',
+        requestedRoute: url,
+        settleMs,
+        windowSize,
+        evidenceMode: 'performance',
+        visualEvidenceMode: 'context-only-not-timing-authority',
+        phase,
+        effectiveRoute: state.effectiveRoute,
+        prototypeIdentity: state.prototypeIdentity,
+        backend: state.backend,
+        pressureBufferHistoryStrategy: state.pressureBufferHistoryStrategy,
+        pressureBufferStartIndex: state.pressureBufferStartIndex,
+        pressureBufferFinalIndex: state.pressureBufferFinalIndex,
+        simGpuProfile,
+        simGpuProfileSamples,
+        simGpuProfileSummary,
+        simGpuProfileSweep,
+        screenshotMetrics,
+        screenshot,
+        fullScreenshot: fullScreenshotPath || null,
+        state,
+        browserSession: {
+          identity: browserSession.identity,
+          mode: browserSession.mode,
+          port: browserSession.port,
+          userDataDir: browserSession.userDataDir,
+          keepBrowserOpen: browserSession.keepBrowserOpen,
+        },
+      };
+      writeFileSync(reportPath, JSON.stringify(report, null, 2));
+      ws.close();
+      closeBrowserSession(browserSession);
+      console.log(JSON.stringify(report, null, 2));
+      return;
+    }
     if (isCaptureReplay) {
       assertCaptureReplayControls({
         captureReplay,
@@ -2875,6 +3048,37 @@ async function main() {
     assert.ok(Number.isFinite(stateTiming.rafFps) && stateTiming.rafFps > 0, 'route-local RAF timing did not report a positive cadence');
     assert.ok(Number.isFinite(stateTiming.frameP95Ms) && stateTiming.frameP95Ms > 0, 'route-local frame p95 timing is missing');
     assert.ok(Number.isFinite(stateTiming.cpuFrameMs) && stateTiming.cpuFrameMs >= 0, 'route-local CPU frame timing is missing');
+
+    const simGpuProfileRequired = expectedSimProfile && expectedPressureStrategy === 'global' && expectedPressureIterations > 0;
+    let simGpuProfile = state.simGpuProfile || null;
+    if (simGpuProfileRequired) {
+      phase = 'sim-gpu-profile';
+      const simGpuProfileEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: 'window.__kaminosVolumePrototype.sampleSimGpuProfile()',
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      simGpuProfile = simGpuProfileEval.result.value;
+      if (
+        simGpuProfile?.identity !== 'fluid-pressure-stage-gpu-timestamp-profile-v0' ||
+        simGpuProfile?.timestampStatus !== 'available' ||
+        simGpuProfile?.reason !== 'timestamp-query-sampled' ||
+        simGpuProfile?.effectiveRoute !== state.effectiveRoute ||
+        Number(simGpuProfile?.grid) !== expectedGrid ||
+        simGpuProfile?.pressureStrategy !== 'global' ||
+        Number(simGpuProfile?.pressureIterations) !== expectedPressureIterations ||
+        simGpuProfile?.pressureBufferHistoryStrategy !== 'persistent-final-pressure-buffer-v0' ||
+        ![0, 1].includes(simGpuProfile?.pressureBufferStartIndex) ||
+        ![0, 1].includes(simGpuProfile?.pressureBufferFinalIndex) ||
+        !Number.isFinite(simGpuProfile?.stages?.mainFluid?.ms) || simGpuProfile.stages.mainFluid.ms < 0 ||
+        !Number.isFinite(simGpuProfile?.stages?.pressureJacobi?.ms) || simGpuProfile.stages.pressureJacobi.ms < 0 ||
+        !Number.isFinite(simGpuProfile?.stages?.pressureProjection?.ms) || simGpuProfile.stages.pressureProjection.ms < 0 ||
+        !Number.isFinite(simGpuProfile?.stages?.total?.ms) || simGpuProfile.stages.total.ms <= 0 ||
+        !Number.isFinite(simGpuProfile?.pressureFraction) || simGpuProfile.pressureFraction < 0 || simGpuProfile.pressureFraction > 1
+      ) {
+        throw new Error(`Isolated simulation GPU timing is unavailable or incomplete: ${JSON.stringify(simGpuProfile)}`);
+      }
+    }
 
     phase = 'gpu-readback';
     const fullScreenshotPath = await captureViewportScreenshot(ws, fullScreenshot);
@@ -4357,8 +4561,12 @@ async function main() {
       pressureTierEffectiveBounds: sample.pressureTierEffectiveBounds,
       pressureTierOverlayOpacity: sample.pressureTierOverlayOpacity,
       pressureTierBufferOwnership: sample.pressureTierBufferOwnership,
+      pressureBufferHistoryStrategy: sample.pressureBufferHistoryStrategy,
+      pressureBufferStartIndex: sample.pressureBufferStartIndex,
+      pressureBufferFinalIndex: sample.pressureBufferFinalIndex,
       simProfile: sample.simProfile,
       simCostLedger: sample.simCostLedger || state.simCostLedger || null,
+      simGpuProfile,
       expectedMajorantCadence,
       expectedPressureIterations,
       expectedTallPlumePressureIterationStrategy: expectedTallPlumePressureStrategy,

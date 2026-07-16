@@ -17,6 +17,7 @@ const BOUNDARY_SPLAT_RENDERER_IDENTITY = 'live-boundary-sidecar-analytic-splats-
 const BOUNDARY_SPLAT_LEARNED_RENDERER_IDENTITY = 'live-boundary-sidecar-learned-attribute-splats-v0';
 const BOUNDARY_SPLAT_SOURCE_AUTHORITY = 'live-baked-sidecar-plus-fluid-material-v0';
 const BOUNDARY_SPLAT_GPU_PROFILE_IDENTITY = 'boundary-splat-stage-gpu-timestamp-profile-v0';
+const SIM_GPU_PROFILE_IDENTITY = 'fluid-pressure-stage-gpu-timestamp-profile-v0';
 const BOUNDARY_SPLAT_ATTRIBUTE_HOOK_IDENTITY = 'boundary-splat-learned-attribute-hook-v0';
 const BOUNDARY_SPLAT_INITIAL_CAPACITY = 131072;
 const BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES = 48;
@@ -419,6 +420,8 @@ const TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY = 'tall-plume-spatial-pressure-t
 const TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE = 'inactive';
 const PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE = 'composite-pressure-tier-read-v0';
 const PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER = 'single-pressure-buffer-read-v0';
+const PRESSURE_BUFFER_HISTORY_STRATEGY_PERSISTENT_FINAL = 'persistent-final-pressure-buffer-v0';
+const PRESSURE_BUFFER_HISTORY_STRATEGY_SPATIAL_COMPOSITE = 'spatial-composite-pressure-buffer-v0';
 const PRESSURE_STRATEGY_SPATIAL_TIERS = 'spatial_tiers';
 const PRESSURE_STRATEGY_GLOBAL = 'global';
 const DEFAULT_PRESSURE_TIER_LOWER_MAX = 0.50;
@@ -438,6 +441,37 @@ const MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_ACTIVE = 'bonfire-non-wind-forc
 const MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-non-wind-force-bypass-v0';
 const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_ACTIVE = 'bonfire-scalar-neighborhood-active-v0';
 const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-scalar-neighborhood-bypass-v0';
+
+export function globalPressureBufferPlan(startIndex, iterationCount) {
+  const normalizedStartIndex = Number(startIndex) === 1 ? 1 : 0;
+  const normalizedIterationCount = Math.max(0, Math.floor(Number(iterationCount) || 0));
+  const dispatches = [];
+  let readIndex = normalizedStartIndex;
+  for (let iteration = 1; iteration <= normalizedIterationCount; iteration += 1) {
+    const writeIndex = 1 - readIndex;
+    dispatches.push({ iteration, readIndex, writeIndex });
+    readIndex = writeIndex;
+  }
+  return {
+    startIndex: normalizedStartIndex,
+    finalIndex: readIndex,
+    dispatches,
+  };
+}
+
+export function pressureJacobiStageTimestampWrites(stageTimestampWrites, iteration, iterationCount) {
+  if (!stageTimestampWrites?.querySet) return null;
+  const isFirst = Number(iteration) === 1;
+  const isLast = Number(iteration) === Number(iterationCount);
+  const hasBeginning = isFirst && stageTimestampWrites.beginningOfPassWriteIndex != null;
+  const hasEnd = isLast && stageTimestampWrites.endOfPassWriteIndex != null;
+  if (!hasBeginning && !hasEnd) return null;
+  return {
+    querySet: stageTimestampWrites.querySet,
+    ...(hasBeginning ? { beginningOfPassWriteIndex: stageTimestampWrites.beginningOfPassWriteIndex } : {}),
+    ...(hasEnd ? { endOfPassWriteIndex: stageTimestampWrites.endOfPassWriteIndex } : {}),
+  };
+}
 const TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_PHASE_ANCHOR = 'transported-detail-phase-anchor-v0';
 const TALL_PLUME_DETAIL_COHERENCE_STRATEGY_INACTIVE = 'inactive';
 const TALL_PLUME_TRANSITION_BAND_STRATEGY_STAGGERED_RETIREMENT = 'staggered-transition-retirement-v0';
@@ -5158,6 +5192,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pressureProjectionIterations: 0,
     pressureIterationDefault: defaultPressureIterationsForScene(controlsSnapshot.volumeScene),
     pressureIterationRequested: defaultPressureIterationsForScene(controlsSnapshot.volumeScene),
+    pressureBufferHistoryStrategy: PRESSURE_BUFFER_HISTORY_STRATEGY_PERSISTENT_FINAL,
+    pressureBufferStartIndex: 0,
+    pressureBufferFinalIndex: 0,
     externalEmitterMode: 'off',
     externalEmitterCoordinateSpace: 'none',
     externalEmitterCount: 0,
@@ -5226,6 +5263,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatCopyDisposition: makeBoundarySplatCopyDisposition(0, boundarySplatEffectiveRendererIdentity(controlsSnapshot.boundarySplatMode)),
     simProfile: normalizeSimProfileFlag(controlsSnapshot.simProfile),
     simCostLedger: null,
+    simGpuProfile: null,
     pressureSourceStrategy: PRESSURE_SOURCE_STRATEGY_DISABLED,
     tallPlumePressureIterationStrategy: TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE,
     tallPlumePressureIterationTarget: 0,
@@ -5577,6 +5615,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let pressureBuffers = [];
   let currentFluid = 0;
   let currentFront = 0;
+  let currentPressure = 0;
   let frameTexture = null;
   let frameTextureSize = '';
   let browserResidualFeatureTexture = null;
@@ -5590,6 +5629,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let lastTemporalControlSignature = '';
   let format = null;
   let raf = 0;
+  let simGpuProfileInFlight = false;
   const timingSamples = {
     rafDelta: [],
     cpuFrame: [],
@@ -6634,6 +6674,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     ];
     currentFluid = 0;
     currentFront = 0;
+    currentPressure = 0;
     state.simStepCount = 0;
     state.simGrid = gridSize;
     state.simGridLabel = `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`;
@@ -6664,6 +6705,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.pressureProjectionIterations = 0;
     state.pressureIterationDefault = defaultPressureIterationsForScene(controlsSnapshot.volumeScene);
     state.pressureIterationRequested = normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
+    state.pressureBufferHistoryStrategy = PRESSURE_BUFFER_HISTORY_STRATEGY_PERSISTENT_FINAL;
+    state.pressureBufferStartIndex = currentPressure;
+    state.pressureBufferFinalIndex = currentPressure;
     state.fluidStateResetCount += 1;
     state.fluidStateResetReason = reason;
     resetTemporalHistory(reason);
@@ -6691,6 +6735,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (Object.keys(requiredLimits).length) deviceDescriptor.requiredLimits = requiredLimits;
     if (requiredFeatures.length) deviceDescriptor.requiredFeatures = requiredFeatures;
     device = await adapter.requestDevice(Object.keys(deviceDescriptor).length ? deviceDescriptor : undefined);
+    setSimGpuProfile(makeSimGpuProfile({
+      timestampStatus: device.features?.has?.('timestamp-query') ? 'available' : 'unsupported',
+      reason: device.features?.has?.('timestamp-query') ? 'not-sampled-yet' : 'timestamp-query-not-supported',
+    }));
     setBoundarySplatGpuProfile(makeBoundarySplatGpuProfile({
       timestampStatus: device.features?.has?.('timestamp-query') ? 'available' : 'unsupported',
       reason: device.features?.has?.('timestamp-query') ? 'not-sampled-yet' : 'timestamp-query-not-supported',
@@ -7974,6 +8022,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       pressureStrategy,
       tallPlumePressureTierStrategy: tallPlumePressureTierStrategyValue,
       pressureProjectionReadStrategy,
+      pressureBufferHistoryStrategy: state.pressureBufferHistoryStrategy,
+      pressureBufferStartIndex: state.pressureBufferStartIndex,
+      pressureBufferFinalIndex: state.pressureBufferFinalIndex,
       pressureJacobiFullGridPasses,
       pressureJacobiPartialSlabPasses,
       pressureJacobiFullGridEquivalentPasses,
@@ -8039,9 +8090,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function encodeSim(encoder, options = {}) {
+    const mainFluidTimestampWrites = options.stageTimestampWrites?.mainFluid;
     const pass = encoder.beginComputePass({
       label: 'kaminos fluid sim pass',
-      ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
+      ...(mainFluidTimestampWrites
+        ? { timestampWrites: mainFluidTimestampWrites }
+        : (options.timestampWrites ? { timestampWrites: options.timestampWrites } : {})),
     });
     pass.setPipeline(computePipeline);
     pass.setBindGroup(0, bindGroups[currentFluid]);
@@ -8053,12 +8107,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.frontFieldReadIndex = currentFront;
     state.frontFieldWriteIndex = 1 - currentFront;
     state.frontFieldProjectionPassthrough = false;
-    encodePressureProjection(encoder);
+    if (options.skipPressureProjection === true) {
+      state.pressureProjectionEnabled = false;
+      state.pressureProjectionIterations = 0;
+      state.pressureBufferHistoryStrategy = 'pressure-disabled-counterfactual-v0';
+      state.pressureBufferStartIndex = null;
+      state.pressureBufferFinalIndex = null;
+    } else {
+      encodePressureProjection(encoder, { stageTimestampWrites: options.stageTimestampWrites });
+    }
     state.simStepCount += 1;
     updateSimCostLedger();
   }
 
-  function encodePressureProjection(encoder) {
+  function encodePressureProjection(encoder, options = {}) {
     const pressureIterationCount = normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
     const pressureStrategy = normalizePressureStrategy(controlsSnapshot.pressureStrategy, controlsSnapshot.volumeScene);
     const tierPlan = pressureTierDispatchPlan(gridSize, pressureStrategy, controlsSnapshot.volumeScene, normalizePressureTierControls(controlsSnapshot));
@@ -8127,27 +8189,46 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }
       state.pressureProjectionEnabled = true;
       state.pressureProjectionIterations = tierPlan.maxTierIterations;
+      currentPressure = 0;
+      state.pressureBufferHistoryStrategy = PRESSURE_BUFFER_HISTORY_STRATEGY_SPATIAL_COMPOSITE;
+      state.pressureBufferStartIndex = null;
+      state.pressureBufferFinalIndex = null;
       state.frontFieldReadIndex = currentFront;
       state.frontFieldWriteIndex = 1 - currentFront;
       state.frontFieldProjectionPassthrough = true;
       updateSimCostLedger();
       return;
     }
-    let pressureReadIndex = 0;
-    for (let i = 0; i < pressureIterationCount; i += 1) {
-      const pass = encoder.beginComputePass({ label: `kaminos pressure jacobi inline-divergence pass ${i + 1}` });
+    const pressureBufferPlan = globalPressureBufferPlan(currentPressure, pressureIterationCount);
+    state.pressureBufferHistoryStrategy = PRESSURE_BUFFER_HISTORY_STRATEGY_PERSISTENT_FINAL;
+    state.pressureBufferStartIndex = pressureBufferPlan.startIndex;
+    for (const dispatch of pressureBufferPlan.dispatches) {
+      const timestampWrites = pressureJacobiStageTimestampWrites(
+        options.stageTimestampWrites?.pressureJacobi,
+        dispatch.iteration,
+        pressureIterationCount,
+      );
+      const pass = encoder.beginComputePass({
+        label: `kaminos pressure jacobi inline-divergence pass ${dispatch.iteration}`,
+        ...(timestampWrites ? { timestampWrites } : {}),
+      });
       pass.setPipeline(pressureJacobiPipeline);
       pass.setBindGroup(0, majorantFrontBindGroups[currentFluid]);
-      pass.setBindGroup(2, pressureJacobiBindGroups[pressureReadIndex]);
+      pass.setBindGroup(2, pressureJacobiBindGroups[dispatch.readIndex]);
       pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
       pass.end();
-      pressureReadIndex = 1 - pressureReadIndex;
     }
+    currentPressure = pressureBufferPlan.finalIndex;
+    state.pressureBufferFinalIndex = currentPressure;
     {
-      const pass = encoder.beginComputePass({ label: 'kaminos pressure projection pass' });
+      const pressureProjectionTimestampWrites = options.stageTimestampWrites?.pressureProjection;
+      const pass = encoder.beginComputePass({
+        label: 'kaminos pressure projection pass',
+        ...(pressureProjectionTimestampWrites ? { timestampWrites: pressureProjectionTimestampWrites } : {}),
+      });
       pass.setPipeline(pressureProjectPipeline);
       pass.setBindGroup(0, bindGroups[currentFluid]);
-      pass.setBindGroup(2, pressureReadBindGroups[pressureReadIndex]);
+      pass.setBindGroup(2, pressureReadBindGroups[currentPressure]);
       pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
       pass.end();
       currentFluid = 1 - currentFluid;
@@ -8232,6 +8313,74 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function boundarySplatFeatureCaptureRequested() {
     return normalizeBoundarySplatFeatureCapture(controlsSnapshot.boundarySplatFeatureCapture);
+  }
+
+  function makeSimGpuStage(status, ms = null) {
+    return { status, ms };
+  }
+
+  function makeSimGpuProfile({
+    timestampStatus = 'unsupported',
+    reason = null,
+    stages = null,
+    stageOverlap = null,
+    pressureWorkMs = null,
+    pressureWindowMs = null,
+    pressureTailMs = null,
+    pressureIterationsOverride = null,
+    counterfactual = null,
+  } = {}) {
+    const stageStatus = timestampStatus === 'available' ? 'not-sampled' : timestampStatus;
+    const stageMap = stages ?? {
+      mainFluid: makeSimGpuStage(stageStatus),
+      pressureJacobi: makeSimGpuStage(stageStatus),
+      pressureProjection: makeSimGpuStage(stageStatus),
+      total: makeSimGpuStage(stageStatus),
+    };
+    const totalMs = stageMap.total?.ms;
+    const derivedPressureWorkMs = Number.isFinite(pressureWorkMs)
+      ? pressureWorkMs
+      : Number.isFinite(stageMap.pressureJacobi?.ms) && Number.isFinite(stageMap.pressureProjection?.ms)
+        ? stageMap.pressureJacobi.ms + stageMap.pressureProjection.ms
+        : null;
+    const derivedPressureTailMs = Number.isFinite(pressureTailMs) ? pressureTailMs : derivedPressureWorkMs;
+    const pressureIterations = Number.isFinite(pressureIterationsOverride)
+      ? pressureIterationsOverride
+      : normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
+    return {
+      identity: SIM_GPU_PROFILE_IDENTITY,
+      timestampFeature: 'timestamp-query',
+      timestampStatus,
+      reason,
+      authority: timestampStatus === 'available'
+        ? 'isolated-webgpu-timestamp-query-single-sim-step'
+        : 'unsupported-no-gpu-timing-claim',
+      routeIdentity: ROUTE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      grid: gridSize,
+      pressureStrategy: normalizePressureStrategy(controlsSnapshot.pressureStrategy, controlsSnapshot.volumeScene),
+      pressureIterations,
+      pressureBufferHistoryStrategy: pressureIterations > 0 ? state.pressureBufferHistoryStrategy : 'pressure-disabled-counterfactual-v0',
+      pressureBufferStartIndex: pressureIterations > 0 ? state.pressureBufferStartIndex : null,
+      pressureBufferFinalIndex: pressureIterations > 0 ? state.pressureBufferFinalIndex : null,
+      counterfactual,
+      sampleDisposition: 'advances-one-live-simulator-step',
+      queueIsolationStrategy: 'drain-prior-work-and-suspend-live-raf-submission-v0',
+      stages: stageMap,
+      stageOverlap,
+      pressureWorkMs: derivedPressureWorkMs,
+      pressureWindowMs,
+      pressureTailMs: derivedPressureTailMs,
+      pressureMs: derivedPressureTailMs,
+      pressureWorkFraction: Number.isFinite(derivedPressureWorkMs) && Number.isFinite(totalMs) && totalMs > 0 ? derivedPressureWorkMs / totalMs : null,
+      pressureWindowFraction: Number.isFinite(pressureWindowMs) && Number.isFinite(totalMs) && totalMs > 0 ? pressureWindowMs / totalMs : null,
+      pressureFraction: Number.isFinite(derivedPressureTailMs) && Number.isFinite(totalMs) && totalMs > 0 ? derivedPressureTailMs / totalMs : null,
+    };
+  }
+
+  function setSimGpuProfile(profile) {
+    state.simGpuProfile = profile;
+    return profile;
   }
 
   function makeBoundarySplatCopyDisposition(candidateCopyBytes = 0, rendererIdentity = BOUNDARY_SPLAT_RENDERER_IDENTITY) {
@@ -8396,6 +8545,164 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       },
     });
     pass.end();
+  }
+
+  async function sampleSimGpuProfile(options = {}) {
+    if (!state.active || !device) {
+      return setSimGpuProfile(makeSimGpuProfile({
+        timestampStatus: 'unsupported',
+        reason: 'sim-profile-route-inactive',
+      }));
+    }
+    if (!timestampQueriesAvailable()) {
+      return setSimGpuProfile(makeSimGpuProfile({
+        timestampStatus: 'unsupported',
+        reason: device?.features?.has?.('timestamp-query') ? 'timestamp-query-write-api-unavailable' : 'timestamp-query-not-supported',
+      }));
+    }
+    const pressureStrategy = normalizePressureStrategy(controlsSnapshot.pressureStrategy, controlsSnapshot.volumeScene);
+    const pressureDisabledCounterfactual = options.pressureDisabledCounterfactual === true;
+    const pressureIterations = pressureDisabledCounterfactual
+      ? 0
+      : normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
+    const projection = Math.max(0, Math.min(1.5, controlsSnapshot.projection ?? 0.65));
+    if (pressureStrategy !== PRESSURE_STRATEGY_GLOBAL) {
+      return setSimGpuProfile(makeSimGpuProfile({
+        timestampStatus: 'unsupported',
+        reason: 'isolated-stage-profile-requires-global-pressure',
+      }));
+    }
+    if (simGpuProfileInFlight) {
+      return setSimGpuProfile(makeSimGpuProfile({
+        timestampStatus: 'unsupported',
+        reason: 'sim-profile-already-in-flight',
+      }));
+    }
+
+    const pressureEnabledForSample = pressureIterations > 0 && projection > 0.001;
+    const queryCount = pressureEnabledForSample ? 6 : 2;
+    const querySet = device.createQuerySet({ type: 'timestamp', count: queryCount });
+    const resolveBuffer = device.createBuffer({
+      label: 'kaminos simulation stage timestamp resolve',
+      size: queryCount * 8,
+      usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
+    });
+    const readbackBuffer = device.createBuffer({
+      label: 'kaminos simulation stage timestamp readback',
+      size: queryCount * 8,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    let validationScopeOpen = false;
+    simGpuProfileInFlight = true;
+
+    try {
+      await device.queue.onSubmittedWorkDone();
+      updateUniforms(performance.now());
+      device.pushErrorScope('validation');
+      validationScopeOpen = true;
+      const encoder = device.createCommandEncoder({ label: 'kaminos isolated simulation stage profile encoder' });
+      encodeSim(encoder, {
+        skipPressureProjection: pressureDisabledCounterfactual,
+        stageTimestampWrites: {
+          mainFluid: { querySet, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 },
+          ...(pressureEnabledForSample ? {
+            pressureJacobi: { querySet, beginningOfPassWriteIndex: 2, endOfPassWriteIndex: 3 },
+            pressureProjection: { querySet, beginningOfPassWriteIndex: 4, endOfPassWriteIndex: 5 },
+          } : {}),
+        },
+      });
+      encoder.resolveQuerySet(querySet, 0, queryCount, resolveBuffer, 0);
+      encoder.copyBufferToBuffer(resolveBuffer, 0, readbackBuffer, 0, queryCount * 8);
+      device.queue.submit([encoder.finish()]);
+      await readbackBuffer.mapAsync(GPUMapMode.READ);
+      const timestamps = new BigUint64Array(readbackBuffer.getMappedRange().slice(0));
+      readbackBuffer.unmap();
+      const validationError = await device.popErrorScope();
+      validationScopeOpen = false;
+      if (validationError) throw new Error(validationError.message || String(validationError));
+      if (timestamps.some(value => value === 0n)) {
+        throw new Error(`timestamp-query-incomplete:${Array.from(timestamps, value => value.toString()).join(',')}`);
+      }
+      const stagePairs = pressureEnabledForSample
+        ? [[0, 1, 'main-fluid'], [2, 3, 'pressure-jacobi'], [4, 5, 'pressure-projection']]
+        : [[0, 1, 'main-fluid']];
+      for (const [startIndex, endIndex, stage] of stagePairs) {
+        if (timestamps[endIndex] < timestamps[startIndex]) {
+          throw new Error(`timestamp-query-stage-reversed:${stage}:${Array.from(timestamps, value => value.toString()).join(',')}`);
+        }
+      }
+      const nsToMs = (endIndex, startIndex) => Number(timestamps[endIndex] - timestamps[startIndex]) / 1_000_000;
+      if (!pressureEnabledForSample) {
+        const mainFluidMs = nsToMs(1, 0);
+        return setSimGpuProfile(makeSimGpuProfile({
+          timestampStatus: 'available',
+          reason: 'timestamp-query-sampled',
+          stages: {
+            mainFluid: makeSimGpuStage('sampled', mainFluidMs),
+            pressureJacobi: makeSimGpuStage('disabled', 0),
+            pressureProjection: makeSimGpuStage('disabled', 0),
+            total: makeSimGpuStage('sampled', mainFluidMs),
+          },
+          stageOverlap: {
+            mainFluidPressureJacobiMs: 0,
+            pressureJacobiProjectionMs: 0,
+          },
+          pressureWorkMs: 0,
+          pressureWindowMs: 0,
+          pressureTailMs: 0,
+          pressureIterationsOverride: 0,
+          counterfactual: pressureDisabledCounterfactual ? 'pressure-disabled-counterfactual' : null,
+        }));
+      }
+      const mainFluidMs = nsToMs(1, 0);
+      const pressureJacobiMs = nsToMs(3, 2);
+      const pressureProjectionMs = nsToMs(5, 4);
+      const totalMs = nsToMs(5, 0);
+      const pressureWorkMs = pressureJacobiMs + pressureProjectionMs;
+      const pressureWindowMs = nsToMs(5, 2);
+      const pressureTailMs = timestamps[5] > timestamps[1] ? nsToMs(5, 1) : 0;
+      return setSimGpuProfile(makeSimGpuProfile({
+        timestampStatus: 'available',
+        reason: 'timestamp-query-sampled',
+        stages: {
+          mainFluid: makeSimGpuStage('sampled', mainFluidMs),
+          pressureJacobi: makeSimGpuStage('sampled', pressureJacobiMs),
+          pressureProjection: makeSimGpuStage('sampled', pressureProjectionMs),
+          total: makeSimGpuStage('sampled', totalMs),
+        },
+        stageOverlap: {
+          mainFluidPressureJacobiMs: timestamps[2] < timestamps[1] ? nsToMs(1, 2) : 0,
+          pressureJacobiProjectionMs: timestamps[4] < timestamps[3] ? nsToMs(3, 4) : 0,
+        },
+        pressureWorkMs,
+        pressureWindowMs,
+        pressureTailMs,
+        pressureIterationsOverride: pressureIterations,
+        counterfactual: null,
+      }));
+    } catch (error) {
+      if (validationScopeOpen) {
+        try {
+          const validationError = await device.popErrorScope();
+          if (validationError && !String(error?.message || error).includes(validationError.message)) {
+            error = new Error(`${error?.message || String(error)}; validation:${validationError.message || String(validationError)}`);
+          }
+        } catch {
+          // The original failure remains the last trustworthy profile evidence.
+        }
+      }
+      return setSimGpuProfile(makeSimGpuProfile({
+        timestampStatus: 'unsupported',
+        reason: `timestamp-query-profile-failed:${error?.message || String(error)}`,
+        pressureIterationsOverride: pressureIterations,
+        counterfactual: pressureDisabledCounterfactual ? 'pressure-disabled-counterfactual' : null,
+      }));
+    } finally {
+      simGpuProfileInFlight = false;
+      resolveBuffer.destroy();
+      readbackBuffer.destroy();
+      querySet.destroy?.();
+    }
   }
 
   async function sampleBoundarySplatGpuProfile() {
@@ -8700,6 +9007,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function render(now) {
     if (!state.active) return;
     raf = requestAnimationFrame(render);
+    if (simGpuProfileInFlight) return;
     try {
       const cpuStart = performance.now();
       controls?.update?.();
@@ -10137,6 +10445,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         majorantSkippedFrameCount: state.majorantSkippedFrameCount,
         simProfile: state.simProfile,
         simCostLedger: state.simCostLedger ? { ...state.simCostLedger } : null,
+        simGpuProfile: state.simGpuProfile ? { ...state.simGpuProfile } : null,
         timing: { ...state.timing },
         effectiveRoute: state.effectiveRoute,
         prototypeIdentity: state.prototypeIdentity,
@@ -10507,6 +10816,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       majorantSkippedFrameCount: state.majorantSkippedFrameCount,
       simProfile: state.simProfile,
       simCostLedger: state.simCostLedger ? { ...state.simCostLedger } : null,
+      simGpuProfile: state.simGpuProfile ? { ...state.simGpuProfile } : null,
       timing: { ...state.timing },
       boundarySplatMode: state.boundarySplatMode,
       boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
@@ -11130,6 +11440,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return canvas;
     },
     sampleFrame,
+    sampleSimGpuProfile,
     sampleRenderScaleSet,
     controlledStepFrame,
     controlledStepSequence,
