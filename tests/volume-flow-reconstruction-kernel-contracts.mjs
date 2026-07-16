@@ -70,6 +70,7 @@ assert.match(core, /flowKernelIdentity:\s*FLOW_RECONSTRUCTION_KERNEL_IDENTITY/, 
 assert.match(core, /flowKernelRequested:[\s\S]*strength:[\s\S]*radiusWorld:[\s\S]*coherence:/, 'runtime state records requested authoring values');
 assert.match(core, /flowKernelEffective:[\s\S]*strength:[\s\S]*radiusWorld:[\s\S]*coherence:/, 'runtime state records normalized effective values');
 assert.match(core, /flowKernelCandidateAdmissionAuthority:\s*FLOW_KERNEL_COMPACT_POPULATION_IDENTITY/, 'runtime state names compact splat structural admission without claiming unfiltered native cells');
+assert.doesNotMatch(core, /native-cell-unfiltered/, 'no runtime path may mislabel structurally admitted compact splats as unfiltered native cells');
 const temporalControlSignature = core.match(/function temporalControlSignature\(snapshot = controlsSnapshot\) \{([\s\S]*?)\n  \}/)?.[1] || '';
 for (const [key] of expectedControls) {
   assert.match(temporalControlSignature, new RegExp(`snapshot\\.${key}`), `${key} changes invalidate temporal history`);
@@ -85,6 +86,6 @@ const frozenRenderFunction = core.match(/async function renderFrozenScaleToCanva
 assert.match(frozenRenderFunction, /flowKernelIdentity:\s*state\.flowKernelIdentity/, 'frozen render receipt preserves the effective kernel identity');
 assert.match(frozenRenderFunction, /flowKernelRequested:\s*state\.flowKernelRequested/, 'frozen render receipt preserves requested kernel controls');
 assert.match(frozenRenderFunction, /flowKernelEffective:\s*state\.flowKernelEffective/, 'frozen render receipt preserves normalized effective kernel controls');
-assert.match(frozenRenderFunction, /flowKernelCandidateAdmissionAuthority:\s*state\.flowKernelCandidateAdmissionAuthority/, 'frozen splat receipt proves that reconstruction did not replace native-cell candidate admission');
+assert.match(frozenRenderFunction, /flowKernelCandidateAdmissionAuthority:\s*state\.flowKernelCandidateAdmissionAuthority/, 'frozen receipt exposes the effective compact or external descriptor admission population');
 
 console.log('volume flow reconstruction kernel contracts passed');

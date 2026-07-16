@@ -9122,7 +9122,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       radiusWorld: uniforms[329],
       coherence: uniforms[330],
     };
-    state.flowKernelCandidateAdmissionAuthority = 'native-cell-unfiltered';
+    state.flowKernelCandidateAdmissionAuthority = FLOW_KERNEL_COMPACT_POPULATION_IDENTITY;
     state.boundarySidecarDebug = boundarySidecarDebug(boundarySidecarSourceName);
     if (state.volumePresentationReceipt) {
       state.volumePresentationReceipt = {
@@ -9920,6 +9920,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pass.dispatchWorkgroups(Math.ceil(state.flowKernelDescriptorIndexCount / 64));
     pass.end();
     state.flowKernelDescriptorCapturePopulation = FLOW_KERNEL_EXTERNAL_INDEX_POPULATION_IDENTITY;
+    state.flowKernelCandidateAdmissionAuthority = FLOW_KERNEL_EXTERNAL_INDEX_POPULATION_IDENTITY;
     return true;
   }
 

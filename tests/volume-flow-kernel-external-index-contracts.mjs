@@ -28,6 +28,7 @@ assert.match(core, /orderIdentity:\s*['"]caller-ordered['"]/, 'external index ad
 assert.match(core, /indexSha256/, 'external receipts bind admission to the uploaded checksum');
 assert.match(core, /nativeCellIndex >= gridSize \* gridSize \* gridSize/, 'host admission fails loud on out-of-grid indices');
 assert.match(core, /dispatchWorkgroups\(Math\.ceil\(state\.flowKernelDescriptorIndexCount \/ 64\)\)/, 'dispatch is driven by requested row count, not splat count');
+assert.match(core, /state\.flowKernelCandidateAdmissionAuthority\s*=\s*FLOW_KERNEL_EXTERNAL_INDEX_POPULATION_IDENTITY/, 'top-level runtime receipts identify external admission when that evaluator runs');
 assert.match(core, /sampleBoundarySplatKernelDescriptorCapture\(state\.flowKernelDescriptorIndexCount/, 'capture drains exactly the requested row population');
 
 console.log('flow kernel external index contracts passed');
