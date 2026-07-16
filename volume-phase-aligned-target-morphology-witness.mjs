@@ -4,6 +4,7 @@ import {
   copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync,
 } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
+import { inflateSync } from 'node:zlib';
 
 const SCHEMA = 'kaminos.volume.phase-aligned-target-morphology-witness.v0';
 const IDENTITY = 'phase-aligned-high-target-vs-filtered-low-vs-deterministic-vs-learned-v0';
@@ -50,13 +51,21 @@ try {
     deterministic.source?.supportProbeManifestSha256 === learned.source?.supportProbeManifestSha256,
     'deterministic and learned roles do not use the same checkpoint',
   );
+  require(
+    JSON.stringify(deterministic.applicationHeads.channels) === JSON.stringify(learned.applicationHeads.channels),
+    'deterministic and learned application heads do not match',
+  );
 
   const renderInputs = {
-    truthHigh160: validateRender(readJson(paths.truthRender), paths.truth, evidence.truth.sha256, 160, 'truthHigh160'),
-    filteredLow96Native: validateRender(readJson(paths.lowRender), paths.low, evidence.low.sha256, 96, 'filteredLow96Native'),
-    deterministic96to160: validateRender(readJson(paths.deterministicRender), paths.deterministic, evidence.deterministic.sha256, 160, 'deterministic96to160'),
-    learned96to160: validateRender(readJson(paths.learnedRender), paths.learned, evidence.learned.sha256, 160, 'learned96to160'),
+    truthHigh160: validateRender(readJson(paths.truthRender), paths.truth, evidence.truth.sha256, 160, 'truthHigh160', basinSha256),
+    filteredLow96Native: validateRender(readJson(paths.lowRender), paths.low, evidence.low.sha256, 96, 'filteredLow96Native', basinSha256),
+    deterministic96to160: validateRender(readJson(paths.deterministicRender), paths.deterministic, evidence.deterministic.sha256, 160, 'deterministic96to160', basinSha256),
+    learned96to160: validateRender(readJson(paths.learnedRender), paths.learned, evidence.learned.sha256, 160, 'learned96to160', basinSha256),
   };
+  require(
+    new Set(Object.values(renderInputs).map(item => item.comparisonFingerprint)).size === 1,
+    'render roles do not share the same source capture, viewport, canvas, and camera/preset contract',
+  );
 
   phase = 'artifact-write';
   const images = {
@@ -125,6 +134,9 @@ try {
     },
     checkpoint: {
       supportProbeManifestSha256: learned.source.supportProbeManifestSha256,
+      applicationHeads: learned.applicationHeads.channels,
+      applicationHeadAuthority: learned.applicationHeads.authority,
+      diagnosticOnlyExcluded: learned.applicationHeads.diagnosticOnlyExcluded,
       residualScales: { deterministic96to160: 0, learned96to160: 1 },
     },
     sources: evidence,
@@ -205,10 +217,27 @@ function validateApplication(value, scale, pairSha256, basinSha256, label) {
   require(value.relationship?.lowGrid === 96 && value.relationship?.highGrid === 160, `${label} grid relationship mismatch`);
   require(value.receiver?.grid === 160, `${label} receiver grid mismatch`);
   require(value.residualBlend?.scale === scale, `${label} residual scale must be ${scale}`);
+  const applicationHeads = value.applicationHeads;
+  require(applicationHeads?.identity === 'explicit-deployed-head-selection-v0', `${label} application heads identity mismatch`);
+  require(applicationHeads?.authority === 'caller-selected-application-heads-v0', `${label} application heads authority mismatch`);
+  require(Array.isArray(applicationHeads?.channels) && applicationHeads.channels.length > 0, `${label} application heads are missing`);
+  require(new Set(applicationHeads.channels).size === applicationHeads.channels.length, `${label} application heads contain duplicates`);
+  require(
+    applicationHeads.channels.every(channel => applicationHeads.trainedChannels?.includes(channel)),
+    `${label} application heads include an untrained channel`,
+  );
+  require(
+    JSON.stringify(Object.keys(value.channelPolicies || {})) === JSON.stringify(applicationHeads.channels),
+    `${label} channel policies do not match application heads`,
+  );
+  require(
+    JSON.stringify(value.residualBlend?.appliesTo) === JSON.stringify(applicationHeads.channels),
+    `${label} residual blend does not match application heads`,
+  );
   return value;
 }
 
-function validateRender(value, sourceManifestPath, sourceManifestSha256, grid, label) {
+function validateRender(value, sourceManifestPath, sourceManifestSha256, grid, label, basinSha256) {
   require(value.schema === 'kaminos.volume.held-field-render.v0', `${label} render schema mismatch`);
   require(value.status === 'captured' && value.failurePhase === null, `${label} render is not captured`);
   require(value.initialFieldImport?.requested?.manifestSha256 === sourceManifestSha256, `${label} requested source checksum mismatch`);
@@ -217,8 +246,15 @@ function validateRender(value, sourceManifestPath, sourceManifestSha256, grid, l
   require(value.initialFieldImport?.effective?.grid === grid, `${label} effective grid mismatch`);
   require(value.initialFieldImport?.effective?.routeIdentity === ROUTE, `${label} route mismatch`);
   require(value.initialFieldImport?.effective?.effectiveRoute === ROUTE, `${label} effective route mismatch`);
+  require(value.sourceCapture?.hashMatches === true, `${label} source capture hash did not verify`);
+  require(value.sourceCapture?.payloadSha256 === basinSha256, `${label} source capture payload mismatch`);
+  require(value.sourceCapture?.actualPayloadSha256 === basinSha256, `${label} source capture actual payload mismatch`);
   require(value.importedRender?.backend === BACKEND, `${label} backend mismatch`);
+  require(value.importedRender?.boundarySplatCompositionRequestedRaw === 'raymarch-only-v0', `${label} did not request canonical raymarch-only composition`);
+  require(value.importedRender?.boundarySplatCompositionRequested === 'raymarch-only-v0', `${label} requested composition was not raymarch-only`);
+  require(value.importedRender?.boundarySplatCompositionEffective === 'raymarch-only-v0', `${label} effective composition was not raymarch-only`);
   require(value.importedRender?.raymarchApplied === true, `${label} did not apply raymarch`);
+  require(value.importedRender?.splatEncoded === false, `${label} encoded splats`);
   require(value.importedRender?.splatApplied === false, `${label} included splats`);
   require(value.importedRender?.fallbackReason == null, `${label} reported renderer fallback`);
   require(value.importedRender?.imageAuthority === 'cdp-canvas-clip-capture-after-render-only-frozen-sim-state', `${label} image authority mismatch`);
@@ -229,14 +265,105 @@ function validateRender(value, sourceManifestPath, sourceManifestSha256, grid, l
     sha256: String(value.importedRender?.sha256 || ''),
   };
   validateImage(image, label);
-  return { image };
+  const comparisonContract = {
+    sourceCapturePayloadSha256: value.sourceCapture.actualPayloadSha256,
+    viewportContract: value.viewportContract,
+    renderCanvasContract: value.renderCanvasContract,
+    canvasCssRect: value.importedRender.canvasCssRect,
+    requestedRenderScale: value.importedRender.requestedRenderScale,
+    devicePixelRatio: value.importedRender.devicePixelRatio,
+  };
+  require(value.viewportContract?.identity === 'cdp-emulation-fixed-device-metrics-v0', `${label} viewport contract identity mismatch`);
+  require(value.renderCanvasContract?.identity === 'explicit-pre-render-canvas-css-geometry-v0', `${label} canvas contract identity mismatch`);
+  require(
+    JSON.stringify(value.viewportContract.requested) === JSON.stringify(value.viewportContract.effective),
+    `${label} viewport requested/effective mismatch`,
+  );
+  require(
+    value.renderCanvasContract.requested?.width === value.renderCanvasContract.effective?.cssWidth
+      && value.renderCanvasContract.requested?.height === value.renderCanvasContract.effective?.cssHeight,
+    `${label} canvas requested/effective mismatch`,
+  );
+  return { image, comparisonFingerprint: sha256Bytes(Buffer.from(JSON.stringify(comparisonContract))) };
 }
 
 function validateImage(image, label) {
   require(existsSync(image.path), `${label} image is missing: ${image.path}`);
   require(statSync(image.path).size === image.byteLength && image.byteLength > 24, `${label} image byte length mismatch`);
   require(sha256File(image.path) === image.sha256, `${label} image checksum mismatch`);
-  require(readFileSync(image.path).subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex')), `${label} image is not PNG`);
+  const decoded = decodePngRgb(readFileSync(image.path), label);
+  require(decoded.width > 1 && decoded.height > 1, `${label} image dimensions are not evidentiary`);
+  require(decoded.pixelActivity > 0, `${label} image is blank or has no pixel activity`);
+}
+
+function decodePngRgb(bytes, label) {
+  require(bytes.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex')), `${label} image is not PNG`);
+  let offset = 8;
+  let width = 0;
+  let height = 0;
+  let bitDepth = 0;
+  let colorType = -1;
+  let interlace = -1;
+  const idat = [];
+  while (offset + 12 <= bytes.length) {
+    const length = bytes.readUInt32BE(offset);
+    const type = bytes.toString('ascii', offset + 4, offset + 8);
+    const dataStart = offset + 8;
+    const dataEnd = dataStart + length;
+    require(dataEnd + 4 <= bytes.length, `${label} PNG chunk is truncated`);
+    if (type === 'IHDR') {
+      require(length === 13, `${label} PNG IHDR length mismatch`);
+      width = bytes.readUInt32BE(dataStart);
+      height = bytes.readUInt32BE(dataStart + 4);
+      bitDepth = bytes[dataStart + 8];
+      colorType = bytes[dataStart + 9];
+      interlace = bytes[dataStart + 12];
+    } else if (type === 'IDAT') idat.push(bytes.subarray(dataStart, dataEnd));
+    offset = dataEnd + 4;
+    if (type === 'IEND') break;
+  }
+  require(width > 0 && height > 0 && idat.length > 0, `${label} PNG is missing image data`);
+  require(bitDepth === 8 && (colorType === 2 || colorType === 6) && interlace === 0, `${label} PNG format is unsupported`);
+  const channels = colorType === 2 ? 3 : 4;
+  const rowBytes = width * channels;
+  const inflated = inflateSync(Buffer.concat(idat));
+  require(inflated.length === height * (rowBytes + 1), `${label} PNG decoded byte length mismatch`);
+  const previous = Buffer.alloc(rowBytes);
+  const current = Buffer.alloc(rowBytes);
+  let cursor = 0;
+  let minRgb = 255;
+  let maxRgb = 0;
+  for (let y = 0; y < height; y += 1) {
+    const filter = inflated[cursor++];
+    require(filter >= 0 && filter <= 4, `${label} PNG filter is invalid`);
+    for (let x = 0; x < rowBytes; x += 1) {
+      const raw = inflated[cursor++];
+      const left = x >= channels ? current[x - channels] : 0;
+      const up = previous[x];
+      const upperLeft = x >= channels ? previous[x - channels] : 0;
+      let predictor = 0;
+      if (filter === 1) predictor = left;
+      else if (filter === 2) predictor = up;
+      else if (filter === 3) predictor = Math.floor((left + up) / 2);
+      else if (filter === 4) predictor = paeth(left, up, upperLeft);
+      current[x] = (raw + predictor) & 0xff;
+      if ((x % channels) < 3) {
+        minRgb = Math.min(minRgb, current[x]);
+        maxRgb = Math.max(maxRgb, current[x]);
+      }
+    }
+    current.copy(previous);
+  }
+  return { width, height, pixelActivity: maxRgb - minRgb };
+}
+
+function paeth(left, up, upperLeft) {
+  const estimate = left + up - upperLeft;
+  const leftDistance = Math.abs(estimate - left);
+  const upDistance = Math.abs(estimate - up);
+  const upperLeftDistance = Math.abs(estimate - upperLeft);
+  if (leftDistance <= upDistance && leftDistance <= upperLeftDistance) return left;
+  return upDistance <= upperLeftDistance ? up : upperLeft;
 }
 
 function copyImage(image, name) {
@@ -261,3 +388,4 @@ function require(condition, message) { if (!condition) throw new Error(message);
 function readJson(path) { return JSON.parse(readFileSync(path, 'utf8')); }
 function writeJson(path, value) { writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, 'utf8'); }
 function sha256File(path) { return createHash('sha256').update(readFileSync(path)).digest('hex'); }
+function sha256Bytes(bytes) { return createHash('sha256').update(bytes).digest('hex'); }
