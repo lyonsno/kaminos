@@ -4,6 +4,7 @@ import { createHash, randomInt } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
+import { validateCameraHoldoutReport } from './boundary-splat-camera-holdout-oracle.mjs';
 
 const SCHEMA = 'kaminos.volume.raymarch-filament-orbit-witness.v0';
 const WRAPPER_ROUTE = 'exact-basin-selective-head-live-v0';
@@ -13,10 +14,12 @@ const PRESET_AUTHORITY = 'shared-volume-settings-preset-v2';
 const SUPPORT_AUTHORITY = 'state-derived-direct-flame-candidate-support-allocation-v0';
 const NON_RIDGE_TARGET = 'nonnegative-non-ridge-flame-emission-coefficient-v0';
 const ANALYTIC_SPLAT_RENDERER = 'live-boundary-sidecar-analytic-splats-v0';
+const FULL_FLAME_TARGET = 'smoke-off-complete-flame-local-emission-extinction-v0';
 const args = parseArgs(process.argv.slice(2));
 const requestedUrl = required('--url');
 const outDir = resolve(String(args.get('--out-dir') || '/tmp/kaminos-raymarch-filament-orbit'));
 const reportPath = resolve(String(args.get('--report') || `${outDir}/report.json`));
+const holdoutReportPath = resolve(String(args.get('--holdout-report') || `${outDir}/camera-holdout-report.json`));
 const rayStepCounts = parseIntegerList(args.get('--ray-steps') || '48,96,160');
 const orbitAngles = parseNumberList(args.get('--orbit-angles') || '-0.42,-0.28,-0.14,0,0.14,0.28,0.42');
 const timeoutMs = Number(args.get('--timeout-ms') || 240000);
@@ -160,6 +163,12 @@ try {
     captures.push(await captureAndPersist(camera, 'nonRidgeFilaments', Math.max(...rayStepCounts)));
     failurePhase = `camera-${camera.index}-analytic-splat`;
     captures.push(await captureAndPersist(camera, 'analyticSplat', Math.max(...rayStepCounts)));
+    failurePhase = `camera-${camera.index}-analytic-conserved-billboard`;
+    captures.push(await captureAndPersist(camera, 'analyticBillboard', Math.max(...rayStepCounts)));
+    failurePhase = `camera-${camera.index}-learned-conserved-billboard`;
+    captures.push(await captureAndPersist(camera, 'learnedBillboard', Math.max(...rayStepCounts)));
+    failurePhase = `camera-${camera.index}-world-tangent-covariance`;
+    captures.push(await captureAndPersist(camera, 'worldCovariance', Math.max(...rayStepCounts)));
     for (const raySteps of rayStepCounts) {
       failurePhase = `camera-${camera.index}-raymarch-${raySteps}`;
       captures.push(await captureAndPersist(camera, 'raymarch', raySteps));
@@ -173,6 +182,7 @@ try {
 
   failurePhase = 'filament-analysis';
   const filamentContinuity = await evaluate(socket, 'window.__kaminosFilamentOrbitWitness.analyze()');
+  const covarianceAnalysis = await evaluate(socket, 'window.__kaminosFilamentOrbitWitness.analyzeCovariance()');
   lastTrustworthyEvidence.captureCount = captures.length;
   lastTrustworthyEvidence.filamentContinuity = filamentContinuity.summary;
 
@@ -218,6 +228,7 @@ try {
     captures: captures.map(({ pngDataUrl, ...capture }) => capture),
     frozenDeterminism,
     filamentContinuity,
+    covarianceAnalysis,
     inspectedArtifacts: captures.map(capture => capture.imagePath),
     falseClosureChecks: {
       rejectsRouteSubstitution: true,
@@ -232,9 +243,82 @@ try {
   };
   rejectFalseClosure(report);
   writeFileSync(reportPath, JSON.stringify(report, null, 2));
+  const captureMap = new Map(report.captures.map(capture => [capture.key, capture]));
+  const familyModes = {
+    'analytic-billboard': ['analyticBillboard', 'camera-facing-billboard-v0'],
+    'learned-billboard': ['learnedBillboard', 'learned-camera-facing-billboard-v0'],
+    'world-tangent-covariance': ['worldCovariance', 'world-gradient-tangent-covariance-v0'],
+  };
+  const maxRaySteps = Math.max(...rayStepCounts);
+  const firstAudit = report.captures.find(capture => capture.footprintAudit)?.footprintAudit;
+  const cameraRows = [];
+  for (const camera of initialization.cameras) {
+    const targetCapture = captureMap.get(`${camera.index}-raymarch-${maxRaySteps}`);
+    for (const [family, [mode, familyAuthority]] of Object.entries(familyModes)) {
+      const capture = captureMap.get(`${camera.index}-${mode}-${maxRaySteps}`);
+      const metrics = covarianceAnalysis.rows.find(row => row.cameraIndex === camera.index && row.mode === mode);
+      cameraRows.push({
+        cameraIndex: camera.index,
+        cameraAngle: camera.angle,
+        cameraPoseHash: capture.cameraPoseHash,
+        family,
+        familyAuthority,
+        attributeSetId: capture.footprintAudit.attributeSetId,
+        cameraConditioning: false,
+        candidateCount: capture.boundarySplatCandidateCount,
+        instanceCount: capture.boundarySplatInstanceCount,
+        overflowCount: capture.boundarySplatOverflowCount,
+        candidatePayloadSha256: capture.footprintAudit.candidatePayloadSha256,
+        fallbackReason: capture.boundarySplatFallbackReason,
+        targetAuthority: FULL_FLAME_TARGET,
+        target: fileArtifact(targetCapture.imagePath),
+        image: fileArtifact(capture.imagePath),
+        conservation: {
+          authority: capture.footprintAudit.authority,
+          baseAreaOpacitySum: capture.footprintAudit.baseAreaOpacitySum,
+          effectiveAreaOpacitySum: capture.footprintAudit.effectiveAreaOpacitySum,
+          relativeError: capture.footprintAudit.relativeError,
+        },
+        metrics,
+      });
+    }
+  }
+  const centerCameraIndex = centerCamera.index;
+  const holdoutReport = {
+    schema: 'kaminos.boundary-splat-camera-holdout-oracle.v0',
+    status: 'completed',
+    requestedRoute: '/volume-selective-head-live.html',
+    effectiveWrapperRoute: initialization.summary.wrapperRoute,
+    effectiveRendererRoute: initialization.summary.effectiveRoute,
+    backend: report.captures[0]?.backend || null,
+    fallbackReason: null,
+    sourceSettingsPreset: initialization.summary.sourceSettingsPreset,
+    frozenState: {
+      sameStateCaptureId: initialization.summary.frozenState.sameStateCaptureId,
+      frameCount: initialization.summary.frozenState.baseFrameCount,
+      simStepCount: initialization.summary.frozenState.baseSimStepCount,
+      controlsHash: initialization.summary.frozenState.controlsHash,
+    },
+    candidatePayload: {
+      authority: 'gpu-compacted-boundary-splat-candidates-frozen-state-v0',
+      count: firstAudit.candidateCount,
+      strideFloats: 4,
+      sha256: firstAudit.candidatePayloadSha256,
+    },
+    trainCameraIndices: [centerCameraIndex],
+    heldOutCameraIndices: initialization.cameras.map(camera => camera.index).filter(index => index !== centerCameraIndex),
+    covarianceCeiling: 'world-gradient-tangent-plane-diagonal-covariance-no-free-3d-rotation-v0',
+    supportCeiling: 'current-structural-ridge-owned-candidates-omit-legitimate-non-ridge-full-flame-filaments-v0',
+    cameraRows,
+    summary: covarianceAnalysis.summary,
+    sourceOrbitReport: reportPath,
+  };
+  await validateCameraHoldoutReport(holdoutReport, { expectedCameraCount: initialization.cameras.length });
+  writeFileSync(holdoutReportPath, JSON.stringify(holdoutReport, null, 2));
   console.log(JSON.stringify({
     status: report.status,
     report: reportPath,
+    holdoutReport: holdoutReportPath,
     captureCount: report.captures.length,
     frozenDeterminism: report.frozenDeterminism,
     filamentSummary: report.filamentContinuity.summary,
@@ -492,6 +576,24 @@ function runtimeInitializationSource(config) {
           prototype.setControls({ boundarySplatMode: 'analytic', raySteps: request.raySteps });
           operator.setComposition('splat-only-v0');
           modeAuthority = '${ANALYTIC_SPLAT_RENDERER}';
+        } else if (request.mode === 'analyticBillboard') {
+          operator.setAppearanceAssay('off');
+          operator.setPresentation('beauty');
+          prototype.setControls({ boundarySplatMode: 'analytic_conserved', raySteps: request.raySteps });
+          operator.setComposition('splat-only-v0');
+          modeAuthority = 'camera-facing-billboard-v0';
+        } else if (request.mode === 'learnedBillboard') {
+          operator.setAppearanceAssay('off');
+          operator.setPresentation('beauty');
+          prototype.setControls({ boundarySplatMode: 'learned_conserved', raySteps: request.raySteps });
+          operator.setComposition('splat-only-v0');
+          modeAuthority = 'learned-camera-facing-billboard-v0';
+        } else if (request.mode === 'worldCovariance') {
+          operator.setAppearanceAssay('off');
+          operator.setPresentation('beauty');
+          prototype.setControls({ boundarySplatMode: 'world_covariance', raySteps: request.raySteps });
+          operator.setComposition('splat-only-v0');
+          modeAuthority = 'world-gradient-tangent-covariance-v0';
         } else {
           operator.setAppearanceAssay('off');
           operator.setPresentation('beauty');
@@ -513,6 +615,9 @@ function runtimeInitializationSource(config) {
         const metrics = pixelMetrics({ ...sample.image, rgba });
         if (!metrics.nonblank) throw new Error('missing, partial, or blank capture: ' + request.key);
         const effectiveRaySteps = sample.volumePresentationReceipt?.effectiveRayQuality?.raySteps ?? sample.controls?.raySteps ?? null;
+        const footprintAudit = ['analyticBillboard', 'learnedBillboard', 'worldCovariance'].includes(request.mode)
+          ? await prototype.sampleBoundarySplatFootprintAudit()
+          : null;
         const record = {
           key: request.key,
           cameraIndex: request.camera.index,
@@ -534,6 +639,9 @@ function runtimeInitializationSource(config) {
           backend: sample.backend,
           modeAuthority,
           boundarySplatRendererIdentity: sample.boundarySplatRendererIdentity,
+          boundarySplatFootprintAuthority: sample.boundarySplatFootprintAuthority,
+          boundarySplatAreaOpacityConservationAuthority: sample.boundarySplatAreaOpacityConservationAuthority,
+          footprintAudit,
           boundarySplatSourceAuthority: sample.boundarySplatSourceAuthority,
           boundarySplatCandidateCount: sample.boundarySplatCandidateCount,
           boundarySplatInstanceCount: sample.boundarySplatInstanceCount,
@@ -628,6 +736,71 @@ function runtimeInitializationSource(config) {
         };
       }
 
+      function edgeLoss(left, right, width, height) {
+        let absoluteDelta = 0;
+        let samples = 0;
+        const edgeAt = (rgba, x0, y0, x1, y1) => {
+          const first = (y0 * width + x0) * 4;
+          const second = (y1 * width + x1) * 4;
+          return Math.abs(luma(rgba, first) - luma(rgba, second));
+        };
+        for (let y = 1; y < height; y += 1) {
+          for (let x = 1; x < width; x += 1) {
+            absoluteDelta += Math.abs(edgeAt(left, x - 1, y, x, y) - edgeAt(right, x - 1, y, x, y));
+            absoluteDelta += Math.abs(edgeAt(left, x, y - 1, x, y) - edgeAt(right, x, y - 1, x, y));
+            samples += 2;
+          }
+        }
+        return absoluteDelta / Math.max(1, samples * 255);
+      }
+
+      function analyzeCovariance() {
+        const maxRaySteps = Math.max(...${JSON.stringify(config.rayStepCounts)});
+        const familyModes = ['analyticBillboard', 'learnedBillboard', 'worldCovariance'];
+        const center = cameras.reduce((best, camera) => Math.abs(camera.angle) < Math.abs(best.angle) ? camera : best);
+        const rows = [];
+        for (const camera of cameras) {
+          const fullFlame = captures.get(camera.index + '-raymarch-' + maxRaySteps);
+          const support = captures.get(camera.index + '-stateDerivedSupport-' + maxRaySteps);
+          const nonRidge = captures.get(camera.index + '-nonRidgeFilaments-' + maxRaySteps);
+          for (const mode of familyModes) {
+            const capture = captures.get(camera.index + '-' + mode + '-' + maxRaySteps);
+            if (!capture || !fullFlame || !support || !nonRidge) throw new Error('missing covariance comparator for camera ' + camera.index + ' mode ' + mode);
+            rows.push({
+              cameraIndex: camera.index,
+              cameraAngle: camera.angle,
+              heldOut: camera.index !== center.index,
+              mode,
+              fullFlamePixelDelta: pixelDelta(capture.rgba, fullFlame.rgba),
+              supportAlignedPixelDelta: pixelDelta(capture.rgba, support.rgba),
+              nonRidgeResidualPixelDelta: pixelDelta(capture.rgba, nonRidge.rgba),
+              fullFlameEdgeLoss: edgeLoss(capture.rgba, fullFlame.rgba, capture.width, capture.height),
+              supportAlignedEdgeLoss: edgeLoss(capture.rgba, support.rgba, capture.width, capture.height),
+            });
+          }
+        }
+        const summarize = (mode, heldOut) => {
+          const selected = rows.filter(row => row.mode === mode && row.heldOut === heldOut);
+          return {
+            mode,
+            split: heldOut ? 'held-out-camera-mean-v0' : 'training-camera-v0',
+            cameraCount: selected.length,
+            fullFlameMeanAbsChannelDelta: selected.reduce((sum, row) => sum + row.fullFlamePixelDelta.meanAbsChannelDelta, 0) / selected.length,
+            fullFlameEdgeLoss: selected.reduce((sum, row) => sum + row.fullFlameEdgeLoss, 0) / selected.length,
+            supportAlignedMeanAbsChannelDelta: selected.reduce((sum, row) => sum + row.supportAlignedPixelDelta.meanAbsChannelDelta, 0) / selected.length,
+            supportAlignedEdgeLoss: selected.reduce((sum, row) => sum + row.supportAlignedEdgeLoss, 0) / selected.length,
+          };
+        };
+        return {
+          identity: 'full-flame-world-covariance-camera-holdout-analysis-v0',
+          targetAuthority: '${FULL_FLAME_TARGET}',
+          trainingCameraIndex: center.index,
+          heldOutCameraIndices: cameras.map(camera => camera.index).filter(index => index !== center.index),
+          rows,
+          summary: familyModes.flatMap(mode => [summarize(mode, false), summarize(mode, true)]),
+        };
+      }
+
       function frozenRepeat() {
         const center = cameras.reduce((best, camera) => Math.abs(camera.angle) < Math.abs(best.angle) ? camera : best);
         const reference = captures.get(center.index + '-raymarch-' + Math.max(...${JSON.stringify(config.rayStepCounts)}));
@@ -644,7 +817,7 @@ function runtimeInitializationSource(config) {
         };
       }
 
-      window.__kaminosFilamentOrbitWitness = { capture, analyze, frozenRepeat };
+      window.__kaminosFilamentOrbitWitness = { capture, analyze, analyzeCovariance, frozenRepeat };
       return {
         summary: {
           wrapperRoute: wrapperBefore.routeIdentity,
@@ -705,6 +878,7 @@ function parseArgs(argv) {
     '--url',
     '--out-dir',
     '--report',
+    '--holdout-report',
     '--ray-steps',
     '--orbit-angles',
     '--timeout-ms',
@@ -757,6 +931,15 @@ function writeDataUrl(path, dataUrl) {
   const match = /^data:image\/png;base64,(.+)$/.exec(String(dataUrl || ''));
   if (!match) throw new Error(`missing, partial, or blank capture: ${path}`);
   writeFileSync(path, Buffer.from(match[1], 'base64'));
+}
+
+function fileArtifact(path) {
+  const bytes = readFileSync(path);
+  return {
+    path,
+    bytes: bytes.length,
+    sha256: createHash('sha256').update(bytes).digest('hex'),
+  };
 }
 
 function gitValue(argv) {

@@ -27,6 +27,13 @@ assert.match(
   'world covariance orientation must derive from frozen state support rather than the camera',
 );
 
+const witnessSource = await readFile(new URL('../volume-raymarch-filament-orbit-witness.mjs', import.meta.url), 'utf8');
+assert.match(witnessSource, /analytic_conserved/, 'camera orbit must capture the conserved analytic billboard family');
+assert.match(witnessSource, /learned_conserved/, 'camera orbit must capture the conserved learned billboard family');
+assert.match(witnessSource, /world_covariance/, 'camera orbit must capture the world covariance family');
+assert.match(witnessSource, /sampleBoundarySplatFootprintAudit/, 'camera orbit must audit candidate identity and area/opacity conservation');
+assert.match(witnessSource, /heldOutCameraIndices/, 'camera orbit must publish an explicit held-out camera split');
+
 const oracle = await import('../boundary-splat-camera-holdout-oracle.mjs');
 
 function sha256(bytes) {
@@ -60,6 +67,7 @@ for (let cameraIndex = 0; cameraIndex < 3; cameraIndex += 1) {
       candidateCount: 93189,
       instanceCount: 93189,
       overflowCount: 0,
+      candidatePayloadSha256: 'a'.repeat(64),
       fallbackReason: null,
       targetAuthority: 'smoke-off-complete-flame-local-emission-extinction-v0',
       target,
