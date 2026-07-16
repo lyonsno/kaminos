@@ -271,6 +271,10 @@ assert.match(witnessSource, /--disable-background-timer-throttling/, 'visual wit
 assert.match(witnessSource, /--disable-renderer-backgrounding/, 'visual witness does not let browser backgrounding freeze the GPU renderer');
 assert.match(witnessSource, /lastDebugState\?\.status\s*===\s*'loading'[\s\S]*throw new Error/, 'visual witness fails loud when the primary bench hook never leaves loading');
 assert.match(witnessSource, /diagnosticsStateDeadline[\s\S]*diagnosticsCompletionCount[\s\S]*explicitDiagnosticsReceipt/, 'visual witness waits for cached debug state to publish its completed explicit diagnostics receipt');
+assert.match(witnessSource, /finalDiagnosticsReceipt[\s\S]*phase\s*=\s*'final_diagnostics_refresh'[\s\S]*kaminosFingerFluidBenchRequestDiagnostics/, 'visual witness requests final diagnostics after composition and cadence work');
+assert.match(witnessSource, /FINAL_DIAGNOSTICS_MAX_LAG_STEPS\s*=\s*16/, 'final diagnostics permit measured in-flight simulation progress without accepting an unbounded step lag');
+assert.match(witnessSource, /finalDiagnosticsLagSteps[\s\S]*FINAL_DIAGNOSTICS_MAX_LAG_STEPS/, 'visual witness bounds final published diagnostic step lag');
+assert.match(witnessSource, /finalDiagnosticsAgeMs[^\n]+3000[\s\S]*phase\s*=\s*null;[\s\S]*writeReport\(\{[\s\S]*ok:\s*true/, 'visual witness validates final published diagnostic freshness immediately before success');
 assert.match(witnessSource, /main\(\)\s*\.then\([\s\S]*process\.exit\(0\)/, 'successful visual witness exits after its synchronous report and image writes instead of retaining a CDP socket');
 assert.match(witnessSource, /\.catch\(error\s*=>[\s\S]*process\.exit\(1\)/, 'failed visual witness exits nonzero after preserving its durable failure report');
 assert.match(witnessSource, /cameraWitness\?\.orbitChanged[^\n]+true/, 'visual witness requires an actual orbit input delta');

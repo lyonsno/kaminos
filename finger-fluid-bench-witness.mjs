@@ -22,6 +22,7 @@ const preContactSettleMs = Number(args.get('--pre-contact-settle-ms') || 3800);
 const hookWaitMs = Number(args.get('--hook-wait-ms') || Math.max(settleMs, 15000));
 const cadenceMs = Number(args.get('--cadence-ms') || 4200);
 const CAMERA_DELTA_EPSILON = 1e-4;
+const FINAL_DIAGNOSTICS_MAX_LAG_STEPS = 16;
 
 let phase = 'initializing';
 let stderr = '';
@@ -32,6 +33,7 @@ let canvasActivity = null;
 let cadenceProbe = null;
 let automaticDiagnosticsRequestCount = null;
 let explicitDiagnosticsReceipt = null;
+let finalDiagnosticsReceipt = null;
 let compositionWitness = null;
 let cameraWitness = null;
 let preContactWitness = null;
@@ -67,6 +69,7 @@ function writeReport(report = {}) {
     cadenceProbe,
     automaticDiagnosticsRequestCount,
     explicitDiagnosticsReceipt,
+    finalDiagnosticsReceipt,
     compositionWitness,
     cameraWitness,
     preContactWitness,
@@ -862,6 +865,43 @@ async function main() {
     lastDebugState = cadenceState;
     if (cadenceProbe.deltaDiagnosticsRequests !== 0) throw new Error(`cadence window scheduled recurring full diagnostics: ${JSON.stringify(cadenceProbe)}`);
     if (cadenceProbe.framesPerSecond < 18) throw new Error(`settled GPU fluid cadence below floor: ${JSON.stringify(cadenceProbe)}`);
+
+    phase = 'final_diagnostics_refresh';
+    finalDiagnosticsReceipt = await evaluate(ws, `(async () => {
+      const request = window.kaminosFingerFluidBenchRequestDiagnostics;
+      if (typeof request !== 'function') throw new Error('missing explicit finger fluid diagnostics hook');
+      return request();
+    })()`);
+    const finalDiagnosticsDeadline = Date.now() + 5000;
+    while (Date.now() < finalDiagnosticsDeadline) {
+      lastDebugState = await evaluate(ws, `(() => {
+        const read = window.kaminosFingerFluidBenchDebugState || window.__kaminosFingerFluidBenchDebugState;
+        return typeof read === 'function' ? read() : null;
+      })()`);
+      if (
+        lastDebugState?.runtime?.diagnosticsRequestCount === finalDiagnosticsReceipt?.diagnosticsRequestCount
+        && lastDebugState?.runtime?.diagnosticsCompletionCount === finalDiagnosticsReceipt?.diagnosticsCompletionCount
+      ) break;
+      await delay(50);
+    }
+    if (
+      finalDiagnosticsReceipt?.diagnosticsRequestCount !== explicitDiagnosticsReceipt?.diagnosticsRequestCount + 1
+      || lastDebugState?.runtime?.diagnosticsRequestCount !== finalDiagnosticsReceipt?.diagnosticsRequestCount
+      || lastDebugState?.runtime?.diagnosticsCompletionCount !== finalDiagnosticsReceipt?.diagnosticsCompletionCount
+    ) {
+      throw new Error(`final explicit diagnostics are missing, partial, or duplicated: ${JSON.stringify({ explicitDiagnosticsReceipt, finalDiagnosticsReceipt, runtime: lastDebugState?.runtime })}`);
+    }
+    const finalDiagnosticsLagSteps = lastDebugState.runtime.stepCount - lastDebugState.runtime.diagnostics?.stepCount;
+    const finalDiagnosticsAgeMs = lastDebugState.runtime.diagnostics?.ageMs;
+    if (
+      !Number.isInteger(finalDiagnosticsLagSteps)
+      || finalDiagnosticsLagSteps < 0
+      || finalDiagnosticsLagSteps > FINAL_DIAGNOSTICS_MAX_LAG_STEPS
+      || !Number.isFinite(finalDiagnosticsAgeMs)
+      || finalDiagnosticsAgeMs > 3000
+    ) {
+      throw new Error(`final published GPU diagnostics are stale: ${JSON.stringify({ finalDiagnosticsAgeMs, finalDiagnosticsLagSteps, finalDiagnosticsReceipt, stepCount: lastDebugState.runtime.stepCount, diagnosticsStepCount: lastDebugState.runtime.diagnostics?.stepCount })}`);
+    }
 
     phase = null;
     writeReport({
