@@ -6,6 +6,7 @@ import { dirname, resolve } from 'node:path';
 import {
   RAY_STEP_ABLATION_AUTHORITY,
   parseRayStepAblation,
+  validateRayStepAblationValues,
   validateRayStepAblationReceipt,
 } from '../boundary-splat-ray-step-ablation.mjs';
 
@@ -15,6 +16,8 @@ const witness = readFileSync(resolve(root, 'volume-witness.mjs'), 'utf8');
 
 assert.equal(RAY_STEP_ABLATION_AUTHORITY, 'frozen-sim-state-native-raymarch-step-ablation-v0');
 assert.deepEqual(parseRayStepAblation('36,96,144'), [36, 96, 144], 'requested step sequence is preserved uncapped');
+assert.throws(() => parseRayStepAblation('36,bad,144'), /integer|malformed/i, 'malformed tokens are rejected instead of silently removed');
+assert.throws(() => validateRayStepAblationValues([36, 96.5, 144]), /integer/i, 'browser API values are rejected instead of floored');
 assert.throws(() => parseRayStepAblation('36,36,144'), /unique/i, 'duplicate steps are rejected');
 assert.throws(() => parseRayStepAblation('96,36,144'), /ascending/i, 'nonascending steps are rejected');
 assert.throws(() => parseRayStepAblation('36,96,161'), /1.*160|160/i, 'steps above the renderer maximum are rejected');
@@ -122,6 +125,7 @@ assert.throws(
 );
 
 assert.match(core, /captureBoundarySplatRayStepAblation/, 'core exposes the frozen-state ray-step ablation');
+assert.doesNotMatch(core, /options\.raySteps\.map\(value => Math\.floor/, 'browser capture must not floor requested step values');
 assert.match(core, /controlsSnapshot\s*=\s*controlsBefore/, 'core restores the exact pre-ablation controls');
 assert.match(witness, /--boundary-splat-ray-step-ablation/, 'witness exposes the explicit ray-step sequence');
 assert.match(witness, /raymarch-steps-\$\{raySteps\}\.png/, 'witness materializes one stable target artifact per requested step count');

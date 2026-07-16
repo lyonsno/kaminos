@@ -1217,6 +1217,24 @@ def topology_band_losses(macro_prediction, topology_residual, final_prediction, 
     return {"macro": macro, "topology": topology, "final": final, "total": total}
 
 
+def evaluation_loss_metrics(prediction, target, edge_weight, topology_losses=None):
+    pixel_value = float(pixel_loss(prediction, target).item())
+    edge_value = float(edge_loss(prediction, target).item())
+    metrics = {
+        "pixelLoss": pixel_value,
+        "edgeLoss": edge_value,
+        "loss": pixel_value + edge_value * edge_weight,
+    }
+    if topology_losses is not None:
+        metrics.update({
+            "macroLoss": float(topology_losses["macro"].item()),
+            "topologyLoss": float(topology_losses["topology"].item()),
+            "topologyFinalLoss": float(topology_losses["final"].item()),
+            "loss": float(topology_losses["total"].item()),
+        })
+    return metrics
+
+
 def save_preview(path, image):
     pixels = np.clip(np.asarray(image) * 255.0 + 0.5, 0, 255).astype(np.uint8)
     Image.fromarray(pixels, mode="RGB").save(path)
@@ -1311,7 +1329,20 @@ def evaluate_frame_set(model, geometries, frames, indices, lower, span, depth_bi
     return rows
 
 
-def evaluate_optical_frame_set(decoder, base_predictions, optical_feature_planes, optical_control_conditions, geometries, frames, indices, edge_weight, output_dir, stage):
+def evaluate_optical_frame_set(
+    decoder,
+    base_predictions,
+    optical_feature_planes,
+    optical_control_conditions,
+    geometries,
+    frames,
+    indices,
+    edge_weight,
+    topology_macro_weight,
+    topology_residual_weight,
+    output_dir,
+    stage,
+):
     rows = []
     for frame_index in indices:
         base_prediction = base_predictions[frame_index]
@@ -1327,8 +1358,8 @@ def evaluate_optical_frame_set(decoder, base_predictions, optical_feature_planes
                 prediction,
                 geometries[frame_index]["target"],
                 decoder.topology_passes,
-                1.0,
-                1.0,
+                topology_macro_weight,
+                topology_residual_weight,
                 edge_weight,
             )
             mx.eval(prediction, macro_prediction, topology_residual, *topology_losses.values())
@@ -1340,24 +1371,20 @@ def evaluate_optical_frame_set(decoder, base_predictions, optical_feature_planes
         save_preview(preview_path, prediction)
         if not target_path.exists():
             save_preview(target_path, geometries[frame_index]["target"])
-        pixel_value = float(pixel_loss(prediction, geometries[frame_index]["target"]).item())
-        edge_value = float(edge_loss(prediction, geometries[frame_index]["target"]).item())
+        metrics = evaluation_loss_metrics(
+            prediction,
+            geometries[frame_index]["target"],
+            edge_weight,
+            topology_losses,
+        )
         row = {
             "frameIndex": frame_index,
             "frameId": frames[frame_index]["id"],
             "sameStateCaptureId": frames[frame_index]["sameStateCaptureId"],
             "preview": str(preview_path),
             "targetPreview": str(target_path),
-            "pixelLoss": pixel_value,
-            "edgeLoss": edge_value,
-            "loss": pixel_value + edge_value * edge_weight,
+            **metrics,
         }
-        if components is not None:
-            row.update({
-                "macroLoss": float(topology_losses["macro"].item()),
-                "topologyLoss": float(topology_losses["topology"].item()),
-                "topologyFinalLoss": float(topology_losses["final"].item()),
-            })
         rows.append(row)
     return rows
 
@@ -1725,6 +1752,8 @@ def main():
                 corpus["frames"],
                 frame_split["evaluationIndices"],
                 args.edge_weight,
+                args.optical_topology_macro_weight,
+                args.optical_topology_residual_weight,
                 output_dir,
                 "initial",
             )
@@ -1854,6 +1883,8 @@ def main():
                 corpus["frames"],
                 frame_split["evaluationIndices"],
                 args.edge_weight,
+                args.optical_topology_macro_weight,
+                args.optical_topology_residual_weight,
                 output_dir,
                 "trained",
             )

@@ -12433,7 +12433,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   async function captureBoundarySplatRayStepAblation(options = {}) {
     if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
     const requestedRaySteps = Array.isArray(options.raySteps)
-      ? options.raySteps.map(value => Math.floor(Number(value)))
+      ? options.raySteps.map(value => Number(value))
       : [];
     if (requestedRaySteps.length < 2 || requestedRaySteps.some(value => !Number.isInteger(value) || value < 1 || value > 160)) {
       return { ok: false, reason: 'invalid-ray-step-ablation', requestedRaySteps };

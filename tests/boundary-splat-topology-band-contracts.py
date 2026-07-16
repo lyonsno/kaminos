@@ -74,4 +74,13 @@ mx.eval(*wrong_topology_losses.values())
 assert float(wrong_topology_losses["topology"].item()) > 0.1
 assert float(wrong_topology_losses["total"].item()) > float(wrong_topology_losses["macro"].item())
 
+weighted_metrics = MODULE.evaluation_loss_metrics(
+    perfect_macro,
+    perfect_target,
+    edge_weight=1.0,
+    topology_losses=wrong_topology_losses,
+)
+assert weighted_metrics["loss"] == float(wrong_topology_losses["total"].item())
+assert weighted_metrics["loss"] != weighted_metrics["pixelLoss"] + weighted_metrics["edgeLoss"]
+
 print("boundary splat topology band contracts passed")

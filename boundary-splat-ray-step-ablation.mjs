@@ -3,16 +3,23 @@ import assert from 'node:assert/strict';
 export const RAY_STEP_ABLATION_AUTHORITY = 'frozen-sim-state-native-raymarch-step-ablation-v0';
 export const RAY_STEP_ABLATION_TARGET_DECOMPOSITION = 'candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0';
 
-export function parseRayStepAblation(value) {
-  const steps = String(value || '')
-    .split(',')
-    .map(entry => Number(entry.trim()))
-    .filter(entry => Number.isFinite(entry));
+export function validateRayStepAblationValues(values) {
+  const steps = Array.from(values || []);
   assert.ok(steps.length >= 2, 'ray-step ablation requires at least two requested steps');
-  assert.ok(steps.every(step => Number.isInteger(step) && step >= 1 && step <= 160), 'ray-step ablation values must be integers in the renderer range 1..160');
+  assert.ok(steps.every(step => Number.isFinite(step) && Number.isInteger(step) && step >= 1 && step <= 160), 'ray-step ablation values must be integers in the renderer range 1..160');
   assert.equal(new Set(steps).size, steps.length, 'ray-step ablation values must be unique');
   assert.ok(steps.every((step, index) => index === 0 || step > steps[index - 1]), 'ray-step ablation values must be strictly ascending');
   return steps;
+}
+
+export function parseRayStepAblation(value) {
+  const raw = String(value || '');
+  if (!raw.trim()) return validateRayStepAblationValues([]);
+  const tokens = raw.split(',').map(entry => entry.trim());
+  assert.ok(tokens.every(token => token.length > 0), 'ray-step ablation contains a malformed value');
+  const steps = tokens.map(token => Number(token));
+  assert.ok(steps.every(step => Number.isFinite(step)), 'ray-step ablation contains a malformed value');
+  return validateRayStepAblationValues(steps);
 }
 
 function sameCamera(left, right) {
