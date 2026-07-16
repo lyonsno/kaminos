@@ -237,6 +237,10 @@
     const causalReleaseSteps = Math.max(1, Math.round(Number(params.get('release_steps') || 30)));
     const causalCurlNoiseGain = Math.max(0, Math.min(3, Number(params.get('causal_curl_noise_gain') || 0.72)));
     const causalVorticityGain = Math.max(0, Math.min(3, Number(params.get('causal_vorticity_gain') || 0.52)));
+    const rawCausalFlowDebug = Number(params.get('causal_flow_debug') || 0);
+    if (!Number.isFinite(rawCausalFlowDebug)) throw new Error('causal_flow_debug must be finite');
+    const causalFlowDebug = Math.max(0, Math.min(1, rawCausalFlowDebug));
+    const causalRenderViewIdentity = 'causal-render-view-identity-v0';
     const manualDualCaptureMode = !native64ManifestMode && !causalFeedbackMode && (params.get('manual_dual_capture') === '1' || params.get('capture_paused') === '1');
     const manualSourceGrid = causalFeedbackMode ? 64 : Number(params.get('manual_source_grid') || 96);
     const manualSourceGridSupported = [64, 96, 128].includes(manualSourceGrid);
@@ -355,6 +359,7 @@
       volume_wind_height: '-0.8',
       volume_input_radius: '0.53',
       volume_flow_rate: '1',
+      volume_flow_debug: String(causalFlowDebug),
       volume_steps: '88',
       volume_adaptive_rays: '1',
       volume_occupancy_skip: '1',
@@ -1036,6 +1041,7 @@
         oracleActivityCurlNoise: 0,
         oracleActivityVorticity: 0,
         oracleActivityMaterial: 0,
+        flowDebug: causalFlowDebug,
         runtimeQualityReason: 'causal-initial-state-reset-intermediate-96',
       });
       prototype.setControls({
@@ -1045,6 +1051,7 @@
         oracleActivityCurlNoise: 0,
         oracleActivityVorticity: 0,
         oracleActivityMaterial: 0,
+        flowDebug: causalFlowDebug,
         runtimeQualityReason: 'causal-initial-state-reset-target-64',
       });
       const runnerState = prototype.debugState?.() || null;
@@ -1064,6 +1071,7 @@
           oracleActivityCurlNoise: 0,
           oracleActivityVorticity: 0,
           oracleActivityMaterial: 0,
+          flowDebug: causalFlowDebug,
           runtimeQualityReason: 'causal-unforced-deterministic-preroll-v0',
         });
         const preRollReceipt = await prototype.captureNativeLowSelectiveSharedDeviceFrame({
@@ -1146,6 +1154,7 @@
         oracleActivityCurlNoise: forceActive ? causalCurlNoiseGain : 0,
         oracleActivityVorticity: forceActive ? causalVorticityGain : 0,
         oracleActivityMaterial: 0,
+        flowDebug: causalFlowDebug,
         runtimeQualityReason: `native64-causal-${causalFeedbackRole}-${forcingPhase}`,
       });
       const receipt = await prototype.captureNativeLowSelectiveSharedDeviceFrame({
@@ -1166,6 +1175,11 @@
       });
       if (!receipt?.ok) {
         throw new Error(`${receipt?.failurePhase || 'native64-causal-feedback-step'}:${receipt?.error || 'unknown'}`);
+      }
+      const effectiveRunnerState = prototype.debugState?.() || null;
+      const effectiveFlowDebug = Number(effectiveRunnerState?.controls?.flowDebug);
+      if (!Number.isFinite(effectiveFlowDebug) || Math.abs(effectiveFlowDebug - causalFlowDebug) > 1e-6) {
+        throw new Error(`causalFlowDebugMismatch:${causalFlowDebug}:${effectiveFlowDebug}`);
       }
       if (generateLearnedCue && receipt.generatedCueFrameId) learnedCuePrimed = true;
       replaceImageUrls({ visuals: { controlObjectUrl: receipt.visuals?.controlObjectUrl } });
@@ -1208,6 +1222,9 @@
         materialGain: 0,
         warmupSteps: causalWarmupSteps,
         releaseSteps: causalReleaseSteps,
+        renderViewIdentity: causalRenderViewIdentity,
+        requestedFlowDebug: causalFlowDebug,
+        effectiveFlowDebug,
         requestedRoute: NATIVE_LOW_SELECTIVE_LIVE_ROUTE,
         effectiveRoute: receipt.effectiveRoute || NATIVE_LOW_SHARED_DEVICE_ROUTE,
         requestedTransferRouteId: NATIVE_LOW_TRANSFER_160_TO_96_DEPLOYMENT_GRID_ROUTE,
@@ -1229,7 +1246,7 @@
         failurePhase: sourceStepDelta === 1 ? null : 'native64-causal-nonconsecutive-step',
       };
       latestReceipt = latestCausalFeedbackFrame;
-      latestRunnerState = prototype.debugState?.() || null;
+      latestRunnerState = effectiveRunnerState;
       lastTrustworthyEvidence = { latestCausalFeedbackFrame, runner: latestRunnerState };
       failurePhase = latestCausalFeedbackFrame.failurePhase;
       routeStatus = latestCausalFeedbackFrame.ok ? 'paused' : 'failed';
@@ -1276,6 +1293,9 @@
         causalPreRollSteps,
         causalWarmupSteps,
         causalReleaseSteps,
+        causalRenderViewIdentity,
+        requestedFlowDebug: causalFeedbackMode ? causalFlowDebug : null,
+        effectiveFlowDebug: causalFeedbackMode ? latestCausalFeedbackFrame?.effectiveFlowDebug ?? null : null,
         nativeControl: latestManualDualCapture?.visualRoles?.[nativeControlRoleIdentity] || null,
         native64Control: manualSourceGrid === 64 ? latestManualDualCapture?.visualRoles?.native64Control || null : null,
         native96Control: manualSourceGrid === 96 ? latestManualDualCapture?.visualRoles?.native96Control || null : null,

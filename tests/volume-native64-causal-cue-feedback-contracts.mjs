@@ -67,6 +67,12 @@ assert.match(causalRoutes, /preRollStep[\s\S]*learnedCueFeedbackEnabled:\s*false
 assert.match(causalRoutes, /causal-unforced-deterministic-preroll-v0[\s\S]*oracleActivityCue:\s*0[\s\S]*oracleActivityCurlNoise:\s*0[\s\S]*oracleActivityVorticity:\s*0/, 'pre-roll cannot apply learned or procedural forcing');
 assert.match(route, /forcingPhase[\s\S]*warmup[\s\S]*release/, 'route records effective forcing phase');
 assert.match(route, /oracleActivityCurlNoise[\s\S]*oracleActivityVorticity/, 'route preserves independent curl-noise and vorticity gains');
+assert.match(route, /requestedFlowDebug\s*=\s*Math\.max\(0, Math\.min\(1, rawRequestedFlowDebug\)\)/, 'operator route exposes a bounded render-only flow-debug mix');
+assert.match(route, /rawRequestedFlowDebug[\s\S]*Number\.isFinite\(rawRequestedFlowDebug\)/, 'operator route rejects malformed flow-debug input before clamping');
+assert.match(route, /causal_flow_debug[\s\S]*requestedFlowDebug/, 'operator route forwards the requested flow-debug mix to the renderer child');
+assert.match(innerRoute, /causal_flow_debug[\s\S]*causalFlowDebug[\s\S]*volume_flow_debug/, 'inner route binds the causal flow-debug request to the effective renderer control');
+assert.match(innerRoute, /rawCausalFlowDebug[\s\S]*Number\.isFinite\(rawCausalFlowDebug\)/, 'inner route rejects malformed forwarded flow-debug input before clamping');
+assert.match(causalRoutes, /requestedFlowDebug[\s\S]*effectiveFlowDebug[\s\S]*causal-render-view-identity-v0/, 'causal receipts preserve requested/effective render-view identity');
 assert.match(route, /causalNativeSourceObjectUrl/, 'operator route displays the causally evolved native source rather than substituting the model-rendered treatment');
 assert.match(route, /runtimeTruthAvailable[\s\S]*false[\s\S]*syntheticDownsampleApplied[\s\S]*false/, 'product-like causal roles forbid truth and synthetic source downsampling');
 
@@ -78,6 +84,8 @@ assert.match(witness, /preRollSteps[\s\S]*firstCapturedSimulationStep/, 'witness
 assert.match(witness, /appliedCueFrameId[\s\S]*generatedCueFrameId[\s\S]*forcingPhase/, 'witness preserves feedback timing and forcing phase per frame');
 assert.match(witness, /learnedFlowActivityModelIdentity[\s\S]*learnedFlowActivityModelSha256[\s\S]*exact-basin-derived-flow-activity-head-160-to-96-v0/, 'witness rejects missing or substituted learned flow-activity model identity');
 assert.match(witness, /requestedBackend[\s\S]*effectiveBackend[\s\S]*requestedRoute[\s\S]*effectiveRoute/, 'witness preserves backend and route identities');
+assert.match(witness, /--flow-debug[\s\S]*requestedFlowDebug[\s\S]*effectiveFlowDebug/, 'witness requires and preserves the requested/effective flow-debug mix');
+assert.match(witness, /assert\.equal\(frame\.effectiveFlowDebug, requestedFlowDebug/, 'witness rejects silent flow-debug fallback or drift');
 assert.match(witness, /blankFrameRejection[\s\S]*cachedFrameRejection/, 'witness rejects blank and cached output');
 assert.match(witness, /failurePhase[\s\S]*lastTrustworthyEvidence/, 'witness writes durable failure phase and last trustworthy evidence');
 assert.match(combined, /baa54236f04c28eab278cf60e4a60745cd3c0160a985a9adbb1e06db7958f6e8/, 'causal route binds the exact 96-trained package checksum');

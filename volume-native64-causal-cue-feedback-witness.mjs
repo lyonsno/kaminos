@@ -17,6 +17,7 @@ const reportPath = resolve(String(args.get('--report') || out.replace(/\.mp4$/i,
 const requestedFrameCount = integerArg('--frames', 60);
 const playbackFps = numberArg('--fps', 30);
 const preRollSteps = integerArg('--preroll-steps', 96);
+const requestedFlowDebug = numberArg('--flow-debug', 0);
 const firstCapturedSimulationStep = preRollSteps + 1;
 const timeoutMs = numberArg('--timeout-ms', 900000);
 const port = integerArg('--debug-port', randomInt(42000, 62000));
@@ -71,6 +72,7 @@ try {
   assert.ok(requestedFrameCount > 1, '--frames must be greater than one');
   assert.ok(playbackFps > 0, '--fps must be positive');
   assert.ok(preRollSteps >= 0, '--preroll-steps must be non-negative');
+  assert.ok(requestedFlowDebug >= 0 && requestedFlowDebug <= 1, '--flow-debug must be between zero and one');
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
 
@@ -108,6 +110,7 @@ try {
   assert.equal(state.role, role, 'operator route role mismatch');
   assert.equal(state.nativeGrid, 64, 'operator route did not bind native64');
   assert.equal(state.preRollSteps, preRollSteps, 'operator route pre-roll length mismatch');
+  assert.equal(state.requestedFlowDebug, requestedFlowDebug, 'operator route flow-debug request mismatch');
   assert.equal(state.firstCapturedSimulationStep, firstCapturedSimulationStep, 'operator route first captured simulation step mismatch');
   assert.equal(state.initialStateContract?.preRollIdentity, 'causal-unforced-deterministic-preroll-v0', 'operator route pre-roll identity mismatch');
   assert.equal(state.runtimeTruthAvailable, false, 'runtime truth must remain unavailable');
@@ -161,6 +164,9 @@ try {
       learnedFlowActivityModelSha256: frame.learnedFlowActivityModelSha256,
       learnedCueDiagnosticStats: frame.learnedCueDiagnosticStats,
       forceActive: frame.forceActive,
+      renderViewIdentity: frame.renderViewIdentity,
+      requestedFlowDebug: frame.requestedFlowDebug,
+      effectiveFlowDebug: frame.effectiveFlowDebug,
       requestedBackend: frame.requestedBackend,
       effectiveBackend: frame.effectiveBackend,
       requestedRoute: frame.requestedRoute,
@@ -203,6 +209,8 @@ try {
     preRollSteps,
     firstCapturedSimulationStep,
     playbackFps,
+    requestedFlowDebug,
+    effectiveFlowDebug: frames.at(-1)?.effectiveFlowDebug ?? null,
     requestedBackend: finalState.requestedBackend,
     effectiveBackend: finalState.effectiveBackend,
     requestedRoute: finalState.requestedRoute,
@@ -230,6 +238,8 @@ try {
     requestedFrameCount,
     capturedFrameCount: frames.length,
     preRollSteps,
+    requestedFlowDebug,
+    effectiveFlowDebug: frames.at(-1)?.effectiveFlowDebug ?? null,
     firstCapturedSimulationStep,
     requestedBackend: 'WebGPU',
     effectiveBackend: frames.at(-1)?.effectiveBackend || null,
@@ -261,6 +271,9 @@ function validateFrame(frame, frameIndex, previousSimulationStep) {
   assert.ok(Math.abs(frame.deterministicNowMs - ((preRollSteps + frameIndex + 1) * (1000 / 30))) < 0.0001, `frame ${frameIndex} deterministic phase time mismatch`);
   assert.equal(frame.runtimeTruthAvailable, false, `frame ${frameIndex} exposed runtime truth`);
   assert.equal(frame.syntheticDownsampleApplied, false, `frame ${frameIndex} used synthetic downsampling`);
+  assert.equal(frame.renderViewIdentity, 'causal-render-view-identity-v0', `frame ${frameIndex} render-view identity mismatch`);
+  assert.equal(frame.requestedFlowDebug, requestedFlowDebug, `frame ${frameIndex} requested flow-debug mismatch`);
+  assert.equal(frame.effectiveFlowDebug, requestedFlowDebug, `frame ${frameIndex} effective flow-debug drift`);
   assert.equal(frame.requestedBackend, 'WebGPU', `frame ${frameIndex} requested wrong backend`);
   assert.match(String(frame.effectiveBackend), /^WebGPU/, `frame ${frameIndex} fell back from WebGPU`);
   assert.equal(frame.fallbackBackend, null, `frame ${frameIndex} reported fallback backend`);

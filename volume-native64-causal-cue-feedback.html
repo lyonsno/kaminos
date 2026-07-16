@@ -41,6 +41,10 @@
     const releaseSteps = Math.max(1, Math.round(Number(params.get('release_steps') || 30)));
     const curlNoiseGain = Math.max(0, Math.min(3, Number(params.get('curl_noise_gain') || 0.72)));
     const vorticityGain = Math.max(0, Math.min(3, Number(params.get('vorticity_gain') || 0.52)));
+    const rawRequestedFlowDebug = Number(params.get('flow_debug') || 0);
+    if (!Number.isFinite(rawRequestedFlowDebug)) throw new Error('flow_debug must be finite');
+    const requestedFlowDebug = Math.max(0, Math.min(1, rawRequestedFlowDebug));
+    const renderViewIdentity = 'causal-render-view-identity-v0';
     const autoIntervalMs = Math.max(0, Number(params.get('interval_ms') || 0));
     const requestedBackend = 'WebGPU';
     const requestedRoute = 'native64-causal-cue-feedback-operator-v0';
@@ -86,6 +90,7 @@
         release_steps: String(releaseSteps),
         causal_curl_noise_gain: String(curlNoiseGain),
         causal_vorticity_gain: String(vorticityGain),
+        causal_flow_debug: String(requestedFlowDebug),
       });
       return `./volume-native-low-selective-live.html?${query}`;
     }
@@ -139,7 +144,7 @@
         failurePhase = frame.failurePhase;
         const forcingPhase = frame.forcingPhase;
         status.textContent = `${role} | ${forcingPhase} | step ${frame.simulationStep} | ${Math.round(frame.endToEndFrameMs || 0)} ms`;
-        identity.textContent = `applied=${frame.appliedCueFrameId || 'none'} | generated=${frame.generatedCueFrameId || 'none'} | next=${frame.generatedForNextSimulationStep ?? 'none'} | truth=false | synthetic=false`;
+        identity.textContent = `applied=${frame.appliedCueFrameId || 'none'} | generated=${frame.generatedCueFrameId || 'none'} | next=${frame.generatedForNextSimulationStep ?? 'none'} | flow=${frame.effectiveFlowDebug} | truth=false | synthetic=false`;
         return frame;
       } catch (error) {
         status.textContent = error?.message || String(error);
@@ -185,6 +190,9 @@
         warmupSteps,
         releaseSteps,
         receiverControls,
+        renderViewIdentity,
+        requestedFlowDebug,
+        effectiveFlowDebug: latestFrame?.effectiveFlowDebug ?? null,
         initialStateContract,
         deterministicStepClock,
         requestedBackend,
