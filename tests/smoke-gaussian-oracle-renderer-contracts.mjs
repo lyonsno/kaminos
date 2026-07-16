@@ -10,6 +10,8 @@ const rendererUrl = new URL('../smoke-gaussian-oracle-renderer.mjs', import.meta
 const rendererSource = await readFile(rendererUrl, 'utf8');
 assert.match(rendererSource, /args\.get\('--projection'\)/, 'native-camera projection must be selectable from the reproducible CLI');
 assert.match(rendererSource, /args\.has\('--optimize-structure'\)/, 'direct structural optimization must be selectable from the reproducible CLI');
+assert.match(rendererSource, /args\.has\('--optimize-geometry'\)/, 'multi-view geometry optimization must be selectable from the reproducible CLI');
+assert.match(rendererSource, /args\.get\('--geometry-config'\)/, 'multi-view geometry inputs must come from an explicit file contract');
 const {
   SMOKE_GAUSSIAN_ORACLE_RENDER_IDENTITY,
   projectOrthographicGaussianFootprint,
@@ -18,6 +20,8 @@ const {
   renderSparseGaussianBasis,
   multiscaleStructuralLoss,
   optimizeGaussianExtinctionMasses,
+  optimizeGaussianGeometryMultiView,
+  optimizeSmokeGaussianGeometryProduct,
   optimizeSmokeGaussianStructureProduct,
   renderSmokeGaussianOracleWitness,
 } = await import(rendererUrl);
@@ -160,6 +164,106 @@ const expectedCenterDepth = 3 * perspectiveFootprint.normalization * Math.exp(-0
   perspectiveFootprint.inverseXX * 0.5 ** 2 + perspectiveFootprint.inverseYY * 0.5 ** 2
 ));
 assert.ok(Math.abs(sparseDepth[50 * 200 + 100] - expectedCenterDepth) < 1e-8, 'sparse basis must use the exact perspective Gaussian contribution');
+
+assert.equal(typeof optimizeGaussianGeometryMultiView, 'function', 'multi-view geometry refinement must be exported as a testable pure contract');
+const shiftedViewMatrix = identityViewMatrix.slice();
+shiftedViewMatrix[12] = -0.2;
+const geometryInitialRows = [{
+  position: [-0.12, -0.04, -2],
+  covariance: [0.02, 0, 0, 0.02, 0, 0.02],
+  extinctionMass: 2,
+}];
+const geometryTargetRows = [{
+  position: [0.1, 0.06, -2],
+  covariance: [0.035, 0.008, 0, 0.012, 0, 0.02],
+  extinctionMass: 2,
+}];
+const geometryViews = [
+  { id: 'camera-a', matrixWorldInverse: identityViewMatrix },
+  { id: 'camera-b', matrixWorldInverse: shiftedViewMatrix },
+].map(view => {
+  const width = 48;
+  const height = 32;
+  const camera = { projectionMatrix: perspectiveMatrix, matrixWorldInverse: view.matrixWorldInverse };
+  const targetBasis = buildPerspectiveGaussianBasis({ rows: geometryTargetRows, width, height, camera, coverageScale: 1 });
+  const targetDepth = renderSparseGaussianBasis(targetBasis.basis, Float64Array.from([2]), width * height);
+  return {
+    id: view.id,
+    width,
+    height,
+    camera,
+    coverageScale: 1,
+    extinctionScale: 1,
+    weight: 1,
+    target: Float32Array.from(targetDepth, value => 1 - Math.exp(-value)),
+  };
+});
+const optimizedGeometry = optimizeGaussianGeometryMultiView({
+  rows: geometryInitialRows,
+  views: geometryViews,
+  iterations: 80,
+  positionLearningRate: 0.025,
+  covarianceLearningRate: 0.015,
+  maxCenterResidual: 0.4,
+  maxLogScaleResidual: 1,
+  maxCholeskyResidual: 0.15,
+  scales: [1, 2],
+  valueWeight: 1,
+  gradientWeight: 1,
+});
+const initialCenterError = Math.hypot(
+  geometryInitialRows[0].position[0] - geometryTargetRows[0].position[0],
+  geometryInitialRows[0].position[1] - geometryTargetRows[0].position[1],
+);
+const finalCenterError = Math.hypot(
+  optimizedGeometry.rows[0].position[0] - geometryTargetRows[0].position[0],
+  optimizedGeometry.rows[0].position[1] - geometryTargetRows[0].position[1],
+);
+assert.equal(optimizedGeometry.identity, 'bounded-center-cholesky-adam-multiview-structure-v0');
+assert.equal(optimizedGeometry.viewCount, 2);
+assert.equal(optimizedGeometry.iterationCount, 80);
+assert.equal(optimizedGeometry.hiddenIterationCapApplied, false);
+assert.ok(optimizedGeometry.finalLoss < optimizedGeometry.initialLoss * 0.35, 'multi-view geometry must materially reduce displaced/reshaped target loss');
+assert.ok(finalCenterError < initialCenterError * 0.35, 'multi-view image gradients must move the world-space center toward the target');
+assert.notDeepEqual(optimizedGeometry.rows[0].covariance, geometryInitialRows[0].covariance, 'covariance refinement must update more than extinction or center');
+assert.ok(optimizedGeometry.maximumCenterResidual <= 0.4 + 1e-12);
+assert.ok(optimizedGeometry.maximumLogScaleResidual <= 1 + 1e-12);
+
+const covarianceOnlyGeometry = optimizeGaussianGeometryMultiView({
+  rows: geometryInitialRows,
+  views: geometryViews,
+  iterations: 12,
+  optimizePositions: false,
+  optimizeCovariances: true,
+  positionLearningRate: 0.025,
+  covarianceLearningRate: 0.015,
+  maxCenterResidual: 0.4,
+  maxLogScaleResidual: 1,
+  maxCholeskyResidual: 0.15,
+  scales: [1, 2],
+});
+assert.deepEqual(covarianceOnlyGeometry.rows[0].position, geometryInitialRows[0].position, 'a disabled center head must remain exact');
+assert.notDeepEqual(covarianceOnlyGeometry.rows[0].covariance, geometryInitialRows[0].covariance, 'the enabled covariance head must still update');
+assert.equal(covarianceOnlyGeometry.heads.position, 'disabled');
+assert.equal(covarianceOnlyGeometry.heads.covariance, 'enabled');
+
+const centerOnlyGeometry = optimizeGaussianGeometryMultiView({
+  rows: geometryInitialRows,
+  views: geometryViews,
+  iterations: 12,
+  optimizePositions: true,
+  optimizeCovariances: false,
+  positionLearningRate: 0.025,
+  covarianceLearningRate: 0.015,
+  maxCenterResidual: 0.4,
+  maxLogScaleResidual: 1,
+  maxCholeskyResidual: 0.15,
+  scales: [1, 2],
+});
+assert.notDeepEqual(centerOnlyGeometry.rows[0].position, geometryInitialRows[0].position, 'the enabled center head must still update');
+assert.deepEqual(centerOnlyGeometry.rows[0].covariance, geometryInitialRows[0].covariance, 'a disabled covariance head must remain exact');
+assert.equal(centerOnlyGeometry.heads.position, 'enabled');
+assert.equal(centerOnlyGeometry.heads.covariance, 'disabled');
 
 const behindCamera = projectPerspectiveGaussianFootprint({
   position: [0, 0, 2],
@@ -467,6 +571,142 @@ try {
     durableMassSum,
     'extinction accounting must describe the serialized Float32 product, not pre-serialization optimizer values',
   );
+
+  assert.equal(typeof optimizeSmokeGaussianGeometryProduct, 'function', 'multi-view geometry product wrapper must be exported');
+  const geometryTargetRowsForProduct = [
+    { position: [0.08, 0.04, 0], covariance: [0.015, 0.003, 0, 0.008, 0, 0.01], extinctionMass: 4 },
+    { position: [0.43, 0.16, 0], covariance: [0.008, -0.002, 0, 0.016, 0, 0.01], extinctionMass: 2 },
+  ];
+  const secondCamera = structuredClone(heldCamera);
+  secondCamera.matrixWorldInverse[12] = -0.2;
+  const secondFitDirectory = join(directory, 'held-second-camera');
+  await mkdir(secondFitDirectory, { recursive: true });
+  const secondFit = structuredClone(heldFit);
+  secondFit.teacher.camera = secondCamera;
+  secondFit.teacher.cameraIdentity = `sha256:${sha256(Buffer.from(JSON.stringify(secondCamera)))}`;
+  secondFit.cameraEvaluation.cameraId = 'shifted-camera';
+  secondFit.cameraEvaluation.role = 'held-out';
+  const secondFitReportPath = join(secondFitDirectory, 'oracle-fit-report.json');
+  await writeFile(secondFitReportPath, `${JSON.stringify(secondFit, null, 2)}\n`);
+
+  const writeGeometryTeacher = async ({ fit, fitReportPath, camera, cameraId, directory: teacherDirectory }) => {
+    await mkdir(teacherDirectory, { recursive: true });
+    const width = 32;
+    const height = 24;
+    const targetBasis = buildPerspectiveGaussianBasis({ rows: geometryTargetRowsForProduct, width, height, camera, coverageScale: 1 });
+    const targetDepth = renderSparseGaussianBasis(targetBasis.basis, Float64Array.from([4, 2]), width * height);
+    const target = Float32Array.from(targetDepth, value => 1 - Math.exp(-value));
+    const bytes = Buffer.from(target.buffer);
+    const radiancePath = join(teacherDirectory, 'linear-smoke-radiance.f32');
+    await writeFile(radiancePath, bytes);
+    const reportPath = join(teacherDirectory, 'dense-raymarch-teacher-report.json');
+    await writeFile(reportPath, `${JSON.stringify({
+      schema: 'kaminos.smoke-dense-raymarch-teacher-report.v0',
+      identity: 'smoke-dense-state-raymarch-teacher-v0',
+      status: 'passed',
+      source: {
+        fitReportPath,
+        manifestIdentity: fit.teacher.manifestIdentity,
+        fluidIdentity: fit.teacher.fluidIdentity,
+        cameraIdentity: fit.teacher.cameraIdentity,
+        effectiveRoute: fit.teacher.effectiveRoute,
+        prototypeIdentity: fit.teacher.prototypeIdentity,
+        backend: fit.teacher.backend,
+        camera,
+      },
+      raymarch: { width, height },
+      pixelStats: { blank: false },
+      artifacts: {
+        linearRadiance: {
+          path: radiancePath,
+          sha256: `sha256:${sha256(bytes)}`,
+          dtype: 'float32',
+          byteOrder: 'little-endian',
+          shape: [height, width],
+          byteLength: bytes.byteLength,
+        },
+      },
+    }, null, 2)}\n`);
+    return reportPath;
+  };
+  const geometryTeacherA = await writeGeometryTeacher({
+    fit: heldFit,
+    fitReportPath: held.reportPath,
+    camera: heldCamera,
+    cameraId: 'recorded-native',
+    directory: join(directory, 'geometry-teacher-a'),
+  });
+  const geometryTeacherB = await writeGeometryTeacher({
+    fit: secondFit,
+    fitReportPath: secondFitReportPath,
+    camera: secondCamera,
+    cameraId: 'shifted-camera',
+    directory: join(directory, 'geometry-teacher-b'),
+  });
+  const geometryProduct = await optimizeSmokeGaussianGeometryProduct({
+    sourceFitReportPath: held.reportPath,
+    views: [
+      { id: 'camera-a', fitReportPath: held.reportPath, teacherReportPath: geometryTeacherA, weight: 1 },
+      { id: 'camera-b', fitReportPath: secondFitReportPath, teacherReportPath: geometryTeacherB, weight: 1 },
+    ],
+    outDir: join(directory, 'optimized-geometry'),
+    budget: 2,
+    downsampleFactor: 1,
+    coverageScale: 1,
+    extinctionScale: 1,
+    iterations: 40,
+    positionLearningRate: 0.02,
+    covarianceLearningRate: 0.01,
+    maxCenterResidual: 0.3,
+    maxLogScaleResidual: 0.8,
+    maxCholeskyResidual: 0.1,
+    scales: [1, 2],
+    valueWeight: 1,
+    gradientWeight: 1,
+  });
+  assert.equal(geometryProduct.status, 'passed');
+  assert.equal(geometryProduct.identity, 'smoke-gaussian-oracle-multiview-geometry-optimization-v0');
+  assert.equal(geometryProduct.budget.activeGaussianCount, 2);
+  assert.equal(geometryProduct.optimizer.hiddenIterationCapApplied, false);
+  assert.equal(geometryProduct.views.length, 2);
+  assert.equal(new Set(geometryProduct.views.map(view => view.cameraIdentity)).size, 2);
+  assert.ok(geometryProduct.optimizer.finalLoss < geometryProduct.optimizer.initialLoss * 0.5);
+  assert.ok(geometryProduct.extinctionAccounting.relativeError < 1e-6);
+  assert.ok(existsSync(geometryProduct.optimizedArtifact.path));
+  assert.ok(existsSync(geometryProduct.optimizedFitReportPath));
+  const geometryFit = JSON.parse(await readFile(geometryProduct.optimizedFitReportPath, 'utf8'));
+  assert.equal(geometryFit.optimizer.positionAuthority, 'bounded-multiview-image-gradient-center-residual-v0');
+  assert.equal(geometryFit.optimizer.covarianceAuthority, 'bounded-positive-cholesky-multiview-image-gradient-v0');
+  assert.equal(
+    geometryFit.budgetCurve[0].support.authority,
+    'optimized-world-space-three-sigma-bounds-v0',
+    'optimized products must not inherit stale initializer support diagnostics',
+  );
+  assert.equal(geometryProduct.support.authority, 'optimized-world-space-three-sigma-bounds-v0');
+
+  const staleGeometryTeacher = JSON.parse(await readFile(geometryTeacherB, 'utf8'));
+  staleGeometryTeacher.source.cameraIdentity = `sha256:${'e'.repeat(64)}`;
+  const staleGeometryTeacherPath = join(directory, 'geometry-teacher-b', 'stale-report.json');
+  await writeFile(staleGeometryTeacherPath, `${JSON.stringify(staleGeometryTeacher, null, 2)}\n`);
+  const failedGeometryOut = join(directory, 'failed-geometry');
+  await assert.rejects(
+    () => optimizeSmokeGaussianGeometryProduct({
+      sourceFitReportPath: held.reportPath,
+      views: [
+        { id: 'camera-a', fitReportPath: held.reportPath, teacherReportPath: geometryTeacherA, weight: 1 },
+        { id: 'camera-b', fitReportPath: secondFitReportPath, teacherReportPath: staleGeometryTeacherPath, weight: 1 },
+      ],
+      outDir: failedGeometryOut,
+      budget: 2,
+      iterations: 2,
+      downsampleFactor: 1,
+    }),
+    /camera identity/i,
+    'a stale teacher camera must fail before multi-view geometry optimization',
+  );
+  const failedGeometry = JSON.parse(await readFile(join(failedGeometryOut, 'geometry-optimization-report.json'), 'utf8'));
+  assert.equal(failedGeometry.status, 'failed');
+  assert.equal(failedGeometry.failurePhase, 'validate-views');
 
   const staleTeacher = JSON.parse(await readFile(teacherReportPath, 'utf8'));
   staleTeacher.source.cameraIdentity = `sha256:${'d'.repeat(64)}`;

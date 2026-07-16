@@ -516,6 +516,7 @@ export function buildPerspectiveGaussianBasis({ rows, width, height, camera, cov
       values: Float32Array.from(values),
       coreIndices: Uint32Array.from(coreIndices),
       determinant: footprint.determinant,
+      footprint,
     });
   }
   return {
@@ -853,6 +854,701 @@ export function optimizeGaussianExtinctionMasses({
     luma: final.luma,
     checkpoints,
   };
+}
+
+function covarianceToCholesky(covariance) {
+  const floor = 1e-12;
+  const l00 = Math.sqrt(Math.max(floor, covariance[0]));
+  const l10 = covariance[1] / l00;
+  const l20 = covariance[2] / l00;
+  const l11 = Math.sqrt(Math.max(floor, covariance[3] - l10 * l10));
+  const l21 = (covariance[4] - l20 * l10) / l11;
+  const l22 = Math.sqrt(Math.max(floor, covariance[5] - l20 * l20 - l21 * l21));
+  return [Math.log(l00), l10, Math.log(l11), l20, l21, Math.log(l22)];
+}
+
+function choleskyToCovariance(parameters, offset = 0) {
+  const l00 = Math.exp(parameters[offset]);
+  const l10 = parameters[offset + 1];
+  const l11 = Math.exp(parameters[offset + 2]);
+  const l20 = parameters[offset + 3];
+  const l21 = parameters[offset + 4];
+  const l22 = Math.exp(parameters[offset + 5]);
+  return [
+    l00 * l00,
+    l00 * l10,
+    l00 * l20,
+    l10 * l10 + l11 * l11,
+    l10 * l20 + l11 * l21,
+    l20 * l20 + l21 * l21 + l22 * l22,
+  ];
+}
+
+function choleskyGradient(covarianceGradient, parameters, offset) {
+  const l = [
+    [Math.exp(parameters[offset]), 0, 0],
+    [parameters[offset + 1], Math.exp(parameters[offset + 2]), 0],
+    [parameters[offset + 3], parameters[offset + 4], Math.exp(parameters[offset + 5])],
+  ];
+  const g = [
+    [covarianceGradient[0], covarianceGradient[1] / 2, covarianceGradient[2] / 2],
+    [covarianceGradient[1] / 2, covarianceGradient[3], covarianceGradient[4] / 2],
+    [covarianceGradient[2] / 2, covarianceGradient[4] / 2, covarianceGradient[5]],
+  ];
+  const dL = Array.from({ length: 3 }, () => [0, 0, 0]);
+  for (let row = 0; row < 3; row += 1) {
+    for (let column = 0; column < 3; column += 1) {
+      for (let inner = 0; inner < 3; inner += 1) dL[row][column] += 2 * g[row][inner] * l[inner][column];
+    }
+  }
+  return [
+    dL[0][0] * l[0][0],
+    dL[1][0],
+    dL[1][1] * l[1][1],
+    dL[2][0],
+    dL[2][1],
+    dL[2][2] * l[2][2],
+  ];
+}
+
+export function optimizeGaussianGeometryMultiView({
+  rows,
+  views,
+  iterations,
+  optimizePositions = true,
+  optimizeCovariances = true,
+  positionLearningRate,
+  covarianceLearningRate,
+  maxCenterResidual,
+  maxLogScaleResidual,
+  maxCholeskyResidual,
+  scales = [1, 2, 4],
+  valueWeight = 1,
+  gradientWeight = 1,
+} = {}) {
+  if (!Array.isArray(rows) || rows.length === 0) throw new Error('geometry optimizer requires nonempty Gaussian rows');
+  if (!Array.isArray(views) || views.length < 2) throw new Error('geometry optimizer requires at least two camera views');
+  if (!Number.isInteger(iterations) || iterations <= 0) throw new Error('geometry optimizer requires a positive integer iteration count');
+  if (!optimizePositions && !optimizeCovariances) throw new Error('geometry optimizer requires at least one enabled geometry head');
+  if (!(positionLearningRate > 0) || !(covarianceLearningRate > 0)) throw new Error('geometry optimizer requires positive learning rates');
+  if (!(maxCenterResidual > 0) || !(maxLogScaleResidual > 0) || !(maxCholeskyResidual > 0)) {
+    throw new Error('geometry optimizer requires positive residual bounds');
+  }
+  const viewWeight = views.reduce((sum, view) => sum + Number(view.weight ?? 1), 0);
+  if (!(viewWeight > 0)) throw new Error('geometry optimizer requires positive total view weight');
+  for (const row of rows) {
+    if (!Array.isArray(row.position) || row.position.length !== 3 || !row.position.every(Number.isFinite)
+      || !Array.isArray(row.covariance) || row.covariance.length !== 6 || !row.covariance.every(Number.isFinite)
+      || !(row.extinctionMass > 0) || !Number.isFinite(row.extinctionMass)) {
+      throw new Error('geometry optimizer requires finite positions, covariances, and positive extinction masses');
+    }
+  }
+  for (const view of views) {
+    if (!view.id || !Number.isInteger(view.width) || view.width <= 0 || !Number.isInteger(view.height) || view.height <= 0
+      || !view.target || view.target.length !== view.width * view.height
+      || !(view.coverageScale > 0) || !(view.extinctionScale > 0)
+      || !view.camera) {
+      throw new Error('geometry optimizer received an incomplete camera view');
+    }
+  }
+
+  const count = rows.length;
+  const positions = new Float64Array(count * 3);
+  const positionAnchors = new Float64Array(count * 3);
+  const cholesky = new Float64Array(count * 6);
+  const choleskyAnchors = new Float64Array(count * 6);
+  for (let index = 0; index < count; index += 1) {
+    positions.set(rows[index].position, index * 3);
+    positionAnchors.set(rows[index].position, index * 3);
+    const parameters = covarianceToCholesky(rows[index].covariance);
+    cholesky.set(parameters, index * 6);
+    choleskyAnchors.set(parameters, index * 6);
+  }
+  const positionFirst = new Float64Array(positions.length);
+  const positionSecond = new Float64Array(positions.length);
+  const choleskyFirst = new Float64Array(cholesky.length);
+  const choleskySecond = new Float64Array(cholesky.length);
+  const beta1 = 0.9;
+  const beta2 = 0.999;
+  const epsilon = 1e-8;
+
+  const currentRows = () => rows.map((row, index) => ({
+    ...row,
+    position: Array.from(positions.slice(index * 3, index * 3 + 3)),
+    covariance: choleskyToCovariance(cholesky, index * 6),
+  }));
+
+  const evaluate = withGradient => {
+    const activeRows = currentRows();
+    const positionGradient = withGradient ? new Float64Array(positions.length) : null;
+    const covarianceGradient = withGradient ? new Float64Array(count * 6) : null;
+    const viewLosses = [];
+    let totalLoss = 0;
+    for (const view of views) {
+      const basisProduct = buildPerspectiveGaussianBasis({
+        rows: activeRows,
+        width: view.width,
+        height: view.height,
+        camera: view.camera,
+        coverageScale: view.coverageScale,
+      });
+      if (basisProduct.visibleGaussianCount !== count || basisProduct.rejectedGaussianCount !== 0) {
+        throw new Error(`geometry optimizer view ${view.id} rejected ${basisProduct.rejectedGaussianCount} Gaussians`);
+      }
+      const masses = Float64Array.from(basisProduct.basis, item => activeRows[item.gaussianIndex].extinctionMass);
+      const depth = renderSparseGaussianBasis(basisProduct.basis, masses, view.width * view.height);
+      const luma = Float32Array.from(depth, value => 1 - Math.exp(-view.extinctionScale * value));
+      const structural = multiscaleStructuralLoss({
+        prediction: luma,
+        target: view.target,
+        width: view.width,
+        height: view.height,
+        scales,
+        valueWeight,
+        gradientWeight,
+      });
+      const normalizedWeight = Number(view.weight ?? 1) / viewWeight;
+      totalLoss += normalizedWeight * structural.totalLoss;
+      viewLosses.push({ id: view.id, loss: structural.totalLoss, weight: Number(view.weight ?? 1) });
+      if (!withGradient) continue;
+      const depthGradient = new Float64Array(depth.length);
+      for (let pixel = 0; pixel < depth.length; pixel += 1) {
+        depthGradient[pixel] = normalizedWeight * structural.gradient[pixel]
+          * view.extinctionScale * Math.exp(-view.extinctionScale * depth[pixel]);
+      }
+      for (const item of basisProduct.basis) {
+        const gaussianIndex = item.gaussianIndex;
+        const footprint = item.footprint;
+        const mass = activeRows[gaussianIndex].extinctionMass;
+        let meanXGradient = 0;
+        let meanYGradient = 0;
+        let projectedXXGradient = 0;
+        let projectedXYGradient = 0;
+        let projectedYYGradient = 0;
+        for (let itemIndex = 0; itemIndex < item.indices.length; itemIndex += 1) {
+          const pixel = item.indices[itemIndex];
+          const x = pixel % view.width;
+          const y = Math.floor(pixel / view.width);
+          const dx = x + 0.5 - footprint.pixelX;
+          const dy = y + 0.5 - footprint.pixelY;
+          const ux = footprint.inverseXX * dx + footprint.inverseXY * dy;
+          const uy = footprint.inverseXY * dx + footprint.inverseYY * dy;
+          const common = depthGradient[pixel] * mass * item.values[itemIndex];
+          meanXGradient += common * ux;
+          meanYGradient += common * uy;
+          projectedXXGradient += 0.5 * common * (ux * ux - footprint.inverseXX);
+          projectedXYGradient += common * (ux * uy - footprint.inverseXY);
+          projectedYYGradient += 0.5 * common * (uy * uy - footprint.inverseYY);
+        }
+        const positionOffset = gaussianIndex * 3;
+        for (let axis = 0; axis < 3; axis += 1) {
+          positionGradient[positionOffset + axis] += footprint.jacobian[0][axis] * meanXGradient
+            + footprint.jacobian[1][axis] * meanYGradient;
+        }
+        const jx = footprint.jacobian[0];
+        const jy = footprint.jacobian[1];
+        const coverageSquared = view.coverageScale * view.coverageScale;
+        const covarianceOffset = gaussianIndex * 6;
+        const addCovarianceGradient = (channel, dxx, dxy, dyy) => {
+          covarianceGradient[covarianceOffset + channel] += coverageSquared * (
+            projectedXXGradient * dxx + projectedXYGradient * dxy + projectedYYGradient * dyy
+          );
+        };
+        addCovarianceGradient(0, jx[0] * jx[0], jx[0] * jy[0], jy[0] * jy[0]);
+        addCovarianceGradient(1, 2 * jx[0] * jx[1], jx[0] * jy[1] + jx[1] * jy[0], 2 * jy[0] * jy[1]);
+        addCovarianceGradient(2, 2 * jx[0] * jx[2], jx[0] * jy[2] + jx[2] * jy[0], 2 * jy[0] * jy[2]);
+        addCovarianceGradient(3, jx[1] * jx[1], jx[1] * jy[1], jy[1] * jy[1]);
+        addCovarianceGradient(4, 2 * jx[1] * jx[2], jx[1] * jy[2] + jx[2] * jy[1], 2 * jy[1] * jy[2]);
+        addCovarianceGradient(5, jx[2] * jx[2], jx[2] * jy[2], jy[2] * jy[2]);
+      }
+    }
+    return { totalLoss, viewLosses, positionGradient, covarianceGradient };
+  };
+
+  const initial = evaluate(false);
+  const checkpoints = [{ iteration: 0, loss: initial.totalLoss, viewLosses: initial.viewLosses }];
+  for (let iteration = 1; iteration <= iterations; iteration += 1) {
+    const current = evaluate(true);
+    if (optimizePositions) {
+      for (let index = 0; index < positions.length; index += 1) {
+        const gradient = current.positionGradient[index];
+        positionFirst[index] = beta1 * positionFirst[index] + (1 - beta1) * gradient;
+        positionSecond[index] = beta2 * positionSecond[index] + (1 - beta2) * gradient * gradient;
+        const correctedFirst = positionFirst[index] / (1 - beta1 ** iteration);
+        const correctedSecond = positionSecond[index] / (1 - beta2 ** iteration);
+        positions[index] -= positionLearningRate * correctedFirst / (Math.sqrt(correctedSecond) + epsilon);
+      }
+    }
+    for (let gaussianIndex = 0; gaussianIndex < count; gaussianIndex += 1) {
+      const covarianceOffset = gaussianIndex * 6;
+      if (optimizeCovariances) {
+        const covariance = Array.from(current.covarianceGradient.slice(covarianceOffset, covarianceOffset + 6));
+        const gradient = choleskyGradient(covariance, cholesky, covarianceOffset);
+        for (let channel = 0; channel < 6; channel += 1) {
+          const index = covarianceOffset + channel;
+          choleskyFirst[index] = beta1 * choleskyFirst[index] + (1 - beta1) * gradient[channel];
+          choleskySecond[index] = beta2 * choleskySecond[index] + (1 - beta2) * gradient[channel] * gradient[channel];
+          const correctedFirst = choleskyFirst[index] / (1 - beta1 ** iteration);
+          const correctedSecond = choleskySecond[index] / (1 - beta2 ** iteration);
+          cholesky[index] -= covarianceLearningRate * correctedFirst / (Math.sqrt(correctedSecond) + epsilon);
+          const residualBound = channel === 0 || channel === 2 || channel === 5
+            ? maxLogScaleResidual
+            : maxCholeskyResidual;
+          cholesky[index] = Math.max(
+            choleskyAnchors[index] - residualBound,
+            Math.min(choleskyAnchors[index] + residualBound, cholesky[index]),
+          );
+        }
+      }
+      const positionOffset = gaussianIndex * 3;
+      if (optimizePositions) {
+        const residual = [0, 1, 2].map(axis => positions[positionOffset + axis] - positionAnchors[positionOffset + axis]);
+        const residualLength = Math.hypot(...residual);
+        if (residualLength > maxCenterResidual) {
+          const scale = maxCenterResidual / residualLength;
+          for (let axis = 0; axis < 3; axis += 1) {
+            positions[positionOffset + axis] = positionAnchors[positionOffset + axis] + residual[axis] * scale;
+          }
+        }
+      }
+    }
+    if (iteration === iterations || iteration % Math.max(1, Math.floor(iterations / 10)) === 0) {
+      const checkpoint = evaluate(false);
+      checkpoints.push({ iteration, loss: checkpoint.totalLoss, viewLosses: checkpoint.viewLosses });
+    }
+  }
+  const final = evaluate(false);
+  let maximumCenterResidualObserved = 0;
+  let maximumLogScaleResidualObserved = 0;
+  let maximumCholeskyResidualObserved = 0;
+  for (let gaussianIndex = 0; gaussianIndex < count; gaussianIndex += 1) {
+    const positionOffset = gaussianIndex * 3;
+    maximumCenterResidualObserved = Math.max(maximumCenterResidualObserved, Math.hypot(
+      positions[positionOffset] - positionAnchors[positionOffset],
+      positions[positionOffset + 1] - positionAnchors[positionOffset + 1],
+      positions[positionOffset + 2] - positionAnchors[positionOffset + 2],
+    ));
+    const covarianceOffset = gaussianIndex * 6;
+    for (let channel = 0; channel < 6; channel += 1) {
+      const residual = Math.abs(cholesky[covarianceOffset + channel] - choleskyAnchors[covarianceOffset + channel]);
+      if (channel === 0 || channel === 2 || channel === 5) maximumLogScaleResidualObserved = Math.max(maximumLogScaleResidualObserved, residual);
+      else maximumCholeskyResidualObserved = Math.max(maximumCholeskyResidualObserved, residual);
+    }
+  }
+  return {
+    identity: 'bounded-center-cholesky-adam-multiview-structure-v0',
+    iterationCount: iterations,
+    hiddenIterationCapApplied: false,
+    viewCount: views.length,
+    viewIds: views.map(view => view.id),
+    heads: {
+      position: optimizePositions ? 'enabled' : 'disabled',
+      covariance: optimizeCovariances ? 'enabled' : 'disabled',
+    },
+    positionLearningRate,
+    covarianceLearningRate,
+    maxCenterResidual,
+    maxLogScaleResidual,
+    maxCholeskyResidual,
+    maximumCenterResidual: maximumCenterResidualObserved,
+    maximumLogScaleResidual: maximumLogScaleResidualObserved,
+    maximumCholeskyResidual: maximumCholeskyResidualObserved,
+    covarianceParameterization: 'positive-diagonal-lower-cholesky-v0',
+    centerGradientAuthority: 'exact-projected-mean-jacobian-with-covariance-center-coupling-omitted-v0',
+    covarianceGradientAuthority: 'exact-projected-covariance-jacobian-at-current-center-v0',
+    extinctionAuthority: 'source-per-record-extinction-fixed-v0',
+    scales: [...scales],
+    valueWeight,
+    gradientWeight,
+    initialLoss: initial.totalLoss,
+    finalLoss: final.totalLoss,
+    initialViewLosses: initial.viewLosses,
+    finalViewLosses: final.viewLosses,
+    checkpoints,
+    rows: currentRows(),
+  };
+}
+
+function downsampleFloatImage(source, width, height, factor) {
+  if (!Number.isInteger(factor) || factor <= 0) throw new Error('downsampleFactor must be a positive integer');
+  if (factor === 1) return { values: Float32Array.from(source), width, height };
+  const outputWidth = Math.ceil(width / factor);
+  const outputHeight = Math.ceil(height / factor);
+  const values = new Float32Array(outputWidth * outputHeight);
+  for (let outputY = 0; outputY < outputHeight; outputY += 1) {
+    for (let outputX = 0; outputX < outputWidth; outputX += 1) {
+      let sum = 0;
+      let count = 0;
+      for (let y = outputY * factor; y < Math.min(height, (outputY + 1) * factor); y += 1) {
+        for (let x = outputX * factor; x < Math.min(width, (outputX + 1) * factor); x += 1) {
+          sum += source[y * width + x];
+          count += 1;
+        }
+      }
+      values[outputY * outputWidth + outputX] = sum / count;
+    }
+  }
+  return { values, width: outputWidth, height: outputHeight };
+}
+
+function symmetricEigenbasis3x3(covariance) {
+  const matrix = [
+    [covariance[0], covariance[1], covariance[2]],
+    [covariance[1], covariance[3], covariance[4]],
+    [covariance[2], covariance[4], covariance[5]],
+  ];
+  const vectors = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  for (let sweep = 0; sweep < 12; sweep += 1) {
+    for (const [p, q] of [[0, 1], [0, 2], [1, 2]]) {
+      const apq = matrix[p][q];
+      if (Math.abs(apq) < 1e-12) continue;
+      const angle = 0.5 * Math.atan2(2 * apq, matrix[q][q] - matrix[p][p]);
+      const cosine = Math.cos(angle);
+      const sine = Math.sin(angle);
+      for (let row = 0; row < 3; row += 1) {
+        const left = matrix[row][p];
+        const right = matrix[row][q];
+        matrix[row][p] = cosine * left - sine * right;
+        matrix[row][q] = sine * left + cosine * right;
+      }
+      for (let column = 0; column < 3; column += 1) {
+        const left = matrix[p][column];
+        const right = matrix[q][column];
+        matrix[p][column] = cosine * left - sine * right;
+        matrix[q][column] = sine * left + cosine * right;
+      }
+      for (let row = 0; row < 3; row += 1) {
+        const left = vectors[row][p];
+        const right = vectors[row][q];
+        vectors[row][p] = cosine * left - sine * right;
+        vectors[row][q] = sine * left + cosine * right;
+      }
+    }
+  }
+  const eigen = [0, 1, 2].map(index => ({
+    value: Math.max(matrix[index][index], 0),
+    vector: [vectors[0][index], vectors[1][index], vectors[2][index]],
+  })).sort((left, right) => right.value - left.value);
+  return {
+    values: eigen.map(item => item.value),
+    vectors: eigen.map(item => item.vector),
+  };
+}
+
+function optimizedSupportDiagnostics(rows, bounds) {
+  if (!bounds?.minimum || !bounds?.maximum) throw new Error('optimized geometry requires world-space bounds for support diagnostics');
+  let leaking = 0;
+  let maxThreeSigmaDiameter = 0;
+  for (const row of rows) {
+    const eigen = symmetricEigenbasis3x3(row.covariance);
+    const majorRadius = Math.sqrt(Math.max(...eigen.values));
+    maxThreeSigmaDiameter = Math.max(maxThreeSigmaDiameter, majorRadius * 6);
+    const outside = row.position.some((component, axis) => (
+      component - majorRadius * 3 < bounds.minimum[axis]
+      || component + majorRadius * 3 > bounds.maximum[axis]
+    ));
+    if (outside) leaking += 1;
+  }
+  return {
+    authority: 'optimized-world-space-three-sigma-bounds-v0',
+    bounds,
+    supportLeakageGaussianCount: leaking,
+    supportLeakageFraction: rows.length ? leaking / rows.length : 0,
+    maxThreeSigmaDiameter,
+  };
+}
+
+export async function optimizeSmokeGaussianGeometryProduct({
+  sourceFitReportPath,
+  views,
+  outDir,
+  budget,
+  downsampleFactor = 1,
+  coverageScale = 1.5,
+  extinctionScale = 0.2,
+  iterations = 40,
+  optimizePositions = true,
+  optimizeCovariances = true,
+  positionLearningRate = 0.005,
+  covarianceLearningRate = 0.002,
+  maxCenterResidual = 0.04,
+  maxLogScaleResidual = 0.35,
+  maxCholeskyResidual = 0.02,
+  scales = [1, 2, 4],
+  valueWeight = 1,
+  gradientWeight = 1,
+} = {}) {
+  if (!outDir) throw new Error('geometry product outDir is required');
+  await mkdir(outDir, { recursive: true });
+  const reportPath = join(outDir, 'geometry-optimization-report.json');
+  let failurePhase = 'validate-source';
+  let lastTrustworthyEvidence = null;
+  try {
+    if (!sourceFitReportPath) throw new Error('geometry product requires sourceFitReportPath');
+    if (!Array.isArray(views) || views.length < 2) throw new Error('geometry product requires at least two view inputs');
+    const requestedBudget = Number(budget);
+    if (!Number.isInteger(requestedBudget) || requestedBudget <= 0) throw new Error('geometry product requires a positive integer budget');
+    if (!Number.isInteger(downsampleFactor) || downsampleFactor <= 0) throw new Error('geometry product downsampleFactor must be a positive integer');
+    const absoluteSourceFitPath = resolve(sourceFitReportPath);
+    const sourceFitBytes = await readFile(absoluteSourceFitPath);
+    const sourceFit = JSON.parse(sourceFitBytes.toString('utf8'));
+    validateTeacher(sourceFit, 'native-camera');
+    const sourceEntry = sourceFit.budgetCurve?.find(entry => entry.requestedBudget === requestedBudget);
+    if (!sourceEntry || sourceEntry.activeGaussianCount !== requestedBudget) {
+      throw new Error(`geometry product lacks exact uncapped source budget ${requestedBudget}`);
+    }
+    if (sourceEntry.extinctionAccounting?.relativeError > 1e-5) throw new Error('geometry source product does not conserve extinction');
+    const sourceLoaded = await loadRows(absoluteSourceFitPath, sourceEntry);
+    lastTrustworthyEvidence = {
+      sourceFitReportPath: absoluteSourceFitPath,
+      sourceFitReportIdentity: `sha256:${sha256(sourceFitBytes)}`,
+      sourceArtifactPath: sourceLoaded.artifactPath,
+      sourceArtifactIdentity: sourceLoaded.artifactIdentity,
+      activeGaussianCount: sourceLoaded.rows.length,
+      fluidIdentity: sourceFit.teacher.fluidIdentity,
+    };
+
+    failurePhase = 'validate-views';
+    const seenViewIds = new Set();
+    const seenCameraIdentities = new Set();
+    const optimizerViews = [];
+    const viewReceipts = [];
+    for (const view of views) {
+      if (!view?.id || seenViewIds.has(view.id)) throw new Error(`duplicate or missing geometry view id ${view?.id || '(missing)'}`);
+      seenViewIds.add(view.id);
+      const absoluteFitPath = resolve(view.fitReportPath);
+      const fitBytes = await readFile(absoluteFitPath);
+      const fit = JSON.parse(fitBytes.toString('utf8'));
+      validateTeacher(fit, 'native-camera');
+      const cameraIdentity = fit.teacher.cameraIdentity;
+      if (seenCameraIdentities.has(cameraIdentity)) throw new Error(`duplicate geometry camera identity ${cameraIdentity}`);
+      seenCameraIdentities.add(cameraIdentity);
+      if (fit.teacher.fluidIdentity !== sourceFit.teacher.fluidIdentity) throw new Error(`geometry view ${view.id} fluid identity mismatch`);
+      const entry = fit.budgetCurve?.find(item => item.requestedBudget === requestedBudget);
+      if (!entry || entry.activeGaussianCount !== requestedBudget) throw new Error(`geometry view ${view.id} lacks exact budget ${requestedBudget}`);
+      const loaded = await loadRows(absoluteFitPath, entry);
+      if (loaded.artifactIdentity !== sourceLoaded.artifactIdentity) throw new Error(`geometry view ${view.id} Gaussian product identity mismatch`);
+
+      const absoluteTeacherPath = resolve(view.teacherReportPath);
+      const teacherBytes = await readFile(absoluteTeacherPath);
+      const teacher = JSON.parse(teacherBytes.toString('utf8'));
+      if (teacher.schema !== 'kaminos.smoke-dense-raymarch-teacher-report.v0'
+        || teacher.identity !== 'smoke-dense-state-raymarch-teacher-v0'
+        || teacher.status !== 'passed' || teacher.pixelStats?.blank !== false) {
+        throw new Error(`geometry view ${view.id} requires a passed nonblank dense smoke teacher`);
+      }
+      for (const key of ['manifestIdentity', 'fluidIdentity', 'cameraIdentity', 'effectiveRoute', 'prototypeIdentity', 'backend']) {
+        const label = key === 'cameraIdentity' ? 'camera identity' : key;
+        if (teacher.source?.[key] !== fit.teacher?.[key]) throw new Error(`geometry view ${view.id} teacher ${label} mismatch`);
+      }
+      if (JSON.stringify(teacher.source?.camera) !== JSON.stringify(fit.teacher.camera)) {
+        throw new Error(`geometry view ${view.id} teacher camera identity matrices mismatch`);
+      }
+      const radiance = teacher.artifacts?.linearRadiance;
+      const width = Number(teacher.raymarch?.width);
+      const height = Number(teacher.raymarch?.height);
+      if (!radiance || radiance.dtype !== 'float32' || radiance.byteOrder !== 'little-endian'
+        || !Number.isInteger(width) || width <= 0 || !Number.isInteger(height) || height <= 0
+        || JSON.stringify(radiance.shape) !== JSON.stringify([height, width])) {
+        throw new Error(`geometry view ${view.id} lacks compatible linear radiance dimensions`);
+      }
+      const radiancePath = view.teacherRadiancePath
+        ? resolve(view.teacherRadiancePath)
+        : resolveArtifactPath(absoluteTeacherPath, radiance.path);
+      const radianceBytes = await readFile(radiancePath);
+      const radianceIdentity = `sha256:${sha256(radianceBytes)}`;
+      if (radianceBytes.byteLength !== radiance.byteLength || radianceIdentity !== radiance.sha256) {
+        throw new Error(`geometry view ${view.id} linear radiance identity mismatch`);
+      }
+      const target = new Float32Array(radianceBytes.buffer, radianceBytes.byteOffset, radianceBytes.byteLength / 4);
+      const downsampled = downsampleFloatImage(target, width, height, downsampleFactor);
+      optimizerViews.push({
+        id: view.id,
+        width: downsampled.width,
+        height: downsampled.height,
+        camera: fit.teacher.camera,
+        target: downsampled.values,
+        coverageScale: Number(view.coverageScale ?? coverageScale),
+        extinctionScale: Number(view.extinctionScale ?? extinctionScale),
+        weight: Number(view.weight ?? 1),
+      });
+      viewReceipts.push({
+        id: view.id,
+        sourceCameraRole: fit.cameraEvaluation?.role || null,
+        fitReportPath: absoluteFitPath,
+        fitReportIdentity: `sha256:${sha256(fitBytes)}`,
+        teacherReportPath: absoluteTeacherPath,
+        teacherReportIdentity: `sha256:${sha256(teacherBytes)}`,
+        requestedTeacherRadiancePath: view.teacherRadiancePath ? resolve(view.teacherRadiancePath) : radiance.path,
+        teacherRadiancePath: radiancePath,
+        teacherRadianceIdentity: radianceIdentity,
+        cameraIdentity,
+        requestedDimensions: { width, height },
+        effectiveDimensions: { width: downsampled.width, height: downsampled.height },
+        downsampleFactor,
+        weight: Number(view.weight ?? 1),
+        coverageScale: Number(view.coverageScale ?? coverageScale),
+        extinctionScale: Number(view.extinctionScale ?? extinctionScale),
+      });
+    }
+
+    failurePhase = 'optimize-geometry';
+    const startedAt = performance.now();
+    const optimized = optimizeGaussianGeometryMultiView({
+      rows: sourceLoaded.rows,
+      views: optimizerViews,
+      iterations,
+      optimizePositions,
+      optimizeCovariances,
+      positionLearningRate,
+      covarianceLearningRate,
+      maxCenterResidual,
+      maxLogScaleResidual,
+      maxCholeskyResidual,
+      scales,
+      valueWeight,
+      gradientWeight,
+    });
+    const optimizedAt = performance.now();
+
+    failurePhase = 'write-optimized-product';
+    const sourceArtifactBytes = await readFile(sourceLoaded.artifactPath);
+    const packed = Float32Array.from(new Float32Array(
+      sourceArtifactBytes.buffer,
+      sourceArtifactBytes.byteOffset,
+      sourceArtifactBytes.byteLength / Float32Array.BYTES_PER_ELEMENT,
+    ));
+    const artifact = sourceEntry.artifact;
+    const map = channelMap(artifact.channelOrder);
+    const stride = artifact.shape[1];
+    for (let gaussianIndex = 0; gaussianIndex < requestedBudget; gaussianIndex += 1) {
+      const offset = gaussianIndex * stride;
+      const row = optimized.rows[gaussianIndex];
+      packed[offset + map.positionX] = row.position[0];
+      packed[offset + map.positionY] = row.position[1];
+      packed[offset + map.positionZ] = row.position[2];
+      for (const [name, value] of [
+        ['covXX', row.covariance[0]], ['covXY', row.covariance[1]], ['covXZ', row.covariance[2]],
+        ['covYY', row.covariance[3]], ['covYZ', row.covariance[4]], ['covZZ', row.covariance[5]],
+      ]) {
+        if (Number.isInteger(map[name])) packed[offset + map[name]] = value;
+      }
+      const eigen = symmetricEigenbasis3x3(row.covariance);
+      for (let axis = 0; axis < 3; axis += 1) {
+        for (let component = 0; component < 3; component += 1) {
+          const name = `axis${axis}${['X', 'Y', 'Z'][component]}`;
+          if (Number.isInteger(map[name])) packed[offset + map[name]] = eigen.vectors[axis][component];
+        }
+        const radiusName = `radius${axis}`;
+        if (Number.isInteger(map[radiusName])) packed[offset + map[radiusName]] = Math.sqrt(eigen.values[axis]);
+      }
+    }
+    const optimizedArtifactPath = join(outDir, `budget-${requestedBudget}.gaussians.f32`);
+    const optimizedArtifactBytes = Buffer.from(packed.buffer);
+    await writeFile(optimizedArtifactPath, optimizedArtifactBytes);
+    const optimizedArtifact = {
+      ...artifact,
+      path: optimizedArtifactPath,
+      sha256: `sha256:${sha256(optimizedArtifactBytes)}`,
+      byteLength: optimizedArtifactBytes.byteLength,
+    };
+    let representedExtinction = 0;
+    for (let index = 0; index < requestedBudget; index += 1) representedExtinction += packed[index * stride + map.extinctionMass];
+    const teacherExtinction = sourceFit.teacher.totalSmokeExtinction;
+    const extinctionAccounting = {
+      teacherTotalExtinction: teacherExtinction,
+      representedExtinction,
+      absoluteError: Math.abs(representedExtinction - teacherExtinction),
+      relativeError: Math.abs(representedExtinction - teacherExtinction) / Math.max(teacherExtinction, 1e-12),
+    };
+    const support = optimizedSupportDiagnostics(optimized.rows, sourceFit.teacher.worldSpace?.bounds);
+    const optimizedFit = structuredClone(sourceFit);
+    optimizedFit.createdAt = new Date().toISOString();
+    optimizedFit.requestedBudgets = [requestedBudget];
+    optimizedFit.budgetCurve = [structuredClone(sourceEntry)];
+    optimizedFit.budgetCurve[0].artifact = optimizedArtifact;
+    optimizedFit.budgetCurve[0].totalAssignedExtinction = representedExtinction;
+    optimizedFit.budgetCurve[0].extinctionAccounting = extinctionAccounting;
+    optimizedFit.budgetCurve[0].support = support;
+    optimizedFit.optimizer = {
+      identity: 'direct-multiview-center-covariance-structure-optimization-v0',
+      sourceOptimizer: sourceFit.optimizer,
+      positionAuthority: 'bounded-multiview-image-gradient-center-residual-v0',
+      covarianceAuthority: 'bounded-positive-cholesky-multiview-image-gradient-v0',
+      extinctionAuthority: optimized.extinctionAuthority,
+    };
+    optimizedFit.geometryOptimization = {
+      sourceFitReportPath: absoluteSourceFitPath,
+      sourceFitReportIdentity: `sha256:${sha256(sourceFitBytes)}`,
+      sourceArtifactIdentity: sourceLoaded.artifactIdentity,
+      views: viewReceipts,
+      optimizer: {
+        identity: optimized.identity,
+        heads: optimized.heads,
+        iterationCount: optimized.iterationCount,
+        hiddenIterationCapApplied: optimized.hiddenIterationCapApplied,
+        positionLearningRate,
+        covarianceLearningRate,
+        maxCenterResidual,
+        maxLogScaleResidual,
+        maxCholeskyResidual,
+        maximumCenterResidual: optimized.maximumCenterResidual,
+        maximumLogScaleResidual: optimized.maximumLogScaleResidual,
+        maximumCholeskyResidual: optimized.maximumCholeskyResidual,
+        centerGradientAuthority: optimized.centerGradientAuthority,
+        covarianceGradientAuthority: optimized.covarianceGradientAuthority,
+        covarianceParameterization: optimized.covarianceParameterization,
+        scales: optimized.scales,
+        valueWeight,
+        gradientWeight,
+        initialLoss: optimized.initialLoss,
+        finalLoss: optimized.finalLoss,
+        initialViewLosses: optimized.initialViewLosses,
+        finalViewLosses: optimized.finalViewLosses,
+        checkpoints: optimized.checkpoints,
+      },
+    };
+    const optimizedFitReportPath = join(outDir, 'oracle-fit-report.json');
+    await writeFile(optimizedFitReportPath, `${JSON.stringify(optimizedFit, null, 2)}\n`);
+    const report = {
+      schema: 'kaminos.smoke-gaussian-oracle-multiview-geometry-optimization-report.v0',
+      identity: 'smoke-gaussian-oracle-multiview-geometry-optimization-v0',
+      status: 'passed',
+      createdAt: new Date().toISOString(),
+      source: lastTrustworthyEvidence,
+      views: viewReceipts,
+      budget: { requestedBudget, activeGaussianCount: requestedBudget, hiddenBudgetCapApplied: false },
+      optimizer: optimizedFit.geometryOptimization.optimizer,
+      hiddenIterationCapApplied: optimized.hiddenIterationCapApplied,
+      extinctionAccounting,
+      support,
+      optimizedArtifact,
+      optimizedFitReportPath,
+      costs: {
+        authority: 'cpu-wall-clock-performance-now-v0',
+        optimizerMs: optimizedAt - startedAt,
+        productBuildMs: performance.now() - optimizedAt,
+        totalMs: performance.now() - startedAt,
+      },
+      reportPath,
+    };
+    await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+    return report;
+  } catch (error) {
+    const failure = {
+      schema: 'kaminos.smoke-gaussian-oracle-multiview-geometry-optimization-report.v0',
+      identity: 'smoke-gaussian-oracle-multiview-geometry-optimization-v0',
+      status: 'failed',
+      createdAt: new Date().toISOString(),
+      failurePhase,
+      lastTrustworthyEvidence,
+      message: error?.message || String(error),
+      stack: error?.stack || null,
+      reportPath,
+    };
+    await writeFile(reportPath, `${JSON.stringify(failure, null, 2)}\n`);
+    throw error;
+  }
 }
 
 export async function optimizeSmokeGaussianStructureProduct({
@@ -1309,7 +2005,31 @@ function parseArgs(argv) {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = parseArgs(process.argv.slice(2));
-  if (args.has('--optimize-structure')) {
+  if (args.has('--optimize-geometry')) {
+    try {
+      const configPath = args.get('--geometry-config');
+      if (!configPath) throw new Error('--geometry-config is required for multi-view geometry optimization');
+      const config = await readJson(resolve(configPath));
+      const report = await optimizeSmokeGaussianGeometryProduct({
+        ...config,
+        outDir: args.get('--out-dir'),
+      });
+      console.log(JSON.stringify({
+        status: report.status,
+        identity: report.identity,
+        reportPath: report.reportPath,
+        optimizedFitReportPath: report.optimizedFitReportPath,
+        budget: report.budget,
+        views: report.views,
+        optimizer: report.optimizer,
+        extinctionAccounting: report.extinctionAccounting,
+        costs: report.costs,
+      }, null, 2));
+    } catch (error) {
+      console.error(error?.stack || error);
+      process.exitCode = 1;
+    }
+  } else if (args.has('--optimize-structure')) {
     const structureScales = String(args.get('--structure-scales') || '1,2,4,8')
       .split(',')
       .map(value => Number(value.trim()))

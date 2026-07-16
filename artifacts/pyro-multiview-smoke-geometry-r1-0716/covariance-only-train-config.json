@@ -1,0 +1,34 @@
+{
+  "sourceFitReportPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-principal-smoke-allocation-r1-0716/gradient-principal-step-45/oracle-fit-report.json",
+  "views": [
+    {
+      "id": "side-plus-90-train",
+      "fitReportPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-principal-smoke-allocation-r1-0716/gradient-principal-step-45/hostile-cameras/side-plus-90/oracle-fit-report.json",
+      "teacherReportPath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/hostile-gradient4/sim-step-45/side-plus-90/teacher-640x455/dense-raymarch-teacher-report.json",
+      "teacherRadiancePath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/hostile-gradient4/sim-step-45/side-plus-90/teacher-640x455/linear-smoke-radiance.f32",
+      "weight": 1
+    },
+    {
+      "id": "back-plus-180-train",
+      "fitReportPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-principal-smoke-allocation-r1-0716/gradient-principal-step-45/hostile-cameras/back-plus-180/oracle-fit-report.json",
+      "teacherReportPath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/hostile-gradient4/sim-step-45/back-plus-180/teacher-640x455/dense-raymarch-teacher-report.json",
+      "teacherRadiancePath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/hostile-gradient4/sim-step-45/back-plus-180/teacher-640x455/linear-smoke-radiance.f32",
+      "weight": 1
+    }
+  ],
+  "budget": 1024,
+  "downsampleFactor": 4,
+  "coverageScale": 1.5,
+  "extinctionScale": 0.2,
+  "iterations": 24,
+  "optimizePositions": false,
+  "optimizeCovariances": true,
+  "positionLearningRate": 0.002,
+  "covarianceLearningRate": 0.001,
+  "maxCenterResidual": 0.03,
+  "maxLogScaleResidual": 0.25,
+  "maxCholeskyResidual": 0.01,
+  "scales": [1, 2, 4, 8],
+  "valueWeight": 1,
+  "gradientWeight": 2
+}

@@ -1,0 +1,185 @@
+{
+  "schema": "kaminos.smoke-gaussian-oracle-render-witness-report.v0",
+  "identity": "smoke-gaussian-oracle-render-witness-v1",
+  "status": "passed",
+  "createdAt": "2026-07-16T08:55:20.598Z",
+  "hiddenBudgetCapApplied": false,
+  "fitReportPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-multiview-smoke-geometry-r1-0716/covariance-only-trained/cameras/recorded-native/oracle-fit-report.json",
+  "teacher": {
+    "raymarchPngPath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v7-m24/maturity-probes/sim-step-45.png",
+    "raymarchSha256": "sha256:c307507a4be6be29ac9fd8eec40bd1753e00fabf70b21e4e4fffe8558f617200",
+    "width": 900,
+    "height": 960,
+    "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+    "prototypeIdentity": "kaminos-volume-prototype-v0",
+    "backend": "WebGPU:apple",
+    "worldSpace": {
+      "coordinateFrame": "kaminos-volume-world-v0",
+      "transformAuthority": "native-volume-grid-world-transform-v0",
+      "bounds": {
+        "minimum": [
+          -1,
+          -1,
+          -1
+        ],
+        "maximum": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    "cameraIdentity": "sha256:52d62666d901cd0fbdbc11d5658ae3f40fd035b404cf4aaab674cab2837a4d7e",
+    "camera": {
+      "position": [
+        1.1799999999999993,
+        0.28,
+        2.049999999999998
+      ],
+      "target": [
+        0,
+        0.02,
+        0
+      ],
+      "projectionMatrix": [
+        2.9306425807515972,
+        0,
+        0,
+        0,
+        0,
+        2.7474774194546225,
+        0,
+        0,
+        0,
+        0,
+        -1.0002000200020003,
+        -1,
+        0,
+        0,
+        -0.020002000200020003,
+        0
+      ],
+      "matrixWorldInverse": [
+        0.8666778489396199,
+        -0.05450735190097278,
+        0.49588149264328957,
+        0,
+        6.938893903907228e-18,
+        0.9940129828903268,
+        0.10926202380275882,
+        0,
+        -0.49886822524329344,
+        -0.09469497576016456,
+        0.8614890338294436,
+        0,
+        -2.2236986557677696e-16,
+        -0.019880259657806553,
+        -2.3817860473342116,
+        0.9999999999999999
+      ]
+    }
+  },
+  "renderer": {
+    "identity": "cpu-perspective-full-covariance-gaussian-smoke-v0",
+    "cameraAuthority": "checksum-bound-fit-teacher-camera-v0",
+    "cameraIdentity": "sha256:52d62666d901cd0fbdbc11d5658ae3f40fd035b404cf4aaab674cab2837a4d7e",
+    "compositorAuthority": "single-channel-smoke-luma-proxy-not-production-compositor-v0",
+    "projectionAuthority": "full-view-projection-jacobian-covariance-v0",
+    "scaleSelection": "explicit-extinction-scale-sweep-min-luma-mse-v0",
+    "requestedExtinctionScales": [
+      3.2,
+      6.4,
+      12.8
+    ],
+    "coverageSelection": "explicit-mass-preserving-covariance-dilation-sweep-min-luma-mse-v0",
+    "requestedCoverageScales": [
+      1,
+      1.5,
+      2
+    ]
+  },
+  "requestedBudgets": [
+    1024
+  ],
+  "budgetCurve": [
+    {
+      "requestedBudget": 1024,
+      "activeGaussianCount": 1024,
+      "selectedExtinctionScale": 6.4,
+      "selectedCoverageScale": 2,
+      "scaleSweep": [
+        3.2,
+        6.4,
+        12.8
+      ],
+      "coverageSweep": [
+        1,
+        1.5,
+        2
+      ],
+      "timing": {
+        "cpuProxyRenderMs": 1790.854916
+      },
+      "projectionDiagnostics": {
+        "identity": "perspective-full-covariance-overlap-diagnostics-v0",
+        "coverageScale": 2,
+        "requestedGaussianCount": 1024,
+        "visibleGaussianCount": 1024,
+        "rejectedGaussianCount": 0,
+        "rejectionReasons": {},
+        "supportPixelCount": 382103,
+        "singleContributorPixelCount": 22279,
+        "singleContributorPixelFraction": 0.05830626820516981,
+        "meanContributorsPerSupportPixel": 48.68146285163948,
+        "maxContributors": 212,
+        "meanPeakContributionFraction": 0.2873179235133349,
+        "minimumProjectedCovarianceDeterminant": 692.3806289371329,
+        "maximumProjectedCovarianceDeterminant": 2935442.842136351
+      },
+      "gaussianArtifact": {
+        "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-multiview-smoke-geometry-r1-0716/covariance-only-trained/budget-1024.gaussians.f32",
+        "identity": "sha256:5ade81c82fa395c982a773e0b5567a563e6374274e723e1cc760380f03e79d42"
+      },
+      "metrics": {
+        "lumaMse": 0.0005322664385774824,
+        "lumaMae": 0.013642525581735836,
+        "renderMeanLuma": 0.021645563621738906,
+        "teacherMeanLuma": 0.02848128867747706,
+        "renderActivePixels": 105406,
+        "teacherActivePixels": 100430,
+        "activePixelIoU": 0.8779114853707268
+      },
+      "support": {
+        "authority": "optimized-world-space-three-sigma-bounds-v0",
+        "bounds": {
+          "minimum": [
+            -1,
+            -1,
+            -1
+          ],
+          "maximum": [
+            1,
+            1,
+            1
+          ]
+        },
+        "supportLeakageGaussianCount": 6,
+        "supportLeakageFraction": 0.005859375,
+        "maxThreeSigmaDiameter": 0.3209712335356053
+      },
+      "images": {
+        "renderPngPath": "artifacts/pyro-multiview-smoke-geometry-r1-0716/covariance-only-trained/renders/recorded-native/budget-1024.perspective-render.png",
+        "diffPngPath": "artifacts/pyro-multiview-smoke-geometry-r1-0716/covariance-only-trained/renders/recorded-native/budget-1024.perspective-diff.png"
+      }
+    }
+  ],
+  "contactSheet": {
+    "path": "artifacts/pyro-multiview-smoke-geometry-r1-0716/covariance-only-trained/renders/recorded-native/perspective-render-contact-sheet.png",
+    "sha256": "sha256:a7f8304ab43017a4afbce7a68082dd1582a750ab869ccf61b4f1a9ff0dd9040a",
+    "layout": "columns: teacher-raymarch | gaussian-proxy-render | abs-luma-diff; rows: requested budgets",
+    "inspected": false,
+    "inspectionNote": null
+  },
+  "reportPath": "artifacts/pyro-multiview-smoke-geometry-r1-0716/covariance-only-trained/renders/recorded-native/render-witness-report.json",
+  "reportIdentity": "sha256:834ea3d415a79014b9585cacb62881ff1fa49313d8b87f55e7d8026a99544c9e"
+}

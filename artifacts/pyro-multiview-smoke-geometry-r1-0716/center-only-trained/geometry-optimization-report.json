@@ -1,0 +1,407 @@
+{
+  "schema": "kaminos.smoke-gaussian-oracle-multiview-geometry-optimization-report.v0",
+  "identity": "smoke-gaussian-oracle-multiview-geometry-optimization-v0",
+  "status": "passed",
+  "createdAt": "2026-07-16T08:54:46.760Z",
+  "source": {
+    "sourceFitReportPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-principal-smoke-allocation-r1-0716/gradient-principal-step-45/oracle-fit-report.json",
+    "sourceFitReportIdentity": "sha256:ef5a8b844c001c2e986f45009b512bd56abadb4f682e439e01e47f946dceeca1",
+    "sourceArtifactPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-principal-smoke-allocation-r1-0716/gradient-principal-step-45/budget-1024.gaussians.f32",
+    "sourceArtifactIdentity": "sha256:167f72aa2b6eddec158e9ae6c25f6211b278380112a4e804fa1b0e2199523ff4",
+    "activeGaussianCount": 1024,
+    "fluidIdentity": "sha256:b9015d0d577ee99b48a3e5bebe207e5024a4e9ef63bd42a8192e65042c9540ee"
+  },
+  "views": [
+    {
+      "id": "side-plus-90-train",
+      "sourceCameraRole": "held-out",
+      "fitReportPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-principal-smoke-allocation-r1-0716/gradient-principal-step-45/hostile-cameras/side-plus-90/oracle-fit-report.json",
+      "fitReportIdentity": "sha256:c23b2b06801592fb5a86debab6b8c908e3eca7485334a7536912153d4ac3b880",
+      "teacherReportPath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/hostile-gradient4/sim-step-45/side-plus-90/teacher-640x455/dense-raymarch-teacher-report.json",
+      "teacherReportIdentity": "sha256:c27a1c13eeb7eaeb2cb1b6bf36c8b2c64bee4841940aa0f7027bafb27ecfd155",
+      "requestedTeacherRadiancePath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/hostile-gradient4/sim-step-45/side-plus-90/teacher-640x455/linear-smoke-radiance.f32",
+      "teacherRadiancePath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/hostile-gradient4/sim-step-45/side-plus-90/teacher-640x455/linear-smoke-radiance.f32",
+      "teacherRadianceIdentity": "sha256:330a9f9f71da095ec229956cf7f0e5bf42cb753c93a76b35d3f5f522c384d527",
+      "cameraIdentity": "sha256:3bd0a7873986b8caaf12384d92766e4d763b2148b861677080aedffc6b41ff20",
+      "requestedDimensions": {
+        "width": 640,
+        "height": 455
+      },
+      "effectiveDimensions": {
+        "width": 160,
+        "height": 114
+      },
+      "downsampleFactor": 4,
+      "weight": 1,
+      "coverageScale": 1.5,
+      "extinctionScale": 0.2
+    },
+    {
+      "id": "back-plus-180-train",
+      "sourceCameraRole": "held-out",
+      "fitReportPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-principal-smoke-allocation-r1-0716/gradient-principal-step-45/hostile-cameras/back-plus-180/oracle-fit-report.json",
+      "fitReportIdentity": "sha256:5342051958ab9929773bfbbc910c2945dbbf61825e5dac46b25b8b359728a492",
+      "teacherReportPath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/hostile-gradient4/sim-step-45/back-plus-180/teacher-640x455/dense-raymarch-teacher-report.json",
+      "teacherReportIdentity": "sha256:43a1e98b194e698f8fe5dda8dd5d08fe9c6656180b4ae81571e1de0d7981b13b",
+      "requestedTeacherRadiancePath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/hostile-gradient4/sim-step-45/back-plus-180/teacher-640x455/linear-smoke-radiance.f32",
+      "teacherRadiancePath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/hostile-gradient4/sim-step-45/back-plus-180/teacher-640x455/linear-smoke-radiance.f32",
+      "teacherRadianceIdentity": "sha256:5f9a18cbe58ee478198fac002e556d092791fc1ef3ab301ab9d911c1cd3304dc",
+      "cameraIdentity": "sha256:a0e3db4747cdb916b9706a925ad70c49398a00cf9e1bcb836132d166d8c4274d",
+      "requestedDimensions": {
+        "width": 640,
+        "height": 455
+      },
+      "effectiveDimensions": {
+        "width": 160,
+        "height": 114
+      },
+      "downsampleFactor": 4,
+      "weight": 1,
+      "coverageScale": 1.5,
+      "extinctionScale": 0.2
+    }
+  ],
+  "budget": {
+    "requestedBudget": 1024,
+    "activeGaussianCount": 1024,
+    "hiddenBudgetCapApplied": false
+  },
+  "optimizer": {
+    "identity": "bounded-center-cholesky-adam-multiview-structure-v0",
+    "heads": {
+      "position": "enabled",
+      "covariance": "disabled"
+    },
+    "iterationCount": 24,
+    "hiddenIterationCapApplied": false,
+    "positionLearningRate": 0.002,
+    "covarianceLearningRate": 0.001,
+    "maxCenterResidual": 0.03,
+    "maxLogScaleResidual": 0.25,
+    "maxCholeskyResidual": 0.01,
+    "maximumCenterResidual": 0.03000000000000004,
+    "maximumLogScaleResidual": 0,
+    "maximumCholeskyResidual": 0,
+    "centerGradientAuthority": "exact-projected-mean-jacobian-with-covariance-center-coupling-omitted-v0",
+    "covarianceGradientAuthority": "exact-projected-covariance-jacobian-at-current-center-v0",
+    "covarianceParameterization": "positive-diagonal-lower-cholesky-v0",
+    "scales": [
+      1,
+      2,
+      4,
+      8
+    ],
+    "valueWeight": 1,
+    "gradientWeight": 2,
+    "initialLoss": 0.009553988067740734,
+    "finalLoss": 0.007750943420142042,
+    "initialViewLosses": [
+      {
+        "id": "side-plus-90-train",
+        "loss": 0.009185768838555444,
+        "weight": 1
+      },
+      {
+        "id": "back-plus-180-train",
+        "loss": 0.009922207296926024,
+        "weight": 1
+      }
+    ],
+    "finalViewLosses": [
+      {
+        "id": "side-plus-90-train",
+        "loss": 0.007625459247383635,
+        "weight": 1
+      },
+      {
+        "id": "back-plus-180-train",
+        "loss": 0.00787642759290045,
+        "weight": 1
+      }
+    ],
+    "checkpoints": [
+      {
+        "iteration": 0,
+        "loss": 0.009553988067740734,
+        "viewLosses": [
+          {
+            "id": "side-plus-90-train",
+            "loss": 0.009185768838555444,
+            "weight": 1
+          },
+          {
+            "id": "back-plus-180-train",
+            "loss": 0.009922207296926024,
+            "weight": 1
+          }
+        ]
+      },
+      {
+        "iteration": 2,
+        "loss": 0.00910904437416516,
+        "viewLosses": [
+          {
+            "id": "side-plus-90-train",
+            "loss": 0.008777422048939415,
+            "weight": 1
+          },
+          {
+            "id": "back-plus-180-train",
+            "loss": 0.009440666699390907,
+            "weight": 1
+          }
+        ]
+      },
+      {
+        "iteration": 4,
+        "loss": 0.008743212367501734,
+        "viewLosses": [
+          {
+            "id": "side-plus-90-train",
+            "loss": 0.00845079373674875,
+            "weight": 1
+          },
+          {
+            "id": "back-plus-180-train",
+            "loss": 0.009035630998254718,
+            "weight": 1
+          }
+        ]
+      },
+      {
+        "iteration": 6,
+        "loss": 0.008422838501253884,
+        "viewLosses": [
+          {
+            "id": "side-plus-90-train",
+            "loss": 0.008169466774401918,
+            "weight": 1
+          },
+          {
+            "id": "back-plus-180-train",
+            "loss": 0.00867621022810585,
+            "weight": 1
+          }
+        ]
+      },
+      {
+        "iteration": 8,
+        "loss": 0.00812954686534819,
+        "viewLosses": [
+          {
+            "id": "side-plus-90-train",
+            "loss": 0.007915166039739139,
+            "weight": 1
+          },
+          {
+            "id": "back-plus-180-train",
+            "loss": 0.008343927690957244,
+            "weight": 1
+          }
+        ]
+      },
+      {
+        "iteration": 10,
+        "loss": 0.007922146190488933,
+        "viewLosses": [
+          {
+            "id": "side-plus-90-train",
+            "loss": 0.007741393571598563,
+            "weight": 1
+          },
+          {
+            "id": "back-plus-180-train",
+            "loss": 0.008102898809379304,
+            "weight": 1
+          }
+        ]
+      },
+      {
+        "iteration": 12,
+        "loss": 0.007843490111000849,
+        "viewLosses": [
+          {
+            "id": "side-plus-90-train",
+            "loss": 0.007683367850085352,
+            "weight": 1
+          },
+          {
+            "id": "back-plus-180-train",
+            "loss": 0.008003612371916345,
+            "weight": 1
+          }
+        ]
+      },
+      {
+        "iteration": 14,
+        "loss": 0.0078053351611705405,
+        "viewLosses": [
+          {
+            "id": "side-plus-90-train",
+            "loss": 0.007659652297114526,
+            "weight": 1
+          },
+          {
+            "id": "back-plus-180-train",
+            "loss": 0.007951018025226556,
+            "weight": 1
+          }
+        ]
+      },
+      {
+        "iteration": 16,
+        "loss": 0.0077842520746148215,
+        "viewLosses": [
+          {
+            "id": "side-plus-90-train",
+            "loss": 0.00764780788846201,
+            "weight": 1
+          },
+          {
+            "id": "back-plus-180-train",
+            "loss": 0.007920696260767633,
+            "weight": 1
+          }
+        ]
+      },
+      {
+        "iteration": 18,
+        "loss": 0.007771210838823536,
+        "viewLosses": [
+          {
+            "id": "side-plus-90-train",
+            "loss": 0.007638990368871088,
+            "weight": 1
+          },
+          {
+            "id": "back-plus-180-train",
+            "loss": 0.007903431308775985,
+            "weight": 1
+          }
+        ]
+      },
+      {
+        "iteration": 20,
+        "loss": 0.0077618957149780034,
+        "viewLosses": [
+          {
+            "id": "side-plus-90-train",
+            "loss": 0.007632328534001132,
+            "weight": 1
+          },
+          {
+            "id": "back-plus-180-train",
+            "loss": 0.007891462895954875,
+            "weight": 1
+          }
+        ]
+      },
+      {
+        "iteration": 22,
+        "loss": 0.007755327158376901,
+        "viewLosses": [
+          {
+            "id": "side-plus-90-train",
+            "loss": 0.007627962230569746,
+            "weight": 1
+          },
+          {
+            "id": "back-plus-180-train",
+            "loss": 0.007882692086184057,
+            "weight": 1
+          }
+        ]
+      },
+      {
+        "iteration": 24,
+        "loss": 0.007750943420142042,
+        "viewLosses": [
+          {
+            "id": "side-plus-90-train",
+            "loss": 0.007625459247383635,
+            "weight": 1
+          },
+          {
+            "id": "back-plus-180-train",
+            "loss": 0.00787642759290045,
+            "weight": 1
+          }
+        ]
+      }
+    ]
+  },
+  "hiddenIterationCapApplied": false,
+  "extinctionAccounting": {
+    "teacherTotalExtinction": 3403.896947889866,
+    "representedExtinction": 3403.8969455957413,
+    "absoluteError": 0.0000022941248971619643,
+    "relativeError": 6.739701384274079e-10
+  },
+  "support": {
+    "authority": "optimized-world-space-three-sigma-bounds-v0",
+    "bounds": {
+      "minimum": [
+        -1,
+        -1,
+        -1
+      ],
+      "maximum": [
+        1,
+        1,
+        1
+      ]
+    },
+    "supportLeakageGaussianCount": 6,
+    "supportLeakageFraction": 0.005859375,
+    "maxThreeSigmaDiameter": 0.2730960634018916
+  },
+  "optimizedArtifact": {
+    "path": "artifacts/pyro-multiview-smoke-geometry-r1-0716/center-only-trained/budget-1024.gaussians.f32",
+    "sha256": "sha256:0d9cbbc98556d6c49a6841a0395ecc537e1e817c0db0fa09bf78acc7c2b248a4",
+    "byteLength": 114688,
+    "dtype": "float32",
+    "byteOrder": "little-endian",
+    "shape": [
+      1024,
+      28
+    ],
+    "channelOrder": [
+      "positionX",
+      "positionY",
+      "positionZ",
+      "covXX",
+      "covXY",
+      "covXZ",
+      "covYY",
+      "covYZ",
+      "covZZ",
+      "axis0X",
+      "axis0Y",
+      "axis0Z",
+      "axis1X",
+      "axis1Y",
+      "axis1Z",
+      "axis2X",
+      "axis2Y",
+      "axis2Z",
+      "radius0",
+      "radius1",
+      "radius2",
+      "extinctionMass",
+      "densityWitness",
+      "temperatureWitness",
+      "velocityX",
+      "velocityY",
+      "velocityZ",
+      "sourceVoxelCount"
+    ]
+  },
+  "optimizedFitReportPath": "artifacts/pyro-multiview-smoke-geometry-r1-0716/center-only-trained/oracle-fit-report.json",
+  "costs": {
+    "authority": "cpu-wall-clock-performance-now-v0",
+    "optimizerMs": 1110.650959,
+    "productBuildMs": 16.063791000000037,
+    "totalMs": 1126.716875
+  },
+  "reportPath": "artifacts/pyro-multiview-smoke-geometry-r1-0716/center-only-trained/geometry-optimization-report.json"
+}
