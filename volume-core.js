@@ -11940,6 +11940,131 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
   }
 
+  async function captureBoundarySplatRayStepAblation(options = {}) {
+    if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
+    const requestedRaySteps = Array.isArray(options.raySteps)
+      ? options.raySteps.map(value => Number(value))
+      : [];
+    if (
+      requestedRaySteps.length < 2
+      || requestedRaySteps.some(value => !Number.isInteger(value) || value < 1 || value > 160)
+      || new Set(requestedRaySteps).size !== requestedRaySteps.length
+      || requestedRaySteps.some((value, index) => index > 0 && value <= requestedRaySteps[index - 1])
+    ) {
+      return { ok: false, reason: 'invalid-ray-step-ablation', requestedRaySteps };
+    }
+    cancelAnimationFrame(raf);
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    cancelAnimationFrame(raf);
+    const controlsBefore = { ...controlsSnapshot };
+    const baseFrameCount = state.frameCount;
+    const baseSimStepCount = state.simStepCount;
+    const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+    const sameStateCaptureId = options.sameStateCaptureId
+      ? String(options.sameStateCaptureId)
+      : `ray-step-ablation-f${baseFrameCount}-s${baseSimStepCount}-${Math.round(fixedNow)}`;
+    const cameraReceipt = () => ({
+      viewProjection: Array.from(viewProj.elements),
+      cameraRight: Array.from(camera.matrixWorld.elements.slice(0, 3)),
+      cameraUp: Array.from(camera.matrixWorld.elements.slice(4, 7)),
+      viewport: [state.width, state.height],
+    });
+    try {
+      const targets = [];
+      for (const requestedRayStepCount of requestedRaySteps) {
+        controlsSnapshot = applyRuntimeQualityControls({
+          ...controlsBefore,
+          runtimeQualityRequested: 'live_high',
+          runtimeQualityEffective: 'live_high',
+          runtimeQualityReason: 'frozen-ray-step-ablation',
+          gpuPressure: 0,
+          boundarySplatMode: 'off',
+          boundarySplatFeatureCapture: false,
+          volumeResidualMode: 'off',
+          raySteps: requestedRayStepCount,
+          adaptiveRays: 0,
+          temporalAccum: 0,
+          temporalJitter: 0,
+          historyClamp: 0,
+          renderScale: 1,
+        });
+        resetTemporalHistory(`frozen-ray-step-ablation-${requestedRayStepCount}`);
+        const targetSample = await sampleFrame({
+          advanceSim: false,
+          includeRgba: true,
+          now: fixedNow,
+          sameStateCaptureId,
+          baseFrameCount,
+          baseSimStepCount,
+        });
+        if (!targetSample.ok) throw new Error(`frozen-ray-step-ablation-target-failed:${requestedRayStepCount}:${targetSample.reason || 'unknown'}`);
+        if (targetSample.sampleAuthority !== 'render-only-frozen-sim-state') {
+          throw new Error(`frozen-ray-step-ablation-authority:${requestedRayStepCount}:${targetSample.sampleAuthority || 'missing'}`);
+        }
+        if (targetSample.frameCount !== baseFrameCount || targetSample.simStepCount !== baseSimStepCount) {
+          throw new Error(`frozen-ray-step-ablation-state-drift:${requestedRayStepCount}:${baseFrameCount}:${baseSimStepCount}:${targetSample.frameCount}:${targetSample.simStepCount}`);
+        }
+        if (targetSample.effectiveRoute !== ROUTE_IDENTITY || targetSample.volumeReconstructionStyle !== 'native-resolution') {
+          throw new Error(`frozen-ray-step-ablation-renderer-substitution:${requestedRayStepCount}:${targetSample.effectiveRoute || 'missing'}:${targetSample.volumeReconstructionStyle || 'missing'}`);
+        }
+        if (!targetSample.image?.rgba?.length) throw new Error(`frozen-ray-step-ablation-image-missing:${requestedRayStepCount}`);
+        const expectedRgbaLength = targetSample.image.width * targetSample.image.height * 4;
+        if (
+          !Number.isInteger(targetSample.image.width)
+          || !Number.isInteger(targetSample.image.height)
+          || targetSample.image.width <= 0
+          || targetSample.image.height <= 0
+          || targetSample.image.rgba.length !== expectedRgbaLength
+        ) {
+          throw new Error(`frozen-ray-step-ablation-image-partial:${requestedRayStepCount}:${targetSample.image.rgba.length}:${expectedRgbaLength}`);
+        }
+        const effectiveRaySteps = Number(targetSample.runtimeQualityReceipt?.knobs?.raySteps);
+        if (effectiveRaySteps !== requestedRayStepCount) {
+          throw new Error(`frozen-ray-step-ablation-step-cap:${requestedRayStepCount}:${effectiveRaySteps}`);
+        }
+        targets.push({
+          requestedRaySteps: requestedRayStepCount,
+          effectiveRaySteps,
+          sameStateCaptureId,
+          frameCount: targetSample.frameCount,
+          simStepCount: targetSample.simStepCount,
+          sampleAuthority: targetSample.sampleAuthority,
+          rendererIdentity: ROUTE_IDENTITY,
+          decomposition: 'operator-basin-native-raymarch-v0',
+          adaptiveRays: targetSample.adaptiveRaymarch,
+          temporalAccum: targetSample.temporalAccum,
+          temporalJitter: targetSample.temporalJitter,
+          historyClamp: targetSample.historyClamp,
+          renderScale: targetSample.renderScale,
+          camera: cameraReceipt(),
+          image: targetSample.image,
+        });
+      }
+      return {
+        ok: true,
+        authority: 'frozen-sim-state-native-raymarch-step-ablation-v0',
+        requestedRoute: state.requestedRoute,
+        effectiveRoute: state.effectiveRoute,
+        backend: state.backend,
+        fallbackReason: state.fallbackReason ?? null,
+        sameStateCaptureId,
+        baseFrameCount,
+        baseSimStepCount,
+        fixedNowMs: fixedNow,
+        requestedRaySteps,
+        camera: cameraReceipt(),
+        targets,
+      };
+    } finally {
+      controlsSnapshot = controlsBefore;
+      resetTemporalHistory('frozen-ray-step-ablation-restore');
+      if (options.resumeRenderLoop !== false && state.active) {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(render);
+      }
+    }
+  }
+
   function compactRenderScaleSample(sample) {
     if (!sample || typeof sample !== 'object') return sample;
     const simReadback = sample.simReadback ? { ...sample.simReadback } : null;
@@ -13155,6 +13280,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return canvas;
     },
     sampleFrame,
+    captureBoundarySplatRayStepAblation,
     sampleDeterministicReplayFrame,
     beginDebugFullFieldImport,
     writeDebugFullFieldImportChunk,
