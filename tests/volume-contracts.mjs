@@ -129,6 +129,7 @@ for (const forbiddenId of [
 assert.match(index, /id="settings-preset-label"/, 'Shared preset surface accepts a human label outside the canonical volume-control inventory');
 assert.match(index, /id="settings-preset-save"/, 'Shared preset surface exposes an exact Save command');
 assert.match(index, /id="settings-preset-select"/, 'Shared preset surface lists branch-independent presets');
+assert.match(index, /id="settings-preset-view"/, 'Shared preset surface exposes renderer composition as an invocation-scoped load choice');
 assert.match(index, /id="settings-preset-load-here"/, 'Shared preset surface exposes fresh-navigation loading in the current tab');
 assert.match(index, /id="settings-preset-open-fresh"/, 'Shared preset surface exposes fresh-navigation loading in a new tab');
 assert.match(index, /dataset\.commandWired = 'true'/, 'Shared preset buttons report when their commands are wired');
@@ -140,7 +141,11 @@ assert.match(index, /Bonfire plume \(superseded\)/, 'Bonfire plume remains visib
 assert.match(index, /saveVolumeSettingsPreset/, 'Shared settings persistence uses a named durable orchestration path');
 assert.match(index, /refreshVolumeSettingsPresetList/, 'Shared settings persistence refreshes a server-backed index');
 assert.match(index, /navigateToSelectedVolumeSettingsPreset/, 'Shared settings loading uses one fresh-navigation path for current and new tabs');
-assert.match(index, /preset=\$\{encodeURIComponent\(entry\.presetId\)\}&view=splat-only/, 'Load Here and Open Fresh navigate by immutable preset id with an explicit operator render view');
+assert.match(index, /SETTINGS_PRESET_VIEW_BY_COMPOSITION/, 'Shared preset loading maps the wrapper composition to an explicit loader view');
+assert.match(index, /selectedVolumeSettingsPresetView[\s\S]*parent\.__kaminosSelectiveHeadLive/, 'Current-view loading reads the wrapper renderer identity without persisting it');
+assert.match(index, /wrapperState\?\.status !== 'running'[\s\S]*requestedComposition !== wrapperState\?\.effectiveComposition/, 'Current-view loading rejects unsettled or substituted wrapper composition');
+assert.match(index, /fallbackReason[\s\S]*compositionFallbackReason[\s\S]*boundarySplatFallbackReason/, 'Current-view loading fails loud on every wrapper fallback surface');
+assert.match(index, /preset=\$\{encodeURIComponent\(entry\.presetId\)\}&view=\$\{encodeURIComponent\(view\)\}/, 'Load Here and Open Fresh navigate by immutable preset id and explicit invocation-scoped view');
 assert.match(index, /validateVolumeSettingsPresetDocument[\s\S]*validateVolumeSettingsPresetTarget/, 'The ordinary live target imports exact preset admission');
 assert.match(index, /async function admitVolumeSettingsPresetRoute[\s\S]*validateVolumeSettingsPresetTarget\(receipt, params\)/, 'The ordinary live target re-reads and validates preset authority instead of trusting route text');
 assert.match(index, /async function initKaminosVolumeRoute\(\) \{[\s\S]*?await admitVolumeSettingsPresetRoute\(params\);[\s\S]*?routedBonfireAblationControls/, 'Preset admission completes before any route settings are applied');
@@ -179,9 +184,11 @@ assert.match(settingsPresetWitness, /operatorWindow\.__kaminosSaveVolumeSettings
 const settingsWitnessLiveDebugBlock = settingsPresetWitness.match(/const liveDebugExpression[\s\S]*?\}\)\(\)`;/)?.[0] || '';
 assert.match(settingsWitnessLiveDebugBlock, /window\.__kaminosSelectiveHeadLive\?\.debugState/, 'Settings witness reads renderer evidence from the selective-head wrapper');
 assert.doesNotMatch(settingsWitnessLiveDebugBlock, /__kaminosVolumePrototype/, 'Settings witness cannot substitute an advancing inner prototype for wrapper pass evidence');
-assert.match(settingsPresetWitness, /function assertSelectiveSplatOnlyState[\s\S]*exact-basin-selective-head-live-v0[\s\S]*truthHigh[\s\S]*splat-only-v0/, 'Settings witness requires the exact selective route, role, and composition');
-assert.match(settingsPresetWitness, /assertSelectiveSplatOnlyState[\s\S]*selectiveHeadLivePassReceipt[\s\S]*splatApplied[\s\S]*raymarchApplied/, 'Settings witness verifies the applied splat-only pass tuple');
-assert.match(settingsPresetWitness, /assertSelectiveSplatOnlyState[\s\S]*fallbackReason[\s\S]*compositionFallbackReason[\s\S]*boundarySplatFallbackReason/, 'Settings witness rejects every selective wrapper fallback surface');
+assert.match(settingsPresetWitness, /function assertSelectiveCompositionState[\s\S]*expectedComposition[\s\S]*selectiveHeadLivePassReceipt/, 'Settings witness requires the exact selected composition and pass receipt');
+assert.match(settingsPresetWitness, /expectedPassTuple[\s\S]*splatApplied[\s\S]*raymarchApplied/, 'Settings witness verifies composition-specific applied pass tuples');
+assert.match(settingsPresetWitness, /smoke-raymarch-under-splats-v0[\s\S]*raymarchFireAuthority:\s*0[\s\S]*full-raymarch-under-splats-diagnostic-v0[\s\S]*raymarchFireAuthority:\s*1/, 'Settings witness distinguishes smoke-only raymarch authority from duplicate-fire diagnostic authority');
+assert.match(settingsPresetWitness, /compositionAuthority[\s\S]*raymarchAuthority[\s\S]*raymarchFireAuthority/, 'Settings witness verifies authority identity in addition to pass presence');
+assert.match(settingsPresetWitness, /assertSelectiveCompositionState[\s\S]*fallbackReason[\s\S]*compositionFallbackReason[\s\S]*boundarySplatFallbackReason/, 'Settings witness rejects every selective wrapper fallback surface');
 assert.match(settingsPresetWitness, /function operatorContext[\s\S]*querySelector\('#basin'\)[\s\S]*contentWindow/, 'Settings witness locates operator controls inside the wrapper-backed product view');
 assert.match(settingsPresetWitness, /operatorWindow\.__kaminosSaveVolumeSettingsPreset/, 'Settings witness saves through the product view inner window');
 assert.match(settingsPresetWitness, /awaitPromise:\s*true/, 'Settings witness waits for the persistence receipt before following its popup');

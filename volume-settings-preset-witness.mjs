@@ -7,6 +7,45 @@ import { spawn } from 'node:child_process';
 
 const args = parseArgs(process.argv.slice(2));
 const url = required('--url');
+const requestedUrl = new URL(url);
+const requestedView = requestedUrl.searchParams.get('view');
+const PRESET_VIEW_COMPOSITIONS = Object.freeze({
+  'splat-only': 'splat-only-v0',
+  'raymarch-only': 'raymarch-only-v0',
+  'smoke-hybrid': 'smoke-raymarch-under-splats-v0',
+  'full-hybrid-diagnostic': 'full-raymarch-under-splats-diagnostic-v0',
+});
+const expectedComposition = PRESET_VIEW_COMPOSITIONS[requestedView];
+const PASS_TUPLES = Object.freeze({
+  'splat-only-v0': Object.freeze({
+    splatApplied: true,
+    raymarchApplied: false,
+    raymarchFireAuthority: 0,
+    compositionAuthority: 'splat-fire-authority-learned-boundary-sheets-v0',
+    raymarchAuthority: 'smoke-raymarch-authority-broad-smoke-only-v0',
+  }),
+  'raymarch-only-v0': Object.freeze({
+    splatApplied: false,
+    raymarchApplied: true,
+    raymarchFireAuthority: 1,
+    compositionAuthority: 'diagnostic-raymarch-full-selected-field-authority-v0',
+    raymarchAuthority: 'diagnostic-raymarch-selected-fields-fire-smoke-v0',
+  }),
+  'smoke-raymarch-under-splats-v0': Object.freeze({
+    splatApplied: true,
+    raymarchApplied: true,
+    raymarchFireAuthority: 0,
+    compositionAuthority: 'smoke-raymarch-authority-broad-smoke-only-v0+splat-fire-authority-learned-boundary-sheets-v0',
+    raymarchAuthority: 'smoke-raymarch-authority-broad-smoke-only-v0',
+  }),
+  'full-raymarch-under-splats-diagnostic-v0': Object.freeze({
+    splatApplied: true,
+    raymarchApplied: true,
+    raymarchFireAuthority: 1,
+    compositionAuthority: 'diagnostic-full-fire-raymarch-under-splats-duplicate-fire-authority-v0',
+    raymarchAuthority: 'diagnostic-raymarch-selected-fields-fire-smoke-v0',
+  }),
+});
 const out = resolve(String(args.get('--out') || '/tmp/kaminos-volume-settings-preset.png'));
 const cockpitOut = resolve(String(args.get('--cockpit-out') || out.replace(/(\.png)?$/, '-cockpit.png')));
 const reportPath = resolve(String(args.get('--report') || '/tmp/kaminos-volume-settings-preset.json'));
@@ -17,14 +56,14 @@ const liveDebugExpression = `(() => {
   return window.__kaminosSelectiveHeadLive?.debugState?.() || null;
 })()`;
 
-function assertSelectiveSplatOnlyState(state, phase, expectedPresetId = null) {
+function assertSelectiveCompositionState(state, phase, expectedPresetId = null) {
   assert.equal(state?.routeIdentity, 'exact-basin-selective-head-live-v0', `${phase}: wrong effective route`);
   assert.equal(state?.status, 'running', `${phase}: selective wrapper is not running`);
   assert.equal(state?.requestedRole, 'truthHigh', `${phase}: wrong requested role`);
   assert.equal(state?.effectiveRole, 'truthHigh', `${phase}: requested role silently fell back`);
   assert.equal(state?.roleAuthority, 'current-high-field-reference-no-learned-composition-v0', `${phase}: wrong role authority`);
-  assert.equal(state?.requestedComposition, 'splat-only-v0', `${phase}: wrong requested composition`);
-  assert.equal(state?.effectiveComposition, 'splat-only-v0', `${phase}: requested composition silently fell back`);
+  assert.equal(state?.requestedComposition, expectedComposition, `${phase}: wrong requested composition`);
+  assert.equal(state?.effectiveComposition, expectedComposition, `${phase}: requested composition silently fell back`);
   assert.equal(state?.fallbackReason, null, `${phase}: selective route reported fallback`);
   assert.equal(state?.compositionFallbackReason, null, `${phase}: selective composition reported fallback`);
   assert.equal(state?.boundarySplatFallbackReason, null, `${phase}: boundary splat route reported fallback`);
@@ -32,12 +71,16 @@ function assertSelectiveSplatOnlyState(state, phase, expectedPresetId = null) {
   assert.ok(state?.sourceSettingsPresetStorePath, `${phase}: shared settings store path is missing`);
   if (expectedPresetId) assert.equal(state?.sourceSettingsPresetId, expectedPresetId, `${phase}: wrong immutable settings preset`);
   const receipt = state?.selectiveHeadLivePassReceipt;
+  const expectedPassTuple = PASS_TUPLES[expectedComposition];
   assert.equal(receipt?.identity, 'selective-head-live-render-pass-receipt-v0', `${phase}: pass receipt identity mismatch`);
-  assert.equal(receipt?.composition, 'splat-only-v0', `${phase}: pass receipt composition mismatch`);
-  assert.equal(receipt?.splatEncoded, true, `${phase}: splat pass was not encoded`);
-  assert.equal(receipt?.splatApplied, true, `${phase}: splat pass was not applied`);
-  assert.equal(receipt?.raymarchEncoded, false, `${phase}: raymarch pass was unexpectedly encoded`);
-  assert.equal(receipt?.raymarchApplied, false, `${phase}: raymarch pass was unexpectedly applied`);
+  assert.equal(receipt?.composition, expectedComposition, `${phase}: pass receipt composition mismatch`);
+  assert.equal(receipt?.splatEncoded, expectedPassTuple.splatApplied, `${phase}: splat encode tuple mismatch`);
+  assert.equal(receipt?.splatApplied, expectedPassTuple.splatApplied, `${phase}: splat apply tuple mismatch`);
+  assert.equal(receipt?.raymarchEncoded, expectedPassTuple.raymarchApplied, `${phase}: raymarch encode tuple mismatch`);
+  assert.equal(receipt?.raymarchApplied, expectedPassTuple.raymarchApplied, `${phase}: raymarch apply tuple mismatch`);
+  assert.equal(receipt?.compositionAuthority, expectedPassTuple.compositionAuthority, `${phase}: composition authority mismatch`);
+  assert.equal(receipt?.raymarchAuthority, expectedPassTuple.raymarchAuthority, `${phase}: raymarch authority mismatch`);
+  assert.equal(receipt?.raymarchFireAuthority, expectedPassTuple.raymarchFireAuthority, `${phase}: raymarch fire authority mismatch`);
   assert.equal(receipt?.fallbackReason, null, `${phase}: pass receipt reported fallback`);
 }
 
@@ -98,6 +141,8 @@ class CdpSocket {
 }
 
 try {
+  if (!requestedView) throw new Error('settings preset witness requires an explicit renderer view');
+  if (!expectedComposition) throw new Error(`unsupported settings preset witness view: ${requestedView}`);
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(cockpitOut), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
@@ -129,7 +174,7 @@ try {
     if (state?.status !== 'running' || Number(state.frameCount) < 2) return null;
     return state;
   })()`, timeoutMs);
-  assertSelectiveSplatOnlyState(initialState, 'source live target');
+  assertSelectiveCompositionState(initialState, 'source live target');
   const button = await evaluate(initialSocket, operatorContext(`(() => {
     const element = operatorDocument.getElementById('settings-preset-save');
     if (!element || element.disabled || element.dataset.commandWired !== 'true') return null;
@@ -166,7 +211,8 @@ try {
   lastTrustworthyEvidence.commandDiagnostic = commandDiagnostic;
   assert.ok(commandResult?.effective?.presetId, 'settings preset command completed without an immutable preset id');
   assert.ok(commandResult?.effective?.alias, 'settings preset command completed without a human alias');
-  assert.ok(commandResult.presetUrl, 'settings preset command completed without a durable live route');
+  assert.ok(commandResult.presetUrl, 'settings preset command completed without a durable loader route');
+  assert.equal(commandResult.presetViewUrls?.[requestedView], `${commandResult.presetUrl}&view=${requestedView}`, 'settings preset command omitted the selected visual route');
   await delay(500);
   const cockpitScreenshot = await initialSocket.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
   writeFileSync(cockpitOut, Buffer.from(cockpitScreenshot.data, 'base64'));
@@ -179,6 +225,8 @@ try {
   });
   if (navigation.exceptionDetails) throw new Error(navigation.exceptionDetails.text || 'settings preset navigation threw');
   assert.ok(navigation.result?.value, 'Open Fresh did not return its requested loader route');
+  const requestedNavigation = new URL(navigation.result.value, url);
+  assert.equal(requestedNavigation.searchParams.get('view'), requestedView, 'Open Fresh changed the current renderer view');
 
   failurePhase = 'effective-live-target';
   const liveTarget = await waitForTarget(target => (
@@ -192,7 +240,7 @@ try {
   assert.equal(sourcePresetId, commandResult.effective.presetId);
   assert.equal(sourcePresetAuthority, 'shared-volume-settings-preset-v2');
   assert.equal(liveUrl.searchParams.get('role'), 'truthHigh');
-  assert.equal(liveUrl.searchParams.get('composition'), 'splat-only-v0');
+  assert.equal(liveUrl.searchParams.get('composition'), expectedComposition);
   assert.equal(liveUrl.searchParams.get('warmup_steps'), '0');
   for (const forbidden of ['basin_capture', 'basin_source_authority']) {
     assert.equal(liveUrl.searchParams.has(forbidden), false, `live settings target invented renderer parameter ${forbidden}`);
@@ -206,7 +254,7 @@ try {
     if (state?.status !== 'running' || Number(state.frameCount) < 2) return null;
     return state;
   })()`, timeoutMs);
-  assertSelectiveSplatOnlyState(startState, 'reopened live target', sourcePresetId);
+  assertSelectiveCompositionState(startState, 'reopened live target', sourcePresetId);
 
   failurePhase = 'preset-artifact-verification';
   const presetResponse = await fetch(new URL(`/api/volume-settings-preset?id=${encodeURIComponent(sourcePresetId)}`, url));
@@ -230,7 +278,7 @@ try {
   failurePhase = 'continuous-observation';
   await delay(5000);
   const endState = await evaluate(liveSocket, liveDebugExpression);
-  assertSelectiveSplatOnlyState(endState, 'reopened live target after observation', sourcePresetId);
+  assertSelectiveCompositionState(endState, 'reopened live target after observation', sourcePresetId);
   const continuousFrameDelta = Number(endState.frameCount) - Number(startState.frameCount);
   const continuousSimStepDelta = Number(endState.simStepCount) - Number(startState.simStepCount);
   assert.ok(continuousFrameDelta >= 2, 'live render frames did not advance');
@@ -250,6 +298,8 @@ try {
     effectiveUrl: liveTarget.url,
     sourcePresetId,
     sourcePresetAuthority,
+    requestedView,
+    expectedComposition,
     writeReceipt: commandResult.effective,
     visualAuthority: 'not-evaluated-settings-persistence-only',
     controlCount: presetDocument.preset.controlCount,

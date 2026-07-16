@@ -983,6 +983,15 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <select id="settings-preset-select" class="select-input" aria-label="Saved volume preset">
           <option value="">Loading presets...</option>
         </select>
+      </div>
+      <div class="volume-actions">
+        <select id="settings-preset-view" class="select-input" aria-label="Preset renderer view">
+          <option value="current" selected>Current renderer view</option>
+          <option value="splat-only">Splat only</option>
+          <option value="raymarch-only">Raymarch only</option>
+          <option value="smoke-hybrid">Smoke hybrid</option>
+          <option value="full-hybrid-diagnostic">Full hybrid diagnostic</option>
+        </select>
         <button class="btn" id="settings-preset-load-here">Load Here</button>
         <button class="btn" id="settings-preset-open-fresh">Open Fresh</button>
       </div>
@@ -12044,11 +12053,41 @@ async function saveVolumeSettingsPreset() {
   }
 }
 
+const SETTINGS_PRESET_VIEW_BY_COMPOSITION = Object.freeze({
+  'splat-only-v0': 'splat-only',
+  'raymarch-only-v0': 'raymarch-only',
+  'smoke-raymarch-under-splats-v0': 'smoke-hybrid',
+  'full-raymarch-under-splats-diagnostic-v0': 'full-hybrid-diagnostic',
+});
+
+function selectedVolumeSettingsPresetView() {
+  const selected = document.getElementById('settings-preset-view')?.value || 'current';
+  if (selected !== 'current') return selected;
+  let wrapperState = null;
+  try {
+    wrapperState = window.parent !== window
+      ? window.parent.__kaminosSelectiveHeadLive?.debugState?.()
+      : window.__kaminosSelectiveHeadLive?.debugState?.();
+  } catch {}
+  if (wrapperState?.status !== 'running'
+    || wrapperState?.requestedComposition !== wrapperState?.effectiveComposition
+    || wrapperState?.fallbackReason
+    || wrapperState?.compositionFallbackReason
+    || wrapperState?.boundarySplatFallbackReason) {
+    throw new Error('current renderer view is not running cleanly; select an explicit preset renderer view');
+  }
+  const composition = wrapperState.effectiveComposition;
+  const view = SETTINGS_PRESET_VIEW_BY_COMPOSITION[composition];
+  if (!view) throw new Error('current renderer view is unavailable; select a preset renderer view');
+  return view;
+}
+
 function selectedVolumeSettingsPresetUrl() {
   const presetId = document.getElementById('settings-preset-select')?.value;
   const entry = volumeSettingsPresetIndex?.entries?.find(candidate => candidate.presetId === presetId);
   if (!entry) throw new Error('select a saved volume settings preset');
-  return `/volume-settings-preset.html?preset=${encodeURIComponent(entry.presetId)}&view=splat-only`;
+  const view = selectedVolumeSettingsPresetView();
+  return `/volume-settings-preset.html?preset=${encodeURIComponent(entry.presetId)}&view=${encodeURIComponent(view)}`;
 }
 
 function navigateToSelectedVolumeSettingsPreset(openFresh = false) {

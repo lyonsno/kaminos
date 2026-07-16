@@ -1,4 +1,10 @@
 export const VOLUME_SETTINGS_PRESET_SCHEMA_IDENTITY = 'kaminos-volume-settings-preset-schema-v2';
+export const VOLUME_SETTINGS_PRESET_VISUAL_VIEWS = Object.freeze({
+  'splat-only': Object.freeze({ role: 'truthHigh', composition: 'splat-only-v0' }),
+  'raymarch-only': Object.freeze({ role: 'truthHigh', composition: 'raymarch-only-v0' }),
+  'smoke-hybrid': Object.freeze({ role: 'truthHigh', composition: 'smoke-raymarch-under-splats-v0' }),
+  'full-hybrid-diagnostic': Object.freeze({ role: 'truthHigh', composition: 'full-raymarch-under-splats-diagnostic-v0' }),
+});
 
 function validatePresetSchema(schema) {
   if (!schema || schema.identity !== VOLUME_SETTINGS_PRESET_SCHEMA_IDENTITY) {
@@ -147,11 +153,12 @@ export function buildVolumeSettingsPresetTarget(receipt, origin) {
 }
 
 export function buildVolumeSettingsPresetVisualTarget(receipt, origin, view) {
-  if (view !== 'splat-only') throw new Error(`unsupported settings preset visual view: ${view || 'missing'}`);
+  const viewSpec = VOLUME_SETTINGS_PRESET_VISUAL_VIEWS[view];
+  if (!viewSpec) throw new Error(`unsupported settings preset visual view: ${view || 'missing'}`);
   const target = new URL('/volume-selective-head-live.html', origin);
   for (const [key, value] of receipt.routeVolumeEntries) target.searchParams.set(key, value);
-  target.searchParams.set('role', 'truthHigh');
-  target.searchParams.set('composition', 'splat-only-v0');
+  target.searchParams.set('role', viewSpec.role);
+  target.searchParams.set('composition', viewSpec.composition);
   target.searchParams.set('warmup_steps', '0');
   target.searchParams.set('settings_preset', receipt.presetId);
   target.searchParams.set('settings_preset_authority', receipt.sourcePresetAuthority);
@@ -163,10 +170,27 @@ export function validateVolumeSettingsPresetVisualTarget(receipt, params) {
   if (params.get('settings_preset_authority') !== receipt.sourcePresetAuthority) {
     throw new Error('visual target settings preset authority mismatch');
   }
-  if (params.get('role') !== 'truthHigh'
-    || params.get('composition') !== 'splat-only-v0'
+  const viewSpec = Object.values(VOLUME_SETTINGS_PRESET_VISUAL_VIEWS)
+    .find(candidate => candidate.composition === params.get('composition'));
+  if (!viewSpec
+    || params.get('role') !== viewSpec.role
     || params.get('warmup_steps') !== '0') {
     throw new Error('visual target renderer view mismatch');
+  }
+  const allowed = new Set([
+    ...receipt.routeVolumeEntries.map(([key]) => key),
+    'role',
+    'composition',
+    'warmup_steps',
+    'settings_preset',
+    'settings_preset_authority',
+  ]);
+  const unexpected = [...params].map(([key]) => key).filter(key => !allowed.has(key));
+  if (unexpected.length > 0) {
+    throw new Error(`visual target contains unexpected parameters: ${unexpected.join(',')}`);
+  }
+  for (const key of ['role', 'composition', 'warmup_steps', 'settings_preset', 'settings_preset_authority']) {
+    if (params.getAll(key).length !== 1) throw new Error(`visual target duplicates parameter: ${key}`);
   }
   const requestedVolumeEntries = [...params].filter(([key]) => key.startsWith('volume_'));
   if (requestedVolumeEntries.length !== receipt.routeVolumeEntries.length) {

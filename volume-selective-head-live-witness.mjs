@@ -13,18 +13,23 @@ const ROLE_AUTHORITIES = Object.freeze({
   lowPhaseAligned: 'phase-aligned-low-field-control-v0',
   selectiveFullResidual: 'learned-selective-full-residual-composition-v0',
 });
+const PRESET_VIEW_COMPOSITIONS = Object.freeze({
+  'splat-only': 'splat-only-v0',
+  'raymarch-only': 'raymarch-only-v0',
+  'smoke-hybrid': 'smoke-raymarch-under-splats-v0',
+  'full-hybrid-diagnostic': 'full-raymarch-under-splats-diagnostic-v0',
+});
 const args = parseArgs(process.argv.slice(2));
 const url = required('--url');
 const requestedUrl = new URL(url);
 const requestedParams = requestedUrl.searchParams;
 const isPresetLoader = requestedUrl.pathname.endsWith('/volume-settings-preset.html');
-const requestedPresetView = isPresetLoader
-  ? (requestedParams.get('view') || 'splat-only')
-  : requestedParams.get('view');
+const requestedPresetView = isPresetLoader ? requestedParams.get('view') : null;
 const requestedPresetRef = requestedParams.get('settings_preset')
   || (isPresetLoader ? requestedParams.get('preset') : null);
 const expectedComposition = requestedParams.get('composition')
-  || (requestedPresetView === 'splat-only' ? 'splat-only-v0' : 'smoke-raymarch-under-splats-v0');
+  || PRESET_VIEW_COMPOSITIONS[requestedPresetView]
+  || 'smoke-raymarch-under-splats-v0';
 const out = resolve(String(args.get('--out') || '/tmp/kaminos-selective-head-live.png'));
 const reportPath = resolve(String(args.get('--report') || '/tmp/kaminos-selective-head-live.json'));
 const minimumContinuousSeconds = Number(args.get('--minimum-seconds') || 5);
@@ -79,6 +84,8 @@ class CdpSocket {
 
 try {
   if (!(minimumContinuousSeconds >= 5 && minimumContinuousSeconds <= 30)) throw new Error('--minimum-seconds must be within 5-30');
+  if (isPresetLoader && !requestedPresetView) throw new Error('missing explicit preset renderer view');
+  if (requestedPresetView && !PRESET_VIEW_COMPOSITIONS[requestedPresetView]) throw new Error(`unsupported preset renderer view: ${requestedPresetView}`);
   failurePhase = 'preset-source-resolution';
   expectedSettingsPreset = await resolveExpectedSettingsPreset(requestedPresetRef);
   lastTrustworthyEvidence = { expectedSettingsPreset };

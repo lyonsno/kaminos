@@ -12,25 +12,42 @@
     strong { display: block; font-size: 18px; }
     #status { margin-top: 8px; color: #9eb0b5; font: 13px/1.5 "SF Mono", Menlo, monospace; overflow-wrap: anywhere; }
     #status.failed { color: #ff9d8d; }
+    #view-commands { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+    #view-commands[hidden] { display: none; }
+    button { border: 1px solid #48616b; border-radius: 4px; padding: 9px 12px; background: #121a1e; color: #edf4f5; cursor: pointer; }
+    button:hover { background: #1b282d; }
   </style>
 </head>
 <body>
   <main>
-    <strong>Loading volume settings preset</strong>
+    <strong id="preset-title">Loading volume settings preset</strong>
     <div id="status">Validating exact controls...</div>
+    <div id="view-commands" hidden>
+      <button type="button" data-view="splat-only">Splat only</button>
+      <button type="button" data-view="raymarch-only">Raymarch only</button>
+      <button type="button" data-view="smoke-hybrid">Smoke hybrid</button>
+      <button type="button" data-view="full-hybrid-diagnostic">Full hybrid diagnostic</button>
+    </div>
   </main>
   <script type="module">
     import {
-      buildVolumeSettingsPresetTarget,
       buildVolumeSettingsPresetVisualTarget,
       validateVolumeSettingsPresetDocument,
     } from './volume-settings-preset-contract.mjs';
 
     const status = document.getElementById('status');
+    const presetTitle = document.getElementById('preset-title');
     const params = new URLSearchParams(location.search);
     const presetId = params.get('preset');
-    const requestedView = params.get('view');
-    const view = requestedView || 'splat-only';
+    const view = params.get('view');
+    const viewCommands = document.getElementById('view-commands');
+    for (const button of viewCommands.querySelectorAll('[data-view]')) {
+      button.addEventListener('click', () => {
+        const target = new URL(location.href);
+        target.searchParams.set('view', button.dataset.view);
+        location.assign(target);
+      });
+    }
 
     async function loadPreset() {
       if (!presetId) throw new Error('settings preset id is required');
@@ -42,10 +59,14 @@
       if (!response.ok) throw new Error(artifact.error || `settings preset lookup failed: ${response.status}`);
       if (!schemaResponse.ok) throw new Error(`settings preset schema lookup failed: ${schemaResponse.status}`);
       const receipt = validateVolumeSettingsPresetDocument(artifact, presetId, schema);
-      const target = view === 'ordinary-live'
-        ? buildVolumeSettingsPresetTarget(receipt, location.origin)
-        : buildVolumeSettingsPresetVisualTarget(receipt, location.origin, view);
-      status.textContent = `${receipt.label || presetId} | requested ${presetId} | effective ${receipt.presetId} | ${receipt.sourcePresetAuthority} | ${receipt.routeVolumeEntries.length} exact volume settings | requested ${requestedView || 'default'} / effective ${view} view`;
+      presetTitle.textContent = 'Volume settings preset';
+      if (!view) {
+        status.textContent = `${receipt.label || presetId} | effective ${receipt.presetId} | ${receipt.sourcePresetAuthority} | ${receipt.routeVolumeEntries.length} exact volume settings`;
+        viewCommands.hidden = false;
+        return;
+      }
+      const target = buildVolumeSettingsPresetVisualTarget(receipt, location.origin, view);
+      status.textContent = `${receipt.label || presetId} | requested ${presetId} | effective ${receipt.presetId} | ${receipt.sourcePresetAuthority} | ${receipt.routeVolumeEntries.length} exact volume settings | effective ${view} view`;
       location.replace(target);
     }
 

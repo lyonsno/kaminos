@@ -268,6 +268,7 @@ def write_volume_settings_preset(store_path, label, payload, source, schema=None
             "source": dict(source or {}),
         }
         _atomic_write_json(alias_path, alias_document)
+    preset_url = f"/volume-settings-preset.html?preset={preset_id}"
     return {
         "ok": True,
         "identity": "kaminos-volume-settings-preset-write-receipt-v1",
@@ -287,7 +288,11 @@ def write_volume_settings_preset(store_path, label, payload, source, schema=None
             "controlCount": schema["controlCount"],
             "idempotent": idempotent,
         },
-        "presetUrl": f"/volume-settings-preset.html?preset={preset_id}&view=splat-only",
+        "presetUrl": preset_url,
+        "presetViewUrls": {
+            view: f"{preset_url}&view={view}"
+            for view in ("splat-only", "raymarch-only", "smoke-hybrid", "full-hybrid-diagnostic")
+        },
     }
 
 

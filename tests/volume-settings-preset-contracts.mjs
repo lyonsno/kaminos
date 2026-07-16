@@ -156,6 +156,16 @@ assert.equal(explicitSplatView.searchParams.get('settings_preset_authority'), 's
 assert.equal(explicitSplatView.searchParams.has('basin_capture'), false);
 assert.equal(explicitSplatView.searchParams.get('volume_density'), '5.05');
 assert.equal(validateVolumeSettingsPresetVisualTarget(acceptedReceipt, explicitSplatView.searchParams), true);
+for (const [view, composition] of [
+  ['raymarch-only', 'raymarch-only-v0'],
+  ['smoke-hybrid', 'smoke-raymarch-under-splats-v0'],
+  ['full-hybrid-diagnostic', 'full-raymarch-under-splats-diagnostic-v0'],
+]) {
+  const target = buildVolumeSettingsPresetVisualTarget(acceptedReceipt, 'http://127.0.0.1:18636', view);
+  assert.equal(target.searchParams.get('role'), 'truthHigh');
+  assert.equal(target.searchParams.get('composition'), composition);
+  assert.equal(validateVolumeSettingsPresetVisualTarget(acceptedReceipt, target.searchParams), true);
+}
 const forgedVisualSetting = new URL(explicitSplatView);
 forgedVisualSetting.searchParams.set('volume_density', 'forged');
 assert.throws(
@@ -163,8 +173,17 @@ assert.throws(
   /route mismatch/i,
   'visual view cannot silently substitute a validated preset setting',
 );
+for (const forbiddenParam of ['camera', 'viewport', 'basin_capture']) {
+  const contaminatedVisualTarget = new URL(explicitSplatView);
+  contaminatedVisualTarget.searchParams.set(forbiddenParam, 'forged');
+  assert.throws(
+    () => validateVolumeSettingsPresetVisualTarget(acceptedReceipt, contaminatedVisualTarget.searchParams),
+    /unexpected parameters/i,
+    `visual preset admission rejects unowned route state: ${forbiddenParam}`,
+  );
+}
 assert.throws(
-  () => buildVolumeSettingsPresetVisualTarget(acceptedReceipt, 'http://127.0.0.1:18636', 'raymarch'),
+  () => buildVolumeSettingsPresetVisualTarget(acceptedReceipt, 'http://127.0.0.1:18636', 'unknown-view'),
   /unsupported.*view/i,
   'preset visual loading rejects unimplemented view substitution',
 );
@@ -229,13 +248,13 @@ assert.match(
 );
 assert.match(
   settingsLoader,
-  /const requestedView = params\.get\('view'\);[\s\S]*const view = requestedView \|\| 'splat-only'/,
-  'operator preset loading defaults explicitly to the visible splat-only view',
+  /const view = params\.get\('view'\);[\s\S]*if \(!view\)[\s\S]*viewCommands\.hidden = false/,
+  'a viewless loader exposes explicit composition commands instead of silently choosing a renderer',
 );
-assert.match(
-  settingsLoader,
-  /view === 'ordinary-live'[\s\S]*buildVolumeSettingsPresetTarget[\s\S]*buildVolumeSettingsPresetVisualTarget/,
-  'renderer-unspecified ordinary live remains an explicit diagnostic instead of an unlabeled operator default',
-);
+assert.match(settingsLoader, /id="view-commands"[\s\S]*data-view="raymarch-only"/, 'the viewless loader presents an explicit raymarch command');
+assert.match(settingsLoader, /id="preset-title"[\s\S]*presetTitle\.textContent = 'Volume settings preset'/, 'the validated chooser does not retain a stale loading claim');
+assert.doesNotMatch(settingsLoader, /params\.get\('view'\)\s*\|\|\s*['"]splat-only['"]/, 'a viewless preset never silently substitutes splat-only');
+assert.doesNotMatch(settingsLoader, /data-view="ordinary-live"|view === 'ordinary-live'/, 'the visual loader has no renderer-off side door');
+assert.doesNotMatch(settingsLoader, /buildVolumeSettingsPresetTarget/, 'the visual loader cannot escape to a renderer-unreceipted ordinary route');
 
 console.log('volume settings preset contracts passed');
