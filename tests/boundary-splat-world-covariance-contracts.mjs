@@ -243,6 +243,31 @@ assert.throws(
   }),
   /preflight.*duplicate family/i,
 );
+const crossFamilyDriftHash = 'f'.repeat(64);
+const crossFamilyDriftMode = preflightModeByFamily['flow-kernel-moment-covariance'];
+assert.throws(
+  () => oracle.validateCaptureReportFootprintPreflight({
+    ...captureReport,
+    footprintFamilyPreflight: kernelPreflight.map(row => row.family === 'flow-kernel-moment-covariance'
+      ? {
+          ...row,
+          candidateCount: row.candidateCount + 1,
+          candidatePayloadSha256: crossFamilyDriftHash,
+        }
+      : row),
+    captures: captureReport.captures.map(row => row.mode === crossFamilyDriftMode
+      ? {
+          ...row,
+          boundarySplatCandidateCount: row.boundarySplatCandidateCount + 1,
+          footprintAudit: {
+            ...row.footprintAudit,
+            candidatePayloadSha256: crossFamilyDriftHash,
+          },
+        }
+      : row),
+  }),
+  /preflight.*candidate payload.*families/i,
+);
 const validatedKernel = await oracle.validateCameraHoldoutReport(kernelReport, { requireKernelMoment: true });
 assert.equal(validatedKernel.familyCount, 4);
 
