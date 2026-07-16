@@ -1,4 +1,8 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const witnessUrl = new URL('../boundary-splat-alternating-anchor-witness.mjs', import.meta.url);
 const witness = await import(witnessUrl);
@@ -119,5 +123,196 @@ assert.throws(
   /fine display cadence/,
   'the old +160 ms checkpoint must not masquerade as alternate-display-frame inference',
 );
+
+const root = await mkdtemp(join(tmpdir(), 'alternating-anchor-witness-contract-'));
+try {
+  const hash = bytes => createHash('sha256').update(bytes).digest('hex');
+  const writeJsonIdentity = async (name, document) => {
+    const path = join(root, name);
+    const bytes = Buffer.from(`${JSON.stringify(document)}\n`);
+    await writeFile(path, bytes);
+    return { path, bytes: bytes.byteLength, sha256: hash(bytes) };
+  };
+  const writeFloatArtifact = async (name, values, strideFloats, authority = undefined) => {
+    const path = join(root, name);
+    const typed = new Float32Array(values);
+    const bytes = Buffer.from(typed.buffer, typed.byteOffset, typed.byteLength);
+    await writeFile(path, bytes);
+    return {
+      path,
+      bytes: bytes.byteLength,
+      sha256: hash(bytes),
+      count: typed.length / strideFloats,
+      strideFloats,
+      dtype: 'float32-le',
+      ...(authority ? { authority } : {}),
+    };
+  };
+  const featureOrder = [
+    'sidecar.support', 'sidecar.coverage', 'sidecar.ridge', 'sidecar.footprint',
+    'material.density', 'material.heat', 'material.fuel', 'material.detail',
+    'fire.energy', 'fire.temperature', 'fire.emission', 'fire.detail',
+    'micro.x', 'micro.y', 'micro.z', 'micro.w',
+  ];
+  const camera = manifestFrames[0].camera;
+  const exactFrames = [];
+  const alternatingFrames = [];
+  const pairs = [];
+  for (let index = 0; index < 241; index += 1) {
+    const candidate = await writeFloatArtifact(
+      `exact-${index}.features.f32`,
+      Array.from({ length: 16 }, (_, channel) => index * 0.001 + channel * 0.01),
+      16,
+    );
+    const exactSplat = await writeFloatArtifact(
+      `exact-${index}.splats.f32`,
+      [Math.sin(index / 25) * 0.08, Math.cos(index / 31) * 0.04, 0, 1, 0.9, 0.35, 0.08, 0.95, 0.18, 0.18, 0, 0],
+      12,
+      'intercepted-live-boundary-splat-buffer-post-compaction-v0',
+    );
+    const exact = {
+      id: `frame-${index}`,
+      controlledStepFrameIndex: index,
+      controlledStepDeltaMs: 16.667,
+      simStepCount: 500 + index,
+      sourceAuthority: 'live-baked-sidecar-plus-fluid-material-v0',
+      rendererIdentity: 'live-boundary-sidecar-learned-attribute-splats-v0',
+      fallbackReason: null,
+      camera,
+      candidates: candidate,
+      splats: exactSplat,
+    };
+    exactFrames.push(exact);
+    if (index % 2 === 0) {
+      alternatingFrames.push({
+        displayFrameIndex: index,
+        referenceFrameId: exact.id,
+        sourceFrameId: exact.id,
+        roleAuthority: 'exact-natural-full-rate-anchor-v0',
+        candidates: candidate,
+        splats: { ...exactSplat, authority: 'exact-natural-full-rate-anchor-v0' },
+      });
+    } else {
+      const causalSplat = await writeFloatArtifact(
+        `causal-${index}.splats.f32`,
+        [Math.sin(index / 25) * 0.075, Math.cos(index / 31) * 0.035, 0, 1, 0.86, 0.32, 0.07, 0.9, 0.18, 0.18, 0, 0],
+        12,
+        'causal-one-step-prediction-from-prior-exact-anchor-v0',
+      );
+      alternatingFrames.push({
+        displayFrameIndex: index,
+        referenceFrameId: exact.id,
+        sourceFrameId: `frame-${index - 1}`,
+        roleAuthority: 'causal-one-step-prediction-from-prior-exact-anchor-v0',
+        candidates: candidate,
+        splats: causalSplat,
+      });
+      const oracleSplat = await writeFloatArtifact(
+        `oracle-${index}.splats.f32`,
+        [Math.sin(index / 25) * 0.079, Math.cos(index / 31) * 0.039, 0, 1, 0.89, 0.34, 0.08, 0.94, 0.18, 0.18, 0, 0],
+        12,
+        'oracle-correspondence-transport-plus-frozen-splat-residual-v0',
+      );
+      pairs.push({
+        sourceFrameId: `frame-${index - 1}`,
+        targetFrameId: exact.id,
+        oraclePredicted: {
+          candidates: { ...candidate, authority: 'oracle-correspondence-transport-plus-frozen-splat-residual-v0' },
+          splats: oracleSplat,
+        },
+      });
+    }
+  }
+  const manifest = {
+    schema: 'kaminos-boundary-splat-phase-candidate-corpus-v0',
+    featureOrder,
+    effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
+    requestedRoute: 'http://127.0.0.1:18218/?volume_resolution=160',
+    frames: exactFrames,
+  };
+  const manifestIdentity = await writeJsonIdentity('phase-corpus.json', manifest);
+  const trainingManifest = await writeJsonIdentity('training-corpus.json', { corpus: 'separate-training' });
+  const transportModel = await writeJsonIdentity('transport-model.json', { model: 'transport' });
+  const stateModel = await writeJsonIdentity('state-model.json', { model: 'state' });
+  const predictions = {
+    schema: 'kaminos-boundary-splat-phase-transport-predictions-v0',
+    status: 'completed',
+    manifest: manifestIdentity,
+    modelTrainingManifest: trainingManifest,
+    model: { ...transportModel, schema: 'kaminos-boundary-splat-phase-transport-model-v0' },
+    destinationStateModel: { ...stateModel, schema: 'kaminos-boundary-splat-phase-destination-state-model-v0' },
+    route: { backend: 'mlx', device: 'Device(gpu, 0)', fallbackReason: null },
+    temporal: {
+      authority: 'alternating-exact-anchor-causal-odd-projection-v0',
+      controlledStepDeltaMs: 16.667,
+      exactAnchorParity: 'even',
+      heldoutTargetParity: 'odd',
+      targetFramesAvailableToPredictor: false,
+      producedSequenceRoles: ['exact-even-anchor', 'causal-odd-prediction'],
+      naturalFullRateControl: {
+        authority: 'exact-controlled-step-corpus-all-display-frames-v0',
+        visible: true,
+        frameIds: exactFrames.map(frame => frame.id),
+        frameCount: exactFrames.length,
+        sourceManifest: manifestIdentity,
+        simulatorAdvancedEveryDisplayFrame: true,
+      },
+      holdControlAuthority: 'prior-exact-even-anchor-byte-repeated-on-odd-display-frames-v0',
+      interpolationAuthority: 'noncausal-exact-neighbor-interpolation-v0',
+      oracleScaffoldAuthority: 'exact-target-support-world-position-offline-upper-bound-v0',
+      inferenceCorpusSeenDuringTraining: false,
+    },
+    frames: alternatingFrames,
+  };
+  const predictionIdentity = await writeJsonIdentity('transport-predictions.json', predictions);
+  const oracle = {
+    schema: 'kaminos-boundary-splat-phase-appearance-transport-evaluation-v0',
+    status: 'completed',
+    route: { backend: 'mlx', device: 'Device(gpu, 0)', fallbackReason: null },
+    evaluationManifest: manifestIdentity,
+    temporal: { controlledStepDeltaMs: 16.667, pairCap: null, sampleCap: null },
+    pairs,
+  };
+  const oracleIdentity = await writeJsonIdentity('oracle-evaluation.json', oracle);
+  const outDir = join(root, 'witness');
+  const report = await witness.writeAlternatingAnchorWitness(
+    manifestIdentity.path,
+    predictionIdentity.path,
+    oracleIdentity.path,
+    { outDir, width: 32, height: 32 },
+  );
+  assert.equal(report.status, 'completed');
+  assert.equal(report.playback.frameCount, 241);
+  assert.equal(report.playback.frameCap, null);
+  assert.equal(report.roles.natural.source, 'exact-inference-manifest');
+  assert.equal(report.roles.hold.byteRepeatsPriorExactAnchorOnOddFrames, true);
+  assert.equal(report.roles.causal.targetFramesAvailableToPredictor, false);
+  assert.equal(report.roles.interpolated.noncausal, true);
+  assert.equal((await readFile(join(outDir, 'alternating-anchor-five-role.mp4'))).byteLength > 0, true);
+
+  const badPredictions = structuredClone(predictions);
+  badPredictions.temporal.naturalFullRateControl.frameIds[1] = 'frame-0';
+  const badPredictionIdentity = await writeJsonIdentity('bad-predictions.json', badPredictions);
+  const badOutDir = join(root, 'bad-witness');
+  const stalePrimary = join(badOutDir, 'alternating-anchor-five-role.mp4');
+  await mkdir(badOutDir, { recursive: true });
+  await writeFile(stalePrimary, 'stale');
+  await assert.rejects(
+    witness.writeAlternatingAnchorWitness(
+      manifestIdentity.path,
+      badPredictionIdentity.path,
+      oracleIdentity.path,
+      { outDir: badOutDir, width: 32, height: 32 },
+    ),
+    /natural full-rate frame identity mismatch/,
+  );
+  const failure = JSON.parse(await readFile(join(badOutDir, 'alternating-anchor-witness-report.json'), 'utf8'));
+  assert.equal(failure.status, 'failed');
+  assert.equal(failure.failurePhase, 'input-validation');
+  assert.equal(failure.primaryOutputExists, false);
+  await assert.rejects(readFile(stalePrimary), { code: 'ENOENT' });
+} finally {
+  await rm(root, { recursive: true, force: true });
+}
 
 console.log('boundary splat alternating-anchor witness contracts passed');
