@@ -342,6 +342,27 @@
       return { ...appearanceDecompositionReceipt, requestedAppearanceAssay, effectiveAppearanceAssay };
     }
 
+    function setControls(next) {
+      if (!next || typeof next !== 'object' || Array.isArray(next)) {
+        return { ok: false, reason: 'runtime-controls-must-be-an-object' };
+      }
+      const runtime = prototype();
+      if (!runtime?.setControls || !runtime?.debugState) {
+        return { ok: false, reason: 'exact-basin-runtime-controls-unavailable' };
+      }
+      runtime.setControls(next);
+      const state = runtime.debugState();
+      return {
+        ok: true,
+        authority: 'exact-same-origin-runtime-control-forwarder-v0',
+        requestedControls: { ...next },
+        effectiveControls: { ...state.controls },
+        frameCount: state.frameCount,
+        simStepCount: state.simStepCount,
+        fallbackReason: state.boundarySplatFallbackReason || state.selectiveHeadLiveFallbackReason || null,
+      };
+    }
+
     function passReceiptMatchesComposition(receipt, composition) {
       if (!receipt || receipt.composition !== composition || receipt.fallbackReason) return false;
       if (composition === 'splat-only-v0') return receipt.splatApplied === true && receipt.raymarchApplied === false;
@@ -462,6 +483,15 @@
         encodedFrameCount: state?.selectiveHeadLive?.encodedFrameCount || 0,
         timing: state?.timing || null,
         boundarySplatFallbackReason: splatPassRequested ? state?.boundarySplatFallbackReason || null : null,
+        boundarySplatMode: state?.boundarySplatMode || null,
+        boundarySplatRadius: state?.boundarySplatRadius ?? null,
+        boundarySplatSharpness: state?.boundarySplatSharpness ?? null,
+        boundarySplatRadianceGain: state?.boundarySplatRadianceGain ?? null,
+        boundarySplatOpacityGain: state?.boundarySplatOpacityGain ?? null,
+        boundarySplatCandidateCount: state?.boundarySplatCandidateCount ?? null,
+        boundarySplatInstanceCount: state?.boundarySplatInstanceCount ?? null,
+        boundarySplatOverflowCount: state?.boundarySplatOverflowCount ?? null,
+        effectiveControls: state?.controls ? { ...state.controls } : null,
         error: warmupError || state?.error || null,
       };
     }
@@ -562,7 +592,7 @@
       ].filter(Boolean).join(' | ');
       requestAnimationFrame(loop);
     };
-    window.__kaminosSelectiveHeadLive = { routeIdentity: ROUTE_IDENTITY, debugState, setRole, setComposition, setPresentation, setRaymarchSmokePresentation, setAppearanceAssay, captureFrame, setCapturePaused, stepCaptureFrame };
+    window.__kaminosSelectiveHeadLive = { routeIdentity: ROUTE_IDENTITY, debugState, setRole, setComposition, setPresentation, setRaymarchSmokePresentation, setAppearanceAssay, setControls, captureFrame, setCapturePaused, stepCaptureFrame };
     loop();
     initializeWarmup().catch(error => { warmupError = error?.message || String(error); });
   </script>

@@ -458,6 +458,14 @@ function normalizeBoundarySplatSharpness(value) {
   return clampFinite(value, 1, 12, 3.4);
 }
 
+function normalizeBoundarySplatRadianceGain(value) {
+  return clampFinite(value, 0.05, 2, 1);
+}
+
+function normalizeBoundarySplatOpacityGain(value) {
+  return clampFinite(value, 0.05, 2, 1);
+}
+
 function boundarySplatEffectiveRendererIdentity(mode) {
   const normalized = normalizeBoundarySplatMode(mode);
   if (normalized === 'world_covariance') return BOUNDARY_SPLAT_WORLD_COVARIANCE_RENDERER_IDENTITY;
@@ -5370,6 +5378,7 @@ struct BoundarySplatCamera {
   cameraRight: vec4<f32>,
   cameraUp: vec4<f32>,
   controls: vec4<f32>,
+  appearance: vec4<f32>,
 };
 
 struct BoundarySplatVertexOut {
@@ -5572,8 +5581,8 @@ fn boundarySplatFs(in: BoundarySplatVertexOut) -> @location(0) vec4<f32> {
   let kernelSharpness = clamp(boundarySplatCamera.controls.w, 1.0, 12.0);
   let gaussian = exp(-radius2 * kernelSharpness);
   let energyCompensation = boundarySplatEnergyCompensation(footprintRadius, kernelSharpness);
-  let alpha = in.colorOpacity.a * gaussian * energyCompensation;
-  return vec4<f32>(in.colorOpacity.rgb, alpha);
+  let alpha = in.colorOpacity.a * boundarySplatCamera.appearance.y * gaussian * energyCompensation;
+  return vec4<f32>(in.colorOpacity.rgb * boundarySplatCamera.appearance.x, alpha);
 }
 `;
 
@@ -5812,6 +5821,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatMode: normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode),
     boundarySplatRadius: normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius),
     boundarySplatSharpness: normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness),
+    boundarySplatRadianceGain: normalizeBoundarySplatRadianceGain(controlsSnapshot.boundarySplatRadianceGain),
+    boundarySplatOpacityGain: normalizeBoundarySplatOpacityGain(controlsSnapshot.boundarySplatOpacityGain),
     boundarySplatRendererIdentity: boundarySplatEffectiveRendererIdentity(controlsSnapshot.boundarySplatMode),
     boundarySplatAttributeModelIdentity: boundarySplatEffectiveAttributeModelIdentity(controlsSnapshot.boundarySplatMode),
     boundarySplatAttributeSetId: boundarySplatAttributeSetId(controlsSnapshot.boundarySplatMode),
@@ -7147,7 +7158,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     boundarySplatCameraBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} camera`,
-      size: 112,
+      size: 128,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     boundarySplatReadbackBuffer = device.createBuffer({
@@ -8438,12 +8449,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     if (boundarySplatCameraBuffer) {
       const cameraMatrix = camera.matrixWorld.elements;
-      const splatCamera = new Float32Array(28);
+      const splatCamera = new Float32Array(32);
       splatCamera.set(viewProj.elements, 0);
       const boundarySplatMode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
       splatCamera.set([cameraMatrix[0], cameraMatrix[1], cameraMatrix[2], boundarySplatMode === 'world_covariance' ? 1 : 0], 16);
       splatCamera.set([cameraMatrix[4], cameraMatrix[5], cameraMatrix[6], boundarySplatAreaOpacityConserved(boundarySplatMode) ? 1 : 0], 20);
       splatCamera.set([normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius), boundarySplatLearnedAttributesRequested() ? 1 : 0, state.boundarySplatFeatureCaptureEffective ? 1 : 0, normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness)], 24);
+      splatCamera.set([normalizeBoundarySplatRadianceGain(controlsSnapshot.boundarySplatRadianceGain), normalizeBoundarySplatOpacityGain(controlsSnapshot.boundarySplatOpacityGain), 0, 0], 28);
       device.queue.writeBuffer(boundarySplatCameraBuffer, 0, splatCamera);
     }
     const { renderPhaseTimeMs, renderPhaseFrame } = updateRenderPhaseState(now, state, lookFreeze);
@@ -14204,6 +14216,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
         boundarySplatRadius: state.boundarySplatRadius,
         boundarySplatSharpness: state.boundarySplatSharpness,
+        boundarySplatRadianceGain: state.boundarySplatRadianceGain,
+        boundarySplatOpacityGain: state.boundarySplatOpacityGain,
         boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
         boundarySplatInstanceCount: state.boundarySplatInstanceCount,
         boundarySplatCandidateCount: state.boundarySplatCandidateCount,
@@ -14540,6 +14554,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.boundarySplatMode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
       state.boundarySplatRadius = normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius);
       state.boundarySplatSharpness = normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness);
+      state.boundarySplatRadianceGain = normalizeBoundarySplatRadianceGain(controlsSnapshot.boundarySplatRadianceGain);
+      state.boundarySplatOpacityGain = normalizeBoundarySplatOpacityGain(controlsSnapshot.boundarySplatOpacityGain);
       state.boundarySplatRendererIdentity = boundarySplatEffectiveRendererIdentity(state.boundarySplatMode);
       state.boundarySplatAttributeModelIdentity = boundarySplatEffectiveAttributeModelIdentity(state.boundarySplatMode);
       state.boundarySplatAttributeSetId = boundarySplatAttributeSetId(state.boundarySplatMode);
