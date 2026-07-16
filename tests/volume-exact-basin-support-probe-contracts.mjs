@@ -27,10 +27,15 @@ assert.match(composerSource, /--support-threshold/, 'composer accepts an explici
 assert.match(composerSource, /caller-specified-calibration-assay-v0/, 'threshold overrides carry explicit non-checkpoint authority');
 assert.match(composerSource, /--residual-scale/, 'composer accepts an explicit calibration-assay residual scale');
 assert.match(composerSource, /caller-specified-residual-blend-assay-v0/, 'residual-scale overrides carry explicit assay authority');
+assert.match(composerSource, /--channel-residual-scales/, 'composer accepts explicit per-head residual ablations');
+assert.match(composerSource, /caller-specified-per-channel-residual-ablation-v0/, 'per-head residual ablations carry diagnostic authority');
 assert.match(composerSource, /--channels/, 'composer requires explicit application-head selection when diagnostics and deployed heads differ');
 assert.match(composerSource, /caller-selected-application-heads-v0/, 'selected application heads carry explicit authority');
 assert.match(composerSource, /--checkpoint-transfer-mode/, 'composer requires an explicit mode before applying checkpoints to another frame');
 assert.match(composerSource, /consecutive-phase-aligned-sequence-v0/, 'composer names the narrow lawful temporal transfer mode');
+assert.match(composerSource, /same-high-capture-cross-grid-zero-shot-v0/, 'composer names cross-grid zero-shot authority explicitly');
+assert.match(composerSource, /--materialization-mode/, 'composer exposes the low-to-output materialization contract');
+assert.match(composerSource, /normalized-trilinear-low-to-output-grid-v0/, 'composer names the neutral trilinear materialization');
 assert.match(composerSource, /failurePhase/, 'composer writes durable failure-phase reports');
 
 const fixtureRoot = mkdtempSync(join(tmpdir(), 'kaminos-exact-basin-support-probe-'));
@@ -302,6 +307,19 @@ const blendComposition = JSON.parse(readFileSync(join(blendCompositionDir, 'mani
 assert.equal(blendComposition.residualBlend.scale, 0.5);
 assert.equal(blendComposition.residualBlend.authority, 'caller-specified-residual-blend-assay-v0');
 
+const channelBlendCompositionDir = join(fixtureRoot, 'composition-channel-residual-ablation');
+execFileSync('python3', [
+  composerPath,
+  '--pair-manifest', pairPath,
+  '--support-probe-manifest', join(outDir, 'manifest.json'),
+  '--out-dir', channelBlendCompositionDir,
+  '--batch-cells', '256',
+  '--channel-residual-scales', 'fuel=0,frontTopology=1',
+], { stdio: 'pipe' });
+const channelBlendComposition = JSON.parse(readFileSync(join(channelBlendCompositionDir, 'manifest.json'), 'utf8'));
+assert.deepEqual(channelBlendComposition.residualBlend.channelScales, { fuel: 0, frontTopology: 1 });
+assert.equal(channelBlendComposition.residualBlend.authority, 'caller-specified-per-channel-residual-ablation-v0');
+
 const diagnosticProbePath = join(outDir, 'manifest-with-diagnostic-flame.json');
 const diagnosticProbe = JSON.parse(readFileSync(join(outDir, 'manifest.json'), 'utf8'));
 diagnosticProbe.gatedChannels.push({ ...diagnosticProbe.gatedChannels[0], channel: 'flame', channelIndex: 8 });
@@ -324,12 +342,28 @@ assert.ok(!('flame' in selectedComposition.channelMetrics), 'diagnostic-only fla
 const applicationLowFluid = new Float32Array(lowFluid);
 for (let cell = 0; cell < lowCells; cell += 1) applicationLowFluid[cell * 16 + 3] += 0.125;
 const applicationLowFluidDesc = writeF32('application-low-fluid.f32', applicationLowFluid);
+const applicationHighFluid = new Float32Array(highFluid);
+const applicationHighFront = new Float32Array(highFront);
+applicationHighFluid[3] += 0.25;
+applicationHighFront[0] += 0.125;
+const applicationHighFluidDesc = writeF32('application-high-fluid.f32', applicationHighFluid);
+const applicationHighFrontDesc = writeF32('application-high-front.f32', applicationHighFront);
 const applicationPair = JSON.parse(readFileSync(pairPath, 'utf8'));
 applicationPair.identity = 'support-probe-contract-application-pair';
 applicationPair.low.fluid = {
   ...applicationLowFluidDesc,
   shape: [lowGrid, lowGrid, lowGrid, 16],
   channelOrder: fluidChannels,
+};
+applicationPair.high.fluid = {
+  ...applicationHighFluidDesc,
+  shape: [highGrid, highGrid, highGrid, 16],
+  channelOrder: fluidChannels,
+};
+applicationPair.high.front = {
+  ...applicationHighFrontDesc,
+  shape: [highGrid, highGrid, highGrid, 1],
+  channelOrder: ['frontTopology'],
 };
 applicationPair.source.deterministicReplay = {
   ...applicationPair.source.deterministicReplay,
@@ -359,6 +393,182 @@ assert.equal(transferComposition.checkpointTransfer.sourceCaptureSha256, 'a'.rep
 assert.equal(transferComposition.checkpointTransfer.effectiveRoute, 'native-3d-compute-fluid-raymarch-v0');
 assert.equal(transferComposition.checkpointTransfer.controlsSignature, 'fixture-controls-signature');
 
+const crossLowGrid = 4;
+const crossLowCells = crossLowGrid ** 3;
+const crossLowFluid = new Float32Array(crossLowCells * 16);
+const crossLowFront = new Float32Array(crossLowCells);
+for (let z = 0; z < crossLowGrid; z += 1) {
+  for (let y = 0; y < crossLowGrid; y += 1) {
+    for (let x = 0; x < crossLowGrid; x += 1) {
+      const cell = x + y * crossLowGrid + z * crossLowGrid * crossLowGrid;
+      for (let channel = 0; channel < 16; channel += 1) {
+        crossLowFluid[cell * 16 + channel] = x + y * 10 + z * 100 + channel * 1000;
+      }
+      crossLowFront[cell] = x + y * 10 + z * 100 + 16000;
+    }
+  }
+}
+const crossLowFluidDesc = writeF32('cross-low-fluid.f32', crossLowFluid);
+const crossLowFrontDesc = writeF32('cross-low-front.f32', crossLowFront);
+const crossPair = structuredClone(JSON.parse(readFileSync(pairPath, 'utf8')));
+crossPair.identity = 'support-probe-contract-cross-grid-application-pair';
+crossPair.lowGrid = crossLowGrid;
+crossPair.low = {
+  fluid: {
+    ...crossLowFluidDesc,
+    shape: [crossLowGrid, crossLowGrid, crossLowGrid, 16],
+    channelOrder: fluidChannels,
+  },
+  front: {
+    ...crossLowFrontDesc,
+    shape: [crossLowGrid, crossLowGrid, crossLowGrid, 1],
+    channelOrder: ['frontTopology'],
+  },
+};
+const crossPairPath = join(fixtureRoot, 'cross-grid-application-pair.json');
+writeFileSync(crossPairPath, `${JSON.stringify(crossPair, null, 2)}\n`);
+
+const implicitCrossDir = join(fixtureRoot, 'composition-cross-grid-implicit');
+const implicitCross = spawnSync('python3', [
+  composerPath,
+  '--pair-manifest', crossPairPath,
+  '--support-probe-manifest', join(outDir, 'manifest.json'),
+  '--out-dir', implicitCrossDir,
+  '--batch-cells', '256',
+], { encoding: 'utf8' });
+assert.notEqual(implicitCross.status, 0, 'cross-grid checkpoint application fails without explicit authority');
+const implicitCrossReport = JSON.parse(readFileSync(join(implicitCrossDir, 'manifest.json'), 'utf8'));
+assert.equal(implicitCrossReport.failurePhase, 'checkpoint-transfer-validation');
+
+const crossCompositionDir = join(fixtureRoot, 'composition-cross-grid-trilinear-zero-shot');
+execFileSync('python3', [
+  composerPath,
+  '--pair-manifest', crossPairPath,
+  '--support-probe-manifest', join(outDir, 'manifest.json'),
+  '--out-dir', crossCompositionDir,
+  '--batch-cells', '256',
+  '--checkpoint-transfer-mode', 'same-high-capture-cross-grid-zero-shot-v0',
+  '--materialization-mode', 'normalized-trilinear-low-to-output-grid-v0',
+  '--residual-scale', '0',
+], { stdio: 'pipe' });
+const crossComposition = JSON.parse(readFileSync(join(crossCompositionDir, 'manifest.json'), 'utf8'));
+assert.equal(crossComposition.checkpointTransfer.identity, 'same-high-capture-cross-grid-zero-shot-v0');
+assert.equal(
+  crossComposition.checkpointTransfer.authority,
+  'frozen-checkpoint-same-high-capture-cross-grid-application-v0',
+  'cross-grid authority remains truthful for any recorded training grid',
+);
+assert.equal(crossComposition.checkpointTransfer.trainingGrid.low, lowGrid);
+assert.equal(crossComposition.checkpointTransfer.applicationGrid.low, crossLowGrid);
+assert.equal(crossComposition.checkpointTransfer.trainingGrid.high, highGrid);
+assert.equal(crossComposition.checkpointTransfer.applicationGrid.high, highGrid);
+assert.equal(crossComposition.checkpointTransfer.sourceCaptureSha256, 'a'.repeat(64));
+assert.equal(crossComposition.materialization.identity, 'normalized-trilinear-low-to-output-grid-v0');
+assert.equal(crossComposition.materialization.sourceGrid, crossLowGrid);
+assert.equal(crossComposition.materialization.outputGrid, highGrid);
+assert.equal(crossComposition.materialization.coordinateConvention, 'cell-center-clamped-v0');
+assert.equal(crossComposition.materialization.legacyArtifactControl, false);
+
+function trilinearCrossValue(tx, ty, tz, channel) {
+  const axis = (target) => {
+    const q = Math.min(crossLowGrid - 1, Math.max(0, ((target + 0.5) * crossLowGrid / highGrid) - 0.5));
+    const lo = Math.floor(q);
+    return [lo, Math.min(crossLowGrid - 1, lo + 1), q - lo];
+  };
+  const [x0, x1, fx] = axis(tx);
+  const [y0, y1, fy] = axis(ty);
+  const [z0, z1, fz] = axis(tz);
+  const sample = (x, y, z) => x + y * 10 + z * 100 + channel * 1000;
+  const x00 = sample(x0, y0, z0) * (1 - fx) + sample(x1, y0, z0) * fx;
+  const x10 = sample(x0, y1, z0) * (1 - fx) + sample(x1, y1, z0) * fx;
+  const x01 = sample(x0, y0, z1) * (1 - fx) + sample(x1, y0, z1) * fx;
+  const x11 = sample(x0, y1, z1) * (1 - fx) + sample(x1, y1, z1) * fx;
+  const y0v = x00 * (1 - fy) + x10 * fy;
+  const y1v = x01 * (1 - fy) + x11 * fy;
+  return y0v * (1 - fz) + y1v * fz;
+}
+
+const crossFluid = readF32(crossComposition.receiver.fluid.path);
+for (const [x, y, z] of [[0, 0, 0], [2, 5, 8], [11, 11, 11]]) {
+  const cell = highIndex(x, y, z);
+  const expected = trilinearCrossValue(x, y, z, 3);
+  assert.ok(
+    Math.abs(crossFluid[cell * 16 + 3] - expected) < 1e-3,
+    'zero-residual cross-grid composition materializes untouched channels with cell-centered trilinear sampling',
+  );
+}
+
+const learnedCrossCompositionDir = join(fixtureRoot, 'composition-cross-grid-trilinear-learned');
+execFileSync('python3', [
+  composerPath,
+  '--pair-manifest', crossPairPath,
+  '--support-probe-manifest', join(outDir, 'manifest.json'),
+  '--out-dir', learnedCrossCompositionDir,
+  '--batch-cells', '256',
+  '--checkpoint-transfer-mode', 'same-high-capture-cross-grid-zero-shot-v0',
+  '--materialization-mode', 'normalized-trilinear-low-to-output-grid-v0',
+  '--support-threshold', '0.000001',
+], { stdio: 'pipe' });
+const learnedCrossComposition = JSON.parse(readFileSync(join(learnedCrossCompositionDir, 'manifest.json'), 'utf8'));
+const learnedCrossFluid = readF32(learnedCrossComposition.receiver.fluid.path);
+const learnedCrossFront = readF32(learnedCrossComposition.receiver.front.path);
+const learnedCrossProbability = readF32(learnedCrossComposition.support.probability.path);
+assert.ok(learnedCrossProbability.every(Number.isFinite), 'cross-grid support probabilities are finite');
+assert.ok(
+  learnedCrossFluid.some((value, index) => index % 16 === 6 && value !== crossFluid[index]),
+  'cross-grid application executes a selected sparse residual head',
+);
+const crossFront = readF32(crossComposition.receiver.front.path);
+assert.ok(
+  learnedCrossFront.some((value, index) => value !== crossFront[index]),
+  'cross-grid application executes the dense front residual head',
+);
+
+const ablatedCrossCompositionDir = join(fixtureRoot, 'composition-cross-grid-trilinear-front-only');
+execFileSync('python3', [
+  composerPath,
+  '--pair-manifest', crossPairPath,
+  '--support-probe-manifest', join(outDir, 'manifest.json'),
+  '--out-dir', ablatedCrossCompositionDir,
+  '--batch-cells', '256',
+  '--checkpoint-transfer-mode', 'same-high-capture-cross-grid-zero-shot-v0',
+  '--materialization-mode', 'normalized-trilinear-low-to-output-grid-v0',
+  '--support-threshold', '0.000001',
+  '--channel-residual-scales', 'fuel=0,frontTopology=1',
+], { stdio: 'pipe' });
+const ablatedCrossComposition = JSON.parse(readFileSync(join(ablatedCrossCompositionDir, 'manifest.json'), 'utf8'));
+const ablatedCrossFluid = readF32(ablatedCrossComposition.receiver.fluid.path);
+const ablatedCrossFront = readF32(ablatedCrossComposition.receiver.front.path);
+for (let cell = 0; cell < highCells; cell += 1) {
+  assert.equal(
+    ablatedCrossFluid[cell * 16 + 6],
+    crossFluid[cell * 16 + 6],
+    'zero sparse-head scale preserves the trilinear cross-grid baseline',
+  );
+  assert.equal(
+    ablatedCrossFront[cell],
+    learnedCrossFront[cell],
+    'unit dense-head scale preserves the learned cross-grid front result',
+  );
+}
+
+const badCrossPair = structuredClone(crossPair);
+badCrossPair.source.exactBasinSourceCaptureSha256 = 'c'.repeat(64);
+const badCrossPairPath = join(fixtureRoot, 'cross-grid-application-pair-wrong-source.json');
+writeFileSync(badCrossPairPath, `${JSON.stringify(badCrossPair, null, 2)}\n`);
+const badCrossDir = join(fixtureRoot, 'composition-cross-grid-wrong-source');
+const badCross = spawnSync('python3', [
+  composerPath,
+  '--pair-manifest', badCrossPairPath,
+  '--support-probe-manifest', join(outDir, 'manifest.json'),
+  '--out-dir', badCrossDir,
+  '--checkpoint-transfer-mode', 'same-high-capture-cross-grid-zero-shot-v0',
+  '--materialization-mode', 'normalized-trilinear-low-to-output-grid-v0',
+], { encoding: 'utf8' });
+assert.notEqual(badCross.status, 0, 'cross-grid transfer rejects a different exact source capture');
+const badCrossReport = JSON.parse(readFileSync(join(badCrossDir, 'manifest.json'), 'utf8'));
+assert.equal(badCrossReport.failurePhase, 'checkpoint-transfer-validation');
+
 const badTransferPair = structuredClone(applicationPair);
 badTransferPair.source.exactBasinSourceCaptureSha256 = 'b'.repeat(64);
 const badTransferPairPath = join(fixtureRoot, 'application-pair-wrong-source.json');
@@ -386,6 +596,8 @@ const composedFluid = readF32(composition.receiver.fluid.path);
 const composedFront = readF32(composition.receiver.front.path);
 const blendFluid = readF32(blendComposition.receiver.fluid.path);
 const blendFront = readF32(blendComposition.receiver.front.path);
+const channelBlendFluid = readF32(channelBlendComposition.receiver.fluid.path);
+const channelBlendFront = readF32(channelBlendComposition.receiver.front.path);
 const transferFluid = readF32(transferComposition.receiver.fluid.path);
 let selectedFuelChanged = false;
 let denseFrontChanged = false;
@@ -416,6 +628,16 @@ for (let z = 0; z < highGrid; z += 1) {
           lowFront[lowCell] + 0.5 * (composedFront[highCell] - lowFront[lowCell])
         )) < 1e-6,
         'residual blend scales dense topology displacement from the low baseline',
+      );
+      assert.equal(
+        channelBlendFluid[highCell * 16 + 6],
+        lowFluid[lowCell * 16 + 6],
+        'zero per-channel fuel scale preserves the materialized baseline exactly',
+      );
+      assert.equal(
+        channelBlendFront[highCell],
+        composedFront[highCell],
+        'unit per-channel front scale preserves the full learned topology head',
       );
       if (composedFluid[highCell * 16 + 6] !== lowFluid[lowCell * 16 + 6]) selectedFuelChanged = true;
       if (composedFront[highCell] !== lowFront[lowCell]) denseFrontChanged = true;

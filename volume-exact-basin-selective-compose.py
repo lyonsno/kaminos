@@ -18,6 +18,9 @@ SCHEMA = "kaminos.volume.exact-basin-selective-composition.v0"
 IDENTITY = "dense-topology-plus-support-aware-sparse-carriers-v0"
 AUTHORITY = "learned-selective-head-composition-not-filtered-high-truth-v0"
 CHECKPOINT_TRANSFER_MODE = "consecutive-phase-aligned-sequence-v0"
+CROSS_GRID_TRANSFER_MODE = "same-high-capture-cross-grid-zero-shot-v0"
+NEAREST_MATERIALIZATION = "legacy-nearest-replicated-low-to-output-grid-v0"
+TRILINEAR_MATERIALIZATION = "normalized-trilinear-low-to-output-grid-v0"
 DENSE_POLICY = "dense-ungated-residual-v0"
 SPARSE_POLICY = "sparse-hard-support-gated-residual-v0"
 FLUID_CHANNELS = [
@@ -50,8 +53,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-cells", type=int, default=32768)
     parser.add_argument("--support-threshold", type=float)
     parser.add_argument("--residual-scale", type=float, default=1.0)
+    parser.add_argument("--channel-residual-scales", help="comma-separated channel=scale diagnostic ablation; must name every applied head")
     parser.add_argument("--channels", help="comma-separated deployed application heads; diagnostic-only trained heads remain excluded")
     parser.add_argument("--checkpoint-transfer-mode")
+    parser.add_argument(
+        "--materialization-mode",
+        choices=[NEAREST_MATERIALIZATION, TRILINEAR_MATERIALIZATION],
+        default=NEAREST_MATERIALIZATION,
+    )
     parser.add_argument("--sequence-start-step", type=int)
     parser.add_argument("--sequence-frame-index", type=int)
     return parser.parse_args()
@@ -185,6 +194,68 @@ def finish_metrics(accumulator: dict[str, float]) -> dict[str, Any]:
     }
 
 
+def materialize_low_values(
+    probe_module: Any,
+    low_fluid: np.ndarray,
+    low_front: np.ndarray,
+    indexes: np.ndarray,
+    low_grid: int,
+    high_grid: int,
+    mode: str,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    if mode == NEAREST_MATERIALIZATION:
+        return probe_module.low_values_for_high_cells(
+            low_fluid, low_front, indexes, low_grid, high_grid,
+        )
+    if mode != TRILINEAR_MATERIALIZATION:
+        raise CompositionFailure("materialization", f"unknown materialization mode: {mode}")
+
+    x = indexes % high_grid
+    y = (indexes // high_grid) % high_grid
+    z = indexes // (high_grid * high_grid)
+
+    def axis_coordinates(coordinates: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        q = (coordinates.astype(np.float64) + 0.5) * low_grid / high_grid - 0.5
+        q = np.clip(q, 0.0, float(low_grid - 1))
+        low = np.floor(q).astype(np.int64)
+        high = np.minimum(low_grid - 1, low + 1)
+        fraction = (q - low).astype(np.float32)
+        return low, high, fraction
+
+    x0, x1, fx = axis_coordinates(x)
+    y0, y1, fy = axis_coordinates(y)
+    z0, z1, fz = axis_coordinates(z)
+
+    def flat_index(ix: np.ndarray, iy: np.ndarray, iz: np.ndarray) -> np.ndarray:
+        return ix + iy * low_grid + iz * low_grid * low_grid
+
+    corners = [
+        flat_index(x0, y0, z0), flat_index(x1, y0, z0),
+        flat_index(x0, y1, z0), flat_index(x1, y1, z0),
+        flat_index(x0, y0, z1), flat_index(x1, y0, z1),
+        flat_index(x0, y1, z1), flat_index(x1, y1, z1),
+    ]
+
+    def interpolate(source: np.ndarray) -> np.ndarray:
+        values = [np.asarray(source[corner], dtype=np.float32) for corner in corners]
+        expand = (slice(None),) + (None,) * (values[0].ndim - 1)
+        fxv = fx[expand]
+        fyv = fy[expand]
+        fzv = fz[expand]
+        x00 = values[0] * (1.0 - fxv) + values[1] * fxv
+        x10 = values[2] * (1.0 - fxv) + values[3] * fxv
+        x01 = values[4] * (1.0 - fxv) + values[5] * fxv
+        x11 = values[6] * (1.0 - fxv) + values[7] * fxv
+        y0v = x00 * (1.0 - fyv) + x10 * fyv
+        y1v = x01 * (1.0 - fyv) + x11 * fyv
+        return (y0v * (1.0 - fzv) + y1v * fzv).astype(np.float32, copy=False)
+
+    fluid_values = interpolate(low_fluid)
+    front_values = interpolate(low_front)
+    low_values = np.concatenate([fluid_values, front_values[:, None]], axis=1)
+    return low_values.astype(np.float32, copy=False), x, y, z
+
+
 def fail_manifest(path: Path, phase: str, error: Exception, evidence: dict[str, Any] | None = None) -> None:
     if isinstance(error, CompositionFailure):
         phase = error.phase
@@ -226,11 +297,11 @@ def main() -> int:
         checkpoint_transfer = None
         if pair_sha != expected_pair_sha:
             phase = "checkpoint-transfer-validation"
-            if args.checkpoint_transfer_mode != CHECKPOINT_TRANSFER_MODE:
+            if args.checkpoint_transfer_mode not in {CHECKPOINT_TRANSFER_MODE, CROSS_GRID_TRANSFER_MODE}:
                 raise CompositionFailure(phase, "support probe was trained against a different pair manifest", {
                     "expectedSha256": expected_pair_sha,
                     "actualSha256": pair_sha,
-                    "requiredTransferMode": CHECKPOINT_TRANSFER_MODE,
+                    "requiredTransferModes": [CHECKPOINT_TRANSFER_MODE, CROSS_GRID_TRANSFER_MODE],
                 })
             if not training_pair_path.exists() or sha256_file(training_pair_path) != expected_pair_sha:
                 raise CompositionFailure(phase, "training pair manifest is missing or disagrees with checkpoint authority", {
@@ -242,8 +313,6 @@ def main() -> int:
                 raise CompositionFailure(phase, "checkpoint training pair is not a captured full-grid pair")
             frame_index = args.sequence_frame_index
             sequence_start_step = args.sequence_start_step
-            if frame_index is None or frame_index < 0 or sequence_start_step is None or sequence_start_step < 0:
-                raise CompositionFailure(phase, "checkpoint transfer requires nonnegative sequence start step and frame index")
             training_source = training_pair.get("source", {})
             application_source = pair.get("source", {})
             training_replay = training_source.get("deterministicReplay", {})
@@ -252,7 +321,6 @@ def main() -> int:
             application_step = int(application_replay.get("completedSteps", -1))
             required_equal = {
                 "authority": (training_pair.get("authority"), pair.get("authority")),
-                "lowGrid": (training_pair.get("lowGrid"), pair.get("lowGrid")),
                 "highGrid": (training_pair.get("highGrid"), pair.get("highGrid")),
                 "sourceCaptureSha256": (
                     training_source.get("exactBasinSourceCaptureSha256"),
@@ -262,6 +330,19 @@ def main() -> int:
                 "effectiveRoute": (training_replay.get("effectiveRoute"), application_replay.get("effectiveRoute")),
                 "controlsSignature": (training_replay.get("controlsSignature"), application_replay.get("controlsSignature")),
             }
+            if args.checkpoint_transfer_mode == CHECKPOINT_TRANSFER_MODE:
+                required_equal["lowGrid"] = (training_pair.get("lowGrid"), pair.get("lowGrid"))
+            else:
+                required_equal.update({
+                    "highFluidSha256": (
+                        training_pair.get("high", {}).get("fluid", {}).get("sha256"),
+                        pair.get("high", {}).get("fluid", {}).get("sha256"),
+                    ),
+                    "highFrontSha256": (
+                        training_pair.get("high", {}).get("front", {}).get("sha256"),
+                        pair.get("high", {}).get("front", {}).get("sha256"),
+                    ),
+                })
             mismatches = {
                 key: {"training": values[0], "application": values[1]}
                 for key, values in required_equal.items()
@@ -269,32 +350,64 @@ def main() -> int:
             }
             if mismatches:
                 raise CompositionFailure(phase, "checkpoint transfer source identity mismatch", {"mismatches": mismatches})
-            if sequence_start_step != training_step + 1:
-                raise CompositionFailure(phase, "sequence must begin on the step immediately after the checkpoint training frame", {
-                    "trainingStep": training_step,
-                    "sequenceStartStep": sequence_start_step,
-                })
-            if application_step != sequence_start_step + frame_index:
-                raise CompositionFailure(phase, "application pair does not match its claimed consecutive sequence frame", {
-                    "applicationStep": application_step,
+            if args.checkpoint_transfer_mode == CHECKPOINT_TRANSFER_MODE:
+                if frame_index is None or frame_index < 0 or sequence_start_step is None or sequence_start_step < 0:
+                    raise CompositionFailure(phase, "checkpoint transfer requires nonnegative sequence start step and frame index")
+                if sequence_start_step != training_step + 1:
+                    raise CompositionFailure(phase, "sequence must begin on the step immediately after the checkpoint training frame", {
+                        "trainingStep": training_step,
+                        "sequenceStartStep": sequence_start_step,
+                    })
+                if application_step != sequence_start_step + frame_index:
+                    raise CompositionFailure(phase, "application pair does not match its claimed consecutive sequence frame", {
+                        "applicationStep": application_step,
+                        "sequenceStartStep": sequence_start_step,
+                        "frameIndex": frame_index,
+                    })
+                if int(training_replay.get("simStepCount", -1)) != training_step or int(application_replay.get("simStepCount", -1)) != application_step:
+                    raise CompositionFailure(phase, "replay completedSteps and simStepCount disagree")
+                checkpoint_transfer = {
+                    "identity": CHECKPOINT_TRANSFER_MODE,
+                    "authority": "frozen-checkpoint-cross-frame-application-not-retraining-v0",
                     "sequenceStartStep": sequence_start_step,
                     "frameIndex": frame_index,
-                })
-            if int(training_replay.get("simStepCount", -1)) != training_step or int(application_replay.get("simStepCount", -1)) != application_step:
-                raise CompositionFailure(phase, "replay completedSteps and simStepCount disagree")
-            checkpoint_transfer = {
-                "identity": CHECKPOINT_TRANSFER_MODE,
-                "authority": "frozen-checkpoint-cross-frame-application-not-retraining-v0",
-                "sequenceStartStep": sequence_start_step,
-                "frameIndex": frame_index,
-                "trainingStep": training_step,
-                "applicationStep": application_step,
+                    "trainingStep": training_step,
+                    "applicationStep": application_step,
+                }
+            else:
+                training_low_grid = int(training_pair.get("lowGrid") or 0)
+                application_low_grid = int(pair.get("lowGrid") or 0)
+                high_grid = int(pair.get("highGrid") or 0)
+                if training_low_grid < 1 or application_low_grid < 1 or training_low_grid == application_low_grid:
+                    raise CompositionFailure(phase, "cross-grid transfer requires distinct positive training and application low grids", {
+                        "trainingLowGrid": training_low_grid,
+                        "applicationLowGrid": application_low_grid,
+                    })
+                if training_step < 0 or application_step != training_step:
+                    raise CompositionFailure(phase, "cross-grid zero-shot transfer requires the same replay step", {
+                        "trainingStep": training_step,
+                        "applicationStep": application_step,
+                    })
+                if int(training_replay.get("simStepCount", -1)) != training_step or int(application_replay.get("simStepCount", -1)) != application_step:
+                    raise CompositionFailure(phase, "replay completedSteps and simStepCount disagree")
+                if args.sequence_start_step is not None or args.sequence_frame_index is not None:
+                    raise CompositionFailure(phase, "cross-grid zero-shot transfer does not accept temporal sequence arguments")
+                checkpoint_transfer = {
+                    "identity": CROSS_GRID_TRANSFER_MODE,
+                    "authority": "frozen-checkpoint-same-high-capture-cross-grid-application-v0",
+                    "trainingGrid": {"low": training_low_grid, "high": high_grid},
+                    "applicationGrid": {"low": application_low_grid, "high": high_grid},
+                    "replayStep": application_step,
+                    "outOfDistributionAxis": "low-grid-resolution-only",
+                    "retrainingPerformed": False,
+                }
+            checkpoint_transfer.update({
                 "sourceCaptureSha256": application_source.get("exactBasinSourceCaptureSha256"),
                 "effectiveRoute": application_replay.get("effectiveRoute"),
                 "controlsSignature": application_replay.get("controlsSignature"),
                 "trainingPair": {"path": str(training_pair_path), "sha256": expected_pair_sha},
                 "applicationPair": {"path": str(pair_path), "sha256": pair_sha},
-            }
+            })
         elif args.checkpoint_transfer_mode is not None:
             phase = "checkpoint-transfer-validation"
             raise CompositionFailure(phase, "checkpoint transfer mode is invalid when application and training pair are identical")
@@ -303,7 +416,10 @@ def main() -> int:
         high_grid = int(pair.get("highGrid") or 0)
         if low_grid < 1 or high_grid <= low_grid:
             raise CompositionFailure(phase, "invalid low/high grid relationship", {"lowGrid": low_grid, "highGrid": high_grid})
-        if int(probe_report.get("inputs", {}).get("lowGrid") or 0) != low_grid or int(probe_report.get("inputs", {}).get("highGrid") or 0) != high_grid:
+        training_low_grid = int(probe_report.get("inputs", {}).get("lowGrid") or 0)
+        training_high_grid = int(probe_report.get("inputs", {}).get("highGrid") or 0)
+        cross_grid_application = bool(checkpoint_transfer and checkpoint_transfer.get("identity") == CROSS_GRID_TRANSFER_MODE)
+        if training_high_grid != high_grid or (training_low_grid != low_grid and not cross_grid_application):
             raise CompositionFailure(phase, "support probe grid relationship disagrees with pair")
 
         low_cells = low_grid ** 3
@@ -365,6 +481,29 @@ def main() -> int:
                 if residual_scale == 1.0
                 else "caller-specified-residual-blend-assay-v0"
             )
+            channel_scales = {channel: residual_scale for channel in requested_channels}
+            if args.channel_residual_scales is not None:
+                if residual_scale != 1.0:
+                    raise CompositionFailure(phase, "--channel-residual-scales cannot be combined with a non-unit --residual-scale")
+                parsed_scales: dict[str, float] = {}
+                for item in args.channel_residual_scales.split(","):
+                    name, separator, raw_scale = item.strip().partition("=")
+                    if not separator or not name or name in parsed_scales:
+                        raise CompositionFailure(phase, f"invalid or duplicate per-channel residual scale: {item!r}")
+                    try:
+                        scale = float(raw_scale)
+                    except ValueError as error:
+                        raise CompositionFailure(phase, f"invalid per-channel residual scale: {item!r}") from error
+                    if not np.isfinite(scale):
+                        raise CompositionFailure(phase, f"per-channel residual scale must be finite: {item!r}")
+                    parsed_scales[name] = scale
+                if set(parsed_scales) != set(requested_channels):
+                    raise CompositionFailure(phase, "per-channel residual scales must name every applied head exactly", {
+                        "appliedHeads": requested_channels,
+                        "scaleHeads": list(parsed_scales),
+                    })
+                channel_scales = {channel: parsed_scales[channel] for channel in requested_channels}
+                residual_scale_authority = "caller-specified-per-channel-residual-ablation-v0"
         with np.load(heads_path, allow_pickle=False) as heads_archive:
             channel_states = {channel: model_state(heads_archive, channel) for channel in requested_channels}
         if classifier["w1"].shape[0] != feature_mean.size or feature_mean.shape != feature_std.shape:
@@ -392,7 +531,15 @@ def main() -> int:
         for start in range(0, high_cells, batch_cells):
             end = min(high_cells, start + batch_cells)
             indexes = np.arange(start, end, dtype=np.int64)
-            low_values, x, y, z = probe_module.low_values_for_high_cells(low_fluid, low_front, indexes, low_grid, high_grid)
+            low_values, x, y, z = materialize_low_values(
+                probe_module,
+                low_fluid,
+                low_front,
+                indexes,
+                low_grid,
+                high_grid,
+                args.materialization_mode,
+            )
             features = probe_module.build_features(low_values, x, y, z, high_grid)
             features = ((features - feature_mean) / feature_std).astype(np.float32, copy=False)
             probability = probe_module.predict_mlp(features, classifier, binary=True)
@@ -407,9 +554,10 @@ def main() -> int:
                 channel_index = 16 if channel == "frontTopology" else FLUID_CHANNELS.index(channel)
                 low_channel = low_values[:, channel_index]
                 residual = probe_module.predict_mlp(features, channel_states[channel], binary=False)
-                composed = low_channel + residual * np.float32(residual_scale)
+                channel_scale = np.float32(channel_scales[channel])
+                composed = low_channel + residual * channel_scale
                 if policy == SPARSE_POLICY:
-                    composed = low_channel + residual * hard_mask.astype(np.float32) * np.float32(residual_scale)
+                    composed = low_channel + residual * hard_mask.astype(np.float32) * channel_scale
                 truth = high_front[indexes] if channel == "frontTopology" else high_fluid[indexes, channel_index]
                 if channel == "frontTopology":
                     front_out[start:end] = composed
@@ -448,6 +596,18 @@ def main() -> int:
                 "applicationInput": "phase-aligned low field only",
                 "highTruthUse": "offline metrics only; not read by checkpoint application features",
             },
+            "materialization": {
+                "identity": args.materialization_mode,
+                "sourceGrid": low_grid,
+                "outputGrid": high_grid,
+                "coordinateConvention": "cell-center-clamped-v0",
+                "legacyArtifactControl": args.materialization_mode == NEAREST_MATERIALIZATION,
+                "authority": (
+                    "neutral-linear-field-reconstruction-control-v0"
+                    if args.materialization_mode == TRILINEAR_MATERIALIZATION
+                    else "legacy-piecewise-constant-receiver-artifact-control-v0"
+                ),
+            },
             "applicationHeads": {
                 "identity": "explicit-deployed-head-selection-v0",
                 "channels": requested_channels,
@@ -469,8 +629,13 @@ def main() -> int:
             },
             "channelPolicies": channel_policies,
             "residualBlend": {
-                "identity": "low-plus-scaled-learned-residual-v0",
+                "identity": (
+                    "low-plus-per-channel-scaled-learned-residual-v0"
+                    if args.channel_residual_scales is not None
+                    else "low-plus-scaled-learned-residual-v0"
+                ),
                 "scale": residual_scale,
+                "channelScales": channel_scales,
                 "authority": residual_scale_authority,
                 "appliesTo": requested_channels,
             },
@@ -489,7 +654,8 @@ def main() -> int:
             },
             "limitations": [
                 "One exact basin and a same-high-history phase-aligned teacher pair.",
-                "No native-low transfer, replay generalization, temporal stability, or renderer improvement is claimed.",
+                "Cross-grid mode is a zero-shot checkpoint assay, not retraining or native-low generalization evidence.",
+                "No replay generalization, temporal stability, or renderer improvement is claimed.",
                 "This manifest is learned composition authority and must not impersonate filtered-high initialization truth.",
             ],
         }
