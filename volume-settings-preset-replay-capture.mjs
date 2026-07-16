@@ -45,21 +45,23 @@ try {
     artifactFileSha256Authority: VOLUME_SETTINGS_PRESET_TRANSPORT_AUTHORITY,
   };
   phase = 'preset-validation';
-  const semanticIdentity = await validateVolumeSettingsPresetSemanticIdentity(artifact, expectedPresetId);
+  if (!provenancePath) throw new Error('detached provenance is required for settings preset replay capture');
+  const provenanceBytes = readFileSync(provenancePath);
+  const provenance = JSON.parse(provenanceBytes.toString('utf8'));
+  const semanticIdentity = await validateVolumeSettingsPresetSemanticIdentity(
+    artifact,
+    expectedPresetId,
+    provenance.routeAuthority,
+  );
   const { domControlCount, routeControlCount: requestedRouteControlCount } = semanticIdentity;
   const sourceRoute = new URL(semanticIdentity.sourceRoute);
-  let sourceProvenance = null;
-  if (provenancePath) {
-    const provenanceBytes = readFileSync(provenancePath);
-    const provenance = JSON.parse(provenanceBytes.toString('utf8'));
-    sourceProvenance = {
-      ...validateVolumeSettingsPresetProvenance(provenance, semanticIdentity, expectedSourceCommit),
-      path: provenancePath,
-      artifactFileSha256: sha256(provenanceBytes),
-      artifactFileSha256Authority: VOLUME_SETTINGS_PRESET_TRANSPORT_AUTHORITY,
-    };
-  }
-  const sourceCommit = sourceProvenance?.sourceCommit || artifact?.source?.commit || null;
+  const sourceProvenance = {
+    ...validateVolumeSettingsPresetProvenance(provenance, semanticIdentity, expectedSourceCommit),
+    path: provenancePath,
+    artifactFileSha256: sha256(provenanceBytes),
+    artifactFileSha256Authority: VOLUME_SETTINGS_PRESET_TRANSPORT_AUTHORITY,
+  };
+  const sourceCommit = sourceProvenance.sourceCommit;
   if (expectedSourceCommit && sourceCommit !== expectedSourceCommit) {
     throw new Error('settings preset source commit mismatch');
   }

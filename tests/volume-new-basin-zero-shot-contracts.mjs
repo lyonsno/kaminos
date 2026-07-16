@@ -43,6 +43,11 @@ assert.match(route, /validateVolumeSettingsPresetSemanticIdentity/, 'assay recom
 assert.match(route, /LATEST_HAPPY_BOWL_PROVENANCE_URL[\s\S]*sourceProvenance[\s\S]*sourceCommit/, 'assay consumes detached source custody');
 assert.match(route, /artifactFileSha256[\s\S]*transport-receipt-only-v0/, 'assay records loaded bytes without promoting them to semantic authority');
 assert.doesNotMatch(route, /LATEST_HAPPY_BOWL_PRESET_FILE_SHA256/, 'assay must not pin relocatable envelope bytes');
+assert.match(
+  route,
+  /lastTrustworthyEvidence\s*=\s*\{[\s\S]*artifactFileSha256[\s\S]*provenanceArtifactFileSha256[\s\S]*\}[\s\S]*JSON\.parse\(text\)[\s\S]*lastTrustworthyEvidence\s*=\s*\{[\s\S]*declaredPresetId[\s\S]*declaredContentHash[\s\S]*\}[\s\S]*validateVolumeSettingsPresetSemanticIdentity[\s\S]*validateVolumeSettingsPresetProvenance/,
+  'browser preserves transport evidence before parse and declared identity before semantic or provenance validation',
+);
 assert.match(route, /exactPresetRouteApplied[\s\S]*controlOverrides/, 'assay distinguishes exact preset application from an explicit source-grid-only override');
 assert.match(route, /requestedDomControlCount[\s\S]*requestedRouteControlCount/, 'assay does not conflate DOM controls with executable route parameters');
 assert.match(route, /raymarch-only-v0/, 'assay requests renderer-matched raymarch-only composition');

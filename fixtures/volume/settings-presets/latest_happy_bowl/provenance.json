@@ -4,6 +4,16 @@
   "contentHash": "sha256:48617494d68e4f24bba358676733f2aaa5f03622b1747c45056de56884fe78d8",
   "sourceCommit": "027bcaca138da6e545065b90c5607b5a4a1b2965",
   "historicalArtifactFileSha256": "bf13e68b6904cfc5677b13af14afe4426f15f9649bfda22105eed8611c5d0967",
+  "routeAuthority": {
+    "identity": "kaminos-volume-settings-preset-route-authority-v1",
+    "activationParam": {
+      "key": "kaminos_volume_smoke",
+      "value": "1"
+    },
+    "extraParams": {
+      "volume_quality_reason": "operator-settings-only-capture"
+    }
+  },
   "authority": "detached-capture-provenance-v1",
   "claimBoundary": "Source commit and historical transport receipt only; semantic preset authority is the recomputed presetId."
 }

@@ -139,6 +139,62 @@ assert.equal(mutatedReport.status, 'failed');
 assert.equal(mutatedReport.failurePhase, 'preset-validation');
 assert.match(mutatedReport.error, /semantic content hash mismatch/);
 
+function assertRouteMutationRejected(name, mutateRoute) {
+  const attackedPresetPath = join(fixture, `${name}-preset.json`);
+  const attackedCapturePath = join(fixture, `${name}-capture.json`);
+  const attackedReportPath = join(fixture, `${name}-report.json`);
+  const attackedPreset = JSON.parse(readFileSync(preset, 'utf8'));
+  const attackedRoute = new URL(attackedPreset.preset.route);
+  mutateRoute(attackedRoute);
+  attackedPreset.preset.route = attackedRoute.href;
+  writeFileSync(attackedPresetPath, `${JSON.stringify(attackedPreset, null, 2)}\n`);
+  const attacked = runAdapter(
+    '--preset', attackedPresetPath,
+    '--provenance', provenance,
+    '--expected-preset-id', expectedPresetId,
+    '--target-origin', 'http://127.0.0.1:18961',
+    '--out', attackedCapturePath,
+    '--report', attackedReportPath,
+  );
+  assert.notEqual(attacked.status, 0, `${name} route mutation was accepted`);
+  assert.equal(existsSync(attackedCapturePath), false, `${name} route mutation wrote a primary capture`);
+  const attackedReport = JSON.parse(readFileSync(attackedReportPath, 'utf8'));
+  assert.equal(attackedReport.failurePhase, 'preset-validation');
+  assert.match(attackedReport.error, /route (activation|extra|parameter)/);
+}
+
+assertRouteMutationRejected('activation-value', route => route.searchParams.set('kaminos_volume_smoke', '0'));
+assertRouteMutationRejected('quality-reason-missing', route => route.searchParams.delete('volume_quality_reason'));
+assertRouteMutationRejected('quality-reason-duplicate', route => route.searchParams.append('volume_quality_reason', 'substitute'));
+assertRouteMutationRejected('unknown-extra', route => route.searchParams.set('volume_unowned_extra', '1'));
+assertRouteMutationRejected('non-volume-extra', route => route.searchParams.set('stale_route', '1'));
+
+const coordinatedPresetPath = join(fixture, 'coordinated-route-preset.json');
+const coordinatedProvenancePath = join(fixture, 'coordinated-route-provenance.json');
+const coordinatedCapturePath = join(fixture, 'coordinated-route-capture.json');
+const coordinatedReportPath = join(fixture, 'coordinated-route-report.json');
+const coordinatedPreset = JSON.parse(readFileSync(preset, 'utf8'));
+const coordinatedRoute = new URL(coordinatedPreset.preset.route);
+coordinatedRoute.searchParams.set('volume_quality_reason', 'substituted-by-sidecar');
+coordinatedPreset.preset.route = coordinatedRoute.href;
+const coordinatedProvenance = JSON.parse(readFileSync(provenance, 'utf8'));
+coordinatedProvenance.routeAuthority.extraParams.volume_quality_reason = 'substituted-by-sidecar';
+writeFileSync(coordinatedPresetPath, `${JSON.stringify(coordinatedPreset, null, 2)}\n`);
+writeFileSync(coordinatedProvenancePath, `${JSON.stringify(coordinatedProvenance, null, 2)}\n`);
+const coordinated = runAdapter(
+  '--preset', coordinatedPresetPath,
+  '--provenance', coordinatedProvenancePath,
+  '--expected-preset-id', expectedPresetId,
+  '--target-origin', 'http://127.0.0.1:18961',
+  '--out', coordinatedCapturePath,
+  '--report', coordinatedReportPath,
+);
+assert.notEqual(coordinated.status, 0, 'coordinated sidecar and route substitution was accepted');
+assert.equal(existsSync(coordinatedCapturePath), false, 'coordinated substitution wrote a primary capture');
+const coordinatedReport = JSON.parse(readFileSync(coordinatedReportPath, 'utf8'));
+assert.equal(coordinatedReport.failurePhase, 'preset-validation');
+assert.match(coordinatedReport.error, /route authority does not match the supported semantic preset/);
+
 const wrongProvenancePath = join(fixture, 'wrong-provenance.json');
 const wrongProvenanceCapturePath = join(fixture, 'wrong-provenance-capture.json');
 const wrongProvenanceReportPath = join(fixture, 'wrong-provenance-report.json');
@@ -162,6 +218,22 @@ assert.equal(wrongProvenanceReport.failurePhase, 'preset-validation');
 assert.match(wrongProvenanceReport.error, /provenance source commit mismatch/);
 assert.equal(wrongProvenanceReport.lastTrustworthyEvidence.declaredPresetId, expectedPresetId);
 assert.match(wrongProvenanceReport.lastTrustworthyEvidence.artifactFileSha256, /^[0-9a-f]{64}$/);
+
+const missingProvenanceCapturePath = join(fixture, 'missing-provenance-capture.json');
+const missingProvenanceReportPath = join(fixture, 'missing-provenance-report.json');
+const missingProvenance = runAdapter(
+  '--preset', preset,
+  '--expected-preset-id', expectedPresetId,
+  '--target-origin', 'http://127.0.0.1:18961',
+  '--out', missingProvenanceCapturePath,
+  '--report', missingProvenanceReportPath,
+);
+assert.notEqual(missingProvenance.status, 0, 'portable preset replay succeeded without detached provenance');
+assert.equal(existsSync(missingProvenanceCapturePath), false, 'missing provenance wrote a primary capture');
+const missingProvenanceReport = JSON.parse(readFileSync(missingProvenanceReportPath, 'utf8'));
+assert.equal(missingProvenanceReport.failurePhase, 'preset-validation');
+assert.match(missingProvenanceReport.error, /detached provenance is required/);
+assert.equal(missingProvenanceReport.lastTrustworthyEvidence.declaredPresetId, expectedPresetId);
 
 const invocationReportPath = join(fixture, 'invocation-report.json');
 const missingArgument = runAdapter(

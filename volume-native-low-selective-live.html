@@ -440,10 +440,29 @@
       if (!provenanceResponse.ok) throw new Error(`latest-happy-bowl-provenance-fetch:${provenanceResponse.status}`);
       const [text, provenanceText] = await Promise.all([response.text(), provenanceResponse.text()]);
       const fileSha256 = await sha256HexFromText(text);
+      const provenanceArtifactFileSha256 = await sha256HexFromText(provenanceText);
+      lastTrustworthyEvidence = {
+        ...lastTrustworthyEvidence,
+        presetUrl: LATEST_HAPPY_BOWL_PRESET_URL,
+        provenanceUrl: LATEST_HAPPY_BOWL_PROVENANCE_URL,
+        artifactFileSha256: fileSha256,
+        provenanceArtifactFileSha256,
+        artifactFileSha256Authority: 'transport-receipt-only-v0',
+      };
       const artifact = JSON.parse(text);
-      const semanticIdentity = await validateVolumeSettingsPresetSemanticIdentity(artifact, requestedBasinIdentity);
+      lastTrustworthyEvidence = {
+        ...lastTrustworthyEvidence,
+        declaredPresetId: artifact?.presetId || null,
+        declaredContentHash: artifact?.contentHash || null,
+      };
+      const provenance = JSON.parse(provenanceText);
+      const semanticIdentity = await validateVolumeSettingsPresetSemanticIdentity(
+        artifact,
+        requestedBasinIdentity,
+        provenance.routeAuthority,
+      );
       const sourceProvenance = validateVolumeSettingsPresetProvenance(
-        JSON.parse(provenanceText),
+        provenance,
         semanticIdentity,
         LATEST_HAPPY_BOWL_SOURCE_COMMIT,
       );
@@ -477,6 +496,7 @@
         artifactFileSha256Authority: 'transport-receipt-only-v0',
         sourceCommit: sourceProvenance.sourceCommit,
         sourceProvenance,
+        provenanceArtifactFileSha256,
         requestedDomControlCount: artifact.controlCount,
         requestedRouteControlCount: routeControlCount,
         effectiveRouteControlCount: Object.keys(controls).length,
