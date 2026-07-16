@@ -5,6 +5,8 @@ const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8')
 const exporter = readFileSync(new URL('../volume-full-grid-field-export.mjs', import.meta.url), 'utf8');
 
 assert.match(exporter, /--flow-kernel-descriptor-index-bin/, 'frozen export accepts a caller-owned native-cell index artifact');
+assert.match(exporter, /majorant\.f32/, 'frozen full-field export preserves the exact majorant bytes consumed by descriptor rows');
+assert.match(exporter, /sidecars:\s*\{\s*fluid,\s*front,\s*majorant\s*\}/, 'full-field manifest binds fluid, front, and majorant sidecars in one source receipt');
 assert.match(exporter, /flow-kernel-descriptor-index-bin[\s\S]*--flow-kernel-descriptor-bin/, 'an index artifact requires a descriptor output artifact');
 assert.match(
   exporter,

@@ -10725,6 +10725,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   async function materializeFullFieldDerivedBuffersForDebugExport(nowMs = performance.now()) {
     updateUniforms(nowMs);
     const encoder = device.createCommandEncoder({ label: 'kaminos full-field derived-buffer materialization' });
+    encodeMajorant(encoder, { force: true });
     encodeBoundarySidecar(encoder);
     const boundarySplatsEncoded = encodeBoundarySplats(encoder);
     device.queue.submit([encoder.finish()]);
@@ -10747,6 +10748,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const fluidBytes = fluidBufferBytes(gridSize);
     const frontBytes = frontFieldBufferBytes(gridSize);
     const boundaryBytes = boundarySidecarBufferBytes(gridSize);
+    const majorantBytes = majorantBufferBytes(majorantGridSize);
     const fluidReadback = device.createBuffer({
       label: 'kaminos full-field fluid export readback',
       size: fluidBytes,
@@ -10762,6 +10764,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       size: boundaryBytes,
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
     });
+    const majorantReadback = device.createBuffer({
+      label: 'kaminos full-field majorant export readback',
+      size: majorantBytes,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
     const boundarySplatDrawReadback = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} full-field draw-state readback`,
       size: 32,
@@ -10771,17 +10778,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     encoder.copyBufferToBuffer(fluidBuffers[currentFluid], 0, fluidReadback, 0, fluidBytes);
     encoder.copyBufferToBuffer(frontBuffers[currentFront], 0, frontReadback, 0, frontBytes);
     encoder.copyBufferToBuffer(boundarySidecarBuffer, 0, boundaryReadback, 0, boundaryBytes);
+    encoder.copyBufferToBuffer(majorantBuffer, 0, majorantReadback, 0, majorantBytes);
     encoder.copyBufferToBuffer(boundarySplatDrawBuffer, 0, boundarySplatDrawReadback, 0, 32);
     device.queue.submit([encoder.finish()]);
     await Promise.all([
       fluidReadback.mapAsync(GPUMapMode.READ),
       frontReadback.mapAsync(GPUMapMode.READ),
       boundaryReadback.mapAsync(GPUMapMode.READ),
+      majorantReadback.mapAsync(GPUMapMode.READ),
       boundarySplatDrawReadback.mapAsync(GPUMapMode.READ),
     ]);
     const fluid = new Float32Array(fluidReadback.getMappedRange()).slice();
     const front = new Float32Array(frontReadback.getMappedRange()).slice();
     const boundary = new Float32Array(boundaryReadback.getMappedRange()).slice();
+    const majorant = new Float32Array(majorantReadback.getMappedRange()).slice();
     const boundarySplatDraw = new Uint32Array(boundarySplatDrawReadback.getMappedRange()).slice();
     fluidReadback.unmap();
     fluidReadback.destroy();
@@ -10789,6 +10799,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     frontReadback.destroy();
     boundaryReadback.unmap();
     boundaryReadback.destroy();
+    majorantReadback.unmap();
+    majorantReadback.destroy();
     boundarySplatDrawReadback.unmap();
     boundarySplatDrawReadback.destroy();
 
@@ -10816,10 +10828,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       fluid,
       front,
       boundary,
+      majorant,
       boundarySplats,
       fluidBytes,
       frontBytes,
       boundaryBytes,
+      majorantBytes,
       boundarySplatBytes,
       boundarySplatDraw: { instanceCount, candidateCount, overflowCount, capacity },
     };
@@ -10828,6 +10842,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function fullFieldExportDescriptorFor(values, kind, byteLength) {
     const isBoundary = kind === 'boundary';
     const isBoundarySplat = kind === 'boundarySplat';
+    const isMajorant = kind === 'majorant';
     return {
       kind,
       dtype: 'float32',
@@ -10836,6 +10851,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       byteLength,
       shape: isBoundarySplat
         ? [values.length / BOUNDARY_SPLAT_CHANNELS.length, BOUNDARY_SPLAT_CHANNELS.length]
+        : isMajorant
+          ? [majorantGridSize, majorantGridSize, majorantGridSize, 4]
         : kind === 'fluid'
         ? [gridSize, gridSize, gridSize, FLUID_COMPONENTS]
         : isBoundary
@@ -10843,6 +10860,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           : [gridSize, gridSize, gridSize, 1],
       channelOrder: isBoundarySplat
         ? BOUNDARY_SPLAT_CHANNELS
+        : isMajorant
+          ? ['density', 'fire', 'extinction', 'importance']
         : kind === 'fluid'
         ? FULL_FIELD_CHANNELS
         : isBoundary
@@ -10861,6 +10880,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       sessionId: session.sessionId,
       createdAtMs: session.createdAtMs,
       grid: session.grid,
+      majorantGrid: session.majorantGrid,
       cellCount: session.cellCount,
       completeFieldCoverage: true,
       routeIdentity: ROUTE_IDENTITY,
@@ -10875,6 +10895,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       frontChannelOrder: ['frontTopology'],
       fluid: session.fluidDescriptor,
       front: session.frontDescriptor,
+      majorant: session.majorantDescriptor,
       boundarySidecar: {
         schema: 'kaminos.volume.boundary-sidecar-export.v0',
         identity: BOUNDARY_SIDECAR_IDENTITY,
@@ -11587,6 +11608,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       sessionId: `full-field-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
       createdAtMs: performance.now(),
       grid: gridSize,
+      majorantGrid: majorantGridSize,
       cellCount: gridCellCount(gridSize),
       deterministicReplay: replaySample ? {
         identity: replaySample.identity,
@@ -11597,11 +11619,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       fluid: captured.fluid,
       front: captured.front,
       boundary: captured.boundary,
+      majorant: captured.majorant,
       boundarySplats: captured.boundarySplats,
       boundarySplatDraw: captured.boundarySplatDraw,
       fluidDescriptor: fullFieldExportDescriptorFor(captured.fluid, 'fluid', captured.fluidBytes),
       frontDescriptor: fullFieldExportDescriptorFor(captured.front, 'front', captured.frontBytes),
       boundaryDescriptor: fullFieldExportDescriptorFor(captured.boundary, 'boundary', captured.boundaryBytes),
+      majorantDescriptor: fullFieldExportDescriptorFor(captured.majorant, 'majorant', captured.majorantBytes),
       boundarySplatDescriptor: fullFieldExportDescriptorFor(captured.boundarySplats, 'boundarySplat', captured.boundarySplatBytes),
     };
     debugFullFieldExportSession = session;
@@ -11633,20 +11657,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       };
     }
     const requestedKind = String(options.kind || 'fluid');
-    const kind = requestedKind === 'front'
-      ? 'front'
-      : requestedKind === 'boundary'
-        ? 'boundary'
-        : requestedKind === 'boundarySplat'
-          ? 'boundarySplat'
-          : 'fluid';
-    const values = kind === 'front'
-      ? session.front
-      : kind === 'boundary'
-        ? session.boundary
-        : kind === 'boundarySplat'
-          ? session.boundarySplats
-          : session.fluid;
+    const supportedKinds = new Set(['fluid', 'front', 'boundary', 'boundarySplat', 'majorant']);
+    const kind = supportedKinds.has(requestedKind) ? requestedKind : 'fluid';
+    const valuesByKind = {
+      fluid: session.fluid,
+      front: session.front,
+      boundary: session.boundary,
+      boundarySplat: session.boundarySplats,
+      majorant: session.majorant,
+    };
+    const values = valuesByKind[kind];
     const startFloat = Math.max(0, Math.min(values.length, Math.floor(Number(options.startFloat) || 0)));
     const requestedFloatCount = Math.floor(Number(options.floatCount) || Math.min(262144, values.length - startFloat));
     const floatCount = Math.max(0, Math.min(values.length - startFloat, requestedFloatCount));

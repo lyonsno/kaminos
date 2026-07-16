@@ -89,6 +89,31 @@ async function rawArtifact(name, bytes) {
   return { path, bytes: bytes.length, sha256: sha256(bytes) };
 }
 
+async function fieldArtifact(name, shape, channelOrder, seed) {
+  const floatCount = shape.reduce((product, value) => product * value, 1);
+  const bytes = floatBytes(Array.from({ length: floatCount }, (_, index) => seed + index / Math.max(1, floatCount)));
+  const path = join(inputDir, `${name}.f32`);
+  await writeFile(path, bytes);
+  return {
+    path,
+    byteLength: bytes.length,
+    sha256: sha256(bytes),
+    dtype: 'float32',
+    byteOrder: 'little-endian',
+    floatCount,
+    shape,
+    channelOrder,
+  };
+}
+
+const fixtureGrid = 4;
+const fixtureMajorantGrid = 2;
+const trainingRoute = `?kaminos_volume_smoke=1&volume_resolution=${fixtureGrid}`;
+const fluidChannelOrder = [
+  'velocityX', 'velocityY', 'velocityZ', 'densityCarrier', 'smokeDensity', 'heat', 'fuel', 'detail',
+  'flame', 'ember', 'visibleFireCarrier', 'combustionFront', 'microdetail', 'interfaceShred', 'fireLick', 'emberFleck',
+];
+
 const featureOrder = [
   'sidecar.support', 'sidecar.coverage', 'sidecar.ridge', 'sidecar.footprint',
   'material.density', 'material.heat', 'material.fuel', 'material.detail',
@@ -116,11 +141,11 @@ const descriptorSocketArtifact = {
   sha256: sha256(descriptorSocketBytes),
 };
 
-function descriptorRowsForFixture(count = 4) {
+function descriptorRowsForFixture(count = 4, nativeCellIndices = Array.from({ length: count }, (_, index) => index)) {
   return Array.from({ length: count }, (_, rowIndex) => {
     const row = Array(FLOW_KERNEL_DESCRIPTOR_STRIDE_FLOATS).fill(0);
     row[0] = rowIndex * 0.01;
-    row[3] = rowIndex;
+    row[3] = nativeCellIndices[rowIndex];
     row[4] = 1;
     row[15] = descriptorControls.coherence;
     row[23] = 0.4 + rowIndex * 0.1;
@@ -154,16 +179,18 @@ async function state(id, splitRole, phase) {
   }
   const featureArtifact = await artifact(`${id}-features`, features, [count, featureOrder.length], 'post-admission-local-features');
   const admissionArtifact = await artifact(`${id}-admission`, admissions, [count, admissionOrder.length], 'analytical-ridge-or-nonridge-admission');
+  const nativeCellIndexValues = Array.from({ length: count }, (_, row) => phase * 8 + row);
   const nativeCellIndices = await uint32Artifact(
     `${id}-native-cell-indices`,
-    Array.from({ length: count }, (_, row) => phase * 100 + row),
+    nativeCellIndexValues,
     [count],
     'analytical-admission-native-cell-indices',
   );
   const coefficientArtifact = await artifact(`${id}-coefficients`, targets, [count, coefficientOrder.length], 'exact-local-layer-emission-extinction');
-  const sourceFluid = await rawArtifact(`${id}-source-fluid.f32`, floatBytes([phase + 0.1, phase + 0.2]));
-  const sourceFront = await rawArtifact(`${id}-source-front.f32`, floatBytes([phase + 0.3, phase + 0.4]));
-  const sourceBoundary = await rawArtifact(`${id}-source-boundary.f32`, floatBytes([phase + 0.5, phase + 0.6]));
+  const sourceFluid = await fieldArtifact(`${id}-source-fluid`, [fixtureGrid, fixtureGrid, fixtureGrid, 16], fluidChannelOrder, phase + 0.1);
+  const sourceFront = await fieldArtifact(`${id}-source-front`, [fixtureGrid, fixtureGrid, fixtureGrid, 1], ['frontTopology'], phase + 0.3);
+  const sourceBoundary = await fieldArtifact(`${id}-source-boundary`, [fixtureGrid, fixtureGrid, fixtureGrid, 4], ['support', 'coverage', 'ridge', 'footprint'], phase + 0.5);
+  const sourceMajorant = await fieldArtifact(`${id}-source-majorant`, [fixtureMajorantGrid, fixtureMajorantGrid, fixtureMajorantGrid, 4], ['density', 'fire', 'extinction', 'importance'], phase + 0.7);
   const sourceManifestValue = {
     schema: 'kaminos.volume.full-grid-field-export.v0',
     identity: 'full-grid-fluid-front-boundary-sidecars-v0',
@@ -171,11 +198,16 @@ async function state(id, splitRole, phase) {
     failurePhase: null,
     completeFieldCoverage: true,
     routeIdentity: 'native-3d-compute-fluid-raymarch-v0',
-    effectiveRoute: '?kaminos_volume_smoke=1&volume_resolution=160',
+    effectiveRoute: trainingRoute,
     prototypeIdentity: 'kaminos-volume-prototype-v0',
     backend: 'WebGPU:apple',
-    grid: 160,
-    sidecars: { fluid: sourceFluid, front: sourceFront },
+    grid: fixtureGrid,
+    cellCount: fixtureGrid ** 3,
+    majorantGrid: fixtureMajorantGrid,
+    fluidComponents: 16,
+    fluidChannelOrder,
+    frontChannelOrder: ['frontTopology'],
+    sidecars: { fluid: sourceFluid, front: sourceFront, majorant: sourceMajorant },
     boundarySidecar: { sidecars: { boundary: sourceBoundary } },
   };
   const sourceManifestBytes = Buffer.from(`${JSON.stringify(sourceManifestValue, null, 2)}\n`);
@@ -184,9 +216,9 @@ async function state(id, splitRole, phase) {
     fluidSha256: sourceFluid.sha256,
     frontSha256: sourceFront.sha256,
     boundarySidecarSha256: sourceBoundary.sha256,
-    majorantSha256: sha256(Buffer.from(`majorant-${id}`)),
+    majorantSha256: sourceMajorant.sha256,
   };
-  const descriptorRows = descriptorRowsForFixture(count);
+  const descriptorRows = descriptorRowsForFixture(count, nativeCellIndexValues);
   const kernelDescriptors = await artifact(
     `${id}-kernel-descriptors`,
     descriptorRows,
@@ -333,9 +365,9 @@ const sourceCorpus = {
   cohortIdentity: 'appearance-cohort-000',
   sameStateCaptureId: 'appearance-state-000',
   simStepCount: 240,
-  grid: 160,
-  requestedRoute: '?volume_resolution=160&volume_steps=160',
-  effectiveRoute: '?volume_resolution=160&volume_steps=160',
+  grid: fixtureGrid,
+  requestedRoute: `?volume_resolution=${fixtureGrid}&volume_steps=160`,
+  effectiveRoute: `?volume_resolution=${fixtureGrid}&volume_steps=160`,
   prototypeIdentity: 'kaminos-volume-prototype-v0',
   backend: 'WebGPU:apple',
   fallbackReason: null,
@@ -388,13 +420,13 @@ const manifest = {
     sha256: sha256(sourceCorpusBytes),
     schema: 'kaminos-boundary-splat-appearance-coefficient-corpus-v1',
     authority: 'live-simulator-frozen-state-multi-camera-positive-full-flame-coefficients-with-signed-comparator-v1',
-    expectedGrid: 160,
+    expectedGrid: fixtureGrid,
     expectedRaySteps: 160,
     expectedRenderScale: 1,
   },
   route: {
-    requested: '?kaminos_volume_smoke=1&volume_resolution=160',
-    effective: '?kaminos_volume_smoke=1&volume_resolution=160',
+    requested: trainingRoute,
+    effective: trainingRoute,
     prototypeIdentity: 'kaminos-volume-prototype-v0',
     backend: 'WebGPU:apple',
     fallbackReason: null,
@@ -442,11 +474,11 @@ const manifest = {
       descriptorOrder: [...FLOW_KERNEL_DESCRIPTOR_ORDER],
       kernelIdentity: descriptorKernelIdentity,
       candidateAdmissionAuthority: 'external-native-cell-index-list-v0',
-      requestedRoute: '?volume_resolution=160&volume_kernel_strength=0.6',
-      effectiveRoute: '?volume_resolution=160&volume_kernel_strength=0.6',
+      requestedRoute: `?volume_resolution=${fixtureGrid}&volume_kernel_strength=0.6`,
+      effectiveRoute: `?volume_resolution=${fixtureGrid}&volume_kernel_strength=0.6`,
       prototypeIdentity: 'kaminos-volume-prototype-v0',
       backend: 'WebGPU:apple',
-      grid: 160,
+      grid: fixtureGrid,
       fallbackReason: null,
       requestedControls: { ...descriptorControls },
       effectiveControls: { ...descriptorControls },
@@ -516,8 +548,8 @@ assert.equal(report.descriptorComparison.capacityMatch.baselineTrainableParamete
 assert.equal(report.descriptorComparison.treatment.descriptorAuthority, 'camera-independent-flow-kernel-descriptors-v0');
 assert.equal(report.descriptorComparison.analyticalGeometryArm.learnedGeometry, false);
 assert.equal(report.assays.heldState.generalizationAuthority, 'held-simulator-state-only');
-assert.equal(report.lastTrustworthyEvidence.validatedArtifactCount, 20);
-assert.equal(report.completionRevalidation.validatedArtifactCount, 20);
+assert.equal(report.lastTrustworthyEvidence.validatedArtifactCount, 22);
+assert.equal(report.completionRevalidation.validatedArtifactCount, 22);
 assert.equal(report.completionRevalidation.sourceAppearanceCorpusRevalidated, true);
 
 const mutationManifest = structuredClone(manifest);
@@ -649,6 +681,16 @@ await reject(async value => {
   target.sha256 = sha256(bytes);
   value.states[0].rows.kernelDescriptors.admissionIndexAuthority.indexSha256 = target.sha256;
 }, /duplicate native-cell index/i);
+await reject(async value => {
+  const target = value.states[1].rows.nativeCellIndices;
+  const bytes = uint32Bytes([11, 10, 9, 8]);
+  const path = join(inputDir, 'reordered-native-cell-indices.u32');
+  await writeFile(path, bytes);
+  target.path = path;
+  target.bytes = bytes.length;
+  target.sha256 = sha256(bytes);
+  value.states[1].rows.kernelDescriptors.admissionIndexAuthority.indexSha256 = target.sha256;
+}, /descriptor row.*native-cell index.*caller-ordered/i);
 await reject(value => {
   value.states[0].rows.kernelDescriptors.admissionArtifactSha256 = 'f'.repeat(64);
 }, /descriptor admission artifact sha256/i);
@@ -658,6 +700,24 @@ await reject(value => {
 await reject(value => {
   value.states[0].rows.kernelDescriptors.sourceHashes.fluidSha256 = 'f'.repeat(64);
 }, /descriptor source hash.*source field/i);
+await reject(value => {
+  value.states[0].sourceFieldManifest.sha256 = 'f'.repeat(64);
+}, /source field manifest artifact sha256/i);
+await reject(async value => {
+  const sourceManifestArtifact = value.states[0].sourceFieldManifest;
+  const sourceManifest = JSON.parse(await readFile(sourceManifestArtifact.path, 'utf8'));
+  sourceManifest.sidecars.fluid.shape = [2];
+  const bytes = Buffer.from(`${JSON.stringify(sourceManifest, null, 2)}\n`);
+  const path = join(inputDir, 'partial-source-field-manifest.json');
+  await writeFile(path, bytes);
+  sourceManifestArtifact.path = path;
+  sourceManifestArtifact.bytes = bytes.length;
+  sourceManifestArtifact.sha256 = sha256(bytes);
+  value.states[0].rows.kernelDescriptors.sourceManifestSha256 = sourceManifestArtifact.sha256;
+}, /source fluid.*shape/i);
+await reject(value => {
+  value.states[0].rows.kernelDescriptors.sourceHashes.majorantSha256 = 'f'.repeat(64);
+}, /descriptor source hash majorantSha256.*source field/i);
 await reject(value => {
   value.states[0].rows.kernelDescriptors.sourceManifestSha256 = 'f'.repeat(64);
 }, /descriptor source manifest sha256/i);

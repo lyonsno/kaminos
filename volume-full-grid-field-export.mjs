@@ -1111,6 +1111,8 @@ async function main() {
     const fluid = await drainSidecar(ws, begin, 'fluid', join(outDir, 'fluid.f32'));
     phase = 'drain-front';
     const front = await drainSidecar(ws, begin, 'front', join(outDir, 'front.f32'));
+    phase = 'drain-majorant';
+    const majorant = await drainSidecar(ws, begin, 'majorant', join(outDir, 'majorant.f32'));
     let boundary = null;
     let boundarySidecar = null;
     let boundarySplats = null;
@@ -1172,6 +1174,7 @@ async function main() {
       prototypeIdentity: begin.prototypeIdentity,
       backend: begin.backend,
       grid: begin.grid,
+      majorantGrid: begin.majorantGrid,
       cellCount: begin.cellCount,
       simGridLabel: begin.simGridLabel,
       deterministicReplay: begin.deterministicReplay,
@@ -1184,7 +1187,7 @@ async function main() {
       fluidComponents: begin.fluidComponents,
       fluidChannelOrder: begin.fluidChannelOrder,
       frontChannelOrder: begin.frontChannelOrder,
-      sidecars: { fluid, front },
+      sidecars: { fluid, front, majorant },
       boundarySidecar,
       boundarySplats: boundarySplatOutput,
       release,
@@ -1198,6 +1201,7 @@ async function main() {
       sidecars: {
         fluid: { path: fluid.path, sha256: fluid.sha256, byteLength: fluid.byteLength },
         front: { path: front.path, sha256: front.sha256, byteLength: front.byteLength },
+        majorant: { path: majorant.path, sha256: majorant.sha256, byteLength: majorant.byteLength },
         ...(boundary ? { boundary: { path: boundary.path, sha256: boundary.sha256, byteLength: boundary.byteLength } } : {}),
         ...(boundarySplats ? { boundarySplats: { path: boundarySplats.path, sha256: boundarySplats.sha256, byteLength: boundarySplats.byteLength } } : {}),
       },

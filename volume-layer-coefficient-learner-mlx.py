@@ -221,6 +221,32 @@ def validate_uint32_artifact(
     return list(struct.unpack(f"<{math.prod(expected_shape)}I", data))
 
 
+def validate_full_field_artifact(
+    manifest_path: Path,
+    artifact: Any,
+    label: str,
+    expected_shape: list[int],
+    expected_channels: list[str],
+    last_trustworthy: dict[str, Any],
+) -> bytes:
+    require(isinstance(artifact, dict), f"{label} artifact is missing")
+    path = resolve_artifact_path(manifest_path, artifact.get("path"))
+    require(path.is_file(), f"{label} artifact is missing at {path}")
+    data = path.read_bytes()
+    require(data, f"{label} artifact is blank")
+    require(artifact.get("dtype") == "float32", f"{label} dtype must be float32")
+    require(artifact.get("byteOrder") == "little-endian", f"{label} byte order must be little-endian")
+    require(artifact.get("shape") == expected_shape, f"{label} shape must equal {expected_shape}")
+    require(artifact.get("channelOrder") == expected_channels, f"{label} channel order must equal {expected_channels}")
+    expected_float_count = math.prod(expected_shape)
+    require(artifact.get("floatCount") == expected_float_count, f"{label} float count does not match shape")
+    require(artifact.get("byteLength") == expected_float_count * 4, f"{label} declared byte length does not match shape")
+    require(len(data) == artifact["byteLength"], f"{label} artifact byte length does not match")
+    require(artifact.get("sha256") == sha256_bytes(data), f"{label} artifact sha256 does not match")
+    last_trustworthy["validatedArtifactCount"] = last_trustworthy.get("validatedArtifactCount", 0) + 1
+    return data
+
+
 def validate_source_field_manifest(
     training_manifest_path: Path,
     artifact: Any,
@@ -251,16 +277,37 @@ def validate_source_field_manifest(
     require(value.get("backend") == route["backend"], f"{label} source field backend differs from the training route")
     require(value.get("backend") == source_corpus["backend"], f"{label} source field backend differs from the coefficient source corpus")
     require(value.get("grid") == source_corpus["grid"], f"{label} source field grid differs from the coefficient source corpus")
+    grid = value["grid"]
+    require(value.get("cellCount") == grid ** 3, f"{label} source field cell count differs from its grid")
+    majorant_grid = value.get("majorantGrid")
+    require(isinstance(majorant_grid, int) and majorant_grid > 0, f"{label} source field majorant grid is invalid")
+    fluid_channels = [
+        "velocityX", "velocityY", "velocityZ", "densityCarrier", "smokeDensity", "heat", "fuel", "detail",
+        "flame", "ember", "visibleFireCarrier", "combustionFront", "microdetail", "interfaceShred", "fireLick", "emberFleck",
+    ]
+    require(value.get("fluidComponents") == len(fluid_channels), f"{label} source field fluid component count is invalid")
+    require(value.get("fluidChannelOrder") == fluid_channels, f"{label} source field fluid channel order is invalid")
+    require(value.get("frontChannelOrder") == ["frontTopology"], f"{label} source field front channel order is invalid")
     sidecars = value.get("sidecars")
     boundary_sidecar = value.get("boundarySidecar")
     require(isinstance(sidecars, dict), f"{label} source field sidecars are missing")
     require(isinstance(boundary_sidecar, dict) and isinstance(boundary_sidecar.get("sidecars"), dict), f"{label} boundary sidecar source is missing")
-    _, fluid_data = validate_artifact(source_manifest_path, sidecars.get("fluid"), f"{label} source fluid", last_trustworthy)
-    _, front_data = validate_artifact(source_manifest_path, sidecars.get("front"), f"{label} source front", last_trustworthy)
-    _, boundary_data = validate_artifact(
+    fluid_data = validate_full_field_artifact(source_manifest_path, sidecars.get("fluid"), f"{label} source fluid", [grid, grid, grid, 16], fluid_channels, last_trustworthy)
+    front_data = validate_full_field_artifact(source_manifest_path, sidecars.get("front"), f"{label} source front", [grid, grid, grid, 1], ["frontTopology"], last_trustworthy)
+    boundary_data = validate_full_field_artifact(
         source_manifest_path,
         boundary_sidecar["sidecars"].get("boundary"),
         f"{label} source boundary sidecar",
+        [grid, grid, grid, 4],
+        ["support", "coverage", "ridge", "footprint"],
+        last_trustworthy,
+    )
+    majorant_data = validate_full_field_artifact(
+        source_manifest_path,
+        sidecars.get("majorant"),
+        f"{label} source majorant",
+        [majorant_grid, majorant_grid, majorant_grid, 4],
+        ["density", "fire", "extinction", "importance"],
         last_trustworthy,
     )
     return {
@@ -269,6 +316,7 @@ def validate_source_field_manifest(
             "fluidSha256": sha256_bytes(fluid_data),
             "frontSha256": sha256_bytes(front_data),
             "boundarySidecarSha256": sha256_bytes(boundary_data),
+            "majorantSha256": sha256_bytes(majorant_data),
         },
     }
 
@@ -653,8 +701,13 @@ def validate_manifest(
             offset = row * descriptor_producer["strideFloats"]
             normalized_mass = descriptors[offset + descriptor_indices["kernel.normalizedMass"]]
             strength_zero = descriptors[offset + descriptor_indices["validity.strengthZeroIdentity"]]
+            embedded_native_cell_index = descriptors[offset + descriptor_indices["position.nativeCellIndex"]]
             validity = descriptors[offset + descriptor_indices["validity.conservativeMajorant"]]
             require(abs(normalized_mass - 1.0) <= 1e-5, f"{label} row {row} descriptor normalized mass must equal one")
+            require(
+                embedded_native_cell_index == native_cell_indices[row],
+                f"{label} descriptor row {row} native-cell index differs from caller-ordered admission index",
+            )
             require(abs(strength_zero - expected_strength_zero) <= 1e-5, f"{label} row {row} descriptor strength-zero identity disagrees with effective controls")
             if expected_strength_zero == 1.0:
                 zero_geometry_channels = (
