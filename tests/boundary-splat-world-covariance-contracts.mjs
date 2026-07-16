@@ -153,6 +153,38 @@ assert.equal(validated.cameraCount, 3);
 assert.deepEqual(validated.heldOutCameraIndices, [0, 2]);
 assert.equal(validated.familyCount, 3);
 
+await assert.rejects(
+  () => oracle.validateCameraHoldoutReport(report, { requireKernelMoment: true }),
+  /kernel moment.*missing/i,
+);
+
+const kernelRows = [];
+for (let cameraIndex = 0; cameraIndex < 3; cameraIndex += 1) {
+  const image = await artifact(root, `flow-kernel-moment-covariance-${cameraIndex}.png`, Buffer.from(`flow-kernel-moment-covariance-${cameraIndex}`));
+  const baseRow = cameraRows.find(row => row.cameraIndex === cameraIndex);
+  kernelRows.push({
+    ...baseRow,
+    family: 'flow-kernel-moment-covariance',
+    familyAuthority: 'base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0',
+    rendererFootprintAuthority: 'base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0',
+    auditFootprintAuthority: 'base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0',
+    attributeSetId: 'learned-fixed-attrs',
+    attributePayloadSha256: 'd'.repeat(64),
+    image,
+    kernelTreatment: {
+      identity: 'flow-tangent-positive-symmetric-trilinear-v0',
+      candidateAdmissionAuthority: 'structural-splat-candidates-v0',
+      firstMomentAuthority: 'zero-first-moment-candidate-centers-fixed-v0',
+      strength: 1,
+      radiusWorld: 0.03,
+      coherence: 1,
+    },
+  });
+}
+const kernelReport = { ...report, cameraRows: [...cameraRows, ...kernelRows] };
+const validatedKernel = await oracle.validateCameraHoldoutReport(kernelReport, { requireKernelMoment: true });
+assert.equal(validatedKernel.familyCount, 4);
+
 const replayBridgeReport = {
   ...report,
   sourceSettingsPreset: {

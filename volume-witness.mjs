@@ -1543,7 +1543,7 @@ const expectedCanonicalBuoyancy = routeParams.has('volume_canonical_buoyancy') &
 const canonicalPassiveBottomNonRiseProof = expectsCanonicalPlumeProof && expectedCanonicalSourceMode === 'passive_bottom';
 const expectsCanonicalSmokeRise = expectsCanonicalPlumeProof && !canonicalPassiveBottomNonRiseProof;
 const requestedGrid = Number(routeParams.get('volume_resolution'));
-const expectedGrid = [32, 48, 64, 96, 128, 160].includes(requestedGrid)
+const expectedGrid = [32, 48, 64, 96, 128, 140, 160].includes(requestedGrid)
   ? requestedGrid
   : canonicalMacroPreset.resolution ?? scenePreset.resolution ?? 96;
 function quantizeFlowKernelControl(value, min, max, step, decimals) {
@@ -3733,7 +3733,7 @@ async function main() {
       }
     }
     assert.equal(state.flowKernelIdentity, FLOW_RECONSTRUCTION_KERNEL_IDENTITY, 'flow reconstruction kernel identity did not reach the live renderer');
-    assert.equal(state.flowKernelCandidateAdmissionAuthority, 'native-cell-unfiltered', 'flow kernel changed or obscured splat admission authority');
+    assert.equal(state.flowKernelCandidateAdmissionAuthority, 'structural-splat-candidates-v0', 'flow kernel changed or obscured splat admission authority');
     assert.ok(Math.abs((state.controls?.flowKernelStrength ?? 0) - expectedFlowKernelStrength) < 0.001, 'flow kernel strength route/control did not apply');
     assert.ok(Math.abs((state.controls?.flowKernelRadius ?? 0) - expectedFlowKernelRadius) < 0.001, 'flow kernel radius route/control did not apply');
     assert.ok(Math.abs((state.controls?.flowKernelCoherence ?? 0) - expectedFlowKernelCoherence) < 0.001, 'flow kernel coherence route/control did not apply');

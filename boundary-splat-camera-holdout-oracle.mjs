@@ -8,7 +8,13 @@ const FAMILY_AUTHORITIES = Object.freeze({
   'analytic-billboard': 'camera-facing-billboard-v0',
   'learned-billboard': 'learned-camera-facing-billboard-v0',
   'world-tangent-covariance': 'world-gradient-tangent-covariance-v0',
+  'flow-kernel-moment-covariance': 'base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0',
 });
+const BASE_FAMILIES = Object.freeze([
+  'analytic-billboard',
+  'learned-billboard',
+  'world-tangent-covariance',
+]);
 const CONSERVATION_AUTHORITY = 'rendered-gaussian-integrated-alpha-conserved-v0';
 const ATTRIBUTE_PAYLOAD_AUTHORITY = 'gpu-compacted-boundary-splat-effective-attributes-v0';
 const TARGET_AUTHORITY = 'smoke-off-complete-flame-local-emission-extinction-v0';
@@ -117,8 +123,13 @@ export async function validateCameraHoldoutReport(report, options = {}) {
   if (trainIndices.some(index => heldOutIndices.includes(index))) throw new Error('training and held-out camera sets overlap');
   exactIndexSet([...trainIndices, ...heldOutIndices], cameraIndices, 'camera split');
 
+  const hasKernelMoment = report.cameraRows.some(row => row.family === 'flow-kernel-moment-covariance');
+  if (options.requireKernelMoment === true && !hasKernelMoment) throw new Error('kernel moment family is missing');
+  const effectiveFamilies = hasKernelMoment
+    ? [...BASE_FAMILIES, 'flow-kernel-moment-covariance']
+    : [...BASE_FAMILIES];
   const rowKeys = new Set();
-  const rowsByFamily = new Map(Object.keys(FAMILY_AUTHORITIES).map(family => [family, []]));
+  const rowsByFamily = new Map(effectiveFamilies.map(family => [family, []]));
   const targetHashByCamera = new Map();
   for (const [rowIndex, row] of report.cameraRows.entries()) {
     const label = `camera row ${rowIndex}`;
@@ -152,6 +163,18 @@ export async function validateCameraHoldoutReport(report, options = {}) {
     if (conservation.authority !== CONSERVATION_AUTHORITY || relativeError > 1e-5 || recomputedError > 1e-5) {
       throw new Error(`${label} integrated alpha conservation failed`);
     }
+    if (row.family === 'flow-kernel-moment-covariance') {
+      const treatment = row.kernelTreatment || {};
+      const strength = finite(treatment.strength, `${label} kernel strength`);
+      const radiusWorld = finite(treatment.radiusWorld, `${label} kernel radius`);
+      const coherence = finite(treatment.coherence, `${label} kernel coherence`);
+      if (treatment.identity !== 'flow-tangent-positive-symmetric-trilinear-v0'
+        || treatment.candidateAdmissionAuthority !== 'structural-splat-candidates-v0'
+        || treatment.firstMomentAuthority !== 'zero-first-moment-candidate-centers-fixed-v0'
+        || strength <= 0 || radiusWorld <= 0 || coherence < 0 || coherence > 1) {
+        throw new Error(`${label} kernel moment treatment identity is incomplete`);
+      }
+    }
     const target = await verifyArtifact(row.target, `${label} target`);
     const image = await verifyArtifact(row.image, `${label} image`);
     if (targetHashByCamera.has(row.cameraIndex) && targetHashByCamera.get(row.cameraIndex) !== target.sha256) {
@@ -179,6 +202,16 @@ export async function validateCameraHoldoutReport(report, options = {}) {
   const worldAttributePayload = rowsByFamily.get('world-tangent-covariance')[0].attributePayloadSha256;
   if (learnedAttributePayload !== worldAttributePayload) {
     throw new Error('learned billboard effective attribute payload was not reused by world covariance');
+  }
+  if (hasKernelMoment) {
+    const kernelRows = rowsByFamily.get('flow-kernel-moment-covariance');
+    if (kernelRows[0].attributeSetId !== learnedAttributeSet) {
+      throw new Error('kernel moment covariance did not reuse the learned appearance attribute set');
+    }
+    const treatmentIdentities = new Set(kernelRows.map(row => JSON.stringify(row.kernelTreatment)));
+    if (treatmentIdentities.size !== 1) {
+      throw new Error('kernel moment controls changed across held-out cameras');
+    }
   }
 
   return {

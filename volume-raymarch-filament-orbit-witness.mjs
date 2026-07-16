@@ -15,6 +15,7 @@ const SUPPORT_AUTHORITY = 'state-derived-direct-flame-candidate-support-allocati
 const NON_RIDGE_TARGET = 'nonnegative-non-ridge-flame-emission-coefficient-v0';
 const ANALYTIC_SPLAT_RENDERER = 'live-boundary-sidecar-analytic-splats-v0';
 const FULL_FLAME_TARGET = 'smoke-off-complete-flame-local-emission-extinction-v0';
+const KERNEL_MOMENT_AUTHORITY = 'base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0';
 const args = parseArgs(process.argv.slice(2));
 const requestedUrl = required('--url');
 const outDir = resolve(String(args.get('--out-dir') || '/tmp/kaminos-raymarch-filament-orbit'));
@@ -23,6 +24,9 @@ const captureReportPath = resolve(`${outDir}/capture-report.json`);
 const holdoutReportPath = resolve(String(args.get('--holdout-report') || `${outDir}/camera-holdout-report.json`));
 const rayStepCounts = parseIntegerList(args.get('--ray-steps') || '48,96,160');
 const orbitAngles = parseNumberList(args.get('--orbit-angles') || '-0.42,-0.28,-0.14,0,0.14,0.28,0.42');
+const flowKernelStrength = Number(args.get('--flow-kernel-strength') ?? 1);
+const flowKernelRadius = Number(args.get('--flow-kernel-radius') ?? 0.03);
+const flowKernelCoherence = Number(args.get('--flow-kernel-coherence') ?? 1);
 const expectedFrameCount = optionalInteger('--expected-frame-count');
 const expectedSimStepCount = optionalInteger('--expected-sim-step-count');
 const expectedControlsHash = args.get('--expected-controls-hash') ? String(args.get('--expected-controls-hash')) : null;
@@ -132,6 +136,9 @@ try {
   assert.ok(rayStepCounts.length >= 2, 'at least two ray-step counts are required');
   assert.ok(orbitAngles.length >= 5, 'at least five orbit poses are required');
   assert.ok(rayStepCounts.every(value => value >= 24 && value <= 160), 'ray-step counts must be inside the live renderer range');
+  assert.ok(Number.isFinite(flowKernelStrength) && flowKernelStrength > 0 && flowKernelStrength <= 2, 'flow kernel strength must be inside the live renderer range');
+  assert.ok(Number.isFinite(flowKernelRadius) && flowKernelRadius > 0 && flowKernelRadius <= 0.12, 'flow kernel radius must be inside the live renderer range');
+  assert.ok(Number.isFinite(flowKernelCoherence) && flowKernelCoherence >= 0 && flowKernelCoherence <= 1, 'flow kernel coherence must be inside the live renderer range');
 
   failurePhase = 'browser-launch';
   browser = spawn(chrome, [
@@ -191,7 +198,13 @@ try {
   await delay(settleMs);
 
   failurePhase = 'same-state-initialization';
-  const initialization = await evaluate(socket, runtimeInitializationSource({ orbitAngles, rayStepCounts }));
+  const initialization = await evaluate(socket, runtimeInitializationSource({
+    orbitAngles,
+    rayStepCounts,
+    flowKernelStrength,
+    flowKernelRadius,
+    flowKernelCoherence,
+  }));
   lastTrustworthyEvidence.initialization = initialization.summary;
   assert.equal(initialization.summary.wrapperRoute, WRAPPER_ROUTE, 'requested/effective route disagreement after pause');
   assert.equal(initialization.summary.effectiveRoute, RENDERER_ROUTE, 'requested/effective route disagreement in renderer');
@@ -203,6 +216,29 @@ try {
   if (expectedFrameCount !== null) assert.equal(initialization.summary.frozenState.baseFrameCount, expectedFrameCount, 'effective frozen frame count disagrees with requested authority');
   if (expectedSimStepCount !== null) assert.equal(initialization.summary.frozenState.baseSimStepCount, expectedSimStepCount, 'effective frozen simulation step disagrees with requested authority');
   if (expectedControlsHash !== null) assert.equal(initialization.summary.frozenState.controlsHash, expectedControlsHash, 'effective controls hash disagrees with requested authority');
+
+  failurePhase = 'footprint-family-preflight';
+  const preflightCamera = initialization.cameras.reduce((best, camera) => Math.abs(camera.angle) < Math.abs(best.angle) ? camera : best);
+  const footprintFamilyPreflight = [];
+  for (const mode of ['analyticBillboard', 'learnedBillboard', 'worldCovariance', 'kernelMomentCovariance']) {
+    const key = `footprint-family-preflight-v0-${mode}`;
+    const capture = await evaluate(socket, `window.__kaminosFilamentOrbitWitness.capture(${JSON.stringify({
+      key,
+      camera: preflightCamera,
+      mode,
+      raySteps: Math.max(...rayStepCounts),
+    })})`);
+    assert.equal(capture.footprintAudit?.ok, true, `${mode} footprint preflight failed`);
+    assert.equal(capture.boundarySplatFallbackReason, null, `${mode} footprint preflight fell back`);
+    footprintFamilyPreflight.push({
+      identity: 'footprint-family-preflight-v0',
+      mode,
+      candidateCount: capture.boundarySplatCandidateCount,
+      candidatePayloadSha256: capture.footprintAudit.candidatePayloadSha256,
+      attributePayloadSha256: capture.footprintAudit.attributePayloadSha256,
+    });
+  }
+  lastTrustworthyEvidence.footprintFamilyPreflight = footprintFamilyPreflight;
 
   const captures = [];
   const maxRaySteps = Math.max(...rayStepCounts);
@@ -219,6 +255,8 @@ try {
     captures.push(await captureAndPersist(camera, 'learnedBillboard', Math.max(...rayStepCounts)));
     failurePhase = `camera-${camera.index}-world-tangent-covariance`;
     captures.push(await captureAndPersist(camera, 'worldCovariance', maxRaySteps));
+    failurePhase = `camera-${camera.index}-flow-kernel-moment-covariance`;
+    captures.push(await captureAndPersist(camera, 'kernelMomentCovariance', maxRaySteps));
     failurePhase = `camera-${camera.index}-ridge-transport-ridge-extinction`;
     captures.push(await captureAndPersist(camera, 'ridgeTransportRidgeExtinction', maxRaySteps));
     failurePhase = `camera-${camera.index}-ridge-transport-total-extinction`;
@@ -290,6 +328,11 @@ try {
     captureConfig: {
       orbitAngles,
       rayStepCounts,
+      flowKernel: {
+        strength: flowKernelStrength,
+        radiusWorld: flowKernelRadius,
+        coherence: flowKernelCoherence,
+      },
       smoke: 'off',
       simulatorAdvance: false,
       expectedFrameCount,
@@ -316,7 +359,9 @@ try {
       rejectsMissingPartialBlankCapture: true,
       rejectsCachedStaticOutput: true,
       rejectsRendererFallback: true,
+      preflightsEveryFootprintFamilyBeforeHashAdmission: true,
     },
+    footprintFamilyPreflight,
     browserEvents: socket.browserEvents,
   };
   rejectFalseClosure(report);
@@ -326,6 +371,7 @@ try {
     'analytic-billboard': 'analyticBillboard',
     'learned-billboard': 'learnedBillboard',
     'world-tangent-covariance': 'worldCovariance',
+    'flow-kernel-moment-covariance': 'kernelMomentCovariance',
   };
   const firstAudit = report.captures.find(capture => capture.footprintAudit)?.footprintAudit;
   const cameraRows = [];
@@ -359,6 +405,16 @@ try {
           effectiveIntegratedAlphaSum: capture.footprintAudit.effectiveIntegratedAlphaSum,
           relativeError: capture.footprintAudit.relativeError,
         },
+        ...(mode === 'kernelMomentCovariance' ? {
+          kernelTreatment: {
+            identity: capture.flowKernelIdentity,
+            candidateAdmissionAuthority: capture.flowKernelCandidateAdmissionAuthority,
+            firstMomentAuthority: 'zero-first-moment-candidate-centers-fixed-v0',
+            strength: capture.flowKernelEffective?.strength,
+            radiusWorld: capture.flowKernelEffective?.radiusWorld,
+            coherence: capture.flowKernelEffective?.coherence,
+          },
+        } : {}),
         metrics,
       });
     }
@@ -389,13 +445,16 @@ try {
     },
     trainCameraIndices: [centerCameraIndex],
     heldOutCameraIndices: initialization.cameras.map(camera => camera.index).filter(index => index !== centerCameraIndex),
-    covarianceCeiling: 'world-gradient-tangent-plane-diagonal-covariance-no-free-3d-rotation-v0',
+    covarianceCeiling: 'world-gradient-or-flow-kernel-rank-one-tangent-covariance-no-full-3d-covariance-v0',
     supportCeiling: 'current-structural-ridge-owned-candidates-omit-legitimate-non-ridge-full-flame-filaments-v0',
     cameraRows,
     summary: covarianceAnalysis.summary,
     sourceOrbitReport: captureReportPath,
   };
-  await validateCameraHoldoutReport(holdoutReport, { expectedCameraCount: initialization.cameras.length });
+  await validateCameraHoldoutReport(holdoutReport, {
+    expectedCameraCount: initialization.cameras.length,
+    requireKernelMoment: true,
+  });
   writeFileSync(reportPath, JSON.stringify(report, null, 2));
   writeFileSync(holdoutReportPath, JSON.stringify(holdoutReport, null, 2));
   console.log(JSON.stringify({
@@ -714,6 +773,18 @@ function runtimeInitializationSource(config) {
           prototype.setControls({ boundarySplatMode: 'world_covariance', raySteps: request.raySteps });
           operator.setComposition('splat-only-v0');
           modeAuthority = 'world-gradient-tangent-covariance-v0';
+        } else if (request.mode === 'kernelMomentCovariance') {
+          operator.setAppearanceAssay('off');
+          operator.setPresentation('beauty');
+          prototype.setControls({
+            boundarySplatMode: 'kernel_moment_covariance',
+            raySteps: request.raySteps,
+            flowKernelStrength: ${JSON.stringify(config.flowKernelStrength)},
+            flowKernelRadius: ${JSON.stringify(config.flowKernelRadius)},
+            flowKernelCoherence: ${JSON.stringify(config.flowKernelCoherence)},
+          });
+          operator.setComposition('splat-only-v0');
+          modeAuthority = '${KERNEL_MOMENT_AUTHORITY}';
         } else if (expectedTransportMasks[request.mode]) {
           operator.setPresentation('beauty');
           operator.setComposition('raymarch-only-v0');
@@ -745,7 +816,7 @@ function runtimeInitializationSource(config) {
         const metrics = pixelMetrics({ ...sample.image, rgba });
         if (!metrics.nonblank) throw new Error('missing, partial, or blank capture: ' + request.key);
         const effectiveRaySteps = sample.volumePresentationReceipt?.effectiveRayQuality?.raySteps ?? sample.controls?.raySteps ?? null;
-        const footprintAudit = ['analyticBillboard', 'learnedBillboard', 'worldCovariance'].includes(request.mode)
+        const footprintAudit = ['analyticBillboard', 'learnedBillboard', 'worldCovariance', 'kernelMomentCovariance'].includes(request.mode)
           ? await prototype.sampleBoundarySplatFootprintAudit()
           : null;
         const record = {
@@ -777,6 +848,9 @@ function runtimeInitializationSource(config) {
           boundarySplatInstanceCount: sample.boundarySplatInstanceCount,
           boundarySplatOverflowCount: sample.boundarySplatOverflowCount,
           boundarySplatFallbackReason: sample.boundarySplatFallbackReason,
+          flowKernelIdentity: sample.flowKernelIdentity,
+          flowKernelEffective: sample.flowKernelEffective,
+          flowKernelCandidateAdmissionAuthority: sample.flowKernelCandidateAdmissionAuthority,
           volumePresentationReceipt: sample.volumePresentationReceipt,
           raymarchSmokePresentationReceipt: sample.raymarchSmokePresentationReceipt,
           appearanceDecompositionReceipt: sample.appearanceDecompositionReceipt,
@@ -894,7 +968,7 @@ function runtimeInitializationSource(config) {
 
       function analyzeCovariance() {
         const maxRaySteps = Math.max(...${JSON.stringify(config.rayStepCounts)});
-        const familyModes = ['analyticBillboard', 'learnedBillboard', 'worldCovariance'];
+        const familyModes = ['analyticBillboard', 'learnedBillboard', 'worldCovariance', 'kernelMomentCovariance'];
         const center = cameras.reduce((best, camera) => Math.abs(camera.angle) < Math.abs(best.angle) ? camera : best);
         const rows = [];
         for (const camera of cameras) {
@@ -1071,6 +1145,12 @@ function rejectFalseClosure(report) {
   if (report.captures.some(capture => capture.requestedRaySteps !== capture.effectiveRaySteps)) {
     throw new Error('requested/effective ray-step disagreement');
   }
+  if (report.captures.some(capture => capture.mode === 'kernelMomentCovariance'
+    && (Math.abs(capture.flowKernelEffective?.strength - flowKernelStrength) > 1e-6
+      || Math.abs(capture.flowKernelEffective?.radiusWorld - flowKernelRadius) > 1e-6
+      || Math.abs(capture.flowKernelEffective?.coherence - flowKernelCoherence) > 1e-6))) {
+    throw new Error('requested/effective flow kernel control disagreement');
+  }
   if (report.captures.some(capture => capture.frameCount !== report.frozenState.baseFrameCount || capture.simStepCount !== report.frozenState.baseSimStepCount)) {
     throw new Error('simulator state changed during frozen orbit');
   }
@@ -1117,6 +1197,9 @@ function parseArgs(argv) {
     '--holdout-report',
     '--ray-steps',
     '--orbit-angles',
+    '--flow-kernel-strength',
+    '--flow-kernel-radius',
+    '--flow-kernel-coherence',
     '--expected-frame-count',
     '--expected-sim-step-count',
     '--expected-controls-hash',
