@@ -298,7 +298,7 @@ const boundaryFireBranch = core.match(/if \(boundarySurfaceMode > 0\.5\) \{[\s\S
 assert.ok(boundaryFireBranch, 'Boundary-fire shader branch is discoverable for sidecar source contracts');
 const bakedOnlyBranch = boundaryFireBranch[0].match(/if \(boundarySidecarSource > 0\.5 && boundarySidecarSource <= 1\.5\) \{([\s\S]*?)\} else \{/);
 assert.ok(bakedOnlyBranch, 'Baked sidecar mode has a distinct branch from live/mix');
-assert.match(bakedOnlyBranch[1], /sampleWorldBoundarySidecar\(p\)/, 'Baked sidecar mode samples the baked structure field');
+assert.match(bakedOnlyBranch[1], /sampleWorldFlowReconstructedSidecar\(p, reconstructed\)/, 'Baked sidecar mode lazily consumes the shared reconstructed baked-structure sample');
 assert.doesNotMatch(bakedOnlyBranch[1], /liveBoundarySupportAt/, 'Baked sidecar mode must not pay the live seven-tap boundary support path per ray step');
 assert.match(boundaryFireBranch[0], /if \(boundarySidecarSource > 1\.5\) \{[\s\S]*mix\(boundarySupport, boundarySidecarSample\.x, 0\.5\)/, 'Mix sidecar mode is the explicit expensive live+baked comparison path');
 assert.match(core, /boundaryStructureSource:\s*boundarySidecarSourceName/, 'Debug state reports the effective boundary structure source');
@@ -1351,7 +1351,7 @@ assert.match(core, /uniforms\[203\]\s*=\s*pyroRadianceChroma/, 'CPU uploads Radi
 assert.match(core, /uniforms\[212\]\s*=\s*pyroFlamePaint/, 'CPU uploads flame paint gain into the Pyro luma uniform block');
 assert.match(core, /uniforms\[213\]\s*=\s*pyroFlameLuma/, 'CPU uploads flame luminance into the Pyro luma uniform block');
 assert.match(core, /writePyroPaletteUniform/, 'CPU uploads editable Pyro palette color endpoints');
-assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*328\)/, 'previous view-projection matrix shifts after Bite-stack, flow, palette, topology-shell lab, boundary-fire, boundary sidecar reconstruction, sidecar display, selective live render controls, and scalar activity receiver uniforms');
+assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*332\)/, 'previous view-projection matrix shifts after Bite-stack, flow, palette, topology-shell lab, boundary-fire, boundary sidecar reconstruction, sidecar display, selective live render controls, scalar activity receiver, and flow reconstruction uniforms');
 assert.match(core, /paletteShape/, 'debug state exposes editable Pyro palette shape');
 assert.match(core, /lumaShape/, 'debug state exposes independent Pyro luma shape');
 assert.match(core, /radianceShape/, 'debug state exposes Pyro radiance gate/spill/warmth shape');
