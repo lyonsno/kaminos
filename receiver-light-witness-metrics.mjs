@@ -17,6 +17,8 @@ export function measureReceiverLightDelta(onImage, mutedImage, region = {}) {
   let changedPixels = 0;
   let positiveLumaPixels = 0;
   let warmPositivePixels = 0;
+  let surfacePositivePixels = 0;
+  let detachedPositivePixels = 0;
   let positiveLumaTotal = 0;
   let maxPositiveLumaDelta = 0;
 
@@ -34,7 +36,14 @@ export function measureReceiverLightDelta(onImage, mutedImage, region = {}) {
         positiveLumaPixels += 1;
         positiveLumaTotal += lumaDelta;
         maxPositiveLumaDelta = Math.max(maxPositiveLumaDelta, lumaDelta);
-        if (dr > db + 1 && dg > db) warmPositivePixels += 1;
+        if (dr > db + 1 && dg > db) {
+          warmPositivePixels += 1;
+          const mutedSurfacePresent = mutedRow[index] > 0
+            || mutedRow[index + 1] > 0
+            || mutedRow[index + 2] > 0;
+          if (mutedSurfacePresent) surfacePositivePixels += 1;
+          else detachedPositivePixels += 1;
+        }
       }
     }
   }
@@ -48,6 +57,9 @@ export function measureReceiverLightDelta(onImage, mutedImage, region = {}) {
     changedPixels,
     positiveLumaPixels,
     warmPositivePixels,
+    surfacePositivePixels,
+    detachedPositivePixels,
+    surfacePositiveRatio: surfacePositivePixels / Math.max(1, warmPositivePixels),
     meanPositiveLumaDelta: positiveLumaTotal / Math.max(1, positiveLumaPixels),
     maxPositiveLumaDelta,
   };
@@ -101,36 +113,51 @@ export function measureReceiverLightSignal(image, region = {}) {
 
 export function evaluateReceiverLightAssay(onImage, mutedImage, options = {}) {
   const region = options.region || {};
+  const backgroundRegion = options.backgroundRegion || null;
   const onSignal = measureReceiverLightSignal(onImage, region);
   const mutedSignal = measureReceiverLightSignal(mutedImage, region);
   const delta = measureReceiverLightDelta(onImage, mutedImage, region);
+  const backgroundDelta = backgroundRegion
+    ? measureReceiverLightDelta(onImage, mutedImage, backgroundRegion)
+    : null;
   const minimumSignalPixels = Math.max(100, Math.ceil(onSignal.sampledPixels * 0.002));
-  const maximumMutedPixels = Math.max(4, Math.floor(mutedSignal.sampledPixels * 0.0001));
+  const minimumSurfacePixels = Math.max(100, Math.ceil(mutedSignal.sampledPixels * 0.002));
+  const minimumSurfacePositiveRatio = Number(options.minimumSurfacePositiveRatio ?? 0.5);
+  const maximumBackgroundDeltaPixels = backgroundDelta
+    ? Math.max(4, Math.floor(backgroundDelta.sampledPixels * 0.0001))
+    : null;
   const failures = [];
 
-  if (mutedSignal.litPixels > maximumMutedPixels || mutedSignal.meanLuma > 0.25 || mutedSignal.maxLuma > 3) {
-    failures.push('muted-control-not-black');
-  }
   if (onSignal.litPixels < minimumSignalPixels || onSignal.warmPixels < minimumSignalPixels) {
     failures.push('receiver-signal-too-sparse');
+  }
+  if (mutedSignal.litPixels < minimumSurfacePixels) {
+    failures.push('muted-receiver-surface-too-sparse');
   }
   if (delta.warmPositivePixels < minimumSignalPixels || delta.meanPositiveLumaDelta < 4) {
     failures.push('receiver-delta-too-weak');
   }
+  if (delta.surfacePositiveRatio < minimumSurfacePositiveRatio) {
+    failures.push('receiver-delta-detached-from-muted-surface');
+  }
+  if (backgroundDelta && backgroundDelta.changedPixels > maximumBackgroundDeltaPixels) {
+    failures.push('empty-background-receiver-spill');
+  }
 
   return {
-    identity: 'receiver-light-binary-assay-v0',
+    identity: 'receiver-light-surface-contact-assay-v1',
     accepted: failures.length === 0,
     failures,
     thresholds: {
       minimumSignalPixels,
-      maximumMutedPixels,
-      maximumMutedMeanLuma: 0.25,
-      maximumMutedLuma: 3,
+      minimumSurfacePixels,
+      minimumSurfacePositiveRatio,
+      maximumBackgroundDeltaPixels,
       minimumMeanPositiveLumaDelta: 4,
     },
     onSignal,
     mutedSignal,
     delta,
+    backgroundDelta,
   };
 }

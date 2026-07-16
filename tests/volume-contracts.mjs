@@ -14,8 +14,8 @@ assert.ok(existsSync(corePath), 'volume-core.js exists');
 const core = readFileSync(corePath, 'utf8');
 const topologyShellLabBlock = core.match(/let curlActivity = smoothstep[\s\S]*?let inspectShellMask =/)?.[0] || '';
 
-assert.match(index, /TIER2_RECEIVER_LIGHT_PASS_IDENTITY\s*=\s*'tier2-opt-in-receiver-buffer-light-pass-v0'/, 'main renderer names the Tier 2 opt-in receiver-buffer light pass');
-assert.match(index, /TIER2_RECEIVER_MASK_AUTHORITY\s*=\s*'opt-in-receiver-buffer-required-v0'/, 'Tier 2 receiver light preserves explicit opt-in receiver-mask authority');
+assert.match(index, /TIER2_RECEIVER_LIGHT_PASS_IDENTITY\s*=\s*'tier2-depth-normal-receiver-surface-light-pass-v1'/, 'main renderer names the Tier 2 depth-normal receiver-surface light pass');
+assert.match(index, /TIER2_RECEIVER_MASK_AUTHORITY\s*=\s*'scene-prepass-visible-surface-depth-normal-v1'/, 'Tier 2 receiver light names visible prepass depth and normals as receiver authority');
 assert.match(index, /TIER2_RECEIVER_SPLAT_MOMENT_ENVELOPE_SOURCE\s*=\s*'gpu-splat-radiance-coverage-depth-moments-v0'/, 'Tier 2 receiver light consumes native GPU splat radiance, coverage, and depth moments');
 assert.match(index, /attachmentAuthority:\s*'native-shared-device-gpu-texture-only-v0'/, 'Tier 2 receiver light names direct shared-device GPU textures as its only light authority');
 assert.match(index, /effectiveAttachmentIdentity:\s*null/, 'Tier 2 receiver light starts unavailable instead of advertising a fallback light source');
@@ -23,10 +23,10 @@ assert.match(index, /volumePrototype\?\.receiverLightAttachments\?\.\(\)/, 'Tier
 assert.match(index, /attachments\.device\s*===\s*sharedGpu\.device/, 'Tier 2 receiver light rejects attachments from a different WebGPU device');
 assert.match(index, /sourceTexture\s*=\s*attachments\.radianceTexture/, 'Tier 2 receiver light directly binds the producer-owned radiance texture');
 assert.match(index, /sourceTexture\s*=\s*attachments\.momentsTexture/, 'Tier 2 receiver light directly binds the producer-owned moments texture');
-assert.match(index, /createTier2ReceiverBufferLightPass/, 'main renderer builds a separate receiver-buffer light pass');
-assert.match(index, /scene-prepass-depth-dynamic-receiver-mask-v0/, 'Tier 2 receiver light restricts illumination to dynamic rendered scene geometry');
+assert.match(index, /createTier2ReceiverSurfaceLightPass/, 'main renderer builds a separate receiver-surface light pass');
+assert.match(index, /scene-prepass-depth-normal-material-response-v1/, 'Tier 2 receiver light restricts illumination to visible rendered scene surfaces');
 assert.match(index, /state\.attachmentGeneration\s*=\s*attachments\.textureGeneration/, 'Tier 2 receiver light reports the effective native texture generation');
-assert.doesNotMatch(index.slice(index.indexOf('function createTier2ReceiverBufferLightPass'), index.indexOf('async function initKaminosVolumeRoute')), /CanvasTexture|lastFrameEnergy|Math\.sin/, 'Tier 2 receiver light has no canvas, scalar-energy, or sinusoidal fallback authority');
+assert.doesNotMatch(index.slice(index.indexOf('function createTier2ReceiverSurfaceLightPass'), index.indexOf('async function initKaminosVolumeRoute')), /CanvasTexture|lastFrameEnergy|Math\.sin/, 'Tier 2 receiver light has no canvas, scalar-energy, or sinusoidal fallback authority');
 assert.match(index, /cpuReadbackAuthority:\s*false/, 'Tier 2 receiver light must not use CPU readback as lighting authority');
 assert.match(index, /hiddenThreeLightAuthority:\s*false/, 'Tier 2 receiver light must not hide a Three light as lighting authority');
 assert.match(index, /canvasBridgeAuthority:\s*false/, 'Tier 2 receiver light must not use the stale volume canvas bridge as lighting authority');

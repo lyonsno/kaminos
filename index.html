@@ -9031,7 +9031,11 @@ async function initScene() {
   const aoOutput = mix(float(1.0), denoisePass.r, aoIntensity);
   const baseSceneOutput = scenePass.mul(vec4(vec3(aoOutput), 1));
   tier2ReceiverLightPass?.dispose?.();
-  tier2ReceiverLightPass = createTier2ReceiverBufferLightPass(baseSceneOutput, prePassDepth);
+  tier2ReceiverLightPass = createTier2ReceiverSurfaceLightPass(
+    baseSceneOutput,
+    prePassDepth,
+    prePassNormal
+  );
   renderPipeline.outputNode = tier2ReceiverLightPass.outputNode;
   window.kaminosTier2ReceiverLightDebugState = () => tier2ReceiverLightPass?.debugState?.() || {
     identity: TIER2_RECEIVER_LIGHT_PASS_IDENTITY,
@@ -9704,9 +9708,9 @@ function isKaminosVolumeSmokeRoute(params = new URLSearchParams(window.location.
   return params.get('kaminos_volume_smoke') === '1';
 }
 
-const TIER2_RECEIVER_LIGHT_PASS_IDENTITY = 'tier2-opt-in-receiver-buffer-light-pass-v0';
-const TIER2_RECEIVER_MASK_AUTHORITY = 'opt-in-receiver-buffer-required-v0';
-const TIER2_RECEIVER_BUFFER_SOURCE = 'scene-prepass-depth-dynamic-receiver-mask-v0';
+const TIER2_RECEIVER_LIGHT_PASS_IDENTITY = 'tier2-depth-normal-receiver-surface-light-pass-v1';
+const TIER2_RECEIVER_MASK_AUTHORITY = 'scene-prepass-visible-surface-depth-normal-v1';
+const TIER2_RECEIVER_BUFFER_SOURCE = 'scene-prepass-depth-normal-material-response-v1';
 const TIER2_RECEIVER_SUPPORT_IDENTITY = 'combustion-front-receiver-support-v0';
 const TIER2_RECEIVER_SUPPORT_AUTHORITY = 'combustion-front-topology-sidecar-v0+reaction-front-stage-fields-v0';
 const TIER2_RECEIVER_SPLAT_MOMENT_ENVELOPE_SOURCE = 'gpu-splat-radiance-coverage-depth-moments-v0';
@@ -19786,7 +19790,7 @@ function createVolumeMainRendererBridge() {
   };
 }
 
-function createTier2ReceiverBufferLightPass(baseOutputNode, sceneDepthNode) {
+function createTier2ReceiverSurfaceLightPass(baseOutputNode, sceneDepthNode, sceneNormalNode) {
   const params = new URLSearchParams(window.location.search);
   const drawSize = renderer.getDrawingBufferSize(new THREE.Vector2());
 
@@ -19894,7 +19898,11 @@ function createTier2ReceiverBufferLightPass(baseOutputNode, sceneDepthNode) {
     .add(spreadRadianceNode.g.mul(0.7152))
     .add(spreadRadianceNode.b.mul(0.0722));
   const receiverWarmSpectralBasisNode = vec3(1.0, 0.38, 0.08);
-  const sceneGeometryReceiverMaskNode = float(1.0).sub(step(float(0.999), sceneDepthNode));
+  const sceneDepthSampleNode = sceneDepthNode.sample(viewportUV).r;
+  const sceneNormalSampleNode = sceneNormalNode.sample(viewportUV).rgb.normalize();
+  const sceneGeometryReceiverMaskNode = float(1.0).sub(step(float(0.999), sceneDepthSampleNode));
+  const receiverFacingNode = sceneNormalSampleNode.z.abs().mul(0.65).add(0.35);
+  const receiverMaterialResponseNode = baseOutputNode.rgb.mul(0.65).add(vec3(0.35));
   const receiverStrength = uniform(0.0);
   const isolateMix = uniform(isTier2ReceiverLightIsolateRoute(params) ? 1.0 : 0.0);
   const receiverSupportNode = spreadCoverageNode.mul(0.2).add(0.8).clamp(0.8, 1.0);
@@ -19902,8 +19910,13 @@ function createTier2ReceiverBufferLightPass(baseOutputNode, sceneDepthNode) {
     .mul(spreadEnergyNode)
     .mul(receiverSupportNode)
     .mul(sceneGeometryReceiverMaskNode)
+    .mul(receiverFacingNode)
+    .mul(receiverMaterialResponseNode)
     .mul(receiverStrength);
-  const receiverLightNode = vec4(receiverSignalNode, 1.0);
+  const dimReceiverSurfaceNode = baseOutputNode.rgb
+    .mul(0.08)
+    .mul(sceneGeometryReceiverMaskNode);
+  const receiverLightNode = vec4(dimReceiverSurfaceNode.add(receiverSignalNode), 1.0);
   const outputNode = mix(
     baseOutputNode.add(vec4(receiverSignalNode, 0.0)),
     receiverLightNode,
@@ -19954,7 +19967,7 @@ function createTier2ReceiverBufferLightPass(baseOutputNode, sceneDepthNode) {
     effectiveRouteIdentity: 'receiver-light-route-inactive-v0',
     active: false,
     isolate: isolateMix.value > 0,
-    receiverCount: 1,
+    receiverCount: 0,
     receiverSelectionIdentity: TIER2_RECEIVER_BUFFER_SOURCE,
     receiverRenderFrameCount: 0,
     lastRenderTargetSize: { width: drawSize.x, height: drawSize.y },
@@ -20053,6 +20066,7 @@ function createTier2ReceiverBufferLightPass(baseOutputNode, sceneDepthNode) {
     outputNode,
     update() {
       state.active = routeActive();
+      state.receiverCount = Number(volumeSceneContext?.debugState?.()?.meshCount || 0);
       state.isolate = state.active && (isTier2ReceiverLightIsolateRoute() || state.witnessIsolate);
       state.effectiveRouteIdentity = !state.active
         ? 'receiver-light-route-inactive-v0'

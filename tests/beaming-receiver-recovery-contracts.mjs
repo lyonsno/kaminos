@@ -33,16 +33,16 @@ requirePatterns(index, 'route', [
 requirePatterns(core, 'receiver support', [
   [/COMBUSTION_FRONT_RECEIVER_SUPPORT_IDENTITY\s*=\s*'combustion-front-receiver-support-v0'/, 'support has stable identity'],
   [/COMBUSTION_FRONT_RECEIVER_SUPPORT_AUTHORITY\s*=\s*'combustion-front-topology-sidecar-v0\+reaction-front-stage-fields-v0'/, 'support names its source authority'],
-  [/COMBUSTION_FRONT_RECEIVER_SUPPORT_CONSUMER\s*=\s*'tier2-opt-in-receiver-buffer-light-pass-v0'/, 'support names its consumer'],
+  [/COMBUSTION_FRONT_RECEIVER_SUPPORT_CONSUMER\s*=\s*'tier2-depth-normal-receiver-surface-light-pass-v1'/, 'support names its consumer'],
   [/supportRole:\s*'lighting-input-not-rendered-receiver-light'/, 'support cannot masquerade as rendered light'],
-  [/receiverMaskAuthority:\s*'opt-in-receiver-buffer-required-v0'/, 'support requires an opted-in receiver mask'],
+  [/receiverMaskAuthority:\s*'scene-prepass-visible-surface-depth-normal-v1'/, 'support names visible prepass receiver authority'],
   [/const receiverSupport = buildCombustionFrontReceiverSupport/, 'readback builds support from live metrics'],
   [/reactionFrontAtlas,\s*\n\s*receiverSupport,/, 'readback carries support beside the atlas'],
 ]);
 
 requirePatterns(index, 'receiver light', [
-  [/TIER2_RECEIVER_LIGHT_PASS_IDENTITY\s*=\s*'tier2-opt-in-receiver-buffer-light-pass-v0'/, 'light pass has stable identity'],
-  [/TIER2_RECEIVER_MASK_AUTHORITY\s*=\s*'opt-in-receiver-buffer-required-v0'/, 'light pass preserves mask authority'],
+  [/TIER2_RECEIVER_LIGHT_PASS_IDENTITY\s*=\s*'tier2-depth-normal-receiver-surface-light-pass-v1'/, 'light pass has stable identity'],
+  [/TIER2_RECEIVER_MASK_AUTHORITY\s*=\s*'scene-prepass-visible-surface-depth-normal-v1'/, 'light pass preserves visible-surface authority'],
   [/TIER2_RECEIVER_SPLAT_MOMENT_ENVELOPE_SOURCE\s*=\s*'gpu-splat-radiance-coverage-depth-moments-v0'/, 'native splat attachment ABI names its authority'],
   [/attachmentAuthority:\s*'native-shared-device-gpu-texture-only-v0'/, 'debug state names native shared-device texture authority'],
   [/effectiveAttachmentIdentity:\s*null/, 'debug state starts unavailable instead of advertising fallback light'],
@@ -50,10 +50,12 @@ requirePatterns(index, 'receiver light', [
   [/attachments\.device\s*===\s*sharedGpu\.device/, 'receiver rejects a different WebGPU device'],
   [/sourceTexture\s*=\s*attachments\.radianceTexture/, 'receiver binds the producer radiance texture directly'],
   [/sourceTexture\s*=\s*attachments\.momentsTexture/, 'receiver binds the producer moments texture directly'],
-  [/createTier2ReceiverBufferLightPass/, 'renderer builds a separate receiver light pass'],
-  [/createTier2ReceiverBufferLightPass\(baseOutputNode, sceneDepthNode\)/, 'receiver pass consumes the rendered scene prepass depth'],
-  [/scene-prepass-depth-dynamic-receiver-mask-v0/, 'dynamic rendered geometry has stable receiver-mask authority'],
+  [/createTier2ReceiverSurfaceLightPass/, 'renderer builds a separate receiver light pass'],
+  [/createTier2ReceiverSurfaceLightPass\(baseOutputNode, sceneDepthNode, sceneNormalNode\)/, 'receiver pass consumes rendered scene depth and normals'],
+  [/scene-prepass-depth-normal-material-response-v1/, 'dynamic rendered geometry has stable receiver-surface authority'],
   [/sceneGeometryReceiverMaskNode/, 'light is restricted to scene geometry instead of proxy planes'],
+  [/sceneNormalSampleNode/, 'receiver response consumes visible surface normals'],
+  [/receiverMaterialResponseNode/, 'receiver response preserves material variation'],
   [/receiverRadianceLowResTarget/, 'renderer downsamples live fire radiance before spreading it'],
   [/receiverRadianceBlurHorizontalTarget/, 'renderer owns a horizontal low-resolution radiance blur target'],
   [/receiverRadianceBlurVerticalTarget/, 'renderer owns a vertical low-resolution radiance blur target'],
@@ -63,7 +65,7 @@ requirePatterns(index, 'receiver light', [
   [/volume_receiver_light_isolate/, 'route can isolate receiver-light evidence'],
   [/window\.kaminosTier2ReceiverLightDebugState/, 'light-pass state is exposed to witnesses'],
   [/window\.kaminosTier2ReceiverLightSetWitnessForegroundMute/, 'witnesses can hide foreground fire without hiding receiver illumination'],
-  [/window\.kaminosTier2ReceiverLightSetWitnessIsolate/, 'witnesses can force a receiver-only black-background assay'],
+  [/window\.kaminosTier2ReceiverLightSetWitnessIsolate/, 'witnesses can force a receiver-surface assay'],
   [/window\.kaminosTier2ReceiverLightSetWitnessHudMute/, 'witnesses can hide viewport chrome without hiding receiver illumination'],
   [/supportIdentity:\s*TIER2_RECEIVER_SUPPORT_IDENTITY/, 'debug state preserves support identity'],
   [/supportAuthority:\s*TIER2_RECEIVER_SUPPORT_AUTHORITY/, 'debug state preserves support authority'],
@@ -77,7 +79,7 @@ requirePatterns(index, 'receiver light', [
 ]);
 
 const receiverPassSource = index.slice(
-  index.indexOf('function createTier2ReceiverBufferLightPass'),
+  index.indexOf('function createTier2ReceiverSurfaceLightPass'),
   index.indexOf('async function initKaminosVolumeRoute'),
 );
 assert.doesNotMatch(receiverPassSource, /receiverProxies|tier2-receiver-proxy-/, 'proxy planes must not masquerade as scene receivers');
@@ -131,8 +133,8 @@ requirePatterns(witness, 'witness', [
   [/receiver-light attachment cadence did not advance within 5s/, 'cadence timeout names the actual evidence horizon'],
   [/receiver-light rendered evidence overexposed/, 'overexposed evidence fails loud'],
   [/kaminosTier2ReceiverLightSetWitnessMute/, 'the witness can mute only the receiver contribution without changing scene composition'],
-  [/kaminosTier2ReceiverLightSetWitnessIsolate\?\.\(true\)/, 'receiver proof removes scene and environment lighting during its binary assay'],
-  [/kaminosTier2ReceiverLightSetWitnessHudMute\?\.\(true\)/, 'receiver proof removes viewport chrome during its binary assay'],
+  [/kaminosTier2ReceiverLightSetWitnessIsolate\?\.\(true\)/, 'receiver proof removes scene and environment lighting during its surface-contact assay'],
+  [/kaminosTier2ReceiverLightSetWitnessHudMute\?\.\(true\)/, 'receiver proof removes viewport chrome during its surface-contact assay'],
   [/visibleNonRendererChildren !== 0/, 'receiver proof rejects incomplete viewport isolation'],
   [/requestedRouteIdentity/, 'receiver evidence records the requested URL route identity'],
   [/effectiveRouteIdentity/, 'receiver evidence records the effective runtime route identity'],
@@ -143,8 +145,8 @@ requirePatterns(witness, 'witness', [
   [/foregroundMutedAtCapture/, 'paired evidence records that foreground fire could not supply the measured delta'],
   [/finally\s*\{[\s\S]*kaminosTier2ReceiverLightSetWitnessMute\?\.\(false\)/, 'mute-only diagnostics restore receiver output even when capture fails'],
   [/receiverLightDeltaEvidence/, 'reports preserve receiver-region delta evidence'],
-  [/receiver-light binary assay rejected receiver signal/, 'a nonblank flame or scene cannot substitute for positive receiver-light output over a black control'],
-  [/receiverLightDebug\.identity !== 'tier2-opt-in-receiver-buffer-light-pass-v0'/, 'wrong light-pass identity fails loud'],
+  [/receiver-light surface-contact assay rejected receiver signal/, 'a detached overlay cannot substitute for positive illumination on a visible receiver surface'],
+  [/receiverLightDebug\.identity !== 'tier2-depth-normal-receiver-surface-light-pass-v1'/, 'wrong light-pass identity fails loud'],
   [/attachmentIdentity !== 'gpu-splat-radiance-coverage-depth-moments-v0'/, 'wrong requested native attachment fails loud'],
   [/effectiveAttachmentIdentity !== 'gpu-splat-radiance-coverage-depth-moments-v0'/, 'missing effective native attachment fails loud'],
   [/attachmentAuthority !== 'native-shared-device-gpu-texture-only-v0'/, 'fallback attachment authority fails loud'],
@@ -158,8 +160,9 @@ requirePatterns(receiverMetrics, 'receiver delta metrics', [
   [/receiver-light-paired-delta-v0/, 'brick-wall evidence carries a paired light-on/light-muted delta identity'],
   [/warmPositivePixels/, 'paired metrics distinguish warm receiver gain from arbitrary frame change'],
   [/matching dimensions and channels/, 'mismatched paired captures fail loud'],
-  [/receiver-light-binary-assay-v0/, 'receiver evidence carries an absolute binary assay identity'],
-  [/muted-control-not-black/, 'ambient-contaminated null frames fail loud'],
+  [/receiver-light-surface-contact-assay-v1/, 'receiver evidence carries a surface-contact assay identity'],
+  [/receiver-delta-detached-from-muted-surface/, 'detached warm overlays fail loud'],
+  [/empty-background-receiver-spill/, 'empty-background spill fails loud'],
   [/receiver-signal-too-sparse/, 'missing receiver light fails independently of scene visibility'],
 ]);
 

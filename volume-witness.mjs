@@ -2465,11 +2465,11 @@ async function main() {
       identity: expectsRenderedReceiverLightEvidence ? (expectsReceiverLightBrickWallEvidence ? 'tier2-receiver-light-brick-wall' : 'tier2-receiver-light-isolate') : null,
       accepted: Boolean(
         receiverLightDebug &&
-        receiverLightDebug.identity === 'tier2-opt-in-receiver-buffer-light-pass-v0' &&
-        receiverLightDebug.receiverMaskAuthority === 'opt-in-receiver-buffer-required-v0' &&
+        receiverLightDebug.identity === 'tier2-depth-normal-receiver-surface-light-pass-v1' &&
+        receiverLightDebug.receiverMaskAuthority === 'scene-prepass-visible-surface-depth-normal-v1' &&
         receiverLightDebug.supportIdentity === 'combustion-front-receiver-support-v0' &&
         receiverLightDebug.supportAuthority === 'combustion-front-topology-sidecar-v0+reaction-front-stage-fields-v0' &&
-        receiverLightDebug.receiverBufferSource === 'scene-prepass-depth-dynamic-receiver-mask-v0' &&
+        receiverLightDebug.receiverBufferSource === 'scene-prepass-depth-normal-material-response-v1' &&
         receiverLightDebug.attachmentIdentity === 'gpu-splat-radiance-coverage-depth-moments-v0' &&
         receiverLightDebug.effectiveAttachmentIdentity === 'gpu-splat-radiance-coverage-depth-moments-v0' &&
         receiverLightDebug.attachmentAuthority === 'native-shared-device-gpu-texture-only-v0' &&
@@ -2500,7 +2500,7 @@ async function main() {
           effectiveRouteIdentity: receiverLightDebug?.effectiveRouteIdentity ?? null,
         })}`);
       }
-      if (!receiverLightDebug || receiverLightDebug.identity !== 'tier2-opt-in-receiver-buffer-light-pass-v0') {
+      if (!receiverLightDebug || receiverLightDebug.identity !== 'tier2-depth-normal-receiver-surface-light-pass-v1') {
         throw new Error(`wrong rendered Tier 2 receiver-light identity: ${JSON.stringify(receiverLightDebug)}`);
       }
       if (
@@ -2604,7 +2604,7 @@ async function main() {
           });
           isolateReceipt = isolateEval.result.value || null;
           if (isolateReceipt?.isolate !== true || isolateReceipt?.isolateMix !== 1) {
-            throw new Error(`receiver-light binary assay could not isolate receiver output: ${JSON.stringify(isolateReceipt)}`);
+            throw new Error(`receiver-light surface-contact assay could not isolate receiver output: ${JSON.stringify(isolateReceipt)}`);
           }
           const hudMuteEval = await wsRequest(ws, 'Runtime.evaluate', {
             expression: 'window.kaminosTier2ReceiverLightSetWitnessHudMute?.(true) ?? null',
@@ -2612,7 +2612,7 @@ async function main() {
           });
           hudMuteReceipt = hudMuteEval.result.value || null;
           if (hudMuteReceipt?.hudMuted !== true || hudMuteReceipt?.visibleNonRendererChildren !== 0) {
-            throw new Error(`receiver-light binary assay could not remove viewport chrome: ${JSON.stringify(hudMuteReceipt)}`);
+            throw new Error(`receiver-light surface-contact assay could not remove viewport chrome: ${JSON.stringify(hudMuteReceipt)}`);
           }
           const foregroundMuteEval = await wsRequest(ws, 'Runtime.evaluate', {
             expression: 'window.kaminosTier2ReceiverLightSetWitnessForegroundMute?.(true) ?? null',
@@ -2666,7 +2666,10 @@ async function main() {
         const assay = evaluateReceiverLightAssay(
           parsePngRgba(receiverOnBuffer),
           parsePngRgba(receiverMutedBuffer),
-          { region: { xMin: 0, xMax: 1, yMin: 0, yMax: 1 } },
+          {
+            region: { xMin: 0, xMax: 1, yMin: 0, yMax: 1 },
+            backgroundRegion: { xMin: 0.02, xMax: 0.18, yMin: 0.05, yMax: 0.4 },
+          },
         );
         receiverLightDeltaEvidence = {
           ...assay,
@@ -2679,7 +2682,7 @@ async function main() {
           receiverMutedPath,
         };
         if (!receiverLightDeltaEvidence.accepted) {
-          throw new Error(`receiver-light binary assay rejected receiver signal: ${JSON.stringify(receiverLightDeltaEvidence)}`);
+          throw new Error(`receiver-light surface-contact assay rejected receiver signal: ${JSON.stringify(receiverLightDeltaEvidence)}`);
         }
       }
       const pageShot = await wsRequest(ws, 'Page.captureScreenshot', {
@@ -3424,9 +3427,9 @@ async function main() {
       !receiverSupport ||
       receiverSupport.identity !== 'combustion-front-receiver-support-v0' ||
       receiverSupport.authority !== 'combustion-front-topology-sidecar-v0+reaction-front-stage-fields-v0' ||
-      receiverSupport.intendedConsumer !== 'tier2-opt-in-receiver-buffer-light-pass-v0' ||
+      receiverSupport.intendedConsumer !== 'tier2-depth-normal-receiver-surface-light-pass-v1' ||
       receiverSupport.supportRole !== 'lighting-input-not-rendered-receiver-light' ||
-      receiverSupport.receiverMaskAuthority !== 'opt-in-receiver-buffer-required-v0' ||
+      receiverSupport.receiverMaskAuthority !== 'scene-prepass-visible-surface-depth-normal-v1' ||
       !Number.isFinite(receiverSupport.supportScalar) ||
       !Number.isFinite(receiverSupport.activeVoxelRatio)
     ) {
@@ -3898,9 +3901,9 @@ async function main() {
         receiverSupport &&
         receiverSupport.identity === 'combustion-front-receiver-support-v0' &&
         receiverSupport.authority === 'combustion-front-topology-sidecar-v0+reaction-front-stage-fields-v0' &&
-        receiverSupport.intendedConsumer === 'tier2-opt-in-receiver-buffer-light-pass-v0' &&
+        receiverSupport.intendedConsumer === 'tier2-depth-normal-receiver-surface-light-pass-v1' &&
         receiverSupport.supportRole === 'lighting-input-not-rendered-receiver-light' &&
-        receiverSupport.receiverMaskAuthority === 'opt-in-receiver-buffer-required-v0' &&
+        receiverSupport.receiverMaskAuthority === 'scene-prepass-visible-surface-depth-normal-v1' &&
         Number.isFinite(receiverSupport.supportScalar) &&
         Number.isFinite(receiverSupport.activeVoxelRatio)
       ),
@@ -5018,11 +5021,11 @@ async function main() {
         receiverLightEvidence = receiverLightDebug ? {
           identity: expectsRenderedReceiverLightEvidence ? (expectsReceiverLightBrickWallEvidence ? 'tier2-receiver-light-brick-wall' : 'tier2-receiver-light-isolate') : null,
           accepted: Boolean(
-            receiverLightDebug.identity === 'tier2-opt-in-receiver-buffer-light-pass-v0' &&
-            receiverLightDebug.receiverMaskAuthority === 'opt-in-receiver-buffer-required-v0' &&
+            receiverLightDebug.identity === 'tier2-depth-normal-receiver-surface-light-pass-v1' &&
+            receiverLightDebug.receiverMaskAuthority === 'scene-prepass-visible-surface-depth-normal-v1' &&
             receiverLightDebug.supportIdentity === 'combustion-front-receiver-support-v0' &&
             receiverLightDebug.supportAuthority === 'combustion-front-topology-sidecar-v0+reaction-front-stage-fields-v0' &&
-            receiverLightDebug.receiverBufferSource === 'scene-prepass-depth-dynamic-receiver-mask-v0' &&
+            receiverLightDebug.receiverBufferSource === 'scene-prepass-depth-normal-material-response-v1' &&
             receiverLightDebug.attachmentIdentity === 'gpu-splat-radiance-coverage-depth-moments-v0' &&
             receiverLightDebug.effectiveAttachmentIdentity === 'gpu-splat-radiance-coverage-depth-moments-v0' &&
             receiverLightDebug.attachmentAuthority === 'native-shared-device-gpu-texture-only-v0' &&

@@ -58,16 +58,40 @@ assert.equal(binarySignal.identity, 'receiver-light-absolute-signal-v0');
 assert.equal(binarySignal.litPixels, 3000);
 assert.equal(binarySignal.warmPixels, 3000);
 
-const honestAssay = evaluateReceiverLightAssay(binaryReceiver, black);
-assert.equal(honestAssay.identity, 'receiver-light-binary-assay-v0');
-assert.equal(honestAssay.accepted, true, 'warm receiver-only output over a black null frame must pass');
+const dimReceiverSurface = image(100, 100, (x, y) => (
+  x >= 20 && x < 80 && y >= 15 && y < 85 ? [8, 8, 8] : [0, 0, 0]
+));
+const illuminatedReceiverSurface = image(100, 100, (x, y) => (
+  x >= 20 && x < 80 && y >= 15 && y < 85 ? [96, 44, 8] : [0, 0, 0]
+));
+const surfaceAssayOptions = {
+  backgroundRegion: { xMin: 0, xMax: 1, yMin: 0, yMax: 0.1 },
+};
+const honestAssay = evaluateReceiverLightAssay(
+  illuminatedReceiverSurface,
+  dimReceiverSurface,
+  surfaceAssayOptions,
+);
+assert.equal(honestAssay.identity, 'receiver-light-surface-contact-assay-v1');
+assert.equal(honestAssay.accepted, true, 'warm gain on a visible muted receiver surface must pass');
 assert.deepEqual(honestAssay.failures, []);
+assert.ok(honestAssay.delta.surfacePositiveRatio > 0.99);
 
-const contaminatedAssay = evaluateReceiverLightAssay(binaryReceiver, ambientControl);
-assert.equal(contaminatedAssay.accepted, false, 'ambient or environment light in the null frame must fail loud');
+const detachedAssay = evaluateReceiverLightAssay(binaryReceiver, black, surfaceAssayOptions);
+assert.equal(detachedAssay.accepted, false, 'a warm detached overlay over black cannot prove receiver illumination');
 assert.ok(
-  contaminatedAssay.failures.includes('muted-control-not-black'),
-  `expected black-control failure, got ${JSON.stringify(contaminatedAssay)}`,
+  detachedAssay.failures.includes('receiver-delta-detached-from-muted-surface'),
+  `expected detached-signal failure, got ${JSON.stringify(detachedAssay)}`,
+);
+
+const backgroundSpill = image(100, 100, (x, y) => (
+  y < 10 ? [48, 24, 4] : (x >= 20 && x < 80 && y >= 15 && y < 85 ? [96, 44, 8] : [0, 0, 0])
+));
+const contaminatedAssay = evaluateReceiverLightAssay(backgroundSpill, dimReceiverSurface, surfaceAssayOptions);
+assert.equal(contaminatedAssay.accepted, false, 'warm gain in the named empty-background region must fail loud');
+assert.ok(
+  contaminatedAssay.failures.includes('empty-background-receiver-spill'),
+  `expected empty-background spill failure, got ${JSON.stringify(contaminatedAssay)}`,
 );
 
 const missingReceiverAssay = evaluateReceiverLightAssay(black, black);

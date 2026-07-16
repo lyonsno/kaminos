@@ -73,7 +73,7 @@ const REACTION_FRONT_STAGE_IDENTITY = 'reaction-front-stage-fields-v0';
 const REACTION_FRONT_ATLAS_SCHEMA = 'kaminos.volume.reaction-front-atlas.v0';
 const COMBUSTION_FRONT_RECEIVER_SUPPORT_IDENTITY = 'combustion-front-receiver-support-v0';
 const COMBUSTION_FRONT_RECEIVER_SUPPORT_AUTHORITY = 'combustion-front-topology-sidecar-v0+reaction-front-stage-fields-v0';
-const COMBUSTION_FRONT_RECEIVER_SUPPORT_CONSUMER = 'tier2-opt-in-receiver-buffer-light-pass-v0';
+const COMBUSTION_FRONT_RECEIVER_SUPPORT_CONSUMER = 'tier2-depth-normal-receiver-surface-light-pass-v1';
 const BROWSER_RESIDUAL_FEATURE_AUTHORITY = 'shader-material-authority-residual-feature-v0';
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 90, 96, 128, 160];
@@ -1321,7 +1321,7 @@ function buildCombustionFrontReceiverSupport(metrics = {}) {
     authority: COMBUSTION_FRONT_RECEIVER_SUPPORT_AUTHORITY,
     intendedConsumer: COMBUSTION_FRONT_RECEIVER_SUPPORT_CONSUMER,
     supportRole: 'lighting-input-not-rendered-receiver-light',
-    receiverMaskAuthority: 'opt-in-receiver-buffer-required-v0',
+    receiverMaskAuthority: 'scene-prepass-visible-surface-depth-normal-v1',
     supportSpace: 'simulation-grid-summary',
     supportScalar,
     activeVoxelRatio,

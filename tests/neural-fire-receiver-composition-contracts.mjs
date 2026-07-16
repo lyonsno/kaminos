@@ -303,7 +303,7 @@ assert.match(
 );
 
 const receiverPassSource = page.slice(
-  page.indexOf('function createTier2ReceiverBufferLightPass'),
+  page.indexOf('function createTier2ReceiverSurfaceLightPass'),
   page.indexOf('async function initKaminosVolumeRoute'),
 );
 assert.doesNotMatch(receiverPassSource, /CanvasTexture|createElement\('canvas'\)|getContext\('2d'\)/, 'native receiver pass has no canvas envelope path');
