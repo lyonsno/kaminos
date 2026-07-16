@@ -120,6 +120,7 @@ try {
     assert.equal(expectedFrameCount, expectedWarmupTarget, 'checksum-anchor bridge frame authority must equal the warmup target');
     assert.equal(expectedSimStepCount, expectedWarmupTarget, 'checksum-anchor bridge simulation authority must equal the warmup target');
     assert.equal(route.searchParams.get('warmup_steps'), String(expectedWarmupTarget), 'checksum-anchor bridge URL must request the exact warmup target');
+    assert.equal(route.searchParams.get('freeze_after_warmup'), '1', 'checksum-anchor bridge must request exact post-warmup freeze');
     assert.equal(route.searchParams.get('settings_preset_authority'), null, 'checksum-anchor bridge cannot impersonate shared-preset visual admission');
   } else {
     assert.equal(requestedPresetId, PRESET_ID, 'requested route must pin the Flamebowl preset');
@@ -173,6 +174,10 @@ try {
     assert.equal(admitted.warmupReceipt?.completedSteps, expectedWarmupTarget, 'effective anchor receipt step disagrees');
     assert.equal(admitted.warmupReceipt?.fluidSha256, expectedAnchorFluidSha256, 'effective fluid anchor hash disagrees');
     assert.equal(admitted.warmupReceipt?.frontSha256, expectedAnchorFrontSha256, 'effective front anchor hash disagrees');
+    assert.equal(admitted.freezeAfterWarmupRequested, true, 'effective route dropped the post-warmup freeze request');
+    assert.equal(admitted.postWarmupFreezeReceipt?.paused, true, 'effective route did not freeze immediately after anchor import');
+    assert.equal(admitted.postWarmupFreezeReceipt?.frameCount, expectedWarmupTarget, 'effective post-warmup freeze frame disagrees');
+    assert.equal(admitted.postWarmupFreezeReceipt?.simStepCount, expectedWarmupTarget, 'effective post-warmup freeze simulation step disagrees');
   } else {
     assert.equal(admitted.sourceSettingsPresetId, PRESET_ID, 'stale/default preset replaced requested preset');
     assert.equal(admitted.sourceSettingsPresetAuthority, PRESET_AUTHORITY, 'effective preset authority disagreement');
@@ -1032,6 +1037,8 @@ function runtimeInitializationSource(config) {
             warmupComplete: wrapperBefore.warmupComplete,
             warmupStarted: wrapperBefore.warmupStarted,
             warmupReceipt: wrapperBefore.warmupReceipt,
+            freezeAfterWarmupRequested: wrapperBefore.freezeAfterWarmupRequested,
+            postWarmupFreezeReceipt: wrapperBefore.postWarmupFreezeReceipt,
           },
           sourceAuthority: {
             fullFlameTarget: 'smoke-off-complete-flame-local-emission-extinction-v0',
@@ -1091,7 +1098,10 @@ function rejectFalseClosure(report) {
       || replay.warmupReceipt?.authority !== report.captureConfig.expectedWarmupAuthority
       || replay.warmupReceipt?.completedSteps !== report.captureConfig.expectedWarmupTarget
       || replay.warmupReceipt?.fluidSha256 !== report.captureConfig.expectedAnchorFluidSha256
-      || replay.warmupReceipt?.frontSha256 !== report.captureConfig.expectedAnchorFrontSha256) {
+      || replay.warmupReceipt?.frontSha256 !== report.captureConfig.expectedAnchorFrontSha256
+      || replay.postWarmupFreezeReceipt?.paused !== true
+      || replay.postWarmupFreezeReceipt?.frameCount !== report.captureConfig.expectedWarmupTarget
+      || replay.postWarmupFreezeReceipt?.simStepCount !== report.captureConfig.expectedWarmupTarget) {
       throw new Error('completed report lost checksum-anchor bridge authority');
     }
   }

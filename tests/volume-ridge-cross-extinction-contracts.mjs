@@ -45,5 +45,9 @@ assert.match(witness, /expectedWarmupAuthority[\s\S]*initialization\.summary\.re
 assert.match(witness, /expectedWarmupTarget[\s\S]*initialization\.summary\.replayAuthority\.warmupReceipt\?\.completedSteps/, 'witness rejects replay-step substitution');
 assert.match(witness, /expectedAnchorFluidSha256[\s\S]*initialization\.summary\.replayAuthority\.warmupReceipt\?\.fluidSha256/, 'witness rejects replay fluid-anchor substitution');
 assert.match(witness, /expectedAnchorFrontSha256[\s\S]*initialization\.summary\.replayAuthority\.warmupReceipt\?\.frontSha256/, 'witness rejects replay front-anchor substitution');
+assert.match(wrapper, /freeze_after_warmup/, 'wrapper exposes an explicit witness-owned post-anchor freeze request');
+assert.match(wrapper, /await prototype\(\)\.setActive\(true\);[\s\S]*setSelectiveHeadLiveCapturePaused\?\.\(true\)/, 'wrapper freezes in the same microtask that activates the imported anchor');
+assert.match(witness, /route\.searchParams\.get\(['"]freeze_after_warmup['"]\)[\s\S]*['"]1['"]/, 'checksum-anchor bridge requires the exact post-warmup freeze request');
+assert.match(witness, /postWarmupFreezeReceipt[\s\S]*paused/, 'completed replay authority preserves the effective post-warmup freeze receipt');
 
 console.log('volume ridge cross-extinction contracts passed');

@@ -136,13 +136,19 @@
     const warmupAuthority = warmupTarget === 0
       ? 'fresh-live-settings-no-anchor-v0'
       : WARMUP_AUTHORITY;
+    const freezeAfterWarmupRaw = params.get('freeze_after_warmup');
+    const freezeAfterWarmupRequested = freezeAfterWarmupRaw === '1';
     const anchorBase = String(params.get('anchor_base') || 'http://127.0.0.1:18537').replace(/\/$/, '');
     let warmupStarted = false;
     let warmupComplete = warmupTarget === 0;
     let warmupReceipt = warmupTarget === 0
       ? { ok: true, authority: warmupAuthority, completedSteps: 0, importedAnchor: false }
       : null;
+    let postWarmupFreezeReceipt = null;
     let warmupError = warmupParamValid ? null : `invalid warmup_steps: ${JSON.stringify(warmupParam)}`;
+    if (freezeAfterWarmupRaw !== null && !freezeAfterWarmupRequested) {
+      warmupError ||= `invalid freeze_after_warmup: ${JSON.stringify(freezeAfterWarmupRaw)}`;
+    }
     if (requestedRaymarchSmokePresentationRaw !== null
       && !raymarchSmokePresentations.includes(requestedRaymarchSmokePresentationRaw)) {
       warmupError ||= `unsupported-raymarch-smoke-presentation-mode:${requestedRaymarchSmokePresentationRaw}`;
@@ -423,6 +429,8 @@
         warmupComplete,
         warmupStarted,
         warmupReceipt,
+        freezeAfterWarmupRequested,
+        postWarmupFreezeReceipt,
         effectiveRole,
         roleAuthority: state?.selectiveHeadLiveRoleAuthority || null,
         compositionAuthority: state?.selectiveHeadLiveCompositionAuthority || null,
@@ -475,6 +483,14 @@
       prototype().setRaymarchSmokePresentationMode(requestedRaymarchSmokePresentation);
       prototype().setAppearanceDecompositionMode(requestedAppearanceAssay);
       await prototype().setActive(true);
+      if (freezeAfterWarmupRequested) {
+        postWarmupFreezeReceipt = prototype().setSelectiveHeadLiveCapturePaused?.(true) || null;
+        if (!postWarmupFreezeReceipt?.paused
+          || postWarmupFreezeReceipt.frameCount !== warmupTarget
+          || postWarmupFreezeReceipt.simStepCount !== warmupTarget) {
+          throw new Error(`post-warmup freeze failed at frame ${postWarmupFreezeReceipt?.frameCount ?? 'unknown'} step ${postWarmupFreezeReceipt?.simStepCount ?? 'unknown'}`);
+        }
+      }
     }
 
     async function captureFrame(options = {}) {
