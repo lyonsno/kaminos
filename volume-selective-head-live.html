@@ -407,8 +407,7 @@
         && postWarmupFreezeReceipt.simStepCount === warmupTarget;
       const rendererSettled = warmupComplete
         && state?.active
-        && effectiveRole === requestedRole
-        && (presentationSettled || frozenAnchorSettled);
+        && (frozenAnchorSettled || (effectiveRole === requestedRole && presentationSettled));
       return {
         routeIdentity: ROUTE_IDENTITY,
         status: warmupError || state?.error || fallback
