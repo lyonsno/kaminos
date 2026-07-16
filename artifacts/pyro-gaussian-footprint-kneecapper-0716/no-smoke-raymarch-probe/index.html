@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>No-Smoke Raymarch Probe</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      background: #111;
+      color: #eee;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    body {
+      margin: 0;
+      padding: 24px;
+      background: #111;
+    }
+    h1, h2 {
+      margin: 0 0 12px;
+    }
+    p, li {
+      max-width: 1040px;
+      line-height: 1.45;
+      color: #ddd;
+    }
+    code {
+      color: #f5d187;
+      overflow-wrap: anywhere;
+    }
+    a {
+      color: #9dd2ff;
+    }
+    figure {
+      margin: 24px 0 0;
+      background: #181818;
+      border: 1px solid #333;
+      padding: 12px;
+      max-width: 1440px;
+    }
+    img {
+      width: 100%;
+      height: auto;
+      display: block;
+      background: #050505;
+    }
+    figcaption {
+      margin-top: 10px;
+      font-size: 13px;
+      line-height: 1.35;
+      color: #ccc;
+    }
+    .path {
+      display: block;
+      margin-top: 6px;
+      color: #f5d187;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+  </style>
+</head>
+<body>
+  <h1>No-Smoke Raymarch Probe</h1>
+  <p>
+    Local page for the same-basin raymarch-only probe requested on 2026-07-16.
+    The route requested <code>volume_smoke=0</code>, <code>composition=raymarch-only-v0</code>,
+    <code>role=truthHigh</code>, <code>volume_steps=160</code>, and <code>volume_render_scale=1</code>.
+  </p>
+  <p>
+    Important receipt caveat: the effective composition stayed <code>raymarch-only-v0</code>
+    with no fallback, but its raymarch authority is
+    <code>diagnostic-raymarch-selected-fields-fire-smoke-v0</code>, not a fire-only/smoke-suppressed authority.
+    Visually the frame still carries a broad blue-gray volume, so this is a diagnostic smoke-slider-zero probe,
+    not evidence that Kaminos currently exposes a clean same-settings no-smoke raymarch route.
+  </p>
+  <ul>
+    <li>Witness report: <a href="raymarch-only-smoke0-witness.json">raymarch-only-smoke0-witness.json</a></li>
+    <li>Route summary: <a href="requested-route-summary.json">requested-route-summary.json</a></li>
+    <li>Full requested URL: <a href="requested-url.txt">requested-url.txt</a></li>
+    <li>Parent R4 gallery: <a href="../footprint-oracle-r4-gallery.html">footprint-oracle-r4-gallery.html</a></li>
+  </ul>
+  <figure>
+    <a href="raymarch-only-smoke0-frame.png"><img src="raymarch-only-smoke0-frame.png" alt="Raymarch-only probe with volume_smoke=0"></a>
+    <figcaption>
+      Raymarch-only probe with <code>volume_smoke=0</code>; captured by <code>volume-selective-head-live-witness.mjs</code>
+      after 48 render/simulation steps.
+      <span class="path">/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/no-smoke-raymarch-probe/raymarch-only-smoke0-frame.png</span>
+    </figcaption>
+  </figure>
+</body>
+</html>

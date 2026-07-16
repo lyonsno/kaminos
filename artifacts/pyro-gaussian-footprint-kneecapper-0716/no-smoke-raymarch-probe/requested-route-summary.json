@@ -1,0 +1,25 @@
+{
+  "sourceMetadata": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-fresh-live-supervision-dryrun-20260715-r3/metadata.json",
+  "requestedUrlPath": "http://127.0.0.1:58179/volume-selective-head-live.html",
+  "selected": {
+    "role": "truthHigh",
+    "composition": "raymarch-only-v0",
+    "kaminos_volume_smoke": "1",
+    "volume_scene": "tall_plume",
+    "volume_smoke": "0",
+    "volume_density": "5.05",
+    "volume_fire": "0.35",
+    "volume_radiance": "0",
+    "volume_absorption": "0.4",
+    "volume_glow": "0",
+    "volume_steps": "160",
+    "volume_render_scale": "1",
+    "volume_resolution": "160",
+    "volume_boundary_splat_mode": "learned",
+    "volume_boundary_sidecar_source": "baked",
+    "volume_reaction_live_view": "boundary_fire",
+    "volume_quality_reason": "pyro-gaussian-footprint-no-smoke-raymarch-probe-0716",
+    "volume_temporal_accum": "0",
+    "volume_temporal_jitter": "0"
+  }
+}
