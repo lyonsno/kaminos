@@ -52,6 +52,8 @@ const SCALAR_ACTIVITY_RECEIVER_HOOK_IDENTITY = 'scalar-activity-receiver-hook-co
 const REACTION_FRONT_STAGE_IDENTITY = 'reaction-front-stage-fields-v0';
 const REACTION_FRONT_ATLAS_SCHEMA = 'kaminos.volume.reaction-front-atlas.v0';
 const BROWSER_RESIDUAL_FEATURE_AUTHORITY = 'shader-material-authority-residual-feature-v0';
+const INTRINSIC_PRESENTATION_TARGET_IDENTITY = 'candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0';
+const BEAUTY_PRESENTATION_TARGET_IDENTITY = 'authored-beauty-renderer-v0';
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160];
 const SELECTIVE_HEAD_LIVE_ROLES = new Set(['off', 'truthHigh', 'lowPhaseAligned', 'selectiveFullResidual']);
@@ -240,6 +242,30 @@ function normalizeRenderScale(value) {
   const requested = Number(value);
   if (!Number.isFinite(requested)) return 0.85;
   return Math.max(0.1, Math.min(1, requested));
+}
+
+function normalizeVolumePresentationMode(value) {
+  const requestedRaw = String(value || 'beauty').trim().toLowerCase();
+  const requested = requestedRaw === 'intrinsic' ? 'intrinsic' : 'beauty';
+  return {
+    requestedRaw,
+    requested,
+    fallbackReason: requestedRaw === requested ? null : `unsupported-volume-presentation-mode:${requestedRaw}`,
+  };
+}
+
+function boundarySplatIntrinsicPresentationOverrides(controls = {}) {
+  return {
+    ...controls,
+    boundarySplatMode: 'off',
+    boundarySplatFeatureCapture: false,
+    volumeResidualMode: 'off',
+    fireRenderMode: 'stock',
+    shellInspectMode: 'boundary_fire',
+    raySteps: controls.raySteps,
+    adaptiveRays: controls.adaptiveRays,
+    renderScale: controls.renderScale,
+  };
 }
 
 function normalizeBrowserResidualMode(value) {
@@ -3908,6 +3934,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
   let boundaryFireLuma = clamp(u.boundary_fire_display.x, 0.0, 5.0);
   let selectiveRaymarchSmokeOnlyPartition = clamp(u.selective_live_render_controls.x, 0.0, 1.0);
   let selectiveRaymarchFireAuthority = 1.0 - selectiveRaymarchSmokeOnlyPartition;
+  let supervisionFireOnlyTarget = clamp(u.boundary_fire_display.y, 0.0, 1.0);
   let canonicalSmokeContent = 1.0 - minimalPlumeRenderScene * step(0.5, canonicalContentMode) * (1.0 - step(1.5, canonicalContentMode));
   let canonicalFireContent = minimalPlumeRenderScene * step(0.5, canonicalContentMode);
   let canonicalFireRenderContent = mix(1.0, canonicalFireContent, minimalPlumeRenderScene);
@@ -4121,6 +4148,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     let quenchedEmberFleck = emberFleck * (1.0 - quenchCoreCollapse * 0.32);
     let vaporAlpha = clamp((vaporCarrier + quenchCoreCollapse * 0.52) * rayStepOpacity * (0.22 + absorptionGain * 0.070), 0.0, 0.22);
     smokeAlpha = clamp(smokeAlpha + vaporAlpha, 0.0, 0.28);
+    smokeAlpha = smokeAlpha * (1.0 - supervisionFireOnlyTarget);
     let fireSnuffDamping = 1.0 - clamp(max(vaporCarrier * 1.18, quenchCoreCollapse * 0.92), 0.0, 0.985);
     let stockFireAlpha = mix(
       clamp(visibleFlameAlphaCarrier * tallPlumeTransitionAlphaStagger * canonicalFireRenderContent * rayStepOpacity * fireGain * (0.58 + radianceGain * 0.18) * bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper * fireSnuffDamping * flameBodyAuthority, 0.0, fireAlphaMax),
@@ -4361,6 +4389,26 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     let baseRadianceEmission = fireRadianceEmission(renderTemp, quenchedFlameDetail, quenchedFireLick, quenchedEmberFleck, radianceGain, glowGain)
       * mix(1.0, bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, bonfireRenderScene)
       * flameBodyAuthority;
+    let directFlameUnitEmission = fireRadianceEmission(renderTemp, quenchedFlameDetail, quenchedFireLick, quenchedEmberFleck, 1.0, 0.0)
+      * mix(1.0, bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, bonfireRenderScene)
+      * flameBodyAuthority;
+    var directFlameCandidateSidecar = vec4<f32>(0.0);
+    var directFlameCandidateFireSignal = 0.0;
+    var directFlameCandidateStructuralSignal = 0.0;
+    var directFlameCandidateSupport = 0.0;
+    if (supervisionFireOnlyTarget > 0.5) {
+      directFlameCandidateSidecar = sampleWorldBoundarySidecar(p);
+      directFlameCandidateFireSignal = flame * 1.25
+        + flameDetail * 0.52
+        + combustionFront * 0.86
+        + fireLick * 0.72
+        + heat * 0.24;
+      directFlameCandidateStructuralSignal = directFlameCandidateSidecar.z
+        * smoothstep(0.055, 0.32, directFlameCandidateSidecar.y)
+        * smoothstep(0.018, 0.16, directFlameCandidateFireSignal);
+      directFlameCandidateSupport = directFlameCandidateStructuralSignal * step(0.11, directFlameCandidateStructuralSignal);
+    }
+    let directFlameCandidateAlpha = clamp(directFlameCandidateSupport * rayStepOpacity * 0.55, 0.0, 0.28);
     let shellTemperature = clamp((rawTemp + thermalSupport * 0.42 + reactionSupport * 0.28 + frontSupport * 0.18 + shellBiteGain * edgeSupport * 0.10) * shellHeatGain, 0.0, 2.4);
     let shellWarmth = smoothstep(0.10, 1.85, shellTemperature);
     let shellHotCore = mix(vec3<f32>(1.75, 0.16, 0.018), vec3<f32>(2.80, 0.68, 0.055), shellWarmth);
@@ -4825,14 +4873,22 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     local = mix(local, oracleDisplayColor, oracleDisplay * smoothstep(0.015, 0.72, oracleDisplayCue));
     let pressureTierOverlay = pressureTierDebugOverlayColor(y);
     local = mix(local, pressureTierOverlay.rgb, pressureTierOverlay.a);
-    color = color + trans * (alpha * local + stockRenderMode * fireAlpha * pyroStockFireVisibility * radianceEmission * mix(0.82, 0.62, bonfireRenderScene) + smokeBacklight * pyroStockFireVisibility * selectiveRaymarchFireAuthority + shellSmokeBacklight * selectiveRaymarchFireAuthority + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma * rayStepOpacity * selectiveRaymarchFireAuthority * mix(mix(0.080, 0.030, pyroRadianceSpill), mix(0.012, 0.030, pyroRadianceSpill), 1.0 - pyroRadianceFireSourceWeight));
+    let standardRadianceContribution = alpha * local
+      + stockRenderMode * fireAlpha * pyroStockFireVisibility * radianceEmission * mix(0.82, 0.62, bonfireRenderScene)
+      + smokeBacklight * pyroStockFireVisibility * selectiveRaymarchFireAuthority
+      + shellSmokeBacklight * selectiveRaymarchFireAuthority
+      + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma * rayStepOpacity * selectiveRaymarchFireAuthority * mix(mix(0.080, 0.030, pyroRadianceSpill), mix(0.012, 0.030, pyroRadianceSpill), 1.0 - pyroRadianceFireSourceWeight);
+    let directFlameSupervisionContribution = stockRenderMode * directFlameCandidateAlpha * directFlameUnitEmission;
+    color = color + trans * mix(standardRadianceContribution, directFlameSupervisionContribution, supervisionFireOnlyTarget);
     let residualFeatureWeight = trans * rayStepOpacity;
     let residualRadianceLuma = max(dot(radianceEmission + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma, vec3<f32>(0.2126, 0.7152, 0.0722)), 0.0);
     residualRadianceAuthority = residualRadianceAuthority + residualFeatureWeight * clamp(residualRadianceLuma * 0.30 + pyroRadianceBoost * 0.75 + pyroFireRadianceEvent * 0.40, 0.0, 4.0);
     residualFireAuthority = residualFireAuthority + residualFeatureWeight * clamp(pyroRawCurrentFire * 1.05 + fireMix * 0.90 + pyroFireEventCarrier * 0.55, 0.0, 3.5);
     residualInterfaceAuthority = residualInterfaceAuthority + residualFeatureWeight * clamp(pyroInterfaceSignal * 0.85 + pyroBiteAlphaBoost * 0.36 + flameDetail * 0.18 + fireLick * 0.16, 0.0, 3.5);
     residualSmokeAuthority = residualSmokeAuthority + residualFeatureWeight * clamp(smoke * 0.55 + rawExtinction * 0.38 + microSmoke * 0.32 + pyroFoldExtinctionBoost * 0.18, 0.0, 3.0);
-    let extinctionStep = clamp(alpha * (0.46 + extinction * 0.16) + fireAlpha * 0.08, 0.0, 0.34);
+    let standardExtinctionStep = clamp(alpha * (0.46 + extinction * 0.16) + fireAlpha * 0.08, 0.0, 0.34);
+    let directFlameSupervisionExtinction = clamp(directFlameCandidateAlpha * 0.54, 0.0, 0.34);
+    let extinctionStep = mix(standardExtinctionStep, directFlameSupervisionExtinction, supervisionFireOnlyTarget);
     trans = trans * exp(-extinctionStep);
     t = t + localDt;
   }
@@ -5189,6 +5245,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const previousViewProj = new THREE.Matrix4();
   const uniforms = new Float32Array(344);
   let controlsSnapshot = applyRuntimeQualityControls(getControls());
+  let volumePresentationModeRequestedRaw = 'beauty';
+  let volumePresentationModeRequested = 'beauty';
+  let volumePresentationModeEffective = 'beauty';
+  let volumePresentationModeFallbackReason = null;
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
   let boundarySplatCapacity = Math.min(BOUNDARY_SPLAT_INITIAL_CAPACITY, gridCellCount(gridSize));
@@ -5209,6 +5269,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     routeIdentity: ROUTE_IDENTITY,
     requestedRoute: 'kaminos_volume_smoke=1',
     effectiveRoute: ROUTE_IDENTITY,
+    volumePresentationModeRequestedRaw,
+    volumePresentationModeRequested,
+    volumePresentationModeEffective,
+    volumePresentationModeFallbackReason,
+    volumePresentationTargetIdentity: BEAUTY_PRESENTATION_TARGET_IDENTITY,
+    volumePresentationReceipt: null,
     selectiveHeadLiveRole: normalizeSelectiveHeadLiveRole(controlsSnapshot.selectiveHeadLiveRole),
     selectiveHeadLiveEffectiveRole: 'off',
     selectiveHeadLiveRoleAuthority: SELECTIVE_HEAD_LIVE_ROLE_AUTHORITIES.off,
@@ -7618,8 +7684,101 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     device.queue.writeBuffer(browserResidualBuffer, 0, data);
   }
 
+  function effectiveVolumePresentationRayQuality() {
+    return {
+      raySteps: controlsSnapshot.raySteps,
+      adaptiveRays: controlsSnapshot.adaptiveRays,
+      renderScale: normalizeRenderScale(controlsSnapshot.renderScale),
+    };
+  }
+
+  function setVolumePresentationMode(value) {
+    const request = normalizeVolumePresentationMode(value);
+    volumePresentationModeRequestedRaw = request.requestedRaw;
+    volumePresentationModeRequested = request.requested;
+    volumePresentationModeEffective = request.requested;
+    volumePresentationModeFallbackReason = request.fallbackReason;
+    const targetIdentity = volumePresentationModeEffective === 'intrinsic'
+      ? INTRINSIC_PRESENTATION_TARGET_IDENTITY
+      : BEAUTY_PRESENTATION_TARGET_IDENTITY;
+    const effectiveRayQuality = effectiveVolumePresentationRayQuality();
+    const receipt = {
+      identity: 'volume-presentation-mode-receipt-v0',
+      requestedMode: volumePresentationModeRequestedRaw,
+      effectiveMode: volumePresentationModeEffective,
+      fallbackReason: volumePresentationModeFallbackReason,
+      targetIdentity,
+      effectiveRayQuality,
+      temporalHistoryContribution: volumePresentationModeEffective === 'intrinsic' ? 'suppressed' : 'authored-control',
+      authoredControlsMutated: false,
+      simulationAdvanced: false,
+      simulationReset: false,
+      cameraMutated: false,
+      passes: volumePresentationModeEffective === 'intrinsic'
+        ? {
+            raymarch: INTRINSIC_PRESENTATION_TARGET_IDENTITY,
+            splats: 'off',
+            residual: 'off',
+            featureCapture: 'off',
+            smoke: 'suppressed',
+          }
+        : {
+            raymarch: BEAUTY_PRESENTATION_TARGET_IDENTITY,
+            splats: 'authored-control',
+            residual: 'authored-control',
+            featureCapture: 'authored-control',
+            smoke: 'authored-control',
+          },
+    };
+    state.volumePresentationModeRequestedRaw = volumePresentationModeRequestedRaw;
+    state.volumePresentationModeRequested = volumePresentationModeRequested;
+    state.volumePresentationModeEffective = volumePresentationModeEffective;
+    state.volumePresentationModeFallbackReason = volumePresentationModeFallbackReason;
+    state.volumePresentationTargetIdentity = targetIdentity;
+    state.volumePresentationReceipt = receipt;
+    return { ...receipt, effectiveRayQuality: { ...effectiveRayQuality }, passes: { ...receipt.passes } };
+  }
+
+  function recordVolumePresentationApplication({
+    raymarchEncoded = false,
+    raymarchApplied = false,
+    splatsEncoded = false,
+    splatsApplied = false,
+    residualEncoded = false,
+    residualApplied = false,
+    featureCaptureEncoded = false,
+    featureCaptureApplied = false,
+    compositionEffective = 'raymarch-only-v0',
+    fallbackReason = null,
+  } = {}) {
+    const application = {
+      identity: 'volume-presentation-applied-pass-receipt-v0',
+      effectiveMode: volumePresentationModeEffective,
+      targetIdentity: volumePresentationModeEffective === 'intrinsic'
+        ? INTRINSIC_PRESENTATION_TARGET_IDENTITY
+        : BEAUTY_PRESENTATION_TARGET_IDENTITY,
+      compositionEffective,
+      raymarchEncoded: Boolean(raymarchEncoded),
+      raymarchApplied: Boolean(raymarchApplied),
+      splatsEncoded: Boolean(splatsEncoded),
+      splatsApplied: Boolean(splatsApplied),
+      residualEncoded: Boolean(residualEncoded),
+      residualApplied: Boolean(residualApplied),
+      featureCaptureEncoded: Boolean(featureCaptureEncoded),
+      featureCaptureApplied: Boolean(featureCaptureApplied),
+      smokeContribution: volumePresentationModeEffective === 'intrinsic' ? 'suppressed' : 'authored-control',
+      fallbackReason: fallbackReason || null,
+    };
+    state.volumePresentationReceipt = {
+      ...state.volumePresentationReceipt,
+      application,
+    };
+    return application;
+  }
+
   function browserResidualCanApply() {
-    return browserResidualRequested()
+    return volumePresentationModeEffective !== 'intrinsic'
+      && browserResidualRequested()
       && browserResidualModel
       && browserResidualPipeline
       && browserResidualSourcePipeline
@@ -7708,6 +7867,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const baseTemporalAccum = Math.max(0, Math.min(0.85, controlsSnapshot.temporalAccum ?? 0.25));
     const requestedTemporalAccum = Math.max(0, Math.min(0.85, baseTemporalAccum * bonfireAblation.temporal));
     uniforms[44] = lookFreeze ? 0 : (historyValid ? requestedTemporalAccum : 0);
+    const temporalAccumulationForPresentation = volumePresentationModeEffective === 'intrinsic' ? 0 : uniforms[44];
+    uniforms[44] = temporalAccumulationForPresentation;
     uniforms[45] = lookFreeze ? 0 : (controlsSnapshot.temporalJitter ?? 0.85);
     uniforms[46] = controlsSnapshot.historyClamp ?? 0.70;
     uniforms[47] = renderPhaseFrame % 4096;
@@ -7898,8 +8059,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     writePyroPaletteUniform(uniforms, 264, controlsSnapshot.pyroRadianceWarmColor, '#d18438');
     writePyroPaletteUniform(uniforms, 268, controlsSnapshot.pyroFlowCoolColor, '#2aa7b8');
     writePyroPaletteUniform(uniforms, 272, controlsSnapshot.pyroFlowHotColor, '#ff7a36');
-    const fireRenderModeName = normalizeFireRenderMode(controlsSnapshot.fireRenderMode);
-    const shellInspectModeName = normalizeShellInspectMode(controlsSnapshot.shellInspectMode);
+    const presentationControls = volumePresentationModeEffective === 'intrinsic'
+      ? boundarySplatIntrinsicPresentationOverrides(controlsSnapshot)
+      : controlsSnapshot;
+    const fireRenderModeName = normalizeFireRenderMode(presentationControls.fireRenderMode);
+    const shellInspectModeName = normalizeShellInspectMode(presentationControls.shellInspectMode);
     const boundarySidecarSourceName = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource);
     const boundarySidecarViewName = normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view);
     const boundarySidecarControls = controlsSnapshot.boundarySidecarControls || {};
@@ -7965,7 +8129,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[302] = boundaryFireUniforms.sootYellowing;
     uniforms[303] = boundaryFireUniforms.thermalWarmth;
     uniforms[304] = boundaryFireUniforms.fireLuma;
-    uniforms[305] = 0;
+    uniforms[305] = volumePresentationModeEffective === 'intrinsic' ? 1 : 0;
     uniforms[306] = 0;
     uniforms[307] = 0;
     uniforms[308] = boundarySidecarSourceValue(boundarySidecarSourceName);
@@ -8030,6 +8194,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundaryStructureSource = boundarySidecarSourceName;
     state.boundarySidecarView = boundarySidecarViewName;
     state.boundarySidecarDebug = boundarySidecarDebug(boundarySidecarSourceName);
+    if (state.volumePresentationReceipt) {
+      state.volumePresentationReceipt = {
+        ...state.volumePresentationReceipt,
+        effectiveRayQuality: effectiveVolumePresentationRayQuality(),
+      };
+    }
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
     state.volumeSceneAuthority = volumeSceneReceipt(controlsSnapshot.volumeScene);
     state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
@@ -8649,15 +8819,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function boundarySplatRequested() {
-    return normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode) !== 'off';
+    return volumePresentationModeEffective !== 'intrinsic'
+      && normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode) !== 'off';
   }
 
   function boundarySplatLearnedAttributesRequested() {
-    return normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode) === 'learned';
+    return volumePresentationModeEffective !== 'intrinsic'
+      && normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode) === 'learned';
   }
 
   function boundarySplatFeatureCaptureRequested() {
-    return normalizeBoundarySplatFeatureCapture(controlsSnapshot.boundarySplatFeatureCapture);
+    return volumePresentationModeEffective !== 'intrinsic'
+      && normalizeBoundarySplatFeatureCapture(controlsSnapshot.boundarySplatFeatureCapture);
   }
 
   function makeBoundarySplatCopyDisposition(candidateCopyBytes = 0, rendererIdentity = BOUNDARY_SPLAT_RENDERER_IDENTITY) {
@@ -9162,7 +9335,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       raf = 0;
       return;
     }
-    raf = requestAnimationFrame(render);
+    raf = 0;
     try {
       const cpuStart = performance.now();
       controls?.update?.();
@@ -9231,13 +9404,23 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           state.volumeReconstructionStyle = 'selective-head-live-fallback-raymarch';
           emitStatus({ phase: 'selective-head-live-composition-fallback', reason: state.selectiveHeadLiveCompositionFallbackReason });
         }
-        recordSelectiveHeadLivePassReceipt({
+        const selectivePassReceipt = recordSelectiveHeadLivePassReceipt({
           composition: composition.effective === 'off' ? composition.requested : composition.effective,
           raymarchEncoded,
           raymarchApplied,
           splatEncoded,
           splatApplied,
           fallbackReason: state.selectiveHeadLiveCompositionFallbackReason,
+        });
+        recordVolumePresentationApplication({
+          raymarchEncoded: selectivePassReceipt.raymarchEncoded,
+          raymarchApplied: selectivePassReceipt.raymarchApplied,
+          splatsEncoded: selectivePassReceipt.splatEncoded,
+          splatsApplied: selectivePassReceipt.splatApplied,
+          featureCaptureEncoded: state.boundarySplatFeatureCaptureEffective,
+          featureCaptureApplied: state.boundarySplatFeatureCaptureEffective,
+          compositionEffective: state.selectiveHeadLiveCompositionEffective,
+          fallbackReason: selectivePassReceipt.fallbackReason,
         });
         recordBrowserResidualCost({ applied: false });
       } else if (browserResidualCanApply()) {
@@ -9250,12 +9433,26 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         const residualApplied = encodeBrowserResidualPass(encoder, currentTexture.createView());
         const residualPassEncodeMs = performance.now() - residualEncodeStart;
         recordBrowserResidualCost({ applied: residualApplied, sourcePassEncodeMs, residualPassEncodeMs });
+        recordVolumePresentationApplication({
+          raymarchEncoded: true,
+          raymarchApplied: true,
+          residualEncoded: residualApplied,
+          residualApplied,
+          compositionEffective: 'authored-raymarch-plus-browser-residual-v0',
+        });
       } else {
         encodeDraw(encoder, currentTexture.createView(), 'kaminos volume canvas pass');
-        state.volumeReconstructionStyle = state.renderScale < 0.999 ? 'linear-css-upscale' : 'native-resolution';
+        state.volumeReconstructionStyle = volumePresentationModeEffective === 'intrinsic'
+          ? INTRINSIC_PRESENTATION_TARGET_IDENTITY
+          : (state.renderScale < 0.999 ? 'linear-css-upscale' : 'native-resolution');
         recordBrowserResidualCost({ applied: false });
+        recordVolumePresentationApplication({
+          raymarchEncoded: true,
+          raymarchApplied: true,
+          compositionEffective: 'raymarch-only-v0',
+        });
       }
-      encodeHistoryCopy(encoder, currentTexture);
+      if (volumePresentationModeEffective !== 'intrinsic') encodeHistoryCopy(encoder, currentTexture);
       encodeBoundarySplatTelemetry(encoder);
       device.queue.submit([encoder.finish()]);
       if (boundarySplatTelemetryCopyPending) void resolveBoundarySplatTelemetry();
@@ -9270,6 +9467,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       canvas.classList.remove('active');
       cancelAnimationFrame(raf);
       emitStatus({ phase: 'render-error', error: state.error });
+    } finally {
+      if (!selectiveHeadLiveCapturePaused && state.active) raf = requestAnimationFrame(render);
     }
   }
 
@@ -11323,6 +11522,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     encodeBoundarySidecar(encoder, { readBindGroup: sampleSelectiveHeadLiveFields?.sidecar || null });
     encodeBoundarySplats(encoder, { computeBindGroup: sampleSelectiveHeadLiveFields?.splat || null });
+    let presentationApplication = null;
     if (boundarySplatRequested()) {
       const composition = updateSelectiveHeadLiveCompositionState();
       let raymarchEncoded = false;
@@ -11378,7 +11578,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           boundarySplatCopyDisposition: state.boundarySplatCopyDisposition,
         };
       }
-      recordSelectiveHeadLivePassReceipt({
+      const selectivePassReceipt = recordSelectiveHeadLivePassReceipt({
         composition: composition.effective === 'off' ? composition.requested : composition.effective,
         raymarchEncoded,
         raymarchApplied,
@@ -11386,9 +11586,27 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         splatApplied,
         fallbackReason: state.selectiveHeadLiveCompositionFallbackReason,
       });
+      presentationApplication = recordVolumePresentationApplication({
+        raymarchEncoded: selectivePassReceipt.raymarchEncoded,
+        raymarchApplied: selectivePassReceipt.raymarchApplied,
+        splatsEncoded: selectivePassReceipt.splatEncoded,
+        splatsApplied: selectivePassReceipt.splatApplied,
+        featureCaptureEncoded: state.boundarySplatFeatureCaptureEffective,
+        featureCaptureApplied: state.boundarySplatFeatureCaptureEffective,
+        compositionEffective: state.selectiveHeadLiveCompositionEffective,
+        fallbackReason: selectivePassReceipt.fallbackReason,
+      });
       encodeBoundarySplatTelemetry(encoder, true);
     } else {
       encodeDraw(encoder, frameTexture.createView(), 'kaminos volume one-off readback pass', readbackPipeline);
+      state.volumeReconstructionStyle = volumePresentationModeEffective === 'intrinsic'
+        ? INTRINSIC_PRESENTATION_TARGET_IDENTITY
+        : (state.renderScale < 0.999 ? 'linear-css-upscale' : 'native-resolution');
+      presentationApplication = recordVolumePresentationApplication({
+        raymarchEncoded: true,
+        raymarchApplied: true,
+        compositionEffective: 'raymarch-only-v0',
+      });
     }
     encoder.copyTextureToBuffer(
       { texture: frameTexture },
@@ -11553,7 +11771,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ? await sampleBoundarySplatFeatureCapture(boundarySplatSample.instanceCount)
       : null;
     state.boundarySplatFeatureCapture = boundarySplatFeatureCapture;
-    const boundarySplatGpuProfile = boundarySplatRequested() ? await sampleBoundarySplatGpuProfile() : state.boundarySplatGpuProfile;
+    const boundarySplatGpuProfile = boundarySplatRequested()
+      ? (advanceSim
+          ? await sampleBoundarySplatGpuProfile()
+          : setBoundarySplatGpuProfile(makeBoundarySplatGpuProfile({
+              timestampStatus: 'suppressed',
+              reason: 'frozen-sample-profile-suppressed-no-sim-advance',
+              candidateCopyBytes: state.boundarySplatCopyBytesThisFrame ?? 0,
+              rendererIdentity: state.boundarySplatRendererIdentity,
+            })))
+      : state.boundarySplatGpuProfile;
     await buffer.mapAsync(GPUMapMode.READ);
     const data = new Uint8Array(buffer.getMappedRange());
     let litPixels = 0;
@@ -11911,6 +12138,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       boundarySplatGpuProfile,
       boundarySplatCopyBytesThisFrame: state.boundarySplatCopyBytesThisFrame,
       boundarySplatCopyDisposition: state.boundarySplatCopyDisposition,
+      volumePresentationReceipt: state.volumePresentationReceipt ? {
+        ...state.volumePresentationReceipt,
+        effectiveRayQuality: { ...state.volumePresentationReceipt.effectiveRayQuality },
+        passes: { ...state.volumePresentationReceipt.passes },
+      } : null,
+      volumePresentationApplication: presentationApplication ? { ...presentationApplication } : null,
+      selectiveHeadLivePassReceipt: state.selectiveHeadLivePassReceipt ? { ...state.selectiveHeadLivePassReceipt } : null,
       simReadback,
       majorantReadback,
       effectiveRoute: state.effectiveRoute,
@@ -12857,6 +13091,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   return {
+    setVolumePresentationMode,
     setControls(next) {
       const previousGrid = gridSize;
       const previousMajorantGrid = majorantGridSize;

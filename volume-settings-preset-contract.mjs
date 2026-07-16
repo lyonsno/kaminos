@@ -160,6 +160,7 @@ export function buildVolumeSettingsPresetVisualTarget(receipt, origin, view) {
   target.searchParams.set('role', viewSpec.role);
   target.searchParams.set('composition', viewSpec.composition);
   target.searchParams.set('warmup_steps', '0');
+  target.searchParams.set('volume_presentation', 'beauty');
   target.searchParams.set('settings_preset', receipt.presetId);
   target.searchParams.set('settings_preset_authority', receipt.sourcePresetAuthority);
   return target;
@@ -177,6 +178,11 @@ export function validateVolumeSettingsPresetVisualTarget(receipt, params) {
     || params.get('warmup_steps') !== '0') {
     throw new Error('visual target renderer view mismatch');
   }
+  const requestedPresentationModes = params.getAll('volume_presentation');
+  if (requestedPresentationModes.length > 1) throw new Error('visual target duplicates volume presentation identity');
+  if (requestedPresentationModes.length === 1 && !['beauty', 'intrinsic'].includes(requestedPresentationModes[0])) {
+    throw new Error(`unsupported visual target volume presentation: ${requestedPresentationModes[0]}`);
+  }
   const allowed = new Set([
     ...receipt.routeVolumeEntries.map(([key]) => key),
     'role',
@@ -184,6 +190,7 @@ export function validateVolumeSettingsPresetVisualTarget(receipt, params) {
     'warmup_steps',
     'settings_preset',
     'settings_preset_authority',
+    'volume_presentation',
   ]);
   const unexpected = [...params].map(([key]) => key).filter(key => !allowed.has(key));
   if (unexpected.length > 0) {
@@ -192,7 +199,7 @@ export function validateVolumeSettingsPresetVisualTarget(receipt, params) {
   for (const key of ['role', 'composition', 'warmup_steps', 'settings_preset', 'settings_preset_authority']) {
     if (params.getAll(key).length !== 1) throw new Error(`visual target duplicates parameter: ${key}`);
   }
-  const requestedVolumeEntries = [...params].filter(([key]) => key.startsWith('volume_'));
+  const requestedVolumeEntries = [...params].filter(([key]) => key.startsWith('volume_') && key !== 'volume_presentation');
   if (requestedVolumeEntries.length !== receipt.routeVolumeEntries.length) {
     throw new Error('visual target volume route is partial or contains extra settings');
   }
@@ -213,10 +220,16 @@ export function validateVolumeSettingsPresetTarget(receipt, params) {
     const values = params.getAll(key);
     if (values.length !== 1 || values[0] !== value) throw new Error(`target settings route mismatch for ${key}`);
   }
+  const requestedPresentationModes = params.getAll('volume_presentation');
+  if (requestedPresentationModes.length > 1) throw new Error('target duplicates volume presentation identity');
+  if (requestedPresentationModes.length === 1 && !['beauty', 'intrinsic'].includes(requestedPresentationModes[0])) {
+    throw new Error(`unsupported target volume presentation: ${requestedPresentationModes[0]}`);
+  }
   const allowed = new Set([
     ...receipt.routeEntries.map(([key]) => key),
     'settings_preset',
     'settings_preset_authority',
+    'volume_presentation',
   ]);
   const unexpected = [...params].map(([key]) => key).filter(key => !allowed.has(key));
   if (unexpected.length > 0) throw new Error(`target settings route contains unexpected parameters: ${unexpected.join(',')}`);

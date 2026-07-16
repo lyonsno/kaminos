@@ -418,6 +418,9 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .volume-pyro-atlas-wrap { margin-top: 8px; border-top: 1px solid #282828; padding-top: 8px; }
 #volume-pyro-dynamic-atlas { width: 100%; height: 54px; border: 1px solid #333; border-radius: 6px; background: #080808; }
 .volume-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.volume-presentation-switch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; margin: 8px 0; }
+.volume-presentation-switch .btn { margin: 0; min-height: 30px; font-size: 11px; }
+.volume-presentation-switch .btn.active { border-color: #4c9fba; background: #17333d; color: #d8f5ff; }
 .ray-budget-wrap { margin: 8px 0 10px; }
 .ray-budget-grid { display: grid; grid-template-columns: 34px 1fr; grid-template-rows: 1fr 18px; gap: 4px 6px; align-items: center; }
 .ray-budget-axis-y { writing-mode: vertical-rl; transform: rotate(180deg); color: #666; font: 9px 'SF Mono', monospace; letter-spacing: 0; justify-self: center; }
@@ -969,6 +972,14 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="field"><span class="field-key">Motion</span><span class="field-val" id="volume-canonical-motion-mode-state">animated</span></div>
       <div class="field"><span class="field-key">Content</span><span class="field-val" id="volume-canonical-content-mode-state">smoke</span></div>
       <div class="field"><span class="field-key">Preset store</span><span class="field-val" id="volume-settings-preset-state">connecting...</span></div>
+      <div class="volume-presentation-switch" role="group" aria-label="Volume presentation">
+        <button class="btn active" type="button" data-volume-presentation-mode="beauty">Beauty</button>
+        <button class="btn" type="button" data-volume-presentation-mode="intrinsic">Intrinsic</button>
+      </div>
+      <div class="field"><span class="field-key">Requested view</span><span class="field-val" id="volume-presentation-requested">beauty</span></div>
+      <div class="field"><span class="field-key">Effective view</span><span class="field-val" id="volume-presentation-effective">beauty</span></div>
+      <div class="field"><span class="field-key">Ray quality</span><span class="field-val" id="volume-presentation-ray-quality">--</span></div>
+      <div class="field"><span class="field-key">View target</span><span class="field-val" id="volume-presentation-target">authored-beauty-renderer-v0</span></div>
       <div class="volume-actions">
         <button class="btn" id="volume-toggle">Enable</button>
         <button class="btn" id="volume-fit-camera">Frame</button>
@@ -16635,9 +16646,34 @@ async function captureVolumeReactionAtlas() {
 }
 window.__kaminosCaptureVolumeReactionAtlas = captureVolumeReactionAtlas;
 
+function syncVolumePresentationControls(receipt = volumePrototype?.debugState?.()?.volumePresentationReceipt) {
+  if (!receipt) return;
+  for (const button of document.querySelectorAll('[data-volume-presentation-mode]')) {
+    button.classList.toggle('active', button.dataset.volumePresentationMode === receipt.effectiveMode);
+    button.setAttribute('aria-pressed', button.dataset.volumePresentationMode === receipt.effectiveMode ? 'true' : 'false');
+  }
+  document.getElementById('volume-presentation-requested').textContent = receipt.requestedMode;
+  document.getElementById('volume-presentation-effective').textContent = receipt.fallbackReason
+    ? `${receipt.effectiveMode} / ${receipt.fallbackReason}`
+    : receipt.effectiveMode;
+  const quality = receipt.effectiveRayQuality || {};
+  document.getElementById('volume-presentation-ray-quality').textContent = `${quality.raySteps ?? '--'} steps / adaptive ${Number.isFinite(quality.adaptiveRays) ? quality.adaptiveRays.toFixed(2) : '--'} / scale ${Number.isFinite(quality.renderScale) ? quality.renderScale.toFixed(2) : '--'}`;
+  document.getElementById('volume-presentation-target').textContent = receipt.targetIdentity || 'missing-target-identity';
+}
+
+for (const button of document.querySelectorAll('[data-volume-presentation-mode]')) {
+  button.addEventListener('click', () => {
+    const receipt = volumePrototype?.setVolumePresentationMode?.(button.dataset.volumePresentationMode);
+    window.__kaminosVolumePresentationReceipt = receipt || null;
+    syncVolumePresentationControls(receipt);
+    window._kaminosDirty?.();
+  });
+}
+
 function refreshVolumeReadout() {
   if (!volumePrototype) return;
   const s = volumePrototype.debugState();
+  syncVolumePresentationControls(s.volumePresentationReceipt);
   const timing = s.timing || {};
   const canonicalPlumeReadoutActive = s.volumeScene === 'canonical_plume';
   const sceneContentLabel = (() => {
@@ -17429,6 +17465,9 @@ async function initKaminosVolumeRoute() {
     },
   });
   window.__kaminosVolumePrototype = volumePrototype;
+  const requestedVolumePresentation = params.get('volume_presentation') || 'beauty';
+  window.__kaminosVolumePresentationReceipt = volumePrototype.setVolumePresentationMode?.(requestedVolumePresentation) || null;
+  syncVolumePresentationControls(window.__kaminosVolumePresentationReceipt);
   volumeBridge?.dispose?.();
   volumeBridge = createVolumeMainRendererBridge();
   window.__kaminosVolumeBridge = volumeBridge;

@@ -73,6 +73,20 @@ assert.equal(acceptedUrl.pathname, '/');
 assert.equal(acceptedUrl.searchParams.get('settings_preset'), `vsp-${'a'.repeat(64)}`);
 assert.equal(acceptedUrl.searchParams.get('settings_preset_authority'), 'shared-volume-settings-preset-v2');
 assert.equal(validateVolumeSettingsPresetTarget(acceptedReceipt, acceptedUrl.searchParams), true);
+const intrinsicPresentationTarget = new URL(acceptedUrl);
+intrinsicPresentationTarget.searchParams.set('volume_presentation', 'intrinsic');
+assert.equal(
+  validateVolumeSettingsPresetTarget(acceptedReceipt, intrinsicPresentationTarget.searchParams),
+  true,
+  'presentation identity is admitted as target-only state without entering the saved controls',
+);
+const invalidPresentationTarget = new URL(acceptedUrl);
+invalidPresentationTarget.searchParams.set('volume_presentation', 'forged');
+assert.throws(
+  () => validateVolumeSettingsPresetTarget(acceptedReceipt, invalidPresentationTarget.searchParams),
+  /presentation/i,
+  'preset target rejects unsupported presentation substitution',
+);
 
 const prototypeBasin = nativeCapture();
 prototypeBasin.identity = 'kaminos-volume-agent-capture-v1';
@@ -166,6 +180,20 @@ for (const [view, composition] of [
   assert.equal(target.searchParams.get('composition'), composition);
   assert.equal(validateVolumeSettingsPresetVisualTarget(acceptedReceipt, target.searchParams), true);
 }
+const intrinsicVisualTarget = new URL(explicitSplatView);
+intrinsicVisualTarget.searchParams.set('volume_presentation', 'intrinsic');
+assert.equal(
+  validateVolumeSettingsPresetVisualTarget(acceptedReceipt, intrinsicVisualTarget.searchParams),
+  true,
+  'visual routes admit one presentation-only identity without changing the preset control count',
+);
+const forgedVisualPresentation = new URL(explicitSplatView);
+forgedVisualPresentation.searchParams.set('volume_presentation', 'forged');
+assert.throws(
+  () => validateVolumeSettingsPresetVisualTarget(acceptedReceipt, forgedVisualPresentation.searchParams),
+  /presentation/i,
+  'visual routes reject unsupported presentation substitution',
+);
 const forgedVisualSetting = new URL(explicitSplatView);
 forgedVisualSetting.searchParams.set('volume_density', 'forged');
 assert.throws(
