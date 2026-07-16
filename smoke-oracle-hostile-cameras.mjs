@@ -93,10 +93,13 @@ function validateSourceFit(report) {
     throw new Error('source fit is not a passed uncapped smoke oracle report');
   }
   const teacher = report.teacher || {};
-  if (teacher.sourceSchema !== 'kaminos.volume.operator-basin-replay.v0'
-    || teacher.effectiveRoute !== 'native-3d-compute-fluid-raymarch-v0'
-    || teacher.worldSpace?.transformAuthority !== 'operator-basin-normalized-volume-domain-v0') {
-    throw new Error('hostile camera split requires checksum-bound held world-space source authority');
+  const heldReplayAuthority = teacher.sourceSchema === 'kaminos.volume.operator-basin-replay.v0'
+    && teacher.worldSpace?.transformAuthority === 'operator-basin-normalized-volume-domain-v0';
+  const nativeFullGridAuthority = teacher.sourceSchema === 'kaminos.volume.full-grid-field-export.v0'
+    && teacher.worldSpace?.transformAuthority === 'native-volume-grid-world-transform-v0';
+  if (teacher.effectiveRoute !== 'native-3d-compute-fluid-raymarch-v0'
+    || (!heldReplayAuthority && !nativeFullGridAuthority)) {
+    throw new Error('hostile camera split requires checksum-bound held replay or native full-grid world-space source authority');
   }
   const camera = teacher.camera || {};
   finiteArray(camera.position, 3, 'source camera position');

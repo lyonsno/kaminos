@@ -57,6 +57,13 @@ async function writeFrame(directory, mutate = {}, densityPattern = 'plume') {
   const bytes = Buffer.from(values.buffer);
   const fluidPath = join(directory, 'frame.fluid.f32');
   await writeFile(fluidPath, bytes);
+  const camera = {
+    identity: 'checksum-bound-native-camera-matrices-v0',
+    position: [1.18, 0.28, 2.05],
+    target: [0, 0.02, 0],
+    projectionMatrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, -1, 0, 0, -0.02, 0],
+    matrixWorldInverse: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -2.4, 1],
+  };
   const manifest = {
     schema: 'kaminos.volume.full-grid-field-export.v0',
     identity: 'full-grid-fluid-front-boundary-sidecars-v0',
@@ -66,6 +73,7 @@ async function writeFrame(directory, mutate = {}, densityPattern = 'plume') {
     prototypeIdentity: 'kaminos-volume-prototype-v0',
     backend: 'WebGPU:apple',
     grid,
+    camera,
     fluidChannelOrder: channels,
     worldSpace: {
       coordinateFrame: 'kaminos-volume-world-v0',
@@ -194,6 +202,27 @@ try {
   assert.equal(report.identity, SMOKE_GAUSSIAN_ORACLE_FIT_IDENTITY);
   assert.equal(report.teacher.effectiveRoute, 'native-3d-compute-fluid-raymarch-v0');
   assert.equal(report.teacher.worldSpace.transformAuthority, 'native-volume-grid-world-transform-v0');
+  assert.deepEqual(report.teacher.camera, {
+    position: [1.18, 0.28, 2.05],
+    target: [0, 0.02, 0],
+    projectionMatrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, -1, 0, 0, -0.02, 0],
+    matrixWorldInverse: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -2.4, 1],
+  });
+  assert.match(report.teacher.cameraIdentity, /^sha256:[a-f0-9]{64}$/);
+
+  const wrongCameraManifestPath = await writeFrame(join(directory, 'wrong-camera-authority'));
+  const wrongCameraManifest = JSON.parse(await readFile(wrongCameraManifestPath, 'utf8'));
+  wrongCameraManifest.camera.identity = 'hand-authored-camera-v0';
+  await writeFile(wrongCameraManifestPath, `${JSON.stringify(wrongCameraManifest, null, 2)}\n`);
+  await assert.rejects(
+    () => fitSmokeGaussianOracleFrame({
+      manifestPath: wrongCameraManifestPath,
+      outDir: join(directory, 'wrong-camera-fit'),
+      budgets: [1],
+    }),
+    /camera identity/i,
+    'the fitter must independently reject full-grid manifests without native camera authority',
+  );
   assert.deepEqual(report.requestedBudgets, [1, 2, 4]);
   assert.equal(report.hiddenBudgetCapApplied, false);
   assert.equal(report.budgetCurve.length, 3);

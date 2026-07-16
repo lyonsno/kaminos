@@ -313,6 +313,40 @@ export function assessMinimumRadiusMaturityCandidate({ current: currentValue, pr
   };
 }
 
+export function assessTemporalCeilingVisualMaturityCandidate({ current: currentValue, previous: previousValue } = {}) {
+  const current = normalizeProbe(currentValue, 'current');
+  const previous = previousValue ? normalizeProbe(previousValue, 'previous') : null;
+  const pixelCount = Math.max(1, Number(current.render.width) * Number(current.render.height));
+  const litFraction = Number(current.render.litPixels || 0) / pixelCount;
+  const smokeFraction = Number(current.render.smokeLikePixels || 0) / pixelCount;
+  const supportAuthority = String(current.support.authority || '');
+  const rise = Number(current.support.smokeVisualRiseDisplacement || 0);
+  const lateral = Number(current.support.smokeVisualLateralDisplacement || 0);
+  const reasons = [];
+  if (supportAuthority !== 'render-bounds-only-v0') reasons.push('invalid-support-authority');
+  if (litFraction <= 0.001 || smokeFraction <= 0.001) reasons.push('blank-render');
+  if (!(rise >= 0.55)) reasons.push('insufficient-rise');
+  if (!(lateral >= 0.08)) reasons.push('insufficient-lateral-support');
+  if (!previous) reasons.push('missing-adjacent-predecessor');
+  if (previous && current.simStepCount !== previous.simStepCount + 1) reasons.push('non-adjacent-steps');
+  if (previous && current.render.sha256 === previous.render.sha256) reasons.push('static-render');
+  const smokePixelDeltaFraction = previous
+    ? Math.abs(Number(current.render.smokeLikePixels || 0) - Number(previous.render.smokeLikePixels || 0))
+      / Math.max(1, Number(previous.render.smokeLikePixels || 0))
+    : 0;
+  if (previous && smokePixelDeltaFraction < 0.001) reasons.push('insufficient-render-evolution');
+  return {
+    identity: 'temporal-ceiling-visual-maturity-candidate-v0',
+    candidate: reasons.length === 0,
+    admitted: false,
+    requiresVisualDisposition: true,
+    reasons,
+    previous,
+    current,
+    metrics: { litFraction, smokeFraction, rise, lateral, smokePixelDeltaFraction, supportAuthority },
+  };
+}
+
 export function admitMinimumRadiusTeacherWindow({ contract: contractValue, frames: frameValues, visualDisposition } = {}) {
   const contract = requireObject(contractValue, 'contract');
   if (!Array.isArray(frameValues) || frameValues.length < 2) throw new Error('teacher admission requires at least two frames');

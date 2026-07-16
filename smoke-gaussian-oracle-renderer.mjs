@@ -189,9 +189,12 @@ function validateTeacher(report, projectionMode) {
   if (teacher.prototypeIdentity !== EXPECTED_PROTOTYPE) throw new Error(`wrong prototype identity: ${teacher.prototypeIdentity || '(missing)'}`);
   if (typeof teacher.backend !== 'string' || !teacher.backend.startsWith('WebGPU:')) throw new Error(`wrong backend: ${teacher.backend || '(missing)'}`);
   if (projectionMode === 'native-camera') {
-    if (teacher.sourceSchema !== 'kaminos.volume.operator-basin-replay.v0'
-      || teacher.worldSpace?.transformAuthority !== 'operator-basin-normalized-volume-domain-v0') {
-      throw new Error('native-camera rendering requires checksum-bound held replay world-space authority');
+    const heldReplayAuthority = teacher.sourceSchema === 'kaminos.volume.operator-basin-replay.v0'
+      && teacher.worldSpace?.transformAuthority === 'operator-basin-normalized-volume-domain-v0';
+    const nativeFullGridAuthority = teacher.sourceSchema === 'kaminos.volume.full-grid-field-export.v0'
+      && teacher.worldSpace?.transformAuthority === 'native-volume-grid-world-transform-v0';
+    if (!heldReplayAuthority && !nativeFullGridAuthority) {
+      throw new Error('native-camera rendering requires checksum-bound held replay or native full-grid world-space authority');
     }
     const camera = teacher.camera;
     if (!camera || !['position', 'target'].every(key => Array.isArray(camera[key]) && camera[key].length === 3 && camera[key].every(Number.isFinite))

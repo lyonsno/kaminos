@@ -187,6 +187,44 @@ function distance(left, right) {
   return Math.sqrt(squaredDistance(left, right));
 }
 
+function spatialCellKey(position, cellSize) {
+  return position.map(component => Math.floor(component / cellSize)).join(':');
+}
+
+export function buildSpatialNeighborIndex(rows, cellSizeValue) {
+  const cellSize = Number(cellSizeValue);
+  if (!(cellSize > 0) || !Number.isFinite(cellSize)) throw new Error('spatial neighbor cell size must be positive and finite');
+  const cells = new Map();
+  for (const row of rows) {
+    const key = spatialCellKey(row.position, cellSize);
+    const cell = cells.get(key);
+    if (cell) cell.push(row);
+    else cells.set(key, [row]);
+  }
+  return { identity: 'exact-threshold-spatial-neighbor-index-v0', cellSize, cells };
+}
+
+export function querySpatialNeighbors(index, row, maxDistanceValue) {
+  const maxDistance = Number(maxDistanceValue);
+  if (!(maxDistance >= 0) || !Number.isFinite(maxDistance)) throw new Error('spatial neighbor distance must be finite and nonnegative');
+  const origin = row.position.map(component => Math.floor(component / index.cellSize));
+  const radius = Math.ceil(maxDistance / index.cellSize);
+  const maxDistanceSquared = maxDistance * maxDistance;
+  const neighbors = [];
+  for (let dx = -radius; dx <= radius; dx += 1) {
+    for (let dy = -radius; dy <= radius; dy += 1) {
+      for (let dz = -radius; dz <= radius; dz += 1) {
+        const cell = index.cells.get(`${origin[0] + dx}:${origin[1] + dy}:${origin[2] + dz}`);
+        if (!cell) continue;
+        for (const candidate of cell) {
+          if (squaredDistance(row.position, candidate.position) <= maxDistanceSquared) neighbors.push(candidate);
+        }
+      }
+    }
+  }
+  return neighbors;
+}
+
 function majorRadius(row) {
   return Math.max(...row.radii.map(value => Math.abs(value)));
 }
@@ -210,7 +248,9 @@ function percentile(values, p) {
 
 function nearestDistance(row, candidates) {
   if (candidates.length === 0) return Infinity;
-  return Math.min(...candidates.map(candidate => distance(row.position, candidate.position)));
+  let nearest = Infinity;
+  for (const candidate of candidates) nearest = Math.min(nearest, distance(row.position, candidate.position));
+  return nearest;
 }
 
 function summarizeRows(rows) {
@@ -224,7 +264,7 @@ function summarizeRows(rows) {
 }
 
 function compactTopologyRows(rows, oppositeRows) {
-  return rows.map(row => ({
+  return rows.slice(0, 32).map(row => ({
     index: row.index,
     position: row.position,
     extinctionMass: row.extinctionMass,
@@ -309,9 +349,12 @@ function matchTransition(previousFrame, nextFrame, budget, maxMatchDistanceMulti
   const previousSummary = summarizeRows(previousRows);
   const nextSummary = summarizeRows(nextRows);
   const maxMatchDistance = Math.max(previousSummary.maxRadius, nextSummary.maxRadius) * maxMatchDistanceMultiplier;
+  const spatialCellSize = maxMatchDistance > 0 ? maxMatchDistance : 1;
+  const nextSpatialIndex = buildSpatialNeighborIndex(nextRows, spatialCellSize);
+  const previousSpatialIndex = buildSpatialNeighborIndex(previousRows, spatialCellSize);
   const candidates = [];
   for (const previous of previousRows) {
-    for (const next of nextRows) {
+    for (const next of querySpatialNeighbors(nextSpatialIndex, previous, maxMatchDistance)) {
       candidates.push({
         previousIndex: previous.index,
         nextIndex: next.index,
@@ -342,19 +385,15 @@ function matchTransition(previousFrame, nextFrame, budget, maxMatchDistanceMulti
   const deaths = previousRows.filter(row => !matchedPrevious.has(row.index));
   const births = nextRows.filter(row => !matchedNext.has(row.index));
   const splits = previousRows.map(previous => {
-    const children = nextRows
-      .filter(next => distance(previous.position, next.position) <= maxMatchDistance)
-      .map(next => next.index);
-    const unmatchedChildren = children.filter(nextIndex => !matches.some(match => match.nextIndex === nextIndex));
+    const children = querySpatialNeighbors(nextSpatialIndex, previous, maxMatchDistance).map(next => next.index);
+    const unmatchedChildren = children.filter(nextIndex => !matchedNext.has(nextIndex));
     return children.length > 1 && unmatchedChildren.length > 0
       ? { previousIndex: previous.index, nextIndices: children, unmatchedNextIndices: unmatchedChildren }
       : null;
   }).filter(Boolean);
   const merges = nextRows.map(next => {
-    const parents = previousRows
-      .filter(previous => distance(previous.position, next.position) <= maxMatchDistance)
-      .map(previous => previous.index);
-    const unmatchedParents = parents.filter(previousIndex => !matches.some(match => match.previousIndex === previousIndex));
+    const parents = querySpatialNeighbors(previousSpatialIndex, next, maxMatchDistance).map(previous => previous.index);
+    const unmatchedParents = parents.filter(previousIndex => !matchedPrevious.has(previousIndex));
     return parents.length > 1 && unmatchedParents.length > 0
       ? { nextIndex: next.index, previousIndices: parents, unmatchedPreviousIndices: unmatchedParents }
       : null;
@@ -547,6 +586,31 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       budgets: report.budgetSummaries,
     }, null, 2));
   } catch (error) {
+    if (typeof outDir === 'string' && outDir.length > 0) {
+      const reportPath = join(outDir, 'temporal-report.json');
+      const failedReport = {
+        schema: 'kaminos.smoke-gaussian-oracle-temporal-correspondence-report.v0',
+        identity: SMOKE_GAUSSIAN_ORACLE_TEMPORAL_IDENTITY,
+        status: 'failed',
+        createdAt: new Date().toISOString(),
+        failure: {
+          phase: 'analyze-temporal-correspondence',
+          message: String(error?.message || error),
+          stack: error?.stack || null,
+        },
+        lastTrustworthyEvidence: {
+          requestedFitReports: fitReports,
+          requestedBudgets: budgets,
+          maxMatchDistanceMultiplier,
+        },
+      };
+      try {
+        await mkdir(outDir, { recursive: true });
+        await writeFile(reportPath, `${JSON.stringify(failedReport, null, 2)}\n`);
+      } catch (reportError) {
+        console.error(`failed to write temporal failure report at ${reportPath}: ${reportError?.stack || reportError}`);
+      }
+    }
     console.error(error?.stack || error);
     process.exitCode = 1;
   }

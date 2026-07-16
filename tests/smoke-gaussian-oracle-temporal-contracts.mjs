@@ -1,16 +1,36 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
 
 const temporalUrl = new URL('../smoke-gaussian-oracle-temporal.mjs', import.meta.url);
 const {
   SMOKE_GAUSSIAN_ORACLE_TEMPORAL_IDENTITY,
   analyzeSmokeGaussianTemporalCorrespondence,
+  buildSpatialNeighborIndex,
+  querySpatialNeighbors,
 } = await import(temporalUrl);
 
 assert.equal(SMOKE_GAUSSIAN_ORACLE_TEMPORAL_IDENTITY, 'smoke-gaussian-oracle-temporal-correspondence-v0');
+
+const neighborRows = [
+  { index: 0, position: [0, 0, 0] },
+  { index: 1, position: [0.05, 0, 0] },
+  { index: 2, position: [-0.05, 0, 0] },
+  { index: 3, position: [0.2, 0, 0] },
+];
+const neighborIndex = buildSpatialNeighborIndex(neighborRows, 0.05);
+assert.deepEqual(
+  querySpatialNeighbors(neighborIndex, neighborRows[0], 0.05).map(row => row.index).sort((left, right) => left - right),
+  [0, 1, 2],
+  'spatial matching must preserve exact-threshold candidates across positive and negative cell boundaries',
+);
 
 const gaussianChannels = [
   'positionX', 'positionY', 'positionZ',
@@ -223,6 +243,24 @@ try {
   assert.ok(report.budgetTransitions[0].opticalDrift.totalExtinctionDelta < 0);
   assert.ok(report.budgetSummaries[0].maxP95Displacement >= report.budgetSummaries[0].maxMeanDisplacement);
 
+  const zeroRadiusFirst = await writeStaticFitReport(join(directory, 'zero-radius-step-20'), {
+    step: 20,
+    budget: 1,
+    rows: [{ position: [0.25, -0.5, 0.75], mass: 1, radius: 0 }],
+  });
+  const zeroRadiusSecond = await writeStaticFitReport(join(directory, 'zero-radius-step-21'), {
+    step: 21,
+    budget: 1,
+    rows: [{ position: [0.25, -0.5, 0.75], mass: 1, radius: 0 }],
+  });
+  const zeroRadiusReport = await analyzeSmokeGaussianTemporalCorrespondence({
+    fitReports: [zeroRadiusFirst, zeroRadiusSecond],
+    outDir: join(directory, 'zero-radius-temporal'),
+    budgets: [1],
+  });
+  assert.equal(zeroRadiusReport.budgetTransitions[0].correspondence.maxMatchDistance, 0);
+  assert.equal(zeroRadiusReport.budgetTransitions[0].correspondence.matchedCount, 1);
+
   const warmSecond = await writeStaticFitReport(join(directory, 'warm-step-11'), {
     step: 11,
     warmStartSourcePath: first,
@@ -265,6 +303,24 @@ try {
     /wrong effective route/i,
     'wrong or fallback static-fit teachers must not enter temporal correspondence evidence',
   );
+
+  const failedOutDir = join(directory, 'failed-cli-temporal');
+  await assert.rejects(
+    () => execFileAsync(process.execPath, [
+      fileURLToPath(temporalUrl),
+      '--fit-reports', `${first},${wrongRoute}`,
+      '--out-dir', failedOutDir,
+      '--budgets', '3',
+    ]),
+    'the CLI must retain a nonzero exit status when temporal authority validation fails',
+  );
+  const failedReport = JSON.parse(await readFile(join(failedOutDir, 'temporal-report.json'), 'utf8'));
+  assert.equal(failedReport.status, 'failed');
+  assert.equal(failedReport.identity, SMOKE_GAUSSIAN_ORACLE_TEMPORAL_IDENTITY);
+  assert.equal(failedReport.failure.phase, 'analyze-temporal-correspondence');
+  assert.match(failedReport.failure.message, /wrong effective route/i);
+  assert.deepEqual(failedReport.lastTrustworthyEvidence.requestedFitReports, [first, wrongRoute]);
+  assert.deepEqual(failedReport.lastTrustworthyEvidence.requestedBudgets, [3]);
 } finally {
   await rm(directory, { recursive: true, force: true });
 }

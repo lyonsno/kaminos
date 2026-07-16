@@ -48,10 +48,35 @@ function requireObject(value, label) {
   return value;
 }
 
+function requireFiniteArray(value, length, label) {
+  if (!Array.isArray(value) || value.length !== length || !value.every(Number.isFinite)) {
+    throw new TypeError(`${label} must be a finite ${length}-element array`);
+  }
+  return value;
+}
+
 function sameArray(left, right) {
   return Array.isArray(left) && Array.isArray(right)
     && left.length === right.length
     && left.every((value, index) => value === right[index]);
+}
+
+function validateNativeCamera(value, label) {
+  const camera = requireObject(value, label);
+  if (camera.identity !== 'checksum-bound-native-camera-matrices-v0') throw new Error(`${label} identity mismatch`);
+  requireFiniteArray(camera.position, 3, `${label}.position`);
+  requireFiniteArray(camera.target, 3, `${label}.target`);
+  requireFiniteArray(camera.projectionMatrix, 16, `${label}.projectionMatrix`);
+  requireFiniteArray(camera.matrixWorldInverse, 16, `${label}.matrixWorldInverse`);
+  return camera;
+}
+
+function sameNativeCamera(left, right) {
+  return left.identity === right.identity
+    && sameArray(left.position, right.position)
+    && sameArray(left.target, right.target)
+    && sameArray(left.projectionMatrix, right.projectionMatrix)
+    && sameArray(left.matrixWorldInverse, right.matrixWorldInverse);
 }
 
 function sha256(bytes) {
@@ -88,6 +113,11 @@ function validateMetadata(metadata) {
   if (replay.prototypeIdentity !== source.prototypeIdentity) throw new Error('deterministic replay prototypeIdentity does not match metadata');
   if (replay.backend !== source.backend) throw new Error('deterministic replay backend does not match metadata');
   identity(replay.controlsSignature, 'deterministicReplay.controlsSignature');
+  const camera = validateNativeCamera(source.camera, 'camera');
+  const replayCamera = validateNativeCamera(replay.camera, 'deterministic replay camera');
+  if (!sameNativeCamera(camera, replayCamera)) {
+    throw new Error('camera does not match deterministic replay camera');
+  }
   const step = integer(replay.simStepCount ?? replay.completedSteps, 'deterministicReplay.simStepCount');
   return { source, grid, totalByteLength, floatCount, replay: { ...replay, simStepCount: step, completedSteps: step } };
 }

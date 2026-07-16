@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   admitMinimumRadiusTeacherWindow,
   assessMinimumRadiusMaturityCandidate,
+  assessTemporalCeilingVisualMaturityCandidate,
   buildMinimumRadiusTeacherContract,
   buildRadiusCandidateTeacherContract,
   buildTemporalCeilingTeacherContract,
@@ -247,6 +248,30 @@ const candidate = assessMinimumRadiusMaturityCandidate({
 assert.equal(candidate.candidate, true);
 assert.equal(candidate.admitted, false, 'machine maturity can nominate but cannot visually admit a teacher');
 assert.equal(candidate.requiresVisualDisposition, true);
+
+const temporalVisualCandidate = assessTemporalCeilingVisualMaturityCandidate({
+  previous: {
+    simStepCount: 104,
+    render: { width: 640, height: 455, litPixels: 22000, smokeLikePixels: 11000, sha256: 'sha256:' + '4'.repeat(64) },
+    support: {
+      authority: 'render-bounds-only-v0',
+      smokeVisualRiseDisplacement: 0.62,
+      smokeVisualLateralDisplacement: 0.14,
+    },
+  },
+  current: {
+    simStepCount: 105,
+    render: { width: 640, height: 455, litPixels: 22400, smokeLikePixels: 11400, sha256: 'sha256:' + '5'.repeat(64) },
+    support: {
+      authority: 'render-bounds-only-v0',
+      smokeVisualRiseDisplacement: 0.64,
+      smokeVisualLateralDisplacement: 0.15,
+    },
+  },
+});
+assert.equal(temporalVisualCandidate.candidate, true, 'the temporal ceiling source may nominate maturity from presented pixels without a blocking GPU support map');
+assert.equal(temporalVisualCandidate.requiresVisualDisposition, true);
+assert.equal(temporalVisualCandidate.metrics.supportAuthority, 'render-bounds-only-v0');
 
 const startupColumn = assessMinimumRadiusMaturityCandidate({
   previous: { ...candidate.previous, support: { ...candidate.previous.support, smokeVisualLateralDisplacement: 0.03 } },

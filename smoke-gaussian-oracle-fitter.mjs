@@ -260,6 +260,14 @@ async function loadTeacherFrame(manifestPath, expectedManifestSha256) {
   }
   const worldSpace = manifest.worldSpace || {};
   if (worldSpace.transformAuthority !== 'native-volume-grid-world-transform-v0') throw new Error('teacher manifest lacks native world-space transform authority');
+  const sourceCamera = manifest.camera || {};
+  if (sourceCamera.identity !== 'checksum-bound-native-camera-matrices-v0') throw new Error('teacher camera identity mismatch');
+  const camera = {
+    position: [...requireFiniteArray(sourceCamera.position, 3, 'teacher camera position')],
+    target: [...requireFiniteArray(sourceCamera.target, 3, 'teacher camera target')],
+    projectionMatrix: [...requireFiniteArray(sourceCamera.projectionMatrix, 16, 'teacher camera projectionMatrix')],
+    matrixWorldInverse: [...requireFiniteArray(sourceCamera.matrixWorldInverse, 16, 'teacher camera matrixWorldInverse')],
+  };
   const field = new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / Float32Array.BYTES_PER_ELEMENT);
   return {
     manifestPath,
@@ -274,8 +282,8 @@ async function loadTeacherFrame(manifestPath, expectedManifestSha256) {
     captureId: null,
     simStepCount: replay.simStepCount,
     sourceCaptureIdentity: manifest.sourceCapture?.manifestSha256 || null,
-    cameraIdentity: null,
-    camera: null,
+    cameraIdentity: `sha256:${sha256(Buffer.from(JSON.stringify(camera)))}`,
+    camera,
   };
 }
 

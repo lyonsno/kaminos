@@ -1,0 +1,4567 @@
+{
+  "schema": "kaminos.smoke-oracle-teacher-capture-report.v0",
+  "status": "captured",
+  "requestedRoute": "http://127.0.0.1:8098/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_tall_preset=operator_fire_0622&volume_input_radius=0.12&volume_flow_rate=0.35&volume_resolution=160&volume_majorant_grid=24&volume_render_scale=0.35&volume_steps=64&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=1",
+  "effectiveCaptureRoute": "http://127.0.0.1:8098/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_tall_preset=operator_fire_0622&volume_input_radius=0.12&volume_flow_rate=0.35&volume_resolution=160&volume_majorant_grid=24&volume_render_scale=0.35&volume_steps=64&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=1&volume_capture_hold=1",
+  "captureExecution": {
+    "requested": "explicit-step-no-autonomous-frame-submission",
+    "effectiveRouteParameter": "volume_capture_hold=1",
+    "expectedAuthority": "capture-hold-explicit-step-v0",
+    "simulatorControlEffect": "none",
+    "rendererControlEffect": "none"
+  },
+  "outDir": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24",
+  "reportPath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/teacher-capture-report.json",
+  "frames": [
+    {
+      "frameIndex": 0,
+      "frameId": "sim-step-45",
+      "simStepCount": 45,
+      "frameCount": 46,
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "prototypeIdentity": "kaminos-volume-prototype-v0",
+      "backend": "WebGPU:apple",
+      "sampleAuthority": "native-raymarch-canvas-submission-v0",
+      "presentationBarrierAuthority": "gpu-queue-complete-before-cdp-capture-v0",
+      "camera": {
+        "identity": "checksum-bound-native-camera-matrices-v0",
+        "position": [
+          1.1799999999999993,
+          0.28,
+          2.049999999999998
+        ],
+        "target": [
+          0,
+          0.02,
+          0
+        ],
+        "projectionMatrix": [
+          2.9306425807515972,
+          0,
+          0,
+          0,
+          0,
+          2.7474774194546225,
+          0,
+          0,
+          0,
+          0,
+          -1.0002000200020003,
+          -1,
+          0,
+          0,
+          -0.020002000200020003,
+          0
+        ],
+        "matrixWorldInverse": [
+          0.8666778489396199,
+          -0.05450735190097278,
+          0.49588149264328957,
+          0,
+          6.938893903907228e-18,
+          0.9940129828903268,
+          0.10926202380275882,
+          0,
+          -0.49886822524329344,
+          -0.09469497576016456,
+          0.8614890338294436,
+          0,
+          -2.2236986557677696e-16,
+          -0.019880259657806553,
+          -2.3817860473342116,
+          0.9999999999999999
+        ]
+      },
+      "sequence": {
+        "sequenceAuthority": "controlled-native-canvas-sequence-v0",
+        "sampleAuthority": "native-raymarch-canvas-submission-v0",
+        "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+        "presentationBarrierAuthority": "gpu-queue-complete-before-cdp-capture-v0",
+        "sameBrowserSessionId": "native-canvas-1784170334815",
+        "sequenceStartNowMs": 0,
+        "controlledStepFrameIndex": 45,
+        "controlledStepDeltaMs": 220,
+        "controlledStepNowMs": 9900,
+        "baseFrameCount": 45,
+        "baseSimStepCount": 44
+      },
+      "render": {
+        "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-45.png",
+        "sha256": "sha256:c307507a4be6be29ac9fd8eec40bd1753e00fabf70b21e4e4fffe8558f617200",
+        "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+        "nativeScreenshot": {
+          "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "sha256": "sha256:ff2bff2e78fcd43287f3ecc740d39bd83c99c2e86ac596208f6191cdc394f02f",
+          "byteLength": 66892,
+          "clip": {
+            "x": 380,
+            "y": 0,
+            "width": 900,
+            "height": 960,
+            "scale": 1
+          }
+        },
+        "width": 900,
+        "height": 960,
+        "meanLuma": 7.2627285728834625,
+        "litPixels": 63915,
+        "smokeLikePixels": 55194
+      },
+      "denseField": {
+        "manifestPath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/sim-step-45.manifest.json",
+        "manifestIdentity": "sha256:ab980bee692fbf6e91a3868201893e95e7ba2f170a036905a1b1eca4312f1d1a",
+        "fluidPath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/sim-step-45.fluid.f32",
+        "fluidIdentity": "sha256:b9015d0d577ee99b48a3e5bebe207e5024a4e9ef63bd42a8192e65042c9540ee",
+        "byteLength": 262144000,
+        "grid": 160,
+        "chunkCount": 1000
+      },
+      "simReadback": {},
+      "majorantReadback": null
+    },
+    {
+      "frameIndex": 1,
+      "frameId": "sim-step-46",
+      "simStepCount": 46,
+      "frameCount": 47,
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "prototypeIdentity": "kaminos-volume-prototype-v0",
+      "backend": "WebGPU:apple",
+      "sampleAuthority": "native-raymarch-canvas-submission-v0",
+      "presentationBarrierAuthority": "gpu-queue-complete-before-cdp-capture-v0",
+      "camera": {
+        "identity": "checksum-bound-native-camera-matrices-v0",
+        "position": [
+          1.1799999999999993,
+          0.28,
+          2.049999999999998
+        ],
+        "target": [
+          0,
+          0.02,
+          0
+        ],
+        "projectionMatrix": [
+          2.9306425807515972,
+          0,
+          0,
+          0,
+          0,
+          2.7474774194546225,
+          0,
+          0,
+          0,
+          0,
+          -1.0002000200020003,
+          -1,
+          0,
+          0,
+          -0.020002000200020003,
+          0
+        ],
+        "matrixWorldInverse": [
+          0.8666778489396199,
+          -0.05450735190097278,
+          0.49588149264328957,
+          0,
+          6.938893903907228e-18,
+          0.9940129828903268,
+          0.10926202380275882,
+          0,
+          -0.49886822524329344,
+          -0.09469497576016456,
+          0.8614890338294436,
+          0,
+          -2.2236986557677696e-16,
+          -0.019880259657806553,
+          -2.3817860473342116,
+          0.9999999999999999
+        ]
+      },
+      "sequence": {
+        "sequenceAuthority": "controlled-native-canvas-sequence-v0",
+        "sampleAuthority": "native-raymarch-canvas-submission-v0",
+        "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+        "presentationBarrierAuthority": "gpu-queue-complete-before-cdp-capture-v0",
+        "sameBrowserSessionId": "native-canvas-1784170334815",
+        "sequenceStartNowMs": 0,
+        "controlledStepFrameIndex": 46,
+        "controlledStepDeltaMs": 220,
+        "controlledStepNowMs": 10120,
+        "baseFrameCount": 46,
+        "baseSimStepCount": 45
+      },
+      "render": {
+        "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/sim-step-46.raymarch.png",
+        "sha256": "sha256:9416462ac61897d03b3ed55278c90d160fe54c1e6824c503d3bb96a81a08e94c",
+        "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+        "nativeScreenshot": {
+          "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "sha256": "sha256:692d17043c8e1ec7fe8dd36b64557d18db6cc4495a98152842eba55c74c239c0",
+          "byteLength": 67727,
+          "clip": {
+            "x": 380,
+            "y": 0,
+            "width": 900,
+            "height": 960,
+            "scale": 1
+          }
+        },
+        "width": 900,
+        "height": 960,
+        "meanLuma": 7.363819091401398,
+        "litPixels": 65914,
+        "smokeLikePixels": 57030
+      },
+      "denseField": {
+        "manifestPath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/sim-step-46.manifest.json",
+        "manifestIdentity": "sha256:dbf2684642d5a8c494dffbb782ccc7bc9bd002bf35e908818752d11f0e243a05",
+        "fluidPath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/sim-step-46.fluid.f32",
+        "fluidIdentity": "sha256:e736fa8584247f1cf2f5fa5e86bb7df68019547e330f9013c7bfdfe71f1ae34e",
+        "byteLength": 262144000,
+        "grid": 160,
+        "chunkCount": 1000
+      },
+      "simReadback": {},
+      "majorantReadback": null
+    },
+    {
+      "frameIndex": 2,
+      "frameId": "sim-step-47",
+      "simStepCount": 47,
+      "frameCount": 48,
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "prototypeIdentity": "kaminos-volume-prototype-v0",
+      "backend": "WebGPU:apple",
+      "sampleAuthority": "native-raymarch-canvas-submission-v0",
+      "presentationBarrierAuthority": "gpu-queue-complete-before-cdp-capture-v0",
+      "camera": {
+        "identity": "checksum-bound-native-camera-matrices-v0",
+        "position": [
+          1.1799999999999993,
+          0.28,
+          2.049999999999998
+        ],
+        "target": [
+          0,
+          0.02,
+          0
+        ],
+        "projectionMatrix": [
+          2.9306425807515972,
+          0,
+          0,
+          0,
+          0,
+          2.7474774194546225,
+          0,
+          0,
+          0,
+          0,
+          -1.0002000200020003,
+          -1,
+          0,
+          0,
+          -0.020002000200020003,
+          0
+        ],
+        "matrixWorldInverse": [
+          0.8666778489396199,
+          -0.05450735190097278,
+          0.49588149264328957,
+          0,
+          6.938893903907228e-18,
+          0.9940129828903268,
+          0.10926202380275882,
+          0,
+          -0.49886822524329344,
+          -0.09469497576016456,
+          0.8614890338294436,
+          0,
+          -2.2236986557677696e-16,
+          -0.019880259657806553,
+          -2.3817860473342116,
+          0.9999999999999999
+        ]
+      },
+      "sequence": {
+        "sequenceAuthority": "controlled-native-canvas-sequence-v0",
+        "sampleAuthority": "native-raymarch-canvas-submission-v0",
+        "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+        "presentationBarrierAuthority": "gpu-queue-complete-before-cdp-capture-v0",
+        "sameBrowserSessionId": "native-canvas-1784170334815",
+        "sequenceStartNowMs": 0,
+        "controlledStepFrameIndex": 47,
+        "controlledStepDeltaMs": 220,
+        "controlledStepNowMs": 10340,
+        "baseFrameCount": 47,
+        "baseSimStepCount": 46
+      },
+      "render": {
+        "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/sim-step-47.raymarch.png",
+        "sha256": "sha256:ac50ee94d45b28940dc966fca8b495c120d516a9b60fefa806f6d82c341a1a1e",
+        "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+        "nativeScreenshot": {
+          "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "sha256": "sha256:7f486faeca94ad0ccd5fe0fe173f008f0ba4eb84df6434a372706ae71e68c176",
+          "byteLength": 69340,
+          "clip": {
+            "x": 380,
+            "y": 0,
+            "width": 900,
+            "height": 960,
+            "scale": 1
+          }
+        },
+        "width": 900,
+        "height": 960,
+        "meanLuma": 7.454248662002623,
+        "litPixels": 67988,
+        "smokeLikePixels": 58696
+      },
+      "denseField": {
+        "manifestPath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/sim-step-47.manifest.json",
+        "manifestIdentity": "sha256:f8057a959c62a1bfba67c8200700ebb875ea6b1b87042971e0683015640173ac",
+        "fluidPath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/sim-step-47.fluid.f32",
+        "fluidIdentity": "sha256:e867e0990306f786f719ee5bc6fd3ecb96b82bd54619dc9c238eb87f1106fd25",
+        "byteLength": 262144000,
+        "grid": 160,
+        "chunkCount": 1000
+      },
+      "simReadback": {},
+      "majorantReadback": null
+    }
+  ],
+  "failures": [],
+  "chunkBytes": 262144,
+  "chunkingPolicy": {
+    "identity": "cdp-chunked-full-grid-readback-no-total-cap-v1",
+    "defaultChunkBytes": 262144,
+    "requestedChunkBytes": 262144,
+    "effectiveChunkBytes": 262144,
+    "measuredReason": "4MiB CDP Runtime.evaluate dense export timed out on 64^3 teacher capture; 256KiB chunks completed the full 16MiB field without truncation",
+    "totalFlowPolicy": "uncapped-contiguous-chunks-until-runtime-complete"
+  },
+  "cdpRequestTimeoutMs": 180000,
+  "cdpStartupTimeoutMs": 30000,
+  "cdpProbeTimeoutMs": 1000,
+  "controlledStep": true,
+  "probeUntilMature": true,
+  "heldManifestPath": null,
+  "temporalCeilingSource": true,
+  "candidateInputRadius": null,
+  "candidateRadiusBracket": null,
+  "teacherContract": {
+    "schema": "kaminos.smoke-oracle-temporal-ceiling-teacher-contract.v0",
+    "identity": "operator-fire-0622-r160-paired-source-temporal-teacher-v0",
+    "requestedRoute": "http://127.0.0.1:8098/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_tall_preset=operator_fire_0622&volume_input_radius=0.12&volume_flow_rate=0.35&volume_resolution=160&volume_majorant_grid=24&volume_render_scale=0.35&volume_steps=64&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=1",
+    "effectiveRouteRequired": "native-3d-compute-fluid-raymarch-v0",
+    "expectedPreset": "operator_fire_0622",
+    "expectedControls": {
+      "volumeScene": "tall_plume",
+      "inputRadius": 0.12,
+      "flowRate": 0.35,
+      "resolution": 160
+    },
+    "cameraAuthority": "record-current-native-camera-then-lock-v0",
+    "admissionAuthority": "machine-candidate-plus-agent-original-resolution-visual-disposition-v0",
+    "expectedCamera": {
+      "identity": "checksum-bound-native-camera-matrices-v0",
+      "position": [
+        1.1799999999999993,
+        0.28,
+        2.049999999999998
+      ],
+      "target": [
+        0,
+        0.02,
+        0
+      ],
+      "projectionMatrix": [
+        2.9306425807515972,
+        0,
+        0,
+        0,
+        0,
+        2.7474774194546225,
+        0,
+        0,
+        0,
+        0,
+        -1.0002000200020003,
+        -1,
+        0,
+        0,
+        -0.020002000200020003,
+        0
+      ],
+      "matrixWorldInverse": [
+        0.8666778489396199,
+        -0.05450735190097278,
+        0.49588149264328957,
+        0,
+        6.938893903907228e-18,
+        0.9940129828903268,
+        0.10926202380275882,
+        0,
+        -0.49886822524329344,
+        -0.09469497576016456,
+        0.8614890338294436,
+        0,
+        -2.2236986557677696e-16,
+        -0.019880259657806553,
+        -2.3817860473342116,
+        0.9999999999999999
+      ]
+    },
+    "cameraIdentity": "sha256:76bb1cd92de1d402ff3939bbf3d394aadc8c6b01936dcee2c4420d12977c62a6"
+  },
+  "maturityProbes": [
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise",
+        "missing-adjacent-predecessor"
+      ],
+      "previous": null,
+      "current": {
+        "simStepCount": 0,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 12282,
+          "smokeLikePixels": 7258,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:4597e764699dbb5306f5037469df933b176caa42a170ce98c9cccf3dbbc9eea5",
+            "byteLength": 23511,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:8ff5e98bb3acede2836679c0b02d0d079de19d8cde6a95af4f7ee02f5cade95c",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-0.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.11458333333333333,
+          "smokeVisualLateralDisplacement": 0.09222222222222222
+        }
+      },
+      "metrics": {
+        "litFraction": 0.014215277777777778,
+        "smokeFraction": 0.008400462962962964,
+        "rise": 0.11458333333333333,
+        "lateral": 0.09222222222222222,
+        "smokePixelDeltaFraction": 0,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:14.828Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 0,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 12282,
+          "smokeLikePixels": 7258,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:4597e764699dbb5306f5037469df933b176caa42a170ce98c9cccf3dbbc9eea5",
+            "byteLength": 23511,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:8ff5e98bb3acede2836679c0b02d0d079de19d8cde6a95af4f7ee02f5cade95c",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-0.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.11458333333333333,
+          "smokeVisualLateralDisplacement": 0.09222222222222222
+        }
+      },
+      "current": {
+        "simStepCount": 1,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 14734,
+          "smokeLikePixels": 10712,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:a283e88b67cb6f490670fe6e395315e943da9646d9d17546b1f188d5338e870a",
+            "byteLength": 31462,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:42f62be2c6d295501cf9102d712c6f78baa8c5a8941c05b7449c699879e5d73c",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-1.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.16875,
+          "smokeVisualLateralDisplacement": 0.10444444444444445
+        }
+      },
+      "metrics": {
+        "litFraction": 0.01705324074074074,
+        "smokeFraction": 0.012398148148148148,
+        "rise": 0.16875,
+        "lateral": 0.10444444444444445,
+        "smokePixelDeltaFraction": 0.47588867456599615,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:14.907Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 1,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 14734,
+          "smokeLikePixels": 10712,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:a283e88b67cb6f490670fe6e395315e943da9646d9d17546b1f188d5338e870a",
+            "byteLength": 31462,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:42f62be2c6d295501cf9102d712c6f78baa8c5a8941c05b7449c699879e5d73c",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-1.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.16875,
+          "smokeVisualLateralDisplacement": 0.10444444444444445
+        }
+      },
+      "current": {
+        "simStepCount": 2,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 15637,
+          "smokeLikePixels": 12155,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:193899be594c823a3c39234b860a842f5a152d9a20b7f09a31085a88fd5c4d5c",
+            "byteLength": 33615,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:9b9af8e06d18af58f27939df75957ddc40f0ea6ce58c0e57f25b91403852b35b",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-2.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.184375,
+          "smokeVisualLateralDisplacement": 0.10888888888888888
+        }
+      },
+      "metrics": {
+        "litFraction": 0.01809837962962963,
+        "smokeFraction": 0.014068287037037037,
+        "rise": 0.184375,
+        "lateral": 0.10888888888888888,
+        "smokePixelDeltaFraction": 0.13470873786407767,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:14.981Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 2,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 15637,
+          "smokeLikePixels": 12155,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:193899be594c823a3c39234b860a842f5a152d9a20b7f09a31085a88fd5c4d5c",
+            "byteLength": 33615,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:9b9af8e06d18af58f27939df75957ddc40f0ea6ce58c0e57f25b91403852b35b",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-2.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.184375,
+          "smokeVisualLateralDisplacement": 0.10888888888888888
+        }
+      },
+      "current": {
+        "simStepCount": 3,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 16520,
+          "smokeLikePixels": 13221,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:80fae6a88edb8c60a154bf4f67b92e576d358947c10062274d8449e1212ef9b1",
+            "byteLength": 34771,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:c197daad441d0fb034ecab1b204855ebee93a3d5eae57a1c8f97dca2eae8b225",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-3.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.19895833333333332,
+          "smokeVisualLateralDisplacement": 0.11333333333333333
+        }
+      },
+      "metrics": {
+        "litFraction": 0.01912037037037037,
+        "smokeFraction": 0.015302083333333332,
+        "rise": 0.19895833333333332,
+        "lateral": 0.11333333333333333,
+        "smokePixelDeltaFraction": 0.0877005347593583,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:15.058Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 3,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 16520,
+          "smokeLikePixels": 13221,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:80fae6a88edb8c60a154bf4f67b92e576d358947c10062274d8449e1212ef9b1",
+            "byteLength": 34771,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:c197daad441d0fb034ecab1b204855ebee93a3d5eae57a1c8f97dca2eae8b225",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-3.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.19895833333333332,
+          "smokeVisualLateralDisplacement": 0.11333333333333333
+        }
+      },
+      "current": {
+        "simStepCount": 4,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 17280,
+          "smokeLikePixels": 14120,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:dc7cd657f499946d134d7b03fd43f0eb3659b1381326eecddbf3e43fa52dfa47",
+            "byteLength": 35935,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:c68a462b2b5681c884d57743fd353b2b2355c7e836160c990a533adec304fa75",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-4.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.21041666666666667,
+          "smokeVisualLateralDisplacement": 0.11333333333333333
+        }
+      },
+      "metrics": {
+        "litFraction": 0.02,
+        "smokeFraction": 0.016342592592592593,
+        "rise": 0.21041666666666667,
+        "lateral": 0.11333333333333333,
+        "smokePixelDeltaFraction": 0.06799788215717419,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:15.132Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 4,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 17280,
+          "smokeLikePixels": 14120,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:dc7cd657f499946d134d7b03fd43f0eb3659b1381326eecddbf3e43fa52dfa47",
+            "byteLength": 35935,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:c68a462b2b5681c884d57743fd353b2b2355c7e836160c990a533adec304fa75",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-4.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.21041666666666667,
+          "smokeVisualLateralDisplacement": 0.11333333333333333
+        }
+      },
+      "current": {
+        "simStepCount": 5,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 17976,
+          "smokeLikePixels": 14851,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:9042bad8e8ee6963ab1dbf7c61e301e551867760e49cfa4b044153897a9d8945",
+            "byteLength": 37621,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:29fd28d1e3548074da7158a40459e9fed4e6336e2c7365bbcdb83614598d578d",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-5.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.21666666666666667,
+          "smokeVisualLateralDisplacement": 0.11444444444444445
+        }
+      },
+      "metrics": {
+        "litFraction": 0.020805555555555556,
+        "smokeFraction": 0.017188657407407406,
+        "rise": 0.21666666666666667,
+        "lateral": 0.11444444444444445,
+        "smokePixelDeltaFraction": 0.05177053824362606,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:15.224Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 5,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 17976,
+          "smokeLikePixels": 14851,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:9042bad8e8ee6963ab1dbf7c61e301e551867760e49cfa4b044153897a9d8945",
+            "byteLength": 37621,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:29fd28d1e3548074da7158a40459e9fed4e6336e2c7365bbcdb83614598d578d",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-5.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.21666666666666667,
+          "smokeVisualLateralDisplacement": 0.11444444444444445
+        }
+      },
+      "current": {
+        "simStepCount": 6,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 18641,
+          "smokeLikePixels": 15581,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:086c82f55c0cee95713e1b82e42e9e1dc720603602e6089b732362be5d4f6168",
+            "byteLength": 38764,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:6c10f531d172a0b86877bcfb00188623b4c32dd71cbf6add02a9eca5d441902c",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-6.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.221875,
+          "smokeVisualLateralDisplacement": 0.11777777777777777
+        }
+      },
+      "metrics": {
+        "litFraction": 0.02157523148148148,
+        "smokeFraction": 0.018033564814814815,
+        "rise": 0.221875,
+        "lateral": 0.11777777777777777,
+        "smokePixelDeltaFraction": 0.04915493906134267,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:15.323Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 6,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 18641,
+          "smokeLikePixels": 15581,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:086c82f55c0cee95713e1b82e42e9e1dc720603602e6089b732362be5d4f6168",
+            "byteLength": 38764,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:6c10f531d172a0b86877bcfb00188623b4c32dd71cbf6add02a9eca5d441902c",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-6.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.221875,
+          "smokeVisualLateralDisplacement": 0.11777777777777777
+        }
+      },
+      "current": {
+        "simStepCount": 7,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 19311,
+          "smokeLikePixels": 16299,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:0dde93f72fb203fa615be8536ae3c06d1e4afbf9e0bf6e4a3932498066ad06b9",
+            "byteLength": 40187,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:66c04070e62130d4a1600cea334a73b6e5796708a5ae089ffcfa05c53b35d63c",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-7.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.228125,
+          "smokeVisualLateralDisplacement": 0.11888888888888889
+        }
+      },
+      "metrics": {
+        "litFraction": 0.022350694444444444,
+        "smokeFraction": 0.018864583333333334,
+        "rise": 0.228125,
+        "lateral": 0.11888888888888889,
+        "smokePixelDeltaFraction": 0.04608176625377062,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:15.426Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 7,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 19311,
+          "smokeLikePixels": 16299,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:0dde93f72fb203fa615be8536ae3c06d1e4afbf9e0bf6e4a3932498066ad06b9",
+            "byteLength": 40187,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:66c04070e62130d4a1600cea334a73b6e5796708a5ae089ffcfa05c53b35d63c",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-7.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.228125,
+          "smokeVisualLateralDisplacement": 0.11888888888888889
+        }
+      },
+      "current": {
+        "simStepCount": 8,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 19895,
+          "smokeLikePixels": 16835,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:0a753f2c3e92c0a6aa18cb7a4a0023519617df41defae49bc7df0eb0e3f8ab7e",
+            "byteLength": 40981,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:f79dac586f384cab614c46e4b20e5c9b22ce6b5d29f1c197395e1c695dba021a",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-8.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.23020833333333332,
+          "smokeVisualLateralDisplacement": 0.12
+        }
+      },
+      "metrics": {
+        "litFraction": 0.02302662037037037,
+        "smokeFraction": 0.019484953703703702,
+        "rise": 0.23020833333333332,
+        "lateral": 0.12,
+        "smokePixelDeltaFraction": 0.032885453095281916,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:15.507Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 8,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 19895,
+          "smokeLikePixels": 16835,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:0a753f2c3e92c0a6aa18cb7a4a0023519617df41defae49bc7df0eb0e3f8ab7e",
+            "byteLength": 40981,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:f79dac586f384cab614c46e4b20e5c9b22ce6b5d29f1c197395e1c695dba021a",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-8.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.23020833333333332,
+          "smokeVisualLateralDisplacement": 0.12
+        }
+      },
+      "current": {
+        "simStepCount": 9,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 20440,
+          "smokeLikePixels": 17393,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:153f82ad5453b1f711a607e5a114bbc14f897e810c2d53386fd95b253054984d",
+            "byteLength": 41532,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:dae2bd4a4cce35b92622c6bf6269eee680b1fdc7330c2c4b1eebdc6322867ca0",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-9.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.23541666666666666,
+          "smokeVisualLateralDisplacement": 0.12222222222222222
+        }
+      },
+      "metrics": {
+        "litFraction": 0.023657407407407408,
+        "smokeFraction": 0.020130787037037037,
+        "rise": 0.23541666666666666,
+        "lateral": 0.12222222222222222,
+        "smokePixelDeltaFraction": 0.03314523314523315,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:15.595Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 9,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 20440,
+          "smokeLikePixels": 17393,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:153f82ad5453b1f711a607e5a114bbc14f897e810c2d53386fd95b253054984d",
+            "byteLength": 41532,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:dae2bd4a4cce35b92622c6bf6269eee680b1fdc7330c2c4b1eebdc6322867ca0",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-9.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.23541666666666666,
+          "smokeVisualLateralDisplacement": 0.12222222222222222
+        }
+      },
+      "current": {
+        "simStepCount": 10,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 21109,
+          "smokeLikePixels": 18030,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:694136be28c26376874499fb07a0cec750eb4d2450f7c3f7ee85304f98034c47",
+            "byteLength": 42054,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:3c3ae22fb1f569e6800edb22c855669490549c52103aaf50c60ec6554b3ec55b",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-10.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.240625,
+          "smokeVisualLateralDisplacement": 0.12222222222222222
+        }
+      },
+      "metrics": {
+        "litFraction": 0.024431712962962964,
+        "smokeFraction": 0.020868055555555556,
+        "rise": 0.240625,
+        "lateral": 0.12222222222222222,
+        "smokePixelDeltaFraction": 0.036623929166906224,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:15.675Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 10,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 21109,
+          "smokeLikePixels": 18030,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:694136be28c26376874499fb07a0cec750eb4d2450f7c3f7ee85304f98034c47",
+            "byteLength": 42054,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:3c3ae22fb1f569e6800edb22c855669490549c52103aaf50c60ec6554b3ec55b",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-10.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.240625,
+          "smokeVisualLateralDisplacement": 0.12222222222222222
+        }
+      },
+      "current": {
+        "simStepCount": 11,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 21864,
+          "smokeLikePixels": 18803,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:aa31062d1dd3062f3d8cecd3459514f88ac6c244fff4ab742bf62b9a0f16f453",
+            "byteLength": 42586,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:183415e968f2f5e559c06a7d27ff208396e1606ed66e26c5b24c02c3cc8eb0c0",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-11.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.24583333333333332,
+          "smokeVisualLateralDisplacement": 0.12333333333333334
+        }
+      },
+      "metrics": {
+        "litFraction": 0.025305555555555557,
+        "smokeFraction": 0.02176273148148148,
+        "rise": 0.24583333333333332,
+        "lateral": 0.12333333333333334,
+        "smokePixelDeltaFraction": 0.042872989462007766,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:15.750Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 11,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 21864,
+          "smokeLikePixels": 18803,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:aa31062d1dd3062f3d8cecd3459514f88ac6c244fff4ab742bf62b9a0f16f453",
+            "byteLength": 42586,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:183415e968f2f5e559c06a7d27ff208396e1606ed66e26c5b24c02c3cc8eb0c0",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-11.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.24583333333333332,
+          "smokeVisualLateralDisplacement": 0.12333333333333334
+        }
+      },
+      "current": {
+        "simStepCount": 12,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 22652,
+          "smokeLikePixels": 19493,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:2fcf12b7cc446f8b7ebcb0a096819118b75a6c540c48aa55606f1eea3bb210c4",
+            "byteLength": 42587,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:439e1055e4421ec0434954b74b5882761e283f2e41181894cd46d866cb721763",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-12.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.24895833333333334,
+          "smokeVisualLateralDisplacement": 0.12333333333333334
+        }
+      },
+      "metrics": {
+        "litFraction": 0.02621759259259259,
+        "smokeFraction": 0.02256134259259259,
+        "rise": 0.24895833333333334,
+        "lateral": 0.12333333333333334,
+        "smokePixelDeltaFraction": 0.03669627187150987,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:15.834Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 12,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 22652,
+          "smokeLikePixels": 19493,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:2fcf12b7cc446f8b7ebcb0a096819118b75a6c540c48aa55606f1eea3bb210c4",
+            "byteLength": 42587,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:439e1055e4421ec0434954b74b5882761e283f2e41181894cd46d866cb721763",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-12.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.24895833333333334,
+          "smokeVisualLateralDisplacement": 0.12333333333333334
+        }
+      },
+      "current": {
+        "simStepCount": 13,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 23408,
+          "smokeLikePixels": 20007,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:86ec55d3772e3d8ee6ca92e69d70b9db0130f5b5cf91e587ab0a7104f21765f1",
+            "byteLength": 43442,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:9a4b8f270e45f0907a8dee048ff75f3f93e87b8c8f5b77dd58976e728f7132c4",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-13.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.25,
+          "smokeVisualLateralDisplacement": 0.12444444444444444
+        }
+      },
+      "metrics": {
+        "litFraction": 0.02709259259259259,
+        "smokeFraction": 0.02315625,
+        "rise": 0.25,
+        "lateral": 0.12444444444444444,
+        "smokePixelDeltaFraction": 0.02636843995280357,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:15.909Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 13,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 23408,
+          "smokeLikePixels": 20007,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:86ec55d3772e3d8ee6ca92e69d70b9db0130f5b5cf91e587ab0a7104f21765f1",
+            "byteLength": 43442,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:9a4b8f270e45f0907a8dee048ff75f3f93e87b8c8f5b77dd58976e728f7132c4",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-13.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.25,
+          "smokeVisualLateralDisplacement": 0.12444444444444444
+        }
+      },
+      "current": {
+        "simStepCount": 14,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 24185,
+          "smokeLikePixels": 20517,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:d4b88f4486ea4f9128871f4109061c2382935ab40fc8b5544fb607ca4f6a7106",
+            "byteLength": 44025,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:9cb35b81066a055d1a6d0cbde907ccf3385f713897b4b6814ebfee4945335d96",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-14.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.24895833333333334,
+          "smokeVisualLateralDisplacement": 0.12555555555555556
+        }
+      },
+      "metrics": {
+        "litFraction": 0.027991898148148148,
+        "smokeFraction": 0.023746527777777776,
+        "rise": 0.24895833333333334,
+        "lateral": 0.12555555555555556,
+        "smokePixelDeltaFraction": 0.02549107812265707,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:15.982Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 14,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 24185,
+          "smokeLikePixels": 20517,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:d4b88f4486ea4f9128871f4109061c2382935ab40fc8b5544fb607ca4f6a7106",
+            "byteLength": 44025,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:9cb35b81066a055d1a6d0cbde907ccf3385f713897b4b6814ebfee4945335d96",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-14.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.24895833333333334,
+          "smokeVisualLateralDisplacement": 0.12555555555555556
+        }
+      },
+      "current": {
+        "simStepCount": 15,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 25042,
+          "smokeLikePixels": 21112,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:7113258eb7e50584f7d4cc057d92280d90e8ae8fa2ebd25519ccee771c6eb1ca",
+            "byteLength": 44364,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:70bc590a4087f2f3b7088d18e0c2f37902bf7f2d058417c3be619c4973472cb3",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-15.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.2552083333333333,
+          "smokeVisualLateralDisplacement": 0.12666666666666668
+        }
+      },
+      "metrics": {
+        "litFraction": 0.028983796296296296,
+        "smokeFraction": 0.024435185185185185,
+        "rise": 0.2552083333333333,
+        "lateral": 0.12666666666666668,
+        "smokePixelDeltaFraction": 0.029000341180484477,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:16.058Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 15,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 25042,
+          "smokeLikePixels": 21112,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:7113258eb7e50584f7d4cc057d92280d90e8ae8fa2ebd25519ccee771c6eb1ca",
+            "byteLength": 44364,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:70bc590a4087f2f3b7088d18e0c2f37902bf7f2d058417c3be619c4973472cb3",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-15.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.2552083333333333,
+          "smokeVisualLateralDisplacement": 0.12666666666666668
+        }
+      },
+      "current": {
+        "simStepCount": 16,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 26003,
+          "smokeLikePixels": 21784,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:0ae671c03b04c72e2a3c3d9ffddb1c74e001586049a30036878bf828105361b3",
+            "byteLength": 45076,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:891e671544721608ac611dea34bf0e976bd6d27805f71c376d7d22c7706b6b67",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-16.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.26875,
+          "smokeVisualLateralDisplacement": 0.12777777777777777
+        }
+      },
+      "metrics": {
+        "litFraction": 0.030096064814814815,
+        "smokeFraction": 0.02521296296296296,
+        "rise": 0.26875,
+        "lateral": 0.12777777777777777,
+        "smokePixelDeltaFraction": 0.03183023872679045,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:16.142Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 16,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 26003,
+          "smokeLikePixels": 21784,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:0ae671c03b04c72e2a3c3d9ffddb1c74e001586049a30036878bf828105361b3",
+            "byteLength": 45076,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:891e671544721608ac611dea34bf0e976bd6d27805f71c376d7d22c7706b6b67",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-16.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.26875,
+          "smokeVisualLateralDisplacement": 0.12777777777777777
+        }
+      },
+      "current": {
+        "simStepCount": 17,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 27112,
+          "smokeLikePixels": 22505,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:58c5291a385028137b93670654eb65a72b017b8479b01155d6ed2f9ae46c0e9a",
+            "byteLength": 45632,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:f7204f45cfbf616dc4b13ecb9b52ccf504dc67b384d30e50c23b221e309db6b7",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-17.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.284375,
+          "smokeVisualLateralDisplacement": 0.12666666666666668
+        }
+      },
+      "metrics": {
+        "litFraction": 0.03137962962962963,
+        "smokeFraction": 0.026047453703703705,
+        "rise": 0.284375,
+        "lateral": 0.12666666666666668,
+        "smokePixelDeltaFraction": 0.03309768637532134,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:16.227Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 17,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 27112,
+          "smokeLikePixels": 22505,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:58c5291a385028137b93670654eb65a72b017b8479b01155d6ed2f9ae46c0e9a",
+            "byteLength": 45632,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:f7204f45cfbf616dc4b13ecb9b52ccf504dc67b384d30e50c23b221e309db6b7",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-17.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.284375,
+          "smokeVisualLateralDisplacement": 0.12666666666666668
+        }
+      },
+      "current": {
+        "simStepCount": 18,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 28321,
+          "smokeLikePixels": 23276,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:a803569aed0d6c2d0f650707512eca85570a3a58e1fdcbadb63e8ec9c912c423",
+            "byteLength": 45503,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:61966c82d348f4935f6364584dd8700e726a68c341e3a68714c72e2c329ee699",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-18.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.29791666666666666,
+          "smokeVisualLateralDisplacement": 0.12666666666666668
+        }
+      },
+      "metrics": {
+        "litFraction": 0.03277893518518518,
+        "smokeFraction": 0.026939814814814816,
+        "rise": 0.29791666666666666,
+        "lateral": 0.12666666666666668,
+        "smokePixelDeltaFraction": 0.034259053543656964,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:16.311Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 18,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 28321,
+          "smokeLikePixels": 23276,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:a803569aed0d6c2d0f650707512eca85570a3a58e1fdcbadb63e8ec9c912c423",
+            "byteLength": 45503,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:61966c82d348f4935f6364584dd8700e726a68c341e3a68714c72e2c329ee699",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-18.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.29791666666666666,
+          "smokeVisualLateralDisplacement": 0.12666666666666668
+        }
+      },
+      "current": {
+        "simStepCount": 19,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 29598,
+          "smokeLikePixels": 24251,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:053f21c9feb3b8e6ad1c8118a477868c49f5306e440719b160968c4d5510ad75",
+            "byteLength": 45694,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:929b47d1caf5e10a991426b59770cb4de9f2e06c355fb77c0fcb5a362c978502",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-19.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.3125,
+          "smokeVisualLateralDisplacement": 0.12555555555555556
+        }
+      },
+      "metrics": {
+        "litFraction": 0.034256944444444444,
+        "smokeFraction": 0.028068287037037037,
+        "rise": 0.3125,
+        "lateral": 0.12555555555555556,
+        "smokePixelDeltaFraction": 0.0418886406599072,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:16.393Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 19,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 29598,
+          "smokeLikePixels": 24251,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:053f21c9feb3b8e6ad1c8118a477868c49f5306e440719b160968c4d5510ad75",
+            "byteLength": 45694,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:929b47d1caf5e10a991426b59770cb4de9f2e06c355fb77c0fcb5a362c978502",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-19.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.3125,
+          "smokeVisualLateralDisplacement": 0.12555555555555556
+        }
+      },
+      "current": {
+        "simStepCount": 20,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 30878,
+          "smokeLikePixels": 25353,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:6022543fb206453740a4021c4fd2d807ad2a2120b24f13f0093ef7d373821298",
+            "byteLength": 46561,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:0e8d7e71443d15a7d4f14da99d8826119e6c809cd93656b42fbaee9cafbe040a",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-20.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.325,
+          "smokeVisualLateralDisplacement": 0.12333333333333334
+        }
+      },
+      "metrics": {
+        "litFraction": 0.035738425925925923,
+        "smokeFraction": 0.02934375,
+        "rise": 0.325,
+        "lateral": 0.12333333333333334,
+        "smokePixelDeltaFraction": 0.04544142509587234,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:16.477Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 20,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 30878,
+          "smokeLikePixels": 25353,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:6022543fb206453740a4021c4fd2d807ad2a2120b24f13f0093ef7d373821298",
+            "byteLength": 46561,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:0e8d7e71443d15a7d4f14da99d8826119e6c809cd93656b42fbaee9cafbe040a",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-20.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.325,
+          "smokeVisualLateralDisplacement": 0.12333333333333334
+        }
+      },
+      "current": {
+        "simStepCount": 21,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 32386,
+          "smokeLikePixels": 26531,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:4e94730927398e833ea08a8767a9434f858b985f07ca2e3d72fc2ffc5b41895b",
+            "byteLength": 47153,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:919e2d3a060c89e4e728dc5ba698e2601480118845735dbf22673145ff5163fb",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-21.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.33645833333333336,
+          "smokeVisualLateralDisplacement": 0.12555555555555556
+        }
+      },
+      "metrics": {
+        "litFraction": 0.03748379629629629,
+        "smokeFraction": 0.030707175925925926,
+        "rise": 0.33645833333333336,
+        "lateral": 0.12555555555555556,
+        "smokePixelDeltaFraction": 0.04646392931802942,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:16.562Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 21,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 32386,
+          "smokeLikePixels": 26531,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:4e94730927398e833ea08a8767a9434f858b985f07ca2e3d72fc2ffc5b41895b",
+            "byteLength": 47153,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:919e2d3a060c89e4e728dc5ba698e2601480118845735dbf22673145ff5163fb",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-21.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.33645833333333336,
+          "smokeVisualLateralDisplacement": 0.12555555555555556
+        }
+      },
+      "current": {
+        "simStepCount": 22,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 33805,
+          "smokeLikePixels": 27783,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:bea4117b65954abefdc2158137bda98ec15e9fcce028d073e7e044e52469db11",
+            "byteLength": 47744,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:2c289a0506643a19fb083c6009889f7133665298831bd51f4c16f9705c601c62",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-22.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.34791666666666665,
+          "smokeVisualLateralDisplacement": 0.12777777777777777
+        }
+      },
+      "metrics": {
+        "litFraction": 0.03912615740740741,
+        "smokeFraction": 0.03215625,
+        "rise": 0.34791666666666665,
+        "lateral": 0.12777777777777777,
+        "smokePixelDeltaFraction": 0.047190079529606875,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:16.645Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 22,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 33805,
+          "smokeLikePixels": 27783,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:bea4117b65954abefdc2158137bda98ec15e9fcce028d073e7e044e52469db11",
+            "byteLength": 47744,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:2c289a0506643a19fb083c6009889f7133665298831bd51f4c16f9705c601c62",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-22.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.34791666666666665,
+          "smokeVisualLateralDisplacement": 0.12777777777777777
+        }
+      },
+      "current": {
+        "simStepCount": 23,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 35074,
+          "smokeLikePixels": 29311,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:16b7ae0aad5f0bf0840fddd5bf56f6f3d10a978249a80f4b928b5dec80f9436b",
+            "byteLength": 48229,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:1f5d33e66300c599f732caa863a5ea160ca6db2151b710c0acb25a067f20487b",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-23.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.3572916666666667,
+          "smokeVisualLateralDisplacement": 0.1288888888888889
+        }
+      },
+      "metrics": {
+        "litFraction": 0.040594907407407406,
+        "smokeFraction": 0.03392476851851852,
+        "rise": 0.3572916666666667,
+        "lateral": 0.1288888888888889,
+        "smokePixelDeltaFraction": 0.05499766043983731,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:16.727Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 23,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 35074,
+          "smokeLikePixels": 29311,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:16b7ae0aad5f0bf0840fddd5bf56f6f3d10a978249a80f4b928b5dec80f9436b",
+            "byteLength": 48229,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:1f5d33e66300c599f732caa863a5ea160ca6db2151b710c0acb25a067f20487b",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-23.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.3572916666666667,
+          "smokeVisualLateralDisplacement": 0.1288888888888889
+        }
+      },
+      "current": {
+        "simStepCount": 24,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 36221,
+          "smokeLikePixels": 30997,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:ee7f83b96569b440ffd42d626d7fc211f77d7fc43631422fbbcb363c5e593819",
+            "byteLength": 49813,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:be9e3cf4b9552cdabd3ba0ef1356424a3729628ba10f629a2d48857e6488fee5",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-24.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.36666666666666664,
+          "smokeVisualLateralDisplacement": 0.13
+        }
+      },
+      "metrics": {
+        "litFraction": 0.041922453703703705,
+        "smokeFraction": 0.035876157407407405,
+        "rise": 0.36666666666666664,
+        "lateral": 0.13,
+        "smokePixelDeltaFraction": 0.057521067176145475,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:16.813Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 24,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 36221,
+          "smokeLikePixels": 30997,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:ee7f83b96569b440ffd42d626d7fc211f77d7fc43631422fbbcb363c5e593819",
+            "byteLength": 49813,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:be9e3cf4b9552cdabd3ba0ef1356424a3729628ba10f629a2d48857e6488fee5",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-24.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.36666666666666664,
+          "smokeVisualLateralDisplacement": 0.13
+        }
+      },
+      "current": {
+        "simStepCount": 25,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 37477,
+          "smokeLikePixels": 32758,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:ba178a97e26f7683aca54f67d0d5d7f556d9286a373c07645a4759eb100fe580",
+            "byteLength": 50267,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:f585640759ffbfe97784370002e753a1924648dd3b9fb72901b7d4a40ad9ae9a",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-25.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.375,
+          "smokeVisualLateralDisplacement": 0.1322222222222222
+        }
+      },
+      "metrics": {
+        "litFraction": 0.043376157407407405,
+        "smokeFraction": 0.03791435185185185,
+        "rise": 0.375,
+        "lateral": 0.1322222222222222,
+        "smokePixelDeltaFraction": 0.05681194954350421,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:16.898Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 25,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 37477,
+          "smokeLikePixels": 32758,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:ba178a97e26f7683aca54f67d0d5d7f556d9286a373c07645a4759eb100fe580",
+            "byteLength": 50267,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:f585640759ffbfe97784370002e753a1924648dd3b9fb72901b7d4a40ad9ae9a",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-25.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.375,
+          "smokeVisualLateralDisplacement": 0.1322222222222222
+        }
+      },
+      "current": {
+        "simStepCount": 26,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 38975,
+          "smokeLikePixels": 34501,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:ac0a0ac6df53fdb8ab6f8742eef353385f8bf1f3982b5f4c92f8d0e10d25b1ec",
+            "byteLength": 51918,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:91a398758e55435b2efc841b7d343453e0483e9e699ba2e3794e613b26a2846e",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-26.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.38229166666666664,
+          "smokeVisualLateralDisplacement": 0.13555555555555557
+        }
+      },
+      "metrics": {
+        "litFraction": 0.0451099537037037,
+        "smokeFraction": 0.03993171296296296,
+        "rise": 0.38229166666666664,
+        "lateral": 0.13555555555555557,
+        "smokePixelDeltaFraction": 0.05320837657976678,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:16.981Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 26,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 38975,
+          "smokeLikePixels": 34501,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:ac0a0ac6df53fdb8ab6f8742eef353385f8bf1f3982b5f4c92f8d0e10d25b1ec",
+            "byteLength": 51918,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:91a398758e55435b2efc841b7d343453e0483e9e699ba2e3794e613b26a2846e",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-26.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.38229166666666664,
+          "smokeVisualLateralDisplacement": 0.13555555555555557
+        }
+      },
+      "current": {
+        "simStepCount": 27,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 40466,
+          "smokeLikePixels": 36097,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:98599298b6cd78cf3f1690688921279159503f8c35693ac6e857c61bfb5abfa6",
+            "byteLength": 53656,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:841ea736c436a748db23cb649bb318be07ad73ba53ead0e31bea8ce74bce6067",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-27.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.3875,
+          "smokeVisualLateralDisplacement": 0.14
+        }
+      },
+      "metrics": {
+        "litFraction": 0.04683564814814815,
+        "smokeFraction": 0.04177893518518518,
+        "rise": 0.3875,
+        "lateral": 0.14,
+        "smokePixelDeltaFraction": 0.046259528709312776,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:17.064Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 27,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 40466,
+          "smokeLikePixels": 36097,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:98599298b6cd78cf3f1690688921279159503f8c35693ac6e857c61bfb5abfa6",
+            "byteLength": 53656,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:841ea736c436a748db23cb649bb318be07ad73ba53ead0e31bea8ce74bce6067",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-27.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.3875,
+          "smokeVisualLateralDisplacement": 0.14
+        }
+      },
+      "current": {
+        "simStepCount": 28,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 41879,
+          "smokeLikePixels": 37549,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:395f8b460a7430ae4abc6456c0088fde92a9573a700256c2826015c8f34bbaa7",
+            "byteLength": 54963,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:c70d91e9d23920c06e3d824e3b3a119325b34a4afe5eeb5adb4e20857a6ae1aa",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-28.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.39166666666666666,
+          "smokeVisualLateralDisplacement": 0.1411111111111111
+        }
+      },
+      "metrics": {
+        "litFraction": 0.048471064814814814,
+        "smokeFraction": 0.04345949074074074,
+        "rise": 0.39166666666666666,
+        "lateral": 0.1411111111111111,
+        "smokePixelDeltaFraction": 0.040224949441781864,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:17.147Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 28,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 41879,
+          "smokeLikePixels": 37549,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:395f8b460a7430ae4abc6456c0088fde92a9573a700256c2826015c8f34bbaa7",
+            "byteLength": 54963,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:c70d91e9d23920c06e3d824e3b3a119325b34a4afe5eeb5adb4e20857a6ae1aa",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-28.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.39166666666666666,
+          "smokeVisualLateralDisplacement": 0.1411111111111111
+        }
+      },
+      "current": {
+        "simStepCount": 29,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 43206,
+          "smokeLikePixels": 38908,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:3c00c7c6ca25a072aa3dc303b6759ddcc0919bbddc212f7a04bbb5b19b754d2a",
+            "byteLength": 56320,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:8cdf2b7d356991be93367286ff94477314013d83533ab617213ed10c1f34fdf4",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-29.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.39791666666666664,
+          "smokeVisualLateralDisplacement": 0.14555555555555555
+        }
+      },
+      "metrics": {
+        "litFraction": 0.050006944444444444,
+        "smokeFraction": 0.04503240740740741,
+        "rise": 0.39791666666666664,
+        "lateral": 0.14555555555555555,
+        "smokePixelDeltaFraction": 0.03619270819462569,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:17.231Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 29,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 43206,
+          "smokeLikePixels": 38908,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:3c00c7c6ca25a072aa3dc303b6759ddcc0919bbddc212f7a04bbb5b19b754d2a",
+            "byteLength": 56320,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:8cdf2b7d356991be93367286ff94477314013d83533ab617213ed10c1f34fdf4",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-29.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.39791666666666664,
+          "smokeVisualLateralDisplacement": 0.14555555555555555
+        }
+      },
+      "current": {
+        "simStepCount": 30,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 44391,
+          "smokeLikePixels": 40026,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:109ea9a972038836e745a740eee57225f191617a546a23fba7816d395a878428",
+            "byteLength": 57135,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:94071bb37998ad21731269cb6e66d12207c8b6600a686d7d072b4de0d3176213",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-30.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.40625,
+          "smokeVisualLateralDisplacement": 0.14555555555555555
+        }
+      },
+      "metrics": {
+        "litFraction": 0.05137847222222222,
+        "smokeFraction": 0.04632638888888889,
+        "rise": 0.40625,
+        "lateral": 0.14555555555555555,
+        "smokePixelDeltaFraction": 0.02873445049861211,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:17.314Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 30,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 44391,
+          "smokeLikePixels": 40026,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:109ea9a972038836e745a740eee57225f191617a546a23fba7816d395a878428",
+            "byteLength": 57135,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:94071bb37998ad21731269cb6e66d12207c8b6600a686d7d072b4de0d3176213",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-30.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.40625,
+          "smokeVisualLateralDisplacement": 0.14555555555555555
+        }
+      },
+      "current": {
+        "simStepCount": 31,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 45347,
+          "smokeLikePixels": 40994,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:11149622a817a7ffefd3b65644904aeb05176214f4d8d17e1309d1ebbb302736",
+            "byteLength": 58222,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:fbc00ec40d724de83d7e8c3ee2085b29d5b67e67ca8cf5dae478a0b7377988b0",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-31.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.41354166666666664,
+          "smokeVisualLateralDisplacement": 0.15
+        }
+      },
+      "metrics": {
+        "litFraction": 0.0524849537037037,
+        "smokeFraction": 0.04744675925925926,
+        "rise": 0.41354166666666664,
+        "lateral": 0.15,
+        "smokePixelDeltaFraction": 0.024184280217858393,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:17.397Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 31,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 45347,
+          "smokeLikePixels": 40994,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:11149622a817a7ffefd3b65644904aeb05176214f4d8d17e1309d1ebbb302736",
+            "byteLength": 58222,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:fbc00ec40d724de83d7e8c3ee2085b29d5b67e67ca8cf5dae478a0b7377988b0",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-31.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.41354166666666664,
+          "smokeVisualLateralDisplacement": 0.15
+        }
+      },
+      "current": {
+        "simStepCount": 32,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 46225,
+          "smokeLikePixels": 41645,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:05339711eb0007f04d97a50742524621712c4cefbdadb81b3a1bce47c56d22a2",
+            "byteLength": 59168,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:d6a2959d665702c8e1f9606bd669b194c4a88d02f4d42b6c6358d19e74aed548",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-32.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.41770833333333335,
+          "smokeVisualLateralDisplacement": 0.15333333333333332
+        }
+      },
+      "metrics": {
+        "litFraction": 0.05350115740740741,
+        "smokeFraction": 0.04820023148148148,
+        "rise": 0.41770833333333335,
+        "lateral": 0.15333333333333332,
+        "smokePixelDeltaFraction": 0.015880372737473777,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:17.483Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 32,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 46225,
+          "smokeLikePixels": 41645,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:05339711eb0007f04d97a50742524621712c4cefbdadb81b3a1bce47c56d22a2",
+            "byteLength": 59168,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:d6a2959d665702c8e1f9606bd669b194c4a88d02f4d42b6c6358d19e74aed548",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-32.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.41770833333333335,
+          "smokeVisualLateralDisplacement": 0.15333333333333332
+        }
+      },
+      "current": {
+        "simStepCount": 33,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 46946,
+          "smokeLikePixels": 42281,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:960f757458349d2fe06eebb82cda9bbe6e4f594f1632442f310b06095a8cc209",
+            "byteLength": 60101,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:a744b0727618f0ac5e1c09008bc5d8ae1397637cdc060ea0bd5fc88861bd8b57",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-33.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.4239583333333333,
+          "smokeVisualLateralDisplacement": 0.15666666666666668
+        }
+      },
+      "metrics": {
+        "litFraction": 0.05433564814814815,
+        "smokeFraction": 0.048936342592592594,
+        "rise": 0.4239583333333333,
+        "lateral": 0.15666666666666668,
+        "smokePixelDeltaFraction": 0.015271941409532957,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:17.574Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 33,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 46946,
+          "smokeLikePixels": 42281,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:960f757458349d2fe06eebb82cda9bbe6e4f594f1632442f310b06095a8cc209",
+            "byteLength": 60101,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:a744b0727618f0ac5e1c09008bc5d8ae1397637cdc060ea0bd5fc88861bd8b57",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-33.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.4239583333333333,
+          "smokeVisualLateralDisplacement": 0.15666666666666668
+        }
+      },
+      "current": {
+        "simStepCount": 34,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 47667,
+          "smokeLikePixels": 42835,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:4746b3b54821e7f44f5c89d0cd23f4d5762cc478acc91b868e656f7241a164a8",
+            "byteLength": 60384,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:20ac09abe25317a32023717ae08c6ec668dc39ab29515e562225d072a47326e8",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-34.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.42916666666666664,
+          "smokeVisualLateralDisplacement": 0.15777777777777777
+        }
+      },
+      "metrics": {
+        "litFraction": 0.05517013888888889,
+        "smokeFraction": 0.04957754629629629,
+        "rise": 0.42916666666666664,
+        "lateral": 0.15777777777777777,
+        "smokePixelDeltaFraction": 0.013102812137839691,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:17.657Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 34,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 47667,
+          "smokeLikePixels": 42835,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:4746b3b54821e7f44f5c89d0cd23f4d5762cc478acc91b868e656f7241a164a8",
+            "byteLength": 60384,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:20ac09abe25317a32023717ae08c6ec668dc39ab29515e562225d072a47326e8",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-34.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.42916666666666664,
+          "smokeVisualLateralDisplacement": 0.15777777777777777
+        }
+      },
+      "current": {
+        "simStepCount": 35,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 48535,
+          "smokeLikePixels": 43321,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:c1de4c6cf65405324570873654eece86278eaff235d130f5351f49f4f5dd2144",
+            "byteLength": 61270,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:85ba0f7adf68523e615948b48f7315369c8f50635a1ab303ec1e21ea05eca559",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-35.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.43645833333333334,
+          "smokeVisualLateralDisplacement": 0.15666666666666668
+        }
+      },
+      "metrics": {
+        "litFraction": 0.05617476851851852,
+        "smokeFraction": 0.050140046296296294,
+        "rise": 0.43645833333333334,
+        "lateral": 0.15666666666666668,
+        "smokePixelDeltaFraction": 0.011345862028714836,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:17.740Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 35,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 48535,
+          "smokeLikePixels": 43321,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:c1de4c6cf65405324570873654eece86278eaff235d130f5351f49f4f5dd2144",
+            "byteLength": 61270,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:85ba0f7adf68523e615948b48f7315369c8f50635a1ab303ec1e21ea05eca559",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-35.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.43645833333333334,
+          "smokeVisualLateralDisplacement": 0.15666666666666668
+        }
+      },
+      "current": {
+        "simStepCount": 36,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 49602,
+          "smokeLikePixels": 43996,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:9d5056320292a2a9b96c748a4d693de54cc51e158b7d4b405ae4adf002dde79e",
+            "byteLength": 61742,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:3b25691b328a60a1b6ce8ac4236769c130f58547cda5142095a3033c3c0a5e18",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-36.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.446875,
+          "smokeVisualLateralDisplacement": 0.15444444444444444
+        }
+      },
+      "metrics": {
+        "litFraction": 0.05740972222222222,
+        "smokeFraction": 0.0509212962962963,
+        "rise": 0.446875,
+        "lateral": 0.15444444444444444,
+        "smokePixelDeltaFraction": 0.015581357771057916,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:17.825Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 36,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 49602,
+          "smokeLikePixels": 43996,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:9d5056320292a2a9b96c748a4d693de54cc51e158b7d4b405ae4adf002dde79e",
+            "byteLength": 61742,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:3b25691b328a60a1b6ce8ac4236769c130f58547cda5142095a3033c3c0a5e18",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-36.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.446875,
+          "smokeVisualLateralDisplacement": 0.15444444444444444
+        }
+      },
+      "current": {
+        "simStepCount": 37,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 51161,
+          "smokeLikePixels": 44997,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:39ed410ee05e385461cb02637b081ce4c05012a1527568cb20140b0cc5bf2882",
+            "byteLength": 62423,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:dbdfa15e8593ae177327cb80e59cf4dc74b46fc955bb4a8049c5fcc8253350da",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-37.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.46458333333333335,
+          "smokeVisualLateralDisplacement": 0.15444444444444444
+        }
+      },
+      "metrics": {
+        "litFraction": 0.05921412037037037,
+        "smokeFraction": 0.05207986111111111,
+        "rise": 0.46458333333333335,
+        "lateral": 0.15444444444444444,
+        "smokePixelDeltaFraction": 0.022752068369851806,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:17.918Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 37,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 51161,
+          "smokeLikePixels": 44997,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:39ed410ee05e385461cb02637b081ce4c05012a1527568cb20140b0cc5bf2882",
+            "byteLength": 62423,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:dbdfa15e8593ae177327cb80e59cf4dc74b46fc955bb4a8049c5fcc8253350da",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-37.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.46458333333333335,
+          "smokeVisualLateralDisplacement": 0.15444444444444444
+        }
+      },
+      "current": {
+        "simStepCount": 38,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 53294,
+          "smokeLikePixels": 46243,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:42f8bcf159c354e864d5a3e436d8386f5a70546ccea99d1962fc41a5476183e1",
+            "byteLength": 61701,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:c26a587c33ee7a5de8d9ca29be62652ecdb893b98856161905cfb0b2057b632f",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-38.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.48020833333333335,
+          "smokeVisualLateralDisplacement": 0.15444444444444444
+        }
+      },
+      "metrics": {
+        "litFraction": 0.06168287037037037,
+        "smokeFraction": 0.05352199074074074,
+        "rise": 0.48020833333333335,
+        "lateral": 0.15444444444444444,
+        "smokePixelDeltaFraction": 0.027690734937884747,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:18.009Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 38,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 53294,
+          "smokeLikePixels": 46243,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:42f8bcf159c354e864d5a3e436d8386f5a70546ccea99d1962fc41a5476183e1",
+            "byteLength": 61701,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:c26a587c33ee7a5de8d9ca29be62652ecdb893b98856161905cfb0b2057b632f",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-38.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.48020833333333335,
+          "smokeVisualLateralDisplacement": 0.15444444444444444
+        }
+      },
+      "current": {
+        "simStepCount": 39,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 55132,
+          "smokeLikePixels": 47596,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:40cd6f43067e2c1f681ad1b889c608ff73782ab0228046ffcda1f6197710a7ac",
+            "byteLength": 62059,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:7c2dce1732b38d74bed6caa058bb1c914a6bbe62cc17bc7fdb7818a40037f2f2",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-39.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.49270833333333336,
+          "smokeVisualLateralDisplacement": 0.15222222222222223
+        }
+      },
+      "metrics": {
+        "litFraction": 0.06381018518518519,
+        "smokeFraction": 0.055087962962962964,
+        "rise": 0.49270833333333336,
+        "lateral": 0.15222222222222223,
+        "smokePixelDeltaFraction": 0.02925848236489847,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:18.100Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 39,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 55132,
+          "smokeLikePixels": 47596,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:40cd6f43067e2c1f681ad1b889c608ff73782ab0228046ffcda1f6197710a7ac",
+            "byteLength": 62059,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:7c2dce1732b38d74bed6caa058bb1c914a6bbe62cc17bc7fdb7818a40037f2f2",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-39.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.49270833333333336,
+          "smokeVisualLateralDisplacement": 0.15222222222222223
+        }
+      },
+      "current": {
+        "simStepCount": 40,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 56516,
+          "smokeLikePixels": 48824,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:a97da573c7bf6a2b20aa147fcd759a04bb546752f6e9123cd00c672efdbf36f8",
+            "byteLength": 62830,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:53cb32d0b90b68f159a5b1a8d50e31b2b24ed3e648d36631386e27b36253dfe3",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-40.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.50625,
+          "smokeVisualLateralDisplacement": 0.15444444444444444
+        }
+      },
+      "metrics": {
+        "litFraction": 0.06541203703703703,
+        "smokeFraction": 0.05650925925925926,
+        "rise": 0.50625,
+        "lateral": 0.15444444444444444,
+        "smokePixelDeltaFraction": 0.025800487435918985,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:18.201Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 40,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 56516,
+          "smokeLikePixels": 48824,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:a97da573c7bf6a2b20aa147fcd759a04bb546752f6e9123cd00c672efdbf36f8",
+            "byteLength": 62830,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:53cb32d0b90b68f159a5b1a8d50e31b2b24ed3e648d36631386e27b36253dfe3",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-40.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.50625,
+          "smokeVisualLateralDisplacement": 0.15444444444444444
+        }
+      },
+      "current": {
+        "simStepCount": 41,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 57714,
+          "smokeLikePixels": 49848,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:17ad8b92f653ab60d049fabeae3789c935dedde65417953bad384a67edcb8848",
+            "byteLength": 63000,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:888e16fe0788669bb1355ee2d258e8ba61d222409408f02481aa4f12dbeeb27b",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-41.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.5177083333333333,
+          "smokeVisualLateralDisplacement": 0.15444444444444444
+        }
+      },
+      "metrics": {
+        "litFraction": 0.06679861111111111,
+        "smokeFraction": 0.057694444444444444,
+        "rise": 0.5177083333333333,
+        "lateral": 0.15444444444444444,
+        "smokePixelDeltaFraction": 0.020973291823693264,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:18.296Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 41,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 57714,
+          "smokeLikePixels": 49848,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:17ad8b92f653ab60d049fabeae3789c935dedde65417953bad384a67edcb8848",
+            "byteLength": 63000,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:888e16fe0788669bb1355ee2d258e8ba61d222409408f02481aa4f12dbeeb27b",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-41.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.5177083333333333,
+          "smokeVisualLateralDisplacement": 0.15444444444444444
+        }
+      },
+      "current": {
+        "simStepCount": 42,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 59050,
+          "smokeLikePixels": 50852,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:86d056b30512633f2e5ffe83303313aea19d9992cf2c985ad4856ba59033e5d0",
+            "byteLength": 63944,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:c360b714f695f325c9d6ff3476b3f485929da1f0e45832d2bcfb5620e1615e91",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-42.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.5291666666666667,
+          "smokeVisualLateralDisplacement": 0.15333333333333332
+        }
+      },
+      "metrics": {
+        "litFraction": 0.06834490740740741,
+        "smokeFraction": 0.05885648148148148,
+        "rise": 0.5291666666666667,
+        "lateral": 0.15333333333333332,
+        "smokePixelDeltaFraction": 0.020141229337185044,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:18.386Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 42,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 59050,
+          "smokeLikePixels": 50852,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:86d056b30512633f2e5ffe83303313aea19d9992cf2c985ad4856ba59033e5d0",
+            "byteLength": 63944,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:c360b714f695f325c9d6ff3476b3f485929da1f0e45832d2bcfb5620e1615e91",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-42.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.5291666666666667,
+          "smokeVisualLateralDisplacement": 0.15333333333333332
+        }
+      },
+      "current": {
+        "simStepCount": 43,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 60441,
+          "smokeLikePixels": 52034,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:643ab9485999eddc0256e37b51eafc0e0787194e1bd62b96f12d7347a9e21c4c",
+            "byteLength": 64593,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:cef370c67260a413405ce2495b9754d89c927f689a297e8defc4fbef8f6e65e6",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-43.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.5375,
+          "smokeVisualLateralDisplacement": 0.15444444444444444
+        }
+      },
+      "metrics": {
+        "litFraction": 0.06995486111111111,
+        "smokeFraction": 0.060224537037037035,
+        "rise": 0.5375,
+        "lateral": 0.15444444444444444,
+        "smokePixelDeltaFraction": 0.023243923542830173,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:18.478Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": false,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [
+        "insufficient-rise"
+      ],
+      "previous": {
+        "simStepCount": 43,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 60441,
+          "smokeLikePixels": 52034,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:643ab9485999eddc0256e37b51eafc0e0787194e1bd62b96f12d7347a9e21c4c",
+            "byteLength": 64593,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:cef370c67260a413405ce2495b9754d89c927f689a297e8defc4fbef8f6e65e6",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-43.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.5375,
+          "smokeVisualLateralDisplacement": 0.15444444444444444
+        }
+      },
+      "current": {
+        "simStepCount": 44,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 62097,
+          "smokeLikePixels": 53505,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:acc637c29cf7b25b60ce61a79c4317d38c0d2a4beb3e2f00750c20378ac89eec",
+            "byteLength": 66143,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:80ddfe6c41f1f1f0ab2eedacece53bcb469994e50aaee6dae725ca1d908684c3",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-44.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.5458333333333333,
+          "smokeVisualLateralDisplacement": 0.15888888888888889
+        }
+      },
+      "metrics": {
+        "litFraction": 0.07187152777777778,
+        "smokeFraction": 0.061927083333333334,
+        "rise": 0.5458333333333333,
+        "lateral": 0.15888888888888889,
+        "smokePixelDeltaFraction": 0.02826997732251989,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:18.570Z"
+    },
+    {
+      "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+      "candidate": true,
+      "admitted": false,
+      "requiresVisualDisposition": true,
+      "reasons": [],
+      "previous": {
+        "simStepCount": 44,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 62097,
+          "smokeLikePixels": 53505,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:acc637c29cf7b25b60ce61a79c4317d38c0d2a4beb3e2f00750c20378ac89eec",
+            "byteLength": 66143,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:80ddfe6c41f1f1f0ab2eedacece53bcb469994e50aaee6dae725ca1d908684c3",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-44.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.5458333333333333,
+          "smokeVisualLateralDisplacement": 0.15888888888888889
+        }
+      },
+      "current": {
+        "simStepCount": 45,
+        "render": {
+          "width": 900,
+          "height": 960,
+          "litPixels": 63915,
+          "smokeLikePixels": 55194,
+          "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "nativeScreenshot": {
+            "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+            "sha256": "sha256:ff2bff2e78fcd43287f3ecc740d39bd83c99c2e86ac596208f6191cdc394f02f",
+            "byteLength": 66892,
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 960,
+              "scale": 1
+            }
+          },
+          "sha256": "sha256:c307507a4be6be29ac9fd8eec40bd1753e00fabf70b21e4e4fffe8558f617200",
+          "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-45.png"
+        },
+        "support": {
+          "authority": "render-bounds-only-v0",
+          "smokeWeight": 0,
+          "smokeVisualRiseDisplacement": 0.5583333333333333,
+          "smokeVisualLateralDisplacement": 0.16555555555555557
+        }
+      },
+      "metrics": {
+        "litFraction": 0.07397569444444445,
+        "smokeFraction": 0.06388194444444445,
+        "rise": 0.5583333333333333,
+        "lateral": 0.16555555555555557,
+        "smokePixelDeltaFraction": 0.03156714325763947,
+        "supportAuthority": "render-bounds-only-v0"
+      },
+      "capturedAt": "2026-07-16T02:52:18.663Z"
+    }
+  ],
+  "teacherRenderScale": 0.35,
+  "port": 51842,
+  "windowSize": "1280,960",
+  "userDataDir": "/tmp/kaminos-smoke-oracle-teacher-profile-51842",
+  "keepBrowserOpen": false,
+  "reuseBrowser": false,
+  "attachWithoutNavigate": false,
+  "continuationAuthority": null,
+  "createdAt": "2026-07-16T02:52:11.638Z",
+  "phase": "frame-2-dense-export",
+  "updatedAt": "2026-07-16T02:52:52.673Z",
+  "browserSession": {
+    "identity": "smoke-oracle-teacher-per-capture-cdp-browser-v0",
+    "mode": "launched-per-capture",
+    "port": 51842,
+    "userDataDir": "/tmp/kaminos-smoke-oracle-teacher-profile-51842",
+    "windowSize": "1280,960",
+    "keepBrowserOpen": false
+  },
+  "browser": {
+    "Browser": "Chrome/150.0.7871.115",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:51842/devtools/browser/10813aac-35e6-489d-8dfe-c82e495d133a"
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "frame-2-sample",
+    "frameId": "sim-step-47",
+    "simStepCount": 47,
+    "frameCount": 48,
+    "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+    "prototypeIdentity": "kaminos-volume-prototype-v0",
+    "backend": "WebGPU:apple",
+    "camera": {
+      "identity": "checksum-bound-native-camera-matrices-v0",
+      "position": [
+        1.1799999999999993,
+        0.28,
+        2.049999999999998
+      ],
+      "target": [
+        0,
+        0.02,
+        0
+      ],
+      "projectionMatrix": [
+        2.9306425807515972,
+        0,
+        0,
+        0,
+        0,
+        2.7474774194546225,
+        0,
+        0,
+        0,
+        0,
+        -1.0002000200020003,
+        -1,
+        0,
+        0,
+        -0.020002000200020003,
+        0
+      ],
+      "matrixWorldInverse": [
+        0.8666778489396199,
+        -0.05450735190097278,
+        0.49588149264328957,
+        0,
+        6.938893903907228e-18,
+        0.9940129828903268,
+        0.10926202380275882,
+        0,
+        -0.49886822524329344,
+        -0.09469497576016456,
+        0.8614890338294436,
+        0,
+        -2.2236986557677696e-16,
+        -0.019880259657806553,
+        -2.3817860473342116,
+        0.9999999999999999
+      ]
+    },
+    "image": {
+      "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/sim-step-47.raymarch.png",
+      "sha256": "sha256:ac50ee94d45b28940dc966fca8b495c120d516a9b60fefa806f6d82c341a1a1e",
+      "byteLength": 115671
+    },
+    "sequence": {
+      "sequenceAuthority": "controlled-native-canvas-sequence-v0",
+      "sampleAuthority": "native-raymarch-canvas-submission-v0",
+      "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+      "presentationBarrierAuthority": "gpu-queue-complete-before-cdp-capture-v0",
+      "sameBrowserSessionId": "native-canvas-1784170334815",
+      "sequenceStartNowMs": 0,
+      "controlledStepFrameIndex": 47,
+      "controlledStepDeltaMs": 220,
+      "controlledStepNowMs": 10340,
+      "baseFrameCount": 47,
+      "baseSimStepCount": 46
+    },
+    "observedAt": "2026-07-16T02:52:41.406Z"
+  },
+  "teacherEffectiveState": {
+    "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+    "prototypeIdentity": "kaminos-volume-prototype-v0",
+    "backend": "WebGPU:apple",
+    "controls": {
+      "volumeScene": "tall_plume",
+      "density": 3.05,
+      "fire": 0.1,
+      "radiance": 2.9,
+      "absorption": 2,
+      "glow": 2.5,
+      "smoke": 2.8,
+      "curl": 2.3,
+      "microdetail": 0,
+      "interfaceShred": 1.55,
+      "fireLicks": 3.25,
+      "projection": 0.25,
+      "speed": 5,
+      "raySteps": 64,
+      "adaptiveRays": 0,
+      "occupancySkip": 0,
+      "majorantSkip": 0,
+      "majorantSmooth": 0.1,
+      "majorantGuard": 0.3,
+      "temporalAccum": 0,
+      "temporalJitter": 0,
+      "historyClamp": 1,
+      "fireScale": 0.42,
+      "detailScale": 1,
+      "plumeHeight": 0.7,
+      "windStrength": 0,
+      "windAngle": 180,
+      "windHeight": -0.8,
+      "renderScale": 0.35,
+      "inputRadius": 0.12,
+      "flowRate": 0.35,
+      "reactionLiveView": "off",
+      "reactionLiveViewIdentity": "reaction-live-view-shader-inspect-v0",
+      "boundarySidecarSource": "live",
+      "boundarySidecarView": "off",
+      "boundarySplatMode": "off",
+      "boundarySplatPhaseMode": "offset-history",
+      "boundarySplatComposition": "splat-only",
+      "boundarySplatFieldLayout": "proof",
+      "boundarySplatFeatureCapture": false,
+      "hybridSmokeRepresentation": "raymarch",
+      "hybridSmokeSource": "offline-manifest",
+      "hybridSmokeManifestUrl": "",
+      "hybridSmokeFineLod": 1,
+      "hybridSmokeMotionRate": 0.16,
+      "hybridSmokeCoarseCoverage": 1.8,
+      "boundarySplatInstances": 1,
+      "boundarySplatPhaseStride": 1,
+      "boundarySplatHistoryDepth": 4,
+      "boundarySplatHistoryFrameStride": 1,
+      "boundarySplatRadius": 1,
+      "boundarySplatSharpness": 3.4,
+      "boundarySidecarControls": {
+        "identity": "baked-boundary-sidecar-v0",
+        "authority": "band-limited-support-coverage-ridge-proximity-footprint-v1",
+        "source": "live",
+        "view": "off",
+        "blur": 0.46,
+        "stepWidth": 0.76,
+        "ridgeGain": 1
+      },
+      "reactionBoundaryControls": {
+        "identity": "reaction-boundary-live-controls-v0",
+        "gradientGain": 2.6,
+        "supportThermal": 0.1,
+        "supportReaction": 0.26,
+        "supportFront": 1.6,
+        "supportInterface": 1.46,
+        "cut": 0.3,
+        "softness": 0.08,
+        "coreReject": 0.92,
+        "topologyGain": 0.9,
+        "curlGain": 0.7,
+        "divergenceGain": 0.05,
+        "displayContrast": 1.35,
+        "displayGamma": 1.05,
+        "displayOpacity": 0.7
+      },
+      "reactionBoundaryFireControls": {
+        "identity": "reaction-boundary-fire-controls-v0",
+        "ridgeGain": 1.76,
+        "ridgeCut": 0.04,
+        "tipBreakup": 1.8,
+        "topologyErosion": 0.55,
+        "cleanBlue": 0.9,
+        "sootYield": 0.72,
+        "sootYellowing": 0.86,
+        "thermalWarmth": 0.92,
+        "fireLuma": 1.05
+      },
+      "reactionBoundaryGradient": 2.6,
+      "reactionBoundarySupportThermal": 0.1,
+      "reactionBoundarySupportReaction": 0.26,
+      "reactionBoundarySupportFront": 1.6,
+      "reactionBoundarySupportInterface": 1.46,
+      "reactionBoundaryCut": 0.3,
+      "reactionBoundarySoftness": 0.08,
+      "reactionBoundaryCoreReject": 0.92,
+      "reactionBoundaryTopology": 0.9,
+      "reactionBoundaryCurl": 0.7,
+      "reactionBoundaryDivergence": 0.05,
+      "reactionBoundaryContrast": 1.35,
+      "reactionBoundaryGamma": 1.05,
+      "reactionBoundaryOpacity": 0.7,
+      "reactionBoundaryFireRidge": 1.76,
+      "reactionBoundaryFireRidgeCut": 0.04,
+      "reactionBoundaryFireTip": 1.8,
+      "reactionBoundaryFireErosion": 0.55,
+      "reactionBoundaryFireCleanBlue": 0.9,
+      "reactionBoundaryFireSoot": 0.72,
+      "reactionBoundaryFireYellow": 0.86,
+      "reactionBoundaryFireWarmth": 0.92,
+      "reactionBoundaryFireLuma": 1.05,
+      "boundarySidecarBlur": 0.46,
+      "boundarySidecarWidth": 0.76,
+      "boundarySidecarRidge": 1,
+      "fireRenderMode": "shell",
+      "shellInspectMode": "shell",
+      "shellAmount": 1.1,
+      "shellWidth": 0.9,
+      "shellThermal": 0.85,
+      "shellReaction": 1.1,
+      "shellFront": 1.25,
+      "shellEdge": 0.85,
+      "shellCoreSuppress": 0.55,
+      "shellBite": 0.8,
+      "shellCurl": 0.25,
+      "shellHeat": 1.65,
+      "shellDivergence": 0,
+      "shellLuma": 1.35,
+      "shellExposure": 1.15,
+      "shellSoftClip": 1.6,
+      "shellSmoke": 0.25,
+      "resolution": 160,
+      "majorantGrid": 24,
+      "smokeDomainMode": "single",
+      "smokeDomainNearGrid": 160,
+      "smokeDomainFarGrid": 48,
+      "volumeResidualMode": "off",
+      "volumeResidualModelUrl": "",
+      "volumeResidualStrength": 1,
+      "volumeResidualFeatureDebug": 0,
+      "gridOverlay": 0,
+      "flowDebug": 0,
+      "oracleActivityCue": 0,
+      "oracleActivityDisplay": 0,
+      "oracleActivityCurlNoise": 0,
+      "oracleActivityVorticity": 0,
+      "oracleActivityMaterial": 0,
+      "lookFreeze": 0,
+      "reactionHeatMin": 0.026,
+      "reactionHeatMax": 0.42,
+      "reactionFuelMin": 0.0015,
+      "reactionFuelMax": 0.055,
+      "reactionFlameMin": 0.0035,
+      "reactionFlameMax": 0.12,
+      "reactionFrontMin": 0.0015,
+      "reactionFrontMax": 0.076,
+      "reactionGradientMin": 0.018,
+      "reactionGradientMax": 0.18,
+      "reactionCoreMin": 0.18,
+      "reactionCoreMax": 0.95,
+      "reactionCoreReject": 0.82,
+      "reactionTopologyGain": 0.44,
+      "reactionStretchErode": 0,
+      "reactionDivergenceMin": 0.004,
+      "reactionDivergenceMax": 0.07,
+      "reactionDivergenceGain": 0,
+      "reactionCurlWarp": 0,
+      "reactionShellGamma": 1,
+      "reactionShellContrast": 1,
+      "pyroCompareMode": "base",
+      "pyroDynamicDetail": 0,
+      "pyroMaterialGain": 0,
+      "pyroInterfaceFocus": 0,
+      "pyroEdgeBite": 0,
+      "pyroBiteBorder": 0,
+      "pyroBiteTeeth": 0,
+      "pyroBiteWake": 0,
+      "pyroBiteHeight": 0,
+      "pyroBiteFireLock": 1,
+      "pyroBiteCore": 0,
+      "pyroBiteCoreCut": 1,
+      "pyroBiteRim": 0,
+      "pyroBiteRimCut": 1,
+      "pyroBiteAfter": 0,
+      "pyroBiteAfterCut": 1,
+      "pyroFireMode": "stock",
+      "pyroFlamePaint": 0,
+      "pyroStockMix": 1,
+      "pyroFlameLuma": 1,
+      "pyroFlameCoreColor": "#fff4b8",
+      "pyroFlameEdgeColor": "#ff8a24",
+      "pyroBiteHeat": 0,
+      "pyroBiteChroma": 0,
+      "pyroBiteLuma": 1,
+      "pyroBiteEmberColor": "#e65a1a",
+      "pyroBiteHotColor": "#fff4b8",
+      "pyroSmokeFold": 0,
+      "pyroFoldBorder": 0,
+      "pyroFoldWake": 0,
+      "pyroWakeLift": 0,
+      "pyroWakeWarmth": 0,
+      "pyroWakeLuma": 1,
+      "pyroWakeShadowColor": "#384c50",
+      "pyroWakeEmberColor": "#b06a2a",
+      "pyroRadiance": 0,
+      "pyroRadianceGate": 1,
+      "pyroRadianceSpill": 0,
+      "pyroRadianceWarmth": 0,
+      "pyroRadianceHue": 0.5,
+      "pyroRadianceChroma": 0,
+      "pyroRadianceLuma": 1,
+      "pyroRadianceCoolColor": "#7aa8b8",
+      "pyroRadianceWarmColor": "#d18438",
+      "pyroRadianceSource": "fire",
+      "pyroRadianceHeight": 0,
+      "pyroRadianceBorder": 0,
+      "pyroRadianceTeeth": 0,
+      "pyroRadianceRise": 0,
+      "pyroRadianceFireLock": 1,
+      "pyroFlowBite": 0,
+      "pyroFlowBorder": 0,
+      "pyroFlowTeeth": 0,
+      "pyroFlowRise": 0,
+      "pyroFlowFireLock": 1,
+      "pyroFlowLuma": 1,
+      "pyroFlowRadiance": 0,
+      "pyroFlowSpikes": 0,
+      "pyroFlowCoolColor": "#2aa7b8",
+      "pyroFlowHotColor": "#ff7a36",
+      "pyroDiagnosticPaint": 0,
+      "pyroCarrierView": "normal",
+      "pyroOverdrive": 1,
+      "pressureMode": "auto",
+      "pressureEffectiveLabel": "Default P2",
+      "pressureTierOverlay": 0,
+      "pressureTierLowerMax": 0.5,
+      "pressureTierHeroMin": 0.05,
+      "pressureTierHeroMax": 0.22,
+      "canonicalSpread": 1,
+      "canonicalCenterline": 1,
+      "canonicalBodyBalance": 0,
+      "canonicalMacroPreset": "",
+      "canonicalSourceMode": "current",
+      "canonicalSourceModeValue": 0,
+      "canonicalRenderMode": "default",
+      "canonicalRenderModeValue": 0,
+      "canonicalMotionMode": "animated",
+      "canonicalMotionModeValue": 0,
+      "canonicalContentMode": "smoke",
+      "canonicalContentModeValue": 0,
+      "canonicalSourceY": -0.74,
+      "canonicalSourceInjection": 1,
+      "canonicalBuoyancy": 1,
+      "reactionFuelScale": 1,
+      "lifecycleEffect": "none",
+      "lifecycleT": 0,
+      "quenchVapor": 0,
+      "runtimeQualityRequested": "live_high",
+      "gpuPressure": 0,
+      "runtimeQualityReason": "route-default",
+      "majorantCadence": 1,
+      "pressureStrategy": "global",
+      "simProfile": false,
+      "rayBudgetPreset": "",
+      "bonfireRecenter": 1,
+      "bonfireLateralDamping": 1,
+      "bonfireShear": 1,
+      "bonfireDetailForces": 1,
+      "bonfireDepinch": 1,
+      "bonfireProjection": 1,
+      "bonfireTemporal": 1,
+      "bonfireInstabilityProbe": 0,
+      "runtimeQualityEffective": "live_high",
+      "runtimeQualityReceipt": {
+        "identity": "volume-runtime-quality-ladder-v0",
+        "requested": "live_high",
+        "effective": "live_high",
+        "reason": "route-default",
+        "gpuPressure": 0,
+        "changedControls": [],
+        "knobs": {
+          "renderScale": 0.35,
+          "raySteps": 64,
+          "adaptiveRays": 0,
+          "occupancySkip": 0,
+          "majorantSkip": 0,
+          "majorantCadence": 1,
+          "temporalAccum": 0,
+          "pressureStrategy": "global"
+        }
+      },
+      "legacyPyroBackedOff": true
+    },
+    "camera": {
+      "identity": "checksum-bound-native-camera-matrices-v0",
+      "position": [
+        1.1799999999999993,
+        0.28,
+        2.049999999999998
+      ],
+      "target": [
+        0,
+        0.02,
+        0
+      ],
+      "projectionMatrix": [
+        2.9306425807515972,
+        0,
+        0,
+        0,
+        0,
+        2.7474774194546225,
+        0,
+        0,
+        0,
+        0,
+        -1.0002000200020003,
+        -1,
+        0,
+        0,
+        -0.020002000200020003,
+        0
+      ],
+      "matrixWorldInverse": [
+        0.8666778489396199,
+        -0.05450735190097278,
+        0.49588149264328957,
+        0,
+        6.938893903907228e-18,
+        0.9940129828903268,
+        0.10926202380275882,
+        0,
+        -0.49886822524329344,
+        -0.09469497576016456,
+        0.8614890338294436,
+        0,
+        -2.2236986557677696e-16,
+        -0.019880259657806553,
+        -2.3817860473342116,
+        0.9999999999999999
+      ]
+    }
+  },
+  "effectiveStateParity": {
+    "ok": true,
+    "identity": "temporal-ceiling-effective-state-parity-v0",
+    "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+    "prototypeIdentity": "kaminos-volume-prototype-v0",
+    "backend": "WebGPU:apple",
+    "cameraIdentity": "sha256:76bb1cd92de1d402ff3939bbf3d394aadc8c6b01936dcee2c4420d12977c62a6",
+    "lockedCamera": {
+      "identity": "checksum-bound-native-camera-matrices-v0",
+      "position": [
+        1.1799999999999993,
+        0.28,
+        2.049999999999998
+      ],
+      "target": [
+        0,
+        0.02,
+        0
+      ],
+      "projectionMatrix": [
+        2.9306425807515972,
+        0,
+        0,
+        0,
+        0,
+        2.7474774194546225,
+        0,
+        0,
+        0,
+        0,
+        -1.0002000200020003,
+        -1,
+        0,
+        0,
+        -0.020002000200020003,
+        0
+      ],
+      "matrixWorldInverse": [
+        0.8666778489396199,
+        -0.05450735190097278,
+        0.49588149264328957,
+        0,
+        6.938893903907228e-18,
+        0.9940129828903268,
+        0.10926202380275882,
+        0,
+        -0.49886822524329344,
+        -0.09469497576016456,
+        0.8614890338294436,
+        0,
+        -2.2236986557677696e-16,
+        -0.019880259657806553,
+        -2.3817860473342116,
+        0.9999999999999999
+      ]
+    },
+    "expectedControls": {
+      "volumeScene": "tall_plume",
+      "inputRadius": 0.12,
+      "flowRate": 0.35,
+      "resolution": 160
+    }
+  },
+  "maturityCandidate": {
+    "identity": "temporal-ceiling-visual-maturity-candidate-v0",
+    "candidate": true,
+    "admitted": false,
+    "requiresVisualDisposition": true,
+    "reasons": [],
+    "previous": {
+      "simStepCount": 44,
+      "render": {
+        "width": 900,
+        "height": 960,
+        "litPixels": 62097,
+        "smokeLikePixels": 53505,
+        "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+        "nativeScreenshot": {
+          "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "sha256": "sha256:acc637c29cf7b25b60ce61a79c4317d38c0d2a4beb3e2f00750c20378ac89eec",
+          "byteLength": 66143,
+          "clip": {
+            "x": 380,
+            "y": 0,
+            "width": 900,
+            "height": 960,
+            "scale": 1
+          }
+        },
+        "sha256": "sha256:80ddfe6c41f1f1f0ab2eedacece53bcb469994e50aaee6dae725ca1d908684c3",
+        "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-44.png"
+      },
+      "support": {
+        "authority": "render-bounds-only-v0",
+        "smokeWeight": 0,
+        "smokeVisualRiseDisplacement": 0.5458333333333333,
+        "smokeVisualLateralDisplacement": 0.15888888888888889
+      }
+    },
+    "current": {
+      "simStepCount": 45,
+      "render": {
+        "width": 900,
+        "height": 960,
+        "litPixels": 63915,
+        "smokeLikePixels": 55194,
+        "imageAuthority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+        "nativeScreenshot": {
+          "authority": "cdp-native-canvas-clip-after-explicit-raymarch-submission-v0",
+          "sha256": "sha256:ff2bff2e78fcd43287f3ecc740d39bd83c99c2e86ac596208f6191cdc394f02f",
+          "byteLength": 66892,
+          "clip": {
+            "x": 380,
+            "y": 0,
+            "width": 900,
+            "height": 960,
+            "scale": 1
+          }
+        },
+        "sha256": "sha256:c307507a4be6be29ac9fd8eec40bd1753e00fabf70b21e4e4fffe8558f617200",
+        "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/maturity-probes/sim-step-45.png"
+      },
+      "support": {
+        "authority": "render-bounds-only-v0",
+        "smokeWeight": 0,
+        "smokeVisualRiseDisplacement": 0.5583333333333333,
+        "smokeVisualLateralDisplacement": 0.16555555555555557
+      }
+    },
+    "metrics": {
+      "litFraction": 0.07397569444444445,
+      "smokeFraction": 0.06388194444444445,
+      "rise": 0.5583333333333333,
+      "lateral": 0.16555555555555557,
+      "smokePixelDeltaFraction": 0.03156714325763947,
+      "supportAuthority": "render-bounds-only-v0"
+    }
+  }
+}

@@ -8,6 +8,7 @@ import { inflateSync } from 'node:zlib';
 import { materializeSmokeOracleTeacherFrameExport } from '../smoke-oracle-teacher-export.mjs';
 import {
   assessMinimumRadiusMaturityCandidate,
+  assessTemporalCeilingVisualMaturityCandidate,
   buildMinimumRadiusTeacherContract,
   buildRadiusCandidateTeacherContract,
   buildTemporalCeilingTeacherContract,
@@ -403,6 +404,7 @@ async function captureTeacherFrameSample(ws, {
   sequenceStartNowMs,
 }) {
   if (teacherContract) {
+    const temporalCeilingTeacher = teacherContract.identity === 'operator-fire-0622-r160-paired-source-temporal-teacher-v0';
     const hasSequenceStart = sequenceStartNowMs !== null
       && sequenceStartNowMs !== undefined
       && Number.isFinite(Number(sequenceStartNowMs));
@@ -415,6 +417,9 @@ async function captureTeacherFrameSample(ws, {
     })})`);
     if (submission?.ok !== true || submission.sampleAuthority !== 'native-raymarch-canvas-submission-v0') {
       throw new Error(`native teacher canvas submission failed for frame ${frameIndex}: ${JSON.stringify(submission)}`);
+    }
+    if (submission.presentationBarrierAuthority !== 'gpu-queue-complete-before-cdp-capture-v0') {
+      throw new Error(`native teacher canvas submission lacks GPU completion authority for frame ${frameIndex}`);
     }
     const rect = submission.canvasCssRect || {};
     const clip = {
@@ -433,7 +438,9 @@ async function captureTeacherFrameSample(ws, {
     const png = Buffer.from(screenshot.data, 'base64');
     const decoded = decodePngRgba(png);
     const metrics = measureRgbaFrame(decoded);
-    const majorantReadback = await evaluate(ws, 'window.__kaminosVolumePrototype.sampleMajorantReadback()');
+    const majorantReadback = temporalCeilingTeacher
+      ? null
+      : await evaluate(ws, 'window.__kaminosVolumePrototype.sampleMajorantReadback()');
     const sessionId = sameBrowserSessionId || `native-canvas-${Date.now()}`;
     const startNow = hasSequenceStart ? Number(sequenceStartNowMs) : submission.sampleNowMs;
     return {
@@ -455,6 +462,7 @@ async function captureTeacherFrameSample(ws, {
         sequenceAuthority: 'controlled-native-canvas-sequence-v0',
         sampleAuthority: submission.sampleAuthority,
         imageAuthority: submission.imageAuthority,
+        presentationBarrierAuthority: submission.presentationBarrierAuthority,
         sameBrowserSessionId: sessionId,
         sequenceStartNowMs: startNow,
         controlledStepFrameIndex: frameIndex,
@@ -905,6 +913,7 @@ try {
       prototypeIdentity: sample.prototypeIdentity,
       backend: sample.backend,
       sampleAuthority: sample.sampleAuthority,
+      presentationBarrierAuthority: sample.presentationBarrierAuthority || null,
       camera: sample.camera || metadata.camera || null,
       sequence,
       render: {
@@ -976,13 +985,16 @@ try {
           path: image.path,
         },
         support: {
+          authority: sample.majorantReadback ? 'coarse-majorant-readback-v0' : 'render-bounds-only-v0',
           liveVoxels: sample.majorantReadback?.occupiedBricks,
           smokeWeight: Number(sample.majorantReadback?.extinctionMean || 0) * Number(sample.majorantReadback?.bricks || 0),
           smokeVisualRiseDisplacement: sample.smokeBounds?.verticalFillRatio,
           smokeVisualLateralDisplacement: sample.smokeBounds?.horizontalFillRatio,
         },
       };
-      const assessment = assessMinimumRadiusMaturityCandidate({ current: currentProbe, previous: previousProbe });
+      const assessment = temporalCeilingSource
+        ? assessTemporalCeilingVisualMaturityCandidate({ current: currentProbe, previous: previousProbe })
+        : assessMinimumRadiusMaturityCandidate({ current: currentProbe, previous: previousProbe });
       report.maturityProbes.push({ ...assessment, capturedAt: new Date().toISOString() });
       report.lastTrustworthyEvidence = {
         phase: `maturity-probe-${sequenceFrameIndex}`,

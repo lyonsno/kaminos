@@ -60,6 +60,17 @@ try {
       assert.ok(Math.abs(radius - sourceRadius) < 1e-10, `${product.cameraId} must preserve camera radius`);
     }
   }
+
+  const nativeFit = structuredClone(fit);
+  nativeFit.teacher.sourceSchema = 'kaminos.volume.full-grid-field-export.v0';
+  nativeFit.teacher.worldSpace.transformAuthority = 'native-volume-grid-world-transform-v0';
+  const nativeFitReportPath = join(directory, 'native-oracle-fit-report.json');
+  await writeFile(nativeFitReportPath, `${JSON.stringify(nativeFit, null, 2)}\n`);
+  const nativeSplit = await buildSmokeOracleHostileCameraSplit({
+    fitReportPath: nativeFitReportPath,
+    outDir: join(directory, 'native-split'),
+  });
+  assert.equal(nativeSplit.status, 'passed', 'checksum-bound native full-grid captures must support hostile camera derivation');
 } finally {
   await rm(directory, { recursive: true, force: true });
 }

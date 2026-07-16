@@ -25,7 +25,7 @@ function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
-async function writeFitSource(directory, { blank = false } = {}) {
+async function writeFitSource(directory, { blank = false, native = false } = {}) {
   await mkdir(directory, { recursive: true });
   const grid = 12;
   const values = new Float32Array(grid ** 3 * channels.length);
@@ -65,7 +65,7 @@ async function writeFitSource(directory, { blank = false } = {}) {
     status: 'passed',
     hiddenBudgetCapApplied: false,
     teacher: {
-      sourceSchema: 'kaminos.volume.operator-basin-replay.v0',
+      sourceSchema: native ? 'kaminos.volume.full-grid-field-export.v0' : 'kaminos.volume.operator-basin-replay.v0',
       manifestIdentity: `sha256:${'a'.repeat(64)}`,
       fluidPath,
       fluidIdentity: `sha256:${sha256(fluidBytes)}`,
@@ -74,8 +74,8 @@ async function writeFitSource(directory, { blank = false } = {}) {
       backend: 'WebGPU:apple',
       grid,
       worldSpace: {
-        coordinateFrame: 'kaminos-normalized-volume-local-v0',
-        transformAuthority: 'operator-basin-normalized-volume-domain-v0',
+        coordinateFrame: native ? 'kaminos-volume-world-v0' : 'kaminos-normalized-volume-local-v0',
+        transformAuthority: native ? 'native-volume-grid-world-transform-v0' : 'operator-basin-normalized-volume-domain-v0',
         bounds: { minimum: [-1, -1, -1], maximum: [1, 1, 1] },
       },
       camera,
@@ -111,6 +111,16 @@ try {
   assert.equal(report.artifacts.linearRadiance.byteLength, 48 * 48 * 4);
   assert.ok(existsSync(report.artifacts.displayPng.path));
   assert.equal((await readFile(report.artifacts.displayPng.path)).readUInt32BE(0), 0x89504e47, 'display witness must be a valid PNG');
+
+  const nativeSource = await writeFitSource(join(directory, 'native-source'), { native: true });
+  const nativeReport = await renderDenseSmokeRaymarchTeacher({
+    fitReportPath: nativeSource.fitReportPath,
+    outDir: join(directory, 'native-teacher'),
+    width: 32,
+    height: 32,
+    samplesPerCell: 1,
+  });
+  assert.equal(nativeReport.status, 'passed', 'checksum-bound native full-grid fields must support hostile-view dense teachers');
 
   const changed = JSON.parse(await readFile(source.fitReportPath, 'utf8'));
   changed.teacher.fluidIdentity = `sha256:${'0'.repeat(64)}`;

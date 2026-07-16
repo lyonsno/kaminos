@@ -181,10 +181,15 @@ async function loadSource(fitReportPath) {
     throw new Error('fit report is not a passed uncapped smoke Gaussian oracle source');
   }
   const teacher = report.teacher || {};
-  if (teacher.sourceSchema !== 'kaminos.volume.operator-basin-replay.v0') throw new Error('dense raymarch requires a checksum-bound held replay source');
   if (teacher.effectiveRoute !== EXPECTED_ROUTE || teacher.prototypeIdentity !== EXPECTED_PROTOTYPE) throw new Error('dense raymarch source route or prototype mismatch');
   if (typeof teacher.backend !== 'string' || !teacher.backend.startsWith('WebGPU:')) throw new Error('dense raymarch source backend mismatch');
-  if (teacher.worldSpace?.transformAuthority !== 'operator-basin-normalized-volume-domain-v0') throw new Error('dense raymarch source lacks held world-space authority');
+  const heldReplayAuthority = teacher.sourceSchema === 'kaminos.volume.operator-basin-replay.v0'
+    && teacher.worldSpace?.transformAuthority === 'operator-basin-normalized-volume-domain-v0';
+  const nativeFullGridAuthority = teacher.sourceSchema === 'kaminos.volume.full-grid-field-export.v0'
+    && teacher.worldSpace?.transformAuthority === 'native-volume-grid-world-transform-v0';
+  if (!heldReplayAuthority && !nativeFullGridAuthority) {
+    throw new Error('dense raymarch source lacks checksum-bound held replay or native full-grid world-space authority');
+  }
   const minimum = finiteArray(teacher.worldSpace.bounds?.minimum, 3, 'world minimum');
   const maximum = finiteArray(teacher.worldSpace.bounds?.maximum, 3, 'world maximum');
   const camera = teacher.camera || {};

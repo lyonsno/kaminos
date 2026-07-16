@@ -12064,15 +12064,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const currentTexture = context.getCurrentTexture();
     encodeDraw(encoder, currentTexture.createView(), 'kaminos native teacher canvas raymarch pass');
     device.queue.submit([encoder.finish()]);
+    await device.queue.onSubmittedWorkDone();
     commitPreviousViewProjection();
     state.frameCount += 1;
     state.frameSubmissionAuthority = 'capture-hold-explicit-step-v0';
-    await new Promise(resolveFrame => requestAnimationFrame(resolveFrame));
     const rect = canvas.getBoundingClientRect();
     return {
       ok: true,
       sampleAuthority: 'native-raymarch-canvas-submission-v0',
       imageAuthority: 'cdp-native-canvas-clip-after-explicit-raymarch-submission-v0',
+      presentationBarrierAuthority: 'gpu-queue-complete-before-cdp-capture-v0',
       advanceSim,
       frameCount: state.frameCount,
       simStepCount: state.simStepCount,
@@ -12899,7 +12900,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       .filter(scale => Number.isFinite(scale));
     if (!renderScales.length) return { ok: false, reason: 'missing-render-scales', ...state };
     cancelAnimationFrame(raf);
-    if (device.queue?.onSubmittedWorkDone) {
+    const queueNeedsDrain = state.frameCount > 0 || state.simStepCount > 0;
+    if (queueNeedsDrain && device.queue?.onSubmittedWorkDone) {
       await device.queue.onSubmittedWorkDone();
     }
     const controlsBefore = { ...controlsSnapshot };
@@ -12968,7 +12970,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       .filter(scale => Number.isFinite(scale));
     if (!renderScales.length) return { ok: false, reason: 'missing-render-scales', ...state };
     cancelAnimationFrame(raf);
-    if (device.queue?.onSubmittedWorkDone) {
+    const queueNeedsDrain = state.frameCount > 0 || state.simStepCount > 0;
+    if (queueNeedsDrain && device.queue?.onSubmittedWorkDone) {
       await device.queue.onSubmittedWorkDone();
     }
     const controlledStepFrameIndex = Math.max(0, Math.floor(Number(options.controlledStepFrameIndex) || 0));

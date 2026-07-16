@@ -267,7 +267,7 @@ async function writeGaussianArtifact(directory, budget, rows) {
   };
 }
 
-async function writeFitReport(directory, { route = 'native-3d-compute-fluid-raymarch-v0', camera = null } = {}) {
+async function writeFitReport(directory, { route = 'native-3d-compute-fluid-raymarch-v0', camera = null, nativeCamera = false } = {}) {
   await mkdir(directory, { recursive: true });
   const raymarchPath = join(directory, 'teacher.png');
   const raymarchBytes = await writeTinyPng(raymarchPath);
@@ -309,7 +309,7 @@ async function writeFitReport(directory, { route = 'native-3d-compute-fluid-raym
     teacher: {
       manifestPath,
       manifestIdentity: 'synthetic',
-      sourceSchema: camera ? 'kaminos.volume.operator-basin-replay.v0' : 'kaminos.volume.full-grid-field-export.v0',
+      sourceSchema: camera && !nativeCamera ? 'kaminos.volume.operator-basin-replay.v0' : 'kaminos.volume.full-grid-field-export.v0',
       effectiveRoute: route,
       prototypeIdentity: 'kaminos-volume-prototype-v0',
       backend: 'WebGPU:apple',
@@ -319,7 +319,7 @@ async function writeFitReport(directory, { route = 'native-3d-compute-fluid-raym
       grid: 8,
       worldSpace: {
         coordinateFrame: 'kaminos-volume-world-v0',
-        transformAuthority: camera ? 'operator-basin-normalized-volume-domain-v0' : 'native-volume-grid-world-transform-v0',
+        transformAuthority: camera && !nativeCamera ? 'operator-basin-normalized-volume-domain-v0' : 'native-volume-grid-world-transform-v0',
         bounds: { minimum: [-1, -1, -1], maximum: [1, 1, 1] },
       },
       activeSmokeVoxelCount: 16,
@@ -500,6 +500,18 @@ try {
   assert.equal(nativeReport.renderer.cameraIdentity, heldCamera ? `sha256:${sha256(Buffer.from(JSON.stringify(heldCamera)))}` : null);
   assert.match(nativeReport.contactSheet.path, /perspective-render-contact-sheet\.png$/);
   assert.ok(nativeReport.budgetCurve[0].projectionDiagnostics.visibleGaussianCount > 0);
+
+  const nativeFullGrid = await writeFitReport(join(directory, 'native-full-grid'), { camera: heldCamera, nativeCamera: true });
+  const nativeFullGridReport = await renderSmokeGaussianOracleWitness({
+    fitReportPath: nativeFullGrid.reportPath,
+    raymarchPngPath: nativeFullGrid.raymarchPath,
+    outDir: join(directory, 'native-full-grid-render'),
+    budgets: [2],
+    extinctionScales: [1],
+    coverageScales: [1],
+    projectionMode: 'native-camera',
+  });
+  assert.equal(nativeFullGridReport.status, 'passed', 'checksum-bound native full-grid captures must retain their recorded perspective camera');
 
   const staleCameraReport = JSON.parse(await readFile(held.reportPath, 'utf8'));
   staleCameraReport.teacher.camera.position[0] = 0.25;

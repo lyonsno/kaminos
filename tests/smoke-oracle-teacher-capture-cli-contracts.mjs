@@ -9,6 +9,14 @@ const scriptUrl = new URL('../scripts/capture-smoke-oracle-teacher-sequence.mjs'
 const source = await readFile(scriptUrl, 'utf8');
 const volumeCoreSource = await readFile(new URL('../volume-core.js', import.meta.url), 'utf8');
 const viewerSource = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+const nativeTeacherSubmissionStart = volumeCoreSource.indexOf('async function submitNativeTeacherFrameToCanvas');
+const nativeTeacherSubmissionEnd = volumeCoreSource.indexOf('async function readTextureRgba8', nativeTeacherSubmissionStart);
+const nativeTeacherSubmissionSource = volumeCoreSource.slice(nativeTeacherSubmissionStart, nativeTeacherSubmissionEnd);
+const sampleRenderScaleSetStart = volumeCoreSource.indexOf('async function sampleRenderScaleSet');
+const controlledStepFrameStart = volumeCoreSource.indexOf('async function controlledStepFrame');
+const sampleRenderScaleSetSource = volumeCoreSource.slice(sampleRenderScaleSetStart, controlledStepFrameStart);
+const controlledStepFrameEnd = volumeCoreSource.indexOf('async function controlledStepSequence', controlledStepFrameStart);
+const controlledStepFrameSource = volumeCoreSource.slice(controlledStepFrameStart, controlledStepFrameEnd);
 
 assert.match(
   source,
@@ -204,6 +212,18 @@ assert.match(
 );
 
 assert.match(
+  controlledStepFrameSource,
+  /const queueNeedsDrain = state\.frameCount > 0 \|\| state\.simStepCount > 0;[\s\S]{0,180}if \(queueNeedsDrain && device\.queue\?\.onSubmittedWorkDone\)/,
+  'the first zero-state capture-hold frame must not wait on nonexistent prior queue work',
+);
+
+assert.match(
+  sampleRenderScaleSetSource,
+  /const queueNeedsDrain = state\.frameCount > 0 \|\| state\.simStepCount > 0;[\s\S]{0,180}if \(queueNeedsDrain && device\.queue\?\.onSubmittedWorkDone\)/,
+  'the first zero-state render-scale sample must not wait on nonexistent prior queue work',
+);
+
+assert.match(
   volumeCoreSource,
   /if \(!forceNativeRaymarchCapture\) \{\s*encodeBoundarySidecar\(encoder\);\s*encodeBoundarySplats\(encoder\);\s*\}/,
   'native raymarch capture must bypass sidecar and splat compute instead of only replacing their final draw pass',
@@ -221,10 +241,52 @@ assert.match(
   'runtime must expose a native canvas submission path that does not depend on the hanging texture-to-buffer map',
 );
 
+assert.doesNotMatch(
+  nativeTeacherSubmissionSource,
+  /await new Promise\(resolveFrame => requestAnimationFrame\(resolveFrame\)\)/,
+  'capture-hold native submission must return after queue submission instead of waiting on a throttled animation callback',
+);
+
+assert.match(
+  nativeTeacherSubmissionSource,
+  /device\.queue\.submit\(\[encoder\.finish\(\)\]\);[\s\S]{0,240}await device\.queue\.onSubmittedWorkDone\(\)/,
+  'capture-hold native submission must cross a GPU completion barrier before CDP is allowed to capture its canvas pixels',
+);
+
+assert.match(
+  nativeTeacherSubmissionSource,
+  /presentationBarrierAuthority:\s*'gpu-queue-complete-before-cdp-capture-v0'/,
+  'the screenshot receipt must name the effective post-submit completion barrier',
+);
+
+assert.match(
+  source,
+  /submission\.presentationBarrierAuthority !== 'gpu-queue-complete-before-cdp-capture-v0'/,
+  'the capture CLI must reject a native screenshot when the effective completion barrier is absent or substituted',
+);
+
+assert.match(
+  source,
+  /presentationBarrierAuthority:\s*sample\.presentationBarrierAuthority/,
+  'each durable teacher frame must preserve the effective completion barrier instead of dropping it after validation',
+);
+
 assert.match(
   source,
   /Page\.captureScreenshot/,
   'held teacher capture must preserve compositor-presented native canvas pixels when direct GPU buffer mapping stalls',
+);
+
+assert.match(
+  source,
+  /const temporalCeilingTeacher = teacherContract\.identity === 'operator-fire-0622-r160-paired-source-temporal-teacher-v0';[\s\S]{0,4000}const majorantReadback = temporalCeilingTeacher[\s\S]{0,80}\? null[\s\S]{0,80}: await evaluate\(ws, 'window\.__kaminosVolumePrototype\.sampleMajorantReadback\(\)'\)/,
+  'a presented-frame maturity probe must not block on the known-stalling coarse-majorant buffer map',
+);
+
+assert.match(
+  source,
+  /assessTemporalCeilingVisualMaturityCandidate/,
+  'the accepted temporal source must nominate maturity from screenshot evidence with explicit render-only support authority',
 );
 
 assert.match(

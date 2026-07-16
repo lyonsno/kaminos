@@ -72,6 +72,13 @@ const metadata = {
     effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
     prototypeIdentity: 'kaminos-volume-prototype-v0',
     backend: 'WebGPU:apple',
+    camera: {
+      identity: 'checksum-bound-native-camera-matrices-v0',
+      position: [-4.24, 2.14, 8.18],
+      target: [0, 0.02, 0],
+      projectionMatrix: Array.from({ length: 16 }, (_, index) => index + 0.25),
+      matrixWorldInverse: Array.from({ length: 16 }, (_, index) => index + 10.25),
+    },
   },
   worldSpace: {
     coordinateFrame: 'kaminos-volume-world-v0',
@@ -154,6 +161,35 @@ try {
     }),
     /byte length/i,
     'hidden truncation or byte-length drift must fail before sidecar publication',
+  );
+  await assert.rejects(
+    () => materializeSmokeOracleTeacherFrameExport({
+      outDir: directory,
+      frameId: 'wrong-camera-authority',
+      metadata: { ...metadata, camera: { ...metadata.camera, identity: 'hand-authored-camera-v0' } },
+      chunks,
+    }),
+    /camera identity/i,
+    'full-grid exports must not promote arbitrary finite matrices into native-camera evidence',
+  );
+  await assert.rejects(
+    () => materializeSmokeOracleTeacherFrameExport({
+      outDir: directory,
+      frameId: 'mismatched-native-camera-records',
+      metadata: {
+        ...metadata,
+        deterministicReplay: {
+          ...metadata.deterministicReplay,
+          camera: {
+            ...metadata.deterministicReplay.camera,
+            projectionMatrix: metadata.deterministicReplay.camera.projectionMatrix.map((value) => value + 1),
+          },
+        },
+      },
+      chunks,
+    }),
+    /camera.*does not match/i,
+    'matching authority labels must not hide divergent capture and replay camera matrices',
   );
 } finally {
   await rm(directory, { recursive: true, force: true });
