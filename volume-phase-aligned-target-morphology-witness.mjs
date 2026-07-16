@@ -64,7 +64,7 @@ try {
   };
   require(
     new Set(Object.values(renderInputs).map(item => item.comparisonFingerprint)).size === 1,
-    'render roles do not share the same source capture, viewport, canvas, and camera/preset contract',
+    'render roles do not share the same source capture, viewport, canvas, camera, and effective control contract',
   );
 
   phase = 'artifact-write';
@@ -257,6 +257,21 @@ function validateRender(value, sourceManifestPath, sourceManifestSha256, grid, l
   require(value.importedRender?.splatEncoded === false, `${label} encoded splats`);
   require(value.importedRender?.splatApplied === false, `${label} included splats`);
   require(value.importedRender?.fallbackReason == null, `${label} reported renderer fallback`);
+  require(
+    typeof value.importedRender?.cameraSignature === 'string' && value.importedRender.cameraSignature.length > 0,
+    `${label} camera signature is missing`,
+  );
+  require(
+    typeof value.importedRender?.renderControlSignature === 'string'
+      && value.importedRender.renderControlSignature.length > 0,
+    `${label} effective render control signature is missing`,
+  );
+  require(
+    value.importedRender?.controlOverrides
+      && typeof value.importedRender.controlOverrides === 'object'
+      && !Array.isArray(value.importedRender.controlOverrides),
+    `${label} render control overrides are missing`,
+  );
   require(value.importedRender?.imageAuthority === 'cdp-canvas-clip-capture-after-render-only-frozen-sim-state', `${label} image authority mismatch`);
   require(value.importedRender?.importedFieldManifestSha256 === sourceManifestSha256, `${label} rendered source checksum mismatch`);
   const image = {
@@ -272,6 +287,9 @@ function validateRender(value, sourceManifestPath, sourceManifestSha256, grid, l
     canvasCssRect: value.importedRender.canvasCssRect,
     requestedRenderScale: value.importedRender.requestedRenderScale,
     devicePixelRatio: value.importedRender.devicePixelRatio,
+    cameraSignature: value.importedRender.cameraSignature,
+    renderControlSignature: value.importedRender.renderControlSignature,
+    controlOverrides: value.importedRender.controlOverrides,
   };
   require(value.viewportContract?.identity === 'cdp-emulation-fixed-device-metrics-v0', `${label} viewport contract identity mismatch`);
   require(value.renderCanvasContract?.identity === 'explicit-pre-render-canvas-css-geometry-v0', `${label} canvas contract identity mismatch`);

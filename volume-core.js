@@ -6420,6 +6420,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     ].map(value => Number.isFinite(value) ? Number(value).toFixed(4) : String(value ?? '')).join('|');
   }
 
+  function frozenRenderControlSignature(snapshot = controlsSnapshot) {
+    return Object.keys(snapshot)
+      .filter(key => key !== 'resolution')
+      .sort()
+      .map(key => `${key}=${JSON.stringify(snapshot[key])}`)
+      .join('|');
+  }
+
   function canonicalSourceControlSignature(snapshot = controlsSnapshot) {
     return [
       normalizeVolumeScene(snapshot.volumeScene),
@@ -12636,6 +12644,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         sampleAuthority: 'render-only-frozen-sim-state',
         imageAuthority: 'cdp-canvas-clip-capture-after-render-only-frozen-sim-state',
         controlOverrides,
+        cameraSignature: temporalCameraSignature(),
+        renderControlSignature: frozenRenderControlSignature(controlsSnapshot),
         boundarySplatCompositionRequestedRaw,
         boundarySplatCompositionRequested,
         boundarySplatCompositionEffective,

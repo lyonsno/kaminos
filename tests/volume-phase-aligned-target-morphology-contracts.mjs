@@ -159,6 +159,9 @@ function render(name, sourceManifest, grid) {
       splatApplied: false,
       backend: 'WebGPU:apple',
       fallbackReason: null,
+      cameraSignature: '0.0000|0.0000|2.0000|0.0000|0.0000|0.0000|1.0000|projection-v0',
+      renderControlSignature: 'same-effective-render-controls-except-grid-v0',
+      controlOverrides: { selectiveHeadLiveRenderComposition: 'raymarch-only-v0' },
       importedFieldManifestPath: sourceManifest,
       importedFieldManifestSha256: sha256(readFileSync(sourceManifest)),
     },
@@ -250,10 +253,19 @@ expectFailure('head-mismatch', {
 }, /application heads.*match/i);
 
 const cameraRenderValue = JSON.parse(readFileSync(learnedRender));
-cameraRenderValue.sourceCapture.actualPayloadSha256 = 'c'.repeat(64);
-cameraRenderValue.viewportContract.effective.width = 1099;
+cameraRenderValue.importedRender.cameraSignature = 'different-camera-signature';
 const cameraRender = writeJson('learned-camera-mismatch.render.json', cameraRenderValue);
-expectFailure('camera-mismatch', { '--learned-render-manifest': cameraRender }, /source capture|viewport/i);
+expectFailure('camera-mismatch', { '--learned-render-manifest': cameraRender }, /camera/i);
+
+const controlRenderValue = JSON.parse(readFileSync(learnedRender));
+controlRenderValue.importedRender.controlOverrides.density = 9;
+const controlRender = writeJson('learned-control-mismatch.render.json', controlRenderValue);
+expectFailure('control-mismatch', { '--learned-render-manifest': controlRender }, /control/i);
+
+const effectiveControlRenderValue = JSON.parse(readFileSync(learnedRender));
+effectiveControlRenderValue.importedRender.renderControlSignature = 'different-effective-render-controls';
+const effectiveControlRender = writeJson('learned-effective-control-mismatch.render.json', effectiveControlRenderValue);
+expectFailure('effective-control-mismatch', { '--learned-render-manifest': effectiveControlRender }, /control/i);
 
 const blankRenderValue = JSON.parse(readFileSync(learnedRender));
 const blankImage = png('learned-blank', { uniform: true });
