@@ -5,8 +5,30 @@ import {
   assessMinimumRadiusMaturityCandidate,
   buildMinimumRadiusTeacherContract,
   buildRadiusCandidateTeacherContract,
+  isTeacherCaptureRouteReady,
   validateMinimumRadiusEffectiveState,
 } from '../smoke-oracle-minimum-radius-teacher.mjs';
+
+assert.equal(
+  isTeacherCaptureRouteReady({ state: null, teacherContract: null, attachWithoutNavigate: false }),
+  false,
+  'transient null readiness must remain retryable for autonomous capture routes',
+);
+assert.equal(
+  isTeacherCaptureRouteReady({
+    state: {
+      active: true,
+      effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
+      width: 1280,
+      height: 960,
+      frameCount: 1,
+    },
+    teacherContract: null,
+    attachWithoutNavigate: false,
+  }),
+  true,
+  'an initialized autonomous native route must satisfy readiness',
+);
 
 const heldManifest = {
   schema: 'kaminos.volume.operator-basin-replay.v0',

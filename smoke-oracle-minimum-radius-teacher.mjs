@@ -4,6 +4,18 @@ const BASELINE_INPUT_RADIUS = 0.68;
 const MINIMUM_INPUT_RADIUS = 0.08;
 const NATIVE_ROUTE = 'native-3d-compute-fluid-raymarch-v0';
 
+export function isTeacherCaptureRouteReady({ state, teacherContract, attachWithoutNavigate = false } = {}) {
+  const routeActive = state?.active === true && state?.effectiveRoute === NATIVE_ROUTE;
+  if (!routeActive) return false;
+  if (!teacherContract) {
+    return state?.width > 0 && state?.height > 0 && state?.frameCount > 0;
+  }
+  if (state?.frameSubmissionAuthority !== 'capture-hold-explicit-step-v0') return false;
+  return attachWithoutNavigate
+    ? state?.frameCount >= state?.simStepCount && state?.simStepCount > 0
+    : state?.frameCount === 0 && state?.simStepCount === 0;
+}
+
 function requireObject(value, label) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new TypeError(`${label} must be an object`);

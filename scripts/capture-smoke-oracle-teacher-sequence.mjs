@@ -10,6 +10,7 @@ import {
   assessMinimumRadiusMaturityCandidate,
   buildMinimumRadiusTeacherContract,
   buildRadiusCandidateTeacherContract,
+  isTeacherCaptureRouteReady,
   validateMinimumRadiusEffectiveState,
 } from '../smoke-oracle-minimum-radius-teacher.mjs';
 
@@ -554,10 +555,6 @@ const candidateRadiusBracket = candidateInputRadius === null ? null : {
   lower: Number(args.get('--radius-lower') ?? 0.08),
   upper: Number(args.get('--radius-upper') ?? 0.68),
 };
-const routeRenderScale = Number(new URL(requestedRoute).searchParams.get('volume_render_scale'));
-const teacherRenderScale = Math.max(0.1, Math.min(1, Number.isFinite(Number(args.get('--teacher-render-scale')))
-  ? Number(args.get('--teacher-render-scale'))
-  : (Number.isFinite(routeRenderScale) ? routeRenderScale : 1)));
 cdpRequestTimeoutMs = Math.max(5000, Math.floor(Number(args.get('--cdp-timeout-ms') || cdpRequestTimeoutMs)));
 cdpStartupTimeoutMs = Math.max(1000, Math.floor(Number(args.get('--cdp-startup-timeout-ms') || cdpStartupTimeoutMs)));
 cdpProbeTimeoutMs = Math.max(250, Math.floor(Number(args.get('--cdp-probe-timeout-ms') || Math.min(1000, cdpStartupTimeoutMs))));
@@ -578,7 +575,9 @@ const preflightReport = {
 await writeJson(reportPath, preflightReport);
 
 let teacherContract = null;
+let captureRouteUrl = null;
 try {
+  captureRouteUrl = new URL(requestedRoute);
   if (candidateInputRadius !== null && !heldManifestPath) {
     throw new Error('--candidate-radius requires --held-manifest');
   }
@@ -597,6 +596,18 @@ try {
         bracket: candidateRadiusBracket,
       });
   }
+  if (probeUntilMature && !teacherContract) {
+    throw new Error('--probe-until-mature requires --held-manifest so maturity cannot detach from source authority');
+  }
+  if (probeUntilMature && frames < 2) {
+    throw new Error('--probe-until-mature requires at least two adjacent teacher frames');
+  }
+  if (attachWithoutNavigate && !reuseBrowser) {
+    throw new Error('--attach-without-navigate requires --reuse-browser and a proven existing CDP target');
+  }
+  if (attachWithoutNavigate && !teacherContract) {
+    throw new Error('--attach-without-navigate requires --held-manifest so continued state cannot detach from source authority');
+  }
 } catch (error) {
   preflightReport.status = 'failed';
   preflightReport.failurePhase = 'contract-preflight';
@@ -614,20 +625,11 @@ try {
   await writeJson(reportPath, preflightReport);
   throw error;
 }
-if (probeUntilMature && !teacherContract) {
-  throw new Error('--probe-until-mature requires --held-manifest so maturity cannot detach from source authority');
-}
-if (probeUntilMature && frames < 2) {
-  throw new Error('--probe-until-mature requires at least two adjacent teacher frames');
-}
-if (attachWithoutNavigate && !reuseBrowser) {
-  throw new Error('--attach-without-navigate requires --reuse-browser and a proven existing CDP target');
-}
-if (attachWithoutNavigate && !teacherContract) {
-  throw new Error('--attach-without-navigate requires --held-manifest so continued state cannot detach from source authority');
-}
 
-const captureRouteUrl = new URL(requestedRoute);
+const routeRenderScale = Number(captureRouteUrl.searchParams.get('volume_render_scale'));
+const teacherRenderScale = Math.max(0.1, Math.min(1, Number.isFinite(Number(args.get('--teacher-render-scale')))
+  ? Number(args.get('--teacher-render-scale'))
+  : (Number.isFinite(routeRenderScale) ? routeRenderScale : 1)));
 if (teacherContract) captureRouteUrl.searchParams.set('volume_capture_hold', '1');
 const url = captureRouteUrl.toString();
 
@@ -761,18 +763,7 @@ try {
       observedAt: new Date().toISOString(),
     };
     if (attempt === 0 || attempt % 10 === 0) await writeJson(reportPath, report);
-    const routeActive = state?.active
-      && state.effectiveRoute === 'native-3d-compute-fluid-raymarch-v0';
-    const captureHoldActive = teacherContract
-      && state?.frameSubmissionAuthority === 'capture-hold-explicit-step-v0'
-      && (attachWithoutNavigate
-        ? state?.frameCount >= state?.simStepCount && state?.simStepCount > 0
-        : state?.frameCount === 0 && state?.simStepCount === 0);
-    const autonomousRouteActive = !teacherContract
-      && state.width > 0
-      && state.height > 0
-      && state.frameCount > 0;
-    if (routeActive && (captureHoldActive || autonomousRouteActive)) break;
+    if (isTeacherCaptureRouteReady({ state, teacherContract, attachWithoutNavigate })) break;
     await delay(250);
     if (attempt === 119) throw new Error(`native volume route did not become active: ${JSON.stringify(lastReadinessState)}`);
   }

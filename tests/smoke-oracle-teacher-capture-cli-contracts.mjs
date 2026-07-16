@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const scriptUrl = new URL('../scripts/capture-smoke-oracle-teacher-sequence.mjs', import.meta.url);
 const source = await readFile(scriptUrl, 'utf8');
@@ -86,9 +90,41 @@ assert.match(
 
 assert.match(
   source,
-  /state\?\.frameSubmissionAuthority/,
-  'a transient null debug state during route startup must remain a retryable readiness observation',
+  /isTeacherCaptureRouteReady/,
+  'route startup must delegate null-safe readiness decisions to the tested contract helper',
 );
+
+const invalidPreflightDir = mkdtempSync(join(tmpdir(), 'kaminos-teacher-invalid-preflight-'));
+try {
+  const invalidPreflight = spawnSync(process.execPath, [
+    scriptUrl.pathname,
+    '--out-dir', invalidPreflightDir,
+    '--probe-until-mature',
+  ], { encoding: 'utf8' });
+  assert.notEqual(invalidPreflight.status, 0, 'an authority-detached maturity probe must fail');
+  const failureReport = JSON.parse(readFileSync(join(invalidPreflightDir, 'teacher-capture-report.json'), 'utf8'));
+  assert.equal(failureReport.status, 'failed', 'invalid invocation must not strand a durable report at status=running');
+  assert.equal(failureReport.failurePhase, 'contract-preflight');
+  assert.match(failureReport.failures.at(-1)?.message || '', /requires --held-manifest/);
+} finally {
+  rmSync(invalidPreflightDir, { recursive: true, force: true });
+}
+
+const invalidRouteDir = mkdtempSync(join(tmpdir(), 'kaminos-teacher-invalid-route-'));
+try {
+  const invalidRoute = spawnSync(process.execPath, [
+    scriptUrl.pathname,
+    '--out-dir', invalidRouteDir,
+    '--url', 'not-a-url',
+  ], { encoding: 'utf8' });
+  assert.notEqual(invalidRoute.status, 0, 'a malformed requested route must fail');
+  const failureReport = JSON.parse(readFileSync(join(invalidRouteDir, 'teacher-capture-report.json'), 'utf8'));
+  assert.equal(failureReport.status, 'failed', 'route parsing must happen inside durable preflight reporting');
+  assert.equal(failureReport.failurePhase, 'contract-preflight');
+  assert.match(failureReport.failures.at(-1)?.message || '', /Invalid URL/);
+} finally {
+  rmSync(invalidRouteDir, { recursive: true, force: true });
+}
 
 assert.match(
   source,
