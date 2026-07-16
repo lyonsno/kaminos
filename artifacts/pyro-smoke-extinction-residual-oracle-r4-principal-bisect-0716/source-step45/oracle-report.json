@@ -3,7 +3,7 @@
   "authority": "exact-fluid-extinction-neighborhood-residual-oracle-v0",
   "status": "passed",
   "failurePhase": null,
-  "createdAt": "2026-07-16T16:56:31.366Z",
+  "createdAt": "2026-07-16T17:11:18.189Z",
   "hiddenCandidateCapApplied": false,
   "requested": {
     "manifestPath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v7-m24/sim-step-45.manifest.json",
@@ -83,6 +83,9 @@
     "residualSplitDiagnostics": {
       "splitParentCount": 49393,
       "unsplitParentCount": 143,
+      "principalAxisDegenerateCount": 143,
+      "requiredRelativeEigenvalueGap": 0.0001,
+      "minimumAcceptedRelativeEigenvalueGap": 0.000444254523578904,
       "minimumProjectionGap": 5.877120984321138e-9,
       "tiedProjectionBoundaryCount": 0
     },
@@ -289,6 +292,9 @@
       "residualSplitDiagnostics": {
         "splitParentCount": 49393,
         "unsplitParentCount": 143,
+        "principalAxisDegenerateCount": 143,
+        "requiredRelativeEigenvalueGap": 0.0001,
+        "minimumAcceptedRelativeEigenvalueGap": 0.000444254523578904,
         "minimumProjectionGap": 5.877120984321138e-9,
         "tiedProjectionBoundaryCount": 0
       },

@@ -2,7 +2,7 @@
   "schema": "kaminos.smoke-gaussian-oracle-static-fit-report.v0",
   "identity": "smoke-gaussian-oracle-static-fit-v0",
   "status": "passed",
-  "createdAt": "2026-07-16T16:56:31.361Z",
+  "createdAt": "2026-07-16T17:11:18.185Z",
   "hiddenBudgetCapApplied": false,
   "teacher": {
     "manifestPath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v7-m24/sim-step-45.manifest.json",
@@ -535,7 +535,7 @@
     "role": "calibration",
     "transform": "recorded-camera-unchanged",
     "sourceFitReportPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-smoke-extinction-residual-oracle-r4-principal-bisect-0716/source-step45/coarse-plus-residual.fit-report.json",
-    "sourceFitReportIdentity": "sha256:73f6a3a7e6f14d1e081957c08e7f93554eea4cb1a135bd54ef263727a5ff68c8",
+    "sourceFitReportIdentity": "sha256:2314dd94a84177d593fc99966847b9a99ab45bba1d7042badfa2e43d9f10d070",
     "fitAuthority": "world-space-state-fit-camera-independent-v0",
     "cameraAuthority": "checksum-bound-recorded-camera-v0",
     "artifactPathAuthority": "absolute-path-anchored-to-source-fit-report-v0"

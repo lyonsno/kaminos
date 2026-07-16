@@ -2,7 +2,7 @@
   "schema": "kaminos.smoke-gaussian-oracle-render-witness-report.v0",
   "identity": "smoke-gaussian-oracle-render-witness-v1",
   "status": "passed",
-  "createdAt": "2026-07-16T16:56:53.570Z",
+  "createdAt": "2026-07-16T17:11:39.643Z",
   "hiddenBudgetCapApplied": false,
   "fitReportPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-smoke-extinction-residual-oracle-r4-principal-bisect-0716/witness/combined/cameras/recorded-native/oracle-fit-report.json",
   "teacher": {
@@ -110,7 +110,7 @@
         1
       ],
       "timing": {
-        "cpuProxyRenderMs": 2762.939583
+        "cpuProxyRenderMs": 1940.560958
       },
       "projectionDiagnostics": {
         "identity": "perspective-full-covariance-overlap-diagnostics-v0",
@@ -159,8 +159,8 @@
     "sha256": "sha256:be221f7b382ab0ea27372d4948e420eecf8161d3463832e5602457a409dd632e",
     "layout": "columns: teacher-raymarch | gaussian-proxy-render | abs-luma-diff; rows: requested budgets",
     "inspected": true,
-    "inspectionNote": "R4 principal bisect recorded-native; fixed R1 calibration"
+    "inspectionNote": "R4 principal bisect recorded-native; eigenaxis authority revision; fixed R1 calibration"
   },
   "reportPath": "artifacts/pyro-smoke-extinction-residual-oracle-r4-principal-bisect-0716/witness/combined/render/recorded-native/render-witness-report.json",
-  "reportIdentity": "sha256:a553bedd7a5cd5085e0fd27c690c663fe6058b058bcc44cb7472cad3963750a1"
+  "reportIdentity": "sha256:2d2a93ea229667d5269894e29714164b7956a06af6518657287b101d6af5a6db"
 }

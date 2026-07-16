@@ -2,7 +2,7 @@
   "schema": "kaminos.smoke-gaussian-oracle-static-fit-report.v0",
   "identity": "smoke-gaussian-oracle-static-fit-v0",
   "status": "passed",
-  "createdAt": "2026-07-16T16:56:31.268Z",
+  "createdAt": "2026-07-16T17:11:18.106Z",
   "hiddenBudgetCapApplied": false,
   "teacher": {
     "manifestPath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v7-m24/sim-step-45.manifest.json",
@@ -248,6 +248,7 @@
           ],
           "residualSplitCutProjection": 0.006237653972834781,
           "residualSplitProjectionGap": 0.00959488304576625,
+          "residualSplitRelativeEigenvalueGap": 0.2993088896301637,
           "residualSplitAuthority": "distinct-principal-projection-weighted-median-bisect-v0"
         },
         {
@@ -340,6 +341,7 @@
           ],
           "residualSplitCutProjection": 0.006237653972834781,
           "residualSplitProjectionGap": 0.00959488304576625,
+          "residualSplitRelativeEigenvalueGap": 0.2993088896301637,
           "residualSplitAuthority": "distinct-principal-projection-weighted-median-bisect-v0"
         },
         {
@@ -432,6 +434,7 @@
           ],
           "residualSplitCutProjection": -0.21777810767413036,
           "residualSplitProjectionGap": 0.00021244966331765425,
+          "residualSplitRelativeEigenvalueGap": 0.6587380037209231,
           "residualSplitAuthority": "distinct-principal-projection-weighted-median-bisect-v0"
         },
         {
@@ -524,6 +527,7 @@
           ],
           "residualSplitCutProjection": -0.21777810767413036,
           "residualSplitProjectionGap": 0.00021244966331765425,
+          "residualSplitRelativeEigenvalueGap": 0.6587380037209231,
           "residualSplitAuthority": "distinct-principal-projection-weighted-median-bisect-v0"
         },
         {
@@ -616,6 +620,7 @@
           ],
           "residualSplitCutProjection": 0.18397694175022017,
           "residualSplitProjectionGap": 0.00001684045216482355,
+          "residualSplitRelativeEigenvalueGap": 0.7513578900169109,
           "residualSplitAuthority": "distinct-principal-projection-weighted-median-bisect-v0"
         },
         {
@@ -708,6 +713,7 @@
           ],
           "residualSplitCutProjection": 0.18397694175022017,
           "residualSplitProjectionGap": 0.00001684045216482355,
+          "residualSplitRelativeEigenvalueGap": 0.7513578900169109,
           "residualSplitAuthority": "distinct-principal-projection-weighted-median-bisect-v0"
         },
         {
@@ -800,6 +806,7 @@
           ],
           "residualSplitCutProjection": 0.1362613936381894,
           "residualSplitProjectionGap": 0.0002058249319457639,
+          "residualSplitRelativeEigenvalueGap": 0.8380941722370117,
           "residualSplitAuthority": "distinct-principal-projection-weighted-median-bisect-v0"
         },
         {
@@ -892,6 +899,7 @@
           ],
           "residualSplitCutProjection": 0.1362613936381894,
           "residualSplitProjectionGap": 0.0002058249319457639,
+          "residualSplitRelativeEigenvalueGap": 0.8380941722370117,
           "residualSplitAuthority": "distinct-principal-projection-weighted-median-bisect-v0"
         }
       ]

@@ -5,10 +5,10 @@ R4 tests whether R1-R3 lose topology because one Gaussian cannot represent multi
 ## Controlled Change
 
 - Exact R160 step 45 pre-absorption physical body target, frozen 1,024 control, source sidecar, cameras, extinction scale `0.2`, coverage `1`, and display exposure `8x` remain fixed.
-- 49,393 / 49,536 positive parents split; 143 single-bucket/single-voxel parents remain unsplit.
+- 49,393 / 49,536 positive parents split; 143 parents remain unsplit because their top covariance eigenspace is degenerate under the explicit relative-gap authority gate.
 - Natural R4 count: 98,929 residual / 99,953 combined, no cap. This is count-matched to R3's 100,215 residual rows.
 - Every source voxel belongs to the single rigid partition exactly once; child rows partition parent mass without duplicating voxel membership. Membership range is `[1,1]`.
-- Minimum legal principal projection gap: `5.877120984e-9`; no tied projection boundaries were selected.
+- Principal-axis authority requires `(lambda0 - lambda1) / lambda0 > 1e-4`. The minimum accepted relative eigenvalue gap is `4.442545236e-4`; 143 degenerate parents were refused. Minimum legal voxel projection gap among accepted splits is `5.877120984e-9`; no tied projection boundaries were selected.
 - Residual product: `sha256:250fe4a588b0f479c3316b4b88f78b2f95e7525ec2faf91de86cd301f7e408df`.
 - Combined product: `sha256:3cb0fda52f5c8c32de9a5c817bed8ebc69817810f287c07b5aa8afb7fc503312`.
 - Combined relative error before serialization: `1.9295013e-10`.
@@ -21,6 +21,8 @@ R4 tests whether R1-R3 lose topology because one Gaussian cannot represent multi
 | elevated +35 held out | `2.7985763e-6` | `2.7914911e-6` | `2.7881062e-6` | `-0.37%` | `-0.12%` |
 
 The inspected R4 native panel reasserts/sharpens the same horizontal stack and centered column. It does not recover the exact target's lateral tongue, cavities, or self-occluding interior sheets. Elevated is effectively unchanged. Count-matched local principal bisection therefore loses to overlap in native error and supplies no compensating topology.
+
+Fresh review found that the initial implementation could label an arbitrary basis axis as principal when the top eigenvalues tied. A symmetric-square fail-first fixture now requires such parents to remain unsplit. On the exact basin, all 143 already-unsplit parents are the degenerate set and every emitted split clears the new authority threshold, so product hashes, pixels, counts, and metrics remain unchanged; regenerated reports now expose the authority diagnostics.
 
 ## Inspect
 

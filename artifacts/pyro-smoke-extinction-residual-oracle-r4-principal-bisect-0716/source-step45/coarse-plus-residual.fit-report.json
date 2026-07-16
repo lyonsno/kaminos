@@ -2,7 +2,7 @@
   "schema": "kaminos.smoke-gaussian-oracle-static-fit-report.v0",
   "identity": "smoke-gaussian-oracle-static-fit-v0",
   "status": "passed",
-  "createdAt": "2026-07-16T16:56:31.361Z",
+  "createdAt": "2026-07-16T17:11:18.185Z",
   "hiddenBudgetCapApplied": false,
   "teacher": {
     "manifestPath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v7-m24/sim-step-45.manifest.json",

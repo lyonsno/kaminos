@@ -2,9 +2,9 @@
   "schema": "kaminos.smoke-oracle-hostile-camera-split.v0",
   "identity": "smoke-oracle-hostile-camera-split-v0",
   "status": "passed",
-  "createdAt": "2026-07-16T16:56:50.545Z",
+  "createdAt": "2026-07-16T17:11:37.488Z",
   "sourceFitReportPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-smoke-extinction-residual-oracle-r4-principal-bisect-0716/source-step45/coarse-plus-residual.fit-report.json",
-  "sourceFitReportIdentity": "sha256:73f6a3a7e6f14d1e081957c08e7f93554eea4cb1a135bd54ef263727a5ff68c8",
+  "sourceFitReportIdentity": "sha256:2314dd94a84177d593fc99966847b9a99ab45bba1d7042badfa2e43d9f10d070",
   "cameraSplit": {
     "authority": "explicit-disjoint-world-space-hostile-camera-split-v0",
     "calibrationCameraIds": [

@@ -167,6 +167,24 @@ assert.deepEqual(principalBisect.residualRows.map(row => row.sourceVoxelCount), 
 assert.deepEqual(principalBisect.residualRows.map(row => row.residualSplitChild), [0, 1]);
 assert.equal(principalBisect.residualRows.every(row => row.residualSplitParentWindowStart.join(',') === '0,0,0'), true);
 assert.equal(principalBisect.residualRows.every(row => row.residualSplitProjectionGap > 0), true);
+const tiedAxisField = field(correlatedGrid);
+for (const [x, y] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+  setCell(tiedAxisField, correlatedGrid, x, y, 0, { smokeDensity: 1, microdetail: 1 });
+}
+const tiedAxisOracle = buildSmokeExtinctionResidualOracle({
+  grid: correlatedGrid,
+  field: tiedAxisField,
+  channelOrder: fluidChannels,
+  controlRows: [{ ...controlRows[0], extinctionMass: 4 }],
+  residualBlockSize: 4,
+  residualGeometry: 'rigid-principal-bisect-full-covariance-v0',
+});
+assert.equal(tiedAxisOracle.residualRows.length, 1, 'tied top eigenspace cannot authorize an arbitrary principal-axis split');
+assert.equal(tiedAxisOracle.accounting.residualSplitDiagnostics.splitParentCount, 0);
+assert.equal(tiedAxisOracle.accounting.residualSplitDiagnostics.unsplitParentCount, 1);
+assert.equal(tiedAxisOracle.accounting.residualSplitDiagnostics.principalAxisDegenerateCount, 1);
+assert.equal(tiedAxisOracle.accounting.residualSplitDiagnostics.minimumAcceptedRelativeEigenvalueGap, null);
+assert.equal(tiedAxisOracle.residualRows[0].residualSplitAuthority, 'unsplittable-degenerate-principal-eigenspace-v0');
 
 const overlapGrid = 8;
 const overlapField = field(overlapGrid);

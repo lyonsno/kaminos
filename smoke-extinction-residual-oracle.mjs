@@ -23,6 +23,7 @@ const MICRO_SMOKE_COEFFICIENT = 0.42;
 const INTERFACE_SHRED_COEFFICIENT = 0.34;
 const MATERIAL_DETAIL_COEFFICIENT = 0.12;
 const MASS_TOLERANCE = 1e-5;
+const PRINCIPAL_RELATIVE_EIGENVALUE_GAP = 1e-4;
 const RESIDUAL_GEOMETRIES = new Set([
   'diagonal-covariance-v0',
   'full-covariance-v0',
@@ -321,7 +322,15 @@ function residualRows({ field, residual, grid, residualBlockSize, residualGeomet
   const partitionWeight = 1 / phases.length;
   const fullCovariance = residualGeometry !== 'diagonal-covariance-v0';
   const principalBisect = residualGeometry === 'rigid-principal-bisect-full-covariance-v0';
-  const splitDiagnostics = { splitParentCount: 0, unsplitParentCount: 0, minimumProjectionGap: null, tiedProjectionBoundaryCount: 0 };
+  const splitDiagnostics = {
+    splitParentCount: 0,
+    unsplitParentCount: 0,
+    principalAxisDegenerateCount: 0,
+    requiredRelativeEigenvalueGap: PRINCIPAL_RELATIVE_EIGENVALUE_GAP,
+    minimumAcceptedRelativeEigenvalueGap: null,
+    minimumProjectionGap: null,
+    tiedProjectionBoundaryCount: 0,
+  };
   for (let phaseIndex = 0; phaseIndex < phases.length; phaseIndex += 1) {
     const phase = phases[phaseIndex];
     const firstStart = phase.map(offset => offset === 0 ? 0 : offset - residualBlockSize);
@@ -364,6 +373,20 @@ function residualRows({ field, residual, grid, residualBlockSize, residualGeomet
             rows.push(parent);
             continue;
           }
+          const topEigenvalue = parent.radii[0] ** 2;
+          const secondEigenvalue = parent.radii[1] ** 2;
+          const relativeEigenvalueGap = (topEigenvalue - secondEigenvalue) / Math.max(topEigenvalue, voxelVariance);
+          if (!(relativeEigenvalueGap > PRINCIPAL_RELATIVE_EIGENVALUE_GAP)) {
+            splitDiagnostics.unsplitParentCount += 1;
+            splitDiagnostics.principalAxisDegenerateCount += 1;
+            rows.push({
+              ...parent,
+              residualSplitChild: null,
+              residualSplitRelativeEigenvalueGap: relativeEigenvalueGap,
+              residualSplitAuthority: 'unsplittable-degenerate-principal-eigenspace-v0',
+            });
+            continue;
+          }
           const split = principalBisectVoxels(voxels, parent.orientation[0]);
           if (!split) {
             splitDiagnostics.unsplitParentCount += 1;
@@ -371,6 +394,9 @@ function residualRows({ field, residual, grid, residualBlockSize, residualGeomet
             continue;
           }
           splitDiagnostics.splitParentCount += 1;
+          splitDiagnostics.minimumAcceptedRelativeEigenvalueGap = splitDiagnostics.minimumAcceptedRelativeEigenvalueGap == null
+            ? relativeEigenvalueGap
+            : Math.min(splitDiagnostics.minimumAcceptedRelativeEigenvalueGap, relativeEigenvalueGap);
           splitDiagnostics.minimumProjectionGap = splitDiagnostics.minimumProjectionGap == null
             ? split.projectionGap
             : Math.min(splitDiagnostics.minimumProjectionGap, split.projectionGap);
@@ -389,6 +415,7 @@ function residualRows({ field, residual, grid, residualBlockSize, residualGeomet
                 residualSplitPrincipalAxis: split.principalAxis,
                 residualSplitCutProjection: split.cutProjection,
                 residualSplitProjectionGap: split.projectionGap,
+                residualSplitRelativeEigenvalueGap: relativeEigenvalueGap,
                 residualSplitAuthority: 'distinct-principal-projection-weighted-median-bisect-v0',
               },
             }));
