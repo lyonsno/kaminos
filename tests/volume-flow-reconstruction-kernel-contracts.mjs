@@ -81,7 +81,7 @@ assert.match(witness, /state\.flowKernelEffective\?\.strength[\s\S]*expectedFlow
 assert.match(witness, /state\.flowKernelEffective\?\.radiusWorld[\s\S]*expectedFlowKernelRadius/, 'visual witness verifies effective world-space radius');
 assert.match(witness, /state\.flowKernelEffective\?\.coherence[\s\S]*expectedFlowKernelCoherence/, 'visual witness verifies effective flow coherence');
 
-const frozenRenderFunction = core.match(/async function renderFrozenScaleToCanvas\(options = \{\}\) \{([\s\S]*?)\n  \}\n\n  async function ensureNativeLowSelectiveSharedRuntime/)?.[1] || '';
+const frozenRenderFunction = core.match(/async function renderFrozenScaleToCanvas\(options = \{\}\) \{([\s\S]*?)\n  \}\n\n  async function [A-Za-z0-9_]+\(/)?.[1] || '';
 assert.match(frozenRenderFunction, /flowKernelIdentity:\s*state\.flowKernelIdentity/, 'frozen render receipt preserves the effective kernel identity');
 assert.match(frozenRenderFunction, /flowKernelRequested:\s*state\.flowKernelRequested/, 'frozen render receipt preserves requested kernel controls');
 assert.match(frozenRenderFunction, /flowKernelEffective:\s*state\.flowKernelEffective/, 'frozen render receipt preserves normalized effective kernel controls');
