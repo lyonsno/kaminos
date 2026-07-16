@@ -154,10 +154,15 @@ assert.equal(report.status, "complete");
 assert.equal(report.failurePhase, null);
 assert.equal(report.source.corpusManifestSha256, corpusSha);
 assert.equal(report.source.corpusIdentity, corpus.identity);
+assert.equal(report.source.corpusManifestRead, "single-byte-snapshot-v0");
+assert.match(report.source.implementation.scriptSha256, /^[a-f0-9]{64}$/);
+assert.equal(report.source.implementation.gitCommit.length, 40);
 assert.equal(report.rows.policy, "all-rows-streamed-uncapped-v0");
+assert.equal(report.rows.evaluationMode, "chunk-streamed-no-full-role-materialization-v0");
 assert.equal(report.rows.fit.settingIds.join(","), "setting-a");
 assert.equal(report.rows.calibration.settingIds.join(","), "setting-b");
 assert.equal(report.rows.heldOut.settingIds.join(","), "setting-c");
+assert.equal(report.training.calibrationSelection, "lexical-last-nonblack-train-setting-v0");
 assert.equal(report.views.current16.rowsEvaluated, 256);
 assert.equal(report.views.sourceComplete.rowsEvaluated, 256);
 assert.ok(
@@ -170,6 +175,9 @@ assert.ok(report.views.sourceComplete.metrics.optical.positiveSupport.rmseMean <
 assert.equal(report.ablations.length, 1);
 assert.equal(report.ablations[0].droppedChannel, "source.signal");
 assert.ok(report.ablations[0].metrics.membership.soft.rmse > report.views.sourceComplete.metrics.membership.soft.rmse);
+assert.ok(report.views.sourceComplete.metrics.optical.predictedAnySupportGated.rmseMean < 0.14);
+assert.equal(report.verification.currentPrefixExactBytes, true);
+assert.equal(report.verification.artifactsPostConsumptionVerified, true);
 
 const blackCalibrationCorpus = structuredClone(corpus);
 const blackCalibrationSetting = blackCalibrationCorpus.settings.find((setting) => setting.id === "setting-b");
@@ -183,7 +191,8 @@ blackCalibrationSetting.targetSummary = {
   positiveMembershipRows: 0,
   negativeMembershipRows: 256,
   positiveOpticalRows: 0,
-  allTargetsZero: true,
+  // Deliberately stale metadata: the assay must inspect target bytes rather than trust this claim.
+  allTargetsZero: false,
 };
 const blackCalibrationPath = path.join(tmp, "black-calibration-corpus-manifest.json");
 const blackCalibrationBytes = Buffer.from(`${JSON.stringify(blackCalibrationCorpus, null, 2)}\n`);
@@ -201,6 +210,103 @@ const blackCalibrationFailure = JSON.parse(
   fs.readFileSync(path.join(blackCalibrationOut, "failure-report.json"), "utf8"),
 );
 assert.equal(blackCalibrationFailure.failurePhase, "calibration-support");
+
+function runRejectedManifest(label, mutate, expectedPhase, calibrationSetting = "setting-b") {
+  const candidate = structuredClone(corpus);
+  mutate(candidate);
+  const candidatePath = path.join(tmp, `${label}-corpus-manifest.json`);
+  const candidateBytes = Buffer.from(`${JSON.stringify(candidate, null, 2)}\n`);
+  fs.writeFileSync(candidatePath, candidateBytes);
+  const candidateOut = path.join(tmp, `${label}-result`);
+  const candidateRun = spawnSync("python3", [
+    SCRIPT,
+    "--corpus-manifest", candidatePath,
+    "--corpus-manifest-sha256", sha256(candidateBytes),
+    "--out-dir", candidateOut,
+    "--calibration-setting", calibrationSetting,
+    "--chunk-rows", "64",
+  ], { cwd: ROOT, encoding: "utf8" });
+  assert.notEqual(candidateRun.status, 0, `${label} must fail loud`);
+  const candidateFailure = JSON.parse(fs.readFileSync(path.join(candidateOut, "failure-report.json"), "utf8"));
+  assert.equal(candidateFailure.failurePhase, expectedPhase);
+}
+
+runRejectedManifest("duplicate-split", (candidate) => {
+  candidate.splits.train.settingIds.splice(1, 0, "setting-a");
+}, "split-contract");
+
+runRejectedManifest("duplicate-effective-control", (candidate) => {
+  candidate.settings[2].effectiveControlIdentity = candidate.settings[0].effectiveControlIdentity;
+}, "split-contract");
+
+runRejectedManifest("stale-cohort-total", (candidate) => {
+  candidate.cohort.totalRows += 1;
+}, "corpus-retention");
+
+runRejectedManifest("curated-calibration", () => {}, "calibration-selection", "setting-a");
+
+runRejectedManifest("nonfinite-artifact", (candidate) => {
+  const setting = candidate.settings[0];
+  const bytes = fs.readFileSync(setting.rows.sourceComplete.path);
+  const values = new Float32Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+  values[2] = Number.NaN;
+  setting.rows.sourceComplete = writeF32(
+    path.join(tmp, "setting-a-nonfinite-complete.f32"),
+    values,
+    [256, 3],
+    "candidate-features-source-complete",
+  );
+}, "artifact-finite");
+
+const artifactCustodyProbe = spawnSync("python3", ["-c", String.raw`
+import hashlib
+import importlib.util
+import os
+import pathlib
+import sys
+import tempfile
+
+script = pathlib.Path(${JSON.stringify(SCRIPT)})
+spec = importlib.util.spec_from_file_location("nonridge_ridge_assay", script)
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+root = pathlib.Path(tempfile.mkdtemp(prefix="kaminos-artifact-custody-"))
+path = root / "artifact.f32"
+original = (b"\x00\x00\x80?" * 4)
+replacement = (b"\x00\x00\x00@" * 4)
+path.write_bytes(original)
+descriptor = {
+    "path": str(path), "bytes": len(original), "byteLength": len(original),
+    "sha256": hashlib.sha256(original).hexdigest(), "dtype": "float32-le",
+    "shape": [4, 1], "semanticRole": "custody-probe",
+}
+artifact = module.open_verified_artifact(descriptor, 1, "artifact-verification")
+replacement_path = root / "replacement.f32"
+replacement_path.write_bytes(replacement)
+os.replace(replacement_path, path)
+assert module.sha256_handle(artifact.handle) == descriptor["sha256"]
+artifact.close()
+
+descriptor["sha256"] = hashlib.sha256(replacement).hexdigest()
+artifact = module.open_verified_artifact(descriptor, 1, "artifact-verification")
+with path.open("r+b") as handle:
+    handle.seek(0)
+    handle.write(b"\x00\x00@@")
+setting = module.OpenedSetting({"rows": {"count": 4}}, artifact, artifact, artifact)
+try:
+    module.verify_artifacts_post_consumption({"setting-probe": setting})
+except module.AssayError as error:
+    assert error.phase == "artifact-post-consumption"
+else:
+    raise AssertionError("in-place artifact mutation was not detected")
+artifact.close()
+`], { cwd: ROOT, encoding: "utf8" });
+assert.equal(
+  artifactCustodyProbe.status,
+  0,
+  `persistent artifact custody probe failed:\nstdout=${artifactCustodyProbe.stdout}\nstderr=${artifactCustodyProbe.stderr}`,
+);
 
 const forgedOut = path.join(tmp, "forged-result");
 fs.appendFileSync(corpusPath, " ");
