@@ -68,8 +68,32 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
 .api-key-input:focus { border-color: #444; }
 
 /* Viewport */
-#viewport { flex: 1; position: relative; background: #111; }
+#viewport { flex: 1; min-width: 0; position: relative; overflow: hidden; isolation: isolate; background: #111; }
 canvas { display: block; }
+#volume-authored-mix-panel { position: relative; flex: 0 0 min(388px, 30vw); width: min(388px, 30vw); min-width: 320px; height: 100vh; display: flex; background: rgba(13,15,16,0.96); border-left: 1px solid #2c3437; overflow: hidden; }
+#volume-authored-mix-panel[hidden] { display: none; }
+#volume-authored-mix-panel[data-collapsed="true"] { flex-basis: 34px; width: 34px; min-width: 34px; }
+#volume-authored-mix-toggle { flex: 0 0 34px; width: 34px; height: 100%; border: 0; border-right: 1px solid #283033; background: rgba(16,19,20,0.98); color: #8fa0a5; font: 16px 'SF Mono', monospace; cursor: pointer; }
+#volume-authored-mix-toggle:hover { background: #202628; color: #fff; }
+#volume-authored-mix-body { flex: 1; min-width: 0; height: 100%; overflow-y: auto; padding: calc(16px + var(--kaminos-operator-overlay-safe-top, 0px)) 14px 24px; }
+#volume-authored-mix-body::-webkit-scrollbar { width: 6px; }
+#volume-authored-mix-body::-webkit-scrollbar-track { background: transparent; }
+#volume-authored-mix-body::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+#volume-authored-mix-panel[data-collapsed="true"] #volume-authored-mix-body { display: none; }
+.volume-authored-mix-kicker { color: #728187; font: 9px 'SF Mono', monospace; text-transform: uppercase; letter-spacing: 1px; }
+.volume-authored-mix-title { margin: 4px 0 14px; color: #e6ecee; font-size: 13px; font-weight: 700; text-transform: none; letter-spacing: 0; }
+#volume-authored-mix-control-root .slider-row { margin: 8px 0; }
+#volume-authored-mix-control-root .slider-label { min-width: 92px; color: #879398; }
+#volume-authored-mix-control-root .slider-val { color: #aab4b7; }
+@media (max-width: 1100px) {
+  #sidebar { width: 330px; }
+  #volume-authored-mix-panel { flex-basis: 320px; width: 320px; min-width: 320px; }
+}
+@media (max-width: 760px) {
+  #sidebar { width: min(320px, calc(100vw - 48px)); }
+  #volume-authored-mix-panel { position: fixed; inset: 0 0 0 auto; z-index: 20; width: min(360px, calc(100vw - 48px)); min-width: 0; }
+  #volume-authored-mix-panel[data-collapsed="true"] { width: 34px; }
+}
 #hybrid-splat-overlay-host { position: absolute; inset: 0; pointer-events: none; z-index: 2; overflow: hidden; }
 #hybrid-splat-overlay-host canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 #hybrid-splat-viewport-controls { position: absolute; right: 16px; bottom: 16px; width: min(340px, calc(100% - 32px)); display: flex; flex-direction: column; gap: 7px; z-index: 8; pointer-events: auto; }
@@ -960,6 +984,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 
   <!-- Volume Tab -->
   <div class="tab-content" id="tab-volume">
+    <div id="volume-primary-control-root" data-volume-control-root="primary">
     <h2>Volume Renderer</h2>
     <div class="panel">
       <div class="field"><span class="field-key">Route</span><span class="route-chip">kaminos_volume_smoke=1</span></div>
@@ -2167,6 +2192,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <canvas id="volume-pyro-dynamic-atlas" width="192" height="54"></canvas>
       </div>
     </div>
+    </div>
   </div>
 
   <!-- Worlds Tab -->
@@ -2557,6 +2583,15 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
   <div id="viewport-drop-overlay">Drop GLB, OBJ, PLY/SPZ, or .kaminos.json</div>
 </div>
 
+<aside id="volume-authored-mix-panel" data-collapsed="false" data-cockpit-status="pending" aria-label="Authored mix controls" hidden>
+  <button id="volume-authored-mix-toggle" type="button" aria-label="Collapse authored mix controls" aria-expanded="true" title="Collapse authored mix controls">&gt;</button>
+  <div id="volume-authored-mix-body">
+    <div class="volume-authored-mix-kicker">Volume</div>
+    <h2 class="volume-authored-mix-title">Authored Mix</h2>
+    <div id="volume-authored-mix-control-root" data-volume-control-root="authored-mix"></div>
+  </div>
+</aside>
+
 <script type="importmap">
 {
   "imports": {
@@ -2579,6 +2614,10 @@ import {
   validateVolumeSettingsPresetDocument,
   validateVolumeSettingsPresetTarget,
 } from './volume-settings-preset-contract.mjs';
+import {
+  collectVolumeCockpitControlElements,
+  initializeVolumeCockpitLayout,
+} from './volume-cockpit-layout.mjs';
 import {
   DEFAULT_DECISION_MOTION_PLAN,
   DEFAULT_MOTION_PHRASE_CONTROLS,
@@ -2659,6 +2698,19 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+
+const volumeCockpitLayoutReady = initializeVolumeCockpitLayout({ documentRef: document });
+volumeCockpitLayoutReady.then(receipt => {
+  window.__kaminosVolumeCockpitLayoutReceipt = receipt;
+}).catch(error => {
+  window.__kaminosVolumeCockpitLayoutReceipt = {
+    identity: 'kaminos-volume-cockpit-layout-receipt-v0',
+    status: 'failed',
+    reason: error?.message || String(error),
+    fallbackApplied: false,
+  };
+  console.error('Volume cockpit initialization failed:', error);
+});
 
 // --- Helpers ---
 function escapeHtml(s) {
@@ -8523,6 +8575,7 @@ async function initScene() {
   camera.position.set(0, 0.6, 3);
 
   renderer = new THREE.WebGPURenderer({ antialias: true });
+  renderer.domElement.id = 'kaminos-host-renderer-canvas';
   renderer.setSize(vp.clientWidth, vp.clientHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -8648,20 +8701,26 @@ async function initScene() {
     falloff: aoPass?.distanceFallOff?.value ?? null,
   });
 
-  window.addEventListener('resize', () => {
-    const w = vp.clientWidth;
-    const h = vp.clientHeight;
+  let needsRender = true;
+  let idleFrames = 0;
+  function syncViewportRendererSize() {
+    const w = Math.max(1, vp.clientWidth);
+    const h = Math.max(1, vp.clientHeight);
+    const currentSize = renderer.getSize(new THREE.Vector2());
+    if (currentSize.x === w && currentSize.y === h) return;
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
     depthRT.setSize(Math.round(size.x * aoResScale), Math.round(size.y * aoResScale));
     needsRender = true;
-  });
+    idleFrames = 0;
+  }
+  window.addEventListener('resize', syncViewportRendererSize);
+  const viewportResizeObserver = new ResizeObserver(syncViewportRendererSize);
+  viewportResizeObserver.observe(vp);
 
   // --- Render loop with idle detection ---
-  let needsRender = true;
-  let idleFrames = 0;
   const IDLE_THRESHOLD = 3;
 
   const markDirty = () => { needsRender = true; idleFrames = 0; };
@@ -9262,6 +9321,8 @@ function ensureFingerJuiceTabFrameLoaded() {
 function setActiveTab(tabName) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${tabName}`));
+  const volumeCockpitPanel = document.getElementById('volume-authored-mix-panel');
+  if (volumeCockpitPanel) volumeCockpitPanel.hidden = tabName !== 'volume';
   const fingerJuiceHostPanel = document.getElementById('finger-juice-host-operator-panel');
   if (fingerJuiceHostPanel) {
     fingerJuiceHostPanel.hidden = tabName !== 'finger-juice-host';
@@ -11947,7 +12008,7 @@ function readVolumeDomControlValue(el) {
 
 function readVolumeDomControls() {
   const controls = {};
-  const fields = document.querySelectorAll('#sidebar input[id^="volume-"], #sidebar select[id^="volume-"], #sidebar textarea[id^="volume-"]');
+  const fields = collectVolumeCockpitControlElements(document);
   for (const el of fields) {
     controls[el.id] = {
       id: el.id,
@@ -12051,10 +12112,12 @@ async function saveVolumeSettingsPreset() {
     || `Basin ${new Date().toISOString().replace(/[:.]/g, '-')}`;
   volumeSettingsPresetStatus(`saving ${label}...`);
   try {
+    await volumeCockpitLayoutReady;
+    const preset = buildVolumeSettingsPreset();
     const response = await fetch('/api/volume-settings-presets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label, preset: buildVolumeSettingsPreset() }),
+      body: JSON.stringify({ label, preset }),
     });
     const result = await response.json();
     if (!response.ok || !result.ok) throw new Error(result.error || `preset save failed: ${response.status}`);

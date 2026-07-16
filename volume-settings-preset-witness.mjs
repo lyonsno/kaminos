@@ -15,6 +15,11 @@ const PRESET_VIEW_COMPOSITIONS = Object.freeze({
   'smoke-hybrid': 'smoke-raymarch-under-splats-v0',
   'full-hybrid-diagnostic': 'full-raymarch-under-splats-diagnostic-v0',
 });
+const TARGET_ONLY_VOLUME_PARAMS = new Set([
+  'volume_presentation',
+  'volume_raymarch_smoke',
+  'volume_appearance_decomposition',
+]);
 const expectedComposition = PRESET_VIEW_COMPOSITIONS[requestedView];
 const PASS_TUPLES = Object.freeze({
   'splat-only-v0': Object.freeze({
@@ -48,6 +53,7 @@ const PASS_TUPLES = Object.freeze({
 });
 const out = resolve(String(args.get('--out') || '/tmp/kaminos-volume-settings-preset.png'));
 const cockpitOut = resolve(String(args.get('--cockpit-out') || out.replace(/(\.png)?$/, '-cockpit.png')));
+const cockpitCollapsedOut = resolve(String(args.get('--cockpit-collapsed-out') || cockpitOut.replace(/(\.png)?$/, '-collapsed.png')));
 const reportPath = resolve(String(args.get('--report') || '/tmp/kaminos-volume-settings-preset.json'));
 const timeoutMs = Number(args.get('--timeout-ms') || 180000);
 const debugPort = Number(args.get('--debug-port') || randomInt(42000, 62000));
@@ -146,6 +152,7 @@ try {
   if (!expectedComposition) throw new Error(`unsupported settings preset witness view: ${requestedView}`);
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(cockpitOut), { recursive: true });
+  mkdirSync(dirname(cockpitCollapsedOut), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
 
   failurePhase = 'browser-launch';
@@ -237,8 +244,80 @@ try {
     const anchorId = ${JSON.stringify(cockpitAnchor)};
     const anchor = anchorId ? operatorDocument.getElementById(anchorId) : null;
     if (anchor) anchor.scrollIntoView({ block: 'center' });
-    return { retired, surviving, anchorId, anchorFound: !anchorId || !!anchor };
+    const panel = operatorDocument.getElementById('volume-authored-mix-panel');
+    const body = operatorDocument.getElementById('volume-authored-mix-body');
+    const toggle = operatorDocument.getElementById('volume-authored-mix-toggle');
+    const authoredRoot = operatorDocument.getElementById('volume-authored-mix-control-root');
+    const canary = operatorDocument.getElementById('volume-reaction-boundary-support-thermal');
+    const canaryRow = canary?.closest('.slider-row');
+    const authoredTitle = operatorDocument.querySelector('.volume-authored-mix-title');
+    const viewport = operatorDocument.getElementById('viewport');
+    const hostRendererCanvas = operatorDocument.getElementById('kaminos-host-renderer-canvas');
+    const outerToolbar = document.getElementById('toolbar');
+    const panelRect = panel?.getBoundingClientRect();
+    const bodyRect = body?.getBoundingClientRect();
+    const toggleRect = toggle?.getBoundingClientRect();
+    const canaryRect = canary?.getBoundingClientRect();
+    const canaryRowRect = canaryRow?.getBoundingClientRect();
+    const authoredTitleRect = authoredTitle?.getBoundingClientRect();
+    const viewportRect = viewport?.getBoundingClientRect();
+    const hostRendererCanvasRect = hostRendererCanvas?.getBoundingClientRect();
+    const outerToolbarRect = outerToolbar?.getBoundingClientRect();
+    const shellSafeAreaReceipt = operatorWindow.__kaminosOperatorOverlaySafeAreaReceipt || null;
+    const shellSafeTop = Number.parseFloat(
+      operatorWindow.getComputedStyle(operatorDocument.documentElement)
+        .getPropertyValue('--kaminos-operator-overlay-safe-top'),
+    ) || 0;
+    const hit = bodyRect && bodyRect.width > 0 && bodyRect.height > 0
+      ? operatorDocument.elementFromPoint(bodyRect.left + Math.min(24, bodyRect.width / 2), bodyRect.top + Math.min(24, bodyRect.height / 2))
+      : null;
+    const layoutReceipt = operatorWindow.__kaminosVolumeCockpitLayoutReceipt || null;
+    return {
+      retired,
+      surviving,
+      anchorId,
+      anchorFound: !anchorId || !!anchor,
+      layoutReceipt,
+      shellOcclusionGeometry: {
+        outerToolbarBottom: outerToolbarRect?.bottom || 0,
+        shellSafeTop,
+        shellSafeAreaReceipt,
+        authoredTitleTop: authoredTitleRect?.top ?? null,
+        authoredControlTop: canaryRowRect?.top ?? null,
+        authoredContentObscured: !!outerToolbarRect && (
+          authoredTitleRect?.top < outerToolbarRect.bottom
+          || canaryRowRect?.top < outerToolbarRect.bottom
+        ),
+      },
+      hostRendererCanvasGeometry: hostRendererCanvasRect ? {
+        hostCanvasLeft: hostRendererCanvasRect.left,
+        hostCanvasRight: hostRendererCanvasRect.right,
+        hostCanvasWidth: hostRendererCanvasRect.width,
+        hostCanvasBackingWidth: hostRendererCanvas.width,
+        viewportRight: viewportRect.right,
+        viewportWidth: viewportRect.width,
+        hostCanvasCrossesPanel: hostRendererCanvasRect.right > panelRect.left + 1,
+      } : null,
+      panelGeometry: panelRect ? {
+        hidden: panel.hidden,
+        collapsed: panel.dataset.collapsed,
+        cockpitStatus: panel.dataset.cockpitStatus,
+        left: panelRect.left,
+        right: panelRect.right,
+        width: panelRect.width,
+        height: panelRect.height,
+        bodyDisplay: operatorWindow.getComputedStyle(body).display,
+        bodyWidth: bodyRect.width,
+        toggleWidth: toggleRect.width,
+        viewportRight: viewportRect.right,
+        viewportWidth: viewportRect.width,
+        canaryWidth: canaryRect.width,
+        canaryInAuthoredRoot: authoredRoot?.contains(canary) || false,
+        hitInsidePanel: !!hit && panel.contains(hit),
+      } : null,
+    };
   })()`));
+  lastTrustworthyEvidence.cockpitVisibility = cockpitVisibility;
   assert.deepEqual(
     cockpitVisibility.retired.map(entry => entry.name).sort(),
     ['atlas-capture', 'raymarch-history', 'topology-shell'],
@@ -256,11 +335,84 @@ try {
     assert.ok(entry.width > 0 && entry.height > 0, `surviving cockpit control ${entry.id} has no rendered box`);
   }
   assert.equal(cockpitVisibility.anchorFound, true, `cockpit screenshot anchor is missing: ${cockpitAnchor}`);
-  lastTrustworthyEvidence.cockpitVisibility = cockpitVisibility;
+  assert.equal(cockpitVisibility.layoutReceipt?.identity, 'kaminos-volume-cockpit-layout-receipt-v0', 'cockpit layout receipt is missing');
+  assert.equal(cockpitVisibility.layoutReceipt?.controlCount, 186, 'cockpit layout omitted canonical controls');
+  assert.equal(cockpitVisibility.layoutReceipt?.rootControlCounts?.['volume-primary-control-root'], 185, 'primary root count changed');
+  assert.equal(cockpitVisibility.layoutReceipt?.rootControlCounts?.['volume-authored-mix-control-root'], 1, 'authored-mix root count changed');
+  assert.equal(cockpitVisibility.layoutReceipt?.fallbackApplied, false, 'cockpit layout silently fell back');
+  assert.equal(
+    cockpitVisibility.shellOcclusionGeometry?.authoredContentObscured,
+    false,
+    'authored-mix controls are hidden beneath the outer assay toolbar',
+  );
+  assert.equal(
+    cockpitVisibility.shellOcclusionGeometry?.shellSafeAreaReceipt?.identity,
+    'kaminos-operator-overlay-safe-area-v0',
+    'outer assay shell did not publish an overlay safe-area receipt',
+  );
+  assert.equal(
+    cockpitVisibility.shellOcclusionGeometry?.shellSafeAreaReceipt?.applied,
+    true,
+    'outer assay shell safe area was not applied',
+  );
+  assert.ok(
+    cockpitVisibility.shellOcclusionGeometry?.shellSafeTop
+      > cockpitVisibility.shellOcclusionGeometry?.outerToolbarBottom,
+    'authored-mix shell safe area does not clear the outer toolbar',
+  );
+  assert.ok(cockpitVisibility.hostRendererCanvasGeometry, 'host renderer canvas geometry is missing');
+  assert.equal(
+    cockpitVisibility.hostRendererCanvasGeometry?.hostCanvasCrossesPanel,
+    false,
+    'stale host renderer canvas crosses into the authored-mix panel',
+  );
+  assert.ok(
+    Math.abs(cockpitVisibility.hostRendererCanvasGeometry?.hostCanvasRight
+      - cockpitVisibility.hostRendererCanvasGeometry?.viewportRight) <= 1,
+    'host renderer canvas is not synchronized to the viewport edge',
+  );
+  assert.equal(cockpitVisibility.panelGeometry?.hidden, false, 'authored-mix panel is hidden on the Volume route');
+  assert.equal(cockpitVisibility.panelGeometry?.collapsed, 'false', 'authored-mix panel did not start expanded');
+  assert.equal(cockpitVisibility.panelGeometry?.cockpitStatus, 'validated', 'authored-mix panel rendered before inventory validation');
+  assert.ok(cockpitVisibility.panelGeometry?.width >= 320, 'authored-mix panel is too narrow to operate');
+  assert.ok(cockpitVisibility.panelGeometry?.bodyWidth > 250, 'authored-mix panel body has no usable width');
+  assert.ok(cockpitVisibility.panelGeometry?.toggleWidth >= 30, 'authored-mix panel toggle has no stable hit target');
+  assert.ok(cockpitVisibility.panelGeometry?.viewportWidth > 0, 'authored-mix panel displaced the viewport completely');
+  assert.ok(cockpitVisibility.panelGeometry?.left >= cockpitVisibility.panelGeometry?.viewportRight - 1, 'authored-mix panel overlaps the viewport as an unlabeled overlay');
+  assert.equal(cockpitVisibility.panelGeometry?.canaryInAuthoredRoot, true, 'authored-mix canary was cloned or left in the primary root');
+  assert.ok(cockpitVisibility.panelGeometry?.canaryWidth > 0, 'authored-mix canary has no rendered width');
+  assert.equal(cockpitVisibility.panelGeometry?.hitInsidePanel, true, 'authored-mix panel is painted behind another surface');
   await delay(200);
   const cockpitScreenshot = await initialSocket.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
   writeFileSync(cockpitOut, Buffer.from(cockpitScreenshot.data, 'base64'));
   lastTrustworthyEvidence.cockpitScreenshot = cockpitOut;
+
+  const collapsed = await evaluate(initialSocket, operatorContext(`(() => {
+    const panel = operatorDocument.getElementById('volume-authored-mix-panel');
+    const body = operatorDocument.getElementById('volume-authored-mix-body');
+    const toggle = operatorDocument.getElementById('volume-authored-mix-toggle');
+    toggle.click();
+    const panelRect = panel.getBoundingClientRect();
+    return {
+      collapsedWidth: panelRect.width,
+      collapsedBodyDisplay: operatorWindow.getComputedStyle(body).display,
+      collapsedState: panel.dataset.collapsed,
+      ariaExpanded: toggle.getAttribute('aria-expanded'),
+    };
+  })()`));
+  assert.ok(collapsed.collapsedWidth >= 33 && collapsed.collapsedWidth <= 35, 'authored-mix collapsed rail width changed');
+  assert.equal(collapsed.collapsedBodyDisplay, 'none', 'authored-mix body still occupies space when collapsed');
+  assert.equal(collapsed.collapsedState, 'true', 'authored-mix panel did not publish collapsed state');
+  assert.equal(collapsed.ariaExpanded, 'false', 'authored-mix toggle accessibility state did not collapse');
+  await delay(200);
+  const cockpitCollapsedScreenshot = await initialSocket.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+  writeFileSync(cockpitCollapsedOut, Buffer.from(cockpitCollapsedScreenshot.data, 'base64'));
+  lastTrustworthyEvidence.cockpitCollapsedScreenshot = cockpitCollapsedOut;
+  lastTrustworthyEvidence.collapsed = collapsed;
+  await evaluate(initialSocket, operatorContext(`(() => {
+    operatorDocument.getElementById('volume-authored-mix-toggle').click();
+    return operatorDocument.getElementById('volume-authored-mix-panel').dataset.collapsed;
+  })()`));
 
   const navigation = await initialSocket.call('Runtime.evaluate', {
     expression: operatorContext(`operatorWindow.__kaminosNavigateToSelectedVolumeSettingsPreset(true)`),
@@ -316,7 +468,9 @@ try {
     assert.deepEqual(liveUrl.searchParams.getAll(key), [value], `effective live route changed saved setting ${key}`);
   }
   const savedVolumeKeys = [...savedRoute.searchParams].filter(([key]) => key.startsWith('volume_')).map(([key]) => key);
-  const liveVolumeKeys = [...liveUrl.searchParams].filter(([key]) => key.startsWith('volume_')).map(([key]) => key);
+  const liveVolumeKeys = [...liveUrl.searchParams]
+    .filter(([key]) => key.startsWith('volume_') && !TARGET_ONLY_VOLUME_PARAMS.has(key))
+    .map(([key]) => key);
   assert.deepEqual(liveVolumeKeys, savedVolumeKeys, 'effective live route added or omitted volume settings');
 
   failurePhase = 'continuous-observation';
@@ -353,6 +507,8 @@ try {
     cockpitAnchor: cockpitVisibility.anchorId || null,
     cockpitVisibility,
     cockpitScreenshot: cockpitOut,
+    cockpitCollapsedScreenshot: cockpitCollapsedOut,
+    cockpitCollapsedState: collapsed,
     screenshot: out,
     screenshotBytes: screenshotBytes.length,
   });

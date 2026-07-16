@@ -98,8 +98,8 @@ assert.match(index, /id="volume-oracle-activity-cue"/, 'Oracle cueing remains in
 assert.match(index, /id="volume-pressure-mode"/, 'Pressure remains in the operator cockpit');
 assert.match(
   index,
-  /document\.querySelectorAll\('#sidebar input\[id\^="volume-"\], #sidebar select\[id\^="volume-"\], #sidebar textarea\[id\^="volume-"\]'\)/,
-  'settings capture continues to serialize retired compatibility controls from the sidebar',
+  /collectVolumeCockpitControlElements\(document\)/,
+  'settings capture continues to serialize retired compatibility controls through every canonical control root',
 );
 assert.match(
   presetWitness,

@@ -153,6 +153,29 @@
     let sourceSettingsPresetReceipt = null;
     const basin = document.getElementById('basin');
     const status = document.getElementById('status');
+    const operatorToolbar = document.getElementById('toolbar');
+    function syncOperatorOverlaySafeArea() {
+      const innerDocument = basin.contentDocument;
+      const innerWindow = basin.contentWindow;
+      if (!innerDocument?.documentElement || !innerWindow) return null;
+      const toolbarRect = operatorToolbar.getBoundingClientRect();
+      const safeTop = Math.max(0, Math.ceil(toolbarRect.bottom + 8));
+      innerDocument.documentElement.style.setProperty('--kaminos-operator-overlay-safe-top', `${safeTop}px`);
+      const receipt = {
+        identity: 'kaminos-operator-overlay-safe-area-v0',
+        sourceRoute: ROUTE_IDENTITY,
+        sourceElement: 'toolbar',
+        targetElement: 'volume-authored-mix-body',
+        toolbarBottom: toolbarRect.bottom,
+        safeTop,
+        applied: true,
+      };
+      innerWindow.__kaminosOperatorOverlaySafeAreaReceipt = receipt;
+      return receipt;
+    }
+    basin.addEventListener('load', syncOperatorOverlaySafeArea);
+    const operatorOverlayResizeObserver = new ResizeObserver(syncOperatorOverlaySafeArea);
+    operatorOverlayResizeObserver.observe(operatorToolbar);
     document.getElementById('assay-source').textContent = warmupTarget === 0
       ? 'Fresh live simulation from routed basin settings; no checksum field anchor imported'
       : 'Load checksum-bound training step 96, then 160 truth -> 128 phase-aligned input -> frozen heads -> 160 render';
