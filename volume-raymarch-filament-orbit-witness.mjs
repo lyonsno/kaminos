@@ -827,7 +827,7 @@ function runtimeInitializationSource(config) {
         if (!metrics.nonblank) throw new Error('missing, partial, or blank capture: ' + request.key);
         const effectiveRaySteps = sample.volumePresentationReceipt?.effectiveRayQuality?.raySteps ?? sample.controls?.raySteps ?? null;
         const footprintAudit = ['analyticBillboard', 'learnedBillboard', 'worldCovariance', 'kernelMomentCovariance'].includes(request.mode)
-          ? await prototype.sampleBoundarySplatFootprintAudit()
+          ? await prototype.sampleBoundarySplatFootprintAudit({ now: fixedNow })
           : null;
         const record = {
           key: request.key,

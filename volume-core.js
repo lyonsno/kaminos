@@ -10716,16 +10716,40 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
   }
 
-  async function sampleBoundarySplatFootprintAudit() {
+  async function sampleBoundarySplatFootprintAudit(options = {}) {
     if (!boundarySplatRequested() || !boundarySplatBuffer) {
       return { ok: false, reason: 'boundary-splat-footprint-audit-unavailable' };
     }
-    const draw = await sampleBoundarySplatDrawState();
+    const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+    let draw = await sampleBoundarySplatDrawState();
     if (!draw || draw.candidateCount <= 0 || draw.instanceCount <= 0) {
       throw new Error('boundary-splat-footprint-audit-blank-candidate-population');
     }
+    const initialDraw = {
+      ...draw,
+      capacityBeforeRetry: boundarySplatCapacity,
+    };
     if (draw.overflowCount !== 0 || draw.candidateCount !== draw.instanceCount) {
-      throw new Error(`boundary-splat-footprint-audit-partial-candidates:${draw.candidateCount}:${draw.instanceCount}:${draw.overflowCount}`);
+      if (draw.overflowCount <= 0) {
+        throw new Error(`boundary-splat-footprint-audit-partial-candidates:${draw.candidateCount}:${draw.instanceCount}:${draw.overflowCount}`);
+      }
+      if (boundarySplatCapacity < draw.candidateCount
+        && !growBoundarySplatCapacity(draw.candidateCount)) {
+        throw new Error(`boundary-splat-footprint-audit-capacity-growth-failed:${draw.candidateCount}:${draw.instanceCount}:${draw.overflowCount}:${boundarySplatCapacity}`);
+      }
+      updateUniforms(fixedNow);
+      const retryEncoder = device.createCommandEncoder({
+        label: 'kaminos boundary splat footprint audit capacity retry',
+      });
+      encodeBoundarySplats(retryEncoder);
+      encodeBoundarySplatTelemetry(retryEncoder, true);
+      device.queue.submit([retryEncoder.finish()]);
+      if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
+      if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+      draw = await sampleBoundarySplatDrawState();
+      if (!draw || draw.overflowCount !== 0 || draw.candidateCount !== draw.instanceCount) {
+        throw new Error(`boundary-splat-footprint-audit-partial-candidates:${draw?.candidateCount ?? 'missing'}:${draw?.instanceCount ?? 'missing'}:${draw?.overflowCount ?? 'missing'}`);
+      }
     }
     const byteLength = draw.instanceCount * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES;
     const readback = device.createBuffer({
@@ -10785,6 +10809,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         candidateCount: draw.candidateCount,
         instanceCount: draw.instanceCount,
         overflowCount: draw.overflowCount,
+        initialDraw,
+        capacityRetryCount: initialDraw.overflowCount > 0 ? 1 : 0,
+        capacityAfterRetry: boundarySplatCapacity,
         strideFloats,
         baseIntegratedAlphaSum,
         effectiveIntegratedAlphaSum,

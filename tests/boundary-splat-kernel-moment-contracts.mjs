@@ -22,6 +22,28 @@ assert.match(core, /kernel_moment_covariance[\s\S]*BOUNDARY_SPLAT_KERNEL_MOMENT_
 assert.match(core, /normalized === 'kernel_moment_covariance'[\s\S]*BOUNDARY_SPLAT_ATTRIBUTE_MODEL_IDENTITY/, 'kernel moments reuse the same learned appearance attributes');
 assert.match(core, /boundarySplatAreaOpacityConserved[\s\S]*kernel_moment_covariance/, 'kernel moments cannot gain energy by widening the footprint');
 
+const footprintAudit = core.match(/async function sampleBoundarySplatFootprintAudit[\s\S]*?(?=\n  async function readStorageBufferBytes)/)?.[0] || '';
+assert.match(
+  footprintAudit,
+  /initialDraw[\s\S]*overflowCount[\s\S]*growBoundarySplatCapacity\(draw\.candidateCount\)[\s\S]*encodeBoundarySplats\([\s\S]*sampleBoundarySplatDrawState\(\)/,
+  'footprint admission must preserve the initial overflow, grow to the full population, and recompact the same state before readback',
+);
+assert.match(
+  footprintAudit,
+  /fixedNow[\s\S]*updateUniforms\(fixedNow\)/,
+  'capacity retry must retain the frozen image timestamp instead of producing a new attribute state',
+);
+assert.match(
+  footprintAudit,
+  /boundary-splat-footprint-audit-capacity-growth-failed[\s\S]*boundary-splat-footprint-audit-partial-candidates/,
+  'growth failure and a still-partial retry must fail loud instead of accepting first-N rows',
+);
+assert.match(
+  orbitWitness,
+  /sampleBoundarySplatFootprintAudit\(\{\s*now:\s*fixedNow\s*\}\)/,
+  'the orbit witness must bind footprint admission to its image capture timestamp',
+);
+
 const compactor = core.match(/fn compactBoundarySplats[\s\S]*?(?=\n@compute @workgroup_size\(1\)\nfn finalizeBoundarySplats)/)?.[0] || '';
 assert.match(compactor, /structuralSignal < 0\.11[\s\S]*atomicAdd\(&boundarySplatDraw\.candidateCount/, 'candidate support remains the structural compactor gate');
 assert.match(compactor, /let flowFrame = boundarySplatFlowFrame\(world\)/, 'the treatment consumes the producer-owned tangent frame');
