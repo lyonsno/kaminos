@@ -204,6 +204,45 @@ const kernelReport = {
   cameraRows: kernelCameraRows,
   footprintFamilyPreflight: kernelPreflight,
 };
+assert.equal(
+  typeof oracle.validateCaptureReportFootprintPreflight,
+  'function',
+  'capture-report preflight family identity must have a directly testable predicate',
+);
+const captureReport = {
+  footprintFamilyPreflight: kernelPreflight,
+  covarianceAnalysis: { trainingCameraIndex: 1 },
+  captures: kernelCameraRows
+    .filter(row => row.cameraIndex === 1)
+    .map(row => ({
+      cameraIndex: row.cameraIndex,
+      mode: preflightModeByFamily[row.family],
+      boundarySplatCandidateCount: row.candidateCount,
+      footprintAudit: {
+        candidatePayloadSha256: row.candidatePayloadSha256,
+        attributePayloadSha256: row.attributePayloadSha256,
+      },
+    })),
+};
+assert.equal(oracle.validateCaptureReportFootprintPreflight(captureReport).familyCount, 4);
+assert.throws(
+  () => oracle.validateCaptureReportFootprintPreflight({
+    ...captureReport,
+    footprintFamilyPreflight: kernelPreflight.map((row, index) => index === 0
+      ? { ...row, family: 'unknown-family' }
+      : row),
+  }),
+  /preflight.*unknown family/i,
+);
+assert.throws(
+  () => oracle.validateCaptureReportFootprintPreflight({
+    ...captureReport,
+    footprintFamilyPreflight: kernelPreflight.map((row, index) => index === 1
+      ? { ...row, family: kernelPreflight[0].family }
+      : row),
+  }),
+  /preflight.*duplicate family/i,
+);
 const validatedKernel = await oracle.validateCameraHoldoutReport(kernelReport, { requireKernelMoment: true });
 assert.equal(validatedKernel.familyCount, 4);
 

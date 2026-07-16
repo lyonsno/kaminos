@@ -88,6 +88,45 @@ function hasExactReplaySourceIdentity(report) {
     && report.frozenState?.controlsHash === REPLAY_CONTROLS_SHA256;
 }
 
+export function validateCaptureReportFootprintPreflight(report) {
+  const preflightRows = report?.footprintFamilyPreflight;
+  if (!Array.isArray(preflightRows)) throw new Error('capture-report preflight families are missing');
+  const trainingCameraIndex = report?.covarianceAnalysis?.trainingCameraIndex;
+  if (!Number.isInteger(trainingCameraIndex)) throw new Error('capture-report preflight training camera is missing');
+  if (!Array.isArray(report?.captures)) throw new Error('capture-report admitted captures are missing');
+  const expectedFamilies = Object.keys(FAMILY_MODES);
+  const preflightByFamily = new Map();
+  for (const [index, row] of preflightRows.entries()) {
+    const label = `capture-report preflight row ${index}`;
+    if (!Object.hasOwn(FAMILY_MODES, row?.family)) throw new Error(`${label} has an unknown family`);
+    if (preflightByFamily.has(row.family)) throw new Error(`${label} is a duplicate family`);
+    if (row.identity !== 'footprint-family-preflight-v0' || row.mode !== FAMILY_MODES[row.family]) {
+      throw new Error(`${label} family identity is wrong`);
+    }
+    const admitted = report.captures.find(capture => (
+      capture.cameraIndex === trainingCameraIndex && capture.mode === row.mode
+    ));
+    if (!admitted?.footprintAudit) throw new Error(`${label} admitted training-camera capture is missing`);
+    if (row.candidateCount !== admitted.boundarySplatCandidateCount
+      || row.candidatePayloadSha256 !== admitted.footprintAudit.candidatePayloadSha256) {
+      throw new Error(`${label} candidate payload disagrees with admitted training-camera capture`);
+    }
+    if (row.attributePayloadSha256 !== admitted.footprintAudit.attributePayloadSha256) {
+      throw new Error(`${label} attribute payload disagrees with admitted training-camera capture`);
+    }
+    preflightByFamily.set(row.family, row);
+  }
+  if (preflightByFamily.size !== expectedFamilies.length
+    || expectedFamilies.some(family => !preflightByFamily.has(family))) {
+    throw new Error('capture-report preflight family set is incomplete');
+  }
+  if (preflightByFamily.get('learned-billboard').attributePayloadSha256
+    !== preflightByFamily.get('world-tangent-covariance').attributePayloadSha256) {
+    throw new Error('capture-report learned and world preflight attribute payloads disagree');
+  }
+  return { familyCount: preflightByFamily.size, trainingCameraIndex };
+}
+
 export async function validateCameraHoldoutReport(report, options = {}) {
   if (!report || report.schema !== SCHEMA) throw new Error(`camera holdout report schema must be ${SCHEMA}`);
   if (report.status !== 'completed') throw new Error(`camera holdout report is incomplete: ${report.status || 'missing'}`);
