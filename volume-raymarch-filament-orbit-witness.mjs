@@ -178,12 +178,14 @@ try {
     assert.equal(admitted.postWarmupFreezeReceipt?.paused, true, 'effective route did not freeze immediately after anchor import');
     assert.equal(admitted.postWarmupFreezeReceipt?.frameCount, expectedWarmupTarget, 'effective post-warmup freeze frame disagrees');
     assert.equal(admitted.postWarmupFreezeReceipt?.simStepCount, expectedWarmupTarget, 'effective post-warmup freeze simulation step disagrees');
+    assert.equal(admitted.configuredRole, 'truthHigh', 'frozen renderer role configuration disagrees');
+    assert.equal(admitted.configuredComposition, 'raymarch-only-v0', 'frozen renderer composition configuration disagrees');
   } else {
     assert.equal(admitted.sourceSettingsPresetId, PRESET_ID, 'stale/default preset replaced requested preset');
     assert.equal(admitted.sourceSettingsPresetAuthority, PRESET_AUTHORITY, 'effective preset authority disagreement');
+    assert.equal(admitted.effectiveRole, 'truthHigh', 'effective role disagreement');
+    assert.equal(admitted.effectiveComposition, 'raymarch-only-v0', 'effective composition disagreement');
   }
-  assert.equal(admitted.effectiveRole, 'truthHigh', 'effective role disagreement');
-  assert.equal(admitted.effectiveComposition, 'raymarch-only-v0', 'effective composition disagreement');
   assert.equal(admitted.fallbackReason, null, 'renderer fallback at admission');
   assert.match(admitted.backend || '', /^WebGPU/, 'effective backend substituted away from WebGPU');
   await delay(settleMs);

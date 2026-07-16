@@ -397,8 +397,8 @@
       const frozenAnchorSettled = freezeAfterWarmupRequested
         && warmupComplete
         && state?.active
-        && effectiveRole === requestedRole
-        && effectiveComposition === requestedComposition
+        && state?.selectiveHeadLiveRole === requestedRole
+        && state?.selectiveHeadLiveCompositionRequested === requestedComposition
         && effectivePresentation === requestedPresentation
         && effectiveRaymarchSmokePresentation === requestedRaymarchSmokePresentation
         && effectiveAppearanceAssay === requestedAppearanceAssay
@@ -442,6 +442,8 @@
         warmupReceipt,
         freezeAfterWarmupRequested,
         postWarmupFreezeReceipt,
+        configuredRole: state?.selectiveHeadLiveRole || null,
+        configuredComposition: state?.selectiveHeadLiveCompositionRequested || null,
         effectiveRole,
         roleAuthority: state?.selectiveHeadLiveRoleAuthority || null,
         compositionAuthority: state?.selectiveHeadLiveCompositionAuthority || null,
