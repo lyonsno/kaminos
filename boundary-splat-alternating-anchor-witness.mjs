@@ -21,6 +21,8 @@ const SCHEMA = 'kaminos-boundary-splat-alternating-anchor-witness-v0';
 const CORPUS_SCHEMA = 'kaminos-boundary-splat-phase-candidate-corpus-v0';
 const PREDICTION_SCHEMA = 'kaminos-boundary-splat-phase-transport-predictions-v0';
 const ORACLE_SCHEMA = 'kaminos-boundary-splat-phase-appearance-transport-evaluation-v0';
+const TRANSPORT_MODEL_SCHEMA = 'kaminos-boundary-splat-phase-transport-model-v0';
+const DESTINATION_STATE_MODEL_SCHEMA = 'kaminos-boundary-splat-phase-destination-state-model-v0';
 const EXACT_SPLAT_AUTHORITY = 'intercepted-live-boundary-splat-buffer-post-compaction-v0';
 const ORACLE_SPLAT_AUTHORITY = 'oracle-correspondence-transport-plus-frozen-splat-residual-v0';
 const FEATURE_ORDER = [
@@ -65,15 +67,23 @@ function sameIdentity(actual, declared) {
   );
 }
 
-function validateIdentity(identity, label) {
+async function readDeclaredJsonRecord(declared, label, expectedSchema) {
   if (
-    !identity
-    || typeof identity.path !== 'string'
-    || !identity.path
-    || !Number.isInteger(identity.bytes)
-    || identity.bytes <= 0
-    || !isSha256(identity.sha256)
+    !declared
+    || typeof declared.path !== 'string'
+    || !declared.path
+    || !isSha256(declared.sha256)
+    || (declared.bytes !== undefined && (!Number.isInteger(declared.bytes) || declared.bytes <= 0))
+    || (declared.schema !== undefined && declared.schema !== expectedSchema)
   ) throw new Error(`${label} identity is missing or malformed`);
+  const record = await readJsonRecord(declared.path);
+  if (record.path !== resolve(declared.path)) throw new Error(`${label} path mismatch`);
+  if (record.identity.sha256 !== declared.sha256) throw new Error(`${label} hash mismatch`);
+  if (declared.bytes !== undefined && record.identity.bytes !== declared.bytes) {
+    throw new Error(`${label} byte count mismatch`);
+  }
+  if (record.document?.schema !== expectedSchema) throw new Error(`${label} artifact schema mismatch`);
+  return record;
 }
 
 function gpuRoute(route, label) {
@@ -130,6 +140,7 @@ function sameState(left, right) {
 }
 
 export function validateAlternatingPlayback(frameCount, controlledStepDeltaMs) {
+  if (frameCount !== 241) throw new Error('alternating witness requires exactly 241 frames');
   if (!Number.isInteger(frameCount) || frameCount < 3 || frameCount % 2 !== 1) {
     throw new Error('alternating playback requires an odd frame count ending on an exact anchor');
   }
@@ -251,7 +262,7 @@ export function validateAlternatingRolePlan(plan) {
   return plan;
 }
 
-function validateInputDocuments(manifestRecord, predictionRecord, oracleRecord) {
+async function validateInputDocuments(manifestRecord, predictionRecord, oracleRecord) {
   const manifest = manifestRecord.document;
   const prediction = predictionRecord.document;
   const oracle = oracleRecord.document;
@@ -289,10 +300,41 @@ function validateInputDocuments(manifestRecord, predictionRecord, oracleRecord) 
   if (!sameIdentity(manifestRecord, prediction.manifest)) {
     throw new Error('alternating prediction evaluation corpus identity mismatch');
   }
-  validateIdentity(prediction.modelTrainingManifest, 'alternating prediction training corpus');
-  validateIdentity(prediction.model, 'alternating transport model');
-  validateIdentity(prediction.destinationStateModel, 'alternating destination-state model');
-  if (prediction.modelTrainingManifest.sha256 === manifestRecord.identity.sha256) {
+  const [trainingManifestRecord, transportModelRecord, destinationStateModelRecord] = await Promise.all([
+    readDeclaredJsonRecord(prediction.modelTrainingManifest, 'alternating prediction training corpus', CORPUS_SCHEMA),
+    readDeclaredJsonRecord(prediction.model, 'alternating transport model', TRANSPORT_MODEL_SCHEMA),
+    readDeclaredJsonRecord(
+      prediction.destinationStateModel,
+      'alternating destination-state model',
+      DESTINATION_STATE_MODEL_SCHEMA,
+    ),
+  ]);
+  if (
+    JSON.stringify(trainingManifestRecord.document.featureOrder) !== JSON.stringify(FEATURE_ORDER)
+    || trainingManifestRecord.document.effectiveRoute !== 'native-3d-compute-fluid-raymarch-v0'
+  ) throw new Error('alternating prediction training corpus contract mismatch');
+  if (
+    transportModelRecord.document.status !== 'completed'
+    || destinationStateModelRecord.document.status !== 'completed'
+  ) throw new Error('alternating model completion status mismatch');
+  gpuRoute(transportModelRecord.document.route, 'alternating transport model route');
+  gpuRoute(destinationStateModelRecord.document.route, 'alternating destination-state model route');
+  if (!sameIdentity(trainingManifestRecord, transportModelRecord.document.manifest)) {
+    throw new Error('alternating transport model training corpus identity mismatch');
+  }
+  if (!sameIdentity(trainingManifestRecord, destinationStateModelRecord.document.trainingManifest)) {
+    throw new Error('alternating destination-state model training corpus identity mismatch');
+  }
+  if (!sameIdentity(manifestRecord, destinationStateModelRecord.document.evaluationManifest)) {
+    throw new Error('alternating destination-state model evaluation corpus identity mismatch');
+  }
+  if (!sameIdentity(trainingManifestRecord, prediction.destinationStateModel.trainingManifest)) {
+    throw new Error('alternating destination-state model declared training corpus identity mismatch');
+  }
+  if (!sameIdentity(manifestRecord, prediction.destinationStateModel.evaluationManifest)) {
+    throw new Error('alternating destination-state model declared evaluation corpus identity mismatch');
+  }
+  if (trainingManifestRecord.identity.sha256 === manifestRecord.identity.sha256) {
     throw new Error('alternating prediction training/evaluation corpus leakage');
   }
   const temporal = prediction.temporal;
@@ -339,16 +381,37 @@ function validateInputDocuments(manifestRecord, predictionRecord, oracleRecord) 
     throw new Error('alternating oracle evaluation schema/status mismatch');
   }
   gpuRoute(oracle.route, 'alternating oracle route');
+  const expectedOraclePairCount = frameIds.length - 1;
   if (
     !sameIdentity(manifestRecord, oracle.evaluationManifest)
     || Math.abs(Number(oracle.temporal?.controlledStepDeltaMs) - cadence) > 1e-6
+    || oracle.temporal?.authority !== 'all-adjacent-cross-episode-one-step-evaluations-v0'
+    || oracle.temporal?.evaluatedPairCount !== expectedOraclePairCount
+    || JSON.stringify(oracle.temporal?.referenceFrameIds) !== JSON.stringify(frameIds)
     || oracle.temporal?.pairCap !== null
     || oracle.temporal?.sampleCap !== null
     || !Array.isArray(oracle.pairs)
-    || oracle.pairs.length !== (frameIds.length - 1) / 2
+    || oracle.pairs.length !== expectedOraclePairCount
   ) throw new Error('alternating oracle corpus/temporal completeness mismatch');
+  for (let index = 1; index < frameIds.length; index += 1) {
+    const pair = oracle.pairs[index - 1];
+    if (pair?.sourceFrameId !== frameIds[index - 1] || pair?.targetFrameId !== frameIds[index]) {
+      throw new Error(`alternating oracle pair ${index} frame alignment mismatch`);
+    }
+  }
   const rolePlan = buildAlternatingRolePlan(manifest.frames, prediction.frames, oracle.pairs);
-  return { playback, rolePlan };
+  return {
+    playback,
+    rolePlan,
+    verifiedSources: {
+      trainingManifest: trainingManifestRecord.identity,
+      transportModel: { ...transportModelRecord.identity, schema: TRANSPORT_MODEL_SCHEMA },
+      destinationStateModel: {
+        ...destinationStateModelRecord.identity,
+        schema: DESTINATION_STATE_MODEL_SCHEMA,
+      },
+    },
+  };
 }
 
 async function loadSplatState(state, label, expectedAuthority = null) {
@@ -512,7 +575,7 @@ export async function writeAlternatingAnchorWitness(manifestPath, predictionsPat
       readJsonRecord(predictionsPath),
       readJsonRecord(oraclePath),
     ]);
-    const { playback, rolePlan } = validateInputDocuments(
+    const { playback, rolePlan, verifiedSources } = await validateInputDocuments(
       manifestRecord,
       predictionRecord,
       oracleRecord,
@@ -600,9 +663,9 @@ export async function writeAlternatingAnchorWitness(manifestPath, predictionsPat
         manifest: manifestRecord.identity,
         predictions: predictionRecord.identity,
         oracleEvaluation: oracleRecord.identity,
-        trainingManifest: predictionRecord.document.modelTrainingManifest,
-        transportModel: predictionRecord.document.model,
-        destinationStateModel: predictionRecord.document.destinationStateModel,
+        trainingManifest: verifiedSources.trainingManifest,
+        transportModel: verifiedSources.transportModel,
+        destinationStateModel: verifiedSources.destinationStateModel,
       },
       route: {
         requested: manifestRecord.document.requestedRoute,

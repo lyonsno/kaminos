@@ -115,8 +115,13 @@ assert.deepEqual(
 );
 assert.throws(
   () => witness.validateAlternatingPlayback(239, 16.667),
-  /at least four seconds/,
-  'the moving witness must not silently shrink below the operator inspection horizon',
+  /exactly 241 frames/,
+  'the moving witness must preserve the exact operator inspection horizon',
+);
+assert.throws(
+  () => witness.validateAlternatingPlayback(243, 16.667),
+  /exactly 241 frames/,
+  'an overlong corpus must not silently replace the exact witness identity',
 );
 assert.throws(
   () => witness.validateAlternatingPlayback(241, 160),
@@ -223,6 +228,14 @@ try {
       });
     }
   }
+  for (let index = 2; index < exactFrames.length; index += 2) {
+    pairs.push({
+      sourceFrameId: `frame-${index - 1}`,
+      targetFrameId: `frame-${index}`,
+      oraclePredicted: exactFrames[index],
+    });
+  }
+  pairs.sort((left, right) => Number(left.targetFrameId.slice(6)) - Number(right.targetFrameId.slice(6)));
   const manifest = {
     schema: 'kaminos-boundary-splat-phase-candidate-corpus-v0',
     featureOrder,
@@ -231,16 +244,37 @@ try {
     frames: exactFrames,
   };
   const manifestIdentity = await writeJsonIdentity('phase-corpus.json', manifest);
-  const trainingManifest = await writeJsonIdentity('training-corpus.json', { corpus: 'separate-training' });
-  const transportModel = await writeJsonIdentity('transport-model.json', { model: 'transport' });
-  const stateModel = await writeJsonIdentity('state-model.json', { model: 'state' });
+  const trainingManifest = await writeJsonIdentity('training-corpus.json', {
+    schema: 'kaminos-boundary-splat-phase-candidate-corpus-v0',
+    featureOrder,
+    effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
+    frames: [],
+  });
+  const transportModel = await writeJsonIdentity('transport-model.json', {
+    schema: 'kaminos-boundary-splat-phase-transport-model-v0',
+    status: 'completed',
+    route: { backend: 'mlx', device: 'Device(gpu, 0)', fallbackReason: null },
+    manifest: trainingManifest,
+  });
+  const stateModel = await writeJsonIdentity('state-model.json', {
+    schema: 'kaminos-boundary-splat-phase-destination-state-model-v0',
+    status: 'completed',
+    route: { backend: 'mlx', device: 'Device(gpu, 0)', fallbackReason: null },
+    trainingManifest,
+    evaluationManifest: manifestIdentity,
+  });
   const predictions = {
     schema: 'kaminos-boundary-splat-phase-transport-predictions-v0',
     status: 'completed',
     manifest: manifestIdentity,
     modelTrainingManifest: trainingManifest,
     model: { ...transportModel, schema: 'kaminos-boundary-splat-phase-transport-model-v0' },
-    destinationStateModel: { ...stateModel, schema: 'kaminos-boundary-splat-phase-destination-state-model-v0' },
+    destinationStateModel: {
+      ...stateModel,
+      schema: 'kaminos-boundary-splat-phase-destination-state-model-v0',
+      trainingManifest,
+      evaluationManifest: manifestIdentity,
+    },
     route: { backend: 'mlx', device: 'Device(gpu, 0)', fallbackReason: null },
     temporal: {
       authority: 'alternating-exact-anchor-causal-odd-projection-v0',
@@ -270,9 +304,17 @@ try {
     status: 'completed',
     route: { backend: 'mlx', device: 'Device(gpu, 0)', fallbackReason: null },
     evaluationManifest: manifestIdentity,
-    temporal: { controlledStepDeltaMs: 16.667, pairCap: null, sampleCap: null },
+    temporal: {
+      authority: 'all-adjacent-cross-episode-one-step-evaluations-v0',
+      referenceFrameIds: exactFrames.map(frame => frame.id),
+      evaluatedPairCount: 240,
+      controlledStepDeltaMs: 16.667,
+      pairCap: null,
+      sampleCap: null,
+    },
     pairs,
   };
+  assert.equal(oracle.pairs.length, 240, 'oracle fixture must mirror the evaluator\'s uncapped all-adjacent output');
   const oracleIdentity = await writeJsonIdentity('oracle-evaluation.json', oracle);
   const outDir = join(root, 'witness');
   const report = await witness.writeAlternatingAnchorWitness(
@@ -289,6 +331,51 @@ try {
   assert.equal(report.roles.causal.targetFramesAvailableToPredictor, false);
   assert.equal(report.roles.interpolated.noncausal, true);
   assert.equal((await readFile(join(outDir, 'alternating-anchor-five-role.mp4'))).byteLength > 0, true);
+
+  const staleModelPredictions = structuredClone(predictions);
+  staleModelPredictions.model.sha256 = '0'.repeat(64);
+  const staleModelPredictionIdentity = await writeJsonIdentity('stale-model-predictions.json', staleModelPredictions);
+  await assert.rejects(
+    witness.writeAlternatingAnchorWitness(
+      manifestIdentity.path,
+      staleModelPredictionIdentity.path,
+      oracleIdentity.path,
+      { outDir: join(root, 'stale-model-witness'), width: 32, height: 32 },
+    ),
+    /alternating transport model hash mismatch/,
+  );
+
+  const contradictoryStateLinkPredictions = structuredClone(predictions);
+  contradictoryStateLinkPredictions.destinationStateModel.trainingManifest = {
+    ...contradictoryStateLinkPredictions.destinationStateModel.trainingManifest,
+    sha256: '1'.repeat(64),
+  };
+  const contradictoryStateLinkIdentity = await writeJsonIdentity(
+    'contradictory-state-link-predictions.json',
+    contradictoryStateLinkPredictions,
+  );
+  await assert.rejects(
+    witness.writeAlternatingAnchorWitness(
+      manifestIdentity.path,
+      contradictoryStateLinkIdentity.path,
+      oracleIdentity.path,
+      { outDir: join(root, 'contradictory-state-link-witness'), width: 32, height: 32 },
+    ),
+    /alternating destination-state model declared training corpus identity mismatch/,
+  );
+
+  const misalignedOracle = structuredClone(oracle);
+  misalignedOracle.pairs[1].sourceFrameId = 'frame-0';
+  const misalignedOracleIdentity = await writeJsonIdentity('misaligned-oracle-evaluation.json', misalignedOracle);
+  await assert.rejects(
+    witness.writeAlternatingAnchorWitness(
+      manifestIdentity.path,
+      predictionIdentity.path,
+      misalignedOracleIdentity.path,
+      { outDir: join(root, 'misaligned-oracle-witness'), width: 32, height: 32 },
+    ),
+    /alternating oracle pair 2 frame alignment mismatch/,
+  );
 
   const badPredictions = structuredClone(predictions);
   badPredictions.temporal.naturalFullRateControl.frameIds[1] = 'frame-0';
