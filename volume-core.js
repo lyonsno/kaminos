@@ -12570,7 +12570,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       : `fixed-candidate-f${baseFrameCount}-s${baseSimStepCount}-${Math.round(fixedNow)}`;
     const renderScale = normalizeRenderScale(options.renderScale ?? 1);
     try {
-      setVolumePresentationMode('default');
+      setVolumePresentationMode('beauty');
       setAppearanceDecompositionMode('off');
       controlsSnapshot = applyRuntimeQualityControls({
         ...controlsSnapshot,

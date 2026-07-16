@@ -365,6 +365,12 @@ try {
 
   failurePhase = 'candidate-transfer';
   const candidateBytes = await readBrowserBytes(socket, 'window.__kaminosAppearanceCandidateBytes', evidence.candidateLength);
+  if (candidateBytes.length !== evidence.candidateMetadata.packedByteLength) {
+    throw new Error(`appearance candidate transfer byte-length mismatch: expected ${evidence.candidateMetadata.packedByteLength}, actual ${candidateBytes.length}`);
+  }
+  if (sha256Buffer(candidateBytes) !== evidence.candidateSha256) {
+    throw new Error('appearance candidate transfer hash drifted from the captured camera cohort');
+  }
   const candidatePath = resolve(outDir, 'appearance-state.candidates.f32');
   writeFileSync(candidatePath, candidateBytes);
 
