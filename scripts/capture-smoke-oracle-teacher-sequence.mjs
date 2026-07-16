@@ -764,10 +764,10 @@ try {
     const routeActive = state?.active
       && state.effectiveRoute === 'native-3d-compute-fluid-raymarch-v0';
     const captureHoldActive = teacherContract
-      && state.frameSubmissionAuthority === 'capture-hold-explicit-step-v0'
+      && state?.frameSubmissionAuthority === 'capture-hold-explicit-step-v0'
       && (attachWithoutNavigate
-        ? state.frameCount >= state.simStepCount && state.simStepCount > 0
-        : state.frameCount === 0 && state.simStepCount === 0);
+        ? state?.frameCount >= state?.simStepCount && state?.simStepCount > 0
+        : state?.frameCount === 0 && state?.simStepCount === 0);
     const autonomousRouteActive = !teacherContract
       && state.width > 0
       && state.height > 0

@@ -86,6 +86,12 @@ assert.match(
 
 assert.match(
   source,
+  /state\?\.frameSubmissionAuthority/,
+  'a transient null debug state during route startup must remain a retryable readiness observation',
+);
+
+assert.match(
+  source,
   /validateMinimumRadiusEffectiveState/,
   'minimum-radius teacher capture must reject a second effective control change or camera drift',
 );
