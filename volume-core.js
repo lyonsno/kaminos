@@ -7262,6 +7262,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySplatRenderPipeline = null;
   let boundarySplatReadbackPipeline = null;
   let boundarySplatPbrScenePipeline = null;
+  let boundarySplatPbrSceneReadbackPipeline = null;
   let bindGroups = [];
   let majorantFrontBindGroups = [];
   let boundarySidecarReadBindGroups = [];
@@ -8892,14 +8893,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     boundarySplatRenderPipeline = makeBoundarySplatRenderPipeline(format, `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} raster ${gridSize}^3`);
     boundarySplatReadbackPipeline = makeBoundarySplatRenderPipeline('rgba8unorm', `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} witness readback ${gridSize}^3`);
-    boundarySplatPbrScenePipeline = device.createRenderPipeline({
-      label: `kaminos ${BOUNDARY_SPLAT_PBR_FIRE_FIELD_IDENTITY} raster`,
+    const makeBoundarySplatPbrScenePipeline = (targetFormat, label) => device.createRenderPipeline({
+      label,
       layout: boundarySplatPbrScenePipelineLayout,
       vertex: { module: boundarySplatPbrSceneShader, entryPoint: 'pbrVs' },
       fragment: {
         module: boundarySplatPbrSceneShader,
         entryPoint: 'pbrFs',
-        targets: [{ format }],
+        targets: [{ format: targetFormat }],
       },
       primitive: { topology: 'triangle-list' },
       depthStencil: {
@@ -8908,6 +8909,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         depthCompare: 'less',
       },
     });
+    boundarySplatPbrScenePipeline = makeBoundarySplatPbrScenePipeline(
+      format,
+      `kaminos ${BOUNDARY_SPLAT_PBR_FIRE_FIELD_IDENTITY} raster`,
+    );
+    boundarySplatPbrSceneReadbackPipeline = makeBoundarySplatPbrScenePipeline(
+      'rgba8unorm',
+      `kaminos ${BOUNDARY_SPLAT_PBR_FIRE_FIELD_IDENTITY} witness readback`,
+    );
     ensureBoundarySplatBuffers();
     ensureTemporalHistoryTexture();
     rebuildFluidBindGroups();
@@ -12800,6 +12809,40 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return state.selectiveHeadLivePassReceipt;
   }
 
+  function encodeSelectiveHeadBoundarySplatComposition(
+    encoder,
+    targetView,
+    targetSplatPipeline,
+    { raymarchApplied = false, targetPbrPipeline = boundarySplatPbrScenePipeline } = {},
+  ) {
+    if (raymarchApplied) {
+      return encodeBoundarySplatDraw(
+        encoder,
+        targetView,
+        targetSplatPipeline,
+        { loadOp: 'load' },
+      );
+    }
+    ensureBoundarySplatPbrDepthTexture();
+    const depthView = boundarySplatPbrDepthTexture.createView();
+    const pbrSceneApplied = encodeBoundarySplatPbrScene(
+      encoder,
+      targetView,
+      depthView,
+      { targetPipeline: targetPbrPipeline },
+    );
+    return encodeBoundarySplatDraw(
+      encoder,
+      targetView,
+      targetSplatPipeline,
+      {
+        depthView,
+        loadColor: pbrSceneApplied,
+        loadDepth: pbrSceneApplied,
+      },
+    );
+  }
+
   function encodeHistoryCopy(encoder, sourceTexture) {
     if (!historyTexture || state.width < 1 || state.height < 1) return;
     encoder.copyTextureToTexture(
@@ -12872,31 +12915,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           raymarchApplied = true;
         }
         if (composition.definition.splat) {
-          if (composition.definition.raymarch) {
-            splatEncoded = encodeBoundarySplatDraw(
-              encoder,
-              currentTexture.createView(),
-              boundarySplatRenderPipeline,
-              { loadOp: 'load' },
-            );
-          } else {
-            ensureBoundarySplatPbrDepthTexture();
-            const pbrSceneApplied = encodeBoundarySplatPbrScene(
-              encoder,
-              currentTexture.createView(),
-              boundarySplatPbrDepthTexture.createView(),
-            );
-            splatEncoded = encodeBoundarySplatDraw(
-              encoder,
-              currentTexture.createView(),
-              boundarySplatRenderPipeline,
-              {
-                depthView: boundarySplatPbrDepthTexture.createView(),
-                loadColor: pbrSceneApplied,
-                loadDepth: pbrSceneApplied,
-              },
-            );
-          }
+          splatEncoded = encodeSelectiveHeadBoundarySplatComposition(
+            encoder,
+            currentTexture.createView(),
+            boundarySplatRenderPipeline,
+            { raymarchApplied },
+          );
           splatApplied = splatEncoded;
         }
         if (composition.definition.splat && !splatApplied) {
@@ -15042,11 +15066,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         raymarchApplied = true;
       }
       if (composition.definition.splat) {
-        splatEncoded = encodeBoundarySplatDraw(
+        splatEncoded = encodeSelectiveHeadBoundarySplatComposition(
           encoder,
           frameTexture.createView(),
           boundarySplatReadbackPipeline,
-          { loadOp: raymarchApplied ? 'load' : 'clear' },
+          {
+            raymarchApplied,
+            targetPbrPipeline: boundarySplatPbrSceneReadbackPipeline,
+          },
         );
         splatApplied = splatEncoded;
       }
@@ -15842,6 +15869,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const targetView = presentToCanvas ? context.getCurrentTexture().createView() : frameTexture.createView();
     const targetRaymarchPipeline = presentToCanvas ? pipeline : readbackPipeline;
     const targetSplatPipeline = presentToCanvas ? boundarySplatRenderPipeline : boundarySplatReadbackPipeline;
+    const targetPbrPipeline = presentToCanvas ? boundarySplatPbrScenePipeline : boundarySplatPbrSceneReadbackPipeline;
     device.pushErrorScope('validation');
     const encoder = device.createCommandEncoder({ label: `kaminos selective-head live frame ${frameIndex}` });
     const beforeSimStepCount = state.simStepCount;
@@ -15878,11 +15906,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       raymarchApplied = true;
     }
     if (composition.definition.splat) {
-      splatEncoded = encodeBoundarySplatDraw(
+      splatEncoded = encodeSelectiveHeadBoundarySplatComposition(
         encoder,
         targetView,
         targetSplatPipeline,
-        { loadOp: raymarchApplied ? 'load' : 'clear' },
+        { raymarchApplied, targetPbrPipeline },
       );
       splatApplied = splatEncoded;
     }
