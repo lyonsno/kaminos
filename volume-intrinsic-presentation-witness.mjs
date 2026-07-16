@@ -13,6 +13,24 @@ const REQUIRED_BEAUTY_ROUTE = 'role=truthHigh&composition=raymarch-only-v0';
 const RESTORATION_MAX_CHANNEL_DELTA = 1;
 const RESTORATION_MAX_MEAN_ABS_CHANNEL_DELTA = 1e-6;
 const RESTORATION_MAX_CHANGED_PIXEL_RATIO = 1e-5;
+const sharedTransportExpectedMasks = Object.freeze({
+  'ridge-emission-under-ridge-extinction': Object.freeze({
+    emission: Object.freeze({ ridge: true, nonRidge: false }),
+    extinction: Object.freeze({ ridge: true, nonRidge: false }),
+  }),
+  'ridge-emission-under-total-flame-extinction': Object.freeze({
+    emission: Object.freeze({ ridge: true, nonRidge: false }),
+    extinction: Object.freeze({ ridge: true, nonRidge: true }),
+  }),
+  'nonridge-emission-under-total-flame-extinction': Object.freeze({
+    emission: Object.freeze({ ridge: false, nonRidge: true }),
+    extinction: Object.freeze({ ridge: true, nonRidge: true }),
+  }),
+  'complete-flame-under-total-extinction': Object.freeze({
+    emission: Object.freeze({ ridge: true, nonRidge: true }),
+    extinction: Object.freeze({ ridge: true, nonRidge: true }),
+  }),
+});
 const args = parseArgs(process.argv.slice(2));
 const requestedUrl = required('--url');
 const outDir = resolve(String(args.get('--out-dir') || '/tmp/kaminos-intrinsic-presentation-witness'));
@@ -307,6 +325,19 @@ try {
       const positiveNonRidgeEmission = await captureAppearance('non-ridge-emission');
       const positiveNonRidgeExtinction = await captureAppearance('non-ridge-extinction');
       const positiveOpticalRecomposition = await captureAppearance('positive-optical-recomposition');
+      const ridgeEmissionUnderRidgeExtinction = await captureAppearance('ridge-emission-under-ridge-extinction');
+      const ridgeEmissionUnderTotalExtinction = await captureAppearance('ridge-emission-under-total-flame-extinction');
+      const nonRidgeEmissionUnderTotalExtinction = await captureAppearance('nonridge-emission-under-total-flame-extinction');
+      const completeFlameUnderTotalExtinction = await captureAppearance('complete-flame-under-total-extinction');
+      const sharedTransportRecomposition = await prototype.sampleSharedTransmittanceContributions({
+        sameStateCaptureId,
+        baseFrameCount: before.frameCount,
+        baseSimStepCount: before.simStepCount,
+        now: fixedNow,
+      });
+      if (!sharedTransportRecomposition?.ok) {
+        throw new Error('shared-transmittance-renderer-recomposition-failed:' + JSON.stringify(sharedTransportRecomposition));
+      }
       operator?.setAppearanceAssay?.('off') || prototype.setAppearanceDecompositionMode('off');
       prototype.setRaymarchSmokePresentationMode('on');
       const beautySmokeRestored = await captureMode('beauty');
@@ -372,6 +403,10 @@ try {
       delete positiveNonRidgeEmission._rgba;
       delete positiveNonRidgeExtinction._rgba;
       delete positiveOpticalRecomposition._rgba;
+      delete ridgeEmissionUnderRidgeExtinction._rgba;
+      delete ridgeEmissionUnderTotalExtinction._rgba;
+      delete nonRidgeEmissionUnderTotalExtinction._rgba;
+      delete completeFlameUnderTotalExtinction._rgba;
       delete cameraHoldoutRidgeEmission._rgba;
       delete cameraHoldoutNonRidgeEmission._rgba;
       delete cameraHoldoutPositiveRecomposition._rgba;
@@ -426,6 +461,11 @@ try {
         positiveNonRidgeEmission,
         positiveNonRidgeExtinction,
         positiveOpticalRecomposition,
+        ridgeEmissionUnderRidgeExtinction,
+        ridgeEmissionUnderTotalExtinction,
+        nonRidgeEmissionUnderTotalExtinction,
+        completeFlameUnderTotalExtinction,
+        sharedTransportRecomposition,
         cameraHoldout: {
           cameraOriginalPose,
           cameraOriginalHash,
@@ -543,6 +583,10 @@ try {
   assert.equal(evidence.positiveNonRidgeEmission.metrics.nonblank, true, 'Non-Ridge emission output is blank');
   assert.equal(evidence.positiveNonRidgeExtinction.metrics.nonblank, true, 'Non-Ridge extinction output is blank');
   assert.equal(evidence.positiveOpticalRecomposition.metrics.nonblank, true, 'positive optical recomposition output is blank');
+  assert.equal(evidence.ridgeEmissionUnderRidgeExtinction.metrics.nonblank, true, 'Ridge emission under Ridge extinction is blank');
+  assert.equal(evidence.ridgeEmissionUnderTotalExtinction.metrics.nonblank, true, 'Ridge emission under total extinction is blank');
+  assert.equal(evidence.nonRidgeEmissionUnderTotalExtinction.metrics.nonblank, true, 'Non-Ridge emission under total extinction is blank');
+  assert.equal(evidence.completeFlameUnderTotalExtinction.metrics.nonblank, true, 'Complete Flame under total extinction is blank');
   assert.equal(evidence.beautyRestored.metrics.nonblank, true, 'restored Beauty output is blank');
   assert.notEqual(evidence.beauty.pixelHash, evidence.intrinsic.pixelHash, 'Intrinsic silently substituted Beauty pixels');
   assert.notEqual(evidence.beautySmokeOn.pixelHash, evidence.beautySmokeOff.pixelHash, 'Smoke Off silently reused Smoke On pixels');
@@ -560,6 +604,10 @@ try {
     evidence.positiveNonRidgeEmission,
     evidence.positiveNonRidgeExtinction,
     evidence.positiveOpticalRecomposition,
+    evidence.ridgeEmissionUnderRidgeExtinction,
+    evidence.ridgeEmissionUnderTotalExtinction,
+    evidence.nonRidgeEmissionUnderTotalExtinction,
+    evidence.completeFlameUnderTotalExtinction,
     evidence.cameraHoldout.cameraHoldoutRidgeEmission,
     evidence.cameraHoldout.cameraHoldoutNonRidgeEmission,
     evidence.cameraHoldout.cameraHoldoutPositiveRecomposition,
@@ -579,6 +627,57 @@ try {
     assert.equal(applied.smokeApplied, false, `appearance smoke applied for ${capture.mode}`);
     assert.ok(capture.receipt.couplingTerms.length >= 3, `appearance coupling terms missing for ${capture.mode}`);
   }
+  const sharedTransportCaptures = [
+    evidence.ridgeEmissionUnderRidgeExtinction,
+    evidence.ridgeEmissionUnderTotalExtinction,
+    evidence.nonRidgeEmissionUnderTotalExtinction,
+    evidence.completeFlameUnderTotalExtinction,
+  ];
+  for (const capture of sharedTransportCaptures) {
+    const expectedMasks = sharedTransportExpectedMasks[capture.mode];
+    const receipt = capture.appearanceDecompositionReceipt;
+    const application = receipt.application;
+    assert.deepEqual(receipt.requestedEmissionMask, expectedMasks.emission, `requested emission mask drifted for ${capture.mode}`);
+    assert.deepEqual(receipt.effectiveEmissionMask, expectedMasks.emission, `effective emission mask drifted for ${capture.mode}`);
+    assert.deepEqual(receipt.requestedExtinctionMask, expectedMasks.extinction, `requested extinction mask drifted for ${capture.mode}`);
+    assert.deepEqual(receipt.effectiveExtinctionMask, expectedMasks.extinction, `effective extinction mask drifted for ${capture.mode}`);
+    assert.equal(application.sourceState.sameStateCaptureId, evidence.sameStateCaptureId, `source-state capture identity drifted for ${capture.mode}`);
+    assert.equal(application.sourceState.frameCount, evidence.before.frameCount, `source frame drifted for ${capture.mode}`);
+    assert.equal(application.sourceState.simStepCount, evidence.before.simStepCount, `source simulation step drifted for ${capture.mode}`);
+    assert.ok(application.camera.signature && application.camera.position.length === 3, `camera receipt is incomplete for ${capture.mode}`);
+    assert.equal(application.route.effective, evidence.effectiveRoute, `effective route drifted for ${capture.mode}`);
+    assert.equal(application.backend, evidence.backend, `backend drifted for ${capture.mode}`);
+    assert.equal(application.quality.raySteps, 160, `ray quality drifted for ${capture.mode}`);
+    assert.equal(application.quality.adaptiveRays, 0, `adaptive rays drifted for ${capture.mode}`);
+    assert.equal(application.postprocess.sumDomain, 'pre-tone-map-linear-radiance', `sum domain drifted for ${capture.mode}`);
+    assert.equal(application.postprocess.independentlyToneMappedAddition, false, `tone-mapped addition was admitted for ${capture.mode}`);
+    assert.equal(application.fallbackReason, null, `applied transport fallback was hidden for ${capture.mode}`);
+  }
+  const sharedTransportRecomposition = evidence.sharedTransportRecomposition;
+  const completeTransportApplication = evidence.completeFlameUnderTotalExtinction.appearanceDecompositionReceipt.application;
+  assert.equal(sharedTransportRecomposition.ok, true, 'renderer-derived shared transport recomposition did not pass');
+  assert.equal(sharedTransportRecomposition.status, 'captured', 'renderer-derived shared transport readback did not complete');
+  assert.equal(sharedTransportRecomposition.mode, 'complete-flame-under-total-extinction', 'renderer readback used the wrong optical mode');
+  assert.equal(sharedTransportRecomposition.exactWithinDeclaredPrecision, true, 'renderer pre-tone-map channels did not reconstruct Complete within declared precision');
+  assert.equal(sharedTransportRecomposition.violationCount, 0, 'renderer recomposition reported component violations');
+  assert.equal(sharedTransportRecomposition.channelsNonblank, true, 'renderer recomposition admitted a blank contribution channel');
+  assert.ok(Number.isFinite(sharedTransportRecomposition.maxAbsError), 'renderer recomposition error is not finite');
+  assert.ok(sharedTransportRecomposition.channelMax.ridge > 0, 'renderer Ridge contribution readback is blank');
+  assert.ok(sharedTransportRecomposition.channelMax.nonRidge > 0, 'renderer Non-Ridge contribution readback is blank');
+  assert.ok(sharedTransportRecomposition.channelMax.complete > 0, 'renderer Complete contribution readback is blank');
+  assert.deepEqual(sharedTransportRecomposition.effectiveEmissionMask, sharedTransportExpectedMasks['complete-flame-under-total-extinction'].emission, 'renderer readback emission mask drifted');
+  assert.deepEqual(sharedTransportRecomposition.effectiveExtinctionMask, sharedTransportExpectedMasks['complete-flame-under-total-extinction'].extinction, 'renderer readback extinction mask drifted');
+  assert.equal(sharedTransportRecomposition.sourceState.sameStateCaptureId, evidence.sameStateCaptureId, 'renderer readback source-state identity drifted');
+  assert.equal(sharedTransportRecomposition.sourceState.frameCount, evidence.before.frameCount, 'renderer readback source frame drifted');
+  assert.equal(sharedTransportRecomposition.sourceState.simStepCount, evidence.before.simStepCount, 'renderer readback simulation step drifted');
+  assert.equal(sharedTransportRecomposition.camera.signature, completeTransportApplication.camera.signature, 'renderer readback camera drifted');
+  assert.equal(sharedTransportRecomposition.route.requested, evidence.requestedRoute, 'renderer readback requested route drifted');
+  assert.equal(sharedTransportRecomposition.route.effective, evidence.effectiveRoute, 'renderer readback route drifted');
+  assert.equal(sharedTransportRecomposition.backend, evidence.backend, 'renderer readback backend drifted');
+  assert.equal(sharedTransportRecomposition.quality.raySteps, 160, 'renderer readback quality drifted');
+  assert.equal(sharedTransportRecomposition.postprocess.sumDomain, 'pre-tone-map-linear-radiance', 'renderer readback left the pre-tone-map domain');
+  assert.equal(sharedTransportRecomposition.independentlyToneMappedAddition, false, 'renderer readback admitted independently tone-mapped addition');
+  assert.equal(sharedTransportRecomposition.fallbackReason, null, 'renderer readback hid fallback');
   assert.equal(evidence.structuralAParityDelta.maxChannelDelta, 0, 'Appearance A diverged from exact Intrinsic pixels');
   assert.equal(evidence.structuralAParityDelta.changedPixelRatio, 0, 'Appearance A changed pixels relative to exact Intrinsic');
   assert.equal(evidence.recompositionDelta.maxChannelDelta, 0, 'A+B did not exactly reconstruct Smoke-Off control pixels');
@@ -623,6 +722,10 @@ try {
     ['positive-non-ridge-emission.png', evidence.positiveNonRidgeEmission],
     ['positive-non-ridge-extinction.png', evidence.positiveNonRidgeExtinction],
     ['positive-optical-recomposition.png', evidence.positiveOpticalRecomposition],
+    ['transport-ridge-emission-ridge-extinction.png', evidence.ridgeEmissionUnderRidgeExtinction],
+    ['transport-ridge-emission-total-extinction.png', evidence.ridgeEmissionUnderTotalExtinction],
+    ['transport-nonridge-emission-total-extinction.png', evidence.nonRidgeEmissionUnderTotalExtinction],
+    ['transport-complete-flame-total-extinction.png', evidence.completeFlameUnderTotalExtinction],
     ['holdout-ridge-owned-emission.png', evidence.cameraHoldout.cameraHoldoutRidgeEmission],
     ['holdout-non-ridge-emission.png', evidence.cameraHoldout.cameraHoldoutNonRidgeEmission],
     ['holdout-positive-optical-recomposition.png', evidence.cameraHoldout.cameraHoldoutPositiveRecomposition],
@@ -662,6 +765,11 @@ try {
     positiveNonRidgeEmission: stripPngData(evidence.positiveNonRidgeEmission),
     positiveNonRidgeExtinction: stripPngData(evidence.positiveNonRidgeExtinction),
     positiveOpticalRecomposition: stripPngData(evidence.positiveOpticalRecomposition),
+    ridgeEmissionUnderRidgeExtinction: stripPngData(evidence.ridgeEmissionUnderRidgeExtinction),
+    ridgeEmissionUnderTotalExtinction: stripPngData(evidence.ridgeEmissionUnderTotalExtinction),
+    nonRidgeEmissionUnderTotalExtinction: stripPngData(evidence.nonRidgeEmissionUnderTotalExtinction),
+    completeFlameUnderTotalExtinction: stripPngData(evidence.completeFlameUnderTotalExtinction),
+    sharedTransportRecomposition: evidence.sharedTransportRecomposition,
     positiveRecompositionDelta: evidence.positiveRecompositionDelta,
     cameraHoldout: {
       ...evidence.cameraHoldout,
@@ -697,6 +805,10 @@ try {
       positiveNonRidgeEmission: relative(process.cwd(), resolve(outDir, 'positive-non-ridge-emission.png')),
       positiveNonRidgeExtinction: relative(process.cwd(), resolve(outDir, 'positive-non-ridge-extinction.png')),
       positiveOpticalRecomposition: relative(process.cwd(), resolve(outDir, 'positive-optical-recomposition.png')),
+      ridgeEmissionUnderRidgeExtinction: relative(process.cwd(), resolve(outDir, 'transport-ridge-emission-ridge-extinction.png')),
+      ridgeEmissionUnderTotalExtinction: relative(process.cwd(), resolve(outDir, 'transport-ridge-emission-total-extinction.png')),
+      nonRidgeEmissionUnderTotalExtinction: relative(process.cwd(), resolve(outDir, 'transport-nonridge-emission-total-extinction.png')),
+      completeFlameUnderTotalExtinction: relative(process.cwd(), resolve(outDir, 'transport-complete-flame-total-extinction.png')),
       cameraHoldoutRidgeEmission: relative(process.cwd(), resolve(outDir, 'holdout-ridge-owned-emission.png')),
       cameraHoldoutNonRidgeEmission: relative(process.cwd(), resolve(outDir, 'holdout-non-ridge-emission.png')),
       cameraHoldoutPositiveRecomposition: relative(process.cwd(), resolve(outDir, 'holdout-positive-optical-recomposition.png')),
@@ -772,6 +884,10 @@ function stripEvidencePngData(evidence) {
     positiveNonRidgeEmission: stripPngData(evidence?.positiveNonRidgeEmission),
     positiveNonRidgeExtinction: stripPngData(evidence?.positiveNonRidgeExtinction),
     positiveOpticalRecomposition: stripPngData(evidence?.positiveOpticalRecomposition),
+    ridgeEmissionUnderRidgeExtinction: stripPngData(evidence?.ridgeEmissionUnderRidgeExtinction),
+    ridgeEmissionUnderTotalExtinction: stripPngData(evidence?.ridgeEmissionUnderTotalExtinction),
+    nonRidgeEmissionUnderTotalExtinction: stripPngData(evidence?.nonRidgeEmissionUnderTotalExtinction),
+    completeFlameUnderTotalExtinction: stripPngData(evidence?.completeFlameUnderTotalExtinction),
     cameraHoldout: evidence?.cameraHoldout ? {
       ...evidence.cameraHoldout,
       cameraHoldoutRidgeEmission: stripPngData(evidence.cameraHoldout.cameraHoldoutRidgeEmission),

@@ -71,5 +71,16 @@ assert.match(witness, /positiveRecompositionDelta\.maxChannelDelta[\s\S]*positiv
 assert.match(witness, /kaminosSetCameraDebugPose[\s\S]*cameraHoldoutPose[\s\S]*cameraHoldoutPositiveRecomposition[\s\S]*cameraHoldoutControl/, 'witness performs an explicit held-state camera holdout');
 assert.match(witness, /cameraHoldoutRecompositionDelta\s*=\s*pixelDelta\(cameraHoldoutPositiveRecomposition\._rgba, cameraHoldoutControl\._rgba\)/, 'held-out camera requires exact positive recomposition');
 assert.match(witness, /cameraHoldoutBefore\.simStepCount[\s\S]*cameraHoldoutAfter\.simStepCount[\s\S]*cameraRestoredHash/, 'camera holdout records frozen simulation and restored camera authority');
+assert.match(
+  witness,
+  /captureAppearance\('ridge-emission-under-ridge-extinction'\)[\s\S]*captureAppearance\('ridge-emission-under-total-flame-extinction'\)[\s\S]*captureAppearance\('nonridge-emission-under-total-flame-extinction'\)[\s\S]*captureAppearance\('complete-flame-under-total-extinction'\)/,
+  'witness captures all four shared-transmittance counterfactuals from one frozen state',
+);
+assert.match(witness, /sharedTransportExpectedMasks[\s\S]*requestedEmissionMask[\s\S]*effectiveEmissionMask[\s\S]*requestedExtinctionMask[\s\S]*effectiveExtinctionMask/, 'witness rejects labels whose effective optical masks drift');
+assert.match(witness, /application\.sourceState[\s\S]*application\.camera[\s\S]*application\.route[\s\S]*application\.backend[\s\S]*application\.quality[\s\S]*application\.postprocess/, 'witness requires exact state, camera, route, backend, quality, and postprocess receipts');
+assert.match(witness, /sumDomain[\s\S]*pre-tone-map-linear-radiance[\s\S]*independentlyToneMappedAddition[\s\S]*false/, 'witness rejects independently tone-mapped image addition as recomposition evidence');
+assert.match(witness, /sampleSharedTransmittanceContributions\(\{[\s\S]*sameStateCaptureId[\s\S]*baseFrameCount[\s\S]*baseSimStepCount/, 'witness reads renderer contributions from the frozen comparison state');
+assert.match(witness, /sharedTransportRecomposition\.exactWithinDeclaredPrecision[\s\S]*sharedTransportRecomposition\.maxAbsError/, 'witness rejects renderer pre-tone-map reconstruction outside declared precision');
+assert.match(witness, /sharedTransportRecomposition\.route\.requested[\s\S]*evidence\.requestedRoute[\s\S]*sharedTransportRecomposition\.route\.effective[\s\S]*evidence\.effectiveRoute/, 'witness rejects requested or effective renderer-route drift');
 
 console.log('volume intrinsic presentation witness contracts passed');
