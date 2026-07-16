@@ -47,9 +47,11 @@ const TEMPORAL_SIDECAR_IDENTITY = 'temporal-boundary-sidecar-history-v0';
 const BOUNDARY_SPLAT_RENDERER_IDENTITY = 'live-boundary-sidecar-analytic-splats-v0';
 const BOUNDARY_SPLAT_LEARNED_RENDERER_IDENTITY = 'live-boundary-sidecar-learned-attribute-splats-v0';
 const BOUNDARY_SPLAT_WORLD_COVARIANCE_RENDERER_IDENTITY = 'live-boundary-sidecar-world-tangent-covariance-splats-v0';
+const BOUNDARY_SPLAT_KERNEL_MOMENT_RENDERER_IDENTITY = 'live-boundary-sidecar-flow-kernel-moment-covariance-splats-v0';
 const BOUNDARY_SPLAT_CAMERA_FACING_AUTHORITY = 'camera-facing-billboard-v0';
 const BOUNDARY_SPLAT_LEARNED_CAMERA_FACING_AUTHORITY = 'learned-camera-facing-billboard-v0';
 const BOUNDARY_SPLAT_WORLD_TANGENT_AUTHORITY = 'world-gradient-tangent-covariance-v0';
+const BOUNDARY_SPLAT_KERNEL_MOMENT_AUTHORITY = 'base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0';
 const BOUNDARY_SPLAT_AREA_OPACITY_CONSERVATION_AUTHORITY = 'rendered-gaussian-integrated-alpha-conserved-v0';
 const BOUNDARY_SPLAT_SOURCE_AUTHORITY = 'live-baked-sidecar-plus-fluid-material-v0';
 const EXTERNAL_BOUNDARY_SIDECAR_AUTHORITY = 'externally-uploaded-boundary-sidecar-plus-live-fluid-material-v0';
@@ -447,7 +449,7 @@ function boundarySidecarViewValue(value) {
 
 function normalizeBoundarySplatMode(value) {
   const normalized = String(value || 'off').toLowerCase().replace(/-/g, '_');
-  return ['analytic', 'learned', 'analytic_conserved', 'learned_conserved', 'world_covariance'].includes(normalized)
+  return ['analytic', 'learned', 'analytic_conserved', 'learned_conserved', 'world_covariance', 'kernel_moment_covariance'].includes(normalized)
     ? normalized
     : 'off';
 }
@@ -508,6 +510,7 @@ function normalizeBoundarySplatOpacityGain(value) {
 
 function boundarySplatEffectiveRendererIdentity(mode) {
   const normalized = normalizeBoundarySplatMode(mode);
+  if (normalized === 'kernel_moment_covariance') return BOUNDARY_SPLAT_KERNEL_MOMENT_RENDERER_IDENTITY;
   if (normalized === 'world_covariance') return BOUNDARY_SPLAT_WORLD_COVARIANCE_RENDERER_IDENTITY;
   if (normalized === 'learned' || normalized === 'learned_conserved') return BOUNDARY_SPLAT_LEARNED_RENDERER_IDENTITY;
   return BOUNDARY_SPLAT_RENDERER_IDENTITY;
@@ -515,20 +518,21 @@ function boundarySplatEffectiveRendererIdentity(mode) {
 
 function boundarySplatEffectiveAttributeModelIdentity(mode) {
   const normalized = normalizeBoundarySplatMode(mode);
-  return normalized === 'learned' || normalized === 'learned_conserved' || normalized === 'world_covariance'
+  return normalized === 'learned' || normalized === 'learned_conserved' || normalized === 'world_covariance' || normalized === 'kernel_moment_covariance'
     ? BOUNDARY_SPLAT_ATTRIBUTE_MODEL_IDENTITY
     : null;
 }
 
 function boundarySplatFootprintAuthority(mode) {
   const normalized = normalizeBoundarySplatMode(mode);
+  if (normalized === 'kernel_moment_covariance') return BOUNDARY_SPLAT_KERNEL_MOMENT_AUTHORITY;
   if (normalized === 'world_covariance') return BOUNDARY_SPLAT_WORLD_TANGENT_AUTHORITY;
   if (normalized === 'learned' || normalized === 'learned_conserved') return BOUNDARY_SPLAT_LEARNED_CAMERA_FACING_AUTHORITY;
   return BOUNDARY_SPLAT_CAMERA_FACING_AUTHORITY;
 }
 
 function boundarySplatAreaOpacityConserved(mode) {
-  return ['analytic_conserved', 'learned_conserved', 'world_covariance'].includes(normalizeBoundarySplatMode(mode));
+  return ['analytic_conserved', 'learned_conserved', 'world_covariance', 'kernel_moment_covariance'].includes(normalizeBoundarySplatMode(mode));
 }
 
 function boundarySplatAttributeSetId(mode) {
@@ -5583,6 +5587,7 @@ ${BOUNDARY_SPLAT_ATTRIBUTE_MODEL_WGSL}
 @group(0) @binding(6) var<storage, read_write> boundarySplatFeatureRows: array<BoundarySplatFeatureRow>;
 @group(0) @binding(7) var<storage, read> boundarySplatMajorant: array<vec4<f32>>;
 @group(0) @binding(8) var<storage, read_write> flowKernelDescriptorRows: array<FlowKernelDescriptorRow>;
+@group(0) @binding(9) var<storage, read> flowKernelDescriptorRowsForRender: array<FlowKernelDescriptorRow>;
 
 fn boundarySplatCellIndex(cell: vec3<u32>) -> u32 {
   return cell.x + cell.y * GRID + cell.z * GRID * GRID;
@@ -5916,11 +5921,26 @@ fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
   let globalRadius = max(boundarySplatCamera.controls.x, 1e-4);
   let kernelSharpness = clamp(boundarySplatCamera.controls.w, 1.0, 12.0);
   let conserveAreaOpacity = boundarySplatCamera.cameraUp.w > 0.5;
-  let axisAreaScale = max(attributeOutput.radiusScale.x * attributeOutput.radiusScale.y * globalRadius * globalRadius, 1e-4);
+  let baseMajorRadius = radius * attributeOutput.radiusScale.x;
+  let baseMinorRadius = radius * attributeOutput.radiusScale.y;
+  let kernelMomentCovariance = boundarySplatCamera.cameraRight.w > 1.5;
+  var effectiveMajorRadius = baseMajorRadius;
+  let effectiveMinorRadius = baseMinorRadius;
+  if (kernelMomentCovariance) {
+    let flowFrame = boundarySplatFlowFrame(world);
+    let kernelMomentVariance = 0.5 * reconstructionStrength * flowFrame.tangentRadius.w * flowFrame.tangentRadius.w;
+    let kernelMajorRadius = sqrt(baseMajorRadius * baseMajorRadius + kernelMomentVariance);
+    let kernelMinorRadius = baseMinorRadius;
+    effectiveMajorRadius = max(kernelMajorRadius, kernelMinorRadius);
+  }
+  let effectiveAxisAreaScale = max(
+    effectiveMajorRadius * effectiveMinorRadius * globalRadius * globalRadius / max(radius * radius, 1e-8),
+    1e-4,
+  );
   let kernelIntegral = boundarySplatKernelIntegral(kernelSharpness);
   let referenceKernelIntegral = boundarySplatKernelIntegral(3.4);
   let energyCompensation = boundarySplatEnergyCompensation(globalRadius, kernelSharpness);
-  let renderedEnergyScale = max(axisAreaScale * energyCompensation * kernelIntegral / referenceKernelIntegral, 1e-4);
+  let renderedEnergyScale = max(effectiveAxisAreaScale * energyCompensation * kernelIntegral / referenceKernelIntegral, 1e-4);
   let effectiveOpacity = select(attributeOutput.colorOpacity.a, attributeOutput.colorOpacity.a / renderedEnergyScale, conserveAreaOpacity);
   let baseIntegratedAlpha = radius * radius * attributeOutput.colorOpacity.a * referenceKernelIntegral;
   let worldNormal = boundarySplatSupportGradient(gid);
@@ -5935,7 +5955,7 @@ fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (conserveAreaOpacity) {
     boundarySplats[candidateIndex].colorOpacity.a = effectiveOpacity;
   }
-  boundarySplats[candidateIndex].shape = vec4<f32>(radius * attributeOutput.radiusScale.x, radius * attributeOutput.radiusScale.y, sidecar.z, fireSignal);
+  boundarySplats[candidateIndex].shape = vec4<f32>(effectiveMajorRadius, effectiveMinorRadius, sidecar.z, fireSignal);
   boundarySplats[candidateIndex].worldNormalAreaOpacity = vec4<f32>(worldNormal, baseIntegratedAlpha);
 }
 
@@ -5963,8 +5983,17 @@ fn boundarySplatVs(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_in
   let tangent = normalize(cross(tangentReference, normal));
   let bitangent = normalize(cross(normal, tangent));
   let worldCovariance = boundarySplatCamera.cameraRight.w > 0.5;
-  let axisX = select(boundarySplatCamera.cameraRight.xyz, tangent, worldCovariance);
-  let axisY = select(boundarySplatCamera.cameraUp.xyz, bitangent, worldCovariance);
+  let kernelMomentCovariance = boundarySplatCamera.cameraRight.w > 1.5;
+  var kernelTangent = tangent;
+  var kernelBitangent = bitangent;
+  if (kernelMomentCovariance) {
+    kernelTangent = normalize(flowKernelDescriptorRowsForRender[instanceIndex].tangentCoherence.xyz);
+    kernelBitangent = normalize(cross(normal, kernelTangent));
+  }
+  let covarianceAxisX = select(tangent, kernelTangent, kernelMomentCovariance);
+  let covarianceAxisY = select(bitangent, kernelBitangent, kernelMomentCovariance);
+  let axisX = select(boundarySplatCamera.cameraRight.xyz, covarianceAxisX, worldCovariance);
+  let axisY = select(boundarySplatCamera.cameraUp.xyz, covarianceAxisY, worldCovariance);
   let offset = axisX * corner.x * splat.shape.x * boundarySplatCamera.controls.x
     + axisY * corner.y * splat.shape.y * boundarySplatCamera.controls.x;
   var out: BoundarySplatVertexOut;
@@ -6243,7 +6272,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     flowKernelIdentity: FLOW_RECONSTRUCTION_KERNEL_IDENTITY,
     flowKernelRequested: flowKernelRequestedControls(controlsSnapshot),
     flowKernelEffective: flowKernelEffectiveControls(controlsSnapshot),
-    flowKernelCandidateAdmissionAuthority: 'native-cell-unfiltered',
+    flowKernelCandidateAdmissionAuthority: 'structural-splat-candidates-v0',
     boundarySplatCapacity: boundarySplatCapacity,
     boundarySplatCapacityGrowthCount: 0,
     boundarySplatCapacityGrowth: null,
@@ -7606,7 +7635,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySplatFeatureCaptureRequested = featureCaptureRequested;
     state.boundarySplatFeatureCaptureEffective = featureCaptureRequested && boundarySplatFeatureBufferCapacity === boundarySplatCapacity;
     const descriptorCaptureRequested = normalizeFlowKernelDescriptorCapture(controlsSnapshot.flowKernelDescriptorCapture);
-    flowKernelDescriptorBufferCapacity = descriptorCaptureRequested ? boundarySplatCapacity : 1;
+    const descriptorRowsRequested = descriptorCaptureRequested
+      || normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode) === 'kernel_moment_covariance';
+    flowKernelDescriptorBufferCapacity = descriptorRowsRequested ? boundarySplatCapacity : 1;
     flowKernelDescriptorBuffer = device.createBuffer({
       label: `kaminos ${FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY} ${descriptorCaptureRequested ? 'full' : 'dummy'}`,
       size: flowKernelDescriptorBufferCapacity * FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES,
@@ -7650,6 +7681,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       entries: [
         { binding: 4, resource: { buffer: boundarySplatCameraBuffer } },
         { binding: 5, resource: { buffer: boundarySplatBuffer } },
+        { binding: 9, resource: { buffer: flowKernelDescriptorBuffer } },
       ],
     });
     rebuildSelectiveHeadLiveBindGroups();
@@ -7678,14 +7710,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function syncFlowKernelDescriptorCaptureBuffer() {
-    const requested = flowKernelDescriptorCaptureRequested();
-    state.flowKernelDescriptorCaptureRequested = requested;
-    if (!requested) {
+    const captureRequested = flowKernelDescriptorCaptureRequested();
+    const rowsRequested = flowKernelDescriptorRowsRequested();
+    state.flowKernelDescriptorCaptureRequested = captureRequested;
+    if (!rowsRequested) {
       state.flowKernelDescriptorCaptureEffective = false;
       return;
     }
     if (flowKernelDescriptorBuffer && flowKernelDescriptorBufferCapacity === boundarySplatCapacity) {
-      state.flowKernelDescriptorCaptureEffective = true;
+      state.flowKernelDescriptorCaptureEffective = captureRequested;
       return;
     }
     const previousDescriptorBuffer = flowKernelDescriptorBuffer;
@@ -7697,7 +7730,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     rebuildBoundarySplatBindGroups();
     previousDescriptorBuffer?.destroy();
-    state.flowKernelDescriptorCaptureEffective = true;
+    state.flowKernelDescriptorCaptureEffective = captureRequested;
   }
 
   function growBoundarySplatCapacity(candidateCount) {
@@ -7709,6 +7742,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const previousDescriptorBuffer = flowKernelDescriptorBuffer;
     const featureCaptureRequested = boundarySplatFeatureCaptureRequested();
     const descriptorCaptureRequested = flowKernelDescriptorCaptureRequested();
+    const descriptorRowsRequested = flowKernelDescriptorRowsRequested();
     boundarySplatCapacity = nextCapacity;
     boundarySplatBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} candidates capacity ${nextCapacity}`,
@@ -7721,7 +7755,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       size: boundarySplatFeatureBufferCapacity * BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
     });
-    flowKernelDescriptorBufferCapacity = descriptorCaptureRequested ? nextCapacity : 1;
+    flowKernelDescriptorBufferCapacity = descriptorRowsRequested ? nextCapacity : 1;
     flowKernelDescriptorBuffer = device.createBuffer({
       label: `kaminos ${FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY} ${descriptorCaptureRequested ? `capacity ${nextCapacity}` : 'dummy'}`,
       size: flowKernelDescriptorBufferCapacity * FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES,
@@ -8266,6 +8300,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       entries: [
         { binding: 4, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
         { binding: 5, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+        { binding: 9, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
       ],
     });
     pressureWriteBindGroupLayout = device.createBindGroupLayout({
@@ -8931,7 +8966,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const splatCamera = new Float32Array(36);
       splatCamera.set(viewProj.elements, 0);
       const boundarySplatMode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
-      splatCamera.set([cameraMatrix[0], cameraMatrix[1], cameraMatrix[2], boundarySplatMode === 'world_covariance' ? 1 : 0], 16);
+      const covarianceMode = boundarySplatMode === 'kernel_moment_covariance'
+        ? 2
+        : (boundarySplatMode === 'world_covariance' ? 1 : 0);
+      splatCamera.set([cameraMatrix[0], cameraMatrix[1], cameraMatrix[2], covarianceMode], 16);
       splatCamera.set([cameraMatrix[4], cameraMatrix[5], cameraMatrix[6], boundarySplatAreaOpacityConserved(boundarySplatMode) ? 1 : 0], 20);
       splatCamera.set([normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius), boundarySplatLearnedAttributesRequested() ? 1 : 0, state.boundarySplatFeatureCaptureEffective ? 1 : 0, normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness)], 24);
       splatCamera.set([
@@ -8945,7 +8983,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         effectiveFlowKernel.strength,
         effectiveFlowKernel.radiusWorld,
         effectiveFlowKernel.coherence,
-        state.flowKernelDescriptorCaptureEffective ? 1 : 0,
+        flowKernelDescriptorRowsRequested() && flowKernelDescriptorBufferCapacity === boundarySplatCapacity ? 1 : 0,
       ], 32);
       device.queue.writeBuffer(boundarySplatCameraBuffer, 0, splatCamera);
     }
@@ -9326,7 +9364,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       radiusWorld: uniforms[329],
       coherence: uniforms[330],
     };
-    state.flowKernelCandidateAdmissionAuthority = 'native-cell-unfiltered';
+    state.flowKernelCandidateAdmissionAuthority = 'structural-splat-candidates-v0';
     state.boundarySidecarDebug = boundarySidecarDebug(boundarySidecarSourceName);
     if (state.volumePresentationReceipt) {
       state.volumePresentationReceipt = {
@@ -9964,7 +10002,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const mode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
     return volumePresentationModeEffective !== 'intrinsic'
       && !appearanceDecompositionActive()
-      && (mode === 'learned' || mode === 'learned_conserved' || mode === 'world_covariance');
+      && (mode === 'learned' || mode === 'learned_conserved' || mode === 'world_covariance' || mode === 'kernel_moment_covariance');
   }
 
   function boundarySplatFeatureCaptureRequested() {
@@ -9975,6 +10013,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function flowKernelDescriptorCaptureRequested() {
     return normalizeFlowKernelDescriptorCapture(controlsSnapshot.flowKernelDescriptorCapture);
+  }
+
+  function flowKernelDescriptorRowsRequested() {
+    return flowKernelDescriptorCaptureRequested()
+      || normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode) === 'kernel_moment_covariance';
   }
 
   function makeBoundarySplatCopyDisposition(candidateCopyBytes = 0, rendererIdentity = BOUNDARY_SPLAT_RENDERER_IDENTITY) {
@@ -15325,6 +15368,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.boundarySplatAreaOpacityConservationAuthority = boundarySplatAreaOpacityConserved(state.boundarySplatMode)
         ? BOUNDARY_SPLAT_AREA_OPACITY_CONSERVATION_AUTHORITY
         : 'unconstrained-current-renderer-v0';
+      if (device) syncFlowKernelDescriptorCaptureBuffer();
       if (device) void ensureBrowserResidualModel();
       state.majorantGrid = majorantGridSize;
       state.majorantCadence = normalizeMajorantBuildCadence(controlsSnapshot.majorantCadence);
