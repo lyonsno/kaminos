@@ -159,6 +159,37 @@ const DEFAULT_MAJORANT_GRID_SIZE = 48;
 const SUPPORTED_MAJORANT_GRID_SIZES = [24, 32, 48];
 const MAX_EXTERNAL_EMITTERS = 32;
 const EXTERNAL_EMITTER_COMPONENTS = 20;
+
+export function canonicalizeBoundarySplatAuditRows(values, instanceCount, strideFloats) {
+  if (!(values instanceof Float32Array)) throw new TypeError('boundary splat audit values must be Float32Array');
+  if (!Number.isInteger(instanceCount) || instanceCount < 0) throw new RangeError('boundary splat audit instance count is invalid');
+  if (!Number.isInteger(strideFloats) || strideFloats < 5) throw new RangeError('boundary splat audit stride is invalid');
+  if (values.length < instanceCount * strideFloats) throw new RangeError('boundary splat audit payload is partial');
+  const order = Array.from({ length: instanceCount }, (_, index) => index);
+  for (let index = 0; index < instanceCount * strideFloats; index += 1) {
+    if (!Number.isFinite(values[index])) throw new Error(`boundary splat audit payload contains non-finite value at ${index}`);
+  }
+  order.sort((leftIndex, rightIndex) => {
+    const leftOffset = leftIndex * strideFloats;
+    const rightOffset = rightIndex * strideFloats;
+    for (let channel = 0; channel < strideFloats; channel += 1) {
+      const delta = values[leftOffset + channel] - values[rightOffset + channel];
+      if (delta !== 0) return delta;
+    }
+    return 0;
+  });
+  const positionSupport = new Float32Array(instanceCount * 4);
+  const attributes = new Float32Array(instanceCount * (strideFloats - 4));
+  for (let canonicalIndex = 0; canonicalIndex < order.length; canonicalIndex += 1) {
+    const sourceOffset = order[canonicalIndex] * strideFloats;
+    positionSupport.set(values.subarray(sourceOffset, sourceOffset + 4), canonicalIndex * 4);
+    attributes.set(
+      values.subarray(sourceOffset + 4, sourceOffset + strideFloats),
+      canonicalIndex * (strideFloats - 4),
+    );
+  }
+  return { positionSupport, attributes };
+}
 const CANONICAL_SOURCE_MODE_VALUES = {
   current: 0,
   passive_bottom: 1,
@@ -9871,8 +9902,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const values = new Float32Array(readback.getMappedRange()).slice();
       readback.unmap();
       const strideFloats = BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES / Float32Array.BYTES_PER_ELEMENT;
-      const identity = new Float32Array(draw.instanceCount * 4);
-      const attributes = new Float32Array(draw.instanceCount * (strideFloats - 4));
+      const { positionSupport: identity, attributes } = canonicalizeBoundarySplatAuditRows(
+        values,
+        draw.instanceCount,
+        strideFloats,
+      );
       const globalRadius = normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius);
       const kernelSharpness = normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness);
       const kernelIntegral = Math.PI * (1 - Math.exp(-kernelSharpness)) / kernelSharpness;
@@ -9882,8 +9916,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       let effectiveIntegratedAlphaSum = 0;
       for (let index = 0; index < draw.instanceCount; index += 1) {
         const offset = index * strideFloats;
-        identity.set(values.subarray(offset, offset + 4), index * 4);
-        attributes.set(values.subarray(offset + 4, offset + strideFloats), index * (strideFloats - 4));
         const opacity = values[offset + 7];
         const radiusX = values[offset + 8] * globalRadius;
         const radiusY = values[offset + 9] * globalRadius;

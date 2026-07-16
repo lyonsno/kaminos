@@ -19,6 +19,7 @@ const args = parseArgs(process.argv.slice(2));
 const requestedUrl = required('--url');
 const outDir = resolve(String(args.get('--out-dir') || '/tmp/kaminos-raymarch-filament-orbit'));
 const reportPath = resolve(String(args.get('--report') || `${outDir}/report.json`));
+const captureReportPath = resolve(`${outDir}/capture-report.json`);
 const holdoutReportPath = resolve(String(args.get('--holdout-report') || `${outDir}/camera-holdout-report.json`));
 const rayStepCounts = parseIntegerList(args.get('--ray-steps') || '48,96,160');
 const orbitAngles = parseNumberList(args.get('--orbit-angles') || '-0.42,-0.28,-0.14,0,0.14,0.28,0.42');
@@ -242,7 +243,7 @@ try {
     browserEvents: socket.browserEvents,
   };
   rejectFalseClosure(report);
-  writeFileSync(reportPath, JSON.stringify(report, null, 2));
+  writeFileSync(captureReportPath, JSON.stringify(report, null, 2));
   const captureMap = new Map(report.captures.map(capture => [capture.key, capture]));
   const familyModes = {
     'analytic-billboard': 'analyticBillboard',
@@ -314,9 +315,10 @@ try {
     supportCeiling: 'current-structural-ridge-owned-candidates-omit-legitimate-non-ridge-full-flame-filaments-v0',
     cameraRows,
     summary: covarianceAnalysis.summary,
-    sourceOrbitReport: reportPath,
+    sourceOrbitReport: captureReportPath,
   };
   await validateCameraHoldoutReport(holdoutReport, { expectedCameraCount: initialization.cameras.length });
+  writeFileSync(reportPath, JSON.stringify(report, null, 2));
   writeFileSync(holdoutReportPath, JSON.stringify(holdoutReport, null, 2));
   console.log(JSON.stringify({
     status: report.status,
@@ -339,6 +341,9 @@ try {
     worktree: process.cwd(),
     lastTrustworthyEvidence,
   };
+  if (existsSync(captureReportPath)) {
+    failureReport.lastTrustworthyEvidence.captureReport = fileArtifact(captureReportPath);
+  }
   writeFileSync(reportPath, JSON.stringify(failureReport, null, 2));
   console.error(JSON.stringify(failureReport, null, 2));
   process.exitCode = 1;

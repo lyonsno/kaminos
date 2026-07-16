@@ -36,6 +36,15 @@ assert.match(witnessSource, /sampleBoundarySplatFootprintAudit/, 'camera orbit m
 assert.match(witnessSource, /heldOutCameraIndices/, 'camera orbit must publish an explicit held-out camera split');
 assert.match(witnessSource, /rendererFootprintAuthority/, 'holdout rows must carry effective renderer footprint authority');
 assert.match(witnessSource, /attributePayloadSha256/, 'holdout rows must carry measured per-candidate attribute identity');
+assert.match(witnessSource, /capture-report\.json/, 'a post-capture validation failure must preserve the complete capture report beside the failure envelope');
+
+const { canonicalizeBoundarySplatAuditRows } = await import('../volume-core.js');
+const auditRowA = [0.5, -0.5, 0.25, 0.8, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+const auditRowB = [-0.5, 0.5, -0.25, 0.6, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
+const canonicalForward = canonicalizeBoundarySplatAuditRows(Float32Array.from([...auditRowA, ...auditRowB]), 2, 16);
+const canonicalPermuted = canonicalizeBoundarySplatAuditRows(Float32Array.from([...auditRowB, ...auditRowA]), 2, 16);
+assert.deepEqual(canonicalForward.positionSupport, canonicalPermuted.positionSupport, 'candidate identity must ignore GPU atomic append permutation');
+assert.deepEqual(canonicalForward.attributes, canonicalPermuted.attributes, 'effective attributes must remain paired with their canonical candidate row');
 
 const oracle = await import('../boundary-splat-camera-holdout-oracle.mjs');
 
