@@ -1,0 +1,2915 @@
+{
+  "schema": "kaminos.smoke-splat-motion-witness.v0",
+  "status": "passed",
+  "failurePhase": null,
+  "startedAt": "2026-07-16T03:50:09.887Z",
+  "completedAt": "2026-07-16T03:50:15.571Z",
+  "requestedUrl": "http://127.0.0.1:8099/smoke-splat-motion.html?route=webgpu-real-field-hierarchical-smoke-motion-v0&manifest=./artifacts/gaussian-phase-transfer-0715/request-8192.json&instances=4&fine_lod=1&motion_rate=0.16&footprint=axisymmetric-projected-covariance-v1&coarse_coverage=1",
+  "requestedRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+  "effectiveRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+  "fallbackReason": null,
+  "backend": "WebGPU:apple",
+  "temporalAuthority": "independent-adjacent-teacher-phase-products-v0",
+  "requestedFootprintAuthority": "axisymmetric-projected-covariance-v1",
+  "effectiveFootprintAuthority": "axisymmetric-projected-covariance-v1",
+  "requestedCoarseCoverageScale": 1,
+  "effectiveCoarseCoverageScale": 1,
+  "browser": {
+    "identity": "kaminos-smoke-motion-single-cdp-browser-v0",
+    "mode": "launched-owned",
+    "chromePath": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "chromePort": 19418,
+    "userDataDir": "/var/folders/lm/2d0ldrgn52jd5h6rtghxs2s40000gn/T/kaminos-smoke-motion-chrome-IOuSso",
+    "keepBrowserOpen": false,
+    "windowSize": "1280,960"
+  },
+  "captureConfig": {
+    "frameCount": 8,
+    "stepMs": 350,
+    "settleMs": 1400,
+    "loadTimeoutMs": 120000,
+    "noHiddenFrameCap": true
+  },
+  "source": {
+    "products": [
+      {
+        "phaseIndex": 0,
+        "identity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+        "producerKind": "oracle-fitted-adjacent-teacher-phase",
+        "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+        "historySlot": 0,
+        "slotWriteTick": 45,
+        "sourceCount": 8192,
+        "coarseCount": 8192,
+        "fineCount": 0,
+        "sourceExtinctionMass": 3403.896947889866,
+        "representedExtinctionMass": 3403.896947892219,
+        "rejectedExtinctionMass": 0,
+        "artifactSha256": "c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17"
+      },
+      {
+        "phaseIndex": 1,
+        "identity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+        "producerKind": "oracle-fitted-adjacent-teacher-phase",
+        "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+        "historySlot": 1,
+        "slotWriteTick": 46,
+        "sourceCount": 8192,
+        "coarseCount": 8192,
+        "fineCount": 0,
+        "sourceExtinctionMass": 3500.186495743509,
+        "representedExtinctionMass": 3500.1864957457956,
+        "rejectedExtinctionMass": 0,
+        "artifactSha256": "373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778"
+      }
+    ],
+    "slotResolve": {
+      "identity": "smoke-splat-slot-resolve-report-v0",
+      "status": "resolved",
+      "requestedProducerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+      "effectiveProducerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+      "simulatorGeneration": 1,
+      "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+      "decoderConfigIdentities": [
+        "0.0200000000000|1.00000000000|0.500000000000|8192"
+      ],
+      "instanceCount": 4,
+      "uniqueSlotCount": 2,
+      "decodeCount": 2,
+      "cacheHitCount": 0,
+      "cachedProductCount": 2,
+      "instanceBindings": [
+        {
+          "instanceIndex": 0,
+          "historySlot": 0,
+          "slotWriteTick": 45,
+          "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+          "transform": null
+        },
+        {
+          "instanceIndex": 1,
+          "historySlot": 1,
+          "slotWriteTick": 46,
+          "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+          "transform": null
+        },
+        {
+          "instanceIndex": 2,
+          "historySlot": 0,
+          "slotWriteTick": 45,
+          "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+          "transform": null
+        },
+        {
+          "instanceIndex": 3,
+          "historySlot": 1,
+          "slotWriteTick": 46,
+          "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+          "transform": null
+        }
+      ],
+      "hierarchyCounts": {
+        "coarse": 16384,
+        "fine": 0,
+        "total": 16384
+      },
+      "accounting": {
+        "sourceExtinctionMass": 6904.083443633375,
+        "representedExtinctionMass": 6904.083443638015,
+        "rejectedExtinctionMass": 0
+      }
+    },
+    "drawPlan": {
+      "identity": "smoke-splat-motion-draw-plan-v0",
+      "instanceCount": 4,
+      "uniqueProductCount": 2,
+      "fineLodFraction": 1,
+      "coarseSplatsAlwaysPresent": true,
+      "rejectedExtinctionMass": 0,
+      "productUploads": [
+        {
+          "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+          "sourceCount": 8192,
+          "selectedCount": 8192,
+          "coarseCount": 8192,
+          "fineCount": 0,
+          "sourceExtinctionMass": 3403.896947108209,
+          "representedExtinctionMass": 3403.896947108209,
+          "rejectedExtinctionMass": 0,
+          "coarseMassCompensation": 0,
+          "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+          "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+          "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+          "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+          "fallbackReason": null
+        },
+        {
+          "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+          "sourceCount": 8192,
+          "selectedCount": 8192,
+          "coarseCount": 8192,
+          "fineCount": 0,
+          "sourceExtinctionMass": 3500.1864953264594,
+          "representedExtinctionMass": 3500.1864953264594,
+          "rejectedExtinctionMass": 0,
+          "coarseMassCompensation": 0,
+          "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+          "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+          "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+          "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+          "fallbackReason": null
+        }
+      ],
+      "instanceBindings": [
+        {
+          "instanceIndex": 0,
+          "productIndex": 0,
+          "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+          "translation": [
+            -1.075,
+            0,
+            -1.075
+          ],
+          "phaseOffset": 0
+        },
+        {
+          "instanceIndex": 1,
+          "productIndex": 1,
+          "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+          "translation": [
+            1.075,
+            0,
+            -1.075
+          ],
+          "phaseOffset": 0.25
+        },
+        {
+          "instanceIndex": 2,
+          "productIndex": 0,
+          "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+          "translation": [
+            -1.075,
+            0,
+            1.075
+          ],
+          "phaseOffset": 0.5
+        },
+        {
+          "instanceIndex": 3,
+          "productIndex": 1,
+          "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+          "translation": [
+            1.075,
+            0,
+            1.075
+          ],
+          "phaseOffset": 0.75
+        }
+      ],
+      "drawInstanceCount": 32768,
+      "maxSelectedProductCount": 8192
+    }
+  },
+  "runtime": {
+    "initial": {
+      "schema": "kaminos.smoke-splat-motion-runtime.v0",
+      "status": "running",
+      "requestedRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+      "effectiveRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+      "fallbackReason": null,
+      "backend": "WebGPU:apple",
+      "temporalAuthority": "independent-adjacent-teacher-phase-products-v0",
+      "requestedFootprintAuthority": "axisymmetric-projected-covariance-v1",
+      "effectiveFootprintAuthority": "axisymmetric-projected-covariance-v1",
+      "requestedCoarseCoverageScale": 1,
+      "effectiveCoarseCoverageScale": 1,
+      "manifestPath": "./artifacts/gaussian-phase-transfer-0715/request-8192.json",
+      "instanceCount": 4,
+      "fineLodFraction": 1,
+      "motionRate": 0.16,
+      "frameCount": 8,
+      "elapsedMs": 64,
+      "products": [
+        {
+          "phaseIndex": 0,
+          "identity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+          "producerKind": "oracle-fitted-adjacent-teacher-phase",
+          "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+          "historySlot": 0,
+          "slotWriteTick": 45,
+          "sourceCount": 8192,
+          "coarseCount": 8192,
+          "fineCount": 0,
+          "sourceExtinctionMass": 3403.896947889866,
+          "representedExtinctionMass": 3403.896947892219,
+          "rejectedExtinctionMass": 0,
+          "artifactSha256": "c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17"
+        },
+        {
+          "phaseIndex": 1,
+          "identity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+          "producerKind": "oracle-fitted-adjacent-teacher-phase",
+          "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+          "historySlot": 1,
+          "slotWriteTick": 46,
+          "sourceCount": 8192,
+          "coarseCount": 8192,
+          "fineCount": 0,
+          "sourceExtinctionMass": 3500.186495743509,
+          "representedExtinctionMass": 3500.1864957457956,
+          "rejectedExtinctionMass": 0,
+          "artifactSha256": "373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778"
+        }
+      ],
+      "gpuProducts": [
+        {
+          "phaseIndex": 0,
+          "schema": "kaminos.smoke-splat-gpu-product.v1",
+          "identity": "browser-gpu:gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+          "producerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+          "compilerIdentity": "browser-static-product-upload-v0",
+          "ownership": "runtime-page-destroy-on-unload-v0",
+          "capacity": 8192,
+          "activeCount": 8192,
+          "hierarchyCounts": {
+            "coarse": 8192,
+            "fine": 0,
+            "total": 8192
+          },
+          "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+          "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+          "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+          "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+          "fallbackReason": null,
+          "packingIdentity": "float32x16-axisymmetric-smoke-v0",
+          "outputWasTruncated": false,
+          "drawMode": "direct",
+          "drawAuthority": "cpu-active-count-direct-v0"
+        },
+        {
+          "phaseIndex": 1,
+          "schema": "kaminos.smoke-splat-gpu-product.v1",
+          "identity": "browser-gpu:gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+          "producerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+          "compilerIdentity": "browser-static-product-upload-v0",
+          "ownership": "runtime-page-destroy-on-unload-v0",
+          "capacity": 8192,
+          "activeCount": 8192,
+          "hierarchyCounts": {
+            "coarse": 8192,
+            "fine": 0,
+            "total": 8192
+          },
+          "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+          "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+          "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+          "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+          "fallbackReason": null,
+          "packingIdentity": "float32x16-axisymmetric-smoke-v0",
+          "outputWasTruncated": false,
+          "drawMode": "direct",
+          "drawAuthority": "cpu-active-count-direct-v0"
+        }
+      ],
+      "slotResolve": {
+        "identity": "smoke-splat-slot-resolve-report-v0",
+        "status": "resolved",
+        "requestedProducerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+        "effectiveProducerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+        "simulatorGeneration": 1,
+        "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+        "decoderConfigIdentities": [
+          "0.0200000000000|1.00000000000|0.500000000000|8192"
+        ],
+        "instanceCount": 4,
+        "uniqueSlotCount": 2,
+        "decodeCount": 2,
+        "cacheHitCount": 0,
+        "cachedProductCount": 2,
+        "instanceBindings": [
+          {
+            "instanceIndex": 0,
+            "historySlot": 0,
+            "slotWriteTick": 45,
+            "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+            "transform": null
+          },
+          {
+            "instanceIndex": 1,
+            "historySlot": 1,
+            "slotWriteTick": 46,
+            "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+            "transform": null
+          },
+          {
+            "instanceIndex": 2,
+            "historySlot": 0,
+            "slotWriteTick": 45,
+            "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+            "transform": null
+          },
+          {
+            "instanceIndex": 3,
+            "historySlot": 1,
+            "slotWriteTick": 46,
+            "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+            "transform": null
+          }
+        ],
+        "hierarchyCounts": {
+          "coarse": 16384,
+          "fine": 0,
+          "total": 16384
+        },
+        "accounting": {
+          "sourceExtinctionMass": 6904.083443633375,
+          "representedExtinctionMass": 6904.083443638015,
+          "rejectedExtinctionMass": 0
+        }
+      },
+      "drawPlan": {
+        "identity": "smoke-splat-motion-draw-plan-v0",
+        "instanceCount": 4,
+        "uniqueProductCount": 2,
+        "fineLodFraction": 1,
+        "coarseSplatsAlwaysPresent": true,
+        "rejectedExtinctionMass": 0,
+        "productUploads": [
+          {
+            "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+            "sourceCount": 8192,
+            "selectedCount": 8192,
+            "coarseCount": 8192,
+            "fineCount": 0,
+            "sourceExtinctionMass": 3403.896947108209,
+            "representedExtinctionMass": 3403.896947108209,
+            "rejectedExtinctionMass": 0,
+            "coarseMassCompensation": 0,
+            "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+            "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+            "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "fallbackReason": null
+          },
+          {
+            "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+            "sourceCount": 8192,
+            "selectedCount": 8192,
+            "coarseCount": 8192,
+            "fineCount": 0,
+            "sourceExtinctionMass": 3500.1864953264594,
+            "representedExtinctionMass": 3500.1864953264594,
+            "rejectedExtinctionMass": 0,
+            "coarseMassCompensation": 0,
+            "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+            "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+            "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "fallbackReason": null
+          }
+        ],
+        "instanceBindings": [
+          {
+            "instanceIndex": 0,
+            "productIndex": 0,
+            "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+            "translation": [
+              -1.075,
+              0,
+              -1.075
+            ],
+            "phaseOffset": 0
+          },
+          {
+            "instanceIndex": 1,
+            "productIndex": 1,
+            "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+            "translation": [
+              1.075,
+              0,
+              -1.075
+            ],
+            "phaseOffset": 0.25
+          },
+          {
+            "instanceIndex": 2,
+            "productIndex": 0,
+            "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+            "translation": [
+              -1.075,
+              0,
+              1.075
+            ],
+            "phaseOffset": 0.5
+          },
+          {
+            "instanceIndex": 3,
+            "productIndex": 1,
+            "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+            "translation": [
+              1.075,
+              0,
+              1.075
+            ],
+            "phaseOffset": 0.75
+          }
+        ],
+        "drawInstanceCount": 32768,
+        "maxSelectedProductCount": 8192
+      },
+      "timing": {
+        "authority": "browser-request-animation-frame-cpu-submit-v0",
+        "sampleCount": 7,
+        "p50Ms": 8.300000000000011,
+        "p95Ms": 9.400000000000006
+      },
+      "error": null
+    },
+    "final": {
+      "schema": "kaminos.smoke-splat-motion-runtime.v0",
+      "status": "running",
+      "requestedRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+      "effectiveRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+      "fallbackReason": null,
+      "backend": "WebGPU:apple",
+      "temporalAuthority": "independent-adjacent-teacher-phase-products-v0",
+      "requestedFootprintAuthority": "axisymmetric-projected-covariance-v1",
+      "effectiveFootprintAuthority": "axisymmetric-projected-covariance-v1",
+      "requestedCoarseCoverageScale": 1,
+      "effectiveCoarseCoverageScale": 1,
+      "manifestPath": "./artifacts/gaussian-phase-transfer-0715/request-8192.json",
+      "instanceCount": 4,
+      "fineLodFraction": 1,
+      "motionRate": 0.16,
+      "frameCount": 572,
+      "elapsedMs": 4763.9,
+      "products": [
+        {
+          "phaseIndex": 0,
+          "identity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+          "producerKind": "oracle-fitted-adjacent-teacher-phase",
+          "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+          "historySlot": 0,
+          "slotWriteTick": 45,
+          "sourceCount": 8192,
+          "coarseCount": 8192,
+          "fineCount": 0,
+          "sourceExtinctionMass": 3403.896947889866,
+          "representedExtinctionMass": 3403.896947892219,
+          "rejectedExtinctionMass": 0,
+          "artifactSha256": "c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17"
+        },
+        {
+          "phaseIndex": 1,
+          "identity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+          "producerKind": "oracle-fitted-adjacent-teacher-phase",
+          "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+          "historySlot": 1,
+          "slotWriteTick": 46,
+          "sourceCount": 8192,
+          "coarseCount": 8192,
+          "fineCount": 0,
+          "sourceExtinctionMass": 3500.186495743509,
+          "representedExtinctionMass": 3500.1864957457956,
+          "rejectedExtinctionMass": 0,
+          "artifactSha256": "373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778"
+        }
+      ],
+      "gpuProducts": [
+        {
+          "phaseIndex": 0,
+          "schema": "kaminos.smoke-splat-gpu-product.v1",
+          "identity": "browser-gpu:gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+          "producerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+          "compilerIdentity": "browser-static-product-upload-v0",
+          "ownership": "runtime-page-destroy-on-unload-v0",
+          "capacity": 8192,
+          "activeCount": 8192,
+          "hierarchyCounts": {
+            "coarse": 8192,
+            "fine": 0,
+            "total": 8192
+          },
+          "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+          "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+          "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+          "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+          "fallbackReason": null,
+          "packingIdentity": "float32x16-axisymmetric-smoke-v0",
+          "outputWasTruncated": false,
+          "drawMode": "direct",
+          "drawAuthority": "cpu-active-count-direct-v0"
+        },
+        {
+          "phaseIndex": 1,
+          "schema": "kaminos.smoke-splat-gpu-product.v1",
+          "identity": "browser-gpu:gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+          "producerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+          "compilerIdentity": "browser-static-product-upload-v0",
+          "ownership": "runtime-page-destroy-on-unload-v0",
+          "capacity": 8192,
+          "activeCount": 8192,
+          "hierarchyCounts": {
+            "coarse": 8192,
+            "fine": 0,
+            "total": 8192
+          },
+          "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+          "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+          "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+          "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+          "fallbackReason": null,
+          "packingIdentity": "float32x16-axisymmetric-smoke-v0",
+          "outputWasTruncated": false,
+          "drawMode": "direct",
+          "drawAuthority": "cpu-active-count-direct-v0"
+        }
+      ],
+      "slotResolve": {
+        "identity": "smoke-splat-slot-resolve-report-v0",
+        "status": "resolved",
+        "requestedProducerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+        "effectiveProducerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+        "simulatorGeneration": 1,
+        "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+        "decoderConfigIdentities": [
+          "0.0200000000000|1.00000000000|0.500000000000|8192"
+        ],
+        "instanceCount": 4,
+        "uniqueSlotCount": 2,
+        "decodeCount": 2,
+        "cacheHitCount": 0,
+        "cachedProductCount": 2,
+        "instanceBindings": [
+          {
+            "instanceIndex": 0,
+            "historySlot": 0,
+            "slotWriteTick": 45,
+            "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+            "transform": null
+          },
+          {
+            "instanceIndex": 1,
+            "historySlot": 1,
+            "slotWriteTick": 46,
+            "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+            "transform": null
+          },
+          {
+            "instanceIndex": 2,
+            "historySlot": 0,
+            "slotWriteTick": 45,
+            "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+            "transform": null
+          },
+          {
+            "instanceIndex": 3,
+            "historySlot": 1,
+            "slotWriteTick": 46,
+            "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+            "transform": null
+          }
+        ],
+        "hierarchyCounts": {
+          "coarse": 16384,
+          "fine": 0,
+          "total": 16384
+        },
+        "accounting": {
+          "sourceExtinctionMass": 6904.083443633375,
+          "representedExtinctionMass": 6904.083443638015,
+          "rejectedExtinctionMass": 0
+        }
+      },
+      "drawPlan": {
+        "identity": "smoke-splat-motion-draw-plan-v0",
+        "instanceCount": 4,
+        "uniqueProductCount": 2,
+        "fineLodFraction": 1,
+        "coarseSplatsAlwaysPresent": true,
+        "rejectedExtinctionMass": 0,
+        "productUploads": [
+          {
+            "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+            "sourceCount": 8192,
+            "selectedCount": 8192,
+            "coarseCount": 8192,
+            "fineCount": 0,
+            "sourceExtinctionMass": 3403.896947108209,
+            "representedExtinctionMass": 3403.896947108209,
+            "rejectedExtinctionMass": 0,
+            "coarseMassCompensation": 0,
+            "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+            "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+            "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "fallbackReason": null
+          },
+          {
+            "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+            "sourceCount": 8192,
+            "selectedCount": 8192,
+            "coarseCount": 8192,
+            "fineCount": 0,
+            "sourceExtinctionMass": 3500.1864953264594,
+            "representedExtinctionMass": 3500.1864953264594,
+            "rejectedExtinctionMass": 0,
+            "coarseMassCompensation": 0,
+            "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+            "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+            "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "fallbackReason": null
+          }
+        ],
+        "instanceBindings": [
+          {
+            "instanceIndex": 0,
+            "productIndex": 0,
+            "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+            "translation": [
+              -1.075,
+              0,
+              -1.075
+            ],
+            "phaseOffset": 0
+          },
+          {
+            "instanceIndex": 1,
+            "productIndex": 1,
+            "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+            "translation": [
+              1.075,
+              0,
+              -1.075
+            ],
+            "phaseOffset": 0.25
+          },
+          {
+            "instanceIndex": 2,
+            "productIndex": 0,
+            "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+            "translation": [
+              -1.075,
+              0,
+              1.075
+            ],
+            "phaseOffset": 0.5
+          },
+          {
+            "instanceIndex": 3,
+            "productIndex": 1,
+            "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+            "translation": [
+              1.075,
+              0,
+              1.075
+            ],
+            "phaseOffset": 0.75
+          }
+        ],
+        "drawInstanceCount": 32768,
+        "maxSelectedProductCount": 8192
+      },
+      "timing": {
+        "authority": "browser-request-animation-frame-cpu-submit-v0",
+        "sampleCount": 240,
+        "p50Ms": 8.300000000000182,
+        "p95Ms": 9.200000000000273
+      },
+      "error": null
+    },
+    "frameCountDelta": 564,
+    "runtimeExceptionCount": 0
+  },
+  "motionEvidence": {
+    "frameDigestAuthority": "sha256-of-live-cdp-page-capture-v0",
+    "uniqueFrameDigestCount": 8,
+    "frameDigests": [
+      "f41a730d53c0e9323e1ec059e7a0f35caf68cfcc18421a776b7cba579fbe9d07",
+      "a11dce2a1bac9d660ae4e9dedcbacc423dc2540c27db7f2226568eaf59f02b75",
+      "38f64aeb352b0647d8a2b545bdca7ee8034444b02ea12d347c4782063abc001a",
+      "7d8750ac934b3af51c65a5b77883d1b1ecccd305424943647ce893e0679e2ff8",
+      "3d0f21bd917e60304c7796294e3a5cd59b99af78bc599067ced9a57b2bcd497e",
+      "61861f74b9dd33320dbf8269bb2b181d63f7dd661d5cb7ebdb5830e21a716bc0",
+      "e229a6b26307ce2ecd9f4e338bbb70a17ddd8d0ed2951887b17356400e6211f9",
+      "1a8f66a962170b4f4779cc8f5278ec38a45b3f7963a3c8b7067d211acd848ba6"
+    ],
+    "runtimeFrameCounts": [
+      176,
+      234,
+      291,
+      347,
+      404,
+      460,
+      516,
+      572
+    ],
+    "staticOrCached": false
+  },
+  "frames": [
+    {
+      "index": 0,
+      "capturedAt": "2026-07-16T03:50:12.291Z",
+      "image": {
+        "path": "/private/tmp/kaminos-handy-smoke-phase-transfer-0715/artifacts/gaussian-phase-transfer-0715/witness-8192/frame-000.png",
+        "byteLength": 203346,
+        "sha256": "f41a730d53c0e9323e1ec059e7a0f35caf68cfcc18421a776b7cba579fbe9d07",
+        "width": 2560,
+        "height": 1746,
+        "luminanceMean": 162.2510228160135,
+        "luminanceStdDev": 30.381015520500416,
+        "nonUniformPixelCount": 4039670
+      },
+      "frameDigest": "f41a730d53c0e9323e1ec059e7a0f35caf68cfcc18421a776b7cba579fbe9d07",
+      "runtime": {
+        "schema": "kaminos.smoke-splat-motion-runtime.v0",
+        "status": "running",
+        "requestedRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+        "effectiveRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+        "fallbackReason": null,
+        "backend": "WebGPU:apple",
+        "temporalAuthority": "independent-adjacent-teacher-phase-products-v0",
+        "requestedFootprintAuthority": "axisymmetric-projected-covariance-v1",
+        "effectiveFootprintAuthority": "axisymmetric-projected-covariance-v1",
+        "requestedCoarseCoverageScale": 1,
+        "effectiveCoarseCoverageScale": 1,
+        "manifestPath": "./artifacts/gaussian-phase-transfer-0715/request-8192.json",
+        "instanceCount": 4,
+        "fineLodFraction": 1,
+        "motionRate": 0.16,
+        "frameCount": 176,
+        "elapsedMs": 1464,
+        "products": [
+          {
+            "phaseIndex": 0,
+            "identity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+            "producerKind": "oracle-fitted-adjacent-teacher-phase",
+            "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+            "historySlot": 0,
+            "slotWriteTick": 45,
+            "sourceCount": 8192,
+            "coarseCount": 8192,
+            "fineCount": 0,
+            "sourceExtinctionMass": 3403.896947889866,
+            "representedExtinctionMass": 3403.896947892219,
+            "rejectedExtinctionMass": 0,
+            "artifactSha256": "c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17"
+          },
+          {
+            "phaseIndex": 1,
+            "identity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+            "producerKind": "oracle-fitted-adjacent-teacher-phase",
+            "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+            "historySlot": 1,
+            "slotWriteTick": 46,
+            "sourceCount": 8192,
+            "coarseCount": 8192,
+            "fineCount": 0,
+            "sourceExtinctionMass": 3500.186495743509,
+            "representedExtinctionMass": 3500.1864957457956,
+            "rejectedExtinctionMass": 0,
+            "artifactSha256": "373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778"
+          }
+        ],
+        "gpuProducts": [
+          {
+            "phaseIndex": 0,
+            "schema": "kaminos.smoke-splat-gpu-product.v1",
+            "identity": "browser-gpu:gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+            "producerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+            "compilerIdentity": "browser-static-product-upload-v0",
+            "ownership": "runtime-page-destroy-on-unload-v0",
+            "capacity": 8192,
+            "activeCount": 8192,
+            "hierarchyCounts": {
+              "coarse": 8192,
+              "fine": 0,
+              "total": 8192
+            },
+            "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+            "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+            "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "fallbackReason": null,
+            "packingIdentity": "float32x16-axisymmetric-smoke-v0",
+            "outputWasTruncated": false,
+            "drawMode": "direct",
+            "drawAuthority": "cpu-active-count-direct-v0"
+          },
+          {
+            "phaseIndex": 1,
+            "schema": "kaminos.smoke-splat-gpu-product.v1",
+            "identity": "browser-gpu:gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+            "producerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+            "compilerIdentity": "browser-static-product-upload-v0",
+            "ownership": "runtime-page-destroy-on-unload-v0",
+            "capacity": 8192,
+            "activeCount": 8192,
+            "hierarchyCounts": {
+              "coarse": 8192,
+              "fine": 0,
+              "total": 8192
+            },
+            "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+            "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+            "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "fallbackReason": null,
+            "packingIdentity": "float32x16-axisymmetric-smoke-v0",
+            "outputWasTruncated": false,
+            "drawMode": "direct",
+            "drawAuthority": "cpu-active-count-direct-v0"
+          }
+        ],
+        "slotResolve": {
+          "identity": "smoke-splat-slot-resolve-report-v0",
+          "status": "resolved",
+          "requestedProducerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+          "effectiveProducerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+          "simulatorGeneration": 1,
+          "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+          "decoderConfigIdentities": [
+            "0.0200000000000|1.00000000000|0.500000000000|8192"
+          ],
+          "instanceCount": 4,
+          "uniqueSlotCount": 2,
+          "decodeCount": 2,
+          "cacheHitCount": 0,
+          "cachedProductCount": 2,
+          "instanceBindings": [
+            {
+              "instanceIndex": 0,
+              "historySlot": 0,
+              "slotWriteTick": 45,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "transform": null
+            },
+            {
+              "instanceIndex": 1,
+              "historySlot": 1,
+              "slotWriteTick": 46,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "transform": null
+            },
+            {
+              "instanceIndex": 2,
+              "historySlot": 0,
+              "slotWriteTick": 45,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "transform": null
+            },
+            {
+              "instanceIndex": 3,
+              "historySlot": 1,
+              "slotWriteTick": 46,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "transform": null
+            }
+          ],
+          "hierarchyCounts": {
+            "coarse": 16384,
+            "fine": 0,
+            "total": 16384
+          },
+          "accounting": {
+            "sourceExtinctionMass": 6904.083443633375,
+            "representedExtinctionMass": 6904.083443638015,
+            "rejectedExtinctionMass": 0
+          }
+        },
+        "drawPlan": {
+          "identity": "smoke-splat-motion-draw-plan-v0",
+          "instanceCount": 4,
+          "uniqueProductCount": 2,
+          "fineLodFraction": 1,
+          "coarseSplatsAlwaysPresent": true,
+          "rejectedExtinctionMass": 0,
+          "productUploads": [
+            {
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "sourceCount": 8192,
+              "selectedCount": 8192,
+              "coarseCount": 8192,
+              "fineCount": 0,
+              "sourceExtinctionMass": 3403.896947108209,
+              "representedExtinctionMass": 3403.896947108209,
+              "rejectedExtinctionMass": 0,
+              "coarseMassCompensation": 0,
+              "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+              "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+              "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "fallbackReason": null
+            },
+            {
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "sourceCount": 8192,
+              "selectedCount": 8192,
+              "coarseCount": 8192,
+              "fineCount": 0,
+              "sourceExtinctionMass": 3500.1864953264594,
+              "representedExtinctionMass": 3500.1864953264594,
+              "rejectedExtinctionMass": 0,
+              "coarseMassCompensation": 0,
+              "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+              "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+              "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "fallbackReason": null
+            }
+          ],
+          "instanceBindings": [
+            {
+              "instanceIndex": 0,
+              "productIndex": 0,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "translation": [
+                -1.075,
+                0,
+                -1.075
+              ],
+              "phaseOffset": 0
+            },
+            {
+              "instanceIndex": 1,
+              "productIndex": 1,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "translation": [
+                1.075,
+                0,
+                -1.075
+              ],
+              "phaseOffset": 0.25
+            },
+            {
+              "instanceIndex": 2,
+              "productIndex": 0,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "translation": [
+                -1.075,
+                0,
+                1.075
+              ],
+              "phaseOffset": 0.5
+            },
+            {
+              "instanceIndex": 3,
+              "productIndex": 1,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "translation": [
+                1.075,
+                0,
+                1.075
+              ],
+              "phaseOffset": 0.75
+            }
+          ],
+          "drawInstanceCount": 32768,
+          "maxSelectedProductCount": 8192
+        },
+        "timing": {
+          "authority": "browser-request-animation-frame-cpu-submit-v0",
+          "sampleCount": 175,
+          "p50Ms": 8.300000000000068,
+          "p95Ms": 9.200000000000045
+        },
+        "error": null
+      }
+    },
+    {
+      "index": 1,
+      "capturedAt": "2026-07-16T03:50:12.766Z",
+      "image": {
+        "path": "/private/tmp/kaminos-handy-smoke-phase-transfer-0715/artifacts/gaussian-phase-transfer-0715/witness-8192/frame-001.png",
+        "byteLength": 202847,
+        "sha256": "a11dce2a1bac9d660ae4e9dedcbacc423dc2540c27db7f2226568eaf59f02b75",
+        "width": 2560,
+        "height": 1746,
+        "luminanceMean": 162.24862958604194,
+        "luminanceStdDev": 30.386237905645526,
+        "nonUniformPixelCount": 4039730
+      },
+      "frameDigest": "a11dce2a1bac9d660ae4e9dedcbacc423dc2540c27db7f2226568eaf59f02b75",
+      "runtime": {
+        "schema": "kaminos.smoke-splat-motion-runtime.v0",
+        "status": "running",
+        "requestedRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+        "effectiveRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+        "fallbackReason": null,
+        "backend": "WebGPU:apple",
+        "temporalAuthority": "independent-adjacent-teacher-phase-products-v0",
+        "requestedFootprintAuthority": "axisymmetric-projected-covariance-v1",
+        "effectiveFootprintAuthority": "axisymmetric-projected-covariance-v1",
+        "requestedCoarseCoverageScale": 1,
+        "effectiveCoarseCoverageScale": 1,
+        "manifestPath": "./artifacts/gaussian-phase-transfer-0715/request-8192.json",
+        "instanceCount": 4,
+        "fineLodFraction": 1,
+        "motionRate": 0.16,
+        "frameCount": 234,
+        "elapsedMs": 1946.8,
+        "products": [
+          {
+            "phaseIndex": 0,
+            "identity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+            "producerKind": "oracle-fitted-adjacent-teacher-phase",
+            "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+            "historySlot": 0,
+            "slotWriteTick": 45,
+            "sourceCount": 8192,
+            "coarseCount": 8192,
+            "fineCount": 0,
+            "sourceExtinctionMass": 3403.896947889866,
+            "representedExtinctionMass": 3403.896947892219,
+            "rejectedExtinctionMass": 0,
+            "artifactSha256": "c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17"
+          },
+          {
+            "phaseIndex": 1,
+            "identity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+            "producerKind": "oracle-fitted-adjacent-teacher-phase",
+            "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+            "historySlot": 1,
+            "slotWriteTick": 46,
+            "sourceCount": 8192,
+            "coarseCount": 8192,
+            "fineCount": 0,
+            "sourceExtinctionMass": 3500.186495743509,
+            "representedExtinctionMass": 3500.1864957457956,
+            "rejectedExtinctionMass": 0,
+            "artifactSha256": "373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778"
+          }
+        ],
+        "gpuProducts": [
+          {
+            "phaseIndex": 0,
+            "schema": "kaminos.smoke-splat-gpu-product.v1",
+            "identity": "browser-gpu:gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+            "producerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+            "compilerIdentity": "browser-static-product-upload-v0",
+            "ownership": "runtime-page-destroy-on-unload-v0",
+            "capacity": 8192,
+            "activeCount": 8192,
+            "hierarchyCounts": {
+              "coarse": 8192,
+              "fine": 0,
+              "total": 8192
+            },
+            "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+            "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+            "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "fallbackReason": null,
+            "packingIdentity": "float32x16-axisymmetric-smoke-v0",
+            "outputWasTruncated": false,
+            "drawMode": "direct",
+            "drawAuthority": "cpu-active-count-direct-v0"
+          },
+          {
+            "phaseIndex": 1,
+            "schema": "kaminos.smoke-splat-gpu-product.v1",
+            "identity": "browser-gpu:gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+            "producerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+            "compilerIdentity": "browser-static-product-upload-v0",
+            "ownership": "runtime-page-destroy-on-unload-v0",
+            "capacity": 8192,
+            "activeCount": 8192,
+            "hierarchyCounts": {
+              "coarse": 8192,
+              "fine": 0,
+              "total": 8192
+            },
+            "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+            "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+            "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "fallbackReason": null,
+            "packingIdentity": "float32x16-axisymmetric-smoke-v0",
+            "outputWasTruncated": false,
+            "drawMode": "direct",
+            "drawAuthority": "cpu-active-count-direct-v0"
+          }
+        ],
+        "slotResolve": {
+          "identity": "smoke-splat-slot-resolve-report-v0",
+          "status": "resolved",
+          "requestedProducerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+          "effectiveProducerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+          "simulatorGeneration": 1,
+          "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+          "decoderConfigIdentities": [
+            "0.0200000000000|1.00000000000|0.500000000000|8192"
+          ],
+          "instanceCount": 4,
+          "uniqueSlotCount": 2,
+          "decodeCount": 2,
+          "cacheHitCount": 0,
+          "cachedProductCount": 2,
+          "instanceBindings": [
+            {
+              "instanceIndex": 0,
+              "historySlot": 0,
+              "slotWriteTick": 45,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "transform": null
+            },
+            {
+              "instanceIndex": 1,
+              "historySlot": 1,
+              "slotWriteTick": 46,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "transform": null
+            },
+            {
+              "instanceIndex": 2,
+              "historySlot": 0,
+              "slotWriteTick": 45,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "transform": null
+            },
+            {
+              "instanceIndex": 3,
+              "historySlot": 1,
+              "slotWriteTick": 46,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "transform": null
+            }
+          ],
+          "hierarchyCounts": {
+            "coarse": 16384,
+            "fine": 0,
+            "total": 16384
+          },
+          "accounting": {
+            "sourceExtinctionMass": 6904.083443633375,
+            "representedExtinctionMass": 6904.083443638015,
+            "rejectedExtinctionMass": 0
+          }
+        },
+        "drawPlan": {
+          "identity": "smoke-splat-motion-draw-plan-v0",
+          "instanceCount": 4,
+          "uniqueProductCount": 2,
+          "fineLodFraction": 1,
+          "coarseSplatsAlwaysPresent": true,
+          "rejectedExtinctionMass": 0,
+          "productUploads": [
+            {
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "sourceCount": 8192,
+              "selectedCount": 8192,
+              "coarseCount": 8192,
+              "fineCount": 0,
+              "sourceExtinctionMass": 3403.896947108209,
+              "representedExtinctionMass": 3403.896947108209,
+              "rejectedExtinctionMass": 0,
+              "coarseMassCompensation": 0,
+              "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+              "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+              "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "fallbackReason": null
+            },
+            {
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "sourceCount": 8192,
+              "selectedCount": 8192,
+              "coarseCount": 8192,
+              "fineCount": 0,
+              "sourceExtinctionMass": 3500.1864953264594,
+              "representedExtinctionMass": 3500.1864953264594,
+              "rejectedExtinctionMass": 0,
+              "coarseMassCompensation": 0,
+              "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+              "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+              "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "fallbackReason": null
+            }
+          ],
+          "instanceBindings": [
+            {
+              "instanceIndex": 0,
+              "productIndex": 0,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "translation": [
+                -1.075,
+                0,
+                -1.075
+              ],
+              "phaseOffset": 0
+            },
+            {
+              "instanceIndex": 1,
+              "productIndex": 1,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "translation": [
+                1.075,
+                0,
+                -1.075
+              ],
+              "phaseOffset": 0.25
+            },
+            {
+              "instanceIndex": 2,
+              "productIndex": 0,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "translation": [
+                -1.075,
+                0,
+                1.075
+              ],
+              "phaseOffset": 0.5
+            },
+            {
+              "instanceIndex": 3,
+              "productIndex": 1,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "translation": [
+                1.075,
+                0,
+                1.075
+              ],
+              "phaseOffset": 0.75
+            }
+          ],
+          "drawInstanceCount": 32768,
+          "maxSelectedProductCount": 8192
+        },
+        "timing": {
+          "authority": "browser-request-animation-frame-cpu-submit-v0",
+          "sampleCount": 233,
+          "p50Ms": 8.300000000000068,
+          "p95Ms": 9.200000000000045
+        },
+        "error": null
+      }
+    },
+    {
+      "index": 2,
+      "capturedAt": "2026-07-16T03:50:13.230Z",
+      "image": {
+        "path": "/private/tmp/kaminos-handy-smoke-phase-transfer-0715/artifacts/gaussian-phase-transfer-0715/witness-8192/frame-002.png",
+        "byteLength": 203690,
+        "sha256": "38f64aeb352b0647d8a2b545bdca7ee8034444b02ea12d347c4782063abc001a",
+        "width": 2560,
+        "height": 1746,
+        "luminanceMean": 162.2468566042702,
+        "luminanceStdDev": 30.38810766400868,
+        "nonUniformPixelCount": 4039713
+      },
+      "frameDigest": "38f64aeb352b0647d8a2b545bdca7ee8034444b02ea12d347c4782063abc001a",
+      "runtime": {
+        "schema": "kaminos.smoke-splat-motion-runtime.v0",
+        "status": "running",
+        "requestedRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+        "effectiveRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+        "fallbackReason": null,
+        "backend": "WebGPU:apple",
+        "temporalAuthority": "independent-adjacent-teacher-phase-products-v0",
+        "requestedFootprintAuthority": "axisymmetric-projected-covariance-v1",
+        "effectiveFootprintAuthority": "axisymmetric-projected-covariance-v1",
+        "requestedCoarseCoverageScale": 1,
+        "effectiveCoarseCoverageScale": 1,
+        "manifestPath": "./artifacts/gaussian-phase-transfer-0715/request-8192.json",
+        "instanceCount": 4,
+        "fineLodFraction": 1,
+        "motionRate": 0.16,
+        "frameCount": 291,
+        "elapsedMs": 2422.2,
+        "products": [
+          {
+            "phaseIndex": 0,
+            "identity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+            "producerKind": "oracle-fitted-adjacent-teacher-phase",
+            "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+            "historySlot": 0,
+            "slotWriteTick": 45,
+            "sourceCount": 8192,
+            "coarseCount": 8192,
+            "fineCount": 0,
+            "sourceExtinctionMass": 3403.896947889866,
+            "representedExtinctionMass": 3403.896947892219,
+            "rejectedExtinctionMass": 0,
+            "artifactSha256": "c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17"
+          },
+          {
+            "phaseIndex": 1,
+            "identity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+            "producerKind": "oracle-fitted-adjacent-teacher-phase",
+            "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+            "historySlot": 1,
+            "slotWriteTick": 46,
+            "sourceCount": 8192,
+            "coarseCount": 8192,
+            "fineCount": 0,
+            "sourceExtinctionMass": 3500.186495743509,
+            "representedExtinctionMass": 3500.1864957457956,
+            "rejectedExtinctionMass": 0,
+            "artifactSha256": "373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778"
+          }
+        ],
+        "gpuProducts": [
+          {
+            "phaseIndex": 0,
+            "schema": "kaminos.smoke-splat-gpu-product.v1",
+            "identity": "browser-gpu:gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+            "producerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+            "compilerIdentity": "browser-static-product-upload-v0",
+            "ownership": "runtime-page-destroy-on-unload-v0",
+            "capacity": 8192,
+            "activeCount": 8192,
+            "hierarchyCounts": {
+              "coarse": 8192,
+              "fine": 0,
+              "total": 8192
+            },
+            "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+            "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+            "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "fallbackReason": null,
+            "packingIdentity": "float32x16-axisymmetric-smoke-v0",
+            "outputWasTruncated": false,
+            "drawMode": "direct",
+            "drawAuthority": "cpu-active-count-direct-v0"
+          },
+          {
+            "phaseIndex": 1,
+            "schema": "kaminos.smoke-splat-gpu-product.v1",
+            "identity": "browser-gpu:gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+            "producerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+            "compilerIdentity": "browser-static-product-upload-v0",
+            "ownership": "runtime-page-destroy-on-unload-v0",
+            "capacity": 8192,
+            "activeCount": 8192,
+            "hierarchyCounts": {
+              "coarse": 8192,
+              "fine": 0,
+              "total": 8192
+            },
+            "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+            "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+            "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "fallbackReason": null,
+            "packingIdentity": "float32x16-axisymmetric-smoke-v0",
+            "outputWasTruncated": false,
+            "drawMode": "direct",
+            "drawAuthority": "cpu-active-count-direct-v0"
+          }
+        ],
+        "slotResolve": {
+          "identity": "smoke-splat-slot-resolve-report-v0",
+          "status": "resolved",
+          "requestedProducerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+          "effectiveProducerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+          "simulatorGeneration": 1,
+          "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+          "decoderConfigIdentities": [
+            "0.0200000000000|1.00000000000|0.500000000000|8192"
+          ],
+          "instanceCount": 4,
+          "uniqueSlotCount": 2,
+          "decodeCount": 2,
+          "cacheHitCount": 0,
+          "cachedProductCount": 2,
+          "instanceBindings": [
+            {
+              "instanceIndex": 0,
+              "historySlot": 0,
+              "slotWriteTick": 45,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "transform": null
+            },
+            {
+              "instanceIndex": 1,
+              "historySlot": 1,
+              "slotWriteTick": 46,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "transform": null
+            },
+            {
+              "instanceIndex": 2,
+              "historySlot": 0,
+              "slotWriteTick": 45,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "transform": null
+            },
+            {
+              "instanceIndex": 3,
+              "historySlot": 1,
+              "slotWriteTick": 46,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "transform": null
+            }
+          ],
+          "hierarchyCounts": {
+            "coarse": 16384,
+            "fine": 0,
+            "total": 16384
+          },
+          "accounting": {
+            "sourceExtinctionMass": 6904.083443633375,
+            "representedExtinctionMass": 6904.083443638015,
+            "rejectedExtinctionMass": 0
+          }
+        },
+        "drawPlan": {
+          "identity": "smoke-splat-motion-draw-plan-v0",
+          "instanceCount": 4,
+          "uniqueProductCount": 2,
+          "fineLodFraction": 1,
+          "coarseSplatsAlwaysPresent": true,
+          "rejectedExtinctionMass": 0,
+          "productUploads": [
+            {
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "sourceCount": 8192,
+              "selectedCount": 8192,
+              "coarseCount": 8192,
+              "fineCount": 0,
+              "sourceExtinctionMass": 3403.896947108209,
+              "representedExtinctionMass": 3403.896947108209,
+              "rejectedExtinctionMass": 0,
+              "coarseMassCompensation": 0,
+              "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+              "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+              "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "fallbackReason": null
+            },
+            {
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "sourceCount": 8192,
+              "selectedCount": 8192,
+              "coarseCount": 8192,
+              "fineCount": 0,
+              "sourceExtinctionMass": 3500.1864953264594,
+              "representedExtinctionMass": 3500.1864953264594,
+              "rejectedExtinctionMass": 0,
+              "coarseMassCompensation": 0,
+              "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+              "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+              "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "fallbackReason": null
+            }
+          ],
+          "instanceBindings": [
+            {
+              "instanceIndex": 0,
+              "productIndex": 0,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "translation": [
+                -1.075,
+                0,
+                -1.075
+              ],
+              "phaseOffset": 0
+            },
+            {
+              "instanceIndex": 1,
+              "productIndex": 1,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "translation": [
+                1.075,
+                0,
+                -1.075
+              ],
+              "phaseOffset": 0.25
+            },
+            {
+              "instanceIndex": 2,
+              "productIndex": 0,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "translation": [
+                -1.075,
+                0,
+                1.075
+              ],
+              "phaseOffset": 0.5
+            },
+            {
+              "instanceIndex": 3,
+              "productIndex": 1,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "translation": [
+                1.075,
+                0,
+                1.075
+              ],
+              "phaseOffset": 0.75
+            }
+          ],
+          "drawInstanceCount": 32768,
+          "maxSelectedProductCount": 8192
+        },
+        "timing": {
+          "authority": "browser-request-animation-frame-cpu-submit-v0",
+          "sampleCount": 240,
+          "p50Ms": 8.300000000000068,
+          "p95Ms": 9.200000000000045
+        },
+        "error": null
+      }
+    },
+    {
+      "index": 3,
+      "capturedAt": "2026-07-16T03:50:13.704Z",
+      "image": {
+        "path": "/private/tmp/kaminos-handy-smoke-phase-transfer-0715/artifacts/gaussian-phase-transfer-0715/witness-8192/frame-003.png",
+        "byteLength": 203193,
+        "sha256": "7d8750ac934b3af51c65a5b77883d1b1ecccd305424943647ce893e0679e2ff8",
+        "width": 2560,
+        "height": 1746,
+        "luminanceMean": 162.24567829268273,
+        "luminanceStdDev": 30.3889796080203,
+        "nonUniformPixelCount": 4039702
+      },
+      "frameDigest": "7d8750ac934b3af51c65a5b77883d1b1ecccd305424943647ce893e0679e2ff8",
+      "runtime": {
+        "schema": "kaminos.smoke-splat-motion-runtime.v0",
+        "status": "running",
+        "requestedRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+        "effectiveRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+        "fallbackReason": null,
+        "backend": "WebGPU:apple",
+        "temporalAuthority": "independent-adjacent-teacher-phase-products-v0",
+        "requestedFootprintAuthority": "axisymmetric-projected-covariance-v1",
+        "effectiveFootprintAuthority": "axisymmetric-projected-covariance-v1",
+        "requestedCoarseCoverageScale": 1,
+        "effectiveCoarseCoverageScale": 1,
+        "manifestPath": "./artifacts/gaussian-phase-transfer-0715/request-8192.json",
+        "instanceCount": 4,
+        "fineLodFraction": 1,
+        "motionRate": 0.16,
+        "frameCount": 347,
+        "elapsedMs": 2888.9,
+        "products": [
+          {
+            "phaseIndex": 0,
+            "identity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+            "producerKind": "oracle-fitted-adjacent-teacher-phase",
+            "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+            "historySlot": 0,
+            "slotWriteTick": 45,
+            "sourceCount": 8192,
+            "coarseCount": 8192,
+            "fineCount": 0,
+            "sourceExtinctionMass": 3403.896947889866,
+            "representedExtinctionMass": 3403.896947892219,
+            "rejectedExtinctionMass": 0,
+            "artifactSha256": "c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17"
+          },
+          {
+            "phaseIndex": 1,
+            "identity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+            "producerKind": "oracle-fitted-adjacent-teacher-phase",
+            "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+            "historySlot": 1,
+            "slotWriteTick": 46,
+            "sourceCount": 8192,
+            "coarseCount": 8192,
+            "fineCount": 0,
+            "sourceExtinctionMass": 3500.186495743509,
+            "representedExtinctionMass": 3500.1864957457956,
+            "rejectedExtinctionMass": 0,
+            "artifactSha256": "373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778"
+          }
+        ],
+        "gpuProducts": [
+          {
+            "phaseIndex": 0,
+            "schema": "kaminos.smoke-splat-gpu-product.v1",
+            "identity": "browser-gpu:gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+            "producerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+            "compilerIdentity": "browser-static-product-upload-v0",
+            "ownership": "runtime-page-destroy-on-unload-v0",
+            "capacity": 8192,
+            "activeCount": 8192,
+            "hierarchyCounts": {
+              "coarse": 8192,
+              "fine": 0,
+              "total": 8192
+            },
+            "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+            "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+            "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "fallbackReason": null,
+            "packingIdentity": "float32x16-axisymmetric-smoke-v0",
+            "outputWasTruncated": false,
+            "drawMode": "direct",
+            "drawAuthority": "cpu-active-count-direct-v0"
+          },
+          {
+            "phaseIndex": 1,
+            "schema": "kaminos.smoke-splat-gpu-product.v1",
+            "identity": "browser-gpu:gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+            "producerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+            "compilerIdentity": "browser-static-product-upload-v0",
+            "ownership": "runtime-page-destroy-on-unload-v0",
+            "capacity": 8192,
+            "activeCount": 8192,
+            "hierarchyCounts": {
+              "coarse": 8192,
+              "fine": 0,
+              "total": 8192
+            },
+            "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+            "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+            "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "fallbackReason": null,
+            "packingIdentity": "float32x16-axisymmetric-smoke-v0",
+            "outputWasTruncated": false,
+            "drawMode": "direct",
+            "drawAuthority": "cpu-active-count-direct-v0"
+          }
+        ],
+        "slotResolve": {
+          "identity": "smoke-splat-slot-resolve-report-v0",
+          "status": "resolved",
+          "requestedProducerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+          "effectiveProducerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+          "simulatorGeneration": 1,
+          "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+          "decoderConfigIdentities": [
+            "0.0200000000000|1.00000000000|0.500000000000|8192"
+          ],
+          "instanceCount": 4,
+          "uniqueSlotCount": 2,
+          "decodeCount": 2,
+          "cacheHitCount": 0,
+          "cachedProductCount": 2,
+          "instanceBindings": [
+            {
+              "instanceIndex": 0,
+              "historySlot": 0,
+              "slotWriteTick": 45,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "transform": null
+            },
+            {
+              "instanceIndex": 1,
+              "historySlot": 1,
+              "slotWriteTick": 46,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "transform": null
+            },
+            {
+              "instanceIndex": 2,
+              "historySlot": 0,
+              "slotWriteTick": 45,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "transform": null
+            },
+            {
+              "instanceIndex": 3,
+              "historySlot": 1,
+              "slotWriteTick": 46,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "transform": null
+            }
+          ],
+          "hierarchyCounts": {
+            "coarse": 16384,
+            "fine": 0,
+            "total": 16384
+          },
+          "accounting": {
+            "sourceExtinctionMass": 6904.083443633375,
+            "representedExtinctionMass": 6904.083443638015,
+            "rejectedExtinctionMass": 0
+          }
+        },
+        "drawPlan": {
+          "identity": "smoke-splat-motion-draw-plan-v0",
+          "instanceCount": 4,
+          "uniqueProductCount": 2,
+          "fineLodFraction": 1,
+          "coarseSplatsAlwaysPresent": true,
+          "rejectedExtinctionMass": 0,
+          "productUploads": [
+            {
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "sourceCount": 8192,
+              "selectedCount": 8192,
+              "coarseCount": 8192,
+              "fineCount": 0,
+              "sourceExtinctionMass": 3403.896947108209,
+              "representedExtinctionMass": 3403.896947108209,
+              "rejectedExtinctionMass": 0,
+              "coarseMassCompensation": 0,
+              "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+              "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+              "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "fallbackReason": null
+            },
+            {
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "sourceCount": 8192,
+              "selectedCount": 8192,
+              "coarseCount": 8192,
+              "fineCount": 0,
+              "sourceExtinctionMass": 3500.1864953264594,
+              "representedExtinctionMass": 3500.1864953264594,
+              "rejectedExtinctionMass": 0,
+              "coarseMassCompensation": 0,
+              "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+              "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+              "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "fallbackReason": null
+            }
+          ],
+          "instanceBindings": [
+            {
+              "instanceIndex": 0,
+              "productIndex": 0,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "translation": [
+                -1.075,
+                0,
+                -1.075
+              ],
+              "phaseOffset": 0
+            },
+            {
+              "instanceIndex": 1,
+              "productIndex": 1,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "translation": [
+                1.075,
+                0,
+                -1.075
+              ],
+              "phaseOffset": 0.25
+            },
+            {
+              "instanceIndex": 2,
+              "productIndex": 0,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "translation": [
+                -1.075,
+                0,
+                1.075
+              ],
+              "phaseOffset": 0.5
+            },
+            {
+              "instanceIndex": 3,
+              "productIndex": 1,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "translation": [
+                1.075,
+                0,
+                1.075
+              ],
+              "phaseOffset": 0.75
+            }
+          ],
+          "drawInstanceCount": 32768,
+          "maxSelectedProductCount": 8192
+        },
+        "timing": {
+          "authority": "browser-request-animation-frame-cpu-submit-v0",
+          "sampleCount": 240,
+          "p50Ms": 8.300000000000182,
+          "p95Ms": 9.200000000000045
+        },
+        "error": null
+      }
+    },
+    {
+      "index": 4,
+      "capturedAt": "2026-07-16T03:50:14.175Z",
+      "image": {
+        "path": "/private/tmp/kaminos-handy-smoke-phase-transfer-0715/artifacts/gaussian-phase-transfer-0715/witness-8192/frame-004.png",
+        "byteLength": 200523,
+        "sha256": "3d0f21bd917e60304c7796294e3a5cd59b99af78bc599067ced9a57b2bcd497e",
+        "width": 2560,
+        "height": 1746,
+        "luminanceMean": 162.24848022921051,
+        "luminanceStdDev": 30.388357622449785,
+        "nonUniformPixelCount": 4039676
+      },
+      "frameDigest": "3d0f21bd917e60304c7796294e3a5cd59b99af78bc599067ced9a57b2bcd497e",
+      "runtime": {
+        "schema": "kaminos.smoke-splat-motion-runtime.v0",
+        "status": "running",
+        "requestedRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+        "effectiveRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+        "fallbackReason": null,
+        "backend": "WebGPU:apple",
+        "temporalAuthority": "independent-adjacent-teacher-phase-products-v0",
+        "requestedFootprintAuthority": "axisymmetric-projected-covariance-v1",
+        "effectiveFootprintAuthority": "axisymmetric-projected-covariance-v1",
+        "requestedCoarseCoverageScale": 1,
+        "effectiveCoarseCoverageScale": 1,
+        "manifestPath": "./artifacts/gaussian-phase-transfer-0715/request-8192.json",
+        "instanceCount": 4,
+        "fineLodFraction": 1,
+        "motionRate": 0.16,
+        "frameCount": 404,
+        "elapsedMs": 3363.9,
+        "products": [
+          {
+            "phaseIndex": 0,
+            "identity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+            "producerKind": "oracle-fitted-adjacent-teacher-phase",
+            "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+            "historySlot": 0,
+            "slotWriteTick": 45,
+            "sourceCount": 8192,
+            "coarseCount": 8192,
+            "fineCount": 0,
+            "sourceExtinctionMass": 3403.896947889866,
+            "representedExtinctionMass": 3403.896947892219,
+            "rejectedExtinctionMass": 0,
+            "artifactSha256": "c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17"
+          },
+          {
+            "phaseIndex": 1,
+            "identity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+            "producerKind": "oracle-fitted-adjacent-teacher-phase",
+            "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+            "historySlot": 1,
+            "slotWriteTick": 46,
+            "sourceCount": 8192,
+            "coarseCount": 8192,
+            "fineCount": 0,
+            "sourceExtinctionMass": 3500.186495743509,
+            "representedExtinctionMass": 3500.1864957457956,
+            "rejectedExtinctionMass": 0,
+            "artifactSha256": "373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778"
+          }
+        ],
+        "gpuProducts": [
+          {
+            "phaseIndex": 0,
+            "schema": "kaminos.smoke-splat-gpu-product.v1",
+            "identity": "browser-gpu:gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+            "producerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+            "compilerIdentity": "browser-static-product-upload-v0",
+            "ownership": "runtime-page-destroy-on-unload-v0",
+            "capacity": 8192,
+            "activeCount": 8192,
+            "hierarchyCounts": {
+              "coarse": 8192,
+              "fine": 0,
+              "total": 8192
+            },
+            "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+            "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+            "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "fallbackReason": null,
+            "packingIdentity": "float32x16-axisymmetric-smoke-v0",
+            "outputWasTruncated": false,
+            "drawMode": "direct",
+            "drawAuthority": "cpu-active-count-direct-v0"
+          },
+          {
+            "phaseIndex": 1,
+            "schema": "kaminos.smoke-splat-gpu-product.v1",
+            "identity": "browser-gpu:gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+            "producerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+            "compilerIdentity": "browser-static-product-upload-v0",
+            "ownership": "runtime-page-destroy-on-unload-v0",
+            "capacity": 8192,
+            "activeCount": 8192,
+            "hierarchyCounts": {
+              "coarse": 8192,
+              "fine": 0,
+              "total": 8192
+            },
+            "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+            "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+            "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "fallbackReason": null,
+            "packingIdentity": "float32x16-axisymmetric-smoke-v0",
+            "outputWasTruncated": false,
+            "drawMode": "direct",
+            "drawAuthority": "cpu-active-count-direct-v0"
+          }
+        ],
+        "slotResolve": {
+          "identity": "smoke-splat-slot-resolve-report-v0",
+          "status": "resolved",
+          "requestedProducerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+          "effectiveProducerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+          "simulatorGeneration": 1,
+          "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+          "decoderConfigIdentities": [
+            "0.0200000000000|1.00000000000|0.500000000000|8192"
+          ],
+          "instanceCount": 4,
+          "uniqueSlotCount": 2,
+          "decodeCount": 2,
+          "cacheHitCount": 0,
+          "cachedProductCount": 2,
+          "instanceBindings": [
+            {
+              "instanceIndex": 0,
+              "historySlot": 0,
+              "slotWriteTick": 45,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "transform": null
+            },
+            {
+              "instanceIndex": 1,
+              "historySlot": 1,
+              "slotWriteTick": 46,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "transform": null
+            },
+            {
+              "instanceIndex": 2,
+              "historySlot": 0,
+              "slotWriteTick": 45,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "transform": null
+            },
+            {
+              "instanceIndex": 3,
+              "historySlot": 1,
+              "slotWriteTick": 46,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "transform": null
+            }
+          ],
+          "hierarchyCounts": {
+            "coarse": 16384,
+            "fine": 0,
+            "total": 16384
+          },
+          "accounting": {
+            "sourceExtinctionMass": 6904.083443633375,
+            "representedExtinctionMass": 6904.083443638015,
+            "rejectedExtinctionMass": 0
+          }
+        },
+        "drawPlan": {
+          "identity": "smoke-splat-motion-draw-plan-v0",
+          "instanceCount": 4,
+          "uniqueProductCount": 2,
+          "fineLodFraction": 1,
+          "coarseSplatsAlwaysPresent": true,
+          "rejectedExtinctionMass": 0,
+          "productUploads": [
+            {
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "sourceCount": 8192,
+              "selectedCount": 8192,
+              "coarseCount": 8192,
+              "fineCount": 0,
+              "sourceExtinctionMass": 3403.896947108209,
+              "representedExtinctionMass": 3403.896947108209,
+              "rejectedExtinctionMass": 0,
+              "coarseMassCompensation": 0,
+              "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+              "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+              "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "fallbackReason": null
+            },
+            {
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "sourceCount": 8192,
+              "selectedCount": 8192,
+              "coarseCount": 8192,
+              "fineCount": 0,
+              "sourceExtinctionMass": 3500.1864953264594,
+              "representedExtinctionMass": 3500.1864953264594,
+              "rejectedExtinctionMass": 0,
+              "coarseMassCompensation": 0,
+              "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+              "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+              "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "fallbackReason": null
+            }
+          ],
+          "instanceBindings": [
+            {
+              "instanceIndex": 0,
+              "productIndex": 0,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "translation": [
+                -1.075,
+                0,
+                -1.075
+              ],
+              "phaseOffset": 0
+            },
+            {
+              "instanceIndex": 1,
+              "productIndex": 1,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "translation": [
+                1.075,
+                0,
+                -1.075
+              ],
+              "phaseOffset": 0.25
+            },
+            {
+              "instanceIndex": 2,
+              "productIndex": 0,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "translation": [
+                -1.075,
+                0,
+                1.075
+              ],
+              "phaseOffset": 0.5
+            },
+            {
+              "instanceIndex": 3,
+              "productIndex": 1,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "translation": [
+                1.075,
+                0,
+                1.075
+              ],
+              "phaseOffset": 0.75
+            }
+          ],
+          "drawInstanceCount": 32768,
+          "maxSelectedProductCount": 8192
+        },
+        "timing": {
+          "authority": "browser-request-animation-frame-cpu-submit-v0",
+          "sampleCount": 240,
+          "p50Ms": 8.300000000000182,
+          "p95Ms": 9.200000000000273
+        },
+        "error": null
+      }
+    },
+    {
+      "index": 5,
+      "capturedAt": "2026-07-16T03:50:14.638Z",
+      "image": {
+        "path": "/private/tmp/kaminos-handy-smoke-phase-transfer-0715/artifacts/gaussian-phase-transfer-0715/witness-8192/frame-005.png",
+        "byteLength": 201797,
+        "sha256": "61861f74b9dd33320dbf8269bb2b181d63f7dd661d5cb7ebdb5830e21a716bc0",
+        "width": 2560,
+        "height": 1746,
+        "luminanceMean": 162.24656364339785,
+        "luminanceStdDev": 30.390780800704377,
+        "nonUniformPixelCount": 4039601
+      },
+      "frameDigest": "61861f74b9dd33320dbf8269bb2b181d63f7dd661d5cb7ebdb5830e21a716bc0",
+      "runtime": {
+        "schema": "kaminos.smoke-splat-motion-runtime.v0",
+        "status": "running",
+        "requestedRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+        "effectiveRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+        "fallbackReason": null,
+        "backend": "WebGPU:apple",
+        "temporalAuthority": "independent-adjacent-teacher-phase-products-v0",
+        "requestedFootprintAuthority": "axisymmetric-projected-covariance-v1",
+        "effectiveFootprintAuthority": "axisymmetric-projected-covariance-v1",
+        "requestedCoarseCoverageScale": 1,
+        "effectiveCoarseCoverageScale": 1,
+        "manifestPath": "./artifacts/gaussian-phase-transfer-0715/request-8192.json",
+        "instanceCount": 4,
+        "fineLodFraction": 1,
+        "motionRate": 0.16,
+        "frameCount": 460,
+        "elapsedMs": 3829.7,
+        "products": [
+          {
+            "phaseIndex": 0,
+            "identity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+            "producerKind": "oracle-fitted-adjacent-teacher-phase",
+            "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+            "historySlot": 0,
+            "slotWriteTick": 45,
+            "sourceCount": 8192,
+            "coarseCount": 8192,
+            "fineCount": 0,
+            "sourceExtinctionMass": 3403.896947889866,
+            "representedExtinctionMass": 3403.896947892219,
+            "rejectedExtinctionMass": 0,
+            "artifactSha256": "c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17"
+          },
+          {
+            "phaseIndex": 1,
+            "identity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+            "producerKind": "oracle-fitted-adjacent-teacher-phase",
+            "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+            "historySlot": 1,
+            "slotWriteTick": 46,
+            "sourceCount": 8192,
+            "coarseCount": 8192,
+            "fineCount": 0,
+            "sourceExtinctionMass": 3500.186495743509,
+            "representedExtinctionMass": 3500.1864957457956,
+            "rejectedExtinctionMass": 0,
+            "artifactSha256": "373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778"
+          }
+        ],
+        "gpuProducts": [
+          {
+            "phaseIndex": 0,
+            "schema": "kaminos.smoke-splat-gpu-product.v1",
+            "identity": "browser-gpu:gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+            "producerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+            "compilerIdentity": "browser-static-product-upload-v0",
+            "ownership": "runtime-page-destroy-on-unload-v0",
+            "capacity": 8192,
+            "activeCount": 8192,
+            "hierarchyCounts": {
+              "coarse": 8192,
+              "fine": 0,
+              "total": 8192
+            },
+            "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+            "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+            "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "fallbackReason": null,
+            "packingIdentity": "float32x16-axisymmetric-smoke-v0",
+            "outputWasTruncated": false,
+            "drawMode": "direct",
+            "drawAuthority": "cpu-active-count-direct-v0"
+          },
+          {
+            "phaseIndex": 1,
+            "schema": "kaminos.smoke-splat-gpu-product.v1",
+            "identity": "browser-gpu:gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+            "producerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+            "compilerIdentity": "browser-static-product-upload-v0",
+            "ownership": "runtime-page-destroy-on-unload-v0",
+            "capacity": 8192,
+            "activeCount": 8192,
+            "hierarchyCounts": {
+              "coarse": 8192,
+              "fine": 0,
+              "total": 8192
+            },
+            "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+            "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+            "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "fallbackReason": null,
+            "packingIdentity": "float32x16-axisymmetric-smoke-v0",
+            "outputWasTruncated": false,
+            "drawMode": "direct",
+            "drawAuthority": "cpu-active-count-direct-v0"
+          }
+        ],
+        "slotResolve": {
+          "identity": "smoke-splat-slot-resolve-report-v0",
+          "status": "resolved",
+          "requestedProducerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+          "effectiveProducerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+          "simulatorGeneration": 1,
+          "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+          "decoderConfigIdentities": [
+            "0.0200000000000|1.00000000000|0.500000000000|8192"
+          ],
+          "instanceCount": 4,
+          "uniqueSlotCount": 2,
+          "decodeCount": 2,
+          "cacheHitCount": 0,
+          "cachedProductCount": 2,
+          "instanceBindings": [
+            {
+              "instanceIndex": 0,
+              "historySlot": 0,
+              "slotWriteTick": 45,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "transform": null
+            },
+            {
+              "instanceIndex": 1,
+              "historySlot": 1,
+              "slotWriteTick": 46,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "transform": null
+            },
+            {
+              "instanceIndex": 2,
+              "historySlot": 0,
+              "slotWriteTick": 45,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "transform": null
+            },
+            {
+              "instanceIndex": 3,
+              "historySlot": 1,
+              "slotWriteTick": 46,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "transform": null
+            }
+          ],
+          "hierarchyCounts": {
+            "coarse": 16384,
+            "fine": 0,
+            "total": 16384
+          },
+          "accounting": {
+            "sourceExtinctionMass": 6904.083443633375,
+            "representedExtinctionMass": 6904.083443638015,
+            "rejectedExtinctionMass": 0
+          }
+        },
+        "drawPlan": {
+          "identity": "smoke-splat-motion-draw-plan-v0",
+          "instanceCount": 4,
+          "uniqueProductCount": 2,
+          "fineLodFraction": 1,
+          "coarseSplatsAlwaysPresent": true,
+          "rejectedExtinctionMass": 0,
+          "productUploads": [
+            {
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "sourceCount": 8192,
+              "selectedCount": 8192,
+              "coarseCount": 8192,
+              "fineCount": 0,
+              "sourceExtinctionMass": 3403.896947108209,
+              "representedExtinctionMass": 3403.896947108209,
+              "rejectedExtinctionMass": 0,
+              "coarseMassCompensation": 0,
+              "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+              "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+              "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "fallbackReason": null
+            },
+            {
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "sourceCount": 8192,
+              "selectedCount": 8192,
+              "coarseCount": 8192,
+              "fineCount": 0,
+              "sourceExtinctionMass": 3500.1864953264594,
+              "representedExtinctionMass": 3500.1864953264594,
+              "rejectedExtinctionMass": 0,
+              "coarseMassCompensation": 0,
+              "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+              "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+              "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "fallbackReason": null
+            }
+          ],
+          "instanceBindings": [
+            {
+              "instanceIndex": 0,
+              "productIndex": 0,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "translation": [
+                -1.075,
+                0,
+                -1.075
+              ],
+              "phaseOffset": 0
+            },
+            {
+              "instanceIndex": 1,
+              "productIndex": 1,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "translation": [
+                1.075,
+                0,
+                -1.075
+              ],
+              "phaseOffset": 0.25
+            },
+            {
+              "instanceIndex": 2,
+              "productIndex": 0,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "translation": [
+                -1.075,
+                0,
+                1.075
+              ],
+              "phaseOffset": 0.5
+            },
+            {
+              "instanceIndex": 3,
+              "productIndex": 1,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "translation": [
+                1.075,
+                0,
+                1.075
+              ],
+              "phaseOffset": 0.75
+            }
+          ],
+          "drawInstanceCount": 32768,
+          "maxSelectedProductCount": 8192
+        },
+        "timing": {
+          "authority": "browser-request-animation-frame-cpu-submit-v0",
+          "sampleCount": 240,
+          "p50Ms": 8.300000000000182,
+          "p95Ms": 9.200000000000273
+        },
+        "error": null
+      }
+    },
+    {
+      "index": 6,
+      "capturedAt": "2026-07-16T03:50:15.108Z",
+      "image": {
+        "path": "/private/tmp/kaminos-handy-smoke-phase-transfer-0715/artifacts/gaussian-phase-transfer-0715/witness-8192/frame-006.png",
+        "byteLength": 202952,
+        "sha256": "e229a6b26307ce2ecd9f4e338bbb70a17ddd8d0ed2951887b17356400e6211f9",
+        "width": 2560,
+        "height": 1746,
+        "luminanceMean": 162.24582959517085,
+        "luminanceStdDev": 30.39092198090132,
+        "nonUniformPixelCount": 4039545
+      },
+      "frameDigest": "e229a6b26307ce2ecd9f4e338bbb70a17ddd8d0ed2951887b17356400e6211f9",
+      "runtime": {
+        "schema": "kaminos.smoke-splat-motion-runtime.v0",
+        "status": "running",
+        "requestedRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+        "effectiveRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+        "fallbackReason": null,
+        "backend": "WebGPU:apple",
+        "temporalAuthority": "independent-adjacent-teacher-phase-products-v0",
+        "requestedFootprintAuthority": "axisymmetric-projected-covariance-v1",
+        "effectiveFootprintAuthority": "axisymmetric-projected-covariance-v1",
+        "requestedCoarseCoverageScale": 1,
+        "effectiveCoarseCoverageScale": 1,
+        "manifestPath": "./artifacts/gaussian-phase-transfer-0715/request-8192.json",
+        "instanceCount": 4,
+        "fineLodFraction": 1,
+        "motionRate": 0.16,
+        "frameCount": 516,
+        "elapsedMs": 4297.2,
+        "products": [
+          {
+            "phaseIndex": 0,
+            "identity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+            "producerKind": "oracle-fitted-adjacent-teacher-phase",
+            "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+            "historySlot": 0,
+            "slotWriteTick": 45,
+            "sourceCount": 8192,
+            "coarseCount": 8192,
+            "fineCount": 0,
+            "sourceExtinctionMass": 3403.896947889866,
+            "representedExtinctionMass": 3403.896947892219,
+            "rejectedExtinctionMass": 0,
+            "artifactSha256": "c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17"
+          },
+          {
+            "phaseIndex": 1,
+            "identity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+            "producerKind": "oracle-fitted-adjacent-teacher-phase",
+            "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+            "historySlot": 1,
+            "slotWriteTick": 46,
+            "sourceCount": 8192,
+            "coarseCount": 8192,
+            "fineCount": 0,
+            "sourceExtinctionMass": 3500.186495743509,
+            "representedExtinctionMass": 3500.1864957457956,
+            "rejectedExtinctionMass": 0,
+            "artifactSha256": "373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778"
+          }
+        ],
+        "gpuProducts": [
+          {
+            "phaseIndex": 0,
+            "schema": "kaminos.smoke-splat-gpu-product.v1",
+            "identity": "browser-gpu:gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+            "producerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+            "compilerIdentity": "browser-static-product-upload-v0",
+            "ownership": "runtime-page-destroy-on-unload-v0",
+            "capacity": 8192,
+            "activeCount": 8192,
+            "hierarchyCounts": {
+              "coarse": 8192,
+              "fine": 0,
+              "total": 8192
+            },
+            "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+            "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+            "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "fallbackReason": null,
+            "packingIdentity": "float32x16-axisymmetric-smoke-v0",
+            "outputWasTruncated": false,
+            "drawMode": "direct",
+            "drawAuthority": "cpu-active-count-direct-v0"
+          },
+          {
+            "phaseIndex": 1,
+            "schema": "kaminos.smoke-splat-gpu-product.v1",
+            "identity": "browser-gpu:gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+            "producerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+            "compilerIdentity": "browser-static-product-upload-v0",
+            "ownership": "runtime-page-destroy-on-unload-v0",
+            "capacity": 8192,
+            "activeCount": 8192,
+            "hierarchyCounts": {
+              "coarse": 8192,
+              "fine": 0,
+              "total": 8192
+            },
+            "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+            "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+            "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "fallbackReason": null,
+            "packingIdentity": "float32x16-axisymmetric-smoke-v0",
+            "outputWasTruncated": false,
+            "drawMode": "direct",
+            "drawAuthority": "cpu-active-count-direct-v0"
+          }
+        ],
+        "slotResolve": {
+          "identity": "smoke-splat-slot-resolve-report-v0",
+          "status": "resolved",
+          "requestedProducerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+          "effectiveProducerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+          "simulatorGeneration": 1,
+          "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+          "decoderConfigIdentities": [
+            "0.0200000000000|1.00000000000|0.500000000000|8192"
+          ],
+          "instanceCount": 4,
+          "uniqueSlotCount": 2,
+          "decodeCount": 2,
+          "cacheHitCount": 0,
+          "cachedProductCount": 2,
+          "instanceBindings": [
+            {
+              "instanceIndex": 0,
+              "historySlot": 0,
+              "slotWriteTick": 45,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "transform": null
+            },
+            {
+              "instanceIndex": 1,
+              "historySlot": 1,
+              "slotWriteTick": 46,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "transform": null
+            },
+            {
+              "instanceIndex": 2,
+              "historySlot": 0,
+              "slotWriteTick": 45,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "transform": null
+            },
+            {
+              "instanceIndex": 3,
+              "historySlot": 1,
+              "slotWriteTick": 46,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "transform": null
+            }
+          ],
+          "hierarchyCounts": {
+            "coarse": 16384,
+            "fine": 0,
+            "total": 16384
+          },
+          "accounting": {
+            "sourceExtinctionMass": 6904.083443633375,
+            "representedExtinctionMass": 6904.083443638015,
+            "rejectedExtinctionMass": 0
+          }
+        },
+        "drawPlan": {
+          "identity": "smoke-splat-motion-draw-plan-v0",
+          "instanceCount": 4,
+          "uniqueProductCount": 2,
+          "fineLodFraction": 1,
+          "coarseSplatsAlwaysPresent": true,
+          "rejectedExtinctionMass": 0,
+          "productUploads": [
+            {
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "sourceCount": 8192,
+              "selectedCount": 8192,
+              "coarseCount": 8192,
+              "fineCount": 0,
+              "sourceExtinctionMass": 3403.896947108209,
+              "representedExtinctionMass": 3403.896947108209,
+              "rejectedExtinctionMass": 0,
+              "coarseMassCompensation": 0,
+              "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+              "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+              "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "fallbackReason": null
+            },
+            {
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "sourceCount": 8192,
+              "selectedCount": 8192,
+              "coarseCount": 8192,
+              "fineCount": 0,
+              "sourceExtinctionMass": 3500.1864953264594,
+              "representedExtinctionMass": 3500.1864953264594,
+              "rejectedExtinctionMass": 0,
+              "coarseMassCompensation": 0,
+              "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+              "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+              "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "fallbackReason": null
+            }
+          ],
+          "instanceBindings": [
+            {
+              "instanceIndex": 0,
+              "productIndex": 0,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "translation": [
+                -1.075,
+                0,
+                -1.075
+              ],
+              "phaseOffset": 0
+            },
+            {
+              "instanceIndex": 1,
+              "productIndex": 1,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "translation": [
+                1.075,
+                0,
+                -1.075
+              ],
+              "phaseOffset": 0.25
+            },
+            {
+              "instanceIndex": 2,
+              "productIndex": 0,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "translation": [
+                -1.075,
+                0,
+                1.075
+              ],
+              "phaseOffset": 0.5
+            },
+            {
+              "instanceIndex": 3,
+              "productIndex": 1,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "translation": [
+                1.075,
+                0,
+                1.075
+              ],
+              "phaseOffset": 0.75
+            }
+          ],
+          "drawInstanceCount": 32768,
+          "maxSelectedProductCount": 8192
+        },
+        "timing": {
+          "authority": "browser-request-animation-frame-cpu-submit-v0",
+          "sampleCount": 240,
+          "p50Ms": 8.300000000000182,
+          "p95Ms": 9.299999999999727
+        },
+        "error": null
+      }
+    },
+    {
+      "index": 7,
+      "capturedAt": "2026-07-16T03:50:15.571Z",
+      "image": {
+        "path": "/private/tmp/kaminos-handy-smoke-phase-transfer-0715/artifacts/gaussian-phase-transfer-0715/witness-8192/frame-007.png",
+        "byteLength": 199302,
+        "sha256": "1a8f66a962170b4f4779cc8f5278ec38a45b3f7963a3c8b7067d211acd848ba6",
+        "width": 2560,
+        "height": 1746,
+        "luminanceMean": 162.25888617606438,
+        "luminanceStdDev": 30.372344772983222,
+        "nonUniformPixelCount": 4039711
+      },
+      "frameDigest": "1a8f66a962170b4f4779cc8f5278ec38a45b3f7963a3c8b7067d211acd848ba6",
+      "runtime": {
+        "schema": "kaminos.smoke-splat-motion-runtime.v0",
+        "status": "running",
+        "requestedRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+        "effectiveRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+        "fallbackReason": null,
+        "backend": "WebGPU:apple",
+        "temporalAuthority": "independent-adjacent-teacher-phase-products-v0",
+        "requestedFootprintAuthority": "axisymmetric-projected-covariance-v1",
+        "effectiveFootprintAuthority": "axisymmetric-projected-covariance-v1",
+        "requestedCoarseCoverageScale": 1,
+        "effectiveCoarseCoverageScale": 1,
+        "manifestPath": "./artifacts/gaussian-phase-transfer-0715/request-8192.json",
+        "instanceCount": 4,
+        "fineLodFraction": 1,
+        "motionRate": 0.16,
+        "frameCount": 572,
+        "elapsedMs": 4763.9,
+        "products": [
+          {
+            "phaseIndex": 0,
+            "identity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+            "producerKind": "oracle-fitted-adjacent-teacher-phase",
+            "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+            "historySlot": 0,
+            "slotWriteTick": 45,
+            "sourceCount": 8192,
+            "coarseCount": 8192,
+            "fineCount": 0,
+            "sourceExtinctionMass": 3403.896947889866,
+            "representedExtinctionMass": 3403.896947892219,
+            "rejectedExtinctionMass": 0,
+            "artifactSha256": "c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17"
+          },
+          {
+            "phaseIndex": 1,
+            "identity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+            "producerKind": "oracle-fitted-adjacent-teacher-phase",
+            "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+            "historySlot": 1,
+            "slotWriteTick": 46,
+            "sourceCount": 8192,
+            "coarseCount": 8192,
+            "fineCount": 0,
+            "sourceExtinctionMass": 3500.186495743509,
+            "representedExtinctionMass": 3500.1864957457956,
+            "rejectedExtinctionMass": 0,
+            "artifactSha256": "373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778"
+          }
+        ],
+        "gpuProducts": [
+          {
+            "phaseIndex": 0,
+            "schema": "kaminos.smoke-splat-gpu-product.v1",
+            "identity": "browser-gpu:gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+            "producerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+            "compilerIdentity": "browser-static-product-upload-v0",
+            "ownership": "runtime-page-destroy-on-unload-v0",
+            "capacity": 8192,
+            "activeCount": 8192,
+            "hierarchyCounts": {
+              "coarse": 8192,
+              "fine": 0,
+              "total": 8192
+            },
+            "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+            "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+            "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "fallbackReason": null,
+            "packingIdentity": "float32x16-axisymmetric-smoke-v0",
+            "outputWasTruncated": false,
+            "drawMode": "direct",
+            "drawAuthority": "cpu-active-count-direct-v0"
+          },
+          {
+            "phaseIndex": 1,
+            "schema": "kaminos.smoke-splat-gpu-product.v1",
+            "identity": "browser-gpu:gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+            "producerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+            "compilerIdentity": "browser-static-product-upload-v0",
+            "ownership": "runtime-page-destroy-on-unload-v0",
+            "capacity": 8192,
+            "activeCount": 8192,
+            "hierarchyCounts": {
+              "coarse": 8192,
+              "fine": 0,
+              "total": 8192
+            },
+            "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+            "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+            "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+            "fallbackReason": null,
+            "packingIdentity": "float32x16-axisymmetric-smoke-v0",
+            "outputWasTruncated": false,
+            "drawMode": "direct",
+            "drawAuthority": "cpu-active-count-direct-v0"
+          }
+        ],
+        "slotResolve": {
+          "identity": "smoke-splat-slot-resolve-report-v0",
+          "status": "resolved",
+          "requestedProducerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+          "effectiveProducerAuthority": "oracle-fitted-gaussian-smoke-splat-producer-v0",
+          "simulatorGeneration": 1,
+          "modelIdentity": "gaussian-phase-model:gradient4:budget-8192:steps-45-46",
+          "decoderConfigIdentities": [
+            "0.0200000000000|1.00000000000|0.500000000000|8192"
+          ],
+          "instanceCount": 4,
+          "uniqueSlotCount": 2,
+          "decodeCount": 2,
+          "cacheHitCount": 0,
+          "cachedProductCount": 2,
+          "instanceBindings": [
+            {
+              "instanceIndex": 0,
+              "historySlot": 0,
+              "slotWriteTick": 45,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "transform": null
+            },
+            {
+              "instanceIndex": 1,
+              "historySlot": 1,
+              "slotWriteTick": 46,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "transform": null
+            },
+            {
+              "instanceIndex": 2,
+              "historySlot": 0,
+              "slotWriteTick": 45,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "transform": null
+            },
+            {
+              "instanceIndex": 3,
+              "historySlot": 1,
+              "slotWriteTick": 46,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "transform": null
+            }
+          ],
+          "hierarchyCounts": {
+            "coarse": 16384,
+            "fine": 0,
+            "total": 16384
+          },
+          "accounting": {
+            "sourceExtinctionMass": 6904.083443633375,
+            "representedExtinctionMass": 6904.083443638015,
+            "rejectedExtinctionMass": 0
+          }
+        },
+        "drawPlan": {
+          "identity": "smoke-splat-motion-draw-plan-v0",
+          "instanceCount": 4,
+          "uniqueProductCount": 2,
+          "fineLodFraction": 1,
+          "coarseSplatsAlwaysPresent": true,
+          "rejectedExtinctionMass": 0,
+          "productUploads": [
+            {
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "sourceCount": 8192,
+              "selectedCount": 8192,
+              "coarseCount": 8192,
+              "fineCount": 0,
+              "sourceExtinctionMass": 3403.896947108209,
+              "representedExtinctionMass": 3403.896947108209,
+              "rejectedExtinctionMass": 0,
+              "coarseMassCompensation": 0,
+              "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+              "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+              "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "fallbackReason": null
+            },
+            {
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "sourceCount": 8192,
+              "selectedCount": 8192,
+              "coarseCount": 8192,
+              "fineCount": 0,
+              "sourceExtinctionMass": 3500.1864953264594,
+              "representedExtinctionMass": 3500.1864953264594,
+              "rejectedExtinctionMass": 0,
+              "coarseMassCompensation": 0,
+              "sourceRepresentation": "float32x28-full-covariance-gaussian-v0",
+              "conversionAuthority": "full-covariance-to-axisymmetric-major-eigenvector-v0",
+              "requestedRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "effectiveRepresentation": "float32x16-axisymmetric-smoke-v0",
+              "fallbackReason": null
+            }
+          ],
+          "instanceBindings": [
+            {
+              "instanceIndex": 0,
+              "productIndex": 0,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "translation": [
+                -1.075,
+                0,
+                -1.075
+              ],
+              "phaseOffset": 0
+            },
+            {
+              "instanceIndex": 1,
+              "productIndex": 1,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "translation": [
+                1.075,
+                0,
+                -1.075
+              ],
+              "phaseOffset": 0.25
+            },
+            {
+              "instanceIndex": 2,
+              "productIndex": 0,
+              "productIdentity": "gaussian-phase-product:45:8192:sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17",
+              "translation": [
+                -1.075,
+                0,
+                1.075
+              ],
+              "phaseOffset": 0.5
+            },
+            {
+              "instanceIndex": 3,
+              "productIndex": 1,
+              "productIdentity": "gaussian-phase-product:46:8192:sha256:373696af0c9086cb4bce9e8cb78e7b35398ec3030bc9c44d1ad2e8b787ac0778",
+              "translation": [
+                1.075,
+                0,
+                1.075
+              ],
+              "phaseOffset": 0.75
+            }
+          ],
+          "drawInstanceCount": 32768,
+          "maxSelectedProductCount": 8192
+        },
+        "timing": {
+          "authority": "browser-request-animation-frame-cpu-submit-v0",
+          "sampleCount": 240,
+          "p50Ms": 8.300000000000182,
+          "p95Ms": 9.200000000000273
+        },
+        "error": null
+      }
+    }
+  ],
+  "falseClosureChecks": {
+    "rejectsWrongOrFallbackRoute": true,
+    "rejectsWrongFootprintAuthority": true,
+    "rejectsWrongCoarseCoverageScale": true,
+    "rejectsMissingPartialOrBlankOutput": true,
+    "rejectsStaticOrCachedFrames": true,
+    "rejectsTruncatedOrMassLosingProducts": true,
+    "rejectsUnvalidatedOrFallbackGpuProducts": true,
+    "preservesFailurePhaseBeforePrimaryOutput": true
+  },
+  "claimBoundary": "Standalone WebGPU smoke representation and raster motion evidence. This does not prove final flame-smoke depth composition or live recurrent smoke decode."
+}

@@ -20,6 +20,12 @@
       cameraFrame,
       loadSmokeSplatMotionSource,
     } from './smoke-splat-motion-source.mjs';
+    import {
+      SMOKE_SPLAT_DIRECT_DRAW_AUTHORITY,
+      SMOKE_SPLAT_GPU_PRODUCT_SCHEMA,
+      SMOKE_SPLAT_PACKING_IDENTITY,
+      validateSmokeSplatGpuProduct,
+    } from './smoke-splat-gpu-product.mjs';
 
     const canvas = document.getElementById('smoke-motion-canvas');
     const params = new URLSearchParams(location.search);
@@ -53,6 +59,8 @@
       frameCount: 0,
       error: null,
       products: [],
+      gpuProducts: [],
+      slotResolve: null,
       drawPlan: null,
       timing: {
         authority: 'browser-request-animation-frame-cpu-submit-v0',
@@ -70,6 +78,24 @@
       const usesProjectedCovariance = requestedFootprintAuthority === SMOKE_SPLAT_FOOTPRINT_PROJECTED_COVARIANCE_AUTHORITY;
       if (!navigator.gpu) throw new Error('navigator.gpu is unavailable');
       const source = await loadSmokeSplatMotionSource(new URL(manifestPath, location.href), { instanceCount, fineLodFraction });
+      state.temporalAuthority = source.manifest.temporalAuthority;
+      state.slotResolve = source.slotResolve ? {
+        identity: source.slotResolve.identity,
+        status: source.slotResolve.status,
+        requestedProducerAuthority: source.slotResolve.requestedProducerAuthority,
+        effectiveProducerAuthority: source.slotResolve.effectiveProducerAuthority,
+        simulatorGeneration: source.slotResolve.simulatorGeneration,
+        modelIdentity: source.slotResolve.modelIdentity,
+        decoderConfigIdentities: source.slotResolve.decoderConfigIdentities,
+        instanceCount: source.slotResolve.instanceCount,
+        uniqueSlotCount: source.slotResolve.uniqueSlotCount,
+        decodeCount: source.slotResolve.decodeCount,
+        cacheHitCount: source.slotResolve.cacheHitCount,
+        cachedProductCount: source.slotResolve.cachedProductCount,
+        instanceBindings: source.slotResolve.instanceBindings,
+        hierarchyCounts: source.slotResolve.hierarchyCounts,
+        accounting: source.slotResolve.accounting,
+      } : null;
       const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
       if (!adapter) throw new Error('WebGPU adapter request returned null');
       const device = await adapter.requestDevice();
@@ -110,13 +136,18 @@
           representedExtinctionMass: upload.representedExtinctionMass,
           rejectedExtinctionMass: upload.rejectedExtinctionMass,
           coarseMassCompensation: upload.coarseMassCompensation,
+          sourceRepresentation: upload.sourceRepresentation,
+          conversionAuthority: upload.conversionAuthority,
+          requestedRepresentation: upload.requestedRepresentation,
+          effectiveRepresentation: upload.effectiveRepresentation,
+          fallbackReason: upload.fallbackReason,
         })),
         instanceBindings: source.drawPlan.instanceBindings,
       };
 
       const format = navigator.gpu.getPreferredCanvasFormat();
       context.configure({ device, format, alphaMode: 'opaque' });
-      const productBuffers = source.drawPlan.productUploads.map((upload, index) => {
+      const gpuProducts = source.drawPlan.productUploads.map((upload, index) => {
         if (!(upload.packed instanceof Float32Array)) throw new Error(`phase ${index} has no packed upload`);
         const buffer = device.createBuffer({
           label: `kaminos smoke phase ${index} exact product`,
@@ -126,9 +157,61 @@
         });
         new Float32Array(buffer.getMappedRange()).set(upload.packed);
         buffer.unmap();
-        return buffer;
+        const product = validateSmokeSplatGpuProduct({
+          schema: SMOKE_SPLAT_GPU_PRODUCT_SCHEMA,
+          identity: `browser-gpu:${upload.productIdentity}`,
+          producerAuthority: source.manifest.producerAuthority,
+          compilerIdentity: 'browser-static-product-upload-v0',
+          ownership: 'runtime-page-destroy-on-unload-v0',
+          device,
+          packedBuffer: buffer,
+          packedByteLength: upload.packed.byteLength,
+          capacity: upload.selectedCount,
+          activeCount: upload.selectedCount,
+          hierarchyCounts: {
+            coarse: upload.coarseCount,
+            fine: upload.fineCount,
+            total: upload.selectedCount,
+          },
+          representation: {
+            sourceIdentity: upload.sourceRepresentation,
+            conversionAuthority: upload.conversionAuthority,
+            requestedIdentity: upload.requestedRepresentation,
+            effectiveIdentity: upload.effectiveRepresentation,
+            fallbackReason: upload.fallbackReason,
+            packingIdentity: SMOKE_SPLAT_PACKING_IDENTITY,
+            activeRecordsPackedFirst: true,
+            outputWasTruncated: false,
+          },
+          draw: {
+            mode: 'direct',
+            authority: SMOKE_SPLAT_DIRECT_DRAW_AUTHORITY,
+          },
+        }, { device });
+        return product;
       });
+      const productBuffers = gpuProducts.map(product => product.packedBuffer);
       if (productBuffers.length !== 2) throw new Error(`first motion route requires exactly two products, got ${productBuffers.length}`);
+      state.gpuProducts = gpuProducts.map((product, index) => ({
+        phaseIndex: index,
+        schema: product.schema,
+        identity: product.identity,
+        producerAuthority: product.producerAuthority,
+        compilerIdentity: product.compilerIdentity,
+        ownership: product.ownership,
+        capacity: product.capacity,
+        activeCount: product.activeCount,
+        hierarchyCounts: product.hierarchyCounts,
+        sourceRepresentation: product.representation.sourceIdentity,
+        conversionAuthority: product.representation.conversionAuthority,
+        requestedRepresentation: product.representation.requestedIdentity,
+        effectiveRepresentation: product.representation.effectiveIdentity,
+        fallbackReason: product.representation.fallbackReason,
+        packingIdentity: product.representation.packingIdentity,
+        outputWasTruncated: product.representation.outputWasTruncated,
+        drawMode: product.draw.mode,
+        drawAuthority: product.draw.authority,
+      }));
 
       const descriptorValues = new Float32Array(instanceCount * 8);
       for (const binding of source.drawPlan.instanceBindings) {

@@ -6,12 +6,21 @@ import { join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { inflateSync } from 'node:zlib';
 import {
+  SMOKE_GAUSSIAN_PHASE_TEMPORAL_AUTHORITY,
   SMOKE_SPLAT_FOOTPRINT_BILLBOARD_AUTHORITY,
+  SMOKE_SPLAT_MOTION_TEMPORAL_AUTHORITY,
 } from './smoke-splat-motion-source.mjs';
+import {
+  SMOKE_SPLAT_GPU_PRODUCT_SCHEMA,
+  SMOKE_SPLAT_PACKING_IDENTITY,
+} from './smoke-splat-gpu-product.mjs';
 
 const SCHEMA = 'kaminos.smoke-splat-motion-witness.v0';
 const ROUTE_IDENTITY = 'webgpu-real-field-hierarchical-smoke-motion-v0';
-const TEMPORAL_AUTHORITY = 'velocity-carried-short-horizon-extrapolation-v0';
+const TEMPORAL_AUTHORITIES = new Set([
+  SMOKE_SPLAT_MOTION_TEMPORAL_AUTHORITY,
+  SMOKE_GAUSSIAN_PHASE_TEMPORAL_AUTHORITY,
+]);
 const args = parseArgs(process.argv.slice(2));
 const requestedUrl = requireIdentity(args.get('--url'), '--url');
 const requestedRoute = new URL(requestedUrl).searchParams.get('route') || ROUTE_IDENTITY;
@@ -141,6 +150,7 @@ try {
     },
     source: {
       products: finalCompact.products,
+      slotResolve: finalCompact.slotResolve,
       drawPlan: finalCompact.drawPlan,
     },
     runtime: {
@@ -164,6 +174,7 @@ try {
       rejectsMissingPartialOrBlankOutput: true,
       rejectsStaticOrCachedFrames: true,
       rejectsTruncatedOrMassLosingProducts: true,
+      rejectsUnvalidatedOrFallbackGpuProducts: true,
       preservesFailurePhaseBeforePrimaryOutput: true,
     },
     claimBoundary: 'Standalone WebGPU smoke representation and raster motion evidence. This does not prove final flame-smoke depth composition or live recurrent smoke decode.',
@@ -369,14 +380,47 @@ function validateState(state) {
   assert.equal(state.effectiveRoute, ROUTE_IDENTITY);
   assert.equal(state.fallbackReason, null);
   assert.match(state.backend || '', /^WebGPU:/);
-  assert.equal(state.temporalAuthority, TEMPORAL_AUTHORITY);
+  assert.equal(TEMPORAL_AUTHORITIES.has(state.temporalAuthority), true, 'unsupported temporal authority');
   assert.equal(state.requestedFootprintAuthority, requestedFootprintAuthority);
   assert.equal(state.effectiveFootprintAuthority, requestedFootprintAuthority);
   assert.equal(state.requestedCoarseCoverageScale, requestedCoarseCoverageScale);
   assert.equal(state.effectiveCoarseCoverageScale, requestedCoarseCoverageScale);
   assert.equal(state.products?.length, 2);
-  assert.equal(state.products.some(product => product.producerKind === 'learned-heldout-residual-selector'), true);
+  if (state.temporalAuthority === SMOKE_GAUSSIAN_PHASE_TEMPORAL_AUTHORITY) {
+    assert.equal(
+      state.products.every(product => product.producerKind === 'oracle-fitted-adjacent-teacher-phase'),
+      true,
+      'Gaussian phase authority requires adjacent-teacher products',
+    );
+    assert.equal(state.slotResolve?.status, 'resolved');
+    assert.equal(state.slotResolve?.instanceCount, state.instanceCount);
+    assert.equal(state.slotResolve?.uniqueSlotCount, 2);
+    assert.equal(state.slotResolve?.decodeCount, 2);
+    assert.equal(state.slotResolve?.cacheHitCount, 0);
+    assert.equal(state.slotResolve?.cachedProductCount, 2);
+    assert.equal(state.slotResolve?.instanceBindings?.length, state.instanceCount);
+    assert.equal(
+      state.gpuProducts.every(product => product.sourceRepresentation === 'float32x28-full-covariance-gaussian-v0'),
+      true,
+    );
+    assert.equal(
+      state.gpuProducts.every(product => product.conversionAuthority === 'full-covariance-to-axisymmetric-major-eigenvector-v0'),
+      true,
+    );
+    assert.equal(
+      state.gpuProducts.every(product => product.effectiveRepresentation === SMOKE_SPLAT_PACKING_IDENTITY),
+      true,
+    );
+  } else {
+    assert.equal(state.products.some(product => product.producerKind === 'learned-heldout-residual-selector'), true);
+  }
   assert.equal(state.products.every(product => product.rejectedExtinctionMass === 0), true);
+  assert.equal(state.gpuProducts?.length, 2);
+  assert.equal(state.gpuProducts.every(product => product.schema === SMOKE_SPLAT_GPU_PRODUCT_SCHEMA), true);
+  assert.equal(state.gpuProducts.every(product => product.packingIdentity === SMOKE_SPLAT_PACKING_IDENTITY), true);
+  assert.equal(state.gpuProducts.every(product => product.requestedRepresentation === product.effectiveRepresentation), true);
+  assert.equal(state.gpuProducts.every(product => product.fallbackReason === null), true);
+  assert.equal(state.gpuProducts.every(product => product.outputWasTruncated === false), true);
   assert.equal(state.drawPlan?.uniqueProductCount, 2);
   assert.equal(state.drawPlan?.coarseSplatsAlwaysPresent, true);
   assert.equal(state.drawPlan?.rejectedExtinctionMass, 0);
@@ -404,6 +448,8 @@ function compactState(state) {
     frameCount: state.frameCount,
     elapsedMs: state.elapsedMs,
     products: state.products,
+    gpuProducts: state.gpuProducts,
+    slotResolve: state.slotResolve,
     drawPlan: state.drawPlan,
     timing: state.timing ? {
       authority: state.timing.authority,

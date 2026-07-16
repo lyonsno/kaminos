@@ -1,0 +1,27 @@
+{
+  "schema": "kaminos.smoke-gaussian-phase-transfer-request.v0",
+  "status": "requested",
+  "requestedRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+  "budget": 1024,
+  "simulatorGeneration": 1,
+  "modelIdentity": "gaussian-phase-model:gradient4:budget-1024:steps-45-46",
+  "cameraIdentity": "sha256:52d62666d901cd0fbdbc11d5658ae3f40fd035b404cf4aaab674cab2837a4d7e",
+  "phases": [
+    {
+      "historySlot": 0,
+      "slotWriteTick": 45,
+      "fitReportUrl": "./step-45/oracle-fit-report.json",
+      "fitReportSha256": "963484537ef5bc69572cfe81001b4accbac39914711b8cb261dd80d321398ef4",
+      "artifactUrl": "./step-45/budget-1024.gaussians.f32",
+      "artifactSha256": "bf7f884bfa8807637940182eb1f4aa5b3443bece905f66534828ba6dc0e2c0ef"
+    },
+    {
+      "historySlot": 1,
+      "slotWriteTick": 46,
+      "fitReportUrl": "./step-46/oracle-fit-report.json",
+      "fitReportSha256": "09822192d49623e4a73ddf0ba9358b39aa086128da3ef7952072177556787098",
+      "artifactUrl": "./step-46/budget-1024.gaussians.f32",
+      "artifactSha256": "b04bf06ed6babe28659c7e94e4a4390fb4ad6aa43e28342ee85cb477240e3b46"
+    }
+  ]
+}
