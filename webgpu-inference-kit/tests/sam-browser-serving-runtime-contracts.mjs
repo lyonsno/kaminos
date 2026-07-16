@@ -212,6 +212,31 @@ assert.deepEqual(lifecycle, ['model-close', 'device-destroy'], 'model leases mus
 await assert.rejects(() => resources.executionContext(), /serving resources are closed/);
 assert.throws(() => resources.setImageFeatures(firstImageKey, cachedFeatures), /serving resources are closed/);
 
+let invalidModelCloseCount = 0;
+let invalidModelDeviceDestroyCount = 0;
+const invalidModelResources = kit.createSam3BrowserServingResources({
+  async acquireExecutionContext() {
+    return {
+      adapter: { info: { description: 'invalid-model-test-adapter' } },
+      device: { destroy() { invalidModelDeviceDestroyCount += 1; } },
+    };
+  },
+  async acquireModelSession() {
+    return {
+      packageId: 'sam3-model-package:wrong-package',
+      async close() { invalidModelCloseCount += 1; },
+    };
+  },
+});
+await assert.rejects(
+  () => invalidModelResources.modelSession(packageRuntime),
+  /preserve package identity and close authority/i,
+  'a resident model session with substituted package identity must be rejected',
+);
+assert.equal(invalidModelCloseCount, 1, 'a rejected but live resident model session must be closed before its authority is discarded');
+await invalidModelResources.close();
+assert.equal(invalidModelDeviceDestroyCount, 1, 'rejected model acquisition must still release the borrowed serving device');
+
 const workbench = readFileSync(new URL('../smokes/sam-semantic-mask-workbench.js', import.meta.url), 'utf8');
 const runtime = readFileSync(new URL('../smokes/sam-mask-island-parity.js', import.meta.url), 'utf8');
 assert.match(workbench, /sam-mask-island-serving\.html/, 'workbench must enter a serving route rather than the parity page');

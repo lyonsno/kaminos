@@ -84,6 +84,33 @@ assert.deepEqual(lifecycle, [
 assert.equal(session.evidence().status, 'closed');
 assert.throws(() => session.loadFloat32({ role: 'fixture-weight' }), /closed/i);
 
+const failedCloseLifecycle = [];
+const failedCloseSession = kit.createSam3BrowserResidentModelSessionForTest({
+  packageRuntime,
+  ownerRoute,
+  residentResources: {
+    ...residentResources,
+    release() { failedCloseLifecycle.push('resident-release'); },
+  },
+  inferenceSession: {
+    async drain() {
+      failedCloseLifecycle.push('session-drain');
+      throw new Error('fixture drain failed');
+    },
+    unregisterRoute() { failedCloseLifecycle.push('owner-route-unregister'); },
+    close() { failedCloseLifecycle.push('session-close'); },
+    snapshot() { return { sessionId: 'failed-close-session', deviceOwnership: 'borrowed' }; },
+  },
+  preparationMilliseconds: 1,
+});
+await assert.rejects(() => failedCloseSession.close(), /fixture drain failed/);
+assert.deepEqual(
+  failedCloseLifecycle,
+  ['session-drain', 'resident-release', 'owner-route-unregister', 'session-close'],
+  'a drain failure must remain visible without stranding resident resources or route/session ownership',
+);
+assert.equal(failedCloseSession.evidence().status, 'closed');
+
 const sourceText = readFileSync(new URL('../src/sam3-browser-resident-model-session.js', import.meta.url), 'utf8');
 assert.match(sourceText, /createWebGpuInferenceSession/);
 assert.match(sourceText, /deviceOwnership:\s*['"]borrowed['"]/);

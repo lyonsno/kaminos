@@ -43,11 +43,30 @@ function createResidentSession({ packageRuntime, inferenceSession, ownerRoute, r
     if (closePromise) return closePromise;
     status = 'closing';
     closePromise = (async () => {
-      await inferenceSession.drain();
-      residentResources.release();
-      inferenceSession.unregisterRoute(ownerRoute.routeId);
-      inferenceSession.close();
+      const errors = [];
+      for (const closeStep of [
+        () => inferenceSession.drain(),
+        () => residentResources.release(),
+        () => inferenceSession.unregisterRoute(ownerRoute.routeId),
+        () => inferenceSession.close(),
+      ]) {
+        try {
+          await closeStep();
+        } catch (error) {
+          errors.push(error);
+        }
+      }
       status = 'closed';
+      if (errors.length > 0) {
+        if (errors.length > 1 && errors[0] && typeof errors[0] === 'object') {
+          try {
+            errors[0].cleanupErrors = errors.slice(1);
+          } catch {
+            // Preserve the primary teardown failure even when it is non-extensible.
+          }
+        }
+        throw errors[0];
+      }
     })();
     return closePromise;
   }

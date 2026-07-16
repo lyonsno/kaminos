@@ -105,9 +105,15 @@ export function createSam3BrowserServingResources({
         executionContext: execution,
         commit: options.commit || null,
       }))
-      .then(value => {
+      .then(async value => {
         if (!value || value.packageId !== packageId || typeof value.close !== 'function') {
-          throw new Error('resident model session must preserve package identity and close authority');
+          const contractError = new Error('resident model session must preserve package identity and close authority');
+          try {
+            await value?.close?.();
+          } catch (error) {
+            contractError.cleanupError = error;
+          }
+          throw contractError;
         }
         modelSessionAcquisitions += 1;
         modelPreparationMilliseconds = now() - startedAt;
