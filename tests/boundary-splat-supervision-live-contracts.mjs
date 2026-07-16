@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const core = await readFile(new URL('../volume-core.js', import.meta.url), 'utf8');
+const supervisionCaptureStart = core.indexOf('async function captureBoundarySplatSupervisionFrame');
+const supervisionCaptureEnd = core.indexOf('async function captureBoundarySplatRayStepAblation', supervisionCaptureStart);
+const supervisionCapture = core.slice(supervisionCaptureStart, supervisionCaptureEnd);
 
 assert.match(core, /async function captureBoundarySplatSupervisionFrame/, 'renderer exposes a dedicated fixed-candidate supervision capture');
 assert.match(core, /captureBoundarySplatSupervisionFrame[\s\S]*cancelAnimationFrame\(raf\)/, 'supervision capture arrests the live render loop before paired evidence');
@@ -27,7 +30,7 @@ assert.match(core, /candidateSample\.boundarySplatRendererIdentity\s*!==\s*BOUND
 assert.match(core, /targetSample\.volumeReconstructionStyle\s*===\s*BOUNDARY_SPLAT_RENDERER_IDENTITY/, 'supervision capture rejects a splat target pretending to be raymarch');
 assert.match(core, /candidateSample\.boundarySplatCandidateCount\s*!==\s*candidateSample\.boundarySplatSupervisionCapture\.rowCount/, 'supervision capture rejects partial candidate rows');
 assert.match(core, /candidateSample\.simStepCount\s*!==\s*targetSample\.simStepCount/, 'supervision capture rejects candidate and raymarch evidence from different simulation states');
-assert.doesNotMatch(core, /targetSample\.simStepCount\s*!==\s*baseSimStepCount/, 'a pre-capture diagnostic counter cannot invalidate an internally identical candidate-target pair');
+assert.doesNotMatch(supervisionCapture, /targetSample\.simStepCount\s*!==\s*baseSimStepCount/, 'a pre-capture diagnostic counter cannot invalidate an internally identical candidate-target pair');
 assert.match(core, /cameraRight:\s*Array\.from\(/, 'supervision camera metadata includes the exact billboard right basis used by the rasterizer');
 assert.match(core, /cameraUp:\s*Array\.from\(/, 'supervision camera metadata includes the exact billboard up basis used by the rasterizer');
 assert.match(core, /splatControls:[\s\S]*radius:[\s\S]*sharpness:/, 'supervision metadata records the effective splat footprint controls required for differentiable replay');

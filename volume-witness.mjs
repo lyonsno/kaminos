@@ -12,6 +12,11 @@ import {
   settleBoundarySplatRawRelease,
   validateBoundarySplatSupervisionCorpus,
 } from './boundary-splat-supervision-corpus.mjs';
+import {
+  RAY_STEP_ABLATION_AUTHORITY,
+  parseRayStepAblation,
+  validateRayStepAblationReceipt,
+} from './boundary-splat-ray-step-ablation.mjs';
 
 const BOUNDARY_SPLAT_SUPERVISION_TARGET_DECOMPOSITION = 'candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0';
 
@@ -140,6 +145,18 @@ const boundarySplatSupervisionDirArg = args.get('--boundary-splat-supervision-di
 const boundarySplatSupervisionDir = typeof boundarySplatSupervisionDirArg === 'string'
   ? resolve(boundarySplatSupervisionDirArg)
   : null;
+const boundarySplatRayStepAblationArg = args.get('--boundary-splat-ray-step-ablation');
+const boundarySplatRayStepAblation = typeof boundarySplatRayStepAblationArg === 'string'
+  ? parseRayStepAblation(boundarySplatRayStepAblationArg)
+  : null;
+const boundarySplatRayStepAblationDirArg = args.get('--boundary-splat-ray-step-ablation-dir');
+const boundarySplatRayStepAblationDir = boundarySplatRayStepAblation
+  ? resolve(typeof boundarySplatRayStepAblationDirArg === 'string'
+    ? boundarySplatRayStepAblationDirArg
+    : '/tmp/kaminos-boundary-splat-ray-step-ablation')
+  : null;
+const boundarySplatRayStepAblationFrames = Math.max(1, Math.floor(Number(args.get('--boundary-splat-ray-step-ablation-frames') || 1)));
+const boundarySplatRayStepAblationStepDeltaMs = Math.max(0, Number(args.get('--boundary-splat-ray-step-ablation-step-delta-ms') || 220));
 const boundarySplatSupervisionFrames = Math.max(1, Math.floor(Number(args.get('--boundary-splat-supervision-frames') || 1)));
 const boundarySplatSupervisionStepDeltaMs = Math.max(0, Number(args.get('--boundary-splat-supervision-step-delta-ms') || 220));
 const boundarySplatSupervisionRawSidecar = args.has('--boundary-splat-supervision-raw-sidecar');
@@ -152,7 +169,9 @@ const boundarySplatSupervisionRawCaptureResponseGraceMs = 5_000;
 const out = resolve(args.get('--out') || '/tmp/kaminos-volume-witness.png');
 const reportPath = resolve(args.get('--report') || (boundarySplatSupervisionDir
   ? join(boundarySplatSupervisionDir, 'report.json')
-  : out.replace(/\.png$/i, '.json')));
+  : boundarySplatRayStepAblationDir
+    ? join(boundarySplatRayStepAblationDir, 'report.json')
+    : out.replace(/\.png$/i, '.json')));
 const boundarySplatFeatureOutArg = args.get('--boundary-splat-feature-out');
 const boundarySplatFeatureOut = resolve(
   typeof boundarySplatFeatureOutArg === 'string'
@@ -2401,6 +2420,237 @@ async function readCachedBrowserBytes(ws, cacheName, expectedLength, label, requ
   return { bytes, chunkBytes: transportChunkBytes, chunkCount: chunks.length };
 }
 
+function measureRayStepTargetDifference(leftBuffer, rightBuffer) {
+  const left = parsePngRgba(leftBuffer);
+  const right = parsePngRgba(rightBuffer);
+  assert.equal(left.width, right.width, 'ray-step target comparison width mismatch');
+  assert.equal(left.height, right.height, 'ray-step target comparison height mismatch');
+  let absolute = 0;
+  let squared = 0;
+  let samples = 0;
+  for (let y = 0; y < left.height; y += 1) {
+    for (let x = 0; x < left.width; x += 1) {
+      const leftOffset = x * left.channels;
+      const rightOffset = x * right.channels;
+      for (let channel = 0; channel < 3; channel += 1) {
+        const delta = Number(left.rows[y][leftOffset + channel]) - Number(right.rows[y][rightOffset + channel]);
+        absolute += Math.abs(delta);
+        squared += delta * delta;
+        samples += 1;
+      }
+    }
+  }
+  const meanAbsoluteError = absolute / Math.max(1, samples);
+  const meanSquaredError = squared / Math.max(1, samples);
+  return {
+    identity: 'native-raymarch-step-target-rgb-difference-v0',
+    meanAbsoluteError,
+    meanSquaredError,
+    psnrDb: meanSquaredError > 0 ? 10 * Math.log10((255 * 255) / meanSquaredError) : null,
+    sampleCount: samples,
+  };
+}
+
+async function captureBoundarySplatRayStepAblationArtifacts(ws, outputDir) {
+  mkdirSync(outputDir, { recursive: true });
+  const rayStepAblationReportPath = join(outputDir, 'report.json');
+  let rayStepAblationPhase = 'initialize-sequence';
+  let capturedFrameCount = 0;
+  let lastTrustworthyEvidence = {
+    authority: 'boundary-splat-ray-step-ablation-last-trustworthy-evidence-v0',
+    requestedRoute: url,
+    effectiveRoute: null,
+    backend: null,
+    fallbackReason: null,
+    lastSimStepCount: null,
+    lastFrameId: null,
+    capturedFrameCount: 0,
+  };
+  const request = (requestWs, method, params = {}, requestOptions = {}) => wsRequest(requestWs, method, params, {
+    operationTimeoutMs: requestOptions.operationTimeoutMs ?? boundarySplatSupervisionOperationTimeoutMsEffective,
+    operationLabel: rayStepAblationPhase,
+  });
+  try {
+    rayStepAblationPhase = 'warmup-live-simulator';
+    const initialStateEval = await request(ws, 'Runtime.evaluate', {
+      expression: 'window.__kaminosVolumePrototype?.debugState?.()',
+      returnByValue: true,
+    });
+    let stateReceipt = initialStateEval.result.value;
+    let simStepCount = Number(stateReceipt?.simStepCount || 0);
+    let consecutiveWarmupStalls = 0;
+    while (simStepCount < boundarySplatSupervisionMinSimStep) {
+      const warmupEval = await request(ws, 'Runtime.evaluate', {
+        expression: `(async () => {
+          const prototype = window.__kaminosVolumePrototype;
+          const before = prototype?.debugState?.();
+          const sample = await prototype?.sampleFrame?.({
+            advanceSim: true,
+            includeRgba: false,
+            sameStateCaptureId: 'ray-step-ablation-warmup-' + String(before?.simStepCount ?? 'missing'),
+          });
+          const after = prototype?.debugState?.();
+          return { ok: sample?.ok === true, sampleAuthority: sample?.sampleAuthority || null, after };
+        })()`,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      const warmup = warmupEval.result.value;
+      if (warmup?.ok !== true || warmup.sampleAuthority !== 'sim-advanced-frame-readback') {
+        throw new Error(`ray-step ablation warmup rejected: ${JSON.stringify(warmup)}`);
+      }
+      stateReceipt = warmup.after;
+      const nextSimStepCount = Number(stateReceipt?.simStepCount || 0);
+      consecutiveWarmupStalls = nextSimStepCount > simStepCount ? 0 : consecutiveWarmupStalls + 1;
+      if (consecutiveWarmupStalls >= 3) throw new Error(`ray-step ablation warmup-progress-stalled at sim step ${simStepCount}`);
+      simStepCount = nextSimStepCount;
+    }
+    lastTrustworthyEvidence = {
+      ...lastTrustworthyEvidence,
+      effectiveRoute: stateReceipt?.effectiveRoute || null,
+      backend: stateReceipt?.backend || null,
+      fallbackReason: stateReceipt?.fallbackReason || null,
+      lastSimStepCount: simStepCount,
+    };
+
+    const sequenceStartEval = await request(ws, 'Runtime.evaluate', { expression: 'performance.now()', returnByValue: true });
+    const sequenceStartNowMs = Number(sequenceStartEval.result.value);
+    if (!Number.isFinite(sequenceStartNowMs)) throw new Error('ray-step ablation sequence clock unavailable');
+    const sequenceIdentity = `same-browser-ray-step-ablation-${Math.round(sequenceStartNowMs)}`;
+    const frames = [];
+    for (let frameIndex = 0; frameIndex < boundarySplatRayStepAblationFrames; frameIndex += 1) {
+      const frameId = `frame-${String(frameIndex).padStart(3, '0')}`;
+      const controlledNowMs = sequenceStartNowMs + frameIndex * boundarySplatRayStepAblationStepDeltaMs;
+      if (frameIndex > 0) {
+        rayStepAblationPhase = `advance-simulator-${frameId}`;
+        const stepEval = await request(ws, 'Runtime.evaluate', {
+          expression: `(async () => {
+            const prototype = window.__kaminosVolumePrototype;
+            const before = prototype?.debugState?.();
+            const sample = await prototype?.sampleFrame?.({
+              advanceSim: true,
+              includeRgba: false,
+              now: ${JSON.stringify(controlledNowMs)},
+              sameStateCaptureId: ${JSON.stringify(`${sequenceIdentity}-advance-${frameIndex}`)},
+            });
+            const after = prototype?.debugState?.();
+            return { ok: sample?.ok === true, sampleAuthority: sample?.sampleAuthority || null, before, after };
+          })()`,
+          awaitPromise: true,
+          returnByValue: true,
+        });
+        const step = stepEval.result.value;
+        if (step?.ok !== true || step.sampleAuthority !== 'sim-advanced-frame-readback' || !(Number(step.after?.simStepCount) > Number(step.before?.simStepCount))) {
+          throw new Error(`ray-step ablation simulator advance rejected: ${JSON.stringify(step)}`);
+        }
+      }
+
+      rayStepAblationPhase = `invoke-live-capture-${frameId}`;
+      const captureEval = await request(ws, 'Runtime.evaluate', {
+        expression: `(async () => {
+          const capture = await window.__kaminosVolumePrototype?.captureBoundarySplatRayStepAblation?.({
+            raySteps: ${JSON.stringify(boundarySplatRayStepAblation)},
+            resumeRenderLoop: false,
+            now: ${JSON.stringify(controlledNowMs)},
+            sameStateCaptureId: ${JSON.stringify(`${sequenceIdentity}-${frameId}`)},
+          });
+          if (!capture?.ok) throw new Error('ray-step ablation capture failed: ' + JSON.stringify(capture));
+          const targets = capture.targets.map(target => {
+            const rgba = target.image?.rgba;
+            if (!Array.isArray(rgba)) throw new Error('ray-step ablation target omitted RGBA for ' + target.requestedRaySteps);
+            const cacheName = '__kaminosBoundarySplatRayStepTarget' + String(target.requestedRaySteps);
+            window[cacheName] = Uint8Array.from(rgba);
+            const { image, ...metadata } = target;
+            return { ...metadata, width: image.width, height: image.height, expectedLength: window[cacheName].length, cacheName };
+          });
+          return { ...capture, targets };
+        })()`,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      if (captureEval.exceptionDetails) throw new Error(`ray-step ablation runtime failed: ${captureEval.exceptionDetails.text || 'runtime exception'}`);
+      const capture = captureEval.result.value;
+      const artifactTargets = [];
+      const targetBuffers = [];
+      for (const target of capture.targets || []) {
+        const raySteps = Number(target.requestedRaySteps);
+        rayStepAblationPhase = `transport-${frameId}-steps-${raySteps}`;
+        const transport = await readCachedBrowserBytes(ws, target.cacheName, Number(target.expectedLength), `ray-step ablation ${frameId} steps ${raySteps}`, request);
+        const targetPath = join(outputDir, `${frameId}.raymarch-steps-${raySteps}.png`);
+        writeRgbaPng(targetPath, target.width, target.height, transport.bytes);
+        const targetBytes = readFileSync(targetPath);
+        const visualMetrics = measureScreenshot(targetBytes);
+        targetBuffers.push({ raySteps, bytes: targetBytes });
+        artifactTargets.push({
+          ...target,
+          path: targetPath,
+          bytes: targetBytes.length,
+          sha256: createHash('sha256').update(targetBytes).digest('hex'),
+          visualMetrics,
+          transportChunkBytes: transport.chunkBytes,
+          transportChunkCount: transport.chunkCount,
+        });
+      }
+      const frameReceipt = validateRayStepAblationReceipt({ ...capture, targets: artifactTargets }, boundarySplatRayStepAblation);
+      const differences = [];
+      for (let targetIndex = 1; targetIndex < targetBuffers.length; targetIndex += 1) {
+        const left = targetBuffers[targetIndex - 1];
+        const right = targetBuffers[targetIndex];
+        differences.push({
+          fromRaySteps: left.raySteps,
+          toRaySteps: right.raySteps,
+          ...measureRayStepTargetDifference(left.bytes, right.bytes),
+        });
+      }
+      frames.push({ ...frameReceipt, id: frameId, differences });
+      capturedFrameCount = frames.length;
+      lastTrustworthyEvidence = {
+        ...lastTrustworthyEvidence,
+        effectiveRoute: frameReceipt.effectiveRoute,
+        backend: frameReceipt.backend,
+        fallbackReason: frameReceipt.fallbackReason,
+        lastSimStepCount: frameReceipt.baseSimStepCount,
+        lastFrameId: frameId,
+        capturedFrameCount,
+      };
+    }
+    rayStepAblationPhase = 'validate-complete-sequence';
+    const report = {
+      ok: true,
+      authority: 'frozen-sim-state-native-raymarch-step-ablation-sequence-v0',
+      frameAuthority: RAY_STEP_ABLATION_AUTHORITY,
+      requestedRoute: url,
+      effectiveRoute: frames[0]?.effectiveRoute || null,
+      backend: frames[0]?.backend || null,
+      fallbackReason: frames[0]?.fallbackReason ?? null,
+      requestedRaySteps: boundarySplatRayStepAblation,
+      requestedFrameCount: boundarySplatRayStepAblationFrames,
+      capturedFrameCount,
+      sequenceIdentity,
+      frames,
+    };
+    writeFileSync(rayStepAblationReportPath, JSON.stringify(report, null, 2));
+    return report;
+  } catch (error) {
+    const rayStepAblationFailureReport = {
+      ok: false,
+      authority: 'frozen-sim-state-native-raymarch-step-ablation-failure-v0',
+      phase: rayStepAblationPhase,
+      requestedRoute: url,
+      requestedRaySteps: boundarySplatRayStepAblation,
+      requestedFrameCount: boundarySplatRayStepAblationFrames,
+      capturedFrameCount,
+      lastTrustworthyEvidence,
+      error: error?.message || String(error),
+    };
+    writeFileSync(rayStepAblationReportPath, JSON.stringify(rayStepAblationFailureReport, null, 2));
+    error.rayStepAblationPhase = rayStepAblationPhase;
+    error.supervisionPhase = rayStepAblationPhase;
+    error.rayStepAblationFailureReport = rayStepAblationFailureReport;
+    throw error;
+  }
+}
+
 async function readBoundarySidecarRawField(ws, captureId, sameStateCaptureId, field, expectedBytes, label, request = wsRequest) {
   assert.ok(Number.isInteger(expectedBytes) && expectedBytes > 0, `${label} expected bytes must be positive`);
   const transportChunkBytes = 256 * 1024;
@@ -3100,6 +3350,17 @@ async function main() {
       state.frameCount > 5,
       `volume route did not render enough frames (${state.frameCount || 0} frames at ${state.displayWidth || 0}x${state.displayHeight || 0})`,
     );
+    if (boundarySplatRayStepAblationDir) {
+      phase = 'boundary-splat-ray-step-ablation';
+      if (captureReplay?.capture?.camera && replayedCaptureCamera?.applied !== true) {
+        throw new Error(`ray-step ablation camera replay failed: ${replayedCaptureCamera?.reason || 'unknown'}`);
+      }
+      const report = await captureBoundarySplatRayStepAblationArtifacts(ws, boundarySplatRayStepAblationDir);
+      ws.close();
+      await closeBrowserSession(browserSession);
+      console.log(JSON.stringify(report, null, 2));
+      return;
+    }
     if (boundarySplatSupervisionDir) {
       phase = 'boundary-splat-supervision';
       if (captureReplay?.capture?.camera && replayedCaptureCamera?.applied !== true) {
@@ -5184,8 +5445,11 @@ async function main() {
     console.log(JSON.stringify(report, null, 2));
   } catch (err) {
     const supervisionFailureReport = err?.supervisionFailureReport || null;
+    const rayStepAblationFailureReport = err?.rayStepAblationFailureReport || null;
     let state = null;
-    if (supervisionFailureReport) {
+    if (rayStepAblationFailureReport) {
+      state = rayStepAblationFailureReport.lastTrustworthyEvidence || null;
+    } else if (supervisionFailureReport) {
       state = supervisionFailureReport.lastTrustworthyEvidence || null;
     } else {
       try {
@@ -5218,7 +5482,7 @@ async function main() {
       browserSessionCloseError = closeError?.message || String(closeError);
     }
     const report = {
-      ...(supervisionFailureReport || {}),
+      ...(supervisionFailureReport || rayStepAblationFailureReport || {}),
       requestedRoute: url,
       captureReplay: isCaptureReplay ? {
         path: captureReplay.path,

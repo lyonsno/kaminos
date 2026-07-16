@@ -199,5 +199,45 @@ assert.match(
   /candidate-flame-bounds[\s\S]{0,800}long_edge_scale\s*=\s*render_width\s*\/\s*max\(roi_width,\s*roi_height\)[\s\S]{0,500}render_width_effective\s*=\s*max\(16,\s*round\(roi_width\s*\*\s*long_edge_scale\)\)[\s\S]{0,300}render_height\s*=\s*max\(16,\s*round\(roi_height\s*\*\s*long_edge_scale\)\)/,
   'candidate-local rendering treats the requested size as a bounded long-edge budget instead of allocating unbounded portrait tensors',
 );
+assert.match(
+  script,
+  /--optical-loss-mode[\s\S]*choices=\["standard",\s*"topology-band"\]/,
+  'topology-band supervision is an explicit optical training regime rather than a post-hoc composition trick',
+);
+assert.match(
+  script,
+  /class\s+ScreenTopologyBandUnet\(nn\.Module\)/,
+  'the topology regime owns separate learned macro and topology output heads',
+);
+assert.match(
+  script,
+  /def\s+topology_band_decompose\([^)]*passes[^)]*\):[\s\S]*return\s+macro,\s*image\s*-\s*macro/,
+  'topology supervision is derived from an explicit reconstructing low/high-frequency decomposition',
+);
+assert.match(
+  script,
+  /topology_raw\s*-\s*topology_lowpass/,
+  'the topology head is structurally prevented from stealing low-frequency coverage from the macro head',
+);
+assert.match(
+  script,
+  /topology-band optical loss requires the screen-unet decoder with candidate-flame-bounds ROI/,
+  'topology training fails loud without the candidate-local screen decoder contract',
+);
+assert.match(
+  script,
+  /"topologyBandAuthority"\s*:\s*TOPOLOGY_BAND_AUTHORITY/,
+  'training receipts preserve the exact topology-band authority',
+);
+assert.match(
+  script,
+  /"topologyBandPasses"\s*:\s*args\.optical_topology_passes[\s\S]*"topologyBandMacroWeight"[\s\S]*"topologyBandResidualWeight"/,
+  'training receipts preserve the effective decomposition and branch weights',
+);
+assert.match(
+  script,
+  /"topologyBandHoldoutAuthority"\s*:\s*frame_split\["authority"\][\s\S]*"topologyBandEvaluationFrameIds"\s*:\s*frame_split\["evaluationFrameIds"\]/,
+  'topology receipts bind every claim to exact disjoint held-out frame identities',
+);
 
 console.log('boundary splat optical decoder contracts passed');

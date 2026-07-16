@@ -38,6 +38,7 @@ GRID_MESSAGE_MODEL_SCHEMA = "kaminos-boundary-splat-grid-message-attribute-mlp-v
 SPARSE_GRID_MODEL_SCHEMA = "kaminos-boundary-splat-sparse-grid-residual-v0"
 OPTICAL_DECODER_SCHEMA = "kaminos-boundary-splat-screen-residual-unet-v0"
 OPTICAL_INPUT_AUTHORITY = "screen-rgb-luma-gradient-v0"
+TOPOLOGY_BAND_AUTHORITY = "screen-macro-plus-zero-lowpass-topology-residual-v0"
 PROJECTED_NATIVE_OPTICAL_INPUT_AUTHORITY = "candidate-attached-native-fields-weight-normalized-screen-projection-v0"
 EMITTER_LIFECYCLE_OPTICAL_INPUT_AUTHORITY = "broadcast-effective-emitter-lifecycle-controls-v0"
 FULL_FRAME_OPTICAL_ROI_AUTHORITY = "full-source-viewport-v0"
@@ -472,6 +473,94 @@ class ScreenResidualUnet(nn.Module):
         decoded0 = self.decode_level(decoded1, encoded0, self.decoder0)
         residual = mx.tanh(self.output(decoded0))[0] * self.residual_scale
         return mx.clip(base_prediction + residual, 0.0, 1.0)
+
+
+def topology_band_lowpass(image, passes):
+    if passes <= 0:
+        raise ValueError("topology band lowpass passes must be positive")
+    macro = image
+    for _ in range(passes):
+        padded_rows = mx.concatenate([macro[:1, :, :], macro, macro[-1:, :, :]], axis=0)
+        padded = mx.concatenate([padded_rows[:, :1, :], padded_rows, padded_rows[:, -1:, :]], axis=1)
+        macro = (
+            padded[:-2, :-2, :]
+            + padded[:-2, 2:, :]
+            + padded[2:, :-2, :]
+            + padded[2:, 2:, :]
+            + (padded[:-2, 1:-1, :] + padded[1:-1, :-2, :] + padded[1:-1, 2:, :] + padded[2:, 1:-1, :]) * 2.0
+            + padded[1:-1, 1:-1, :] * 4.0
+        ) / 16.0
+    return macro
+
+
+def topology_band_decompose(image, passes):
+    macro = topology_band_lowpass(image, passes)
+    return macro, image - macro
+
+
+class ScreenTopologyBandUnet(nn.Module):
+    def __init__(self, input_channels=5, base_channels=8, residual_scale=1.0, topology_scale=1.0, topology_passes=2):
+        super().__init__()
+        if input_channels <= 0 or base_channels <= 0 or residual_scale <= 0 or topology_scale <= 0 or topology_passes <= 0:
+            raise ValueError("screen topology U-Net channels, scales, and topology passes must be positive")
+        widths = [base_channels, base_channels * 2, base_channels * 3, base_channels * 4, base_channels * 6]
+        self.input_channels = int(input_channels)
+        self.residual_scale = float(residual_scale)
+        self.topology_scale = float(topology_scale)
+        self.topology_passes = int(topology_passes)
+        self.encoder0 = ScreenConvBlock(self.input_channels, widths[0])
+        self.down1 = nn.Conv2d(widths[0], widths[1], kernel_size=3, stride=2, padding=1)
+        self.encoder1 = ScreenConvBlock(widths[1], widths[1])
+        self.down2 = nn.Conv2d(widths[1], widths[2], kernel_size=3, stride=2, padding=1)
+        self.encoder2 = ScreenConvBlock(widths[2], widths[2])
+        self.down3 = nn.Conv2d(widths[2], widths[3], kernel_size=3, stride=2, padding=1)
+        self.encoder3 = ScreenConvBlock(widths[3], widths[3])
+        self.down4 = nn.Conv2d(widths[3], widths[4], kernel_size=3, stride=2, padding=1)
+        self.bottleneck = ScreenConvBlock(widths[4], widths[4])
+        self.global_context = nn.Conv2d(widths[4], widths[4], kernel_size=1)
+        self.upsample = nn.Upsample(scale_factor=2, mode="linear")
+        self.decoder3 = ScreenConvBlock(widths[4] + widths[3], widths[3])
+        self.decoder2 = ScreenConvBlock(widths[3] + widths[2], widths[2])
+        self.decoder1 = ScreenConvBlock(widths[2] + widths[1], widths[1])
+        self.decoder0 = ScreenConvBlock(widths[1] + widths[0], widths[0])
+        self.macro_output = nn.Conv2d(widths[0], 3, kernel_size=1)
+        self.topology_output = nn.Conv2d(widths[0], 3, kernel_size=1)
+        self.macro_output.weight = mx.zeros_like(self.macro_output.weight)
+        self.macro_output.bias = mx.zeros_like(self.macro_output.bias)
+        self.topology_output.weight = mx.zeros_like(self.topology_output.weight)
+        self.topology_output.bias = mx.zeros_like(self.topology_output.bias)
+
+    def decode_level(self, inputs, skip, decoder):
+        upsampled = self.upsample(inputs)
+        upsampled = upsampled[:, :skip.shape[1], :skip.shape[2], :]
+        return decoder(mx.concatenate([upsampled, skip], axis=-1))
+
+    def decoded_features(self, base_prediction, projected_features=None, control_condition=None):
+        inputs = screen_decoder_inputs(base_prediction, projected_features, control_condition)[None, :, :, :]
+        encoded0 = self.encoder0(inputs)
+        encoded1 = self.encoder1(nn.gelu(self.down1(encoded0)))
+        encoded2 = self.encoder2(nn.gelu(self.down2(encoded1)))
+        encoded3 = self.encoder3(nn.gelu(self.down3(encoded2)))
+        bottleneck = self.bottleneck(nn.gelu(self.down4(encoded3)))
+        global_context = mx.mean(bottleneck, axis=(1, 2), keepdims=True)
+        bottleneck = bottleneck + self.global_context(global_context)
+        decoded3 = self.decode_level(bottleneck, encoded3, self.decoder3)
+        decoded2 = self.decode_level(decoded3, encoded2, self.decoder2)
+        decoded1 = self.decode_level(decoded2, encoded1, self.decoder1)
+        return self.decode_level(decoded1, encoded0, self.decoder0)
+
+    def predict_components(self, base_prediction, projected_features=None, control_condition=None):
+        decoded = self.decoded_features(base_prediction, projected_features, control_condition)
+        macro_residual = mx.tanh(self.macro_output(decoded))[0] * self.residual_scale
+        macro_prediction = mx.clip(base_prediction + macro_residual, 0.0, 1.0)
+        topology_raw = mx.tanh(self.topology_output(decoded))[0] * self.topology_scale
+        topology_lowpass = topology_band_lowpass(topology_raw, self.topology_passes)
+        topology_residual = topology_raw - topology_lowpass
+        final_prediction = mx.clip(macro_prediction + topology_residual, 0.0, 1.0)
+        return macro_prediction, topology_residual, final_prediction
+
+    def __call__(self, base_prediction, projected_features=None, control_condition=None):
+        return self.predict_components(base_prediction, projected_features, control_condition)[2]
 
 
 def freeze_grid_message_base(model):
@@ -1115,6 +1204,19 @@ def image_loss(prediction, target, edge_weight):
     return pixel_loss(prediction, target) + edge_loss(prediction, target) * edge_weight
 
 
+def topology_band_losses(macro_prediction, topology_residual, final_prediction, target, passes, macro_weight, topology_weight, edge_weight):
+    target_macro, target_topology = topology_band_decompose(target, passes)
+    macro = image_loss(macro_prediction, target_macro, edge_weight)
+    topology = (
+        mx.mean(mx.square(topology_residual - target_topology))
+        + mx.mean(mx.abs(topology_residual - target_topology)) * 0.08
+        + edge_loss(topology_residual, target_topology) * edge_weight
+    )
+    final = image_loss(final_prediction, target, edge_weight)
+    total = final + macro * macro_weight + topology * topology_weight
+    return {"macro": macro, "topology": topology, "final": final, "total": total}
+
+
 def save_preview(path, image):
     pixels = np.clip(np.asarray(image) * 255.0 + 0.5, 0, 255).astype(np.uint8)
     Image.fromarray(pixels, mode="RGB").save(path)
@@ -1212,8 +1314,27 @@ def evaluate_frame_set(model, geometries, frames, indices, lower, span, depth_bi
 def evaluate_optical_frame_set(decoder, base_predictions, optical_feature_planes, optical_control_conditions, geometries, frames, indices, edge_weight, output_dir, stage):
     rows = []
     for frame_index in indices:
-        prediction = decoder(base_predictions[frame_index], optical_feature_planes[frame_index], optical_control_conditions[frame_index])
-        mx.eval(prediction)
+        base_prediction = base_predictions[frame_index]
+        projected_features = optical_feature_planes[frame_index]
+        control_condition = optical_control_conditions[frame_index]
+        components = None
+        if isinstance(decoder, ScreenTopologyBandUnet):
+            components = decoder.predict_components(base_prediction, projected_features, control_condition)
+            macro_prediction, topology_residual, prediction = components
+            topology_losses = topology_band_losses(
+                macro_prediction,
+                topology_residual,
+                prediction,
+                geometries[frame_index]["target"],
+                decoder.topology_passes,
+                1.0,
+                1.0,
+                edge_weight,
+            )
+            mx.eval(prediction, macro_prediction, topology_residual, *topology_losses.values())
+        else:
+            prediction = decoder(base_prediction, projected_features, control_condition)
+            mx.eval(prediction)
         preview_path = output_dir / f"preview-{stage}-frame-{frame_index:03d}.png"
         target_path = output_dir / f"preview-target-frame-{frame_index:03d}.png"
         save_preview(preview_path, prediction)
@@ -1221,7 +1342,7 @@ def evaluate_optical_frame_set(decoder, base_predictions, optical_feature_planes
             save_preview(target_path, geometries[frame_index]["target"])
         pixel_value = float(pixel_loss(prediction, geometries[frame_index]["target"]).item())
         edge_value = float(edge_loss(prediction, geometries[frame_index]["target"]).item())
-        rows.append({
+        row = {
             "frameIndex": frame_index,
             "frameId": frames[frame_index]["id"],
             "sameStateCaptureId": frames[frame_index]["sameStateCaptureId"],
@@ -1230,7 +1351,14 @@ def evaluate_optical_frame_set(decoder, base_predictions, optical_feature_planes
             "pixelLoss": pixel_value,
             "edgeLoss": edge_value,
             "loss": pixel_value + edge_value * edge_weight,
-        })
+        }
+        if components is not None:
+            row.update({
+                "macroLoss": float(topology_losses["macro"].item()),
+                "topologyLoss": float(topology_losses["topology"].item()),
+                "topologyFinalLoss": float(topology_losses["final"].item()),
+            })
+        rows.append(row)
     return rows
 
 
@@ -1371,11 +1499,16 @@ def parse_args():
     parser.add_argument("--message-size", type=int, default=0)
     parser.add_argument("--freeze-base", type=int, choices=[0, 1], default=0)
     parser.add_argument("--optical-decoder", choices=["none", "screen-unet"], default="none")
+    parser.add_argument("--optical-loss-mode", choices=["standard", "topology-band"], default="standard")
     parser.add_argument("--optical-feature-mode", choices=["screen-only", "projected-native"], default="screen-only")
     parser.add_argument("--optical-condition-mode", choices=["none", "emitter-lifecycle"], default="none")
     parser.add_argument("--optical-roi-mode", choices=["full-frame", "candidate-flame-bounds"], default="full-frame")
     parser.add_argument("--optical-channels", type=int, default=8)
     parser.add_argument("--optical-residual-scale", type=float, default=1.0)
+    parser.add_argument("--optical-topology-scale", type=float, default=1.0)
+    parser.add_argument("--optical-topology-passes", type=int, default=2)
+    parser.add_argument("--optical-topology-macro-weight", type=float, default=1.0)
+    parser.add_argument("--optical-topology-residual-weight", type=float, default=1.0)
     parser.add_argument("--partial-flow-debug-gain", type=float, default=0.0)
     parser.add_argument("--train-frame-indices")
     parser.add_argument("--eval-frame-indices")
@@ -1394,8 +1527,8 @@ def main():
     report = {"schema": SCHEMA, "status": "running", "failurePhase": None, "startedAt": started_at}
     phase = "arguments"
     try:
-        if args.steps < 0 or args.hidden_size < 0 or args.message_size < 0 or args.render_width <= 0 or args.learning_rate <= 0 or args.depth_bins <= 0 or args.edge_weight < 0 or args.optical_channels <= 0 or args.optical_residual_scale <= 0:
-            raise ValueError("steps, hidden-size, message-size, and edge-weight must be non-negative; render-width, learning-rate, depth-bins, optical-channels, and optical-residual-scale must be positive")
+        if args.steps < 0 or args.hidden_size < 0 or args.message_size < 0 or args.render_width <= 0 or args.learning_rate <= 0 or args.depth_bins <= 0 or args.edge_weight < 0 or args.optical_channels <= 0 or args.optical_residual_scale <= 0 or args.optical_topology_scale <= 0 or args.optical_topology_passes <= 0 or args.optical_topology_macro_weight < 0 or args.optical_topology_residual_weight < 0:
+            raise ValueError("steps, hidden-size, message-size, edge-weight, and topology weights must be non-negative; render-width, learning-rate, depth-bins, optical channels, optical scales, and topology passes must be positive")
         if args.partial_flow_debug_gain != 0.0 and not (0.5 <= args.partial_flow_debug_gain <= 0.75):
             raise ValueError("partial-flow-debug-gain must be zero or within the witnessed range 0.5..0.75")
         frequencies = parse_fourier_frequencies(args.fourier_frequencies)
@@ -1425,6 +1558,14 @@ def main():
             "explicit-single-frame-memorization-oracle-v0",
         ):
             raise ValueError("screen-unet requires an explicit disjoint frame holdout")
+        if args.optical_loss_mode == "topology-band" and not (
+            args.optical_decoder == "screen-unet" and args.optical_roi_mode == "candidate-flame-bounds"
+        ):
+            raise ValueError("topology-band optical loss requires the screen-unet decoder with candidate-flame-bounds ROI")
+        if args.optical_loss_mode == "topology-band" and frame_split["authority"] != "explicit-disjoint-frame-holdout-v0":
+            raise ValueError("topology-band optical loss requires an explicit disjoint frame holdout")
+        if args.optical_decoder == "none" and args.optical_loss_mode != "standard":
+            raise ValueError("non-standard optical loss requires an optical decoder")
         if args.spatial_mixing == "sparse-grid-residual" and frame_split["authority"] != "explicit-disjoint-frame-holdout-v0":
             raise ValueError("sparse-grid-residual requires an explicit disjoint frame holdout")
         if args.context_mode == "native-sidecar-pyramid" and frame_split["authority"] != "explicit-disjoint-frame-holdout-v0":
@@ -1546,7 +1687,16 @@ def main():
                 + (len(FEATURES) if args.optical_feature_mode == "projected-native" else 0)
                 + (len(EMITTER_LIFECYCLE_CONDITION_ORDER) if args.optical_condition_mode == "emitter-lifecycle" else 0)
             )
-            optical_decoder = ScreenResidualUnet(optical_input_channels, args.optical_channels, args.optical_residual_scale)
+            if args.optical_loss_mode == "topology-band":
+                optical_decoder = ScreenTopologyBandUnet(
+                    optical_input_channels,
+                    args.optical_channels,
+                    args.optical_residual_scale,
+                    args.optical_topology_scale,
+                    args.optical_topology_passes,
+                )
+            else:
+                optical_decoder = ScreenResidualUnet(optical_input_channels, args.optical_channels, args.optical_residual_scale)
             mx.eval(optical_decoder.parameters())
         initial_radius = [mx.array(attributes[:, 4:6]) for attributes in initial_attributes]
         training_geometries = [geometries[index] for index in frame_split["trainIndices"]]
@@ -1585,6 +1735,8 @@ def main():
         initial_pixel_loss = mean_metric(initial_evaluation_rows, "pixelLoss")
         initial_edge_loss = mean_metric(initial_evaluation_rows, "edgeLoss")
         initial_loss = mean_metric(initial_evaluation_rows, "loss")
+        initial_macro_loss = mean_metric(initial_evaluation_rows, "macroLoss") if args.optical_loss_mode == "topology-band" else None
+        initial_topology_loss = mean_metric(initial_evaluation_rows, "topologyLoss") if args.optical_loss_mode == "topology-band" else None
         initial_evidence = {
             "initialPreview": str(initial_preview_path),
             "targetPreview": str(target_preview_path),
@@ -1595,6 +1747,8 @@ def main():
             "initialPixelLoss": initial_pixel_loss,
             "initialEdgeLoss": initial_edge_loss,
             "initialLoss": initial_loss,
+            "initialMacroLoss": initial_macro_loss,
+            "initialTopologyLoss": initial_topology_loss,
             "evaluationFrames": [
                 {
                     "frameIndex": row["frameIndex"],
@@ -1626,12 +1780,30 @@ def main():
             def loss_fn(active_decoder):
                 total = mx.array(0.0)
                 for frame_index in frame_split["trainIndices"]:
-                    prediction = active_decoder(
-                        base_predictions[frame_index],
-                        optical_feature_planes[frame_index],
-                        optical_control_conditions[frame_index],
-                    )
-                    total = total + image_loss(prediction, geometries[frame_index]["target"], args.edge_weight)
+                    if args.optical_loss_mode == "topology-band":
+                        macro_prediction, topology_residual, prediction = active_decoder.predict_components(
+                            base_predictions[frame_index],
+                            optical_feature_planes[frame_index],
+                            optical_control_conditions[frame_index],
+                        )
+                        losses = topology_band_losses(
+                            macro_prediction,
+                            topology_residual,
+                            prediction,
+                            geometries[frame_index]["target"],
+                            args.optical_topology_passes,
+                            args.optical_topology_macro_weight,
+                            args.optical_topology_residual_weight,
+                            args.edge_weight,
+                        )
+                        total = total + losses["total"]
+                    else:
+                        prediction = active_decoder(
+                            base_predictions[frame_index],
+                            optical_feature_planes[frame_index],
+                            optical_control_conditions[frame_index],
+                        )
+                        total = total + image_loss(prediction, geometries[frame_index]["target"], args.edge_weight)
                 return total / len(frame_split["trainIndices"])
 
             trainable_model = optical_decoder
@@ -1710,9 +1882,11 @@ def main():
         trained_pixel_loss = mean_metric(trained_evaluation_rows, "pixelLoss")
         trained_edge_loss = mean_metric(trained_evaluation_rows, "edgeLoss")
         trained_loss = mean_metric(trained_evaluation_rows, "loss")
+        trained_macro_loss = mean_metric(trained_evaluation_rows, "macroLoss") if args.optical_loss_mode == "topology-band" else None
+        trained_topology_loss = mean_metric(trained_evaluation_rows, "topologyLoss") if args.optical_loss_mode == "topology-band" else None
         evaluation_frames = []
         for initial_row, trained_row in zip(initial_evaluation_rows, trained_evaluation_rows):
-            evaluation_frames.append({
+            evaluation_frame = {
                 "frameIndex": initial_row["frameIndex"],
                 "frameId": initial_row["frameId"],
                 "sameStateCaptureId": initial_row["sameStateCaptureId"],
@@ -1725,7 +1899,15 @@ def main():
                 "trainedPixelLoss": trained_row["pixelLoss"],
                 "initialEdgeLoss": initial_row["edgeLoss"],
                 "trainedEdgeLoss": trained_row["edgeLoss"],
-            })
+            }
+            if args.optical_loss_mode == "topology-band":
+                evaluation_frame.update({
+                    "initialMacroLoss": initial_row["macroLoss"],
+                    "trainedMacroLoss": trained_row["macroLoss"],
+                    "initialTopologyLoss": initial_row["topologyLoss"],
+                    "trainedTopologyLoss": trained_row["topologyLoss"],
+                })
+            evaluation_frames.append(evaluation_frame)
         phase = "model-artifact"
         if optical_decoder is not None:
             model_path = output_dir / "screen-residual-unet.safetensors"
@@ -1742,7 +1924,11 @@ def main():
                 "path": str(model_path),
                 "schema": OPTICAL_DECODER_SCHEMA,
                 "identity": f"sha256:{sha256_bytes(model_bytes)}",
-                "authority": "screen-global-multiscale-residual-unet-v0",
+                "authority": (
+                    "screen-global-macro-topology-band-residual-unet-v0"
+                    if args.optical_loss_mode == "topology-band"
+                    else "screen-global-multiscale-residual-unet-v0"
+                ),
                 "inputAuthority": optical_input_authority,
                 "featureMode": args.optical_feature_mode,
                 "conditionMode": args.optical_condition_mode,
@@ -1755,6 +1941,10 @@ def main():
                 "inputChannels": optical_decoder.input_channels,
                 "baseChannels": args.optical_channels,
                 "residualScale": args.optical_residual_scale,
+                "lossMode": args.optical_loss_mode,
+                "topologyBandAuthority": TOPOLOGY_BAND_AUTHORITY if args.optical_loss_mode == "topology-band" else None,
+                "topologyBandPasses": args.optical_topology_passes if args.optical_loss_mode == "topology-band" else None,
+                "topologyScale": args.optical_topology_scale if args.optical_loss_mode == "topology-band" else None,
                 "deployable": False,
             }
         elif args.spatial_mixing == "sparse-grid-residual":
@@ -1859,6 +2049,13 @@ def main():
                 "contextMode": args.context_mode,
                 "spatialMixing": args.spatial_mixing,
                 "opticalDecoder": args.optical_decoder,
+                "opticalLossMode": args.optical_loss_mode,
+                "topologyBandAuthority": TOPOLOGY_BAND_AUTHORITY if args.optical_loss_mode == "topology-band" else None,
+                "topologyBandPasses": args.optical_topology_passes if args.optical_loss_mode == "topology-band" else None,
+                "topologyBandMacroWeight": args.optical_topology_macro_weight if args.optical_loss_mode == "topology-band" else None,
+                "topologyBandResidualWeight": args.optical_topology_residual_weight if args.optical_loss_mode == "topology-band" else None,
+                "topologyBandHoldoutAuthority": frame_split["authority"] if args.optical_loss_mode == "topology-band" else None,
+                "topologyBandEvaluationFrameIds": frame_split["evaluationFrameIds"] if args.optical_loss_mode == "topology-band" else [],
                 "opticalFeatureMode": args.optical_feature_mode if optical_decoder is not None else None,
                 "opticalConditionMode": args.optical_condition_mode if optical_decoder is not None else None,
                 "opticalConditionIdentity": EMITTER_LIFECYCLE_CONDITION_IDENTITY if optical_decoder is not None and args.optical_condition_mode == "emitter-lifecycle" else None,
@@ -1909,6 +2106,10 @@ def main():
                 "trainedPixelLoss": trained_pixel_loss,
                 "initialEdgeLoss": initial_edge_loss,
                 "trainedEdgeLoss": trained_edge_loss,
+                "initialMacroLoss": initial_macro_loss,
+                "trainedMacroLoss": trained_macro_loss,
+                "initialTopologyLoss": initial_topology_loss,
+                "trainedTopologyLoss": trained_topology_loss,
                 "trainingInitialLoss": training_losses[0]["loss"],
                 "trainingTrainedLoss": training_losses[-1]["loss"],
                 "trainingLossTrace": training_losses,

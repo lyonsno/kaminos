@@ -12430,6 +12430,122 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
   }
 
+  async function captureBoundarySplatRayStepAblation(options = {}) {
+    if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
+    const requestedRaySteps = Array.isArray(options.raySteps)
+      ? options.raySteps.map(value => Math.floor(Number(value)))
+      : [];
+    if (requestedRaySteps.length < 2 || requestedRaySteps.some(value => !Number.isInteger(value) || value < 1 || value > 160)) {
+      return { ok: false, reason: 'invalid-ray-step-ablation', requestedRaySteps };
+    }
+    boundarySplatSupervisionCaptureActive = true;
+    cancelAnimationFrame(raf);
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    cancelAnimationFrame(raf);
+    const controlsBefore = { ...controlsSnapshot };
+    const baseFrameCount = state.frameCount;
+    const baseSimStepCount = state.simStepCount;
+    const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+    const sameStateCaptureId = options.sameStateCaptureId
+      ? String(options.sameStateCaptureId)
+      : `ray-step-ablation-f${baseFrameCount}-s${baseSimStepCount}-${Math.round(fixedNow)}`;
+    const cameraReceipt = () => ({
+      viewProjection: Array.from(viewProj.elements),
+      cameraRight: Array.from(camera.matrixWorld.elements.slice(0, 3)),
+      cameraUp: Array.from(camera.matrixWorld.elements.slice(4, 7)),
+      viewport: [state.width, state.height],
+    });
+    try {
+      const targets = [];
+      boundarySplatSupervisionFireOnlyTargetActive = true;
+      for (const requestedRayStepCount of requestedRaySteps) {
+        controlsSnapshot = applyRuntimeQualityControls({
+          ...controlsBefore,
+          runtimeQualityRequested: 'live_high',
+          runtimeQualityEffective: 'live_high',
+          runtimeQualityReason: 'frozen-ray-step-ablation',
+          gpuPressure: 0,
+          boundarySplatMode: 'off',
+          boundarySplatFeatureCapture: false,
+          volumeResidualMode: 'off',
+          fireRenderMode: 'stock',
+          shellInspectMode: 'boundary_fire',
+          raySteps: requestedRayStepCount,
+          adaptiveRays: 0,
+          temporalAccum: 0,
+          temporalJitter: 0,
+          historyClamp: 0,
+          renderScale: 1,
+        });
+        resetTemporalHistory(`frozen-ray-step-ablation-${requestedRayStepCount}`);
+        const targetSample = await sampleFrame({
+          advanceSim: false,
+          includeRgba: true,
+          now: fixedNow,
+          sameStateCaptureId,
+          baseFrameCount,
+          baseSimStepCount,
+        });
+        if (!targetSample.ok) throw new Error(`frozen-ray-step-ablation-target-failed:${requestedRayStepCount}:${targetSample.reason || 'unknown'}`);
+        if (targetSample.sampleAuthority !== 'render-only-frozen-sim-state') {
+          throw new Error(`frozen-ray-step-ablation-authority:${requestedRayStepCount}:${targetSample.sampleAuthority || 'missing'}`);
+        }
+        if (targetSample.frameCount !== baseFrameCount || targetSample.simStepCount !== baseSimStepCount) {
+          throw new Error(`frozen-ray-step-ablation-state-drift:${requestedRayStepCount}:${baseFrameCount}:${baseSimStepCount}:${targetSample.frameCount}:${targetSample.simStepCount}`);
+        }
+        if (targetSample.volumeReconstructionStyle !== 'native-resolution') {
+          throw new Error(`frozen-ray-step-ablation-renderer-substitution:${requestedRayStepCount}:${targetSample.volumeReconstructionStyle || 'missing'}`);
+        }
+        if (!targetSample.image?.rgba?.length) throw new Error(`frozen-ray-step-ablation-image-missing:${requestedRayStepCount}`);
+        const effectiveRaySteps = Number(targetSample.runtimeQualityReceipt?.knobs?.raySteps);
+        if (effectiveRaySteps !== requestedRayStepCount) {
+          throw new Error(`frozen-ray-step-ablation-step-cap:${requestedRayStepCount}:${effectiveRaySteps}`);
+        }
+        targets.push({
+          requestedRaySteps: requestedRayStepCount,
+          effectiveRaySteps,
+          sameStateCaptureId,
+          frameCount: targetSample.frameCount,
+          simStepCount: targetSample.simStepCount,
+          sampleAuthority: targetSample.sampleAuthority,
+          rendererIdentity: ROUTE_IDENTITY,
+          decomposition: 'candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0',
+          adaptiveRays: targetSample.adaptiveRaymarch,
+          temporalAccum: targetSample.temporalAccum,
+          temporalJitter: targetSample.temporalJitter,
+          historyClamp: targetSample.historyClamp,
+          renderScale: targetSample.renderScale,
+          camera: cameraReceipt(),
+          image: targetSample.image,
+        });
+      }
+      return {
+        ok: true,
+        authority: 'frozen-sim-state-native-raymarch-step-ablation-v0',
+        requestedRoute: state.requestedRoute,
+        effectiveRoute: state.effectiveRoute,
+        backend: state.backend,
+        fallbackReason: null,
+        sameStateCaptureId,
+        baseFrameCount,
+        baseSimStepCount,
+        fixedNowMs: fixedNow,
+        requestedRaySteps,
+        camera: cameraReceipt(),
+        targets,
+      };
+    } finally {
+      boundarySplatSupervisionFireOnlyTargetActive = false;
+      controlsSnapshot = controlsBefore;
+      resetTemporalHistory('frozen-ray-step-ablation-restore');
+      boundarySplatSupervisionCaptureActive = false;
+      if (options.resumeRenderLoop !== false && state.active) {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(render);
+      }
+    }
+  }
+
   function boundarySidecarGridToWorld() {
     const scale = 2 / gridSize;
     const translation = -1 + (1 / gridSize);
@@ -13801,6 +13917,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     readDebugFullFieldExportChunk,
     releaseDebugFullFieldExport,
     captureBoundarySplatSupervisionFrame,
+    captureBoundarySplatRayStepAblation,
     captureBoundarySidecarRawFrame,
     captureBoundarySidecarRawFrameWithDeadline,
     readBoundarySidecarRawCaptureChunk,
