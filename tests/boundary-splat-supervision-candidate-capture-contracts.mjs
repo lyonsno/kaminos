@@ -76,6 +76,11 @@ assert.match(
 assert.match(core, /captureBoundarySplatSupervisionCandidates[\s\S]*sameStateCaptureId[\s\S]*simStepCount[\s\S]*camera/, 'candidate capture reports frozen-state and camera identity');
 assert.match(
   core,
+  /async function sampleFrame[\s\S]*selectiveHeadLiveEffectiveRole:\s*state\.selectiveHeadLiveEffectiveRole[\s\S]*selectiveHeadLiveCompositionEffective:\s*state\.selectiveHeadLiveCompositionEffective[\s\S]*selectiveHeadLivePassReceipt:/,
+  'frozen samples serialize the effective selective role and composition beside their pass receipt',
+);
+assert.match(
+  core,
   /boundarySplatCapacity\s*<\s*candidateSample\.boundarySplatCandidateCount[\s\S]*growBoundarySplatCapacity\(candidateSample\.boundarySplatCandidateCount\)/,
   'overflow recovery accepts telemetry-owned growth and only requests growth while current capacity is insufficient',
 );

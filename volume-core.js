@@ -12522,6 +12522,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         couplingTerms: [...state.appearanceDecompositionReceipt.couplingTerms],
       } : null,
       volumePresentationApplication: presentationApplication ? { ...presentationApplication } : null,
+      selectiveHeadLiveEffectiveRole: state.selectiveHeadLiveEffectiveRole,
+      selectiveHeadLiveCompositionEffective: state.selectiveHeadLiveCompositionEffective,
       selectiveHeadLivePassReceipt: state.selectiveHeadLivePassReceipt ? { ...state.selectiveHeadLivePassReceipt } : null,
       simReadback,
       majorantReadback,
