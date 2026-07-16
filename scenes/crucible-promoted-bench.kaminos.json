@@ -1,0 +1,118 @@
+{
+  "schema": "kaminos.scene.v1",
+  "version": 4,
+  "timestamp": "2026-07-15T00:00:00.000Z",
+  "composition": {
+    "schema": "kaminos.crucible-bench-composition.v0",
+    "id": "promoted-bench-2026-07-15",
+    "label": "Promoted Crucible Bench",
+    "truthBoundary": "Visual composition only. Receiver authority remains in the receiver descriptor and proxy; tray and hammer carry no topology, collision, or interaction claim.",
+    "deferredAssets": [
+      {
+        "id": "surface-board-sharp",
+        "source": "artifacts/crucible-bench-shards-2026-07-13/view-firings/surface-board-sharp/05-surface-board.ply",
+        "role": "bench-dressing-only",
+        "reason": "The 66 MB partial-view point cloud is view-cone-bound and is not receiver truth."
+      }
+    ]
+  },
+  "objects": [
+    {
+      "id": "stone-receiver",
+      "source": "artifacts/stone-receiver-fixture-2026-07-13/promoted/matte-stone-corner-receiver.glb",
+      "type": "glb",
+      "fileName": "matte-stone-corner-receiver.glb",
+      "label": "Matte stone receiver",
+      "groupId": "crucible-promoted-bench",
+      "provenance": {
+        "commit": "85b9d299",
+        "authority": "visual-fixture",
+        "receiverDescriptor": "artifacts/stone-receiver-fixture-2026-07-13/promoted/receiver-descriptor.json"
+      },
+      "transform": {
+        "position": [0, 0, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1]
+      }
+    },
+    {
+      "id": "specimen-tray",
+      "source": "artifacts/specimen-tray-sourcegen-2026-07-14/promoted/specimen-tray-trellis2mlx-fast-72014.glb",
+      "type": "glb",
+      "fileName": "specimen-tray-trellis2mlx-fast-72014.glb",
+      "label": "Specimen tray",
+      "groupId": "crucible-promoted-bench",
+      "provenance": {
+        "commit": "1fbee5dc",
+        "authority": "visual-orbitability"
+      },
+      "transform": {
+        "position": [0.62, 0.09, 0.35],
+        "rotation": [0, -0.12, 0],
+        "scale": [1.55, 1.55, 1.55]
+      }
+    },
+    {
+      "id": "titan-hammer",
+      "source": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/promoted/titan-hammer-trellis2mlx-fast-61014.glb",
+      "type": "glb",
+      "fileName": "titan-hammer-trellis2mlx-fast-61014.glb",
+      "label": "Titan Hammer",
+      "groupId": "crucible-promoted-bench",
+      "provenance": {
+        "commit": "953b77c6",
+        "authority": "visual-orbitability",
+        "knownDefect": "Helical back-facing strip on the handle; ambient occlusion must remain disabled."
+      },
+      "transform": {
+        "position": [-0.55, 0.19, -0.52],
+        "rotation": [0, 0.18, -1.28],
+        "scale": [1.35, 1.35, 1.35]
+      }
+    }
+  ],
+  "groups": [
+    {
+      "id": "crucible-promoted-bench",
+      "label": "Promoted Crucible Bench",
+      "objectIds": ["stone-receiver", "specimen-tray", "titan-hammer"],
+      "source": "scenes/crucible-promoted-bench.kaminos.json"
+    }
+  ],
+  "activeObjectId": "titan-hammer",
+  "activeGroupId": "crucible-promoted-bench",
+  "camera": {
+    "position": [3.7, 2.45, -3.9],
+    "target": [0, 0.38, 0.25],
+    "fov": 46
+  },
+  "environment": {
+    "name": "studio",
+    "exposure": 1.35,
+    "intensity": 0.85,
+    "rotation": 0.35,
+    "showBackground": false,
+    "backgroundBlur": 0.25
+  },
+  "volumePrimitives": {
+    "schema": "kaminos.volume-primitives.v0",
+    "primitives": []
+  },
+  "postprocessing": {
+    "ao": {
+      "enabled": false,
+      "radius": 1,
+      "intensity": 0,
+      "scale": 1.62,
+      "thickness": 1.81,
+      "falloff": 0.74
+    },
+    "dof": {
+      "enabled": false,
+      "focus": 4,
+      "aperture": 0.0025,
+      "maxblur": 0.01
+    }
+  },
+  "backdrop": false
+}

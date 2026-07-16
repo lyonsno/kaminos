@@ -16,6 +16,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 #sidebar::-webkit-scrollbar-track { background: transparent; }
 #sidebar::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
 
+@media (max-width: 720px) {
+  #sidebar { width: 42vw; padding: 10px; }
+  #drop-zone { padding: 12px 8px; }
+  .tab { padding-left: 7px; padding-right: 7px; }
+}
+
 h1 { font-size: 15px; font-weight: 700; margin-bottom: 4px; color: #fff; letter-spacing: -0.3px; }
 .subtitle { font-size: 11px; color: #555; margin-bottom: 16px; font-family: 'SF Mono', 'Fira Code', monospace; }
 h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-transform: uppercase; letter-spacing: 1px; }
@@ -206,7 +212,7 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
     #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-viewport-receipt-tag summary { min-height: 36px; padding: 7px 10px; }
 
 /* Viewport */
-#viewport { flex: 1; position: relative; background: #111; }
+#viewport { flex: 1; min-width: 0; position: relative; background: #111; }
 canvas { display: block; }
 #hybrid-splat-overlay-host { position: absolute; inset: 0; pointer-events: none; z-index: 2; overflow: hidden; }
 #hybrid-splat-overlay-host canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
@@ -2608,6 +2614,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
             <div class="crucible-viewport-subtitle" id="crucible-viewport-summary">This crucible is on the bench.</div>
           </div>
           <div class="crucible-viewport-heading-actions">
+            <button type="button" class="crucible-console-toggle" id="crucible-viewport-stage-assets-button">Stage bench</button>
             <div class="crucible-heat-badge" id="crucible-viewport-heat-label">Idle</div>
             <button type="button" class="crucible-console-toggle" id="crucible-viewport-console-toggle" hidden>Open bench</button>
           </div>
@@ -13127,6 +13134,48 @@ let crucibleViewportPresentationMode = 'full-volume';
 let crucibleViewportFlameContinuityMode = 'bounded-history-holdover';
 let crucibleViewportConsolePreference = 'auto';
 let crucibleViewportLastRoomPosture = 'bench';
+const CRUCIBLE_PROMOTED_BENCH_ID = 'promoted-bench-2026-07-15';
+const CRUCIBLE_PROMOTED_BENCH_SOURCE = 'scenes/crucible-promoted-bench.kaminos.json';
+let kaminosCrucibleCompositionState = {
+  schema: 'kaminos.crucible-composition-debug.v0',
+  status: 'idle',
+  requestedCompositionId: null,
+  effectiveCompositionId: null,
+  manifestSource: null,
+  registeredObjectIds: [],
+  aoEnabled: null,
+  viewportFraming: null,
+  error: null,
+};
+
+function kaminosCrucibleCompositionDebugState() {
+  return { ...kaminosCrucibleCompositionState };
+}
+
+window.kaminosCrucibleCompositionDebugState = kaminosCrucibleCompositionDebugState;
+
+function applyKaminosCrucibleCompositionFraming(manifest) {
+  const viewport = document.getElementById('viewport');
+  const viewportAspect = viewport.clientWidth / Math.max(1, viewport.clientHeight);
+  const distanceScale = Math.max(1, 0.5 / viewportAspect);
+  const baseTarget = manifest.camera?.target || [0, 0, 0];
+  const basePosition = manifest.camera?.position || [3.7, 2.45, -3.9];
+  const framedPosition = basePosition.map((value, index) => (
+    baseTarget[index] + (value - baseTarget[index]) * distanceScale
+  ));
+  camera.position.fromArray(framedPosition);
+  controls.target.fromArray(baseTarget);
+  camera.updateProjectionMatrix();
+  controls.update();
+  return {
+    viewportWidth: viewport.clientWidth,
+    viewportHeight: viewport.clientHeight,
+    viewportAspect,
+    distanceScale,
+    cameraPosition: framedPosition,
+    cameraTarget: baseTarget,
+  };
+}
 
 const CRUCIBLE_BENCH_STORAGE_KEY = 'kaminosCrucibleBenchState';
 const CRUCIBLE_BENCH_PROXY_ZONES = [
@@ -18718,6 +18767,9 @@ function initPipelineDock() {
   document.getElementById('crucible-viewport-fire-button')?.addEventListener('click', () => {
     runCrucibleViewportFiring().catch(err => setInfo(err.message || String(err)));
   });
+  document.getElementById('crucible-viewport-stage-assets-button')?.addEventListener('click', () => {
+    loadKaminosCrucibleComposition().catch(err => console.error('Crucible composition failed:', err));
+  });
   document.getElementById('crucible-viewport-cast-button')?.addEventListener('click', openCrucibleViewportCast);
   document.getElementById('crucible-viewport-console-toggle')?.addEventListener('click', toggleCrucibleViewportConsole);
   document.getElementById('pipeline-refresh-button')?.addEventListener('click', () => loadPipelineManifest().catch(err => setInfo(err.message || String(err))));
@@ -23080,6 +23132,76 @@ async function loadSceneFile(file) {
   }
 }
 
+async function loadKaminosCrucibleComposition(compositionId = CRUCIBLE_PROMOTED_BENCH_ID) {
+  kaminosCrucibleCompositionState = {
+    ...kaminosCrucibleCompositionState,
+    status: 'loading',
+    requestedCompositionId: compositionId,
+    effectiveCompositionId: null,
+    manifestSource: CRUCIBLE_PROMOTED_BENCH_SOURCE,
+    registeredObjectIds: [],
+    aoEnabled: null,
+    viewportFraming: null,
+    error: null,
+  };
+  const stageButton = document.getElementById('crucible-viewport-stage-assets-button');
+  if (stageButton) stageButton.disabled = true;
+  try {
+    if (compositionId !== CRUCIBLE_PROMOTED_BENCH_ID) {
+      throw new Error(`Unknown Crucible composition: ${compositionId}`);
+    }
+    const response = await fetch(CRUCIBLE_PROMOTED_BENCH_SOURCE, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`Composition manifest fetch failed ${response.status}`);
+    const manifest = await response.json();
+    if (manifest.composition?.schema !== 'kaminos.crucible-bench-composition.v0') {
+      throw new Error('Composition manifest schema mismatch');
+    }
+    if (manifest.composition.id !== compositionId) {
+      throw new Error(`Composition identity mismatch: ${manifest.composition.id || 'missing'}`);
+    }
+    const expectedObjectIds = manifest.objects.map(record => record.id);
+    await loadSceneFile({
+      name: 'crucible-promoted-bench.preset.json',
+      text: async () => JSON.stringify(manifest),
+    });
+    const registeredObjectIds = expectedObjectIds.filter(id => sceneObjects.some(record => record.id === id));
+    if (registeredObjectIds.length !== expectedObjectIds.length) {
+      throw new Error(`Composition registration incomplete: ${registeredObjectIds.length}/${expectedObjectIds.length}`);
+    }
+    const aoToggle = document.getElementById('ao-toggle');
+    if (aoToggle) aoToggle.checked = false;
+    document.getElementById('ao-controls').style.display = 'none';
+    if (aoIntensity) aoIntensity.value = 0;
+    setActiveTab('assets');
+    const viewportFraming = applyKaminosCrucibleCompositionFraming(manifest);
+    kaminosCrucibleCompositionState = {
+      ...kaminosCrucibleCompositionState,
+      status: 'loaded',
+      effectiveCompositionId: manifest.composition.id,
+      registeredObjectIds,
+      aoEnabled: false,
+      viewportFraming,
+    };
+    setInfo(`Staged ${manifest.composition.label}`);
+    window._kaminosDirty?.();
+    return kaminosCrucibleCompositionDebugState();
+  } catch (error) {
+    kaminosCrucibleCompositionState = {
+      ...kaminosCrucibleCompositionState,
+      status: 'failed',
+      effectiveCompositionId: null,
+      registeredObjectIds: [],
+      error: error?.message || String(error),
+    };
+    setInfo(`Crucible composition failed: ${kaminosCrucibleCompositionState.error}`);
+    throw error;
+  } finally {
+    if (stageButton) stageButton.disabled = false;
+  }
+}
+
+window.loadKaminosCrucibleComposition = loadKaminosCrucibleComposition;
+
 // File input handler for Load Scene
 document.getElementById('scene-file-input').addEventListener('change', e => {
   if (e.target.files[0]) loadSceneFile(e.target.files[0]);
@@ -23111,9 +23233,15 @@ initScene().then(() => {
   initEnvButtons();
   loadDemoButtons();
   restoreSettings();
-  // Load HDR environment first, then auto-load deep-linked splat if present
-  loadEnvironment('studio').then(async () => {
-    const params = new URLSearchParams(window.location.search);
+  const params = new URLSearchParams(window.location.search);
+  const compositionId = params.get('composition');
+  if (compositionId) {
+    loadKaminosCrucibleComposition(compositionId).catch(err => {
+      console.error('Crucible composition route failed:', err);
+    });
+  } else {
+    // Load HDR environment first, then auto-load a deep-linked splat if present.
+    loadEnvironment('studio').then(async () => {
     const loadSplat = params.get('load');
     if (loadSplat) {
       // Deep-link: ?load=splat-inbox/evil_orb_trimmed_050.ply
@@ -23146,7 +23274,8 @@ initScene().then(() => {
         setInfo(`Deep-link load failed: ${err.message || err}`);
       }
     }
-  });
+    });
+  }
   kaminosVolumeRouteInitPromise = initKaminosVolumeRoute();
   initKaminosMotionAgencyRoute();
   initWorldChambersRoute();

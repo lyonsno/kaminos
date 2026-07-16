@@ -107,7 +107,11 @@ export function isReloadableSceneObjectRecord(record) {
   if (type === 'pbr') return source.startsWith('demos/');
   if (type === 'splat') return source.startsWith('/api/') || source.startsWith('http://') || source.startsWith('https://');
   if (type === 'image') return source.startsWith('/api/') || source.startsWith('http://') || source.startsWith('https://') || source.startsWith('demos/');
-  return source.startsWith('/api/') || source.startsWith('http://') || source.startsWith('https://') || source.startsWith('demos/');
+  return source.startsWith('/api/')
+    || source.startsWith('http://')
+    || source.startsWith('https://')
+    || source.startsWith('demos/')
+    || source.startsWith('artifacts/');
 }
 
 export function planSceneRestore(data) {

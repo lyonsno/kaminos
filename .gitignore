@@ -3,4 +3,5 @@ scratch/*
 !scratch/.gitkeep
 scenes/*
 !scenes/.gitkeep
+!scenes/crucible-promoted-bench.kaminos.json
 artifacts/volume-captures/

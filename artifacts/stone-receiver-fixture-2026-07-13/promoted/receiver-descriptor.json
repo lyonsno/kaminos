@@ -1,0 +1,277 @@
+{
+  "schema": "kaminos.receiver-descriptor.v0",
+  "assetId": "matte-stone-corner-receiver-2026-07-13",
+  "assetSource": "artifacts/stone-receiver-fixture-2026-07-13/visual/matte-stone-corner-receiver.glb",
+  "worldUp": [
+    0,
+    1,
+    0
+  ],
+  "defaultReceiverPolicy": "non_receiver",
+  "nodes": [
+    {
+      "nodeId": "receiver_floor",
+      "role": "floor",
+      "receiver": true,
+      "maskSource": "proxy",
+      "localToAsset": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      "boundsLocal": {
+        "min": [
+          -1.8,
+          -0.08,
+          -1.15
+        ],
+        "max": [
+          1.8,
+          0.0,
+          1.55
+        ]
+      },
+      "groundContact": "floor_contact",
+      "directMaskSafety": "safe",
+      "materialResponse": {
+        "albedoHint": [
+          0.5,
+          0.47,
+          0.42
+        ],
+        "roughnessClass": "matte_stone",
+        "emissiveExclusion": true
+      },
+      "viewBoundary": {
+        "geometryCompleteness": "complete_enough_for_receiver_mask",
+        "validViewCone": "free_orbit",
+        "knownMissingSides": []
+      },
+      "proxyId": "stone-corner-low-poly-proxy"
+    },
+    {
+      "nodeId": "receiver_back_wall",
+      "role": "kiln_wall",
+      "receiver": true,
+      "maskSource": "proxy",
+      "localToAsset": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      "boundsLocal": {
+        "min": [
+          -1.8,
+          0.0,
+          1.47
+        ],
+        "max": [
+          1.8,
+          1.85,
+          1.57
+        ]
+      },
+      "groundContact": "wall_mounted",
+      "directMaskSafety": "safe",
+      "materialResponse": {
+        "albedoHint": [
+          0.5,
+          0.47,
+          0.42
+        ],
+        "roughnessClass": "matte_stone",
+        "emissiveExclusion": true
+      },
+      "viewBoundary": {
+        "geometryCompleteness": "complete_enough_for_receiver_mask",
+        "validViewCone": "free_orbit",
+        "knownMissingSides": []
+      },
+      "proxyId": "stone-corner-low-poly-proxy"
+    },
+    {
+      "nodeId": "receiver_side_wall",
+      "role": "kiln_wall",
+      "receiver": true,
+      "maskSource": "proxy",
+      "localToAsset": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      "boundsLocal": {
+        "min": [
+          -1.8,
+          0.0,
+          -1.15
+        ],
+        "max": [
+          -1.7,
+          1.45,
+          1.55
+        ]
+      },
+      "groundContact": "wall_mounted",
+      "directMaskSafety": "safe",
+      "materialResponse": {
+        "albedoHint": [
+          0.5,
+          0.47,
+          0.42
+        ],
+        "roughnessClass": "matte_stone",
+        "emissiveExclusion": true
+      },
+      "viewBoundary": {
+        "geometryCompleteness": "complete_enough_for_receiver_mask",
+        "validViewCone": "free_orbit",
+        "knownMissingSides": []
+      },
+      "proxyId": "stone-corner-low-poly-proxy"
+    },
+    {
+      "nodeId": "non_receiver_rubble_block_a",
+      "role": "prop",
+      "receiver": false,
+      "maskSource": "disabled",
+      "directMaskSafety": "disabled_non_receiver",
+      "boundsLocal": {
+        "min": [
+          1.02,
+          0.0,
+          -0.72
+        ],
+        "max": [
+          1.33,
+          0.22,
+          -0.42
+        ]
+      },
+      "viewBoundary": {
+        "geometryCompleteness": "decorative_rejection_witness_only",
+        "validViewCone": "free_orbit",
+        "knownMissingSides": []
+      }
+    },
+    {
+      "nodeId": "non_receiver_rubble_block_b",
+      "role": "prop",
+      "receiver": false,
+      "maskSource": "disabled",
+      "directMaskSafety": "disabled_non_receiver",
+      "boundsLocal": {
+        "min": [
+          1.36,
+          0.0,
+          -0.58
+        ],
+        "max": [
+          1.6,
+          0.16,
+          -0.34
+        ]
+      },
+      "viewBoundary": {
+        "geometryCompleteness": "decorative_rejection_witness_only",
+        "validViewCone": "free_orbit",
+        "knownMissingSides": []
+      }
+    }
+  ],
+  "proxies": [
+    {
+      "proxyId": "stone-corner-low-poly-proxy",
+      "source": "artifacts/stone-receiver-fixture-2026-07-13/proxy/matte-stone-corner-receiver-proxy.glb",
+      "replacesNodeIds": [
+        "receiver_floor",
+        "receiver_back_wall",
+        "receiver_side_wall"
+      ],
+      "localToAsset": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      "boundsLocal": {
+        "min": [
+          -1.8,
+          -0.08,
+          -1.15
+        ],
+        "max": [
+          1.8,
+          1.85,
+          1.57
+        ]
+      },
+      "triangleCount": 6,
+      "truthBoundary": "Low-poly receiver mask proxy only. It is the preferred mask source for Beaming's receiver buffer, while the visual GLB remains the operator-facing fixture."
+    }
+  ],
+  "materialResponse": {
+    "defaultAlbedoHint": [
+      0.5,
+      0.47,
+      0.42
+    ],
+    "roughnessClass": "matte_stone",
+    "emissiveExclusion": true
+  },
+  "failureRules": [
+    "Missing descriptor, proxy, bounds, or node transforms must fail loud instead of falling back to hardcoded planes.",
+    "Only receiver=true nodes or their proxy should enter the receiver mask.",
+    "non_receiver_rubble_block_* must remain mask-disabled in Beaming receiver-only witness."
+  ]
+}
