@@ -454,8 +454,9 @@ def main() -> int:
             raise CompositionFailure(phase, f"no explicit composition policy for channels: {unsupported}")
         if "frontTopology" not in requested_channels:
             raise CompositionFailure(phase, "composition requires the dense frontTopology head")
-        if not any(SUPPORTED_POLICIES[channel] == SPARSE_POLICY for channel in requested_channels):
-            raise CompositionFailure(phase, "composition requires at least one sparse support-gated carrier head")
+        sparse_application_heads = [
+            channel for channel in requested_channels if SUPPORTED_POLICIES[channel] == SPARSE_POLICY
+        ]
 
         probe_module = load_probe_module()
         with np.load(classifier_path, allow_pickle=False) as classifier_archive:
@@ -618,6 +619,12 @@ def main() -> int:
             "features": probe_report.get("features"),
             "support": {
                 "identity": probe_report.get("classifier", {}).get("identity"),
+                "appliesToHeads": sparse_application_heads,
+                "applicationAuthority": (
+                    "hard-gate-applied-to-explicit-sparse-heads-v0"
+                    if sparse_application_heads
+                    else "diagnostic-only-not-applied-v0"
+                ),
                 "threshold": threshold,
                 "checkpointThreshold": checkpoint_threshold,
                 "thresholdAuthority": threshold_authority,

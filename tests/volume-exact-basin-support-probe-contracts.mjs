@@ -274,6 +274,8 @@ assert.equal(composition.source.pairManifestSha256, sha256(readFileSync(pairPath
 assert.equal(composition.source.supportProbeManifestSha256, sha256(readFileSync(join(outDir, 'manifest.json'))));
 assert.equal(composition.channelPolicies.frontTopology, 'dense-ungated-residual-v0');
 assert.equal(composition.channelPolicies.fuel, 'sparse-hard-support-gated-residual-v0');
+assert.deepEqual(composition.support.appliesToHeads, ['fuel']);
+assert.equal(composition.support.applicationAuthority, 'hard-gate-applied-to-explicit-sparse-heads-v0');
 assert.deepEqual(composition.receiver.fluid.shape, [highGrid, highGrid, highGrid, 16]);
 assert.deepEqual(composition.receiver.front.shape, [highGrid, highGrid, highGrid, 1]);
 assert.deepEqual(composition.support.probability.shape, [highGrid, highGrid, highGrid, 1]);
@@ -338,6 +340,27 @@ assert.deepEqual(selectedComposition.applicationHeads.channels, ['fuel', 'frontT
 assert.equal(selectedComposition.applicationHeads.authority, 'caller-selected-application-heads-v0');
 assert.deepEqual(Object.keys(selectedComposition.channelPolicies), ['fuel', 'frontTopology']);
 assert.ok(!('flame' in selectedComposition.channelMetrics), 'diagnostic-only flame head is not applied');
+
+const frontOnlyCompositionDir = join(fixtureRoot, 'composition-front-only');
+const frontOnlyRun = spawnSync('python3', [
+  composerPath,
+  '--pair-manifest', pairPath,
+  '--support-probe-manifest', join(outDir, 'manifest.json'),
+  '--out-dir', frontOnlyCompositionDir,
+  '--batch-cells', '256',
+  '--channels', 'frontTopology',
+], { encoding: 'utf8' });
+assert.equal(
+  frontOnlyRun.status,
+  0,
+  `dense front-only composition must not require an unrelated sparse carrier head: ${frontOnlyRun.stderr}`,
+);
+const frontOnlyComposition = JSON.parse(readFileSync(join(frontOnlyCompositionDir, 'manifest.json'), 'utf8'));
+assert.deepEqual(frontOnlyComposition.applicationHeads.channels, ['frontTopology']);
+assert.deepEqual(frontOnlyComposition.support.appliesToHeads, []);
+assert.equal(frontOnlyComposition.support.applicationAuthority, 'diagnostic-only-not-applied-v0');
+assert.deepEqual(Object.keys(frontOnlyComposition.channelPolicies), ['frontTopology']);
+assert.equal(frontOnlyComposition.channelPolicies.frontTopology, 'dense-ungated-residual-v0');
 
 const applicationLowFluid = new Float32Array(lowFluid);
 for (let cell = 0; cell < lowCells; cell += 1) applicationLowFluid[cell * 16 + 3] += 0.125;
@@ -599,8 +622,11 @@ const blendFront = readF32(blendComposition.receiver.front.path);
 const channelBlendFluid = readF32(channelBlendComposition.receiver.fluid.path);
 const channelBlendFront = readF32(channelBlendComposition.receiver.front.path);
 const transferFluid = readF32(transferComposition.receiver.fluid.path);
+const frontOnlyFluid = readF32(frontOnlyComposition.receiver.fluid.path);
+const frontOnlyFront = readF32(frontOnlyComposition.receiver.front.path);
 let selectedFuelChanged = false;
 let denseFrontChanged = false;
+let frontOnlyDenseChanged = false;
 for (let z = 0; z < highGrid; z += 1) {
   for (let y = 0; y < highGrid; y += 1) {
     for (let x = 0; x < highGrid; x += 1) {
@@ -639,13 +665,22 @@ for (let z = 0; z < highGrid; z += 1) {
         composedFront[highCell],
         'unit per-channel front scale preserves the full learned topology head',
       );
+      for (let channel = 0; channel < 16; channel += 1) {
+        assert.equal(
+          frontOnlyFluid[highCell * 16 + channel],
+          lowFluid[lowCell * 16 + channel],
+          'dense front-only composition preserves every fluid channel at the materialized baseline',
+        );
+      }
       if (composedFluid[highCell * 16 + 6] !== lowFluid[lowCell * 16 + 6]) selectedFuelChanged = true;
       if (composedFront[highCell] !== lowFront[lowCell]) denseFrontChanged = true;
+      if (frontOnlyFront[highCell] !== lowFront[lowCell]) frontOnlyDenseChanged = true;
     }
   }
 }
 assert.equal(selectedFuelChanged, true, 'sparse selected fuel head changes at least one high-grid cell');
 assert.equal(denseFrontChanged, true, 'dense topology head changes at least one high-grid cell');
+assert.equal(frontOnlyDenseChanged, true, 'dense front-only topology head changes at least one high-grid cell');
 
 const corruptedClassifierPath = join(fixtureRoot, 'support-classifier-corrupt.npz');
 const classifierBytes = readFileSync(report.classifier.artifact.path);
