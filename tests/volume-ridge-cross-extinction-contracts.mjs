@@ -47,7 +47,9 @@ assert.match(witness, /expectedAnchorFluidSha256[\s\S]*initialization\.summary\.
 assert.match(witness, /expectedAnchorFrontSha256[\s\S]*initialization\.summary\.replayAuthority\.warmupReceipt\?\.frontSha256/, 'witness rejects replay front-anchor substitution');
 assert.match(wrapper, /freeze_after_warmup/, 'wrapper exposes an explicit witness-owned post-anchor freeze request');
 assert.match(wrapper, /await prototype\(\)\.setActive\(true\);[\s\S]*setSelectiveHeadLiveCapturePaused\?\.\(true\)/, 'wrapper freezes in the same microtask that activates the imported anchor');
+assert.match(wrapper, /frozenAnchorSettled[\s\S]*postWarmupFreezeReceipt\?\.paused[\s\S]*frameCount\s*===\s*warmupTarget[\s\S]*simStepCount\s*===\s*warmupTarget/, 'wrapper admits the exact frozen anchor without requiring a state-advancing presentation frame');
 assert.match(witness, /route\.searchParams\.get\(['"]freeze_after_warmup['"]\)[\s\S]*['"]1['"]/, 'checksum-anchor bridge requires the exact post-warmup freeze request');
 assert.match(witness, /postWarmupFreezeReceipt[\s\S]*paused/, 'completed replay authority preserves the effective post-warmup freeze receipt');
+assert.match(witness, /lastTrustworthyEvidence\.routeAdmissionProbe\s*=\s*state/, 'route-admission polling preserves the last effective state before timeout');
 
 console.log('volume ridge cross-extinction contracts passed');

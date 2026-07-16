@@ -394,10 +394,21 @@
         : effectivePresentation === 'beauty'
           && effectiveComposition === requestedComposition
           && passReceiptMatchesComposition(passReceipt, requestedComposition);
+      const frozenAnchorSettled = freezeAfterWarmupRequested
+        && warmupComplete
+        && state?.active
+        && effectiveRole === requestedRole
+        && effectiveComposition === requestedComposition
+        && effectivePresentation === requestedPresentation
+        && effectiveRaymarchSmokePresentation === requestedRaymarchSmokePresentation
+        && effectiveAppearanceAssay === requestedAppearanceAssay
+        && postWarmupFreezeReceipt?.paused === true
+        && postWarmupFreezeReceipt.frameCount === warmupTarget
+        && postWarmupFreezeReceipt.simStepCount === warmupTarget;
       const rendererSettled = warmupComplete
         && state?.active
         && effectiveRole === requestedRole
-        && presentationSettled;
+        && (presentationSettled || frozenAnchorSettled);
       return {
         routeIdentity: ROUTE_IDENTITY,
         status: warmupError || state?.error || fallback

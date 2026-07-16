@@ -1231,6 +1231,7 @@ async function waitForRuntime(cdp, timeout) {
   const started = Date.now();
   while (Date.now() - started < timeout) {
     const state = await evaluate(cdp, 'window.__kaminosSelectiveHeadLive?.debugState?.() || null');
+    if (state) lastTrustworthyEvidence.routeAdmissionProbe = state;
     if (state?.status === 'failed') throw new Error(`route failed: ${state.error || state.fallbackReason || 'unknown'}`);
     if (state?.status === 'running') return state;
     await delay(125);
