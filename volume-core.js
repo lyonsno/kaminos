@@ -166,6 +166,7 @@ export function canonicalizeBoundarySplatAuditRows(values, instanceCount, stride
   if (!Number.isInteger(strideFloats) || strideFloats < 5) throw new RangeError('boundary splat audit stride is invalid');
   if (values.length < instanceCount * strideFloats) throw new RangeError('boundary splat audit payload is partial');
   const order = Array.from({ length: instanceCount }, (_, index) => index);
+  const valueBits = new Uint32Array(values.buffer, values.byteOffset, values.length);
   for (let index = 0; index < instanceCount * strideFloats; index += 1) {
     if (!Number.isFinite(values[index])) throw new Error(`boundary splat audit payload contains non-finite value at ${index}`);
   }
@@ -173,8 +174,13 @@ export function canonicalizeBoundarySplatAuditRows(values, instanceCount, stride
     const leftOffset = leftIndex * strideFloats;
     const rightOffset = rightIndex * strideFloats;
     for (let channel = 0; channel < strideFloats; channel += 1) {
-      const delta = values[leftOffset + channel] - values[rightOffset + channel];
-      if (delta !== 0) return delta;
+      const leftValue = values[leftOffset + channel];
+      const rightValue = values[rightOffset + channel];
+      if (leftValue < rightValue) return -1;
+      if (leftValue > rightValue) return 1;
+      const leftBits = valueBits[leftOffset + channel];
+      const rightBits = valueBits[rightOffset + channel];
+      if (leftBits !== rightBits) return leftBits < rightBits ? -1 : 1;
     }
     return 0;
   });

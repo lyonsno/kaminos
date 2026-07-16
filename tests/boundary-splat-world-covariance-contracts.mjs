@@ -45,6 +45,20 @@ const canonicalForward = canonicalizeBoundarySplatAuditRows(Float32Array.from([.
 const canonicalPermuted = canonicalizeBoundarySplatAuditRows(Float32Array.from([...auditRowB, ...auditRowA]), 2, 16);
 assert.deepEqual(canonicalForward.positionSupport, canonicalPermuted.positionSupport, 'candidate identity must ignore GPU atomic append permutation');
 assert.deepEqual(canonicalForward.attributes, canonicalPermuted.attributes, 'effective attributes must remain paired with their canonical candidate row');
+const positiveZeroRow = [0, 0.25, 0.5, 0.75, 0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+const negativeZeroRow = [-0, 0.25, 0.5, 0.75, -0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+const signedZeroForward = canonicalizeBoundarySplatAuditRows(Float32Array.from([...positiveZeroRow, ...negativeZeroRow]), 2, 16);
+const signedZeroPermuted = canonicalizeBoundarySplatAuditRows(Float32Array.from([...negativeZeroRow, ...positiveZeroRow]), 2, 16);
+assert.deepEqual(
+  new Uint8Array(signedZeroForward.positionSupport.buffer),
+  new Uint8Array(signedZeroPermuted.positionSupport.buffer),
+  'candidate canonical order must distinguish signed-zero bytes',
+);
+assert.deepEqual(
+  new Uint8Array(signedZeroForward.attributes.buffer),
+  new Uint8Array(signedZeroPermuted.attributes.buffer),
+  'attribute canonical order must distinguish signed-zero bytes while preserving row pairing',
+);
 
 const oracle = await import('../boundary-splat-camera-holdout-oracle.mjs');
 
