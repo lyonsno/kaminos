@@ -217,6 +217,18 @@ try {
       const coefficientBoundary = 'per-sample-pre-tone-map-emission-extinction-v0';
       const broadCarrierIdentity = 'signed-control-minus-structural-a-local-coefficients-v0';
       const opticalRecurrence = 'front-to-back-emission-with-exponential-transmittance-v0';
+      const positivePartitionIdentity = 'nonnegative-ridge-owned-plus-non-ridge-complete-flame-v0';
+      const completeFlameIdentity = 'smoke-off-complete-flame-local-emission-extinction-v0';
+      const ridgeOwnershipIdentity = 'state-derived-direct-flame-candidate-support-allocation-v0';
+      const positiveModes = new Set([
+        'complete-flame-emission',
+        'complete-flame-extinction',
+        'ridge-owned-emission',
+        'ridge-owned-extinction',
+        'non-ridge-emission',
+        'non-ridge-extinction',
+        'positive-optical-recomposition',
+      ]);
       const captureAppearance = async (mode, targetIdentity) => {
         prototype.setVolumePresentationMode('beauty');
         const requestedReceipt = operator.setAppearanceAssay(mode);
@@ -244,6 +256,15 @@ try {
           || receipt?.broadCarrierIdentity !== broadCarrierIdentity
           || receipt?.opticalRecurrence !== opticalRecurrence) {
           throw new Error('appearance-assay-receipt-invalid:' + mode + ':' + JSON.stringify({ requestedReceipt, receipt }));
+        }
+        if (positiveModes.has(mode)
+          && (receipt?.positivePartitionIdentity !== positivePartitionIdentity
+            || receipt?.completeFlameIdentity !== completeFlameIdentity
+            || receipt?.ridgeOwnershipIdentity !== ridgeOwnershipIdentity
+            || receipt?.coefficientSigns?.completeFlame !== 'nonnegative'
+            || receipt?.coefficientSigns?.ridgeOwned !== 'nonnegative'
+            || receipt?.coefficientSigns?.nonRidge !== 'nonnegative')) {
+          throw new Error('appearance-positive-partition-receipt-invalid:' + mode + ':' + JSON.stringify(receipt));
         }
         const application = receipt.application;
         if (application?.raymarchEncoded !== true
@@ -300,6 +321,13 @@ try {
           const appearanceBAppliedToFixedA = await captureAppearance('b-applied-to-fixed-a', 'pre-tone-map-b-optical-effect-on-fixed-structural-a-v0');
           const appearanceAPlusB = await captureAppearance('a-plus-b-recomposition', 'nonlinear-optical-a-plus-b-recomposition-v0');
           const smokeOffBeautyControl = await captureAppearance('smoke-off-beauty-control', 'smoke-off-beauty-optical-control-v0');
+          const positiveCompleteEmission = await captureAppearance('complete-flame-emission', 'smoke-off-complete-flame-emission-coefficient-v0');
+          const positiveCompleteExtinction = await captureAppearance('complete-flame-extinction', 'smoke-off-complete-flame-extinction-coefficient-v0');
+          const positiveRidgeOwnedEmission = await captureAppearance('ridge-owned-emission', 'nonnegative-ridge-owned-flame-emission-coefficient-v0');
+          const positiveRidgeOwnedExtinction = await captureAppearance('ridge-owned-extinction', 'nonnegative-ridge-owned-flame-extinction-coefficient-v0');
+          const positiveNonRidgeEmission = await captureAppearance('non-ridge-emission', 'nonnegative-non-ridge-flame-emission-coefficient-v0');
+          const positiveNonRidgeExtinction = await captureAppearance('non-ridge-extinction', 'nonnegative-non-ridge-flame-extinction-coefficient-v0');
+          const positiveOpticalRecomposition = await captureAppearance('positive-optical-recomposition', 'nonnegative-ridge-plus-non-ridge-optical-recomposition-v0');
           const afterView = prototype.debugState();
           if (afterView.simStepCount !== before.simStepCount) {
             throw new Error('appearance-state-advanced-during-view:' + entry.id);
@@ -308,11 +336,22 @@ try {
             || appearanceAPlusB.rgba.some((value, index) => value !== smokeOffBeautyControl.rgba[index])) {
             throw new Error('appearance-a-plus-b-control-pixel-mismatch:' + entry.id);
           }
+          if (positiveOpticalRecomposition.rgba.length !== smokeOffBeautyControl.rgba.length
+            || positiveOpticalRecomposition.rgba.some((value, index) => value !== smokeOffBeautyControl.rgba[index])) {
+            throw new Error('appearance-positive-recomposition-control-pixel-mismatch:' + entry.id);
+          }
           delete structuralA.rgba;
           delete appearanceBroadCarrierB.rgba;
           delete appearanceBAppliedToFixedA.rgba;
           delete appearanceAPlusB.rgba;
           delete smokeOffBeautyControl.rgba;
+          delete positiveCompleteEmission.rgba;
+          delete positiveCompleteExtinction.rgba;
+          delete positiveRidgeOwnedEmission.rgba;
+          delete positiveRidgeOwnedExtinction.rgba;
+          delete positiveNonRidgeEmission.rgba;
+          delete positiveNonRidgeExtinction.rgba;
+          delete positiveOpticalRecomposition.rgba;
           const camera = capture.camera;
           cameras.push({
             id: entry.id,
@@ -327,6 +366,13 @@ try {
             appearanceBAppliedToFixedA,
             appearanceAPlusB,
             smokeOffBeautyControl,
+            positiveCompleteEmission,
+            positiveCompleteExtinction,
+            positiveRidgeOwnedEmission,
+            positiveRidgeOwnedExtinction,
+            positiveNonRidgeEmission,
+            positiveNonRidgeExtinction,
+            positiveOpticalRecomposition,
           });
         }
       } finally {
@@ -409,6 +455,13 @@ try {
       appearanceBAppliedToFixedA: ['b-on-fixed-a', 'b-applied-to-fixed-a', 'pre-tone-map-b-optical-effect-on-fixed-structural-a-v0'],
       appearanceAPlusB: ['a-plus-b', 'a-plus-b-recomposition', 'nonlinear-optical-a-plus-b-recomposition-v0'],
       smokeOffBeautyControl: ['smoke-off-control', 'smoke-off-beauty-control', 'smoke-off-beauty-optical-control-v0'],
+      positiveCompleteEmission: ['positive-complete-emission', 'complete-flame-emission', 'smoke-off-complete-flame-emission-coefficient-v0'],
+      positiveCompleteExtinction: ['positive-complete-extinction', 'complete-flame-extinction', 'smoke-off-complete-flame-extinction-coefficient-v0'],
+      positiveRidgeOwnedEmission: ['positive-ridge-owned-emission', 'ridge-owned-emission', 'nonnegative-ridge-owned-flame-emission-coefficient-v0'],
+      positiveRidgeOwnedExtinction: ['positive-ridge-owned-extinction', 'ridge-owned-extinction', 'nonnegative-ridge-owned-flame-extinction-coefficient-v0'],
+      positiveNonRidgeEmission: ['positive-non-ridge-emission', 'non-ridge-emission', 'nonnegative-non-ridge-flame-emission-coefficient-v0'],
+      positiveNonRidgeExtinction: ['positive-non-ridge-extinction', 'non-ridge-extinction', 'nonnegative-non-ridge-flame-extinction-coefficient-v0'],
+      positiveOpticalRecomposition: ['positive-optical-recomposition', 'positive-optical-recomposition', 'nonnegative-ridge-plus-non-ridge-optical-recomposition-v0'],
     };
     const targets = {};
     for (const [key, [fileLabel, mode, targetIdentity]] of Object.entries(targetSpecs)) {

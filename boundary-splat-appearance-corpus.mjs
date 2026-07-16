@@ -7,8 +7,8 @@ import {
   BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_STRIDE_FLOATS,
 } from './boundary-splat-feature-capture.mjs';
 
-export const BOUNDARY_SPLAT_APPEARANCE_SCHEMA = 'kaminos-boundary-splat-appearance-coefficient-corpus-v0';
-export const BOUNDARY_SPLAT_APPEARANCE_AUTHORITY = 'live-simulator-frozen-state-multi-camera-signed-appearance-coefficients-v0';
+export const BOUNDARY_SPLAT_APPEARANCE_SCHEMA = 'kaminos-boundary-splat-appearance-coefficient-corpus-v1';
+export const BOUNDARY_SPLAT_APPEARANCE_AUTHORITY = 'live-simulator-frozen-state-multi-camera-positive-full-flame-coefficients-with-signed-comparator-v1';
 export const BOUNDARY_SPLAT_APPEARANCE_CONDITIONING_IDENTITY = 'boundary-splat-authored-appearance-conditioning-v0';
 
 const APPEARANCE_RECEIPT_IDENTITY = 'appearance-decomposition-receipt-v0';
@@ -20,6 +20,16 @@ const BROAD_CARRIER_B_TARGET_IDENTITY = 'pre-tone-map-signed-broad-carrier-coeff
 const B_ON_A_TARGET_IDENTITY = 'pre-tone-map-b-optical-effect-on-fixed-structural-a-v0';
 const A_PLUS_B_TARGET_IDENTITY = 'nonlinear-optical-a-plus-b-recomposition-v0';
 const SMOKE_OFF_CONTROL_TARGET_IDENTITY = 'smoke-off-beauty-optical-control-v0';
+const POSITIVE_PARTITION_IDENTITY = 'nonnegative-ridge-owned-plus-non-ridge-complete-flame-v0';
+const COMPLETE_FLAME_IDENTITY = 'smoke-off-complete-flame-local-emission-extinction-v0';
+const RIDGE_OWNERSHIP_IDENTITY = 'state-derived-direct-flame-candidate-support-allocation-v0';
+const COMPLETE_FLAME_EMISSION_TARGET_IDENTITY = 'smoke-off-complete-flame-emission-coefficient-v0';
+const COMPLETE_FLAME_EXTINCTION_TARGET_IDENTITY = 'smoke-off-complete-flame-extinction-coefficient-v0';
+const RIDGE_OWNED_EMISSION_TARGET_IDENTITY = 'nonnegative-ridge-owned-flame-emission-coefficient-v0';
+const RIDGE_OWNED_EXTINCTION_TARGET_IDENTITY = 'nonnegative-ridge-owned-flame-extinction-coefficient-v0';
+const NON_RIDGE_EMISSION_TARGET_IDENTITY = 'nonnegative-non-ridge-flame-emission-coefficient-v0';
+const NON_RIDGE_EXTINCTION_TARGET_IDENTITY = 'nonnegative-non-ridge-flame-extinction-coefficient-v0';
+const POSITIVE_OPTICAL_RECOMPOSITION_TARGET_IDENTITY = 'nonnegative-ridge-plus-non-ridge-optical-recomposition-v0';
 const RAYMARCH_RENDERER_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const TARGET_AUTHORITY = 'gpu-rgba8-raymarch-readback-frozen-sim-state';
 const COUPLING_TERMS = [
@@ -143,6 +153,29 @@ function validateAppearanceReceipt(target, label, mode, targetIdentity) {
   }
 }
 
+function validatePositiveAppearanceReceipt(target, label, mode, targetIdentity) {
+  validateAppearanceReceipt(target, label, mode, targetIdentity);
+  const receipt = target.appearanceDecompositionReceipt;
+  if (receipt.positivePartitionIdentity !== POSITIVE_PARTITION_IDENTITY) {
+    throw new Error(`${label} positive partition identity is invalid`);
+  }
+  if (receipt.completeFlameIdentity !== COMPLETE_FLAME_IDENTITY) {
+    throw new Error(`${label} Complete Flame identity is invalid`);
+  }
+  if (receipt.ridgeOwnershipIdentity !== RIDGE_OWNERSHIP_IDENTITY) {
+    throw new Error(`${label} ridge ownership identity is invalid`);
+  }
+  if (receipt.coefficientSigns?.completeFlame !== 'nonnegative') {
+    throw new Error(`${label} Complete Flame coefficients must be nonnegative`);
+  }
+  if (receipt.coefficientSigns?.ridgeOwned !== 'nonnegative') {
+    throw new Error(`${label} Ridge-Owned coefficients must be nonnegative`);
+  }
+  if (receipt.coefficientSigns?.nonRidge !== 'nonnegative') {
+    throw new Error(`${label} Non-Ridge coefficients must be nonnegative`);
+  }
+}
+
 export async function validateBoundarySplatAppearanceCorpus(manifestFile, options = {}) {
   const manifestPath = resolve(manifestFile);
   const expectedGrid = options.expectedGrid == null ? 160 : Number(options.expectedGrid);
@@ -232,14 +265,21 @@ export async function validateBoundarySplatAppearanceCorpus(manifestFile, option
     cameraSignatures.add(cameraSignature);
 
     const targets = [
-      ['structuralA', 'structural A', 'structural-a', STRUCTURAL_A_IDENTITY],
-      ['appearanceBroadCarrierB', 'broad-carrier B', 'broad-carrier-b', BROAD_CARRIER_B_TARGET_IDENTITY],
-      ['appearanceBAppliedToFixedA', 'B applied to fixed A', 'b-applied-to-fixed-a', B_ON_A_TARGET_IDENTITY],
-      ['appearanceAPlusB', 'A+B recomposition', 'a-plus-b-recomposition', A_PLUS_B_TARGET_IDENTITY],
-      ['smokeOffBeautyControl', 'smoke-off optical control', 'smoke-off-beauty-control', SMOKE_OFF_CONTROL_TARGET_IDENTITY],
+      ['structuralA', 'structural A', 'structural-a', STRUCTURAL_A_IDENTITY, false],
+      ['appearanceBroadCarrierB', 'broad-carrier B', 'broad-carrier-b', BROAD_CARRIER_B_TARGET_IDENTITY, false],
+      ['appearanceBAppliedToFixedA', 'B applied to fixed A', 'b-applied-to-fixed-a', B_ON_A_TARGET_IDENTITY, false],
+      ['appearanceAPlusB', 'A+B recomposition', 'a-plus-b-recomposition', A_PLUS_B_TARGET_IDENTITY, false],
+      ['smokeOffBeautyControl', 'smoke-off optical control', 'smoke-off-beauty-control', SMOKE_OFF_CONTROL_TARGET_IDENTITY, false],
+      ['positiveCompleteEmission', 'Complete Flame emission', 'complete-flame-emission', COMPLETE_FLAME_EMISSION_TARGET_IDENTITY, true],
+      ['positiveCompleteExtinction', 'Complete Flame extinction', 'complete-flame-extinction', COMPLETE_FLAME_EXTINCTION_TARGET_IDENTITY, true],
+      ['positiveRidgeOwnedEmission', 'Ridge-Owned emission', 'ridge-owned-emission', RIDGE_OWNED_EMISSION_TARGET_IDENTITY, true],
+      ['positiveRidgeOwnedExtinction', 'Ridge-Owned extinction', 'ridge-owned-extinction', RIDGE_OWNED_EXTINCTION_TARGET_IDENTITY, true],
+      ['positiveNonRidgeEmission', 'Non-Ridge emission', 'non-ridge-emission', NON_RIDGE_EMISSION_TARGET_IDENTITY, true],
+      ['positiveNonRidgeExtinction', 'Non-Ridge extinction', 'non-ridge-extinction', NON_RIDGE_EXTINCTION_TARGET_IDENTITY, true],
+      ['positiveOpticalRecomposition', 'positive optical recomposition', 'positive-optical-recomposition', POSITIVE_OPTICAL_RECOMPOSITION_TARGET_IDENTITY, true],
     ];
     const artifacts = {};
-    for (const [key, targetLabel, mode, targetIdentity] of targets) {
+    for (const [key, targetLabel, mode, targetIdentity, positiveTarget] of targets) {
       const target = entry[key];
       if (!target) throw new Error(`${label} ${targetLabel} target is missing`);
       validateTargetIdentity(target, `${label} ${targetLabel}`, {
@@ -248,7 +288,8 @@ export async function validateBoundarySplatAppearanceCorpus(manifestFile, option
       });
       validateTargetState(target, entry, manifest, `${label} ${targetLabel}`);
       validateExactTeacher(target, `${label} ${targetLabel}`, expectedRaySteps, expectedRenderScale);
-      validateAppearanceReceipt(target, `${label} ${targetLabel}`, mode, targetIdentity);
+      if (positiveTarget) validatePositiveAppearanceReceipt(target, `${label} ${targetLabel}`, mode, targetIdentity);
+      else validateAppearanceReceipt(target, `${label} ${targetLabel}`, mode, targetIdentity);
       artifacts[key] = await validateArtifact(manifestPath, target, `${label} ${targetLabel}`);
     }
     if (entry.appearanceBAppliedToFixedA.trainingAuthority !== 'diagnostic-only-not-local-b-target') {
@@ -257,6 +298,10 @@ export async function validateBoundarySplatAppearanceCorpus(manifestFile, option
     if (artifacts.appearanceAPlusB.digest !== artifacts.smokeOffBeautyControl.digest
       || artifacts.appearanceAPlusB.bytes.length !== artifacts.smokeOffBeautyControl.bytes.length) {
       throw new Error(`${label} exact A+B recomposition does not byte-match the smoke-off optical control`);
+    }
+    if (artifacts.positiveOpticalRecomposition.digest !== artifacts.smokeOffBeautyControl.digest
+      || artifacts.positiveOpticalRecomposition.bytes.length !== artifacts.smokeOffBeautyControl.bytes.length) {
+      throw new Error(`${label} positive optical recomposition does not byte-match the smoke-off optical control`);
     }
 
     cameras.push({
@@ -267,6 +312,13 @@ export async function validateBoundarySplatAppearanceCorpus(manifestFile, option
       appearanceBAppliedToFixedAPath: artifacts.appearanceBAppliedToFixedA.path,
       appearanceAPlusBPath: artifacts.appearanceAPlusB.path,
       smokeOffBeautyControlPath: artifacts.smokeOffBeautyControl.path,
+      positiveCompleteEmissionPath: artifacts.positiveCompleteEmission.path,
+      positiveCompleteExtinctionPath: artifacts.positiveCompleteExtinction.path,
+      positiveRidgeOwnedEmissionPath: artifacts.positiveRidgeOwnedEmission.path,
+      positiveRidgeOwnedExtinctionPath: artifacts.positiveRidgeOwnedExtinction.path,
+      positiveNonRidgeEmissionPath: artifacts.positiveNonRidgeEmission.path,
+      positiveNonRidgeExtinctionPath: artifacts.positiveNonRidgeExtinction.path,
+      positiveOpticalRecompositionPath: artifacts.positiveOpticalRecomposition.path,
       camera: entry.camera,
     });
   }
@@ -288,6 +340,7 @@ export async function validateBoundarySplatAppearanceCorpus(manifestFile, option
     cameraCount: cameras.length,
     trainCameraCount,
     heldoutCameraCount,
+    positiveTargetAuthority: POSITIVE_PARTITION_IDENTITY,
     authoredAppearanceControls: conditioning.values,
     cameras,
   };
