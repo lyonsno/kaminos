@@ -29,6 +29,8 @@ const port = Number(args.get('cdp-port') || 9364);
 const width = Number(args.get('viewport-width') || 1600);
 const height = Number(args.get('viewport-height') || 1000);
 const loadTimeoutMs = Number(args.get('load-timeout-ms') || 120000);
+const expectedServerRootArgument = args.get('expected-server-root');
+const expectedServerRoot = expectedServerRootArgument ? path.resolve(expectedServerRootArgument) : null;
 const expectedObjectIds = ['stone-receiver', 'specimen-tray', 'titan-hammer'];
 const startedAt = new Date().toISOString();
 
@@ -41,6 +43,8 @@ let primaryOutputWritten = false;
 let lastTrustworthyEvidence = null;
 let canvasPixelEvidence = null;
 let sidebarPixelEvidence = null;
+let serverRootEvidence = null;
+let effectiveServerRoot = null;
 let cleanupEvidence = null;
 let finalStatus = 'failed';
 let finalError = null;
@@ -62,6 +66,9 @@ function writeReport(status, extra = {}) {
     startedAt,
     finishedAt: new Date().toISOString(),
     requestedUrl,
+    expectedServerRoot,
+    effectiveServerRoot,
+    serverRootEvidence,
     requestedCompositionId,
     effectiveCompositionId: lastTrustworthyEvidence?.effectiveCompositionId || null,
     registeredObjectIds: lastTrustworthyEvidence?.registeredObjectIds || [],
@@ -94,6 +101,43 @@ async function waitForCdp() {
     }
   }
   throw new Error(`CDP did not open on ${port}`);
+}
+
+async function verifyServerRoot() {
+  const rootsUrl = new URL('/api/roots', baseUrl);
+  let response;
+  try {
+    response = await fetch(rootsUrl);
+  } catch (error) {
+    throw new Error(`server root identity unavailable: ${error?.message || error}`);
+  }
+
+  let roots;
+  try {
+    roots = await response.json();
+  } catch (error) {
+    throw new Error(`server root identity unavailable: invalid /api/roots response: ${error?.message || error}`);
+  }
+  if (!response.ok || roots?.error) {
+    throw new Error(`server root identity unavailable: ${roots?.error || response.status}`);
+  }
+
+  const scenesPath = roots?.scenes?.path;
+  if (!scenesPath) throw new Error('server root identity unavailable: missing scenes root');
+  if (!path.isAbsolute(scenesPath)) {
+    throw new Error(`server root identity is not absolute: ${scenesPath}`);
+  }
+
+  effectiveServerRoot = path.resolve(scenesPath, '..');
+  serverRootEvidence = {
+    requestedUrl: rootsUrl.toString(),
+    expectedServerRoot,
+    effectiveServerRoot,
+    scenesPath,
+  };
+  if (effectiveServerRoot !== expectedServerRoot) {
+    throw new Error(`effective server root mismatch: expected ${expectedServerRoot} but server reported ${effectiveServerRoot}`);
+  }
 }
 
 function connectWebSocket(url) {
@@ -243,9 +287,15 @@ async function inspectScreenshotRegion(ws, screenshotBase64, {
 }
 
 try {
+  phase = 'validating-arguments';
+  if (!expectedServerRoot) {
+    throw new Error('--expected-server-root is required');
+  }
   if (!Number.isFinite(port) || !Number.isFinite(width) || !Number.isFinite(height) || !Number.isFinite(loadTimeoutMs)) {
     throw new Error('numeric witness arguments must be finite');
   }
+  phase = 'checking-server-root';
+  await verifyServerRoot();
   userDataDir = mkdtempSync(path.join(tmpdir(), 'kaminos-crucible-composition-'));
   phase = 'launching-browser';
   browser = spawn(chrome, [
@@ -336,6 +386,8 @@ writeReport(finalStatus, finalError ? { error: finalError } : {});
 if (finalStatus === 'passed') {
   console.log(JSON.stringify({
     status: finalStatus,
+    expectedServerRoot,
+    effectiveServerRoot,
     requestedCompositionId,
     effectiveCompositionId: lastTrustworthyEvidence.effectiveCompositionId,
     registeredObjectIds: lastTrustworthyEvidence.registeredObjectIds,

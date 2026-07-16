@@ -1,0 +1,98 @@
+{
+  "schema": "kaminos.crucible-composition-witness.v0",
+  "status": "failed-visual-inspection",
+  "automatedStatus": "passed",
+  "visualDisposition": "failed-control-and-asset-paint-to-black",
+  "automatedPixelEvidenceDisposition": "false-positive-against-agent-visual-inspection",
+  "rerunDisposition": "stopped-after-repeated-same-kind-automated-presentation-paint-failure",
+  "phase": "complete",
+  "startedAt": "2026-07-16T08:18:09.501Z",
+  "finishedAt": "2026-07-16T08:18:14.572Z",
+  "requestedUrl": "http://127.0.0.1:8297/?composition=promoted-bench-2026-07-15",
+  "expectedServerRoot": "/private/tmp/kaminos-wake-and-bake-pit-boss-0715",
+  "effectiveServerRoot": "/private/tmp/kaminos-wake-and-bake-pit-boss-0715",
+  "serverRootEvidence": {
+    "requestedUrl": "http://127.0.0.1:8297/api/roots",
+    "expectedServerRoot": "/private/tmp/kaminos-wake-and-bake-pit-boss-0715",
+    "effectiveServerRoot": "/private/tmp/kaminos-wake-and-bake-pit-boss-0715",
+    "scenesPath": "/private/tmp/kaminos-wake-and-bake-pit-boss-0715/scenes"
+  },
+  "requestedCompositionId": "promoted-bench-2026-07-15",
+  "effectiveCompositionId": "promoted-bench-2026-07-15",
+  "registeredObjectIds": [
+    "stone-receiver",
+    "specimen-tray",
+    "titan-hammer"
+  ],
+  "aoEnabled": false,
+  "screenshot": "artifacts/crucible-composition-smoke-2026-07-15/crucible-promoted-bench-desktop-control-paint-failure-2026-07-16.png",
+  "primaryOutputWritten": true,
+  "canvasPixelEvidence": {
+    "ok": true,
+    "reason": "sampled-canvas-screenshot",
+    "sampleWidth": 64,
+    "sampleHeight": 64,
+    "quantizedColorCount": 50,
+    "minLuma": 2,
+    "maxLuma": 220.2808,
+    "meanLuma": 90.02157026367078,
+    "variance": 7105.647303709464,
+    "darkFraction": 0.27587890625,
+    "regionRect": {
+      "left": 380,
+      "top": 0,
+      "width": 1220,
+      "height": 1000
+    }
+  },
+  "sidebarPixelEvidence": {
+    "ok": true,
+    "reason": "sampled-sidebar-screenshot",
+    "sampleWidth": 64,
+    "sampleHeight": 64,
+    "quantizedColorCount": 49,
+    "minLuma": 25.999999999999996,
+    "maxLuma": 229.99999999999997,
+    "meanLuma": 33.385558691406146,
+    "variance": 188.76281731523318,
+    "darkFraction": 0,
+    "regionRect": {
+      "left": 0,
+      "top": 0,
+      "width": 380,
+      "height": 1000
+    }
+  },
+  "cleanup": null,
+  "lastTrustworthyEvidence": {
+    "schema": "kaminos.crucible-composition-debug.v0",
+    "status": "loaded",
+    "requestedCompositionId": "promoted-bench-2026-07-15",
+    "effectiveCompositionId": "promoted-bench-2026-07-15",
+    "manifestSource": "scenes/crucible-promoted-bench.kaminos.json",
+    "registeredObjectIds": [
+      "stone-receiver",
+      "specimen-tray",
+      "titan-hammer"
+    ],
+    "aoEnabled": false,
+    "viewportFraming": {
+      "viewportWidth": 1220,
+      "viewportHeight": 1000,
+      "viewportAspect": 1.22,
+      "distanceScale": 1,
+      "cameraPosition": [
+        3.7,
+        2.45,
+        -3.9000000000000004
+      ],
+      "cameraTarget": [
+        0,
+        0.38,
+        0.25
+      ]
+    },
+    "error": null
+  },
+  "stderr": "DevTools listening on ws://127.0.0.1:9464/devtools/browser/c194d34e-7580-4a9f-bccc-a81649aae1e2\nTrying to load the allocator multiple times. This is *not* supported.\n[42485:17352694:0716/041813.513326:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[42485:17352694:0716/041813.515601:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[42485:17352694:0716/041813.606446:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR"
+}
