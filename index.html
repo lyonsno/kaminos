@@ -2815,6 +2815,8 @@ let fingerFluidBenchSolverPromise = null;
 let fingerFluidBenchRunning = false;
 let fingerFluidBenchCamera = { yaw: -0.62, pitch: 0.52, distance: 6.2, target: [0, -0.48, 0.2] };
 const FINGER_FLUID_PYRO_CONTACT_DELAY_MS = 5500;
+const FINGER_FLUID_PYRO_PRE_CONTACT_CAPTURE_MIN_SIM_STEPS = 180;
+const FINGER_FLUID_PYRO_CONTACT_MIN_SIM_STEPS = 240;
 let fingerFluidBenchConfig = null;
 let fingerFluidPyroCompositionState = {
   schema: 'kaminos.finger-fluid-pyro-composition.v0',
@@ -9901,8 +9903,13 @@ function updateFingerFluidPyroCompositionContactGate(now = performance.now()) {
     fingerFluidPyroCompositionActivatedAtMs === null
   ) return;
   const elapsedMs = now - fingerFluidPyroCompositionActivatedAtMs;
+  const simStepCount = Number(volumePrototype.debugState()?.simStepCount || 0);
   fingerFluidPyroCompositionState.contactElapsedMs = elapsedMs;
-  if (elapsedMs >= FINGER_FLUID_PYRO_CONTACT_DELAY_MS) {
+  fingerFluidPyroCompositionState.observedContactSimStepCount = simStepCount;
+  if (
+    elapsedMs >= FINGER_FLUID_PYRO_CONTACT_DELAY_MS
+    && simStepCount >= FINGER_FLUID_PYRO_CONTACT_MIN_SIM_STEPS
+  ) {
     const gate = volumePrototype.setLiquidFireContactTransferEnabled(true, { reason: 'composition-observation-window-complete' });
     fingerFluidPyroCompositionState.contactTransferEnabled = gate.enabled;
     fingerFluidPyroCompositionState.contactPhase = 'coupled';
@@ -9947,6 +9954,9 @@ async function activateFingerFluidPyroComposition() {
     requestedRenderComposition: 'smoke-raymarch-under-splats-v0',
     camera: fingerFluidCompositionCameraState(),
     contactDelayMs: FINGER_FLUID_PYRO_CONTACT_DELAY_MS,
+    preContactCaptureMinSimSteps: FINGER_FLUID_PYRO_PRE_CONTACT_CAPTURE_MIN_SIM_STEPS,
+    contactMinSimSteps: FINGER_FLUID_PYRO_CONTACT_MIN_SIM_STEPS,
+    observedContactSimStepCount: 0,
     contactPhase: 'uncoupled-observation',
     contactTransferEnabled: false,
     contactActivatedAtMs: fingerFluidPyroCompositionActivatedAtMs,
