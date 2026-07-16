@@ -52,5 +52,14 @@ assert.match(witness, /volumePresentationReceipt\.application[\s\S]*raymarchAppl
 assert.match(witness, /candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0/, 'witness requires the exact intrinsic target identity');
 assert.match(witness, /passes\.splats[\s\S]*passes\.residual[\s\S]*passes\.featureCapture/, 'witness rejects hidden splat, residual, or feature-capture application');
 assert.match(witness, /function stripEvidencePngData[\s\S]*beauty:[^\n]*stripPngData[\s\S]*intrinsic:[^\n]*stripPngData[\s\S]*beautyRestored:[^\n]*stripPngData/, 'failed witness reports recursively remove nested PNG payloads');
+assert.match(
+  witness,
+  /captureAppearance\('structural-a'\)[\s\S]*captureAppearance\('broad-carrier-b'\)[\s\S]*captureAppearance\('b-applied-to-fixed-a'\)[\s\S]*captureAppearance\('a-plus-b-recomposition'\)[\s\S]*captureAppearance\('smoke-off-beauty-control'\)/,
+  'witness captures all five appearance identities from one frozen state',
+);
+assert.match(witness, /appearanceDecompositionReceipt[\s\S]*couplingTerms[\s\S]*passes/, 'appearance captures preserve requested/effective coefficient and pass receipts');
+assert.match(witness, /const recompositionDelta\s*=\s*pixelDelta\(appearanceRecomposition\._rgba, appearanceControl\._rgba\)/, 'witness compares A+B against the independently accumulated control');
+assert.match(witness, /recompositionDelta\.maxChannelDelta[\s\S]*recompositionDelta\.changedPixelRatio/, 'witness rejects inexact optical recomposition');
+assert.match(witness, /appearanceStructuralA\.metrics\.nonblank[\s\S]*appearanceBroadCarrierB\.metrics\.nonblank[\s\S]*appearanceBAppliedToFixedA\.metrics\.nonblank/, 'witness rejects blank A, B, and B-on-A diagnostics');
 
 console.log('volume intrinsic presentation witness contracts passed');

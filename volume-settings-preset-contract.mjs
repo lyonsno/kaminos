@@ -5,6 +5,25 @@ export const VOLUME_SETTINGS_PRESET_VISUAL_VIEWS = Object.freeze({
   'smoke-hybrid': Object.freeze({ role: 'truthHigh', composition: 'smoke-raymarch-under-splats-v0' }),
   'full-hybrid-diagnostic': Object.freeze({ role: 'truthHigh', composition: 'full-raymarch-under-splats-diagnostic-v0' }),
 });
+const VOLUME_APPEARANCE_DECOMPOSITION_MODES = Object.freeze([
+  'off',
+  'structural-a',
+  'broad-carrier-b',
+  'b-applied-to-fixed-a',
+  'a-plus-b-recomposition',
+  'smoke-off-beauty-control',
+]);
+
+function validateAppearanceDecompositionTarget(params, prefix = '') {
+  const requestedAppearanceDecompositionModes = params.getAll('volume_appearance_decomposition');
+  if (requestedAppearanceDecompositionModes.length > 1) {
+    throw new Error(`${prefix}target duplicates appearance decomposition identity`);
+  }
+  if (requestedAppearanceDecompositionModes.length === 1
+    && !VOLUME_APPEARANCE_DECOMPOSITION_MODES.includes(requestedAppearanceDecompositionModes[0])) {
+    throw new Error(`unsupported ${prefix}target appearance decomposition: ${requestedAppearanceDecompositionModes[0]}`);
+  }
+}
 
 function validatePresetSchema(schema) {
   if (!schema || schema.identity !== VOLUME_SETTINGS_PRESET_SCHEMA_IDENTITY) {
@@ -189,6 +208,7 @@ export function validateVolumeSettingsPresetVisualTarget(receipt, params) {
   if (requestedSmokePresentationModes.length === 1 && !['on', 'off'].includes(requestedSmokePresentationModes[0])) {
     throw new Error(`unsupported visual target raymarch smoke presentation: ${requestedSmokePresentationModes[0]}`);
   }
+  validateAppearanceDecompositionTarget(params, 'visual ');
   const allowed = new Set([
     ...receipt.routeVolumeEntries.map(([key]) => key),
     'role',
@@ -198,6 +218,7 @@ export function validateVolumeSettingsPresetVisualTarget(receipt, params) {
     'settings_preset_authority',
     'volume_presentation',
     'volume_raymarch_smoke',
+    'volume_appearance_decomposition',
   ]);
   const unexpected = [...params].map(([key]) => key).filter(key => !allowed.has(key));
   if (unexpected.length > 0) {
@@ -207,7 +228,10 @@ export function validateVolumeSettingsPresetVisualTarget(receipt, params) {
     if (params.getAll(key).length !== 1) throw new Error(`visual target duplicates parameter: ${key}`);
   }
   const requestedVolumeEntries = [...params].filter(([key]) => (
-    key.startsWith('volume_') && key !== 'volume_presentation' && key !== 'volume_raymarch_smoke'
+    key.startsWith('volume_')
+      && key !== 'volume_presentation'
+      && key !== 'volume_raymarch_smoke'
+      && key !== 'volume_appearance_decomposition'
   ));
   if (requestedVolumeEntries.length !== receipt.routeVolumeEntries.length) {
     throw new Error('visual target volume route is partial or contains extra settings');
@@ -239,12 +263,14 @@ export function validateVolumeSettingsPresetTarget(receipt, params) {
   if (requestedSmokePresentationModes.length === 1 && !['on', 'off'].includes(requestedSmokePresentationModes[0])) {
     throw new Error(`unsupported target raymarch smoke presentation: ${requestedSmokePresentationModes[0]}`);
   }
+  validateAppearanceDecompositionTarget(params);
   const allowed = new Set([
     ...receipt.routeEntries.map(([key]) => key),
     'settings_preset',
     'settings_preset_authority',
     'volume_presentation',
     'volume_raymarch_smoke',
+    'volume_appearance_decomposition',
   ]);
   const unexpected = [...params].map(([key]) => key).filter(key => !allowed.has(key));
   if (unexpected.length > 0) throw new Error(`target settings route contains unexpected parameters: ${unexpected.join(',')}`);

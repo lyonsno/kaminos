@@ -17502,6 +17502,8 @@ async function initKaminosVolumeRoute() {
   const requestedRaymarchSmokePresentation = params.get('volume_raymarch_smoke') || 'on';
   window.__kaminosRaymarchSmokePresentationReceipt = volumePrototype.setRaymarchSmokePresentationMode?.(requestedRaymarchSmokePresentation) || null;
   syncRaymarchSmokePresentationControls(window.__kaminosRaymarchSmokePresentationReceipt);
+  const requestedAppearanceDecomposition = params.get('volume_appearance_decomposition') || 'off';
+  window.__kaminosAppearanceDecompositionReceipt = volumePrototype.setAppearanceDecompositionMode?.(requestedAppearanceDecomposition) || null;
   volumeBridge?.dispose?.();
   volumeBridge = createVolumeMainRendererBridge();
   window.__kaminosVolumeBridge = volumeBridge;

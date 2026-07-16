@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { randomInt } from 'node:crypto';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, relative, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
 const TARGET_IDENTITY = 'candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0';
@@ -225,8 +225,8 @@ try {
       const controlsHash = await digest(before.controls);
       const cameraHash = await digest(basinWindow?.kaminosCameraDebugState?.() || null);
 
-      async function captureMode(mode) {
-        const receipt = operator?.setPresentation?.(mode) || prototype.setVolumePresentationMode(mode);
+      async function captureMode(mode, existingReceipt = null) {
+        const receipt = existingReceipt || operator?.setPresentation?.(mode) || prototype.setVolumePresentationMode(mode);
         const captureStarted = performance.now();
         const sample = await prototype.sampleFrame({
           advanceSim: false,
@@ -261,12 +261,28 @@ try {
             boundarySplatCandidateCount: sample.boundarySplatCandidateCount,
             volumePresentationReceipt: sample.volumePresentationReceipt,
             raymarchSmokePresentationReceipt: sample.raymarchSmokePresentationReceipt,
+            appearanceDecompositionReceipt: sample.appearanceDecompositionReceipt,
             selectiveHeadLivePassReceipt: sample.selectiveHeadLivePassReceipt,
           },
           pixelHash: await digest(rgba),
           metrics: pixelMetrics(rgba),
           pngDataUrl: pngDataUrl({ width: sample.image.width, height: sample.image.height, rgba }),
           _rgba: rgba,
+        };
+      }
+
+      async function captureAppearance(mode) {
+        const beautyReceipt = prototype.setVolumePresentationMode('beauty');
+        const appearanceDecompositionReceipt = operator?.setAppearanceAssay?.(mode)
+          || prototype.setAppearanceDecompositionMode(mode);
+        const capture = await captureMode('beauty', beautyReceipt);
+        return {
+          ...capture,
+          mode,
+          receipt: appearanceDecompositionReceipt,
+          appearanceDecompositionReceipt: capture.sample.appearanceDecompositionReceipt,
+          couplingTerms: appearanceDecompositionReceipt?.couplingTerms || [],
+          passes: appearanceDecompositionReceipt?.passes || {},
         };
       }
 
@@ -279,6 +295,12 @@ try {
         disabled: [...document.querySelectorAll('[data-composition]')].every(button => button.disabled && button.getAttribute('aria-disabled') === 'true'),
         rejectedReceipt: operator?.setComposition?.('smoke-raymarch-under-splats-v0') || null,
       };
+      const appearanceStructuralA = await captureAppearance('structural-a');
+      const appearanceBroadCarrierB = await captureAppearance('broad-carrier-b');
+      const appearanceBAppliedToFixedA = await captureAppearance('b-applied-to-fixed-a');
+      const appearanceRecomposition = await captureAppearance('a-plus-b-recomposition');
+      const appearanceControl = await captureAppearance('smoke-off-beauty-control');
+      operator?.setAppearanceAssay?.('off') || prototype.setAppearanceDecompositionMode('off');
       prototype.setRaymarchSmokePresentationMode('on');
       const beautySmokeRestored = await captureMode('beauty');
       const afterPresentation = prototype.debugState();
@@ -297,9 +319,16 @@ try {
       const compositionRestoreReceipt = operator?.setComposition?.('raymarch-only-v0') || null;
       const restorationDelta = pixelDelta(beautySmokeOn._rgba, beautySmokeRestored._rgba);
       const smokeIsolationDelta = pixelDelta(beautySmokeOn._rgba, beautySmokeOff._rgba);
+      const structuralAParityDelta = pixelDelta(intrinsic._rgba, appearanceStructuralA._rgba);
+      const recompositionDelta = pixelDelta(appearanceRecomposition._rgba, appearanceControl._rgba);
       delete beautySmokeOn._rgba;
       delete beautySmokeOff._rgba;
       delete intrinsic._rgba;
+      delete appearanceStructuralA._rgba;
+      delete appearanceBroadCarrierB._rgba;
+      delete appearanceBAppliedToFixedA._rgba;
+      delete appearanceRecomposition._rgba;
+      delete appearanceControl._rgba;
       delete beautySmokeRestored._rgba;
       const afterCompositionProbe = prototype.debugState();
       return {
@@ -338,6 +367,11 @@ try {
         beautySmokeOn,
         beautySmokeOff,
         intrinsic,
+        appearanceStructuralA,
+        appearanceBroadCarrierB,
+        appearanceBAppliedToFixedA,
+        appearanceRecomposition,
+        appearanceControl,
         beautyRestored: beautySmokeRestored,
         beautySmokeRestored,
         intrinsicCompositionControlState,
@@ -355,6 +389,8 @@ try {
           effectiveComposition: afterCompositionProbe.selectiveHeadLiveCompositionEffective,
         },
         smokeIsolationDelta,
+        structuralAParityDelta,
+        recompositionDelta,
         restorationDelta,
       };
     })()
@@ -420,10 +456,40 @@ try {
   assert.equal(evidence.beauty.metrics.nonblank, true, 'Beauty output is blank');
   assert.equal(evidence.beautySmokeOff.metrics.nonblank, true, 'Beauty Smoke Off output is blank');
   assert.equal(evidence.intrinsic.metrics.nonblank, true, 'intrinsic output is blank');
+  assert.equal(evidence.appearanceStructuralA.metrics.nonblank, true, 'Appearance A output is blank');
+  assert.equal(evidence.appearanceBroadCarrierB.metrics.nonblank, true, 'Appearance B coefficient output is blank');
+  assert.equal(evidence.appearanceBAppliedToFixedA.metrics.nonblank, true, 'Appearance B-on-A output is blank');
+  assert.equal(evidence.appearanceRecomposition.metrics.nonblank, true, 'Appearance A+B output is blank');
+  assert.equal(evidence.appearanceControl.metrics.nonblank, true, 'Appearance control output is blank');
   assert.equal(evidence.beautyRestored.metrics.nonblank, true, 'restored Beauty output is blank');
   assert.notEqual(evidence.beauty.pixelHash, evidence.intrinsic.pixelHash, 'Intrinsic silently substituted Beauty pixels');
   assert.notEqual(evidence.beautySmokeOn.pixelHash, evidence.beautySmokeOff.pixelHash, 'Smoke Off silently reused Smoke On pixels');
   assert.ok(evidence.smokeIsolationDelta.changedPixelRatio > 0.001, 'Smoke On/Off did not produce a material pixel difference');
+  for (const capture of [
+    evidence.appearanceStructuralA,
+    evidence.appearanceBroadCarrierB,
+    evidence.appearanceBAppliedToFixedA,
+    evidence.appearanceRecomposition,
+    evidence.appearanceControl,
+  ]) {
+    assert.equal(capture.receipt.requestedMode, capture.mode, `appearance request identity drifted for ${capture.mode}`);
+    assert.equal(capture.receipt.effectiveMode, capture.mode, `appearance effective identity drifted for ${capture.mode}`);
+    assert.equal(capture.receipt.fallbackReason, null, `appearance fallback applied for ${capture.mode}`);
+    assert.equal(capture.appearanceDecompositionReceipt.effectiveMode, capture.mode, `sampled appearance identity drifted for ${capture.mode}`);
+    const applied = capture.appearanceDecompositionReceipt.application;
+    assert.equal(applied.raymarchEncoded, true, `appearance raymarch was not encoded for ${capture.mode}`);
+    assert.equal(applied.raymarchApplied, true, `appearance raymarch missing for ${capture.mode}`);
+    assert.equal(applied.splatsEncoded, false, `appearance splats encoded for ${capture.mode}`);
+    assert.equal(applied.splatsApplied, false, `appearance splats applied for ${capture.mode}`);
+    assert.equal(applied.residualEncoded, false, `appearance residual encoded for ${capture.mode}`);
+    assert.equal(applied.residualApplied, false, `appearance residual applied for ${capture.mode}`);
+    assert.equal(applied.smokeApplied, false, `appearance smoke applied for ${capture.mode}`);
+    assert.ok(capture.receipt.couplingTerms.length >= 3, `appearance coupling terms missing for ${capture.mode}`);
+  }
+  assert.equal(evidence.structuralAParityDelta.maxChannelDelta, 0, 'Appearance A diverged from exact Intrinsic pixels');
+  assert.equal(evidence.structuralAParityDelta.changedPixelRatio, 0, 'Appearance A changed pixels relative to exact Intrinsic');
+  assert.equal(evidence.recompositionDelta.maxChannelDelta, 0, 'A+B did not exactly reconstruct Smoke-Off control pixels');
+  assert.equal(evidence.recompositionDelta.changedPixelRatio, 0, 'A+B/control pixel identity was not exact');
   assert.equal(evidence.intrinsicCompositionControlState.disabled, true, 'Intrinsic did not disable composition controls');
   assert.equal(evidence.intrinsicCompositionControlState.rejectedReceipt?.reason, 'composition-controls-disabled-during-intrinsic', 'Intrinsic composition click was not rejected explicitly');
   assert.equal(evidence.beautyCompositionControlState.enabled, true, 'Beauty did not restore composition controls');
@@ -442,6 +508,11 @@ try {
     ['beauty-smoke-on.png', evidence.beautySmokeOn],
     ['beauty-smoke-off.png', evidence.beautySmokeOff],
     ['intrinsic.png', evidence.intrinsic],
+    ['appearance-a-structural.png', evidence.appearanceStructuralA],
+    ['appearance-b-coefficients.png', evidence.appearanceBroadCarrierB],
+    ['appearance-b-on-fixed-a.png', evidence.appearanceBAppliedToFixedA],
+    ['appearance-a-plus-b.png', evidence.appearanceRecomposition],
+    ['appearance-smoke-off-control.png', evidence.appearanceControl],
     ['beauty-smoke-restored.png', evidence.beautySmokeRestored],
   ]) {
     writeFileSync(resolve(outDir, name), decodePngDataUrl(capture.pngDataUrl));
@@ -465,6 +536,13 @@ try {
     beautySmokeOn: stripPngData(evidence.beautySmokeOn),
     beautySmokeOff: stripPngData(evidence.beautySmokeOff),
     intrinsic: stripPngData(evidence.intrinsic),
+    appearanceStructuralA: stripPngData(evidence.appearanceStructuralA),
+    appearanceBroadCarrierB: stripPngData(evidence.appearanceBroadCarrierB),
+    appearanceBAppliedToFixedA: stripPngData(evidence.appearanceBAppliedToFixedA),
+    appearanceRecomposition: stripPngData(evidence.appearanceRecomposition),
+    appearanceControl: stripPngData(evidence.appearanceControl),
+    structuralAParityDelta: evidence.structuralAParityDelta,
+    recompositionDelta: evidence.recompositionDelta,
     beautyRestored: stripPngData(evidence.beautySmokeRestored),
     beautySmokeRestored: stripPngData(evidence.beautySmokeRestored),
     smokeIsolationDelta: evidence.smokeIsolationDelta,
@@ -474,13 +552,18 @@ try {
     compositionRestoreReceipt: evidence.compositionRestoreReceipt,
     restorationAcceptance,
     artifacts: {
-      beauty: resolve(outDir, 'beauty-smoke-on.png'),
-      beautySmokeOn: resolve(outDir, 'beauty-smoke-on.png'),
-      beautySmokeOff: resolve(outDir, 'beauty-smoke-off.png'),
-      intrinsic: resolve(outDir, 'intrinsic.png'),
-      beautyRestored: resolve(outDir, 'beauty-smoke-restored.png'),
-      beautySmokeRestored: resolve(outDir, 'beauty-smoke-restored.png'),
-      cockpitRestoredBeauty: resolve(outDir, 'operator-cockpit-restored-beauty.png'),
+      beauty: relative(process.cwd(), resolve(outDir, 'beauty-smoke-on.png')),
+      beautySmokeOn: relative(process.cwd(), resolve(outDir, 'beauty-smoke-on.png')),
+      beautySmokeOff: relative(process.cwd(), resolve(outDir, 'beauty-smoke-off.png')),
+      intrinsic: relative(process.cwd(), resolve(outDir, 'intrinsic.png')),
+      appearanceStructuralA: relative(process.cwd(), resolve(outDir, 'appearance-a-structural.png')),
+      appearanceBroadCarrierB: relative(process.cwd(), resolve(outDir, 'appearance-b-coefficients.png')),
+      appearanceBAppliedToFixedA: relative(process.cwd(), resolve(outDir, 'appearance-b-on-fixed-a.png')),
+      appearanceRecomposition: relative(process.cwd(), resolve(outDir, 'appearance-a-plus-b.png')),
+      appearanceControl: relative(process.cwd(), resolve(outDir, 'appearance-smoke-off-control.png')),
+      beautyRestored: relative(process.cwd(), resolve(outDir, 'beauty-smoke-restored.png')),
+      beautySmokeRestored: relative(process.cwd(), resolve(outDir, 'beauty-smoke-restored.png')),
+      cockpitRestoredBeauty: relative(process.cwd(), resolve(outDir, 'operator-cockpit-restored-beauty.png')),
     },
   };
   writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
@@ -537,6 +620,11 @@ function stripEvidencePngData(evidence) {
     beautySmokeOn: stripPngData(evidence?.beautySmokeOn),
     beautySmokeOff: stripPngData(evidence?.beautySmokeOff),
     intrinsic: stripPngData(evidence?.intrinsic),
+    appearanceStructuralA: stripPngData(evidence?.appearanceStructuralA),
+    appearanceBroadCarrierB: stripPngData(evidence?.appearanceBroadCarrierB),
+    appearanceBAppliedToFixedA: stripPngData(evidence?.appearanceBAppliedToFixedA),
+    appearanceRecomposition: stripPngData(evidence?.appearanceRecomposition),
+    appearanceControl: stripPngData(evidence?.appearanceControl),
     beautyRestored: stripPngData(evidence?.beautyRestored),
     beautySmokeRestored: stripPngData(evidence?.beautySmokeRestored),
   };
