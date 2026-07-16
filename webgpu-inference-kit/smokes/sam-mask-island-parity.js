@@ -15,6 +15,7 @@ import {
   SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID,
   SAM3_IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID,
   createSam3BrowserImageCacheKey,
+  createSam3BrowserModelPackageRuntime,
   createSam3BrowserServingResources,
   createSam3BrowserStaticArtifactCache,
   resolveSam3BrowserArtifactUrl,
@@ -52,21 +53,39 @@ import {
   createSam3SelectionPostprocessPhaseProgramCpuOracle,
   createSam3SelectionPostprocessPhaseProgramRouteDefinition,
   runSam3MaskDecoderIslandRoute,
-  runSam3MaskTailPhaseProgramRoute,
-  runSam3PixelDecoderPhaseProgramRoute,
-  runSam3PromptTextIngressPhaseProgramRoute,
-  runSam3PromptFpnPhaseProgramRoute,
-  runSam3DetrEncoderPhaseProgramRoute,
-  runSam3DetrDecoderPhaseProgramRoute,
-  runSam3ScoringPhaseProgramRoute,
+  runSam3MaskTailPhaseProgramRoute as runSam3MaskTailPhaseProgramRouteRaw,
+  runSam3PixelDecoderPhaseProgramRoute as runSam3PixelDecoderPhaseProgramRouteRaw,
+  runSam3PromptTextIngressPhaseProgramRoute as runSam3PromptTextIngressPhaseProgramRouteRaw,
+  runSam3PromptFpnPhaseProgramRoute as runSam3PromptFpnPhaseProgramRouteRaw,
+  runSam3DetrEncoderPhaseProgramRoute as runSam3DetrEncoderPhaseProgramRouteRaw,
+  runSam3DetrDecoderPhaseProgramRoute as runSam3DetrDecoderPhaseProgramRouteRaw,
+  runSam3ScoringPhaseProgramRoute as runSam3ScoringPhaseProgramRouteRaw,
   runSam3SelectionPostprocessPhaseProgramRoute,
   runSam3ImagePreprocessPhaseProgramRoute,
-  runSam3ImagePatchEmbedPhaseProgramRoute,
-  runSam3ImageVitPrefixPhaseProgramRoute,
-  runSam3ImageVitFirstBlockPhaseProgramRoute,
-  runSam3ImageVitBlockStackPhaseProgramRoute,
-  runSam3ImageFpnNeckPhaseProgramRoute,
+  runSam3ImagePatchEmbedPhaseProgramRoute as runSam3ImagePatchEmbedPhaseProgramRouteRaw,
+  runSam3ImageVitPrefixPhaseProgramRoute as runSam3ImageVitPrefixPhaseProgramRouteRaw,
+  runSam3ImageVitFirstBlockPhaseProgramRoute as runSam3ImageVitFirstBlockPhaseProgramRouteRaw,
+  runSam3ImageVitBlockStackPhaseProgramRoute as runSam3ImageVitBlockStackPhaseProgramRouteRaw,
+  runSam3ImageFpnNeckPhaseProgramRoute as runSam3ImageFpnNeckPhaseProgramRouteRaw,
 } from '../src/index.js';
+
+let activeResidentTensorResolver = null;
+let activeResidentWeightSource = null;
+const residentPhaseInput = input => activeResidentTensorResolver
+  ? { ...input, residentTensorResolver: activeResidentTensorResolver }
+  : input;
+const runSam3MaskTailPhaseProgramRoute = input => runSam3MaskTailPhaseProgramRouteRaw(residentPhaseInput(input));
+const runSam3PixelDecoderPhaseProgramRoute = input => runSam3PixelDecoderPhaseProgramRouteRaw(residentPhaseInput(input));
+const runSam3PromptTextIngressPhaseProgramRoute = input => runSam3PromptTextIngressPhaseProgramRouteRaw(residentPhaseInput(input));
+const runSam3PromptFpnPhaseProgramRoute = input => runSam3PromptFpnPhaseProgramRouteRaw(residentPhaseInput(input));
+const runSam3DetrEncoderPhaseProgramRoute = input => runSam3DetrEncoderPhaseProgramRouteRaw(residentPhaseInput(input));
+const runSam3DetrDecoderPhaseProgramRoute = input => runSam3DetrDecoderPhaseProgramRouteRaw(residentPhaseInput(input));
+const runSam3ScoringPhaseProgramRoute = input => runSam3ScoringPhaseProgramRouteRaw(residentPhaseInput(input));
+const runSam3ImagePatchEmbedPhaseProgramRoute = input => runSam3ImagePatchEmbedPhaseProgramRouteRaw(residentPhaseInput(input));
+const runSam3ImageVitPrefixPhaseProgramRoute = input => runSam3ImageVitPrefixPhaseProgramRouteRaw(residentPhaseInput(input));
+const runSam3ImageVitFirstBlockPhaseProgramRoute = input => runSam3ImageVitFirstBlockPhaseProgramRouteRaw(residentPhaseInput(input));
+const runSam3ImageVitBlockStackPhaseProgramRoute = input => runSam3ImageVitBlockStackPhaseProgramRouteRaw(residentPhaseInput(input));
+const runSam3ImageFpnNeckPhaseProgramRoute = input => runSam3ImageFpnNeckPhaseProgramRouteRaw(residentPhaseInput(input));
 
 const SUPPORTED_ROUTE_IDS = new Set([
   SAM3_MASK_DECODER_ISLAND_ROUTE_ID,
@@ -104,6 +123,8 @@ const initialState = {
   midstreamRouteReceipt: null,
   downstreamRouteReceipt: null,
   compositionRouteReceipts: null,
+  executedRouteReceipts: null,
+  reusedRouteReceipts: null,
   compositionEdge: null,
   detectorStackEvidence: null,
   imagePreprocessEvidence: null,
@@ -120,6 +141,7 @@ const initialState = {
   staticArtifactCacheEvidence: null,
   imageCacheEvidence: null,
   servingResourcesEvidence: null,
+  servingTimings: null,
   invocationRequestIds: null,
   invocationOutputIdentity: null,
   preDecoderCheckpointEvidence: null,
@@ -256,6 +278,9 @@ const staticArtifactCache = createSam3BrowserStaticArtifactCache({
 });
 
 async function fetchArray(url, Type) {
+  if (Type === Float32Array && activeResidentWeightSource?.weightsByUrl.has(url)) {
+    return activeResidentWeightSource.modelSession.loadFloat32(activeResidentWeightSource.weightsByUrl.get(url));
+  }
   return staticArtifactCache.fetchArray(url, Type);
 }
 
@@ -1286,7 +1311,8 @@ async function loadDetrDecoderPayload(manifest) {
   };
 }
 
-async function loadDetrStackPayload(manifest, { verificationAttached, servingResources }) {
+async function loadDetrStackPayload(manifest, { verificationAttached, servingResources, modelSession }) {
+  if (!verificationAttached && !modelSession) throw new Error('detached SAM3 detector stack requires a resident model session');
   const includeImageFpnNeck = manifest.mode === 'mlx-detector-stack-image-fpn-neck-export' || manifest.boundary === 'sam3-browser-local-image-preprocess-patch-embed-vit-prefix-full-backbone-fpn-neck-detector-stack-phase-program';
   const includeImageVitFullBackbone = includeImageFpnNeck || manifest.mode === 'mlx-detector-stack-vit-backbone-export' || manifest.boundary === 'sam3-browser-local-image-preprocess-patch-embed-vit-prefix-full-backbone-detector-stack-phase-program';
   const includeImageVitBlockStack = includeImageVitFullBackbone || manifest.mode === 'mlx-detector-stack-vit-block-stack-export' || manifest.boundary === 'sam3-browser-local-image-preprocess-patch-embed-vit-prefix-block-stack-first-global-detector-stack-phase-program';
@@ -2603,6 +2629,35 @@ async function loadDetrStackPayload(manifest, { verificationAttached, servingRes
         routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-stack', promptHash: manifest.prompt?.sha256, composedFrom: pixelResult?.receipt?.effectiveRouteId || decoderResult.receipt?.effectiveRouteId, lastHsOutput, pixelEmbedOutput },
       });
       const tailResult = await runSam3MaskTailPhaseProgramRoute({ request: maskRequest, route: maskRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: maskRoute.kernel, model: { revision: maskRoute.model.revision, weightsHash: manifest.staticWeights.sha256, dtype: 'fp32' }, tensors: { lastHs: gpuLastHs, pixelEmbed: effectivePixelEmbed, weights: tailWeights, shape: maskTailShape }, includeReadback: true });
+      const dependencyRouteResults = [
+        imagePreprocessResult,
+        imagePatchEmbedResult,
+        imageVitPrefixResult,
+        imageVitFirstBlockResult,
+        imageVitBlockStackResult,
+        imageFpnNeckResult,
+        promptTextResult,
+        encoderResult,
+        promptResult,
+        pixelResult,
+        decoderResult,
+        scoringResult,
+        selectionResult,
+        tailResult,
+      ].filter(Boolean);
+      const imageStageRouteIds = new Set([
+        SAM3_IMAGE_PREPROCESS_PHASE_PROGRAM_ROUTE_ID,
+        SAM3_IMAGE_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID,
+        SAM3_IMAGE_VIT_PREFIX_PHASE_PROGRAM_ROUTE_ID,
+        SAM3_IMAGE_VIT_FIRST_BLOCK_PHASE_PROGRAM_ROUTE_ID,
+        SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID,
+        SAM3_IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID,
+      ]);
+      const reusedRouteResults = cachedImageFeatures
+        ? dependencyRouteResults.filter(routeResult => imageStageRouteIds.has(routeResult.receipt.effectiveRouteId))
+        : [];
+      const reusedRequestIds = new Set(reusedRouteResults.map(routeResult => routeResult.requestId));
+      const executedRouteResults = dependencyRouteResults.filter(routeResult => !reusedRequestIds.has(routeResult.requestId));
       return {
         ...tailResult,
         imageCache: {
@@ -2615,22 +2670,10 @@ async function loadDetrStackPayload(manifest, { verificationAttached, servingRes
         midstreamRouteReceipt: decoderResult.receipt,
         downstreamRouteReceipt: tailResult.receipt,
         compositionRouteReceipts: includeImageFpnNeck ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, imageVitPrefixResult.receipt, imageVitBlockStackResult.receipt, imageFpnNeckResult.receipt, promptTextResult.receipt, encoderResult.receipt, promptResult.receipt, pixelResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImageVitBlockStack ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, imageVitPrefixResult.receipt, imageVitBlockStackResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImageVitFirstBlock ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, imageVitPrefixResult.receipt, imageVitFirstBlockResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImageVitPrefix ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, imageVitPrefixResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImagePatchEmbed ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImagePreprocess ? [imagePreprocessResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeStackSelection ? [encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeStackScoring ? [encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, tailResult.receipt] : [encoderResult.receipt, decoderResult.receipt, tailResult.receipt],
-        compositionRequestIds: [
-          imagePreprocessResult,
-          imagePatchEmbedResult,
-          imageVitPrefixResult,
-          imageVitFirstBlockResult,
-          imageVitBlockStackResult,
-          imageFpnNeckResult,
-          promptTextResult,
-          encoderResult,
-          promptResult,
-          pixelResult,
-          decoderResult,
-          scoringResult,
-          selectionResult,
-          tailResult,
-        ].filter(Boolean).map(routeResult => routeResult.requestId),
+        executedRouteReceipts: executedRouteResults.map(routeResult => routeResult.receipt),
+        reusedRouteReceipts: reusedRouteResults.map(routeResult => routeResult.receipt),
+        dependencyRequestIds: dependencyRouteResults.map(routeResult => routeResult.requestId),
+        compositionRequestIds: executedRouteResults.filter(Boolean).map(routeResult => routeResult.requestId),
         backend: tailResult.backend,
         debugReadback: {
           pixelValues: gpuPixelValues ? Array.from(gpuPixelValues) : undefined,
@@ -3540,6 +3583,7 @@ async function loadPromptFpnPayload(manifest) {
 }
 
 async function main(manifestUrl = initialManifestUrl, invocationOptions = {}) {
+  const invocationStartedAt = performance.now();
   try {
     const verificationMode = invocationOptions.verificationMode || defaultVerificationMode;
     if (!['reference-parity', 'execution-only'].includes(verificationMode)) {
@@ -3605,9 +3649,24 @@ async function main(manifestUrl = initialManifestUrl, invocationOptions = {}) {
     if (!manifest.staticWeights?.sha256 || !['none', 'reference-upstream'].includes(manifest.staticWeights.role)) {
       throw new Error('oracle packet must preserve explicit static-weight or reference-weight identity');
     }
+    activeResidentTensorResolver = null;
+    activeResidentWeightSource = null;
+    let modelSession = null;
+    if (!verificationAttached) {
+      const modelPackageRuntime = createSam3BrowserModelPackageRuntime({
+        manifest,
+        loadUint8: entry => staticArtifactCache.fetchArray(resolveManifestFile(entry.file), Uint8Array),
+      });
+      modelSession = await servingResources.modelSession(modelPackageRuntime, { commit: params.get('commit') || null });
+      activeResidentTensorResolver = modelSession.residentTensorResolver;
+      activeResidentWeightSource = {
+        modelSession,
+        weightsByUrl: new Map(manifest.weights.map(weight => [resolveManifestFile(weight.file), weight])),
+      };
+    }
 
     const payload = manifest.mode === 'mlx-detr-stack-export' || manifest.mode === 'mlx-detr-stack-scoring-export' || manifest.mode === 'mlx-detr-stack-selection-export' || manifest.mode === 'mlx-detector-stack-export' || manifest.mode === 'mlx-detector-stack-preprocess-export' || manifest.mode === 'mlx-detector-stack-patch-embed-export' || manifest.mode === 'mlx-detector-stack-vit-prefix-export' || manifest.mode === 'mlx-detector-stack-vit-first-block-export' || manifest.mode === 'mlx-detector-stack-vit-block-stack-export' || manifest.mode === 'mlx-detector-stack-vit-backbone-export' || manifest.mode === 'mlx-detector-stack-image-fpn-neck-export' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-mask-tail-phase-program' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-scoring-mask-tail-phase-program' || manifest.boundary === 'sam3-detector-detr-encoder-decoder-scoring-selection-mask-tail-phase-program' || manifest.boundary === 'sam3-detector-stack-browser-local-detector-mask-phase-program' || manifest.boundary === 'sam3-browser-local-image-preprocess-detector-stack-phase-program' || manifest.boundary === 'sam3-browser-local-image-preprocess-patch-embed-detector-stack-phase-program' || manifest.boundary === 'sam3-browser-local-image-preprocess-patch-embed-vit-prefix-detector-stack-phase-program' || manifest.boundary === 'sam3-browser-local-image-preprocess-patch-embed-vit-prefix-first-block-detector-stack-phase-program' || manifest.boundary === 'sam3-browser-local-image-preprocess-patch-embed-vit-prefix-block-stack-first-global-detector-stack-phase-program' || manifest.boundary === 'sam3-browser-local-image-preprocess-patch-embed-vit-prefix-full-backbone-detector-stack-phase-program' || manifest.boundary === 'sam3-browser-local-image-preprocess-patch-embed-vit-prefix-full-backbone-fpn-neck-detector-stack-phase-program'
-      ? await loadDetrStackPayload(manifest, { verificationAttached, servingResources })
+      ? await loadDetrStackPayload(manifest, { verificationAttached, servingResources, modelSession })
       : manifest.routeId === SAM3_DETR_DECODER_PHASE_PROGRAM_ROUTE_ID
       ? await loadDetrDecoderPayload(manifest)
       : manifest.routeId === SAM3_DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID
@@ -3903,7 +3962,14 @@ async function main(manifestUrl = initialManifestUrl, invocationOptions = {}) {
     });
 
     setStatus('run-webgpu-route');
+    const executionStartedAt = performance.now();
     const result = await payload.run({ device, adapter, route, request, sourceImage });
+    const executionMilliseconds = performance.now() - executionStartedAt;
+    state.servingTimings = {
+      modelPreparationMilliseconds: servingResources.evidence().modelPreparationMilliseconds,
+      invocationPreparationMilliseconds: executionStartedAt - invocationStartedAt,
+      executionMilliseconds,
+    };
     if (diagnosticReadbackEnabled) {
       diagnosticReadback = {
         packageId: state.packageInvocationEvidence?.packageId || null,
@@ -3923,6 +3989,8 @@ async function main(manifestUrl = initialManifestUrl, invocationOptions = {}) {
       };
     }
     state.invocationRequestIds = result.compositionRequestIds || [result.requestId].filter(Boolean);
+    state.executedRouteReceipts = result.executedRouteReceipts || null;
+    state.reusedRouteReceipts = result.reusedRouteReceipts || null;
     const terminalOutputs = result.downstreamRouteReceipt?.outputs || result.outputs || [];
     state.invocationOutputIdentity = terminalOutputs.length > 0
       ? await aggregateTensorBundleSha256('sam3-browser-invocation-terminal-outputs', terminalOutputs)
@@ -4309,7 +4377,10 @@ async function main(manifestUrl = initialManifestUrl, invocationOptions = {}) {
         requestedRouteId: manifest.routeId,
         effectiveRouteId: result.receipt.effectiveRouteId,
         receiptChain: (result.compositionRouteReceipts || []).map(receipt => receipt.effectiveRouteId),
+        executedRouteIds: (result.executedRouteReceipts || []).map(receipt => receipt.effectiveRouteId),
+        reusedRouteIds: (result.reusedRouteReceipts || []).map(receipt => receipt.effectiveRouteId),
         imageCache: result.imageCache,
+        servingTimings: state.servingTimings,
         selectedCandidateCount,
         selectedMaskIndex: selectedCandidateCount === 0 ? null : selectedMaskIndex,
         selectedMaskIndexSource,
@@ -4420,6 +4491,10 @@ async function main(manifestUrl = initialManifestUrl, invocationOptions = {}) {
       adapter: state.backendIdentity?.adapterName,
       selectedMask: selectedMaskIndex,
       imageCache: result.imageCache?.status || 'not-applicable',
+      executedRoutes: result.executedRouteReceipts?.length ?? 'not-applicable',
+      reusedRoutes: result.reusedRouteReceipts?.length ?? 'not-applicable',
+      modelPrepareMs: state.servingTimings?.modelPreparationMilliseconds?.toFixed(1) ?? 'not-applicable',
+      executionMs: state.servingTimings?.executionMilliseconds?.toFixed(1) ?? 'not-applicable',
       logitsDiff: parity?.maskLogitsMaxAbsDiff ?? parity?.predLogitsMaxAbsDiff ?? 'not-attached',
       binaryMismatch: parity?.binaryMismatchCount ?? 'not-attached',
     });

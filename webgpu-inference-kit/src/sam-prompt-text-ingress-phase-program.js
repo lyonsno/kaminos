@@ -664,21 +664,22 @@ export async function runSam3PromptTextIngressPhaseProgramRoute(input = {}) {
     waitForSubmittedWorkDone: true,
     yieldMs: 0,
     now: input.now,
+    residentTensorResolver: input.residentTensorResolver,
   });
 
   let tensors = null;
   await runtime.runStage('load-prompt-text-tensors', async stage => {
     const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
     const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
-    const createWeightTensor = (name, value, shapeValue) => {
-      const tensor = stage.createTensor({ name, shape: shapeValue, dtype: 'f32', usage: readonlyUsage });
+    const createWeightTensor = (name, value, shapeValue, resident = true) => {
+      const tensor = stage.createTensor({ name, shape: shapeValue, dtype: 'f32', usage: readonlyUsage, ...(resident ? { sourceData: value } : {}) });
       stage.uploadTensor(tensor, value);
       return tensor;
     };
     tensors = {
       inputIds: stage.createTensor({ name: 'sam3.prompt-text.input-ids', shape: [shape.batch, shape.promptTokens], dtype: 'u32', usage: readonlyUsage }),
       attentionMask: stage.createTensor({ name: 'sam3.prompt-text.attention-mask', shape: [shape.batch, shape.promptTokens], dtype: 'f32', usage: readonlyUsage }),
-      tokenEmbeddingWeight: createWeightTensor('sam3.prompt-text.token-embedding-rows', promptTokenEmbeddingRows, [shape.batch, shape.promptTokens, shape.hiddenSize]),
+      tokenEmbeddingWeight: createWeightTensor('sam3.prompt-text.token-embedding-rows', promptTokenEmbeddingRows, [shape.batch, shape.promptTokens, shape.hiddenSize], false),
       positionEmbeddingWeight: createWeightTensor('sam3.prompt-text.position-embedding-weight', weights.positionEmbeddingWeight, [shape.maxPositionEmbeddings, shape.hiddenSize]),
       hiddenA: stage.createTensor({ name: 'sam3.prompt-text.hidden-a', shape: [shape.batch, shape.promptTokens, shape.hiddenSize], dtype: 'f32', usage }),
       hiddenB: stage.createTensor({ name: 'sam3.prompt-text.hidden-b', shape: [shape.batch, shape.promptTokens, shape.hiddenSize], dtype: 'f32', usage }),

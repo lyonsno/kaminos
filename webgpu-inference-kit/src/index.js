@@ -44,6 +44,18 @@ export {
 } from './sam31-resident-model-resources.js';
 
 export {
+  SAM3_BROWSER_MODEL_PACKAGE_RUNTIME_SCHEMA,
+  createSam3BrowserModelPackageRuntime,
+} from './sam3-browser-model-package-runtime.js';
+
+export {
+  SAM3_BROWSER_RESIDENT_MODEL_OWNER_ROUTE_ID,
+  SAM3_BROWSER_RESIDENT_MODEL_SESSION_EVIDENCE_SCHEMA,
+  createSam3BrowserResidentModelSession,
+  createSam3BrowserResidentModelSessionForTest,
+} from './sam3-browser-resident-model-session.js';
+
+export {
   createWebGpuBackendIdentity,
   createWebGpuDeviceRequest,
   requestBrowserWebGpuDevice,

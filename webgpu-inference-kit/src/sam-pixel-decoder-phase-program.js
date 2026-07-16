@@ -450,6 +450,7 @@ export async function runSam3PixelDecoderPhaseProgramRoute(input = {}) {
     waitForSubmittedWorkDone: true,
     yieldMs: 0,
     now: input.now,
+    residentTensorResolver: input.residentTensorResolver,
   });
 
   let tensors = null;
@@ -464,10 +465,10 @@ export async function runSam3PixelDecoderPhaseProgramRoute(input = {}) {
       stats: [],
       dims: [],
       weights: weights.stages.map((stageWeights, index) => ({
-        convWeight: stage.createTensor({ name: `sam3.pixel-decoder.${index}.conv.weight`, shape: [shape.channels, 3, 3, shape.channels], dtype: 'f32', usage: readonlyUsage }),
-        convBias: stage.createTensor({ name: `sam3.pixel-decoder.${index}.conv.bias`, shape: [shape.channels], dtype: 'f32', usage: readonlyUsage }),
-        normWeight: stage.createTensor({ name: `sam3.pixel-decoder.${index}.norm.weight`, shape: [shape.channels], dtype: 'f32', usage: readonlyUsage }),
-        normBias: stage.createTensor({ name: `sam3.pixel-decoder.${index}.norm.bias`, shape: [shape.channels], dtype: 'f32', usage: readonlyUsage }),
+        convWeight: stage.createTensor({ name: `sam3.pixel-decoder.${index}.conv.weight`, shape: [shape.channels, 3, 3, shape.channels], dtype: 'f32', usage: readonlyUsage, sourceData: stageWeights.convWeight }),
+        convBias: stage.createTensor({ name: `sam3.pixel-decoder.${index}.conv.bias`, shape: [shape.channels], dtype: 'f32', usage: readonlyUsage, sourceData: stageWeights.convBias }),
+        normWeight: stage.createTensor({ name: `sam3.pixel-decoder.${index}.norm.weight`, shape: [shape.channels], dtype: 'f32', usage: readonlyUsage, sourceData: stageWeights.normWeight }),
+        normBias: stage.createTensor({ name: `sam3.pixel-decoder.${index}.norm.bias`, shape: [shape.channels], dtype: 'f32', usage: readonlyUsage, sourceData: stageWeights.normBias }),
       })),
     };
     for (let index = 0; index < features.length; index += 1) stage.uploadTensor(tensors.features[index], features[index]);

@@ -1194,6 +1194,7 @@ export async function runSam3DetrDecoderPhaseProgramRoute(input = {}) {
     waitForSubmittedWorkDone: true,
     yieldMs: 0,
     now: input.now,
+    residentTensorResolver: input.residentTensorResolver,
   });
 
   const hiddenTokens = shape.batch * (shape.queryTokens + 1);
@@ -1215,7 +1216,7 @@ export async function runSam3DetrDecoderPhaseProgramRoute(input = {}) {
   await runtime.runStage('load-detr-decoder-tensors', async stage => {
     const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
     const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
-    const tensor = (name, tensorShape, tensorUsage = usage) => stage.createTensor({ name, shape: tensorShape, dtype: 'f32', usage: tensorUsage });
+    const tensor = (name, tensorShape, tensorUsage = usage, sourceData = undefined) => stage.createTensor({ name, shape: tensorShape, dtype: 'f32', usage: tensorUsage, ...(sourceData ? { sourceData } : {}) });
     tensors = {
       visionFeatures: tensor('sam3.detr-decoder.vision-features', [shape.batch, shape.spatialTokens, shape.channels], readonlyUsage),
       visionPosEncoding: tensor('sam3.detr-decoder.vision-pos', [shape.batch, shape.spatialTokens, shape.channels], readonlyUsage),
@@ -1302,13 +1303,13 @@ export async function runSam3DetrDecoderPhaseProgramRoute(input = {}) {
     for (const [name, values] of Object.entries(shared)) {
       const weightShape = name.includes('Layer3Bias') || name.includes('RpbXLayer2Bias') || name.includes('RpbYLayer2Bias') ? [values.length] : [values.length];
       const tensorName = `sam3.detr-decoder.shared.${name}`;
-      tensors.sharedWeights[name] = tensor(tensorName, weightShape, readonlyUsage);
+      tensors.sharedWeights[name] = tensor(tensorName, weightShape, readonlyUsage, values);
       stage.uploadTensor(tensors.sharedWeights[name], values);
     }
     for (let layerIndex = 0; layerIndex < shape.layerCount; layerIndex += 1) {
       const layerTensors = {};
       for (const [name, values] of Object.entries(layers[layerIndex])) {
-        layerTensors[name] = tensor(`sam3.detr-decoder.layer-${layerIndex}.${name}`, [values.length], readonlyUsage);
+        layerTensors[name] = tensor(`sam3.detr-decoder.layer-${layerIndex}.${name}`, [values.length], readonlyUsage, values);
         stage.uploadTensor(layerTensors[name], values);
       }
       tensors.layerWeights.push(layerTensors);

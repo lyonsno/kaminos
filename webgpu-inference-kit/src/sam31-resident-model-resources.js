@@ -194,11 +194,13 @@ export async function createSam31ResidentModelResources({ packageRuntime, route 
     const resident = allocationBySha.get(entry.sha256);
     if (!resident) throw new Error(`unknown static artifact is not resident: ${entry.sha256 || '<missing>'}`);
     const aliases = Array.isArray(resident.artifact.aliases) ? resident.artifact.aliases : [];
-    const aliasDeclared = typeof entry.role === 'string' && entry.role.length > 0
-      && aliases.some(alias => alias?.role === entry.role
+    const declaredAlias = typeof entry.role === 'string' && entry.role.length > 0
+      ? aliases.find(alias => alias?.role === entry.role
         && (entry.packetName == null || alias.packetName === entry.packetName)
-        && (entry.kind == null || alias.kind === entry.kind));
-    if (entry.file !== resident.artifact.file || !aliasDeclared) {
+        && (entry.kind == null || alias.kind === entry.kind))
+      : null;
+    const declaredFile = declaredAlias?.file || resident.artifact.file;
+    if (entry.file !== declaredFile || !declaredAlias) {
       throw new Error(`resident tensor entry is not a declared static artifact alias: ${entry.role || entry.file || entry.sha256}`);
     }
     return resident;

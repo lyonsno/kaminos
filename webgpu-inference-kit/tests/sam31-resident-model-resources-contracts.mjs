@@ -30,6 +30,7 @@ const artifactA = {
   aliases: [
     { packetName: 'ingress', kind: 'weight', role: 'patch-embed-projection-weight' },
     { packetName: 'ingress', kind: 'weight', role: 'vit-position-embeddings' },
+    { packetName: 'ingress', kind: 'weight', role: 'vit-block-stack-layer0-q-proj-weight', file: 'static/a-alias.bin' },
   ],
 };
 const artifactB = {
@@ -177,14 +178,19 @@ assert.throws(
 );
 const firstSource = await resident.loadFloat32(entryA);
 const secondSource = await resident.loadFloat32(entryA);
+const aliasEntryA = { ...entryA, role: 'vit-block-stack-layer0-q-proj-weight', file: 'static/a-alias.bin' };
+const aliasSource = await resident.loadFloat32(aliasEntryA);
 const firstBinding = resident.bind(entryA, firstSource);
 const secondBinding = resident.bind(entryA, secondSource);
+const aliasBinding = resident.bind(aliasEntryA, aliasSource);
 assert.equal(firstBinding.buffer, secondBinding.buffer, 'distinct invocation views must resolve to the exact same live GPU object');
+assert.equal(firstBinding.buffer, aliasBinding.buffer, 'distinct declared files with the same authenticated bytes must share one resident allocation');
 assert.equal(firstBinding.sourceData, firstSource);
 assert.equal(secondBinding.sourceData, secondSource);
 assert.equal(resident.residentTensorResolver({ sourceData: firstSource }), firstBinding);
 assert.equal(resident.residentTensorResolver({ sourceData: secondSource }), secondBinding);
-assert.equal(resident.evidence().bindingCount, 2);
+assert.equal(resident.residentTensorResolver({ sourceData: aliasSource }), aliasBinding);
+assert.equal(resident.evidence().bindingCount, 3);
 
 const logicalMatrixBinding = resident.residentTensorResolver({
   name: 'sam31.high-resolution.s0.weight',
@@ -243,7 +249,7 @@ assert.equal(subviewBinding.buffer, firstBinding.buffer, 'an authenticated packa
 assert.equal(subviewBinding.bufferOffset, 4, 'an authenticated package subview must bind the exact byte offset');
 assert.equal(subviewBinding.byteLength, authenticatedSubview.byteLength);
 assert.equal(subviewBinding.sourceData, authenticatedSubview);
-assert.equal(resident.evidence().bindingCount, 4, 'logical reshapes and authenticated subviews must each remain visible in evidence');
+assert.equal(resident.evidence().bindingCount, 5, 'logical reshapes and authenticated subviews must each remain visible in evidence');
 
 assert.throws(
   () => resident.bind({ ...entryA, sha256: `sha256:${'0'.repeat(64)}` }, new Float32Array(4)),

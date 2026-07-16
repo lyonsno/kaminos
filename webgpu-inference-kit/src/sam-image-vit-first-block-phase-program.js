@@ -821,13 +821,14 @@ export async function runSam3ImageVitFirstBlockPhaseProgramRoute(input = {}) {
     waitForSubmittedWorkDone: true,
     yieldMs: 0,
     now: input.now,
+    residentTensorResolver: input.residentTensorResolver,
   });
 
   let tensors = null;
   await runtime.runStage('load-image-vit-first-block-tensors', async stage => {
     const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
     const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
-    const tensor = (name, tensorShape, tensorUsage = usage) => stage.createTensor({ name, shape: tensorShape, dtype: 'f32', usage: tensorUsage });
+    const tensor = (name, tensorShape, tensorUsage = usage, sourceData = undefined) => stage.createTensor({ name, shape: tensorShape, dtype: 'f32', usage: tensorUsage, ...(sourceData ? { sourceData } : {}) });
     tensors = {
       hiddenStates: tensor('sam3.image-vit-first-block.hidden-states', [shape.batch, shape.height, shape.width, shape.hiddenSize], readonlyUsage),
       layerNorm1: tensor('sam3.image-vit-first-block.layernorm1.out', [shape.batch, shape.height, shape.width, shape.hiddenSize]),
@@ -844,22 +845,22 @@ export async function runSam3ImageVitFirstBlockPhaseProgramRoute(input = {}) {
       mlpHidden: tensor('sam3.image-vit-first-block.mlp-hidden', [shape.batch, shape.height * shape.width, shape.intermediateSize]),
       mlpOut: tensor('sam3.image-vit-first-block.mlp-out', [shape.batch, shape.height, shape.width, shape.hiddenSize]),
       vitFirstBlockHiddenStates: tensor('sam3.image-vit-first-block.output', [shape.batch, shape.height, shape.width, shape.hiddenSize]),
-      layerNorm1Weight: tensor('sam3.image-vit-first-block.layernorm1.weight', [shape.hiddenSize], readonlyUsage),
-      layerNorm1Bias: tensor('sam3.image-vit-first-block.layernorm1.bias', [shape.hiddenSize], readonlyUsage),
-      qProjWeight: tensor('sam3.image-vit-first-block.q.weight', [shape.hiddenSize, shape.hiddenSize], readonlyUsage),
-      qProjBias: tensor('sam3.image-vit-first-block.q.bias', [shape.hiddenSize], readonlyUsage),
-      kProjWeight: tensor('sam3.image-vit-first-block.k.weight', [shape.hiddenSize, shape.hiddenSize], readonlyUsage),
-      kProjBias: tensor('sam3.image-vit-first-block.k.bias', [shape.hiddenSize], readonlyUsage),
-      vProjWeight: tensor('sam3.image-vit-first-block.v.weight', [shape.hiddenSize, shape.hiddenSize], readonlyUsage),
-      vProjBias: tensor('sam3.image-vit-first-block.v.bias', [shape.hiddenSize], readonlyUsage),
-      oProjWeight: tensor('sam3.image-vit-first-block.o.weight', [shape.hiddenSize, shape.hiddenSize], readonlyUsage),
-      oProjBias: tensor('sam3.image-vit-first-block.o.bias', [shape.hiddenSize], readonlyUsage),
-      layerNorm2Weight: tensor('sam3.image-vit-first-block.layernorm2.weight', [shape.hiddenSize], readonlyUsage),
-      layerNorm2Bias: tensor('sam3.image-vit-first-block.layernorm2.bias', [shape.hiddenSize], readonlyUsage),
-      mlpFc1Weight: tensor('sam3.image-vit-first-block.mlp.fc1.weight', [shape.intermediateSize, shape.hiddenSize], readonlyUsage),
-      mlpFc1Bias: tensor('sam3.image-vit-first-block.mlp.fc1.bias', [shape.intermediateSize], readonlyUsage),
-      mlpFc2Weight: tensor('sam3.image-vit-first-block.mlp.fc2.weight', [shape.hiddenSize, shape.intermediateSize], readonlyUsage),
-      mlpFc2Bias: tensor('sam3.image-vit-first-block.mlp.fc2.bias', [shape.hiddenSize], readonlyUsage),
+      layerNorm1Weight: tensor('sam3.image-vit-first-block.layernorm1.weight', [shape.hiddenSize], readonlyUsage, weights.layerNorm1Weight),
+      layerNorm1Bias: tensor('sam3.image-vit-first-block.layernorm1.bias', [shape.hiddenSize], readonlyUsage, weights.layerNorm1Bias),
+      qProjWeight: tensor('sam3.image-vit-first-block.q.weight', [shape.hiddenSize, shape.hiddenSize], readonlyUsage, weights.qProjWeight),
+      qProjBias: tensor('sam3.image-vit-first-block.q.bias', [shape.hiddenSize], readonlyUsage, weights.qProjBias),
+      kProjWeight: tensor('sam3.image-vit-first-block.k.weight', [shape.hiddenSize, shape.hiddenSize], readonlyUsage, weights.kProjWeight),
+      kProjBias: tensor('sam3.image-vit-first-block.k.bias', [shape.hiddenSize], readonlyUsage, weights.kProjBias),
+      vProjWeight: tensor('sam3.image-vit-first-block.v.weight', [shape.hiddenSize, shape.hiddenSize], readonlyUsage, weights.vProjWeight),
+      vProjBias: tensor('sam3.image-vit-first-block.v.bias', [shape.hiddenSize], readonlyUsage, weights.vProjBias),
+      oProjWeight: tensor('sam3.image-vit-first-block.o.weight', [shape.hiddenSize, shape.hiddenSize], readonlyUsage, weights.oProjWeight),
+      oProjBias: tensor('sam3.image-vit-first-block.o.bias', [shape.hiddenSize], readonlyUsage, weights.oProjBias),
+      layerNorm2Weight: tensor('sam3.image-vit-first-block.layernorm2.weight', [shape.hiddenSize], readonlyUsage, weights.layerNorm2Weight),
+      layerNorm2Bias: tensor('sam3.image-vit-first-block.layernorm2.bias', [shape.hiddenSize], readonlyUsage, weights.layerNorm2Bias),
+      mlpFc1Weight: tensor('sam3.image-vit-first-block.mlp.fc1.weight', [shape.intermediateSize, shape.hiddenSize], readonlyUsage, weights.mlpFc1Weight),
+      mlpFc1Bias: tensor('sam3.image-vit-first-block.mlp.fc1.bias', [shape.intermediateSize], readonlyUsage, weights.mlpFc1Bias),
+      mlpFc2Weight: tensor('sam3.image-vit-first-block.mlp.fc2.weight', [shape.hiddenSize, shape.intermediateSize], readonlyUsage, weights.mlpFc2Weight),
+      mlpFc2Bias: tensor('sam3.image-vit-first-block.mlp.fc2.bias', [shape.hiddenSize], readonlyUsage, weights.mlpFc2Bias),
       blockDims: stage.createUniformBuffer({
         label: 'sam3.image-vit-first-block.dims',
         schema: [

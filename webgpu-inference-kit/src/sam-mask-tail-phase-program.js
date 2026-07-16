@@ -400,6 +400,7 @@ export async function runSam3MaskTailPhaseProgramRoute(input = {}) {
     waitForSubmittedWorkDone: true,
     yieldMs: 0,
     now: input.now,
+    residentTensorResolver: input.residentTensorResolver,
   });
 
   let tensors = null;
@@ -436,12 +437,12 @@ export async function runSam3MaskTailPhaseProgramRoute(input = {}) {
       }),
       weights: {
         maskEmbedder: weights.maskEmbedder.map((layer, index) => ({
-          weight: stage.createTensor({ name: `sam3.mask-embedder.${index}.weight`, shape: [shape.channels, shape.channels], dtype: 'f32', usage: readonlyUsage }),
-          bias: stage.createTensor({ name: `sam3.mask-embedder.${index}.bias`, shape: [shape.channels], dtype: 'f32', usage: readonlyUsage }),
+          weight: stage.createTensor({ name: `sam3.mask-embedder.${index}.weight`, shape: [shape.channels, shape.channels], dtype: 'f32', usage: readonlyUsage, sourceData: layer.weight }),
+          bias: stage.createTensor({ name: `sam3.mask-embedder.${index}.bias`, shape: [shape.channels], dtype: 'f32', usage: readonlyUsage, sourceData: layer.bias }),
         })),
         instanceProjection: {
-          weight: stage.createTensor({ name: 'sam3.instance-projection.weight', shape: [shape.channels, shape.channels], dtype: 'f32', usage: readonlyUsage }),
-          bias: stage.createTensor({ name: 'sam3.instance-projection.bias', shape: [shape.channels], dtype: 'f32', usage: readonlyUsage }),
+          weight: stage.createTensor({ name: 'sam3.instance-projection.weight', shape: [shape.channels, shape.channels], dtype: 'f32', usage: readonlyUsage, sourceData: weights.instanceProjection.weight }),
+          bias: stage.createTensor({ name: 'sam3.instance-projection.bias', shape: [shape.channels], dtype: 'f32', usage: readonlyUsage, sourceData: weights.instanceProjection.bias }),
         },
       },
     };

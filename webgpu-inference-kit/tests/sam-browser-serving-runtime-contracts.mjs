@@ -102,12 +102,36 @@ assert.equal(typeof kit.createSam3BrowserImageCacheKey, 'function', 'serving run
 
 let acquireCount = 0;
 let destroyCount = 0;
+let modelAcquireCount = 0;
+let modelCloseCount = 0;
+let nowMs = 100;
+let releaseModelClose;
+const modelCloseGate = new Promise(resolve => { releaseModelClose = resolve; });
+const lifecycle = [];
 const resources = kit.createSam3BrowserServingResources({
+  now: () => nowMs,
   async acquireExecutionContext() {
     acquireCount += 1;
     return {
       adapter: { info: { description: 'test-adapter' } },
-      device: { destroy() { destroyCount += 1; } },
+      device: { destroy() { destroyCount += 1; lifecycle.push('device-destroy'); } },
+    };
+  },
+  async acquireModelSession({ packageRuntime, executionContext, commit }) {
+    modelAcquireCount += 1;
+    assert.equal(executionContext, firstContext);
+    assert.equal(commit, 'fixture-commit');
+    nowMs += 7;
+    return {
+      packageId: packageRuntime.packageId,
+      residentTensorResolver() {},
+      loadFloat32() {},
+      evidence() { return { packageId: packageRuntime.packageId, uploadCount: 2 }; },
+      async close() {
+        modelCloseCount += 1;
+        lifecycle.push('model-close');
+        await modelCloseGate;
+      },
     };
   },
 });
@@ -116,6 +140,21 @@ const firstContext = await resources.executionContext();
 const secondContext = await resources.executionContext();
 assert.strictEqual(secondContext, firstContext);
 assert.equal(acquireCount, 1, 'resident serving must acquire one execution context');
+
+const packageRuntime = { packageId: modelPackage.packageId };
+const [firstModelSession, concurrentModelSession] = await Promise.all([
+  resources.modelSession(packageRuntime, { commit: 'fixture-commit' }),
+  resources.modelSession(packageRuntime, { commit: 'fixture-commit' }),
+]);
+const reusedModelSession = await resources.modelSession(packageRuntime, { commit: 'fixture-commit' });
+assert.strictEqual(concurrentModelSession, firstModelSession);
+assert.strictEqual(reusedModelSession, firstModelSession);
+assert.equal(modelAcquireCount, 1, 'resident model acquisition must single-flight and persist across prompt invocations');
+await assert.rejects(
+  () => resources.modelSession({ packageId: 'sam3-model-package:other' }, { commit: 'fixture-commit' }),
+  /already bound|package identity|cannot switch/i,
+  'one serving page must not silently switch resident model packages',
+);
 
 const firstImageKey = kit.createSam3BrowserImageCacheKey({
   packageId: modelPackage.packageId,
@@ -147,16 +186,29 @@ assert.deepEqual(resources.evidence(), {
   schema: 'kaminos.sam3-browser-serving-resources-evidence.v0',
   status: 'active',
   executionContextAcquisitions: 1,
-  executionContextReuses: 1,
+  executionContextReuses: 2,
+  modelSessionAcquisitions: 1,
+  modelSessionReuses: 2,
+  modelPreparationMilliseconds: 7,
+  activeModelPackageId: modelPackage.packageId,
+  modelSession: { packageId: modelPackage.packageId, uploadCount: 2 },
   imageCacheHits: 1,
   imageCacheMisses: 2,
   imageCacheWrites: 1,
   activeImageCacheKey: firstImageKey,
 });
 
-await resources.close();
+let secondCloseSettled = false;
+const firstClose = resources.close();
+const secondClose = resources.close().then(() => { secondCloseSettled = true; });
+await Promise.resolve();
+assert.equal(secondCloseSettled, false, 'concurrent close callers must share the complete teardown flight');
+releaseModelClose();
+await Promise.all([firstClose, secondClose]);
 await resources.close();
 assert.equal(destroyCount, 1, 'resident serving close must release its device exactly once');
+assert.equal(modelCloseCount, 1, 'resident serving close must release its model session exactly once');
+assert.deepEqual(lifecycle, ['model-close', 'device-destroy'], 'model leases must close before their device is destroyed');
 await assert.rejects(() => resources.executionContext(), /serving resources are closed/);
 assert.throws(() => resources.setImageFeatures(firstImageKey, cachedFeatures), /serving resources are closed/);
 
@@ -165,15 +217,47 @@ const runtime = readFileSync(new URL('../smokes/sam-mask-island-parity.js', impo
 assert.match(workbench, /sam-mask-island-serving\.html/, 'workbench must enter a serving route rather than the parity page');
 assert.match(runtime, /resolveBrowserManifest\(rootManifest,\s*\{\s*includeVerification:\s*verificationAttached\s*\}\)/, 'execution-only runtime must detach verification before artifact resolution');
 assert.match(runtime, /createSam3BrowserServingResources/, 'runtime must own resident WebGPU and image resources');
+assert.match(runtime, /createSam3BrowserModelPackageRuntime/, 'runtime must project the semantic model package into shared resident-resource ownership');
+assert.match(runtime, /servingResources\.modelSession\(/, 'detached serving must single-flight a persistent model session');
+assert.match(runtime, /residentTensorResolver/, 'semantic phase execution must receive authenticated resident tensor resolution');
 assert.match(runtime, /const imageCacheKey\s*=\s*!verificationAttached\s*\?[\s\S]*createSam3BrowserImageCacheKey\(/, 'detached runtime must authenticate image feature reuse');
 assert.match(runtime, /servingResources\.getImageFeatures\(imageCacheKey\)/, 'detached runtime must look up image features before image execution');
 assert.match(runtime, /servingResources\.setImageFeatures\(imageCacheKey,\s*\{/, 'detached runtime must preserve newly computed image features');
 assert.match(runtime, /if \(includeImagePreprocess && !cachedImageFeatures\)/, 'an authenticated cache hit must bypass image preprocessing');
 assert.match(runtime, /imageCache:\s*\{[\s\S]*status:\s*cachedImageFeatures\s*\?\s*['"]hit['"]\s*:\s*['"]miss['"]/, 'runtime evidence must distinguish live image cache hits from misses');
+assert.match(runtime, /executedRouteReceipts/, 'runtime evidence must identify routes executed in the current invocation');
+assert.match(runtime, /reusedRouteReceipts/, 'runtime evidence must identify cached image-stage provenance separately');
+assert.match(runtime, /compositionRequestIds:\s*executedRouteResults[\s\S]*\.map\(routeResult\s*=>\s*routeResult\.requestId\)/, 'current invocation request identity must exclude reused image-stage request ids');
 assert.match(runtime, /visualOutput\s*=\s*\{[\s\S]*imageCache:\s*result\.imageCache/, 'operator-visible output must carry the effective image-cache route');
 assert.match(runtime, /\.\.\.\(verificationAttached\s*\?\s*\{\s*expectedLayerCheckpoints:\s*expectedVitLayerCheckpoints\s*\}\s*:\s*\{\s*\}\)/, 'detached ViT execution must omit the expected-checkpoint contract rather than pass an empty list');
 assert.match(runtime, /const parity\s*=\s*verificationAttached\s*\?\s*\{/, 'detached execution must not construct final reference parity from absent expected tensors');
 assert.match(runtime, /loadDetrStackPayload\(manifest,\s*\{[\s\S]*verificationAttached[\s\S]*servingResources/, 'full SAM runner must receive serving authority explicitly');
 assert.match(runtime, /if \(verificationAttached\) \{[\s\S]*oracle packet self-check failed/, 'CPU oracle self-check must be unreachable in detached serving mode');
+const residentAcquireIndex = runtime.indexOf('servingResources.modelSession(');
+for (const validationMarker of [
+  'if (!SUPPORTED_ROUTE_IDS.has(manifest.routeId))',
+  "if (manifest.claims?.fullSam3BrowserExecution !== false)",
+  "if (!manifest.staticWeights?.sha256",
+]) {
+  assert.ok(runtime.indexOf(validationMarker) >= 0 && runtime.indexOf(validationMarker) < residentAcquireIndex, `${validationMarker} must reject before multi-gigabyte resident acquisition`);
+}
+
+for (const file of [
+  'sam-image-patch-embed-phase-program.js',
+  'sam-image-vit-prefix-phase-program.js',
+  'sam-image-vit-first-block-phase-program.js',
+  'sam-image-vit-block-stack-phase-program.js',
+  'sam-image-fpn-neck-phase-program.js',
+  'sam-prompt-text-ingress-phase-program.js',
+  'sam-detr-encoder-phase-program.js',
+  'sam-prompt-fpn-phase-program.js',
+  'sam-pixel-decoder-phase-program.js',
+  'sam-detr-decoder-phase-program.js',
+  'sam-scoring-phase-program.js',
+  'sam-mask-tail-phase-program.js',
+]) {
+  const source = readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8');
+  assert.match(source, /residentTensorResolver:\s*input\.residentTensorResolver/, `${file} must compose the shared resident tensor resolver`);
+}
 
 console.log('sam browser serving runtime contracts passed');

@@ -450,12 +450,14 @@ export async function runSam3PromptFpnPhaseProgramRoute(input = {}) {
     waitForSubmittedWorkDone: true,
     yieldMs: 0,
     now: input.now,
+    residentTensorResolver: input.residentTensorResolver,
   });
 
   let tensors = null;
   await runtime.runStage('load-prompt-fpn-tensors', async stage => {
     const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
     const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
+    const weightTensor = (name, value, weightShape) => stage.createTensor({ name, shape: weightShape, dtype: 'f32', usage: readonlyUsage, sourceData: value });
     tensors = {
       encoderHiddenStates: stage.createTensor({ name: 'sam3.prompt-fpn.encoder-hidden-states', shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage: readonlyUsage }),
       promptFeatures: stage.createTensor({ name: 'sam3.prompt-fpn.prompt-features', shape: [shape.batch, shape.promptTokens, shape.channels], dtype: 'f32', usage: readonlyUsage }),
@@ -490,16 +492,16 @@ export async function runSam3PromptFpnPhaseProgramRoute(input = {}) {
         },
       }),
       weights: {
-        layerNormWeight: stage.createTensor({ name: 'sam3.prompt-fpn.norm.weight', shape: [shape.channels], dtype: 'f32', usage: readonlyUsage }),
-        layerNormBias: stage.createTensor({ name: 'sam3.prompt-fpn.norm.bias', shape: [shape.channels], dtype: 'f32', usage: readonlyUsage }),
-        qWeight: stage.createTensor({ name: 'sam3.prompt-fpn.q.weight', shape: [shape.channels, shape.channels], dtype: 'f32', usage: readonlyUsage }),
-        qBias: stage.createTensor({ name: 'sam3.prompt-fpn.q.bias', shape: [shape.channels], dtype: 'f32', usage: readonlyUsage }),
-        kWeight: stage.createTensor({ name: 'sam3.prompt-fpn.k.weight', shape: [shape.channels, shape.channels], dtype: 'f32', usage: readonlyUsage }),
-        kBias: stage.createTensor({ name: 'sam3.prompt-fpn.k.bias', shape: [shape.channels], dtype: 'f32', usage: readonlyUsage }),
-        vWeight: stage.createTensor({ name: 'sam3.prompt-fpn.v.weight', shape: [shape.channels, shape.channels], dtype: 'f32', usage: readonlyUsage }),
-        vBias: stage.createTensor({ name: 'sam3.prompt-fpn.v.bias', shape: [shape.channels], dtype: 'f32', usage: readonlyUsage }),
-        oWeight: stage.createTensor({ name: 'sam3.prompt-fpn.o.weight', shape: [shape.channels, shape.channels], dtype: 'f32', usage: readonlyUsage }),
-        oBias: stage.createTensor({ name: 'sam3.prompt-fpn.o.bias', shape: [shape.channels], dtype: 'f32', usage: readonlyUsage }),
+        layerNormWeight: weightTensor('sam3.prompt-fpn.norm.weight', weights.layerNormWeight, [shape.channels]),
+        layerNormBias: weightTensor('sam3.prompt-fpn.norm.bias', weights.layerNormBias, [shape.channels]),
+        qWeight: weightTensor('sam3.prompt-fpn.q.weight', weights.qWeight, [shape.channels, shape.channels]),
+        qBias: weightTensor('sam3.prompt-fpn.q.bias', weights.qBias, [shape.channels]),
+        kWeight: weightTensor('sam3.prompt-fpn.k.weight', weights.kWeight, [shape.channels, shape.channels]),
+        kBias: weightTensor('sam3.prompt-fpn.k.bias', weights.kBias, [shape.channels]),
+        vWeight: weightTensor('sam3.prompt-fpn.v.weight', weights.vWeight, [shape.channels, shape.channels]),
+        vBias: weightTensor('sam3.prompt-fpn.v.bias', weights.vBias, [shape.channels]),
+        oWeight: weightTensor('sam3.prompt-fpn.o.weight', weights.oWeight, [shape.channels, shape.channels]),
+        oBias: weightTensor('sam3.prompt-fpn.o.bias', weights.oBias, [shape.channels]),
       },
     };
     stage.uploadTensor(tensors.encoderHiddenStates, encoderHiddenStates);

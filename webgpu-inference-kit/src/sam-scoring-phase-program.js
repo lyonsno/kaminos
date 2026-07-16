@@ -433,12 +433,14 @@ export async function runSam3ScoringPhaseProgramRoute(input = {}) {
     waitForSubmittedWorkDone: true,
     yieldMs: 0,
     now: input.now,
+    residentTensorResolver: input.residentTensorResolver,
   });
 
   let tensors = null;
   await runtime.runStage('load-scoring-tensors', async stage => {
     const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
     const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
+    const weightTensor = (name, value, weightShape) => stage.createTensor({ name, shape: weightShape, dtype: 'f32', usage: readonlyUsage, sourceData: value });
     tensors = {
       hiddenStates: stage.createTensor({ name: 'sam3.scoring.hidden-states', shape: [shape.layerCount, shape.batch, shape.queryTokens, shape.channels], dtype: 'f32', usage: readonlyUsage }),
       promptFeatures: stage.createTensor({ name: 'sam3.scoring.prompt-features', shape: [shape.batch, shape.promptTokens, shape.channels], dtype: 'f32', usage: readonlyUsage }),
@@ -457,16 +459,16 @@ export async function runSam3ScoringPhaseProgramRoute(input = {}) {
       queryProjDims: stage.createUniformBuffer({ label: 'sam3.scoring.query-proj-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }], values: { input_channels: shape.channels, output_channels: shape.channels, total_output: hiddenTotal } }),
       scoreDims: stage.createUniformBuffer({ label: 'sam3.scoring.score-dims', schema: [{ name: 'layer_count', type: 'u32' }, { name: 'batch', type: 'u32' }, { name: 'query_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'total_scores', type: 'u32' }], values: { layer_count: shape.layerCount, batch: shape.batch, query_tokens: shape.queryTokens, channels: shape.channels, total_scores: scoreTotal } }),
       weights: {
-        textMlpLayer1Weight: stage.createTensor({ name: 'sam3.scoring.text-mlp.layer1.weight', shape: [shape.mlpHidden, shape.channels], dtype: 'f32', usage: readonlyUsage }),
-        textMlpLayer1Bias: stage.createTensor({ name: 'sam3.scoring.text-mlp.layer1.bias', shape: [shape.mlpHidden], dtype: 'f32', usage: readonlyUsage }),
-        textMlpLayer2Weight: stage.createTensor({ name: 'sam3.scoring.text-mlp.layer2.weight', shape: [shape.channels, shape.mlpHidden], dtype: 'f32', usage: readonlyUsage }),
-        textMlpLayer2Bias: stage.createTensor({ name: 'sam3.scoring.text-mlp.layer2.bias', shape: [shape.channels], dtype: 'f32', usage: readonlyUsage }),
-        textMlpOutNormWeight: stage.createTensor({ name: 'sam3.scoring.text-mlp-out-norm.weight', shape: [shape.channels], dtype: 'f32', usage: readonlyUsage }),
-        textMlpOutNormBias: stage.createTensor({ name: 'sam3.scoring.text-mlp-out-norm.bias', shape: [shape.channels], dtype: 'f32', usage: readonlyUsage }),
-        textProjWeight: stage.createTensor({ name: 'sam3.scoring.text-proj.weight', shape: [shape.channels, shape.channels], dtype: 'f32', usage: readonlyUsage }),
-        textProjBias: stage.createTensor({ name: 'sam3.scoring.text-proj.bias', shape: [shape.channels], dtype: 'f32', usage: readonlyUsage }),
-        queryProjWeight: stage.createTensor({ name: 'sam3.scoring.query-proj.weight', shape: [shape.channels, shape.channels], dtype: 'f32', usage: readonlyUsage }),
-        queryProjBias: stage.createTensor({ name: 'sam3.scoring.query-proj.bias', shape: [shape.channels], dtype: 'f32', usage: readonlyUsage }),
+        textMlpLayer1Weight: weightTensor('sam3.scoring.text-mlp.layer1.weight', weights.textMlpLayer1Weight, [shape.mlpHidden, shape.channels]),
+        textMlpLayer1Bias: weightTensor('sam3.scoring.text-mlp.layer1.bias', weights.textMlpLayer1Bias, [shape.mlpHidden]),
+        textMlpLayer2Weight: weightTensor('sam3.scoring.text-mlp.layer2.weight', weights.textMlpLayer2Weight, [shape.channels, shape.mlpHidden]),
+        textMlpLayer2Bias: weightTensor('sam3.scoring.text-mlp.layer2.bias', weights.textMlpLayer2Bias, [shape.channels]),
+        textMlpOutNormWeight: weightTensor('sam3.scoring.text-mlp-out-norm.weight', weights.textMlpOutNormWeight, [shape.channels]),
+        textMlpOutNormBias: weightTensor('sam3.scoring.text-mlp-out-norm.bias', weights.textMlpOutNormBias, [shape.channels]),
+        textProjWeight: weightTensor('sam3.scoring.text-proj.weight', weights.textProjWeight, [shape.channels, shape.channels]),
+        textProjBias: weightTensor('sam3.scoring.text-proj.bias', weights.textProjBias, [shape.channels]),
+        queryProjWeight: weightTensor('sam3.scoring.query-proj.weight', weights.queryProjWeight, [shape.channels, shape.channels]),
+        queryProjBias: weightTensor('sam3.scoring.query-proj.bias', weights.queryProjBias, [shape.channels]),
       },
     };
     stage.uploadTensor(tensors.hiddenStates, hiddenStates);
