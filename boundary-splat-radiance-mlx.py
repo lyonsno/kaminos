@@ -1349,6 +1349,7 @@ def evaluate_optical_frame_set(
         projected_features = optical_feature_planes[frame_index]
         control_condition = optical_control_conditions[frame_index]
         components = None
+        topology_losses = None
         if isinstance(decoder, ScreenTopologyBandUnet):
             components = decoder.predict_components(base_prediction, projected_features, control_condition)
             macro_prediction, topology_residual, prediction = components

@@ -2,6 +2,7 @@
 import importlib.util
 from pathlib import Path
 import sys
+import tempfile
 
 import mlx.core as mx
 import numpy as np
@@ -82,5 +83,29 @@ weighted_metrics = MODULE.evaluation_loss_metrics(
 )
 assert weighted_metrics["loss"] == float(wrong_topology_losses["total"].item())
 assert weighted_metrics["loss"] != weighted_metrics["pixelLoss"] + weighted_metrics["edgeLoss"]
+
+standard_decoder = MODULE.ScreenResidualUnet(
+    input_channels=5,
+    base_channels=4,
+    residual_scale=1.0,
+)
+standard_prediction = mx.array(np.random.default_rng(11).random((16, 16, 3), dtype=np.float32))
+with tempfile.TemporaryDirectory() as temporary_directory:
+    standard_rows = MODULE.evaluate_optical_frame_set(
+        standard_decoder,
+        [standard_prediction],
+        [None],
+        [None],
+        [{"target": standard_prediction}],
+        [{"id": "standard-eval-frame", "sameStateCaptureId": "standard-eval-state"}],
+        [0],
+        1.0,
+        1.0,
+        1.0,
+        Path(temporary_directory),
+        "standard-runtime",
+    )
+assert len(standard_rows) == 1
+assert np.isfinite(standard_rows[0]["loss"])
 
 print("boundary splat topology band contracts passed")
