@@ -11507,7 +11507,9 @@ function formatVolumePresetControlValue(key, value) {
   if (['raySteps', 'resolution', 'majorantGrid', 'windAngle'].includes(key)) {
     return String(Math.round(value));
   }
-  return typeof value === 'number' ? value.toFixed(2) : value;
+  if (typeof value !== 'number') return value;
+  const field = REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.find(candidate => candidate.key === key);
+  return value.toFixed(field?.decimals ?? 2);
 }
 
 function volumeControlRow(id) {
@@ -11705,24 +11707,24 @@ function applyTallPlumeOperatorPreset(name, options = {}) {
 }
 
 const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
-  { key: 'reactionBoundaryGradient', id: 'volume-reaction-boundary-gradient', param: 'volume_reaction_boundary_gradient', min: 0, max: 4, decimals: 2 },
-  { key: 'reactionBoundarySupportThermal', id: 'volume-reaction-boundary-support-thermal', param: 'volume_reaction_boundary_support_thermal', min: 0, max: 2, decimals: 2 },
-  { key: 'reactionBoundarySupportReaction', id: 'volume-reaction-boundary-support-reaction', param: 'volume_reaction_boundary_support_reaction', min: 0, max: 2, decimals: 2 },
-  { key: 'reactionBoundarySupportFront', id: 'volume-reaction-boundary-support-front', param: 'volume_reaction_boundary_support_front', min: 0, max: 2, decimals: 2 },
-  { key: 'reactionBoundarySupportInterface', id: 'volume-reaction-boundary-support-interface', param: 'volume_reaction_boundary_support_interface', min: 0, max: 2, decimals: 2 },
-  { key: 'reactionBoundaryCut', id: 'volume-reaction-boundary-cut', param: 'volume_reaction_boundary_cut', min: 0, max: 0.55, decimals: 3 },
-  { key: 'reactionBoundarySoftness', id: 'volume-reaction-boundary-softness', param: 'volume_reaction_boundary_softness', min: 0.005, max: 0.45, decimals: 3 },
-  { key: 'reactionBoundaryCoreReject', id: 'volume-reaction-boundary-core-reject', param: 'volume_reaction_boundary_core_reject', min: 0, max: 1, decimals: 2 },
-  { key: 'reactionBoundaryTopology', id: 'volume-reaction-boundary-topology', param: 'volume_reaction_boundary_topology', min: 0, max: 2.5, decimals: 2 },
-  { key: 'reactionBoundaryCurl', id: 'volume-reaction-boundary-curl', param: 'volume_reaction_boundary_curl', min: 0, max: 2, decimals: 2 },
-  { key: 'reactionBoundaryDivergence', id: 'volume-reaction-boundary-divergence', param: 'volume_reaction_boundary_divergence', min: 0, max: 1, decimals: 2 },
+  { key: 'reactionBoundaryGradient', id: 'volume-reaction-boundary-gradient', param: 'volume_reaction_boundary_gradient', min: 0, max: 4, step: 0.05, decimals: 2 },
+  { key: 'reactionBoundarySupportThermal', id: 'volume-reaction-boundary-support-thermal', param: 'volume_reaction_boundary_support_thermal', min: 0, max: 2, step: 0.02, decimals: 2 },
+  { key: 'reactionBoundarySupportReaction', id: 'volume-reaction-boundary-support-reaction', param: 'volume_reaction_boundary_support_reaction', min: 0, max: 2, step: 0.02, decimals: 2 },
+  { key: 'reactionBoundarySupportFront', id: 'volume-reaction-boundary-support-front', param: 'volume_reaction_boundary_support_front', min: 0, max: 2, step: 0.02, decimals: 2 },
+  { key: 'reactionBoundarySupportInterface', id: 'volume-reaction-boundary-support-interface', param: 'volume_reaction_boundary_support_interface', min: 0, max: 2, step: 0.02, decimals: 2 },
+  { key: 'reactionBoundaryCut', id: 'volume-reaction-boundary-cut', param: 'volume_reaction_boundary_cut', min: 0, max: 0.55, step: 0.005, decimals: 3 },
+  { key: 'reactionBoundarySoftness', id: 'volume-reaction-boundary-softness', param: 'volume_reaction_boundary_softness', min: 0.005, max: 0.45, step: 0.005, decimals: 3 },
+  { key: 'reactionBoundaryCoreReject', id: 'volume-reaction-boundary-core-reject', param: 'volume_reaction_boundary_core_reject', min: 0, max: 1, step: 0.01, decimals: 2 },
+  { key: 'reactionBoundaryTopology', id: 'volume-reaction-boundary-topology', param: 'volume_reaction_boundary_topology', min: 0, max: 2.5, step: 0.02, decimals: 2 },
+  { key: 'reactionBoundaryCurl', id: 'volume-reaction-boundary-curl', param: 'volume_reaction_boundary_curl', min: 0, max: 2, step: 0.02, decimals: 2 },
+  { key: 'reactionBoundaryDivergence', id: 'volume-reaction-boundary-divergence', param: 'volume_reaction_boundary_divergence', min: 0, max: 1, step: 0.01, decimals: 2 },
   { key: 'reactionBoundaryContrast', id: 'volume-reaction-boundary-contrast', param: 'volume_reaction_boundary_contrast', min: 0.25, max: 5, decimals: 2 },
   { key: 'reactionBoundaryGamma', id: 'volume-reaction-boundary-gamma', param: 'volume_reaction_boundary_gamma', min: 0.35, max: 3, decimals: 2 },
   { key: 'reactionBoundaryOpacity', id: 'volume-reaction-boundary-opacity', param: 'volume_reaction_boundary_opacity', min: 0, max: 3, decimals: 2 },
-  { key: 'reactionBoundaryFireRidge', id: 'volume-reaction-boundary-fire-ridge', param: 'volume_reaction_boundary_fire_ridge', min: 0, max: 2, decimals: 2 },
-  { key: 'reactionBoundaryFireRidgeCut', id: 'volume-reaction-boundary-fire-ridge-cut', param: 'volume_reaction_boundary_fire_ridge_cut', min: 0, max: 0.55, decimals: 3 },
-  { key: 'reactionBoundaryFireTip', id: 'volume-reaction-boundary-fire-tip', param: 'volume_reaction_boundary_fire_tip', min: 0, max: 2, decimals: 2 },
-  { key: 'reactionBoundaryFireErosion', id: 'volume-reaction-boundary-fire-erosion', param: 'volume_reaction_boundary_fire_erosion', min: 0, max: 1, decimals: 2 },
+  { key: 'reactionBoundaryFireRidge', id: 'volume-reaction-boundary-fire-ridge', param: 'volume_reaction_boundary_fire_ridge', min: 0, max: 2, step: 0.02, decimals: 2 },
+  { key: 'reactionBoundaryFireRidgeCut', id: 'volume-reaction-boundary-fire-ridge-cut', param: 'volume_reaction_boundary_fire_ridge_cut', min: 0, max: 0.55, step: 0.005, decimals: 3 },
+  { key: 'reactionBoundaryFireTip', id: 'volume-reaction-boundary-fire-tip', param: 'volume_reaction_boundary_fire_tip', min: 0, max: 2, step: 0.02, decimals: 2 },
+  { key: 'reactionBoundaryFireErosion', id: 'volume-reaction-boundary-fire-erosion', param: 'volume_reaction_boundary_fire_erosion', min: 0, max: 1, step: 0.01, decimals: 2 },
   { key: 'reactionBoundaryFireCleanBlue', id: 'volume-reaction-boundary-fire-clean-blue', param: 'volume_reaction_boundary_fire_clean_blue', min: 0, max: 2, decimals: 2 },
   { key: 'reactionBoundaryFireSoot', id: 'volume-reaction-boundary-fire-soot', param: 'volume_reaction_boundary_fire_soot', min: 0, max: 2, decimals: 2 },
   { key: 'reactionBoundaryFireYellow', id: 'volume-reaction-boundary-fire-yellow', param: 'volume_reaction_boundary_fire_yellow', min: 0, max: 2, decimals: 2 },
