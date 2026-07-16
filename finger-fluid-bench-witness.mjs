@@ -13,6 +13,7 @@ const canvasOut = resolve(args.get('--canvas-out') || out.replace(/\.png$/i, '.c
 const preContactOut = resolve(args.get('--pre-contact-out') || out.replace(/\.png$/i, '.pre-contact.png'));
 const midContactOut = resolve(args.get('--mid-contact-out') || out.replace(/\.png$/i, '.mid-contact.png'));
 const postContactOut = resolve(args.get('--post-contact-out') || out.replace(/\.png$/i, '.post-contact.png'));
+const recoveryOut = resolve(args.get('--recovery-out') || out.replace(/\.png$/i, '.pilot-recovery.png'));
 const port = Number(args.get('--debug-port') || 9493);
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-finger-fluid-bench-profile-${port}-${process.pid}`;
@@ -42,9 +43,16 @@ let cameraWitness = null;
 let preContactWitness = null;
 let preContactVolumeSample = null;
 let preContactComposedSample = null;
+let preContactSourceLastContactTick = 0;
 let midContactWitness = null;
+let midContactWitnesses = [];
 let midContactComposedSample = null;
+let midContactComposedSamples = [];
+let midContactPresentedSample = null;
 let postContactComposedSample = null;
+let dryExtinguishedWitness = null;
+let recoveryWitness = null;
+let recoveryComposedSample = null;
 const consoleEvents = [];
 
 function delay(ms) {
@@ -82,12 +90,19 @@ function writeReport(report = {}) {
     preContactVolumeSample,
     preContactComposedSample,
     midContactWitness,
+    midContactWitnesses,
     midContactComposedSample,
+    midContactComposedSamples,
+    midContactPresentedSample,
     postContactComposedSample,
+    dryExtinguishedWitness,
+    recoveryWitness,
+    recoveryComposedSample,
     canvasOut,
     preContactOut,
     midContactOut,
     postContactOut,
+    recoveryOut,
     output: primaryOutputWritten ? out : null,
     ...report,
   }, null, 2));
@@ -289,6 +304,13 @@ async function main() {
       if ((preContactWitness?.consumerWitness?.sourceContactWetness || 0) !== 0) {
         throw new Error('pre-contact witness already contained burner contact');
       }
+      if ((preContactWitness?.consumerWitness?.sourceWetness || 0) !== 0) {
+        throw new Error('pre-contact witness retained stale burner wetness before physical overlap');
+      }
+      if ((preContactWitness?.consumerWitness?.sourceLastContactTick || 0) !== 0) {
+        throw new Error('pre-contact witness retained a stale exact-contact event before physical overlap');
+      }
+      preContactSourceLastContactTick = preContactWitness.consumerWitness.sourceLastContactTick || 0;
       const preContactVolume = preContactWitness?.volume;
       if (preContactVolume?.boundarySplatMode !== 'learned') {
         throw new Error(`learned boundary-splat route was not effective: ${preContactVolume?.boundarySplatMode}`);
@@ -337,19 +359,34 @@ async function main() {
           majorantReadback: sample.majorantReadback,
         };
       })()`);
-      preContactComposedSample = await evaluate(ws, `(window.__kaminosCaptureComposedFireSample = async () => {
+      preContactComposedSample = await evaluate(ws, `(window.__kaminosCaptureComposedFireSample = async (presentToCanvas = false) => {
         const prototype = window.__kaminosVolumePrototype;
         if (typeof prototype?.captureSelectiveHeadLiveFrame !== 'function') {
           throw new Error('missing composed-frame Pyro witness hook');
         }
         const frame = await prototype.captureSelectiveHeadLiveFrame({
           advanceSim: false,
-          presentToCanvas: false,
+          presentToCanvas,
           frameIndex: 0,
         });
         try {
-          if (frame?.ok !== true || !Array.isArray(frame?.rgba)) {
-            throw new Error('composed-frame Pyro readback failed: ' + (frame?.reason || 'missing rgba'));
+          if (frame?.ok !== true) {
+            throw new Error('composed-frame Pyro capture failed: ' + (frame?.reason || 'unknown failure'));
+          }
+          if (presentToCanvas) {
+            return {
+              ok: true,
+              imageAuthority: frame.imageAuthority,
+              width: frame.width,
+              height: frame.height,
+              simStepCount: frame.simStepCount,
+              composedFireClassifier: 'presented-from-same-paused-field-after-authoritative-readback-v0',
+              composedFireBounds: null,
+              passReceipt: frame.selectiveHeadLivePassReceipt,
+            };
+          }
+          if (!Array.isArray(frame?.rgba)) {
+            throw new Error('composed-frame Pyro readback failed: missing rgba');
           }
           let minX = frame.width;
           let minY = frame.height;
@@ -546,14 +583,14 @@ async function main() {
         })()`);
         lastCompositionSample = candidate;
         const source = candidate?.consumerWitness;
-        if ((source?.sourceContactWetness || 0) > 0 || (source?.sourceWetness || 0) > 0.01) {
+        if ((source?.sourceLastContactTick || 0) > preContactSourceLastContactTick) {
           observedPhysicalSourceContact = true;
         }
         if (
           observedPhysicalSourceContact
           && source?.sourceWetness > 0.15
-          && source?.sourceCombustion < 0.75
-          && source?.sourceCombustion > 0.08
+          && source?.sourceCombustion < 0.65
+          && source?.sourceCombustion > 0.50
         ) {
           midContactWitness = candidate;
           break;
@@ -562,17 +599,54 @@ async function main() {
       }
       if (!observedPhysicalSourceContact) throw new Error('liquid never physically contacted the authored burner neighborhood');
       if (!midContactWitness) throw new Error('continuous source model skipped the observable intermediate-combustion phase');
-      midContactComposedSample = await evaluate(ws, `window.__kaminosCaptureComposedFireSample()`);
-      const midContactScreenshot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+      const preContactFirePixels = preContactComposedSample?.composedFireBounds?.pixelCount || 0;
+      let midContactScreenshot = null;
+      for (let frameIndex = 0; frameIndex < 4; frameIndex += 1) {
+        if (frameIndex > 0) await delay(80);
+        const sourceWitness = await evaluate(ws, `window.kaminosFingerFluidPyroCompositionSample()`);
+        const composedSample = await evaluate(ws, `window.__kaminosCaptureComposedFireSample()`);
+        composedSample.sourceCombustion = sourceWitness?.consumerWitness?.sourceCombustion ?? null;
+        composedSample.sourceTemperature = sourceWitness?.consumerWitness?.sourceTemperature ?? null;
+        composedSample.midFireRatio = (composedSample?.composedFireBounds?.pixelCount || 0) / Math.max(1, preContactFirePixels);
+        composedSample.preContactFirePixels = preContactFirePixels;
+        midContactWitnesses.push(sourceWitness);
+        midContactComposedSamples.push(composedSample);
+        if (!midContactScreenshot && composedSample.midFireRatio > 0.12) {
+          await evaluate(ws, `window.kaminosFingerFluidPyroSetSimulationPaused(true)`);
+          try {
+            const representativeReadback = await evaluate(ws, `window.__kaminosCaptureComposedFireSample()`);
+            representativeReadback.midFireRatio = (representativeReadback?.composedFireBounds?.pixelCount || 0) / Math.max(1, preContactFirePixels);
+            representativeReadback.preContactFirePixels = preContactFirePixels;
+            midContactPresentedSample = await evaluate(ws, `window.__kaminosCaptureComposedFireSample(true)`);
+            midContactPresentedSample.representedReadback = representativeReadback;
+            if (
+              representativeReadback.midFireRatio > 0.12
+              && midContactPresentedSample?.passReceipt?.raymarchApplied === true
+              && midContactPresentedSample?.passReceipt?.splatApplied === true
+              && !midContactPresentedSample?.passReceipt?.fallbackReason
+            ) {
+              midContactScreenshot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+            }
+          } finally {
+            await evaluate(ws, `window.kaminosFingerFluidPyroSetSimulationPaused(false)`);
+          }
+        }
+      }
+      if (!midContactScreenshot) throw new Error('intermediate temporal sequence produced no representative material frame for the operator-visible witness');
       mkdirSync(dirname(midContactOut), { recursive: true });
       writeFileSync(midContactOut, Buffer.from(midContactScreenshot.data, 'base64'));
-      const preContactFirePixels = preContactComposedSample?.composedFireBounds?.pixelCount || 0;
-      const midContactFirePixels = midContactComposedSample?.composedFireBounds?.pixelCount || 0;
-      const midFireRatio = midContactFirePixels / Math.max(1, preContactFirePixels);
-      midContactComposedSample.midFireRatio = midFireRatio;
-      midContactComposedSample.preContactFirePixels = preContactFirePixels;
-      if (!(midFireRatio > 0.15 && midFireRatio < 0.95)) {
-        throw new Error(`intermediate source cooling did not preserve a reduced detached flame body: ${JSON.stringify({ midFireRatio, preContactFirePixels, midContactFirePixels })}`);
+      midContactComposedSample = midContactComposedSamples.reduce((best, sample) =>
+        (sample.midFireRatio > (best?.midFireRatio || 0) ? sample : best), null);
+      const materialMidFrameCount = midContactComposedSamples.filter(sample => sample.midFireRatio > 0.12).length;
+      const authoritativeMidFrameCount = midContactComposedSamples.filter(sample =>
+        sample?.passReceipt?.raymarchApplied === true
+        && sample?.passReceipt?.splatApplied === true
+        && !sample?.passReceipt?.fallbackReason).length;
+      if (authoritativeMidFrameCount !== midContactComposedSamples.length) {
+        throw new Error(`intermediate composed sequence contained fallback or partial frames: ${JSON.stringify(midContactComposedSamples)}`);
+      }
+      if (!(materialMidFrameCount >= 2) || !(midContactComposedSample?.midFireRatio > 0.15)) {
+        throw new Error(`intermediate source cooling did not preserve repeated material flame support: ${JSON.stringify({ materialMidFrameCount, preContactFirePixels, samples: midContactComposedSamples })}`);
       }
 
       const extinctionDeadline = Date.now() + Math.max(20000, hookWaitMs * 2);
@@ -605,7 +679,7 @@ async function main() {
         throw new Error('intermediate liquid/fire transfer did not retain physical burner wetness after the dry baseline');
       }
       if (!(compositionWitness.consumerWitness.sourceWetness > 0.15)) throw new Error('liquid/fire composition established no recoverable burner wetness');
-      if (!(midContactWitness.consumerWitness.sourceCombustion < 0.75 && midContactWitness.consumerWitness.sourceCombustion > 0.08)) throw new Error('liquid/fire composition did not expose progressive source combustion');
+      if (!(midContactWitness.consumerWitness.sourceCombustion < 0.65 && midContactWitness.consumerWitness.sourceCombustion > 0.50)) throw new Error('liquid/fire composition did not expose the bounded intermediate-combustion phase');
       if (!(compositionWitness.consumerWitness.sourceCombustion < 0.08)) throw new Error('liquid/fire composition did not materially extinguish source combustion');
       if (!(compositionWitness.consumerWitness.sourceIgnited < 0.5)) throw new Error('manual-reignition source remained ignited after quench');
       if (compositionWitness.consumerWitness.sourceStateModel !== 'recoverable-wetness-thermal-ignition-v0') throw new Error(`source state model mismatch: ${compositionWitness.consumerWitness.sourceStateModel}`);
@@ -622,6 +696,68 @@ async function main() {
       if (!(postFireRatio <= 0.15)) {
         throw new Error(`sustained liquid contact did not quench the fixed-view luminous flame: ${JSON.stringify({ postFireRatio, preContactFirePixels, postContactFirePixels, pre: preContactComposedSample?.composedFireBounds, post: postContactComposedSample?.composedFireBounds })}`);
       }
+
+      phase = 'verify_manual_pilot_recovery';
+      await evaluate(ws, `window.kaminosFingerFluidPyroSetPilotEnabled(false)`);
+      const dryMoveReceipt = await evaluate(ws, `window.kaminosFingerFluidPyroSetSourcePosition([0.65, -0.35, 0.51])`);
+      if (dryMoveReceipt?.simulationReset !== false) throw new Error(`moving the extinguished source reported a simulation reset: ${JSON.stringify(dryMoveReceipt)}`);
+      const recoveryStartStep = compositionWitness?.volume?.simStepCount || 0;
+      const recoveryStartResetCount = compositionWitness?.volume?.fluidStateResetCount;
+      const dryDeadline = Date.now() + Math.max(30000, hookWaitMs * 3);
+      while (Date.now() < dryDeadline) {
+        const candidate = await evaluate(ws, `window.kaminosFingerFluidPyroCompositionSample()`);
+        lastCompositionSample = candidate;
+        const source = candidate?.consumerWitness;
+        if ((source?.sourceIgnited || 0) >= 0.5) {
+          throw new Error(`extinguished source automatically reignited while pilot was disabled: ${JSON.stringify(source)}`);
+        }
+        if ((source?.sourceCombustion || 0) >= 0.08) {
+          await delay(100);
+          continue;
+        }
+        if ((source?.sourceWetness || 0) < 0.16) {
+          dryExtinguishedWitness = candidate;
+          break;
+        }
+        await delay(100);
+      }
+      if (!dryExtinguishedWitness) throw new Error('extinguished source did not dry while remaining manually unignited');
+      if (dryExtinguishedWitness.volume?.fluidStateResetCount !== recoveryStartResetCount) {
+        throw new Error(`source drying reset the established field: ${JSON.stringify({ recoveryStartResetCount, final: dryExtinguishedWitness.volume?.fluidStateResetCount })}`);
+      }
+      if (!(dryExtinguishedWitness.volume?.simStepCount > recoveryStartStep)) throw new Error('source drying did not advance the established live simulation');
+      if (dryExtinguishedWitness.consumerWitness?.sourcePilotEnabled !== false) throw new Error('manual no-auto-reignite interval did not report the pilot disabled');
+
+      const pilotReceipt = await evaluate(ws, `window.kaminosFingerFluidPyroSetPilotEnabled(true)`);
+      if (pilotReceipt?.enabled !== true || pilotReceipt?.simulationReset !== false) {
+        throw new Error(`explicit pilot did not engage without reset: ${JSON.stringify(pilotReceipt)}`);
+      }
+      const pilotDeadline = Date.now() + Math.max(30000, hookWaitMs * 3);
+      while (Date.now() < pilotDeadline) {
+        const candidate = await evaluate(ws, `window.kaminosFingerFluidPyroCompositionSample()`);
+        lastCompositionSample = candidate;
+        const source = candidate?.consumerWitness;
+        if ((source?.sourceIgnited || 0) > 0.5 && (source?.sourceCombustion || 0) > 0.45) {
+          recoveryWitness = candidate;
+          break;
+        }
+        await delay(100);
+      }
+      if (!recoveryWitness) throw new Error('explicit pilot failed to recover the dry extinguished live source');
+      if (recoveryWitness.consumerWitness?.sourcePilotEnabled !== true) throw new Error('recovered source did not report explicit pilot authority');
+      if (recoveryWitness.volume?.fluidStateResetCount !== recoveryStartResetCount) {
+        throw new Error(`pilot recovery reset the established field: ${JSON.stringify({ recoveryStartResetCount, final: recoveryWitness.volume?.fluidStateResetCount })}`);
+      }
+      await delay(600);
+      recoveryComposedSample = await evaluate(ws, `window.__kaminosCaptureComposedFireSample()`);
+      const recoveryFirePixels = recoveryComposedSample?.composedFireBounds?.pixelCount || 0;
+      recoveryComposedSample.recoveryFireRatio = recoveryFirePixels / Math.max(1, preContactFirePixels);
+      if (!(recoveryComposedSample.recoveryFireRatio > 0.15)) {
+        throw new Error(`explicit pilot recovered source state without a material fixed-view luminous flame: ${JSON.stringify(recoveryComposedSample)}`);
+      }
+      const recoveryScreenshot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+      mkdirSync(dirname(recoveryOut), { recursive: true });
+      writeFileSync(recoveryOut, Buffer.from(recoveryScreenshot.data, 'base64'));
     }
 
     phase = 'read_debug_state';

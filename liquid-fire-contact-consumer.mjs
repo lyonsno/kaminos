@@ -8,8 +8,8 @@ export const LIQUID_FIRE_CONTACT_VERSION = 1;
 export const LIQUID_FIRE_CONTACT_FIXED_POINT_SCALE = 65536;
 export const LIQUID_FIRE_SOURCE_STATE_MODEL = 'recoverable-wetness-thermal-ignition-v0';
 export const LIQUID_FIRE_SOURCE_REIGNITION_POLICY = 'manual-reignition-v0';
-export const LIQUID_FIRE_SOURCE_STATE_WORDS = 4;
-export const LIQUID_FIRE_CONTACT_STATS_WORDS = 20;
+export const LIQUID_FIRE_SOURCE_STATE_WORDS = 5;
+export const LIQUID_FIRE_CONTACT_STATS_WORDS = 21;
 
 function nonnegativeInteger(value, label) {
   const integer = Number(value);
@@ -171,6 +171,7 @@ const SOURCE_WETNESS_INDEX: u32 = GRID_CELL_COUNT;
 const SOURCE_TEMPERATURE_INDEX: u32 = GRID_CELL_COUNT + 1u;
 const SOURCE_COMBUSTION_INDEX: u32 = GRID_CELL_COUNT + 2u;
 const SOURCE_IGNITED_INDEX: u32 = GRID_CELL_COUNT + 3u;
+const SOURCE_LAST_CONTACT_TICK_INDEX: u32 = GRID_CELL_COUNT + 4u;
 const SOURCE_MAGIC: u32 = ${LIQUID_FIRE_CONTACT_MAGIC}u;
 const SOURCE_VERSION: u32 = ${LIQUID_FIRE_CONTACT_VERSION}u;
 const FIXED_POINT_SCALE: f32 = ${LIQUID_FIRE_CONTACT_FIXED_POINT_SCALE}.0;
@@ -237,6 +238,7 @@ struct ConsumerStats {
   sourceCombustion: atomic<u32>,
   sourceIgnited: atomic<u32>,
   sourceNearestContactDistance: atomic<u32>,
+  sourceLastContactTick: atomic<u32>,
 };
 
 struct ConsumerParams {
@@ -298,6 +300,7 @@ fn clear_liquid_fire_contact_consumer_stats(@builtin(global_invocation_id) gid: 
   atomicStore(&consumerStats.sourceCombustion, 0u);
   atomicStore(&consumerStats.sourceIgnited, 0u);
   atomicStore(&consumerStats.sourceNearestContactDistance, 0xffffffffu);
+  atomicStore(&consumerStats.sourceLastContactTick, 0u);
 }
 
 @compute @workgroup_size(64)
@@ -334,6 +337,7 @@ fn scatter_liquid_fire_contacts(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (sourceContactDistance <= consumerParams.sourceQuench.w) {
     let sourceContactWetness = fixedPoint(min(1.0, wetness));
     atomicMax(&quenchField[SOURCE_WETNESS_INDEX], sourceContactWetness);
+    atomicMax(&quenchField[SOURCE_LAST_CONTACT_TICK_INDEX], writeTick);
     atomicMax(&consumerStats.sourceContactWetness, sourceContactWetness);
   }
   let cell = min(vec3<u32>(receiverUnit * f32(GRID)), vec3<u32>(GRID - 1u));
@@ -418,6 +422,7 @@ fn finalize_liquid_fire_contact_transfer(@builtin(global_invocation_id) gid: vec
   atomicStore(&consumerStats.sourceTemperature, atomicLoad(&quenchField[SOURCE_TEMPERATURE_INDEX]));
   atomicStore(&consumerStats.sourceCombustion, atomicLoad(&quenchField[SOURCE_COMBUSTION_INDEX]));
   atomicStore(&consumerStats.sourceIgnited, atomicLoad(&quenchField[SOURCE_IGNITED_INDEX]));
+  atomicStore(&consumerStats.sourceLastContactTick, atomicLoad(&quenchField[SOURCE_LAST_CONTACT_TICK_INDEX]));
   let acceptedContacts = atomicLoad(&consumerStats.acceptedContacts);
   if (acceptedContacts > 0u) {
     atomicStore(&consumerStats.status, 1u);

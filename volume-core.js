@@ -2587,10 +2587,12 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let sourceTemperatureIndex = sourceWetnessIndex + 1u;
   let sourceCombustionIndex = sourceWetnessIndex + 2u;
   let sourceIgnitedIndex = sourceWetnessIndex + 3u;
+  let sourceLastContactTickIndex = sourceWetnessIndex + 4u;
   let sourceWetness = clamp(f32(quenchSrc[sourceWetnessIndex]) / 65536.0, 0.0, 1.0);
   let sourceTemperature = clamp(f32(quenchSrc[sourceTemperatureIndex]) / 65536.0, 0.0, 1.0);
   let sourceCombustion = clamp(f32(quenchSrc[sourceCombustionIndex]) / 65536.0, 0.0, 1.0);
   let sourceIgnited = clamp(f32(quenchSrc[sourceIgnitedIndex]) / 65536.0, 0.0, 1.0);
+  let sourceLastContactTick = quenchSrc[sourceLastContactTickIndex];
   let base = idx * SLOTS_PER_CELL;
   let cell = vec3<f32>(gid) + vec3<f32>(0.5);
   let cellI = vec3<i32>(gid);
@@ -2600,7 +2602,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let curl = u.fire_smoke_curl_speed.z;
   let inputRadius = max(0.04, u.source_controls.x);
   let rawInputFlow = max(0.0, u.source_controls.y);
-  let inputFlow = rawInputFlow * sourceCombustion;
+  let sourcePilot = clamp(u.source_controls.w, 0.0, 1.0);
+  let sourceFlowEnvelope = sqrt(sourceCombustion);
+  let inputFlow = rawInputFlow * sourceFlowEnvelope;
   let projection = clamp(u.source_controls.z, 0.0, 1.5);
   let fireScale = clamp(u.scale_controls.x, 0.35, 1.30);
   let detailScale = clamp(u.scale_controls.y, 0.45, 3.20);
@@ -3802,12 +3806,13 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       0.0,
       1.0
     );
-    let sourceHeating = sourceCombustion * 0.006;
+    let sourceHeating = sourceCombustion * 0.006 + sourcePilot * 0.005;
     let sourceCooling = nextSourceWetness * (0.024 + sourceTemperature * 0.014);
     let nextSourceTemperature = clamp(sourceTemperature + sourceHeating - sourceCooling - 0.0008, 0.0, 1.0);
     let sourceWetSuppression = smoothstep(0.18, 0.68, nextSourceWetness);
     let sourceThermalSupport = smoothstep(0.24, 0.62, nextSourceTemperature);
-    let sourceCombustionTarget = sourceThermalSupport * (1.0 - sourceWetSuppression) * sourceIgnited;
+    let sourceIgnitionAuthority = max(sourceIgnited, sourcePilot);
+    let sourceCombustionTarget = sourceThermalSupport * (1.0 - sourceWetSuppression) * sourceIgnitionAuthority;
     let sourceCombustionResponse = select(0.028, 0.020, sourceCombustionTarget < sourceCombustion);
     let nextSourceCombustion = clamp(
       sourceCombustion + (sourceCombustionTarget - sourceCombustion) * sourceCombustionResponse,
@@ -3815,11 +3820,15 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       1.0
     );
     let sourceExtinguished = nextSourceCombustion < 0.035 && nextSourceTemperature < 0.34;
-    let nextSourceIgnited = select(sourceIgnited, 0.0, sourceIgnited > 0.5 && sourceExtinguished);
+    let sourcePilotCanIgnite = sourcePilot > 0.5 && nextSourceWetness < 0.16 && nextSourceTemperature > 0.30;
+    let unpilotedSourceIgnited = select(0.0, 1.0, sourceIgnited > 0.5 && !sourceExtinguished);
+    let pilotedSourceIgnited = select(sourceIgnited, 1.0, sourcePilotCanIgnite);
+    let nextSourceIgnited = select(unpilotedSourceIgnited, pilotedSourceIgnited, sourcePilot > 0.5);
     quenchDst[sourceWetnessIndex] = u32(nextSourceWetness * 65536.0 + 0.5);
     quenchDst[sourceTemperatureIndex] = u32(nextSourceTemperature * 65536.0 + 0.5);
     quenchDst[sourceCombustionIndex] = u32(nextSourceCombustion * 65536.0 + 0.5);
     quenchDst[sourceIgnitedIndex] = u32(nextSourceIgnited * 65536.0 + 0.5);
+    quenchDst[sourceLastContactTickIndex] = sourceLastContactTick;
   }
   let localQuenchSuppression = smoothstep(0.08, 0.55, persistentQuench);
   heat = heat * (1.0 - localQuenchSuppression * 0.025);
@@ -4059,7 +4068,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     let interfaceShred = microLayer.y;
     let fireLick = microLayer.z;
     let emberFleck = microLayer.w;
-    let flowDebug = clamp(u.source_controls.w, 0.0, 1.0);
+    let flowDebug = clamp(u.boundary_fire_display.y, 0.0, 1.0);
     let radianceGain = max(0.0, u.radiance_controls.x);
     let absorptionGain = max(0.0, u.radiance_controls.y);
     let glowGain = max(0.0, u.radiance_controls.z);
@@ -5432,6 +5441,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     liquidFireContactAccumulationLayout: LIQUID_FIRE_CONTACT_ACCUMULATION_LAYOUT,
     liquidFireSourceStateModel: LIQUID_FIRE_SOURCE_STATE_MODEL,
     liquidFireSourceReignitionPolicy: LIQUID_FIRE_SOURCE_REIGNITION_POLICY,
+    liquidFireSourcePilotEnabled: false,
     liquidFireContactStatus: 'unbound',
     liquidFireContactDispatchCount: 0,
     liquidFireContactTransferEnabled: true,
@@ -5859,6 +5869,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let liquidFireContactParamsBuffer = null;
   let liquidFireContactBindGroups = [];
   let liquidFireContactTransferEnabled = true;
+  let sourcePilotEnabled = false;
   let liquidFireContactSuppressedFrameCount = 0;
   let volumePrimitives = [];
   let majorantBuffer = null;
@@ -6994,9 +7005,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       sourceNearestContactDistance: words[19] === 0xffffffff
         ? null
         : words[19] / LIQUID_FIRE_CONTACT_FIXED_POINT_SCALE,
+      sourceLastContactTick: words[20],
       sourceContactRadius: state.liquidFireSourceContactRadius,
       sourceStateModel: LIQUID_FIRE_SOURCE_STATE_MODEL,
       sourceReignitionPolicy: LIQUID_FIRE_SOURCE_REIGNITION_POLICY,
+      sourcePilotEnabled,
       sourceFrameId: liquidFireContactDescriptor?.sourceFrameId || null,
       receiverTransformId: LIQUID_FIRE_CONTACT_RECEIVER_TRANSFORM_ID,
       receiverScale: [0.5, 0.5, 0.5],
@@ -8064,7 +8077,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[32] = sourcePrimitive.radius;
     uniforms[33] = sourcePrimitive.flowRate;
     uniforms[34] = controlsSnapshot.projection ?? 0.65;
-    uniforms[35] = controlsSnapshot.flowDebug || 0;
+    uniforms[35] = sourcePilotEnabled ? 1 : 0;
     uniforms[36] = controlsSnapshot.radiance ?? 1.65;
     uniforms[37] = controlsSnapshot.absorption ?? 0.85;
     uniforms[38] = controlsSnapshot.glow ?? 1.15;
@@ -8334,7 +8347,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[302] = boundaryFireUniforms.sootYellowing;
     uniforms[303] = boundaryFireUniforms.thermalWarmth;
     uniforms[304] = boundaryFireUniforms.fireLuma;
-    uniforms[305] = 0;
+    uniforms[305] = controlsSnapshot.flowDebug || 0;
     uniforms[306] = 0;
     uniforms[307] = 0;
     uniforms[308] = boundarySidecarSourceValue(boundarySidecarSourceName);
@@ -13412,6 +13425,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         sourceFrameHash: descriptor.sourceFrameHash,
         sourceFrameId: descriptor.sourceFrameId,
         receiverTransformId: LIQUID_FIRE_CONTACT_RECEIVER_TRANSFORM_ID,
+      };
+    },
+    setLiquidFireSourcePilotEnabled(enabled) {
+      sourcePilotEnabled = enabled === true;
+      state.liquidFireSourcePilotEnabled = sourcePilotEnabled;
+      emitStatus({ phase: sourcePilotEnabled ? 'liquid-fire-source-pilot-enabled' : 'liquid-fire-source-pilot-disabled' });
+      return {
+        enabled: sourcePilotEnabled,
+        policy: LIQUID_FIRE_SOURCE_REIGNITION_POLICY,
+        authority: 'explicit-live-source-pilot-v0',
+        simulationReset: false,
       };
     },
     setLiquidFireContactTransferEnabled(enabled, { reason = 'host-control' } = {}) {
