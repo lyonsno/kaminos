@@ -13,7 +13,7 @@ const SCHEMA = 'kaminos.volume.selective-head-motion-witness.v0';
 const FRAME_SCHEMA = 'kaminos.volume.selective-head-motion-frame.v0';
 const TEMPORAL_AUTHORITY = 'consecutive-phase-aligned-per-frame-frozen-model-application-v0';
 const PARTIAL_DEBUG_AUTHORITY = 'render-only-control-override-v0';
-const EXPECTED_COMPOSITION = 'raymarch-under-splats-v0';
+const DEFAULT_EXPECTED_COMPOSITION = 'raymarch-under-splats-v0';
 const ROLES = [
   'truthHigh',
   'lowPhaseAligned',
@@ -35,6 +35,7 @@ const requestedPartialDebugMix = Number(args.values.get('--partial-debug-mix') |
 const requestedViewportSize = String(args.values.get('--expected-viewport-size') || '');
 const requestedCanvasSize = String(args.values.get('--expected-canvas-size') || '');
 const requestedDeviceScaleFactor = Number(args.values.get('--expected-device-scale-factor'));
+const expectedComposition = String(args.values.get('--expected-composition') || DEFAULT_EXPECTED_COMPOSITION);
 let failurePhase = 'argument-validation';
 let lastTrustworthyEvidence = {};
 
@@ -55,6 +56,9 @@ try {
   if (!Number.isFinite(expectedGeometry.deviceScaleFactor) || expectedGeometry.deviceScaleFactor <= 0) {
     throw new Error(`invalid --expected-device-scale-factor: ${requestedDeviceScaleFactor}`);
   }
+  if (!['raymarch-under-splats-v0', 'raymarch-only-v0'].includes(expectedComposition)) {
+    throw new Error(`unsupported --expected-composition: ${expectedComposition}`);
+  }
   if (!Number.isFinite(requestedPartialDebugMix)
     || requestedPartialDebugMix < 0.5
     || requestedPartialDebugMix > 0.75) {
@@ -73,7 +77,12 @@ try {
   failurePhase = 'role-validation';
   validateRoles(frames);
   failurePhase = 'render-identity-validation';
-  const { renderIdentity, geometryIdentity } = validateRenderIdentity(frames, requestedPartialDebugMix, expectedGeometry);
+  const { renderIdentity, geometryIdentity } = validateRenderIdentity(
+    frames,
+    requestedPartialDebugMix,
+    expectedGeometry,
+    expectedComposition,
+  );
   failurePhase = 'artifact-validation';
   const copiedFrames = copyArtifacts(frames);
   failurePhase = 'output';
@@ -100,6 +109,7 @@ try {
     selectiveModelIdentity: first.selectiveModelIdentity,
     supportThreshold: first.supportThreshold,
     calibratedResidualScale: first.calibratedResidualScale,
+    beautyControlOverrides: first.beautyControlOverrides,
     partialFlowDebug: {
       requestedMix: requestedPartialDebugMix,
       effectiveMix: requestedPartialDebugMix,
@@ -135,6 +145,7 @@ try {
     expectedFrameCount: Number.isFinite(expectedFrameCount) ? expectedFrameCount : null,
     receivedFrameCount: args.frames.length,
     frameManifestPaths: args.frames,
+    expectedComposition,
     lastTrustworthyEvidence,
   };
   writeJson(manifestPath, failure);
@@ -182,8 +193,18 @@ function loadFrame(path, ordinal) {
 
 function validateTemporalCustody(frames) {
   const first = frames[0];
+  if (!first.beautyControlOverrides
+    || Array.isArray(first.beautyControlOverrides)
+    || typeof first.beautyControlOverrides !== 'object') {
+    throw new Error('frame 0 omitted requested beauty-control authority');
+  }
   for (let index = 0; index < frames.length; index += 1) {
     const frame = frames[index];
+    if (!frame.beautyControlOverrides
+      || Array.isArray(frame.beautyControlOverrides)
+      || typeof frame.beautyControlOverrides !== 'object') {
+      throw new Error(`frame ${index} omitted requested beauty-control authority`);
+    }
     if (frame.frameIndex !== index) throw new Error(`frame index is not contiguous at ordinal ${index}: ${frame.frameIndex}`);
     if (!Number.isInteger(frame.simulationStep)) throw new Error(`frame ${index} simulationStep is not an integer`);
     if (index > 0 && frame.simulationStep !== frames[index - 1].simulationStep + 1) {
@@ -201,6 +222,9 @@ function validateTemporalCustody(frames) {
       'calibratedResidualScale',
     ]) {
       if (frame[key] !== first[key]) throw new Error(`frame ${index} ${key} drift: ${frame[key]} != ${first[key]}`);
+    }
+    if (JSON.stringify(frame.beautyControlOverrides) !== JSON.stringify(first.beautyControlOverrides)) {
+      throw new Error(`frame ${index} beautyControlOverrides drift`);
     }
     const expectedTime = first.simulationTimeMs + index * first.cadenceMs;
     if (Math.abs(frame.simulationTimeMs - expectedTime) > 1e-6) {
@@ -222,17 +246,38 @@ function validateRoles(frames) {
   }
 }
 
-function validateRenderIdentity(frames, partialDebugMix, expectedGeometry) {
+function validateRenderIdentity(frames, partialDebugMix, expectedGeometry, expectedComposition) {
   const firstReceipt = frames[0].captures[ROLES[0]].renderReceipt;
-  const keys = ['effectiveRoute', 'backend', 'composition', 'learnedDecoder', 'learnedDecoderModel'];
-  if (firstReceipt?.composition !== EXPECTED_COMPOSITION) {
-    throw new Error(`unsupported hybrid composition: ${firstReceipt?.composition || '(missing)'}`);
+  const firstPartialReceipt = frames[0].captures[ROLES[0]].partialFlowDebug?.renderReceipt;
+  const keys = [
+    'effectiveRoute',
+    'backend',
+    'composition',
+    'learnedDecoder',
+    'learnedDecoderModel',
+  ];
+  if (firstReceipt?.composition !== expectedComposition) {
+    throw new Error(`effective composition mismatch: ${firstReceipt?.composition || '(missing)'} != ${expectedComposition}`);
+  }
+  if (!firstReceipt?.renderControlSignature) {
+    throw new Error('first render receipt omitted the effective render-control signature');
+  }
+  if (!firstPartialReceipt?.renderControlSignature) {
+    throw new Error('first partial-debug receipt omitted the effective render-control signature');
   }
   for (const frame of frames) {
     for (const role of ROLES) {
       const capture = frame.captures[role];
       const receipt = capture.renderReceipt || {};
       validateReceipt(receipt, firstReceipt, keys, expectedGeometry, `frame ${frame.frameIndex}/${role} beauty`);
+      if (receipt.renderControlSignature !== firstReceipt.renderControlSignature) {
+        throw new Error(`frame ${frame.frameIndex}/${role} beauty render-control signature drift`);
+      }
+      assertRequestedOverrides(
+        receipt.controlOverrides,
+        frame.beautyControlOverrides,
+        `frame ${frame.frameIndex}/${role} beauty`,
+      );
       const debug = capture.partialFlowDebug || {};
       if (debug.requestedMix !== partialDebugMix || debug.effectiveMix !== partialDebugMix) {
         throw new Error(`frame ${frame.frameIndex}/${role} partial debug mismatch: ${debug.requestedMix}/${debug.effectiveMix}`);
@@ -241,10 +286,22 @@ function validateRenderIdentity(frames, partialDebugMix, expectedGeometry) {
         throw new Error(`frame ${frame.frameIndex}/${role} partial debug is not render-only`);
       }
       validateReceipt(debug.renderReceipt || {}, firstReceipt, keys, expectedGeometry, `frame ${frame.frameIndex}/${role} partial debug`);
+      if (debug.renderReceipt?.renderControlSignature !== firstPartialReceipt.renderControlSignature) {
+        throw new Error(`frame ${frame.frameIndex}/${role} partial-debug render-control signature drift`);
+      }
+      assertRequestedOverrides(
+        debug.renderReceipt?.controlOverrides,
+        { ...frame.beautyControlOverrides, flowDebug: partialDebugMix },
+        `frame ${frame.frameIndex}/${role} partial debug`,
+      );
     }
   }
   return {
-    renderIdentity: Object.fromEntries(keys.map(key => [key, firstReceipt[key]])),
+    renderIdentity: {
+      ...Object.fromEntries(keys.map(key => [key, firstReceipt[key]])),
+      beautyRenderControlSignature: firstReceipt.renderControlSignature,
+      partialFlowDebugRenderControlSignature: firstPartialReceipt.renderControlSignature,
+    },
     geometryIdentity: {
       viewport: { ...expectedGeometry.viewport, deviceScaleFactor: expectedGeometry.deviceScaleFactor },
       canvas: {
@@ -254,6 +311,17 @@ function validateRenderIdentity(frames, partialDebugMix, expectedGeometry) {
       },
     },
   };
+}
+
+function assertRequestedOverrides(actual, requested, label) {
+  if (!actual || Array.isArray(actual) || typeof actual !== 'object') {
+    throw new Error(`${label} omitted effective control overrides`);
+  }
+  for (const [key, value] of Object.entries(requested || {})) {
+    if (!Object.is(actual[key], value)) {
+      throw new Error(`${label} effective control override drift for ${key}: ${actual[key]} != ${value}`);
+    }
+  }
 }
 
 function validateReceipt(receipt, firstReceipt, keys, expectedGeometry, label) {

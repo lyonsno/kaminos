@@ -116,11 +116,39 @@ assert.equal(manifest.retention.ephemeralFieldArtifactsDeletedAfterFrameReceipt,
 assert.equal(manifest.temporalAuthority, 'consecutive-phase-aligned-per-frame-frozen-model-application-v0');
 assert.equal(manifest.recurrentPrediction, false);
 assert.equal(manifest.staticSidecarOverMovingMaterial, false);
+
+const raymarchOnly = run([
+  '--render-composition', 'raymarch-only-v0',
+  '--beauty-control-overrides-json', '{}',
+], 'raymarch-only');
+assert.equal(raymarchOnly.result.status, 0, raymarchOnly.result.stderr || raymarchOnly.result.stdout);
+const raymarchOnlyManifest = JSON.parse(readFileSync(join(raymarchOnly.outDir, 'producer-manifest.json'), 'utf8'));
+assert.equal(raymarchOnlyManifest.renderComposition, 'raymarch-only-v0');
+assert.deepEqual(raymarchOnlyManifest.beautyControlOverrides, {});
+assert.match(raymarchOnlyManifest.frames[0].commands.renders.truthHigh, /--render-composition raymarch-only-v0/);
+assert.match(raymarchOnlyManifest.frames[0].commands.renders.truthHigh, /--render-control-overrides-json '\{\}'/);
+assert.match(raymarchOnlyManifest.frames[0].commands.renders.truthHigh, /--secondary-render-control-overrides-json '\{"flowDebug":0\.625\}'/);
+
+const badOverrides = run([
+  '--beauty-control-overrides-json', '{bad-json',
+], 'bad-overrides');
+assert.notEqual(badOverrides.result.status, 0, 'malformed beauty overrides must fail before GPU work');
+const badOverridesManifest = JSON.parse(readFileSync(join(badOverrides.outDir, 'producer-manifest.json'), 'utf8'));
+assert.equal(badOverridesManifest.status, 'failed');
+assert.equal(badOverridesManifest.failurePhase, 'render-contract-validation');
+const badSupport = run(['--support-threshold', '2'], 'bad-support');
+assert.notEqual(badSupport.result.status, 0, 'invalid support threshold must fail before checkpoint loading');
+assert.equal(
+  JSON.parse(readFileSync(join(badSupport.outDir, 'producer-manifest.json'), 'utf8')).failurePhase,
+  'argument-validation',
+);
 const producerSource = readFileSync(producer, 'utf8');
 assert.match(producerSource, /process\.on\('SIGINT'[\s\S]*interrupted/, 'operator interruption leaves a durable failed producer manifest');
 assert.match(producerSource, /viewportContract:\s*renderManifest\.viewportContract/, 'per-frame receipt retains effective viewport custody after ephemeral render manifests are deleted');
 assert.match(producerSource, /renderWidth:\s*beauty\.renderWidth[\s\S]*renderHeight:\s*beauty\.renderHeight/, 'crop identity uses post-render dimensions rather than placeholder pre-render canvas intrinsics');
 assert.match(producerSource, /partialFlowDebug:[\s\S]*renderReceipt:\s*renderReceiptDescriptor\(partial, renderManifest\)/, 'partial-flow image retains its own secondary-render route, geometry, fallback, and capacity receipt');
+assert.match(producerSource, /controlOverrides:\s*render\.controlOverrides/, 'durable render receipt retains the renderer-returned effective control object');
+assert.match(producerSource, /assertRequestedOverrides\(beauty\.controlOverrides, context\.beautyControlOverrides/, 'execution rejects non-flow beauty control substitution');
 assert.match(producerSource, /--expected-viewport-size[\s\S]*context\.viewportSize[\s\S]*--expected-canvas-size[\s\S]*RENDER_CANVAS_SIZE/, 'producer gives the final assembler explicit viewport and canvas admission dimensions');
 assert.match(
   producerSource,

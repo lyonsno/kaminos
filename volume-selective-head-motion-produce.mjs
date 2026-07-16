@@ -8,12 +8,12 @@ const SCHEMA = 'kaminos.volume.selective-head-motion-producer.v0';
 const TEMPORAL_AUTHORITY = 'consecutive-phase-aligned-per-frame-frozen-model-application-v0';
 const TRANSFER_MODE = 'consecutive-phase-aligned-sequence-v0';
 const PAIR_AUTHORITY = 'downsampled-same-high-history-input-to-exact-high-target';
-const RENDER_COMPOSITION = 'raymarch-under-splats-v0';
+const DEFAULT_RENDER_COMPOSITION = 'raymarch-under-splats-v0';
 const PARTIAL_DEBUG_AUTHORITY = 'render-only-control-override-v0';
 const RENDER_CANVAS_SIZE = '1240,633';
 const VIEWPORT_DEVICE_SCALE_FACTOR = 2;
 const ROLES = ['truthHigh', 'lowPhaseAligned', 'selectiveFullResidual', 'selectiveCalibratedResidual'];
-const BEAUTY_OVERRIDES = {
+const DEFAULT_BEAUTY_OVERRIDES = {
   fireRenderMode: 'off', fire: 0, radiance: 0, glow: 0, shellAmount: 0,
   density: 0.25, smoke: 0.25, flowDebug: 0,
 };
@@ -73,6 +73,11 @@ try {
   const supportThreshold = requiredNumber('--support-threshold');
   const calibratedResidualScale = requiredNumber('--calibrated-residual-scale');
   const partialFlowDebugMix = Number(args.get('--partial-flow-debug-mix') || 0.625);
+  const renderComposition = String(args.get('--render-composition') || DEFAULT_RENDER_COMPOSITION);
+  failurePhase = 'render-contract-validation';
+  const beautyControlOverrides = args.has('--beauty-control-overrides-json')
+    ? parseJsonObject(String(args.get('--beauty-control-overrides-json')), '--beauty-control-overrides-json')
+    : { ...DEFAULT_BEAUTY_OVERRIDES };
   const planOnly = args.has('--plan-only');
   const debugPort = Number(args.get('--debug-port') || randomInt(42000, 62000));
   const userDataDir = resolve(String(args.get('--user-data-dir') || join(outDir, '.chrome-profile')));
@@ -88,8 +93,17 @@ try {
     viewportDeviceScaleFactor: VIEWPORT_DEVICE_SCALE_FACTOR,
     renderCanvasSize: RENDER_CANVAS_SIZE,
     renderWarmupCount,
+    renderComposition,
+    beautyControlOverrides,
   };
 
+  if (!['raymarch-under-splats-v0', 'raymarch-only-v0'].includes(renderComposition)) {
+    throw new Error(`unsupported --render-composition: ${renderComposition}`);
+  }
+  if (Number(beautyControlOverrides.flowDebug ?? 0) !== 0) {
+    throw new Error('--beauty-control-overrides-json must leave flowDebug at zero for the beauty witness');
+  }
+  failurePhase = 'argument-validation';
   if (!Number.isFinite(partialFlowDebugMix) || partialFlowDebugMix < 0.5 || partialFlowDebugMix > 0.75) {
     failurePhase = 'render-contract-validation';
     throw new Error(`partial debug mix must be within 0.50-0.75: ${partialFlowDebugMix}`);
@@ -146,6 +160,7 @@ try {
     sourceCapturePath, supportProbePath, targetOrigin: target.origin, startStep, frameCount, sequenceFrameCount,
     supportThreshold, calibratedResidualScale, partialFlowDebugMix, debugPort, userDataDir,
     renderWarmupCount, windowSize, viewportSize, lowGrid, highGrid,
+    renderComposition, beautyControlOverrides,
   };
   const frameIndexes = targetFrameIndex === null
     ? Array.from({ length: frameCount }, (_, frameIndex) => frameIndex)
@@ -179,7 +194,8 @@ try {
     calibratedResidualScale,
     partialFlowDebugMix,
     runtimeConfig,
-    renderComposition: RENDER_COMPOSITION,
+    renderComposition,
+    beautyControlOverrides,
     roles: ROLES,
     retention: {
       identity: 'stream-one-frame-retain-images-and-receipts-v0',
@@ -233,6 +249,7 @@ try {
         '--expected-viewport-size', context.viewportSize,
         '--expected-canvas-size', RENDER_CANVAS_SIZE,
         '--expected-device-scale-factor', String(VIEWPORT_DEVICE_SCALE_FACTOR),
+        '--expected-composition', renderComposition,
       ];
       runCommand(process.execPath, assemble, failurePhase);
       const witnessManifestPath = join(witnessDir, 'manifest.json');
@@ -316,6 +333,19 @@ function requiredNumber(name) {
   return value;
 }
 
+function parseJsonObject(value, label) {
+  let parsed;
+  try {
+    parsed = JSON.parse(value);
+  } catch (error) {
+    throw new Error(`${label} must be valid JSON: ${error.message}`);
+  }
+  if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
+    throw new Error(`${label} must decode to an object`);
+  }
+  return parsed;
+}
+
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
@@ -388,7 +418,7 @@ function buildFramePlan(context, frameIndex) {
     selectiveFullResidual: join(fullDir, 'manifest.json'),
     selectiveCalibratedResidual: join(calibratedDir, 'manifest.json'),
   };
-  const partialOverrides = { ...BEAUTY_OVERRIDES, flowDebug: context.partialFlowDebugMix };
+  const partialOverrides = { ...context.beautyControlOverrides, flowDebug: context.partialFlowDebugMix };
   const renderArgs = role => [
     join(scriptRoot, 'volume-full-grid-field-export.mjs'),
     ...commonBrowser,
@@ -398,9 +428,9 @@ function buildFramePlan(context, frameIndex) {
     '--render-only',
     '--render-canvas-size', RENDER_CANVAS_SIZE,
     '--render-warmup-count', String(context.renderWarmupCount),
-    '--render-composition', RENDER_COMPOSITION,
+    '--render-composition', context.renderComposition,
     '--render-png', join(captureRoot, `${role}-beauty.png`),
-    '--render-control-overrides-json', JSON.stringify(BEAUTY_OVERRIDES),
+    '--render-control-overrides-json', JSON.stringify(context.beautyControlOverrides),
     '--secondary-render-png', join(captureRoot, `${role}-partial-flow.png`),
     '--secondary-render-control-overrides-json', JSON.stringify(partialOverrides),
   ];
@@ -455,7 +485,11 @@ function executeFrame(frame, context, identity) {
     const beauty = renderManifest.importedRender;
     const partial = renderManifest.importedSecondaryRender;
     if (!beauty || !partial) throw new Error(`${role} omitted a same-state beauty or partial-debug render`);
-    if (beauty.controlOverrides?.flowDebug !== 0 || partial.controlOverrides?.flowDebug !== context.partialFlowDebugMix) {
+    const partialControlOverrides = { ...context.beautyControlOverrides, flowDebug: context.partialFlowDebugMix };
+    assertRequestedOverrides(beauty.controlOverrides, context.beautyControlOverrides, `${role} beauty`);
+    assertRequestedOverrides(partial.controlOverrides, partialControlOverrides, `${role} partial debug`);
+    if (Number(beauty.controlOverrides?.flowDebug ?? 0) !== 0
+      || partial.controlOverrides?.flowDebug !== context.partialFlowDebugMix) {
       throw new Error(`${role} render controls do not match beauty/partial-debug contract`);
     }
     if (beauty.simStepCount !== partial.simStepCount || beauty.baseSimStepCount !== partial.baseSimStepCount) {
@@ -510,6 +544,7 @@ function executeFrame(frame, context, identity) {
     selectiveModelIdentity: identity.modelIdentity,
     supportThreshold: context.supportThreshold,
     calibratedResidualScale: context.calibratedResidualScale,
+    beautyControlOverrides: context.beautyControlOverrides,
     captures,
     fieldEvidence,
     retention: {
@@ -539,6 +574,8 @@ function renderReceiptDescriptor(render, renderManifest) {
     learnedDecoder: render.boundarySplatRendererIdentity,
     learnedDecoderModel: render.boundarySplatAttributeModelIdentity,
     fallback: render.boundarySplatFallbackReason ?? null,
+    controlOverrides: render.controlOverrides,
+    renderControlSignature: render.renderControlSignature,
     viewportContract: renderManifest.viewportContract,
     canvas: {
       cssRect: render.canvasCssRect,
@@ -552,6 +589,17 @@ function renderReceiptDescriptor(render, renderManifest) {
     boundarySplatInstanceCount: render.boundarySplatInstanceCount,
     boundarySplatOverflowCount: render.boundarySplatOverflowCount,
   };
+}
+
+function assertRequestedOverrides(actual, requested, label) {
+  if (!actual || Array.isArray(actual) || typeof actual !== 'object') {
+    throw new Error(`${label} render receipt omitted effective control overrides`);
+  }
+  for (const [key, value] of Object.entries(requested)) {
+    if (!Object.is(actual[key], value)) {
+      throw new Error(`${label} effective control override drift for ${key}: ${actual[key]} != ${value}`);
+    }
+  }
 }
 
 function imageDescriptor(receipt) {

@@ -17,8 +17,12 @@ const roles = [
   'selectiveFullResidual',
   'selectiveCalibratedResidual',
 ];
+const beautyControlOverrides = {
+  fireRenderMode: 'off', fire: 0, radiance: 0, glow: 0, shellAmount: 0,
+  density: 0.25, smoke: 0.25, flowDebug: 0,
+};
 
-function writeFrame(frameIndex, simStep, overrides = {}, variant = 'base') {
+function writeFrame(frameIndex, simStep, overrides = {}, variant = 'base', composition = 'raymarch-under-splats-v0') {
   const frameDir = join(fixtureRoot, `${variant}-frame-${String(frameIndex).padStart(3, '0')}`);
   mkdirSync(frameDir, { recursive: true });
   const captures = Object.fromEntries(roles.map(role => {
@@ -31,10 +35,12 @@ function writeFrame(frameIndex, simStep, overrides = {}, variant = 'base') {
     const renderReceipt = {
       effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
       backend: 'WebGPU:apple',
-      composition: 'raymarch-under-splats-v0',
+      composition,
       learnedDecoder: 'live-boundary-sidecar-learned-attribute-splats-v0',
       learnedDecoderModel: 'sha256:decoder-model',
+      renderControlSignature: 'sha256:render-controls',
       fallback: null,
+      controlOverrides: { ...beautyControlOverrides },
       viewportContract: {
         identity: 'cdp-emulation-fixed-device-metrics-v0',
         requested: { width: 1620, height: 633, deviceScaleFactor: 2 },
@@ -59,7 +65,11 @@ function writeFrame(frameIndex, simStep, overrides = {}, variant = 'base') {
         requestedMix: 0.625,
         effectiveMix: 0.625,
         applicationAuthority: 'render-only-control-override-v0',
-        renderReceipt: { ...renderReceipt },
+        renderReceipt: {
+          ...renderReceipt,
+          renderControlSignature: 'sha256:partial-render-controls',
+          controlOverrides: { ...beautyControlOverrides, flowDebug: 0.625 },
+        },
       },
       renderReceipt,
     }];
@@ -80,6 +90,7 @@ function writeFrame(frameIndex, simStep, overrides = {}, variant = 'base') {
     selectiveModelIdentity: 'sha256:selective-model',
     supportThreshold: 0.92476779,
     calibratedResidualScale: 0.5,
+    beautyControlOverrides,
     captures,
     ...overrides,
   };
@@ -88,7 +99,7 @@ function writeFrame(frameIndex, simStep, overrides = {}, variant = 'base') {
   return path;
 }
 
-function run(framePaths, name) {
+function run(framePaths, name, expectedComposition = 'raymarch-under-splats-v0') {
   const outDir = join(fixtureRoot, name);
   const result = spawnSync(process.execPath, [
     script,
@@ -98,6 +109,7 @@ function run(framePaths, name) {
     '--expected-viewport-size', '1620,633',
     '--expected-canvas-size', '1240,633',
     '--expected-device-scale-factor', '2',
+    '--expected-composition', expectedComposition,
   ], { encoding: 'utf8' });
   return { result, outDir };
 }
@@ -126,6 +138,52 @@ assert.equal(manifest.renderIdentity.composition, 'raymarch-under-splats-v0');
 assert.deepEqual(manifest.geometryIdentity.viewport, { width: 1620, height: 633, deviceScaleFactor: 2 });
 assert.deepEqual(manifest.geometryIdentity.canvas, { width: 1240, height: 633, renderWidth: 2480, renderHeight: 1266 });
 assert.equal(manifest.frames[0].captures.truthHigh.partialFlowDebug.path.endsWith('truthHigh-partial-flow.png'), true);
+
+const raymarchFrame0 = writeFrame(0, 96, {}, 'raymarch-only', 'raymarch-only-v0');
+const raymarchFrame1 = writeFrame(1, 97, {}, 'raymarch-only', 'raymarch-only-v0');
+const raymarchOnly = run([raymarchFrame0, raymarchFrame1], 'raymarch-only', 'raymarch-only-v0');
+assert.equal(raymarchOnly.result.status, 0, raymarchOnly.result.stderr || raymarchOnly.result.stdout);
+const raymarchManifest = JSON.parse(readFileSync(join(raymarchOnly.outDir, 'manifest.json'), 'utf8'));
+assert.equal(raymarchManifest.renderIdentity.composition, 'raymarch-only-v0');
+
+const wrongExpectedComposition = run([raymarchFrame0, raymarchFrame1], 'wrong-composition', 'raymarch-under-splats-v0');
+assert.notEqual(wrongExpectedComposition.result.status, 0, 'effective composition drift must fail');
+assert.equal(
+  JSON.parse(readFileSync(join(wrongExpectedComposition.outDir, 'manifest.json'), 'utf8')).failurePhase,
+  'render-identity-validation',
+);
+
+const controlDriftPayload = JSON.parse(readFileSync(frame1, 'utf8'));
+controlDriftPayload.captures.selectiveFullResidual.renderReceipt.controlOverrides.density = 0.75;
+const controlDriftFrame = join(fixtureRoot, 'control-drift.json');
+writeFileSync(controlDriftFrame, JSON.stringify(controlDriftPayload, null, 2));
+const controlDrift = run([frame0, controlDriftFrame], 'control-drift');
+assert.notEqual(controlDrift.result.status, 0, 'effective non-flow control substitution must fail');
+assert.equal(
+  JSON.parse(readFileSync(join(controlDrift.outDir, 'manifest.json'), 'utf8')).failurePhase,
+  'render-identity-validation',
+);
+
+const missingControlAuthorityPaths = [frame0, frame1].map((framePath, index) => {
+  const payload = JSON.parse(readFileSync(framePath, 'utf8'));
+  delete payload.beautyControlOverrides;
+  const path = join(fixtureRoot, `missing-control-authority-${index}.json`);
+  writeFileSync(path, JSON.stringify(payload, null, 2));
+  return path;
+});
+const missingControlAuthority = run(missingControlAuthorityPaths, 'missing-control-authority');
+assert.notEqual(missingControlAuthority.result.status, 0, 'missing requested-control authority must fail');
+assert.equal(
+  JSON.parse(readFileSync(join(missingControlAuthority.outDir, 'manifest.json'), 'utf8')).failurePhase,
+  'temporal-validation',
+);
+
+const partialSignatureDriftPayload = JSON.parse(readFileSync(frame1, 'utf8'));
+partialSignatureDriftPayload.captures.selectiveFullResidual.partialFlowDebug.renderReceipt.renderControlSignature = 'sha256:drift';
+const partialSignatureDriftFrame = join(fixtureRoot, 'partial-signature-drift.json');
+writeFileSync(partialSignatureDriftFrame, JSON.stringify(partialSignatureDriftPayload, null, 2));
+const partialSignatureDrift = run([frame0, partialSignatureDriftFrame], 'partial-signature-drift');
+assert.notEqual(partialSignatureDrift.result.status, 0, 'partial debug signature drift must fail against partial debug, not beauty');
 
 const html = readFileSync(join(valid.outDir, 'index.html'), 'utf8');
 assert.match(html, /Truth high/);
