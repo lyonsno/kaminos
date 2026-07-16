@@ -29,7 +29,7 @@ const REPLAY_WARMUP_AUTHORITY = 'checksum-bound-exact-basin-step96-field-anchor-
 const REPLAY_FREEZE_AUTHORITY = 'witness-owned-presented-frame-pause-release-v0';
 const REPLAY_FLUID_SHA256 = 'd58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1';
 const REPLAY_FRONT_SHA256 = '1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8';
-const REPLAY_CONTROLS_SHA256 = 'dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f';
+const REPLAY_CONTROLS_SHA256 = 'ba122038332747804203b4d03c6a5e9bf7b1e5969ec5d1f5ef995d3b5adff5b9';
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
