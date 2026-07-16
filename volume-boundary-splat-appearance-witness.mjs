@@ -174,6 +174,27 @@ try {
         context.putImageData(new ImageData(Uint8ClampedArray.from(image.rgba), image.width, image.height), 0, 0);
         return canvas.toDataURL('image/png');
       };
+      const pixelMetrics = rgba => {
+        let litPixels = 0;
+        let alphaPixels = 0;
+        let lumaSum = 0;
+        for (let index = 0; index < rgba.length; index += 4) {
+          const red = rgba[index];
+          const green = rgba[index + 1];
+          const blue = rgba[index + 2];
+          const alpha = rgba[index + 3];
+          const luma = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+          if (luma > 8) litPixels += 1;
+          if (alpha > 8) alphaPixels += 1;
+          lumaSum += luma;
+        }
+        return {
+          litPixels,
+          alphaPixels,
+          meanLuma: lumaSum / Math.max(1, rgba.length / 4),
+          nonblank: litPixels > 64,
+        };
+      };
       const candidateBytesFromCapture = capture => {
         if (capture.candidates?.packedEncoding !== 'float32-le-base64' || typeof capture.candidates?.packedFloat32Base64 !== 'string') {
           throw new Error('appearance-candidate-packed-payload-missing');
@@ -236,11 +257,16 @@ try {
           || application?.smokeApplied !== false) {
           throw new Error('appearance-assay-not-raymarch-only:' + mode + ':' + JSON.stringify(application));
         }
+        const metrics = pixelMetrics(sample.image.rgba);
+        if (!metrics.nonblank) {
+          throw new Error('appearance-assay-blank-target:' + mode + ':' + JSON.stringify(metrics));
+        }
         return {
           pngDataUrl: pngDataUrl(sample.image),
           width: sample.image.width,
           height: sample.image.height,
           rgba: sample.image.rgba,
+          metrics,
           sampleAuthority: sample.sampleAuthority,
           appearanceDecompositionReceipt: receipt,
         };

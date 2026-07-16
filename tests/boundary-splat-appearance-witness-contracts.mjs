@@ -32,6 +32,9 @@ assert.match(witness, /nonlinear-optical-a-plus-b-recomposition-v0/, 'appearance
 assert.match(witness, /smoke-off-beauty-optical-control-v0/, 'appearance witness validates exact control identity');
 assert.match(witness, /raymarch-only/, 'appearance witness rejects decomposition leakage outside the raymarch');
 assert.doesNotMatch(witness, /beautySmokeOff/, 'full Beauty must not survive as nominal B training authority');
+assert.match(witness, /const pixelMetrics = rgba =>/, 'appearance witness measures target pixel activity before publication');
+assert.match(witness, /if \(!metrics\.nonblank\)[\s\S]*appearance-assay-blank-target/, 'appearance witness rejects blank or near-blank assay targets');
+assert.match(witness, /metrics,[\s\S]*sampleAuthority/, 'appearance witness records target activity metrics beside route authority');
 assert.match(witness, /viewCandidateSha256\s*!==\s*candidateSha256/, 'appearance witness compares candidate hashes across camera views');
 assert.match(witness, /candidateBytes\.length\s*!==\s*evidence\.candidateMetadata\.packedByteLength/, 'appearance witness rejects a transferred candidate byte-length mismatch');
 assert.match(witness, /sha256Buffer\(candidateBytes\)\s*!==\s*evidence\.candidateSha256/, 'appearance witness rejects candidate transfer hash drift from the captured cohort');

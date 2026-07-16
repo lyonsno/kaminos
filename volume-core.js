@@ -12554,11 +12554,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   async function captureBoundarySplatSupervisionCandidates(options = {}) {
     if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
-    boundarySplatSupervisionCaptureActive = true;
-    cancelAnimationFrame(raf);
-    raf = 0;
-    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
-    cancelAnimationFrame(raf);
     const controlsBefore = { ...controlsSnapshot };
     const presentationBefore = volumePresentationModeRequestedRaw;
     const decompositionBefore = appearanceDecompositionModeRequestedRaw;
@@ -12569,7 +12564,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ? String(options.sameStateCaptureId)
       : `fixed-candidate-f${baseFrameCount}-s${baseSimStepCount}-${Math.round(fixedNow)}`;
     const renderScale = normalizeRenderScale(options.renderScale ?? 1);
+    boundarySplatSupervisionCaptureActive = true;
     try {
+      cancelAnimationFrame(raf);
+      raf = 0;
+      if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+      cancelAnimationFrame(raf);
       setVolumePresentationMode('beauty');
       setAppearanceDecompositionMode('off');
       controlsSnapshot = applyRuntimeQualityControls({

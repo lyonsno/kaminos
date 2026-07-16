@@ -68,6 +68,11 @@ assert.match(core, /async function captureBoundarySplatSupervisionCandidates\(op
 assert.match(core, /captureBoundarySplatSupervisionCandidates[\s\S]*advanceSim:\s*false/, 'candidate capture renders without advancing simulation');
 assert.match(core, /captureBoundarySplatSupervisionCandidates[\s\S]*boundarySplatMode:\s*['"]analytic['"][\s\S]*boundarySplatFeatureCapture:\s*true/, 'candidate capture requests analytic candidates and full feature rows');
 assert.match(core, /captureBoundarySplatSupervisionCandidates[\s\S]*setVolumePresentationMode\(['"]beauty['"]\)/, 'candidate capture requests a supported explicit presentation mode without fallback');
+assert.match(
+  core,
+  /boundarySplatSupervisionCaptureActive\s*=\s*true;\s*try\s*\{\s*cancelAnimationFrame\(raf\);[\s\S]*device\.queue\?\.onSubmittedWorkDone/,
+  'candidate capture wraps the initial queue drain in the restoration finally block',
+);
 assert.match(core, /captureBoundarySplatSupervisionCandidates[\s\S]*sameStateCaptureId[\s\S]*simStepCount[\s\S]*camera/, 'candidate capture reports frozen-state and camera identity');
 assert.match(
   core,
