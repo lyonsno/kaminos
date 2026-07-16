@@ -2,7 +2,7 @@
   "schema": "kaminos.smoke-gaussian-oracle-render-witness-report.v0",
   "identity": "smoke-gaussian-oracle-render-witness-v1",
   "status": "passed",
-  "createdAt": "2026-07-16T07:59:20.969Z",
+  "createdAt": "2026-07-16T08:23:08.926Z",
   "hiddenBudgetCapApplied": false,
   "fitReportPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-principal-smoke-allocation-r1-0716/step-45/oracle-fit-report.json",
   "teacher": {
@@ -118,7 +118,7 @@
         2
       ],
       "timing": {
-        "cpuProxyRenderMs": 1368.641083
+        "cpuProxyRenderMs": 1508.040958
       },
       "projectionDiagnostics": {
         "identity": "perspective-full-covariance-overlap-diagnostics-v0",
@@ -168,5 +168,5 @@
     "inspectionNote": null
   },
   "reportPath": "artifacts/pyro-principal-smoke-allocation-r1-0716/step-45/native-render/render-witness-report.json",
-  "reportIdentity": "sha256:fa27974e0118b5409242eeef6a45a196fe1a4a0f8c7685f0dd181e420d327385"
+  "reportIdentity": "sha256:fb81973fe983254d17623f911706e0b5d50c5adfb55faabc3ca518fc2e891932"
 }

@@ -770,16 +770,29 @@ function splitDenseLeafAlongPrincipalAxis(source, leaf) {
   const totalWeight = projected.reduce((sum, entry) => sum + entry.weight, 0);
   let accumulatedWeight = 0;
   let selectedIndex = -1;
+  let selectedProjectionGap = null;
   let minimumImbalance = Infinity;
+  let tiedProjectionBoundaryCount = 0;
   for (let index = 0; index < projected.length - 1; index += 1) {
     accumulatedWeight += projected[index].weight;
+    const leftProjection = projected[index].projection;
+    const rightProjection = projected[index + 1].projection;
+    const projectionGap = rightProjection - leftProjection;
+    const distinctTolerance = Number.EPSILON * 64 * Math.max(1, Math.abs(leftProjection), Math.abs(rightProjection));
+    if (!(projectionGap > distinctTolerance)) {
+      tiedProjectionBoundaryCount += 1;
+      continue;
+    }
     const imbalance = Math.abs(accumulatedWeight - totalWeight / 2);
     if (imbalance < minimumImbalance) {
       minimumImbalance = imbalance;
       selectedIndex = index;
+      selectedProjectionGap = projectionGap;
     }
   }
-  if (selectedIndex < 0) throw new Error(`cannot split principal smoke leaf containing ${leaf.indices.length} distinct voxels`);
+  if (selectedIndex < 0) {
+    throw new Error(`cannot geometrically split principal smoke leaf containing ${leaf.indices.length} voxels across distinct projection buckets`);
+  }
   const left = Int32Array.from(projected.slice(0, selectedIndex + 1), entry => entry.cellIndex);
   const right = Int32Array.from(projected.slice(selectedIndex + 1), entry => entry.cellIndex);
   const maximumAxisComponent = Math.max(...principalAxis.map(Math.abs));
@@ -788,6 +801,8 @@ function splitDenseLeafAlongPrincipalAxis(source, leaf) {
     split: {
       principalAxis,
       cutProjection: (projected[selectedIndex].projection + projected[selectedIndex + 1].projection) / 2,
+      projectionGap: selectedProjectionGap,
+      tiedProjectionBoundaryCount,
       oblique: maximumAxisComponent < 1 - 1e-6,
     },
   };
@@ -802,7 +817,12 @@ async function recursiveMomentBudgetCurve({ frame, requestedBudgets, densityThre
   const requested = new Set(requestedBudgets);
   const leaves = [makeDenseLeaf(source, source.indices)];
   const budgetCurve = [];
-  const partition = { obliqueSplitCount: 0, axisAlignedSplitCount: 0 };
+  const partition = {
+    obliqueSplitCount: 0,
+    axisAlignedSplitCount: 0,
+    minimumCutProjectionGap: Infinity,
+    tiedProjectionBoundaryCount: 0,
+  };
   while (leaves.length <= maximumBudget) {
     if (requested.has(leaves.length)) {
       const gaussians = leaves.map(leaf => leaf.gaussian).sort((left, right) => (
@@ -835,10 +855,14 @@ async function recursiveMomentBudgetCurve({ frame, requestedBudgets, densityThre
         },
         support: supportDiagnostics(gaussians, source.bounds),
         partition: principalAxisSplit ? {
-          authority: 'leaf-covariance-principal-axis-weighted-median-v0',
+          authority: 'leaf-covariance-principal-axis-distinct-projection-weighted-median-v1',
           splitCount: leaves.length - 1,
           obliqueSplitCount: partition.obliqueSplitCount,
           axisAlignedSplitCount: partition.axisAlignedSplitCount,
+          minimumCutProjectionGap: Number.isFinite(partition.minimumCutProjectionGap)
+            ? partition.minimumCutProjectionGap
+            : null,
+          tiedProjectionBoundaryCount: partition.tiedProjectionBoundaryCount,
         } : null,
         artifact,
         preview: gaussians.slice(0, 8),
@@ -862,6 +886,8 @@ async function recursiveMomentBudgetCurve({ frame, requestedBudgets, densityThre
       const result = splitDenseLeafAlongPrincipalAxis(source, leaves[splitIndex]);
       if (result.split.oblique) partition.obliqueSplitCount += 1;
       else partition.axisAlignedSplitCount += 1;
+      partition.minimumCutProjectionGap = Math.min(partition.minimumCutProjectionGap, result.split.projectionGap);
+      partition.tiedProjectionBoundaryCount += result.split.tiedProjectionBoundaryCount;
       leaves.splice(splitIndex, 1, ...result.children);
     } else {
       const children = splitDenseLeaf(source, leaves[splitIndex]);

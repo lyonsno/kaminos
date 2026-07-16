@@ -2,7 +2,7 @@
   "schema": "kaminos.smoke-gaussian-oracle-static-fit-report.v0",
   "identity": "smoke-gaussian-oracle-static-fit-v0",
   "status": "passed",
-  "createdAt": "2026-07-16T08:02:24.060Z",
+  "createdAt": "2026-07-16T08:22:46.872Z",
   "teacher": {
     "manifestPath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v9-barrier-receipt-m24/sim-step-45.manifest.json",
     "manifestIdentity": "sha256:ab980bee692fbf6e91a3868201893e95e7ba2f170a036905a1b1eca4312f1d1a",
@@ -108,9 +108,9 @@
   "warmStart": null,
   "costs": {
     "authority": "cpu-wall-clock-performance-now-v0",
-    "sourceLoadAndValidateMs": 180.55975,
-    "optimizerAndProductBuildMs": 13897.160333,
-    "totalMs": 14077.720083
+    "sourceLoadAndValidateMs": 131.880833,
+    "optimizerAndProductBuildMs": 17225.469875000003,
+    "totalMs": 17357.350708
   },
   "budgetCurve": [
     {
@@ -140,10 +140,12 @@
         "maxThreeSigmaDiameter": 0.2730960598558132
       },
       "partition": {
-        "authority": "leaf-covariance-principal-axis-weighted-median-v0",
+        "authority": "leaf-covariance-principal-axis-distinct-projection-weighted-median-v1",
         "splitCount": 1023,
         "obliqueSplitCount": 1023,
-        "axisAlignedSplitCount": 0
+        "axisAlignedSplitCount": 0,
+        "minimumCutProjectionGap": 8.909358795855526e-9,
+        "tiedProjectionBoundaryCount": 0
       },
       "artifact": {
         "path": "artifacts/pyro-principal-smoke-allocation-r1-0716/gradient-principal-step-45/budget-1024.gaussians.f32",
@@ -599,14 +601,14 @@
     }
   ],
   "reportPath": "artifacts/pyro-principal-smoke-allocation-r1-0716/gradient-principal-step-45/oracle-fit-report.json",
-  "reportIdentity": "sha256:b4156b0505556fab592346905d0e53c8fa473af7379b1c2e20c6a79661c784c4",
+  "reportIdentity": "sha256:4d3f30e6bbe1d18903d2e89ecb7914a91d4eae879be0a9f55f8787de2d5727a8",
   "cameraEvaluation": {
     "identity": "smoke-oracle-camera-evaluation-product-v0",
     "cameraId": "recorded-native",
     "role": "calibration",
     "transform": "recorded-camera-unchanged",
     "sourceFitReportPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-principal-smoke-allocation-r1-0716/gradient-principal-step-45/oracle-fit-report.json",
-    "sourceFitReportIdentity": "sha256:67f2f8849fd77fd7b62beaf4d5860a42a8c575a4d0dfb86e5e4172297d2ecceb",
+    "sourceFitReportIdentity": "sha256:ef5a8b844c001c2e986f45009b512bd56abadb4f682e439e01e47f946dceeca1",
     "fitAuthority": "world-space-state-fit-camera-independent-v0",
     "cameraAuthority": "checksum-bound-recorded-camera-v0"
   }

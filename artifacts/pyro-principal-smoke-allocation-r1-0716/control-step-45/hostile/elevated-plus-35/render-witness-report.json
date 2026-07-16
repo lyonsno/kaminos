@@ -1,0 +1,230 @@
+{
+  "schema": "kaminos.smoke-gaussian-oracle-render-witness-report.v0",
+  "identity": "smoke-gaussian-oracle-render-witness-v1",
+  "status": "passed",
+  "createdAt": "2026-07-16T02:34:57.767Z",
+  "hiddenBudgetCapApplied": false,
+  "fitReportPath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/hostile-gradient4/sim-step-45/elevated-plus-35/oracle-fit-report.json",
+  "teacher": {
+    "raymarchPngPath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/hostile-gradient4/sim-step-45/elevated-plus-35/teacher-640x455/dense-raymarch-smoke.png",
+    "raymarchSha256": "sha256:add0db5b11a226b26d9a1a779142a4e9c69ef5952f0716acd13ed93ba9b079ce",
+    "width": 640,
+    "height": 455,
+    "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+    "prototypeIdentity": "kaminos-volume-prototype-v0",
+    "backend": "WebGPU:apple",
+    "worldSpace": {
+      "coordinateFrame": "kaminos-volume-world-v0",
+      "transformAuthority": "native-volume-grid-world-transform-v0",
+      "bounds": {
+        "minimum": [
+          -1,
+          -1,
+          -1
+        ],
+        "maximum": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    "cameraIdentity": "sha256:31fff60f656e0b261563e0ff602f404edea4584002fe7c438fde064c328758c6",
+    "camera": {
+      "position": [
+        0.8922032569616167,
+        1.589690904672157,
+        1.5500141328570456
+      ],
+      "target": [
+        0,
+        0.02,
+        0
+      ],
+      "projectionMatrix": [
+        2.9306425807515972,
+        0,
+        0,
+        0,
+        0,
+        2.7474774194546225,
+        0,
+        0,
+        0,
+        0,
+        -1.0002000200020003,
+        -1,
+        0,
+        0,
+        -0.020002000200020003,
+        0
+      ],
+      "matrixWorldInverse": [
+        0.8666778489396199,
+        -0.3290757481412369,
+        0.37493820576553505,
+        0,
+        0,
+        0.7515776447431204,
+        0.6596446345740894,
+        0,
+        -0.49886822524329355,
+        -0.5716993929572334,
+        0.6513756964570734,
+        0,
+        0,
+        -0.015031552894862465,
+        -2.392793699549639,
+        1
+      ]
+    }
+  },
+  "renderer": {
+    "identity": "cpu-perspective-full-covariance-gaussian-smoke-v0",
+    "cameraAuthority": "checksum-bound-fit-teacher-camera-v0",
+    "cameraIdentity": "sha256:31fff60f656e0b261563e0ff602f404edea4584002fe7c438fde064c328758c6",
+    "compositorAuthority": "single-channel-smoke-luma-proxy-not-production-compositor-v0",
+    "projectionAuthority": "full-view-projection-jacobian-covariance-v0",
+    "scaleSelection": "explicit-extinction-scale-sweep-min-luma-mse-v0",
+    "requestedExtinctionScales": [
+      0.1,
+      0.2,
+      0.4
+    ],
+    "coverageSelection": "explicit-mass-preserving-covariance-dilation-sweep-min-luma-mse-v0",
+    "requestedCoverageScales": [
+      1,
+      1.5,
+      2
+    ]
+  },
+  "requestedBudgets": [
+    1024,
+    8192
+  ],
+  "budgetCurve": [
+    {
+      "requestedBudget": 1024,
+      "activeGaussianCount": 1024,
+      "selectedExtinctionScale": 0.2,
+      "selectedCoverageScale": 2,
+      "scaleSweep": [
+        0.1,
+        0.2,
+        0.4
+      ],
+      "coverageSweep": [
+        1,
+        1.5,
+        2
+      ],
+      "timing": {
+        "cpuProxyRenderMs": 431.21983300000005
+      },
+      "projectionDiagnostics": {
+        "identity": "perspective-full-covariance-overlap-diagnostics-v0",
+        "coverageScale": 2,
+        "requestedGaussianCount": 1024,
+        "visibleGaussianCount": 1024,
+        "rejectedGaussianCount": 0,
+        "rejectionReasons": {},
+        "supportPixelCount": 122643,
+        "singleContributorPixelCount": 7852,
+        "singleContributorPixelFraction": 0.0640232218716111,
+        "meanContributorsPerSupportPixel": 44.350374664677155,
+        "maxContributors": 249,
+        "meanPeakContributionFraction": 0.3109416073039381,
+        "minimumProjectedCovarianceDeterminant": 310.10694318412277,
+        "maximumProjectedCovarianceDeterminant": 350283.35214905755
+      },
+      "gaussianArtifact": {
+        "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/fit-gradient4/sim-step-45/budget-1024.gaussians.f32",
+        "identity": "sha256:bf7f884bfa8807637940182eb1f4aa5b3443bece905f66534828ba6dc0e2c0ef"
+      },
+      "metrics": {
+        "lumaMse": 0.000001707151715400555,
+        "lumaMae": 0.00040578910389028064,
+        "renderMeanLuma": 0.0022874133902968043,
+        "teacherMeanLuma": 0.002062446208556239,
+        "renderActivePixels": 5881,
+        "teacherActivePixels": 5167,
+        "activePixelIoU": 0.8346064430421787
+      },
+      "support": {
+        "supportLeakageGaussianCount": 0,
+        "supportLeakageFraction": 0,
+        "maxThreeSigmaDiameter": 0.2646369103104338
+      },
+      "images": {
+        "renderPngPath": "artifacts/temporal-gaussian-ceiling-0715/hostile-gradient4/sim-step-45/elevated-plus-35/gaussian-render-final/budget-1024.perspective-render.png",
+        "diffPngPath": "artifacts/temporal-gaussian-ceiling-0715/hostile-gradient4/sim-step-45/elevated-plus-35/gaussian-render-final/budget-1024.perspective-diff.png"
+      }
+    },
+    {
+      "requestedBudget": 8192,
+      "activeGaussianCount": 8192,
+      "selectedExtinctionScale": 0.2,
+      "selectedCoverageScale": 2,
+      "scaleSweep": [
+        0.1,
+        0.2,
+        0.4
+      ],
+      "coverageSweep": [
+        1,
+        1.5,
+        2
+      ],
+      "timing": {
+        "cpuProxyRenderMs": 1120.71025
+      },
+      "projectionDiagnostics": {
+        "identity": "perspective-full-covariance-overlap-diagnostics-v0",
+        "coverageScale": 2,
+        "requestedGaussianCount": 8192,
+        "visibleGaussianCount": 8192,
+        "rejectedGaussianCount": 0,
+        "rejectionReasons": {},
+        "supportPixelCount": 133519,
+        "singleContributorPixelCount": 6157,
+        "singleContributorPixelFraction": 0.04611328724750784,
+        "meanContributorsPerSupportPixel": 99.49580958515267,
+        "maxContributors": 520,
+        "meanPeakContributionFraction": 0.23929014829054762,
+        "minimumProjectedCovarianceDeterminant": 19.50823794545241,
+        "maximumProjectedCovarianceDeterminant": 253277.54307596723
+      },
+      "gaussianArtifact": {
+        "path": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/fit-gradient4/sim-step-45/budget-8192.gaussians.f32",
+        "identity": "sha256:c552ea13af6eda65d6ca20d656caedcbdc43c77e6886b2b95d438ed2aacdad17"
+      },
+      "metrics": {
+        "lumaMse": 0.000001600668732167296,
+        "lumaMae": 0.00035839551378812057,
+        "renderMeanLuma": 0.0022851498057533605,
+        "teacherMeanLuma": 0.002062446208556239,
+        "renderActivePixels": 5957,
+        "teacherActivePixels": 5167,
+        "activePixelIoU": 0.8558558558558559
+      },
+      "support": {
+        "supportLeakageGaussianCount": 0,
+        "supportLeakageFraction": 0,
+        "maxThreeSigmaDiameter": 0.20095638447525987
+      },
+      "images": {
+        "renderPngPath": "artifacts/temporal-gaussian-ceiling-0715/hostile-gradient4/sim-step-45/elevated-plus-35/gaussian-render-final/budget-8192.perspective-render.png",
+        "diffPngPath": "artifacts/temporal-gaussian-ceiling-0715/hostile-gradient4/sim-step-45/elevated-plus-35/gaussian-render-final/budget-8192.perspective-diff.png"
+      }
+    }
+  ],
+  "contactSheet": {
+    "path": "artifacts/temporal-gaussian-ceiling-0715/hostile-gradient4/sim-step-45/elevated-plus-35/gaussian-render-final/perspective-render-contact-sheet.png",
+    "sha256": "sha256:d2d43ced50d68c61fab9cf60f140109c04466257814aabce49388fee7d3cc411",
+    "layout": "columns: teacher-raymarch | gaussian-proxy-render | abs-luma-diff; rows: requested budgets",
+    "inspected": false,
+    "inspectionNote": null
+  },
+  "reportPath": "artifacts/temporal-gaussian-ceiling-0715/hostile-gradient4/sim-step-45/elevated-plus-35/gaussian-render-final/render-witness-report.json",
+  "reportIdentity": "sha256:328dac711bef02f30f5effc4038b06c80430abf48fe834c50e6f4fe54e2cc4cf"
+}

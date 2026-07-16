@@ -9,9 +9,9 @@ The result is a bounded positive allocation finding, not a scene-fill pass. Obli
 ## Roles and source identity
 
 - **Reference:** exact analytical R160 `operator_fire_0622` smoke teacher, simulator step 45, source radius `0.12`, flow `0.35`, native 3D compute fluid raymarch on `WebGPU:apple`. Fluid SHA-256: `b9015d0d577ee99b48a3e5bebe207e5024a4e9ef63bd42a8192e65042c9540ee`.
-- **Control:** accepted `recursive-gradient-moment-split`, exactly 1,024 Gaussians. Product SHA-256: `bf7f884bfa8807637940182eb1f4aa5b3443bece905f66534828ba6dc0e2c0ef`.
-- **Treatment A:** density-weighted principal-axis moment splitting, exactly 1,024 Gaussians. Product SHA-256: `7771e48cbd5086f8d1796a235ed7feab0d23a4b41419a62ee4e8496400e432c4`; report SHA-256: `723a5ed7f05ffa9bcafb0484af7deaf23d9ea5f17947b8d395124a0cb8243b45`.
-- **Treatment B:** smoke-gradient-weighted principal-axis moment splitting with fixed gain `4`, exactly 1,024 Gaussians. Product SHA-256: `167f72aa2b6eddec158e9ae6c25f6211b278380112a4e804fa1b0e2199523ff4`; report SHA-256: `b4156b0505556fab592346905d0e53c8fa473af7379b1c2e20c6a79661c784c4`.
+- **Control:** accepted `recursive-gradient-moment-split`, exactly 1,024 Gaussians. Product SHA-256: `bf7f884bfa8807637940182eb1f4aa5b3443bece905f66534828ba6dc0e2c0ef`; committed fit report file SHA-256: `963484537ef5bc69572cfe81001b4accbac39914711b8cb261dd80d321398ef4`.
+- **Treatment A:** density-weighted principal-axis moment splitting, exactly 1,024 Gaussians. Product SHA-256: `7771e48cbd5086f8d1796a235ed7feab0d23a4b41419a62ee4e8496400e432c4`; internal pre-self-reference `reportIdentity`: `4fa6727e75ecfe74d6947dafba45b3d91d9e30ea983eacc99a64e0bf500033a3`; committed report file SHA-256: `75690c0bf9af214cef3810a49f3980bc611e279aa9d0eaf7735d10edde9a7097`.
+- **Treatment B:** smoke-gradient-weighted principal-axis moment splitting with fixed gain `4`, exactly 1,024 Gaussians. Product SHA-256: `167f72aa2b6eddec158e9ae6c25f6211b278380112a4e804fa1b0e2199523ff4`; internal pre-self-reference `reportIdentity`: `4d3f30e6bbe1d18903d2e89ecb7914a91d4eae879be0a9f55f8787de2d5727a8`; committed report file SHA-256: `ef5a8b844c001c2e986f45009b512bd56abadb4f682e439e01e47f946dceeca1`.
 - **Render witness:** CPU full-covariance perspective Gaussian luma proxy. This is an isolated analytical witness, not the production compositor and not a beauty claim.
 - **Camera split:** native calibration camera plus disjoint world-space side `+90 deg`, back `+180 deg`, and elevated `+35 deg` heldouts; camera overlap is zero.
 
@@ -26,7 +26,9 @@ Lower MSE and higher IoU are better. All rows use exactly 1,024 active records. 
 | Back +180 | 5.2127471e-7 | 5.0466276e-7 | 5.0260545e-7 | -3.58% | 0.91800 | 0.90409 | 0.91450 |
 | Elevated +35 | 1.7071517e-6 | 1.7251498e-6 | 1.6820995e-6 | -1.47% | 0.83461 | 0.83668 | 0.83667 |
 
-Both treatments preserve total extinction to less than `7e-13` relative error. Principal-only has zero support-leaking Gaussians. Gradient-plus-principal has 2 / 1,024 support-leaking Gaussians (`0.195%`). Every one of the 1,023 treatment splits is genuinely oblique. CPU fit time was `12.163 s` for principal-only and `14.078 s` for gradient-plus-principal on the local machine.
+Both treatments preserve total extinction to less than `7e-13` relative error. Principal-only has zero support-leaking Gaussians. Gradient-plus-principal has 2 / 1,024 support-leaking Gaussians (`0.195%`). Every one of the 1,023 treatment splits is genuinely oblique. The corrected splitter selects only distinct projection buckets; the minimum selected gaps are `9.3735e-8` for Treatment A and `8.9094e-9` for Treatment B, with zero tied candidate boundaries encountered in this R160 fit. CPU fit time was `13.753 s` for principal-only and `17.357 s` for gradient-plus-principal on the local machine.
+
+The exact control receipts are vendored under `control-step-45/`; their embedded original source paths are retained as provenance. The native render report file SHA-256 is `84c752ae0c5b3a4c9d6e42e767354891a12ab5a010bb9c6012b3ae904543621e`, the hostile camera-split report file SHA-256 is `81637e88b1fb33cdce0ab2f78e0fe0b3e349d3a565144a2009d656eedec946ba`, and the side/back/elevated render report file hashes are respectively `3c7bb12da310508f7345bbd227a1e8f13b3d49eed33b7c238046e431d7525569`, `5416a69e74f52b5e19b40fa99772e8842f28b090af93d577cd2c98a519dcf512`, and `312a92a36f6f2c83c92b13bb5d5f611ea20bba9768975d8a3a2bea9b3174cdab`.
 
 ## Image context
 
@@ -38,7 +40,7 @@ The native Treatment B sheet shows a smoother, more continuous body than the axi
 
 For comparison, this is the accepted native `gradient4-1024` control under the same teacher and camera. The first row is the 1,024-record row; later rows are higher budgets and are not part of this fixed-budget adjudication.
 
-![Native gradient4 control budget rows with reference, proxy, and difference roles](../temporal-gaussian-ceiling-0715/render-gradient4/sim-step-45-final/perspective-render-contact-sheet.png)
+![Native gradient4 control budget rows with reference, proxy, and difference roles](control-step-45/native/perspective-render-contact-sheet.png)
 
 The hostile-camera sheets are photometrically calibrated at extinction scales `0.1, 0.2, 0.4`; the selected scale is `0.2`. They are intentionally very dark and are not visually authoritative for fine interior articulation. Their metrics can reject gross view-dependent failure, but they cannot close visible smoke quality.
 

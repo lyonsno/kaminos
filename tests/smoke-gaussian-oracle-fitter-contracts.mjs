@@ -46,6 +46,8 @@ async function writeFrame(directory, mutate = {}, densityPattern = 'plume') {
         const rightPlume = x === 2 && y >= 1 && z >= 1;
         values[offset + 4] = densityPattern === 'interior-pocket'
           ? (x === 2 && y === 2 && z === 2 ? 1.5 : 0.2)
+          : densityPattern === 'axis-column'
+          ? (x >= 1 && x <= 2 && z >= 1 && z <= 2 ? 0.5 : 0)
           : leftPlume || rightPlume ? 0.5 + y * 0.1 : 0;
         values[offset + 0] = 0.01 * x;
         values[offset + 1] = 0.08;
@@ -262,8 +264,13 @@ try {
   assert.equal(principalReport.budgetCurve.every(entry => entry.activeGaussianCount === entry.requestedBudget), true);
   assert.equal(principalReport.budgetCurve.every(entry => entry.extinctionAccounting.relativeError < 1e-6), true);
   assert.equal(
-    principalReport.budgetCurve.every(entry => entry.partition.authority === 'leaf-covariance-principal-axis-weighted-median-v0'),
+    principalReport.budgetCurve.every(entry => entry.partition.authority === 'leaf-covariance-principal-axis-distinct-projection-weighted-median-v1'),
     true,
+  );
+  assert.equal(principalReport.budgetCurve[0].partition.minimumCutProjectionGap, null);
+  assert.ok(
+    principalReport.budgetCurve.at(-1).partition.minimumCutProjectionGap > 0,
+    'every recorded principal split must fall between distinct projection buckets',
   );
   assert.ok(
     principalReport.budgetCurve.at(-1).partition.obliqueSplitCount > 0,
@@ -274,6 +281,19 @@ try {
     recursiveReport.budgetCurve.at(-1).artifact.sha256,
     'principal-axis partitioning must materially change the fixed-budget product',
   );
+  const tiedProjectionManifestPath = await writeFrame(join(directory, 'tied-projection-frame'), {}, 'axis-column');
+  const tiedProjectionReport = await fitSmokeGaussianOracleFrame({
+    manifestPath: tiedProjectionManifestPath,
+    outDir: join(directory, 'tied-projection-fit'),
+    budgets: [1, 2],
+    densityThreshold: 0.000001,
+    optimizerStrategy: 'recursive-principal-moment-split',
+  });
+  assert.ok(
+    tiedProjectionReport.budgetCurve.at(-1).partition.tiedProjectionBoundaryCount > 0,
+    'the axis-column fixture must exercise tied principal-axis projection buckets',
+  );
+  assert.ok(tiedProjectionReport.budgetCurve.at(-1).partition.minimumCutProjectionGap > 0);
 
   const structureManifestPath = await writeFrame(join(directory, 'structure-frame'), {}, 'interior-pocket');
   const structureControl = await fitSmokeGaussianOracleFrame({
@@ -303,6 +323,13 @@ try {
     structureControl.budgetCurve[3].artifact.sha256,
     'boundary-weighted allocation must materially change the fixed-budget product on an articulated field',
   );
+  const structurePrincipalReport = await fitSmokeGaussianOracleFrame({
+    manifestPath: structureManifestPath,
+    outDir: join(directory, 'structure-principal-fit'),
+    budgets: [1, 2, 4, 8],
+    densityThreshold: 0.000001,
+    optimizerStrategy: 'recursive-principal-moment-split',
+  });
   const gradientPrincipalReport = await fitSmokeGaussianOracleFrame({
     manifestPath: structureManifestPath,
     outDir: join(directory, 'gradient-principal-fit'),
@@ -322,7 +349,12 @@ try {
   assert.equal(gradientPrincipalReport.budgetCurve.every(entry => entry.extinctionAccounting.relativeError < 1e-6), true);
   assert.ok(gradientPrincipalReport.budgetCurve.at(-1).partition.obliqueSplitCount > 0);
   assert.notEqual(gradientPrincipalReport.budgetCurve.at(-1).artifact.sha256, structureReport.budgetCurve.at(-1).artifact.sha256);
-  assert.notEqual(gradientPrincipalReport.budgetCurve.at(-1).artifact.sha256, principalReport.budgetCurve.at(-1).artifact.sha256);
+  assert.equal(gradientPrincipalReport.teacher.fluidIdentity, structurePrincipalReport.teacher.fluidIdentity);
+  assert.notEqual(
+    gradientPrincipalReport.budgetCurve.at(-1).artifact.sha256,
+    structurePrincipalReport.budgetCurve.at(-1).artifact.sha256,
+    'gradient-plus-principal allocation must differ from principal-only allocation on the same teacher field',
+  );
 
   const nextManifestPath = await writeFrame(join(directory, 'next-frame'), {
     deterministicReplay: {
