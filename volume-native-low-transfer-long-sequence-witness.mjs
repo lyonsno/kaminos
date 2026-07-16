@@ -201,7 +201,9 @@ try {
       }, 'grid-overridden route did not record its sole control override');
       assert.equal(state?.effectiveBasinIdentity, `${state.requestedBasinIdentity}+volume_resolution=${expectedGrid}`, 'overridden route impersonated the exact preset identity');
     }
-    assert.equal(state?.latestHappyBowlPresetReceipt?.presetFileSha256, 'bf13e68b6904cfc5677b13af14afe4426f15f9649bfda22105eed8611c5d0967', 'preset file checksum drifted');
+    assert.match(state?.latestHappyBowlPresetReceipt?.artifactFileSha256 || '', /^[0-9a-f]{64}$/, 'preset transport receipt is missing');
+    assert.equal(state?.latestHappyBowlPresetReceipt?.artifactFileSha256Authority, 'transport-receipt-only-v0', 'preset bytes impersonated semantic authority');
+    assert.equal(state?.latestHappyBowlPresetReceipt?.sourceProvenance?.sourceCommit, '027bcaca138da6e545065b90c5607b5a4a1b2965', 'detached source provenance drifted');
   }
   assertModels(state.models || state.modelPackages);
 

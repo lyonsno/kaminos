@@ -40,6 +40,8 @@ assert.match(witness, /capturedFrameCount[\s\S]*requestedFrameCount/);
 assert.match(witness, /playbackSeconds/);
 assert.match(witness, /failurePhase/);
 assert.match(witness, /lastTrustworthyEvidence/);
+assert.match(witness, /artifactFileSha256Authority[\s\S]*transport-receipt-only-v0/, 'witness treats preset bytes as a transport receipt');
+assert.match(witness, /sourceProvenance[\s\S]*sourceCommit/, 'witness requires detached preset source custody');
 assert.match(witness, /Page\.captureScreenshot/);
 assert.match(witness, /captureCallTimeoutMs/, 'capture-call timeout is explicit and reportable');
 assert.match(witness, /captureScreenshotWithRetry/, 'a dropped CDP screenshot response is retried without advancing the simulation');

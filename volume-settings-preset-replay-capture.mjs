@@ -2,6 +2,11 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import {
+  VOLUME_SETTINGS_PRESET_TRANSPORT_AUTHORITY,
+  validateVolumeSettingsPresetProvenance,
+  validateVolumeSettingsPresetSemanticIdentity,
+} from './volume-settings-preset-semantic-identity.mjs';
 
 const REPORT_SCHEMA = 'kaminos.volume.settings-preset-replay-capture-report.v0';
 const REPORT_IDENTITY = 'settings-preset-replay-capture-adapter-v0';
@@ -19,7 +24,8 @@ try {
   outPath = requiredPath('--out');
   if (!reportPath) throw new Error('missing --report');
   const expectedPresetId = required('--expected-preset-id');
-  const expectedFileSha256 = required('--expected-file-sha256');
+  const provenancePath = optionalPath('--provenance');
+  const expectedSourceCommit = optional('--expected-source-commit');
   const targetOriginRaw = required('--target-origin');
   const overrides = args.has('--control-overrides-json')
     ? JSON.parse(String(args.get('--control-overrides-json')))
@@ -31,31 +37,38 @@ try {
   const presetBytes = readFileSync(presetPath);
   const presetFileSha256 = sha256(presetBytes);
   const artifact = JSON.parse(presetBytes.toString('utf8'));
-  phase = 'preset-validation';
-  const domControls = artifact?.preset?.domControls;
-  requireObject(domControls, 'preset.domControls');
-  const domControlCount = Object.keys(domControls).length;
-  const sourceRoute = new URL(String(artifact?.preset?.route || ''));
-  const requestedRouteControlCount = [...sourceRoute.searchParams].length;
-  if (
-    artifact?.identity !== 'kaminos-volume-settings-preset-artifact-v2'
-    || artifact?.schemaIdentity !== 'kaminos-volume-settings-preset-schema-v2'
-    || artifact?.presetId !== expectedPresetId
-    || presetFileSha256 !== expectedFileSha256
-    || artifact?.contentHash !== `sha256:${expectedPresetId.replace(/^vsp-/, '')}`
-    || artifact?.controlCount !== domControlCount
-    || artifact?.preset?.controlCount !== domControlCount
-    || requestedRouteControlCount < domControlCount
-    || !artifact?.source?.commit
-  ) {
-    throw new Error('settings preset identity, hash, schema, or control count mismatch');
-  }
   lastTrustworthyEvidence = {
     presetPath,
+    declaredPresetId: artifact?.presetId || null,
+    declaredContentHash: artifact?.contentHash || null,
+    artifactFileSha256: presetFileSha256,
+    artifactFileSha256Authority: VOLUME_SETTINGS_PRESET_TRANSPORT_AUTHORITY,
+  };
+  phase = 'preset-validation';
+  const semanticIdentity = await validateVolumeSettingsPresetSemanticIdentity(artifact, expectedPresetId);
+  const { domControlCount, routeControlCount: requestedRouteControlCount } = semanticIdentity;
+  const sourceRoute = new URL(semanticIdentity.sourceRoute);
+  let sourceProvenance = null;
+  if (provenancePath) {
+    const provenanceBytes = readFileSync(provenancePath);
+    const provenance = JSON.parse(provenanceBytes.toString('utf8'));
+    sourceProvenance = {
+      ...validateVolumeSettingsPresetProvenance(provenance, semanticIdentity, expectedSourceCommit),
+      path: provenancePath,
+      artifactFileSha256: sha256(provenanceBytes),
+      artifactFileSha256Authority: VOLUME_SETTINGS_PRESET_TRANSPORT_AUTHORITY,
+    };
+  }
+  const sourceCommit = sourceProvenance?.sourceCommit || artifact?.source?.commit || null;
+  if (expectedSourceCommit && sourceCommit !== expectedSourceCommit) {
+    throw new Error('settings preset source commit mismatch');
+  }
+  lastTrustworthyEvidence = {
+    ...lastTrustworthyEvidence,
     presetId: artifact.presetId,
-    presetFileSha256,
     contentHash: artifact.contentHash,
-    sourceCommit: artifact.source.commit,
+    semanticIdentityAuthority: semanticIdentity.semanticIdentityAuthority,
+    sourceCommit,
     requestedDomControlCount: domControlCount,
     requestedRouteControlCount,
   };
@@ -96,8 +109,11 @@ try {
       presetId: artifact.presetId,
       contentHash: artifact.contentHash,
       schemaIdentity: artifact.schemaIdentity,
-      fileSha256: presetFileSha256,
-      sourceCommit: artifact.source.commit,
+      semanticIdentityAuthority: semanticIdentity.semanticIdentityAuthority,
+      artifactFileSha256: presetFileSha256,
+      artifactFileSha256Authority: VOLUME_SETTINGS_PRESET_TRANSPORT_AUTHORITY,
+      sourceCommit,
+      sourceProvenance,
       domControlCount,
       routeControlCount: requestedRouteControlCount,
       stateExclusions: artifact.preset.stateExclusions,
@@ -120,8 +136,10 @@ try {
       path: presetPath,
       presetId: artifact.presetId,
       contentHash: artifact.contentHash,
-      fileSha256: presetFileSha256,
-      sourceCommit: artifact.source.commit,
+      semanticIdentityAuthority: semanticIdentity.semanticIdentityAuthority,
+      artifactFileSha256: presetFileSha256,
+      artifactFileSha256Authority: VOLUME_SETTINGS_PRESET_TRANSPORT_AUTHORITY,
+      sourceCommit,
     },
     requestedRouteControlCount,
     effectiveRouteControlCount,
@@ -181,6 +199,11 @@ function required(name) {
 
 function requiredPath(name) {
   return resolve(required(name));
+}
+
+function optional(name) {
+  const value = args.get(name);
+  return !value || value === true ? null : String(value);
 }
 
 function optionalPath(name) {

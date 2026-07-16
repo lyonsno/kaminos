@@ -11,6 +11,9 @@ const witnessPath = join(root, 'volume-new-basin-zero-shot-witness.mjs');
 const trainedWitnessPath = join(root, 'volume-latest-happy-bowl-trained-witness.mjs');
 const sharedWitnessPath = join(root, 'volume-native-low-transfer-long-sequence-witness.mjs');
 const trainedModelPath = join(root, 'models/selective-head-live/latest-happy-bowl-160-to-96-step96-v0/manifest.json');
+const semanticIdentityPath = join(root, 'volume-settings-preset-semantic-identity.mjs');
+const presetPath = join(root, 'fixtures/volume/settings-presets/latest_happy_bowl/preset.json');
+const provenancePath = join(root, 'fixtures/volume/settings-presets/latest_happy_bowl/provenance.json');
 
 assert.ok(existsSync(routePath), 'native-low live route exists');
 assert.ok(existsSync(corePath), 'volume renderer core exists');
@@ -19,6 +22,8 @@ assert.ok(existsSync(witnessPath), 'new-basin zero-shot witness exists');
 assert.ok(existsSync(trainedWitnessPath), 'latest-basin trained witness exists');
 assert.ok(existsSync(sharedWitnessPath), 'continuous shared witness exists');
 assert.ok(existsSync(trainedModelPath), 'latest-basin trained package exists');
+assert.ok(existsSync(semanticIdentityPath), 'shared settings-preset semantic verifier exists');
+assert.ok(existsSync(provenancePath), 'latest Happy Bowl detached provenance exists');
 
 const route = readFileSync(routePath, 'utf8');
 const core = readFileSync(corePath, 'utf8');
@@ -27,12 +32,17 @@ const witness = readFileSync(witnessPath, 'utf8');
 const trainedWitness = readFileSync(trainedWitnessPath, 'utf8');
 const sharedWitness = readFileSync(sharedWitnessPath, 'utf8');
 const trainedModel = JSON.parse(readFileSync(trainedModelPath, 'utf8'));
+const preset = JSON.parse(readFileSync(presetPath, 'utf8'));
+const provenance = JSON.parse(readFileSync(provenancePath, 'utf8'));
 const witnessContract = `${witness}\n${sharedWitness}`;
 const combined = `${route}\n${core}\n${witnessContract}`;
 
 assert.match(route, /new_basin_zero_shot/, 'route exposes an explicit new-basin assay mode');
 assert.match(route, /vsp-48617494d68e4f24bba358676733f2aaa5f03622b1747c45056de56884fe78d8/, 'assay binds the immutable operator preset');
-assert.match(route, /LATEST_HAPPY_BOWL_PRESET_URL[\s\S]*presetFileSha256[\s\S]*sourceCommit/, 'assay consumes the exact preset JSON and preserves source custody');
+assert.match(route, /validateVolumeSettingsPresetSemanticIdentity/, 'assay recomputes semantic preset authority instead of trusting declarations');
+assert.match(route, /LATEST_HAPPY_BOWL_PROVENANCE_URL[\s\S]*sourceProvenance[\s\S]*sourceCommit/, 'assay consumes detached source custody');
+assert.match(route, /artifactFileSha256[\s\S]*transport-receipt-only-v0/, 'assay records loaded bytes without promoting them to semantic authority');
+assert.doesNotMatch(route, /LATEST_HAPPY_BOWL_PRESET_FILE_SHA256/, 'assay must not pin relocatable envelope bytes');
 assert.match(route, /exactPresetRouteApplied[\s\S]*controlOverrides/, 'assay distinguishes exact preset application from an explicit source-grid-only override');
 assert.match(route, /requestedDomControlCount[\s\S]*requestedRouteControlCount/, 'assay does not conflate DOM controls with executable route parameters');
 assert.match(route, /raymarch-only-v0/, 'assay requests renderer-matched raymarch-only composition');
@@ -53,6 +63,14 @@ assert.match(runtime, /\[48, 64, 96, 128\]\.includes\(lowGrid\)/, 'runtime admit
 assert.equal(trainedModel.identity, 'latest-happy-bowl-selective-carrier-heads-160-to-96-step96-v0');
 assert.equal(trainedModel.source.trainingBasinIdentity, 'latest-happy-bowl-vsp-48617494-step96-v0');
 assert.equal(trainedModel.source.trainingSourceCaptureSha256, '3f1c08a38c61e8affa39ed69cc85bf59e15bd4c3a5b773d4d91a64d7d7cfe035');
+assert.equal(Object.hasOwn(preset, 'source'), false, 'portable preset embeds capture provenance');
+assert.equal(Object.hasOwn(preset, 'writtenAt'), false, 'portable preset embeds capture time');
+assert.equal(Object.hasOwn(preset.preset, 'savedAt'), false, 'semantic payload embeds capture time');
+assert.equal(new URL(preset.preset.route).origin, 'http://kaminos.invalid', 'portable preset embeds a live checkout origin');
+assert.equal(provenance.identity, 'kaminos-volume-settings-preset-provenance-v1');
+assert.equal(provenance.presetId, preset.presetId);
+assert.equal(provenance.sourceCommit, '027bcaca138da6e545065b90c5607b5a4a1b2965');
+assert.equal(provenance.historicalArtifactFileSha256, 'bf13e68b6904cfc5677b13af14afe4426f15f9649bfda22105eed8611c5d0967');
 assert.match(runtime, /native-low-transfer-latest-happy-bowl-160-to-96-step96-v0/, 'runtime exposes the latest-basin package as a distinct route');
 assert.match(runtime, /97e25caa711395f26e8b39f22c506e38e772bfc1a12cf518d5e048511d2bee08/, 'runtime pins the latest-basin model checksum');
 

@@ -78,6 +78,10 @@
       sha256HexFromText,
       validateVivisectorCandidateHeadPackage,
     } from './native-low-candidate-head-package.mjs';
+    import {
+      validateVolumeSettingsPresetProvenance,
+      validateVolumeSettingsPresetSemanticIdentity,
+    } from './volume-settings-preset-semantic-identity.mjs';
 
     const REPORT_SCHEMA = 'kaminos.volume.native-low-selective-live-comparison.v0';
     const CONTRACT_MARKERS = Object.freeze({
@@ -257,7 +261,7 @@
       ? 'vsp-48617494d68e4f24bba358676733f2aaa5f03622b1747c45056de56884fe78d8'
       : 'rgb_upscale_basin_0711';
     const LATEST_HAPPY_BOWL_PRESET_URL = './fixtures/volume/settings-presets/latest_happy_bowl/preset.json';
-    const LATEST_HAPPY_BOWL_PRESET_FILE_SHA256 = 'bf13e68b6904cfc5677b13af14afe4426f15f9649bfda22105eed8611c5d0967';
+    const LATEST_HAPPY_BOWL_PROVENANCE_URL = './fixtures/volume/settings-presets/latest_happy_bowl/provenance.json';
     const LATEST_HAPPY_BOWL_CONTENT_HASH = 'sha256:48617494d68e4f24bba358676733f2aaa5f03622b1747c45056de56884fe78d8';
     const LATEST_HAPPY_BOWL_SOURCE_COMMIT = '027bcaca138da6e545065b90c5607b5a4a1b2965';
     const manualDualCaptureMode = !native64ManifestMode && !causalFeedbackMode
@@ -428,14 +432,21 @@
 
     async function loadLatestHappyBowlPresetControls() {
       failurePhase = 'latest-happy-bowl-preset-load';
-      const response = await fetch(LATEST_HAPPY_BOWL_PRESET_URL, { cache: 'no-store' });
+      const [response, provenanceResponse] = await Promise.all([
+        fetch(LATEST_HAPPY_BOWL_PRESET_URL, { cache: 'no-store' }),
+        fetch(LATEST_HAPPY_BOWL_PROVENANCE_URL, { cache: 'no-store' }),
+      ]);
       if (!response.ok) throw new Error(`latest-happy-bowl-preset-fetch:${response.status}`);
-      const text = await response.text();
+      if (!provenanceResponse.ok) throw new Error(`latest-happy-bowl-provenance-fetch:${provenanceResponse.status}`);
+      const [text, provenanceText] = await Promise.all([response.text(), provenanceResponse.text()]);
       const fileSha256 = await sha256HexFromText(text);
-      if (fileSha256 !== LATEST_HAPPY_BOWL_PRESET_FILE_SHA256) {
-        throw new Error(`latest-happy-bowl-preset-file-sha256-mismatch:${fileSha256}`);
-      }
       const artifact = JSON.parse(text);
+      const semanticIdentity = await validateVolumeSettingsPresetSemanticIdentity(artifact, requestedBasinIdentity);
+      const sourceProvenance = validateVolumeSettingsPresetProvenance(
+        JSON.parse(provenanceText),
+        semanticIdentity,
+        LATEST_HAPPY_BOWL_SOURCE_COMMIT,
+      );
       const domControlCount = Object.keys(artifact?.preset?.domControls || {}).length;
       const valid = artifact?.identity === 'kaminos-volume-settings-preset-artifact-v2'
         && artifact?.presetId === requestedBasinIdentity
@@ -444,7 +455,7 @@
         && artifact?.controlCount === 186
         && artifact?.preset?.controlCount === 186
         && domControlCount === 186
-        && artifact?.source?.commit === LATEST_HAPPY_BOWL_SOURCE_COMMIT;
+        && sourceProvenance.sourceCommit === LATEST_HAPPY_BOWL_SOURCE_COMMIT;
       if (!valid) throw new Error('latest-happy-bowl-preset-identity-mismatch');
       const sourceRoute = new URL(artifact.preset.route);
       const controls = Object.fromEntries(sourceRoute.searchParams.entries());
@@ -461,8 +472,11 @@
         presetIdentity: artifact.presetId,
         contentHash: artifact.contentHash,
         schemaIdentity: artifact.schemaIdentity,
-        presetFileSha256: fileSha256,
-        sourceCommit: artifact.source.commit,
+        semanticIdentityAuthority: semanticIdentity.semanticIdentityAuthority,
+        artifactFileSha256: fileSha256,
+        artifactFileSha256Authority: 'transport-receipt-only-v0',
+        sourceCommit: sourceProvenance.sourceCommit,
+        sourceProvenance,
         requestedDomControlCount: artifact.controlCount,
         requestedRouteControlCount: routeControlCount,
         effectiveRouteControlCount: Object.keys(controls).length,
