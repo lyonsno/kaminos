@@ -5,7 +5,7 @@ import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSy
 import { dirname, resolve } from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash, randomInt } from 'node:crypto';
-import { measureReceiverLightDelta } from './receiver-light-witness-metrics.mjs';
+import { evaluateReceiverLightAssay } from './receiver-light-witness-metrics.mjs';
 
 function parseCliArgs(argv) {
   const parsed = new Map();
@@ -527,6 +527,11 @@ function expectedTallPlumePressureTierStrategy(volumeScene, pressureStrategy) {
 }
 
 const routeParams = new URL(url).searchParams;
+const requestedReceiverLightRouteIdentity = routeParams.get('volume_receiver_light_isolate') === '1'
+  ? 'tier2-receiver-light-isolate-requested-v0'
+  : (routeParams.get('volume_receiver_light') === 'tier2'
+    ? 'tier2-receiver-light-composite-requested-v0'
+    : 'receiver-light-route-not-requested-v0');
 const expectedVolumeSceneContext = normalizeVolumeSceneContext(routeParams.get('volume_scene_context'));
 const expectsVolumeBrickWallSceneContext = expectedVolumeSceneContext === 'brick_wall';
 const BRICK_WALL_GREENROOM_SOURCE_PATH = '/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-trellis-crumbled-brick-wall-fast8-350k-4k-20260701Tasset-probe/output.glb';
@@ -2482,10 +2487,19 @@ async function main() {
         Number(receiverLightDebug.lastRenderTargetSize?.height || 0) > 0
       ),
       nativeAttachmentAccepted: false,
+      requestedRouteIdentity: requestedReceiverLightRouteIdentity,
+      effectiveRouteIdentity: receiverLightDebug?.effectiveRouteIdentity ?? null,
       debug: receiverLightDebug,
       debugLater: null,
     };
     if (expectsRenderedReceiverLightEvidence) {
+      if (requestedReceiverLightRouteIdentity === 'receiver-light-route-not-requested-v0') {
+        throw new Error(`receiver-light requested route is inactive: ${JSON.stringify({
+          requestedRoute: url,
+          requestedRouteIdentity: requestedReceiverLightRouteIdentity,
+          effectiveRouteIdentity: receiverLightDebug?.effectiveRouteIdentity ?? null,
+        })}`);
+      }
       if (!receiverLightDebug || receiverLightDebug.identity !== 'tier2-opt-in-receiver-buffer-light-pass-v0') {
         throw new Error(`wrong rendered Tier 2 receiver-light identity: ${JSON.stringify(receiverLightDebug)}`);
       }
@@ -2548,7 +2562,7 @@ async function main() {
     if (expectsRenderedReceiverLightEvidence && !isCaptureReplay) {
       phase = 'receiver-light-rendered-evidence';
       let receiverLightDeltaEvidence = null;
-      if (expectsReceiverLightBrickWallEvidence) {
+      if (expectsRenderedReceiverLightEvidence) {
         const freezeEval = await wsRequest(ws, 'Runtime.evaluate', {
           expression: `(() => {
             const freeze = document.getElementById('volume-look-freeze');
@@ -2581,7 +2595,25 @@ async function main() {
         let receiverOnBuffer;
         let receiverMutedBuffer;
         let foregroundMuteReceipt = null;
+        let isolateReceipt = null;
+        let hudMuteReceipt = null;
         try {
+          const isolateEval = await wsRequest(ws, 'Runtime.evaluate', {
+            expression: 'window.kaminosTier2ReceiverLightSetWitnessIsolate?.(true) ?? null',
+            returnByValue: true,
+          });
+          isolateReceipt = isolateEval.result.value || null;
+          if (isolateReceipt?.isolate !== true || isolateReceipt?.isolateMix !== 1) {
+            throw new Error(`receiver-light binary assay could not isolate receiver output: ${JSON.stringify(isolateReceipt)}`);
+          }
+          const hudMuteEval = await wsRequest(ws, 'Runtime.evaluate', {
+            expression: 'window.kaminosTier2ReceiverLightSetWitnessHudMute?.(true) ?? null',
+            returnByValue: true,
+          });
+          hudMuteReceipt = hudMuteEval.result.value || null;
+          if (hudMuteReceipt?.hudMuted !== true || hudMuteReceipt?.visibleNonRendererChildren !== 0) {
+            throw new Error(`receiver-light binary assay could not remove viewport chrome: ${JSON.stringify(hudMuteReceipt)}`);
+          }
           const foregroundMuteEval = await wsRequest(ws, 'Runtime.evaluate', {
             expression: 'window.kaminosTier2ReceiverLightSetWitnessForegroundMute?.(true) ?? null',
             returnByValue: true,
@@ -2622,23 +2654,32 @@ async function main() {
             expression: 'window.kaminosTier2ReceiverLightSetWitnessForegroundMute?.(false) ?? null',
             returnByValue: true,
           });
+          await wsRequest(ws, 'Runtime.evaluate', {
+            expression: 'window.kaminosTier2ReceiverLightSetWitnessIsolate?.(false) ?? null',
+            returnByValue: true,
+          });
+          await wsRequest(ws, 'Runtime.evaluate', {
+            expression: 'window.kaminosTier2ReceiverLightSetWitnessHudMute?.(false) ?? null',
+            returnByValue: true,
+          });
         }
-        const delta = measureReceiverLightDelta(
+        const assay = evaluateReceiverLightAssay(
           parsePngRgba(receiverOnBuffer),
           parsePngRgba(receiverMutedBuffer),
-          { xMin: 0, xMax: 1, yMin: 0, yMax: 1 },
+          { region: { xMin: 0, xMax: 1, yMin: 0, yMax: 1 } },
         );
         receiverLightDeltaEvidence = {
-          ...delta,
-          accepted: delta.warmPositivePixels >= 100 && delta.meanPositiveLumaDelta >= 2,
+          ...assay,
           freezeReceipt,
           foregroundMutedAtCapture: foregroundMuteReceipt?.witnessForegroundMuted === true,
           foregroundMuteReceipt,
+          isolateReceipt,
+          hudMuteReceipt,
           receiverOnPath,
           receiverMutedPath,
         };
         if (!receiverLightDeltaEvidence.accepted) {
-          throw new Error(`receiver-light paired delta missing warm receiver signal: ${JSON.stringify(receiverLightDeltaEvidence)}`);
+          throw new Error(`receiver-light binary assay rejected receiver signal: ${JSON.stringify(receiverLightDeltaEvidence)}`);
         }
       }
       const pageShot = await wsRequest(ws, 'Page.captureScreenshot', {

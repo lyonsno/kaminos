@@ -9046,6 +9046,44 @@ async function initScene() {
   };
   window.kaminosTier2ReceiverLightSetWitnessMute = muted => tier2ReceiverLightPass?.setWitnessMute?.(muted) || null;
   window.kaminosTier2ReceiverLightSetWitnessForegroundMute = muted => tier2ReceiverLightPass?.setWitnessForegroundMute?.(muted) || null;
+  window.kaminosTier2ReceiverLightSetWitnessIsolate = isolated => tier2ReceiverLightPass?.setWitnessIsolate?.(isolated) || null;
+  let receiverWitnessHudSnapshot = null;
+  window.kaminosTier2ReceiverLightSetWitnessHudMute = muted => {
+    const viewport = document.getElementById('viewport');
+    const nonRendererChildren = viewport
+      ? Array.from(viewport.children).filter(element => element !== renderer.domElement)
+      : [];
+    if (muted && receiverWitnessHudSnapshot === null) {
+      receiverWitnessHudSnapshot = nonRendererChildren.map(element => ({
+        element,
+        visibility: element.style.visibility,
+        ariaHidden: element.getAttribute('aria-hidden'),
+      }));
+    }
+    if (muted) {
+      for (const element of nonRendererChildren) {
+        element.style.visibility = 'hidden';
+        element.setAttribute('aria-hidden', 'true');
+      }
+    } else if (receiverWitnessHudSnapshot !== null) {
+      for (const snapshot of receiverWitnessHudSnapshot) {
+        snapshot.element.style.visibility = snapshot.visibility;
+        if (snapshot.ariaHidden === null) snapshot.element.removeAttribute('aria-hidden');
+        else snapshot.element.setAttribute('aria-hidden', snapshot.ariaHidden);
+      }
+      receiverWitnessHudSnapshot = null;
+    }
+    const visibleNonRendererChildren = nonRendererChildren.filter(element => {
+      const style = getComputedStyle(element);
+      return style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity || 1) > 0;
+    }).length;
+    return {
+      identity: 'tier2-receiver-light-witness-hud-mute-v0',
+      hudMuted: Boolean(muted),
+      nonRendererChildCount: nonRendererChildren.length,
+      visibleNonRendererChildren,
+    };
+  };
   window.kaminosAODebugState = () => ({
     route: 'three-tsl-render-pipeline-gtao-compute',
     hasRenderPipeline: !!renderPipeline,
@@ -19907,6 +19945,13 @@ function createTier2ReceiverBufferLightPass(baseOutputNode, sceneDepthNode) {
     areaWashBlurRounds: receiverAreaWashBlurRounds,
     witnessMuted: false,
     witnessForegroundMuted: false,
+    witnessIsolate: false,
+    requestedRouteIdentity: isTier2ReceiverLightIsolateRoute(params)
+      ? 'tier2-receiver-light-isolate-requested-v0'
+      : (params.get('volume_receiver_light') === 'tier2'
+        ? 'tier2-receiver-light-composite-requested-v0'
+        : 'receiver-light-route-not-requested-v0'),
+    effectiveRouteIdentity: 'receiver-light-route-inactive-v0',
     active: false,
     isolate: isolateMix.value > 0,
     receiverCount: 1,
@@ -20008,7 +20053,14 @@ function createTier2ReceiverBufferLightPass(baseOutputNode, sceneDepthNode) {
     outputNode,
     update() {
       state.active = routeActive();
-      state.isolate = isTier2ReceiverLightIsolateRoute();
+      state.isolate = state.active && (isTier2ReceiverLightIsolateRoute() || state.witnessIsolate);
+      state.effectiveRouteIdentity = !state.active
+        ? 'receiver-light-route-inactive-v0'
+        : (state.isolate
+          ? (state.witnessIsolate
+            ? 'tier2-receiver-light-witness-isolate-effective-v0'
+            : 'tier2-receiver-light-isolate-effective-v0')
+          : 'tier2-receiver-light-composite-effective-v0');
       isolateMix.value = state.active && state.isolate ? 1.0 : 0.0;
       setNativeVolumeVisibility();
       if (!state.active) {
@@ -20110,6 +20162,18 @@ function createTier2ReceiverBufferLightPass(baseOutputNode, sceneDepthNode) {
         identity: 'tier2-receiver-light-witness-foreground-mute-v0',
         witnessForegroundMuted: state.witnessForegroundMuted,
         nativeCanvasOpacity: volumePrototype?.canvasElement?.()?.style?.opacity || '',
+      };
+    },
+    setWitnessIsolate(isolated) {
+      state.witnessIsolate = Boolean(isolated);
+      state.isolate = state.active && (isTier2ReceiverLightIsolateRoute() || state.witnessIsolate);
+      isolateMix.value = state.isolate ? 1.0 : 0.0;
+      setNativeVolumeVisibility();
+      return {
+        identity: 'tier2-receiver-light-witness-isolate-v0',
+        witnessIsolate: state.witnessIsolate,
+        isolate: state.isolate,
+        isolateMix: isolateMix.value,
       };
     },
     debugState() {

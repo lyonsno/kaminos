@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
-import { measureReceiverLightDelta } from '../receiver-light-witness-metrics.mjs';
+import {
+  evaluateReceiverLightAssay,
+  measureReceiverLightDelta,
+  measureReceiverLightSignal,
+} from '../receiver-light-witness-metrics.mjs';
 
 function image(width, height, pixelAt) {
   const rows = [];
@@ -43,6 +47,32 @@ assert.equal(excludedUiDelta.warmPositivePixels, 0);
 const noDelta = measureReceiverLightDelta(dark, dark);
 assert.equal(noDelta.changedPixels, 0);
 assert.equal(noDelta.warmPositivePixels, 0, 'a nonblank static scene must not prove receiver light');
+
+const black = image(100, 100, () => [0, 0, 0]);
+const binaryReceiver = image(100, 100, (x, y) => (
+  x >= 25 && x < 75 && y >= 20 && y < 80 ? [96, 44, 8] : [0, 0, 0]
+));
+const ambientControl = image(100, 100, () => [8, 8, 8]);
+const binarySignal = measureReceiverLightSignal(binaryReceiver);
+assert.equal(binarySignal.identity, 'receiver-light-absolute-signal-v0');
+assert.equal(binarySignal.litPixels, 3000);
+assert.equal(binarySignal.warmPixels, 3000);
+
+const honestAssay = evaluateReceiverLightAssay(binaryReceiver, black);
+assert.equal(honestAssay.identity, 'receiver-light-binary-assay-v0');
+assert.equal(honestAssay.accepted, true, 'warm receiver-only output over a black null frame must pass');
+assert.deepEqual(honestAssay.failures, []);
+
+const contaminatedAssay = evaluateReceiverLightAssay(binaryReceiver, ambientControl);
+assert.equal(contaminatedAssay.accepted, false, 'ambient or environment light in the null frame must fail loud');
+assert.ok(
+  contaminatedAssay.failures.includes('muted-control-not-black'),
+  `expected black-control failure, got ${JSON.stringify(contaminatedAssay)}`,
+);
+
+const missingReceiverAssay = evaluateReceiverLightAssay(black, black);
+assert.equal(missingReceiverAssay.accepted, false, 'two black frames cannot prove receiver illumination');
+assert.ok(missingReceiverAssay.failures.includes('receiver-signal-too-sparse'));
 
 assert.throws(
   () => measureReceiverLightDelta(warmReceiver, image(7, 6, () => [0, 0, 0])),

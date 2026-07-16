@@ -52,3 +52,85 @@ export function measureReceiverLightDelta(onImage, mutedImage, region = {}) {
     maxPositiveLumaDelta,
   };
 }
+
+export function measureReceiverLightSignal(image, region = {}) {
+  const width = Number(image?.width);
+  const height = Number(image?.height);
+  const channels = Number(image?.channels);
+  if (!(width > 0 && height > 0 && channels >= 3 && Array.isArray(image?.rows))) {
+    throw new Error('receiver-light absolute signal requires a valid RGB image');
+  }
+
+  const xStart = Math.max(0, Math.floor(width * (region.xMin ?? 0)));
+  const xEnd = Math.min(width, Math.ceil(width * (region.xMax ?? 1)));
+  const yStart = Math.max(0, Math.floor(height * (region.yMin ?? 0)));
+  const yEnd = Math.min(height, Math.ceil(height * (region.yMax ?? 1)));
+  const sampledPixels = Math.max(0, xEnd - xStart) * Math.max(0, yEnd - yStart);
+  let litPixels = 0;
+  let warmPixels = 0;
+  let lumaTotal = 0;
+  let maxLuma = 0;
+
+  for (let y = yStart; y < yEnd; y += 1) {
+    const row = image.rows[y];
+    for (let x = xStart; x < xEnd; x += 1) {
+      const index = x * channels;
+      const r = row[index];
+      const g = row[index + 1];
+      const b = row[index + 2];
+      const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      lumaTotal += luma;
+      maxLuma = Math.max(maxLuma, luma);
+      if (luma >= 2) litPixels += 1;
+      if (luma >= 2 && r > b + 1 && g > b) warmPixels += 1;
+    }
+  }
+
+  return {
+    identity: 'receiver-light-absolute-signal-v0',
+    width,
+    height,
+    region: { xStart, xEnd, yStart, yEnd },
+    sampledPixels,
+    litPixels,
+    warmPixels,
+    meanLuma: lumaTotal / Math.max(1, sampledPixels),
+    maxLuma,
+  };
+}
+
+export function evaluateReceiverLightAssay(onImage, mutedImage, options = {}) {
+  const region = options.region || {};
+  const onSignal = measureReceiverLightSignal(onImage, region);
+  const mutedSignal = measureReceiverLightSignal(mutedImage, region);
+  const delta = measureReceiverLightDelta(onImage, mutedImage, region);
+  const minimumSignalPixels = Math.max(100, Math.ceil(onSignal.sampledPixels * 0.002));
+  const maximumMutedPixels = Math.max(4, Math.floor(mutedSignal.sampledPixels * 0.0001));
+  const failures = [];
+
+  if (mutedSignal.litPixels > maximumMutedPixels || mutedSignal.meanLuma > 0.25 || mutedSignal.maxLuma > 3) {
+    failures.push('muted-control-not-black');
+  }
+  if (onSignal.litPixels < minimumSignalPixels || onSignal.warmPixels < minimumSignalPixels) {
+    failures.push('receiver-signal-too-sparse');
+  }
+  if (delta.warmPositivePixels < minimumSignalPixels || delta.meanPositiveLumaDelta < 4) {
+    failures.push('receiver-delta-too-weak');
+  }
+
+  return {
+    identity: 'receiver-light-binary-assay-v0',
+    accepted: failures.length === 0,
+    failures,
+    thresholds: {
+      minimumSignalPixels,
+      maximumMutedPixels,
+      maximumMutedMeanLuma: 0.25,
+      maximumMutedLuma: 3,
+      minimumMeanPositiveLumaDelta: 4,
+    },
+    onSignal,
+    mutedSignal,
+    delta,
+  };
+}
