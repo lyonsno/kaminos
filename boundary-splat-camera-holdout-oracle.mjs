@@ -15,6 +15,12 @@ const BASE_FAMILIES = Object.freeze([
   'learned-billboard',
   'world-tangent-covariance',
 ]);
+const FAMILY_MODES = Object.freeze({
+  'analytic-billboard': 'analyticBillboard',
+  'learned-billboard': 'learnedBillboard',
+  'world-tangent-covariance': 'worldCovariance',
+  'flow-kernel-moment-covariance': 'kernelMomentCovariance',
+});
 const CONSERVATION_AUTHORITY = 'rendered-gaussian-integrated-alpha-conserved-v0';
 const ATTRIBUTE_PAYLOAD_AUTHORITY = 'gpu-compacted-boundary-splat-effective-attributes-v0';
 const TARGET_AUTHORITY = 'smoke-off-complete-flame-local-emission-extinction-v0';
@@ -211,6 +217,47 @@ export async function validateCameraHoldoutReport(report, options = {}) {
     const treatmentIdentities = new Set(kernelRows.map(row => JSON.stringify(row.kernelTreatment)));
     if (treatmentIdentities.size !== 1) {
       throw new Error('kernel moment controls changed across held-out cameras');
+    }
+    const preflightRows = report.footprintFamilyPreflight;
+    if (!Array.isArray(preflightRows)) throw new Error('kernel moment preflight families are missing');
+    const preflightByFamily = new Map();
+    for (const [index, row] of preflightRows.entries()) {
+      const label = `preflight row ${index}`;
+      if (!Object.hasOwn(FAMILY_MODES, row?.family) || !effectiveFamilies.includes(row.family)) {
+        throw new Error(`${label} has an unknown family`);
+      }
+      if (preflightByFamily.has(row.family)) throw new Error(`${label} is a duplicate preflight family`);
+      if (row.identity !== 'footprint-family-preflight-v0' || row.mode !== FAMILY_MODES[row.family]) {
+        throw new Error(`${label} family identity is wrong`);
+      }
+      if (row.candidateCount !== candidatePayload.count) throw new Error(`${label} candidate count disagrees with admitted payload`);
+      if (row.candidatePayloadSha256 !== candidatePayload.sha256) {
+        throw new Error(`${label} candidate payload disagrees with admitted payload`);
+      }
+      if (!/^[0-9a-f]{64}$/.test(row.attributePayloadSha256 || '')) {
+        throw new Error(`${label} attribute payload identity is missing`);
+      }
+      preflightByFamily.set(row.family, row);
+    }
+    if (preflightByFamily.size !== effectiveFamilies.length
+      || effectiveFamilies.some(family => !preflightByFamily.has(family))) {
+      throw new Error('preflight families do not cover the effective family set');
+    }
+    const admittedCameraIndex = trainIndices[0];
+    for (const family of effectiveFamilies) {
+      const preflight = preflightByFamily.get(family);
+      const admitted = rowsByFamily.get(family).find(row => row.cameraIndex === admittedCameraIndex);
+      if (!admitted) throw new Error(`${family} has no admitted training-camera row`);
+      if (preflight.candidatePayloadSha256 !== admitted.candidatePayloadSha256) {
+        throw new Error(`${family} preflight candidate payload disagrees with admitted training-camera payload`);
+      }
+      if (preflight.attributePayloadSha256 !== admitted.attributePayloadSha256) {
+        throw new Error(`${family} preflight attribute payload disagrees with admitted training-camera payload`);
+      }
+    }
+    if (preflightByFamily.get('learned-billboard').attributePayloadSha256
+      !== preflightByFamily.get('world-tangent-covariance').attributePayloadSha256) {
+      throw new Error('learned and world preflight attribute payloads disagree');
     }
   }
 

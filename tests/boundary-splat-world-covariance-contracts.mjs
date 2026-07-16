@@ -181,9 +181,77 @@ for (let cameraIndex = 0; cameraIndex < 3; cameraIndex += 1) {
     },
   });
 }
-const kernelReport = { ...report, cameraRows: [...cameraRows, ...kernelRows] };
+const kernelCameraRows = [...cameraRows, ...kernelRows];
+const preflightModeByFamily = {
+  'analytic-billboard': 'analyticBillboard',
+  'learned-billboard': 'learnedBillboard',
+  'world-tangent-covariance': 'worldCovariance',
+  'flow-kernel-moment-covariance': 'kernelMomentCovariance',
+};
+const kernelPreflight = Object.entries(preflightModeByFamily).map(([family, mode]) => {
+  const admitted = kernelCameraRows.find(row => row.cameraIndex === 1 && row.family === family);
+  return {
+    identity: 'footprint-family-preflight-v0',
+    family,
+    mode,
+    candidateCount: admitted.candidateCount,
+    candidatePayloadSha256: admitted.candidatePayloadSha256,
+    attributePayloadSha256: admitted.attributePayloadSha256,
+  };
+});
+const kernelReport = {
+  ...report,
+  cameraRows: kernelCameraRows,
+  footprintFamilyPreflight: kernelPreflight,
+};
 const validatedKernel = await oracle.validateCameraHoldoutReport(kernelReport, { requireKernelMoment: true });
 assert.equal(validatedKernel.familyCount, 4);
+
+await assert.rejects(
+  () => oracle.validateCameraHoldoutReport({
+    ...kernelReport,
+    footprintFamilyPreflight: kernelPreflight.map((row, index) => index === 0
+      ? { ...row, candidatePayloadSha256: 'e'.repeat(64) }
+      : row),
+  }, { requireKernelMoment: true }),
+  /preflight.*candidate payload.*admitted/i,
+);
+
+await assert.rejects(
+  () => oracle.validateCameraHoldoutReport({
+    ...kernelReport,
+    footprintFamilyPreflight: kernelPreflight.map((row, index) => index === 1
+      ? { ...row, attributePayloadSha256: 'e'.repeat(64) }
+      : row),
+  }, { requireKernelMoment: true }),
+  /preflight.*attribute payload.*admitted/i,
+);
+
+await assert.rejects(
+  () => oracle.validateCameraHoldoutReport({
+    ...kernelReport,
+    footprintFamilyPreflight: kernelPreflight.slice(1),
+  }, { requireKernelMoment: true }),
+  /preflight.*families/i,
+);
+
+await assert.rejects(
+  () => oracle.validateCameraHoldoutReport({
+    ...kernelReport,
+    footprintFamilyPreflight: [...kernelPreflight, kernelPreflight[0]],
+  }, { requireKernelMoment: true }),
+  /preflight.*duplicate/i,
+);
+
+await assert.rejects(
+  () => oracle.validateCameraHoldoutReport({
+    ...kernelReport,
+    footprintFamilyPreflight: kernelPreflight.map((row, index) => index === 0
+      ? { ...row, family: 'unknown-family' }
+      : row),
+  }, { requireKernelMoment: true }),
+  /preflight.*unknown family/i,
+);
 
 const replayBridgeReport = {
   ...report,
