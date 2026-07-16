@@ -25,6 +25,8 @@ assert.match(witness, /\['running', 'paused'\][\s\S]*capturePaused/, 'an explici
 assert.match(witness, /assertConsecutiveSteps/);
 assert.match(witness, /sameNativeStateIdentity/);
 assert.match(witness, /sourceStepIdentity/);
+assert.match(witness, /candidate96Trained[\s\S]*sourceStepIdentityVerification[\s\S]*expectationSupplied[\s\S]*expectationMatched/);
+assert.match(witness, /expectedSourceStepIdentity[\s\S]*computedSourceStepIdentity[\s\S]*effectiveSourceStepIdentity/);
 assert.match(witness, /dc1886384f87c4e51015f6ffd5ac8c0a48ac6f32b6f02a238ac5e3c3bd883dc9/);
 assert.match(witness, /baa54236f04c28eab278cf60e4a60745cd3c0160a985a9adbb1e06db7958f6e8/);
 assert.match(witness, /requestedRoute[\s\S]*effectiveRoute/);

@@ -390,6 +390,15 @@ function validateFrameReceipt(receipt, frameIndex, previousStep, previousStateId
     assert.equal(roleReceipt.sourceStepIdentity, receipt.sourceStepIdentity, `${role} used a different source step at frame ${frameIndex}`);
     assert.equal(roleReceipt.fallbackReason ?? null, null, `${role} fell back at frame ${frameIndex}`);
     assert.equal(roleReceipt.staleFrameReason ?? null, null, `${role} reused stale output at frame ${frameIndex}`);
+    if (role === 'candidate96Trained') {
+      const verification = roleReceipt.sourceStepIdentityVerification;
+      assert.ok(verification, `${role} omitted source-step identity verification at frame ${frameIndex}`);
+      assert.equal(verification.expectationSupplied, true, `${role} did not guard the expected source identity at frame ${frameIndex}`);
+      assert.equal(verification.expectationMatched, true, `${role} source identity expectation did not match at frame ${frameIndex}`);
+      assert.equal(verification.expectedSourceStepIdentity, receipt.sourceStepIdentity, `${role} expected a different source identity at frame ${frameIndex}`);
+      assert.equal(verification.computedSourceStepIdentity, receipt.sourceStepIdentity, `${role} computed a different source identity at frame ${frameIndex}`);
+      assert.equal(verification.effectiveSourceStepIdentity, receipt.sourceStepIdentity, `${role} used a different effective source identity at frame ${frameIndex}`);
+    }
     if (receipt.requestedComposition === 'splat-only-v0') {
       const candidateCount = Number(roleReceipt.candidateCount);
       const instanceCount = Number(roleReceipt.instanceCount);
@@ -427,6 +436,9 @@ function compactFrameReceipt(receipt, frameIndex) {
         overflowCount: value.overflowCount,
         modelIdentity: value.modelIdentity || null,
         modelSha256: value.modelSha256 || null,
+        expectedSourceStepIdentity: value.expectedSourceStepIdentity ?? null,
+        computedSourceStepIdentity: value.computedSourceStepIdentity || null,
+        sourceStepIdentityVerification: value.sourceStepIdentityVerification || null,
         stageTiming: value.stageTiming || null,
         modelSpecificTiming: value.modelSpecificTiming || null,
       }];
