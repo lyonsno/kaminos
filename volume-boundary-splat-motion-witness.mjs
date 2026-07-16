@@ -26,7 +26,9 @@ import {
   selectFailureRendererIdentity,
 } from './hybrid-raymarch-smoke-boundary-evidence.mjs';
 import {
+  assessSharedVolumeSettingsApplication,
   buildSharedVolumeSettingsTarget,
+  buildSharedVolumeSettingsReplayPlan,
   DEFAULT_SHARED_VOLUME_SETTINGS_STORE,
   resolveSharedVolumeSettingsPreset,
 } from './volume-shared-settings-preset.mjs';
@@ -109,6 +111,8 @@ let ws = null;
 let failurePhase = 'startup';
 let requestedHybridSmokeConfig = null;
 let settingsPresetReceipt = null;
+let settingsPresetReplay = null;
+let settingsPresetApplication = null;
 let liveCoupledHybrid = false;
 let failureReportPathValidated = !hybridOnly;
 let liveWarmupStepIndex = 0;
@@ -150,12 +154,27 @@ try {
   failurePhase = 'route-load';
   await navigateToRequestedRoute();
   await waitForPrototype();
+  if (settingsPresetReceipt) {
+    failurePhase = 'settings-preset-exact-replay';
+    settingsPresetReplay = await applySettingsPresetReplay(settingsPresetReceipt);
+    lastTrustworthyEvidence.settingsPresetReplay = settingsPresetReplay;
+  }
   await delay(settleMs);
   await hideHud();
   await wsRequest('Page.bringToFront');
   if (liveCoupledHybrid) await waitForRequestedLiveRoute();
   const initialState = await debugState();
   validateRequestedEffectiveConfig(initialState);
+  if (settingsPresetReceipt) {
+    failurePhase = 'settings-preset-effective-controls';
+    const observedControls = await inspectSettingsPresetControls(settingsPresetReceipt);
+    lastTrustworthyEvidence.settingsPresetObservedControls = observedControls;
+    settingsPresetApplication = assessSharedVolumeSettingsApplication(
+      settingsPresetReceipt,
+      observedControls,
+    );
+    lastTrustworthyEvidence.settingsPresetApplication = settingsPresetApplication;
+  }
   lastTrustworthyEvidence.initialState = compactState(initialState);
   const effectivePageUrl = await currentPageUrl();
 
@@ -228,6 +247,8 @@ try {
     requestedRoute,
     requestedRouteInput,
     settingsPresetReceipt: compactSettingsPresetReceipt(settingsPresetReceipt),
+    settingsPresetReplay,
+    settingsPresetApplication,
     requestedRouteIdentity,
     effectiveRoute: raymarchHybridBoundary
       ? deriveRaymarchHybridBoundaryRoute([staticSequence, grazingSequence])
@@ -334,6 +355,8 @@ try {
     settingsPresetRef: settingsPresetRef || null,
     settingsStorePath,
     settingsPresetReceipt: compactSettingsPresetReceipt(settingsPresetReceipt),
+    settingsPresetReplay,
+    settingsPresetApplication,
     rendererIdentity: selectFailureRendererIdentity({ hybridOnly, raymarchHybridBoundary }),
     requestedRouteIdentity: {
       requestedRoute,
@@ -386,6 +409,84 @@ function compactSettingsPresetReceipt(receipt) {
     artifactPath: receipt.artifactPath,
     authority: receipt.authority,
   };
+}
+
+async function applySettingsPresetReplay(receipt) {
+  const plan = buildSharedVolumeSettingsReplayPlan(receipt);
+  const result = await wsRequest('Runtime.evaluate', {
+    expression: `(() => {
+      const plan = ${JSON.stringify(plan)};
+      return plan.map(control => {
+        const element = document.getElementById(control.id);
+        const tagMatches = !!element
+          && String(element.tagName || '').toUpperCase() === String(control.tagName).toUpperCase();
+        const typeMatches = !!element
+          && String(element.type || '').toLowerCase() === String(control.type).toLowerCase();
+        if (!element || !tagMatches || !typeMatches) {
+          return { key: control.key, id: control.id, found: !!element, tagMatches, typeMatches, applied: false };
+        }
+        if (String(control.type).toLowerCase() === 'checkbox') {
+          element.checked = Boolean(control.expectedValue);
+        } else {
+          element.value = String(control.expectedValue ?? '');
+        }
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+        element.dispatchEvent(new Event('change', { bubbles: true }));
+        return { key: control.key, id: control.id, found: true, tagMatches, typeMatches, applied: true };
+      });
+    })()`,
+    returnByValue: true,
+  });
+  const applications = result.result?.value;
+  if (result.exceptionDetails
+      || !Array.isArray(applications)
+      || applications.length !== receipt.controlCount
+      || applications.some(application => application.applied !== true)) {
+    throw new Error(`shared preset exact DOM replay failed: ${JSON.stringify({
+      exceptionDetails: result.exceptionDetails ?? null,
+      applications: Array.isArray(applications)
+        ? applications.filter(application => application.applied !== true)
+        : applications,
+    })}`);
+  }
+  return {
+    status: 'passed',
+    authority: 'exact-browser-dom-control-replay-v1',
+    presetId: receipt.presetId,
+    requestedControlCount: receipt.controlCount,
+    appliedControlCount: applications.length,
+  };
+}
+
+async function inspectSettingsPresetControls(receipt) {
+  const expected = receipt.controls.map(({ key, id, param, type }) => ({ key, id, param, type }));
+  const result = await wsRequest('Runtime.evaluate', {
+    expression: `(() => {
+      const expected = ${JSON.stringify(expected)};
+      return expected.map(control => {
+        const element = document.getElementById(control.id);
+        return {
+          key: control.key,
+          id: control.id,
+          param: control.param,
+          found: !!element,
+          actualTagName: element?.tagName || null,
+          actualType: element?.type || null,
+          actualValue: !element
+            ? null
+            : (String(control.type).toLowerCase() === 'checkbox' ? element.checked : element.value),
+        };
+      });
+    })()`,
+    returnByValue: true,
+  });
+  if (result.exceptionDetails || !Array.isArray(result.result?.value)) {
+    throw new Error(`shared preset browser control inspection failed: ${JSON.stringify({
+      exceptionDetails: result.exceptionDetails ?? null,
+      result: result.result ?? null,
+    })}`);
+  }
+  return result.result.value;
 }
 
 function parseArgs(argv) {
