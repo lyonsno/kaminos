@@ -5,6 +5,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { inflateSync } from 'node:zlib';
 
 const scriptUrl = new URL('../volume-nonridge-feature-oracle-mlx.py', import.meta.url);
 assert.ok(existsSync(scriptUrl), 'non-ridge feature oracle exists');
@@ -17,6 +18,10 @@ assert.match(script, /current16-plus-independent-source-evidence-v0/, 'oracle co
 assert.match(script, /candidate\.nonRidgeMembership/, 'oracle evaluates non-ridge membership');
 assert.match(script, /nonRidge\.extinction/, 'oracle evaluates physical extinction');
 assert.match(script, /failurePhase[\s\S]*lastTrustworthyEvidence/, 'oracle preserves phase-local failure evidence');
+assert.match(script, /kaminos\.volume\.nonridge-feature-oracle-visuals\.v0/, 'oracle publishes a stable native-grid visual schema');
+assert.match(script, /x-fastest-y-then-z-v0/, 'oracle binds projections to the producer grid-axis contract');
+assert.match(script, /--visual-setting/, 'oracle accepts explicit settings for in-job prediction visualization');
+assert.match(script, /--truth-only/, 'oracle can render a truth-only witness without loading MLX');
 
 const current16 = [
   'sidecar.support', 'sidecar.coverage', 'sidecar.ridge', 'sidecar.footprint',
@@ -112,6 +117,10 @@ const manifest = {
   },
   targets: { identity: 'positive-nonridge-membership-emission-extinction-v0', order: targets },
   controls: { conditionedArm: null },
+  frozenAuthority: {
+    gridShape: [2, 2, 1],
+    gridAxisOrder: 'x-fastest-y-then-z-v0',
+  },
   splits: {
     identity: 'whole-effective-control-setting-holdout-v0',
     train: { settingIds: ['train-negative', 'train-positive'] },
@@ -144,6 +153,78 @@ assert.equal(report.assays.sameState.identity, 'same-state-memorization-v0');
 assert.equal(report.assays.heldSetting.identity, 'whole-effective-control-setting-holdout-v0');
 assert.equal(report.controlsUsedAsFeatures, false);
 assert.equal(report.lastTrustworthyEvidence.validatedArtifactCount, 12);
+
+function readRgbPng(bytes) {
+  assert.deepEqual([...bytes.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+  let offset = 8;
+  let width = 0;
+  let height = 0;
+  const idat = [];
+  while (offset < bytes.length) {
+    const length = bytes.readUInt32BE(offset);
+    const type = bytes.toString('ascii', offset + 4, offset + 8);
+    const data = bytes.subarray(offset + 8, offset + 8 + length);
+    if (type === 'IHDR') {
+      width = data.readUInt32BE(0);
+      height = data.readUInt32BE(4);
+      assert.equal(data[8], 8, 'witness PNG uses eight-bit channels');
+      assert.equal(data[9], 2, 'witness PNG uses RGB color');
+    } else if (type === 'IDAT') {
+      idat.push(data);
+    } else if (type === 'IEND') {
+      break;
+    }
+    offset += 12 + length;
+  }
+  const raw = inflateSync(Buffer.concat(idat));
+  const stride = width * 3;
+  const pixels = Buffer.alloc(width * height * 3);
+  for (let row = 0; row < height; row += 1) {
+    const source = row * (stride + 1);
+    assert.equal(raw[source], 0, 'witness PNG rows use deterministic no-filter encoding');
+    raw.copy(pixels, row * stride, source + 1, source + 1 + stride);
+  }
+  return { width, height, pixels };
+}
+
+const truthOutDir = join(root, 'truth-visual-output');
+await mkdir(truthOutDir);
+const truthReportPath = join(truthOutDir, 'oracle-report.json');
+const truthOnly = spawnSync('python3', [
+  scriptUrl.pathname,
+  '--input', inputPath,
+  '--out-dir', truthOutDir,
+  '--report', truthReportPath,
+  '--truth-only',
+  '--visual-setting', 'held-positive',
+], { encoding: 'utf8' });
+assert.equal(truthOnly.status, 0, truthOnly.stderr || truthOnly.stdout);
+const truthReport = JSON.parse(await readFile(truthReportPath, 'utf8'));
+assert.equal(truthReport.status, 'visualized-truth-only');
+assert.equal(truthReport.visualizations.schema, 'kaminos.volume.nonridge-feature-oracle-visuals.v0');
+assert.deepEqual(truthReport.visualizations.gridShape, [2, 2, 1]);
+assert.equal(truthReport.visualizations.gridAxisOrder, 'x-fastest-y-then-z-v0');
+assert.deepEqual(truthReport.visualizations.requiredRoles, ['truth']);
+assert.deepEqual(truthReport.visualizations.settingIds, ['held-positive']);
+assert.equal(truthReport.visualizations.images.length, 9, 'truth witness emits three modalities on all three axes');
+const membershipZ = truthReport.visualizations.images.find(value => (
+  value.settingId === 'held-positive'
+  && value.role === 'truth'
+  && value.modality === 'membership'
+  && value.axis === 'z'
+));
+assert.ok(membershipZ, 'truth witness emits the z-axis membership projection');
+const membershipZBytes = await readFile(membershipZ.path);
+assert.equal(sha256(membershipZBytes), membershipZ.sha256, 'truth witness binds every image checksum');
+const decodedMembershipZ = readRgbPng(membershipZBytes);
+assert.equal(decodedMembershipZ.width, 2, 'z projection preserves native x width');
+assert.equal(decodedMembershipZ.height, 2, 'z projection preserves native y height');
+assert.deepEqual(
+  [decodedMembershipZ.pixels[0], decodedMembershipZ.pixels[3], decodedMembershipZ.pixels[6], decodedMembershipZ.pixels[9]],
+  [51, 255, 51, 51],
+  'z projection reshapes flattened rows as x-fastest, then y, then z',
+);
+assert.ok(existsSync(truthReport.visualizations.htmlPath), 'truth witness writes a complete comparison surface');
 
 const singleMixedHeld = structuredClone(manifest);
 singleMixedHeld.splits.train.settingIds.push('held-negative');
@@ -195,6 +276,8 @@ if (process.env.KAMINOS_MLX_PYTHON) {
     '--epochs', '2',
     '--batch-size', '4',
     '--hidden-size', '16',
+    '--visual-setting', 'train-positive',
+    '--visual-setting', 'held-positive',
   ], { encoding: 'utf8' });
   assert.equal(mlxRun.status, 0, mlxRun.stderr || mlxRun.stdout);
   const mlxReport = JSON.parse(await readFile(mlxReportPath, 'utf8'));
@@ -210,6 +293,16 @@ if (process.env.KAMINOS_MLX_PYTHON) {
   assert.equal(mlxReport.views.current16.seed, mlxReport.views.sourceComplete.seed);
   assert.equal(mlxReport.views.current16.architectureIdentity, mlxReport.views.sourceComplete.architectureIdentity);
   assert.ok(Number.isFinite(mlxReport.comparisons.sameState.opticalMseReductionFraction));
+  assert.equal(mlxReport.visualizations.schema, 'kaminos.volume.nonridge-feature-oracle-visuals.v0');
+  assert.deepEqual(mlxReport.visualizations.requiredRoles, ['truth', 'current16', 'sourceComplete']);
+  assert.deepEqual(mlxReport.visualizations.settingIds, ['held-positive', 'train-positive']);
+  assert.equal(mlxReport.visualizations.images.length, 54, 'matched witness emits every role, modality, axis, and setting');
+  for (const image of mlxReport.visualizations.images) {
+    const bytes = await readFile(image.path);
+    assert.equal(sha256(bytes), image.sha256, `visual checksum matches ${image.path}`);
+    const decoded = readRgbPng(bytes);
+    assert.ok(decoded.width > 0 && decoded.height > 0, `visual has native dimensions ${image.path}`);
+  }
 }
 
 const uncoveredHeldSplit = structuredClone(manifest);

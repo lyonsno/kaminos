@@ -5,11 +5,14 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import html
 import json
 import math
 import os
+import struct
 import sys
 import time
+import zlib
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -19,6 +22,8 @@ import numpy as np
 INPUT_SCHEMA = "kaminos.volume.nonridge-source-basis-corpus.v0"
 RESULT_SCHEMA = "kaminos.volume.nonridge-feature-oracle.v0"
 FAILURE_SCHEMA = "kaminos.volume.nonridge-feature-oracle-failure.v0"
+VISUAL_SCHEMA = "kaminos.volume.nonridge-feature-oracle-visuals.v0"
+GRID_AXIS_IDENTITY = "x-fastest-y-then-z-v0"
 CURRENT16_IDENTITY = "live-boundary-candidate-current16-v0"
 SOURCE_COMPLETE_IDENTITY = "current16-plus-independent-source-evidence-v0"
 SPLIT_IDENTITY = "whole-effective-control-setting-holdout-v0"
@@ -69,6 +74,25 @@ def atomic_json(path: Path, payload: dict[str, Any]) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     os.replace(temporary, path)
+
+
+def png_chunk(kind: bytes, payload: bytes) -> bytes:
+    return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF)
+
+
+def write_rgb_png(path: Path, pixels: np.ndarray) -> dict[str, Any]:
+    require(pixels.ndim == 3 and pixels.shape[2] == 3, "PNG pixels must have HxWx3 shape")
+    require(pixels.dtype == np.uint8, "PNG pixels must be uint8")
+    height, width, _ = pixels.shape
+    require(width > 0 and height > 0, "PNG dimensions must be positive")
+    raw = b"".join(b"\x00" + pixels[row].tobytes(order="C") for row in range(height))
+    header = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    encoded = b"\x89PNG\r\n\x1a\n" + png_chunk(b"IHDR", header) + png_chunk(b"IDAT", zlib.compress(raw, level=9)) + png_chunk(b"IEND", b"")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_bytes(encoded)
+    os.replace(temporary, path)
+    return {"path": str(path), "bytes": len(encoded), "sha256": hashlib.sha256(encoded).hexdigest(), "width": width, "height": height}
 
 
 def artifact_path(manifest_dir: Path, artifact: dict[str, Any]) -> Path:
@@ -134,6 +158,17 @@ def validate_manifest(manifest: dict[str, Any], manifest_path: Path) -> dict[str
     require(isinstance(target_contract, dict) and target_contract.get("order") == TARGETS, "target order mismatch")
     controls = manifest.get("controls")
     require(isinstance(controls, dict) and controls.get("conditionedArm") is None, "first assay must not condition on controls")
+    frozen_authority = manifest.get("frozenAuthority")
+    require(isinstance(frozen_authority, dict), "frozenAuthority must be an object")
+    grid_shape = frozen_authority.get("gridShape")
+    require(
+        isinstance(grid_shape, list)
+        and len(grid_shape) == 3
+        and all(isinstance(dimension, int) and dimension > 0 for dimension in grid_shape),
+        "frozenAuthority.gridShape must contain three positive integers",
+    )
+    require(frozen_authority.get("gridAxisOrder") == GRID_AXIS_IDENTITY, f"frozenAuthority.gridAxisOrder must be {GRID_AXIS_IDENTITY}")
+    grid_row_count = math.prod(grid_shape)
     split_contract = manifest.get("splits")
     require(isinstance(split_contract, dict) and split_contract.get("identity") == SPLIT_IDENTITY, "split identity mismatch")
     train_ids = sorted((split_contract.get("train") or {}).get("settingIds") or [])
@@ -162,6 +197,7 @@ def validate_manifest(manifest: dict[str, Any], manifest_path: Path) -> dict[str
         require(isinstance(rows, dict), f"setting {setting_id}.rows must be an object")
         row_count = rows.get("count")
         require(isinstance(row_count, int) and row_count > 0, f"setting {setting_id}.rows.count must be positive")
+        require(row_count == grid_row_count, f"setting {setting_id}.rows.count must equal gridShape product {grid_row_count}")
         negative_control = setting_value.get("negativeControl")
         require(isinstance(negative_control, bool), f"setting {setting_id}.negativeControl must be boolean")
         normalized_rows = {}
@@ -236,6 +272,8 @@ def validate_manifest(manifest: dict[str, Any], manifest_path: Path) -> dict[str
             "sourceComplete": {"identity": SOURCE_COMPLETE_IDENTITY, "order": [*CURRENT16, *SOURCE_COMPLETE_ADDITIONS], "channelCount": len(CURRENT16) + len(SOURCE_COMPLETE_ADDITIONS)},
         },
         "targets": {"order": TARGETS, "channelCount": len(TARGETS)},
+        "gridShape": grid_shape,
+        "gridAxisOrder": GRID_AXIS_IDENTITY,
         "splits": {
             "identity": SPLIT_IDENTITY,
             "targetCoverage": split_coverage,
@@ -479,6 +517,163 @@ def evaluate_model(
     }
 
 
+def predict_setting(
+    model: Any,
+    normalization: dict[str, Any],
+    setting: dict[str, Any],
+    feature_role: str,
+    feature_count: int,
+    batch_size: int,
+) -> np.ndarray:
+    import mlx.core as mx
+
+    features = map_array(setting, feature_role, feature_count)
+    predictions = np.empty((setting["rows"]["count"], len(TARGETS)), dtype=np.float32)
+    for start in range(0, predictions.shape[0], batch_size):
+        stop = min(predictions.shape[0], start + batch_size)
+        batch = (np.asarray(features[start:stop], dtype=np.float32) - normalization["featureMean"]) / normalization["featureStd"]
+        logits = model(mx.array(batch.astype(np.float32)))
+        output = np.asarray(mx.sigmoid(logits), dtype=np.float32)
+        output[:, 1:] *= normalization["opticalScale"]
+        predictions[start:stop] = output
+    return predictions
+
+
+def grid_volume(values: np.ndarray, grid_shape: list[int]) -> np.ndarray:
+    grid_x, grid_y, grid_z = grid_shape
+    require(values.shape == (grid_x * grid_y * grid_z, len(TARGETS)), "visual values do not match the validated grid")
+    return values.reshape((grid_z, grid_y, grid_x, len(TARGETS)))
+
+
+def projection_axis(axis: str) -> int:
+    return {"x": 2, "y": 1, "z": 0}[axis]
+
+
+def target_projection_scale(truth_volume: np.ndarray, modality: str, axis: str) -> float:
+    spatial_axis = projection_axis(axis)
+    if modality == "membership":
+        return 1.0
+    if modality == "emission":
+        projected = np.max(truth_volume[..., 1:4], axis=spatial_axis)
+    else:
+        projected = np.sum(truth_volume[..., 4], axis=spatial_axis)
+    positive = projected[projected > 0.0]
+    if positive.size == 0:
+        return 1.0
+    reference = float(np.quantile(positive, 0.995))
+    return -math.log(0.1) / max(reference, 1e-8)
+
+
+def projected_rgb(volume: np.ndarray, modality: str, axis: str, display_scale: float) -> np.ndarray:
+    spatial_axis = projection_axis(axis)
+    if modality == "membership":
+        projected = np.max(volume[..., 0], axis=spatial_axis)
+        rgb = np.repeat(np.clip(projected, 0.0, 1.0)[..., None], 3, axis=2)
+    elif modality == "emission":
+        projected = np.max(volume[..., 1:4], axis=spatial_axis)
+        rgb = 1.0 - np.exp(-np.maximum(projected, 0.0) * display_scale)
+    elif modality == "extinction":
+        projected = np.sum(np.maximum(volume[..., 4], 0.0), axis=spatial_axis)
+        grayscale = 1.0 - np.exp(-projected * display_scale)
+        rgb = np.repeat(grayscale[..., None], 3, axis=2)
+    else:
+        raise OracleError(f"unknown visual modality {modality}")
+    return np.rint(np.clip(rgb, 0.0, 1.0) * 255.0).astype(np.uint8)
+
+
+def render_visual_role(
+    out_dir: Path,
+    setting: dict[str, Any],
+    role: str,
+    values: np.ndarray,
+    truth_values: np.ndarray,
+    grid_shape: list[int],
+) -> list[dict[str, Any]]:
+    volume = grid_volume(values, grid_shape)
+    truth_volume = grid_volume(truth_values, grid_shape)
+    safe_setting_id = "".join(character if character.isalnum() or character in "-_" else "_" for character in setting["id"])
+    records = []
+    for modality in ("membership", "emission", "extinction"):
+        for axis in ("x", "y", "z"):
+            display_scale = target_projection_scale(truth_volume, modality, axis)
+            pixels = projected_rgb(volume, modality, axis, display_scale)
+            image_path = out_dir / "visuals" / safe_setting_id / f"{role}-{modality}-{axis}.png"
+            artifact = write_rgb_png(image_path, pixels)
+            records.append({
+                "settingId": setting["id"],
+                "role": role,
+                "modality": modality,
+                "axis": axis,
+                "displayScale": display_scale,
+                "displayScaleAuthority": "truth-derived-shared-across-roles-v0",
+                **artifact,
+            })
+    return records
+
+
+def write_visual_html(path: Path, images: list[dict[str, Any]], setting_ids: list[str], required_roles: list[str]) -> dict[str, Any]:
+    image_lookup = {(image["settingId"], image["role"], image["modality"], image["axis"]): image for image in images}
+    cards = []
+    for setting_id in setting_ids:
+        for modality in ("membership", "emission", "extinction"):
+            for axis in ("x", "y", "z"):
+                role_images = []
+                for role in required_roles:
+                    image = image_lookup[(setting_id, role, modality, axis)]
+                    relative_path = os.path.relpath(image["path"], path.parent)
+                    role_images.append(
+                        f'<figure data-role="{html.escape(role)}"><img src="{html.escape(relative_path)}" alt="{html.escape(role)} {html.escape(modality)} {axis}"><figcaption>{html.escape(role)}</figcaption></figure>'
+                    )
+                cards.append(
+                    f'<section><h2>{html.escape(setting_id)} · {html.escape(modality)} · {axis}</h2><div class="roles">{"".join(role_images)}</div></section>'
+                )
+    role_buttons = "".join(f'<button data-role-button="{html.escape(role)}">{html.escape(role)}</button>' for role in required_roles)
+    document = f"""<!doctype html>
+<html><head><meta charset="utf-8"><title>Non-Ridge feature oracle native-grid witness</title>
+<style>
+body{{background:#0b0d10;color:#f2f4f8;font-family:system-ui;margin:24px}}button{{margin:0 8px 16px 0;padding:8px 12px}}section{{border-top:1px solid #39404a;padding:16px 0}}.roles{{display:flex;gap:16px;flex-wrap:wrap}}figure{{margin:0}}img{{image-rendering:pixelated;min-width:240px;max-width:40vw;background:#000}}figcaption{{text-align:center;margin-top:4px}}.native img{{min-width:0;max-width:none}}
+</style></head><body><h1>Native-grid Non-Ridge oracle witness</h1>
+<p>Checksum-bound grid projections only; not a screen-space raymarch or product-beauty claim.</p>
+<div>{role_buttons}<button id="scale">toggle native / enlarged</button></div>{''.join(cards)}
+<script>
+for(const button of document.querySelectorAll('[data-role-button]')){{button.onclick=()=>{{const role=button.dataset.roleButton;for(const figure of document.querySelectorAll('[data-role]')){{figure.hidden=figure.dataset.role!==role}}}}}}
+document.querySelector('#scale').onclick=()=>document.body.classList.toggle('native');
+</script></body></html>"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(document, encoding="utf-8")
+    os.replace(temporary, path)
+    return {"htmlPath": str(path), "htmlSha256": sha256_file(path)}
+
+
+def visual_receipt(
+    out_dir: Path,
+    validated: dict[str, Any],
+    setting_ids: list[str],
+    required_roles: list[str],
+    images: list[dict[str, Any]],
+) -> dict[str, Any]:
+    expected_count = len(setting_ids) * len(required_roles) * 3 * 3
+    require(len(images) == expected_count, f"visual witness is partial: expected {expected_count} images, found {len(images)}")
+    for image in images:
+        path = Path(image["path"])
+        require(path.is_file(), f"visual witness image is missing: {path}")
+        require(path.stat().st_size == image["bytes"], f"visual witness image byte count changed: {path}")
+        require(sha256_file(path) == image["sha256"], f"visual witness image checksum changed: {path}")
+    html_receipt = write_visual_html(out_dir / "visuals" / "index.html", images, setting_ids, required_roles)
+    return {
+        "schema": VISUAL_SCHEMA,
+        "authority": "checksum-bound-native-grid-projection-diagnostic-v0",
+        "scopeDisclaimer": "Grid projections diagnose retained source structure; they are not screen-space raymarch or product-beauty evidence.",
+        "gridShape": validated["gridShape"],
+        "gridAxisOrder": validated["gridAxisOrder"],
+        "settingIds": setting_ids,
+        "requiredRoles": required_roles,
+        "images": images,
+        **html_receipt,
+    }
+
+
 def comparison(current: dict[str, Any], source_complete: dict[str, Any]) -> dict[str, Any]:
     current_optical = current["opticalMeanMse"]
     augmented_optical = source_complete["opticalMeanMse"]
@@ -507,6 +702,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out-dir", required=True, type=Path)
     parser.add_argument("--report", type=Path)
     parser.add_argument("--probe-only", action="store_true")
+    parser.add_argument("--truth-only", action="store_true")
+    parser.add_argument("--visual-setting", action="append", default=[])
     parser.add_argument("--epochs", type=int, default=4)
     parser.add_argument("--batch-size", type=int, default=8192)
     parser.add_argument("--hidden-size", type=int, default=96)
@@ -529,6 +726,8 @@ def main() -> int:
         require(args.batch_size > 0, "batch-size must be positive")
         require(args.hidden_size > 0, "hidden-size must be positive")
         require(args.learning_rate > 0, "learning-rate must be positive")
+        require(not (args.probe_only and args.truth_only), "probe-only and truth-only are mutually exclusive")
+        require(not args.truth_only or args.visual_setting, "truth-only requires at least one --visual-setting")
         input_bytes = input_path.read_bytes()
         input_sha = hashlib.sha256(input_bytes).hexdigest()
         last_trustworthy["inputManifestSha256"] = input_sha
@@ -540,12 +739,18 @@ def main() -> int:
             "validatedSettingCount": validated["cohort"]["retainedSettingCount"],
             "validatedRowCount": validated["cohort"]["totalRows"],
         })
+        requested_visual_ids = sorted(set(args.visual_setting))
+        require(len(requested_visual_ids) == len(args.visual_setting), "visual-setting ids must not repeat")
+        setting_by_id = {setting["id"]: setting for setting in validated["settings"]}
+        missing_visual_ids = sorted(set(requested_visual_ids) - set(setting_by_id))
+        require(not missing_visual_ids, f"visual-setting ids are absent from the corpus: {missing_visual_ids}")
+        visual_settings = [setting_by_id[setting_id] for setting_id in requested_visual_ids]
         report: dict[str, Any] = {
             "schema": RESULT_SCHEMA,
-            "status": "validated" if args.probe_only else "training",
+            "status": "validated" if args.probe_only else "visualizing-truth" if args.truth_only else "training",
             "failurePhase": None,
             "source": {"manifestPath": str(input_path), "manifestSha256": input_sha, "manifestIdentity": validated["identity"]},
-            "backend": "not-loaded-probe-only" if args.probe_only else "mlx",
+            "backend": "not-loaded-probe-only" if args.probe_only else "not-loaded-truth-only" if args.truth_only else "mlx",
             "controlsUsedAsFeatures": False,
             "cohort": validated["cohort"],
             "featureViews": validated["featureViews"],
@@ -565,6 +770,23 @@ def main() -> int:
             report["elapsedSeconds"] = report["finishedAt"] - started_at
             atomic_json(report_path, report)
             print(json.dumps({"status": report["status"], "report": str(report_path), "rows": validated["cohort"]["totalRows"]}))
+            return 0
+        visual_images: list[dict[str, Any]] = []
+        for setting in visual_settings:
+            truth_values = np.asarray(map_array(setting, "targets", len(TARGETS)), dtype=np.float32)
+            visual_images.extend(render_visual_role(out_dir, setting, "truth", truth_values, truth_values, validated["gridShape"]))
+        if args.truth_only:
+            phase = "source-revalidation"
+            require(hashlib.sha256(input_path.read_bytes()).hexdigest() == input_sha, "input manifest changed after initial validation")
+            validate_manifest(json.loads(input_path.read_bytes()), input_path)
+            last_trustworthy["sourceRevalidatedAtCompletion"] = True
+            phase = "visual-witness-finalization"
+            report["status"] = "visualized-truth-only"
+            report["visualizations"] = visual_receipt(out_dir, validated, requested_visual_ids, ["truth"], visual_images)
+            report["finishedAt"] = time.time()
+            report["elapsedSeconds"] = report["finishedAt"] - started_at
+            atomic_json(report_path, report)
+            print(json.dumps({"status": report["status"], "report": str(report_path), "images": len(visual_images)}))
             return 0
         train_settings = [setting for setting in validated["settings"] if setting["splitRole"] == "train"]
         held_settings = [setting for setting in validated["settings"] if setting["splitRole"] == "heldOut"]
@@ -587,6 +809,11 @@ def main() -> int:
             phase = f"{view_name}-evaluation"
             same_state = evaluate_model(model, normalization["arrays"], train_settings, feature_role, feature_count, args.batch_size)
             held_setting = evaluate_model(model, normalization["arrays"], held_settings, feature_role, feature_count, args.batch_size)
+            phase = f"{view_name}-visualization"
+            for setting in visual_settings:
+                truth_values = np.asarray(map_array(setting, "targets", len(TARGETS)), dtype=np.float32)
+                predicted_values = predict_setting(model, normalization["arrays"], setting, feature_role, feature_count, args.batch_size)
+                visual_images.extend(render_visual_role(out_dir, setting, view_name, predicted_values, truth_values, validated["gridShape"]))
             results[view_name] = {
                 "featureIdentity": validated["featureViews"][view_name]["identity"],
                 "featureChannelCount": feature_count,
@@ -599,12 +826,26 @@ def main() -> int:
                 "heldSetting": held_setting,
             }
             del model
-        report["status"] = "complete"
+        phase = "source-revalidation"
+        final_input_bytes = input_path.read_bytes()
+        require(hashlib.sha256(final_input_bytes).hexdigest() == input_sha, "input manifest changed after initial validation")
+        validate_manifest(json.loads(final_input_bytes), input_path)
+        last_trustworthy["sourceRevalidatedAtCompletion"] = True
+        phase = "visual-witness-finalization"
         report["views"] = results
         report["comparisons"] = {
             "sameState": comparison(results["current16"]["sameState"], results["sourceComplete"]["sameState"]),
             "heldSetting": comparison(results["current16"]["heldSetting"], results["sourceComplete"]["heldSetting"]),
         }
+        if requested_visual_ids:
+            report["visualizations"] = visual_receipt(
+                out_dir,
+                validated,
+                requested_visual_ids,
+                ["truth", "current16", "sourceComplete"],
+                visual_images,
+            )
+        report["status"] = "complete"
         report["finishedAt"] = time.time()
         report["elapsedSeconds"] = report["finishedAt"] - started_at
         atomic_json(report_path, report)
