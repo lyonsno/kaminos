@@ -1,0 +1,150 @@
+{
+  "schema": "kaminos.volume.boundary-splat-motion-witness.v0",
+  "status": "failed",
+  "failurePhase": "static-camera-capture",
+  "error": "Error: renderer capture failed for learned-splat-control-before: {\"canvasCapture\":{},\"result\":{\"type\":\"object\",\"value\":{}},\"exceptionDetails\":{\"exceptionId\":1,\"text\":\"Uncaught (in promise) ReferenceError: liveStateBefore is not defined\",\"lineNumber\":13293,\"columnNumber\":45,\"scriptId\":\"13\",\"stackTrace\":{\"callFrames\":[{\"functionName\":\"renderFrozenScaleToCanvas\",\"scriptId\":\"13\",\"url\":\"http://127.0.0.1:18816/volume-core.js?v=residual-source-uv-flip-0706\",\"lineNumber\":13292,\"columnNumber\":44}]},\"exception\":{\"type\":\"object\",\"subtype\":\"error\",\"className\":\"ReferenceError\",\"description\":\"ReferenceError: liveStateBefore is not defined\\n    at Object.renderFrozenScaleToCanvas (http://127.0.0.1:18816/volume-core.js?v=residual-source-uv-flip-0706:13293:45)\",\"objectId\":\"8205532323816820012.2.1\"}}}\n    at captureRenderer (file:///private/tmp/kaminos-handy-hybrid-smoke-boundary-0716/volume-boundary-splat-motion-witness.mjs:943:11)\n    at async captureSequence (file:///private/tmp/kaminos-handy-hybrid-smoke-boundary-0716/volume-boundary-splat-motion-witness.mjs:749:64)\n    at async file:///private/tmp/kaminos-handy-hybrid-smoke-boundary-0716/volume-boundary-splat-motion-witness.mjs:180:26",
+  "requestedRoute": "http://127.0.0.1:18816/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_tall_preset=operator_fire_0622&volume_input_radius=0.12&volume_flow_rate=0.35&volume_boundary_splat_mode=learned&volume_boundary_splat_composition=hybrid-smoke&volume_boundary_splat_instances=1&volume_boundary_splat_layout=proof&volume_hybrid_smoke_representation=raymarch&volume_resolution=128&volume_majorant_grid=24&volume_render_scale=0.65&volume_steps=48&volume_adaptive_rays=0&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=1",
+  "rendererIdentity": "splat-depth-conditioned-front-back-smoke-compositor-v1",
+  "requestedRouteIdentity": {
+    "requestedRoute": "http://127.0.0.1:18816/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_tall_preset=operator_fire_0622&volume_input_radius=0.12&volume_flow_rate=0.35&volume_boundary_splat_mode=learned&volume_boundary_splat_composition=hybrid-smoke&volume_boundary_splat_instances=1&volume_boundary_splat_layout=proof&volume_hybrid_smoke_representation=raymarch&volume_resolution=128&volume_majorant_grid=24&volume_render_scale=0.65&volume_steps=48&volume_adaptive_rays=0&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=1",
+    "routeMode": "hybrid-raymarch-smoke-boundary-v0"
+  },
+  "expectedLearnedModelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+  "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+  "hybridOnly": false,
+  "raymarchHybridBoundary": true,
+  "evidenceRoot": "/private/tmp/kaminos-handy-hybrid-smoke-boundary-0716",
+  "browser": {
+    "identity": "boundary-splat-motion-single-cdp-browser-v0",
+    "mode": "launched-owned",
+    "port": 19392,
+    "userDataDir": "/var/folders/lm/2d0ldrgn52jd5h6rtghxs2s40000gn/T/kaminos-splat-motion-chrome-KqlkMS",
+    "keepBrowserOpen": false,
+    "windowSize": "1280,960"
+  },
+  "lastTrustworthyEvidence": {
+    "initialState": {
+      "active": true,
+      "backend": "WebGPU:apple",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "volumeReconstructionStyle": "splat-depth-conditioned-front-back-smoke-compositor-v1",
+      "boundarySplatMode": "learned",
+      "boundarySplatRendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+      "boundarySplatAttributeModelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "boundarySplatSourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+      "boundarySplatInstanceDescriptorIdentity": "boundary-splat-instance-descriptor-v0",
+      "boundarySplatRequestedInstanceCount": 1,
+      "boundarySplatSourceCandidateCount": 5321,
+      "boundarySplatPhaseSourceCount": 1,
+      "phaseMode": "offset-history",
+      "phaseModeIdentity": "live-history-offset",
+      "boundarySplatPhaseStride": 1,
+      "boundarySplatHistoryDepth": 4,
+      "boundarySplatHistoryFrameStride": 1,
+      "boundarySplatEffectiveHistoryWindowFrames": 3,
+      "phaseSourceIdentity": "shared-current-control",
+      "phaseSources": [
+        {
+          "index": 0,
+          "phaseMode": "offset-history",
+          "phaseStride": 1,
+          "historyDepth": 4,
+          "historyFrameStride": 1,
+          "phaseModeIdentity": "live-history-offset",
+          "phaseSourceIdentity": "shared-current-control",
+          "historyOffsetSlots": 0,
+          "historyOffsetFrames": 0,
+          "effectiveHistoryOffsetFrames": 0,
+          "historySlot": 2,
+          "authority": "current-live-candidate-buffer"
+        }
+      ],
+      "incrementalInstanceCost": {
+        "identity": "boundary-splat-incremental-instance-cost-v0",
+        "evidenceSource": "gpu-archive-pass-plus-deterministic-raster-work-proxy",
+        "requestedInstanceCount": 1,
+        "sourceCandidateCount": 5321,
+        "renderedInstanceCount": 5321,
+        "addedSimulationPasses": 0,
+        "addedCompactionPasses": 0,
+        "addedHistoryArchivePasses": 1,
+        "addedRasterMultiplier": 1,
+        "phaseMode": "offset-history",
+        "phaseStride": 1,
+        "historyDepth": 4,
+        "historyFrameStride": 1,
+        "effectiveHistoryWindowFrames": 3,
+        "maxEffectiveHistoryOffsetFrames": 0,
+        "phaseModeIdentity": "live-history-offset",
+        "phaseSourceIdentity": "shared-current-control",
+        "fieldLayoutIdentity": "boundary-splat-proof-layout-v0",
+        "layoutBounds": {
+          "min": [
+            0,
+            0,
+            0
+          ],
+          "max": [
+            0,
+            0,
+            0
+          ],
+          "uniformScaleMin": 1,
+          "uniformScaleMax": 1,
+          "instanceCount": 1
+        }
+      },
+      "boundarySplatCandidateCount": 5321,
+      "boundarySplatOverflowCount": 0,
+      "boundarySplatFallbackReason": null,
+      "boundarySplatCompositionRequested": "hybrid-smoke",
+      "boundarySplatCompositionEffective": "hybrid-smoke",
+      "boundarySplatCompositionFallbackReason": null,
+      "hybridSplatSmokeCompositorIdentity": "splat-depth-conditioned-front-back-smoke-compositor-v1",
+      "hybridSmokeLayer": {
+        "identity": "raymarched-smoke-front-back-radiance-transmittance-linear-depth-intervals-v1",
+        "rendererIdentity": "native-3d-compute-fluid-raymarch-smoke-only-v0",
+        "format": "rgba16float",
+        "radiance": "premultiplied-smoke-only",
+        "opacity": "one-minus-smoke-transmittance",
+        "intervals": [
+          "front-of-splat-depth",
+          "back-of-splat-depth"
+        ],
+        "depth": "weighted-linear-depth-plus-near-far-interval",
+        "opticalComposition": "front-smoke>splat>back-smoke",
+        "excludedAuthority": "raymarched-flame-interface-emission",
+        "coupledDomain": null
+      },
+      "boundarySplatCopyBytesThisFrame": 0,
+      "boundarySplatCopyDisposition": {
+        "identity": "boundary-splat-candidate-copy-disposition-v0",
+        "status": "removed-full-capacity-copy",
+        "rendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+        "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+        "candidateStrideBytes": 48,
+        "priorFullCapacityCopyBytes": 6291456,
+        "effectiveCandidateCopyBytes": 0,
+        "renderStorageStrategy": "single-candidate-storage-buffer-read-after-compute-pass"
+      },
+      "hybridSmokeRepresentationRequested": "raymarch",
+      "hybridSmokeRepresentationEffective": "raymarch",
+      "hybridSmokeSourceRequested": "offline-manifest",
+      "hybridSmokeSourceEffective": null,
+      "spatialStrataHybridSmokeManifestUrl": "",
+      "spatialStrataHybridSmokeSourceStatus": "not-requested",
+      "spatialStrataHybridSmokeFailureReason": null,
+      "spatialStrataHybridSmokeSourceLifecycle": null,
+      "spatialStrataHybridSmokeConfigRequestedIdentity": null,
+      "spatialStrataHybridSmokeConfigEffectiveIdentity": null,
+      "spatialStrataHybridSmokeRendererIdentity": null,
+      "spatialStrataHybridSmokeDebug": null,
+      "frameCount": 131,
+      "simStepCount": 131
+    }
+  },
+  "reportWriteDisposition": {
+    "status": "written",
+    "path": "/private/tmp/kaminos-handy-hybrid-smoke-boundary-0716/artifacts/hybrid-raymarch-smoke-boundary-0716/tall-plume-v7/report.json"
+  }
+}

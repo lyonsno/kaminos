@@ -51,6 +51,10 @@ import {
   smokeDomainMetricVelocityScale,
   smokeDomainWorldContract,
 } from './coupled-smoke-domain.mjs';
+import {
+  restoreFrozenRenderLiveState,
+  snapshotFrozenRenderLiveState,
+} from './frozen-render-control-restoration.mjs';
 
 // Hybrid smoke is split during the raymarch around the transformed splat depth.
 
@@ -13113,6 +13117,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       await device.queue.onSubmittedWorkDone();
     }
     const controlsBefore = { ...controlsSnapshot };
+    const liveStateBefore = snapshotFrozenRenderLiveState(state);
     const renderScale = normalizeRenderScale(options.renderScale ?? controlsSnapshot.renderScale);
     const controlOverrides = options.controlOverrides && typeof options.controlOverrides === 'object'
       ? { ...options.controlOverrides }
@@ -13285,6 +13290,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       if (options.restoreControls !== false) {
         controlsSnapshot = controlsBefore;
         resetTemporalHistory('same-state-render-scale-canvas-restore');
+        restoreFrozenRenderLiveState(state, liveStateBefore);
       }
       if (options.resumeRenderLoop === true && state.active) {
         cancelAnimationFrame(raf);

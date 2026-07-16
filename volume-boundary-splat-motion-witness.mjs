@@ -18,6 +18,13 @@ import {
   requirePositiveHybridWitnessWallDelay,
   validateSpatialStrataHybridSmokeWitnessConfig,
 } from './spatial-strata-hybrid-smoke-witness-contracts.mjs';
+import {
+  assertLiveControlRestored,
+  assertLowerFrontRegionEvidence,
+  assertSmokeResidualMotion,
+  compactLiveControlState,
+  selectFailureRendererIdentity,
+} from './hybrid-raymarch-smoke-boundary-evidence.mjs';
 
 const SCHEMA = 'kaminos.volume.boundary-splat-motion-witness.v0';
 const SPLAT_RENDERER = 'live-boundary-sidecar-analytic-splats-v0';
@@ -36,6 +43,7 @@ const LEARNED_FLAME_CONTROL_RENDERER = 'learned-splat-frozen-flame-control';
 const HYBRID_RAYMARCH_BOUNDARY_ROUTE = 'hybrid-raymarch-smoke-boundary-v0';
 const HYBRID_RAYMARCH_RENDERER = 'hybrid-raymarch-smoke';
 const LEARNED_SPLAT_CONTROL_BEFORE = 'learned-splat-control-before';
+const LEARNED_SPLAT_CONTROL_REPEAT_BEFORE = 'learned-splat-control-repeat-before';
 const LEARNED_SPLAT_CONTROL_RESTORED = 'learned-splat-control-restored';
 const HYBRID_RAYMARCH_EFFECTIVE_RENDERER = 'splat-depth-conditioned-front-back-smoke-compositor-v1';
 const HYBRID_RAYMARCH_SMOKE_RENDERER = 'native-3d-compute-fluid-raymarch-smoke-only-v0';
@@ -300,7 +308,13 @@ try {
     failurePhase,
     error: error?.stack || error?.message || String(error),
     requestedRoute,
-    rendererIdentity: hybridOnly ? HYBRID_SPATIAL_STRATA_EFFECTIVE_RENDERER : SPLAT_RENDERER,
+    rendererIdentity: selectFailureRendererIdentity({ hybridOnly, raymarchHybridBoundary }),
+    requestedRouteIdentity: {
+      requestedRoute,
+      routeMode: raymarchHybridBoundary
+        ? HYBRID_RAYMARCH_BOUNDARY_ROUTE
+        : (hybridOnly ? SPATIAL_STRATA_EFFECTIVE_ROUTE : 'boundary-splat-motion-falsification'),
+    },
     expectedLearnedModelIdentity: EXPECTED_LEARNED_MODEL,
     sourceAuthority: SOURCE_AUTHORITY,
     hybridOnly,
@@ -742,6 +756,15 @@ async function captureSequence(config) {
       boundarySplatMode: 'learned',
       boundarySplatComposition: 'splat-only',
     }) : null;
+    const learnedSplatControlRepeatBefore = raymarchHybridBoundary ? await captureRenderer({
+      frameDir,
+      frameIndex,
+      scaleSet,
+      camera,
+      requestedRenderer: LEARNED_SPLAT_CONTROL_REPEAT_BEFORE,
+      boundarySplatMode: 'learned',
+      boundarySplatComposition: 'splat-only',
+    }) : null;
     const hybridRaymarchSmoke = raymarchHybridBoundary ? await captureRenderer({
       frameDir,
       frameIndex,
@@ -855,6 +878,7 @@ async function captureSequence(config) {
       camera,
       captures: [
         learnedSplatControlBefore,
+        learnedSplatControlRepeatBefore,
         hybridRaymarchSmoke,
         learnedSplatControlRestored,
         hybrid,
@@ -886,7 +910,10 @@ async function captureSequence(config) {
     frames,
   };
   addMotionEnergy(sequence);
-  if (raymarchHybridBoundary) addRaymarchHybridSmokeDifferential(sequence);
+  if (raymarchHybridBoundary) {
+    addRaymarchHybridSmokeDifferential(sequence);
+    sequence.restorationDiagnostics = sequence.frames.map(frame => computeRaymarchHybridRestoration(frame));
+  }
   if (liveCoupledHybrid) addLiveSmokeDifferential(sequence);
   return sequence;
 }
@@ -910,6 +937,7 @@ async function captureRenderer({
   if (boundarySplatPhaseStride) controlOverrides.boundarySplatPhaseStride = boundarySplatPhaseStride;
   if (boundarySplatHistoryDepth) controlOverrides.boundarySplatHistoryDepth = boundarySplatHistoryDepth;
   if (boundarySplatHistoryFrameStride) controlOverrides.boundarySplatHistoryFrameStride = boundarySplatHistoryFrameStride;
+  const preRenderLiveState = compactLiveControlState(await debugState());
   const canvasEval = await wsRequest('Runtime.evaluate', {
     expression: `window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
       renderScale: 1,
@@ -926,9 +954,18 @@ async function captureRenderer({
   });
   const canvasCapture = canvasEval.result.value;
   if (canvasCapture?.ok !== true || canvasCapture.sampleAuthority !== 'render-only-frozen-sim-state') {
-    throw new Error(`renderer capture failed for ${requestedRenderer}: ${JSON.stringify(canvasCapture)}`);
+    throw new Error(`renderer capture failed for ${requestedRenderer}: ${JSON.stringify({
+      canvasCapture,
+      result: canvasEval.result,
+      exceptionDetails: canvasEval.exceptionDetails ?? null,
+    })}`);
   }
   const postState = await debugState();
+  const postRenderLiveState = compactLiveControlState(postState);
+  const liveControlRestoration = assertLiveControlRestored({
+    before: preRenderLiveState,
+    after: postRenderLiveState,
+  });
   const clip = clipFromCanvas(canvasCapture.canvasCssRect);
   const shot = await wsRequest('Page.captureScreenshot', {
     format: 'png',
@@ -978,6 +1015,9 @@ async function captureRenderer({
     boundarySplatCompositionFallbackReason: canvasCapture.boundarySplatCompositionFallbackReason ?? postState?.boundarySplatCompositionFallbackReason ?? null,
     hybridSplatSmokeCompositorIdentity: canvasCapture.hybridSplatSmokeCompositorIdentity ?? postState?.hybridSplatSmokeCompositorIdentity ?? null,
     hybridSmokeLayer: canvasCapture.hybridSmokeLayer ?? postState?.hybridSmokeLayer ?? null,
+    preRenderLiveState,
+    postRenderLiveState,
+    liveControlRestoration,
     frameStateIdentity: canvasCapture.frameStateIdentity ?? null,
     coupledPhaseStateToken: canvasCapture.coupledPhaseStateToken ?? null,
     hybridSmokeRepresentationRequested: canvasCapture.hybridSmokeRepresentationRequested ?? null,
@@ -1026,6 +1066,9 @@ async function captureRenderer({
       boundarySplatCompositionFallbackReason: canvasCapture.boundarySplatCompositionFallbackReason,
       hybridSplatSmokeCompositorIdentity: canvasCapture.hybridSplatSmokeCompositorIdentity,
       hybridSmokeLayer: canvasCapture.hybridSmokeLayer,
+      preRenderLiveState,
+      postRenderLiveState,
+      liveControlRestoration,
       boundarySplatInstanceDescriptorIdentity: canvasCapture.boundarySplatInstanceDescriptorIdentity,
       boundarySplatRequestedInstanceCount: canvasCapture.boundarySplatRequestedInstanceCount,
       boundarySplatSourceCandidateCount: canvasCapture.boundarySplatSourceCandidateCount,
@@ -1058,6 +1101,10 @@ function clipFromCanvas(rect = {}) {
 }
 
 function validateCapture(capture) {
+  assertLiveControlRestored({
+    before: capture.preRenderLiveState,
+    after: capture.postRenderLiveState,
+  });
   if (capture.image.metrics.litPixels <= 20 || capture.image.metrics.meanLuma <= 1) {
     throw new Error(`missing or blank capture: ${JSON.stringify({ requestedRenderer: capture.requestedRenderer, metrics: capture.image.metrics })}`);
   }
@@ -1160,6 +1207,7 @@ function validateCapture(capture) {
   if (capture.requestedRenderer === 'learned-splat'
       || capture.requestedRenderer === LEARNED_FLAME_CONTROL_RENDERER
       || capture.requestedRenderer === LEARNED_SPLAT_CONTROL_BEFORE
+      || capture.requestedRenderer === LEARNED_SPLAT_CONTROL_REPEAT_BEFORE
       || capture.requestedRenderer === LEARNED_SPLAT_CONTROL_RESTORED) {
     if (capture.effectiveRenderer !== LEARNED_SPLAT_RENDERER || capture.rendererIdentity !== LEARNED_SPLAT_RENDERER) {
       throw new Error(`renderer disagreement: requested learned splat but effective renderer was ${capture.effectiveRenderer}/${capture.rendererIdentity}`);
@@ -1175,6 +1223,7 @@ function validateCapture(capture) {
       throw new Error(`candidate telemetry missing for learned splat: ${JSON.stringify(capture)}`);
     }
     if ((capture.requestedRenderer === LEARNED_SPLAT_CONTROL_BEFORE
+        || capture.requestedRenderer === LEARNED_SPLAT_CONTROL_REPEAT_BEFORE
         || capture.requestedRenderer === LEARNED_SPLAT_CONTROL_RESTORED)
         && (capture.boundarySplatCompositionRequested !== 'splat-only'
           || capture.boundarySplatCompositionEffective !== 'splat-only')) {
@@ -1295,17 +1344,19 @@ function rejectRaymarchHybridBoundaryFalseClosure(report) {
     if (sequence.sameBrowserSessionId !== sequence.frames[0]?.sameBrowserSessionId) {
       throw new Error(`same-browser identity missing for ${sequence.label}`);
     }
-    for (const frame of sequence.frames) {
+    for (const [frameIndex, frame] of sequence.frames.entries()) {
       const before = frame.captures.find(capture => capture.requestedRenderer === LEARNED_SPLAT_CONTROL_BEFORE);
+      const repeatBefore = frame.captures.find(capture => capture.requestedRenderer === LEARNED_SPLAT_CONTROL_REPEAT_BEFORE);
       const hybrid = frame.captures.find(capture => capture.requestedRenderer === HYBRID_RAYMARCH_RENDERER);
       const restored = frame.captures.find(capture => capture.requestedRenderer === LEARNED_SPLAT_CONTROL_RESTORED);
-      if (!before || !hybrid || !restored) {
+      if (!before || !repeatBefore || !hybrid || !restored) {
         throw new Error(`missing or partial bracketed captures for ${sequence.label}/${frame.controlledStepFrameIndex}`);
       }
       validateCapture(before);
+      validateCapture(repeatBefore);
       validateCapture(hybrid);
       validateCapture(restored);
-      const identities = [before, hybrid, restored].map(capture => capture.frameStateIdentity);
+      const identities = [before, repeatBefore, hybrid, restored].map(capture => capture.frameStateIdentity);
       if (new Set(identities).size !== 1 || identities[0] !== frame.sameStateCaptureId) {
         throw new Error(`stale/default same-state identity mismatch for ${sequence.label}/${frame.controlledStepFrameIndex}: ${identities.join(',')}`);
       }
@@ -1313,18 +1364,17 @@ function rejectRaymarchHybridBoundaryFalseClosure(report) {
       if (!restoration.ok || restoration.restorationPixelStable !== true) {
         throw new Error(`splat-only restoration failed for ${sequence.label}/${frame.controlledStepFrameIndex}: ${JSON.stringify(restoration)}`);
       }
-      const lowerFrontRegion = lowerFrontRegionDiff(before.image.path, hybrid.image.path);
-      if (!(lowerFrontRegion.samples > 0) || !Number.isFinite(lowerFrontRegion.meanAbsDiff)) {
-        throw new Error(`lower-front region evidence missing for ${sequence.label}/${frame.controlledStepFrameIndex}`);
-      }
+      const lowerFrontRegion = sequence.smokeDifferential?.lowerFrontRegionDiffs?.[frameIndex];
+      assertLowerFrontRegionEvidence(lowerFrontRegion);
     }
+    assertSmokeResidualMotion(sequence.smokeDifferential);
   }
-  if (summary.allRestorationsPixelStable !== true || report.frozenDeterminism?.restorationPixelStable !== true) {
+  if (summary.allRestorationsPixelStable !== true
+      || summary.allLiveControlsRestored !== true
+      || report.frozenDeterminism?.restorationPixelStable !== true) {
     throw new Error(`restoration authority incomplete: ${JSON.stringify(report.frozenDeterminism)}`);
   }
-  if (!(report.staticCamera.motionEnergy?.maxMeanAbsDiff > 0.1)) {
-    throw new Error('cached or static output rejected: hybrid raymarch smoke sequence did not move');
-  }
+  assertSmokeResidualMotion(report.staticCamera.smokeDifferential);
 }
 
 function summarizeLiveCoupledDomainTelemetry(state) {
@@ -1525,9 +1575,12 @@ function computeHybridFrozenDeterminism(frame) {
 
 function computeRaymarchHybridRestoration(frame) {
   const before = frame.captures.find(capture => capture.requestedRenderer === LEARNED_SPLAT_CONTROL_BEFORE);
+  const repeatBefore = frame.captures.find(capture => capture.requestedRenderer === LEARNED_SPLAT_CONTROL_REPEAT_BEFORE);
   const restored = frame.captures.find(capture => capture.requestedRenderer === LEARNED_SPLAT_CONTROL_RESTORED);
-  if (!before || !restored) return { ok: false, reason: 'missing-bracket-control' };
+  if (!before || !repeatBefore || !restored) return { ok: false, reason: 'missing-bracket-control-or-repeat' };
+  const repeatBaseline = exactPixelDiff(before.image.path, repeatBefore.image.path);
   const diff = exactPixelDiff(before.image.path, restored.image.path);
+  const postHybridAgainstRepeat = exactPixelDiff(repeatBefore.image.path, restored.image.path);
   const restorationHashExact = before.image.sha256 === restored.image.sha256;
   const restorationPixelStable = diff.maxChannelDiff <= RESTORATION_PIXEL_TOLERANCE.maxChannelDiff
     && diff.changedPixelFraction <= RESTORATION_PIXEL_TOLERANCE.maxChangedPixelFraction
@@ -1535,6 +1588,9 @@ function computeRaymarchHybridRestoration(frame) {
   return {
     ok: restorationPixelStable,
     authority: 'same-state-splat-only-before-after-hybrid-decoded-pixel-restoration-v1',
+    repeatBaselineAuthority: 'same-state-adjacent-splat-only-decoded-pixel-nondeterminism-floor-v0',
+    repeatBaseline,
+    postHybridAgainstRepeat,
     restorationHashExact,
     restorationPixelStable,
     restorationTolerance: RESTORATION_PIXEL_TOLERANCE,
@@ -1556,11 +1612,12 @@ function deriveRaymarchHybridBoundaryRoute(sequences) {
 }
 
 function summarizeRaymarchHybridBoundary(sequences) {
-  const frames = sequences.flatMap(sequence => sequence.frames.map(frame => {
+  const frames = sequences.flatMap(sequence => sequence.frames.map((frame, frameIndex) => {
     const before = frame.captures.find(capture => capture.requestedRenderer === LEARNED_SPLAT_CONTROL_BEFORE);
+    const repeatBefore = frame.captures.find(capture => capture.requestedRenderer === LEARNED_SPLAT_CONTROL_REPEAT_BEFORE);
     const hybrid = frame.captures.find(capture => capture.requestedRenderer === HYBRID_RAYMARCH_RENDERER);
     const restored = frame.captures.find(capture => capture.requestedRenderer === LEARNED_SPLAT_CONTROL_RESTORED);
-    if (!before || !hybrid || !restored) throw new Error(`partial bracketed hybrid frame ${sequence.label}/${frame.controlledStepFrameIndex}`);
+    if (!before || !repeatBefore || !hybrid || !restored) throw new Error(`partial bracketed hybrid frame ${sequence.label}/${frame.controlledStepFrameIndex}`);
     const restoration = computeRaymarchHybridRestoration(frame);
     return {
       sequence: sequence.label,
@@ -1570,11 +1627,12 @@ function summarizeRaymarchHybridBoundary(sequences) {
       baseFrameCount: frame.baseFrameCount,
       baseSimStepCount: frame.baseSimStepCount,
       controlBefore: before.image,
+      controlRepeatBefore: repeatBefore.image,
       hybrid: hybrid.image,
       controlRestored: restored.image,
       restoration,
       fullFrameContribution: imageDiff(before.image.path, hybrid.image.path),
-      lowerFrontRegion: lowerFrontRegionDiff(before.image.path, hybrid.image.path),
+      lowerFrontRegion: sequence.smokeDifferential?.lowerFrontRegionDiffs?.[frameIndex] ?? null,
       composition: {
         requested: hybrid.boundarySplatCompositionRequested,
         effective: hybrid.boundarySplatCompositionEffective,
@@ -1590,6 +1648,9 @@ function summarizeRaymarchHybridBoundary(sequences) {
     routeIdentity: HYBRID_RAYMARCH_BOUNDARY_ROUTE,
     frameCount: frames.length,
     allRestorationsPixelStable: frames.every(frame => frame.restoration.ok),
+    allLiveControlsRestored: sequences.every(sequence => sequence.frames.every(frame => (
+      frame.captures.every(capture => capture.liveControlRestoration?.status === 'passed')
+    ))),
     frames,
   };
 }
@@ -1713,15 +1774,22 @@ function addMotionEnergy(sequence) {
 function addRaymarchHybridSmokeDifferential(sequence) {
   const pairs = sequence.frames.map(frame => ({
     hybrid: frame.captures.find(capture => capture.requestedRenderer === HYBRID_RAYMARCH_RENDERER),
-    flame: frame.captures.find(capture => capture.requestedRenderer === LEARNED_SPLAT_CONTROL_BEFORE),
+    flame: frame.captures.find(capture => capture.requestedRenderer === LEARNED_SPLAT_CONTROL_REPEAT_BEFORE),
   }));
   if (pairs.some(pair => !pair.hybrid || !pair.flame)) {
     throw new Error('raymarch hybrid smoke differential requires hybrid and same-state splat-only captures');
   }
+  const residualMotionDiffs = [];
+  for (let index = 1; index < pairs.length; index += 1) {
+    residualMotionDiffs.push(smokeResidualImageDiff(pairs[index - 1], pairs[index]));
+  }
   sequence.smokeDifferential = {
-    authority: 'same-state-raymarch-hybrid-minus-splat-control-residual-v0',
+    authority: 'same-state-raymarch-hybrid-minus-splat-control-residual-v1',
     contributionDiffs: pairs.map(pair => imageDiff(pair.flame.image.path, pair.hybrid.image.path)),
     lowerFrontRegionDiffs: pairs.map(pair => lowerFrontRegionDiff(pair.flame.image.path, pair.hybrid.image.path)),
+    smokeResidualMotionDiffs: residualMotionDiffs,
+    smokeResidualMotionMeanAbsDiffs: residualMotionDiffs.map(diff => diff.meanAbsDiff),
+    smokeResidualMotionChangedFractions: residualMotionDiffs.map(diff => diff.changedFraction),
   };
 }
 
@@ -1762,6 +1830,7 @@ function compactSequenceEvidence(sequence) {
     sequenceDurationMs: sequence.sequenceDurationMs,
     motionEnergy: sequence.motionEnergy,
     smokeDifferential: sequence.smokeDifferential ?? null,
+    restorationDiagnostics: sequence.restorationDiagnostics ?? null,
     frames: sequence.frames.map(frame => {
       const capture = frame.captures.find(item => item.requestedRenderer === primaryMotionRenderer());
       return {
@@ -1948,23 +2017,11 @@ function lowerFrontRegionDiff(controlPath, hybridPath) {
   const hybrid = parsePngRgba(readBuffer(hybridPath));
   const width = Math.min(control.width, hybrid.width);
   const height = Math.min(control.height, hybrid.height);
-  let minX = width;
-  let minY = height;
-  let maxX = -1;
-  let maxY = -1;
-  for (let y = 0; y < height; y += 2) {
-    const row = control.rows[y];
-    for (let x = 0; x < width; x += 2) {
-      const index = x * control.channels;
-      const luma = 0.2126 * row[index] + 0.7152 * row[index + 1] + 0.0722 * row[index + 2];
-      if (luma <= 18) continue;
-      minX = Math.min(minX, x);
-      minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x);
-      maxY = Math.max(maxY, y);
-    }
+  const component = largestConnectedLitComponent(control, width, height);
+  if (!component || component.sampleCount <= 0) {
+    throw new Error('lower-front region cannot be derived from blank splat control');
   }
-  if (maxX < minX || maxY < minY) throw new Error('lower-front region cannot be derived from blank splat control');
+  const { minX, minY, maxX, maxY } = component.bounds;
   const supportWidth = Math.max(1, maxX - minX + 1);
   const supportHeight = Math.max(1, maxY - minY + 1);
   const region = {
@@ -1975,6 +2032,7 @@ function lowerFrontRegionDiff(controlPath, hybridPath) {
   };
   let total = 0;
   let changed = 0;
+  let supportPixels = 0;
   let samples = 0;
   for (let y = region.y0; y < region.y1; y += 1) {
     const controlRow = control.rows[y];
@@ -1982,6 +2040,10 @@ function lowerFrontRegionDiff(controlPath, hybridPath) {
     for (let x = region.x0; x < region.x1; x += 1) {
       const controlIndex = x * control.channels;
       const hybridIndex = x * hybrid.channels;
+      const controlLuma = 0.2126 * controlRow[controlIndex]
+        + 0.7152 * controlRow[controlIndex + 1]
+        + 0.0722 * controlRow[controlIndex + 2];
+      if (controlLuma > 18) supportPixels += 1;
       const diff = (
         Math.abs(controlRow[controlIndex] - hybridRow[hybridIndex])
         + Math.abs(controlRow[controlIndex + 1] - hybridRow[hybridIndex + 1])
@@ -1993,12 +2055,106 @@ function lowerFrontRegionDiff(controlPath, hybridPath) {
     }
   }
   return {
-    authority: 'splat-control-derived-lower-half-support-region-v0',
+    authority: 'largest-connected-splat-support-lower-front-smoke-residual-v1',
     region,
     supportBounds: { minX, minY, maxX, maxY },
+    supportComponent: component,
     samples,
+    supportPixels,
+    supportDensity: samples ? supportPixels / samples : 0,
+    componentFractionOfLitSupport: component.fractionOfLitSupport,
+    regionFrameAreaFraction: width * height > 0 ? samples / (width * height) : 0,
     meanAbsDiff: samples ? total / samples : 0,
     changedFraction: samples ? changed / samples : 0,
+    smokeResidualMeanAbsDiff: samples ? total / samples : 0,
+    smokeResidualChangedPixels: changed,
+    smokeResidualChangedFraction: samples ? changed / samples : 0,
+  };
+}
+
+function largestConnectedLitComponent(png, width, height) {
+  const stride = 2;
+  const gridWidth = Math.ceil(width / stride);
+  const gridHeight = Math.ceil(height / stride);
+  const cellCount = gridWidth * gridHeight;
+  const lit = new Uint8Array(cellCount);
+  let litSampleCount = 0;
+  for (let gridY = 0; gridY < gridHeight; gridY += 1) {
+    const y = Math.min(height - 1, gridY * stride);
+    const row = png.rows[y];
+    for (let gridX = 0; gridX < gridWidth; gridX += 1) {
+      const x = Math.min(width - 1, gridX * stride);
+      const index = x * png.channels;
+      const luma = 0.2126 * row[index] + 0.7152 * row[index + 1] + 0.0722 * row[index + 2];
+      if (luma <= 18) continue;
+      lit[gridY * gridWidth + gridX] = 1;
+      litSampleCount += 1;
+    }
+  }
+  if (litSampleCount === 0) return null;
+
+  const visited = new Uint8Array(cellCount);
+  const queue = new Int32Array(cellCount);
+  let largest = null;
+  for (let seed = 0; seed < cellCount; seed += 1) {
+    if (!lit[seed] || visited[seed]) continue;
+    let head = 0;
+    let tail = 0;
+    queue[tail++] = seed;
+    visited[seed] = 1;
+    let sampleCount = 0;
+    let minGridX = gridWidth;
+    let minGridY = gridHeight;
+    let maxGridX = -1;
+    let maxGridY = -1;
+    let sumX = 0;
+    let sumY = 0;
+    while (head < tail) {
+      const cell = queue[head++];
+      const gridY = Math.floor(cell / gridWidth);
+      const gridX = cell - gridY * gridWidth;
+      sampleCount += 1;
+      minGridX = Math.min(minGridX, gridX);
+      minGridY = Math.min(minGridY, gridY);
+      maxGridX = Math.max(maxGridX, gridX);
+      maxGridY = Math.max(maxGridY, gridY);
+      sumX += gridX * stride;
+      sumY += gridY * stride;
+      for (let dy = -1; dy <= 1; dy += 1) {
+        for (let dx = -1; dx <= 1; dx += 1) {
+          if (dx === 0 && dy === 0) continue;
+          const nextX = gridX + dx;
+          const nextY = gridY + dy;
+          if (nextX < 0 || nextX >= gridWidth || nextY < 0 || nextY >= gridHeight) continue;
+          const next = nextY * gridWidth + nextX;
+          if (!lit[next] || visited[next]) continue;
+          visited[next] = 1;
+          queue[tail++] = next;
+        }
+      }
+    }
+    if (!largest || sampleCount > largest.sampleCount) {
+      largest = {
+        sampleCount,
+        bounds: {
+          minX: minGridX * stride,
+          minY: minGridY * stride,
+          maxX: Math.min(width - 1, maxGridX * stride),
+          maxY: Math.min(height - 1, maxGridY * stride),
+        },
+        centroid: {
+          x: sumX / sampleCount,
+          y: sumY / sampleCount,
+        },
+      };
+    }
+  }
+  return {
+    ...largest,
+    litSampleCount,
+    fractionOfLitSupport: largest.sampleCount / litSampleCount,
+    connectivity: 'eight-neighbor-on-two-pixel-luma-mask',
+    lumaThreshold: 18,
   };
 }
 
