@@ -33,6 +33,8 @@ assert.match(witness, /smoke-off-beauty-optical-control-v0/, 'appearance witness
 assert.match(witness, /raymarch-only/, 'appearance witness rejects decomposition leakage outside the raymarch');
 assert.doesNotMatch(witness, /beautySmokeOff/, 'full Beauty must not survive as nominal B training authority');
 assert.match(witness, /viewCandidateSha256\s*!==\s*candidateSha256/, 'appearance witness compares candidate hashes across camera views');
+assert.match(witness, /count:\s*evidence\.candidateMetadata\.rowCount/, 'appearance manifest maps the packed cohort row count without inventing a second count field');
+assert.match(witness, /dtype:\s*['"]float32-le['"]/, 'appearance manifest declares the packed candidate dtype explicitly');
 assert.match(witness, /sameStateCaptureId[\s\S]*simStepCount/, 'appearance witness preserves frozen-state and simulator-step evidence');
 assert.match(witness, /camera-manifest-restored/, 'appearance witness restores the original operator camera after capture');
 assert.match(witness, /failurePhase[\s\S]*lastTrustworthyEvidence[\s\S]*writeFile/, 'appearance witness writes a durable failure report with the last trustworthy evidence');
