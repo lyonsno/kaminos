@@ -2818,7 +2818,8 @@ const FINGER_FLUID_PYRO_PRE_CONTACT_CAPTURE_MIN_SIM_STEPS = 180;
 const FINGER_FLUID_PYRO_SOURCE_MOTION_START_STEP = 220;
 const FINGER_FLUID_PYRO_SOURCE_MOTION_END_STEP = 230;
 const FINGER_FLUID_PYRO_SOURCE_DRY_POSITION = [0.65, -0.35, 0.51];
-const FINGER_FLUID_PYRO_SOURCE_WET_POSITION = [0.0, -0.96, 0.51];
+const FINGER_FLUID_PYRO_SOURCE_WET_POSITION = [0.54, -0.81, 0.29];
+const FINGER_FLUID_PYRO_SOURCE_WET_POSITION_PROVENANCE = 'step-238-stable-contact-record-v0';
 let fingerFluidBenchConfig = null;
 let fingerFluidPyroCompositionState = {
   schema: 'kaminos.finger-fluid-pyro-composition.v0',
@@ -2829,6 +2830,7 @@ let fingerFluidPyroCompositionState = {
   sameDevice: false,
 };
 let fingerFluidPyroCompositionActivatedAtMs = null;
+let fingerFluidPyroCompositionSourceTrajectoryEnabled = true;
 
 function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.location.search)) {
   const requestedColorMode = params.get('finger_fluid_color_mode') || 'phase';
@@ -9872,6 +9874,7 @@ function fingerFluidCompositionCameraState() {
 
 function advanceFingerFluidPyroCompositionSource(stepCount) {
   if (fingerFluidPyroCompositionState.effectiveRoute !== 'same-device-liquid-contact-pyro-near-field-v0') return;
+  if (!fingerFluidPyroCompositionSourceTrajectoryEnabled) return;
   const linear = Math.max(0, Math.min(1,
     (Number(stepCount) - FINGER_FLUID_PYRO_SOURCE_MOTION_START_STEP)
       / (FINGER_FLUID_PYRO_SOURCE_MOTION_END_STEP - FINGER_FLUID_PYRO_SOURCE_MOTION_START_STEP),
@@ -9887,6 +9890,26 @@ function advanceFingerFluidPyroCompositionSource(stepCount) {
   fingerFluidPyroCompositionState.sourcePrimitivePosition = [...updated.transform.position];
   fingerFluidPyroCompositionState.sourceTrajectoryProgress = progress;
   fingerFluidPyroCompositionState.sourceTrajectoryStep = Number(stepCount);
+}
+
+function setFingerFluidPyroCompositionSourcePosition(position) {
+  if (!volumePrototype || !fingerFluidPyroCompositionState.sourcePrimitiveId) return null;
+  if (!Array.isArray(position) || position.length < 3 || position.slice(0, 3).some(value => !Number.isFinite(Number(value)))) {
+    throw new Error('Finger Fluid Pyro source position must contain three finite coordinates');
+  }
+  const updated = volumePrototype.updateVolumePrimitiveTransform(
+    fingerFluidPyroCompositionState.sourcePrimitiveId,
+    { position: position.slice(0, 3).map(Number) },
+  );
+  if (!updated) return null;
+  fingerFluidPyroCompositionSourceTrajectoryEnabled = false;
+  fingerFluidPyroCompositionState.sourcePrimitivePosition = [...updated.transform.position];
+  fingerFluidPyroCompositionState.sourceTrajectory = 'explicit-live-position-v0';
+  return {
+    sourcePrimitiveId: updated.id,
+    position: [...updated.transform.position],
+    simulationReset: false,
+  };
 }
 
 function installFingerFluidCompositionCameraControls(panel) {
@@ -9921,6 +9944,7 @@ async function activateFingerFluidPyroComposition() {
   if (!fingerFluidPyroCompositionRequested() || !fingerFluidBenchSolver?.available || !volumePrototype) return false;
   if (fingerFluidPyroCompositionState.effectiveRoute === 'same-device-liquid-contact-pyro-near-field-v0') return true;
   const descriptor = fingerFluidBenchSolver.getLiquidFireContactDescriptor();
+  fingerFluidPyroCompositionSourceTrajectoryEnabled = true;
   const binding = volumePrototype.setLiquidFireContactDescriptor(descriptor);
   const panel = document.getElementById('finger-fluid-bench-operator-panel');
   const volumeCanvas = volumePrototype.canvasElement();
@@ -9941,6 +9965,7 @@ async function activateFingerFluidPyroComposition() {
   };
   volumePrototype.setVolumePrimitives([compositionSourcePrimitive]);
   volumePrototype.setLiquidFireContactTransferEnabled(true, { reason: 'physical-contact-from-start' });
+  volumePrototype.setLiquidFireSourcePilotEnabled(false);
   volumePrototype.setControls({
     volumeScene: 'tall_plume',
     ...VOLUME_SCENE_PRESETS.tall_plume,
@@ -9971,9 +9996,11 @@ async function activateFingerFluidPyroComposition() {
     contactActivatedAtMs: fingerFluidPyroCompositionActivatedAtMs,
     sourcePrimitiveId: compositionSourcePrimitive.id,
     sourcePrimitivePosition: [...compositionSourcePrimitive.transform.position],
+    sourceWetPositionProvenance: FINGER_FLUID_PYRO_SOURCE_WET_POSITION_PROVENANCE,
     sourceTrajectory: 'simulation-step-dry-ridge-to-obstacle-channel-v0',
     sourceTrajectoryProgress: 0,
     sourceTrajectoryStep: 0,
+    sourcePilotEnabled: false,
     source: descriptor.schema,
     sourcePacking: descriptor.packing,
     sourceGeneration: descriptor.allocationGeneration,
@@ -10172,6 +10199,8 @@ function initKaminosFingerFluidBenchRoute() {
     volume: volumePrototype?.debugState?.() || null,
   });
   window.kaminosFingerFluidPyroSetSimulationPaused = paused => volumePrototype.setSimulationPaused(paused === true);
+  window.kaminosFingerFluidPyroSetPilotEnabled = enabled => volumePrototype.setLiquidFireSourcePilotEnabled(enabled === true);
+  window.kaminosFingerFluidPyroSetSourcePosition = position => setFingerFluidPyroCompositionSourcePosition(position);
   window.kaminosFingerFluidPyroCompositionSample = sampleFingerFluidPyroComposition;
   window.kaminosFingerFluidPyroVolumeSample = () => volumePrototype.sampleFrame();
   window.kaminosFingerFluidCompositionCameraState = fingerFluidCompositionCameraState;
