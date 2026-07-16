@@ -6,6 +6,7 @@ import {
   BOUNDARY_SPLAT_FEATURE_CAPTURE_IDENTITY,
   BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS,
   packBoundarySplatFeatureCapture,
+  packBoundarySplatSupervisionCandidates,
 } from './boundary-splat-feature-capture.mjs';
 import {
   SELECTIVE_HEAD_LIVE_FEATURE_AUTHORITY,
@@ -5926,6 +5927,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySplatFeatureBufferCapacity = 0;
   let boundarySplatTelemetryCopyPending = false;
   let boundarySplatTelemetryMapPending = false;
+  let boundarySplatSupervisionCaptureActive = false;
   let fluidBuffers = [];
   let frontBuffers = [];
   let pressureBuffers = [];
@@ -6876,6 +6878,28 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySplatFeatureCaptureRequested = featureCaptureRequested;
     state.boundarySplatFeatureCaptureEffective = featureCaptureRequested && boundarySplatFeatureBufferCapacity === boundarySplatCapacity;
     state.boundarySplatCapacity = boundarySplatCapacity;
+  }
+
+  function configureBoundarySplatFeatureCaptureBuffer(requested) {
+    if (!device || !boundarySplatBuffer) return;
+    const normalizedRequested = normalizeBoundarySplatFeatureCapture(requested);
+    const nextCapacity = normalizedRequested ? boundarySplatCapacity : 1;
+    if (boundarySplatFeatureBuffer && boundarySplatFeatureBufferCapacity === nextCapacity) {
+      state.boundarySplatFeatureCaptureRequested = normalizedRequested;
+      state.boundarySplatFeatureCaptureEffective = normalizedRequested && nextCapacity === boundarySplatCapacity;
+      return;
+    }
+    const previousFeatureBuffer = boundarySplatFeatureBuffer;
+    boundarySplatFeatureBufferCapacity = nextCapacity;
+    boundarySplatFeatureBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_FEATURE_CAPTURE_IDENTITY} ${normalizedRequested ? `capacity ${nextCapacity}` : 'dummy'}`,
+      size: nextCapacity * BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+    });
+    rebuildBoundarySplatBindGroups();
+    previousFeatureBuffer?.destroy();
+    state.boundarySplatFeatureCaptureRequested = normalizedRequested;
+    state.boundarySplatFeatureCaptureEffective = normalizedRequested && nextCapacity === boundarySplatCapacity;
   }
 
   function rebuildBoundarySplatBindGroups() {
@@ -9511,6 +9535,57 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
   }
 
+  async function sampleBoundarySplatSupervisionCapture(instanceCount) {
+    if (!state.boundarySplatFeatureCaptureRequested) return null;
+    if (!state.boundarySplatFeatureCaptureEffective || !boundarySplatFeatureBuffer || !boundarySplatBuffer) {
+      throw new Error('boundary-splat-supervision-capture-requested-but-unavailable');
+    }
+    if (!Number.isInteger(instanceCount) || instanceCount <= 0) {
+      throw new Error(`boundary-splat-supervision-capture-blank-instance-count:${instanceCount}`);
+    }
+    if (instanceCount > boundarySplatCapacity) {
+      throw new Error(`boundary-splat-supervision-capture-instance-count-exceeds-capacity:${instanceCount}`);
+    }
+    const candidateBytes = instanceCount * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES;
+    const featureBytes = instanceCount * BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES;
+    const candidateReadback = device.createBuffer({
+      label: 'kaminos boundary splat supervision candidate readback',
+      size: candidateBytes,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const featureReadback = device.createBuffer({
+      label: 'kaminos boundary splat supervision feature readback',
+      size: featureBytes,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    try {
+      const encoder = device.createCommandEncoder({ label: 'kaminos boundary splat supervision readback encoder' });
+      encoder.copyBufferToBuffer(boundarySplatBuffer, 0, candidateReadback, 0, candidateBytes);
+      encoder.copyBufferToBuffer(boundarySplatFeatureBuffer, 0, featureReadback, 0, featureBytes);
+      device.queue.submit([encoder.finish()]);
+      await Promise.all([
+        candidateReadback.mapAsync(GPUMapMode.READ),
+        featureReadback.mapAsync(GPUMapMode.READ),
+      ]);
+      const candidateValues = new Float32Array(candidateReadback.getMappedRange()).slice();
+      const featureValues = new Float32Array(featureReadback.getMappedRange()).slice();
+      candidateReadback.unmap();
+      featureReadback.unmap();
+      return {
+        ...packBoundarySplatSupervisionCandidates(candidateValues, featureValues, instanceCount, boundarySplatCapacity),
+        status: 'captured',
+        requested: true,
+        effective: true,
+        rendererIdentity: state.boundarySplatRendererIdentity,
+        modelIdentity: state.boundarySplatAttributeModelIdentity,
+        countAuthority: 'gpu-indirect-post-submit-witness-readback',
+      };
+    } finally {
+      candidateReadback.destroy();
+      featureReadback.destroy();
+    }
+  }
+
   function encodeDraw(encoder, view, label, targetPipeline = pipeline, options = {}) {
     const pass = encoder.beginRenderPass({
       label,
@@ -9612,7 +9687,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function render(now) {
-    if (!state.active) return;
+    if (!state.active || boundarySplatSupervisionCaptureActive) return;
     if (selectiveHeadLiveCapturePaused) {
       raf = 0;
       return;
@@ -12051,8 +12126,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       };
     }
     const boundarySplatSample = boundarySplatRequested() ? await sampleBoundarySplatDrawState() : null;
-    const boundarySplatFeatureCapture = state.boundarySplatFeatureCaptureRequested && boundarySplatSample
+    const boundarySplatFeatureCapture = state.boundarySplatFeatureCaptureRequested
+      && boundarySplatSample
+      && options.includeBoundarySplatSupervision !== true
       ? await sampleBoundarySplatFeatureCapture(boundarySplatSample.instanceCount)
+      : null;
+    const boundarySplatSupervisionCapture = options.includeBoundarySplatSupervision === true && boundarySplatSample
+      ? await sampleBoundarySplatSupervisionCapture(boundarySplatSample.instanceCount)
       : null;
     state.boundarySplatFeatureCapture = boundarySplatFeatureCapture;
     const boundarySplatGpuProfile = boundarySplatRequested()
@@ -12409,6 +12489,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       boundarySplatFeatureCaptureRequested: state.boundarySplatFeatureCaptureRequested,
       boundarySplatFeatureCaptureEffective: state.boundarySplatFeatureCaptureEffective,
       boundarySplatFeatureCapture,
+      boundarySplatSupervisionCapture,
       boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
       boundarySidecarOverrideReceipt: state.boundarySidecarOverrideReceipt,
       boundarySplatCapacity: state.boundarySplatCapacity,
@@ -12469,6 +12550,153 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         rgba: Array.from(rgba),
       } : null,
     };
+  }
+
+  async function captureBoundarySplatSupervisionCandidates(options = {}) {
+    if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
+    boundarySplatSupervisionCaptureActive = true;
+    cancelAnimationFrame(raf);
+    raf = 0;
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    cancelAnimationFrame(raf);
+    const controlsBefore = { ...controlsSnapshot };
+    const presentationBefore = volumePresentationModeRequestedRaw;
+    const decompositionBefore = appearanceDecompositionModeRequestedRaw;
+    const baseFrameCount = state.frameCount;
+    const baseSimStepCount = state.simStepCount;
+    const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+    const sameStateCaptureId = options.sameStateCaptureId
+      ? String(options.sameStateCaptureId)
+      : `fixed-candidate-f${baseFrameCount}-s${baseSimStepCount}-${Math.round(fixedNow)}`;
+    const renderScale = normalizeRenderScale(options.renderScale ?? 1);
+    try {
+      setVolumePresentationMode('default');
+      setAppearanceDecompositionMode('off');
+      controlsSnapshot = applyRuntimeQualityControls({
+        ...controlsSnapshot,
+        selectiveHeadLiveRole: 'truthHigh',
+        selectiveHeadLiveRenderComposition: 'splat-only-v0',
+        boundarySplatMode: 'analytic',
+        boundarySplatFeatureCapture: true,
+        volumeResidualMode: 'off',
+        renderScale,
+      });
+      configureBoundarySplatFeatureCaptureBuffer(true);
+      resetTemporalHistory('fixed-candidate-supervision-candidates');
+      let candidateSample = await sampleFrame({
+        advanceSim: false,
+        includeRgba: false,
+        includeBoundarySplatSupervision: true,
+        now: fixedNow,
+        sameStateCaptureId,
+        baseFrameCount,
+        baseSimStepCount,
+      });
+      if (!candidateSample.ok) {
+        throw new Error(`fixed-candidate-supervision-candidate-failed:${candidateSample.reason || 'unknown'}`);
+      }
+      if (candidateSample.boundarySplatOverflowCount > 0) {
+        if (!growBoundarySplatCapacity(candidateSample.boundarySplatCandidateCount)) {
+          throw new Error(`fixed-candidate-supervision-capacity-growth-failed:${candidateSample.boundarySplatCandidateCount}:${candidateSample.boundarySplatOverflowCount}`);
+        }
+        resetTemporalHistory('fixed-candidate-supervision-candidates-after-capacity-growth');
+        candidateSample = await sampleFrame({
+          advanceSim: false,
+          includeRgba: false,
+          includeBoundarySplatSupervision: true,
+          now: fixedNow,
+          sameStateCaptureId,
+          baseFrameCount,
+          baseSimStepCount,
+        });
+        if (!candidateSample.ok) {
+          throw new Error(`fixed-candidate-supervision-candidate-retry-failed:${candidateSample.reason || 'unknown'}`);
+        }
+      }
+      if (candidateSample.boundarySplatRendererIdentity !== BOUNDARY_SPLAT_RENDERER_IDENTITY) {
+        throw new Error(`fixed-candidate-supervision-renderer-substitution:${candidateSample.boundarySplatRendererIdentity || 'missing'}`);
+      }
+      if (candidateSample.boundarySplatFallbackReason != null) {
+        throw new Error(`fixed-candidate-supervision-fallback:${candidateSample.boundarySplatFallbackReason}`);
+      }
+      if (!candidateSample.boundarySplatSupervisionCapture) {
+        throw new Error('fixed-candidate-supervision-candidate-capture-missing');
+      }
+      if (candidateSample.boundarySplatCandidateCount !== candidateSample.boundarySplatSupervisionCapture.rowCount) {
+        throw new Error(`fixed-candidate-supervision-partial-rows:${candidateSample.boundarySplatCandidateCount}:${candidateSample.boundarySplatSupervisionCapture.rowCount}`);
+      }
+      if (candidateSample.boundarySplatOverflowCount !== 0) {
+        throw new Error(`fixed-candidate-supervision-overflow:${candidateSample.boundarySplatOverflowCount}`);
+      }
+      if (candidateSample.selectiveHeadLiveEffectiveRole !== 'truthHigh') {
+        throw new Error(`fixed-candidate-supervision-selective-role:${candidateSample.selectiveHeadLiveEffectiveRole || 'missing'}`);
+      }
+      if (candidateSample.selectiveHeadLiveCompositionEffective !== 'splat-only-v0') {
+        throw new Error(`fixed-candidate-supervision-selective-composition:${candidateSample.selectiveHeadLiveCompositionEffective || 'missing'}`);
+      }
+      if (candidateSample.simStepCount !== baseSimStepCount) {
+        throw new Error(`fixed-candidate-supervision-state-drift:${baseSimStepCount}:${candidateSample.simStepCount}`);
+      }
+      return {
+        ok: true,
+        authority: 'live-simulator-frozen-state-fixed-candidate-supervision-v0',
+        requestedRoute: state.requestedRoute,
+        effectiveRoute: state.effectiveRoute,
+        prototypeIdentity: state.prototypeIdentity,
+        backend: state.backend,
+        fallbackReason: null,
+        sameStateCaptureId,
+        baseFrameCount,
+        baseSimStepCount,
+        frameCount: candidateSample.frameCount,
+        simStepCount: candidateSample.simStepCount,
+        fixedNowMs: fixedNow,
+        grid: state.simGrid,
+        renderScale: candidateSample.renderScale,
+        camera: {
+          viewProjection: Array.from(viewProj.elements),
+          cameraRight: Array.from(camera.matrixWorld.elements.slice(0, 3)),
+          cameraUp: Array.from(camera.matrixWorld.elements.slice(4, 7)),
+          viewport: [state.width, state.height],
+        },
+        captureAdmission: {
+          identity: 'fresh-live-selective-splat-candidate-admission-v0',
+          authority: 'fresh-live-settings-no-anchor-v0',
+          requestedRole: candidateSample.selectiveHeadLiveRequestedRole,
+          effectiveRole: candidateSample.selectiveHeadLiveEffectiveRole,
+          roleAuthority: candidateSample.selectiveHeadLiveRoleAuthority,
+          requestedComposition: candidateSample.selectiveHeadLiveCompositionRequested,
+          effectiveComposition: candidateSample.selectiveHeadLiveCompositionEffective,
+          compositionAuthority: candidateSample.selectiveHeadLiveCompositionAuthority,
+          passReceipt: candidateSample.selectiveHeadLivePassReceipt,
+          boundarySidecarSource: candidateSample.boundarySidecarSource,
+          boundarySidecarBuilt: candidateSample.boundarySidecarBuilt,
+          boundarySidecarBuiltThisFrame: candidateSample.boundarySidecarBuiltThisFrame,
+          boundarySplatSourceAuthority: candidateSample.boundarySplatSourceAuthority,
+          boundarySplatFallbackReason: candidateSample.boundarySplatFallbackReason,
+        },
+        candidates: {
+          ...candidateSample.boundarySplatSupervisionCapture,
+          rendererIdentity: candidateSample.boundarySplatRendererIdentity,
+          sourceAuthority: candidateSample.boundarySplatSourceAuthority,
+          fallbackReason: candidateSample.boundarySplatFallbackReason,
+          candidateCount: candidateSample.boundarySplatCandidateCount,
+          instanceCount: candidateSample.boundarySplatInstanceCount,
+          overflowCount: candidateSample.boundarySplatOverflowCount,
+        },
+      };
+    } finally {
+      controlsSnapshot = controlsBefore;
+      setVolumePresentationMode(presentationBefore);
+      setAppearanceDecompositionMode(decompositionBefore);
+      configureBoundarySplatFeatureCaptureBuffer(controlsBefore.boundarySplatFeatureCapture);
+      resetTemporalHistory('fixed-candidate-supervision-restore');
+      boundarySplatSupervisionCaptureActive = false;
+      if (options.resumeRenderLoop !== false && state.active) {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(render);
+      }
+    }
   }
 
   function compactRenderScaleSample(sample) {
@@ -13703,6 +13931,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     beginDebugFullFieldExport,
     readDebugFullFieldExportChunk,
     releaseDebugFullFieldExport,
+    captureBoundarySplatSupervisionCandidates,
     sampleRenderScaleSet,
     controlledStepFrame,
     controlledStepSequence,
