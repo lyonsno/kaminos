@@ -143,6 +143,17 @@ assert.match(
   /const warmupTarget = warmupParam === '0'\s*\?\s*0[\s\S]*fresh-live-settings-no-anchor-v0/,
   'only an explicit valid zero-step request reports that no checksum field anchor was imported',
 );
+assert.match(page, /sourceCaptureId:\s*params\.get\('basin_capture'\)/, 'selective-head wrapper records the durable source-capture id');
+assert.match(page, /validateVolumeSettingsPresetVisualTarget[\s\S]*sourceSettingsPresetId:/, 'preset-backed visual routes independently validate and report settings-preset identity');
+assert.match(page, /sourceSettingsPresetAuthority:/, 'preset-backed visual routes report derived preset authority separately from captures');
+assert.match(page, /sourceSettingsPresetStorePath:/, 'preset-backed visual routes report the effective shared store path');
+assert.match(page, /sourceSettingsPresetContentHash:/, 'preset-backed visual routes report immutable preset content identity');
+assert.match(page, /capture: \$\{state\.sourceCaptureId/, 'operator status names the durable source capture that actually rendered');
+assert.match(page, /presentationSettled[\s\S]*effectiveComposition === requestedComposition[\s\S]*rendererSettled[\s\S]*effectiveRole === requestedRole[\s\S]*presentationSettled[\s\S]*'running'[\s\S]*'settling'/, 'wrapper reports running only after the requested role and presentation-specific pass tuple become effective');
+assert.match(page, /function passReceiptMatchesComposition\(/, 'wrapper has a named exact pass-tuple predicate');
+assert.match(page, /splat-only-v0[\s\S]*splatApplied === true[\s\S]*raymarchApplied === false/, 'splat-only running requires splats applied and raymarch absent');
+assert.match(page, /raymarch-only-v0[\s\S]*raymarchApplied === true[\s\S]*splatApplied === false/, 'raymarch-only running requires raymarch applied and splats absent');
+assert.match(page, /smoke-raymarch-under-splats-v0[\s\S]*raymarchApplied === true[\s\S]*splatApplied === true/, 'hybrid running requires both passes applied');
 
 const witness = readFileSync(witnessPath, 'utf8');
 assert.match(witness, /kaminos\.volume\.selective-head-live-witness\.v0/);
@@ -153,12 +164,26 @@ assert.match(witness, /requestedRole/);
 assert.match(witness, /effectiveRole/);
 assert.match(witness, /expectedRoleAuthority/);
 assert.match(witness, /expectedComposition/);
+assert.match(witness, /PRESET_VIEW_COMPOSITIONS[\s\S]*raymarch-only[\s\S]*raymarch-only-v0/, 'continuous witness understands explicit raymarch-only preset loading');
+assert.match(witness, /PRESET_VIEW_COMPOSITIONS[\s\S]*smoke-hybrid[\s\S]*smoke-raymarch-under-splats-v0/, 'continuous witness understands explicit smoke-hybrid preset loading');
 assert.match(witness, /effectiveComposition/);
 assert.match(witness, /composition drift/i);
 assert.match(witness, /selectiveHeadLivePassReceipt/);
+assert.match(witness, /isPresetLoader[\s\S]*requestedParams\.get\('view'\)[\s\S]*missing explicit preset renderer view/, 'visual witness rejects viewless loader evidence instead of inferring a composition');
+assert.match(witness, /requestedPresetRef[\s\S]*get\('settings_preset'\)[\s\S]*get\('preset'\)/, 'visual witness derives source expectations from direct and loader-form preset references');
+assert.match(witness, /resolveExpectedSettingsPreset[\s\S]*\/api\/volume-settings-preset/, 'visual witness independently resolves loader aliases to immutable preset identity');
+assert.match(witness, /sourceSettingsPresetId[\s\S]*expectedSettingsPresetId/, 'visual witness rejects a loader that renders the wrong immutable preset');
+assert.match(witness, /sourceSettingsPresetAuthority[\s\S]*shared-volume-settings-preset-v2/, 'visual witness rejects loader output without derived shared-store authority');
 assert.match(witness, /roleAuthority/);
 assert.match(witness, /fallbackReason/);
 assert.match(witness, /failurePhase/);
+assert.match(witness, /const timer = setTimeout[\s\S]*CDP call timed out/, 'visual witness bounds every CDP call');
+assert.match(witness, /rejectPending[\s\S]*CDP socket closed/, 'visual witness rejects pending calls when CDP closes');
+assert.match(witness, /sourceSettingsPresetId:\s*endState\.sourceSettingsPresetId/, 'visual witness promotes independently validated settings-preset identity into its report');
+assert.match(witness, /sourceSettingsPresetAuthority:\s*endState\.sourceSettingsPresetAuthority/, 'visual witness promotes derived settings-preset authority into its report');
+assert.match(witness, /sourceSettingsPresetStorePath:\s*endState\.sourceSettingsPresetStorePath/, 'visual witness preserves the effective shared store path');
+assert.match(witness, /sourceSettingsPresetContentHash:\s*endState\.sourceSettingsPresetContentHash/, 'visual witness preserves immutable preset content identity');
+assert.match(witness, /effectiveUrl,\n/, 'visual witness records the final browser target rather than only the requested loader URL');
 
 const sequenceWitness = readFileSync(sequenceWitnessPath, 'utf8');
 assert.match(sequenceWitness, /kaminos\.volume\.selective-head-live-sequence-witness\.v0/);

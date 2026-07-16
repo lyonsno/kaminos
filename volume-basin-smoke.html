@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kaminos Settings Preset</title>
+  <link rel="icon" href="data:,">
+</head>
+<body>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const presetId = params.get('capture') || params.get('preset');
+    const target = new URL('/volume-settings-preset.html', location.origin);
+    if (presetId) target.searchParams.set('preset', presetId);
+    target.searchParams.set('view', 'splat-only');
+    location.replace(target);
+  </script>
+</body>
+</html>

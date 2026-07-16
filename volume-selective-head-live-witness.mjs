@@ -13,9 +13,23 @@ const ROLE_AUTHORITIES = Object.freeze({
   lowPhaseAligned: 'phase-aligned-low-field-control-v0',
   selectiveFullResidual: 'learned-selective-full-residual-composition-v0',
 });
+const PRESET_VIEW_COMPOSITIONS = Object.freeze({
+  'splat-only': 'splat-only-v0',
+  'raymarch-only': 'raymarch-only-v0',
+  'smoke-hybrid': 'smoke-raymarch-under-splats-v0',
+  'full-hybrid-diagnostic': 'full-raymarch-under-splats-diagnostic-v0',
+});
 const args = parseArgs(process.argv.slice(2));
 const url = required('--url');
-const expectedComposition = new URL(url).searchParams.get('composition') || 'smoke-raymarch-under-splats-v0';
+const requestedUrl = new URL(url);
+const requestedParams = requestedUrl.searchParams;
+const isPresetLoader = requestedUrl.pathname.endsWith('/volume-settings-preset.html');
+const requestedPresetView = isPresetLoader ? requestedParams.get('view') : null;
+const requestedPresetRef = requestedParams.get('settings_preset')
+  || (isPresetLoader ? requestedParams.get('preset') : null);
+const expectedComposition = requestedParams.get('composition')
+  || PRESET_VIEW_COMPOSITIONS[requestedPresetView]
+  || 'smoke-raymarch-under-splats-v0';
 const out = resolve(String(args.get('--out') || '/tmp/kaminos-selective-head-live.png'));
 const reportPath = resolve(String(args.get('--report') || '/tmp/kaminos-selective-head-live.json'));
 const minimumContinuousSeconds = Number(args.get('--minimum-seconds') || 5);
@@ -25,6 +39,7 @@ let failurePhase = 'argument-validation';
 let browser = null;
 let socket = null;
 let lastTrustworthyEvidence = {};
+let expectedSettingsPreset = null;
 
 class CdpSocket {
   constructor(url) { this.url = url; this.socket = null; this.nextId = 1; this.pending = new Map(); }
@@ -33,12 +48,14 @@ class CdpSocket {
       this.socket = new WebSocket(this.url);
       this.socket.addEventListener('open', resolveOpen, { once: true });
       this.socket.addEventListener('error', reject, { once: true });
+      this.socket.addEventListener('close', () => this.rejectPending(new Error('CDP socket closed')));
       this.socket.addEventListener('message', event => {
         const message = JSON.parse(event.data);
         if (!message.id) return;
         const pending = this.pending.get(message.id);
         if (!pending) return;
         this.pending.delete(message.id);
+        clearTimeout(pending.timer);
         if (message.error) pending.reject(new Error(message.error.message));
         else pending.resolve(message.result);
       });
@@ -47,15 +64,31 @@ class CdpSocket {
   call(method, params = {}) {
     return new Promise((resolveCall, reject) => {
       const id = this.nextId++;
-      this.pending.set(id, { resolve: resolveCall, reject });
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`CDP call timed out: ${method}`));
+      }, timeoutMs);
+      this.pending.set(id, { resolve: resolveCall, reject, timer });
       this.socket.send(JSON.stringify({ id, method, params }));
     });
+  }
+  rejectPending(error) {
+    for (const pending of this.pending.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(error);
+    }
+    this.pending.clear();
   }
   close() { this.socket?.close(); }
 }
 
 try {
   if (!(minimumContinuousSeconds >= 5 && minimumContinuousSeconds <= 30)) throw new Error('--minimum-seconds must be within 5-30');
+  if (isPresetLoader && !requestedPresetView) throw new Error('missing explicit preset renderer view');
+  if (requestedPresetView && !PRESET_VIEW_COMPOSITIONS[requestedPresetView]) throw new Error(`unsupported preset renderer view: ${requestedPresetView}`);
+  failurePhase = 'preset-source-resolution';
+  expectedSettingsPreset = await resolveExpectedSettingsPreset(requestedPresetRef);
+  lastTrustworthyEvidence = { expectedSettingsPreset };
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
   failurePhase = 'browser-launch';
@@ -96,6 +129,12 @@ try {
       && !state?.fallbackReason
       && !state?.compositionFallbackReason
       && !state?.boundarySplatFallbackReason
+      && (!expectedSettingsPreset || (
+        state?.sourceSettingsPresetId === expectedSettingsPreset.presetId
+        && state?.sourceSettingsPresetAuthority === 'shared-volume-settings-preset-v2'
+        && state?.sourceSettingsPresetStorePath === expectedSettingsPreset.storePath
+        && state?.sourceSettingsPresetContentHash === expectedSettingsPreset.contentHash
+      ))
       && (state?.requestedRole === 'truthHigh' || Number(state?.encodedFrameCount || 0) >= 2)
     ) break;
     await delay(250);
@@ -129,7 +168,18 @@ try {
   assert.equal(endState?.fallbackReason, null, 'selective route fell back during observation');
   assert.equal(endState?.compositionFallbackReason, null, 'selective composition fell back during observation');
   assert.equal(endState?.boundarySplatFallbackReason, null, 'splat route fell back during observation');
+  if (expectedSettingsPreset) {
+    assert.equal(endState?.sourceSettingsPresetId, expectedSettingsPreset.presetId, 'visual route did not validate its requested settings preset');
+    assert.equal(endState?.sourceSettingsPresetAuthority, 'shared-volume-settings-preset-v2', 'visual route did not derive its requested settings authority');
+    assert.equal(endState?.sourceSettingsPresetStorePath, expectedSettingsPreset.storePath, 'visual route reported the wrong effective shared preset store path');
+    assert.equal(
+      endState?.sourceSettingsPresetContentHash,
+      expectedSettingsPreset.contentHash,
+      'visual route reported a content hash that diverges from its immutable preset id',
+    );
+  }
   failurePhase = 'capture';
+  const effectiveUrl = await evaluate(socket, 'location.href');
   const capture = await socket.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
   writeFileSync(out, Buffer.from(capture.data, 'base64'));
   const report = {
@@ -138,7 +188,17 @@ try {
     status: 'captured',
     failurePhase: null,
     requestedUrl: url,
+    effectiveUrl,
     effectiveRoute: endState.routeIdentity,
+    sourceSettingsPresetRequestedId: endState.sourceSettingsPresetRequestedId,
+    sourceSettingsPresetId: endState.sourceSettingsPresetId,
+    sourceSettingsPresetAuthority: endState.sourceSettingsPresetAuthority,
+    sourceSettingsPresetAlias: endState.sourceSettingsPresetAlias,
+    sourceSettingsPresetLabel: endState.sourceSettingsPresetLabel,
+    sourceSettingsPresetContentHash: endState.sourceSettingsPresetContentHash,
+    sourceSettingsPresetStorePath: endState.sourceSettingsPresetStorePath,
+    requestedPresetRef,
+    expectedSettingsPresetId: expectedSettingsPreset?.presetId || null,
     requestedRole: endState.requestedRole,
     effectiveRole: endState.effectiveRole,
     roleAuthority: endState.roleAuthority,
@@ -199,6 +259,24 @@ function required(name) {
   const value = args.get(name);
   if (!value || value === true) throw new Error(`missing ${name}`);
   return String(value);
+}
+
+async function resolveExpectedSettingsPreset(presetRef) {
+  if (!presetRef) return null;
+  const endpoint = new URL('/api/volume-settings-preset', requestedUrl);
+  endpoint.searchParams.set('id', presetRef);
+  const response = await fetch(endpoint, { cache: 'no-store' });
+  const document = await response.json();
+  if (!response.ok) throw new Error(document?.error || `settings preset lookup failed: ${response.status}`);
+  const presetId = String(document?.presetId || '');
+  const contentHash = String(document?.contentHash || '');
+  const storePath = String(document?.storePath || '');
+  if (!/^vsp-[0-9a-f]{64}$/.test(presetId)
+    || contentHash !== `sha256:${presetId.slice(4)}`
+    || !storePath) {
+    throw new Error('settings preset lookup returned invalid immutable authority');
+  }
+  return { presetId, contentHash, storePath };
 }
 
 function chromeExecutable() {

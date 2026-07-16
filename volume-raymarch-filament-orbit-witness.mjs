@@ -1,0 +1,811 @@
+#!/usr/bin/env node
+import assert from 'node:assert/strict';
+import { createHash, randomInt } from 'node:crypto';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { spawn, spawnSync } from 'node:child_process';
+
+const SCHEMA = 'kaminos.volume.raymarch-filament-orbit-witness.v0';
+const WRAPPER_ROUTE = 'exact-basin-selective-head-live-v0';
+const RENDERER_ROUTE = 'native-3d-compute-fluid-raymarch-v0';
+const PRESET_ID = 'vsp-5d9fedbab31583860d39a34751ff5cd847116cd6fe6eeee6b4379909ef4bb2a2';
+const PRESET_AUTHORITY = 'shared-volume-settings-preset-v2';
+const SUPPORT_AUTHORITY = 'state-derived-direct-flame-candidate-support-allocation-v0';
+const NON_RIDGE_TARGET = 'nonnegative-non-ridge-flame-emission-coefficient-v0';
+const ANALYTIC_SPLAT_RENDERER = 'live-boundary-sidecar-analytic-splats-v0';
+const args = parseArgs(process.argv.slice(2));
+const requestedUrl = required('--url');
+const outDir = resolve(String(args.get('--out-dir') || '/tmp/kaminos-raymarch-filament-orbit'));
+const reportPath = resolve(String(args.get('--report') || `${outDir}/report.json`));
+const rayStepCounts = parseIntegerList(args.get('--ray-steps') || '48,96,160');
+const orbitAngles = parseNumberList(args.get('--orbit-angles') || '-0.42,-0.28,-0.14,0,0.14,0.28,0.42');
+const timeoutMs = Number(args.get('--timeout-ms') || 240000);
+const settleMs = Number(args.get('--settle-ms') || 1800);
+const debugPort = Number(args.get('--debug-port') || randomInt(42000, 62000));
+const keepBrowserOpen = args.has('--keep-browser-open');
+const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const userDataDir = mkdtempSync('/tmp/kaminos-raymarch-filament-orbit-profile-');
+const runStartedAt = new Date().toISOString();
+
+let browser = null;
+let socket = null;
+let failurePhase = 'argument-validation';
+let lastTrustworthyEvidence = {};
+
+mkdirSync(outDir, { recursive: true });
+mkdirSync(dirname(reportPath), { recursive: true });
+
+class CdpSocket {
+  constructor(url, timeout) {
+    this.url = url;
+    this.timeout = timeout;
+    this.socket = null;
+    this.nextId = 1;
+    this.pending = new Map();
+    this.browserEvents = [];
+  }
+
+  open() {
+    return new Promise((resolveOpen, reject) => {
+      this.socket = new WebSocket(this.url);
+      this.socket.addEventListener('open', resolveOpen, { once: true });
+      this.socket.addEventListener('error', reject, { once: true });
+      this.socket.addEventListener('close', () => this.rejectPending(new Error('CDP socket closed')));
+      this.socket.addEventListener('message', event => {
+        const message = JSON.parse(event.data);
+        if (!message.id) {
+          if (['Runtime.exceptionThrown', 'Runtime.consoleAPICalled', 'Log.entryAdded'].includes(message.method)) {
+            this.browserEvents.push(message);
+          }
+          return;
+        }
+        const pending = this.pending.get(message.id);
+        if (!pending) return;
+        this.pending.delete(message.id);
+        clearTimeout(pending.timer);
+        if (message.error) pending.reject(new Error(message.error.message));
+        else pending.resolve(message.result);
+      });
+    });
+  }
+
+  call(method, params = {}) {
+    return new Promise((resolveCall, reject) => {
+      const id = this.nextId++;
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`CDP call timed out: ${method}`));
+      }, this.timeout);
+      this.pending.set(id, { resolve: resolveCall, reject, timer });
+      this.socket.send(JSON.stringify({ id, method, params }));
+    });
+  }
+
+  rejectPending(error) {
+    for (const pending of this.pending.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(error);
+    }
+    this.pending.clear();
+  }
+
+  close() {
+    this.socket?.close();
+  }
+}
+
+try {
+  if (args.errors.length) throw new Error(args.errors.join('; '));
+  if (!requestedUrl) throw new Error('missing --url');
+  const route = new URL(requestedUrl);
+  assert.equal(route.pathname, '/volume-selective-head-live.html', 'requested route must use the selective-head live wrapper');
+  assert.equal(route.searchParams.get('settings_preset'), PRESET_ID, 'requested route must pin the Flamebowl preset');
+  assert.equal(route.searchParams.get('settings_preset_authority'), PRESET_AUTHORITY, 'requested route must pin preset authority');
+  assert.equal(route.searchParams.get('role'), 'truthHigh', 'requested role must be truthHigh');
+  assert.equal(route.searchParams.get('composition'), 'raymarch-only-v0', 'requested initial composition must be raymarch-only-v0');
+  assert.ok(rayStepCounts.length >= 2, 'at least two ray-step counts are required');
+  assert.ok(orbitAngles.length >= 5, 'at least five orbit poses are required');
+  assert.ok(rayStepCounts.every(value => value >= 24 && value <= 160), 'ray-step counts must be inside the live renderer range');
+
+  failurePhase = 'browser-launch';
+  browser = spawn(chrome, [
+    '--headless=new',
+    '--enable-unsafe-webgpu',
+    '--disable-background-timer-throttling',
+    '--disable-renderer-backgrounding',
+    '--disable-backgrounding-occluded-windows',
+    `--remote-debugging-port=${debugPort}`,
+    `--user-data-dir=${userDataDir}`,
+    '--window-size=1440,960',
+    '--no-first-run',
+    '--no-default-browser-check',
+    'about:blank',
+  ], { stdio: 'ignore', detached: keepBrowserOpen });
+  if (keepBrowserOpen) browser.unref();
+
+  const browserVersion = await waitForJson(`http://127.0.0.1:${debugPort}/json/version`, timeoutMs);
+  const target = await waitForTarget(debugPort, timeoutMs);
+  socket = new CdpSocket(target.webSocketDebuggerUrl, timeoutMs);
+  await socket.open();
+  await socket.call('Page.enable');
+  await socket.call('Runtime.enable');
+  await socket.call('Log.enable');
+  await socket.call('Page.navigate', { url: requestedUrl });
+
+  failurePhase = 'route-admission';
+  const admitted = await waitForRuntime(socket, timeoutMs);
+  lastTrustworthyEvidence = { admitted };
+  assert.equal(admitted.routeIdentity, WRAPPER_ROUTE, 'requested/effective route disagreement at wrapper admission');
+  assert.equal(admitted.status, 'running', 'wrapper did not settle on the requested route');
+  assert.equal(admitted.sourceSettingsPresetId, PRESET_ID, 'stale/default preset replaced requested preset');
+  assert.equal(admitted.sourceSettingsPresetAuthority, PRESET_AUTHORITY, 'effective preset authority disagreement');
+  assert.equal(admitted.effectiveRole, 'truthHigh', 'effective role disagreement');
+  assert.equal(admitted.effectiveComposition, 'raymarch-only-v0', 'effective composition disagreement');
+  assert.equal(admitted.fallbackReason, null, 'renderer fallback at admission');
+  assert.match(admitted.backend || '', /^WebGPU/, 'effective backend substituted away from WebGPU');
+  await delay(settleMs);
+
+  failurePhase = 'same-state-initialization';
+  const initialization = await evaluate(socket, runtimeInitializationSource({ orbitAngles, rayStepCounts }));
+  lastTrustworthyEvidence.initialization = initialization.summary;
+  assert.equal(initialization.summary.wrapperRoute, WRAPPER_ROUTE, 'requested/effective route disagreement after pause');
+  assert.equal(initialization.summary.effectiveRoute, RENDERER_ROUTE, 'requested/effective route disagreement in renderer');
+  assert.equal(initialization.summary.smokeReceipt?.effectiveMode, 'off', 'smoke presentation did not become disabled');
+
+  const captures = [];
+  for (const camera of initialization.cameras) {
+    failurePhase = `camera-${camera.index}-support`;
+    captures.push(await captureAndPersist(camera, 'stateDerivedSupport', Math.max(...rayStepCounts)));
+    failurePhase = `camera-${camera.index}-non-ridge-filaments`;
+    captures.push(await captureAndPersist(camera, 'nonRidgeFilaments', Math.max(...rayStepCounts)));
+    failurePhase = `camera-${camera.index}-analytic-splat`;
+    captures.push(await captureAndPersist(camera, 'analyticSplat', Math.max(...rayStepCounts)));
+    for (const raySteps of rayStepCounts) {
+      failurePhase = `camera-${camera.index}-raymarch-${raySteps}`;
+      captures.push(await captureAndPersist(camera, 'raymarch', raySteps));
+    }
+  }
+
+  failurePhase = 'frozen-repeat';
+  const centerCamera = initialization.cameras.reduce((best, camera) => Math.abs(camera.angle) < Math.abs(best.angle) ? camera : best);
+  const frozenRepeat = await captureAndPersist(centerCamera, 'raymarchRepeat', Math.max(...rayStepCounts));
+  captures.push(frozenRepeat);
+
+  failurePhase = 'filament-analysis';
+  const filamentContinuity = await evaluate(socket, 'window.__kaminosFilamentOrbitWitness.analyze()');
+  lastTrustworthyEvidence.captureCount = captures.length;
+  lastTrustworthyEvidence.filamentContinuity = filamentContinuity.summary;
+
+  const frozenDeterminism = await evaluate(socket, 'window.__kaminosFilamentOrbitWitness.frozenRepeat()');
+  const finalState = await evaluate(socket, `(() => {
+    const basinWindow = document.querySelector('#basin')?.contentWindow || window;
+    const prototype = basinWindow.__kaminosVolumePrototype;
+    const state = prototype?.debugState?.() || null;
+    return {
+      frameCount: state?.frameCount,
+      simStepCount: state?.simStepCount,
+      effectiveRoute: state?.effectiveRoute,
+      backend: state?.backend,
+      camera: basinWindow.kaminosCameraDebugState?.() || null,
+    };
+  })()`);
+
+  const report = {
+    schema: SCHEMA,
+    status: 'completed',
+    runStartedAt,
+    runCompletedAt: new Date().toISOString(),
+    requestedUrl,
+    requestedRoute: '/volume-selective-head-live.html',
+    effectiveWrapperRoute: initialization.summary.wrapperRoute,
+    effectiveRendererRoute: initialization.summary.effectiveRoute,
+    sourceSettingsPreset: initialization.summary.sourceSettingsPreset,
+    sourceAuthority: initialization.summary.sourceAuthority,
+    commit: gitValue(['rev-parse', 'HEAD']),
+    branch: gitValue(['branch', '--show-current']),
+    worktree: process.cwd(),
+    browser: {
+      identity: 'single-owned-chrome-cdp-browser-v0',
+      product: browserVersion.Browser || null,
+      userAgent: browserVersion['User-Agent'] || null,
+      debugPort,
+      userDataDir,
+      keptOpen: keepBrowserOpen,
+    },
+    captureConfig: { orbitAngles, rayStepCounts, smoke: 'off', simulatorAdvance: false },
+    frozenState: initialization.summary.frozenState,
+    finalState,
+    captures: captures.map(({ pngDataUrl, ...capture }) => capture),
+    frozenDeterminism,
+    filamentContinuity,
+    inspectedArtifacts: captures.map(capture => capture.imagePath),
+    falseClosureChecks: {
+      rejectsRouteSubstitution: true,
+      rejectsStaleDefaultPreset: true,
+      rejectsRayStepDisagreement: true,
+      rejectsStateEvolution: true,
+      rejectsMissingPartialBlankCapture: true,
+      rejectsCachedStaticOutput: true,
+      rejectsRendererFallback: true,
+    },
+    browserEvents: socket.browserEvents,
+  };
+  rejectFalseClosure(report);
+  writeFileSync(reportPath, JSON.stringify(report, null, 2));
+  console.log(JSON.stringify({
+    status: report.status,
+    report: reportPath,
+    captureCount: report.captures.length,
+    frozenDeterminism: report.frozenDeterminism,
+    filamentSummary: report.filamentContinuity.summary,
+  }, null, 2));
+} catch (error) {
+  const failureReport = {
+    schema: SCHEMA,
+    status: 'failed',
+    failurePhase,
+    error: error?.stack || error?.message || String(error),
+    requestedUrl,
+    rayStepCounts,
+    orbitAngles,
+    commit: gitValue(['rev-parse', 'HEAD']),
+    worktree: process.cwd(),
+    lastTrustworthyEvidence,
+  };
+  writeFileSync(reportPath, JSON.stringify(failureReport, null, 2));
+  console.error(JSON.stringify(failureReport, null, 2));
+  process.exitCode = 1;
+} finally {
+  socket?.close();
+  if (!keepBrowserOpen) browser?.kill('SIGTERM');
+}
+
+async function captureAndPersist(camera, mode, raySteps) {
+  const key = `${camera.index}-${mode}-${raySteps}`;
+  const capture = await evaluate(socket, `window.__kaminosFilamentOrbitWitness.capture(${JSON.stringify({ key, camera, mode, raySteps })})`);
+  const filename = `camera-${String(camera.index).padStart(2, '0')}-${mode}-${raySteps}.png`;
+  const imagePath = resolve(outDir, filename);
+  writeDataUrl(imagePath, capture.pngDataUrl);
+  const persisted = { ...capture, imagePath };
+  delete persisted.pngDataUrl;
+  lastTrustworthyEvidence.lastCapture = persisted;
+  return { ...persisted, pngDataUrl: capture.pngDataUrl };
+}
+
+function runtimeInitializationSource(config) {
+  return `
+    (async () => {
+      const operator = window.__kaminosSelectiveHeadLive || null;
+      const basinWindow = document.querySelector('#basin')?.contentWindow || window;
+      const prototype = basinWindow.__kaminosVolumePrototype;
+      if (!operator?.debugState || !prototype?.debugState || !prototype?.sampleFrame || !basinWindow.kaminosSetCameraDebugPose) {
+        throw new Error('filament-orbit-runtime-api-missing');
+      }
+      const digest = async value => {
+        const bytes = value instanceof Uint8Array ? value : new TextEncoder().encode(JSON.stringify(value));
+        const hash = await crypto.subtle.digest('SHA-256', bytes);
+        return [...new Uint8Array(hash)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+      };
+      const luma = (rgba, index) => 0.2126 * rgba[index] + 0.7152 * rgba[index + 1] + 0.0722 * rgba[index + 2];
+      const pngDataUrl = image => {
+        const canvas = document.createElement('canvas');
+        canvas.width = image.width;
+        canvas.height = image.height;
+        canvas.getContext('2d').putImageData(new ImageData(Uint8ClampedArray.from(image.rgba), image.width, image.height), 0, 0);
+        return canvas.toDataURL('image/png');
+      };
+      const pixelMetrics = image => {
+        let litPixels = 0;
+        let lumaSum = 0;
+        let maxLuma = 0;
+        for (let index = 0; index < image.rgba.length; index += 4) {
+          const value = luma(image.rgba, index);
+          if (value > 8) litPixels += 1;
+          lumaSum += value;
+          maxLuma = Math.max(maxLuma, value);
+        }
+        return { litPixels, meanLuma: lumaSum / Math.max(1, image.width * image.height), maxLuma, nonblank: litPixels > 64 };
+      };
+      const pixelDelta = (left, right) => {
+        if (!left || !right || left.length !== right.length) throw new Error('pixel-delta-shape-mismatch');
+        let maxChannelDelta = 0;
+        let absoluteDelta = 0;
+        let changedPixels = 0;
+        for (let index = 0; index < left.length; index += 4) {
+          let changed = false;
+          for (let channel = 0; channel < 4; channel += 1) {
+            const delta = Math.abs(left[index + channel] - right[index + channel]);
+            maxChannelDelta = Math.max(maxChannelDelta, delta);
+            absoluteDelta += delta;
+            changed ||= delta !== 0;
+          }
+          changedPixels += changed ? 1 : 0;
+        }
+        return {
+          maxChannelDelta,
+          meanAbsChannelDelta: absoluteDelta / Math.max(1, left.length),
+          changedPixels,
+          changedFraction: changedPixels / Math.max(1, left.length / 4),
+        };
+      };
+      const filamentComponents = (support, raymarch, analytic, stateSupport, cameraIndex, raySteps) => {
+        const width = support.width;
+        const height = support.height;
+        const supportLuma = new Float32Array(width * height);
+        const rayLuma = new Float32Array(width * height);
+        const analyticLuma = new Float32Array(width * height);
+        const stateSupportLuma = new Float32Array(width * height);
+        const nonzero = [];
+        for (let pixel = 0; pixel < width * height; pixel += 1) {
+          supportLuma[pixel] = luma(support.rgba, pixel * 4);
+          rayLuma[pixel] = luma(raymarch.rgba, pixel * 4);
+          analyticLuma[pixel] = luma(analytic.rgba, pixel * 4);
+          stateSupportLuma[pixel] = luma(stateSupport.rgba, pixel * 4);
+          if (supportLuma[pixel] > 2) nonzero.push(supportLuma[pixel]);
+        }
+        nonzero.sort((a, b) => a - b);
+        const threshold = Math.max(12, nonzero[Math.floor(nonzero.length * 0.58)] || 12);
+        const mask = new Uint8Array(width * height);
+        for (let y = 1; y < height - 1; y += 1) {
+          for (let x = 1; x < width - 1; x += 1) {
+            const pixel = y * width + x;
+            let neighborhood = 0;
+            for (let oy = -2; oy <= 2; oy += 1) {
+              for (let ox = -2; ox <= 2; ox += 1) neighborhood += supportLuma[(y + oy) * width + x + ox];
+            }
+            const localContrast = supportLuma[pixel] - neighborhood / 25;
+            mask[pixel] = supportLuma[pixel] >= threshold && (localContrast >= 2.5 || supportLuma[pixel] >= threshold * 1.45) ? 1 : 0;
+          }
+        }
+        const seen = new Uint8Array(mask.length);
+        const components = [];
+        const neighbors = [-width - 1, -width, -width + 1, -1, 1, width - 1, width, width + 1];
+        for (let seed = 0; seed < mask.length; seed += 1) {
+          if (!mask[seed] || seen[seed]) continue;
+          const queue = [seed];
+          seen[seed] = 1;
+          const pixels = [];
+          let minX = width;
+          let maxX = 0;
+          let minY = height;
+          let maxY = 0;
+          while (queue.length) {
+            const pixel = queue.pop();
+            pixels.push(pixel);
+            const x = pixel % width;
+            const y = Math.floor(pixel / width);
+            minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+            minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+            for (const offset of neighbors) {
+              const next = pixel + offset;
+              if (next < 0 || next >= mask.length || seen[next] || !mask[next]) continue;
+              const nx = next % width;
+              if (Math.abs(nx - x) > 1) continue;
+              seen[next] = 1;
+              queue.push(next);
+            }
+          }
+          if (pixels.length < 6) continue;
+          const rayThreshold = 12;
+          const analyticThreshold = 8;
+          const rayPixels = pixels.filter(pixel => rayLuma[pixel] >= rayThreshold).length;
+          const analyticPixels = pixels.filter(pixel => analyticLuma[pixel] >= analyticThreshold).length;
+          const stateSupportPixels = pixels.filter(pixel => stateSupportLuma[pixel] >= analyticThreshold).length;
+          const targetLumaSum = pixels.reduce((sum, pixel) => sum + supportLuma[pixel], 0);
+          const raymarchLumaSum = pixels.reduce((sum, pixel) => sum + rayLuma[pixel], 0);
+          const analyticLumaSum = pixels.reduce((sum, pixel) => sum + analyticLuma[pixel], 0);
+          const stateSupportLumaSum = pixels.reduce((sum, pixel) => sum + stateSupportLuma[pixel], 0);
+          const rayCoverage = rayPixels / pixels.length;
+          const analyticCoverage = analyticPixels / pixels.length;
+          const majorSpan = Math.max(maxX - minX + 1, maxY - minY + 1);
+          components.push({
+            id: 'camera-' + String(cameraIndex).padStart(2, '0') + '-step-' + raySteps + '-filament-' + String(components.length).padStart(3, '0'),
+            bbox: { minX, minY, maxX, maxY },
+            supportPixels: pixels.length,
+            supportWidthProxy: pixels.length / Math.max(1, majorSpan),
+            raymarchPixels: rayPixels,
+            raymarchCoverage: rayCoverage,
+            raymarchWidthProxy: rayPixels / Math.max(1, majorSpan),
+            analyticSplatPixels: analyticPixels,
+            analyticSplatCoverage: analyticCoverage,
+            stateDerivedSupportPixels: stateSupportPixels,
+            stateDerivedSupportCoverage: stateSupportPixels / pixels.length,
+            raymarchToTargetIntensityRatio: raymarchLumaSum / Math.max(1, targetLumaSum),
+            analyticSplatToTargetIntensityRatio: analyticLumaSum / Math.max(1, targetLumaSum),
+            stateDerivedSupportToTargetIntensityRatio: stateSupportLumaSum / Math.max(1, targetLumaSum),
+            classification: rayCoverage < 0.25 ? 'omitted' : (rayCoverage < 0.65 ? 'partial' : 'present'),
+          });
+        }
+        components.sort((a, b) => b.supportPixels - a.supportPixels);
+        const kept = components.slice(0, 80);
+        return {
+          supportThreshold: threshold,
+          componentCount: kept.length,
+          omittedCount: kept.filter(component => component.classification === 'omitted').length,
+          partialCount: kept.filter(component => component.classification === 'partial').length,
+          presentCount: kept.filter(component => component.classification === 'present').length,
+          meanRaymarchCoverage: kept.reduce((sum, component) => sum + component.raymarchCoverage, 0) / Math.max(1, kept.length),
+          meanAnalyticSplatCoverage: kept.reduce((sum, component) => sum + component.analyticSplatCoverage, 0) / Math.max(1, kept.length),
+          meanStateDerivedSupportCoverage: kept.reduce((sum, component) => sum + component.stateDerivedSupportCoverage, 0) / Math.max(1, kept.length),
+          meanRaymarchToTargetIntensityRatio: kept.reduce((sum, component) => sum + component.raymarchToTargetIntensityRatio, 0) / Math.max(1, kept.length),
+          meanAnalyticSplatToTargetIntensityRatio: kept.reduce((sum, component) => sum + component.analyticSplatToTargetIntensityRatio, 0) / Math.max(1, kept.length),
+          meanStateDerivedSupportToTargetIntensityRatio: kept.reduce((sum, component) => sum + component.stateDerivedSupportToTargetIntensityRatio, 0) / Math.max(1, kept.length),
+          meanRaymarchWidthProxy: kept.reduce((sum, component) => sum + component.raymarchWidthProxy, 0) / Math.max(1, kept.length),
+          components: kept,
+        };
+      };
+
+      operator.setCapturePaused(true);
+      await new Promise(resolve => setTimeout(resolve, 120));
+      operator.setPresentation('beauty');
+      operator.setAppearanceAssay('off');
+      operator.setComposition('raymarch-only-v0');
+      const smokeReceipt = prototype.setRaymarchSmokePresentationMode('off');
+      const before = prototype.debugState();
+      const wrapperBefore = operator.debugState();
+      const originalCamera = basinWindow.kaminosCameraDebugState();
+      const baseFrameCount = before.frameCount;
+      const baseSimStepCount = before.simStepCount;
+      const sameStateCaptureId = 'filament-orbit-f' + baseFrameCount + '-s' + baseSimStepCount;
+      const fixedNow = performance.now();
+      const controlsHash = await digest(before.controls);
+      const sourceSettingsPreset = {
+        presetId: wrapperBefore.sourceSettingsPresetId,
+        authority: wrapperBefore.sourceSettingsPresetAuthority,
+        contentHash: wrapperBefore.sourceSettingsPresetContentHash,
+        label: wrapperBefore.sourceSettingsPresetLabel,
+        controlCount: wrapperBefore.sourceSettingsPresetControlCount,
+      };
+      const dx = originalCamera.position[0] - originalCamera.target[0];
+      const dz = originalCamera.position[2] - originalCamera.target[2];
+      const cameras = ${JSON.stringify(config.orbitAngles)}.map((angle, index) => ({
+        index,
+        angle,
+        pose: {
+          position: [
+            originalCamera.target[0] + dx * Math.cos(angle) - dz * Math.sin(angle),
+            originalCamera.position[1],
+            originalCamera.target[2] + dx * Math.sin(angle) + dz * Math.cos(angle),
+          ],
+          target: [...originalCamera.target],
+        },
+      }));
+      const captures = new Map();
+
+      async function capture(request) {
+        basinWindow.kaminosSetCameraDebugPose(request.camera.pose);
+        prototype.setControls({ raySteps: request.raySteps });
+        let modeAuthority = null;
+        if (request.mode === 'stateDerivedSupport') {
+          operator.setPresentation('beauty');
+          operator.setComposition('raymarch-only-v0');
+          const receipt = operator.setAppearanceAssay('ridge-owned-emission');
+          modeAuthority = receipt?.ridgeOwnershipIdentity || receipt?.targetIdentity || null;
+        } else if (request.mode === 'nonRidgeFilaments') {
+          operator.setPresentation('beauty');
+          operator.setComposition('raymarch-only-v0');
+          const receipt = operator.setAppearanceAssay('non-ridge-emission');
+          modeAuthority = receipt?.targetIdentity || null;
+        } else if (request.mode === 'analyticSplat') {
+          operator.setAppearanceAssay('off');
+          operator.setPresentation('beauty');
+          prototype.setControls({ boundarySplatMode: 'analytic', raySteps: request.raySteps });
+          operator.setComposition('splat-only-v0');
+          modeAuthority = '${ANALYTIC_SPLAT_RENDERER}';
+        } else {
+          operator.setAppearanceAssay('off');
+          operator.setPresentation('beauty');
+          operator.setComposition('raymarch-only-v0');
+          modeAuthority = 'smoke-off-complete-flame-raymarch-v0';
+        }
+        const smoke = prototype.setRaymarchSmokePresentationMode('off');
+        const cameraPose = basinWindow.kaminosCameraDebugState();
+        const sample = await prototype.sampleFrame({
+          advanceSim: false,
+          includeRgba: true,
+          now: fixedNow,
+          sameStateCaptureId,
+          baseFrameCount,
+          baseSimStepCount,
+        });
+        if (!sample.ok || !sample.image?.rgba?.length) throw new Error('missing, partial, or blank capture: ' + request.key);
+        const rgba = Uint8Array.from(sample.image.rgba);
+        const metrics = pixelMetrics({ ...sample.image, rgba });
+        if (!metrics.nonblank) throw new Error('missing, partial, or blank capture: ' + request.key);
+        const effectiveRaySteps = sample.volumePresentationReceipt?.effectiveRayQuality?.raySteps ?? sample.controls?.raySteps ?? null;
+        const record = {
+          key: request.key,
+          cameraIndex: request.camera.index,
+          cameraAngle: request.camera.angle,
+          mode: request.mode,
+          requestedRaySteps: request.raySteps,
+          effectiveRaySteps,
+          sameStateCaptureId,
+          frameCount: sample.frameCount,
+          simStepCount: sample.simStepCount,
+          cameraPose,
+          cameraPoseHash: await digest(cameraPose),
+          pixelHash: await digest(rgba),
+          width: sample.image.width,
+          height: sample.image.height,
+          metrics,
+          requestedRoute: '/volume-selective-head-live.html',
+          effectiveRoute: sample.effectiveRoute,
+          backend: sample.backend,
+          modeAuthority,
+          boundarySplatRendererIdentity: sample.boundarySplatRendererIdentity,
+          boundarySplatSourceAuthority: sample.boundarySplatSourceAuthority,
+          boundarySplatCandidateCount: sample.boundarySplatCandidateCount,
+          boundarySplatInstanceCount: sample.boundarySplatInstanceCount,
+          boundarySplatOverflowCount: sample.boundarySplatOverflowCount,
+          boundarySplatFallbackReason: sample.boundarySplatFallbackReason,
+          volumePresentationReceipt: sample.volumePresentationReceipt,
+          raymarchSmokePresentationReceipt: sample.raymarchSmokePresentationReceipt,
+          appearanceDecompositionReceipt: sample.appearanceDecompositionReceipt,
+          selectiveHeadLivePassReceipt: sample.selectiveHeadLivePassReceipt,
+          pngDataUrl: pngDataUrl({ ...sample.image, rgba }),
+        };
+        captures.set(request.key, { ...record, rgba });
+        return record;
+      }
+
+      function analyze() {
+        const rows = [];
+        for (const camera of cameras) {
+          const stateSupport = captures.get(camera.index + '-stateDerivedSupport-' + Math.max(...${JSON.stringify(config.rayStepCounts)}));
+          const support = captures.get(camera.index + '-nonRidgeFilaments-' + Math.max(...${JSON.stringify(config.rayStepCounts)}));
+          const analytic = captures.get(camera.index + '-analyticSplat-' + Math.max(...${JSON.stringify(config.rayStepCounts)}));
+          if (!support || !stateSupport || !analytic) throw new Error('missing comparator capture for camera ' + camera.index);
+          for (const raySteps of ${JSON.stringify(config.rayStepCounts)}) {
+            const raymarch = captures.get(camera.index + '-raymarch-' + raySteps);
+            if (!raymarch) throw new Error('missing raymarch capture for camera ' + camera.index + ' steps ' + raySteps);
+            rows.push({
+              cameraIndex: camera.index,
+              cameraAngle: camera.angle,
+              raySteps,
+              ...filamentComponents(support, raymarch, analytic, stateSupport, camera.index, raySteps),
+              raymarchVsSupportPixelDelta: pixelDelta(raymarch.rgba, support.rgba),
+              raymarchVsAnalyticSplatPixelDelta: pixelDelta(raymarch.rgba, analytic.rgba),
+            });
+          }
+        }
+        const byRaySteps = ${JSON.stringify(config.rayStepCounts)}.map(raySteps => {
+          const selected = rows.filter(row => row.raySteps === raySteps);
+          const omissionRatios = selected.map(row => row.omittedCount / Math.max(1, row.componentCount));
+          const widthProxies = selected.map(row => row.meanRaymarchWidthProxy);
+          return {
+            raySteps,
+            cameraCount: selected.length,
+            meanOmissionRatio: omissionRatios.reduce((sum, value) => sum + value, 0) / selected.length,
+            minOmissionRatio: Math.min(...omissionRatios),
+            maxOmissionRatio: Math.max(...omissionRatios),
+            cameraOmissionSwing: Math.max(...omissionRatios) - Math.min(...omissionRatios),
+            minMeanWidthProxy: Math.min(...widthProxies),
+            maxMeanWidthProxy: Math.max(...widthProxies),
+            cameraWidthSwing: Math.max(...widthProxies) - Math.min(...widthProxies),
+            meanRaymarchToTargetIntensityRatio: selected.reduce((sum, row) => sum + row.meanRaymarchToTargetIntensityRatio, 0) / selected.length,
+          };
+        });
+        const maxRaySteps = Math.max(...${JSON.stringify(config.rayStepCounts)});
+        const rayStepAppearance = ${JSON.stringify(config.rayStepCounts)}.map(raySteps => {
+          const selected = cameras.map(camera => captures.get(camera.index + '-raymarch-' + raySteps));
+          const reference = cameras.map(camera => captures.get(camera.index + '-raymarch-' + maxRaySteps));
+          const sameCameraDelta = selected.map((capture, index) => pixelDelta(capture.rgba, reference[index].rgba));
+          return {
+            raySteps,
+            meanLuma: selected.reduce((sum, capture) => sum + capture.metrics.meanLuma, 0) / selected.length,
+            minMeanLuma: Math.min(...selected.map(capture => capture.metrics.meanLuma)),
+            maxMeanLuma: Math.max(...selected.map(capture => capture.metrics.meanLuma)),
+            meanChangedFractionVsMaxSteps: sameCameraDelta.reduce((sum, delta) => sum + delta.changedFraction, 0) / sameCameraDelta.length,
+            meanAbsChannelDeltaVsMaxSteps: sameCameraDelta.reduce((sum, delta) => sum + delta.meanAbsChannelDelta, 0) / sameCameraDelta.length,
+            sameCameraDelta,
+          };
+        });
+        const adjacentCameraDelta = ${JSON.stringify(config.rayStepCounts)}.map(raySteps => {
+          const deltas = [];
+          for (let index = 1; index < cameras.length; index += 1) {
+            const previous = captures.get(cameras[index - 1].index + '-raymarch-' + raySteps);
+            const current = captures.get(cameras[index].index + '-raymarch-' + raySteps);
+            deltas.push({
+              fromCameraIndex: cameras[index - 1].index,
+              toCameraIndex: cameras[index].index,
+              ...pixelDelta(previous.rgba, current.rgba),
+            });
+          }
+          return {
+            raySteps,
+            meanChangedFraction: deltas.reduce((sum, delta) => sum + delta.changedFraction, 0) / Math.max(1, deltas.length),
+            meanAbsChannelDelta: deltas.reduce((sum, delta) => sum + delta.meanAbsChannelDelta, 0) / Math.max(1, deltas.length),
+            maxMeanAbsChannelDelta: Math.max(...deltas.map(delta => delta.meanAbsChannelDelta)),
+            deltas,
+          };
+        });
+        return {
+          identity: 'view-local-state-support-filament-continuity-v0',
+          caveat: 'component ids are view-local projections; camera continuity is measured against state-derived support at each pose, not asserted 3D correspondence',
+          rows,
+          summary: { byRaySteps, rayStepAppearance, adjacentCameraDelta },
+        };
+      }
+
+      function frozenRepeat() {
+        const center = cameras.reduce((best, camera) => Math.abs(camera.angle) < Math.abs(best.angle) ? camera : best);
+        const reference = captures.get(center.index + '-raymarch-' + Math.max(...${JSON.stringify(config.rayStepCounts)}));
+        const repeat = captures.get(center.index + '-raymarchRepeat-' + Math.max(...${JSON.stringify(config.rayStepCounts)}));
+        if (!reference || !repeat) throw new Error('frozen repeat capture missing');
+        return {
+          referenceKey: reference.key,
+          repeatKey: repeat.key,
+          referencePixelHash: reference.pixelHash,
+          repeatPixelHash: repeat.pixelHash,
+          pixelDelta: pixelDelta(reference.rgba, repeat.rgba),
+          frameCountStable: reference.frameCount === repeat.frameCount,
+          simStepCountStable: reference.simStepCount === repeat.simStepCount,
+        };
+      }
+
+      window.__kaminosFilamentOrbitWitness = { capture, analyze, frozenRepeat };
+      return {
+        summary: {
+          wrapperRoute: wrapperBefore.routeIdentity,
+          effectiveRoute: before.effectiveRoute,
+          backend: before.backend,
+          sourceSettingsPreset,
+          sourceAuthority: {
+            fullFlameTarget: 'smoke-off-complete-flame-local-emission-extinction-v0',
+            stateDerivedSupport: '${SUPPORT_AUTHORITY}',
+            nonRidgeFilaments: '${NON_RIDGE_TARGET}',
+            analyticSplat: '${ANALYTIC_SPLAT_RENDERER}',
+          },
+          smokeReceipt,
+          frozenState: {
+            sameStateCaptureId,
+            baseFrameCount,
+            baseSimStepCount,
+            controlsHash,
+            originalCamera,
+          },
+        },
+        cameras,
+      };
+    })()
+  `;
+}
+
+function rejectFalseClosure(report) {
+  if (report.status !== 'completed') throw new Error('partial report cannot close Wave One');
+  if (report.effectiveWrapperRoute !== WRAPPER_ROUTE || report.effectiveRendererRoute !== RENDERER_ROUTE) {
+    throw new Error('requested/effective route disagreement');
+  }
+  if (report.captures.some(capture => capture.requestedRaySteps !== capture.effectiveRaySteps)) {
+    throw new Error('requested/effective ray-step disagreement');
+  }
+  if (report.captures.some(capture => capture.frameCount !== report.frozenState.baseFrameCount || capture.simStepCount !== report.frozenState.baseSimStepCount)) {
+    throw new Error('simulator state changed during frozen orbit');
+  }
+  if (report.captures.some(capture => !capture.metrics?.nonblank || !capture.pixelHash || !existsSync(capture.imagePath))) {
+    throw new Error('missing, partial, or blank capture');
+  }
+  if (report.captures.some(capture => capture.boundarySplatFallbackReason || capture.volumePresentationReceipt?.fallbackReason || capture.raymarchSmokePresentationReceipt?.fallbackReason)) {
+    throw new Error('renderer fallback');
+  }
+  if (report.captures.some(capture => capture.raymarchSmokePresentationReceipt?.effectiveMode !== 'off')) {
+    throw new Error('smoke-off request was not effective');
+  }
+  const raymarchCameraHashes = new Set(report.captures.filter(capture => capture.mode === 'raymarch' && capture.requestedRaySteps === Math.max(...rayStepCounts)).map(capture => capture.pixelHash));
+  if (raymarchCameraHashes.size < Math.min(3, orbitAngles.length)) throw new Error('cached or static output pretending to be live');
+  if (!report.frozenDeterminism.frameCountStable || !report.frozenDeterminism.simStepCountStable || report.frozenDeterminism.pixelDelta.changedFraction !== 0) {
+    throw new Error('frozen-state determinism failed');
+  }
+  if (!report.filamentContinuity?.rows?.length) throw new Error('filament continuity report missing');
+}
+
+function parseArgs(argv) {
+  const known = new Set([
+    '--url',
+    '--out-dir',
+    '--report',
+    '--ray-steps',
+    '--orbit-angles',
+    '--timeout-ms',
+    '--settle-ms',
+    '--debug-port',
+    '--keep-browser-open',
+  ]);
+  const map = new Map();
+  map.errors = [];
+  for (let index = 0; index < argv.length; index += 1) {
+    const item = argv[index];
+    if (!item.startsWith('--')) {
+      map.errors.push(`unknown argument: ${item}`);
+      continue;
+    }
+    const equalsIndex = item.indexOf('=');
+    const key = equalsIndex >= 0 ? item.slice(0, equalsIndex) : item;
+    if (!known.has(key)) {
+      map.errors.push(`unknown argument: ${key}`);
+      continue;
+    }
+    if (equalsIndex >= 0) {
+      map.set(key, item.slice(equalsIndex + 1));
+      continue;
+    }
+    const next = argv[index + 1];
+    if (!next || next.startsWith('--')) map.set(key, '1');
+    else {
+      map.set(key, next);
+      index += 1;
+    }
+  }
+  return map;
+}
+
+function required(name) {
+  const value = args.get(name);
+  return value ? String(value) : '';
+}
+
+function parseIntegerList(value) {
+  return [...new Set(String(value).split(',').map(item => Math.round(Number(item))).filter(Number.isFinite))].sort((a, b) => a - b);
+}
+
+function parseNumberList(value) {
+  return String(value).split(',').map(Number).filter(Number.isFinite);
+}
+
+function writeDataUrl(path, dataUrl) {
+  const match = /^data:image\/png;base64,(.+)$/.exec(String(dataUrl || ''));
+  if (!match) throw new Error(`missing, partial, or blank capture: ${path}`);
+  writeFileSync(path, Buffer.from(match[1], 'base64'));
+}
+
+function gitValue(argv) {
+  const result = spawnSync('git', argv, { cwd: process.cwd(), encoding: 'utf8' });
+  return result.status === 0 ? result.stdout.trim() : null;
+}
+
+async function waitForJson(url, timeout) {
+  const started = Date.now();
+  while (Date.now() - started < timeout) {
+    try {
+      const response = await fetch(url);
+      if (response.ok) return response.json();
+    } catch {}
+    await delay(100);
+  }
+  throw new Error(`timed out waiting for ${url}`);
+}
+
+async function waitForTarget(port, timeout) {
+  const started = Date.now();
+  while (Date.now() - started < timeout) {
+    try {
+      const targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json();
+      const page = targets.find(target => target.type === 'page');
+      if (page?.webSocketDebuggerUrl) return page;
+    } catch {}
+    await delay(100);
+  }
+  throw new Error('timed out waiting for Chrome target');
+}
+
+async function waitForRuntime(cdp, timeout) {
+  const started = Date.now();
+  while (Date.now() - started < timeout) {
+    const state = await evaluate(cdp, 'window.__kaminosSelectiveHeadLive?.debugState?.() || null');
+    if (state?.status === 'failed') throw new Error(`route failed: ${state.error || state.fallbackReason || 'unknown'}`);
+    if (state?.status === 'running') return state;
+    await delay(125);
+  }
+  throw new Error('timed out waiting for selective-head runtime');
+}
+
+async function evaluate(cdp, expression) {
+  const result = await cdp.call('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
+  if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text || 'browser evaluation failed');
+  return result.result.value;
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
