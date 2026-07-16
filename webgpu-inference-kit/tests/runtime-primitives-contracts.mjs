@@ -159,6 +159,22 @@ const runtime = await createWebGpuInferenceRuntime({
   browser: 'Node fake',
   kernel: { profile: 'sam3-attention-tile-v0' },
   requiredStages: ['mask-attention'],
+  hostPhases: {
+    runId: 'sam3-runtime-primitives-a',
+    clock: {
+      clockId: 'sam3-runtime-primitives-clock-a',
+      source: 'performance.now',
+      timeOriginEpochMs: 1_700_000_000_000,
+    },
+  },
+  commandDuties: {
+    runId: 'sam3-runtime-primitives-a',
+    clock: {
+      clockId: 'sam3-runtime-primitives-clock-a',
+      source: 'performance.now',
+      timeOriginEpochMs: 1_700_000_000_000,
+    },
+  },
   now,
 });
 
@@ -322,6 +338,14 @@ await runtime.runKernel(kernel, {
   stage: 'mask-attention',
   dispatch: [8, 8, 1],
   metadata: { tiles: 64 },
+  commandDuty: {
+    chunkControl: {
+      controlId: 'attentionTiles',
+      unit: 'attention-tile',
+      current: 8,
+      bounds: { min: 1, max: 8, stepFactor: 2 },
+    },
+  },
 });
 
 assert.deepEqual(calls.dispatches.at(-1), { x: 8, y: 8, z: 1 });
@@ -343,6 +367,26 @@ assert.equal(calls.copies.at(-1).size, 4);
 const offsetReadbackBytes = await runtime.readTensor(offsetReadback);
 assert.deepEqual([...new Uint8Array(offsetReadbackBytes)], [9, 8, 7, 6]);
 
+const commandDuties = runtime.finishCommandDuties();
+assert.equal(commandDuties.status, 'succeeded');
+assert.equal(commandDuties.retention, 'uncapped');
+assert.equal(commandDuties.submissionCount, 3);
+assert.deepEqual(
+  commandDuties.submissions.map(row => [
+    row.descriptor.phase,
+    row.descriptor.kind,
+    row.descriptor.metadata.operation,
+  ]),
+  [
+    ['mask-attention', 'compute', 'kernel-dispatch'],
+    ['sam3.output-mask.readback', 'copy', 'tensor-readback-copy'],
+    ['sam3.one-byte-mask.readback', 'copy', 'tensor-readback-copy'],
+  ],
+  'runtime-owned compute and staged-copy submits must be recorded, while direct mapped reads emit no duty',
+);
+assert.equal(commandDuties.submissions[0].descriptor.chunkControl.controlId, 'attentionTiles');
+assert.deepEqual(commandDuties.submissions[0].descriptor.metadata.dispatch, [8, 8, 1]);
+
 const profile = runtime.finishProfile({
   evidence: { mode: 'live', source: 'runtime-primitives-contract' },
 });
@@ -351,5 +395,22 @@ assert.deepEqual(profile.profile.stageNames, ['mask-attention']);
 assert.equal(profile.profile.stages[0].metadata.kernelName, 'sam3.mask-attention');
 assert.equal(profile.profile.stages[0].metadata.dispatch[0], 8);
 assert.equal(profile.profile.stages[0].metadata.tiles, 64);
+
+const hostPhases = runtime.finishHostPhases();
+assert.deepEqual(
+  hostPhases.intervals.map(interval => interval.phase),
+  [
+    'command-encoding',
+    'queue-submission',
+    'command-encoding',
+    'queue-submission',
+    'readback',
+    'command-encoding',
+    'queue-submission',
+    'readback',
+    'readback',
+  ],
+  'kernel dispatch and both readback routes must emit common runtime host phases',
+);
 
 console.log('runtime primitives contracts passed');

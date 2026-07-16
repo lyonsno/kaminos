@@ -418,6 +418,9 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .volume-pyro-atlas-wrap { margin-top: 8px; border-top: 1px solid #282828; padding-top: 8px; }
 #volume-pyro-dynamic-atlas { width: 100%; height: 54px; border: 1px solid #333; border-radius: 6px; background: #080808; }
 .volume-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.volume-presentation-switch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; margin: 8px 0; }
+.volume-presentation-switch .btn { margin: 0; min-height: 30px; font-size: 11px; }
+.volume-presentation-switch .btn.active { border-color: #4c9fba; background: #17333d; color: #d8f5ff; }
 .ray-budget-wrap { margin: 8px 0 10px; }
 .ray-budget-grid { display: grid; grid-template-columns: 34px 1fr; grid-template-rows: 1fr 18px; gap: 4px 6px; align-items: center; }
 .ray-budget-axis-y { writing-mode: vertical-rl; transform: rotate(180deg); color: #666; font: 9px 'SF Mono', monospace; letter-spacing: 0; justify-self: center; }
@@ -960,63 +963,65 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
     <h2>Volume Renderer</h2>
     <div class="panel">
       <div class="field"><span class="field-key">Route</span><span class="route-chip">kaminos_volume_smoke=1</span></div>
-      <div class="field"><span class="field-key">Scene</span><span class="field-val" id="volume-scene-state">compact_plume</span></div>
+      <div class="field"><span class="field-key">Scene</span><span class="field-val" id="volume-scene-state">tall_plume</span></div>
+      <div class="field"><span class="field-key">Scene authority</span><span class="field-val" id="volume-scene-authority">prototype</span></div>
       <div class="field"><span class="field-key">Backend</span><span class="field-val" id="volume-backend">inactive</span></div>
       <div class="field"><span class="field-key">Identity</span><span class="field-val" id="volume-identity">kaminos-volume-prototype-v0</span></div>
       <div class="field"><span class="field-key">Orientation</span><span class="field-val" id="volume-render-source-orientation">unverified</span></div>
       <div class="field"><span class="field-key">Render</span><span class="field-val" id="volume-canonical-render-mode-state">default</span></div>
       <div class="field"><span class="field-key">Motion</span><span class="field-val" id="volume-canonical-motion-mode-state">animated</span></div>
       <div class="field"><span class="field-key">Content</span><span class="field-val" id="volume-canonical-content-mode-state">smoke</span></div>
-      <div class="field"><span class="field-key">Agent Capture</span><span class="field-val" id="volume-agent-capture-state">writes artifacts/volume-captures</span></div>
+      <div class="field"><span class="field-key">Preset store</span><span class="field-val" id="volume-settings-preset-state">connecting...</span></div>
+      <div class="volume-presentation-switch" role="group" aria-label="Volume presentation">
+        <button class="btn active" type="button" data-volume-presentation-mode="beauty">Beauty</button>
+        <button class="btn" type="button" data-volume-presentation-mode="intrinsic">Intrinsic</button>
+      </div>
+      <div class="volume-presentation-switch" role="group" aria-label="Raymarch smoke presentation">
+        <button class="btn active" type="button" data-raymarch-smoke-presentation="on">Smoke On</button>
+        <button class="btn" type="button" data-raymarch-smoke-presentation="off">Smoke Off</button>
+      </div>
+      <div class="field"><span class="field-key">Requested view</span><span class="field-val" id="volume-presentation-requested">beauty</span></div>
+      <div class="field"><span class="field-key">Effective view</span><span class="field-val" id="volume-presentation-effective">beauty</span></div>
+      <div class="field"><span class="field-key">Ray quality</span><span class="field-val" id="volume-presentation-ray-quality">--</span></div>
+      <div class="field"><span class="field-key">View target</span><span class="field-val" id="volume-presentation-target">authored-beauty-renderer-v0</span></div>
+      <div class="field"><span class="field-key">Raymarch smoke</span><span class="field-val" id="volume-raymarch-smoke-effective">on</span></div>
+      <div class="field"><span class="field-key">Smoke target</span><span class="field-val" id="volume-raymarch-smoke-target">authored-raymarch-smoke-radiance-extinction-v0</span></div>
       <div class="volume-actions">
         <button class="btn" id="volume-toggle">Enable</button>
         <button class="btn" id="volume-fit-camera">Frame</button>
-        <button class="btn" id="volume-agent-camera-save">Save Agent Camera</button>
-        <button class="btn" id="volume-agent-view-save">Save Agent View + Settings</button>
-        <button class="btn" id="volume-basin-copy">Copy Basin</button>
-        <button class="btn" id="volume-basin-restore">Restore Last</button>
         <button class="btn" id="volume-basin-warm-cap">Warm Cap</button>
         <button class="btn" id="volume-basin-bonfire-family">Bonfire</button>
       </div>
       <div class="volume-actions">
-        <select id="volume-basin-slot" class="select-input">
-          <option value="a" selected>Slot A</option>
-          <option value="b">Slot B</option>
-          <option value="c">Slot C</option>
-          <option value="d">Slot D</option>
-        </select>
-        <button class="btn" id="volume-basin-slot-save">Save Slot</button>
-        <button class="btn" id="volume-basin-slot-load">Load Slot</button>
+        <input id="settings-preset-label" class="search-input" type="text" placeholder="Preset name" aria-label="Preset name">
+        <button class="btn" id="settings-preset-save">Save</button>
       </div>
       <div class="volume-actions">
-        <select id="volume-look-library-kind" class="select-input">
-          <option value="pyro" selected>Pyro looks</option>
-          <option value="firesim">FireSim looks</option>
-        </select>
-        <select id="volume-look-library-entry" class="select-input">
-          <option value="">No saved looks</option>
+        <select id="settings-preset-select" class="select-input" aria-label="Saved volume preset">
+          <option value="">Loading presets...</option>
         </select>
       </div>
       <div class="volume-actions">
-        <input id="volume-look-library-name" class="search-input" type="text" placeholder="look name">
+        <select id="settings-preset-view" class="select-input" aria-label="Preset renderer view">
+          <option value="current" selected>Current renderer view</option>
+          <option value="splat-only">Splat only</option>
+          <option value="raymarch-only">Raymarch only</option>
+          <option value="smoke-hybrid">Smoke hybrid</option>
+          <option value="full-hybrid-diagnostic">Full hybrid diagnostic</option>
+        </select>
+        <button class="btn" id="settings-preset-load-here">Load Here</button>
+        <button class="btn" id="settings-preset-open-fresh">Open Fresh</button>
       </div>
-      <div class="volume-actions">
-        <button class="btn" id="volume-look-library-save">Save Look</button>
-        <button class="btn" id="volume-look-library-load">Load Look</button>
-        <button class="btn" id="volume-look-library-export">Export JSON</button>
-        <button class="btn" id="volume-look-library-import">Import JSON</button>
-      </div>
-      <textarea id="volume-look-library-json" class="gen-input" rows="4" spellcheck="false" placeholder='{"identity":"kaminos-volume-look-library-v1",...}'></textarea>
     </div>
     <div class="slider-row">
       <span class="slider-label">Scene</span>
       <select id="volume-scene" class="select-input">
-        <option value="compact_plume" selected>Compact plume</option>
-        <option value="canonical_plume">Canonical plume</option>
-        <option value="tall_plume">Tall plume</option>
-        <option value="bonfire_plume">Bonfire plume</option>
+        <option value="tall_plume" selected>Tall plume (prototype)</option>
+        <option value="compact_plume">Compact plume (superseded)</option>
+        <option value="canonical_plume">Canonical plume (superseded)</option>
+        <option value="bonfire_plume">Bonfire plume (superseded)</option>
       </select>
-      <span class="slider-val" id="volume-scene-val">compact</span>
+      <span class="slider-val" id="volume-scene-val">prototype</span>
     </div>
     <div class="slider-row">
       <span class="slider-label">Freeze</span>
@@ -1134,6 +1139,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
           <option value="live">live</option>
           <option value="baked">baked</option>
           <option value="mix">mix</option>
+          <option value="override">imported capture</option>
         </select>
         <span class="slider-val" id="volume-boundary-sidecar-source-val">live</span>
       </div>
@@ -1158,6 +1164,17 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         </select>
         <span class="slider-val" id="volume-boundary-splat-mode-val">raymarch</span>
       </div>
+      <div class="slider-row">
+        <span class="slider-label">Splat radius</span>
+        <input type="range" id="volume-boundary-splat-radius" min="0.35" max="1.5" step="0.01" value="1.00">
+        <span class="slider-val" id="volume-boundary-splat-radius-val">1.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Splat sharpness</span>
+        <input type="range" id="volume-boundary-splat-sharpness" min="1" max="12" step="0.1" value="3.4">
+        <span class="slider-val" id="volume-boundary-splat-sharpness-val">3.4</span>
+      </div>
+      <span class="slider-help">Splat authority: support heat/reaction/front/interface, bake blur, baked ridge, and ridge select/cut shape candidate fields; splat radius/sharpness shape raster support. Step width and boundary display/color controls remain raymarch-only.</span>
       <span class="slider-help">baked-boundary-sidecar-v0: prefilters support/coverage/ridge/footprint before the raymarch. Sidecar views expose the reconstruction channels in the primary viewer.</span>
       <div class="slider-row">
         <span class="slider-label">Bake blur</span>
@@ -1219,6 +1236,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <input type="range" id="volume-reaction-boundary-fire-luma" min="0" max="5" step="0.05" value="1.05">
         <span class="slider-val" id="volume-reaction-boundary-fire-luma-val">1.05</span>
       </div>
+      <div class="volume-retired-control-state" data-volume-retired-control-state="atlas-capture" hidden>
       <div class="volume-control-section-title">Atlas capture</div>
       <div class="slider-row">
         <span class="slider-label">Heat min</span>
@@ -1332,6 +1350,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <canvas id="volume-reaction-atlas-canvas" width="640" height="256"></canvas>
       </div>
       <div class="reaction-front-atlas-state" id="volume-reaction-atlas-state">atlas not captured</div>
+      </div>
     </div>
     <div class="volume-control-section" data-volume-control-section="visual-tuning">
       <div class="volume-control-section-title">Visual Tuning</div>
@@ -1453,6 +1472,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <input type="range" id="volume-occupancy-skip" min="0" max="1" step="0.05" value="0.35">
       <span class="slider-val" id="volume-occupancy-skip-val">0.35</span>
     </div>
+    <div class="volume-retired-control-state" data-volume-retired-control-state="raymarch-history" hidden>
     <div class="slider-row">
       <span class="slider-label">Majorant Skip</span>
       <input type="range" id="volume-majorant-skip" min="0" max="1" step="0.05" value="0.70">
@@ -1482,6 +1502,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <span class="slider-label">History Clamp</span>
       <input type="range" id="volume-history-clamp" min="0" max="1" step="0.05" value="0.70">
       <span class="slider-val" id="volume-history-clamp-val">0.70</span>
+    </div>
     </div>
     <div class="slider-row">
       <span class="slider-label">Render Scale</span>
@@ -1562,7 +1583,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <input type="range" id="volume-flow-debug" min="0" max="1" step="0.05" value="0">
       <span class="slider-val" id="volume-flow-debug-val">0.00</span>
     </div>
-    <div class="volume-control-section" data-volume-control-section="topology-shell">
+    <div class="volume-control-section" data-volume-control-section="topology-shell" data-volume-retired-control-state="topology-shell" hidden>
       <div class="volume-control-section-title">Topology Lab Shell</div>
       <span class="slider-help">Shell mode bypasses stock fire emission. Carrier sliders add raw support; shape sliders cut or thicken the resulting mask.</span>
       <div class="slider-row">
@@ -2552,7 +2573,12 @@ import * as THREE from 'three';
 import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture } from 'three/tsl';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { createKaminosVolumePrototype } from './volume-core.js?v=residual-source-uv-flip-0706';
+import { createKaminosVolumePrototype } from './volume-core.js?v=prototype-scene-ontology-0715';
+import { DEFAULT_VOLUME_SCENE, volumeSceneReceipt } from './volume-scene-ontology.mjs';
+import {
+  validateVolumeSettingsPresetDocument,
+  validateVolumeSettingsPresetTarget,
+} from './volume-settings-preset-contract.mjs';
 import {
   DEFAULT_DECISION_MOTION_PLAN,
   DEFAULT_MOTION_PHRASE_CONTROLS,
@@ -10090,11 +10116,6 @@ const NON_CANONICAL_VOLUME_HIDDEN_CONTROLS = new Set([
   'volume-canonical-body-balance',
 ]);
 
-const KAMINOS_VOLUME_BASIN_STORAGE_KEY = 'kaminos.volume.lastBasin.v1';
-const KAMINOS_VOLUME_BASIN_SLOT_STORAGE_PREFIX = 'kaminos.volume.basinSlot.v1.';
-const VOLUME_BASIN_SNAPSHOT_IDENTITY = 'kaminos-volume-basin-snapshot-v1';
-const KAMINOS_VOLUME_LOOK_LIBRARY_STORAGE_KEY = 'kaminos.volume.lookLibrary.v1';
-const VOLUME_LOOK_LIBRARY_IDENTITY = 'kaminos-volume-look-library-v1';
 const PYRO_LOOK_FIELDS = [
   'pyroDynamicDetail', 'pyroMaterialGain', 'pyroInterfaceFocus', 'pyroEdgeBite',
   'pyroBiteBorder', 'pyroBiteTeeth', 'pyroBiteWake', 'pyroBiteHeight', 'pyroBiteFireLock',
@@ -10112,18 +10133,6 @@ const PYRO_LOOK_FIELDS = [
   'pyroFlowCoolColor', 'pyroFlowHotColor', 'pyroDiagnosticPaint', 'pyroCarrierView',
   'pyroOverdrive',
 ];
-const FIRESIM_LOOK_FIELDS = [
-  'volumeScene', 'density', 'fire', 'radiance', 'absorption', 'glow', 'smoke', 'curl',
-  'microdetail', 'interfaceShred', 'fireLicks', 'projection', 'speed', 'fireScale',
-  'detailScale', 'plumeHeight', 'windStrength', 'windAngle', 'windHeight', 'inputRadius',
-  'flowRate', 'fireRenderMode', 'shellInspectMode', 'shellAmount', 'shellWidth',
-  'shellThermal', 'shellReaction', 'shellFront', 'shellEdge', 'shellCoreSuppress',
-  'shellBite', 'shellCurl', 'shellHeat', 'shellDivergence', 'shellLuma', 'shellExposure',
-  'shellSoftClip', 'shellSmoke',
-  'oracleActivityCue', 'oracleActivityDisplay', 'oracleActivityCurlNoise',
-  'oracleActivityVorticity', 'oracleActivityMaterial',
-];
-
 const VOLUME_SCENE_PRESETS = {
   canonical_plume: {
     label: 'simple',
@@ -11076,57 +11085,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
 
 const DEFAULT_VOLUME_SMOKE_TALL_PRESET = 'boundary_fire_bonfire_a_la_ruffles_0709';
 
-const BUILT_IN_VOLUME_LOOK_LIBRARY = {
-  identity: VOLUME_LOOK_LIBRARY_IDENTITY,
-  version: 1,
-  updatedAt: '2026-07-06T08:21:46.551Z',
-  pyro: [
-    {
-      name: 'Pyro_Flow_small_bonfire_gamut_0707',
-      kind: 'pyro',
-      savedAt: '2026-07-07T19:43:04.135Z',
-      updatedAt: '2026-07-07T19:43:04.135Z',
-      fields: [...PYRO_LOOK_FIELDS],
-      controls: Object.fromEntries(
-        PYRO_LOOK_FIELDS
-          .filter(key => TALL_PLUME_OPERATOR_PRESETS.pyro_flow_small_bonfire_gamut_0707[key] !== undefined)
-          .map(key => [key, TALL_PLUME_OPERATOR_PRESETS.pyro_flow_small_bonfire_gamut_0707[key]])
-      ),
-      sourceBacked: true,
-      flowCarrierAuthored: true,
-    },
-    {
-      name: 'exploding-jellow-fireball-motherfucker',
-      kind: 'pyro',
-      savedAt: '2026-07-06T08:21:46.551Z',
-      updatedAt: '2026-07-06T08:21:46.551Z',
-      fields: [...PYRO_LOOK_FIELDS],
-      controls: Object.fromEntries(
-        PYRO_LOOK_FIELDS
-          .filter(key => TALL_PLUME_OPERATOR_PRESETS.exploding_jellow_fireball_motherfucker_0706[key] !== undefined)
-          .map(key => [key, TALL_PLUME_OPERATOR_PRESETS.exploding_jellow_fireball_motherfucker_0706[key]])
-      ),
-      sourceBacked: true,
-      biteStackAuthored: true,
-    },
-    {
-      name: 'Bonfire_a_la_ruffles',
-      kind: 'pyro',
-      savedAt: '2026-07-09T23:04:01.483Z',
-      updatedAt: '2026-07-09T23:04:01.483Z',
-      fields: [...PYRO_LOOK_FIELDS],
-      controls: Object.fromEntries(
-        PYRO_LOOK_FIELDS
-          .filter(key => TALL_PLUME_OPERATOR_PRESETS.boundary_fire_bonfire_a_la_ruffles_0709[key] !== undefined)
-          .map(key => [key, TALL_PLUME_OPERATOR_PRESETS.boundary_fire_bonfire_a_la_ruffles_0709[key]])
-      ),
-      sourceBacked: true,
-      boundaryFireAuthored: true,
-    },
-  ],
-  firesim: [],
-};
-
 const CANONICAL_VOLUME_MACRO_PRESETS = {
   macro_foothold_0621: {
     label: 'macro foothold 0621',
@@ -11680,20 +11638,6 @@ function hideVolumeLegacyPyroSurfaceForTopologyBranch() {
     const element = document.getElementById(id);
     if (element) element.style.display = 'none';
   }
-  for (const id of [
-    'volume-look-library-kind',
-    'volume-look-library-entry',
-    'volume-look-library-name',
-    'volume-look-library-save',
-    'volume-look-library-load',
-    'volume-look-library-export',
-    'volume-look-library-import',
-    'volume-look-library-json',
-  ]) {
-    const element = document.getElementById(id);
-    const host = element?.closest?.('.volume-actions') || element;
-    if (host) host.style.display = 'none';
-  }
 }
 
 function syncCanonicalVolumeControlVisibility(volumeScene) {
@@ -11729,7 +11673,7 @@ function volumeSceneControlId(key) {
 }
 
 function applyVolumeScenePreset(scene, options = {}) {
-  const normalizedScene = Object.hasOwn(VOLUME_SCENE_PRESETS, scene) ? scene : 'compact_plume';
+  const normalizedScene = Object.hasOwn(VOLUME_SCENE_PRESETS, scene) ? scene : DEFAULT_VOLUME_SCENE;
   const preset = VOLUME_SCENE_PRESETS[normalizedScene];
   setVolumeControlValue('volume-scene', normalizedScene);
   for (const [key, value] of Object.entries(preset)) {
@@ -11787,6 +11731,8 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
   { key: 'boundarySidecarBlur', id: 'volume-boundary-sidecar-blur', param: 'volume_boundary_sidecar_blur', min: 0, max: 1, decimals: 2 },
   { key: 'boundarySidecarWidth', id: 'volume-boundary-sidecar-width', param: 'volume_boundary_sidecar_width', min: 0, max: 2, decimals: 2 },
   { key: 'boundarySidecarRidge', id: 'volume-boundary-sidecar-ridge', param: 'volume_boundary_sidecar_ridge', min: 0, max: 2, decimals: 2 },
+  { key: 'boundarySplatRadius', id: 'volume-boundary-splat-radius', param: 'volume_boundary_splat_radius', min: 0.35, max: 1.5, decimals: 2 },
+  { key: 'boundarySplatSharpness', id: 'volume-boundary-splat-sharpness', param: 'volume_boundary_splat_sharpness', min: 1, max: 12, decimals: 1 },
   { key: 'reactionHeatMin', id: 'volume-reaction-heat-min', param: 'volume_reaction_heat_min', min: 0, max: 0.2, decimals: 3 },
   { key: 'reactionHeatMax', id: 'volume-reaction-heat-max', param: 'volume_reaction_heat_max', min: 0.04, max: 1.2, decimals: 2 },
   { key: 'reactionFuelMin', id: 'volume-reaction-fuel-min', param: 'volume_reaction_fuel_min', min: 0, max: 0.03, decimals: 4 },
@@ -11811,7 +11757,7 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
 ];
 
 const REACTION_FRONT_LIVE_VIEW_VALUES = new Set(['off', 'shell', 'thermal', 'reaction', 'front', 'edge', 'core', 'curl', 'divergence', 'boundary', 'boundary_fire']);
-const BOUNDARY_SIDECAR_SOURCE_VALUES = new Set(['live', 'baked', 'mix']);
+const BOUNDARY_SIDECAR_SOURCE_VALUES = new Set(['live', 'baked', 'mix', 'override']);
 const BOUNDARY_SIDECAR_VIEW_VALUES = new Set(['off', 'support', 'coverage', 'ridge', 'proximity', 'footprint']);
 const BOUNDARY_SPLAT_MODE_VALUES = new Set(['off', 'analytic', 'learned']);
 
@@ -11978,20 +11924,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
 ];
 
 function formatVolumeBasinRouteValue(value) {
-  if (typeof value === 'number') return Number.isInteger(value) ? String(value) : value.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
   return String(value ?? '');
-}
-
-function buildVolumeBasinUrl(controlsSnapshot = readVolumeControls()) {
-  const url = new URL(window.location.href);
-  url.search = '';
-  url.searchParams.set('kaminos_volume_smoke', '1');
-  for (const [key, param] of VOLUME_BASIN_ROUTE_FIELDS) {
-    if (controlsSnapshot[key] === undefined || controlsSnapshot[key] === null) continue;
-    url.searchParams.set(param, formatVolumeBasinRouteValue(controlsSnapshot[key]));
-  }
-  url.searchParams.set('volume_quality_reason', 'pyro-contrast-basin-copied-0702');
-  return url.toString();
 }
 
 function volumeDomControlKeyFromId(id) {
@@ -12005,7 +11938,7 @@ function volumeDomControlParamFromId(id) {
 function readVolumeDomControlValue(el) {
   if (!el) return null;
   if (el.type === 'checkbox') return Boolean(el.checked);
-  if (el.type === 'color' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') return el.value;
+  if (['color', 'text', 'url', 'search', 'password'].includes(el.type) || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') return el.value;
   const numericValue = Number(el.value);
   return Number.isFinite(numericValue) ? numericValue : el.value;
 }
@@ -12014,8 +11947,7 @@ function readVolumeDomControls() {
   const controls = {};
   const fields = document.querySelectorAll('#sidebar input[id^="volume-"], #sidebar select[id^="volume-"], #sidebar textarea[id^="volume-"]');
   for (const el of fields) {
-    const key = volumeDomControlKeyFromId(el.id);
-    controls[key] = {
+    controls[el.id] = {
       id: el.id,
       param: volumeDomControlParamFromId(el.id),
       tagName: el.tagName,
@@ -12028,78 +11960,188 @@ function readVolumeDomControls() {
 
 function buildVolumeAgentCaptureRoute(domControls = readVolumeDomControls()) {
   const url = new URL(window.location.href);
+  const sourceQualityReason = url.searchParams.get('volume_quality_reason') || 'agent-view-capture';
   url.search = '';
   url.searchParams.set('kaminos_volume_smoke', '1');
   for (const entry of Object.values(domControls)) {
-    if (!entry?.param || entry.tagName === 'TEXTAREA') continue;
+    if (!entry?.param) continue;
     if (entry.value === undefined || entry.value === null) continue;
     url.searchParams.set(entry.param, formatVolumeBasinRouteValue(entry.value));
   }
-  url.searchParams.set('volume_quality_reason', 'agent-view-capture');
+  url.searchParams.set('volume_quality_reason', sourceQualityReason);
   return url.toString();
 }
 
-function buildVolumeAgentCapture(kind = 'view') {
+function buildVolumeSettingsPreset() {
   const domControls = readVolumeDomControls();
-  const controlsSnapshot = kind === 'camera' ? null : readVolumeControls();
-  const debugState = window.__kaminosVolumePrototype?.debugState?.() || null;
   return {
-    identity: 'kaminos-volume-agent-capture-v1',
-    kind,
+    identity: 'kaminos-volume-settings-preset-v2',
+    kind: 'settings-preset',
+    schemaIdentity: 'kaminos-volume-settings-preset-schema-v2',
     savedAt: new Date().toISOString(),
-    href: window.location.href,
     route: buildVolumeAgentCaptureRoute(domControls),
-    camera: window.kaminosCameraDebugState?.() || null,
-    domControls: kind === 'camera' ? {} : domControls,
-    controlCount: kind === 'camera' ? 0 : Object.keys(domControls).length,
-    controls: controlsSnapshot,
-    volumeDebugState: debugState,
-    viewport: {
-      innerWidth: window.innerWidth,
-      innerHeight: window.innerHeight,
-      devicePixelRatio: window.devicePixelRatio || 1,
+    domControls,
+    controlCount: Object.keys(domControls).length,
+    stateExclusions: {
+      fluidField: true,
+      frontField: true,
+      boundarySidecar: true,
+      splatInstances: true,
+      historyBuffers: true,
+      pressureState: true,
+      replayState: true,
     },
-    note: 'Replay with node volume-witness.mjs --capture <artifact>; captures write under artifacts/volume-captures.',
+    note: 'Exact editable volume controls only; no simulation, renderer, camera, or replay state.',
   };
 }
 
-async function saveVolumeAgentCapture(kind = 'view') {
-  const state = document.getElementById('volume-agent-capture-state');
-  const capture = buildVolumeAgentCapture(kind);
-  if (state) state.textContent = 'saving capture...';
+let volumeSettingsPresetIndex = null;
+
+function volumeSettingsPresetStatus(message, failed = false) {
+  const state = document.getElementById('volume-settings-preset-state');
+  if (!state) return;
+  state.textContent = message;
+  state.title = message;
+  state.classList.toggle('missing', failed);
+  state.classList.toggle('present', !failed);
+}
+
+async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
+  const select = document.getElementById('settings-preset-select');
   try {
-    const response = await fetch('/api/volume-capture', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(capture),
-    });
-    const result = await response.json();
-    if (!response.ok || !result.ok) throw new Error(result.error || `capture save failed: ${response.status}`);
-    if (state) state.textContent = result.relativePath;
-    console.log(JSON.stringify(result, null, 2));
-    setInfo(`Volume capture saved: ${result.relativePath}`);
-    return result;
+    const response = await fetch('/api/volume-settings-presets', { cache: 'no-store' });
+    const index = await response.json();
+    if (!response.ok) throw new Error(index.error || `preset index failed: ${response.status}`);
+    if (index.identity !== 'kaminos-volume-settings-preset-index-v1'
+      || index.schemaIdentity !== 'kaminos-volume-settings-preset-schema-v2'
+      || Number(index.controlCount) !== 186
+      || !Array.isArray(index.entries)) {
+      throw new Error('preset index identity or schema mismatch');
+    }
+    volumeSettingsPresetIndex = index;
+    if (select) {
+      const previous = selectedPresetId || select.value;
+      select.replaceChildren();
+      if (!index.entries.length) {
+        select.add(new Option('No saved presets', ''));
+      } else {
+        for (const entry of index.entries) {
+          const option = new Option(`${entry.label} | ${entry.presetId.slice(0, 16)}`, entry.presetId);
+          option.title = `${entry.label} | alias ${entry.alias} | ${entry.presetId}`;
+          select.add(option);
+        }
+        select.value = index.entries.some(entry => entry.presetId === previous) ? previous : index.entries[0].presetId;
+      }
+    }
+    volumeSettingsPresetStatus(`${index.entries.length} presets | 186 controls | ${index.storePath}`);
+    return index;
   } catch (error) {
-    if (state) state.textContent = `capture failed: ${error.message || error}`;
-    setInfo(`Volume capture failed: ${error.message || error}`);
+    volumeSettingsPresetIndex = null;
+    if (select) select.replaceChildren(new Option('Preset index failed', ''));
+    volumeSettingsPresetStatus(`PRESET INDEX FAILED | ${error.message || error}`, true);
     throw error;
   }
 }
 
-function saveVolumeBasinSnapshot(reason = 'control-change') {
-  const controlsSnapshot = readVolumeControls();
-  const snapshot = {
-    identity: VOLUME_BASIN_SNAPSHOT_IDENTITY,
-    reason,
-    savedAt: new Date().toISOString(),
-    controls: controlsSnapshot,
-    url: buildVolumeBasinUrl(controlsSnapshot),
-  };
+async function saveVolumeSettingsPreset() {
+  const labelInput = document.getElementById('settings-preset-label');
+  const label = String(labelInput?.value || '').trim()
+    || `Basin ${new Date().toISOString().replace(/[:.]/g, '-')}`;
+  volumeSettingsPresetStatus(`saving ${label}...`);
   try {
-    localStorage.setItem(KAMINOS_VOLUME_BASIN_STORAGE_KEY, JSON.stringify(snapshot));
-  } catch {}
-  return snapshot;
+    const response = await fetch('/api/volume-settings-presets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label, preset: buildVolumeSettingsPreset() }),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.error || `preset save failed: ${response.status}`);
+    if (result.identity !== 'kaminos-volume-settings-preset-write-receipt-v1'
+      || result.effective?.schemaIdentity !== 'kaminos-volume-settings-preset-schema-v2'
+      || Number(result.effective?.controlCount) !== 186) {
+      throw new Error('preset write receipt identity or schema mismatch');
+    }
+    await refreshVolumeSettingsPresetList(result.effective.presetId);
+    if (labelInput) labelInput.value = result.effective.label;
+    volumeSettingsPresetStatus(`${result.effective.label} | ${result.effective.presetId} | 186/186 | ${result.effective.storePath}`);
+    console.log(JSON.stringify(result, null, 2));
+    setInfo(`Volume settings preset saved: ${result.effective.label}`);
+    return result;
+  } catch (error) {
+    volumeSettingsPresetStatus(`PRESET SAVE FAILED | ${error.message || error}`, true);
+    setInfo(`Volume settings preset failed: ${error.message || error}`);
+    throw error;
+  }
 }
+
+const SETTINGS_PRESET_VIEW_BY_COMPOSITION = Object.freeze({
+  'splat-only-v0': 'splat-only',
+  'raymarch-only-v0': 'raymarch-only',
+  'smoke-raymarch-under-splats-v0': 'smoke-hybrid',
+  'full-raymarch-under-splats-diagnostic-v0': 'full-hybrid-diagnostic',
+});
+
+function selectedVolumeSettingsPresetView() {
+  const selected = document.getElementById('settings-preset-view')?.value || 'current';
+  if (selected !== 'current') return selected;
+  let wrapperState = null;
+  try {
+    wrapperState = window.parent !== window
+      ? window.parent.__kaminosSelectiveHeadLive?.debugState?.()
+      : window.__kaminosSelectiveHeadLive?.debugState?.();
+  } catch {}
+  if (wrapperState?.status !== 'running'
+    || wrapperState?.requestedComposition !== wrapperState?.effectiveComposition
+    || wrapperState?.fallbackReason
+    || wrapperState?.compositionFallbackReason
+    || wrapperState?.boundarySplatFallbackReason) {
+    throw new Error('current renderer view is not running cleanly; select an explicit preset renderer view');
+  }
+  const composition = wrapperState.effectiveComposition;
+  const view = SETTINGS_PRESET_VIEW_BY_COMPOSITION[composition];
+  if (!view) throw new Error('current renderer view is unavailable; select a preset renderer view');
+  return view;
+}
+
+function selectedVolumeSettingsPresetUrl() {
+  const presetId = document.getElementById('settings-preset-select')?.value;
+  const entry = volumeSettingsPresetIndex?.entries?.find(candidate => candidate.presetId === presetId);
+  if (!entry) throw new Error('select a saved volume settings preset');
+  const view = selectedVolumeSettingsPresetView();
+  return `/volume-settings-preset.html?preset=${encodeURIComponent(entry.presetId)}&view=${encodeURIComponent(view)}`;
+}
+
+function navigateToSelectedVolumeSettingsPreset(openFresh = false) {
+  try {
+    const target = selectedVolumeSettingsPresetUrl();
+    if (openFresh) {
+      const opened = window.open(target, '_blank');
+      if (!opened) throw new Error(`preset window blocked; route: ${target}`);
+    } else {
+      location.assign(target);
+    }
+    return target;
+  } catch (error) {
+    volumeSettingsPresetStatus(`PRESET LOAD FAILED | ${error.message || error}`, true);
+    setInfo(`Volume settings preset load failed: ${error.message || error}`);
+    return null;
+  }
+}
+
+window.__kaminosSaveVolumeSettingsPreset = saveVolumeSettingsPreset;
+window.__kaminosRefreshVolumeSettingsPresetList = refreshVolumeSettingsPresetList;
+window.__kaminosNavigateToSelectedVolumeSettingsPreset = navigateToSelectedVolumeSettingsPreset;
+for (const [id, command] of [
+  ['settings-preset-save', () => void saveVolumeSettingsPreset()],
+  ['settings-preset-load-here', () => navigateToSelectedVolumeSettingsPreset(false)],
+  ['settings-preset-open-fresh', () => navigateToSelectedVolumeSettingsPreset(true)],
+]) {
+  const button = document.getElementById(id);
+  if (!button) continue;
+  button.addEventListener('click', command);
+  button.dataset.commandWired = 'true';
+}
+void refreshVolumeSettingsPresetList();
 
 function applyVolumeControlsSnapshot(controlsSnapshot = {}) {
   for (const [key] of VOLUME_BASIN_ROUTE_FIELDS) {
@@ -12112,22 +12154,32 @@ function applyVolumeControlsSnapshot(controlsSnapshot = {}) {
   routedVolumeRayBudgetPreset = '';
 }
 
-function restoreVolumeBasinSnapshot() {
-  let snapshot = null;
-  try {
-    snapshot = JSON.parse(localStorage.getItem(KAMINOS_VOLUME_BASIN_STORAGE_KEY));
-  } catch {}
-  if (!snapshot || snapshot.identity !== VOLUME_BASIN_SNAPSHOT_IDENTITY || !snapshot.controls) {
-    setInfo('No saved volume basin found');
-    return false;
-  }
-  applyVolumeControlsSnapshot(snapshot.controls);
+window.kaminosApplyVolumeControlsSnapshot = function kaminosApplyVolumeControlsSnapshot(controlsSnapshot = {}) {
+  applyVolumeControlsSnapshot(controlsSnapshot);
   updateVolumeControlLabels();
-  volumePrototype?.setControls(readVolumeControls());
+  const effectiveControls = readVolumeControls();
+  volumePrototype?.setControls(effectiveControls);
   refreshVolumeReadout();
-  setInfo(`Restored volume basin from ${snapshot.savedAt || 'local storage'}`);
-  return true;
-}
+  const requestedKeys = VOLUME_BASIN_ROUTE_FIELDS
+    .map(([key]) => key)
+    .filter(key => controlsSnapshot[key] !== undefined && controlsSnapshot[key] !== null);
+  const substitutions = requestedKeys.flatMap(key => {
+    const requested = controlsSnapshot[key];
+    const effective = effectiveControls[key];
+    if (typeof requested === 'number' && typeof effective === 'number') {
+      return Math.abs(requested - effective) <= 0.000001 ? [] : [{ key, requested, effective }];
+    }
+    return String(requested) === String(effective) ? [] : [{ key, requested, effective }];
+  });
+  return {
+    identity: 'native-volume-control-snapshot-application-v0',
+    status: 'applied',
+    requestedKeys,
+    requestedControls: { ...controlsSnapshot },
+    effectiveControls,
+    substitutions,
+  };
+};
 
 function syncReactionFrontExtractorLabels(controlsSnapshot) {
   const liveView = normalizeReactionFrontLiveView(controlsSnapshot.reactionLiveView);
@@ -12152,249 +12204,6 @@ function syncReactionFrontExtractorLabels(controlsSnapshot) {
     if (!label || !Number.isFinite(value)) continue;
     label.textContent = value.toFixed(field.decimals);
   }
-}
-
-function selectedVolumeBasinSlot() {
-  const slot = String(document.getElementById('volume-basin-slot')?.value || 'a').toLowerCase();
-  return ['a', 'b', 'c', 'd'].includes(slot) ? slot : 'a';
-}
-
-function saveVolumeBasinSlot(slot = selectedVolumeBasinSlot()) {
-  const snapshot = saveVolumeBasinSnapshot(`slot-${slot}`);
-  try {
-    localStorage.setItem(`${KAMINOS_VOLUME_BASIN_SLOT_STORAGE_PREFIX}${slot}`, JSON.stringify(snapshot));
-    setInfo(`Saved volume basin slot ${slot.toUpperCase()}`);
-  } catch {
-    setInfo(`Could not save volume basin slot ${slot.toUpperCase()}`);
-  }
-  return snapshot;
-}
-
-function restoreVolumeBasinSlot(slot = selectedVolumeBasinSlot()) {
-  let snapshot = null;
-  try {
-    snapshot = JSON.parse(localStorage.getItem(`${KAMINOS_VOLUME_BASIN_SLOT_STORAGE_PREFIX}${slot}`));
-  } catch {}
-  if (!snapshot || snapshot.identity !== VOLUME_BASIN_SNAPSHOT_IDENTITY || !snapshot.controls) {
-    setInfo(`No saved volume basin in slot ${slot.toUpperCase()}`);
-    return false;
-  }
-  applyVolumeControlsSnapshot(snapshot.controls);
-  updateVolumeControlLabels();
-  volumePrototype?.setControls(readVolumeControls());
-  refreshVolumeReadout();
-  setInfo(`Loaded volume basin slot ${slot.toUpperCase()}`);
-  return true;
-}
-
-function normalizeVolumeLookLibrary(raw = null) {
-  const now = new Date().toISOString();
-  const library = raw && typeof raw === 'object' ? raw : {};
-  return {
-    identity: VOLUME_LOOK_LIBRARY_IDENTITY,
-    version: 1,
-    updatedAt: typeof library.updatedAt === 'string' ? library.updatedAt : now,
-    pyro: Array.isArray(library.pyro) ? library.pyro.map(entry => normalizeVolumeLookEntry(entry, 'pyro')).filter(Boolean) : [],
-    firesim: Array.isArray(library.firesim) ? library.firesim.map(entry => normalizeVolumeLookEntry(entry, 'firesim')).filter(Boolean) : [],
-  };
-}
-
-function normalizeVolumeLookControls(kind, controls = {}, entry = {}) {
-  return controls && typeof controls === 'object' ? { ...controls } : {};
-}
-
-function normalizeVolumeLookEntry(entry, kind) {
-  if (!entry || !entry.name || !entry.controls) return null;
-  return {
-    ...entry,
-    controls: normalizeVolumeLookControls(kind, entry.controls, entry),
-  };
-}
-
-function cloneVolumeLookLibraryEntry(entry) {
-  return {
-    ...entry,
-    fields: Array.isArray(entry.fields) ? [...entry.fields] : [],
-    controls: entry.controls && typeof entry.controls === 'object' ? { ...entry.controls } : {},
-  };
-}
-
-function mergeVolumeLookLibraryWithBuiltIns(library = normalizeVolumeLookLibrary()) {
-  const normalized = normalizeVolumeLookLibrary(library);
-  const builtIns = normalizeVolumeLookLibrary(BUILT_IN_VOLUME_LOOK_LIBRARY);
-  for (const kind of ['pyro', 'firesim']) {
-    const byName = new Map();
-    for (const entry of builtIns[kind] || []) byName.set(entry.name, cloneVolumeLookLibraryEntry(entry));
-    for (const entry of normalized[kind] || []) {
-      const existing = byName.get(entry.name);
-      if (existing?.sourceBacked) continue;
-      byName.set(entry.name, cloneVolumeLookLibraryEntry(entry));
-    }
-    normalized[kind] = [...byName.values()];
-  }
-  return normalized;
-}
-
-function readVolumeLookLibrary() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(KAMINOS_VOLUME_LOOK_LIBRARY_STORAGE_KEY));
-    return mergeVolumeLookLibraryWithBuiltIns(parsed);
-  } catch {
-    return mergeVolumeLookLibraryWithBuiltIns();
-  }
-}
-
-function writeVolumeLookLibrary(library) {
-  const normalized = normalizeVolumeLookLibrary({ ...library, updatedAt: new Date().toISOString() });
-  try {
-    localStorage.setItem(KAMINOS_VOLUME_LOOK_LIBRARY_STORAGE_KEY, JSON.stringify(normalized));
-  } catch {}
-  refreshVolumeLookLibraryList(normalized);
-  return normalized;
-}
-
-function normalizeVolumeLookLibraryKind(kind) {
-  return String(kind || 'pyro').toLowerCase() === 'firesim' ? 'firesim' : 'pyro';
-}
-
-function currentVolumeLookLibraryKind() {
-  return normalizeVolumeLookLibraryKind(document.getElementById('volume-look-library-kind')?.value);
-}
-
-function volumeLookLibraryFields(kind = currentVolumeLookLibraryKind()) {
-  return normalizeVolumeLookLibraryKind(kind) === 'firesim' ? FIRESIM_LOOK_FIELDS : PYRO_LOOK_FIELDS;
-}
-
-function pickVolumeLookControls(fields, controlsSnapshot = readVolumeControls()) {
-  const picked = {};
-  for (const key of fields) {
-    if (controlsSnapshot[key] !== undefined && controlsSnapshot[key] !== null) picked[key] = controlsSnapshot[key];
-  }
-  return picked;
-}
-
-function refreshVolumeLookLibraryList(library = readVolumeLookLibrary()) {
-  const kind = currentVolumeLookLibraryKind();
-  const select = document.getElementById('volume-look-library-entry');
-  if (!select) return;
-  const previous = select.value;
-  const entries = Array.isArray(library[kind]) ? library[kind] : [];
-  select.innerHTML = '';
-  if (!entries.length) {
-    const option = document.createElement('option');
-    option.value = '';
-    option.textContent = 'No saved looks';
-    select.appendChild(option);
-    return;
-  }
-  for (const entry of entries) {
-    const option = document.createElement('option');
-    option.value = entry.name;
-    option.textContent = entry.name;
-    select.appendChild(option);
-  }
-  select.value = entries.some(entry => entry.name === previous) ? previous : entries[entries.length - 1].name;
-  const nameInput = document.getElementById('volume-look-library-name');
-  if (nameInput && !nameInput.value) nameInput.value = select.value;
-}
-
-function saveVolumeLookLibraryEntry() {
-  const kind = currentVolumeLookLibraryKind();
-  const nameInput = document.getElementById('volume-look-library-name');
-  const name = String(nameInput?.value || '').trim() || `${kind}-look-${new Date().toISOString().replace(/[:.]/g, '-')}`;
-  const library = readVolumeLookLibrary();
-  const entries = Array.isArray(library[kind]) ? [...library[kind]] : [];
-  const now = new Date().toISOString();
-  const entry = {
-    name,
-    kind,
-    savedAt: now,
-    updatedAt: now,
-    fields: volumeLookLibraryFields(kind),
-    controls: pickVolumeLookControls(volumeLookLibraryFields(kind)),
-  };
-  if (kind === 'pyro') {
-    entry.biteStackAuthored = ['pyroBiteCore', 'pyroBiteRim', 'pyroBiteAfter'].some(key => Number(entry.controls[key]) > 0);
-  }
-  const index = entries.findIndex(candidate => candidate.name === name);
-  if (index >= 0) entries[index] = { ...entries[index], ...entry, savedAt: entries[index].savedAt || now };
-  else entries.push(entry);
-  library[kind] = entries;
-  const normalized = writeVolumeLookLibrary(library);
-  document.getElementById('volume-look-library-entry').value = name;
-  document.getElementById('volume-look-library-json').value = JSON.stringify(normalized, null, 2);
-  saveVolumeBasinSnapshot(`look-library-save-${kind}-${name}`);
-  setInfo(`Saved ${kind} look: ${name}`);
-  return entry;
-}
-
-function loadVolumeLookLibraryEntry() {
-  const kind = currentVolumeLookLibraryKind();
-  const name = document.getElementById('volume-look-library-entry')?.value || document.getElementById('volume-look-library-name')?.value || '';
-  const library = readVolumeLookLibrary();
-  const entry = (library[kind] || []).find(candidate => candidate.name === name);
-  if (!entry) {
-    setInfo(`No ${kind} look named ${name || '(blank)'}`);
-    return false;
-  }
-  applyVolumeControlsSnapshot(entry.controls || {});
-  updateVolumeControlLabels();
-  volumePrototype?.setControls(readVolumeControls());
-  refreshVolumeReadout();
-  document.getElementById('volume-look-library-name').value = entry.name;
-  saveVolumeBasinSnapshot(`look-library-load-${kind}-${entry.name}`);
-  setInfo(`Loaded ${kind} look: ${entry.name}`);
-  return true;
-}
-
-async function exportVolumeLookLibraryJson() {
-  const library = readVolumeLookLibrary();
-  const json = JSON.stringify(library, null, 2);
-  const buffer = document.getElementById('volume-look-library-json');
-  if (buffer) buffer.value = json;
-  try {
-    await navigator.clipboard.writeText(json);
-    setInfo('Exported volume look library JSON to clipboard');
-  } catch {
-    setInfo('Exported volume look library JSON to the page buffer');
-  }
-  return json;
-}
-
-function importVolumeLookLibraryJson() {
-  const buffer = document.getElementById('volume-look-library-json');
-  let parsed = null;
-  try {
-    parsed = JSON.parse(buffer?.value || '');
-  } catch {
-    setInfo('Look library JSON did not parse');
-    return false;
-  }
-  const incoming = normalizeVolumeLookLibrary(parsed);
-  if (parsed?.identity !== VOLUME_LOOK_LIBRARY_IDENTITY) {
-    setInfo('Look library JSON has the wrong identity');
-    return false;
-  }
-  const current = readVolumeLookLibrary();
-  for (const kind of ['pyro', 'firesim']) {
-    const byName = new Map((current[kind] || []).map(entry => [entry.name, entry]));
-    for (const entry of incoming[kind] || []) byName.set(entry.name, entry);
-    current[kind] = [...byName.values()];
-  }
-  writeVolumeLookLibrary(current);
-  setInfo('Imported volume look library JSON');
-  return true;
-}
-
-async function copyVolumeBasinUrl() {
-  const snapshot = saveVolumeBasinSnapshot('copy-basin');
-  try {
-    await navigator.clipboard.writeText(snapshot.url);
-    setInfo('Copied volume basin URL');
-  } catch {
-    window.prompt('Copy volume basin URL', snapshot.url);
-  }
-  return snapshot.url;
 }
 
 function applyCanonicalVolumeMacroPreset(name) {
@@ -16406,6 +16215,8 @@ function readVolumeControls() {
     boundarySidecarView,
     boundarySplatMode,
     boundarySplatFeatureCapture,
+    boundarySplatRadius: parseFloat(document.getElementById('volume-boundary-splat-radius').value),
+    boundarySplatSharpness: parseFloat(document.getElementById('volume-boundary-splat-sharpness').value),
     boundarySidecarControls: {
       identity: 'baked-boundary-sidecar-v0',
       authority: 'band-limited-support-coverage-ridge-proximity-footprint-v1',
@@ -16841,9 +16652,59 @@ async function captureVolumeReactionAtlas() {
 }
 window.__kaminosCaptureVolumeReactionAtlas = captureVolumeReactionAtlas;
 
+function syncVolumePresentationControls(receipt = volumePrototype?.debugState?.()?.volumePresentationReceipt) {
+  if (!receipt) return;
+  for (const button of document.querySelectorAll('[data-volume-presentation-mode]')) {
+    button.classList.toggle('active', button.dataset.volumePresentationMode === receipt.effectiveMode);
+    button.setAttribute('aria-pressed', button.dataset.volumePresentationMode === receipt.effectiveMode ? 'true' : 'false');
+  }
+  document.getElementById('volume-presentation-requested').textContent = receipt.requestedMode;
+  document.getElementById('volume-presentation-effective').textContent = receipt.fallbackReason
+    ? `${receipt.effectiveMode} / ${receipt.fallbackReason}`
+    : receipt.effectiveMode;
+  const quality = receipt.effectiveRayQuality || {};
+  document.getElementById('volume-presentation-ray-quality').textContent = `${quality.raySteps ?? '--'} steps / adaptive ${Number.isFinite(quality.adaptiveRays) ? quality.adaptiveRays.toFixed(2) : '--'} / scale ${Number.isFinite(quality.renderScale) ? quality.renderScale.toFixed(2) : '--'}`;
+  document.getElementById('volume-presentation-target').textContent = receipt.targetIdentity || 'missing-target-identity';
+}
+
+function syncRaymarchSmokePresentationControls(receipt = volumePrototype?.debugState?.()?.raymarchSmokePresentationReceipt) {
+  if (!receipt) return;
+  for (const button of document.querySelectorAll('[data-raymarch-smoke-presentation]')) {
+    const requested = button.dataset.raymarchSmokePresentation === receipt.normalizedRequestedMode;
+    button.classList.toggle('active', requested);
+    button.setAttribute('aria-pressed', requested ? 'true' : 'false');
+  }
+  document.getElementById('volume-raymarch-smoke-effective').textContent = receipt.fallbackReason
+    ? `${receipt.requestedMode} -> ${receipt.effectiveMode} / ${receipt.fallbackReason}`
+    : `${receipt.requestedMode} -> ${receipt.effectiveMode}`;
+  document.getElementById('volume-raymarch-smoke-target').textContent = receipt.targetIdentity || 'missing-target-identity';
+}
+
+for (const button of document.querySelectorAll('[data-volume-presentation-mode]')) {
+  button.addEventListener('click', () => {
+    const receipt = volumePrototype?.setVolumePresentationMode?.(button.dataset.volumePresentationMode);
+    window.__kaminosVolumePresentationReceipt = receipt || null;
+    syncVolumePresentationControls(receipt);
+    syncRaymarchSmokePresentationControls();
+    window._kaminosDirty?.();
+  });
+}
+
+for (const button of document.querySelectorAll('[data-raymarch-smoke-presentation]')) {
+  button.addEventListener('click', () => {
+    const receipt = volumePrototype?.setRaymarchSmokePresentationMode?.(button.dataset.raymarchSmokePresentation);
+    window.__kaminosRaymarchSmokePresentationReceipt = receipt || null;
+    syncRaymarchSmokePresentationControls(receipt);
+    syncVolumePresentationControls();
+    window._kaminosDirty?.();
+  });
+}
+
 function refreshVolumeReadout() {
   if (!volumePrototype) return;
   const s = volumePrototype.debugState();
+  syncVolumePresentationControls(s.volumePresentationReceipt);
+  syncRaymarchSmokePresentationControls(s.raymarchSmokePresentationReceipt);
   const timing = s.timing || {};
   const canonicalPlumeReadoutActive = s.volumeScene === 'canonical_plume';
   const sceneContentLabel = (() => {
@@ -16854,8 +16715,17 @@ function refreshVolumeReadout() {
     if (smokeActive) return 'smoke';
     return 'empty';
   })();
+  const sceneReceipt = s.volumeSceneAuthority || volumeSceneReceipt(s.volumeScene);
   document.getElementById('volume-backend').textContent = s.backend || 'unknown';
-  document.getElementById('volume-scene-state').textContent = s.volumeScene || 'compact_plume';
+  document.getElementById('volume-scene-state').textContent = sceneReceipt.effective;
+  document.getElementById('volume-scene-authority').textContent = sceneReceipt.status === 'prototype'
+    ? `${sceneReceipt.status} / ${sceneReceipt.authority}`
+    : `${sceneReceipt.status} -> ${sceneReceipt.supersededBy}`;
+  const settingsPresetButton = document.getElementById('settings-preset-save');
+  if (settingsPresetButton) {
+    settingsPresetButton.disabled = false;
+    settingsPresetButton.title = 'Write every current volume control to the shared preset store';
+  }
   document.getElementById('volume-render-source-orientation').textContent = s.minimalPlumeProof?.canonicalRenderSourceOrientation || 'unverified';
   document.getElementById('volume-canonical-render-mode-state').textContent = canonicalPlumeReadoutActive ? (s.canonicalPlumeControls?.renderMode || 'default') : 'scene';
   document.getElementById('volume-canonical-motion-mode-state').textContent = canonicalPlumeReadoutActive ? (s.canonicalPlumeControls?.motionMode || 'animated') : 'live';
@@ -16905,7 +16775,7 @@ function refreshVolumeReadout() {
 window.__kaminosRefreshVolumeReadout = refreshVolumeReadout;
 
 function frameVolumeCamera() {
-  const sceneName = document.getElementById('volume-scene')?.value || 'compact_plume';
+  const sceneName = document.getElementById('volume-scene')?.value || DEFAULT_VOLUME_SCENE;
   const frame = sceneName === 'bonfire_plume' ? BONFIRE_VOLUME_CAMERA_FRAME : DEFAULT_VOLUME_CAMERA_FRAME;
   camera.position.set(...frame.position);
   controls.target.set(...frame.target);
@@ -16979,8 +16849,49 @@ function createVolumeMainRendererBridge() {
   };
 }
 
+let activeVolumeSettingsPresetReceipt = null;
+
+async function admitVolumeSettingsPresetRoute(params) {
+  const requestedPresetId = params.get('settings_preset');
+  const requestedAuthority = params.get('settings_preset_authority');
+  if (!requestedPresetId && !requestedAuthority) return null;
+  if (!requestedPresetId || requestedAuthority !== 'shared-volume-settings-preset-v2') {
+    throw new Error('settings preset route identity or authority is incomplete');
+  }
+  const [artifactResponse, schemaResponse] = await Promise.all([
+    fetch(`/api/volume-settings-preset?id=${encodeURIComponent(requestedPresetId)}`, { cache: 'no-store' }),
+    fetch('/volume-settings-preset-schema-v2.json', { cache: 'no-store' }),
+  ]);
+  const [artifact, schema] = await Promise.all([artifactResponse.json(), schemaResponse.json()]);
+  if (!artifactResponse.ok) throw new Error(artifact.error || `settings preset lookup failed: ${artifactResponse.status}`);
+  if (!schemaResponse.ok) throw new Error(`settings preset schema lookup failed: ${schemaResponse.status}`);
+  const receipt = validateVolumeSettingsPresetDocument(artifact, requestedPresetId, schema);
+  validateVolumeSettingsPresetTarget(receipt, params);
+  activeVolumeSettingsPresetReceipt = receipt;
+  window.__kaminosVolumeSettingsPresetReceipt = receipt;
+  volumeSettingsPresetStatus(
+    `${receipt.label || receipt.presetId} | requested ${requestedPresetId} | effective ${receipt.presetId} | ${receipt.schemaIdentity} | ${receipt.storePath}`,
+  );
+  return receipt;
+}
+
+function reportKaminosVolumeRouteInitFailure(error) {
+  const params = new URLSearchParams(window.location.search);
+  const message = error?.message || String(error);
+  if (params.has('settings_preset') || params.has('settings_preset_authority')) {
+    activeVolumeSettingsPresetReceipt = null;
+    window.__kaminosVolumeSettingsPresetReceipt = null;
+    volumeSettingsPresetStatus(`PRESET LOAD FAILED | ${message}`, true);
+    const toggle = document.getElementById('volume-toggle');
+    if (toggle) toggle.disabled = true;
+  }
+  console.error('Volume route initialization failed:', error);
+  setInfo(`Volume route initialization failed: ${message}`);
+}
+
 async function initKaminosVolumeRoute() {
   const params = new URLSearchParams(window.location.search);
+  await admitVolumeSettingsPresetRoute(params);
   routedBonfireAblationControls = normalizeBonfireAblationControls({
     bonfireRecenter: routeBonfireAblationControl(params, 'volume_bonfire_recenter', 'bonfireRecenter'),
     bonfireLateralDamping: routeBonfireAblationControl(params, 'volume_bonfire_lateral_damping', 'bonfireLateralDamping'),
@@ -17102,8 +17013,10 @@ async function initKaminosVolumeRoute() {
   if (['shell', 'inspect', 'off', 'stock'].includes(routeFireRenderMode)) {
     document.getElementById('volume-fire-render-mode').value = routeFireRenderMode;
   }
-  const routeShellInspectMode = (params.get('volume_shell_inspect') || '').toLowerCase().replace(/-/g, '_');
-  if (['shell', 'thermal', 'reaction', 'front', 'edge', 'core', 'curl', 'divergence'].includes(routeShellInspectMode)) {
+  const routeShellInspectMode = (params.get('volume_shell_inspect_mode') ?? params.get('volume_shell_inspect') ?? '').toLowerCase().replace(/-/g, '_');
+  if (params.has('volume_shell_inspect_mode') && routeShellInspectMode === '') {
+    document.getElementById('volume-shell-inspect-mode').value = '';
+  } else if (['shell', 'thermal', 'reaction', 'front', 'edge', 'core', 'curl', 'divergence'].includes(routeShellInspectMode)) {
     document.getElementById('volume-shell-inspect-mode').value = routeShellInspectMode;
   }
   for (const [param, id, min, max] of [
@@ -17583,6 +17496,14 @@ async function initKaminosVolumeRoute() {
     },
   });
   window.__kaminosVolumePrototype = volumePrototype;
+  const requestedVolumePresentation = params.get('volume_presentation') || 'beauty';
+  window.__kaminosVolumePresentationReceipt = volumePrototype.setVolumePresentationMode?.(requestedVolumePresentation) || null;
+  syncVolumePresentationControls(window.__kaminosVolumePresentationReceipt);
+  const requestedRaymarchSmokePresentation = params.get('volume_raymarch_smoke') || 'on';
+  window.__kaminosRaymarchSmokePresentationReceipt = volumePrototype.setRaymarchSmokePresentationMode?.(requestedRaymarchSmokePresentation) || null;
+  syncRaymarchSmokePresentationControls(window.__kaminosRaymarchSmokePresentationReceipt);
+  const requestedAppearanceDecomposition = params.get('volume_appearance_decomposition') || 'off';
+  window.__kaminosAppearanceDecompositionReceipt = volumePrototype.setAppearanceDecompositionMode?.(requestedAppearanceDecomposition) || null;
   volumeBridge?.dispose?.();
   volumeBridge = createVolumeMainRendererBridge();
   window.__kaminosVolumeBridge = volumeBridge;
@@ -17614,7 +17535,6 @@ async function initKaminosVolumeRoute() {
     updateVolumeControlLabels();
     volumePrototype.setControls(readVolumeControls());
     refreshVolumeReadout();
-    saveVolumeBasinSnapshot(event?.target?.id || 'control-change');
   };
   moveVolumePyroFreezeIntoCarrierWorkbench();
   moveVolumePyroRadianceControlsBelowFlow();
@@ -17640,7 +17560,6 @@ async function initKaminosVolumeRoute() {
     updateVolumeControlLabels();
     volumePrototype.setControls(readVolumeControls());
     refreshVolumeReadout();
-    saveVolumeBasinSnapshot('budget-controls');
   };
   const gamut = document.getElementById('volume-ray-budget-gamut');
   const updateGamutFromPointer = event => {
@@ -17676,38 +17595,19 @@ async function initKaminosVolumeRoute() {
       applyBudgetControls();
     });
   });
-  document.getElementById('volume-basin-copy')?.addEventListener('click', () => void copyVolumeBasinUrl());
-  document.getElementById('volume-basin-restore')?.addEventListener('click', () => restoreVolumeBasinSnapshot());
-  document.getElementById('volume-agent-camera-save')?.addEventListener('click', () => void saveVolumeAgentCapture('camera'));
-  document.getElementById('volume-agent-view-save')?.addEventListener('click', () => void saveVolumeAgentCapture('view'));
   document.getElementById('volume-reaction-atlas-capture')?.addEventListener('click', () => void captureVolumeReactionAtlas());
-  document.getElementById('volume-basin-slot-save')?.addEventListener('click', () => saveVolumeBasinSlot());
-  document.getElementById('volume-basin-slot-load')?.addEventListener('click', () => restoreVolumeBasinSlot());
-  document.getElementById('volume-look-library-kind')?.addEventListener('change', () => refreshVolumeLookLibraryList());
-  document.getElementById('volume-look-library-entry')?.addEventListener('change', event => {
-    const nameInput = document.getElementById('volume-look-library-name');
-    if (nameInput) nameInput.value = event.target.value;
-  });
-  document.getElementById('volume-look-library-save')?.addEventListener('click', () => saveVolumeLookLibraryEntry());
-  document.getElementById('volume-look-library-load')?.addEventListener('click', () => loadVolumeLookLibraryEntry());
-  document.getElementById('volume-look-library-export')?.addEventListener('click', () => void exportVolumeLookLibraryJson());
-  document.getElementById('volume-look-library-import')?.addEventListener('click', () => importVolumeLookLibraryJson());
   document.getElementById('volume-basin-warm-cap')?.addEventListener('click', () => {
     applyTallPlumeOperatorPreset('pyro_contrast_warm_cap_small_flame_0702');
     updateVolumeControlLabels();
     volumePrototype.setControls(readVolumeControls());
     refreshVolumeReadout();
-    saveVolumeBasinSnapshot('warm-cap-preset');
   });
   document.getElementById('volume-basin-bonfire-family')?.addEventListener('click', () => {
     applyTallPlumeOperatorPreset('pyro_material_bonfire_family_0702');
     updateVolumeControlLabels();
     volumePrototype.setControls(readVolumeControls());
     refreshVolumeReadout();
-    saveVolumeBasinSnapshot('bonfire-family-preset');
   });
-  saveVolumeBasinSnapshot('route-init');
-  refreshVolumeLookLibraryList();
   document.getElementById('volume-toggle').addEventListener('click', async () => {
     if (volumePrototype.debugState().active) {
       volumePrototype.setActive(false);
@@ -18752,6 +18652,373 @@ function greenroomMeshMetadata(display, fileName, source) {
     groupLabel: display?.title || fileName,
     groupSource: source,
   };
+}
+
+let kaminosAssetSmokeLinkState = {
+  schema: 'kaminos.asset-smoke-link.v0',
+  assetType: null,
+  status: 'idle',
+  requestedRoot: null,
+  requestedPath: null,
+  effectiveUrl: null,
+  fileName: null,
+  label: null,
+  registeredObjectId: null,
+  registeredAt: null,
+  error: null,
+};
+
+function cloneKaminosAssetSmokeLinkState() {
+  return {
+    ...kaminosAssetSmokeLinkState,
+  };
+}
+
+window.kaminosAssetSmokeLinkDebugState = cloneKaminosAssetSmokeLinkState;
+
+function kaminosApiReadRouteFromUrl(value) {
+  if (!value) return null;
+  try {
+    const parsed = new URL(value, window.location.href);
+    if (parsed.pathname !== '/api/read') return null;
+    const requestedRoot = parsed.searchParams.get('root');
+    const requestedPath = parsed.searchParams.get('path');
+    if (!requestedRoot || !requestedPath) return null;
+    return {
+      requestedRoot,
+      requestedPath,
+      sourceParam: 'api_read_url',
+    };
+  } catch {
+    return null;
+  }
+}
+
+function kaminosMeshAssetRouteLabel(path, fileName) {
+  const parts = String(path || '').split('/').filter(Boolean);
+  const genericFile = /^(output|model|scene|asset)\.(glb|gltf)$/i.test(fileName || '');
+  const source = genericFile && parts.length > 1 ? parts[parts.length - 2] : (fileName || parts[parts.length - 1]);
+  return greenroomHumanizeName(source, fileName || 'Mesh asset');
+}
+
+function kaminosSplatAssetRouteLabel(path, fileName) {
+  const parts = String(path || '').split('/').filter(Boolean);
+  const genericFile = /^(output|splat|pointcloud|point-cloud|asset)\.ply$/i.test(fileName || '');
+  const source = genericFile && parts.length > 1 ? parts[parts.length - 2] : (fileName || parts[parts.length - 1]);
+  return greenroomHumanizeName(source, fileName || 'Splat asset');
+}
+
+function kaminosImageAssetRouteLabel(path, fileName) {
+  const parts = String(path || '').split('/').filter(Boolean);
+  const genericFile = /^(output|image|source|asset)\.(png|jpe?g|webp|avif)$/i.test(fileName || '');
+  const source = genericFile && parts.length > 1 ? parts[parts.length - 2] : (fileName || parts[parts.length - 1]);
+  return greenroomHumanizeName(source, fileName || 'Image asset');
+}
+
+function kaminosMeshAssetRouteFromSearch(params = new URLSearchParams(window.location.search)) {
+  const requestedRoot = params.get('mesh_root');
+  const requestedPath = params.get('mesh_path');
+  const legacyGlbPath = params.get('glb_path');
+  const meshUrl = params.get('mesh_url');
+  let route = null;
+  if (requestedRoot && requestedPath) {
+    route = {
+      requestedRoot,
+      requestedPath,
+      sourceParam: 'mesh_root/mesh_path',
+    };
+  } else {
+    route = kaminosApiReadRouteFromUrl(meshUrl) || kaminosApiReadRouteFromUrl(legacyGlbPath);
+    if (!route && legacyGlbPath) {
+      route = {
+        requestedRoot: params.get('glb_root') || 'greenroom',
+        requestedPath: legacyGlbPath,
+        sourceParam: 'glb_path',
+      };
+    }
+  }
+  if (!route) return null;
+  const effectiveUrl = `/api/read?${new URLSearchParams({ root: route.requestedRoot, path: route.requestedPath }).toString()}`;
+  const fileName = route.requestedPath.split('/').pop() || 'asset.glb';
+  return {
+    ...route,
+    effectiveUrl,
+    fileName,
+    label: kaminosMeshAssetRouteLabel(route.requestedPath, fileName),
+  };
+}
+
+function kaminosSplatAssetRouteFromSearch(params = new URLSearchParams(window.location.search)) {
+  const requestedRoot = params.get('splat_root');
+  const requestedPath = params.get('splat_path');
+  const legacyPlyPath = params.get('ply_path');
+  const splatUrl = params.get('splat_url');
+  const plyUrl = params.get('ply_url');
+  let route = null;
+  if (requestedRoot && requestedPath) {
+    route = {
+      requestedRoot,
+      requestedPath,
+      sourceParam: 'splat_root/splat_path',
+    };
+  } else {
+    route = kaminosApiReadRouteFromUrl(splatUrl) || kaminosApiReadRouteFromUrl(plyUrl);
+    if (!route && legacyPlyPath) {
+      route = {
+        requestedRoot: params.get('ply_root') || 'splat-inbox',
+        requestedPath: legacyPlyPath,
+        sourceParam: 'ply_path',
+      };
+    }
+  }
+  if (!route) return null;
+  const effectiveUrl = `/api/read?${new URLSearchParams({ root: route.requestedRoot, path: route.requestedPath }).toString()}`;
+  const fileName = route.requestedPath.split('/').pop() || 'splat.ply';
+  return {
+    ...route,
+    effectiveUrl,
+    fileName,
+    label: kaminosSplatAssetRouteLabel(route.requestedPath, fileName),
+  };
+}
+
+function kaminosImageAssetRouteFromSearch(params = new URLSearchParams(window.location.search)) {
+  const requestedRoot = params.get('image_root');
+  const requestedPath = params.get('image_path');
+  const legacyImagePath = params.get('img_path') || (!requestedRoot ? requestedPath : null);
+  const imageUrl = params.get('image_url');
+  const imgUrl = params.get('img_url');
+  let route = null;
+  if (requestedRoot && requestedPath) {
+    route = {
+      requestedRoot,
+      requestedPath,
+      sourceParam: 'image_root/image_path',
+    };
+  } else {
+    route = kaminosApiReadRouteFromUrl(imageUrl) || kaminosApiReadRouteFromUrl(imgUrl);
+    if (!route && legacyImagePath) {
+      route = {
+        requestedRoot: params.get('img_root') || 'image-inbox',
+        requestedPath: legacyImagePath,
+        sourceParam: params.get('img_path') ? 'img_path' : 'image_path',
+      };
+    }
+  }
+  if (!route) return null;
+  const effectiveUrl = `/api/read?${new URLSearchParams({ root: route.requestedRoot, path: route.requestedPath }).toString()}`;
+  const fileName = route.requestedPath.split('/').pop() || 'image.png';
+  return {
+    ...route,
+    effectiveUrl,
+    fileName,
+    label: kaminosImageAssetRouteLabel(route.requestedPath, fileName),
+  };
+}
+
+async function loadKaminosMeshAssetRoute(route = kaminosMeshAssetRouteFromSearch()) {
+  if (!route) return false;
+  kaminosAssetSmokeLinkState = {
+    schema: 'kaminos.asset-smoke-link.v0',
+    assetType: 'mesh',
+    status: 'loading',
+    requestedRoot: route.requestedRoot,
+    requestedPath: route.requestedPath,
+    effectiveUrl: route.effectiveUrl,
+    fileName: route.fileName,
+    label: route.label,
+    registeredObjectId: null,
+    registeredAt: null,
+    error: null,
+  };
+  window._kaminosDirty?.();
+  setInfo(`Loading mesh asset: ${route.label}`);
+  try {
+    const model = await showGLB(route.effectiveUrl, {
+      clear: true,
+      metadata: {
+        ...greenroomMeshMetadata({ title: route.label }, route.fileName, route.effectiveUrl),
+        assetSmokeLink: {
+          schema: 'kaminos.asset-smoke-link.v0',
+          assetType: 'mesh',
+          requestedRoot: route.requestedRoot,
+          requestedPath: route.requestedPath,
+          effectiveUrl: route.effectiveUrl,
+          sourceParam: route.sourceParam,
+        },
+      },
+    });
+    const registered = model?.userData?.kaminosSceneObject || null;
+    if (!registered?.id) {
+      throw new Error('GLB loaded but no scene object registration was recorded');
+    }
+    kaminosAssetSmokeLinkState = {
+      ...kaminosAssetSmokeLinkState,
+      status: 'loaded',
+      registeredObjectId: registered.id,
+      registeredAt: new Date().toISOString(),
+      error: null,
+    };
+    setInfo(`Mesh asset loaded: ${route.label}`);
+    window._kaminosDirty?.();
+    return true;
+  } catch (error) {
+    kaminosAssetSmokeLinkState = {
+      ...kaminosAssetSmokeLinkState,
+      status: 'failed',
+      error: error?.message || String(error),
+    };
+    console.error('Mesh asset link load failed:', error);
+    setInfo(`Mesh asset link failed: ${kaminosAssetSmokeLinkState.error}`);
+    window._kaminosDirty?.();
+    return false;
+  }
+}
+
+async function loadKaminosSplatAssetRoute(route = kaminosSplatAssetRouteFromSearch()) {
+  if (!route) return false;
+  kaminosAssetSmokeLinkState = {
+    schema: 'kaminos.asset-smoke-link.v0',
+    assetType: 'splat',
+    status: 'loading',
+    requestedRoot: route.requestedRoot,
+    requestedPath: route.requestedPath,
+    effectiveUrl: route.effectiveUrl,
+    fileName: route.fileName,
+    label: route.label,
+    registeredObjectId: null,
+    registeredAt: null,
+    error: null,
+  };
+  window._kaminosDirty?.();
+  setInfo(`Loading splat asset: ${route.label}`);
+  try {
+    const format = route.fileName.split('.').pop()?.toLowerCase() || 'ply';
+    const object = await greenroomImportSplat(route.effectiveUrl, route.fileName, { title: route.label }, {
+      clear: true,
+      metadata: {
+        source: route.effectiveUrl,
+        fileName: route.fileName,
+        label: route.label,
+        assetSmokeLink: {
+          schema: 'kaminos.asset-smoke-link.v0',
+          assetType: 'splat',
+          requestedRoot: route.requestedRoot,
+          requestedPath: route.requestedPath,
+          effectiveUrl: route.effectiveUrl,
+          sourceParam: route.sourceParam,
+        },
+        splat: {
+          schema: 'kaminos.splat-asset.v0',
+          assetSource: route.effectiveUrl,
+          fileName: route.fileName,
+          format,
+          root_id: route.requestedRoot,
+          path: route.requestedPath,
+          bounds: null,
+          splatCount: null,
+          sidecars: [],
+          provenance: provenanceForSource(route.effectiveUrl),
+        },
+      },
+    });
+    const registered = object?.userData?.kaminosSceneObject || null;
+    if (!registered?.id) {
+      throw new Error('PLY loaded but no scene object registration was recorded');
+    }
+    kaminosAssetSmokeLinkState = {
+      ...kaminosAssetSmokeLinkState,
+      status: 'loaded',
+      registeredObjectId: registered.id,
+      registeredAt: new Date().toISOString(),
+      error: null,
+    };
+    setInfo(`Splat asset loaded: ${route.label}`);
+    window._kaminosDirty?.();
+    return true;
+  } catch (error) {
+    kaminosAssetSmokeLinkState = {
+      ...kaminosAssetSmokeLinkState,
+      status: 'failed',
+      error: error?.message || String(error),
+    };
+    console.error('Splat asset link load failed:', error);
+    setInfo(`Splat asset link failed: ${kaminosAssetSmokeLinkState.error}`);
+    window._kaminosDirty?.();
+    return false;
+  }
+}
+
+async function loadKaminosImageAssetRoute(route = kaminosImageAssetRouteFromSearch()) {
+  if (!route) return false;
+  kaminosAssetSmokeLinkState = {
+    schema: 'kaminos.asset-smoke-link.v0',
+    assetType: 'image',
+    status: 'loading',
+    requestedRoot: route.requestedRoot,
+    requestedPath: route.requestedPath,
+    effectiveUrl: route.effectiveUrl,
+    fileName: route.fileName,
+    label: route.label,
+    registeredObjectId: null,
+    registeredAt: null,
+    error: null,
+  };
+  window._kaminosDirty?.();
+  setInfo(`Loading image asset: ${route.label}`);
+  try {
+    const format = route.fileName.split('.').pop()?.toLowerCase() || 'png';
+    const mesh = await showImagePlane(route.effectiveUrl, {
+      clear: true,
+      metadata: {
+        source: route.effectiveUrl,
+        type: 'image',
+        fileName: route.fileName,
+        label: route.label,
+        assetSmokeLink: {
+          schema: 'kaminos.asset-smoke-link.v0',
+          assetType: 'image',
+          requestedRoot: route.requestedRoot,
+          requestedPath: route.requestedPath,
+          effectiveUrl: route.effectiveUrl,
+          sourceParam: route.sourceParam,
+        },
+        image: {
+          schema: 'kaminos.image-plane.v0',
+          assetSource: route.effectiveUrl,
+          fileName: route.fileName,
+          format,
+          root_id: route.requestedRoot,
+          path: route.requestedPath,
+          provenance: provenanceForSource(route.effectiveUrl),
+        },
+      },
+    });
+    const registered = mesh?.userData?.kaminosSceneObject || null;
+    if (!registered?.id) {
+      throw new Error('Image loaded but no scene object registration was recorded');
+    }
+    kaminosAssetSmokeLinkState = {
+      ...kaminosAssetSmokeLinkState,
+      status: 'loaded',
+      registeredObjectId: registered.id,
+      registeredAt: new Date().toISOString(),
+      error: null,
+    };
+    setInfo(`Image asset loaded: ${route.label}`);
+    window._kaminosDirty?.();
+    return true;
+  } catch (error) {
+    kaminosAssetSmokeLinkState = {
+      ...kaminosAssetSmokeLinkState,
+      status: 'failed',
+      error: error?.message || String(error),
+    };
+    console.error('Image asset link load failed:', error);
+    setInfo(`Image asset link failed: ${kaminosAssetSmokeLinkState.error}`);
+    window._kaminosDirty?.();
+    return false;
+  }
 }
 
 async function greenroomViewMesh(url, fileName, display) {
@@ -20627,8 +20894,20 @@ initScene().then(() => {
         setInfo(`Deep-link load failed: ${err.message || err}`);
       }
     }
+    const meshRoute = kaminosMeshAssetRouteFromSearch(params);
+    if (meshRoute) {
+      await loadKaminosMeshAssetRoute(meshRoute);
+    }
+    const splatRoute = kaminosSplatAssetRouteFromSearch(params);
+    if (splatRoute) {
+      await loadKaminosSplatAssetRoute(splatRoute);
+    }
+    const imageRoute = kaminosImageAssetRouteFromSearch(params);
+    if (imageRoute) {
+      await loadKaminosImageAssetRoute(imageRoute);
+    }
   });
-  initKaminosVolumeRoute();
+  initKaminosVolumeRoute().catch(reportKaminosVolumeRouteInitFailure);
   initKaminosMotionAgencyRoute();
   initWorldChambersRoute();
   initKaminosFingerJuiceHostRoute();
@@ -20639,9 +20918,7 @@ initScene().then(() => {
   initEnvButtons();
   loadDemoButtons();
   restoreSettings();
-  initKaminosVolumeRoute().catch(err => {
-    console.error('volume route init failed after scene init failure:', err);
-  });
+  initKaminosVolumeRoute().catch(reportKaminosVolumeRouteInitFailure);
   initWorldChambersRoute();
   initKaminosFingerJuiceHostRoute();
   initKaminosFingerJuiceTabRoute();
