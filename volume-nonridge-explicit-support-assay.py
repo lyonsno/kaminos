@@ -940,7 +940,8 @@ def implementation_provenance() -> dict[str, Any]:
         ["git", "rev-parse", "HEAD"], cwd=root, check=False, capture_output=True, text=True,
     )
     return {
-        "script": str(script),
+        "script": script.name,
+        "scriptLocator": "repository-relative-v0",
         "scriptSha256": sha256_file(script),
         "gitCommit": commit.stdout.strip() if commit.returncode == 0 else None,
         "scriptDirty": bool(result.stdout.strip()) if result.returncode == 0 else None,
@@ -1061,7 +1062,8 @@ def main() -> int:
             "status": "complete",
             "authority": "deterministic-selector-source-closure-assay-only-v0",
             "source": {
-                "corpusManifest": str(corpus_path),
+                "corpusManifest": corpus_path.name,
+                "corpusManifestLocator": "external-basename-plus-sha256-v0",
                 "corpusManifestSha256": actual_manifest_sha,
                 "corpusIdentity": corpus.get("identity"),
                 "sampleCap": corpus["cohort"]["sampleCap"],
@@ -1124,7 +1126,7 @@ def main() -> int:
             },
             "selector": selector,
             "selectorRecipe": {
-                "path": str(recipe_path),
+                "path": recipe_path.name,
                 "sha256": sha256_file(recipe_path),
             },
             "metrics": {

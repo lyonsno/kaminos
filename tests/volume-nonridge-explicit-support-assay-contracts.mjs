@@ -237,6 +237,18 @@ assert.equal(report.schema, 'kaminos.volume.nonridge-explicit-support-assay.v0')
 assert.equal(report.identity, 'deterministic-source-field-nonridge-selector-search-v0');
 assert.equal(report.status, 'complete');
 assert.equal(report.source.corpusManifestSha256, corpusSha);
+assert.equal(report.source.corpusManifest, 'corpus-manifest.json');
+assert.equal(report.source.corpusManifestLocator, 'external-basename-plus-sha256-v0');
+assert.equal(report.implementation.script, 'volume-nonridge-explicit-support-assay.py');
+assert.equal(report.implementation.scriptLocator, 'repository-relative-v0');
+assert.equal(report.selectorRecipe.path, 'selector-recipe.json');
+for (const [label, value] of [
+  ['corpus', report.source.corpusManifest],
+  ['implementation', report.implementation.script],
+  ['recipe', report.selectorRecipe.path],
+]) {
+  assert.equal(path.isAbsolute(value), false, `${label} locator must not leak an ephemeral runtime path`);
+}
 assert.equal(report.source.sampleCap, null);
 assert.equal(report.source.rowsEvaluated, 5 * 128);
 assert.deepEqual(report.source.effectiveSplits, {
