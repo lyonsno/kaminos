@@ -55,5 +55,10 @@ assert.match(
 );
 assert.match(holdoutOracle, /base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0/, 'the oracle pins the treatment authority');
 assert.match(holdoutOracle, /structural-splat-candidates-v0/, 'the oracle preserves the producer coverage ceiling');
+assert.match(
+  holdoutOracle,
+  /REPLAY_CONTROLS_SHA256\s*=\s*'ba122038332747804203b4d03c6a5e9bf7b1e5969ec5d1f5ef995d3b5adff5b9'/,
+  'the replay contract pins the post-kernel-control-schema step-96 state identity',
+);
 
 console.log('boundary splat kernel moment contracts passed');

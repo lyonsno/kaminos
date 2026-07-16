@@ -348,7 +348,7 @@ const replayBridgeReport = {
     sameStateCaptureId: 'filament-orbit-f96-s96',
     frameCount: 96,
     simStepCount: 96,
-    controlsHash: 'dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f',
+    controlsHash: 'ba122038332747804203b4d03c6a5e9bf7b1e5969ec5d1f5ef995d3b5adff5b9',
   },
 };
 const validatedReplayBridge = await oracle.validateCameraHoldoutReport(replayBridgeReport);
