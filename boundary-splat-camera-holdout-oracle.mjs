@@ -120,6 +120,11 @@ export function validateCaptureReportFootprintPreflight(report) {
     || expectedFamilies.some(family => !preflightByFamily.has(family))) {
     throw new Error('capture-report preflight family set is incomplete');
   }
+  const candidateCounts = new Set(preflightRows.map(row => row.candidateCount));
+  const candidatePayloads = new Set(preflightRows.map(row => row.candidatePayloadSha256));
+  if (candidateCounts.size !== 1 || candidatePayloads.size !== 1) {
+    throw new Error('capture-report preflight candidate payload differs between families');
+  }
   if (preflightByFamily.get('learned-billboard').attributePayloadSha256
     !== preflightByFamily.get('world-tangent-covariance').attributePayloadSha256) {
     throw new Error('capture-report learned and world preflight attribute payloads disagree');
