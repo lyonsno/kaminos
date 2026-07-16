@@ -18,8 +18,8 @@ assert.match(core, /let ndc = vec2<f32>\(uv\.x \* 2\.0 - 1\.0, uv\.y \* 2\.0 - 1
 assert.match(core, /boundarySplatPbrScenePipeline/, 'runtime must own a PBR scene pipeline on the live-volume device');
 assert.match(core, /depthStencil:\s*\{[\s\S]*format:\s*'depth24plus'[\s\S]*depthWriteEnabled:\s*true[\s\S]*depthCompare:\s*'less'/, 'PBR scene pipeline must write the shared depth attachment');
 assert.match(core, /boundarySplatRenderPipeline[\s\S]*depthStencil:\s*\{[\s\S]*format:\s*'depth24plus'[\s\S]*depthWriteEnabled:\s*false[\s\S]*depthCompare:\s*'less-equal'/, 'learned splats must test against PBR scene depth without replacing it');
-assert.match(core, /encodeBoundarySplatPbrScene\(encoder,\s*currentTexture\.createView\(\),\s*boundarySplatPbrDepthTexture\.createView\(\)/, 'frame must render the PBR scene before splats on the same color/depth targets');
-assert.match(core, /encodeBoundarySplatDraw\(encoder,\s*currentTexture\.createView\(\)[\s\S]*depthView:[\s\S]*loadColor:\s*pbrSceneApplied[\s\S]*loadDepth:\s*pbrSceneApplied/, 'splat pass must load PBR color and shared depth instead of clearing them');
+assert.match(core, /encodeBoundarySplatPbrScene\(\s*encoder,\s*currentTexture\.createView\(\),\s*boundarySplatPbrDepthTexture\.createView\(\)/, 'frame must render the PBR scene before splats on the same color/depth targets');
+assert.match(core, /encodeBoundarySplatDraw\(\s*encoder,\s*currentTexture\.createView\(\)[\s\S]*depthView:[\s\S]*loadColor:\s*pbrSceneApplied[\s\S]*loadDepth:\s*pbrSceneApplied/, 'splat pass must load PBR color and shared depth instead of clearing them');
 
 assert.match(core, /boundarySplatPbrSceneIdentity/, 'debug state must expose effective PBR scene identity');
 assert.match(core, /boundarySplatPbrDepthAuthority/, 'debug state must expose hardware depth authority');

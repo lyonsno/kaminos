@@ -6,6 +6,12 @@ const LEGACY_PHASE_FIELD_ALIASES = {
   vitBlock: ['phaseChunkSize.vitBlock', 'vitBlockChunkSize'],
 };
 
+const VERIFIED_PHASE_BOUNDARIES = {
+  spnPatch: 'spn-patch-chunk',
+  vitBlock: 'vit-block-chunk',
+  spnFusionOutputItems: 'spn-fusion',
+};
+
 function cloneJson(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
 }
@@ -108,10 +114,8 @@ function normalizeFrameTail(frameTail = {}, eventTrace = {}) {
   };
 }
 
-function legacyBoundaryForPhaseKey(key) {
-  if (key === 'spnPatch') return 'spn-patch-chunk';
-  if (key === 'vitBlock') return 'vit-block-chunk';
-  return null;
+function verifiedBoundaryForPhaseKey(key) {
+  return VERIFIED_PHASE_BOUNDARIES[key] || null;
 }
 
 function eventMatchesBoundary(event = {}, boundary) {
@@ -131,8 +135,8 @@ function eventMatchesPhaseKey(event = {}, key) {
 }
 
 function observedBoundaryForPhaseKey(key, events = []) {
-  const legacyBoundary = legacyBoundaryForPhaseKey(key);
-  if (legacyBoundary) return legacyBoundary;
+  const verifiedBoundary = verifiedBoundaryForPhaseKey(key);
+  if (verifiedBoundary) return verifiedBoundary;
   const event = events.find(candidate => eventMatchesPhaseKey(candidate, key));
   return event?.boundary || event?.phase || key;
 }
@@ -144,7 +148,7 @@ function observedCountForPhaseKey(key, observedBoundary, events = []) {
 function derivedAssertionStatus(key, observedCount, unsupported) {
   if (unsupported) return 'unsupported';
   if (observedCount <= 0) return 'unverified';
-  return legacyBoundaryForPhaseKey(key) ? 'verified' : 'observed';
+  return verifiedBoundaryForPhaseKey(key) ? 'verified' : 'observed';
 }
 
 function deriveBoundaryAssertions({
@@ -190,7 +194,7 @@ function fieldKeyForAssertion(assertion = {}) {
 
 function fieldBoundaryForAssertion(assertion = {}) {
   const key = fieldKeyForAssertion(assertion);
-  return key ? legacyBoundaryForPhaseKey(key) : null;
+  return key ? verifiedBoundaryForPhaseKey(key) : null;
 }
 
 function expectedBoundaryForAssertion(assertion = {}) {
@@ -223,7 +227,7 @@ function assertionVerifiesRequestedKey(assertion = {}, key, events = []) {
 function normalizeCallerBoundaryAssertion(assertion = {}) {
   const normalized = { ...assertion };
   const key = fieldKeyForAssertion(normalized);
-  if (normalized.status === 'verified' && key && !legacyBoundaryForPhaseKey(key)) {
+  if (normalized.status === 'verified' && key && !verifiedBoundaryForPhaseKey(key)) {
     normalized.reportedStatus = normalized.reportedStatus || normalized.status;
     normalized.status = 'observed';
   }

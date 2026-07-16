@@ -296,6 +296,11 @@ assert.match(index, /splat-correction-crop-target/, 'splat correction crop mode 
 assert.match(index, /window\.kaminosSetSplatCorrectionCropTransform/, 'browser witnesses can edit crop bounds through the viewport crop target');
 assert.match(index, /async function greenroomViewMesh\(/, 'Greenroom mesh rows expose an explicit View action instead of relying on ambient append state');
 assert.match(index, /async function greenroomImportMesh\(/, 'Greenroom mesh rows expose an explicit Import action for adding to the current scene');
+assert.match(index, /schema:\s*'kaminos\.asset-smoke-link\.v0'/, 'single-asset smoke links expose a route evidence schema for operator handoff');
+assert.match(index, /function kaminosMeshAssetRouteFromSearch\(/, 'direct GLB smoke links resolve mesh_root/mesh_path from the URL');
+assert.match(index, /async function loadKaminosMeshAssetRoute\(/, 'direct GLB smoke links load and register a mesh scene object automatically');
+assert.match(index, /window\.kaminosAssetSmokeLinkDebugState/, 'direct asset smoke links expose requested/effective route and registration state to witnesses');
+assert.match(index, /await loadKaminosMeshAssetRoute\(meshRoute\)/, 'Kaminos initializes direct GLB smoke routes after the scene is ready');
 assert.match(index, /const RENDER_HANDOFF_SCHEMA\s*=\s*'kaminos\.render-handoff\.v0'/, 'splat route handoff declares a compact schema identity for downstream renderers');
 assert.match(index, /class HybridMeshSplatRoute/, 'Kaminos exposes a named hybrid mesh/splat route stub before real renderer integration');
 assert.match(index, /meshDepthOcclusion:\s*false/, 'hybrid splat route stub must explicitly say mesh depth occlusion is not implemented yet');

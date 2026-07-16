@@ -1,0 +1,53 @@
+{
+  "schema": "kaminos.native-low.vivisector-candidate-head-width32-package.v0",
+  "identity": "synthetic-candidate-head-width32-benchmark-package-v0",
+  "authority": "synthetic-deterministic-candidate-head-cost-substrate-not-learned-evidence-v0",
+  "syntheticBenchmarkWeights": true,
+  "trainedWeights": false,
+  "vivisectorTrainedWeights": false,
+  "learnedWeightsUsed": false,
+  "fidelityClaim": false,
+  "visualClaim": false,
+  "model": {
+    "identity": "synthetic-cost-substrate-not-a-trained-model",
+    "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "sourceDiaulos": "pyro-native-transfer-forgemaster"
+  },
+  "grid": {
+    "sourceLowGrid": 128,
+    "receiverHighGrid": 160,
+    "candidateGrid": 160,
+    "sourceChannels": 17,
+    "sourceDeltaChannels": 17
+  },
+  "runtimeShape": {
+    "candidateHeadWidth": 32,
+    "workgroupSize": 64,
+    "inputCount": 48,
+    "candidateListSource": "real-uncapped-fixed-gate-sourceHistoryCandidates-v0",
+    "dispatchMode": "dispatchWorkgroupsIndirect-sourceHistoryDispatchArgs-v0"
+  },
+  "inputSchema": {
+    "featureOrder": [
+      "currentSource[0..16]",
+      "sourceDelta[0..16]",
+      "normalizedPosition[xyz]",
+      "subcell[xyz]",
+      "coarseLatent[0..7]"
+    ],
+    "currentSourceChannels": 17,
+    "sourceDeltaChannels": 17,
+    "normalizedPositionAndSubcell": true,
+    "coarseLatentChannels": 8,
+    "coarseLatentAuthority": "deterministic-synthetic-coarse-latent-v0"
+  },
+  "outputSchema": {
+    "identity": "compact-renderer-facing-cue-record-v0",
+    "cueRecordStrideBytes": 32,
+    "outputChannels": 8,
+    "cueRecordVec4Count": 2
+  },
+  "checksums": {
+    "weightsSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  }
+}

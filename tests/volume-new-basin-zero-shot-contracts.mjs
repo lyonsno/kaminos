@@ -1,0 +1,100 @@
+import assert from 'node:assert/strict';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const routePath = join(root, 'volume-native-low-selective-live.html');
+const corePath = join(root, 'volume-core.js');
+const runtimePath = join(root, 'native-low-selective-live-runtime.mjs');
+const witnessPath = join(root, 'volume-new-basin-zero-shot-witness.mjs');
+const trainedWitnessPath = join(root, 'volume-latest-happy-bowl-trained-witness.mjs');
+const sharedWitnessPath = join(root, 'volume-native-low-transfer-long-sequence-witness.mjs');
+const trainedModelPath = join(root, 'models/selective-head-live/latest-happy-bowl-160-to-96-step96-v0/manifest.json');
+const semanticIdentityPath = join(root, 'volume-settings-preset-semantic-identity.mjs');
+const presetPath = join(root, 'fixtures/volume/settings-presets/latest_happy_bowl/preset.json');
+const provenancePath = join(root, 'fixtures/volume/settings-presets/latest_happy_bowl/provenance.json');
+
+assert.ok(existsSync(routePath), 'native-low live route exists');
+assert.ok(existsSync(corePath), 'volume renderer core exists');
+assert.ok(existsSync(runtimePath), 'native-low inference runtime exists');
+assert.ok(existsSync(witnessPath), 'new-basin zero-shot witness exists');
+assert.ok(existsSync(trainedWitnessPath), 'latest-basin trained witness exists');
+assert.ok(existsSync(sharedWitnessPath), 'continuous shared witness exists');
+assert.ok(existsSync(trainedModelPath), 'latest-basin trained package exists');
+assert.ok(existsSync(semanticIdentityPath), 'shared settings-preset semantic verifier exists');
+assert.ok(existsSync(provenancePath), 'latest Happy Bowl detached provenance exists');
+
+const route = readFileSync(routePath, 'utf8');
+const core = readFileSync(corePath, 'utf8');
+const runtime = readFileSync(runtimePath, 'utf8');
+const witness = readFileSync(witnessPath, 'utf8');
+const trainedWitness = readFileSync(trainedWitnessPath, 'utf8');
+const sharedWitness = readFileSync(sharedWitnessPath, 'utf8');
+const trainedModel = JSON.parse(readFileSync(trainedModelPath, 'utf8'));
+const preset = JSON.parse(readFileSync(presetPath, 'utf8'));
+const provenance = JSON.parse(readFileSync(provenancePath, 'utf8'));
+const witnessContract = `${witness}\n${sharedWitness}`;
+const combined = `${route}\n${core}\n${witnessContract}`;
+
+assert.match(route, /new_basin_zero_shot/, 'route exposes an explicit new-basin assay mode');
+assert.match(route, /vsp-48617494d68e4f24bba358676733f2aaa5f03622b1747c45056de56884fe78d8/, 'assay binds the immutable operator preset');
+assert.match(route, /validateVolumeSettingsPresetSemanticIdentity/, 'assay recomputes semantic preset authority instead of trusting declarations');
+assert.match(route, /LATEST_HAPPY_BOWL_PROVENANCE_URL[\s\S]*sourceProvenance[\s\S]*sourceCommit/, 'assay consumes detached source custody');
+assert.match(route, /artifactFileSha256[\s\S]*transport-receipt-only-v0/, 'assay records loaded bytes without promoting them to semantic authority');
+assert.doesNotMatch(route, /LATEST_HAPPY_BOWL_PRESET_FILE_SHA256/, 'assay must not pin relocatable envelope bytes');
+assert.match(
+  route,
+  /lastTrustworthyEvidence\s*=\s*\{[\s\S]*artifactFileSha256[\s\S]*provenanceArtifactFileSha256[\s\S]*\}[\s\S]*JSON\.parse\(text\)[\s\S]*lastTrustworthyEvidence\s*=\s*\{[\s\S]*declaredPresetId[\s\S]*declaredContentHash[\s\S]*\}[\s\S]*validateVolumeSettingsPresetSemanticIdentity[\s\S]*validateVolumeSettingsPresetProvenance/,
+  'browser preserves transport evidence before parse and declared identity before semantic or provenance validation',
+);
+assert.match(route, /exactPresetRouteApplied[\s\S]*controlOverrides/, 'assay distinguishes exact preset application from an explicit source-grid-only override');
+assert.match(route, /requestedDomControlCount[\s\S]*requestedRouteControlCount/, 'assay does not conflate DOM controls with executable route parameters');
+assert.match(route, /raymarch-only-v0/, 'assay requests renderer-matched raymarch-only composition');
+assert.match(route, /native\$\{manualSourceGrid\}Control[\s\S]*deterministicUpscale[\s\S]*baseline128Trained[\s\S]*candidate96Trained/, 'assay presents control, deterministic upscale, and both frozen packages');
+assert.match(route, /runtimeTruthAvailable:\s*false/, 'runtime truth remains unavailable');
+assert.match(route, /syntheticDownsampleApplied:\s*false/, 'assay does not manufacture a low source from high truth');
+assert.match(route, /sameNativeStateIdentity/, 'all roles bind to one native source state');
+assert.match(route, /body\.new-basin-zero-shot #runner-wrap[\s\S]*900px[\s\S]*900px/, 'new-basin renderer uses a square source viewport');
+assert.match(route, /body\.new-basin-zero-shot \.pane img[\s\S]*object-fit:\s*contain/, 'operator panes preserve the complete rendered frame');
+
+assert.match(core, /captureDeterministicUpscale/, 'shared-device capture can request a deterministic field-upsample control');
+assert.match(core, /nativeUpsampleFluid[\s\S]*nativeUpsampleFront/, 'deterministic control materializes the runtime native-upsample buffers');
+assert.match(core, /\['splat-only-v0', 'raymarch-only-v0'\]/, 'shared-device capture admits only the named evidence compositions');
+assert.match(core, /deterministicUpscaleVisualUrl/, 'shared-device capture returns the deterministic-upscale image');
+assert.match(runtime, /nativeUpsampleFluid/, 'runtime preserves the deterministic fluid upsample before learned residual mutation');
+assert.match(runtime, /native-low-deterministic-upsample-control-v0/, 'runtime build identity changes with the new preserved buffer contract');
+assert.match(runtime, /\[48, 64, 96, 128\]\.includes\(lowGrid\)/, 'runtime admits every source grid advertised by the new-basin witness');
+assert.equal(trainedModel.identity, 'latest-happy-bowl-selective-carrier-heads-160-to-96-step96-v0');
+assert.equal(trainedModel.source.trainingBasinIdentity, 'latest-happy-bowl-vsp-48617494-step96-v0');
+assert.equal(trainedModel.source.trainingSourceCaptureSha256, '3f1c08a38c61e8affa39ed69cc85bf59e15bd4c3a5b773d4d91a64d7d7cfe035');
+assert.equal(Object.hasOwn(preset, 'source'), false, 'portable preset embeds capture provenance');
+assert.equal(Object.hasOwn(preset, 'writtenAt'), false, 'portable preset embeds capture time');
+assert.equal(Object.hasOwn(preset.preset, 'savedAt'), false, 'semantic payload embeds capture time');
+assert.equal(new URL(preset.preset.route).origin, 'http://kaminos.invalid', 'portable preset embeds a live checkout origin');
+assert.equal(provenance.identity, 'kaminos-volume-settings-preset-provenance-v1');
+assert.equal(provenance.presetId, preset.presetId);
+assert.equal(provenance.sourceCommit, '027bcaca138da6e545065b90c5607b5a4a1b2965');
+assert.equal(provenance.historicalArtifactFileSha256, 'bf13e68b6904cfc5677b13af14afe4426f15f9649bfda22105eed8611c5d0967');
+assert.match(runtime, /native-low-transfer-latest-happy-bowl-160-to-96-step96-v0/, 'runtime exposes the latest-basin package as a distinct route');
+assert.match(runtime, /97e25caa711395f26e8b39f22c506e38e772bfc1a12cf518d5e048511d2bee08/, 'runtime pins the latest-basin model checksum');
+
+assert.match(witness, /--new-basin-zero-shot/, 'named witness cannot silently run the legacy three-role mode');
+assert.match(trainedWitness, /--latest-basin-trained-comparison/, 'trained witness cannot silently run the legacy zero-shot comparison');
+assert.match(trainedWitness, /--new-basin-zero-shot/, 'trained witness retains the exact latest-basin renderer and preset route');
+assert.match(witnessContract, /new-basin-zero-shot-raymarch-witness-v0/, 'witness names its evidence identity');
+assert.match(witnessContract, /baseline128Trained[\s\S]*candidate96Trained[\s\S]*deterministicUpscale/, 'witness requires all four visual roles in presentation order');
+assert.match(witnessContract, /requestedBasinIdentity[\s\S]*effectiveBasinIdentity/, 'witness rejects silent basin substitution');
+assert.match(witnessContract, /exactPresetRouteApplied[\s\S]*sourceGridOverrideApplied[\s\S]*controlOverrides/, 'witness proves exact preset custody or records the grid override explicitly');
+assert.match(witnessContract, /latest_happy_bowl preset \+ explicit source-grid override/, 'operator page does not call an overridden route the exact preset');
+assert.match(witnessContract, /requestedComposition[\s\S]*effectiveComposition/, 'witness rejects silent renderer substitution');
+assert.match(witnessContract, /failurePhase[\s\S]*lastTrustworthyEvidence/, 'witness writes phase-bearing failure reports');
+assert.match(witnessContract, /lastObservedRouteState/, 'route-settle failures preserve the browser state that explains the failure');
+assert.match(witnessContract, /runtimeTruthAvailable[\s\S]*syntheticDownsampleApplied/, 'witness records runtime authority boundaries');
+assert.match(witnessContract, /modelSha256/, 'witness records frozen model checksums');
+assert.match(witnessContract, /captureViewport[\s\S]*1200[\s\S]*1200/, 'new-basin witness captures four legible square panes');
+assert.match(sharedWitness, /Native \$\{expectedGrid\} control[\s\S]*128-trained zero-shot[\s\S]*96-trained zero-shot[\s\S]*Deterministic upscale/, 'operator legend follows the actual top-left, top-right, bottom-left, bottom-right pane order');
+assert.match(route, /latest_basin_trained_comparison[\s\S]*latestBasin96Trained/, 'live route presents the basin-native package as a distinct visual role');
+assert.match(sharedWitness, /latestBasin96Trained[\s\S]*candidate96Trained[\s\S]*deterministicUpscale/, 'trained witness requires latest-basin, legacy-96, and deterministic controls');
+
+console.log('new-basin zero-shot contracts passed');
