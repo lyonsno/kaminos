@@ -8,6 +8,7 @@ import {
   validateCameraHoldoutReport,
   validateCaptureReportFootprintPreflight,
 } from './boundary-splat-camera-holdout-oracle.mjs';
+import { validateSplatRadianceParityReport } from './volume-splat-radiance-parity-contract.mjs';
 
 const SCHEMA = 'kaminos.volume.raymarch-filament-orbit-witness.v0';
 const WRAPPER_ROUTE = 'exact-basin-selective-head-live-v0';
@@ -25,6 +26,7 @@ const outDir = resolve(String(args.get('--out-dir') || '/tmp/kaminos-raymarch-fi
 const reportPath = resolve(String(args.get('--report') || `${outDir}/report.json`));
 const captureReportPath = resolve(`${outDir}/capture-report.json`);
 const holdoutReportPath = resolve(String(args.get('--holdout-report') || `${outDir}/camera-holdout-report.json`));
+const radianceParityReportPath = resolve(String(args.get('--radiance-parity-report') || `${outDir}/radiance-parity-report.json`));
 const rayStepCounts = parseIntegerList(args.get('--ray-steps') || '48,96,160');
 const orbitAngles = parseNumberList(args.get('--orbit-angles') || '-0.42,-0.28,-0.14,0,0.14,0.28,0.42');
 const flowKernelStrength = Number(args.get('--flow-kernel-strength') ?? 1);
@@ -267,6 +269,10 @@ try {
     captures.push(await captureAndPersist(camera, 'worldCovariance', maxRaySteps));
     failurePhase = `camera-${camera.index}-flow-kernel-moment-covariance`;
     captures.push(await captureAndPersist(camera, 'kernelMomentCovariance', maxRaySteps));
+    failurePhase = `camera-${camera.index}-world-covariance-current-additive`;
+    captures.push(await captureAndPersist(camera, 'worldCovarianceAdditive', maxRaySteps));
+    failurePhase = `camera-${camera.index}-world-covariance-matched-presentation`;
+    captures.push(await captureAndPersist(camera, 'worldCovarianceMatchedPresentation', maxRaySteps));
     failurePhase = `camera-${camera.index}-ridge-transport-ridge-extinction`;
     captures.push(await captureAndPersist(camera, 'ridgeTransportRidgeExtinction', maxRaySteps));
     failurePhase = `camera-${camera.index}-ridge-transport-total-extinction`;
@@ -379,6 +385,63 @@ try {
   writeFileSync(captureReportPath, JSON.stringify(report, null, 2));
   const captureMap = new Map(report.captures.map(capture => [capture.key, capture]));
   const firstAudit = report.captures.find(capture => capture.footprintAudit)?.footprintAudit;
+  failurePhase = 'radiance-parity-validation';
+  const presentationArms = [
+    ['current-additive-v0', 'worldCovarianceAdditive'],
+    ['matched-presentation-v0', 'worldCovarianceMatchedPresentation'],
+  ].map(([id, mode]) => {
+    const armCaptures = initialization.cameras.map(camera => captureMap.get(`${camera.index}-${mode}-${maxRaySteps}`));
+    const first = armCaptures[0];
+    return {
+      id,
+      requestedRoute: id,
+      effectiveRoute: first?.boundarySplatPresentationReceipt?.effectiveMode,
+      targetFormat: id === 'current-additive-v0' ? 'rgba8unorm' : first?.boundarySplatPresentationReceipt?.targetFormat,
+      resolveIdentity: first?.boundarySplatPresentationReceipt?.resolveIdentity,
+      blendIdentity: first?.boundarySplatPresentationReceipt?.blendIdentity,
+      intermediateClamped: first?.boundarySplatPresentationReceipt?.intermediateClamped,
+      intermediateReadbackStatus: first?.boundarySplatPresentationReceipt?.intermediateReadbackStatus,
+      fallbackReason: first?.boundarySplatPresentationReceipt?.fallbackReason ?? null,
+      captures: armCaptures.map(capture => ({
+        cameraIndex: capture.cameraIndex,
+        cameraPoseHash: capture.cameraPoseHash,
+        pixelHash: capture.pixelHash,
+        candidateCount: capture.boundarySplatCandidateCount,
+        candidatePayloadSha256: capture.footprintAudit?.candidatePayloadSha256,
+        controlsSha256: initialization.summary.frozenState.controlsHash,
+        nonblank: capture.metrics?.nonblank === true,
+        imagePath: capture.imagePath,
+        metrics: capture.metrics,
+        hdrTelemetry: capture.boundarySplatPresentationReceipt?.hdrTelemetry || null,
+      })),
+    };
+  });
+  const radianceParityReport = {
+    schema: 'kaminos.volume.splat-radiance-parity.v0',
+    status: 'completed',
+    failurePhase: null,
+    runStartedAt,
+    runCompletedAt: new Date().toISOString(),
+    requestedRoute: '/volume-selective-head-live.html',
+    effectiveWrapperRoute: report.effectiveWrapperRoute,
+    effectiveRendererRoute: report.effectiveRendererRoute,
+    backend: report.finalState.backend,
+    cameraCount: initialization.cameras.length,
+    curve: { exposure: 0.96, vignetteBase: 0.80, vignetteGain: 0.18, power: 0.84 },
+    source: {
+      commit: report.commit,
+      sameStateCaptureId: report.frozenState.sameStateCaptureId,
+      controlsSha256: report.frozenState.controlsHash,
+      candidatePayloadSha256: firstAudit?.candidatePayloadSha256,
+      candidateCount: firstAudit?.candidateCount,
+      fluidSha256: report.replayAuthority.warmupReceipt?.fluidSha256,
+      frontSha256: report.replayAuthority.warmupReceipt?.frontSha256,
+    },
+    arms: presentationArms,
+  };
+  validateSplatRadianceParityReport(radianceParityReport);
+  writeFileSync(radianceParityReportPath, JSON.stringify(radianceParityReport, null, 2));
+  lastTrustworthyEvidence.radianceParityReport = fileArtifact(radianceParityReportPath);
   const cameraRows = [];
   for (const camera of initialization.cameras) {
     const targetCapture = captureMap.get(`${camera.index}-raymarch-${maxRaySteps}`);
@@ -468,6 +531,7 @@ try {
     status: report.status,
     report: reportPath,
     holdoutReport: holdoutReportPath,
+    radianceParityReport: radianceParityReportPath,
     captureCount: report.captures.length,
     frozenDeterminism: report.frozenDeterminism,
     filamentSummary: report.filamentContinuity.summary,
@@ -488,6 +552,16 @@ try {
   };
   if (existsSync(captureReportPath)) {
     failureReport.lastTrustworthyEvidence.captureReport = fileArtifact(captureReportPath);
+  }
+  if (args.has('--radiance-parity-report')) {
+    writeFileSync(radianceParityReportPath, JSON.stringify({
+      schema: 'kaminos.volume.splat-radiance-parity.v0',
+      status: 'failed',
+      failurePhase,
+      error: failureReport.error,
+      requestedRoute: '/volume-selective-head-live.html',
+      lastTrustworthyEvidence,
+    }, null, 2));
   }
   writeFileSync(reportPath, JSON.stringify(failureReport, null, 2));
   console.error(JSON.stringify(failureReport, null, 2));
@@ -777,10 +851,15 @@ function runtimeInitializationSource(config) {
           prototype.setControls({ boundarySplatMode: 'learned_conserved', raySteps: request.raySteps });
           operator.setComposition('splat-only-v0');
           modeAuthority = 'learned-camera-facing-billboard-v0';
-        } else if (request.mode === 'worldCovariance') {
+        } else if (request.mode === 'worldCovariance'
+          || request.mode === 'worldCovarianceAdditive'
+          || request.mode === 'worldCovarianceMatchedPresentation') {
           operator.setAppearanceAssay('off');
           operator.setPresentation('beauty');
           prototype.setControls({ boundarySplatMode: 'world_covariance', raySteps: request.raySteps });
+          prototype.setBoundarySplatPresentationMode(
+            request.mode === 'worldCovarianceMatchedPresentation' ? 'matched-presentation-v0' : 'current-additive-v0',
+          );
           operator.setComposition('splat-only-v0');
           modeAuthority = 'world-gradient-tangent-covariance-v0';
         } else if (request.mode === 'kernelMomentCovariance') {
@@ -826,7 +905,14 @@ function runtimeInitializationSource(config) {
         const metrics = pixelMetrics({ ...sample.image, rgba });
         if (!metrics.nonblank) throw new Error('missing, partial, or blank capture: ' + request.key);
         const effectiveRaySteps = sample.volumePresentationReceipt?.effectiveRayQuality?.raySteps ?? sample.controls?.raySteps ?? null;
-        const footprintAudit = ['analyticBillboard', 'learnedBillboard', 'worldCovariance', 'kernelMomentCovariance'].includes(request.mode)
+        const footprintAudit = [
+          'analyticBillboard',
+          'learnedBillboard',
+          'worldCovariance',
+          'kernelMomentCovariance',
+          'worldCovarianceAdditive',
+          'worldCovarianceMatchedPresentation',
+        ].includes(request.mode)
           ? await prototype.sampleBoundarySplatFootprintAudit({ now: fixedNow })
           : null;
         const record = {
@@ -861,6 +947,7 @@ function runtimeInitializationSource(config) {
           flowKernelIdentity: sample.flowKernelIdentity,
           flowKernelEffective: sample.flowKernelEffective,
           flowKernelCandidateAdmissionAuthority: sample.flowKernelCandidateAdmissionAuthority,
+          boundarySplatPresentationReceipt: sample.boundarySplatPresentationReceipt,
           volumePresentationReceipt: sample.volumePresentationReceipt,
           raymarchSmokePresentationReceipt: sample.raymarchSmokePresentationReceipt,
           appearanceDecompositionReceipt: sample.appearanceDecompositionReceipt,
@@ -1206,6 +1293,7 @@ function parseArgs(argv) {
     '--out-dir',
     '--report',
     '--holdout-report',
+    '--radiance-parity-report',
     '--ray-steps',
     '--orbit-angles',
     '--flow-kernel-strength',
