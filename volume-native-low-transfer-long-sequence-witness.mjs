@@ -5,14 +5,26 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
-const SCHEMA = 'kaminos.volume.native-low-transfer-long-sequence-witness.v0';
-const IDENTITY = 'native-low-two-model-long-sequence-witness-v0';
-const PRESENTED_FRAME_AUTHORITY = 'cdp-presented-three-role-frame-after-one-native-step-v0';
 const args = parseArgs(process.argv.slice(2));
+const newBasinZeroShot = args.has('--new-basin-zero-shot');
+const SCHEMA = newBasinZeroShot
+  ? 'kaminos.volume.new-basin-zero-shot-raymarch-witness.v0'
+  : 'kaminos.volume.native-low-transfer-long-sequence-witness.v0';
+const IDENTITY = newBasinZeroShot
+  ? 'new-basin-zero-shot-raymarch-witness-v0'
+  : 'native-low-two-model-long-sequence-witness-v0';
+const PRESENTED_FRAME_AUTHORITY = newBasinZeroShot
+  ? 'cdp-presented-four-role-raymarch-frame-after-one-native-step-v0'
+  : 'cdp-presented-three-role-frame-after-one-native-step-v0';
+const captureViewport = newBasinZeroShot
+  ? Object.freeze({ width: 1200, height: 1200 })
+  : Object.freeze({ width: 1800, height: 720 });
 const expectedGrid = integerArg('--expected-grid', 96);
 const controlRole = `native${expectedGrid}Control`;
 const SEQUENCE_AUTHORITY = `frame-locked-consecutive-native-${expectedGrid}-simulation-steps-v0`;
-const ROLES = Object.freeze([controlRole, 'baseline128Trained', 'candidate96Trained']);
+const ROLES = Object.freeze(newBasinZeroShot
+  ? [controlRole, 'deterministicUpscale', 'baseline128Trained', 'candidate96Trained']
+  : [controlRole, 'baseline128Trained', 'candidate96Trained']);
 const MODELS = Object.freeze({
   baseline128Trained: Object.freeze({
     identity: 'exact-basin-selective-carrier-heads-160-to-128-v0',
@@ -42,6 +54,7 @@ let captureSocket = null;
 let captureTargetUrl = null;
 let ffmpeg = null;
 let lastTrustworthyEvidence = null;
+let lastObservedRouteState = null;
 const frames = [];
 let screenshotRetryCount = 0;
 
@@ -94,7 +107,12 @@ try {
   assert.ok(playbackFps > 0, '--fps must be positive');
   assert.ok(timeoutMs > 0, '--timeout-ms must be positive');
   assert.ok(captureCallTimeoutMs > 0, '--capture-call-timeout-ms must be positive');
-  assert.ok([64, 96, 128].includes(expectedGrid), '--expected-grid must be 64, 96, or 128');
+  const supportedGrid = newBasinZeroShot
+    ? [48, 64, 96, 128].includes(expectedGrid)
+    : [64, 96, 128].includes(expectedGrid);
+  assert.ok(supportedGrid, newBasinZeroShot
+    ? '--expected-grid must be 48, 64, 96, or 128'
+    : '--expected-grid must be 64, 96, or 128');
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
   mkdirSync(dirname(contactPath), { recursive: true });
@@ -108,7 +126,7 @@ try {
     '--disable-renderer-backgrounding',
     '--disable-backgrounding-occluded-windows',
     `--remote-debugging-port=${port}`,
-    '--window-size=1800,720',
+    `--window-size=${captureViewport.width},${captureViewport.height}`,
     '--no-first-run',
     '--no-default-browser-check',
     'about:blank',
@@ -120,8 +138,8 @@ try {
   await socket.call('Page.enable');
   await socket.call('Runtime.enable');
   await socket.call('Emulation.setDeviceMetricsOverride', {
-    width: 1800,
-    height: 720,
+    width: captureViewport.width,
+    height: captureViewport.height,
     deviceScaleFactor: 2,
     mobile: false,
   });
@@ -133,7 +151,11 @@ try {
   const settleStarted = performance.now();
   while (performance.now() - settleStarted < timeoutMs) {
     state = await evaluate(socket, 'window.__kaminosNativeLowSelectiveLive?.debugState?.()');
-    if (state?.status === 'failed') throw new Error(state.error || state.failureReason || 'native-low route failed');
+    lastObservedRouteState = state;
+    if (state?.status === 'failed') {
+      const routeError = state?.lastTrustworthyEvidence?.error || state.error || state.failureReason || 'native-low route failed';
+      throw new Error(routeError);
+    }
     const settledStatus = ['running', 'paused'].includes(state?.status);
     const pausedManualRoute = state?.status !== 'paused' || state?.capturePaused === true;
     if (settledStatus && pausedManualRoute && state?.nativeGrid === expectedGrid) break;
@@ -144,6 +166,23 @@ try {
   assert.equal(state?.nativeGrid, expectedGrid, 'native-low route used the wrong source grid');
   assert.equal(state?.runtimeTruthAvailable, false, 'runtime truth must be unavailable');
   assert.equal(state?.syntheticDownsampleApplied, false, 'native-low route silently used a synthetic downsample');
+  if (newBasinZeroShot) {
+    assert.equal(state?.requestedBasinIdentity, 'vsp-48617494d68e4f24bba358676733f2aaa5f03622b1747c45056de56884fe78d8', 'requested basin identity drifted');
+    const presetReceipt = state?.latestHappyBowlPresetReceipt || {};
+    const exactPresetExpected = expectedGrid === Number(presetReceipt.presetGrid);
+    assert.equal(presetReceipt.exactPresetRouteApplied, exactPresetExpected, 'exact preset route status drifted');
+    assert.equal(presetReceipt.sourceGridOverrideApplied, !exactPresetExpected, 'source-grid override status drifted');
+    if (exactPresetExpected) {
+      assert.deepEqual(presetReceipt.controlOverrides, {}, 'exact preset route carried hidden control overrides');
+      assert.equal(state?.effectiveBasinIdentity, state.requestedBasinIdentity, 'exact preset route silently substituted its basin identity');
+    } else {
+      assert.deepEqual(presetReceipt.controlOverrides, {
+        volume_resolution: { requested: String(expectedGrid), preset: String(presetReceipt.presetGrid) },
+      }, 'grid-overridden route did not record its sole control override');
+      assert.equal(state?.effectiveBasinIdentity, `${state.requestedBasinIdentity}+volume_resolution=${expectedGrid}`, 'overridden route impersonated the exact preset identity');
+    }
+    assert.equal(state?.latestHappyBowlPresetReceipt?.presetFileSha256, 'bf13e68b6904cfc5677b13af14afe4426f15f9649bfda22105eed8611c5d0967', 'preset file checksum drifted');
+  }
   assertModels(state.models || state.modelPackages);
 
   failurePhase = 'capture-handshake';
@@ -237,6 +276,9 @@ try {
     effectiveBackend: state.effectiveBackend,
     requestedComposition: state.requestedComposition,
     effectiveComposition: state.effectiveComposition,
+    requestedBasinIdentity: state.requestedBasinIdentity || null,
+    effectiveBasinIdentity: state.effectiveBasinIdentity || null,
+    latestHappyBowlPresetReceipt: state.latestHappyBowlPresetReceipt || null,
     nativeGrid: expectedGrid,
     runtimeTruthAvailable: false,
     syntheticDownsampleApplied: false,
@@ -253,11 +295,13 @@ try {
     screenshotRetryCount,
     width,
     height,
+    captureViewport,
     frames,
     video: artifact(out),
     contactSheet: artifact(contactPath),
     operatorPage: artifact(pagePath),
     lastTrustworthyEvidence,
+    lastObservedRouteState,
   };
   writeReport(report);
   console.log(JSON.stringify({
@@ -284,6 +328,7 @@ try {
     screenshotRetryCount,
     frames,
     lastTrustworthyEvidence,
+    lastObservedRouteState,
   });
   console.error(JSON.stringify({
     ok: false,
@@ -325,12 +370,14 @@ function validateFrameReceipt(receipt, frameIndex, previousStep, previousStateId
     assert.equal(roleReceipt.sourceStepIdentity, receipt.sourceStepIdentity, `${role} used a different source step at frame ${frameIndex}`);
     assert.equal(roleReceipt.fallbackReason ?? null, null, `${role} fell back at frame ${frameIndex}`);
     assert.equal(roleReceipt.staleFrameReason ?? null, null, `${role} reused stale output at frame ${frameIndex}`);
-    const candidateCount = Number(roleReceipt.candidateCount);
-    const instanceCount = Number(roleReceipt.instanceCount);
-    const overflowCount = Number(roleReceipt.overflowCount);
-    assert.ok(Number.isInteger(candidateCount) && candidateCount > 0, `${role} has no positive candidateCount at frame ${frameIndex}`);
-    assert.equal(instanceCount, candidateCount, `${role} clipped candidates at frame ${frameIndex}`);
-    assert.equal(overflowCount, 0, `${role} overflowed at frame ${frameIndex}`);
+    if (receipt.requestedComposition === 'splat-only-v0') {
+      const candidateCount = Number(roleReceipt.candidateCount);
+      const instanceCount = Number(roleReceipt.instanceCount);
+      const overflowCount = Number(roleReceipt.overflowCount);
+      assert.ok(Number.isInteger(candidateCount) && candidateCount > 0, `${role} has no positive candidateCount at frame ${frameIndex}`);
+      assert.equal(instanceCount, candidateCount, `${role} clipped candidates at frame ${frameIndex}`);
+      assert.equal(overflowCount, 0, `${role} overflowed at frame ${frameIndex}`);
+    }
     if (MODELS[role]) {
       assert.equal(roleReceipt.modelIdentity, MODELS[role].identity, `${role} used the wrong model at frame ${frameIndex}`);
       assert.equal(roleReceipt.modelSha256, MODELS[role].sha256, `${role} used the wrong model checksum at frame ${frameIndex}`);
@@ -443,9 +490,9 @@ function writeOperatorPage() {
   writeFileSync(pagePath, `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Native ${expectedGrid} two-model long motion</title><style>
-:root{color-scheme:dark;font-family:Inter,system-ui,sans-serif;background:#080a0b;color:#eef2f3}*{box-sizing:border-box}body{margin:0;background:#080a0b}header{padding:12px 16px;border-bottom:1px solid #30383a;background:#111516}h1{font-size:17px;margin:0 0 4px}p{font-size:12px;color:#aab5b8;margin:0}.roles{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#30383a}.role{padding:9px 12px;background:#121617}.role strong{display:block;font-size:13px}.role span{display:block;color:#98a6a9;font-size:10px;margin-top:2px}main{padding:0 0 18px}video{display:block;width:100%;height:auto;background:#000}nav{padding:12px 16px}a{color:#8fd4ff}@media(max-width:760px){.roles{grid-template-columns:1fr}.role{min-height:48px}}
-</style></head><body><header><h1>Native ${expectedGrid} control vs both learned transfer models</h1><p>${requestedFrameCount} consecutive simulation steps at ${playbackFps} fps. Splat-only. No native-phase high-grid truth target.</p></header>
-<section class="roles"><div class="role"><strong>Native ${expectedGrid} control</strong><span>No learned residual</span></div><div class="role"><strong>128-trained zero-shot</strong><span>${MODELS.baseline128Trained.identity}</span></div><div class="role"><strong>96-trained zero-shot</strong><span>${MODELS.candidate96Trained.identity}</span></div></section>
+:root{color-scheme:dark;font-family:Inter,system-ui,sans-serif;background:#080a0b;color:#eef2f3}*{box-sizing:border-box}body{margin:0;background:#080a0b}header{padding:12px 16px;border-bottom:1px solid #30383a;background:#111516}h1{font-size:17px;margin:0 0 4px}p{font-size:12px;color:#aab5b8;margin:0}.roles{display:grid;grid-template-columns:repeat(${newBasinZeroShot ? 4 : 3},1fr);gap:1px;background:#30383a}.role{padding:9px 12px;background:#121617}.role strong{display:block;font-size:13px}.role span{display:block;color:#98a6a9;font-size:10px;margin-top:2px}main{padding:0 0 18px}video{display:block;width:100%;height:auto;background:#000}nav{padding:12px 16px}a{color:#8fd4ff}@media(max-width:760px){.roles{grid-template-columns:1fr}.role{min-height:48px}}
+</style></head><body><header><h1>Native ${expectedGrid} ${newBasinZeroShot ? 'new-basin raymarch reconstruction' : 'control vs both learned transfer models'}</h1><p>${requestedFrameCount} consecutive simulation steps at ${playbackFps} fps. ${newBasinZeroShot ? (expectedGrid === 96 ? 'Raymarch-only, exact latest_happy_bowl preset.' : 'Raymarch-only, latest_happy_bowl preset + explicit source-grid override.') : 'Splat-only.'} No native-phase high-grid truth target.</p></header>
+<section class="roles"><div class="role"><strong>Native ${expectedGrid} control</strong><span>No learned residual</span></div>${newBasinZeroShot ? '<div class="role"><strong>Deterministic upscale</strong><span>Native field at 160^3, no learned residual</span></div>' : ''}<div class="role"><strong>128-trained zero-shot</strong><span>${MODELS.baseline128Trained.identity}</span></div><div class="role"><strong>96-trained zero-shot</strong><span>${MODELS.candidate96Trained.identity}</span></div></section>
 <main><video autoplay loop controls muted playsinline src="./${videoName}"></video><nav><a href="./${contactName}">Open first / middle / last contact sheet</a></nav></main></body></html>\n`);
 }
 

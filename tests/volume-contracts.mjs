@@ -23,7 +23,7 @@ const fullGridFieldExport = readFileSync(join(root, 'volume-full-grid-field-expo
 
 assert.match(nativeLowSelectiveCompose, /native-low-simulator-state-no-synthetic-downsample-v0/, 'native-low application records genuine simulator input authority');
 assert.match(nativeLowSelectiveCompose, /runtimeTruthAvailable["']?\s*:\s*False/, 'native-low application makes truth unavailable at application time');
-assert.match(nativeLowSelectiveCompose, /exact-basin-selective-carrier-heads-160-to-128-v0/, 'native-low application binds the frozen model identity');
+assert.match(nativeLowSelectiveCompose, /return f"exact-basin-selective-carrier-heads-\{high_grid\}-to-\{low_grid\}-v0"/, 'native-low application derives the frozen model identity from the validated model grids');
 assert.match(nativeLowSelectiveCompose, /modelSha256/, 'native-low application records the frozen model checksum');
 assert.match(nativeLowSelectiveCompose, /\[low_grid, low_grid, low_grid, 16\]/, 'native-low application validates the complete low fluid shape');
 assert.match(nativeLowSelectiveCompose, /\[high_grid, high_grid, high_grid, 16\]/, 'native-low application records the complete predicted high fluid shape');
@@ -38,7 +38,7 @@ assert.match(fullGridFieldExport, /native-low-simulator-state-no-synthetic-downs
 assert.match(fullGridFieldExport, /native-low-selective-composition-held-only/, 'native-low learned fields cannot silently advance as initialized truth');
 assert.match(core, /NATIVE_LOW_HELD_INITIALIZATION_AUTHORITY\s*=\s*'native-low-simulator-held-control-v0'/, 'browser importer names native-low control authority');
 assert.match(core, /NATIVE_LOW_SELECTIVE_INITIALIZATION_AUTHORITY\s*=\s*'frozen-exact-basin-heads-applied-to-native-low-state-v0'/, 'browser importer names native-low learned treatment authority');
-assert.match(core, /isNativeLowHeld[\s\S]*isNativeLowSelective[\s\S]*!isCoarseReceiver && !isSelectiveComposition && !isPhaseAlignedHeld && !isNativeLowHeld && !isNativeLowSelective/, 'browser importer explicitly admits both native-low held authorities without broad fallback');
+assert.match(core, /isNativeLowHeld[\s\S]*isNativeLowSelective[\s\S]*isNativeLowCrossGridSelective[\s\S]*!isCoarseReceiver && !isSelectiveComposition && !isPhaseAlignedHeld[\s\S]*&& !isNativeLowHeld && !isNativeLowSelective && !isNativeLowCrossGridSelective && !isLiveReplay/, 'browser importer explicitly admits native-low held, selective, cross-grid, and checksum replay authorities without broad fallback');
 
 assert.match(index, /data-tab="volume"/, 'sidebar exposes a Volume tab');
 assert.match(index, /id="tab-volume"/, 'Volume tab content is present');

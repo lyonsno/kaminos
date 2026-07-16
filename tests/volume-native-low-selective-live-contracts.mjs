@@ -36,7 +36,7 @@ const candidateHeadPackage = readFileSync(candidateHeadPackagePath, 'utf8');
 const combined = `${route}\n${witness}\n${native64Witness}\n${runtime}\n${core}\n${candidateHeadPackage}`;
 
 assert.match(route, /native-low-live-browser-webgpu-inference-v0/, 'route names browser/WebGPU frozen-model inference authority');
-assert.match(combined, /native-low-resident-cue-buffer-lifecycle-stress-v1/, 'route and witness carry fail-loud runtime build identity');
+assert.match(combined, /native-low-deterministic-upsample-control-v0/, 'route and witness carry fail-loud runtime build identity');
 assert.match(witness, /expectedRuntimeBuildIdentity[\s\S]*runtimeBuildIdentity[\s\S]*cachedCodeRejection/, 'witness records expected/effective runtime build identity and cached-code rejection');
 assert.match(witness, /user-data-dir[\s\S]*Network\.setCacheDisabled[\s\S]*cacheBustUrl/, 'witness uses a fresh browser profile, disables cache, and cache-busts the route URL');
 assert.match(witness, /servedSourceBundleSha256[\s\S]*fresh-http-served-source-bundle-sha256-v0[\s\S]*runtimeBuildIdentityPresent/, 'witness binds receipt to the HTTP-served source bundle hash and runtime marker');

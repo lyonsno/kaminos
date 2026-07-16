@@ -25,7 +25,7 @@ export const NATIVE_LOW_FIXED_SOURCE_DELTA_ADMISSION = 'native-low-fixed-source-
 export const NATIVE_LOW_SOURCE_PROXIMAL_TILE_CANDIDATE = 'native-low-source-proximal-tile-candidate-v0';
 export const NATIVE_LOW_CANDIDATE_HEAD_COST_MICROBENCHMARK = 'native-low-candidate-head-cost-microbenchmark-v0';
 export const NATIVE_LOW_RESIDENT_CUE_BUFFER_LIFECYCLE_STRESS = 'native-low-resident-cue-buffer-lifecycle-stress-v0';
-export const NATIVE_LOW_RUNTIME_BUILD_IDENTITY = 'native-low-resident-cue-buffer-lifecycle-stress-v1';
+export const NATIVE_LOW_RUNTIME_BUILD_IDENTITY = 'native-low-deterministic-upsample-control-v0';
 export const NATIVE_LOW_PREDICTED_ACTIVITY_CUE_PROJECTION = 'native-low-predicted-front-carrier-activity-max-projection-v0';
 export const NATIVE_LOW_LEARNED_FLOW_ACTIVITY_CUE_PROJECTION = 'native-low-learned-flow-activity-head-projection-v0';
 export const NATIVE_LOW_LEARNED_FLOW_ACTIVITY_MODEL_IDENTITY = 'exact-basin-derived-flow-activity-head-160-to-96-v0';
@@ -50,7 +50,7 @@ export const NATIVE_LOW_TRAINED_PACKAGE_ROUTES = Object.freeze({
     modelSha256: NATIVE_LOW_TRANSFER_160_TO_128_MODEL_SHA256,
     trainedLowGrid: 128,
     trainedHighGrid: 160,
-    effectiveSourceGrid: 'native-64-native-96-or-native-128-runtime-selected-v0',
+    effectiveSourceGrid: 'native-48-native-64-native-96-or-native-128-runtime-selected-v0',
     promotionRole: 'existing-zero-shot-product-candidate',
     dispatchIdentity: NATIVE_LOW_SUPPORT_POSITIVE_INDIRECT_RESIDUAL_DISPATCH,
     sourceHistoryDispatchIdentity: 'sourceHistoryDispatchArgs',
@@ -67,7 +67,7 @@ export const NATIVE_LOW_TRAINED_PACKAGE_ROUTES = Object.freeze({
     modelSha256: NATIVE_LOW_TRANSFER_160_TO_96_MODEL_SHA256,
     trainedLowGrid: 96,
     trainedHighGrid: 160,
-    effectiveSourceGrid: 'native-64-native-96-or-native-128-runtime-selected-v0',
+    effectiveSourceGrid: 'native-48-native-64-native-96-or-native-128-runtime-selected-v0',
     promotionRole: 'deployment-grid-product-candidate',
     trainingInputAuthority: SELECTIVE_HEAD_LIVE_MODEL_160_TO_96.source.trainingInputAuthority,
     trainingInputSyntheticDownsample: SELECTIVE_HEAD_LIVE_MODEL_160_TO_96.source.trainingInputSyntheticDownsample,
@@ -181,6 +181,7 @@ const SUPPORT_THRESHOLD: f32 = ${SELECTIVE_HEAD_LIVE_MODEL.composition.supportTh
 @group(0) @binding(5) var<storage, read_write> stats: array<atomic<u32>>;
 @group(0) @binding(6) var<storage, read_write> lowSnapshotFluid: array<vec4<f32>>;
 @group(0) @binding(7) var<storage, read_write> lowSnapshotFrontAndSupport: array<u32>;
+@group(0) @binding(8) var<storage, read_write> nativeUpsampleFluid: array<vec4<f32>>;
 
 struct FeatureBundle {
   features: array<f32, ${FEATURE_COUNT}>,
@@ -238,6 +239,7 @@ fn makeFeatureBundle(gid: vec3<u32>, writeBase: bool) -> FeatureBundle {
     lowValues[slot * 4u + 3u] = value.w;
     if (writeBase) {
       predictedFluid[highIndex * SLOTS_PER_CELL + slot] = value;
+      nativeUpsampleFluid[highIndex * SLOTS_PER_CELL + slot] = value;
     }
   }
   lowValues[16] = lowFront[lowIndex];
@@ -815,7 +817,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
   const selectedModel = route.model;
   const selectedModelUrl = route.modelUrl;
   const lowGrid = Number(sourceGrid);
-  if (![64, 96, 128].includes(lowGrid)) throw new Error(`unsupportedEffectiveSourceGrid:${sourceGrid}`);
+  if (![48, 64, 96, 128].includes(lowGrid)) throw new Error(`unsupportedEffectiveSourceGrid:${sourceGrid}`);
   const response = await fetch(selectedModelUrl, { cache: 'no-store' });
   if (!response.ok) throw new Error(`modelFetchFailed:${response.status}`);
   const modelBytes = await response.arrayBuffer();
@@ -845,6 +847,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
   const lowSnapshotFront = makeBuffer(`native-low shared-device low snapshot front ${lowGrid}^3 plus support indices`, lowFrontSnapshotAndSupportBytes);
   const predictedFluid = makeBuffer('native-low shared-device predicted fluid 160^3', highFluidBytes);
   const predictedFront = makeBuffer('native-low shared-device predicted front 160^3', highFrontBytes);
+  const nativeUpsampleFluid = makeBuffer('native-low shared-device native-upsample fluid 160^3', highFluidBytes);
   const nativeUpsampleFront = makeBuffer('native-low shared-device native-upsample front 160^3', highFrontBytes);
   const stats = makeBuffer('native-low shared-device support stats', STATS_BYTES);
   const sourceHistoryCandidates = makeBuffer('native-low fixed source-delta high-cell candidates', highCells * Uint32Array.BYTES_PER_ELEMENT);
@@ -876,7 +879,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
   if (errors.length) throw new Error(`native-low shared-device WGSL failed:${errors.map(error => `${error.lineNum}:${error.linePos} ${error.message}`).join('; ')}`);
   const layout = device.createBindGroupLayout({
     label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} layout`,
-    entries: Array.from({ length: 8 }, (_, binding) => ({
+    entries: Array.from({ length: 9 }, (_, binding) => ({
       binding,
       visibility: GPUShaderStage.COMPUTE,
       buffer: { type: binding === 0 || binding === 1 || binding === 4 ? 'read-only-storage' : 'storage' },
@@ -1354,7 +1357,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
     noHiddenCaps: true,
     supportCompactionIdentity: NATIVE_LOW_SUPPORT_POSITIVE_RESIDUAL_DISPATCH,
     runtimeBuildIdentity: NATIVE_LOW_RUNTIME_BUILD_IDENTITY,
-    buffers: { lowSnapshotFluid, lowSnapshotFront, predictedFluid, predictedFront, nativeUpsampleFront, residualDispatchArgs, sourceHistoryCandidates, sourceHistoryDispatchArgs, candidateCueRecords, candidateCueLifecycleStats, candidateCueLifecycleParams },
+    buffers: { lowSnapshotFluid, lowSnapshotFront, predictedFluid, predictedFront, nativeUpsampleFluid, nativeUpsampleFront, residualDispatchArgs, sourceHistoryCandidates, sourceHistoryDispatchArgs, candidateCueRecords, candidateCueLifecycleStats, candidateCueLifecycleParams },
     encodeFromNativeLow(encoder, sourceFluid, sourceFront, options = {}) {
       const currentHistoryEpochIdentity = String(options.historyEpochIdentity || 'native-low-source-history-epoch-unspecified-v0');
       const priorHistoryEpochIdentity = lastHistoryEpochIdentity;
@@ -1508,6 +1511,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
           { binding: 5, resource: { buffer: stats } },
           { binding: 6, resource: { buffer: lowSnapshotFluid } },
           { binding: 7, resource: { buffer: lowSnapshotFront } },
+          { binding: 8, resource: { buffer: nativeUpsampleFluid } },
         ],
       });
       const supportTimestampWrites = options.stageTimestampWrites?.supportFront
@@ -2013,6 +2017,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
       lowSnapshotFront.destroy();
       predictedFluid.destroy();
       predictedFront.destroy();
+      nativeUpsampleFluid.destroy();
       nativeUpsampleFront.destroy();
       residualDispatchArgs.destroy();
       sourceHistoryCandidates.destroy();

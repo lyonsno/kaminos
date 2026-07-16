@@ -16,12 +16,15 @@
     #status.bad { color: #ff9d8d; }
     #panes { width: 100vw; height: 100vh; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; background: #162024; }
     body.front-topology-ablation #panes { grid-template-columns: 1fr 1fr 1fr; }
+    body.new-basin-zero-shot #panes { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
     .pane { min-width: 0; min-height: 0; position: relative; display: grid; place-items: center; background: #000; }
     .pane[hidden] { display: none; }
     .pane img { width: 100%; height: 100%; object-fit: cover; display: block; background: #000; }
+    body.new-basin-zero-shot .pane img { object-fit: contain; }
     .pane-label { position: absolute; z-index: 5; left: 12px; bottom: 12px; max-width: calc(100% - 24px); padding: 7px 9px; border: 1px solid rgba(190, 215, 220, .22); background: rgba(5, 8, 8, .78); border-radius: 5px; font-size: 11px; color: #dbe8ea; }
     .pane-label span { display: block; margin-top: 2px; color: #90a1a6; font-size: 10px; }
     #runner-wrap { position: fixed; left: -2200px; top: 0; width: 900px; height: 640px; opacity: .01; pointer-events: none; }
+    body.new-basin-zero-shot #runner-wrap { width: 900px; height: 900px; }
     #runner { width: 100%; height: 100%; border: 0; display: block; background: #000; }
     @media (max-width: 900px) { #toolbar { grid-template-columns: 1fr; } #panes, body.front-topology-ablation #panes { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; } body.front-topology-ablation #panes { grid-template-rows: 1fr 1fr 1fr; } }
   </style>
@@ -46,6 +49,10 @@
     <section id="frontTopologyAblatedPane" class="pane" hidden>
       <img id="frontTopologyAblatedImage" alt="frontTopologyAblatedTreatment">
       <div class="pane-label">frontTopologyAblatedTreatment<span>Learned support/carrier residuals, native-low upsampled front, no learned frontTopology residual</span></div>
+    </section>
+    <section id="deterministicUpscalePane" class="pane" hidden>
+      <img id="deterministicUpscaleImage" alt="deterministicUpscale">
+      <div class="pane-label">deterministicUpscale<span>Native source field deterministically reconstructed at 160^3, no learned residual</span></div>
     </section>
   </main>
   <div id="runner-wrap"><iframe id="runner" title="sharedDeviceNativeLowRenderer"></iframe></div>
@@ -75,7 +82,7 @@
     const CONTRACT_MARKERS = Object.freeze({
       routeIdentity: 'native-low-live-browser-webgpu-inference-v0',
       sharedDeviceRoute: 'native-low-shared-device-buffer-inference-v0',
-      runtimeBuildIdentity: 'native-low-resident-cue-buffer-lifecycle-stress-v1',
+      runtimeBuildIdentity: 'native-low-deterministic-upsample-control-v0',
       schema: REPORT_SCHEMA,
       modelIdentity: 'exact-basin-selective-carrier-heads-160-to-128-v0',
       modelSha256: 'dc1886384f87c4e51015f6ffd5ac8c0a48ac6f32b6f02a238ac5e3c3bd883dc9',
@@ -207,7 +214,9 @@
         failurePhase: null,
       },
     });
-    const requestedComposition = 'splat-only-v0';
+    const requestedComposition = new URLSearchParams(location.search).get('new_basin_zero_shot') === '1'
+      ? 'raymarch-only-v0'
+      : 'splat-only-v0';
     const runtimeTruthAvailable = false;
     const syntheticDownsampleApplied = false;
     const sourceStepDrift = 'sourceStepDrift';
@@ -241,9 +250,18 @@
     if (!Number.isFinite(rawCausalFlowDebug)) throw new Error('causal_flow_debug must be finite');
     const causalFlowDebug = Math.max(0, Math.min(1, rawCausalFlowDebug));
     const causalRenderViewIdentity = 'causal-render-view-identity-v0';
-    const manualDualCaptureMode = !native64ManifestMode && !causalFeedbackMode && (params.get('manual_dual_capture') === '1' || params.get('capture_paused') === '1');
+    const newBasinZeroShotMode = !native64ManifestMode && !causalFeedbackMode && params.get('new_basin_zero_shot') === '1';
+    const requestedBasinIdentity = newBasinZeroShotMode
+      ? 'vsp-48617494d68e4f24bba358676733f2aaa5f03622b1747c45056de56884fe78d8'
+      : 'rgb_upscale_basin_0711';
+    const LATEST_HAPPY_BOWL_PRESET_URL = './fixtures/volume/settings-presets/latest_happy_bowl/preset.json';
+    const LATEST_HAPPY_BOWL_PRESET_FILE_SHA256 = 'bf13e68b6904cfc5677b13af14afe4426f15f9649bfda22105eed8611c5d0967';
+    const LATEST_HAPPY_BOWL_CONTENT_HASH = 'sha256:48617494d68e4f24bba358676733f2aaa5f03622b1747c45056de56884fe78d8';
+    const LATEST_HAPPY_BOWL_SOURCE_COMMIT = '027bcaca138da6e545065b90c5607b5a4a1b2965';
+    const manualDualCaptureMode = !native64ManifestMode && !causalFeedbackMode
+      && (newBasinZeroShotMode || params.get('manual_dual_capture') === '1' || params.get('capture_paused') === '1');
     const manualSourceGrid = causalFeedbackMode ? 64 : Number(params.get('manual_source_grid') || 96);
-    const manualSourceGridSupported = [64, 96, 128].includes(manualSourceGrid);
+    const manualSourceGridSupported = [48, 64, 96, 128].includes(manualSourceGrid);
     const nativeControlRoleIdentity = `native${manualSourceGrid}Control`;
     const requestedTransferRouteId = params.get('native_low_transfer_route') || NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE;
     const vivisectorCandidateHeadPackageUrl = params.get('vivisector_candidate_head_package') || '';
@@ -261,6 +279,8 @@
     const treatmentImage = document.getElementById('treatmentImage');
     const frontTopologyAblatedImage = document.getElementById('frontTopologyAblatedImage');
     const frontTopologyAblatedPane = document.getElementById('frontTopologyAblatedPane');
+    const deterministicUpscaleImage = document.getElementById('deterministicUpscaleImage');
+    const deterministicUpscalePane = document.getElementById('deterministicUpscalePane');
     let routeStatus = 'starting';
     let failurePhase = null;
     let lastTrustworthyEvidence = {};
@@ -289,6 +309,8 @@
     let lastControlObjectUrl = null;
     let lastTreatmentObjectUrl = null;
     let lastFrontTopologyAblatedObjectUrl = null;
+    let lastDeterministicUpscaleObjectUrl = null;
+    let latestHappyBowlPresetReceipt = null;
 
     if (frontTopologyAblationMode) {
       document.body.classList.add('front-topology-ablation');
@@ -315,6 +337,19 @@
       document.querySelector('#frontTopologyAblatedImage + .pane-label').innerHTML = `candidate96Trained<span>160->96 package applied zero-shot to the same native ${manualSourceGrid} source, splat-only-v0</span>`;
     }
 
+    if (newBasinZeroShotMode) {
+      document.body.classList.remove('front-topology-ablation');
+      document.body.classList.add('new-basin-zero-shot');
+      frontTopologyAblatedPane.hidden = false;
+      deterministicUpscalePane.hidden = false;
+      title.querySelector('strong').textContent = `New-basin native ${manualSourceGrid} zero-shot reconstruction`;
+      title.querySelector('span').textContent = 'Same source step and camera, raymarch-only-v0, no runtime truth';
+      document.querySelector('#controlImage + .pane-label').innerHTML = `${nativeControlRoleIdentity}<span>Untouched native ${manualSourceGrid}^3 simulator, raymarch-only-v0</span>`;
+      document.querySelector('#deterministicUpscaleImage + .pane-label').innerHTML = 'deterministicUpscale<span>Native field deterministically reconstructed at 160^3, no learned residual</span>';
+      document.querySelector('#treatmentImage + .pane-label').innerHTML = `baseline128Trained<span>128-trained frozen residual applied zero-shot, raymarch-only-v0</span>`;
+      document.querySelector('#frontTopologyAblatedImage + .pane-label').innerHTML = `candidate96Trained<span>96-trained frozen residual applied zero-shot, raymarch-only-v0</span>`;
+    }
+
     if (causalFeedbackMode) {
       if (!CAUSAL_FEEDBACK_ROLES.includes(causalFeedbackRole)) {
         throw new Error(`unsupportedCausalFeedbackRole:${causalFeedbackRole}`);
@@ -326,7 +361,7 @@
       document.getElementById('panes').style.gridTemplateColumns = '1fr';
     }
 
-    const baseControls = {
+    const legacyBaseControls = {
       kaminos_volume_smoke: '1',
       volume_scene: 'tall_plume',
       volume_tall_preset: 'rgb_upscale_basin_0711',
@@ -371,9 +406,71 @@
       volume_history_clamp: '0',
       volume_quality_reason: native64ManifestMode ? 'native-low-cross-grid-64-shared-device-manifest' : 'native-low-selective-shared-device-transfer',
     };
+    let baseControls = newBasinZeroShotMode
+      ? {
+          kaminos_volume_smoke: '1',
+          volume_resolution: String(manualSourceGrid),
+        }
+      : legacyBaseControls;
 
     function delay(ms) {
       return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async function loadLatestHappyBowlPresetControls() {
+      failurePhase = 'latest-happy-bowl-preset-load';
+      const response = await fetch(LATEST_HAPPY_BOWL_PRESET_URL, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`latest-happy-bowl-preset-fetch:${response.status}`);
+      const text = await response.text();
+      const fileSha256 = await sha256HexFromText(text);
+      if (fileSha256 !== LATEST_HAPPY_BOWL_PRESET_FILE_SHA256) {
+        throw new Error(`latest-happy-bowl-preset-file-sha256-mismatch:${fileSha256}`);
+      }
+      const artifact = JSON.parse(text);
+      const domControlCount = Object.keys(artifact?.preset?.domControls || {}).length;
+      const valid = artifact?.identity === 'kaminos-volume-settings-preset-artifact-v2'
+        && artifact?.presetId === requestedBasinIdentity
+        && artifact?.contentHash === LATEST_HAPPY_BOWL_CONTENT_HASH
+        && artifact?.schemaIdentity === 'kaminos-volume-settings-preset-schema-v2'
+        && artifact?.controlCount === 186
+        && artifact?.preset?.controlCount === 186
+        && domControlCount === 186
+        && artifact?.source?.commit === LATEST_HAPPY_BOWL_SOURCE_COMMIT;
+      if (!valid) throw new Error('latest-happy-bowl-preset-identity-mismatch');
+      const sourceRoute = new URL(artifact.preset.route);
+      const controls = Object.fromEntries(sourceRoute.searchParams.entries());
+      const routeControlCount = Object.keys(controls).length;
+      if (routeControlCount !== 188) throw new Error(`latest-happy-bowl-route-control-count:${routeControlCount}`);
+      const presetGrid = Number(controls.volume_resolution);
+      const exactPresetRouteApplied = manualSourceGrid === presetGrid;
+      const controlOverrides = manualSourceGrid === presetGrid
+        ? {}
+        : { volume_resolution: { requested: String(manualSourceGrid), preset: String(presetGrid) } };
+      if (manualSourceGrid !== presetGrid) controls.volume_resolution = String(manualSourceGrid);
+      latestHappyBowlPresetReceipt = {
+        identity: 'latest-happy-bowl-preset-consumption-v0',
+        presetIdentity: artifact.presetId,
+        contentHash: artifact.contentHash,
+        schemaIdentity: artifact.schemaIdentity,
+        presetFileSha256: fileSha256,
+        sourceCommit: artifact.source.commit,
+        requestedDomControlCount: artifact.controlCount,
+        requestedRouteControlCount: routeControlCount,
+        effectiveRouteControlCount: Object.keys(controls).length,
+        presetGrid,
+        requestedSourceGrid: manualSourceGrid,
+        sourceGridOverrideApplied: !exactPresetRouteApplied,
+        exactPresetRouteApplied,
+        effectiveBasinIdentity: exactPresetRouteApplied
+          ? artifact.presetId
+          : `${artifact.presetId}+volume_resolution=${manualSourceGrid}`,
+        controlOverrides,
+        stateExclusions: artifact.preset.stateExclusions,
+        requestedRoute: artifact.preset.route,
+        effectiveRoute: new URL(`./?${new URLSearchParams(controls)}`, location.href).href,
+        failurePhase: null,
+      };
+      return controls;
     }
 
     async function validateVivisectorCandidateHeadPackageForRoute() {
@@ -448,6 +545,11 @@
         if (lastFrontTopologyAblatedObjectUrl) URL.revokeObjectURL(lastFrontTopologyAblatedObjectUrl);
         lastFrontTopologyAblatedObjectUrl = receipt.visuals.frontTopologyAblatedObjectUrl;
         frontTopologyAblatedImage.src = lastFrontTopologyAblatedObjectUrl;
+      }
+      if (receipt?.visuals?.deterministicUpscaleObjectUrl) {
+        if (lastDeterministicUpscaleObjectUrl) URL.revokeObjectURL(lastDeterministicUpscaleObjectUrl);
+        lastDeterministicUpscaleObjectUrl = receipt.visuals.deterministicUpscaleObjectUrl;
+        deterministicUpscaleImage.src = lastDeterministicUpscaleObjectUrl;
       }
     }
 
@@ -900,12 +1002,15 @@
         boundarySplatMode: 'learned',
         selectiveHeadLiveRole: 'off',
         selectiveHeadLiveRenderComposition: requestedComposition,
-        runtimeQualityReason: 'native-low-dual-trained-package-manual-capture',
+        runtimeQualityReason: newBasinZeroShotMode
+          ? baseControls.volume_quality_reason
+          : 'native-low-dual-trained-package-manual-capture',
       });
       const sharedOptions = {
         boundarySplatComposition: requestedComposition,
         now: performance.now(),
         captureVisuals: true,
+        captureDeterministicUpscale: newBasinZeroShotMode,
         sourceHistoryDetailAdmissionEnabled,
         sourceHistoryDetailTargetCoverage,
         supportProbabilityDetailAdmissionEnabled,
@@ -922,6 +1027,7 @@
       if (!baseline128?.ok) throw new Error(`${baseline128?.failurePhase || 'baseline128Trained'}:${baseline128?.error || 'unknown'}`);
       const candidate96 = await prototype.captureNativeLowSelectiveSharedDeviceFrame({
         ...sharedOptions,
+        captureDeterministicUpscale: false,
         transferRouteId: NATIVE_LOW_TRANSFER_160_TO_96_DEPLOYMENT_GRID_ROUTE,
         advanceSourceStep: false,
         expectedSourceStepIdentity: baseline128.sourceStepIdentity,
@@ -932,6 +1038,7 @@
           controlObjectUrl: baseline128.visuals?.controlObjectUrl,
           treatmentObjectUrl: baseline128.visuals?.treatmentObjectUrl,
           frontTopologyAblatedObjectUrl: candidate96.visuals?.treatmentObjectUrl,
+          deterministicUpscaleObjectUrl: baseline128.visuals?.deterministicUpscaleObjectUrl,
         },
       });
       frameIndex += 1;
@@ -939,7 +1046,19 @@
       const candidateRole = trainedRoleReceipt('candidate96Trained', candidate96);
       const nativeControl = nativeControlRoleReceipt(baseline128, manualSourceGrid);
       const sameNativeStateIdentity = `native-${manualSourceGrid}-shared-source:${baseline128.sourceStepIdentity}:composition-${requestedComposition}:transport-${NATIVE_LOW_TRANSPORT_MODE}`;
-      for (const role of [nativeControl, baselineRole, candidateRole]) {
+      const deterministicUpscaleRole = newBasinZeroShotMode ? {
+        identity: 'deterministicUpscale',
+        role: 'deterministicUpscale',
+        authority: `deterministic-native-${manualSourceGrid}-to-160-field-upsample-v0`,
+        grid: 160,
+        sourceStepIdentity: baseline128.sourceStepIdentity,
+        sameNativeStateIdentity,
+        requestedComposition,
+        effectiveComposition: baseline128.deterministicUpscaleRender?.boundarySplatCompositionEffective || null,
+        fallbackReason: null,
+        staleFrameReason: null,
+      } : null;
+      for (const role of [nativeControl, deterministicUpscaleRole, baselineRole, candidateRole].filter(Boolean)) {
         role.sameNativeStateIdentity = sameNativeStateIdentity;
         role.fallbackReason = role.fallbackReason || role.fallbackBackend || null;
         role.staleFrameReason = role.stalePredictionRejection?.stalePrediction === true ? 'stale-prediction' : null;
@@ -968,11 +1087,13 @@
         secondPackageSourceStepDelta: candidate96.simulationSteppingReceipt?.simStepDelta ?? null,
         visualRoles: {
           [nativeControlRoleIdentity]: nativeControl,
+          ...(deterministicUpscaleRole ? { deterministicUpscale: deterministicUpscaleRole } : {}),
           baseline128Trained: baselineRole,
           candidate96Trained: candidateRole,
         },
         roles: {
           [nativeControlRoleIdentity]: nativeControl,
+          ...(deterministicUpscaleRole ? { deterministicUpscale: deterministicUpscaleRole } : {}),
           baseline128Trained: baselineRole,
           candidate96Trained: candidateRole,
         },
@@ -1013,6 +1134,10 @@
           staleFrameRejected: false,
         },
         candidateInstanceEqualityOk: candidateEqualityOk,
+        requestedBasinIdentity,
+        effectiveBasinIdentity: latestHappyBowlPresetReceipt?.effectiveBasinIdentity || null,
+        latestHappyBowlPresetReceipt,
+        newBasinZeroShotMode,
         failurePhase: candidateEqualityOk ? null : 'manual-dual-candidate-instance-equality',
       };
       latestReceipt = latestManualDualCapture;
@@ -1299,6 +1424,7 @@
         nativeControl: latestManualDualCapture?.visualRoles?.[nativeControlRoleIdentity] || null,
         native64Control: manualSourceGrid === 64 ? latestManualDualCapture?.visualRoles?.native64Control || null : null,
         native96Control: manualSourceGrid === 96 ? latestManualDualCapture?.visualRoles?.native96Control || null : null,
+        deterministicUpscale: latestManualDualCapture?.visualRoles?.deterministicUpscale || null,
         baseline128Trained: latestManualDualCapture?.visualRoles?.baseline128Trained || null,
         candidate96Trained: latestManualDualCapture?.visualRoles?.candidate96Trained || null,
         modelChecksumMismatch: null,
@@ -1329,6 +1455,10 @@
         requestedComposition,
         effectiveComposition,
         compositionMismatch: effectiveComposition && effectiveComposition !== requestedComposition ? compositionMismatch : null,
+        requestedBasinIdentity,
+        effectiveBasinIdentity: newBasinZeroShotMode ? latestHappyBowlPresetReceipt?.effectiveBasinIdentity || null : 'rgb_upscale_basin_0711',
+        latestHappyBowlPresetReceipt,
+        newBasinZeroShotMode,
         requestedCalibration,
         effectiveCalibration: receipt.effectiveCalibration || null,
         treatmentSplatRadianceGain: receipt.treatmentSplatRadianceGain ?? treatmentSplatRadianceGain,
@@ -1406,6 +1536,7 @@
       }
       await validateVivisectorCandidateHeadPackageForRoute();
       failurePhase = 'route-initialize';
+      if (newBasinZeroShotMode) baseControls = await loadLatestHappyBowlPresetControls();
       runnerFrame.src = `./?${new URLSearchParams(baseControls)}`;
       const prototype = await waitForPrototype();
       prototype.setControls({

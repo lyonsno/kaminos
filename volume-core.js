@@ -13153,6 +13153,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     let lastTrustworthyEvidence = {};
     const requestedComposition = options.boundarySplatComposition ?? 'splat-only-v0';
     const captureVisuals = options.captureVisuals === true;
+    const captureDeterministicUpscale = options.captureDeterministicUpscale === true;
     const frontTopologyAblationEnabled = options.frontTopologyAblation === true;
     const requestedTransferRouteId = String(options.transferRouteId || NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE);
     const learnedCueFeedbackEnabled = options.learnedCueFeedbackEnabled === true;
@@ -13171,8 +13172,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const appliedCueBeforeStep = scalarActivityReceiverDebug();
     try {
       if (!state.active || !device) throw new Error('inactive');
-      if (![64, 96, 128].includes(sourceGrid)) throw new Error(`native-low-shared-device-grid-mismatch:${sourceGrid}`);
-      if (requestedComposition !== 'splat-only-v0') throw new Error(`unsupported-native-low-shared-device-composition:${requestedComposition}`);
+      if (![48, 64, 96, 128].includes(sourceGrid)) throw new Error(`native-low-shared-device-grid-mismatch:${sourceGrid}`);
+      if (!['splat-only-v0', 'raymarch-only-v0'].includes(requestedComposition)) {
+        throw new Error(`unsupported-native-low-shared-device-composition:${requestedComposition}`);
+      }
       cancelAnimationFrame(raf);
       raf = 0;
       if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
@@ -13483,6 +13486,42 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       let frontTopologyAblatedRenderMs = null;
       let frontTopologyAblatedSplatCandidateCount = null;
       let frontTopologyAblatedSplatInstanceCount = null;
+      let deterministicUpscaleVisualUrl = null;
+      let deterministicUpscaleRender = null;
+      let deterministicUpscaleMaterializeMs = null;
+      let deterministicUpscaleRenderMs = null;
+      if (captureDeterministicUpscale) {
+        failurePhase = 'shared-device-deterministic-upscale-materialization';
+        const deterministicMaterializeStart = performance.now();
+        rebuildFluidState(160, sourceMajorantGrid, 'native-low-shared-device-deterministic-upscale-materialize', { skipInitialFluid: true });
+        const deterministicEncoder = device.createCommandEncoder({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} deterministic native upsample materialization` });
+        for (const target of fluidBuffers) {
+          deterministicEncoder.copyBufferToBuffer(runtime.buffers.nativeUpsampleFluid, 0, target, 0, fluidBufferBytes(160));
+        }
+        for (const target of frontBuffers) {
+          deterministicEncoder.copyBufferToBuffer(runtime.buffers.nativeUpsampleFront, 0, target, 0, frontFieldBufferBytes(160));
+        }
+        device.queue.submit([deterministicEncoder.finish()]);
+        if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+        setSharedDeviceCopiedState(sourceStep, sourceFrameAfter);
+        deterministicUpscaleMaterializeMs = performance.now() - deterministicMaterializeStart;
+
+        failurePhase = 'shared-device-deterministic-upscale-render';
+        const deterministicRenderStart = performance.now();
+        deterministicUpscaleRender = await renderFrozenScaleToCanvas({
+          boundarySplatComposition: requestedComposition,
+          now: fixedNow,
+          sameStateCaptureId: `${sourceStepIdentity}:deterministic-upscale`,
+          baseFrameCount: sourceFrameAfter,
+          baseSimStepCount: sourceStep,
+          restoreControls: true,
+        });
+        if (!deterministicUpscaleRender?.ok) {
+          throw new Error(`native-low-shared-device-deterministic-upscale-render:${deterministicUpscaleRender?.reason || 'unknown'}`);
+        }
+        deterministicUpscaleVisualUrl = captureVisuals ? await captureCanvasObjectUrl() : null;
+        deterministicUpscaleRenderMs = performance.now() - deterministicRenderStart;
+      }
       if (frontTopologyAblationEnabled) {
         failurePhase = 'shared-device-front-topology-ablation-materialization';
         const ablatedMaterializeStart = performance.now();
@@ -13532,6 +13571,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         frontTopologyAblatedMaterializeMs,
         frontTopologyAblatedRenderMs,
         frontTopologyAblatedSplatInstanceCount,
+        deterministicUpscaleMaterializeMs,
+        deterministicUpscaleRenderMs,
       };
 
       failurePhase = 'shared-device-source-restore';
@@ -14018,6 +14059,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         frontTopologyAblatedSplatInstanceCount,
         frontTopologyAblatedMaterializeMs,
         frontTopologyAblatedRenderMs,
+        deterministicUpscaleMaterializeMs,
+        deterministicUpscaleRenderMs,
         endToEndFrameMs,
         stageTiming: {
           nativeStepMs,
@@ -14034,6 +14077,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           treatmentRenderMs,
           frontTopologyAblatedMaterializeMs,
           frontTopologyAblatedRenderMs,
+          deterministicUpscaleMaterializeMs,
+          deterministicUpscaleRenderMs,
           restoreRebuildMs,
           restoreCopyMs,
           restoreMaterializeMs,
@@ -14042,6 +14087,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         visuals: {
           controlObjectUrl: controlVisualUrl,
           treatmentObjectUrl: treatmentVisualUrl,
+          deterministicUpscaleObjectUrl: deterministicUpscaleVisualUrl,
           frontTopologyAblatedObjectUrl: frontTopologyAblatedVisualUrl,
         },
         nativeLowControl: { grid: sourceGrid, step: sourceStep, backend: runtimeState.effectiveBackend, splatInstanceCount: controlSplatInstanceCount },
@@ -14050,6 +14096,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           ? { grid: 160, step: sourceStep, backend: runtimeState.effectiveBackend, splatInstanceCount: frontTopologyAblatedSplatInstanceCount }
           : null,
         treatmentRender,
+        deterministicUpscaleRender,
         frontTopologyAblatedRender,
         controlRender,
         runtime: runtimeState,
