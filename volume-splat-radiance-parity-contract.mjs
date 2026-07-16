@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 
 const SCHEMA = 'kaminos.volume.splat-radiance-parity.v0';
 const WRAPPER_ROUTE = 'exact-basin-selective-head-live-v0';
@@ -75,6 +77,37 @@ export function validateSplatRadianceParityReport(report) {
     assert.equal(matchedCapture.cameraPoseHash, additiveCapture.cameraPoseHash, `camera pose changed between arms at ${index}`);
   }
   return report;
+}
+
+export function writeSplatRadianceParityFailureReport(reportPath, failureReport) {
+  const priorBytes = existsSync(reportPath) ? readFileSync(reportPath) : null;
+  let priorPayload = null;
+  if (priorBytes) {
+    try {
+      priorPayload = JSON.parse(priorBytes.toString('utf8'));
+    } catch {
+      priorPayload = null;
+    }
+  }
+  const payload = {
+    ...failureReport,
+    lastTrustworthyEvidence: {
+      ...(failureReport.lastTrustworthyEvidence || {}),
+      ...(priorBytes ? {
+        displacedPrimaryReport: {
+          path: reportPath,
+          byteLength: priorBytes.byteLength,
+          sha256: createHash('sha256').update(priorBytes).digest('hex'),
+          schema: priorPayload?.schema || null,
+          status: priorPayload?.status || 'unparseable',
+        },
+      } : {}),
+    },
+  };
+  const temporaryPath = `${reportPath}.tmp-${process.pid}-${Date.now()}`;
+  writeFileSync(temporaryPath, JSON.stringify(payload, null, 2));
+  renameSync(temporaryPath, reportPath);
+  return payload;
 }
 
 export const SPLAT_RADIANCE_PARITY_CONTRACT = Object.freeze({

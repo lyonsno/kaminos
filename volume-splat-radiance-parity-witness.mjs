@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { validateSplatRadianceParityReport } from './volume-splat-radiance-parity-contract.mjs';
+import {
+  validateSplatRadianceParityReport,
+  writeSplatRadianceParityFailureReport,
+} from './volume-splat-radiance-parity-contract.mjs';
 
 const CURRENT_ARM = 'current-additive-v0';
 const MATCHED_ARM = 'matched-presentation-v0';
@@ -79,8 +82,8 @@ try {
     error: error?.stack || error?.message || String(error),
     lastTrustworthyEvidence,
   };
-  if (failurePhase === 'route-preflight' || !existsSync(reportPath)) writeFileSync(reportPath, JSON.stringify(failureReport, null, 2));
-  console.error(JSON.stringify(failureReport, null, 2));
+  const writtenFailureReport = writeSplatRadianceParityFailureReport(reportPath, failureReport);
+  console.error(JSON.stringify(writtenFailureReport, null, 2));
   process.exitCode = 1;
 }
 

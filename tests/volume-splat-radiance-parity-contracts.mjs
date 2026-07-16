@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname;
@@ -16,7 +18,7 @@ assert.match(core, /intermediateClamped:\s*false/, 'matched presentation receipt
 
 const contractPath = join(root, 'volume-splat-radiance-parity-contract.mjs');
 assert.ok(existsSync(contractPath), 'radiance parity evidence validator must exist');
-const { validateSplatRadianceParityReport } = await import(contractPath);
+const { validateSplatRadianceParityReport, writeSplatRadianceParityFailureReport } = await import(contractPath);
 
 const cameraHashes = Array.from({ length: 21 }, (_, index) => `camera-${index}`);
 const makeArm = (id, overrides = {}) => ({
@@ -91,5 +93,31 @@ assert.match(witness, /validateSplatRadianceParityReport/, 'witness applies the 
 assert.match(witness, /current-additive-v0[\s\S]*matched-presentation-v0/, 'witness captures additive and matched-presentation arms separately');
 assert.match(witness, /failurePhase = 'route-preflight'/, 'witness preflights the requested route before launching the browser delegate');
 assert.match(witness, /response\.status[\s\S]*response\.url[\s\S]*volume-selective-head-live/, 'route preflight rejects non-success and wrong-document responses with effective identity evidence');
+assert.doesNotMatch(witness, /if \(failurePhase === 'route-preflight' \|\| !existsSync\(reportPath\)\) writeFileSync\(reportPath/, 'wrapper failure cannot leave an existing completed primary report in place');
+assert.match(witness, /writeSplatRadianceParityFailureReport\(reportPath, failureReport\)/, 'wrapper catch path must atomically replace the primary report with failed evidence');
+
+const failureDir = mkdtempSync(join(tmpdir(), 'kaminos-radiance-failure-report-'));
+try {
+  const failureReportPath = join(failureDir, 'report.json');
+  const completedBytes = Buffer.from(JSON.stringify({ schema: 'kaminos.volume.splat-radiance-parity.v0', status: 'completed' }));
+  writeFileSync(failureReportPath, completedBytes);
+  writeSplatRadianceParityFailureReport(failureReportPath, {
+    schema: 'kaminos.volume.splat-radiance-parity.v0',
+    status: 'failed',
+    failurePhase: 'delegate-orbit-capture',
+    lastTrustworthyEvidence: { delegateStatus: 1 },
+  });
+  const replaced = JSON.parse(readFileSync(failureReportPath, 'utf8'));
+  assert.equal(replaced.status, 'failed', 'pre-seeded completed primary report must be replaced on wrapper failure');
+  assert.equal(replaced.failurePhase, 'delegate-orbit-capture', 'replacement report preserves the wrapper failure phase');
+  assert.equal(replaced.lastTrustworthyEvidence.displacedPrimaryReport.status, 'completed', 'replacement records the displaced report status');
+  assert.equal(
+    replaced.lastTrustworthyEvidence.displacedPrimaryReport.sha256,
+    createHash('sha256').update(completedBytes).digest('hex'),
+    'replacement records the displaced report content identity',
+  );
+} finally {
+  rmSync(failureDir, { recursive: true, force: true });
+}
 
 console.log('volume splat radiance parity contracts passed');
