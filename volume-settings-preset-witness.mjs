@@ -52,6 +52,7 @@ const reportPath = resolve(String(args.get('--report') || '/tmp/kaminos-volume-s
 const timeoutMs = Number(args.get('--timeout-ms') || 180000);
 const debugPort = Number(args.get('--debug-port') || randomInt(42000, 62000));
 const label = String(args.get('--label') || 'Automated settings witness').trim();
+const cockpitAnchor = String(args.get('--cockpit-anchor') || '').trim();
 const liveDebugExpression = `(() => {
   return window.__kaminosSelectiveHeadLive?.debugState?.() || null;
 })()`;
@@ -214,6 +215,49 @@ try {
   assert.ok(commandResult.presetUrl, 'settings preset command completed without a durable loader route');
   assert.equal(commandResult.presetViewUrls?.[requestedView], `${commandResult.presetUrl}&view=${requestedView}`, 'settings preset command omitted the selected visual route');
   await delay(500);
+  const cockpitVisibility = await evaluate(initialSocket, operatorContext(`(() => {
+    const retired = [...operatorDocument.querySelectorAll('[data-volume-retired-control-state]')].map(element => {
+      const style = operatorWindow.getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return {
+        name: element.dataset.volumeRetiredControlState,
+        hidden: element.hidden,
+        display: style.display,
+        width: rect.width,
+        height: rect.height,
+      };
+    });
+    const surviving = ['volume-oracle-activity-cue', 'volume-pressure-mode'].map(id => {
+      const element = operatorDocument.getElementById(id);
+      if (!element) return { id, missing: true };
+      const style = operatorWindow.getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return { id, missing: false, display: style.display, width: rect.width, height: rect.height };
+    });
+    const anchorId = ${JSON.stringify(cockpitAnchor)};
+    const anchor = anchorId ? operatorDocument.getElementById(anchorId) : null;
+    if (anchor) anchor.scrollIntoView({ block: 'center' });
+    return { retired, surviving, anchorId, anchorFound: !anchorId || !!anchor };
+  })()`));
+  assert.deepEqual(
+    cockpitVisibility.retired.map(entry => entry.name).sort(),
+    ['atlas-capture', 'raymarch-history', 'topology-shell'],
+    'cockpit retired-control group inventory changed',
+  );
+  for (const entry of cockpitVisibility.retired) {
+    assert.equal(entry.hidden, true, `retired cockpit group ${entry.name} lost its hidden contract`);
+    assert.equal(entry.display, 'none', `retired cockpit group ${entry.name} is still rendered`);
+    assert.equal(entry.width, 0, `retired cockpit group ${entry.name} still occupies horizontal space`);
+    assert.equal(entry.height, 0, `retired cockpit group ${entry.name} still occupies vertical space`);
+  }
+  for (const entry of cockpitVisibility.surviving) {
+    assert.equal(entry.missing, false, `surviving cockpit control ${entry.id} is missing`);
+    assert.notEqual(entry.display, 'none', `surviving cockpit control ${entry.id} is hidden`);
+    assert.ok(entry.width > 0 && entry.height > 0, `surviving cockpit control ${entry.id} has no rendered box`);
+  }
+  assert.equal(cockpitVisibility.anchorFound, true, `cockpit screenshot anchor is missing: ${cockpitAnchor}`);
+  lastTrustworthyEvidence.cockpitVisibility = cockpitVisibility;
+  await delay(200);
   const cockpitScreenshot = await initialSocket.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
   writeFileSync(cockpitOut, Buffer.from(cockpitScreenshot.data, 'base64'));
   lastTrustworthyEvidence.cockpitScreenshot = cockpitOut;
@@ -306,6 +350,8 @@ try {
     storePath: commandResult.effective.storePath,
     continuousFrameDelta,
     continuousSimStepDelta,
+    cockpitAnchor: cockpitVisibility.anchorId || null,
+    cockpitVisibility,
     cockpitScreenshot: cockpitOut,
     screenshot: out,
     screenshotBytes: screenshotBytes.length,

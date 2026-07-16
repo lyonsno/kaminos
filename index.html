@@ -1219,6 +1219,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <input type="range" id="volume-reaction-boundary-fire-luma" min="0" max="5" step="0.05" value="1.05">
         <span class="slider-val" id="volume-reaction-boundary-fire-luma-val">1.05</span>
       </div>
+      <div class="volume-retired-control-state" data-volume-retired-control-state="atlas-capture" hidden>
       <div class="volume-control-section-title">Atlas capture</div>
       <div class="slider-row">
         <span class="slider-label">Heat min</span>
@@ -1332,6 +1333,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <canvas id="volume-reaction-atlas-canvas" width="640" height="256"></canvas>
       </div>
       <div class="reaction-front-atlas-state" id="volume-reaction-atlas-state">atlas not captured</div>
+      </div>
     </div>
     <div class="volume-control-section" data-volume-control-section="visual-tuning">
       <div class="volume-control-section-title">Visual Tuning</div>
@@ -1453,6 +1455,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <input type="range" id="volume-occupancy-skip" min="0" max="1" step="0.05" value="0.35">
       <span class="slider-val" id="volume-occupancy-skip-val">0.35</span>
     </div>
+    <div class="volume-retired-control-state" data-volume-retired-control-state="raymarch-history" hidden>
     <div class="slider-row">
       <span class="slider-label">Majorant Skip</span>
       <input type="range" id="volume-majorant-skip" min="0" max="1" step="0.05" value="0.70">
@@ -1482,6 +1485,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <span class="slider-label">History Clamp</span>
       <input type="range" id="volume-history-clamp" min="0" max="1" step="0.05" value="0.70">
       <span class="slider-val" id="volume-history-clamp-val">0.70</span>
+    </div>
     </div>
     <div class="slider-row">
       <span class="slider-label">Render Scale</span>
@@ -1562,7 +1566,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <input type="range" id="volume-flow-debug" min="0" max="1" step="0.05" value="0">
       <span class="slider-val" id="volume-flow-debug-val">0.00</span>
     </div>
-    <div class="volume-control-section" data-volume-control-section="topology-shell">
+    <div class="volume-control-section" data-volume-control-section="topology-shell" data-volume-retired-control-state="topology-shell" hidden>
       <div class="volume-control-section-title">Topology Lab Shell</div>
       <span class="slider-help">Shell mode bypasses stock fire emission. Carrier sliders add raw support; shape sliders cut or thicken the resulting mask.</span>
       <div class="slider-row">
