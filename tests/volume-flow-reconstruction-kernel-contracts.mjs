@@ -69,7 +69,7 @@ assert.match(splatCompactor, /boundarySplatAttributeFeatures\(sidecar, material,
 assert.match(core, /flowKernelIdentity:\s*FLOW_RECONSTRUCTION_KERNEL_IDENTITY/, 'runtime state records effective kernel identity');
 assert.match(core, /flowKernelRequested:[\s\S]*strength:[\s\S]*radiusWorld:[\s\S]*coherence:/, 'runtime state records requested authoring values');
 assert.match(core, /flowKernelEffective:[\s\S]*strength:[\s\S]*radiusWorld:[\s\S]*coherence:/, 'runtime state records normalized effective values');
-assert.match(core, /flowKernelCandidateAdmissionAuthority:\s*'native-cell-unfiltered'/, 'runtime state makes unchanged splat admission authority explicit');
+assert.match(core, /flowKernelCandidateAdmissionAuthority:\s*FLOW_KERNEL_COMPACT_POPULATION_IDENTITY/, 'runtime state names compact splat structural admission without claiming unfiltered native cells');
 const temporalControlSignature = core.match(/function temporalControlSignature\(snapshot = controlsSnapshot\) \{([\s\S]*?)\n  \}/)?.[1] || '';
 for (const [key] of expectedControls) {
   assert.match(temporalControlSignature, new RegExp(`snapshot\\.${key}`), `${key} changes invalidate temporal history`);

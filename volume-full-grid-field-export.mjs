@@ -45,6 +45,9 @@ const secondaryRenderPngPath = args.has('--secondary-render-png') ? resolve(Stri
 const flowKernelDescriptorBinPath = args.has('--flow-kernel-descriptor-bin')
   ? resolve(String(args.get('--flow-kernel-descriptor-bin')))
   : null;
+const flowKernelDescriptorIndexBinPath = args.has('--flow-kernel-descriptor-index-bin')
+  ? resolve(String(args.get('--flow-kernel-descriptor-index-bin')))
+  : null;
 const renderOnly = args.has('--render-only');
 const renderWarmupCount = Math.max(0, Math.floor(Number(args.get('--render-warmup-count') || 0)));
 const renderCompositionExplicit = args.has('--render-composition');
@@ -525,6 +528,67 @@ async function uploadInitialArtifact(ws, sessionId, kind, artifact) {
   return { kind, byteLength: bytes.byteLength, sha256: artifact.sha256, chunkCount, chunkFloats };
 }
 
+async function uploadFlowKernelDescriptorIndices(ws, artifact, grid) {
+  const begin = await evaluateByValue(
+    ws,
+    `window.__kaminosVolumePrototype.beginFlowKernelDescriptorIndexUpload(${JSON.stringify({
+      grid,
+      count: artifact.count,
+      byteLength: artifact.byteLength,
+      indexSha256: artifact.sha256,
+      duplicatePolicy: 'forbidden',
+      orderIdentity: 'caller-ordered',
+    })})`,
+    'begin-flow-kernel-descriptor-index-upload',
+  );
+  if (begin?.ok !== true || begin.status !== 'receiving') {
+    throw new Error(`flow kernel descriptor index upload did not begin cleanly: ${JSON.stringify(begin)}`);
+  }
+  const chunkBytes = chunkFloats * Uint32Array.BYTES_PER_ELEMENT;
+  let byteOffset = 0;
+  let chunkCount = 0;
+  while (byteOffset < artifact.bytes.byteLength) {
+    const chunk = artifact.bytes.subarray(byteOffset, Math.min(artifact.bytes.byteLength, byteOffset + chunkBytes));
+    const receipt = await evaluateByValue(
+      ws,
+      `window.__kaminosVolumePrototype.writeFlowKernelDescriptorIndexUploadChunk(${JSON.stringify({
+        sessionId: begin.sessionId,
+        byteOffset,
+        base64: chunk.toString('base64'),
+      })})`,
+      'write-flow-kernel-descriptor-index-upload-chunk',
+    );
+    if (receipt?.ok !== true || Number(receipt.byteOffset) !== byteOffset) {
+      throw new Error(`bad flow kernel descriptor index chunk at ${byteOffset}: ${JSON.stringify(receipt)}`);
+    }
+    byteOffset += chunk.byteLength;
+    chunkCount += 1;
+  }
+  const finish = await evaluateByValue(
+    ws,
+    `window.__kaminosVolumePrototype.finishFlowKernelDescriptorIndexUpload(${JSON.stringify({ sessionId: begin.sessionId })})`,
+    'finish-flow-kernel-descriptor-index-upload',
+  );
+  if (finish?.ok !== true || finish.status !== 'applied'
+    || finish.indexSha256 !== artifact.sha256
+    || Number(finish.count) !== artifact.count) {
+    throw new Error(`flow kernel descriptor index upload did not apply cleanly: ${JSON.stringify(finish)}`);
+  }
+  return {
+    requested: {
+      identity: 'external-native-cell-index-list-v0',
+      path: artifact.path,
+      count: artifact.count,
+      byteLength: artifact.byteLength,
+      sha256: artifact.sha256,
+      duplicatePolicy: 'forbidden',
+      orderIdentity: 'caller-ordered',
+    },
+    chunkCount,
+    effective: finish,
+  };
+}
+
 async function mountImportedRenderCanvas(ws, phase) {
   const canvasMount = await evaluateByValue(ws, `(() => {
     const canvas = window.__kaminosVolumePrototype?.canvasElement?.();
@@ -587,6 +651,8 @@ async function main() {
   let importedAdvance = null;
   let importedRender = null;
   let importedSecondaryRender = null;
+  let flowKernelDescriptorIndexArtifact = null;
+  let flowKernelDescriptorIndexUpload = null;
   const renderWarmups = [];
   let renderControlOverrides = {};
   let secondaryRenderControlOverrides = {};
@@ -631,6 +697,25 @@ async function main() {
       renderControlOverrides = {
         ...renderControlOverrides,
         flowKernelDescriptorCapture: true,
+      };
+    }
+    if (flowKernelDescriptorIndexBinPath && !flowKernelDescriptorBinPath) {
+      throw new Error('--flow-kernel-descriptor-index-bin requires --flow-kernel-descriptor-bin');
+    }
+    if (flowKernelDescriptorIndexBinPath) {
+      const bytes = readFileSync(flowKernelDescriptorIndexBinPath);
+      if (bytes.byteLength === 0 || bytes.byteLength % Uint32Array.BYTES_PER_ELEMENT !== 0) {
+        throw new Error('--flow-kernel-descriptor-index-bin must be a nonempty packed uint32 little-endian artifact');
+      }
+      flowKernelDescriptorIndexArtifact = {
+        identity: 'external-native-cell-index-list-v0',
+        path: flowKernelDescriptorIndexBinPath,
+        bytes,
+        byteLength: bytes.byteLength,
+        count: bytes.byteLength / Uint32Array.BYTES_PER_ELEMENT,
+        sha256: sha256(bytes),
+        duplicatePolicy: 'forbidden',
+        orderIdentity: 'caller-ordered',
       };
     }
     secondaryRenderControlOverrides = args.has('--secondary-render-control-overrides-json')
@@ -795,6 +880,14 @@ async function main() {
       if (importedAdvance?.ok !== true || importedAdvance.completedSteps !== advanceImportedSteps) {
         throw new Error(`imported receiver advance failed: ${JSON.stringify(importedAdvance)}`);
       }
+      if (flowKernelDescriptorIndexArtifact) {
+        phase = 'upload-flow-kernel-descriptor-indices';
+        flowKernelDescriptorIndexUpload = await uploadFlowKernelDescriptorIndices(
+          ws,
+          flowKernelDescriptorIndexArtifact,
+          initialField.grid,
+        );
+      }
       if (renderPngPath) {
         phase = 'mount-imported-render-canvas';
         let canvasMount = await mountImportedRenderCanvas(ws, phase);
@@ -895,6 +988,7 @@ async function main() {
           importedFieldManifestSha256: initialField.manifestSha256,
           importedAdvanceIdentity: importedAdvance.identity,
           importedAdvanceCompletedSteps: importedAdvance.completedSteps,
+          flowKernelDescriptorIndexUpload,
           flowKernelDescriptorArtifact,
         };
         if (secondaryRenderPngPath) {
@@ -976,6 +1070,7 @@ async function main() {
         runtimeEvents,
         initialFieldImport,
         importedAdvance,
+        flowKernelDescriptorIndexUpload,
         renderWarmups,
         importedRender,
         importedSecondaryRender,
@@ -1082,6 +1177,7 @@ async function main() {
       deterministicReplay: begin.deterministicReplay,
       initialFieldImport,
       importedAdvance,
+      flowKernelDescriptorIndexUpload,
       renderWarmups,
       importedRender,
       importedSecondaryRender,
@@ -1117,8 +1213,10 @@ async function main() {
       sourceCapture,
       requestedSourceCapture: sourceCapturePath,
       requestedInitialFieldManifest: initialFieldManifestPath,
+      requestedFlowKernelDescriptorIndexBin: flowKernelDescriptorIndexBinPath,
       initialFieldImport,
       importedAdvance,
+      flowKernelDescriptorIndexUpload,
       renderWarmups,
       importedRender,
       importedSecondaryRender,

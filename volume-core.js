@@ -50,6 +50,8 @@ const BOUNDARY_SPLAT_GPU_PROFILE_IDENTITY = 'boundary-splat-stage-gpu-timestamp-
 const BOUNDARY_SPLAT_ATTRIBUTE_HOOK_IDENTITY = 'boundary-splat-learned-attribute-hook-v0';
 const NATIVE_LOW_LEARNED_SPLAT_CALIBRATION_IDENTITY = 'native-low-learned-splat-calibration-v0';
 const FLOW_RECONSTRUCTION_KERNEL_IDENTITY = 'flow-tangent-positive-symmetric-trilinear-v0';
+const FLOW_KERNEL_COMPACT_POPULATION_IDENTITY = 'structural-splat-candidates-v0';
+const FLOW_KERNEL_EXTERNAL_INDEX_POPULATION_IDENTITY = 'external-native-cell-index-list-v0';
 const BOUNDARY_SPLAT_INITIAL_CAPACITY = 131072;
 const BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES = 48;
 const BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES = BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
@@ -5414,6 +5416,7 @@ ${BOUNDARY_SPLAT_ATTRIBUTE_MODEL_WGSL}
 @group(0) @binding(6) var<storage, read_write> boundarySplatFeatureRows: array<BoundarySplatFeatureRow>;
 @group(0) @binding(7) var<storage, read> boundarySplatMajorant: array<vec4<f32>>;
 @group(0) @binding(8) var<storage, read_write> flowKernelDescriptorRows: array<FlowKernelDescriptorRow>;
+@group(0) @binding(9) var<storage, read> flowKernelDescriptorCellIndices: array<u32>;
 
 fn boundarySplatCellIndex(cell: vec3<u32>) -> u32 {
   return cell.x + cell.y * GRID + cell.z * GRID * GRID;
@@ -5730,6 +5733,23 @@ fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
   boundarySplats[candidateIndex].shape = vec4<f32>(radius * attributeOutput.radiusScale.x, radius * attributeOutput.radiusScale.y, sidecar.z, fireSignal);
 }
 
+@compute @workgroup_size(64)
+fn evaluateFlowKernelDescriptorsForIndices(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let outputIndex = gid.x;
+  if (outputIndex >= flowKernelDescriptorCellIndices[0u]) { return; }
+  let nativeCellIndex = flowKernelDescriptorCellIndices[outputIndex + 1u];
+  let gridPlane = GRID * GRID;
+  let z = nativeCellIndex / gridPlane;
+  let planeIndex = nativeCellIndex - z * gridPlane;
+  let y = planeIndex / GRID;
+  let x = planeIndex - y * GRID;
+  let cell = vec3<u32>(x, y, z);
+  let world = ((vec3<f32>(cell) + vec3<f32>(0.5)) / f32(GRID)) * 2.0 - vec3<f32>(1.0);
+  let frame = boundarySplatFlowFrame(world);
+  let reconstructed = boundarySplatFlowReconstruction(world);
+  writeFlowKernelDescriptor(outputIndex, nativeCellIndex, world, frame, reconstructed);
+}
+
 @compute @workgroup_size(1)
 fn finalizeBoundarySplats() {
   atomicStore(&boundarySplatDraw.instanceCount, min(atomicLoad(&boundarySplatDraw.candidateCount), boundarySplatDraw.capacity));
@@ -6015,11 +6035,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     flowKernelDescriptorCaptureEffective: false,
     flowKernelDescriptorCaptureIdentity: FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY,
     flowKernelDescriptorCapture: null,
+    flowKernelDescriptorCapturePopulation: null,
+    flowKernelDescriptorIndexCount: 0,
+    flowKernelDescriptorIndexReceipt: null,
     boundarySplatSourceAuthority: BOUNDARY_SPLAT_SOURCE_AUTHORITY,
     flowKernelIdentity: FLOW_RECONSTRUCTION_KERNEL_IDENTITY,
     flowKernelRequested: flowKernelRequestedControls(controlsSnapshot),
     flowKernelEffective: flowKernelEffectiveControls(controlsSnapshot),
-    flowKernelCandidateAdmissionAuthority: 'native-cell-unfiltered',
+    flowKernelCandidateAdmissionAuthority: FLOW_KERNEL_COMPACT_POPULATION_IDENTITY,
     boundarySplatCapacity: boundarySplatCapacity,
     boundarySplatCapacityGrowthCount: 0,
     boundarySplatCapacityGrowth: null,
@@ -6337,6 +6360,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let majorantComputePipeline = null;
   let boundarySidecarBuildPipeline = null;
   let boundarySplatCompactPipeline = null;
+  let flowKernelDescriptorIndexPipeline = null;
   let boundarySplatFinalizePipeline = null;
   let boundarySplatRenderPipeline = null;
   let boundarySplatReadbackPipeline = null;
@@ -6393,6 +6417,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let flowKernelDescriptorBuffer = null;
   let flowKernelDescriptorBufferCapacity = 0;
   let flowKernelDescriptorExportSession = null;
+  let flowKernelDescriptorIndexBuffer = null;
+  let flowKernelDescriptorIndexBufferCapacity = 0;
+  let flowKernelDescriptorIndexUpload = null;
   let boundarySplatDescriptorSource = null;
   let boundarySplatTelemetryCopyPending = false;
   let boundarySplatTelemetryMapPending = false;
@@ -6868,6 +6895,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatReadbackBuffer?.destroy();
     boundarySplatFeatureBuffer?.destroy();
     flowKernelDescriptorBuffer?.destroy();
+    flowKernelDescriptorIndexBuffer?.destroy();
     oracleActivityCueBuffer?.destroy();
     boundarySidecarBuffer = null;
     boundarySplatBuffer = null;
@@ -6879,6 +6907,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     flowKernelDescriptorBuffer = null;
     flowKernelDescriptorBufferCapacity = 0;
     flowKernelDescriptorExportSession = null;
+    flowKernelDescriptorIndexBuffer = null;
+    flowKernelDescriptorIndexBufferCapacity = 0;
+    flowKernelDescriptorIndexUpload = null;
+    state.flowKernelDescriptorIndexCount = 0;
+    state.flowKernelDescriptorIndexReceipt = null;
     boundarySplatDescriptorSource = null;
     boundarySplatTelemetryCopyPending = false;
     oracleActivityCueBuffer = null;
@@ -7106,6 +7139,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       || !boundarySplatCameraBuffer
       || !boundarySplatFeatureBuffer
       || !flowKernelDescriptorBuffer
+      || !flowKernelDescriptorIndexBuffer
     ) {
       selectiveHeadLiveBindGroups = null;
       return;
@@ -7158,6 +7192,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           { binding: 6, resource: { buffer: boundarySplatFeatureBuffer } },
           { binding: 7, resource: { buffer: majorantBuffer } },
           { binding: 8, resource: { buffer: flowKernelDescriptorBuffer } },
+          { binding: 9, resource: { buffer: flowKernelDescriptorIndexBuffer } },
         ],
       }),
     });
@@ -7328,7 +7363,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function ensureBoundarySplatBuffers() {
-    if (boundarySplatBuffer && boundarySplatDrawBuffer && boundarySplatIndirectBuffer && boundarySplatCameraBuffer && boundarySplatReadbackBuffer && boundarySplatFeatureBuffer && flowKernelDescriptorBuffer) return;
+    if (boundarySplatBuffer && boundarySplatDrawBuffer && boundarySplatIndirectBuffer && boundarySplatCameraBuffer && boundarySplatReadbackBuffer && boundarySplatFeatureBuffer && flowKernelDescriptorBuffer && flowKernelDescriptorIndexBuffer) return;
     boundarySplatBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} candidates`,
       size: boundarySplatCapacity * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES,
@@ -7370,6 +7405,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       size: flowKernelDescriptorBufferCapacity * FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
     });
+    flowKernelDescriptorIndexBufferCapacity = 1;
+    flowKernelDescriptorIndexBuffer = device.createBuffer({
+      label: `kaminos ${FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY} external index dummy`,
+      size: 4,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(flowKernelDescriptorIndexBuffer, 0, new Uint32Array([0]));
     state.flowKernelDescriptorCaptureRequested = descriptorCaptureRequested;
     state.flowKernelDescriptorCaptureEffective = descriptorCaptureRequested && flowKernelDescriptorBufferCapacity === boundarySplatCapacity;
     state.boundarySplatCapacity = boundarySplatCapacity;
@@ -7407,6 +7449,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       || !boundarySplatCameraBuffer
       || !boundarySplatFeatureBuffer
       || !flowKernelDescriptorBuffer
+      || !flowKernelDescriptorIndexBuffer
       || !majorantBuffer
       || fluidBuffers.length !== 2
     ) return;
@@ -7422,6 +7465,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         { binding: 6, resource: { buffer: boundarySplatFeatureBuffer } },
         { binding: 7, resource: { buffer: majorantBuffer } },
         { binding: 8, resource: { buffer: flowKernelDescriptorBuffer } },
+        { binding: 9, resource: { buffer: flowKernelDescriptorIndexBuffer } },
       ],
     }));
     boundarySplatRenderBindGroup = device.createBindGroup({
@@ -7435,6 +7479,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     rebuildSelectiveHeadLiveBindGroups();
   }
 
+  function resizeFlowKernelDescriptorBuffer(requiredCapacity, label) {
+    const nextCapacity = Math.max(1, Math.floor(Number(requiredCapacity) || 1));
+    if (flowKernelDescriptorBuffer && flowKernelDescriptorBufferCapacity === nextCapacity) return false;
+    const previousDescriptorBuffer = flowKernelDescriptorBuffer;
+    flowKernelDescriptorBufferCapacity = nextCapacity;
+    flowKernelDescriptorBuffer = device.createBuffer({
+      label: `kaminos ${FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY} ${label} ${nextCapacity}`,
+      size: flowKernelDescriptorBufferCapacity * FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+    });
+    rebuildBoundarySplatBindGroups();
+    previousDescriptorBuffer?.destroy();
+    return true;
+  }
+
   function syncFlowKernelDescriptorCaptureBuffer() {
     const requested = flowKernelDescriptorCaptureRequested();
     state.flowKernelDescriptorCaptureRequested = requested;
@@ -7442,20 +7501,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.flowKernelDescriptorCaptureEffective = false;
       return;
     }
-    if (flowKernelDescriptorBuffer && flowKernelDescriptorBufferCapacity === boundarySplatCapacity) {
-      state.flowKernelDescriptorCaptureEffective = true;
-      return;
-    }
-    const previousDescriptorBuffer = flowKernelDescriptorBuffer;
-    flowKernelDescriptorBufferCapacity = boundarySplatCapacity;
-    flowKernelDescriptorBuffer = device.createBuffer({
-      label: `kaminos ${FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY} runtime capacity ${boundarySplatCapacity}`,
-      size: flowKernelDescriptorBufferCapacity * FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
-    });
-    rebuildBoundarySplatBindGroups();
-    previousDescriptorBuffer?.destroy();
-    state.flowKernelDescriptorCaptureEffective = true;
+    const requiredCapacity = Math.max(boundarySplatCapacity, state.flowKernelDescriptorIndexCount || 0);
+    resizeFlowKernelDescriptorBuffer(requiredCapacity, 'runtime capacity');
+    state.flowKernelDescriptorCaptureEffective = flowKernelDescriptorBufferCapacity >= requiredCapacity;
   }
 
   function growBoundarySplatCapacity(candidateCount) {
@@ -7479,7 +7527,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       size: boundarySplatFeatureBufferCapacity * BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
     });
-    flowKernelDescriptorBufferCapacity = descriptorCaptureRequested ? nextCapacity : 1;
+    flowKernelDescriptorBufferCapacity = descriptorCaptureRequested
+      ? Math.max(nextCapacity, state.flowKernelDescriptorIndexCount || 0)
+      : 1;
     flowKernelDescriptorBuffer = device.createBuffer({
       label: `kaminos ${FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY} ${descriptorCaptureRequested ? `capacity ${nextCapacity}` : 'dummy'}`,
       size: flowKernelDescriptorBufferCapacity * FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES,
@@ -7502,7 +7552,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySplatFeatureCaptureEffective = featureCaptureRequested
       && boundarySplatFeatureBufferCapacity === boundarySplatCapacity;
     state.flowKernelDescriptorCaptureEffective = descriptorCaptureRequested
-      && flowKernelDescriptorBufferCapacity === boundarySplatCapacity;
+      && flowKernelDescriptorBufferCapacity >= Math.max(boundarySplatCapacity, state.flowKernelDescriptorIndexCount || 0);
     return true;
   }
 
@@ -7640,6 +7690,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compact ${gridSize}^3`,
       layout: boundarySplatComputePipelineLayout,
       compute: { module: boundarySplatShader, entryPoint: 'compactBoundarySplats', constants: computePipelineConstants },
+    });
+    flowKernelDescriptorIndexPipeline = device.createComputePipeline({
+      label: `kaminos ${FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY} external index ${gridSize}^3`,
+      layout: boundarySplatComputePipelineLayout,
+      compute: { module: boundarySplatShader, entryPoint: 'evaluateFlowKernelDescriptorsForIndices', constants: computePipelineConstants },
     });
     boundarySplatFinalizePipeline = device.createComputePipeline({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} finalize ${gridSize}^3`,
@@ -8004,6 +8059,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
         { binding: 7, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
         { binding: 8, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 9, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
       ],
     });
     boundarySplatRenderBindGroupLayout = device.createBindGroupLayout({
@@ -9787,7 +9843,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySplatFeatureCaptureEffective = state.boundarySplatFeatureCaptureRequested
       && boundarySplatFeatureBufferCapacity === boundarySplatCapacity;
     state.flowKernelDescriptorCaptureEffective = state.flowKernelDescriptorCaptureRequested
-      && flowKernelDescriptorBufferCapacity === boundarySplatCapacity;
+      && flowKernelDescriptorBufferCapacity >= boundarySplatCapacity;
     const defaultDescriptorSource = {
       role: 'truthHigh',
       fluid: fluidBuffers[currentFluid],
@@ -9836,6 +9892,34 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     encoder.copyBufferToBuffer(boundarySplatDrawBuffer, 0, boundarySplatIndirectBuffer, 0, 16);
     hooks.afterIndirectSetup?.();
     state.boundarySplatFallbackReason = null;
+    return true;
+  }
+
+  function encodeExternalFlowKernelDescriptors(encoder) {
+    const count = state.flowKernelDescriptorIndexCount;
+    if (!state.flowKernelDescriptorCaptureRequested
+      || state.flowKernelDescriptorIndexReceipt?.status !== 'applied'
+      || !Number.isInteger(count)
+      || count <= 0) return false;
+    if (!state.boundarySidecarBuiltThisFrame
+      || !state.majorantBuiltThisFrame
+      || !flowKernelDescriptorIndexPipeline
+      || !flowKernelDescriptorIndexBuffer
+      || flowKernelDescriptorBufferCapacity < count
+      || boundarySplatComputeBindGroups.length !== 2) {
+      throw new Error('external-flow-kernel-descriptor-route-unavailable');
+    }
+    boundarySplatDescriptorSource = {
+      role: 'truthHigh',
+      fluid: fluidBuffers[currentFluid],
+      front: frontBuffers[currentFront],
+    };
+    const pass = encoder.beginComputePass({ label: `kaminos ${FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY} external index pass` });
+    pass.setPipeline(flowKernelDescriptorIndexPipeline);
+    pass.setBindGroup(0, boundarySplatComputeBindGroups[currentFluid]);
+    pass.dispatchWorkgroups(Math.ceil(state.flowKernelDescriptorIndexCount / 64));
+    pass.end();
+    state.flowKernelDescriptorCapturePopulation = FLOW_KERNEL_EXTERNAL_INDEX_POPULATION_IDENTITY;
     return true;
   }
 
@@ -10194,7 +10278,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       .map(value => value.toString(16).padStart(2, '0')).join('');
   }
 
-  async function sampleBoundarySplatKernelDescriptorCapture(instanceCount) {
+  async function sampleBoundarySplatKernelDescriptorCapture(instanceCount, options = {}) {
     if (!state.flowKernelDescriptorCaptureRequested) return null;
     if (!state.flowKernelDescriptorCaptureEffective || !flowKernelDescriptorBuffer) {
       throw new Error('flow-kernel-descriptor-capture-requested-but-unavailable');
@@ -10202,8 +10286,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (!Number.isInteger(instanceCount) || instanceCount <= 0) {
       throw new Error(`flow-kernel-descriptor-capture-blank-instance-count:${instanceCount}`);
     }
-    if (instanceCount > boundarySplatCapacity) {
-      throw new Error(`flow-kernel-descriptor-capture-instance-count-exceeds-capacity:${instanceCount}`);
+    if (instanceCount > flowKernelDescriptorBufferCapacity) {
+      throw new Error(`flow-kernel-descriptor-capture-row-count-exceeds-capacity:${instanceCount}`);
     }
     const importReceipt = state.fullFieldImportReceipt;
     if (importReceipt?.status !== 'applied'
@@ -10256,7 +10340,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const decoded = decodeFlowKernelDescriptorCapture(
       descriptorValues,
       instanceCount,
-      boundarySplatCapacity,
+      flowKernelDescriptorBufferCapacity,
       {
         kernelIdentity: FLOW_RECONSTRUCTION_KERNEL_IDENTITY,
         requestedControls: flowKernelRequestedControls(controlsSnapshot),
@@ -10294,8 +10378,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           ? importReceipt.sourceManifestSha256
           : null,
       },
-      candidateAdmissionAuthority: state.flowKernelCandidateAdmissionAuthority,
-      countAuthority: 'gpu-indirect-post-submit-witness-readback',
+      candidateAdmissionAuthority: options.populationIdentity || FLOW_KERNEL_COMPACT_POPULATION_IDENTITY,
+      admissionIndexAuthority: options.indexReceipt ? {
+        identity: FLOW_KERNEL_EXTERNAL_INDEX_POPULATION_IDENTITY,
+        indexSha256: options.indexReceipt.indexSha256,
+        count: options.indexReceipt.count,
+        byteLength: options.indexReceipt.byteLength,
+        duplicatePolicy: options.indexReceipt.duplicatePolicy,
+        orderIdentity: options.indexReceipt.orderIdentity,
+      } : null,
+      countAuthority: options.countAuthority || 'gpu-indirect-post-submit-witness-readback',
       routeIdentity: ROUTE_IDENTITY,
       effectiveRoute: state.effectiveRoute,
       backend: state.backend,
@@ -10847,6 +10939,166 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
     state.fullFieldImportReceipt = failed;
     return { ok: false, ...failed };
+  }
+
+  function flowKernelDescriptorIndexFailure(failurePhase, reason, extra = {}) {
+    const failed = {
+      identity: FLOW_KERNEL_EXTERNAL_INDEX_POPULATION_IDENTITY,
+      status: 'failed',
+      failurePhase,
+      reason,
+      duplicatePolicy: 'forbidden',
+      orderIdentity: 'caller-ordered',
+      routeIdentity: ROUTE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      backend: state.backend,
+      ...extra,
+    };
+    state.flowKernelDescriptorIndexReceipt = failed;
+    return { ok: false, ...failed };
+  }
+
+  function beginFlowKernelDescriptorIndexUpload(payload = {}) {
+    if (!device) return flowKernelDescriptorIndexFailure('begin', 'inactive');
+    const requestedGrid = Math.floor(Number(payload.grid));
+    const count = Math.floor(Number(payload.count));
+    const byteLength = Math.floor(Number(payload.byteLength));
+    const indexSha256 = String(payload.indexSha256 || '').toLowerCase();
+    if (requestedGrid !== gridSize) {
+      return flowKernelDescriptorIndexFailure('begin', 'grid-mismatch', { requestedGrid, effectiveGrid: gridSize });
+    }
+    if (!Number.isInteger(count) || count <= 0 || byteLength !== count * Uint32Array.BYTES_PER_ELEMENT) {
+      return flowKernelDescriptorIndexFailure('begin', 'shape-mismatch', { count, byteLength });
+    }
+    if (!/^[a-f0-9]{64}$/.test(indexSha256)) return flowKernelDescriptorIndexFailure('begin', 'sha256-missing');
+    flowKernelDescriptorIndexUpload = {
+      sessionId: `flow-kernel-index-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+      grid: requestedGrid,
+      count,
+      byteLength,
+      indexSha256,
+      bytes: new Uint8Array(byteLength),
+      receivedBytes: 0,
+      chunkCount: 0,
+    };
+    state.flowKernelDescriptorIndexReceipt = {
+      identity: FLOW_KERNEL_EXTERNAL_INDEX_POPULATION_IDENTITY,
+      status: 'receiving',
+      sessionId: flowKernelDescriptorIndexUpload.sessionId,
+      grid: requestedGrid,
+      count,
+      byteLength,
+      indexSha256,
+      duplicatePolicy: 'forbidden',
+      orderIdentity: 'caller-ordered',
+    };
+    return { ok: true, ...state.flowKernelDescriptorIndexReceipt };
+  }
+
+  function writeFlowKernelDescriptorIndexUploadChunk(payload = {}) {
+    const upload = flowKernelDescriptorIndexUpload;
+    if (!upload || payload.sessionId !== upload.sessionId) return flowKernelDescriptorIndexFailure('chunk-write', 'session-id-mismatch');
+    const byteOffset = Math.floor(Number(payload.byteOffset));
+    if (byteOffset !== upload.receivedBytes) {
+      return flowKernelDescriptorIndexFailure('chunk-write', 'non-sequential-byte-offset', {
+        expectedByteOffset: upload.receivedBytes,
+        requestedByteOffset: byteOffset,
+      });
+    }
+    const chunk = decodeFullFieldImportChunk(payload.base64);
+    if (byteOffset + chunk.byteLength > upload.byteLength) {
+      return flowKernelDescriptorIndexFailure('chunk-write', 'chunk-overflow', { byteOffset, chunkByteLength: chunk.byteLength });
+    }
+    upload.bytes.set(chunk, byteOffset);
+    upload.receivedBytes += chunk.byteLength;
+    upload.chunkCount += 1;
+    return {
+      ok: true,
+      identity: FLOW_KERNEL_EXTERNAL_INDEX_POPULATION_IDENTITY,
+      sessionId: upload.sessionId,
+      byteOffset,
+      byteLength: chunk.byteLength,
+      receivedBytes: upload.receivedBytes,
+      expectedBytes: upload.byteLength,
+      chunkCount: upload.chunkCount,
+      isFinal: upload.receivedBytes === upload.byteLength,
+    };
+  }
+
+  async function finishFlowKernelDescriptorIndexUpload(payload = {}) {
+    const upload = flowKernelDescriptorIndexUpload;
+    if (!upload || payload.sessionId !== upload.sessionId) return flowKernelDescriptorIndexFailure('finish', 'session-id-mismatch');
+    if (upload.receivedBytes !== upload.byteLength) {
+      return flowKernelDescriptorIndexFailure('finish', 'incomplete-upload', {
+        receivedBytes: upload.receivedBytes,
+        expectedBytes: upload.byteLength,
+      });
+    }
+    const actualIndexSha256 = await sha256Bytes(upload.bytes);
+    if (actualIndexSha256 !== upload.indexSha256) {
+      flowKernelDescriptorIndexUpload = null;
+      return flowKernelDescriptorIndexFailure('sha256-validation', 'sha256-mismatch', {
+        expectedIndexSha256: upload.indexSha256,
+        actualIndexSha256,
+      });
+    }
+    const indices = new Uint32Array(upload.bytes.buffer, upload.bytes.byteOffset, upload.count);
+    const seen = new Set();
+    for (let index = 0; index < indices.length; index += 1) {
+      const nativeCellIndex = indices[index];
+      if (nativeCellIndex >= gridSize * gridSize * gridSize) {
+        flowKernelDescriptorIndexUpload = null;
+        return flowKernelDescriptorIndexFailure('index-validation', 'native-cell-index-out-of-bounds', { index, nativeCellIndex, grid: gridSize });
+      }
+      if (seen.has(nativeCellIndex)) {
+        flowKernelDescriptorIndexUpload = null;
+        return flowKernelDescriptorIndexFailure('index-validation', 'duplicate-native-cell-index', {
+          index,
+          nativeCellIndex,
+          duplicatePolicy: 'forbidden',
+        });
+      }
+      seen.add(nativeCellIndex);
+    }
+    const packed = new Uint32Array(upload.count + 1);
+    packed[0] = upload.count;
+    packed.set(indices, 1);
+    const previousIndexBuffer = flowKernelDescriptorIndexBuffer;
+    flowKernelDescriptorIndexBufferCapacity = packed.length;
+    flowKernelDescriptorIndexBuffer = device.createBuffer({
+      label: `kaminos ${FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY} external indices ${upload.count}`,
+      size: packed.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(flowKernelDescriptorIndexBuffer, 0, packed);
+    state.flowKernelDescriptorIndexCount = upload.count;
+    resizeFlowKernelDescriptorBuffer(
+      Math.max(flowKernelDescriptorCaptureRequested() ? boundarySplatCapacity : 1, upload.count),
+      'external index capacity',
+    );
+    rebuildBoundarySplatBindGroups();
+    previousIndexBuffer?.destroy();
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    const receipt = {
+      ok: true,
+      identity: FLOW_KERNEL_EXTERNAL_INDEX_POPULATION_IDENTITY,
+      status: 'applied',
+      failurePhase: null,
+      sessionId: upload.sessionId,
+      grid: upload.grid,
+      count: upload.count,
+      byteLength: upload.byteLength,
+      indexSha256: actualIndexSha256,
+      duplicatePolicy: 'forbidden',
+      orderIdentity: 'caller-ordered',
+      chunkCount: upload.chunkCount,
+      routeIdentity: ROUTE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      backend: state.backend,
+    };
+    state.flowKernelDescriptorIndexReceipt = receipt;
+    flowKernelDescriptorIndexUpload = null;
+    return { ...receipt };
   }
 
   function beginDebugFullFieldImport(payload = {}) {
@@ -13956,6 +14208,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       encodeMajorant(encoder, { force: true });
       encodeBoundarySidecar(encoder);
       encodeBoundarySplats(encoder);
+      let externalFlowKernelDescriptorsEncoded = encodeExternalFlowKernelDescriptors(encoder);
       const currentTexture = context.getCurrentTexture();
       let residualApplied = false;
       let raymarchEncoded = false;
@@ -14087,6 +14340,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         updateUniforms(fixedNow);
         const retryEncoder = device.createCommandEncoder({ label: 'kaminos frozen-boundary-splat-capacity-retry' });
         encodeBoundarySplats(retryEncoder);
+        externalFlowKernelDescriptorsEncoded = encodeExternalFlowKernelDescriptors(retryEncoder)
+          || externalFlowKernelDescriptorsEncoded;
         const retryTexture = context.getCurrentTexture();
         let retryRaymarchEncoded = false;
         if (compositionDefinition.raymarch) {
@@ -14151,9 +14406,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           };
         }
       }
-      const flowKernelDescriptorCapture = state.flowKernelDescriptorCaptureRequested && compositionDefinition.splat
-        ? await sampleBoundarySplatKernelDescriptorCapture(Number(state.boundarySplatInstanceCount))
-        : null;
+      const flowKernelDescriptorCapture = state.flowKernelDescriptorCaptureRequested && externalFlowKernelDescriptorsEncoded
+        ? await sampleBoundarySplatKernelDescriptorCapture(state.flowKernelDescriptorIndexCount, {
+          populationIdentity: FLOW_KERNEL_EXTERNAL_INDEX_POPULATION_IDENTITY,
+          indexReceipt: state.flowKernelDescriptorIndexReceipt,
+          countAuthority: 'checksum-bound-caller-index-count',
+        })
+        : state.flowKernelDescriptorCaptureRequested && compositionDefinition.splat
+          ? await sampleBoundarySplatKernelDescriptorCapture(Number(state.boundarySplatInstanceCount), {
+            populationIdentity: FLOW_KERNEL_COMPACT_POPULATION_IDENTITY,
+          })
+          : null;
       state.flowKernelDescriptorCapture = flowKernelDescriptorCapture;
       const featureCapture = featureCaptureSourcePassApplied && browserResidualFeatureTexture
         ? await readTextureRgba8(
@@ -14773,6 +15036,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     beginDebugFullFieldImport,
     writeDebugFullFieldImportChunk,
     finishDebugFullFieldImport,
+    beginFlowKernelDescriptorIndexUpload,
+    writeFlowKernelDescriptorIndexUploadChunk,
+    finishFlowKernelDescriptorIndexUpload,
     advanceDebugImportedFieldSteps,
     resumeDebugImportedFieldLive,
     beginDebugFullFieldExport,
