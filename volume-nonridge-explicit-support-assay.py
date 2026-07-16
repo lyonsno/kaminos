@@ -90,9 +90,34 @@ class CandidateDefinition:
     name: str
     expression: str
     inputs: tuple[str, ...]
+    controls: tuple[str, ...] = ()
+
+
+AUTHORED_BOUNDARY_CONTROLS = (
+    "support.thermal", "support.reaction", "support.front", "support.interface",
+    "boundary.gradientGain", "boundary.cut", "boundary.softness",
+    "boundary.coreRejection", "topology.gain", "curl.gain", "divergence.gain",
+)
 
 
 CANDIDATES = [
+    CandidateDefinition(
+        "authored.gradient-gated-fire.signal",
+        "step(1e-6,boundary.gradientGain)*fire.signal",
+        ("fire.energy", "fire.emission", "fire.detail", "micro.z", "material.heat"),
+        ("boundary.gradientGain",),
+    ),
+    CandidateDefinition(
+        "authored.boundary.raw",
+        "boundarySupport*gradientGate*coreGate*topology",
+        (
+            "material.density", "material.heat", "material.fuel", "material.detail",
+            "fire.energy", "fire.temperature", "fire.emission", "fire.detail",
+            "micro.x", "micro.y", "micro.z", "micro.w", "front.topology",
+            "velocity.x", "velocity.y", "velocity.z", "flow.curlMagnitude", "flow.divergence",
+        ),
+        AUTHORED_BOUNDARY_CONTROLS,
+    ),
     CandidateDefinition("material.heat", "clamp(material.heat,0,1)", ("material.heat",)),
     CandidateDefinition("fire.energy", "clamp(fire.energy,0,1)", ("fire.energy",)),
     CandidateDefinition("fire.emission", "clamp(fire.emission,0,1)", ("fire.emission",)),
@@ -446,12 +471,23 @@ def validate_and_open(corpus: dict[str, Any], calibration_setting: str | None) -
             effective_controls = setting.get("effectiveControls")
             if not isinstance(effective_controls, dict):
                 raise AssayError("control-identity", f"{setting_id} lacks canonical effective controls")
+            missing_controls = sorted(set(AUTHORED_BOUNDARY_CONTROLS) - set(effective_controls))
+            if missing_controls:
+                raise AssayError("control-identity", f"{setting_id} lacks authored boundary controls", {
+                    "missing": missing_controls,
+                })
             controls_hash = sha256_bytes(canonical_json(effective_controls))
             if source.get("controlsHash") != controls_hash or setting.get("effectiveControlIdentity") != f"sha256:{controls_hash}":
                 raise AssayError("control-identity", f"{setting_id} effective controls do not match identity")
             shape = source.get("gridShape")
             if not isinstance(shape, list) or len(shape) != 3 or not all(isinstance(v, int) and v > 0 for v in shape):
                 raise AssayError("spatial-contract", f"{setting_id} gridShape is invalid")
+            spacing = source.get("gridSpacing")
+            if (
+                not isinstance(spacing, list) or len(spacing) != 3
+                or any(not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0 for value in spacing)
+            ):
+                raise AssayError("spatial-contract", f"{setting_id} gridSpacing is invalid")
             if source.get("gridAxisOrder") != "x-fastest-y-then-z-v0":
                 raise AssayError("spatial-contract", f"{setting_id} axis order is not x-fastest")
             row_count = rows.get("count")
@@ -566,10 +602,114 @@ def central_gradient(values: np.ndarray, shape_xyz: list[int]) -> np.ndarray:
     return np.sqrt(dx * dx + dy * dy + dz * dz).reshape(-1)
 
 
+def world_central_gradient(
+    values: np.ndarray, shape_xyz: list[int], spacing_xyz: list[float],
+) -> np.ndarray:
+    x_size, y_size, z_size = shape_xyz
+    if len(spacing_xyz) != 3 or any(not math.isfinite(value) or value <= 0 for value in spacing_xyz):
+        raise AssayError("spatial-contract", "grid spacing must contain three positive finite values")
+    grid = np.asarray(values, dtype=np.float32).reshape((z_size, y_size, x_size))
+    padded = np.pad(grid, 1, mode="edge")
+    dx = (padded[1:-1, 1:-1, 2:] - padded[1:-1, 1:-1, :-2]) * (0.5 / spacing_xyz[0])
+    dy = (padded[1:-1, 2:, 1:-1] - padded[1:-1, :-2, 1:-1]) * (0.5 / spacing_xyz[1])
+    dz = (padded[2:, 1:-1, 1:-1] - padded[:-2, 1:-1, 1:-1]) * (0.5 / spacing_xyz[2])
+    return np.sqrt(dx * dx + dy * dy + dz * dz).reshape(-1)
+
+
+def authored_boundary_raw(
+    source: np.ndarray,
+    indices: dict[str, int],
+    shape_xyz: list[int],
+    spacing_xyz: list[float],
+    controls: dict[str, float],
+) -> np.ndarray:
+    """CPU mirror of the live boundary carrier before display shaping and erosion."""
+    column = lambda feature: np.asarray(source[:, indices[feature]], dtype=np.float32)
+    velocity_magnitude = np.sqrt(
+        column("velocity.x") ** 2 + column("velocity.y") ** 2 + column("velocity.z") ** 2
+    )
+    heat = column("material.heat")
+    fuel = column("material.fuel")
+    flame = column("fire.energy")
+    ember = column("fire.temperature")
+    flame_detail = column("fire.emission")
+    combustion_front = column("fire.detail")
+    micro_smoke = column("micro.x")
+    interface_shred = column("micro.y")
+    fire_lick = column("micro.z")
+    material_detail = column("micro.w")
+    raw_temperature = np.clip(
+        flame * 1.22 + ember * 0.46 + flame_detail * 0.40 + fire_lick * 1.18
+        + material_detail * 0.48 + heat * 0.20 + velocity_magnitude * 0.30,
+        0.0, 2.4,
+    )
+    thermal = smoothstep(0.018, 0.62, raw_temperature + flame * 0.16 + heat * 0.24 + ember * 0.12)
+    reaction = smoothstep(
+        0.004, 0.30,
+        flame_detail * 0.72 + fire_lick * 0.44 + combustion_front * 0.34 + fuel * heat * 0.28,
+    )
+    front = smoothstep(
+        0.001, 0.088,
+        column("front.topology") * 1.08 + combustion_front * 0.54 + fire_lick * 0.12,
+    )
+    interface = smoothstep(
+        0.004, 0.24,
+        interface_shred * 0.58 + micro_smoke * 0.18
+        + column("material.density") * 0.08 + column("material.detail") * 0.06,
+    )
+    weights = np.asarray([
+        controls["support.thermal"], controls["support.reaction"],
+        controls["support.front"], controls["support.interface"],
+    ], dtype=np.float32)
+    support = np.clip(
+        (thermal * weights[0] + reaction * weights[1] + front * weights[2] + interface * weights[3])
+        / max(0.001, float(np.sum(weights))),
+        0.0, 1.35,
+    )
+    gradient = world_central_gradient(support, shape_xyz, spacing_xyz)
+    gradient_gate = smoothstep(
+        float(controls["boundary.cut"]),
+        float(controls["boundary.cut"] + controls["boundary.softness"]),
+        gradient * float(controls["boundary.gradientGain"]),
+    )
+    curl_activity = smoothstep(0.006, 0.16, np.clip(column("flow.curlMagnitude"), 0.0, None))
+    edge = smoothstep(
+        0.004, 0.24,
+        interface_shred * 0.58 + micro_smoke * 0.18
+        + column("material.density") * 0.08 + curl_activity * 0.42,
+    )
+    div_support = smoothstep(0.010, 0.18, np.abs(column("flow.divergence"))) * smoothstep(
+        0.010, 0.46, raw_temperature + heat * 0.18 + flame_detail * 0.32,
+    )
+    shell_core_body = smoothstep(
+        0.26, 1.18,
+        raw_temperature * 0.54 + flame_detail * 0.44 + heat * 0.12 + ember * 0.12,
+    ) * (1.0 - np.clip(front * 0.54 + edge * 0.30 + curl_activity * 0.12, 0.0, 0.86))
+    core_gate = np.clip(
+        1.0 - shell_core_body * float(controls["boundary.coreRejection"]), 0.0, 1.0,
+    )
+    topology = np.clip(
+        1.0
+        + float(controls["topology.gain"]) * (edge * 0.50 + front * 0.24)
+        + float(controls["curl.gain"]) * curl_activity
+        + float(controls["divergence.gain"]) * div_support,
+        0.0, 3.5,
+    )
+    return np.clip(support * gradient_gate * core_gate * topology, 0.0, 2.0)
+
+
 def candidate_values(setting: OpenSetting, definition: CandidateDefinition, indices: dict[str, int]) -> np.ndarray:
     source = setting.source
     name = definition.name
     column = lambda feature: np.asarray(source[:, indices[feature]], dtype=np.float32)
+    if name == "authored.boundary.raw":
+        return authored_boundary_raw(
+            source,
+            indices,
+            setting.manifest["source"]["gridShape"],
+            setting.manifest["source"]["gridSpacing"],
+            setting.manifest["effectiveControls"],
+        )
     if name in {"material.heat", "fire.energy", "fire.emission", "fire.detail", "micro.z", "front.topology", "support.reaction", "flow.curlMagnitude"}:
         return np.clip(column(name), 0.0, 1.0)
     if name == "support.interface.inverse":
@@ -586,6 +726,9 @@ def candidate_values(setting: OpenSetting, definition: CandidateDefinition, indi
         + column("micro.z") * 0.72
         + column("material.heat") * 0.24
     ) / 1.5, 0.0, 1.0)
+    if name == "authored.gradient-gated-fire.signal":
+        enabled = float(setting.manifest["effectiveControls"]["boundary.gradientGain"]) >= 1e-6
+        return fire_signal if enabled else np.zeros_like(fire_signal)
     reaction = np.clip(column("support.reaction"), 0.0, 1.0)
     front = np.clip(column("front.topology"), 0.0, 1.0)
     if name == "fire.signal":
@@ -648,6 +791,18 @@ def setting_counts(setting: OpenSetting, values: np.ndarray, threshold: float, i
         "fullFlamePositive": int(np.count_nonzero(optical)),
         "ridgeAdmitted": int(np.count_nonzero(ridge_admitted)),
     }
+
+
+def source_populated_rows(setting: OpenSetting, indices: dict[str, int]) -> int:
+    source = setting.source
+    fire_signal = (
+        source[:, indices["fire.energy"]] * 1.25
+        + source[:, indices["fire.emission"]] * 0.52
+        + source[:, indices["fire.detail"]] * 0.86
+        + source[:, indices["micro.z"]] * 0.72
+        + source[:, indices["material.heat"]] * 0.24
+    )
+    return int(np.count_nonzero(fire_signal >= 0.018))
 
 
 def ratio(numerator: int, denominator: int) -> float:
@@ -822,11 +977,18 @@ def main() -> int:
         fit_settings = [opened[setting_id] for setting_id in roles["fit"]]
         calibration_settings = [opened[setting_id] for setting_id in roles["calibration"]]
         held_settings = [opened[setting_id] for setting_id in roles["heldOut"]]
+        negative_control_settings = [
+            setting for setting in opened.values()
+            if setting.manifest.get("negativeControl") is True
+        ]
 
         candidates: list[dict[str, Any]] = []
         for definition in CANDIDATES:
             threshold, fit_counts, fit_score = best_fit_threshold(fit_settings, definition, indices)
             calibration_counts, _ = evaluate_settings(calibration_settings, definition, threshold, indices)
+            negative_control_counts, _ = evaluate_settings(
+                negative_control_settings, definition, threshold, indices,
+            )
             candidates.append({
                 "definition": definition,
                 "threshold": threshold,
@@ -834,8 +996,15 @@ def main() -> int:
                 "fitScore": fit_score,
                 "calibrationCounts": calibration_counts,
                 "calibrationScore": objective(calibration_counts),
+                "negativeControlCounts": negative_control_counts,
             })
-        candidates.sort(key=lambda item: (-item["calibrationScore"], -item["fitScore"], item["definition"].name))
+        candidates.sort(key=lambda item: (
+            item["negativeControlCounts"]["selected"] != 0,
+            ratio(item["negativeControlCounts"]["selected"], item["negativeControlCounts"]["rows"]),
+            -item["calibrationScore"],
+            -item["fitScore"],
+            item["definition"].name,
+        ))
         selected = candidates[0]
         definition: CandidateDefinition = selected["definition"]
         threshold = selected["threshold"]
@@ -856,6 +1025,7 @@ def main() -> int:
                 "feature": definition.name,
                 "expression": definition.expression,
                 "inputs": list(definition.inputs),
+                "controls": list(definition.controls),
                 "low": low,
                 "high": high,
                 "weight": 1.0,
@@ -865,6 +1035,11 @@ def main() -> int:
             "ridgeLayerIdentity": "authored-ridge-support-coefficient-layer-v0",
             "compositionIdentity": "separate-ridge-nonridge-shared-total-extinction-v0",
             "compositionLaw": "sigma_total=sigma_ridge+sigma_nonridge",
+            "ownershipSeparation": {
+                "ridge": "sigma_ridge=sigma_complete*ridgeOwnershipWeight",
+                "nonRidge": "sigma_nonridge=sigma_complete*(1-ridgeOwnershipWeight)",
+                "sharedTransport": "sigma_total=sigma_ridge+sigma_nonridge",
+            },
         }
         recipe_path = out_dir / "selector-recipe.json"
         write_json(recipe_path, selector)
@@ -873,6 +1048,7 @@ def main() -> int:
                 "rows": counts["rows"],
                 "admittedRows": counts["selected"],
                 "admittedFraction": ratio(counts["selected"], counts["rows"]),
+                "sourcePopulatedRows": source_populated_rows(opened[setting_id], indices),
             }
             for per_role in (fit_per_setting, calibration_per_setting, held_per_setting)
             for setting_id, counts in per_role.items()
@@ -908,22 +1084,40 @@ def main() -> int:
                 "predicate": "max(nonRidge.emission.rgb,nonRidge.extinction)>epsilon && ridgeStructuralSignal<0.11",
                 "note": "When Ridge rejects, the positive Non-Ridge optical remainder equals Complete Flame optical support.",
             },
+            "authoredControlLaw": {
+                "identity": "reaction-boundary-live-controls-v0",
+                "sourceFunction": "boundarySupportFromSlots/liveBoundarySupportAt",
+                "gradientSpace": "world-grid-spacing-scaled-central-difference-v0",
+                "controls": list(AUTHORED_BOUNDARY_CONTROLS),
+                "preDisplayExpression": "boundarySupport*gradientGate*coreGate*topology",
+            },
             "candidateBasis": [definition.name for definition in CANDIDATES],
             "candidateBasisDefinitions": [
-                {"name": item.name, "expression": item.expression, "inputs": list(item.inputs)}
+                {
+                    "name": item.name, "expression": item.expression,
+                    "inputs": list(item.inputs), "controls": list(item.controls),
+                }
                 for item in CANDIDATES
             ],
             "search": {
-                "identity": "fixed-256-bin-whole-setting-formula-threshold-search-v0",
+                "identity": "black-control-veto-then-fixed-256-bin-formula-threshold-search-v0",
                 "histogramBins": HISTOGRAM_BINS,
                 "formulaCount": len(CANDIDATES),
                 "discoveryRole": "fit",
                 "selectionRole": "calibration",
+                "selectionCriteria": [
+                    "zero-negative-control-admissions-first",
+                    "minimum-negative-control-admitted-fraction",
+                    "maximum-calibration-objective",
+                    "maximum-fit-objective",
+                    "lexical-formula-name-tiebreak",
+                ],
                 "ranking": [{
                     "feature": item["definition"].name,
                     "threshold": item["threshold"],
                     "fitObjective": item["fitScore"],
                     "calibrationObjective": item["calibrationScore"],
+                    "negativeControl": public_metrics(item["negativeControlCounts"]),
                     "fit": public_metrics(item["fitCounts"]),
                     "calibration": public_metrics(item["calibrationCounts"]),
                 } for item in candidates],
