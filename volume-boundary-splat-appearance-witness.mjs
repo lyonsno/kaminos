@@ -167,6 +167,17 @@ try {
         const hash = await crypto.subtle.digest('SHA-256', bytes);
         return [...new Uint8Array(hash)].map(byte => byte.toString(16).padStart(2, '0')).join('');
       };
+      const markProgress = (phase, details = {}) => {
+        const receipt = {
+          identity: 'kaminos-boundary-splat-appearance-progress-v0',
+          phase,
+          atMs: performance.now(),
+          ...details,
+        };
+        window.__kaminosAppearanceWitnessProgress = receipt;
+        console.info(receipt.identity, JSON.stringify(receipt));
+        return receipt;
+      };
       const pngDataUrl = image => {
         const canvas = document.createElement('canvas');
         canvas.width = image.width;
@@ -231,6 +242,7 @@ try {
         'positive-optical-recomposition',
       ]);
       const captureAppearance = async (mode, targetIdentity) => {
+        markProgress('target-capture-start', { mode, targetIdentity });
         prototype.setVolumePresentationMode('beauty');
         const requestedReceipt = operator.setAppearanceAssay(mode);
         const sample = await prototype.sampleFrame({
@@ -283,8 +295,10 @@ try {
         if (!metrics.nonblank) {
           throw new Error('appearance-assay-blank-target:' + mode + ':' + JSON.stringify(metrics));
         }
+        const materializedPngDataUrl = pngDataUrl(sample.image);
+        markProgress('target-capture-complete', { mode, targetIdentity, metrics });
         return {
-          pngDataUrl: pngDataUrl(sample.image),
+          pngDataUrl: materializedPngDataUrl,
           width: sample.image.width,
           height: sample.image.height,
           rgba: sample.image.rgba,
@@ -294,6 +308,14 @@ try {
         };
       };
       try {
+        const cohortCameraEntry = cameraManifest.cameras[0];
+        if (!cohortCameraEntry) throw new Error('appearance-cohort-camera-missing');
+        basinWindow.kaminosSetCameraDebugPose(cohortCameraEntry.pose);
+        markProgress('candidate-capture-start', {
+          cameraId: cohortCameraEntry.id,
+          sameStateCaptureId,
+          simStepCount: before.simStepCount,
+        });
         const capture = await prototype.captureBoundarySplatSupervisionCandidates({
           renderScale: expectedRenderScale,
           resumeRenderLoop: false,
@@ -307,7 +329,15 @@ try {
         window.__kaminosAppearanceCandidateBytes = candidateBytes;
         const { packedFloat32Base64, ...metadata } = capture.candidates;
         candidateMetadata = metadata;
+        markProgress('candidate-capture-complete', {
+          cameraId: cohortCameraEntry.id,
+          sameStateCaptureId,
+          simStepCount: before.simStepCount,
+          candidateCount: metadata.rowCount,
+          candidateBytes: candidateLength,
+        });
         for (const entry of cameraManifest.cameras) {
+          markProgress('camera-view-start', { cameraId: entry.id, split: entry.split });
           basinWindow.kaminosSetCameraDebugPose(entry.pose);
           const cameraState = basinWindow.kaminosCameraDebugState();
           const beforeView = prototype.debugState();
@@ -370,14 +400,28 @@ try {
             positiveNonRidgeExtinction,
             positiveOpticalRecomposition,
           });
+          markProgress('camera-view-complete', {
+            cameraId: entry.id,
+            split: entry.split,
+            targetCount: 12,
+            simStepCount: before.simStepCount,
+          });
         }
       } finally {
+        markProgress('cohort-restoration-start', { sameStateCaptureId });
         basinWindow.kaminosSetCameraDebugPose(originalCamera);
         operator.setAppearanceAssay(originalAppearanceMode);
         prototype.setVolumePresentationMode(originalPresentationMode);
+        markProgress('cohort-restoration-complete', { sameStateCaptureId });
       }
       const after = prototype.debugState();
       if (after.simStepCount !== before.simStepCount) throw new Error('appearance-state-advanced-after-cohort');
+      markProgress('cohort-capture-complete', {
+        sameStateCaptureId,
+        cameraCount: cameras.length,
+        candidateCount: candidateMetadata.rowCount,
+        simStepCount: before.simStepCount,
+      });
       return {
         ok: true,
         requestedUrl: location.href,
