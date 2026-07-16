@@ -1,0 +1,35 @@
+{
+  "admissionThreshold": 0.5,
+  "authority": "explicit-source-field-operator-v0",
+  "compositionIdentity": "separate-ridge-nonridge-shared-total-extinction-v0",
+  "compositionLaw": "sigma_total=sigma_ridge+sigma_nonridge",
+  "kind": "bounded-monotone-rule-v0",
+  "nonRidgeLayerIdentity": "authored-nonridge-support-coefficient-layer-v0",
+  "ownershipSeparation": {
+    "nonRidge": "sigma_nonridge=sigma_complete*(1-ridgeOwnershipWeight)",
+    "ridge": "sigma_ridge=sigma_complete*ridgeOwnershipWeight",
+    "sharedTransport": "sigma_total=sigma_ridge+sigma_nonridge"
+  },
+  "ridgeLayerIdentity": "authored-ridge-support-coefficient-layer-v0",
+  "scoreExpression": "max(weight_i*smoothstep(low_i,high_i,term_i))",
+  "terms": [
+    {
+      "controls": [
+        "boundary.gradientGain"
+      ],
+      "direction": "increasing",
+      "expression": "step(1e-6,boundary.gradientGain)*fire.signal",
+      "feature": "authored.gradient-gated-fire.signal",
+      "high": 0.011764705882352941,
+      "inputs": [
+        "fire.energy",
+        "fire.emission",
+        "fire.detail",
+        "micro.z",
+        "material.heat"
+      ],
+      "low": 0.00392156862745098,
+      "weight": 1.0
+    }
+  ]
+}

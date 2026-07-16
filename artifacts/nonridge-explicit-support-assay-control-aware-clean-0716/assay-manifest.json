@@ -1,0 +1,2150 @@
+{
+  "authoredControlLaw": {
+    "controls": [
+      "support.thermal",
+      "support.reaction",
+      "support.front",
+      "support.interface",
+      "boundary.gradientGain",
+      "boundary.cut",
+      "boundary.softness",
+      "boundary.coreRejection",
+      "topology.gain",
+      "curl.gain",
+      "divergence.gain"
+    ],
+    "gradientSpace": "world-grid-spacing-scaled-central-difference-v0",
+    "identity": "reaction-boundary-live-controls-v0",
+    "preDisplayExpression": "boundarySupport*gradientGate*coreGate*topology",
+    "sourceFunction": "boundarySupportFromSlots/liveBoundarySupportAt"
+  },
+  "authority": "deterministic-selector-source-closure-assay-only-v0",
+  "candidateBasis": [
+    "authored.gradient-gated-fire.signal",
+    "authored.boundary.raw",
+    "material.heat",
+    "fire.energy",
+    "fire.emission",
+    "fire.detail",
+    "micro.z",
+    "front.topology",
+    "support.reaction",
+    "support.interface.inverse",
+    "flow.curlMagnitude",
+    "flow.divergence.abs",
+    "velocity.magnitude",
+    "fire.signal",
+    "reaction-front.max",
+    "reaction-front-flow.max",
+    "body-reaction-front-flow.max",
+    "reaction-front-neighbor.max",
+    "reaction-front-neighbor-gradient.max"
+  ],
+  "candidateBasisDefinitions": [
+    {
+      "controls": [
+        "boundary.gradientGain"
+      ],
+      "expression": "step(1e-6,boundary.gradientGain)*fire.signal",
+      "inputs": [
+        "fire.energy",
+        "fire.emission",
+        "fire.detail",
+        "micro.z",
+        "material.heat"
+      ],
+      "name": "authored.gradient-gated-fire.signal"
+    },
+    {
+      "controls": [
+        "support.thermal",
+        "support.reaction",
+        "support.front",
+        "support.interface",
+        "boundary.gradientGain",
+        "boundary.cut",
+        "boundary.softness",
+        "boundary.coreRejection",
+        "topology.gain",
+        "curl.gain",
+        "divergence.gain"
+      ],
+      "expression": "boundarySupport*gradientGate*coreGate*topology",
+      "inputs": [
+        "material.density",
+        "material.heat",
+        "material.fuel",
+        "material.detail",
+        "fire.energy",
+        "fire.temperature",
+        "fire.emission",
+        "fire.detail",
+        "micro.x",
+        "micro.y",
+        "micro.z",
+        "micro.w",
+        "front.topology",
+        "velocity.x",
+        "velocity.y",
+        "velocity.z",
+        "flow.curlMagnitude",
+        "flow.divergence"
+      ],
+      "name": "authored.boundary.raw"
+    },
+    {
+      "controls": [],
+      "expression": "clamp(material.heat,0,1)",
+      "inputs": [
+        "material.heat"
+      ],
+      "name": "material.heat"
+    },
+    {
+      "controls": [],
+      "expression": "clamp(fire.energy,0,1)",
+      "inputs": [
+        "fire.energy"
+      ],
+      "name": "fire.energy"
+    },
+    {
+      "controls": [],
+      "expression": "clamp(fire.emission,0,1)",
+      "inputs": [
+        "fire.emission"
+      ],
+      "name": "fire.emission"
+    },
+    {
+      "controls": [],
+      "expression": "clamp(fire.detail,0,1)",
+      "inputs": [
+        "fire.detail"
+      ],
+      "name": "fire.detail"
+    },
+    {
+      "controls": [],
+      "expression": "clamp(micro.z,0,1)",
+      "inputs": [
+        "micro.z"
+      ],
+      "name": "micro.z"
+    },
+    {
+      "controls": [],
+      "expression": "clamp(front.topology,0,1)",
+      "inputs": [
+        "front.topology"
+      ],
+      "name": "front.topology"
+    },
+    {
+      "controls": [],
+      "expression": "clamp(support.reaction,0,1)",
+      "inputs": [
+        "support.reaction"
+      ],
+      "name": "support.reaction"
+    },
+    {
+      "controls": [],
+      "expression": "1-clamp(support.interface,0,1)",
+      "inputs": [
+        "support.interface"
+      ],
+      "name": "support.interface.inverse"
+    },
+    {
+      "controls": [],
+      "expression": "clamp(flow.curlMagnitude,0,1)",
+      "inputs": [
+        "flow.curlMagnitude"
+      ],
+      "name": "flow.curlMagnitude"
+    },
+    {
+      "controls": [],
+      "expression": "clamp(abs(flow.divergence)/0.5,0,1)",
+      "inputs": [
+        "flow.divergence"
+      ],
+      "name": "flow.divergence.abs"
+    },
+    {
+      "controls": [],
+      "expression": "clamp(length(velocity.xyz)/0.6,0,1)",
+      "inputs": [
+        "velocity.x",
+        "velocity.y",
+        "velocity.z"
+      ],
+      "name": "velocity.magnitude"
+    },
+    {
+      "controls": [],
+      "expression": "clamp((1.25*fire.energy+0.52*fire.emission+0.86*fire.detail+0.72*micro.z+0.24*material.heat)/1.5,0,1)",
+      "inputs": [
+        "fire.energy",
+        "fire.emission",
+        "fire.detail",
+        "micro.z",
+        "material.heat"
+      ],
+      "name": "fire.signal"
+    },
+    {
+      "controls": [],
+      "expression": "max(clamp(support.reaction,0,1),clamp(front.topology,0,1))",
+      "inputs": [
+        "support.reaction",
+        "front.topology"
+      ],
+      "name": "reaction-front.max"
+    },
+    {
+      "controls": [],
+      "expression": "max(reaction,front,curl,abs(divergence)/0.5)",
+      "inputs": [
+        "support.reaction",
+        "front.topology",
+        "flow.curlMagnitude",
+        "flow.divergence"
+      ],
+      "name": "reaction-front-flow.max"
+    },
+    {
+      "controls": [],
+      "expression": "max(fire.signal,reaction,front,curl,abs(divergence)/0.5)",
+      "inputs": [
+        "fire.energy",
+        "fire.emission",
+        "fire.detail",
+        "micro.z",
+        "material.heat",
+        "support.reaction",
+        "front.topology",
+        "flow.curlMagnitude",
+        "flow.divergence"
+      ],
+      "name": "body-reaction-front-flow.max"
+    },
+    {
+      "controls": [],
+      "expression": "max(center_and_6_neighbors(support.reaction),center_and_6_neighbors(front.topology))",
+      "inputs": [
+        "support.reaction",
+        "front.topology"
+      ],
+      "name": "reaction-front-neighbor.max"
+    },
+    {
+      "controls": [],
+      "expression": "clamp(2*max(central_gradient(support.reaction),central_gradient(front.topology)),0,1)",
+      "inputs": [
+        "support.reaction",
+        "front.topology"
+      ],
+      "name": "reaction-front-neighbor-gradient.max"
+    }
+  ],
+  "failurePhase": null,
+  "hardPositive": {
+    "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+    "note": "When Ridge rejects, the positive Non-Ridge optical remainder equals Complete Flame optical support.",
+    "opticalEpsilon": 1e-06,
+    "predicate": "max(nonRidge.emission.rgb,nonRidge.extinction)>epsilon && ridgeStructuralSignal<0.11"
+  },
+  "identity": "deterministic-source-field-nonridge-selector-search-v0",
+  "implementation": {
+    "gitCommit": "b4a95b4ee106672bfbda0a3278fb3c4723e99afc",
+    "script": "volume-nonridge-explicit-support-assay.py",
+    "scriptDirty": false,
+    "scriptLocator": "repository-relative-v0",
+    "scriptSha256": "142f533595c8f2b4ef57200ae32c9ef36f902897628b9e4fec701cc874cf44f0"
+  },
+  "metrics": {
+    "calibration": {
+      "fullFlamePositiveRows": 925788,
+      "hardPositive": {
+        "admittedRows": 857675,
+        "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+        "recall": 0.940862279285288,
+        "rows": 911584
+      },
+      "ridgeAdmittedRows": 22827,
+      "rowsDropped": 0,
+      "rowsEvaluated": 2097152,
+      "wholeGrid": {
+        "admittedRows": 964151,
+        "f1": 0.9226530591728093,
+        "falsePositiveRate": 0.07877312261602713,
+        "negativeRows": 1171364,
+        "positiveRows": 925788,
+        "precision": 0.9042971484757055,
+        "recall": 0.9417696060005099
+      }
+    },
+    "fit": {
+      "fullFlamePositiveRows": 11817705,
+      "hardPositive": {
+        "admittedRows": 10904253,
+        "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+        "recall": 0.9516646064036536,
+        "rows": 11458084
+      },
+      "ridgeAdmittedRows": 705267,
+      "rowsDropped": 0,
+      "rowsEvaluated": 31457280,
+      "wholeGrid": {
+        "admittedRows": 13498114,
+        "f1": 0.8898684257459734,
+        "falsePositiveRate": 0.1137621358914335,
+        "negativeRows": 19639575,
+        "positiveRows": 11817705,
+        "precision": 0.8344776166507409,
+        "recall": 0.9531354861201901
+      }
+    },
+    "heldOut": {
+      "fullFlamePositiveRows": 809915,
+      "hardPositive": {
+        "admittedRows": 808609,
+        "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+        "recall": 0.9993462178268725,
+        "rows": 809138
+      },
+      "ridgeAdmittedRows": 812,
+      "rowsDropped": 0,
+      "rowsEvaluated": 2097152,
+      "wholeGrid": {
+        "admittedRows": 964151,
+        "f1": 0.9124643615288269,
+        "falsePositiveRate": 0.12023038492523133,
+        "negativeRows": 1287237,
+        "positiveRows": 809915,
+        "precision": 0.839480537799577,
+        "recall": 0.9993468450392943
+      }
+    },
+    "negativeControls": {
+      "setting-d": {
+        "admittedFraction": 0.0,
+        "admittedRows": 0,
+        "rows": 2097152,
+        "sourcePopulatedRows": 894852
+      }
+    },
+    "perSetting": {
+      "calibration": {
+        "setting-q": {
+          "fullFlamePositiveRows": 925788,
+          "hardPositive": {
+            "admittedRows": 857675,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.940862279285288,
+            "rows": 911584
+          },
+          "ridgeAdmittedRows": 22827,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 964151,
+            "f1": 0.9226530591728093,
+            "falsePositiveRate": 0.07877312261602713,
+            "negativeRows": 1171364,
+            "positiveRows": 925788,
+            "precision": 0.9042971484757055,
+            "recall": 0.9417696060005099
+          }
+        }
+      },
+      "fit": {
+        "setting-a": {
+          "fullFlamePositiveRows": 890413,
+          "hardPositive": {
+            "admittedRows": 820624,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9400842683114032,
+            "rows": 872926
+          },
+          "ridgeAdmittedRows": 50886,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 964151,
+            "f1": 0.9038361577168543,
+            "falsePositiveRate": 0.10444677763791507,
+            "negativeRows": 1206739,
+            "positiveRows": 890413,
+            "precision": 0.8692735888880476,
+            "recall": 0.9412609654171716
+          }
+        },
+        "setting-b": {
+          "fullFlamePositiveRows": 905692,
+          "hardPositive": {
+            "admittedRows": 787575,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.931198382529426,
+            "rows": 845765
+          },
+          "ridgeAdmittedRows": 104734,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 964151,
+            "f1": 0.9064953581664342,
+            "falsePositiveRate": 0.09790425192620818,
+            "negativeRows": 1191460,
+            "positiveRows": 905692,
+            "precision": 0.879013764441462,
+            "recall": 0.9357507850350892
+          }
+        },
+        "setting-c": {
+          "fullFlamePositiveRows": 778490,
+          "hardPositive": {
+            "admittedRows": 728099,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9725258726164334,
+            "rows": 748668
+          },
+          "ridgeAdmittedRows": 49881,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 964151,
+            "f1": 0.8698532859034076,
+            "falsePositiveRate": 0.1563933744962697,
+            "negativeRows": 1318662,
+            "positiveRows": 778490,
+            "precision": 0.7861019695047767,
+            "recall": 0.9735783375508998
+          }
+        },
+        "setting-d": {
+          "fullFlamePositiveRows": 0,
+          "hardPositive": {
+            "admittedRows": 0,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.0,
+            "rows": 0
+          },
+          "ridgeAdmittedRows": 18858,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 0,
+            "f1": 0.0,
+            "falsePositiveRate": 0.0,
+            "negativeRows": 2097152,
+            "positiveRows": 0,
+            "precision": 0.0,
+            "recall": 0.0
+          }
+        },
+        "setting-e": {
+          "fullFlamePositiveRows": 860997,
+          "hardPositive": {
+            "admittedRows": 817272,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.969711639430042,
+            "rows": 842799
+          },
+          "ridgeAdmittedRows": 40329,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 964151,
+            "f1": 0.9155093176005453,
+            "falsePositiveRate": 0.1040977870898067,
+            "negativeRows": 1236155,
+            "positiveRows": 860997,
+            "precision": 0.8665343913971981,
+            "recall": 0.9703518130725194
+          }
+        },
+        "setting-f": {
+          "fullFlamePositiveRows": 948534,
+          "hardPositive": {
+            "admittedRows": 878226,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9398400328752347,
+            "rows": 934442
+          },
+          "ridgeAdmittedRows": 28216,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 964151,
+            "f1": 0.9330527504528974,
+            "falsePositiveRate": 0.06253863338377076,
+            "negativeRows": 1148618,
+            "positiveRows": 948534,
+            "precision": 0.925496110049152,
+            "recall": 0.9407338060628296
+          }
+        },
+        "setting-g": {
+          "fullFlamePositiveRows": 865956,
+          "hardPositive": {
+            "admittedRows": 823786,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9674027413733172,
+            "rows": 851544
+          },
+          "ridgeAdmittedRows": 30798,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 964151,
+            "f1": 0.9160098289334995,
+            "falsePositiveRate": 0.10230133951052472,
+            "negativeRows": 1231196,
+            "positiveRows": 865956,
+            "precision": 0.8693638237164095,
+            "recall": 0.9679452535694654
+          }
+        },
+        "setting-h": {
+          "fullFlamePositiveRows": 351472,
+          "hardPositive": {
+            "admittedRows": 351096,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9999743666424574,
+            "rows": 351105
+          },
+          "ridgeAdmittedRows": 530,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 964151,
+            "f1": 0.534291358542683,
+            "falsePositiveRate": 0.3509738325466294,
+            "negativeRows": 1745680,
+            "positiveRows": 351472,
+            "precision": 0.3645310744893694,
+            "recall": 0.9999743934082943
+          }
+        },
+        "setting-i": {
+          "fullFlamePositiveRows": 784954,
+          "hardPositive": {
+            "admittedRows": 772812,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9980731082365583,
+            "rows": 774304
+          },
+          "ridgeAdmittedRows": 26914,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 964151,
+            "f1": 0.8958433027176756,
+            "falsePositiveRate": 0.13769949352155697,
+            "negativeRows": 1312198,
+            "positiveRows": 784954,
+            "precision": 0.812592633311587,
+            "recall": 0.9980992516758944
+          }
+        },
+        "setting-j": {
+          "fullFlamePositiveRows": 910993,
+          "hardPositive": {
+            "admittedRows": 739082,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.8995993027966036,
+            "rows": 821568
+          },
+          "ridgeAdmittedRows": 147712,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 964151,
+            "f1": 0.883672933918675,
+            "falsePositiveRate": 0.1143556639539893,
+            "negativeRows": 1186159,
+            "positiveRows": 910993,
+            "precision": 0.8593124935824368,
+            "recall": 0.9094548476223199
+          }
+        },
+        "setting-k": {
+          "fullFlamePositiveRows": 916729,
+          "hardPositive": {
+            "admittedRows": 788117,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9335423620801163,
+            "rows": 844222
+          },
+          "ridgeAdmittedRows": 110602,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 964151,
+            "f1": 0.9151290885117604,
+            "falsePositiveRate": 0.0877033063571279,
+            "negativeRows": 1180423,
+            "positiveRows": 916729,
+            "precision": 0.8926236657950881,
+            "recall": 0.9387987071424597
+          }
+        },
+        "setting-l": {
+          "fullFlamePositiveRows": 954673,
+          "hardPositive": {
+            "admittedRows": 893301,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9357141136284362,
+            "rows": 954673
+          },
+          "ridgeAdmittedRows": 0,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 964151,
+            "f1": 0.931092168953484,
+            "falsePositiveRate": 0.06201426897124586,
+            "negativeRows": 1142479,
+            "positiveRows": 954673,
+            "precision": 0.9265156598914486,
+            "recall": 0.9357141136284362
+          }
+        },
+        "setting-m": {
+          "fullFlamePositiveRows": 876770,
+          "hardPositive": {
+            "admittedRows": 825991,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9626362535560241,
+            "rows": 858051
+          },
+          "ridgeAdmittedRows": 42215,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 964151,
+            "f1": 0.9177036928798139,
+            "falsePositiveRate": 0.09787181390744865,
+            "negativeRows": 1220382,
+            "positiveRows": 876770,
+            "precision": 0.8761179524783981,
+            "recall": 0.9634339678593018
+          }
+        },
+        "setting-n": {
+          "fullFlamePositiveRows": 917665,
+          "hardPositive": {
+            "admittedRows": 868887,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9470374798769237,
+            "rows": 917479
+          },
+          "ridgeAdmittedRows": 216,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 964151,
+            "f1": 0.9236535346707647,
+            "falsePositiveRate": 0.08060962096233362,
+            "negativeRows": 1179487,
+            "positiveRows": 917665,
+            "precision": 0.9013868159655489,
+            "recall": 0.9470482147624678
+          }
+        },
+        "setting-o": {
+          "fullFlamePositiveRows": 854367,
+          "hardPositive": {
+            "admittedRows": 809385,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9629368333139013,
+            "rows": 840538
+          },
+          "ridgeAdmittedRows": 53376,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 964151,
+            "f1": 0.9053679974572701,
+            "falsePositiveRate": 0.11340416886267536,
+            "negativeRows": 1242785,
+            "positiveRows": 854367,
+            "precision": 0.8538226895994507,
+            "recall": 0.9635367470887803
+          }
+        }
+      },
+      "heldOut": {
+        "setting-p": {
+          "fullFlamePositiveRows": 809915,
+          "hardPositive": {
+            "admittedRows": 808609,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9993462178268725,
+            "rows": 809138
+          },
+          "ridgeAdmittedRows": 812,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 964151,
+            "f1": 0.9124643615288269,
+            "falsePositiveRate": 0.12023038492523133,
+            "negativeRows": 1287237,
+            "positiveRows": 809915,
+            "precision": 0.839480537799577,
+            "recall": 0.9993468450392943
+          }
+        }
+      }
+    }
+  },
+  "ridgeAdmission": {
+    "expression": "sidecar.ridge*smoothstep(0.055,0.32,sidecar.coverage)*smoothstep(0.018,0.16,fireSignal)",
+    "fireSignal": "1.25*fire.energy+0.52*fire.emission+0.86*fire.detail+0.72*micro.z+0.24*material.heat",
+    "identity": "production-direct-flame-candidate-structural-signal-v0",
+    "inputs": [
+      "sidecar.ridge",
+      "sidecar.coverage",
+      "fire.energy",
+      "fire.emission",
+      "fire.detail",
+      "micro.z",
+      "material.heat"
+    ],
+    "threshold": 0.11
+  },
+  "runtimeSeconds": 33.426269499992486,
+  "schema": "kaminos.volume.nonridge-explicit-support-assay.v0",
+  "search": {
+    "discoveryRole": "fit",
+    "formulaCount": 19,
+    "histogramBins": 256,
+    "identity": "black-control-veto-then-fixed-256-bin-formula-threshold-search-v0",
+    "ranking": [
+      {
+        "calibration": {
+          "fullFlamePositiveRows": 925788,
+          "hardPositive": {
+            "admittedRows": 857675,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.940862279285288,
+            "rows": 911584
+          },
+          "ridgeAdmittedRows": 22827,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 964151,
+            "f1": 0.9226530591728093,
+            "falsePositiveRate": 0.07877312261602713,
+            "negativeRows": 1171364,
+            "positiveRows": 925788,
+            "precision": 0.9042971484757055,
+            "recall": 0.9417696060005099
+          }
+        },
+        "calibrationObjective": 0.9309660581666321,
+        "feature": "authored.gradient-gated-fire.signal",
+        "fit": {
+          "fullFlamePositiveRows": 11817705,
+          "hardPositive": {
+            "admittedRows": 10904253,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9516646064036536,
+            "rows": 11458084
+          },
+          "ridgeAdmittedRows": 705267,
+          "rowsDropped": 0,
+          "rowsEvaluated": 31457280,
+          "wholeGrid": {
+            "admittedRows": 13498114,
+            "f1": 0.8898684257459734,
+            "falsePositiveRate": 0.1137621358914335,
+            "negativeRows": 19639575,
+            "positiveRows": 11817705,
+            "precision": 0.8344776166507409,
+            "recall": 0.9531354861201901
+          }
+        },
+        "fitObjective": 0.9194642417798051,
+        "negativeControl": {
+          "fullFlamePositiveRows": 0,
+          "hardPositive": {
+            "admittedRows": 0,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.0,
+            "rows": 0
+          },
+          "ridgeAdmittedRows": 18858,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 0,
+            "f1": 0.0,
+            "falsePositiveRate": 0.0,
+            "negativeRows": 2097152,
+            "positiveRows": 0,
+            "precision": 0.0,
+            "recall": 0.0
+          }
+        },
+        "threshold": 0.00784313725490196
+      },
+      {
+        "calibration": {
+          "fullFlamePositiveRows": 925788,
+          "hardPositive": {
+            "admittedRows": 664659,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.7291253466493488,
+            "rows": 911584
+          },
+          "ridgeAdmittedRows": 22827,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 714434,
+            "f1": 0.8274648187867253,
+            "falsePositiveRate": 0.030580588100709943,
+            "negativeRows": 1171364,
+            "positiveRows": 925788,
+            "precision": 0.9498610088545618,
+            "recall": 0.7330112293527243
+          }
+        },
+        "calibrationObjective": 0.797295436138993,
+        "feature": "authored.boundary.raw",
+        "fit": {
+          "fullFlamePositiveRows": 11817705,
+          "hardPositive": {
+            "admittedRows": 7216913,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.6298533856096709,
+            "rows": 11458084
+          },
+          "ridgeAdmittedRows": 705267,
+          "rowsDropped": 0,
+          "rowsEvaluated": 31457280,
+          "wholeGrid": {
+            "admittedRows": 8918382,
+            "f1": 0.729607181914312,
+            "falsePositiveRate": 0.06893137962506826,
+            "negativeRows": 19639575,
+            "positiveRows": 11817705,
+            "precision": 0.8482030709157782,
+            "recall": 0.6401072797129392
+          }
+        },
+        "fitObjective": 0.7020650422002779,
+        "negativeControl": {
+          "fullFlamePositiveRows": 0,
+          "hardPositive": {
+            "admittedRows": 0,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.0,
+            "rows": 0
+          },
+          "ridgeAdmittedRows": 18858,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 0,
+            "f1": 0.0,
+            "falsePositiveRate": 0.0,
+            "negativeRows": 2097152,
+            "positiveRows": 0,
+            "precision": 0.0,
+            "recall": 0.0
+          }
+        },
+        "threshold": 0.12941176470588237
+      },
+      {
+        "calibration": {
+          "fullFlamePositiveRows": 925788,
+          "hardPositive": {
+            "admittedRows": 233306,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.2559347246112262,
+            "rows": 911584
+          },
+          "ridgeAdmittedRows": 22827,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 249798,
+            "f1": 0.41260783983477184,
+            "falsePositiveRate": 0.006206439672040459,
+            "negativeRows": 1171364,
+            "positiveRows": 925788,
+            "precision": 0.9708964843593624,
+            "recall": 0.26196926294140777
+          }
+        },
+        "calibrationObjective": 0.4730767409166423,
+        "feature": "fire.emission",
+        "fit": {
+          "fullFlamePositiveRows": 11817705,
+          "hardPositive": {
+            "admittedRows": 3112844,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.27167229704372914,
+            "rows": 11458084
+          },
+          "ridgeAdmittedRows": 705267,
+          "rowsDropped": 0,
+          "rowsEvaluated": 31457280,
+          "wholeGrid": {
+            "admittedRows": 3746970,
+            "f1": 0.4136875328267375,
+            "falsePositiveRate": 0.026859746201228895,
+            "negativeRows": 19639575,
+            "positiveRows": 11817705,
+            "precision": 0.8592158464038944,
+            "recall": 0.27242649905375027
+          }
+        },
+        "fitObjective": 0.4538201327240278,
+        "negativeControl": {
+          "fullFlamePositiveRows": 0,
+          "hardPositive": {
+            "admittedRows": 0,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.0,
+            "rows": 0
+          },
+          "ridgeAdmittedRows": 18858,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 249798,
+            "f1": 0.0,
+            "falsePositiveRate": 0.11911296844482422,
+            "negativeRows": 2097152,
+            "positiveRows": 0,
+            "precision": 0.0,
+            "recall": 0.0
+          }
+        },
+        "threshold": 0.00392156862745098
+      },
+      {
+        "calibration": {
+          "fullFlamePositiveRows": 925788,
+          "hardPositive": {
+            "admittedRows": 233978,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.25667190297328607,
+            "rows": 911584
+          },
+          "ridgeAdmittedRows": 22827,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 250804,
+            "f1": 0.4137169044154643,
+            "falsePositiveRate": 0.00633108068883797,
+            "negativeRows": 1171364,
+            "positiveRows": 925788,
+            "precision": 0.9704310936029729,
+            "recall": 0.26289820131606806
+          }
+        },
+        "calibrationObjective": 0.47351812603329707,
+        "feature": "fire.energy",
+        "fit": {
+          "fullFlamePositiveRows": 11817705,
+          "hardPositive": {
+            "admittedRows": 3119399,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.27224438221957525,
+            "rows": 11458084
+          },
+          "ridgeAdmittedRows": 705267,
+          "rowsDropped": 0,
+          "rowsEvaluated": 31457280,
+          "wholeGrid": {
+            "admittedRows": 3762060,
+            "f1": 0.41466183860924727,
+            "falsePositiveRate": 0.0270827143662732,
+            "negativeRows": 19639575,
+            "positiveRows": 11817705,
+            "precision": 0.8586165558231394,
+            "recall": 0.273332851006181
+          }
+        },
+        "fitObjective": 0.4541431879878253,
+        "negativeControl": {
+          "fullFlamePositiveRows": 0,
+          "hardPositive": {
+            "admittedRows": 0,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.0,
+            "rows": 0
+          },
+          "ridgeAdmittedRows": 18858,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 250804,
+            "f1": 0.0,
+            "falsePositiveRate": 0.11959266662597656,
+            "negativeRows": 2097152,
+            "positiveRows": 0,
+            "precision": 0.0,
+            "recall": 0.0
+          }
+        },
+        "threshold": 0.00392156862745098
+      },
+      {
+        "calibration": {
+          "fullFlamePositiveRows": 925788,
+          "hardPositive": {
+            "admittedRows": 240175,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.26346995998174605,
+            "rows": 911584
+          },
+          "ridgeAdmittedRows": 22827,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 256436,
+            "f1": 0.42162906521945076,
+            "falsePositiveRate": 0.006151802513992235,
+            "negativeRows": 1171364,
+            "positiveRows": 925788,
+            "precision": 0.9718994212981017,
+            "recall": 0.2692085012983534
+          }
+        },
+        "calibrationObjective": 0.47853087251519993,
+        "feature": "support.reaction",
+        "fit": {
+          "fullFlamePositiveRows": 11817705,
+          "hardPositive": {
+            "admittedRows": 3160226,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.275807543390326,
+            "rows": 11458084
+          },
+          "ridgeAdmittedRows": 705267,
+          "rowsDropped": 0,
+          "rowsEvaluated": 31457280,
+          "wholeGrid": {
+            "admittedRows": 3846540,
+            "f1": 0.42017013906511297,
+            "falsePositiveRate": 0.0282957243219367,
+            "negativeRows": 19639575,
+            "positiveRows": 11817705,
+            "precision": 0.8555283449541666,
+            "recall": 0.2784655734764068
+          }
+        },
+        "fitObjective": 0.4561970879171932,
+        "negativeControl": {
+          "fullFlamePositiveRows": 0,
+          "hardPositive": {
+            "admittedRows": 0,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.0,
+            "rows": 0
+          },
+          "ridgeAdmittedRows": 18858,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 256436,
+            "f1": 0.0,
+            "falsePositiveRate": 0.12227821350097656,
+            "negativeRows": 2097152,
+            "positiveRows": 0,
+            "precision": 0.0,
+            "recall": 0.0
+          }
+        },
+        "threshold": 0.00392156862745098
+      },
+      {
+        "calibration": {
+          "fullFlamePositiveRows": 925788,
+          "hardPositive": {
+            "admittedRows": 240331,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.26364109067293856,
+            "rows": 911584
+          },
+          "ridgeAdmittedRows": 22827,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 257234,
+            "f1": 0.42131591804717067,
+            "falsePositiveRate": 0.006847572573512589,
+            "negativeRows": 1171364,
+            "positiveRows": 925788,
+            "precision": 0.9688182744116252,
+            "recall": 0.26919013856304036
+          }
+        },
+        "calibrationObjective": 0.4777982154178131,
+        "feature": "micro.z",
+        "fit": {
+          "fullFlamePositiveRows": 11817705,
+          "hardPositive": {
+            "admittedRows": 3162675,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.2760212789503027,
+            "rows": 11458084
+          },
+          "ridgeAdmittedRows": 705267,
+          "rowsDropped": 0,
+          "rowsEvaluated": 31457280,
+          "wholeGrid": {
+            "admittedRows": 3858510,
+            "f1": 0.4200955396439766,
+            "falsePositiveRate": 0.02880693701365737,
+            "negativeRows": 19639575,
+            "positiveRows": 11817705,
+            "precision": 0.8533744891162651,
+            "recall": 0.27862888775781763
+          }
+        },
+        "fitObjective": 0.45577007289547405,
+        "negativeControl": {
+          "fullFlamePositiveRows": 0,
+          "hardPositive": {
+            "admittedRows": 0,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.0,
+            "rows": 0
+          },
+          "ridgeAdmittedRows": 18858,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 257234,
+            "f1": 0.0,
+            "falsePositiveRate": 0.12265872955322266,
+            "negativeRows": 2097152,
+            "positiveRows": 0,
+            "precision": 0.0,
+            "recall": 0.0
+          }
+        },
+        "threshold": 0.00392156862745098
+      },
+      {
+        "calibration": {
+          "fullFlamePositiveRows": 925788,
+          "hardPositive": {
+            "admittedRows": 242257,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.26575389651419945,
+            "rows": 911584
+          },
+          "ridgeAdmittedRows": 22827,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 258868,
+            "f1": 0.4239205305168758,
+            "falsePositiveRate": 0.0066315850581032025,
+            "negativeRows": 1171364,
+            "positiveRows": 925788,
+            "precision": 0.969992428573636,
+            "recall": 0.27122840218278915
+          }
+        },
+        "calibrationObjective": 0.47956288186759083,
+        "feature": "fire.detail",
+        "fit": {
+          "fullFlamePositiveRows": 11817705,
+          "hardPositive": {
+            "admittedRows": 3177752,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.27733711849206205,
+            "rows": 11458084
+          },
+          "ridgeAdmittedRows": 705267,
+          "rowsDropped": 0,
+          "rowsEvaluated": 31457280,
+          "wholeGrid": {
+            "admittedRows": 3883020,
+            "f1": 0.4213779936913741,
+            "falsePositiveRate": 0.029280165176690433,
+            "negativeRows": 19639575,
+            "positiveRows": 11817705,
+            "precision": 0.8519065057609798,
+            "recall": 0.27991644739820465
+          }
+        },
+        "fitObjective": 0.45629343335238953,
+        "negativeControl": {
+          "fullFlamePositiveRows": 0,
+          "hardPositive": {
+            "admittedRows": 0,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.0,
+            "rows": 0
+          },
+          "ridgeAdmittedRows": 18858,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 258868,
+            "f1": 0.0,
+            "falsePositiveRate": 0.12343788146972656,
+            "negativeRows": 2097152,
+            "positiveRows": 0,
+            "precision": 0.0,
+            "recall": 0.0
+          }
+        },
+        "threshold": 0.00784313725490196
+      },
+      {
+        "calibration": {
+          "fullFlamePositiveRows": 925788,
+          "hardPositive": {
+            "admittedRows": 589855,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.6470659862393372,
+            "rows": 911584
+          },
+          "ridgeAdmittedRows": 22827,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 707855,
+            "f1": 0.7395055100777833,
+            "falsePositiveRate": 0.08862403147100303,
+            "negativeRows": 1171364,
+            "positiveRows": 925788,
+            "precision": 0.8533442583579971,
+            "recall": 0.6524647111433719
+          }
+        },
+        "calibrationObjective": 0.713200734609494,
+        "feature": "reaction-front-neighbor-gradient.max",
+        "fit": {
+          "fullFlamePositiveRows": 11817705,
+          "hardPositive": {
+            "admittedRows": 7448987,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.6501075572495366,
+            "rows": 11458084
+          },
+          "ridgeAdmittedRows": 705267,
+          "rowsDropped": 0,
+          "rowsEvaluated": 31457280,
+          "wholeGrid": {
+            "admittedRows": 10617825,
+            "f1": 0.694764955407784,
+            "falsePositiveRate": 0.14379715446999236,
+            "negativeRows": 19639575,
+            "positiveRows": 11817705,
+            "precision": 0.734021327343406,
+            "recall": 0.6594943772923761
+          }
+        },
+        "fitObjective": 0.6837374691977374,
+        "negativeControl": {
+          "fullFlamePositiveRows": 0,
+          "hardPositive": {
+            "admittedRows": 0,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.0,
+            "rows": 0
+          },
+          "ridgeAdmittedRows": 18858,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 707855,
+            "f1": 0.0,
+            "falsePositiveRate": 0.33753156661987305,
+            "negativeRows": 2097152,
+            "positiveRows": 0,
+            "precision": 0.0,
+            "recall": 0.0
+          }
+        },
+        "threshold": 0.00392156862745098
+      },
+      {
+        "calibration": {
+          "fullFlamePositiveRows": 925788,
+          "hardPositive": {
+            "admittedRows": 851732,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9343428581458209,
+            "rows": 911584
+          },
+          "ridgeAdmittedRows": 22827,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 943775,
+            "f1": 0.9263512382305383,
+            "falsePositiveRate": 0.06645158977055808,
+            "negativeRows": 1171364,
+            "positiveRows": 925788,
+            "precision": 0.9175237742046568,
+            "recall": 0.9353502097672469
+          }
+        },
+        "calibrationObjective": 0.9303502026700674,
+        "feature": "material.heat",
+        "fit": {
+          "fullFlamePositiveRows": 11817705,
+          "hardPositive": {
+            "admittedRows": 10845517,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9465384439492676,
+            "rows": 11458084
+          },
+          "ridgeAdmittedRows": 705267,
+          "rowsDropped": 0,
+          "rowsEvaluated": 31457280,
+          "wholeGrid": {
+            "admittedRows": 14156625,
+            "f1": 0.8627834481197397,
+            "falsePositiveRate": 0.15028400563657818,
+            "negativeRows": 19639575,
+            "positiveRows": 11817705,
+            "precision": 0.7915100527138353,
+            "recall": 0.9481630316546233
+          }
+        },
+        "fitObjective": 0.9033463705874561,
+        "negativeControl": {
+          "fullFlamePositiveRows": 0,
+          "hardPositive": {
+            "admittedRows": 0,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.0,
+            "rows": 0
+          },
+          "ridgeAdmittedRows": 18858,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 943775,
+            "f1": 0.0,
+            "falsePositiveRate": 0.4500269889831543,
+            "negativeRows": 2097152,
+            "positiveRows": 0,
+            "precision": 0.0,
+            "recall": 0.0
+          }
+        },
+        "threshold": 0.054901960784313725
+      },
+      {
+        "calibration": {
+          "fullFlamePositiveRows": 925788,
+          "hardPositive": {
+            "admittedRows": 842088,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9237634710569733,
+            "rows": 911584
+          },
+          "ridgeAdmittedRows": 22827,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 953962,
+            "f1": 0.9109221971006783,
+            "falsePositiveRate": 0.08350009049279301,
+            "negativeRows": 1171364,
+            "positiveRows": 925788,
+            "precision": 0.8974707587933272,
+            "recall": 0.9247829956750357
+          }
+        },
+        "calibrationObjective": 0.917081996068089,
+        "feature": "front.topology",
+        "fit": {
+          "fullFlamePositiveRows": 11817705,
+          "hardPositive": {
+            "admittedRows": 10709001,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9346240610559322,
+            "rows": 11458084
+          },
+          "ridgeAdmittedRows": 705267,
+          "rowsDropped": 0,
+          "rowsEvaluated": 31457280,
+          "wholeGrid": {
+            "admittedRows": 14309430,
+            "f1": 0.846383807485972,
+            "falsePositiveRate": 0.16561651665069127,
+            "negativeRows": 19639575,
+            "positiveRows": 11817705,
+            "precision": 0.7726926928605822,
+            "recall": 0.9356124560564001
+          }
+        },
+        "fitObjective": 0.8893762888718806,
+        "negativeControl": {
+          "fullFlamePositiveRows": 0,
+          "hardPositive": {
+            "admittedRows": 0,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.0,
+            "rows": 0
+          },
+          "ridgeAdmittedRows": 18858,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 953962,
+            "f1": 0.0,
+            "falsePositiveRate": 0.45488452911376953,
+            "negativeRows": 2097152,
+            "positiveRows": 0,
+            "precision": 0.0,
+            "recall": 0.0
+          }
+        },
+        "threshold": 0.00392156862745098
+      },
+      {
+        "calibration": {
+          "fullFlamePositiveRows": 925788,
+          "hardPositive": {
+            "admittedRows": 842300,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9239960332783375,
+            "rows": 911584
+          },
+          "ridgeAdmittedRows": 22827,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 954385,
+            "f1": 0.911054461477747,
+            "falsePositiveRate": 0.08359058328581039,
+            "negativeRows": 1171364,
+            "positiveRows": 925788,
+            "precision": 0.8974051352441624,
+            "recall": 0.9251254066805792
+          }
+        },
+        "calibrationObjective": 0.9172513212921468,
+        "feature": "reaction-front.max",
+        "fit": {
+          "fullFlamePositiveRows": 11817705,
+          "hardPositive": {
+            "admittedRows": 10710426,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9347484273985075,
+            "rows": 11458084
+          },
+          "ridgeAdmittedRows": 705267,
+          "rowsDropped": 0,
+          "rowsEvaluated": 31457280,
+          "wholeGrid": {
+            "admittedRows": 14315775,
+            "f1": 0.8465026471790208,
+            "falsePositiveRate": 0.16572380003131432,
+            "negativeRows": 19639575,
+            "positiveRows": 11817705,
+            "precision": 0.7726462591092693,
+            "recall": 0.9359710705251146
+          }
+        },
+        "fitObjective": 0.8895049347363587,
+        "negativeControl": {
+          "fullFlamePositiveRows": 0,
+          "hardPositive": {
+            "admittedRows": 0,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.0,
+            "rows": 0
+          },
+          "ridgeAdmittedRows": 18858,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 954385,
+            "f1": 0.0,
+            "falsePositiveRate": 0.45508623123168945,
+            "negativeRows": 2097152,
+            "positiveRows": 0,
+            "precision": 0.0,
+            "recall": 0.0
+          }
+        },
+        "threshold": 0.00392156862745098
+      },
+      {
+        "calibration": {
+          "fullFlamePositiveRows": 925788,
+          "hardPositive": {
+            "admittedRows": 857675,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.940862279285288,
+            "rows": 911584
+          },
+          "ridgeAdmittedRows": 22827,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 964151,
+            "f1": 0.9226530591728093,
+            "falsePositiveRate": 0.07877312261602713,
+            "negativeRows": 1171364,
+            "positiveRows": 925788,
+            "precision": 0.9042971484757055,
+            "recall": 0.9417696060005099
+          }
+        },
+        "calibrationObjective": 0.9309660581666321,
+        "feature": "fire.signal",
+        "fit": {
+          "fullFlamePositiveRows": 11817705,
+          "hardPositive": {
+            "admittedRows": 10904253,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9516646064036536,
+            "rows": 11458084
+          },
+          "ridgeAdmittedRows": 705267,
+          "rowsDropped": 0,
+          "rowsEvaluated": 31457280,
+          "wholeGrid": {
+            "admittedRows": 14462265,
+            "f1": 0.8572212220942413,
+            "falsePositiveRate": 0.16285438966983756,
+            "negativeRows": 19639575,
+            "positiveRows": 11817705,
+            "precision": 0.7788457755406916,
+            "recall": 0.9531354861201901
+          }
+        },
+        "fitObjective": 0.9031016688133727,
+        "negativeControl": {
+          "fullFlamePositiveRows": 0,
+          "hardPositive": {
+            "admittedRows": 0,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.0,
+            "rows": 0
+          },
+          "ridgeAdmittedRows": 18858,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 964151,
+            "f1": 0.0,
+            "falsePositiveRate": 0.45974302291870117,
+            "negativeRows": 2097152,
+            "positiveRows": 0,
+            "precision": 0.0,
+            "recall": 0.0
+          }
+        },
+        "threshold": 0.00784313725490196
+      },
+      {
+        "calibration": {
+          "fullFlamePositiveRows": 925788,
+          "hardPositive": {
+            "admittedRows": 863566,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9473246568610243,
+            "rows": 911584
+          },
+          "ridgeAdmittedRows": 22827,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 1019362,
+            "f1": 0.9025134308408093,
+            "falsePositiveRate": 0.12088471218169587,
+            "negativeRows": 1171364,
+            "positiveRows": 925788,
+            "precision": 0.8610895834845718,
+            "recall": 0.9481241925797267
+          }
+        },
+        "calibrationObjective": 0.9225553039944507,
+        "feature": "reaction-front-neighbor.max",
+        "fit": {
+          "fullFlamePositiveRows": 11817705,
+          "hardPositive": {
+            "admittedRows": 10947632,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9554504924208969,
+            "rows": 11458084
+          },
+          "ridgeAdmittedRows": 705267,
+          "rowsDropped": 0,
+          "rowsEvaluated": 31457280,
+          "wholeGrid": {
+            "admittedRows": 15290430,
+            "f1": 0.834062985151874,
+            "falsePositiveRate": 0.20293127524399077,
+            "negativeRows": 19639575,
+            "positiveRows": 11817705,
+            "precision": 0.7393478142864524,
+            "recall": 0.95661094941869
+          }
+        },
+        "fitObjective": 0.8937958487534897,
+        "negativeControl": {
+          "fullFlamePositiveRows": 0,
+          "hardPositive": {
+            "admittedRows": 0,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.0,
+            "rows": 0
+          },
+          "ridgeAdmittedRows": 18858,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 1019362,
+            "f1": 0.0,
+            "falsePositiveRate": 0.4860696792602539,
+            "negativeRows": 2097152,
+            "positiveRows": 0,
+            "precision": 0.0,
+            "recall": 0.0
+          }
+        },
+        "threshold": 0.00392156862745098
+      },
+      {
+        "calibration": {
+          "fullFlamePositiveRows": 925788,
+          "hardPositive": {
+            "admittedRows": 869957,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9543355302418647,
+            "rows": 911584
+          },
+          "ridgeAdmittedRows": 22827,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 1064004,
+            "f1": 0.8864604943632299,
+            "falsePositiveRate": 0.1554324701800636,
+            "negativeRows": 1171364,
+            "positiveRows": 925788,
+            "precision": 0.8288841019394664,
+            "recall": 0.9526327841795313
+          }
+        },
+        "calibrationObjective": 0.9170585866295854,
+        "feature": "velocity.magnitude",
+        "fit": {
+          "fullFlamePositiveRows": 11817705,
+          "hardPositive": {
+            "admittedRows": 11076987,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9667399017148067,
+            "rows": 11458084
+          },
+          "ridgeAdmittedRows": 705267,
+          "rowsDropped": 0,
+          "rowsEvaluated": 31457280,
+          "wholeGrid": {
+            "admittedRows": 15960060,
+            "f1": 0.8196382970336167,
+            "falsePositiveRate": 0.23300911552312104,
+            "negativeRows": 19639575,
+            "positiveRows": 11817705,
+            "precision": 0.7132717546174638,
+            "recall": 0.9632885572960233
+          }
+        },
+        "fitObjective": 0.8925225779738787,
+        "negativeControl": {
+          "fullFlamePositiveRows": 0,
+          "hardPositive": {
+            "admittedRows": 0,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.0,
+            "rows": 0
+          },
+          "ridgeAdmittedRows": 18858,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 1064004,
+            "f1": 0.0,
+            "falsePositiveRate": 0.5073566436767578,
+            "negativeRows": 2097152,
+            "positiveRows": 0,
+            "precision": 0.0,
+            "recall": 0.0
+          }
+        },
+        "threshold": 0.2
+      },
+      {
+        "calibration": {
+          "fullFlamePositiveRows": 925788,
+          "hardPositive": {
+            "admittedRows": 885237,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9710975620458455,
+            "rows": 911584
+          },
+          "ridgeAdmittedRows": 22827,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 1116927,
+            "f1": 0.8806289668406998,
+            "falsePositiveRate": 0.18567242974856663,
+            "negativeRows": 1171364,
+            "positiveRows": 925788,
+            "precision": 0.80527823214946,
+            "recall": 0.9715366801038683
+          }
+        },
+        "calibrationObjective": 0.9219140094965343,
+        "feature": "body-reaction-front-flow.max",
+        "fit": {
+          "fullFlamePositiveRows": 11817705,
+          "hardPositive": {
+            "admittedRows": 11193416,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9769011991882761,
+            "rows": 11458084
+          },
+          "ridgeAdmittedRows": 705267,
+          "rowsDropped": 0,
+          "rowsEvaluated": 31457280,
+          "wholeGrid": {
+            "admittedRows": 16753905,
+            "f1": 0.8086594350125877,
+            "falsePositiveRate": 0.26485063958868765,
+            "negativeRows": 19639575,
+            "positiveRows": 11817705,
+            "precision": 0.689531843471716,
+            "recall": 0.9775460633007848
+          }
+        },
+        "fitObjective": 0.8931324843484152,
+        "negativeControl": {
+          "fullFlamePositiveRows": 0,
+          "hardPositive": {
+            "admittedRows": 0,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.0,
+            "rows": 0
+          },
+          "ridgeAdmittedRows": 18858,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 1116927,
+            "f1": 0.0,
+            "falsePositiveRate": 0.5325922966003418,
+            "negativeRows": 2097152,
+            "positiveRows": 0,
+            "precision": 0.0,
+            "recall": 0.0
+          }
+        },
+        "threshold": 0.03529411764705882
+      },
+      {
+        "calibration": {
+          "fullFlamePositiveRows": 925788,
+          "hardPositive": {
+            "admittedRows": 157165,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.17240868641836626,
+            "rows": 911584
+          },
+          "ridgeAdmittedRows": 22827,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 1324717,
+            "f1": 0.14315542511569626,
+            "falsePositiveRate": 0.9933982946377045,
+            "negativeRows": 1171364,
+            "positiveRows": 925788,
+            "precision": 0.1216003116137258,
+            "recall": 0.17399879886107836
+          }
+        },
+        "calibrationObjective": 0.15181377177508062,
+        "feature": "support.interface.inverse",
+        "fit": {
+          "fullFlamePositiveRows": 11817705,
+          "hardPositive": {
+            "admittedRows": 1666278,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.14542378987621316,
+            "rows": 11458084
+          },
+          "ridgeAdmittedRows": 705267,
+          "rowsDropped": 0,
+          "rowsEvaluated": 31457280,
+          "wholeGrid": {
+            "admittedRows": 19870755,
+            "f1": 0.11318751368794824,
+            "falsePositiveRate": 0.9204570872842207,
+            "negativeRows": 19639575,
+            "positiveRows": 11817705,
+            "precision": 0.0902516789120494,
+            "recall": 0.1517527303313122
+          }
+        },
+        "fitObjective": 0.1299189533909253,
+        "negativeControl": {
+          "fullFlamePositiveRows": 0,
+          "hardPositive": {
+            "admittedRows": 0,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.0,
+            "rows": 0
+          },
+          "ridgeAdmittedRows": 18858,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 1324717,
+            "f1": 0.0,
+            "falsePositiveRate": 0.6316742897033691,
+            "negativeRows": 2097152,
+            "positiveRows": 0,
+            "precision": 0.0,
+            "recall": 0.0
+          }
+        },
+        "threshold": 0.00392156862745098
+      },
+      {
+        "calibration": {
+          "fullFlamePositiveRows": 925788,
+          "hardPositive": {
+            "admittedRows": 822308,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9020649770070559,
+            "rows": 911584
+          },
+          "ridgeAdmittedRows": 22827,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 1392593,
+            "f1": 0.7212162280487978,
+            "falsePositiveRate": 0.475143507910436,
+            "negativeRows": 1171364,
+            "positiveRows": 925788,
+            "precision": 0.6003383616031389,
+            "recall": 0.9030436773861834
+          }
+        },
+        "calibrationObjective": 0.808017574004984,
+        "feature": "flow.divergence.abs",
+        "fit": {
+          "fullFlamePositiveRows": 11817705,
+          "hardPositive": {
+            "admittedRows": 10325052,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9011150555363358,
+            "rows": 11458084
+          },
+          "ridgeAdmittedRows": 705267,
+          "rowsDropped": 0,
+          "rowsEvaluated": 31457280,
+          "wholeGrid": {
+            "admittedRows": 20888895,
+            "f1": 0.6523294380950634,
+            "falsePositiveRate": 0.52043672024471,
+            "negativeRows": 19639575,
+            "positiveRows": 11817705,
+            "precision": 0.5106894835748851,
+            "recall": 0.9026912585819328
+          }
+        },
+        "fitObjective": 0.7828251245183201,
+        "negativeControl": {
+          "fullFlamePositiveRows": 0,
+          "hardPositive": {
+            "admittedRows": 0,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.0,
+            "rows": 0
+          },
+          "ridgeAdmittedRows": 18858,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 1392593,
+            "f1": 0.0,
+            "falsePositiveRate": 0.6640400886535645,
+            "negativeRows": 2097152,
+            "positiveRows": 0,
+            "precision": 0.0,
+            "recall": 0.0
+          }
+        },
+        "threshold": 0.00392156862745098
+      },
+      {
+        "calibration": {
+          "fullFlamePositiveRows": 925788,
+          "hardPositive": {
+            "admittedRows": 902355,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9898758644293888,
+            "rows": 911584
+          },
+          "ridgeAdmittedRows": 22827,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 1430999,
+            "f1": 0.7778038490538177,
+            "falsePositiveRate": 0.43918030603638153,
+            "negativeRows": 1171364,
+            "positiveRows": 925788,
+            "precision": 0.640502893433189,
+            "recall": 0.9900311950468141
+          }
+        },
+        "calibrationObjective": 0.8811186458114066,
+        "feature": "reaction-front-flow.max",
+        "fit": {
+          "fullFlamePositiveRows": 11817705,
+          "hardPositive": {
+            "admittedRows": 11340693,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.989754744335964,
+            "rows": 11458084
+          },
+          "ridgeAdmittedRows": 705267,
+          "rowsDropped": 0,
+          "rowsEvaluated": 31457280,
+          "wholeGrid": {
+            "admittedRows": 21464985,
+            "f1": 0.7030794686366998,
+            "falsePositiveRate": 0.4972000157844556,
+            "negativeRows": 19639575,
+            "positiveRows": 11817705,
+            "precision": 0.5450825146162459,
+            "recall": 0.9900558526380545
+          }
+        },
+        "fitObjective": 0.8543142259755362,
+        "negativeControl": {
+          "fullFlamePositiveRows": 0,
+          "hardPositive": {
+            "admittedRows": 0,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.0,
+            "rows": 0
+          },
+          "ridgeAdmittedRows": 18858,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 1430999,
+            "f1": 0.0,
+            "falsePositiveRate": 0.6823534965515137,
+            "negativeRows": 2097152,
+            "positiveRows": 0,
+            "precision": 0.0,
+            "recall": 0.0
+          }
+        },
+        "threshold": 0.011764705882352941
+      },
+      {
+        "calibration": {
+          "fullFlamePositiveRows": 925788,
+          "hardPositive": {
+            "admittedRows": 871613,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9561521483483695,
+            "rows": 911584
+          },
+          "ridgeAdmittedRows": 22827,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 1514964,
+            "f1": 0.7258287609720283,
+            "falsePositiveRate": 0.5371344859497134,
+            "negativeRows": 1171364,
+            "positiveRows": 925788,
+            "precision": 0.5846898012097977,
+            "recall": 0.9567892433256858
+          }
+        },
+        "calibrationObjective": 0.8387815035931514,
+        "feature": "flow.curlMagnitude",
+        "fit": {
+          "fullFlamePositiveRows": 11817705,
+          "hardPositive": {
+            "admittedRows": 10942779,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.9550269486591301,
+            "rows": 11458084
+          },
+          "ridgeAdmittedRows": 705267,
+          "rowsDropped": 0,
+          "rowsEvaluated": 31457280,
+          "wholeGrid": {
+            "admittedRows": 22724460,
+            "f1": 0.6543021261116667,
+            "falsePositiveRate": 0.581680306218439,
+            "negativeRows": 19639575,
+            "positiveRows": 11817705,
+            "precision": 0.4972838078440588,
+            "recall": 0.9562352419526464
+          }
+        },
+        "fitObjective": 0.8140578740348628,
+        "negativeControl": {
+          "fullFlamePositiveRows": 0,
+          "hardPositive": {
+            "admittedRows": 0,
+            "identity": "positive-full-flame-optical-and-production-ridge-rejected-v0",
+            "recall": 0.0,
+            "rows": 0
+          },
+          "ridgeAdmittedRows": 18858,
+          "rowsDropped": 0,
+          "rowsEvaluated": 2097152,
+          "wholeGrid": {
+            "admittedRows": 1514964,
+            "f1": 0.0,
+            "falsePositiveRate": 0.7223911285400391,
+            "negativeRows": 2097152,
+            "positiveRows": 0,
+            "precision": 0.0,
+            "recall": 0.0
+          }
+        },
+        "threshold": 0.00392156862745098
+      }
+    ],
+    "selectionCriteria": [
+      "zero-negative-control-admissions-first",
+      "minimum-negative-control-admitted-fraction",
+      "maximum-calibration-objective",
+      "maximum-fit-objective",
+      "lexical-formula-name-tiebreak"
+    ],
+    "selectionRole": "calibration"
+  },
+  "selector": {
+    "admissionThreshold": 0.5,
+    "authority": "explicit-source-field-operator-v0",
+    "compositionIdentity": "separate-ridge-nonridge-shared-total-extinction-v0",
+    "compositionLaw": "sigma_total=sigma_ridge+sigma_nonridge",
+    "kind": "bounded-monotone-rule-v0",
+    "nonRidgeLayerIdentity": "authored-nonridge-support-coefficient-layer-v0",
+    "ownershipSeparation": {
+      "nonRidge": "sigma_nonridge=sigma_complete*(1-ridgeOwnershipWeight)",
+      "ridge": "sigma_ridge=sigma_complete*ridgeOwnershipWeight",
+      "sharedTransport": "sigma_total=sigma_ridge+sigma_nonridge"
+    },
+    "ridgeLayerIdentity": "authored-ridge-support-coefficient-layer-v0",
+    "scoreExpression": "max(weight_i*smoothstep(low_i,high_i,term_i))",
+    "terms": [
+      {
+        "controls": [
+          "boundary.gradientGain"
+        ],
+        "direction": "increasing",
+        "expression": "step(1e-6,boundary.gradientGain)*fire.signal",
+        "feature": "authored.gradient-gated-fire.signal",
+        "high": 0.011764705882352941,
+        "inputs": [
+          "fire.energy",
+          "fire.emission",
+          "fire.detail",
+          "micro.z",
+          "material.heat"
+        ],
+        "low": 0.00392156862745098,
+        "weight": 1.0
+      }
+    ]
+  },
+  "selectorRecipe": {
+    "path": "selector-recipe.json",
+    "sha256": "541836e6c45ef014ab0b8be23ebd8dce9898900a7639a0c4e21f38336daef8f9"
+  },
+  "source": {
+    "artifactsPostConsumptionVerified": true,
+    "corpusIdentity": "sha256:dbd0a738ebda4a6423c36ed77eb9680bc6ee6891367a7057dab0785328f9b3e8",
+    "corpusManifest": "corpus-manifest.json",
+    "corpusManifestLocator": "external-basename-plus-sha256-v0",
+    "corpusManifestSha256": "b7af257e7b5a0a033211d78eae9039c48d57e8f27150a36eef009bae4d66f708",
+    "effectiveSplits": {
+      "calibration": [
+        "setting-q"
+      ],
+      "fit": [
+        "setting-a",
+        "setting-b",
+        "setting-c",
+        "setting-d",
+        "setting-e",
+        "setting-f",
+        "setting-g",
+        "setting-h",
+        "setting-i",
+        "setting-j",
+        "setting-k",
+        "setting-l",
+        "setting-m",
+        "setting-n",
+        "setting-o"
+      ],
+      "heldOut": [
+        "setting-p"
+      ]
+    },
+    "featureOrder": [
+      "sidecar.support",
+      "sidecar.coverage",
+      "sidecar.ridge",
+      "sidecar.footprint",
+      "material.density",
+      "material.heat",
+      "material.fuel",
+      "material.detail",
+      "fire.energy",
+      "fire.temperature",
+      "fire.emission",
+      "fire.detail",
+      "micro.x",
+      "micro.y",
+      "micro.z",
+      "micro.w",
+      "front.topology",
+      "velocity.x",
+      "velocity.y",
+      "velocity.z",
+      "support.reaction",
+      "support.interface",
+      "flow.curlMagnitude",
+      "flow.divergence"
+    ],
+    "rowsDropped": 0,
+    "rowsEvaluated": 35651584,
+    "sampleCap": null
+  },
+  "status": "complete"
+}
