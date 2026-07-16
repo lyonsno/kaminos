@@ -27,6 +27,7 @@ const RESIDUAL_GEOMETRIES = new Set([
   'diagonal-covariance-v0',
   'full-covariance-v0',
   'two-phase-overlap-full-covariance-v0',
+  'rigid-principal-bisect-full-covariance-v0',
 ]);
 
 const GAUSSIAN_CHANNEL_ORDER = Object.freeze([
@@ -222,6 +223,95 @@ function supportSidecar({ field, grid }) {
   return { values, physical, residual, smokeDensityMass, physicalExtinctionMass, residualExtinctionMass };
 }
 
+function residualMomentRow({ voxels, field, voxelVariance, fullCovariance, membershipWeight, metadata }) {
+  let mass = 0;
+  const first = [0, 0, 0];
+  const second = [0, 0, 0, 0, 0, 0];
+  const velocity = [0, 0, 0];
+  let densityMass = 0;
+  let heatMass = 0;
+  for (const voxel of voxels) {
+    const weight = voxel.residualWeight * membershipWeight;
+    mass += weight;
+    for (let axis = 0; axis < 3; axis += 1) {
+      first[axis] += voxel.position[axis] * weight;
+      velocity[axis] += field[voxel.fieldOffset + axis] * weight;
+    }
+    second[0] += voxel.position[0] * voxel.position[0] * weight;
+    second[1] += voxel.position[0] * voxel.position[1] * weight;
+    second[2] += voxel.position[0] * voxel.position[2] * weight;
+    second[3] += voxel.position[1] * voxel.position[1] * weight;
+    second[4] += voxel.position[1] * voxel.position[2] * weight;
+    second[5] += voxel.position[2] * voxel.position[2] * weight;
+    densityMass += field[voxel.fieldOffset + CHANNEL.smokeDensity] * weight;
+    heatMass += field[voxel.fieldOffset + CHANNEL.heat] * weight;
+  }
+  const position = first.map(value => value / mass);
+  const covariance = [
+    Math.max(voxelVariance, second[0] / mass - position[0] * position[0] + voxelVariance),
+    fullCovariance ? second[1] / mass - position[0] * position[1] : 0,
+    fullCovariance ? second[2] / mass - position[0] * position[2] : 0,
+    Math.max(voxelVariance, second[3] / mass - position[1] * position[1] + voxelVariance),
+    fullCovariance ? second[4] / mass - position[1] * position[2] : 0,
+    Math.max(voxelVariance, second[5] / mass - position[2] * position[2] + voxelVariance),
+  ];
+  const eigen = fullCovariance ? symmetricEigenbasis3x3(covariance) : null;
+  return {
+    position,
+    covariance,
+    orientation: eigen?.vectors || [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+    radii: eigen?.values.map(Math.sqrt) || [Math.sqrt(covariance[0]), Math.sqrt(covariance[3]), Math.sqrt(covariance[5])],
+    extinctionMass: mass,
+    densityWitness: densityMass / mass,
+    temperatureWitness: heatMass / mass,
+    velocityWitness: velocity.map(value => value / mass),
+    sourceVoxelCount: voxels.length,
+    ...metadata,
+  };
+}
+
+function principalBisectVoxels(voxels, principalAxis) {
+  if (voxels.length < 2) return null;
+  const projected = voxels.map(voxel => ({
+    voxel,
+    projection: voxel.position.reduce((sum, component, axis) => sum + component * principalAxis[axis], 0),
+  })).sort((left, right) => left.projection - right.projection || left.voxel.cell - right.voxel.cell);
+  const totalWeight = projected.reduce((sum, item) => sum + item.voxel.residualWeight, 0);
+  let accumulatedWeight = 0;
+  let selectedIndex = -1;
+  let selectedGap = null;
+  let minimumImbalance = Infinity;
+  let tiedProjectionBoundaryCount = 0;
+  for (let index = 0; index < projected.length - 1; index += 1) {
+    accumulatedWeight += projected[index].voxel.residualWeight;
+    const leftProjection = projected[index].projection;
+    const rightProjection = projected[index + 1].projection;
+    const gap = rightProjection - leftProjection;
+    const tolerance = Number.EPSILON * 64 * Math.max(1, Math.abs(leftProjection), Math.abs(rightProjection));
+    if (!(gap > tolerance)) {
+      tiedProjectionBoundaryCount += 1;
+      continue;
+    }
+    const imbalance = Math.abs(accumulatedWeight - totalWeight / 2);
+    if (imbalance < minimumImbalance) {
+      minimumImbalance = imbalance;
+      selectedIndex = index;
+      selectedGap = gap;
+    }
+  }
+  if (selectedIndex < 0) return null;
+  return {
+    children: [
+      projected.slice(0, selectedIndex + 1).map(item => item.voxel),
+      projected.slice(selectedIndex + 1).map(item => item.voxel),
+    ],
+    principalAxis: [...principalAxis],
+    cutProjection: (projected[selectedIndex].projection + projected[selectedIndex + 1].projection) / 2,
+    projectionGap: selectedGap,
+    tiedProjectionBoundaryCount,
+  };
+}
+
 function residualRows({ field, residual, grid, residualBlockSize, residualGeometry }) {
   const rows = [];
   const cellWidth = 2 / grid;
@@ -230,79 +320,79 @@ function residualRows({ field, residual, grid, residualBlockSize, residualGeomet
   const membershipWeights = new Float64Array(grid ** 3);
   const partitionWeight = 1 / phases.length;
   const fullCovariance = residualGeometry !== 'diagonal-covariance-v0';
+  const principalBisect = residualGeometry === 'rigid-principal-bisect-full-covariance-v0';
+  const splitDiagnostics = { splitParentCount: 0, unsplitParentCount: 0, minimumProjectionGap: null, tiedProjectionBoundaryCount: 0 };
   for (let phaseIndex = 0; phaseIndex < phases.length; phaseIndex += 1) {
     const phase = phases[phaseIndex];
     const firstStart = phase.map(offset => offset === 0 ? 0 : offset - residualBlockSize);
     for (let bz = firstStart[2]; bz < grid; bz += residualBlockSize) {
       for (let by = firstStart[1]; by < grid; by += residualBlockSize) {
         for (let bx = firstStart[0]; bx < grid; bx += residualBlockSize) {
-        let mass = 0;
-        let sourceVoxelCount = 0;
-        const first = [0, 0, 0];
-        const second = [0, 0, 0, 0, 0, 0];
-        const velocity = [0, 0, 0];
-        let densityMass = 0;
-        let heatMass = 0;
-        const windowStart = [bx, by, bz];
-        const windowEndExclusive = windowStart.map(start => start + residualBlockSize);
-        const clippedStart = windowStart.map(start => Math.max(0, start));
-        const clippedEndExclusive = windowEndExclusive.map(end => Math.min(grid, end));
-        for (let z = clippedStart[2]; z < clippedEndExclusive[2]; z += 1) {
-          for (let y = clippedStart[1]; y < clippedEndExclusive[1]; y += 1) {
-            for (let x = clippedStart[0]; x < clippedEndExclusive[0]; x += 1) {
-              const cell = index3(x, y, z, grid);
-              if (!(residual[cell] > 0)) continue;
-              const weight = residual[cell] * partitionWeight;
-              membershipWeights[cell] += partitionWeight;
-              const position = [x, y, z].map(component => -1 + (component + 0.5) * cellWidth);
-              const offset = cell * KAMINOS_FLUID_CHANNEL_ORDER.length;
-              mass += weight;
-              sourceVoxelCount += 1;
-              for (let axis = 0; axis < 3; axis += 1) {
-                first[axis] += position[axis] * weight;
-                velocity[axis] += field[offset + axis] * weight;
+          const windowStart = [bx, by, bz];
+          const windowEndExclusive = windowStart.map(start => start + residualBlockSize);
+          const clippedStart = windowStart.map(start => Math.max(0, start));
+          const clippedEndExclusive = windowEndExclusive.map(end => Math.min(grid, end));
+          const voxels = [];
+          for (let z = clippedStart[2]; z < clippedEndExclusive[2]; z += 1) {
+            for (let y = clippedStart[1]; y < clippedEndExclusive[1]; y += 1) {
+              for (let x = clippedStart[0]; x < clippedEndExclusive[0]; x += 1) {
+                const cell = index3(x, y, z, grid);
+                if (!(residual[cell] > 0)) continue;
+                membershipWeights[cell] += partitionWeight;
+                voxels.push({
+                  cell,
+                  residualWeight: residual[cell],
+                  position: [x, y, z].map(component => -1 + (component + 0.5) * cellWidth),
+                  fieldOffset: cell * KAMINOS_FLUID_CHANNEL_ORDER.length,
+                });
               }
-              second[0] += position[0] * position[0] * weight;
-              second[1] += position[0] * position[1] * weight;
-              second[2] += position[0] * position[2] * weight;
-              second[3] += position[1] * position[1] * weight;
-              second[4] += position[1] * position[2] * weight;
-              second[5] += position[2] * position[2] * weight;
-              densityMass += field[offset + CHANNEL.smokeDensity] * weight;
-              heatMass += field[offset + CHANNEL.heat] * weight;
             }
           }
-        }
-        if (!(mass > 0)) continue;
-        const position = first.map(value => value / mass);
-        const covariance = [
-          Math.max(voxelVariance, second[0] / mass - position[0] * position[0] + voxelVariance),
-          fullCovariance ? second[1] / mass - position[0] * position[1] : 0,
-          fullCovariance ? second[2] / mass - position[0] * position[2] : 0,
-          Math.max(voxelVariance, second[3] / mass - position[1] * position[1] + voxelVariance),
-          fullCovariance ? second[4] / mass - position[1] * position[2] : 0,
-          Math.max(voxelVariance, second[5] / mass - position[2] * position[2] + voxelVariance),
-        ];
-        const eigen = fullCovariance ? symmetricEigenbasis3x3(covariance) : null;
-        rows.push({
-          position,
-          covariance,
-          orientation: eigen?.vectors || [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
-          radii: eigen?.values.map(Math.sqrt) || [Math.sqrt(covariance[0]), Math.sqrt(covariance[3]), Math.sqrt(covariance[5])],
-          extinctionMass: mass,
-          densityWitness: densityMass / mass,
-          temperatureWitness: heatMass / mass,
-          velocityWitness: velocity.map(value => value / mass),
-          sourceVoxelCount,
-          residualBlock: [bx / residualBlockSize, by / residualBlockSize, bz / residualBlockSize],
-          residualPartitionPhase: phaseIndex,
-          residualPartitionOffset: [...phase],
-          residualWindowStart: windowStart,
-          residualWindowEndExclusive: windowEndExclusive,
-          residualClippedWindowStart: clippedStart,
-          residualClippedWindowEndExclusive: clippedEndExclusive,
-          residualMembershipWeight: partitionWeight,
-        });
+          if (voxels.length === 0) continue;
+          const metadata = {
+            residualBlock: [bx / residualBlockSize, by / residualBlockSize, bz / residualBlockSize],
+            residualPartitionPhase: phaseIndex,
+            residualPartitionOffset: [...phase],
+            residualWindowStart: windowStart,
+            residualWindowEndExclusive: windowEndExclusive,
+            residualClippedWindowStart: clippedStart,
+            residualClippedWindowEndExclusive: clippedEndExclusive,
+            residualMembershipWeight: partitionWeight,
+          };
+          const parent = residualMomentRow({ voxels, field, voxelVariance, fullCovariance, membershipWeight: partitionWeight, metadata });
+          if (!principalBisect) {
+            rows.push(parent);
+            continue;
+          }
+          const split = principalBisectVoxels(voxels, parent.orientation[0]);
+          if (!split) {
+            splitDiagnostics.unsplitParentCount += 1;
+            rows.push({ ...parent, residualSplitChild: null, residualSplitAuthority: 'unsplittable-distinct-principal-projection-v0' });
+            continue;
+          }
+          splitDiagnostics.splitParentCount += 1;
+          splitDiagnostics.minimumProjectionGap = splitDiagnostics.minimumProjectionGap == null
+            ? split.projectionGap
+            : Math.min(splitDiagnostics.minimumProjectionGap, split.projectionGap);
+          splitDiagnostics.tiedProjectionBoundaryCount += split.tiedProjectionBoundaryCount;
+          for (let child = 0; child < split.children.length; child += 1) {
+            rows.push(residualMomentRow({
+              voxels: split.children[child],
+              field,
+              voxelVariance,
+              fullCovariance,
+              membershipWeight: partitionWeight,
+              metadata: {
+                ...metadata,
+                residualSplitChild: child,
+                residualSplitParentWindowStart: windowStart,
+                residualSplitPrincipalAxis: split.principalAxis,
+                residualSplitCutProjection: split.cutProjection,
+                residualSplitProjectionGap: split.projectionGap,
+                residualSplitAuthority: 'distinct-principal-projection-weighted-median-bisect-v0',
+              },
+            }));
+          }
         }
       }
     }
@@ -320,7 +410,7 @@ function residualRows({ field, residual, grid, residualBlockSize, residualGeomet
   if (membershipWeightRange.some(weight => Math.abs(weight - 1) > 1e-12)) {
     throw new Error(`residual window membership does not conserve per-voxel mass: ${membershipWeightRange.join(',')}`);
   }
-  return { rows, phases, membershipWeightRange };
+  return { rows, phases, membershipWeightRange, splitDiagnostics: principalBisect ? splitDiagnostics : null };
 }
 
 export function buildSmokeExtinctionResidualOracle(request = {}) {
@@ -383,13 +473,18 @@ export function buildSmokeExtinctionResidualOracle(request = {}) {
       combinedExtinctionMass,
       combinedRelativeError,
       residualCandidateCount: detailRows.length,
-      residualCandidateCountAuthority: detail.phases.length === 1
-        ? 'all-positive-explicit-blocks-no-cap-v0'
-        : 'all-positive-explicit-overlap-windows-no-cap-v0',
-      residualMassPartitionAuthority: detail.phases.length === 1
-        ? 'single-complete-window-partition-v0'
-        : 'equal-share-across-complete-window-partitions-v0',
+      residualCandidateCountAuthority: residualGeometry === 'rigid-principal-bisect-full-covariance-v0'
+        ? 'all-positive-rigid-windows-principal-bisect-no-cap-v0'
+        : detail.phases.length === 1
+          ? 'all-positive-explicit-blocks-no-cap-v0'
+          : 'all-positive-explicit-overlap-windows-no-cap-v0',
+      residualMassPartitionAuthority: residualGeometry === 'rigid-principal-bisect-full-covariance-v0'
+        ? 'distinct-principal-projection-weighted-median-bisect-v0'
+        : detail.phases.length === 1
+          ? 'single-complete-window-partition-v0'
+          : 'equal-share-across-complete-window-partitions-v0',
       residualMembershipWeightRange: detail.membershipWeightRange,
+      residualSplitDiagnostics: detail.splitDiagnostics,
       residualGeometry,
     },
   };

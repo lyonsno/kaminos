@@ -1,0 +1,298 @@
+{
+  "schema": "kaminos.smoke-extinction-residual-oracle.v0",
+  "authority": "exact-fluid-extinction-neighborhood-residual-oracle-v0",
+  "status": "passed",
+  "failurePhase": null,
+  "createdAt": "2026-07-16T16:56:31.366Z",
+  "hiddenCandidateCapApplied": false,
+  "requested": {
+    "manifestPath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v7-m24/sim-step-45.manifest.json",
+    "controlReportPath": "artifacts/pyro-principal-smoke-allocation-r1-0716/control-step-45/fit/oracle-fit-report.json",
+    "controlArtifactPath": "artifacts/pyro-principal-smoke-allocation-r1-0716/control-step-45/fit/budget-1024.gaussians.f32",
+    "controlBudget": 1024,
+    "residualBlockSize": 4,
+    "residualGeometry": "rigid-principal-bisect-full-covariance-v0"
+  },
+  "effective": {
+    "manifestPath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v7-m24/sim-step-45.manifest.json",
+    "manifestSha256": "sha256:ab980bee692fbf6e91a3868201893e95e7ba2f170a036905a1b1eca4312f1d1a",
+    "fluidPath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v7-m24/sim-step-45.fluid.f32",
+    "fluidSha256": "sha256:b9015d0d577ee99b48a3e5bebe207e5024a4e9ef63bd42a8192e65042c9540ee",
+    "controlReportPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-principal-smoke-allocation-r1-0716/control-step-45/fit/oracle-fit-report.json",
+    "controlReportSha256": "sha256:963484537ef5bc69572cfe81001b4accbac39914711b8cb261dd80d321398ef4",
+    "controlArtifactPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-principal-smoke-allocation-r1-0716/control-step-45/fit/budget-1024.gaussians.f32",
+    "controlArtifactSha256": "sha256:bf7f884bfa8807637940182eb1f4aa5b3443bece905f66534828ba6dc0e2c0ef",
+    "route": "native-3d-compute-fluid-raymarch-v0",
+    "prototypeIdentity": "kaminos-volume-prototype-v0",
+    "backend": "WebGPU:apple",
+    "grid": 160,
+    "residualBlockSize": 4,
+    "residualGeometry": "rigid-principal-bisect-full-covariance-v0",
+    "residualWindowPhases": [
+      [
+        0,
+        0,
+        0
+      ]
+    ]
+  },
+  "sidecar": {
+    "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-smoke-extinction-residual-oracle-r4-principal-bisect-0716/source-step45/smoke-extinction-support-sidecar.f32",
+    "sha256": "sha256:564efca0905957a8a44592309b7ce1618b14cfc486e658d92c6cd0f323b26b5a",
+    "byteLength": 65536000,
+    "dtype": "float32",
+    "byteOrder": "little-endian",
+    "shape": [
+      160,
+      160,
+      160,
+      4
+    ],
+    "channelOrder": [
+      "physicalExtinction",
+      "coverage",
+      "ridge",
+      "residualExtinction"
+    ],
+    "neighborhoodAuthority": "center-plus-six-axis-neighbors-clamped-domain-v0",
+    "ridgeAuthority": "central-gradient-plus-normalized-absolute-laplacian-v0"
+  },
+  "accounting": {
+    "authority": "physical-extinction-component-sum-v0",
+    "coefficients": {
+      "smokeDensity": 0.74,
+      "microSmoke": 0.42,
+      "interfaceShred": 0.34,
+      "materialDetail": 0.12
+    },
+    "controlSmokeDensityMass": 3403.896946847439,
+    "sourceSmokeDensityMass": 3403.896947889866,
+    "coarseExtinctionMass": 2518.883740667105,
+    "residualExtinctionMass": 1472.7960008141977,
+    "representedResidualMass": 1472.7960008155103,
+    "physicalExtinctionMass": 3991.6797422528102,
+    "combinedExtinctionMass": 3991.679741482615,
+    "combinedRelativeError": 1.9295013095731318e-10,
+    "residualCandidateCount": 98929,
+    "residualCandidateCountAuthority": "all-positive-rigid-windows-principal-bisect-no-cap-v0",
+    "residualMassPartitionAuthority": "distinct-principal-projection-weighted-median-bisect-v0",
+    "residualMembershipWeightRange": [
+      1,
+      1
+    ],
+    "residualSplitDiagnostics": {
+      "splitParentCount": 49393,
+      "unsplitParentCount": 143,
+      "minimumProjectionGap": 5.877120984321138e-9,
+      "tiedProjectionBoundaryCount": 0
+    },
+    "residualGeometry": "rigid-principal-bisect-full-covariance-v0"
+  },
+  "products": {
+    "coarse": {
+      "role": "coarse-control",
+      "count": 1024,
+      "targetMass": 2518.883740667105,
+      "representedExtinction": 2518.883740544319,
+      "accounting": {
+        "teacherTotalExtinction": 2518.883740667105,
+        "representedExtinction": 2518.883740544319,
+        "absoluteError": 1.227858774655033e-7,
+        "relativeError": 4.874614714571324e-11
+      },
+      "descriptor": {
+        "path": "coarse-control.gaussians.f32",
+        "sha256": "sha256:831f322a870a3f690650815fb5d4b7c13b1673c82dbbac91c9167ad7439ad2ac",
+        "byteLength": 114688,
+        "dtype": "float32",
+        "byteOrder": "little-endian",
+        "shape": [
+          1024,
+          28
+        ],
+        "channelOrder": [
+          "positionX",
+          "positionY",
+          "positionZ",
+          "covXX",
+          "covXY",
+          "covXZ",
+          "covYY",
+          "covYZ",
+          "covZZ",
+          "axis0X",
+          "axis0Y",
+          "axis0Z",
+          "axis1X",
+          "axis1Y",
+          "axis1Z",
+          "axis2X",
+          "axis2Y",
+          "axis2Z",
+          "radius0",
+          "radius1",
+          "radius2",
+          "extinctionMass",
+          "densityWitness",
+          "temperatureWitness",
+          "velocityX",
+          "velocityY",
+          "velocityZ",
+          "sourceVoxelCount"
+        ]
+      },
+      "fitPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-smoke-extinction-residual-oracle-r4-principal-bisect-0716/source-step45/coarse-control.fit-report.json"
+    },
+    "residual": {
+      "role": "residual-oracle",
+      "count": 98929,
+      "targetMass": 1472.7960008141977,
+      "representedExtinction": 1472.7960002723053,
+      "accounting": {
+        "teacherTotalExtinction": 1472.7960008141977,
+        "representedExtinction": 1472.7960002723053,
+        "absoluteError": 5.418924047262408e-7,
+        "relativeError": 3.6793446236048267e-10
+      },
+      "descriptor": {
+        "path": "residual-oracle.gaussians.f32",
+        "sha256": "sha256:250fe4a588b0f479c3316b4b88f78b2f95e7525ec2faf91de86cd301f7e408df",
+        "byteLength": 11080048,
+        "dtype": "float32",
+        "byteOrder": "little-endian",
+        "shape": [
+          98929,
+          28
+        ],
+        "channelOrder": [
+          "positionX",
+          "positionY",
+          "positionZ",
+          "covXX",
+          "covXY",
+          "covXZ",
+          "covYY",
+          "covYZ",
+          "covZZ",
+          "axis0X",
+          "axis0Y",
+          "axis0Z",
+          "axis1X",
+          "axis1Y",
+          "axis1Z",
+          "axis2X",
+          "axis2Y",
+          "axis2Z",
+          "radius0",
+          "radius1",
+          "radius2",
+          "extinctionMass",
+          "densityWitness",
+          "temperatureWitness",
+          "velocityX",
+          "velocityY",
+          "velocityZ",
+          "sourceVoxelCount"
+        ]
+      },
+      "fitPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-smoke-extinction-residual-oracle-r4-principal-bisect-0716/source-step45/residual-oracle.fit-report.json"
+    },
+    "combined": {
+      "role": "coarse-plus-residual",
+      "count": 99953,
+      "targetMass": 3991.6797422528102,
+      "representedExtinction": 3991.6797408164357,
+      "accounting": {
+        "teacherTotalExtinction": 3991.6797422528102,
+        "representedExtinction": 3991.6797408164357,
+        "absoluteError": 0.0000014363745322043542,
+        "relativeError": 3.5984212786412024e-10
+      },
+      "descriptor": {
+        "path": "coarse-plus-residual.gaussians.f32",
+        "sha256": "sha256:3cb0fda52f5c8c32de9a5c817bed8ebc69817810f287c07b5aa8afb7fc503312",
+        "byteLength": 11194736,
+        "dtype": "float32",
+        "byteOrder": "little-endian",
+        "shape": [
+          99953,
+          28
+        ],
+        "channelOrder": [
+          "positionX",
+          "positionY",
+          "positionZ",
+          "covXX",
+          "covXY",
+          "covXZ",
+          "covYY",
+          "covYZ",
+          "covZZ",
+          "axis0X",
+          "axis0Y",
+          "axis0Z",
+          "axis1X",
+          "axis1Y",
+          "axis1Z",
+          "axis2X",
+          "axis2Y",
+          "axis2Z",
+          "radius0",
+          "radius1",
+          "radius2",
+          "extinctionMass",
+          "densityWitness",
+          "temperatureWitness",
+          "velocityX",
+          "velocityY",
+          "velocityZ",
+          "sourceVoxelCount"
+        ]
+      },
+      "fitPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-smoke-extinction-residual-oracle-r4-principal-bisect-0716/source-step45/coarse-plus-residual.fit-report.json"
+    }
+  },
+  "lastTrustworthyEvidence": {
+    "manifestPath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v7-m24/sim-step-45.manifest.json",
+    "manifestSha256": "sha256:ab980bee692fbf6e91a3868201893e95e7ba2f170a036905a1b1eca4312f1d1a",
+    "fluidPath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/accepted-source-r160-teacher-v7-m24/sim-step-45.fluid.f32",
+    "fluidSha256": "sha256:b9015d0d577ee99b48a3e5bebe207e5024a4e9ef63bd42a8192e65042c9540ee",
+    "controlReportPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-principal-smoke-allocation-r1-0716/control-step-45/fit/oracle-fit-report.json",
+    "controlReportSha256": "sha256:963484537ef5bc69572cfe81001b4accbac39914711b8cb261dd80d321398ef4",
+    "controlArtifactPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-principal-smoke-allocation-r1-0716/control-step-45/fit/budget-1024.gaussians.f32",
+    "controlArtifactSha256": "sha256:bf7f884bfa8807637940182eb1f4aa5b3443bece905f66534828ba6dc0e2c0ef",
+    "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+    "backend": "WebGPU:apple",
+    "accounting": {
+      "authority": "physical-extinction-component-sum-v0",
+      "coefficients": {
+        "smokeDensity": 0.74,
+        "microSmoke": 0.42,
+        "interfaceShred": 0.34,
+        "materialDetail": 0.12
+      },
+      "controlSmokeDensityMass": 3403.896946847439,
+      "sourceSmokeDensityMass": 3403.896947889866,
+      "coarseExtinctionMass": 2518.883740667105,
+      "residualExtinctionMass": 1472.7960008141977,
+      "representedResidualMass": 1472.7960008155103,
+      "physicalExtinctionMass": 3991.6797422528102,
+      "combinedExtinctionMass": 3991.679741482615,
+      "combinedRelativeError": 1.9295013095731318e-10,
+      "residualCandidateCount": 98929,
+      "residualCandidateCountAuthority": "all-positive-rigid-windows-principal-bisect-no-cap-v0",
+      "residualMassPartitionAuthority": "distinct-principal-projection-weighted-median-bisect-v0",
+      "residualMembershipWeightRange": [
+        1,
+        1
+      ],
+      "residualSplitDiagnostics": {
+        "splitParentCount": 49393,
+        "unsplitParentCount": 143,
+        "minimumProjectionGap": 5.877120984321138e-9,
+        "tiedProjectionBoundaryCount": 0
+      },
+      "residualGeometry": "rigid-principal-bisect-full-covariance-v0"
+    }
+  }
+}

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Smoke Residual R4 Local Principal Bisection</title>
+<style>
+:root{color-scheme:dark;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}*{box-sizing:border-box}body{margin:0;color:#f4f4f2;background:#090a0b;letter-spacing:0}header,section{padding:18px 24px;border-bottom:1px solid #393d40}h1{margin:0 0 8px;font-size:26px}h2{margin:0 0 7px;font-size:18px}p{max-width:1500px;margin:5px 0;color:#c8cccf;font-size:12px;line-height:1.4}code{color:#fff}.panels{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:10px}figure{margin:0;min-width:0}figcaption{min-height:54px;padding:7px 8px;background:#202326;border:1px solid #41464a;font-size:11px;line-height:1.3}img{display:block;width:100%;height:auto;border:1px solid #41464a;border-top:0;background:#000;filter:brightness(8)}.role{color:#fff;font-weight:700}.note{color:#92999e}
+</style></head><body>
+<header><h1>R4 Local Principal Multimodality Falsifier</h1>
+<p><strong>Question:</strong> can two coherent residual modes inside each rigid 4x4x4 neighborhood recover the missing tongue/cavity/sheet topology better than cross-block overlap?</p>
+<p><strong>Controlled change:</strong> exact R160 step 45 body target, frozen 1,024 control, one rigid partition, cameras, extinction scale <code>0.2</code>, coverage <code>1</code>, display exposure <code>8x</code>. R4 bisects each geometrically splittable parent at a residual-mass weighted median between distinct full-covariance principal-axis projection buckets. It emits 98,929 residual rows; R3 emits 100,215 overlap rows.</p>
+<p><strong>Metric:</strong> versus R2, R4 changes MSE by <code>+3.40%</code> native and <code>-0.37%</code> elevated +35. Versus R3, native regresses <code>10.75%</code>. This sheet asks whether any visible topology gain justifies that loss.</p></header>
+<section><h2>Recorded Native</h2><div class="panels">
+<figure><figcaption><span class="role">A. Exact body target</span><br><span class="note">Pre-absorption dense ray integral</span></figcaption><img src="../../../pyro-smoke-extinction-residual-oracle-r1-0716/witness/teachers/recorded-native/dense-raymarch-smoke.png"></figure>
+<figure><figcaption><span class="role">B. R2 rigid full covariance</span><br><span class="note">49,536 one-mode blocks</span></figcaption><img src="../../../pyro-smoke-extinction-residual-oracle-r2-full-covariance-0716/witness/combined/render/recorded-native/budget-50560.perspective-render.png"></figure>
+<figure><figcaption><span class="role">C. R3 two-phase overlap</span><br><span class="note">100,215 cross-boundary rows</span></figcaption><img src="../../../pyro-smoke-extinction-residual-oracle-r3-two-phase-overlap-0716/witness/combined/render/recorded-native/budget-101239.perspective-render.png"></figure>
+<figure><figcaption><span class="role">D. R4 principal bisect</span><br><span class="note">98,929 local two-mode rows</span></figcaption><img src="../combined/render/recorded-native/budget-99953.perspective-render.png"></figure>
+<figure><figcaption><span class="role">E. R4 target error</span><br><span class="note">Absolute luma difference</span></figcaption><img src="../combined/render/recorded-native/budget-99953.perspective-diff.png"></figure>
+</div></section>
+<section><h2>Elevated +35 Held Out</h2><div class="panels">
+<figure><figcaption><span class="role">A. Exact body target</span><br><span class="note">Pre-absorption dense ray integral</span></figcaption><img src="../../../pyro-smoke-extinction-residual-oracle-r1-0716/witness/teachers/elevated-plus-35/dense-raymarch-smoke.png"></figure>
+<figure><figcaption><span class="role">B. R2 rigid full covariance</span><br><span class="note">49,536 one-mode blocks</span></figcaption><img src="../../../pyro-smoke-extinction-residual-oracle-r2-full-covariance-0716/witness/combined/render/elevated-plus-35/budget-50560.perspective-render.png"></figure>
+<figure><figcaption><span class="role">C. R3 two-phase overlap</span><br><span class="note">100,215 cross-boundary rows</span></figcaption><img src="../../../pyro-smoke-extinction-residual-oracle-r3-two-phase-overlap-0716/witness/combined/render/elevated-plus-35/budget-101239.perspective-render.png"></figure>
+<figure><figcaption><span class="role">D. R4 principal bisect</span><br><span class="note">98,929 local two-mode rows</span></figcaption><img src="../combined/render/elevated-plus-35/budget-99953.perspective-render.png"></figure>
+<figure><figcaption><span class="role">E. R4 target error</span><br><span class="note">Absolute luma difference</span></figcaption><img src="../combined/render/elevated-plus-35/budget-99953.perspective-diff.png"></figure>
+</div></section></body></html>

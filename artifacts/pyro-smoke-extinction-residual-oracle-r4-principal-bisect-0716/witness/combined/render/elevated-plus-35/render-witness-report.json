@@ -1,0 +1,166 @@
+{
+  "schema": "kaminos.smoke-gaussian-oracle-render-witness-report.v0",
+  "identity": "smoke-gaussian-oracle-render-witness-v1",
+  "status": "passed",
+  "createdAt": "2026-07-16T16:57:02.845Z",
+  "hiddenBudgetCapApplied": false,
+  "fitReportPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-smoke-extinction-residual-oracle-r4-principal-bisect-0716/witness/combined/cameras/elevated-plus-35/oracle-fit-report.json",
+  "teacher": {
+    "raymarchPngPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-smoke-extinction-residual-oracle-r1-0716/witness/teachers/elevated-plus-35/dense-raymarch-smoke.png",
+    "raymarchSha256": "sha256:7a0275be80fbc6484e3e5993e3dddd614032af671bdf2a0e28f9b1d5becf4462",
+    "width": 640,
+    "height": 455,
+    "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+    "prototypeIdentity": "kaminos-volume-prototype-v0",
+    "backend": "WebGPU:apple",
+    "worldSpace": {
+      "coordinateFrame": "kaminos-volume-world-v0",
+      "transformAuthority": "native-volume-grid-world-transform-v0",
+      "bounds": {
+        "minimum": [
+          -1,
+          -1,
+          -1
+        ],
+        "maximum": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    "cameraIdentity": "sha256:31fff60f656e0b261563e0ff602f404edea4584002fe7c438fde064c328758c6",
+    "camera": {
+      "position": [
+        0.8922032569616167,
+        1.589690904672157,
+        1.5500141328570456
+      ],
+      "target": [
+        0,
+        0.02,
+        0
+      ],
+      "projectionMatrix": [
+        2.9306425807515972,
+        0,
+        0,
+        0,
+        0,
+        2.7474774194546225,
+        0,
+        0,
+        0,
+        0,
+        -1.0002000200020003,
+        -1,
+        0,
+        0,
+        -0.020002000200020003,
+        0
+      ],
+      "matrixWorldInverse": [
+        0.8666778489396199,
+        -0.3290757481412369,
+        0.37493820576553505,
+        0,
+        0,
+        0.7515776447431204,
+        0.6596446345740894,
+        0,
+        -0.49886822524329355,
+        -0.5716993929572334,
+        0.6513756964570734,
+        0,
+        0,
+        -0.015031552894862465,
+        -2.392793699549639,
+        1
+      ]
+    }
+  },
+  "renderer": {
+    "identity": "cpu-perspective-full-covariance-gaussian-smoke-v0",
+    "cameraAuthority": "checksum-bound-fit-teacher-camera-v0",
+    "cameraIdentity": "sha256:31fff60f656e0b261563e0ff602f404edea4584002fe7c438fde064c328758c6",
+    "compositorAuthority": "single-channel-smoke-luma-proxy-not-production-compositor-v0",
+    "projectionAuthority": "full-view-projection-jacobian-covariance-v0",
+    "scaleSelection": "explicit-extinction-scale-sweep-min-luma-mse-v0",
+    "requestedExtinctionScales": [
+      0.2
+    ],
+    "coverageSelection": "explicit-mass-preserving-covariance-dilation-sweep-min-luma-mse-v0",
+    "requestedCoverageScales": [
+      1
+    ]
+  },
+  "requestedBudgets": [
+    99953
+  ],
+  "budgetCurve": [
+    {
+      "requestedBudget": 99953,
+      "activeGaussianCount": 99953,
+      "selectedExtinctionScale": 0.2,
+      "selectedCoverageScale": 1,
+      "scaleSweep": [
+        0.2
+      ],
+      "coverageSweep": [
+        1
+      ],
+      "timing": {
+        "cpuProxyRenderMs": 8617.125875
+      },
+      "projectionDiagnostics": {
+        "identity": "perspective-full-covariance-overlap-diagnostics-v0",
+        "coverageScale": 1,
+        "requestedGaussianCount": 99953,
+        "visibleGaussianCount": 99953,
+        "rejectedGaussianCount": 0,
+        "rejectionReasons": {},
+        "supportPixelCount": 291162,
+        "singleContributorPixelCount": 47,
+        "singleContributorPixelFraction": 0.00016142216360651458,
+        "meanContributorsPerSupportPixel": 144.7519490867627,
+        "maxContributors": 326,
+        "meanPeakContributionFraction": 0.30455153626475623,
+        "minimumProjectedCovarianceDeterminant": 0.2770923448645908,
+        "maximumProjectedCovarianceDeterminant": 21892.709509316097
+      },
+      "gaussianArtifact": {
+        "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-smoke-extinction-residual-oracle-r4-principal-bisect-0716/source-step45/coarse-plus-residual.gaussians.f32",
+        "identity": "sha256:3cb0fda52f5c8c32de9a5c817bed8ebc69817810f287c07b5aa8afb7fc503312"
+      },
+      "metrics": {
+        "lumaMse": 0.0000027881062092436567,
+        "lumaMae": 0.00043387006045240853,
+        "renderMeanLuma": 0.002672910137053053,
+        "teacherMeanLuma": 0.002399402152298205,
+        "renderActivePixels": 7318,
+        "nonzeroRenderPixels": 208588,
+        "maximumRenderLuma": 0.11255013197660446,
+        "teacherActivePixels": 5986,
+        "activePixelIoU": 0.8056460369163952
+      },
+      "support": {
+        "supportLeakageGaussianCount": null,
+        "supportLeakageFraction": null,
+        "authority": "not-evaluated-by-product-writer-v0"
+      },
+      "images": {
+        "renderPngPath": "artifacts/pyro-smoke-extinction-residual-oracle-r4-principal-bisect-0716/witness/combined/render/elevated-plus-35/budget-99953.perspective-render.png",
+        "diffPngPath": "artifacts/pyro-smoke-extinction-residual-oracle-r4-principal-bisect-0716/witness/combined/render/elevated-plus-35/budget-99953.perspective-diff.png"
+      }
+    }
+  ],
+  "contactSheet": {
+    "path": "artifacts/pyro-smoke-extinction-residual-oracle-r4-principal-bisect-0716/witness/combined/render/elevated-plus-35/perspective-render-contact-sheet.png",
+    "sha256": "sha256:812d62244edc3d7010cc59c96e12f4a1fecd1996d7992b870a55bc39671c6b7d",
+    "layout": "columns: teacher-raymarch | gaussian-proxy-render | abs-luma-diff; rows: requested budgets",
+    "inspected": true,
+    "inspectionNote": "R4 principal bisect elevated-plus-35 heldout; fixed R1 calibration"
+  },
+  "reportPath": "artifacts/pyro-smoke-extinction-residual-oracle-r4-principal-bisect-0716/witness/combined/render/elevated-plus-35/render-witness-report.json",
+  "reportIdentity": "sha256:4bca7af19855dbc498899780008d402fc8ff36aee218a02653ef72537487e9ad"
+}

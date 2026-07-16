@@ -143,6 +143,30 @@ for (let axis = 0; axis < 3; axis += 1) {
 for (let component = 0; component < 6; component += 1) {
   assert.ok(Math.abs(reconstructed[component] - fullRow.covariance[component]) < 1e-10, `eigenbasis reconstructs covariance component ${component}`);
 }
+const principalBisect = buildSmokeExtinctionResidualOracle({
+  grid: correlatedGrid,
+  field: correlatedField,
+  channelOrder: fluidChannels,
+  controlRows: correlatedControl,
+  residualBlockSize: 4,
+  residualGeometry: 'rigid-principal-bisect-full-covariance-v0',
+});
+assert.equal(principalBisect.residualWindowPhases.length, 1, 'principal bisect retains one rigid ownership partition');
+assert.equal(principalBisect.residualRows.length, 2, 'one correlated parent becomes two local modes');
+assert.equal(principalBisect.accounting.residualCandidateCountAuthority, 'all-positive-rigid-windows-principal-bisect-no-cap-v0');
+assert.equal(principalBisect.accounting.residualMassPartitionAuthority, 'distinct-principal-projection-weighted-median-bisect-v0');
+assert.equal(principalBisect.accounting.residualSplitDiagnostics.splitParentCount, 1);
+assert.equal(principalBisect.accounting.residualSplitDiagnostics.unsplitParentCount, 0);
+assert.ok(principalBisect.accounting.residualSplitDiagnostics.minimumProjectionGap > 0);
+assert.deepEqual(principalBisect.accounting.residualMembershipWeightRange, [1, 1]);
+assert.ok(Math.abs(
+  principalBisect.residualRows.reduce((sum, row) => sum + row.extinctionMass, 0)
+    - correlatedFull.residualRows[0].extinctionMass,
+) < 1e-12, 'principal children exactly partition parent residual mass');
+assert.deepEqual(principalBisect.residualRows.map(row => row.sourceVoxelCount), [1, 1]);
+assert.deepEqual(principalBisect.residualRows.map(row => row.residualSplitChild), [0, 1]);
+assert.equal(principalBisect.residualRows.every(row => row.residualSplitParentWindowStart.join(',') === '0,0,0'), true);
+assert.equal(principalBisect.residualRows.every(row => row.residualSplitProjectionGap > 0), true);
 
 const overlapGrid = 8;
 const overlapField = field(overlapGrid);
@@ -171,6 +195,21 @@ assert.deepEqual(bridgeRow.residualWindowEndExclusive, [6, 6, 6]);
 assert.equal(bridgeRow.sourceVoxelCount, 2, 'bridge carries both positive voxels across the old ownership boundary');
 assert.ok(Math.abs(bridgeRow.extinctionMass - 0.42) < 1e-6, 'bridge receives half of each voxel residual mass');
 assert.equal(bridgeRow.residualMembershipWeight, 0.5);
+const edgeField = field(overlapGrid);
+setCell(edgeField, overlapGrid, 0, 0, 0, { smokeDensity: 1, microdetail: 1 });
+setCell(edgeField, overlapGrid, 7, 7, 7, { smokeDensity: 1, microdetail: 1 });
+const edgeOverlap = buildSmokeExtinctionResidualOracle({
+  grid: overlapGrid,
+  field: edgeField,
+  channelOrder: fluidChannels,
+  controlRows: overlapControl,
+  residualBlockSize: 4,
+  residualGeometry: 'two-phase-overlap-full-covariance-v0',
+});
+assert.equal(edgeOverlap.residualRows.length, 4, 'low and high domain edges each remain covered in both complete partitions');
+assert.deepEqual(edgeOverlap.accounting.residualMembershipWeightRange, [1, 1]);
+assert.equal(edgeOverlap.residualRows.some(row => row.residualWindowStart.some(value => value < 0)), true, 'low clipped stagger window is explicit');
+assert.equal(edgeOverlap.residualRows.some(row => row.residualWindowEndExclusive.some(value => value > overlapGrid)), true, 'high clipped stagger window is explicit');
 assert.throws(
   () => buildSmokeExtinctionResidualOracle({
     grid: correlatedGrid,
@@ -408,6 +447,20 @@ try {
   assert.equal(overlapReport.accounting.residualMassPartitionAuthority, 'equal-share-across-complete-window-partitions-v0');
   assert.deepEqual(overlapReport.accounting.residualMembershipWeightRange, [1, 1]);
   assert.ok(overlapReport.accounting.combinedRelativeError < 1e-6);
+
+  const principalBisectOut = join(producerRoot, 'principal-bisect-out');
+  const principalBisectArgs = [
+    ...args.slice(0, -2),
+    '--residual-geometry', 'rigid-principal-bisect-full-covariance-v0',
+    '--out-dir', principalBisectOut,
+  ];
+  const principalBisectProduced = spawnSync('node', principalBisectArgs, { cwd: root, encoding: 'utf8' });
+  assert.equal(principalBisectProduced.status, 0, principalBisectProduced.stderr || principalBisectProduced.stdout);
+  const principalBisectReport = JSON.parse(readFileSync(join(principalBisectOut, 'oracle-report.json'), 'utf8'));
+  assert.equal(principalBisectReport.requested.residualGeometry, 'rigid-principal-bisect-full-covariance-v0');
+  assert.equal(principalBisectReport.effective.residualGeometry, 'rigid-principal-bisect-full-covariance-v0');
+  assert.equal(principalBisectReport.accounting.residualMassPartitionAuthority, 'distinct-principal-projection-weighted-median-bisect-v0');
+  assert.ok(principalBisectReport.accounting.combinedRelativeError < 1e-6);
 
   const wrongRouteManifest = { ...manifest, effectiveRoute: 'fallback-cpu-demo-v0' };
   const wrongRoutePath = join(producerRoot, 'wrong-route.manifest.json');
