@@ -9051,6 +9051,7 @@ async function initScene() {
   window.kaminosTier2ReceiverLightSetWitnessMute = muted => tier2ReceiverLightPass?.setWitnessMute?.(muted) || null;
   window.kaminosTier2ReceiverLightSetWitnessForegroundMute = muted => tier2ReceiverLightPass?.setWitnessForegroundMute?.(muted) || null;
   window.kaminosTier2ReceiverLightSetWitnessIsolate = isolated => tier2ReceiverLightPass?.setWitnessIsolate?.(isolated) || null;
+  window.kaminosTier2ReceiverLightSetWitnessSurfaceMask = enabled => tier2ReceiverLightPass?.setWitnessSurfaceMask?.(enabled) || null;
   let receiverWitnessHudSnapshot = null;
   window.kaminosTier2ReceiverLightSetWitnessHudMute = muted => {
     const viewport = document.getElementById('viewport');
@@ -19905,6 +19906,7 @@ function createTier2ReceiverSurfaceLightPass(baseOutputNode, sceneDepthNode, sce
   const receiverMaterialResponseNode = baseOutputNode.rgb.mul(0.65).add(vec3(0.35));
   const receiverStrength = uniform(0.0);
   const isolateMix = uniform(isTier2ReceiverLightIsolateRoute(params) ? 1.0 : 0.0);
+  const surfaceMaskMix = uniform(0.0);
   const receiverSupportNode = spreadCoverageNode.mul(0.2).add(0.8).clamp(0.8, 1.0);
   const receiverSignalNode = receiverWarmSpectralBasisNode
     .mul(spreadEnergyNode)
@@ -19917,9 +19919,11 @@ function createTier2ReceiverSurfaceLightPass(baseOutputNode, sceneDepthNode, sce
     .mul(0.08)
     .mul(sceneGeometryReceiverMaskNode);
   const receiverLightNode = vec4(dimReceiverSurfaceNode.add(receiverSignalNode), 1.0);
+  const receiverSurfaceMaskNode = vec4(vec3(sceneGeometryReceiverMaskNode), 1.0);
+  const isolatedOutputNode = mix(receiverLightNode, receiverSurfaceMaskNode, surfaceMaskMix);
   const outputNode = mix(
     baseOutputNode.add(vec4(receiverSignalNode, 0.0)),
-    receiverLightNode,
+    isolatedOutputNode,
     isolateMix
   );
 
@@ -19959,6 +19963,7 @@ function createTier2ReceiverSurfaceLightPass(baseOutputNode, sceneDepthNode, sce
     witnessMuted: false,
     witnessForegroundMuted: false,
     witnessIsolate: false,
+    witnessSurfaceMask: false,
     requestedRouteIdentity: isTier2ReceiverLightIsolateRoute(params)
       ? 'tier2-receiver-light-isolate-requested-v0'
       : (params.get('volume_receiver_light') === 'tier2'
@@ -20190,11 +20195,22 @@ function createTier2ReceiverSurfaceLightPass(baseOutputNode, sceneDepthNode, sce
         isolateMix: isolateMix.value,
       };
     },
+    setWitnessSurfaceMask(enabled) {
+      state.witnessSurfaceMask = Boolean(enabled);
+      surfaceMaskMix.value = state.witnessSurfaceMask ? 1.0 : 0.0;
+      return {
+        identity: 'tier2-receiver-light-witness-surface-mask-v0',
+        witnessSurfaceMask: state.witnessSurfaceMask,
+        surfaceMaskMix: surfaceMaskMix.value,
+        receiverMaskAuthority: TIER2_RECEIVER_MASK_AUTHORITY,
+      };
+    },
     debugState() {
       return {
         ...state,
         strength: receiverStrength.value,
         isolateMix: isolateMix.value,
+        surfaceMaskMix: surfaceMaskMix.value,
       };
     },
     dispose() {

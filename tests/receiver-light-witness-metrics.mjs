@@ -61,10 +61,14 @@ assert.equal(binarySignal.warmPixels, 3000);
 const dimReceiverSurface = image(100, 100, (x, y) => (
   x >= 20 && x < 80 && y >= 15 && y < 85 ? [8, 8, 8] : [0, 0, 0]
 ));
+const receiverCoverageMask = image(100, 100, (x, y) => (
+  x >= 20 && x < 80 && y >= 15 && y < 85 ? [255, 255, 255] : [0, 0, 0]
+));
 const illuminatedReceiverSurface = image(100, 100, (x, y) => (
   x >= 20 && x < 80 && y >= 15 && y < 85 ? [96, 44, 8] : [0, 0, 0]
 ));
 const surfaceAssayOptions = {
+  receiverMaskImage: receiverCoverageMask,
   backgroundRegion: { xMin: 0, xMax: 1, yMin: 0, yMax: 0.1 },
 };
 const honestAssay = evaluateReceiverLightAssay(
@@ -77,10 +81,44 @@ assert.equal(honestAssay.accepted, true, 'warm gain on a visible muted receiver 
 assert.deepEqual(honestAssay.failures, []);
 assert.ok(honestAssay.delta.surfacePositiveRatio > 0.99);
 
-const detachedAssay = evaluateReceiverLightAssay(binaryReceiver, black, surfaceAssayOptions);
+const darkMaterialAssay = evaluateReceiverLightAssay(
+  illuminatedReceiverSurface,
+  black,
+  surfaceAssayOptions,
+);
+assert.equal(
+  darkMaterialAssay.accepted,
+  true,
+  'an explicit receiver mask must prove contact even when the muted material quantizes to black',
+);
+
+const mixedSurfaceAndSpill = image(100, 100, (x, y) => {
+  if (x >= 20 && x < 80 && y >= 15 && y < 85) return [96, 44, 8];
+  if (x >= 82 && x < 92 && y >= 45 && y < 75) return [72, 36, 6];
+  return [0, 0, 0];
+});
+const mixedAssay = evaluateReceiverLightAssay(
+  mixedSurfaceAndSpill,
+  dimReceiverSurface,
+  surfaceAssayOptions,
+);
+assert.equal(
+  mixedAssay.accepted,
+  false,
+  'a mostly attached response must still fail when a material detached lobe escapes the receiver mask',
+);
+assert.ok(
+  mixedAssay.failures.includes('receiver-delta-escaped-surface-mask'),
+  `expected full-frame detached-signal failure, got ${JSON.stringify(mixedAssay)}`,
+);
+
+const detachedAssay = evaluateReceiverLightAssay(binaryReceiver, black, {
+  ...surfaceAssayOptions,
+  receiverMaskImage: black,
+});
 assert.equal(detachedAssay.accepted, false, 'a warm detached overlay over black cannot prove receiver illumination');
 assert.ok(
-  detachedAssay.failures.includes('receiver-delta-detached-from-muted-surface'),
+  detachedAssay.failures.includes('receiver-delta-escaped-surface-mask'),
   `expected detached-signal failure, got ${JSON.stringify(detachedAssay)}`,
 );
 

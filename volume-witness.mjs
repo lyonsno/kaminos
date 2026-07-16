@@ -2592,11 +2592,14 @@ async function main() {
         }
         const receiverOnPath = out.replace(/\.png$/i, '.receiver-on.png');
         const receiverMutedPath = out.replace(/\.png$/i, '.receiver-muted.png');
+        const receiverMaskPath = out.replace(/\.png$/i, '.receiver-mask.png');
         let receiverOnBuffer;
         let receiverMutedBuffer;
+        let receiverMaskBuffer;
         let foregroundMuteReceipt = null;
         let isolateReceipt = null;
         let hudMuteReceipt = null;
+        let surfaceMaskReceipt = null;
         try {
           const isolateEval = await wsRequest(ws, 'Runtime.evaluate', {
             expression: 'window.kaminosTier2ReceiverLightSetWitnessIsolate?.(true) ?? null',
@@ -2645,7 +2648,31 @@ async function main() {
           });
           receiverMutedBuffer = Buffer.from(receiverMutedShot.data || '', 'base64');
           writeFileSync(receiverMutedPath, receiverMutedBuffer);
+          const surfaceMaskEval = await wsRequest(ws, 'Runtime.evaluate', {
+            expression: 'window.kaminosTier2ReceiverLightSetWitnessSurfaceMask?.(true) ?? null',
+            returnByValue: true,
+          });
+          surfaceMaskReceipt = surfaceMaskEval.result.value || null;
+          if (
+            surfaceMaskReceipt?.witnessSurfaceMask !== true ||
+            surfaceMaskReceipt?.surfaceMaskMix !== 1 ||
+            surfaceMaskReceipt?.receiverMaskAuthority !== 'scene-prepass-visible-surface-depth-normal-v1'
+          ) {
+            throw new Error(`receiver-light assay could not expose explicit receiver coverage: ${JSON.stringify(surfaceMaskReceipt)}`);
+          }
+          await delay(100);
+          const receiverMaskShot = await wsRequest(ws, 'Page.captureScreenshot', {
+            format: 'png',
+            fromSurface: true,
+            clip: freezeReceipt.clip,
+          });
+          receiverMaskBuffer = Buffer.from(receiverMaskShot.data || '', 'base64');
+          writeFileSync(receiverMaskPath, receiverMaskBuffer);
         } finally {
+          await wsRequest(ws, 'Runtime.evaluate', {
+            expression: 'window.kaminosTier2ReceiverLightSetWitnessSurfaceMask?.(false) ?? null',
+            returnByValue: true,
+          });
           await wsRequest(ws, 'Runtime.evaluate', {
             expression: 'window.kaminosTier2ReceiverLightSetWitnessMute?.(false) ?? null',
             returnByValue: true,
@@ -2668,6 +2695,7 @@ async function main() {
           parsePngRgba(receiverMutedBuffer),
           {
             region: { xMin: 0, xMax: 1, yMin: 0, yMax: 1 },
+            receiverMaskImage: parsePngRgba(receiverMaskBuffer),
             backgroundRegion: { xMin: 0.02, xMax: 0.18, yMin: 0.05, yMax: 0.4 },
           },
         );
@@ -2678,8 +2706,10 @@ async function main() {
           foregroundMuteReceipt,
           isolateReceipt,
           hudMuteReceipt,
+          surfaceMaskReceipt,
           receiverOnPath,
           receiverMutedPath,
+          receiverMaskPath,
         };
         if (!receiverLightDeltaEvidence.accepted) {
           throw new Error(`receiver-light surface-contact assay rejected receiver signal: ${JSON.stringify(receiverLightDeltaEvidence)}`);
