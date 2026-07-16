@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Smoke Residual R2 Full-Covariance Isolation</title>
+  <style>
+    :root { color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #f4f4f2; background: #090a0b; letter-spacing: 0; }
+    header, section { padding: 22px 28px; border-bottom: 1px solid #393d40; }
+    h1 { margin: 0 0 10px; font-size: 28px; }
+    h2 { margin: 0 0 8px; font-size: 19px; }
+    p { max-width: 1350px; margin: 6px 0; color: #c8cccf; font-size: 13px; line-height: 1.45; }
+    code { color: #fff; }
+    .panels { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+    figure { margin: 0; min-width: 0; }
+    figcaption { min-height: 46px; padding: 8px 10px; background: #202326; border: 1px solid #41464a; font-size: 12px; line-height: 1.3; }
+    img { display: block; width: 100%; height: auto; border: 1px solid #41464a; border-top: 0; background: #000; filter: brightness(8); }
+    .role { color: #fff; font-weight: 700; }
+    .note { color: #92999e; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>R2 Full-Covariance Isolation</h1>
+    <p><strong>Question:</strong> is R1's discarded cross-covariance/orientation a material cause of its block bands and missing tongue topology?</p>
+    <p><strong>Controlled change:</strong> same R160 step 45, pre-absorption body carrier, frozen 1,024 control, 49,536 rigid 4x4x4 residual blocks, weighted centroids, masses, count, cameras, extinction scale <code>0.2</code>, coverage <code>1</code>, and display-only exposure <code>8x</code>. R1 uses diagonal covariance; R2 retains all residual-weighted second moments and serializes the full eigenbasis.</p>
+    <p><strong>Initial metric:</strong> R2 changes combined MSE by <code>-0.71%</code> native and <code>-0.28%</code> elevated; IoU is effectively unchanged. This sheet decides whether a qualitative topology delta exists despite the small scalar movement.</p>
+  </header>
+  <section>
+    <h2>Recorded Native</h2>
+    <div class="panels">
+      <figure><figcaption><span class="role">A. Exact body target</span><br><span class="note">Pre-absorption dense ray integral</span></figcaption><img src="../../../pyro-smoke-extinction-residual-oracle-r1-0716/witness/teachers/recorded-native/dense-raymarch-smoke.png" alt="Exact pre-absorption body target, native"></figure>
+      <figure><figcaption><span class="role">B. R1 combined</span><br><span class="note">Diagonal covariance per rigid block</span></figcaption><img src="../../../pyro-smoke-extinction-residual-oracle-r1-0716/witness/combined/render/recorded-native/budget-50560.perspective-render.png" alt="R1 diagonal combined, native"></figure>
+      <figure><figcaption><span class="role">C. R2 combined</span><br><span class="note">Full covariance, same blocks/count/mass</span></figcaption><img src="../combined/render/recorded-native/budget-50560.perspective-render.png" alt="R2 full covariance combined, native"></figure>
+      <figure><figcaption><span class="role">D. R2 target error</span><br><span class="note">Absolute luma difference</span></figcaption><img src="../combined/render/recorded-native/budget-50560.perspective-diff.png" alt="R2 target error, native"></figure>
+    </div>
+  </section>
+  <section>
+    <h2>Elevated +35 Held Out</h2>
+    <div class="panels">
+      <figure><figcaption><span class="role">A. Exact body target</span><br><span class="note">Pre-absorption dense ray integral</span></figcaption><img src="../../../pyro-smoke-extinction-residual-oracle-r1-0716/witness/teachers/elevated-plus-35/dense-raymarch-smoke.png" alt="Exact pre-absorption body target, elevated"></figure>
+      <figure><figcaption><span class="role">B. R1 combined</span><br><span class="note">Diagonal covariance per rigid block</span></figcaption><img src="../../../pyro-smoke-extinction-residual-oracle-r1-0716/witness/combined/render/elevated-plus-35/budget-50560.perspective-render.png" alt="R1 diagonal combined, elevated"></figure>
+      <figure><figcaption><span class="role">C. R2 combined</span><br><span class="note">Full covariance, same blocks/count/mass</span></figcaption><img src="../combined/render/elevated-plus-35/budget-50560.perspective-render.png" alt="R2 full covariance combined, elevated"></figure>
+      <figure><figcaption><span class="role">D. R2 target error</span><br><span class="note">Absolute luma difference</span></figcaption><img src="../combined/render/elevated-plus-35/budget-50560.perspective-diff.png" alt="R2 target error, elevated"></figure>
+    </div>
+  </section>
+</body>
+</html>

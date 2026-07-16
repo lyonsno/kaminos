@@ -101,6 +101,61 @@ assert.ok(oracle.accounting.combinedRelativeError < 1e-12, 'coarse plus residual
 assert.equal(oracle.accounting.residualCandidateCount, 1);
 assert.equal(oracle.accounting.residualCandidateCountAuthority, 'all-positive-explicit-blocks-no-cap-v0');
 
+const correlatedGrid = 4;
+const correlatedField = field(correlatedGrid);
+setCell(correlatedField, correlatedGrid, 0, 0, 0, { smokeDensity: 1, microdetail: 1 });
+setCell(correlatedField, correlatedGrid, 1, 1, 0, { smokeDensity: 1, microdetail: 1 });
+const correlatedControl = [{ ...controlRows[0], extinctionMass: 2 }];
+const correlatedDiagonal = buildSmokeExtinctionResidualOracle({
+  grid: correlatedGrid,
+  field: correlatedField,
+  channelOrder: fluidChannels,
+  controlRows: correlatedControl,
+  residualBlockSize: 4,
+  residualGeometry: 'diagonal-covariance-v0',
+});
+const correlatedFull = buildSmokeExtinctionResidualOracle({
+  grid: correlatedGrid,
+  field: correlatedField,
+  channelOrder: fluidChannels,
+  controlRows: correlatedControl,
+  residualBlockSize: 4,
+  residualGeometry: 'full-covariance-v0',
+});
+assert.equal(correlatedFull.residualGeometry, 'full-covariance-v0');
+assert.equal(correlatedFull.residualRows.length, correlatedDiagonal.residualRows.length, 'covariance isolation preserves natural candidate count');
+assert.deepEqual(correlatedFull.residualRows[0].position, correlatedDiagonal.residualRows[0].position, 'covariance isolation preserves weighted centroid');
+assert.equal(correlatedFull.residualRows[0].extinctionMass, correlatedDiagonal.residualRows[0].extinctionMass, 'covariance isolation preserves residual mass');
+assert.equal(correlatedDiagonal.residualRows[0].covariance[1], 0, 'R1 diagonal control discards xy correlation');
+assert.ok(correlatedFull.residualRows[0].covariance[1] > 0.05, 'full covariance retains the correlated xy sheet direction');
+const fullRow = correlatedFull.residualRows[0];
+const reconstructed = [0, 0, 0, 0, 0, 0];
+for (let axis = 0; axis < 3; axis += 1) {
+  const eigenvalue = fullRow.radii[axis] ** 2;
+  const vector = fullRow.orientation[axis];
+  reconstructed[0] += eigenvalue * vector[0] * vector[0];
+  reconstructed[1] += eigenvalue * vector[0] * vector[1];
+  reconstructed[2] += eigenvalue * vector[0] * vector[2];
+  reconstructed[3] += eigenvalue * vector[1] * vector[1];
+  reconstructed[4] += eigenvalue * vector[1] * vector[2];
+  reconstructed[5] += eigenvalue * vector[2] * vector[2];
+}
+for (let component = 0; component < 6; component += 1) {
+  assert.ok(Math.abs(reconstructed[component] - fullRow.covariance[component]) < 1e-10, `eigenbasis reconstructs covariance component ${component}`);
+}
+assert.throws(
+  () => buildSmokeExtinctionResidualOracle({
+    grid: correlatedGrid,
+    field: correlatedField,
+    channelOrder: fluidChannels,
+    controlRows: correlatedControl,
+    residualBlockSize: 4,
+    residualGeometry: 'silent-fallback-v0',
+  }),
+  /residual geometry/i,
+  'unknown geometry cannot silently fall back to the R1 diagonal arm',
+);
+
 assert.throws(
   () => buildSmokeExtinctionResidualOracle({
     grid,
@@ -287,6 +342,20 @@ try {
     firstHashes,
     're-running the same source rewrites the canonical outputs without changing product identity',
   );
+
+  const fullCovarianceOut = join(producerRoot, 'full-covariance-out');
+  const fullCovarianceArgs = [
+    ...args.slice(0, -2),
+    '--residual-geometry', 'full-covariance-v0',
+    '--out-dir', fullCovarianceOut,
+  ];
+  const fullCovarianceProduced = spawnSync('node', fullCovarianceArgs, { cwd: root, encoding: 'utf8' });
+  assert.equal(fullCovarianceProduced.status, 0, fullCovarianceProduced.stderr || fullCovarianceProduced.stdout);
+  const fullCovarianceReport = JSON.parse(readFileSync(join(fullCovarianceOut, 'oracle-report.json'), 'utf8'));
+  assert.equal(fullCovarianceReport.requested.residualGeometry, 'full-covariance-v0');
+  assert.equal(fullCovarianceReport.effective.residualGeometry, 'full-covariance-v0');
+  assert.equal(fullCovarianceReport.accounting.residualCandidateCount, report.accounting.residualCandidateCount);
+  assert.ok(fullCovarianceReport.accounting.combinedRelativeError < 1e-6);
 
   const wrongRouteManifest = { ...manifest, effectiveRoute: 'fallback-cpu-demo-v0' };
   const wrongRoutePath = join(producerRoot, 'wrong-route.manifest.json');

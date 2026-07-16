@@ -23,6 +23,7 @@ const MICRO_SMOKE_COEFFICIENT = 0.42;
 const INTERFACE_SHRED_COEFFICIENT = 0.34;
 const MATERIAL_DETAIL_COEFFICIENT = 0.12;
 const MASS_TOLERANCE = 1e-5;
+const RESIDUAL_GEOMETRIES = new Set(['diagonal-covariance-v0', 'full-covariance-v0']);
 
 const GAUSSIAN_CHANNEL_ORDER = Object.freeze([
   'positionX', 'positionY', 'positionZ',
@@ -102,6 +103,56 @@ function relativeError(actual, expected) {
   return Math.abs(actual - expected) / Math.max(Math.abs(expected), 1e-12);
 }
 
+function residualGeometryIdentity(value) {
+  const identity = String(value || 'diagonal-covariance-v0');
+  if (!RESIDUAL_GEOMETRIES.has(identity)) throw new Error(`unsupported residual geometry: ${identity}`);
+  return identity;
+}
+
+function symmetricEigenbasis3x3(covariance) {
+  const matrix = [
+    [covariance[0], covariance[1], covariance[2]],
+    [covariance[1], covariance[3], covariance[4]],
+    [covariance[2], covariance[4], covariance[5]],
+  ];
+  const vectors = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  for (let sweep = 0; sweep < 12; sweep += 1) {
+    for (const [p, q] of [[0, 1], [0, 2], [1, 2]]) {
+      const offDiagonal = matrix[p][q];
+      if (Math.abs(offDiagonal) < 1e-12) continue;
+      const angle = 0.5 * Math.atan2(2 * offDiagonal, matrix[q][q] - matrix[p][p]);
+      const cosine = Math.cos(angle);
+      const sine = Math.sin(angle);
+      for (let row = 0; row < 3; row += 1) {
+        const left = matrix[row][p];
+        const right = matrix[row][q];
+        matrix[row][p] = cosine * left - sine * right;
+        matrix[row][q] = sine * left + cosine * right;
+      }
+      for (let column = 0; column < 3; column += 1) {
+        const left = matrix[p][column];
+        const right = matrix[q][column];
+        matrix[p][column] = cosine * left - sine * right;
+        matrix[q][column] = sine * left + cosine * right;
+      }
+      for (let row = 0; row < 3; row += 1) {
+        const left = vectors[row][p];
+        const right = vectors[row][q];
+        vectors[row][p] = cosine * left - sine * right;
+        vectors[row][q] = sine * left + cosine * right;
+      }
+    }
+  }
+  const eigen = [0, 1, 2].map(index => ({
+    value: Math.max(matrix[index][index], 0),
+    vector: [vectors[0][index], vectors[1][index], vectors[2][index]],
+  })).sort((left, right) => right.value - left.value);
+  return {
+    values: eigen.map(item => item.value),
+    vectors: eigen.map(item => item.vector),
+  };
+}
+
 function index3(x, y, z, grid) {
   return x + y * grid + z * grid * grid;
 }
@@ -160,7 +211,7 @@ function supportSidecar({ field, grid }) {
   return { values, physical, residual, smokeDensityMass, physicalExtinctionMass, residualExtinctionMass };
 }
 
-function residualRows({ field, residual, grid, residualBlockSize }) {
+function residualRows({ field, residual, grid, residualBlockSize, residualGeometry }) {
   const rows = [];
   const cellWidth = 2 / grid;
   const voxelVariance = cellWidth * cellWidth / 12;
@@ -170,7 +221,7 @@ function residualRows({ field, residual, grid, residualBlockSize }) {
         let mass = 0;
         let sourceVoxelCount = 0;
         const first = [0, 0, 0];
-        const second = [0, 0, 0];
+        const second = [0, 0, 0, 0, 0, 0];
         const velocity = [0, 0, 0];
         let densityMass = 0;
         let heatMass = 0;
@@ -186,9 +237,14 @@ function residualRows({ field, residual, grid, residualBlockSize }) {
               sourceVoxelCount += 1;
               for (let axis = 0; axis < 3; axis += 1) {
                 first[axis] += position[axis] * weight;
-                second[axis] += position[axis] * position[axis] * weight;
                 velocity[axis] += field[offset + axis] * weight;
               }
+              second[0] += position[0] * position[0] * weight;
+              second[1] += position[0] * position[1] * weight;
+              second[2] += position[0] * position[2] * weight;
+              second[3] += position[1] * position[1] * weight;
+              second[4] += position[1] * position[2] * weight;
+              second[5] += position[2] * position[2] * weight;
               densityMass += field[offset + CHANNEL.smokeDensity] * weight;
               heatMass += field[offset + CHANNEL.heat] * weight;
             }
@@ -196,12 +252,20 @@ function residualRows({ field, residual, grid, residualBlockSize }) {
         }
         if (!(mass > 0)) continue;
         const position = first.map(value => value / mass);
-        const variances = second.map((value, axis) => Math.max(voxelVariance, value / mass - position[axis] * position[axis] + voxelVariance));
+        const covariance = [
+          Math.max(voxelVariance, second[0] / mass - position[0] * position[0] + voxelVariance),
+          residualGeometry === 'full-covariance-v0' ? second[1] / mass - position[0] * position[1] : 0,
+          residualGeometry === 'full-covariance-v0' ? second[2] / mass - position[0] * position[2] : 0,
+          Math.max(voxelVariance, second[3] / mass - position[1] * position[1] + voxelVariance),
+          residualGeometry === 'full-covariance-v0' ? second[4] / mass - position[1] * position[2] : 0,
+          Math.max(voxelVariance, second[5] / mass - position[2] * position[2] + voxelVariance),
+        ];
+        const eigen = residualGeometry === 'full-covariance-v0' ? symmetricEigenbasis3x3(covariance) : null;
         rows.push({
           position,
-          covariance: [variances[0], 0, 0, variances[1], 0, variances[2]],
-          orientation: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
-          radii: variances.map(Math.sqrt),
+          covariance,
+          orientation: eigen?.vectors || [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+          radii: eigen?.values.map(Math.sqrt) || [Math.sqrt(covariance[0]), Math.sqrt(covariance[3]), Math.sqrt(covariance[5])],
           extinctionMass: mass,
           densityWitness: densityMass / mass,
           temperatureWitness: heatMass / mass,
@@ -225,6 +289,7 @@ export function buildSmokeExtinctionResidualOracle(request = {}) {
   const expectedLength = grid ** 3 * KAMINOS_FLUID_CHANNEL_ORDER.length;
   if (request.field.length !== expectedLength) throw new Error(`field length ${request.field.length} does not match ${expectedLength}`);
   const residualBlockSize = positiveInteger(request.residualBlockSize ?? 2, 'residualBlockSize');
+  const residualGeometry = residualGeometryIdentity(request.residualGeometry);
   if (grid % residualBlockSize !== 0) throw new Error(`residualBlockSize must divide grid ${grid}`);
   const controlRows = validateControlRows(request.controlRows);
   const sidecar = supportSidecar({ field: request.field, grid });
@@ -233,7 +298,7 @@ export function buildSmokeExtinctionResidualOracle(request = {}) {
     throw new Error(`control smoke mass ${controlSmokeDensityMass} does not match source smoke mass ${sidecar.smokeDensityMass}`);
   }
   const coarseRows = controlRows.map(row => ({ ...row, extinctionMass: row.extinctionMass * BODY_SMOKE_COEFFICIENT }));
-  const detailRows = residualRows({ field: request.field, residual: sidecar.residual, grid, residualBlockSize });
+  const detailRows = residualRows({ field: request.field, residual: sidecar.residual, grid, residualBlockSize, residualGeometry });
   const coarseExtinctionMass = coarseRows.reduce((sum, row) => sum + row.extinctionMass, 0);
   const representedResidualMass = detailRows.reduce((sum, row) => sum + row.extinctionMass, 0);
   const combinedExtinctionMass = coarseExtinctionMass + representedResidualMass;
@@ -244,6 +309,7 @@ export function buildSmokeExtinctionResidualOracle(request = {}) {
     authority: ORACLE_AUTHORITY,
     hiddenCandidateCapApplied: false,
     residualBlockSize,
+    residualGeometry,
     sidecar: {
       shape: [grid, grid, grid, KAMINOS_SMOKE_EXTINCTION_CHANNEL_ORDER.length],
       channelOrder: [...KAMINOS_SMOKE_EXTINCTION_CHANNEL_ORDER],
@@ -272,6 +338,7 @@ export function buildSmokeExtinctionResidualOracle(request = {}) {
       combinedRelativeError,
       residualCandidateCount: detailRows.length,
       residualCandidateCountAuthority: 'all-positive-explicit-blocks-no-cap-v0',
+      residualGeometry,
     },
   };
 }
@@ -341,7 +408,7 @@ function encodeRows(rows) {
   return Buffer.from(values.buffer, values.byteOffset, values.byteLength);
 }
 
-async function writeRoleProduct({ outDir, role, rows, teacher, targetMass }) {
+async function writeRoleProduct({ outDir, role, rows, teacher, targetMass, residualGeometry }) {
   const artifactName = `${role}.gaussians.f32`;
   const artifactPath = join(outDir, artifactName);
   const bytes = encodeRows(rows);
@@ -377,6 +444,7 @@ async function writeRoleProduct({ outDir, role, rows, teacher, targetMass }) {
       identity: 'fixed-coarse-plus-uncapped-local-extinction-residual-oracle-v0',
       sampleSelectionAuthority: 'all-positive-explicit-blocks-no-subsampling-v0',
       role,
+      residualGeometry,
     },
     warmStart: null,
     costs: { authority: 'producer-report-only-v0' },
@@ -487,6 +555,7 @@ export async function produceSmokeExtinctionResidualOracle(options = {}) {
       channelOrder: inputs.manifest.fluidChannelOrder,
       controlRows,
       residualBlockSize: options.residualBlockSize,
+      residualGeometry: options.residualGeometry,
     });
     progress.lastTrustworthyEvidence = { ...progress.lastTrustworthyEvidence, accounting: oracle.accounting };
     progress.failurePhase = 'product-write';
@@ -510,9 +579,9 @@ export async function produceSmokeExtinctionResidualOracle(options = {}) {
       cameraIdentity: camera ? `sha256:${sha256(Buffer.from(JSON.stringify(camera)))}` : null,
     };
     const products = {
-      coarse: await writeRoleProduct({ outDir, role: 'coarse-control', rows: oracle.coarseRows, teacher, targetMass: oracle.accounting.coarseExtinctionMass }),
-      residual: await writeRoleProduct({ outDir, role: 'residual-oracle', rows: oracle.residualRows, teacher, targetMass: oracle.accounting.residualExtinctionMass }),
-      combined: await writeRoleProduct({ outDir, role: 'coarse-plus-residual', rows: oracle.combinedRows, teacher, targetMass: oracle.accounting.physicalExtinctionMass }),
+      coarse: await writeRoleProduct({ outDir, role: 'coarse-control', rows: oracle.coarseRows, teacher, targetMass: oracle.accounting.coarseExtinctionMass, residualGeometry: oracle.residualGeometry }),
+      residual: await writeRoleProduct({ outDir, role: 'residual-oracle', rows: oracle.residualRows, teacher, targetMass: oracle.accounting.residualExtinctionMass, residualGeometry: oracle.residualGeometry }),
+      combined: await writeRoleProduct({ outDir, role: 'coarse-plus-residual', rows: oracle.combinedRows, teacher, targetMass: oracle.accounting.physicalExtinctionMass, residualGeometry: oracle.residualGeometry }),
     };
     const report = {
     schema: ORACLE_SCHEMA,
@@ -527,6 +596,7 @@ export async function produceSmokeExtinctionResidualOracle(options = {}) {
       controlArtifactPath: options.controlArtifactPath || null,
       controlBudget: options.controlBudget,
       residualBlockSize: options.residualBlockSize,
+      residualGeometry: options.residualGeometry || 'diagonal-covariance-v0',
     },
     effective: {
       manifestPath: inputs.manifestPath,
@@ -542,6 +612,7 @@ export async function produceSmokeExtinctionResidualOracle(options = {}) {
       backend: inputs.manifest.backend,
       grid: inputs.manifest.grid,
       residualBlockSize: oracle.residualBlockSize,
+      residualGeometry: oracle.residualGeometry,
     },
     sidecar: {
       path: sidecarPath,
@@ -576,6 +647,7 @@ export async function produceSmokeExtinctionResidualOracle(options = {}) {
         controlArtifactPath: options.controlArtifactPath || null,
         controlBudget: options.controlBudget,
         residualBlockSize: options.residualBlockSize,
+        residualGeometry: options.residualGeometry || 'diagonal-covariance-v0',
       },
       lastTrustworthyEvidence: progress.lastTrustworthyEvidence,
     }, null, 2)}\n`);
@@ -608,6 +680,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     expectedControlArtifactSha256: args.get('--expected-control-artifact-sha256'),
     controlBudget: Number(args.get('--control-budget') || 1024),
     residualBlockSize: Number(args.get('--residual-block-size') || 2),
+    residualGeometry: args.get('--residual-geometry') || 'diagonal-covariance-v0',
     outDir: args.get('--out-dir'),
   };
   const requested = {
@@ -616,6 +689,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     controlArtifactPath: options.controlArtifactPath,
     controlBudget: options.controlBudget,
     residualBlockSize: options.residualBlockSize,
+    residualGeometry: options.residualGeometry,
   };
   let failurePhase = 'input-validation';
   let lastTrustworthyEvidence = { requested };
