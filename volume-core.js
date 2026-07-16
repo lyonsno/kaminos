@@ -79,6 +79,10 @@ const APPEARANCE_DECOMPOSITION_MODES = Object.freeze({
   'non-ridge-emission': { uniform: 10, targetIdentity: 'nonnegative-non-ridge-flame-emission-coefficient-v0' },
   'non-ridge-extinction': { uniform: 11, targetIdentity: 'nonnegative-non-ridge-flame-extinction-coefficient-v0' },
   'positive-optical-recomposition': { uniform: 12, targetIdentity: 'nonnegative-ridge-plus-non-ridge-optical-recomposition-v0' },
+  'ridge-transport-ridge-extinction': { uniform: 13, targetIdentity: 'ridge-emission-under-ridge-extinction-v0', emissionMask: 'ridge-owned', extinctionMask: 'ridge-owned' },
+  'ridge-transport-total-extinction': { uniform: 14, targetIdentity: 'ridge-emission-under-complete-flame-extinction-v0', emissionMask: 'ridge-owned', extinctionMask: 'complete-flame' },
+  'non-ridge-transport-total-extinction': { uniform: 15, targetIdentity: 'non-ridge-emission-under-complete-flame-extinction-v0', emissionMask: 'non-ridge', extinctionMask: 'complete-flame' },
+  'shared-transmittance-contribution-sum': { uniform: 16, targetIdentity: 'ridge-plus-non-ridge-contributions-under-shared-transmittance-v0', emissionMask: 'ridge-owned-plus-non-ridge', extinctionMask: 'complete-flame' },
 });
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160];
@@ -4113,6 +4117,11 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
   var broadCarrierCoefficientColor = vec3<f32>(0.0);
   var positiveRecomposedTransmittance = 1.0;
   var positiveRecomposedColor = vec3<f32>(0.004, 0.005, 0.006);
+  var ridgeOnlyTransportTransmittance = 1.0;
+  var ridgeOnlyTransportColor = vec3<f32>(0.004, 0.005, 0.006);
+  var sharedFlameTransmittance = 1.0;
+  var ridgeSharedTransportColor = vec3<f32>(0.004, 0.005, 0.006);
+  var nonRidgeSharedTransportColor = vec3<f32>(0.0);
   var completeFlameEmissionColor = vec3<f32>(0.0);
   var completeFlameExtinctionColor = vec3<f32>(0.0);
   var ridgeOwnedEmissionColor = vec3<f32>(0.0);
@@ -5115,6 +5124,11 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
         + vec3<f32>(broadCarrierExtinctionCoefficient * 0.12);
       positiveRecomposedColor = positiveRecomposedColor + positiveRecomposedTransmittance * positiveRecomposedEmissionCoefficient;
       positiveRecomposedTransmittance = positiveRecomposedTransmittance * exp(-positiveRecomposedExtinctionCoefficient);
+      ridgeOnlyTransportColor = ridgeOnlyTransportColor + ridgeOnlyTransportTransmittance * ridgeOwnedEmissionCoefficient;
+      ridgeOnlyTransportTransmittance = ridgeOnlyTransportTransmittance * exp(-ridgeOwnedExtinctionCoefficient);
+      ridgeSharedTransportColor = ridgeSharedTransportColor + sharedFlameTransmittance * ridgeOwnedEmissionCoefficient;
+      nonRidgeSharedTransportColor = nonRidgeSharedTransportColor + sharedFlameTransmittance * nonRidgeEmissionCoefficient;
+      sharedFlameTransmittance = sharedFlameTransmittance * exp(-positiveRecomposedExtinctionCoefficient);
       completeFlameEmissionColor = completeFlameEmissionColor + completeFlameEmissionCoefficient;
       completeFlameExtinctionColor = completeFlameExtinctionColor + vec3<f32>(completeFlameExtinctionCoefficient * 2.8);
       ridgeOwnedEmissionColor = ridgeOwnedEmissionColor + ridgeOwnedEmissionCoefficient;
@@ -5125,12 +5139,19 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     let extinctionStep = mix(standardExtinctionStep, directFlameSupervisionExtinction, supervisionFireOnlyTarget);
     trans = trans * exp(-extinctionStep);
     if (appearanceAssayActive > 0.5) {
-      trans = select(controlTransmittance, structuralATransmittance, appearanceDecompositionMode < 1.5);
+      if (appearanceDecompositionMode > 12.5 && appearanceDecompositionMode < 13.5) {
+        trans = ridgeOnlyTransportTransmittance;
+      } else if (appearanceDecompositionMode > 13.5) {
+        trans = sharedFlameTransmittance;
+      } else {
+        trans = select(controlTransmittance, structuralATransmittance, appearanceDecompositionMode < 1.5);
+      }
     }
     t = t + localDt;
   }
 
   let bAppliedToFixedAColor = recomposedColor - structuralAColor;
+  let sharedContributionColor = ridgeSharedTransportColor + nonRidgeSharedTransportColor;
   if (appearanceDecompositionMode > 0.5 && appearanceDecompositionMode < 1.5) {
     color = structuralAColor;
   } else if (appearanceDecompositionMode > 1.5 && appearanceDecompositionMode < 2.5) {
@@ -5157,8 +5178,16 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     color = nonRidgeEmissionColor;
   } else if (appearanceDecompositionMode > 10.5 && appearanceDecompositionMode < 11.5) {
     color = nonRidgeExtinctionColor;
-  } else if (appearanceDecompositionMode > 11.5) {
+  } else if (appearanceDecompositionMode > 11.5 && appearanceDecompositionMode < 12.5) {
     color = positiveRecomposedColor;
+  } else if (appearanceDecompositionMode > 12.5 && appearanceDecompositionMode < 13.5) {
+    color = ridgeOnlyTransportColor;
+  } else if (appearanceDecompositionMode > 13.5 && appearanceDecompositionMode < 14.5) {
+    color = ridgeSharedTransportColor;
+  } else if (appearanceDecompositionMode > 14.5 && appearanceDecompositionMode < 15.5) {
+    color = nonRidgeSharedTransportColor;
+  } else if (appearanceDecompositionMode > 15.5) {
+    color = sharedContributionColor;
   }
 
   let vignette = 1.0 - smoothstep(0.28, 1.48, length(ndc));
@@ -8101,7 +8130,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     appearanceDecompositionModeRequested = request.requested;
     appearanceDecompositionModeEffective = request.requested;
     appearanceDecompositionModeFallbackReason = request.fallbackReason;
-    const targetIdentity = APPEARANCE_DECOMPOSITION_MODES[appearanceDecompositionModeEffective].targetIdentity;
+    const modeContract = APPEARANCE_DECOMPOSITION_MODES[appearanceDecompositionModeEffective];
+    const targetIdentity = modeContract.targetIdentity;
     const receipt = {
       identity: 'appearance-decomposition-receipt-v0',
       requestedMode: appearanceDecompositionModeRequestedRaw,
@@ -8109,6 +8139,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       effectiveMode: appearanceDecompositionModeEffective,
       fallbackReason: appearanceDecompositionModeFallbackReason,
       targetIdentity,
+      emissionMask: modeContract.emissionMask,
+      extinctionMask: modeContract.extinctionMask,
       coefficientBoundary: 'per-sample-pre-tone-map-emission-extinction-v0',
       structuralAIdentity: INTRINSIC_PRESENTATION_TARGET_IDENTITY,
       broadCarrierIdentity: 'signed-control-minus-structural-a-local-coefficients-v0',
@@ -8122,6 +8154,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         signedClosureComparator: 'signed',
       },
       opticalRecurrence: 'front-to-back-emission-with-exponential-transmittance-v0',
+      sharedTransmittanceIdentity: 'ridge-plus-non-ridge-extinction-one-running-transmittance-v0',
       simulationAdvanced: false,
       simulationReset: false,
       cameraMutated: false,

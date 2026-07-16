@@ -19,6 +19,10 @@ const VOLUME_APPEARANCE_DECOMPOSITION_MODES = Object.freeze([
   'non-ridge-emission',
   'non-ridge-extinction',
   'positive-optical-recomposition',
+  'ridge-transport-ridge-extinction',
+  'ridge-transport-total-extinction',
+  'non-ridge-transport-total-extinction',
+  'shared-transmittance-contribution-sum',
 ]);
 
 function validateAppearanceDecompositionTarget(params, prefix = '') {

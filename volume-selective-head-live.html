@@ -50,6 +50,10 @@
       <button type="button" data-appearance-assay="non-ridge-emission">Non-Ridge Emission</button>
       <button type="button" data-appearance-assay="non-ridge-extinction">Non-Ridge Extinction</button>
       <button type="button" data-appearance-assay="positive-optical-recomposition">Positive Sum</button>
+      <button type="button" data-appearance-assay="ridge-transport-ridge-extinction">Ridge / Ridge X</button>
+      <button type="button" data-appearance-assay="ridge-transport-total-extinction">Ridge / Total X</button>
+      <button type="button" data-appearance-assay="non-ridge-transport-total-extinction">Non-Ridge / Total X</button>
+      <button type="button" data-appearance-assay="shared-transmittance-contribution-sum">Shared Sum</button>
     </div>
     <div id="roles" role="group" aria-label="Live reconstruction role">
       <button type="button" data-role="truthHigh">Truth high</button>
@@ -99,6 +103,10 @@
       'non-ridge-emission',
       'non-ridge-extinction',
       'positive-optical-recomposition',
+      'ridge-transport-ridge-extinction',
+      'ridge-transport-total-extinction',
+      'non-ridge-transport-total-extinction',
+      'shared-transmittance-contribution-sum',
     ];
     const roleAuthorities = Object.freeze({
       truthHigh: 'current-high-field-reference-no-learned-composition-v0',

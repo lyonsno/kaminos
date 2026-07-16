@@ -23,6 +23,9 @@ const captureReportPath = resolve(`${outDir}/capture-report.json`);
 const holdoutReportPath = resolve(String(args.get('--holdout-report') || `${outDir}/camera-holdout-report.json`));
 const rayStepCounts = parseIntegerList(args.get('--ray-steps') || '48,96,160');
 const orbitAngles = parseNumberList(args.get('--orbit-angles') || '-0.42,-0.28,-0.14,0,0.14,0.28,0.42');
+const expectedFrameCount = optionalInteger('--expected-frame-count');
+const expectedSimStepCount = optionalInteger('--expected-sim-step-count');
+const expectedControlsHash = args.get('--expected-controls-hash') ? String(args.get('--expected-controls-hash')) : null;
 const timeoutMs = Number(args.get('--timeout-ms') || 240000);
 const settleMs = Number(args.get('--settle-ms') || 1800);
 const debugPort = Number(args.get('--debug-port') || randomInt(42000, 62000));
@@ -155,8 +158,12 @@ try {
   assert.equal(initialization.summary.wrapperRoute, WRAPPER_ROUTE, 'requested/effective route disagreement after pause');
   assert.equal(initialization.summary.effectiveRoute, RENDERER_ROUTE, 'requested/effective route disagreement in renderer');
   assert.equal(initialization.summary.smokeReceipt?.effectiveMode, 'off', 'smoke presentation did not become disabled');
+  if (expectedFrameCount !== null) assert.equal(initialization.summary.frozenState.baseFrameCount, expectedFrameCount, 'effective frozen frame count disagrees with requested authority');
+  if (expectedSimStepCount !== null) assert.equal(initialization.summary.frozenState.baseSimStepCount, expectedSimStepCount, 'effective frozen simulation step disagrees with requested authority');
+  if (expectedControlsHash !== null) assert.equal(initialization.summary.frozenState.controlsHash, expectedControlsHash, 'effective controls hash disagrees with requested authority');
 
   const captures = [];
+  const maxRaySteps = Math.max(...rayStepCounts);
   for (const camera of initialization.cameras) {
     failurePhase = `camera-${camera.index}-support`;
     captures.push(await captureAndPersist(camera, 'stateDerivedSupport', Math.max(...rayStepCounts)));
@@ -169,7 +176,17 @@ try {
     failurePhase = `camera-${camera.index}-learned-conserved-billboard`;
     captures.push(await captureAndPersist(camera, 'learnedBillboard', Math.max(...rayStepCounts)));
     failurePhase = `camera-${camera.index}-world-tangent-covariance`;
-    captures.push(await captureAndPersist(camera, 'worldCovariance', Math.max(...rayStepCounts)));
+    captures.push(await captureAndPersist(camera, 'worldCovariance', maxRaySteps));
+    failurePhase = `camera-${camera.index}-ridge-transport-ridge-extinction`;
+    captures.push(await captureAndPersist(camera, 'ridgeTransportRidgeExtinction', maxRaySteps));
+    failurePhase = `camera-${camera.index}-ridge-transport-total-extinction`;
+    captures.push(await captureAndPersist(camera, 'ridgeTransportTotalExtinction', maxRaySteps));
+    failurePhase = `camera-${camera.index}-non-ridge-transport-total-extinction`;
+    captures.push(await captureAndPersist(camera, 'nonRidgeTransportTotalExtinction', maxRaySteps));
+    failurePhase = `camera-${camera.index}-shared-transmittance-contribution-sum`;
+    captures.push(await captureAndPersist(camera, 'sharedTransmittanceContributionSum', maxRaySteps));
+    failurePhase = `camera-${camera.index}-positive-optical-recomposition-control`;
+    captures.push(await captureAndPersist(camera, 'positiveOpticalRecomposition', maxRaySteps));
     for (const raySteps of rayStepCounts) {
       failurePhase = `camera-${camera.index}-raymarch-${raySteps}`;
       captures.push(await captureAndPersist(camera, 'raymarch', raySteps));
@@ -184,6 +201,7 @@ try {
   failurePhase = 'filament-analysis';
   const filamentContinuity = await evaluate(socket, 'window.__kaminosFilamentOrbitWitness.analyze()');
   const covarianceAnalysis = await evaluate(socket, 'window.__kaminosFilamentOrbitWitness.analyzeCovariance()');
+  const crossExtinctionAnalysis = await evaluate(socket, 'window.__kaminosFilamentOrbitWitness.analyzeCrossExtinction()');
   lastTrustworthyEvidence.captureCount = captures.length;
   lastTrustworthyEvidence.filamentContinuity = filamentContinuity.summary;
 
@@ -230,6 +248,7 @@ try {
     frozenDeterminism,
     filamentContinuity,
     covarianceAnalysis,
+    crossExtinctionAnalysis,
     inspectedArtifacts: captures.map(capture => capture.imagePath),
     falseClosureChecks: {
       rejectsRouteSubstitution: true,
@@ -250,7 +269,6 @@ try {
     'learned-billboard': 'learnedBillboard',
     'world-tangent-covariance': 'worldCovariance',
   };
-  const maxRaySteps = Math.max(...rayStepCounts);
   const firstAudit = report.captures.find(capture => capture.footprintAudit)?.footprintAudit;
   const cameraRows = [];
   for (const camera of initialization.cameras) {
@@ -327,6 +345,7 @@ try {
     captureCount: report.captures.length,
     frozenDeterminism: report.frozenDeterminism,
     filamentSummary: report.filamentContinuity.summary,
+    crossExtinctionSummary: report.crossExtinctionAnalysis.summary,
   }, null, 2));
 } catch (error) {
   const failureReport = {
@@ -418,6 +437,33 @@ function runtimeInitializationSource(config) {
           meanAbsChannelDelta: absoluteDelta / Math.max(1, left.length),
           changedPixels,
           changedFraction: changedPixels / Math.max(1, left.length / 4),
+        };
+      };
+      const maskedPixelDelta = (left, right, mask) => {
+        if (!left || !right || !mask || left.length !== right.length || left.length !== mask.length) throw new Error('masked-pixel-delta-shape-mismatch');
+        let maxChannelDelta = 0;
+        let absoluteDelta = 0;
+        let changedPixels = 0;
+        let selectedPixels = 0;
+        for (let index = 0; index < left.length; index += 4) {
+          if (luma(mask, index) <= 8) continue;
+          selectedPixels += 1;
+          let changed = false;
+          for (let channel = 0; channel < 4; channel += 1) {
+            const delta = Math.abs(left[index + channel] - right[index + channel]);
+            maxChannelDelta = Math.max(maxChannelDelta, delta);
+            absoluteDelta += delta;
+            changed ||= delta !== 0;
+          }
+          changedPixels += changed ? 1 : 0;
+        }
+        if (selectedPixels === 0) throw new Error('support-aligned-mask-is-empty');
+        return {
+          maxChannelDelta,
+          meanAbsChannelDelta: absoluteDelta / (selectedPixels * 4),
+          changedPixels,
+          changedFraction: changedPixels / selectedPixels,
+          selectedPixels,
         };
       };
       const filamentComponents = (support, raymarch, analytic, stateSupport, cameraIndex, raySteps) => {
@@ -563,6 +609,12 @@ function runtimeInitializationSource(config) {
         },
       }));
       const captures = new Map();
+      const expectedTransportMasks = {
+        ridgeTransportRidgeExtinction: { mode: 'ridge-transport-ridge-extinction', emissionMask: 'ridge-owned', extinctionMask: 'ridge-owned' },
+        ridgeTransportTotalExtinction: { mode: 'ridge-transport-total-extinction', emissionMask: 'ridge-owned', extinctionMask: 'complete-flame' },
+        nonRidgeTransportTotalExtinction: { mode: 'non-ridge-transport-total-extinction', emissionMask: 'non-ridge', extinctionMask: 'complete-flame' },
+        sharedTransmittanceContributionSum: { mode: 'shared-transmittance-contribution-sum', emissionMask: 'ridge-owned-plus-non-ridge', extinctionMask: 'complete-flame' },
+      };
 
       async function capture(request) {
         basinWindow.kaminosSetCameraDebugPose(request.camera.pose);
@@ -602,6 +654,16 @@ function runtimeInitializationSource(config) {
           prototype.setControls({ boundarySplatMode: 'world_covariance', raySteps: request.raySteps });
           operator.setComposition('splat-only-v0');
           modeAuthority = 'world-gradient-tangent-covariance-v0';
+        } else if (expectedTransportMasks[request.mode]) {
+          operator.setPresentation('beauty');
+          operator.setComposition('raymarch-only-v0');
+          const receipt = operator.setAppearanceAssay(expectedTransportMasks[request.mode].mode);
+          modeAuthority = receipt?.targetIdentity || null;
+        } else if (request.mode === 'positiveOpticalRecomposition') {
+          operator.setPresentation('beauty');
+          operator.setComposition('raymarch-only-v0');
+          const receipt = operator.setAppearanceAssay('positive-optical-recomposition');
+          modeAuthority = receipt?.targetIdentity || null;
         } else {
           operator.setAppearanceAssay('off');
           operator.setPresentation('beauty');
@@ -661,6 +723,14 @@ function runtimeInitializationSource(config) {
           selectiveHeadLivePassReceipt: sample.selectiveHeadLivePassReceipt,
           pngDataUrl: pngDataUrl({ ...sample.image, rgba }),
         };
+        const expectedMasks = expectedTransportMasks[request.mode];
+        if (expectedMasks) {
+          if (record.appearanceDecompositionReceipt?.effectiveMode !== expectedMasks.mode
+            || record.appearanceDecompositionReceipt?.emissionMask !== expectedMasks.emissionMask
+            || record.appearanceDecompositionReceipt?.extinctionMask !== expectedMasks.extinctionMask) {
+            throw new Error('transport coefficient mask substitution: ' + request.key);
+          }
+        }
         captures.set(request.key, { ...record, rgba });
         return record;
       }
@@ -809,6 +879,77 @@ function runtimeInitializationSource(config) {
         };
       }
 
+      function analyzeCrossExtinction() {
+        const maxRaySteps = Math.max(...${JSON.stringify(config.rayStepCounts)});
+        const center = cameras.reduce((best, camera) => Math.abs(camera.angle) < Math.abs(best.angle) ? camera : best);
+        const rows = [];
+        for (const camera of cameras) {
+          const world = captures.get(camera.index + '-worldCovariance-' + maxRaySteps);
+          const support = captures.get(camera.index + '-stateDerivedSupport-' + maxRaySteps);
+          const ridgeOnly = captures.get(camera.index + '-ridgeTransportRidgeExtinction-' + maxRaySteps);
+          const ridgeTotal = captures.get(camera.index + '-ridgeTransportTotalExtinction-' + maxRaySteps);
+          const nonRidgeTotal = captures.get(camera.index + '-nonRidgeTransportTotalExtinction-' + maxRaySteps);
+          const sharedSum = captures.get(camera.index + '-sharedTransmittanceContributionSum-' + maxRaySteps);
+          const positiveControl = captures.get(camera.index + '-positiveOpticalRecomposition-' + maxRaySteps);
+          const completeControl = captures.get(camera.index + '-raymarch-' + maxRaySteps);
+          if (!world || !support || !ridgeOnly || !ridgeTotal || !nonRidgeTotal || !sharedSum || !positiveControl || !completeControl) {
+            throw new Error('missing cross-extinction comparator for camera ' + camera.index);
+          }
+          const worldVsRidgeOnly = pixelDelta(world.rgba, ridgeOnly.rgba);
+          const worldVsRidgeTotal = pixelDelta(world.rgba, ridgeTotal.rgba);
+          const supportWorldVsRidgeOnly = maskedPixelDelta(world.rgba, ridgeOnly.rgba, support.rgba);
+          const supportWorldVsRidgeTotal = maskedPixelDelta(world.rgba, ridgeTotal.rgba, support.rgba);
+          rows.push({
+            cameraIndex: camera.index,
+            cameraAngle: camera.angle,
+            heldOut: camera.index !== center.index,
+            ridgeOnlyPixelHash: ridgeOnly.pixelHash,
+            ridgeTotalPixelHash: ridgeTotal.pixelHash,
+            crossExtinctionPixelDelta: pixelDelta(ridgeOnly.rgba, ridgeTotal.rgba),
+            crossExtinctionSupportAlignedPixelDelta: maskedPixelDelta(ridgeOnly.rgba, ridgeTotal.rgba, support.rgba),
+            worldVsRidgeOnly,
+            worldVsRidgeTotal,
+            supportWorldVsRidgeOnly,
+            supportWorldVsRidgeTotal,
+            crossExtinctionResidualReduction: (worldVsRidgeOnly.meanAbsChannelDelta - worldVsRidgeTotal.meanAbsChannelDelta) / Math.max(worldVsRidgeOnly.meanAbsChannelDelta, 1e-9),
+            supportAlignedCrossExtinctionResidualReduction: (supportWorldVsRidgeOnly.meanAbsChannelDelta - supportWorldVsRidgeTotal.meanAbsChannelDelta) / Math.max(supportWorldVsRidgeOnly.meanAbsChannelDelta, 1e-9),
+            worldVsRidgeOnlyEdgeLoss: edgeLoss(world.rgba, ridgeOnly.rgba, world.width, world.height),
+            worldVsRidgeTotalEdgeLoss: edgeLoss(world.rgba, ridgeTotal.rgba, world.width, world.height),
+            sharedRecompositionPixelDelta: pixelDelta(sharedSum.rgba, positiveControl.rgba),
+            sharedSumVsCompleteControlPixelDelta: pixelDelta(sharedSum.rgba, completeControl.rgba),
+            positiveControlVsCompleteControlPixelDelta: pixelDelta(positiveControl.rgba, completeControl.rgba),
+            nonRidgeTotalMetrics: nonRidgeTotal.metrics,
+          });
+        }
+        const summarize = heldOut => {
+          const selected = rows.filter(row => row.heldOut === heldOut);
+          const mean = key => selected.reduce((sum, row) => sum + row[key], 0) / selected.length;
+          const meanNested = (key, nested) => selected.reduce((sum, row) => sum + row[key][nested], 0) / selected.length;
+          return {
+            split: heldOut ? 'held-out-camera-mean-v0' : 'training-camera-v0',
+            cameraCount: selected.length,
+            worldVsRidgeOnlyMeanAbsChannelDelta: meanNested('worldVsRidgeOnly', 'meanAbsChannelDelta'),
+            worldVsRidgeTotalMeanAbsChannelDelta: meanNested('worldVsRidgeTotal', 'meanAbsChannelDelta'),
+            supportWorldVsRidgeOnlyMeanAbsChannelDelta: meanNested('supportWorldVsRidgeOnly', 'meanAbsChannelDelta'),
+            supportWorldVsRidgeTotalMeanAbsChannelDelta: meanNested('supportWorldVsRidgeTotal', 'meanAbsChannelDelta'),
+            crossExtinctionResidualReduction: mean('crossExtinctionResidualReduction'),
+            supportAlignedCrossExtinctionResidualReduction: mean('supportAlignedCrossExtinctionResidualReduction'),
+            meanCrossExtinctionPixelDelta: meanNested('crossExtinctionPixelDelta', 'meanAbsChannelDelta'),
+            meanSharedRecompositionPixelDelta: meanNested('sharedRecompositionPixelDelta', 'meanAbsChannelDelta'),
+            maxSharedRecompositionChannelDelta: Math.max(...selected.map(row => row.sharedRecompositionPixelDelta.maxChannelDelta)),
+          };
+        };
+        return {
+          identity: 'ridge-cross-layer-extinction-camera-holdout-analysis-v0',
+          targetAuthority: 'positive-ridge-owned-and-non-ridge-optical-partition-v0',
+          sharedTransmittanceAuthority: 'ridge-plus-non-ridge-extinction-one-running-transmittance-v0',
+          trainingCameraIndex: center.index,
+          heldOutCameraIndices: cameras.map(camera => camera.index).filter(index => index !== center.index),
+          rows,
+          summary: [summarize(false), summarize(true)],
+        };
+      }
+
       function frozenRepeat() {
         const center = cameras.reduce((best, camera) => Math.abs(camera.angle) < Math.abs(best.angle) ? camera : best);
         const reference = captures.get(center.index + '-raymarch-' + Math.max(...${JSON.stringify(config.rayStepCounts)}));
@@ -825,7 +966,7 @@ function runtimeInitializationSource(config) {
         };
       }
 
-      window.__kaminosFilamentOrbitWitness = { capture, analyze, analyzeCovariance, frozenRepeat };
+      window.__kaminosFilamentOrbitWitness = { capture, analyze, analyzeCovariance, analyzeCrossExtinction, frozenRepeat };
       return {
         summary: {
           wrapperRoute: wrapperBefore.routeIdentity,
@@ -879,6 +1020,10 @@ function rejectFalseClosure(report) {
     throw new Error('frozen-state determinism failed');
   }
   if (!report.filamentContinuity?.rows?.length) throw new Error('filament continuity report missing');
+  if (report.crossExtinctionAnalysis?.rows?.length !== orbitAngles.length) throw new Error('cross-extinction camera rows are partial');
+  if (report.crossExtinctionAnalysis.rows.some(row => row.sharedRecompositionPixelDelta.maxChannelDelta > 1)) {
+    throw new Error('shared contribution recomposition exceeds byte-quantization tolerance');
+  }
 }
 
 function parseArgs(argv) {
@@ -889,6 +1034,9 @@ function parseArgs(argv) {
     '--holdout-report',
     '--ray-steps',
     '--orbit-angles',
+    '--expected-frame-count',
+    '--expected-sim-step-count',
+    '--expected-controls-hash',
     '--timeout-ms',
     '--settle-ms',
     '--debug-port',
@@ -925,6 +1073,13 @@ function parseArgs(argv) {
 function required(name) {
   const value = args.get(name);
   return value ? String(value) : '';
+}
+
+function optionalInteger(name) {
+  if (!args.has(name)) return null;
+  const value = Number(args.get(name));
+  if (!Number.isInteger(value) || value < 0) args.errors.push(`${name} must be a nonnegative integer`);
+  return value;
 }
 
 function parseIntegerList(value) {
