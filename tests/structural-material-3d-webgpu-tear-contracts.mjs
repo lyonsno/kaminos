@@ -48,6 +48,8 @@ assert.match(tearSource, /componentLabels/, 'tear bridge consumes GPU-returned c
 assert.match(witnessSource, /notchedControlDiscriminates/, 'browser witness rejects geometry-independent breakup');
 assert.match(witnessSource, /visibleTransformBoundToGpuLabels/, 'browser witness binds visible transforms to GPU labels');
 assert.match(witnessSource, /releasePreservedSeparation/, 'browser witness checks persistent release state');
+assert.match(witnessSource, /interactiveValidation/, 'product witness requires compact hot-route validation');
+assert.match(witnessSource, /hotResidency/, 'product witness proves the live WebGPU sidecar remains resident');
 assert.match(witnessSource, /screenshotPixelProbe/, 'browser witness inspects the actual screenshot pixels');
 assert.match(
   witnessSource,
@@ -64,6 +66,12 @@ assert.match(
 
 const requestGate = createLayeredStructuralGpuTearRequestGate();
 const staleToken = requestGate.begin();
+const concurrentToken = requestGate.begin();
+assert.equal(
+  requestGate.accepts(staleToken) && requestGate.accepts(concurrentToken),
+  true,
+  'same-generation structural interactions remain accepted for ordered application',
+);
 let staleCompletionApplied = false;
 const staleCompletion = Promise.resolve().then(() => {
   if (requestGate.accepts(staleToken)) staleCompletionApplied = true;

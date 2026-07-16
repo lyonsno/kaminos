@@ -156,8 +156,14 @@
       runLayeredStructuralRetainedWebGpuParity,
     } from './structural-material-3d-webgpu-retained.js';
     import {
+      STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE,
+      createLayeredStructuralHotWebGpuSidecar,
+    } from './structural-material-3d-webgpu-hot-sidecar.js';
+    import {
       STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_ROUTE,
       buildLayeredStructuralGpuTearMaterial,
+      buildLayeredStructuralHotSympatheticTearFailureReceipt,
+      buildLayeredStructuralHotSympatheticTearReceipt,
       createLayeredStructuralGpuTearRequestGate,
       runLayeredStructuralSympatheticTearWebGpu,
     } from './structural-material-3d-webgpu-tear.js';
@@ -235,6 +241,13 @@
     let gpuRetainedPromise = null;
     let gpuTearReceipt = null;
     let gpuTearPromise = null;
+    let gpuTearOperationQueue = Promise.resolve();
+    let gpuTearAppliedCount = 0;
+    let gpuTearPreviousAppliedReceipt = null;
+    let gpuTearLatestAppliedReceipt = null;
+    let gpuTearDiscardedCount = 0;
+    let gpuHotSidecar = null;
+    let gpuHotSidecarPromise = null;
     const gpuTearRequestGate = createLayeredStructuralGpuTearRequestGate();
 
     function worldPoint(node) {
@@ -427,28 +440,100 @@
       });
     }
 
-    async function requestGpuSympatheticTear(sourceState, interaction, { applyToWorld = true } = {}) {
+    function requestGpuSympatheticTear(sourceState, interaction, { applyToWorld = true } = {}) {
       const requestEpoch = gpuTearRequestGate.begin();
-      const promise = runLayeredStructuralSympatheticTearWebGpu({
-        state: sourceState,
-        interactions: [interaction],
-      }).then(receipt => {
-        if (!gpuTearRequestGate.accepts(requestEpoch)) return receipt;
+      const operation = async () => {
+        if (!gpuTearRequestGate.accepts(requestEpoch)) {
+          gpuTearDiscardedCount += 1;
+          return buildLayeredStructuralHotSympatheticTearFailureReceipt(
+            new Error('structural interaction invalidated before execution'),
+            'request-invalidated-before-execution',
+            applyToWorld
+              ? STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE
+              : STRUCTURAL_MATERIAL_3D_WEBGPU_RETAINED_ROUTE,
+          );
+        }
+        const effectiveSourceState = applyToWorld ? material : sourceState;
+        const execution = applyToWorld
+          ? ensureHotSidecar(effectiveSourceState)
+            .then(sidecar => sidecar.execute(interaction))
+            .then(receipt => buildLayeredStructuralHotSympatheticTearReceipt(effectiveSourceState, receipt))
+          : runLayeredStructuralSympatheticTearWebGpu({
+            state: effectiveSourceState,
+            interactions: [interaction],
+          });
+        const receipt = await execution.catch(error =>
+          buildLayeredStructuralHotSympatheticTearFailureReceipt(
+            error,
+            applyToWorld ? 'hot-sidecar-initialization-or-execution' : 'cold-validation-execution',
+            applyToWorld
+              ? STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE
+              : STRUCTURAL_MATERIAL_3D_WEBGPU_RETAINED_ROUTE,
+          ));
+        if (!gpuTearRequestGate.accepts(requestEpoch)) {
+          gpuTearDiscardedCount += 1;
+          return receipt;
+        }
         gpuTearReceipt = receipt;
         if (applyToWorld && receipt.status === 'passed') {
           runStructuralMutation('gpu-sympathetic-tear', () => {
-            material = buildLayeredStructuralGpuTearMaterial(sourceState, receipt, interaction);
+            material = buildLayeredStructuralGpuTearMaterial(effectiveSourceState, receipt, interaction);
           });
+          gpuTearAppliedCount += 1;
+          gpuTearPreviousAppliedReceipt = gpuTearLatestAppliedReceipt;
+          gpuTearLatestAppliedReceipt = receipt;
         } else {
           updateReadout();
           renderScene();
         }
         return receipt;
-      }).finally(() => {
+      };
+      const promise = gpuTearOperationQueue.then(operation, operation).finally(() => {
         if (gpuTearPromise === promise) gpuTearPromise = null;
       });
+      gpuTearOperationQueue = promise.catch(() => undefined);
       gpuTearPromise = promise;
       return promise;
+    }
+
+    async function ensureHotSidecar(sourceState) {
+      if (gpuHotSidecar) return gpuHotSidecar;
+      if (!gpuHotSidecarPromise) {
+        gpuHotSidecarPromise = createLayeredStructuralHotWebGpuSidecar({ state: sourceState })
+          .then(sidecar => {
+            gpuHotSidecar = sidecar;
+            return sidecar;
+          })
+          .finally(() => {
+            gpuHotSidecarPromise = null;
+          });
+      }
+      return gpuHotSidecarPromise;
+    }
+
+    function synchronizeHotSidecar(nextState) {
+      const pending = gpuHotSidecar
+        ? Promise.resolve(gpuHotSidecar)
+        : gpuHotSidecarPromise;
+      if (pending) {
+        void pending
+          .then(sidecar => sidecar.reinitialize(nextState))
+          .then(receipt => {
+            if (receipt.status === 'passed') return;
+            gpuTearReceipt = buildLayeredStructuralHotSympatheticTearFailureReceipt(
+              new Error(`hot sidecar reinitialize failed: ${receipt.failurePhase}`),
+              receipt.failurePhase,
+            );
+            updateReadout();
+          })
+          .catch(error => {
+            gpuTearReceipt = buildLayeredStructuralHotSympatheticTearFailureReceipt(
+              error,
+              'hot-sidecar-reinitialize',
+            );
+            updateReadout();
+          });
+      }
     }
 
     renderer.domElement.addEventListener('pointerdown', (event) => {
@@ -488,6 +573,7 @@
         forceEnvelope = null;
         gpuTearReceipt = null;
       });
+      synchronizeHotSidecar(material);
     });
     document.querySelector('#fracture').addEventListener('click', () => {
       runStructuralMutation('shear', () => {
@@ -517,6 +603,7 @@
         delete material.sympatheticTear;
         gpuTearReceipt = null;
       });
+      synchronizeHotSidecar(material);
     });
 
     window.__structuralMaterial3dWitness = () => ({
@@ -531,6 +618,11 @@
       gpuParity: gpuParityReceipt,
       gpuRetainedParity: gpuRetainedReceipt,
       gpuSympatheticTear: gpuTearReceipt,
+      gpuHotSidecar: gpuHotSidecar?.snapshot() || null,
+      gpuTearAppliedCount,
+      gpuTearRecentAppliedReceipts: [gpuTearPreviousAppliedReceipt, gpuTearLatestAppliedReceipt]
+        .filter(Boolean),
+      gpuTearDiscardedCount,
       sympatheticTear: material.sympatheticTear || null,
       visibleTear: visibleTearState(),
     });
@@ -660,6 +752,46 @@
       return gpuRetainedPromise;
     };
 
+    window.__structuralMaterial3dRunHotSidecarWitness = async () => {
+      const scenario = buildLayeredStructuralWitnessScenario();
+      const witnessState = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true });
+      const sidecar = await createLayeredStructuralHotWebGpuSidecar({ state: witnessState });
+      const first = await sidecar.execute(scenario.force);
+      const second = await sidecar.execute({
+        ...scenario.force,
+        kind: 'warm-shifted-shear',
+        point: { x: 0.78, y: 0.62, z: 0.28 },
+        vector: { x: 0.68, y: -0.18, z: -0.71 },
+        magnitude: 1.72,
+      });
+      const reinitialize = await sidecar.reinitialize(witnessState);
+      const afterReinitialize = await sidecar.execute(scenario.force);
+      const beforeDispose = sidecar.snapshot();
+      const dispose = await sidecar.dispose();
+      const disposeAgain = await sidecar.dispose();
+      return {
+        schema: 'kaminos.structural-material.webgpu-hot-sidecar-page-witness.v0',
+        coldInitialization: {
+          timingsMs: sidecar.coldTimingsMs,
+          lifecycle: sidecar.initializationLifecycle,
+        },
+        first,
+        second,
+        reinitialize,
+        afterReinitialize,
+        beforeDispose,
+        dispose,
+        disposeAgain,
+        warmReuse: first.lifecycle.deviceRequestCount === 1 &&
+          second.lifecycle.deviceRequestCount === 1 &&
+          first.lifecycle.pipelineCreateCount === 2 &&
+          second.lifecycle.pipelineCreateCount === 2 &&
+          first.lifecycle.bufferAllocationCount === 9 &&
+          second.lifecycle.bufferAllocationCount === 9,
+        disposeIdempotent: JSON.stringify(dispose) === JSON.stringify(disposeAgain),
+      };
+    };
+
     window.__structuralMaterial3dRunGpuSympatheticTear = async (options = {}) => {
       const scenario = buildLayeredStructuralWitnessScenario();
       const sourceState = createLayeredStructuralMaterial({
@@ -688,6 +820,10 @@
         applyToWorld: options.applyToWorld !== false,
       });
     };
+
+    window.addEventListener('pagehide', () => {
+      if (gpuHotSidecar) void gpuHotSidecar.dispose();
+    });
 
     window.addEventListener('resize', resize);
     resize();

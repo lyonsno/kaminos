@@ -3,24 +3,27 @@ import {
   buildLayeredStructuralCpuSequenceOracle,
   runLayeredStructuralRetainedWebGpuParity,
 } from './structural-material-3d-webgpu-retained.js';
+import {
+  STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE,
+  validateLayeredStructuralHotSidecarReceipt,
+} from './structural-material-3d-webgpu-hot-sidecar.js';
 
 export const STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_ROUTE = 'kaminos.structural-material.webgpu-sympathetic-tear.v0';
 export const STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_AUTHORITY = 'retained-webgpu-liveness-component-labels-v0';
 export const STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_VISUAL_AUTHORITY = 'gpu-component-label-to-visible-separation-v0';
 
 export function createLayeredStructuralGpuTearRequestGate() {
-  let epoch = 0;
+  let generation = 0;
   return {
     begin() {
-      epoch += 1;
-      return epoch;
+      return generation;
     },
     invalidate() {
-      epoch += 1;
-      return epoch;
+      generation += 1;
+      return generation;
     },
     accepts(token) {
-      return token === epoch;
+      return token === generation;
     },
   };
 }
@@ -153,7 +156,11 @@ export function buildLayeredStructuralGpuTearMaterial(state, receipt, interactio
     receipt.requestedSequenceIdentity === receipt.effectiveSequenceIdentity,
     'interaction-sequence identity mismatch',
   );
-  assertReceipt(receipt.topology?.parity?.ok === true, 'topology parity did not pass');
+  const topologyAccepted = receipt.topology?.parity?.ok === true || (
+    receipt.executionRoute === STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE &&
+    receipt.interactiveValidation?.ok === true
+  );
+  assertReceipt(topologyAccepted, 'topology parity or interactive validation did not pass');
 
   const finalBondLiveness = receipt.gpuStructuralState?.finalBondLiveness;
   const componentLabels = receipt.gpuStructuralState?.componentLabels;
@@ -246,6 +253,51 @@ export function buildLayeredStructuralGpuTearMaterial(state, receipt, interactio
       causingEventEpochs: [...new Set(receipt.gpuResult?.eventEpochs || [])].sort((a, b) => a - b),
       direction: { x: round(direction.x), y: round(direction.y), z: round(direction.z) },
       separationScale: round(separationScale),
+    },
+  };
+}
+
+export function buildLayeredStructuralHotSympatheticTearReceipt(state, hotReceipt) {
+  const interactiveValidation = validateLayeredStructuralHotSidecarReceipt(state, hotReceipt);
+  const passed = hotReceipt?.status === 'passed' && interactiveValidation.ok;
+  return {
+    ...hotReceipt,
+    schema: 'kaminos.structural-material.webgpu-sympathetic-tear-receipt.v0',
+    status: passed ? 'passed' : 'failed',
+    failurePhase: passed ? null : hotReceipt?.failurePhase || 'interactive-receipt-validation',
+    requestedRoute: STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_ROUTE,
+    effectiveRoute: passed ? STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_ROUTE : null,
+    executionRoute: hotReceipt?.effectiveRoute || null,
+    retainedRoute: hotReceipt?.validationRoute || STRUCTURAL_MATERIAL_3D_WEBGPU_RETAINED_ROUTE,
+    tearAuthority: STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_AUTHORITY,
+    interactiveValidation,
+  };
+}
+
+export function buildLayeredStructuralHotSympatheticTearFailureReceipt(
+  error,
+  failurePhase,
+  requestedExecutionRoute = STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE,
+) {
+  const initialization = error?.hotSidecarInitialization || {};
+  return {
+    schema: 'kaminos.structural-material.webgpu-sympathetic-tear-receipt.v0',
+    status: 'failed',
+    failurePhase: failurePhase || initialization.failurePhase || 'hot-sidecar-execution',
+    requestedRoute: STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_ROUTE,
+    effectiveRoute: null,
+    executionRoute: null,
+    requestedExecutionRoute,
+    retainedRoute: STRUCTURAL_MATERIAL_3D_WEBGPU_RETAINED_ROUTE,
+    requestedBackend: 'webgpu',
+    effectiveBackend: initialization.effectiveBackend || null,
+    cpuFallbackUsed: false,
+    tearAuthority: STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_AUTHORITY,
+    objectIdentity: initialization.objectIdentity || null,
+    lifecycle: initialization.lifecycle || null,
+    error: {
+      name: error?.name || 'Error',
+      message: error?.message || String(error),
     },
   };
 }

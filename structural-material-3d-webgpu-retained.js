@@ -24,7 +24,7 @@ export const STRUCTURAL_MATERIAL_3D_WEBGPU_RETAINED_AUTHORITY = 'webgpu-retained
 export const STRUCTURAL_MATERIAL_3D_WEBGPU_SEQUENCE_AUTHORITY = 'ordered-screen-space-force-epochs-v0';
 export const STRUCTURAL_MATERIAL_3D_WEBGPU_COMPONENT_AUTHORITY = 'webgpu-minimum-node-component-labels-v0';
 
-const COMPONENT_LABEL_SHADER = /* wgsl */ `
+export const STRUCTURAL_MATERIAL_3D_WEBGPU_COMPONENT_SHADER = /* wgsl */ `
 struct BondRecord {
   endpoints: vec4<u32>,
   direction: vec4<f32>,
@@ -570,7 +570,7 @@ export async function runLayeredStructuralRetainedWebGpuParity(options = {}) {
     if (includeComponentTopology) {
       const componentShaderModule = device.createShaderModule({
         label: STRUCTURAL_MATERIAL_3D_WEBGPU_COMPONENT_AUTHORITY,
-        code: COMPONENT_LABEL_SHADER,
+        code: STRUCTURAL_MATERIAL_3D_WEBGPU_COMPONENT_SHADER,
       });
       lifecycle.pipelineCreateCount += 1;
       lifecycle.topologyPipelineCreateCount += 1;

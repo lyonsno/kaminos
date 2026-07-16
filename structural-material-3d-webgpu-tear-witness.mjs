@@ -4,6 +4,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 import { STRUCTURAL_MATERIAL_3D_ROUTE } from './structural-material-3d-core.js';
+import { STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE } from './structural-material-3d-webgpu-hot-sidecar.js';
 import { STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_ROUTE } from './structural-material-3d-webgpu-tear.js';
 
 const SCHEMA = 'kaminos.structural-material.webgpu-sympathetic-tear-browser-witness.v0';
@@ -352,28 +353,24 @@ try {
   report.checks.noCpuFallback = notched.cpuFallbackUsed === false;
   report.checks.noFallbackAdapter = notched.adapter?.isFallbackAdapter === false;
   report.checks.sequenceIdentity = notched.requestedSequenceIdentity === notched.effectiveSequenceIdentity;
-  report.checks.retainedParity = notched.parity?.ok === true;
-  report.checks.topologyParity = notched.topology?.parity?.ok === true &&
-    notched.topology.parity.labelsMatch === true;
+  report.checks.interactiveValidation = notched.interactiveValidation?.ok === true;
+  report.checks.hotExecutionRoute = notched.executionRoute === STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE;
   report.checks.oneDevice = notched.lifecycle?.deviceRequestCount === 1;
-  report.checks.twoPipelines = notched.lifecycle?.pipelineCreateCount === 2 &&
-    notched.lifecycle?.topologyPipelineCreateCount === 1;
-  report.checks.noIntermediateReadback = notched.lifecycle?.intermediateReadbackCount === 0;
-  report.checks.oneValidationReadback = notched.lifecycle?.validationReadbackCount === 1;
-  report.checks.exactMappedReadbacks = notched.lifecycle?.mappedBufferCount === 5;
-  report.checks.topologyDispatchCount = notched.lifecycle?.topologyDispatchCount === notched.dispatch?.nodeCount &&
-    notched.lifecycle?.topologySubmissionCount === 1;
-  report.checks.topologyTimingNamed = Number.isFinite(
-    notched.timingsMs?.sequenceTopologyAndTerminalCopyGpuCompletion,
-  );
-  report.checks.cleanupMatches = notched.lifecycle?.cleanupMatches === true &&
-    notched.parity?.cleanupMatches === true &&
-    notched.lifecycle?.bufferAllocationCount === 12 &&
-    notched.lifecycle?.bufferDestroyCount === 12 &&
-    notched.lifecycle?.deviceDestroyCount === 1;
+  report.checks.twoPipelines = notched.lifecycle?.pipelineCreateCount === 2;
+  report.checks.persistentBuffers = notched.lifecycle?.bufferAllocationCount === 9;
+  report.checks.compactReadback = notched.lifecycle?.compactReadbackCount === 1 &&
+    notched.lifecycle?.compactReadbackBufferCount === 2 &&
+    notched.lifecycle?.fullValidationReadbackCount === 0;
+  report.checks.topologyDispatchCount = notched.lifecycle?.topologyDispatchCount ===
+    notched.gpuStructuralState?.componentLabels?.length;
+  report.checks.warmTimingNamed = Number.isFinite(notched.timingsMs?.warmTotal);
+  report.checks.hotResidency = notched.lifecycle?.disposed === false &&
+    notched.lifecycle?.bufferDestroyCount === 0 &&
+    notched.lifecycle?.deviceDestroyCount === 0;
+  const brokenLiveness = notched.gpuStructuralState?.finalBondLiveness?.filter(alive => !alive).length || 0;
   report.checks.notchedSeparated = notched.topology?.componentCount >= 2 &&
     notched.topology?.detachedComponentLabels?.length >= 1 &&
-    notched.gpuResult?.eventCount > 0;
+    brokenLiveness > 0;
   report.checks.notchedControlDiscriminates = report.checks.notchedSeparated &&
     report.checks.unnotchedStayedConnected &&
     notched.effectiveSequenceIdentity === unnotched.effectiveSequenceIdentity;
