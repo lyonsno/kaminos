@@ -22,6 +22,8 @@ assert.match(script, /kaminos\.volume\.nonridge-feature-oracle-visuals\.v0/, 'or
 assert.match(script, /x-fastest-y-then-z-v0/, 'oracle binds projections to the producer grid-axis contract');
 assert.match(script, /--visual-setting/, 'oracle accepts explicit settings for in-job prediction visualization');
 assert.match(script, /--truth-only/, 'oracle can render a truth-only witness without loading MLX');
+assert.match(script, /--condition-controls/, 'oracle exposes one explicit effective-control conditioning assay');
+assert.match(script, /gpu-effective-setting-control-conditioning-v0/, 'oracle identifies the exact causal conditioning contract');
 
 const current16 = [
   'sidecar.support', 'sidecar.coverage', 'sidecar.ridge', 'sidecar.footprint',
@@ -32,6 +34,12 @@ const current16 = [
 const additions = [
   'front.topology', 'velocity.x', 'velocity.y', 'velocity.z',
   'support.reaction', 'support.interface', 'flow.curlMagnitude', 'flow.divergence',
+];
+const controlOrder = [
+  'support.thermal', 'support.reaction', 'support.front', 'support.interface',
+  'boundary.gradientGain', 'boundary.cut', 'boundary.softness', 'boundary.coreRejection',
+  'topology.gain', 'curl.gain', 'divergence.gain', 'ridge.gain', 'ridge.cut',
+  'tip.breakup', 'topology.erosion',
 ];
 const targets = [
   'candidate.nonRidgeMembership',
@@ -84,6 +92,8 @@ async function setting(id, splitRole, negativeControl, phase) {
     id,
     splitRole,
     negativeControl,
+    effectiveControlIdentity: `sha256:${String(phase + 1).repeat(64).slice(0, 64)}`,
+    gpuEffectiveControls: Object.fromEntries(controlOrder.map((name, index) => [name, (phase + 1) * (index + 1) / 32])),
     rows: {
       count,
       current16: await artifact(id, 'candidate-features-current16', currentRows, [count, current16.length]),
@@ -116,7 +126,11 @@ const manifest = {
     sourceComplete: { identity: 'current16-plus-independent-source-evidence-v0', order: [...current16, ...additions] },
   },
   targets: { identity: 'positive-nonridge-membership-emission-extinction-v0', order: targets },
-  controls: { conditionedArm: null },
+  controls: {
+    conditionedArm: null,
+    sampledControlOrder: controlOrder,
+    storage: 'setting-level-separate-from-local-feature-views-v0',
+  },
   frozenAuthority: {
     gridShape: [2, 2, 1],
     gridAxisOrder: 'x-fastest-y-then-z-v0',
@@ -147,6 +161,9 @@ assert.equal(report.cohort.totalRows, 16);
 assert.equal(report.cohort.droppedRowCount, 0);
 assert.equal(report.featureViews.current16.channelCount, 16);
 assert.equal(report.featureViews.sourceComplete.channelCount, 24);
+assert.equal(report.featureViews.sourceCompleteConditioned.channelCount, 39);
+assert.deepEqual(report.featureViews.sourceCompleteConditioned.controlOrder, controlOrder);
+assert.equal(report.featureViews.sourceCompleteConditioned.controlSource, 'settings[].gpuEffectiveControls');
 assert.deepEqual(report.splits.train.settingIds, ['train-negative', 'train-positive']);
 assert.deepEqual(report.splits.heldOut.settingIds, ['held-negative', 'held-positive']);
 assert.equal(report.assays.sameState.identity, 'same-state-memorization-v0');
@@ -276,6 +293,7 @@ if (process.env.KAMINOS_MLX_PYTHON) {
     '--epochs', '2',
     '--batch-size', '4',
     '--hidden-size', '16',
+    '--condition-controls',
     '--visual-setting', 'train-positive',
     '--visual-setting', 'held-positive',
   ], { encoding: 'utf8' });
@@ -284,6 +302,7 @@ if (process.env.KAMINOS_MLX_PYTHON) {
   assert.equal(mlxReport.status, 'complete');
   assert.equal(mlxReport.views.current16.normalization.rowsSeen, 16);
   assert.equal(mlxReport.views.sourceComplete.normalization.rowsSeen, 16);
+  assert.equal(mlxReport.views.sourceCompleteConditioned.normalization.rowsSeen, 16);
   assert.equal(mlxReport.views.current16.normalization.positiveCount, 4);
   assert.equal(mlxReport.views.sourceComplete.normalization.positiveCount, 4);
   assert.equal(mlxReport.views.current16.sameState.rowCount, 8);
@@ -292,11 +311,16 @@ if (process.env.KAMINOS_MLX_PYTHON) {
   assert.equal(mlxReport.views.sourceComplete.heldSetting.membership.positiveRowCount, 4);
   assert.equal(mlxReport.views.current16.seed, mlxReport.views.sourceComplete.seed);
   assert.equal(mlxReport.views.current16.architectureIdentity, mlxReport.views.sourceComplete.architectureIdentity);
+  assert.equal(mlxReport.views.sourceComplete.seed, mlxReport.views.sourceCompleteConditioned.seed);
+  assert.equal(mlxReport.views.sourceComplete.architectureIdentity, mlxReport.views.sourceCompleteConditioned.architectureIdentity);
+  assert.equal(mlxReport.views.sourceCompleteConditioned.controlConditioning.identity, 'gpu-effective-setting-control-conditioning-v0');
+  assert.deepEqual(mlxReport.views.sourceCompleteConditioned.controlConditioning.order, controlOrder);
   assert.ok(Number.isFinite(mlxReport.comparisons.sameState.opticalMseReductionFraction));
+  assert.ok(Number.isFinite(mlxReport.conditioningComparisons.heldSetting.opticalMseReductionFraction));
   assert.equal(mlxReport.visualizations.schema, 'kaminos.volume.nonridge-feature-oracle-visuals.v0');
-  assert.deepEqual(mlxReport.visualizations.requiredRoles, ['truth', 'current16', 'sourceComplete']);
+  assert.deepEqual(mlxReport.visualizations.requiredRoles, ['truth', 'current16', 'sourceComplete', 'sourceCompleteConditioned']);
   assert.deepEqual(mlxReport.visualizations.settingIds, ['held-positive', 'train-positive']);
-  assert.equal(mlxReport.visualizations.images.length, 54, 'matched witness emits every role, modality, axis, and setting');
+  assert.equal(mlxReport.visualizations.images.length, 72, 'conditioned witness emits every role, modality, axis, and setting');
   for (const image of mlxReport.visualizations.images) {
     const bytes = await readFile(image.path);
     assert.equal(sha256(bytes), image.sha256, `visual checksum matches ${image.path}`);
@@ -304,6 +328,23 @@ if (process.env.KAMINOS_MLX_PYTHON) {
     assert.ok(decoded.width > 0 && decoded.height > 0, `visual has native dimensions ${image.path}`);
   }
 }
+
+const missingEffectiveControl = structuredClone(manifest);
+delete missingEffectiveControl.settings[0].gpuEffectiveControls['ridge.cut'];
+await writeFile(inputPath, `${JSON.stringify(missingEffectiveControl, null, 2)}\n`);
+const missingControlOutDir = join(root, 'missing-control-output');
+await mkdir(missingControlOutDir);
+const missingControlReportPath = join(missingControlOutDir, 'oracle-report.json');
+const rejectMissingEffectiveControl = spawnSync('python3', [
+  scriptUrl.pathname,
+  '--input', inputPath,
+  '--out-dir', missingControlOutDir,
+  '--report', missingControlReportPath,
+  '--probe-only',
+], { encoding: 'utf8' });
+assert.equal(rejectMissingEffectiveControl.status, 2, 'missing GPU-effective conditioning controls must fail');
+const missingControlReport = JSON.parse(await readFile(missingControlReportPath, 'utf8'));
+assert.match(missingControlReport.reason, /gpuEffectiveControls.*ridge\.cut/);
 
 const uncoveredHeldSplit = structuredClone(manifest);
 uncoveredHeldSplit.splits.train.settingIds.push('held-negative');

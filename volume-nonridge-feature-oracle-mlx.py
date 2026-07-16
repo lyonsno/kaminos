@@ -26,6 +26,8 @@ VISUAL_SCHEMA = "kaminos.volume.nonridge-feature-oracle-visuals.v0"
 GRID_AXIS_IDENTITY = "x-fastest-y-then-z-v0"
 CURRENT16_IDENTITY = "live-boundary-candidate-current16-v0"
 SOURCE_COMPLETE_IDENTITY = "current16-plus-independent-source-evidence-v0"
+SOURCE_COMPLETE_CONDITIONED_IDENTITY = "source-complete-plus-gpu-effective-controls-v0"
+CONTROL_CONDITIONING_IDENTITY = "gpu-effective-setting-control-conditioning-v0"
 SPLIT_IDENTITY = "whole-effective-control-setting-holdout-v0"
 MEMORIZATION_IDENTITY = "same-state-memorization-v0"
 CURRENT16 = [
@@ -37,6 +39,12 @@ CURRENT16 = [
 SOURCE_COMPLETE_ADDITIONS = [
     "front.topology", "velocity.x", "velocity.y", "velocity.z",
     "support.reaction", "support.interface", "flow.curlMagnitude", "flow.divergence",
+]
+EFFECTIVE_CONTROL_ORDER = [
+    "support.thermal", "support.reaction", "support.front", "support.interface",
+    "boundary.gradientGain", "boundary.cut", "boundary.softness", "boundary.coreRejection",
+    "topology.gain", "curl.gain", "divergence.gain", "ridge.gain", "ridge.cut",
+    "tip.breakup", "topology.erosion",
 ]
 TARGETS = [
     "candidate.nonRidgeMembership",
@@ -158,6 +166,8 @@ def validate_manifest(manifest: dict[str, Any], manifest_path: Path) -> dict[str
     require(isinstance(target_contract, dict) and target_contract.get("order") == TARGETS, "target order mismatch")
     controls = manifest.get("controls")
     require(isinstance(controls, dict) and controls.get("conditionedArm") is None, "first assay must not condition on controls")
+    require(controls.get("sampledControlOrder") == EFFECTIVE_CONTROL_ORDER, "controls.sampledControlOrder mismatch")
+    require(controls.get("storage") == "setting-level-separate-from-local-feature-views-v0", "controls.storage mismatch")
     frozen_authority = manifest.get("frozenAuthority")
     require(isinstance(frozen_authority, dict), "frozenAuthority must be an object")
     grid_shape = frozen_authority.get("gridShape")
@@ -193,6 +203,27 @@ def validate_manifest(manifest: dict[str, Any], manifest_path: Path) -> dict[str
         expected_role = "train" if setting_id in train_ids else "heldOut" if setting_id in held_ids else None
         require(expected_role is not None, f"setting {setting_id} is absent from the whole-setting split")
         require(split_role == expected_role, f"setting {setting_id} splitRole mismatch")
+        effective_control_identity = setting_value.get("effectiveControlIdentity")
+        require(
+            isinstance(effective_control_identity, str)
+            and effective_control_identity.startswith("sha256:")
+            and len(effective_control_identity) == 71,
+            f"setting {setting_id}.effectiveControlIdentity must be a sha256 identity",
+        )
+        gpu_effective_controls = setting_value.get("gpuEffectiveControls")
+        require(isinstance(gpu_effective_controls, dict), f"setting {setting_id}.gpuEffectiveControls must be an object")
+        require(
+            set(gpu_effective_controls) == set(EFFECTIVE_CONTROL_ORDER),
+            f"setting {setting_id}.gpuEffectiveControls must contain exactly {EFFECTIVE_CONTROL_ORDER}; got {sorted(gpu_effective_controls)}",
+        )
+        effective_control_vector = []
+        for control_name in EFFECTIVE_CONTROL_ORDER:
+            control_value = gpu_effective_controls.get(control_name)
+            require(
+                isinstance(control_value, (int, float)) and not isinstance(control_value, bool) and math.isfinite(control_value),
+                f"setting {setting_id}.gpuEffectiveControls.{control_name} must be finite numeric GPU-effective state",
+            )
+            effective_control_vector.append(float(control_value))
         rows = setting_value.get("rows")
         require(isinstance(rows, dict), f"setting {setting_id}.rows must be an object")
         row_count = rows.get("count")
@@ -243,6 +274,8 @@ def validate_manifest(manifest: dict[str, Any], manifest_path: Path) -> dict[str
             "id": setting_id,
             "splitRole": split_role,
             "negativeControl": negative_control,
+            "effectiveControlIdentity": effective_control_identity,
+            "gpuEffectiveControlVector": np.asarray(effective_control_vector, dtype=np.float32),
             "rows": {"count": row_count, **normalized_rows},
             "targetSummary": target_summary,
         })
@@ -270,6 +303,19 @@ def validate_manifest(manifest: dict[str, Any], manifest_path: Path) -> dict[str
         "featureViews": {
             "current16": {"identity": CURRENT16_IDENTITY, "order": CURRENT16, "channelCount": len(CURRENT16)},
             "sourceComplete": {"identity": SOURCE_COMPLETE_IDENTITY, "order": [*CURRENT16, *SOURCE_COMPLETE_ADDITIONS], "channelCount": len(CURRENT16) + len(SOURCE_COMPLETE_ADDITIONS)},
+            "sourceCompleteConditioned": {
+                "identity": SOURCE_COMPLETE_CONDITIONED_IDENTITY,
+                "order": [*CURRENT16, *SOURCE_COMPLETE_ADDITIONS, *[f"effectiveControl.{name}" for name in EFFECTIVE_CONTROL_ORDER]],
+                "channelCount": len(CURRENT16) + len(SOURCE_COMPLETE_ADDITIONS) + len(EFFECTIVE_CONTROL_ORDER),
+                "controlOrder": EFFECTIVE_CONTROL_ORDER,
+                "controlSource": "settings[].gpuEffectiveControls",
+            },
+        },
+        "controlConditioning": {
+            "identity": CONTROL_CONDITIONING_IDENTITY,
+            "source": "settings[].gpuEffectiveControls",
+            "order": EFFECTIVE_CONTROL_ORDER,
+            "storage": controls["storage"],
         },
         "targets": {"order": TARGETS, "channelCount": len(TARGETS)},
         "gridShape": grid_shape,
@@ -290,9 +336,31 @@ def map_array(setting: dict[str, Any], role: str, channel_count: int) -> np.memm
     return np.memmap(rows[role]["path"], dtype="<f4", mode="r", shape=(rows["count"], channel_count))
 
 
+def base_feature_role(feature_view: str) -> str:
+    return "sourceComplete" if feature_view == "sourceCompleteConditioned" else feature_view
+
+
+def feature_batch(
+    setting: dict[str, Any],
+    feature_view: str,
+    feature_count: int,
+    indices: np.ndarray | slice,
+) -> np.ndarray:
+    base_role = base_feature_role(feature_view)
+    base_count = len(CURRENT16) + len(SOURCE_COMPLETE_ADDITIONS) if base_role == "sourceComplete" else len(CURRENT16)
+    base = np.asarray(map_array(setting, base_role, base_count)[indices], dtype=np.float32)
+    if feature_view != "sourceCompleteConditioned":
+        require(base.shape[1] == feature_count, f"{feature_view} batch channel count mismatch")
+        return base
+    controls = np.broadcast_to(setting["gpuEffectiveControlVector"], (base.shape[0], len(EFFECTIVE_CONTROL_ORDER)))
+    conditioned = np.concatenate([base, controls], axis=1, dtype=np.float32)
+    require(conditioned.shape[1] == feature_count, "conditioned batch channel count mismatch")
+    return conditioned
+
+
 def setting_batches(
     settings: list[dict[str, Any]],
-    feature_role: str,
+    feature_view: str,
     feature_count: int,
     batch_size: int,
     rng: np.random.Generator | None,
@@ -302,19 +370,18 @@ def setting_batches(
         rng.shuffle(order)
     for setting_index in order:
         setting = settings[int(setting_index)]
-        features = map_array(setting, feature_role, feature_count)
         targets = map_array(setting, "targets", len(TARGETS))
         row_order = np.arange(setting["rows"]["count"])
         if rng is not None:
             rng.shuffle(row_order)
         for start in range(0, row_order.size, batch_size):
             indices = row_order[start:start + batch_size]
-            yield np.asarray(features[indices], dtype=np.float32), np.asarray(targets[indices], dtype=np.float32)
+            yield feature_batch(setting, feature_view, feature_count, indices), np.asarray(targets[indices], dtype=np.float32)
 
 
 def streaming_normalization(
     settings: list[dict[str, Any]],
-    feature_role: str,
+    feature_view: str,
     feature_count: int,
     batch_size: int,
 ) -> dict[str, np.ndarray | float | int]:
@@ -324,7 +391,7 @@ def streaming_normalization(
     target_sum = np.zeros(len(TARGETS), dtype=np.float64)
     row_count = 0
     positive_count = 0
-    for features, targets in setting_batches(settings, feature_role, feature_count, batch_size, None):
+    for features, targets in setting_batches(settings, feature_view, feature_count, batch_size, None):
         feature_sum += features.sum(axis=0, dtype=np.float64)
         feature_square_sum += np.square(features, dtype=np.float64).sum(axis=0, dtype=np.float64)
         optical_max = np.maximum(optical_max, targets[:, 1:].max(axis=0))
@@ -359,7 +426,7 @@ def normalized_batch(features: np.ndarray, targets: np.ndarray, normalization: d
 
 def train_model(
     settings: list[dict[str, Any]],
-    feature_role: str,
+    feature_view: str,
     feature_count: int,
     hidden_size: int,
     epochs: int,
@@ -389,7 +456,7 @@ def train_model(
 
     mx.random.seed(seed)
     rng = np.random.default_rng(seed)
-    normalization = streaming_normalization(settings, feature_role, feature_count, batch_size)
+    normalization = streaming_normalization(settings, feature_view, feature_count, batch_size)
     model = FeatureOracle()
     mx.eval(model.parameters())
     optimizer = optim.AdamW(learning_rate=learning_rate, weight_decay=1e-5)
@@ -418,7 +485,7 @@ def train_model(
         loss_sum = 0.0
         epoch_batches = 0
         epoch_rows = 0
-        for features, targets in setting_batches(settings, feature_role, feature_count, batch_size, rng):
+        for features, targets in setting_batches(settings, feature_view, feature_count, batch_size, rng):
             features, targets = normalized_batch(features, targets, normalization)
             loss, gradients = loss_and_grad(model, mx.array(features), mx.array(targets))
             optimizer.update(model, gradients)
@@ -452,7 +519,7 @@ def evaluate_model(
     model: Any,
     normalization: dict[str, Any],
     settings: list[dict[str, Any]],
-    feature_role: str,
+    feature_view: str,
     feature_count: int,
     batch_size: int,
 ) -> dict[str, Any]:
@@ -468,7 +535,7 @@ def evaluate_model(
     false_negative = 0
     positive_rows = 0
     positive_membership_sum = 0.0
-    for features, targets in setting_batches(settings, feature_role, feature_count, batch_size, None):
+    for features, targets in setting_batches(settings, feature_view, feature_count, batch_size, None):
         normalized_features, _ = normalized_batch(features, targets, normalization)
         logits = model(mx.array(normalized_features))
         predictions = np.asarray(mx.concatenate([mx.sigmoid(logits[:, :1]), mx.sigmoid(logits[:, 1:])], axis=1))
@@ -521,17 +588,17 @@ def predict_setting(
     model: Any,
     normalization: dict[str, Any],
     setting: dict[str, Any],
-    feature_role: str,
+    feature_view: str,
     feature_count: int,
     batch_size: int,
 ) -> np.ndarray:
     import mlx.core as mx
 
-    features = map_array(setting, feature_role, feature_count)
     predictions = np.empty((setting["rows"]["count"], len(TARGETS)), dtype=np.float32)
     for start in range(0, predictions.shape[0], batch_size):
         stop = min(predictions.shape[0], start + batch_size)
-        batch = (np.asarray(features[start:stop], dtype=np.float32) - normalization["featureMean"]) / normalization["featureStd"]
+        batch_features = feature_batch(setting, feature_view, feature_count, slice(start, stop))
+        batch = (batch_features - normalization["featureMean"]) / normalization["featureStd"]
         logits = model(mx.array(batch.astype(np.float32)))
         output = np.asarray(mx.sigmoid(logits), dtype=np.float32)
         output[:, 1:] *= normalization["opticalScale"]
@@ -674,21 +741,28 @@ def visual_receipt(
     }
 
 
-def comparison(current: dict[str, Any], source_complete: dict[str, Any]) -> dict[str, Any]:
-    current_optical = current["opticalMeanMse"]
-    augmented_optical = source_complete["opticalMeanMse"]
+def comparison(
+    baseline: dict[str, Any],
+    candidate: dict[str, Any],
+    baseline_name: str = "current16",
+    candidate_name: str = "sourceComplete",
+) -> dict[str, Any]:
+    current_optical = baseline["opticalMeanMse"]
+    augmented_optical = candidate["opticalMeanMse"]
     return {
         "opticalMseReductionFraction": (current_optical - augmented_optical) / current_optical if current_optical > 0 else 0.0,
-        "membershipRecallDelta": source_complete["membership"]["recall"] - current["membership"]["recall"],
-        "membershipF1Delta": source_complete["membership"]["f1"] - current["membership"]["f1"],
+        "baselineRole": baseline_name,
+        "candidateRole": candidate_name,
+        "membershipRecallDelta": candidate["membership"]["recall"] - baseline["membership"]["recall"],
+        "membershipF1Delta": candidate["membership"]["f1"] - baseline["membership"]["f1"],
         "partialVisibleRecovery": {
             name: {
-                "current16EnergyRecoveryFraction": current["perTarget"][name]["energyRecoveryFraction"],
-                "sourceCompleteEnergyRecoveryFraction": source_complete["perTarget"][name]["energyRecoveryFraction"],
+                f"{baseline_name}EnergyRecoveryFraction": baseline["perTarget"][name]["energyRecoveryFraction"],
+                f"{candidate_name}EnergyRecoveryFraction": candidate["perTarget"][name]["energyRecoveryFraction"],
                 "mseReductionFraction": (
-                    (current["perTarget"][name]["mse"] - source_complete["perTarget"][name]["mse"])
-                    / current["perTarget"][name]["mse"]
-                    if current["perTarget"][name]["mse"] > 0 else 0.0
+                    (baseline["perTarget"][name]["mse"] - candidate["perTarget"][name]["mse"])
+                    / baseline["perTarget"][name]["mse"]
+                    if baseline["perTarget"][name]["mse"] > 0 else 0.0
                 ),
             }
             for name in TARGETS[1:]
@@ -703,6 +777,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--report", type=Path)
     parser.add_argument("--probe-only", action="store_true")
     parser.add_argument("--truth-only", action="store_true")
+    parser.add_argument("--condition-controls", action="store_true")
     parser.add_argument("--visual-setting", action="append", default=[])
     parser.add_argument("--epochs", type=int, default=4)
     parser.add_argument("--batch-size", type=int, default=8192)
@@ -751,7 +826,8 @@ def main() -> int:
             "failurePhase": None,
             "source": {"manifestPath": str(input_path), "manifestSha256": input_sha, "manifestIdentity": validated["identity"]},
             "backend": "not-loaded-probe-only" if args.probe_only else "not-loaded-truth-only" if args.truth_only else "mlx",
-            "controlsUsedAsFeatures": False,
+            "controlsUsedAsFeatures": args.condition_controls,
+            "controlConditioning": validated["controlConditioning"],
             "cohort": validated["cohort"],
             "featureViews": validated["featureViews"],
             "targets": validated["targets"],
@@ -791,13 +867,16 @@ def main() -> int:
         train_settings = [setting for setting in validated["settings"] if setting["splitRole"] == "train"]
         held_settings = [setting for setting in validated["settings"] if setting["splitRole"] == "heldOut"]
         results = {}
-        for view_index, (view_name, feature_role) in enumerate((("current16", "current16"), ("sourceComplete", "sourceComplete"))):
+        view_names = ["current16", "sourceComplete"]
+        if args.condition_controls:
+            view_names.append("sourceCompleteConditioned")
+        for view_name in view_names:
             phase = f"{view_name}-training"
             feature_count = validated["featureViews"][view_name]["channelCount"]
             model_path = out_dir / f"{view_name}-oracle.safetensors"
             model, normalization, trace = train_model(
                 train_settings,
-                feature_role,
+                view_name,
                 feature_count,
                 args.hidden_size,
                 args.epochs,
@@ -807,18 +886,19 @@ def main() -> int:
                 model_path,
             )
             phase = f"{view_name}-evaluation"
-            same_state = evaluate_model(model, normalization["arrays"], train_settings, feature_role, feature_count, args.batch_size)
-            held_setting = evaluate_model(model, normalization["arrays"], held_settings, feature_role, feature_count, args.batch_size)
+            same_state = evaluate_model(model, normalization["arrays"], train_settings, view_name, feature_count, args.batch_size)
+            held_setting = evaluate_model(model, normalization["arrays"], held_settings, view_name, feature_count, args.batch_size)
             phase = f"{view_name}-visualization"
             for setting in visual_settings:
                 truth_values = np.asarray(map_array(setting, "targets", len(TARGETS)), dtype=np.float32)
-                predicted_values = predict_setting(model, normalization["arrays"], setting, feature_role, feature_count, args.batch_size)
+                predicted_values = predict_setting(model, normalization["arrays"], setting, view_name, feature_count, args.batch_size)
                 visual_images.extend(render_visual_role(out_dir, setting, view_name, predicted_values, truth_values, validated["gridShape"]))
             results[view_name] = {
                 "featureIdentity": validated["featureViews"][view_name]["identity"],
                 "featureChannelCount": feature_count,
                 "seed": args.seed,
                 "architectureIdentity": report["architecture"]["identity"],
+                "controlConditioning": validated["controlConditioning"] if view_name == "sourceCompleteConditioned" else None,
                 "normalization": normalization["receipt"],
                 "lossTrace": trace,
                 "modelArtifact": {"path": str(model_path), "bytes": model_path.stat().st_size, "sha256": sha256_file(model_path)},
@@ -837,12 +917,28 @@ def main() -> int:
             "sameState": comparison(results["current16"]["sameState"], results["sourceComplete"]["sameState"]),
             "heldSetting": comparison(results["current16"]["heldSetting"], results["sourceComplete"]["heldSetting"]),
         }
+        if args.condition_controls:
+            report["conditioningComparisons"] = {
+                "sameState": comparison(
+                    results["sourceComplete"]["sameState"],
+                    results["sourceCompleteConditioned"]["sameState"],
+                    "sourceComplete",
+                    "sourceCompleteConditioned",
+                ),
+                "heldSetting": comparison(
+                    results["sourceComplete"]["heldSetting"],
+                    results["sourceCompleteConditioned"]["heldSetting"],
+                    "sourceComplete",
+                    "sourceCompleteConditioned",
+                ),
+            }
         if requested_visual_ids:
+            visual_roles = ["truth", *view_names]
             report["visualizations"] = visual_receipt(
                 out_dir,
                 validated,
                 requested_visual_ids,
-                ["truth", "current16", "sourceComplete"],
+                visual_roles,
                 visual_images,
             )
         report["status"] = "complete"
