@@ -1,0 +1,706 @@
+{
+  "schema": "kaminos.volume.boundary-splat-motion-witness.v0",
+  "status": "failed",
+  "failurePhase": "false-closure-validation",
+  "error": "Error: splat-only restoration failed for staticCamera/0: {\"ok\":false,\"authority\":\"same-state-splat-only-before-after-hybrid-restoration-v0\",\"restorationHashExact\":false,\"before\":\"artifacts/hybrid-raymarch-smoke-boundary-0716/tall-plume-v1/staticCamera/frame-001/001-learned-splat-control-before.png\",\"restored\":\"artifacts/hybrid-raymarch-smoke-boundary-0716/tall-plume-v1/staticCamera/frame-001/001-learned-splat-control-restored.png\",\"width\":1800,\"height\":1746,\"samples\":785700,\"meanAbsDiff\":8.485002757625895e-7,\"changedFraction\":0}\n    at rejectRaymarchHybridBoundaryFalseClosure (file:///private/tmp/kaminos-handy-hybrid-smoke-boundary-0716/volume-boundary-splat-motion-witness.mjs:1309:15)\n    at file:///private/tmp/kaminos-handy-hybrid-smoke-boundary-0716/volume-boundary-splat-motion-witness.mjs:288:31",
+  "requestedRoute": "http://127.0.0.1:18816/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_tall_preset=operator_fire_0622&volume_input_radius=0.12&volume_flow_rate=0.35&volume_boundary_splat_mode=learned&volume_boundary_splat_composition=hybrid-smoke&volume_boundary_splat_instances=1&volume_boundary_splat_layout=proof&volume_hybrid_smoke_representation=raymarch&volume_resolution=128&volume_majorant_grid=24&volume_render_scale=0.65&volume_steps=48&volume_adaptive_rays=0&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=1",
+  "rendererIdentity": "live-boundary-sidecar-analytic-splats-v0",
+  "expectedLearnedModelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+  "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+  "hybridOnly": false,
+  "raymarchHybridBoundary": true,
+  "evidenceRoot": "/private/tmp/kaminos-handy-hybrid-smoke-boundary-0716",
+  "browser": {
+    "identity": "boundary-splat-motion-single-cdp-browser-v0",
+    "mode": "launched-owned",
+    "port": 19386,
+    "userDataDir": "/var/folders/lm/2d0ldrgn52jd5h6rtghxs2s40000gn/T/kaminos-splat-motion-chrome-fde8xf",
+    "keepBrowserOpen": false,
+    "windowSize": "1280,960"
+  },
+  "lastTrustworthyEvidence": {
+    "initialState": {
+      "active": true,
+      "backend": "WebGPU:apple",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "volumeReconstructionStyle": "splat-depth-conditioned-front-back-smoke-compositor-v1",
+      "boundarySplatMode": "learned",
+      "boundarySplatRendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+      "boundarySplatAttributeModelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "boundarySplatSourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+      "boundarySplatInstanceDescriptorIdentity": "boundary-splat-instance-descriptor-v0",
+      "boundarySplatRequestedInstanceCount": 1,
+      "boundarySplatSourceCandidateCount": 4201,
+      "boundarySplatPhaseSourceCount": 1,
+      "phaseMode": "offset-history",
+      "phaseModeIdentity": "live-history-offset",
+      "boundarySplatPhaseStride": 1,
+      "boundarySplatHistoryDepth": 4,
+      "boundarySplatHistoryFrameStride": 1,
+      "boundarySplatEffectiveHistoryWindowFrames": 3,
+      "phaseSourceIdentity": "shared-current-control",
+      "phaseSources": [
+        {
+          "index": 0,
+          "phaseMode": "offset-history",
+          "phaseStride": 1,
+          "historyDepth": 4,
+          "historyFrameStride": 1,
+          "phaseModeIdentity": "live-history-offset",
+          "phaseSourceIdentity": "shared-current-control",
+          "historyOffsetSlots": 0,
+          "historyOffsetFrames": 0,
+          "effectiveHistoryOffsetFrames": 0,
+          "historySlot": 0,
+          "authority": "current-live-candidate-buffer"
+        }
+      ],
+      "incrementalInstanceCost": {
+        "identity": "boundary-splat-incremental-instance-cost-v0",
+        "evidenceSource": "gpu-archive-pass-plus-deterministic-raster-work-proxy",
+        "requestedInstanceCount": 1,
+        "sourceCandidateCount": 4201,
+        "renderedInstanceCount": 4201,
+        "addedSimulationPasses": 0,
+        "addedCompactionPasses": 0,
+        "addedHistoryArchivePasses": 1,
+        "addedRasterMultiplier": 1,
+        "phaseMode": "offset-history",
+        "phaseStride": 1,
+        "historyDepth": 4,
+        "historyFrameStride": 1,
+        "effectiveHistoryWindowFrames": 3,
+        "maxEffectiveHistoryOffsetFrames": 0,
+        "phaseModeIdentity": "live-history-offset",
+        "phaseSourceIdentity": "shared-current-control",
+        "fieldLayoutIdentity": "boundary-splat-proof-layout-v0",
+        "layoutBounds": {
+          "min": [
+            0,
+            0,
+            0
+          ],
+          "max": [
+            0,
+            0,
+            0
+          ],
+          "uniformScaleMin": 1,
+          "uniformScaleMax": 1,
+          "instanceCount": 1
+        }
+      },
+      "boundarySplatCandidateCount": 4201,
+      "boundarySplatOverflowCount": 0,
+      "boundarySplatFallbackReason": null,
+      "boundarySplatCompositionRequested": "hybrid-smoke",
+      "boundarySplatCompositionEffective": "hybrid-smoke",
+      "boundarySplatCompositionFallbackReason": null,
+      "hybridSplatSmokeCompositorIdentity": "splat-depth-conditioned-front-back-smoke-compositor-v1",
+      "hybridSmokeLayer": {
+        "identity": "raymarched-smoke-front-back-radiance-transmittance-linear-depth-intervals-v1",
+        "rendererIdentity": "native-3d-compute-fluid-raymarch-smoke-only-v0",
+        "format": "rgba16float",
+        "radiance": "premultiplied-smoke-only",
+        "opacity": "one-minus-smoke-transmittance",
+        "intervals": [
+          "front-of-splat-depth",
+          "back-of-splat-depth"
+        ],
+        "depth": "weighted-linear-depth-plus-near-far-interval",
+        "opticalComposition": "front-smoke>splat>back-smoke",
+        "excludedAuthority": "raymarched-flame-interface-emission",
+        "coupledDomain": null
+      },
+      "boundarySplatCopyBytesThisFrame": 0,
+      "boundarySplatCopyDisposition": {
+        "identity": "boundary-splat-candidate-copy-disposition-v0",
+        "status": "removed-full-capacity-copy",
+        "rendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+        "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+        "candidateStrideBytes": 48,
+        "priorFullCapacityCopyBytes": 6291456,
+        "effectiveCandidateCopyBytes": 0,
+        "renderStorageStrategy": "single-candidate-storage-buffer-read-after-compute-pass"
+      },
+      "hybridSmokeRepresentationRequested": "raymarch",
+      "hybridSmokeRepresentationEffective": "raymarch",
+      "hybridSmokeSourceRequested": "offline-manifest",
+      "hybridSmokeSourceEffective": null,
+      "spatialStrataHybridSmokeManifestUrl": "",
+      "spatialStrataHybridSmokeSourceStatus": "not-requested",
+      "spatialStrataHybridSmokeFailureReason": null,
+      "spatialStrataHybridSmokeSourceLifecycle": null,
+      "spatialStrataHybridSmokeConfigRequestedIdentity": null,
+      "spatialStrataHybridSmokeConfigEffectiveIdentity": null,
+      "spatialStrataHybridSmokeRendererIdentity": null,
+      "spatialStrataHybridSmokeDebug": null,
+      "frameCount": 41,
+      "simStepCount": 41
+    },
+    "staticSequence": {
+      "label": "staticCamera",
+      "sampleAuthority": "same-state-bracketed-raymarch-smoke-boundary-controlled-step-v0",
+      "frameCount": 4,
+      "stepMs": 800,
+      "sequenceDurationMs": 2400,
+      "motionEnergy": {
+        "authority": "adjacent-frame-cdp-png-diff-v0",
+        "diffs": [
+          {
+            "width": 1800,
+            "height": 1746,
+            "samples": 785700,
+            "meanAbsDiff": 0.21088880403886043,
+            "changedFraction": 0.010280005091001654
+          },
+          {
+            "width": 1800,
+            "height": 1746,
+            "samples": 785700,
+            "meanAbsDiff": 0.1722990114971776,
+            "changedFraction": 0.009471808578337787
+          },
+          {
+            "width": 1800,
+            "height": 1746,
+            "samples": 785700,
+            "meanAbsDiff": 0.17111535361248978,
+            "changedFraction": 0.009299987272495864
+          }
+        ],
+        "maxMeanAbsDiff": 0.21088880403886043,
+        "meanMeanAbsDiff": 0.18476772304950928
+      },
+      "smokeDifferential": {
+        "authority": "same-state-raymarch-hybrid-minus-splat-control-residual-v0",
+        "contributionDiffs": [
+          {
+            "width": 1800,
+            "height": 1746,
+            "samples": 785700,
+            "meanAbsDiff": 0.19416740910441505,
+            "changedFraction": 0.017561410207458317
+          },
+          {
+            "width": 1800,
+            "height": 1746,
+            "samples": 785700,
+            "meanAbsDiff": 0.2063085995503044,
+            "changedFraction": 0.01840015273004964
+          },
+          {
+            "width": 1800,
+            "height": 1746,
+            "samples": 785700,
+            "meanAbsDiff": 0.20441050443342154,
+            "changedFraction": 0.018331424207712867
+          },
+          {
+            "width": 1800,
+            "height": 1746,
+            "samples": 785700,
+            "meanAbsDiff": 0.20487717958508977,
+            "changedFraction": 0.018438335242458952
+          }
+        ],
+        "lowerFrontRegionDiffs": [
+          {
+            "authority": "splat-control-derived-lower-half-support-region-v0",
+            "region": {
+              "x0": 843,
+              "x1": 994,
+              "y0": 977,
+              "y1": 1186
+            },
+            "supportBounds": {
+              "minX": 856,
+              "minY": 804,
+              "maxX": 980,
+              "maxY": 1150
+            },
+            "samples": 31559,
+            "meanAbsDiff": 5.70631726818603,
+            "changedFraction": 0.5296745777749612
+          },
+          {
+            "authority": "splat-control-derived-lower-half-support-region-v0",
+            "region": {
+              "x0": 843,
+              "x1": 994,
+              "y0": 992,
+              "y1": 1193
+            },
+            "supportBounds": {
+              "minX": 856,
+              "minY": 826,
+              "maxX": 980,
+              "maxY": 1158
+            },
+            "samples": 30351,
+            "meanAbsDiff": 5.611446080854344,
+            "changedFraction": 0.5268689664261474
+          },
+          {
+            "authority": "splat-control-derived-lower-half-support-region-v0",
+            "region": {
+              "x0": 841,
+              "x1": 992,
+              "y0": 991,
+              "y1": 1191
+            },
+            "supportBounds": {
+              "minX": 854,
+              "minY": 826,
+              "maxX": 978,
+              "maxY": 1156
+            },
+            "samples": 30200,
+            "meanAbsDiff": 5.646743929360213,
+            "changedFraction": 0.539635761589404
+          },
+          {
+            "authority": "splat-control-derived-lower-half-support-region-v0",
+            "region": {
+              "x0": 837,
+              "x1": 992,
+              "y0": 994,
+              "y1": 1188
+            },
+            "supportBounds": {
+              "minX": 850,
+              "minY": 834,
+              "maxX": 978,
+              "maxY": 1154
+            },
+            "samples": 30070,
+            "meanAbsDiff": 5.530284890810708,
+            "changedFraction": 0.5161290322580645
+          }
+        ]
+      },
+      "frames": [
+        {
+          "controlledStepFrameIndex": 0,
+          "controlledStepNowMs": 8572.700000017881,
+          "baseFrameCount": 41,
+          "baseSimStepCount": 41,
+          "image": {
+            "path": "artifacts/hybrid-raymarch-smoke-boundary-0716/tall-plume-v1/staticCamera/frame-001/001-hybrid-raymarch-smoke.png",
+            "basename": "001-hybrid-raymarch-smoke.png",
+            "sha256": "e525b3d3f078dc79b44c179bc1e4496332561f84802024e090e362637d76bc45",
+            "authority": "cdp-canvas-clip-capture-after-render-only-frozen-sim-state",
+            "metrics": {
+              "width": 1800,
+              "height": 1746,
+              "samples": 636660,
+              "litPixels": 9511,
+              "meanLuma": 3.1049597867230987
+            },
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 873,
+              "scale": 1
+            },
+            "canvasCssRect": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 873
+            }
+          },
+          "frameStateIdentity": "same-browser-f41-s41-8573-frame-001-s41",
+          "smokeElapsedSeconds": null
+        },
+        {
+          "controlledStepFrameIndex": 1,
+          "controlledStepNowMs": 9372.700000017881,
+          "baseFrameCount": 41,
+          "baseSimStepCount": 42,
+          "image": {
+            "path": "artifacts/hybrid-raymarch-smoke-boundary-0716/tall-plume-v1/staticCamera/frame-002/002-hybrid-raymarch-smoke.png",
+            "basename": "002-hybrid-raymarch-smoke.png",
+            "sha256": "5635c3ba65b5901bb9241fa71247e5b9bb1f2c9d718bcd58d241114a26779927",
+            "authority": "cdp-canvas-clip-capture-after-render-only-frozen-sim-state",
+            "metrics": {
+              "width": 1800,
+              "height": 1746,
+              "samples": 636660,
+              "litPixels": 9600,
+              "meanLuma": 3.1264944727406023
+            },
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 873,
+              "scale": 1
+            },
+            "canvasCssRect": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 873
+            }
+          },
+          "frameStateIdentity": "same-browser-f41-s41-8573-frame-002-s42",
+          "smokeElapsedSeconds": null
+        },
+        {
+          "controlledStepFrameIndex": 2,
+          "controlledStepNowMs": 10172.700000017881,
+          "baseFrameCount": 41,
+          "baseSimStepCount": 43,
+          "image": {
+            "path": "artifacts/hybrid-raymarch-smoke-boundary-0716/tall-plume-v1/staticCamera/frame-003/003-hybrid-raymarch-smoke.png",
+            "basename": "003-hybrid-raymarch-smoke.png",
+            "sha256": "0f4e8c5ecba63fb0d94b9d4e77633c88d5f8d1c4cf4356783b883ff6a7bf3475",
+            "authority": "cdp-canvas-clip-capture-after-render-only-frozen-sim-state",
+            "metrics": {
+              "width": 1800,
+              "height": 1746,
+              "samples": 636660,
+              "litPixels": 9544,
+              "meanLuma": 3.095895583851379
+            },
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 873,
+              "scale": 1
+            },
+            "canvasCssRect": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 873
+            }
+          },
+          "frameStateIdentity": "same-browser-f41-s41-8573-frame-003-s43",
+          "smokeElapsedSeconds": null
+        },
+        {
+          "controlledStepFrameIndex": 3,
+          "controlledStepNowMs": 10972.700000017881,
+          "baseFrameCount": 41,
+          "baseSimStepCount": 44,
+          "image": {
+            "path": "artifacts/hybrid-raymarch-smoke-boundary-0716/tall-plume-v1/staticCamera/frame-004/004-hybrid-raymarch-smoke.png",
+            "basename": "004-hybrid-raymarch-smoke.png",
+            "sha256": "ecce5d0e3be92bf9459d9a55a4a3bb7c7cab182d3119304a3ae5d58a4671c990",
+            "authority": "cdp-canvas-clip-capture-after-render-only-frozen-sim-state",
+            "metrics": {
+              "width": 1800,
+              "height": 1746,
+              "samples": 636660,
+              "litPixels": 9618,
+              "meanLuma": 3.1920305083007627
+            },
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 873,
+              "scale": 1
+            },
+            "canvasCssRect": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 873
+            }
+          },
+          "frameStateIdentity": "same-browser-f41-s41-8573-frame-004-s44",
+          "smokeElapsedSeconds": null
+        }
+      ]
+    },
+    "grazingSequence": {
+      "label": "grazingCamera",
+      "sampleAuthority": "same-state-bracketed-raymarch-smoke-boundary-controlled-step-v0",
+      "frameCount": 4,
+      "stepMs": 800,
+      "sequenceDurationMs": 2400,
+      "motionEnergy": {
+        "authority": "adjacent-frame-cdp-png-diff-v0",
+        "diffs": [
+          {
+            "width": 1800,
+            "height": 1746,
+            "samples": 785700,
+            "meanAbsDiff": 2.6064456323447303,
+            "changedFraction": 0.027154130075092275
+          },
+          {
+            "width": 1800,
+            "height": 1746,
+            "samples": 785700,
+            "meanAbsDiff": 4.008695855076289,
+            "changedFraction": 0.042537864324805906
+          },
+          {
+            "width": 1800,
+            "height": 1746,
+            "samples": 785700,
+            "meanAbsDiff": 3.4206898307244344,
+            "changedFraction": 0.05185948835433372
+          }
+        ],
+        "maxMeanAbsDiff": 4.008695855076289,
+        "meanMeanAbsDiff": 3.345277106048485
+      },
+      "smokeDifferential": {
+        "authority": "same-state-raymarch-hybrid-minus-splat-control-residual-v0",
+        "contributionDiffs": [
+          {
+            "width": 1800,
+            "height": 1746,
+            "samples": 785700,
+            "meanAbsDiff": 0.20335793984133604,
+            "changedFraction": 0.018377243222604048
+          },
+          {
+            "width": 1800,
+            "height": 1746,
+            "samples": 785700,
+            "meanAbsDiff": 0.3120317339103391,
+            "changedFraction": 0.029292350770014
+          },
+          {
+            "width": 1800,
+            "height": 1746,
+            "samples": 785700,
+            "meanAbsDiff": 0.43808875312880036,
+            "changedFraction": 0.04218149420898562
+          },
+          {
+            "width": 1800,
+            "height": 1746,
+            "samples": 785700,
+            "meanAbsDiff": 0.4655916168172102,
+            "changedFraction": 0.046699758177421405
+          }
+        ],
+        "lowerFrontRegionDiffs": [
+          {
+            "authority": "splat-control-derived-lower-half-support-region-v0",
+            "region": {
+              "x0": 837,
+              "x1": 992,
+              "y0": 994,
+              "y1": 1188
+            },
+            "supportBounds": {
+              "minX": 850,
+              "minY": 834,
+              "maxX": 978,
+              "maxY": 1154
+            },
+            "samples": 30070,
+            "meanAbsDiff": 5.545493847689108,
+            "changedFraction": 0.5137346192218157
+          },
+          {
+            "authority": "splat-control-derived-lower-half-support-region-v0",
+            "region": {
+              "x0": 826,
+              "x1": 1035,
+              "y0": 1117,
+              "y1": 1360
+            },
+            "supportBounds": {
+              "minX": 844,
+              "minY": 916,
+              "maxX": 1016,
+              "maxY": 1318
+            },
+            "samples": 50787,
+            "meanAbsDiff": 4.537775414968854,
+            "changedFraction": 0.43623368184771694
+          },
+          {
+            "authority": "splat-control-derived-lower-half-support-region-v0",
+            "region": {
+              "x0": 808,
+              "x1": 1063,
+              "y0": 1269,
+              "y1": 1579
+            },
+            "supportBounds": {
+              "minX": 830,
+              "minY": 1012,
+              "maxX": 1040,
+              "maxY": 1526
+            },
+            "samples": 79050,
+            "meanAbsDiff": 4.623786632931979,
+            "changedFraction": 0.43077798861480077
+          },
+          {
+            "authority": "splat-control-derived-lower-half-support-region-v0",
+            "region": {
+              "x0": 784,
+              "x1": 1047,
+              "y0": 1374,
+              "y1": 1716
+            },
+            "supportBounds": {
+              "minX": 806,
+              "minY": 1090,
+              "maxX": 1024,
+              "maxY": 1658
+            },
+            "samples": 89946,
+            "meanAbsDiff": 4.930673218744778,
+            "changedFraction": 0.4760856513908345
+          }
+        ]
+      },
+      "frames": [
+        {
+          "controlledStepFrameIndex": 0,
+          "controlledStepNowMs": 18248.5,
+          "baseFrameCount": 41,
+          "baseSimStepCount": 44,
+          "image": {
+            "path": "artifacts/hybrid-raymarch-smoke-boundary-0716/tall-plume-v1/grazingCamera/frame-001/001-hybrid-raymarch-smoke.png",
+            "basename": "001-hybrid-raymarch-smoke.png",
+            "sha256": "2128ff75013e6c1004fd1e8498e61834b9b0793dd48e06816986de1059b86e0b",
+            "authority": "cdp-canvas-clip-capture-after-render-only-frozen-sim-state",
+            "metrics": {
+              "width": 1800,
+              "height": 1746,
+              "samples": 636660,
+              "litPixels": 9540,
+              "meanLuma": 3.1896181227260003
+            },
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 873,
+              "scale": 1
+            },
+            "canvasCssRect": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 873
+            }
+          },
+          "frameStateIdentity": "same-browser-f41-s44-18249-frame-001-s44",
+          "smokeElapsedSeconds": null
+        },
+        {
+          "controlledStepFrameIndex": 1,
+          "controlledStepNowMs": 19048.5,
+          "baseFrameCount": 41,
+          "baseSimStepCount": 45,
+          "image": {
+            "path": "artifacts/hybrid-raymarch-smoke-boundary-0716/tall-plume-v1/grazingCamera/frame-002/002-hybrid-raymarch-smoke.png",
+            "basename": "002-hybrid-raymarch-smoke.png",
+            "sha256": "6be668f40225f87337c805225b80127e06288e54e09345e6c4b8f1aaa45459e0",
+            "authority": "cdp-canvas-clip-capture-after-render-only-frozen-sim-state",
+            "metrics": {
+              "width": 1800,
+              "height": 1746,
+              "samples": 636660,
+              "litPixels": 15553,
+              "meanLuma": 4.741912200495223
+            },
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 873,
+              "scale": 1
+            },
+            "canvasCssRect": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 873
+            }
+          },
+          "frameStateIdentity": "same-browser-f41-s44-18249-frame-002-s45",
+          "smokeElapsedSeconds": null
+        },
+        {
+          "controlledStepFrameIndex": 2,
+          "controlledStepNowMs": 19848.5,
+          "baseFrameCount": 41,
+          "baseSimStepCount": 46,
+          "image": {
+            "path": "artifacts/hybrid-raymarch-smoke-boundary-0716/tall-plume-v1/grazingCamera/frame-003/003-hybrid-raymarch-smoke.png",
+            "basename": "003-hybrid-raymarch-smoke.png",
+            "sha256": "36bdba333ecc91154ed3720d851dfd420cb6547b0de72bf7a6d4476b9d5c10b5",
+            "authority": "cdp-canvas-clip-capture-after-render-only-frozen-sim-state",
+            "metrics": {
+              "width": 1800,
+              "height": 1746,
+              "samples": 636660,
+              "litPixels": 21807,
+              "meanLuma": 6.788957027619197
+            },
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 873,
+              "scale": 1
+            },
+            "canvasCssRect": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 873
+            }
+          },
+          "frameStateIdentity": "same-browser-f41-s44-18249-frame-003-s46",
+          "smokeElapsedSeconds": null
+        },
+        {
+          "controlledStepFrameIndex": 3,
+          "controlledStepNowMs": 20648.5,
+          "baseFrameCount": 41,
+          "baseSimStepCount": 47,
+          "image": {
+            "path": "artifacts/hybrid-raymarch-smoke-boundary-0716/tall-plume-v1/grazingCamera/frame-004/004-hybrid-raymarch-smoke.png",
+            "basename": "004-hybrid-raymarch-smoke.png",
+            "sha256": "ab167a98d16078751f4ce49ae7e2267a2846f45da6d99804669d7f6d7a70c21c",
+            "authority": "cdp-canvas-clip-capture-after-render-only-frozen-sim-state",
+            "metrics": {
+              "width": 1800,
+              "height": 1746,
+              "samples": 636660,
+              "litPixels": 23779,
+              "meanLuma": 7.337639132345011
+            },
+            "clip": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 873,
+              "scale": 1
+            },
+            "canvasCssRect": {
+              "x": 380,
+              "y": 0,
+              "width": 900,
+              "height": 873
+            }
+          },
+          "frameStateIdentity": "same-browser-f41-s44-18249-frame-004-s47",
+          "smokeElapsedSeconds": null
+        }
+      ]
+    }
+  },
+  "reportWriteDisposition": {
+    "status": "written",
+    "path": "/private/tmp/kaminos-handy-hybrid-smoke-boundary-0716/artifacts/hybrid-raymarch-smoke-boundary-0716/tall-plume-v1/report.json"
+  }
+}
