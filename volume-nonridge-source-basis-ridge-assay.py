@@ -180,8 +180,13 @@ class ClassificationAccumulator:
         }
 
 
+class AssayArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        raise AssayError("arguments", message)
+
+
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = AssayArgumentParser(description=__doc__)
     parser.add_argument("--corpus-manifest", required=True)
     parser.add_argument("--corpus-manifest-sha256", required=True)
     parser.add_argument("--out-dir", required=True)
@@ -189,6 +194,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--chunk-rows", type=int, default=131_072)
     parser.add_argument("--ridge-alphas", default="1e-8,1e-6,1e-4,1e-2,1")
     return parser.parse_args()
+
+
+def output_dir_hint(arguments: list[str]) -> Path | None:
+    for index, argument in enumerate(arguments):
+        if argument.startswith("--out-dir="):
+            value = argument.split("=", 1)[1]
+            return Path(value).resolve() if value else None
+        if argument == "--out-dir" and index + 1 < len(arguments):
+            value = arguments[index + 1]
+            return Path(value).resolve() if value and not value.startswith("--") else None
+    return None
 
 
 def canonical_bytes(value: Any) -> bytes:
@@ -222,8 +238,8 @@ def prepare_output(out_dir: Path) -> None:
 
 
 def fail(out_dir: Path, error: Exception, corpus_path: Path | None = None) -> None:
-    phase = error.phase if isinstance(error, AssayError) else "unknown"
-    evidence = error.evidence if isinstance(error, AssayError) else {}
+    phase = error.phase if isinstance(error, AssayError) else "internal-error"
+    evidence = error.evidence if isinstance(error, AssayError) else {"exceptionType": type(error).__name__}
     payload = {
         "schema": SCHEMA,
         "identity": IDENTITY,
@@ -248,13 +264,20 @@ def parse_alphas(raw: str) -> list[float]:
 
 def descriptor_path(descriptor: dict[str, Any], expected_columns: int, phase: str) -> tuple[Path, int, int, str]:
     shape = descriptor.get("shape")
-    if not isinstance(shape, list) or len(shape) != 2 or int(shape[1]) != expected_columns:
+    try:
+        valid_shape = isinstance(shape, list) and len(shape) == 2 and int(shape[0]) >= 0 and int(shape[1]) == expected_columns
+    except (TypeError, ValueError, OverflowError) as error:
+        raise AssayError(phase, f"invalid descriptor shape {shape}", {"descriptor": descriptor}) from error
+    if not valid_shape:
         raise AssayError(phase, f"unexpected descriptor shape {shape}", {"descriptor": descriptor})
     if descriptor.get("dtype") != "float32-le":
         raise AssayError(phase, "descriptor dtype must be float32-le", {"descriptor": descriptor})
     path = Path(str(descriptor.get("path") or ""))
-    expected_bytes = int(shape[0]) * int(shape[1]) * 4
-    declared_bytes = int(descriptor.get("bytes", descriptor.get("byteLength", -1)))
+    try:
+        expected_bytes = int(shape[0]) * int(shape[1]) * 4
+        declared_bytes = int(descriptor.get("bytes", descriptor.get("byteLength", -1)))
+    except (TypeError, ValueError, OverflowError) as error:
+        raise AssayError(phase, "descriptor byte counts must be integers", {"descriptor": descriptor}) from error
     if declared_bytes != expected_bytes:
         raise AssayError(phase, "descriptor declared byte count does not match shape", {
             "path": str(path), "declaredBytes": declared_bytes, "expectedBytes": expected_bytes,
@@ -361,11 +384,12 @@ def validate_manifest(corpus: dict[str, Any], calibration_assertion: str) -> tup
         raise AssayError("split-contract", "split setting lists must not contain duplicates")
     if set(train_ids) & set(held_ids) or set(train_ids + held_ids) != set(setting_ids):
         raise AssayError("split-contract", "manifest splits must partition every setting exactly once")
+    by_setting = {str(setting["id"]): setting for setting in settings}
     effective_by_id = {str(setting["id"]): str(setting["effectiveControlIdentity"]) for setting in settings}
     for role, role_ids in (("train", train_ids), ("heldOut", held_ids)):
         declared_effective = list((splits.get(role) or {}).get("effectiveControlIdentities") or [])
         expected_effective = [effective_by_id[value] for value in role_ids]
-        if declared_effective and (
+        if not declared_effective or (
             len(declared_effective) != len(set(declared_effective))
             or set(declared_effective) != set(expected_effective)
         ):
@@ -373,7 +397,18 @@ def validate_manifest(corpus: dict[str, Any], calibration_assertion: str) -> tup
                 "role": role, "declared": declared_effective,
                 "expected": expected_effective,
             })
-    by_id = {str(setting["id"]): setting for setting in settings}
+        contradictory_roles = [
+            setting_id for setting_id in role_ids
+            if str(by_setting.get(setting_id, {}).get("splitRole") or "") != role
+        ]
+        if contradictory_roles:
+            raise AssayError("split-contract", "setting-local splitRole contradicts the split cohort", {
+                "role": role, "settingIds": contradictory_roles,
+                "declaredSplitRoles": {
+                    setting_id: by_setting[setting_id].get("splitRole") for setting_id in contradictory_roles
+                },
+            })
+    by_id = by_setting
     eligible_calibration = sorted(
         setting_id for setting_id in train_ids
         if not bool((by_id[setting_id].get("targetSummary") or {}).get("allTargetsZero"))
@@ -425,6 +460,10 @@ def open_and_verify_artifacts(
                     "completeRows": complete.array.shape[0], "targetRows": targets.array.shape[0],
                     "declaredRows": opened_setting.count,
                 })
+            positive_membership_rows = 0
+            negative_membership_rows = 0
+            positive_optical_rows = 0
+            nonzero_target_rows = 0
             for start, stop in chunks(opened_setting.count, chunk_rows):
                 current_chunk = np.asarray(current.array[start:stop]).view(np.uint8).reshape(stop - start, current_dim * 4)
                 complete_prefix = np.asarray(complete.array[start:stop, :current_dim]).view(np.uint8).reshape(stop - start, current_dim * 4)
@@ -440,11 +479,41 @@ def open_and_verify_artifacts(
                             "settingId": setting_id, "artifactRole": role,
                             "row": start + int(bad[0]), "column": int(bad[1]),
                         })
+                target_chunk = np.asarray(targets.array[start:stop])
+                membership = target_chunk[:, 0]
+                optical = target_chunk[:, 1:5]
+                if np.any(membership < 0.0) or np.any(membership > 1.0) or np.any(optical < 0.0):
+                    raise AssayError("target-domain", "membership must be in [0,1] and optical coefficients nonnegative", {
+                        "settingId": setting_id, "rowStart": start, "rowStop": stop,
+                        "membershipMin": float(np.min(membership)),
+                        "membershipMax": float(np.max(membership)),
+                        "opticalMin": float(np.min(optical)),
+                    })
+                membership_positive = membership > 0.0
+                optical_positive = np.any(optical > 0.0, axis=1)
+                positive_membership_rows += int(np.count_nonzero(membership_positive))
+                negative_membership_rows += int(np.count_nonzero(~membership_positive))
+                positive_optical_rows += int(np.count_nonzero(optical_positive))
+                nonzero_target_rows += int(np.count_nonzero(np.any(target_chunk != 0.0, axis=1)))
+            actual_summary = {
+                "positiveMembershipRows": positive_membership_rows,
+                "negativeMembershipRows": negative_membership_rows,
+                "positiveOpticalRows": positive_optical_rows,
+                "allTargetsZero": nonzero_target_rows == 0,
+            }
+            declared_summary = setting.get("targetSummary") or {}
+            if any(declared_summary.get(key) != value for key, value in actual_summary.items()):
+                raise AssayError("target-summary", "setting targetSummary does not match authenticated target bytes", {
+                    "settingId": setting_id, "declared": declared_summary, "actual": actual_summary,
+                })
             artifacts = [
                 {"semanticRole": artifact.semantic_role, "sha256": artifact.expected_sha256, "bytes": artifact.initial_stat.st_size}
                 for artifact in (current, complete, targets)
             ]
-            checked.append({"settingId": setting_id, "rows": opened_setting.count, "artifacts": artifacts, "currentPrefixExactBytes": True})
+            checked.append({
+                "settingId": setting_id, "rows": opened_setting.count, "artifacts": artifacts,
+                "currentPrefixExactBytes": True, "targetSummary": actual_summary,
+            })
         return opened, {
             "settings": checked,
             "settingCount": len(checked),
@@ -457,16 +526,42 @@ def open_and_verify_artifacts(
         raise
 
 
+def validate_target_coverage(corpus: dict[str, Any], verification: dict[str, Any]) -> None:
+    actual_by_id = {item["settingId"]: item["targetSummary"] for item in verification["settings"]}
+    splits = corpus.get("splits") or {}
+    declared_coverage = splits.get("targetCoverage") or {}
+    for role in ("train", "heldOut"):
+        setting_ids = list((splits.get(role) or {}).get("settingIds") or [])
+        actual = {
+            key: sum(int(actual_by_id[setting_id][key]) for setting_id in setting_ids)
+            for key in ("positiveMembershipRows", "negativeMembershipRows", "positiveOpticalRows")
+        }
+        declared = declared_coverage.get(role)
+        if not isinstance(declared, dict) or any(declared.get(key) != value for key, value in actual.items()):
+            raise AssayError("target-summary", "split targetCoverage does not match authenticated target bytes", {
+                "role": role, "settingIds": setting_ids, "declared": declared, "actual": actual,
+            })
+
+
 def verify_artifacts_post_consumption(opened: dict[str, OpenedSetting]) -> None:
     for setting_id, setting in opened.items():
         for role, artifact in (("current16", setting.current), ("sourceComplete", setting.source_complete), ("targets", setting.targets)):
             final_stat = os.fstat(artifact.handle.fileno())
             final_sha = sha256_handle(artifact.handle)
-            if final_stat.st_size != artifact.initial_stat.st_size or final_sha != artifact.expected_sha256:
+            stat_changed = any((
+                final_stat.st_dev != artifact.initial_stat.st_dev,
+                final_stat.st_ino != artifact.initial_stat.st_ino,
+                final_stat.st_size != artifact.initial_stat.st_size,
+                final_stat.st_mtime_ns != artifact.initial_stat.st_mtime_ns,
+                final_stat.st_ctime_ns != artifact.initial_stat.st_ctime_ns,
+            ))
+            if stat_changed or final_sha != artifact.expected_sha256:
                 raise AssayError("artifact-post-consumption", "artifact changed after initial verification", {
                     "settingId": setting_id, "artifactRole": role, "path": str(artifact.path),
                     "expectedBytes": artifact.initial_stat.st_size, "actualBytes": final_stat.st_size,
                     "expectedSha256": artifact.expected_sha256, "actualSha256": final_sha,
+                    "expectedMtimeNs": artifact.initial_stat.st_mtime_ns, "actualMtimeNs": final_stat.st_mtime_ns,
+                    "expectedCtimeNs": artifact.initial_stat.st_ctime_ns, "actualCtimeNs": final_stat.st_ctime_ns,
                 })
 
 
@@ -490,7 +585,7 @@ def collect_stats(
             x_chunk = x[start:stop]
             target_chunk = targets[start:stop]
             membership.add(x_chunk, target_chunk[:, 0])
-            positive = np.asarray(target_chunk[:, 0] > 0.0)
+            positive = np.asarray(np.any(target_chunk[:, 1:5] > 0.0, axis=1))
             optical.add(x_chunk[positive], target_chunk[positive, 1:5])
     if membership.count == 0 or optical.count == 0:
         raise AssayError("sufficient-statistics", "fit split lacks membership or positive optical rows", {
@@ -639,11 +734,12 @@ def view_fit(
     for _, x, targets in iter_role_chunks(by_id, calibration_ids, chunk_rows):
         membership_target = targets[:, 0]
         positive = np.asarray(membership_target > 0.0)
+        optical_positive = np.asarray(np.any(targets[:, 1:5] > 0.0, axis=1))
         strong = np.asarray(membership_target >= 0.5)
         balance["rows"] += int(targets.shape[0])
         balance["anyPositive"] += int(np.count_nonzero(positive))
         balance["strongPositive"] += int(np.count_nonzero(strong))
-        balance["positiveOptical"] += int(np.count_nonzero(positive))
+        balance["positiveOptical"] += int(np.count_nonzero(optical_positive))
         for candidate in membership_candidates:
             prediction = predict(x, indices, mean, std, candidate["weights"])[:, 0]
             candidate["metrics"].add(membership_target, prediction)
@@ -651,7 +747,7 @@ def view_fit(
             candidate["maximum"] = max(candidate["maximum"], float(np.max(prediction)))
         for candidate in optical_candidates:
             prediction = np.maximum(predict(x, indices, mean, std, candidate["weights"]), 0.0)
-            candidate["metrics"].add(targets[positive, 1:5], prediction[positive])
+            candidate["metrics"].add(targets[optical_positive, 1:5], prediction[optical_positive])
     if (
         balance["anyPositive"] == 0 or balance["anyPositive"] == balance["rows"]
         or balance["strongPositive"] == 0 or balance["strongPositive"] == balance["rows"]
@@ -705,29 +801,37 @@ def evaluate_view(
 ) -> dict[str, Any]:
     membership_soft = RegressionAccumulator(1)
     optical_all = RegressionAccumulator(4)
-    optical_positive = RegressionAccumulator(4)
+    optical_positive_metrics = RegressionAccumulator(4)
     optical_gated = RegressionAccumulator(4)
     any_metrics = ClassificationAccumulator(fitted["thresholds"]["anySupport"])
     strong_metrics = ClassificationAccumulator(fitted["thresholds"]["strongSupport"])
     rows = 0
     positive_rows = 0
+    negative_rows = 0
+    positive_optical_rows = 0
     for _, x, targets in iter_role_chunks(by_id, setting_ids, chunk_rows):
         membership_prediction = predict(x, fitted["indices"], mean, std, fitted["membershipWeights"])[:, 0]
         optical_prediction = np.maximum(predict(x, fitted["indices"], mean, std, fitted["opticalWeights"]), 0.0)
         positive = np.asarray(targets[:, 0] > 0.0)
+        optical_positive_mask = np.asarray(np.any(targets[:, 1:5] > 0.0, axis=1))
         predicted_any = np.asarray(membership_prediction >= fitted["thresholds"]["anySupport"])
         membership_soft.add(targets[:, 0], membership_prediction)
         any_metrics.add(positive, membership_prediction)
         strong_metrics.add(targets[:, 0] >= 0.5, membership_prediction)
         optical_all.add(targets[:, 1:5], optical_prediction)
-        optical_positive.add(targets[positive, 1:5], optical_prediction[positive])
+        optical_positive_metrics.add(targets[optical_positive_mask, 1:5], optical_prediction[optical_positive_mask])
         optical_gated.add(targets[:, 1:5], optical_prediction * predicted_any[:, None])
         rows += int(targets.shape[0])
         positive_rows += int(np.count_nonzero(positive))
+        negative_rows += int(np.count_nonzero(~positive))
+        positive_optical_rows += int(np.count_nonzero(optical_positive_mask))
     if rows == 0:
         raise AssayError("heldout-support", "held-out role has zero rows")
-    if positive_rows == 0:
-        raise AssayError("heldout-support", "held-out role has zero positive membership rows", {"settingIds": setting_ids, "rows": rows})
+    if positive_rows == 0 or negative_rows == 0 or positive_optical_rows == 0:
+        raise AssayError("heldout-support", "held-out role must contain both membership classes and positive optical rows", {
+            "settingIds": setting_ids, "rows": rows, "positiveMembershipRows": positive_rows,
+            "negativeMembershipRows": negative_rows, "positiveOpticalRows": positive_optical_rows,
+        })
     return {
         "membership": {
             "soft": membership_soft.metrics("heldout-support"),
@@ -736,7 +840,7 @@ def evaluate_view(
         },
         "optical": {
             "allRows": optical_all.metrics("heldout-support"),
-            "positiveSupport": optical_positive.metrics("heldout-support"),
+            "positiveSupport": optical_positive_metrics.metrics("heldout-support"),
             "predictedAnySupportGated": optical_gated.metrics("heldout-support"),
         },
         "rows": rows,
@@ -789,13 +893,20 @@ def implementation_provenance() -> dict[str, Any]:
 
 
 def main() -> int:
-    args = parse_args()
-    out_dir = Path(args.out_dir).resolve()
-    corpus_path = Path(args.corpus_manifest).resolve()
-    prepare_output(out_dir)
     started = time.perf_counter()
     opened: dict[str, OpenedSetting] = {}
+    out_dir = output_dir_hint(sys.argv[1:])
+    corpus_path: Path | None = None
     try:
+        args = parse_args()
+        out_dir = Path(args.out_dir).resolve()
+        corpus_path = Path(args.corpus_manifest).resolve()
+        try:
+            prepare_output(out_dir)
+        except OSError as error:
+            raise AssayError("output-preparation", f"cannot prepare output directory: {error}", {
+                "outDir": str(out_dir),
+            }) from error
         if args.chunk_rows <= 0:
             raise AssayError("arguments", "chunk rows must be positive")
         alphas = parse_alphas(args.ridge_alphas)
@@ -820,6 +931,7 @@ def main() -> int:
         current_dim = len(current_order)
         complete_dim = len(complete_order)
         opened, verification = open_and_verify_artifacts(settings, current_dim, complete_dim, args.chunk_rows)
+        validate_target_coverage(corpus, verification)
         membership_stats, optical_stats = collect_stats(opened, fit_ids, complete_dim, args.chunk_rows)
         mean, std, constant_features = feature_scale(membership_stats)
         current_indices = np.arange(current_dim, dtype=np.int64)
@@ -917,7 +1029,7 @@ def main() -> int:
                 "standardization": "fit-settings-population-mean-std-v0",
                 "ridgeAlphas": alphas,
                 "membershipObjective": "soft-membership-rmse-v0",
-                "opticalObjective": "positive-membership-clipped-nonnegative-rgb-extinction-rmse-v0",
+                "opticalObjective": "positive-optical-support-clipped-nonnegative-rgb-extinction-rmse-v0",
                 "thresholdCalibration": "whole-setting-513-point-max-f1-v0",
                 "calibrationSelection": "lexical-last-nonblack-train-setting-v0",
             },
@@ -943,8 +1055,16 @@ def main() -> int:
         }))
         return 0
     except Exception as error:
-        fail(out_dir, error, corpus_path)
+        report_error = None
+        if out_dir is not None:
+            try:
+                out_dir.mkdir(parents=True, exist_ok=True)
+                fail(out_dir, error, corpus_path)
+            except Exception as secondary_error:
+                report_error = secondary_error
         print(f"{type(error).__name__}: {error}", file=sys.stderr)
+        if report_error is not None:
+            print(f"failure-report-write: {type(report_error).__name__}: {report_error}", file=sys.stderr)
         return 1
     finally:
         for setting in opened.values():

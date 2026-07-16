@@ -42,8 +42,11 @@ function makeSetting(id, role, phase, rows = 256) {
     const u = ((index * 37 + phase * 19) % rows) / (rows - 1) * 2 - 1;
     const nuisance = Math.sin(index * 1.71 + phase) * 0.08;
     const membership = u > 0 ? 1 : 0;
-    const emission = membership ? [0.4 + 0.3 * u, 0.2 + 0.2 * u, 0.1 + 0.1 * u] : [0, 0, 0];
-    const extinction = membership ? 0.15 + 0.25 * u : 0;
+    const opticalOnly = !membership && index === 0;
+    const emission = membership
+      ? [0.4 + 0.3 * u, 0.2 + 0.2 * u, 0.1 + 0.1 * u]
+      : opticalOnly ? [0.03, 0.02, 0.01] : [0, 0, 0];
+    const extinction = membership ? 0.15 + 0.25 * u : opticalOnly ? 0.02 : 0;
     current.push(nuisance, Math.cos(index * 0.93 + phase) * 0.08);
     complete.push(nuisance, Math.cos(index * 0.93 + phase) * 0.08, u);
     targets.push(membership, ...emission, extinction);
@@ -74,6 +77,16 @@ const settings = [
   makeSetting("setting-b", "train", 2),
   makeSetting("setting-c", "heldOut", 3),
 ];
+
+function coverage(settingIds) {
+  return settingIds.reduce((summary, id) => {
+    const target = settings.find((setting) => setting.id === id).targetSummary;
+    summary.positiveMembershipRows += target.positiveMembershipRows;
+    summary.negativeMembershipRows += target.negativeMembershipRows;
+    summary.positiveOpticalRows += target.positiveOpticalRows;
+    return summary;
+  }, { positiveMembershipRows: 0, negativeMembershipRows: 0, positiveOpticalRows: 0 });
+}
 
 const corpus = {
   schema: "kaminos.volume.nonridge-source-basis-corpus.v0",
@@ -120,8 +133,18 @@ const corpus = {
   design: { computed: { rank: 2, requiredRank: 2 } },
   splits: {
     identity: "whole-effective-control-setting-holdout-v0",
-    train: { settingIds: ["setting-a", "setting-b"] },
-    heldOut: { settingIds: ["setting-c"] },
+    train: {
+      settingIds: ["setting-a", "setting-b"],
+      effectiveControlIdentities: settings.slice(0, 2).map((setting) => setting.effectiveControlIdentity),
+    },
+    heldOut: {
+      settingIds: ["setting-c"],
+      effectiveControlIdentities: [settings[2].effectiveControlIdentity],
+    },
+    targetCoverage: {
+      train: coverage(["setting-a", "setting-b"]),
+      heldOut: coverage(["setting-c"]),
+    },
   },
   ablations: [{
     ablation: "source-complete-drop-one-channel-v0",
@@ -172,6 +195,8 @@ assert.ok(
 );
 assert.ok(report.views.sourceComplete.metrics.membership.strongSupport.f1 > 0.95);
 assert.ok(report.views.sourceComplete.metrics.optical.positiveSupport.rmseMean < 0.08);
+assert.equal(report.views.sourceComplete.metrics.optical.positiveSupport.rows, 129);
+assert.equal(report.views.sourceComplete.calibration.supportBalance.positiveOptical, 129);
 assert.equal(report.ablations.length, 1);
 assert.equal(report.ablations[0].droppedChannel, "source.signal");
 assert.ok(report.ablations[0].metrics.membership.soft.rmse > report.views.sourceComplete.metrics.membership.soft.rmse);
@@ -191,8 +216,7 @@ blackCalibrationSetting.targetSummary = {
   positiveMembershipRows: 0,
   negativeMembershipRows: 256,
   positiveOpticalRows: 0,
-  // Deliberately stale metadata: the assay must inspect target bytes rather than trust this claim.
-  allTargetsZero: false,
+  allTargetsZero: true,
 };
 const blackCalibrationPath = path.join(tmp, "black-calibration-corpus-manifest.json");
 const blackCalibrationBytes = Buffer.from(`${JSON.stringify(blackCalibrationCorpus, null, 2)}\n`);
@@ -209,7 +233,7 @@ assert.notEqual(blackCalibration.status, 0, "an all-black calibration setting mu
 const blackCalibrationFailure = JSON.parse(
   fs.readFileSync(path.join(blackCalibrationOut, "failure-report.json"), "utf8"),
 );
-assert.equal(blackCalibrationFailure.failurePhase, "calibration-support");
+assert.equal(blackCalibrationFailure.failurePhase, "calibration-selection");
 
 function runRejectedManifest(label, mutate, expectedPhase, calibrationSetting = "setting-b") {
   const candidate = structuredClone(corpus);
@@ -239,6 +263,14 @@ runRejectedManifest("duplicate-effective-control", (candidate) => {
   candidate.settings[2].effectiveControlIdentity = candidate.settings[0].effectiveControlIdentity;
 }, "split-contract");
 
+runRejectedManifest("contradictory-setting-split-role", (candidate) => {
+  candidate.settings[0].splitRole = "heldOut";
+}, "split-contract");
+
+runRejectedManifest("missing-split-effective-identities", (candidate) => {
+  delete candidate.splits.train.effectiveControlIdentities;
+}, "split-contract");
+
 runRejectedManifest("stale-cohort-total", (candidate) => {
   candidate.cohort.totalRows += 1;
 }, "corpus-retention");
@@ -257,6 +289,52 @@ runRejectedManifest("nonfinite-artifact", (candidate) => {
     "candidate-features-source-complete",
   );
 }, "artifact-finite");
+
+runRejectedManifest("invalid-target-domain", (candidate) => {
+  const setting = candidate.settings[0];
+  const bytes = fs.readFileSync(setting.rows.targets.path);
+  const values = new Float32Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+  values[0] = 1.25;
+  setting.rows.targets = writeF32(
+    path.join(tmp, "setting-a-invalid-targets.f32"), values, [256, 5], "supervision-targets-positive-nonridge",
+  );
+}, "target-domain");
+
+runRejectedManifest("stale-target-summary", (candidate) => {
+  candidate.settings[0].targetSummary.positiveOpticalRows += 1;
+}, "target-summary");
+
+runRejectedManifest("one-class-heldout", (candidate) => {
+  const setting = candidate.settings[2];
+  const bytes = fs.readFileSync(setting.rows.targets.path);
+  const values = new Float32Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+  for (let row = 0; row < 256; row += 1) values[row * 5] = 1;
+  setting.rows.targets = writeF32(
+    path.join(tmp, "setting-c-one-class-targets.f32"), values, [256, 5], "supervision-targets-positive-nonridge",
+  );
+  setting.targetSummary.positiveMembershipRows = 256;
+  setting.targetSummary.negativeMembershipRows = 0;
+  candidate.splits.targetCoverage.heldOut = structuredClone(setting.targetSummary);
+  delete candidate.splits.targetCoverage.heldOut.allTargetsZero;
+}, "heldout-support");
+
+runRejectedManifest("zero-optical-heldout", (candidate) => {
+  const setting = candidate.settings[2];
+  const bytes = fs.readFileSync(setting.rows.targets.path);
+  const values = new Float32Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+  for (let row = 0; row < 256; row += 1) {
+    for (let column = 1; column < 5; column += 1) values[row * 5 + column] = 0;
+  }
+  setting.rows.targets = writeF32(
+    path.join(tmp, "setting-c-zero-optical-targets.f32"), values, [256, 5], "supervision-targets-positive-nonridge",
+  );
+  setting.targetSummary.positiveOpticalRows = 0;
+  candidate.splits.targetCoverage.heldOut.positiveOpticalRows = 0;
+}, "heldout-support");
+
+runRejectedManifest("malformed-descriptor-shape", (candidate) => {
+  candidate.settings[0].rows.current16.shape = [256, "bad"];
+}, "artifact-verification");
 
 const artifactCustodyProbe = spawnSync("python3", ["-c", String.raw`
 import hashlib
@@ -301,12 +379,43 @@ except module.AssayError as error:
 else:
     raise AssertionError("in-place artifact mutation was not detected")
 artifact.close()
+
+path.write_bytes(replacement)
+descriptor["sha256"] = hashlib.sha256(replacement).hexdigest()
+artifact = module.open_verified_artifact(descriptor, 1, "artifact-verification")
+with path.open("r+b") as handle:
+    handle.seek(0)
+    handle.write(original[:4])
+_ = float(artifact.array[0, 0])
+with path.open("r+b") as handle:
+    handle.seek(0)
+    handle.write(replacement[:4])
+setting = module.OpenedSetting({"rows": {"count": 4}}, artifact, artifact, artifact)
+try:
+    module.verify_artifacts_post_consumption({"setting-probe": setting})
+except module.AssayError as error:
+    assert error.phase == "artifact-post-consumption"
+else:
+    raise AssertionError("transient ABA artifact mutation was not detected")
+artifact.close()
 `], { cwd: ROOT, encoding: "utf8" });
 assert.equal(
   artifactCustodyProbe.status,
   0,
   `persistent artifact custody probe failed:\nstdout=${artifactCustodyProbe.stdout}\nstderr=${artifactCustodyProbe.stderr}`,
 );
+
+const argumentFailureOut = path.join(tmp, "argument-failure-result");
+const argumentFailure = spawnSync("python3", [
+  SCRIPT,
+  "--corpus-manifest", corpusPath,
+  "--out-dir", argumentFailureOut,
+], { cwd: ROOT, encoding: "utf8" });
+assert.notEqual(argumentFailure.status, 0, "argument parsing must fail loud");
+const argumentFailureReport = JSON.parse(
+  fs.readFileSync(path.join(argumentFailureOut, "failure-report.json"), "utf8"),
+);
+assert.equal(argumentFailureReport.failurePhase, "arguments");
 
 const forgedOut = path.join(tmp, "forged-result");
 fs.appendFileSync(corpusPath, " ");
