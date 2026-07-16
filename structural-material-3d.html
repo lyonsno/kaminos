@@ -155,6 +155,12 @@
       buildLayeredStructuralRetainedWitnessInteractions,
       runLayeredStructuralRetainedWebGpuParity,
     } from './structural-material-3d-webgpu-retained.js';
+    import {
+      STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_ROUTE,
+      buildLayeredStructuralGpuTearMaterial,
+      createLayeredStructuralGpuTearRequestGate,
+      runLayeredStructuralSympatheticTearWebGpu,
+    } from './structural-material-3d-webgpu-tear.js';
 
     const stage = document.querySelector('#stage');
     const readout = document.querySelector('#readout');
@@ -227,6 +233,9 @@
     let gpuParityPromise = null;
     let gpuRetainedReceipt = null;
     let gpuRetainedPromise = null;
+    let gpuTearReceipt = null;
+    let gpuTearPromise = null;
+    const gpuTearRequestGate = createLayeredStructuralGpuTearRequestGate();
 
     function worldPoint(node) {
       return new THREE.Vector3(
@@ -251,6 +260,9 @@
     function renderMaterial() {
       clearWorld();
       const nodeById = new Map(material.nodes.map(node => [node.id, node]));
+      const anchoredComponentId = material.sympatheticTear
+        ? `g${material.sympatheticTear.anchoredComponentLabel}`
+        : 'c0';
       const maxStress = Math.max(0.001, ...material.bonds.map(bond => bond.lastStress || 0));
       for (const bond of material.bonds) {
         const a = worldPoint(nodeById.get(bond.a));
@@ -270,7 +282,7 @@
       for (const node of material.nodes) {
         const mesh = new THREE.Mesh(
           nodeGeometry,
-          node.pinned ? pinnedMaterial : node.componentId === 'c0' ? nodeMaterial : looseMaterial,
+          node.pinned ? pinnedMaterial : node.componentId === anchoredComponentId ? nodeMaterial : looseMaterial,
         );
         mesh.position.copy(worldPoint(node));
         mesh.scale.setScalar(node.pinned ? 1.32 : 1);
@@ -290,15 +302,49 @@
       const summary = summarizeLayeredStructuralState(material);
       readout.textContent = `broken ${summary.brokenBondCount} | depth ${summary.brokenDepthBondCount}/${summary.crossDepthBondCount} | components ${summary.componentCount} | sound ${summary.sound.signature}`;
       route.textContent = `${STRUCTURAL_MATERIAL_3D_ROUTE} | ${STRUCTURAL_MATERIAL_3D_VISUAL_AUTHORITY}`;
-      gpuStatus.textContent = gpuRetainedReceipt
-        ? `GPU retained ${gpuRetainedReceipt.status} ${gpuRetainedReceipt.parity?.gpuEventCount ?? 0}/${gpuRetainedReceipt.parity?.cpuEventCount ?? 0}`
+      gpuStatus.textContent = gpuTearReceipt
+        ? `GPU tear ${gpuTearReceipt.status} ${gpuTearReceipt.topology?.componentCount ?? 0} components`
+        : gpuRetainedReceipt
+          ? `GPU retained ${gpuRetainedReceipt.status} ${gpuRetainedReceipt.parity?.gpuEventCount ?? 0}/${gpuRetainedReceipt.parity?.cpuEventCount ?? 0}`
         : gpuParityReceipt
           ? `GPU ${gpuParityReceipt.status} ${gpuParityReceipt.parity?.gpuBreakCount ?? 0}/${gpuParityReceipt.parity?.cpuBreakCount ?? 0}`
           : '';
-      gpuStatus.title = gpuRetainedReceipt?.effectiveRoute || gpuParityReceipt?.effectiveRoute || STRUCTURAL_MATERIAL_3D_WEBGPU_ROUTE;
+      gpuStatus.title = gpuTearReceipt?.effectiveRoute || gpuRetainedReceipt?.effectiveRoute || gpuParityReceipt?.effectiveRoute || STRUCTURAL_MATERIAL_3D_WEBGPU_ROUTE;
       gesture.textContent = forceEnvelope
         ? `drag ${forceEnvelope.dragLength.toFixed(3)} | mag ${forceEnvelope.magnitude.toFixed(3)} | z ${forceEnvelope.point.z.toFixed(3)} | stress ${summary.maxStress.toFixed(3)}`
         : `drag 0.000 | mag 0.000 | z 0.500 | stress ${summary.maxStress.toFixed(3)}`;
+    }
+
+    function visibleTearState() {
+      if (!material.sympatheticTear) return null;
+      const direction = material.sympatheticTear.direction;
+      const nodeById = new Map(material.nodes.map(node => [node.id, node]));
+      return {
+        authority: material.sympatheticTear.authority,
+        effectiveRoute: material.sympatheticTear.effectiveRoute,
+        effectiveSequenceIdentity: material.sympatheticTear.effectiveSequenceIdentity,
+        components: material.components.map(component => {
+          const nodes = component.nodeIds.map(nodeId => nodeById.get(nodeId));
+          const displacementMagnitudes = nodes.map(node => Math.hypot(
+            node.displacement.x,
+            node.displacement.y,
+            node.displacement.z,
+          ));
+          const directionDots = nodes.map(node =>
+            node.displacement.x * direction.x +
+            node.displacement.y * direction.y +
+            node.displacement.z * direction.z
+          );
+          return {
+            id: component.id,
+            label: component.label,
+            pinned: component.pinned,
+            nodeCount: component.nodeCount,
+            maxDisplacement: Math.max(...displacementMagnitudes),
+            minDirectionDot: Math.min(...directionDots),
+          };
+        }),
+      };
     }
 
     function renderScene() {
@@ -369,7 +415,7 @@
       };
     }
 
-    function applyDrag(point, steps = 1) {
+    function applyDrag(point) {
       return runStructuralMutation('material-drag', () => {
         const depthBias = -0.65;
         forceEnvelope = createLayeredStructuralDragInteraction({
@@ -378,8 +424,31 @@
           depthBias,
         });
         lastPoint = forceEnvelope.point;
-        material = applyLayeredStructuralInteraction(material, forceEnvelope, { steps });
       });
+    }
+
+    async function requestGpuSympatheticTear(sourceState, interaction, { applyToWorld = true } = {}) {
+      const requestEpoch = gpuTearRequestGate.begin();
+      const promise = runLayeredStructuralSympatheticTearWebGpu({
+        state: sourceState,
+        interactions: [interaction],
+      }).then(receipt => {
+        if (!gpuTearRequestGate.accepts(requestEpoch)) return receipt;
+        gpuTearReceipt = receipt;
+        if (applyToWorld && receipt.status === 'passed') {
+          runStructuralMutation('gpu-sympathetic-tear', () => {
+            material = buildLayeredStructuralGpuTearMaterial(sourceState, receipt, interaction);
+          });
+        } else {
+          updateReadout();
+          renderScene();
+        }
+        return receipt;
+      }).finally(() => {
+        if (gpuTearPromise === promise) gpuTearPromise = null;
+      });
+      gpuTearPromise = promise;
+      return promise;
     }
 
     renderer.domElement.addEventListener('pointerdown', (event) => {
@@ -393,15 +462,18 @@
     });
     renderer.domElement.addEventListener('pointermove', (event) => {
       if (event.pointerId !== materialPointerId) return;
-      applyDrag(eventPoint(event), 1);
+      applyDrag(eventPoint(event));
     });
     renderer.domElement.addEventListener('pointerup', (event) => {
       if (event.pointerId !== materialPointerId) return;
-      applyDrag(eventPoint(event), 1);
+      applyDrag(eventPoint(event));
+      const releasedForce = forceEnvelope;
+      const sourceState = material;
       materialPointerId = null;
       if (renderer.domElement.hasPointerCapture(event.pointerId)) {
         renderer.domElement.releasePointerCapture(event.pointerId);
       }
+      void requestGpuSympatheticTear(sourceState, releasedForce);
     });
     renderer.domElement.addEventListener('pointercancel', (event) => {
       if (event.pointerId !== materialPointerId) return;
@@ -410,9 +482,11 @@
     });
     document.querySelector('#reset').addEventListener('click', () => {
       runStructuralMutation('reset', () => {
+        gpuTearRequestGate.invalidate();
         material = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true });
         dragStart = null;
         forceEnvelope = null;
+        gpuTearReceipt = null;
       });
     });
     document.querySelector('#fracture').addEventListener('click', () => {
@@ -427,10 +501,11 @@
           magnitude: 1.46,
           radius: 0.26,
         };
-        material = applyLayeredStructuralInteraction(material, forceEnvelope, { steps: 4 });
       });
+      void requestGpuSympatheticTear(material, forceEnvelope);
     });
     document.querySelector('#bind').addEventListener('click', () => {
+      gpuTearRequestGate.invalidate();
       runStructuralMutation('bind', () => {
         const summary = summarizeLayeredStructuralState(material);
         const bindPoint = summary.crackPath.find(edge => edge.bondKind === 'depth')?.midpoint || lastPoint;
@@ -439,6 +514,8 @@
           radius: 0.22,
           strength: 1.25,
         });
+        delete material.sympatheticTear;
+        gpuTearReceipt = null;
       });
     });
 
@@ -453,6 +530,9 @@
       cameraInvariantViolationCount: cameraInvariantViolations.length,
       gpuParity: gpuParityReceipt,
       gpuRetainedParity: gpuRetainedReceipt,
+      gpuSympatheticTear: gpuTearReceipt,
+      sympatheticTear: material.sympatheticTear || null,
+      visibleTear: visibleTearState(),
     });
 
     window.__structuralMaterial3dCameraWitness = () => ({
@@ -514,6 +594,7 @@
       const scenario = buildLayeredStructuralWitnessScenario();
       runStructuralMutation('witness-force', () => {
         material = scenario.states.cracked;
+        gpuTearReceipt = null;
         forceEnvelope = {
           ...scenario.force,
           authority: 'screen-space-drag-to-layered-force-envelope-v0',
@@ -577,6 +658,35 @@
         });
       }
       return gpuRetainedPromise;
+    };
+
+    window.__structuralMaterial3dRunGpuSympatheticTear = async (options = {}) => {
+      const scenario = buildLayeredStructuralWitnessScenario();
+      const sourceState = createLayeredStructuralMaterial({
+        columns: 9,
+        rows: 5,
+        layers: 4,
+        notch: options.notch !== false,
+      });
+      const interaction = options.interaction || scenario.force;
+      if (options.applyToWorld !== false) {
+        runStructuralMutation('gpu-sympathetic-tear-force', () => {
+          forceEnvelope = {
+            ...interaction,
+            authority: 'screen-space-drag-to-layered-force-envelope-v0',
+            start: interaction.start || {
+              x: Math.max(0, interaction.point.x - 0.38),
+              y: interaction.point.y,
+              z: 0.5,
+            },
+            dragLength: interaction.dragLength || 0.5,
+          };
+          lastPoint = interaction.point;
+        });
+      }
+      return requestGpuSympatheticTear(sourceState, interaction, {
+        applyToWorld: options.applyToWorld !== false,
+      });
     };
 
     window.addEventListener('resize', resize);

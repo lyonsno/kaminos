@@ -22,6 +22,40 @@ import {
 export const STRUCTURAL_MATERIAL_3D_WEBGPU_RETAINED_ROUTE = 'kaminos.structural-material.webgpu-retained-bond-sequence.v0';
 export const STRUCTURAL_MATERIAL_3D_WEBGPU_RETAINED_AUTHORITY = 'webgpu-retained-bond-liveness-and-event-journal-v0';
 export const STRUCTURAL_MATERIAL_3D_WEBGPU_SEQUENCE_AUTHORITY = 'ordered-screen-space-force-epochs-v0';
+export const STRUCTURAL_MATERIAL_3D_WEBGPU_COMPONENT_AUTHORITY = 'webgpu-minimum-node-component-labels-v0';
+
+const COMPONENT_LABEL_SHADER = /* wgsl */ `
+struct BondRecord {
+  endpoints: vec4<u32>,
+  direction: vec4<f32>,
+  midpoint: vec4<f32>,
+  material: vec4<f32>,
+  prior: vec4<f32>,
+}
+
+@group(0) @binding(0) var<storage, read> bonds: array<BondRecord>;
+@group(0) @binding(1) var<storage, read_write> componentLabels: array<atomic<u32>>;
+
+@compute @workgroup_size(${STRUCTURAL_MATERIAL_3D_WEBGPU_WORKGROUP_SIZE})
+fn main(@builtin(global_invocation_id) globalId: vec3<u32>) {
+  let bondIndex = globalId.x;
+  if (bondIndex >= arrayLength(&bonds)) {
+    return;
+  }
+  let bond = bonds[bondIndex];
+  if (bond.material.w < 0.5) {
+    return;
+  }
+  let a = bond.endpoints.x;
+  let b = bond.endpoints.y;
+  let minimumLabel = min(
+    atomicLoad(&componentLabels[a]),
+    atomicLoad(&componentLabels[b]),
+  );
+  atomicMin(&componentLabels[a], minimumLabel);
+  atomicMin(&componentLabels[b], minimumLabel);
+}
+`;
 
 function finite(value, fallback = 0) {
   const number = Number(value);
@@ -200,15 +234,23 @@ export function compareLayeredStructuralRetainedGpuParity(cpuOracle, gpuResult, 
     midpoint: finite(options.midpointTolerance, 0.00001),
   };
   const lifecycle = gpuResult.lifecycle || {};
+  const componentTopologyEnabled = gpuResult.componentTopologyEnabled === true;
+  const expectedPipelineCreateCount = componentTopologyEnabled ? 2 : 1;
+  const topologyLifecycleMatches = !componentTopologyEnabled || (
+    lifecycle.topologyPipelineCreateCount === 1 &&
+    lifecycle.topologyDispatchCount === gpuResult.nodeCount &&
+    lifecycle.topologySubmissionCount === 1
+  );
   const lifecycleMatches = lifecycle.adapterRequestCount === 1 &&
     lifecycle.deviceRequestCount === 1 &&
-    lifecycle.pipelineCreateCount === 1 &&
+    lifecycle.pipelineCreateCount === expectedPipelineCreateCount &&
     lifecycle.interactionUploadCount === cpuOracle.interactionCount &&
     lifecycle.dispatchCount === cpuOracle.interactionCount &&
     lifecycle.dispatchSubmissionCount === cpuOracle.interactionCount &&
     lifecycle.intermediateReadbackCount === 0 &&
     lifecycle.validationReadbackCount === 1 &&
-    lifecycle.readbackSubmissionCount === 1;
+    lifecycle.readbackSubmissionCount === 1 &&
+    topologyLifecycleMatches;
   const sequenceIdentityMatches = gpuResult.requestedSequenceIdentity === cpuOracle.sequenceIdentity &&
     gpuResult.effectiveSequenceIdentity === cpuOracle.sequenceIdentity;
 
@@ -356,9 +398,12 @@ function emptyLifecycle() {
     adapterRequestCount: 0,
     deviceRequestCount: 0,
     pipelineCreateCount: 0,
+    topologyPipelineCreateCount: 0,
     interactionUploadCount: 0,
     dispatchCount: 0,
     dispatchSubmissionCount: 0,
+    topologyDispatchCount: 0,
+    topologySubmissionCount: 0,
     intermediateReadbackCount: 0,
     validationReadbackCount: 0,
     readbackSubmissionCount: 0,
@@ -372,12 +417,14 @@ function emptyLifecycle() {
   };
 }
 
-export function layeredStructuralRetainedCleanupMatches(lifecycle = {}) {
+export function layeredStructuralRetainedCleanupMatches(lifecycle = {}, options = {}) {
+  const expectedMappedBufferCount = Math.max(0, Math.floor(finite(options.expectedMappedBufferCount, 4)));
+  const expectedBufferAllocationCount = Math.max(0, Math.floor(finite(options.expectedBufferAllocationCount, 10)));
   return lifecycle.adapterRequestCount === 1 &&
     lifecycle.deviceRequestCount === 1 &&
     lifecycle.validationReadbackCount === 1 &&
-    lifecycle.mappedBufferCount === 4 &&
-    lifecycle.bufferAllocationCount === 10 &&
+    lifecycle.mappedBufferCount === expectedMappedBufferCount &&
+    lifecycle.bufferAllocationCount === expectedBufferAllocationCount &&
     lifecycle.bufferDestroyCount === lifecycle.bufferAllocationCount &&
     lifecycle.bufferDestroyErrorCount === 0 &&
     lifecycle.deviceDestroyCount === 1 &&
@@ -387,6 +434,9 @@ export function layeredStructuralRetainedCleanupMatches(lifecycle = {}) {
 export async function runLayeredStructuralRetainedWebGpuParity(options = {}) {
   const state = options.state;
   const interactions = options.interactions || [];
+  const includeComponentTopology = options.includeComponentTopology === true;
+  const expectedMappedBufferCount = includeComponentTopology ? 5 : 4;
+  const expectedBufferAllocationCount = includeComponentTopology ? 12 : 10;
   const cpuOracle = buildLayeredStructuralCpuSequenceOracle(state, interactions);
   const requestedSequenceIdentity = options.requestedSequenceIdentity || cpuOracle.sequenceIdentity;
   const effectiveSequenceIdentity = layeredStructuralInteractionSequenceIdentity(interactions);
@@ -408,6 +458,7 @@ export async function runLayeredStructuralRetainedWebGpuParity(options = {}) {
     requestedSequenceIdentity,
     effectiveSequenceIdentity: null,
     interactionCount: interactions.length,
+    includeComponentTopology,
     abi: layeredStructuralGpuAbiDescriptor(),
     adapter: null,
     lifecycle,
@@ -421,6 +472,8 @@ export async function runLayeredStructuralRetainedWebGpuParity(options = {}) {
       finalBrokenBondCount: cpuOracle.finalBondLiveness.filter(alive => !alive).length,
     },
     gpuResult: null,
+    gpuStructuralState: null,
+    topology: null,
     parity: null,
     resultFingerprint: null,
     error: null,
@@ -468,13 +521,22 @@ export async function runLayeredStructuralRetainedWebGpuParity(options = {}) {
     const responseBuffer = makeBuffer({ label: 'retained-structural-response-storage', size: packed.bondCount * STRUCTURAL_MATERIAL_3D_WEBGPU_RESPONSE_STRIDE_BYTES, usage: usage.STORAGE | usage.COPY_SRC });
     const eventHeaderBuffer = makeBuffer({ label: 'retained-structural-event-header', size: STRUCTURAL_MATERIAL_3D_WEBGPU_EVENT_HEADER_BYTES, usage: usage.STORAGE | usage.COPY_DST | usage.COPY_SRC });
     const eventBuffer = makeBuffer({ label: 'retained-structural-event-storage', size: packed.eventCapacity * STRUCTURAL_MATERIAL_3D_WEBGPU_EVENT_STRIDE_BYTES, usage: usage.STORAGE | usage.COPY_SRC });
+    const componentLabelBuffer = includeComponentTopology
+      ? makeBuffer({ label: 'retained-structural-component-label-storage', size: packed.nodeCount * Uint32Array.BYTES_PER_ELEMENT, usage: usage.STORAGE | usage.COPY_DST | usage.COPY_SRC })
+      : null;
     const bondReadback = makeBuffer({ label: 'retained-structural-bond-readback', size: packed.bondCount * STRUCTURAL_MATERIAL_3D_WEBGPU_BOND_STRIDE_BYTES, usage: usage.COPY_DST | usage.MAP_READ });
     const responseReadback = makeBuffer({ label: 'retained-structural-response-readback', size: packed.bondCount * STRUCTURAL_MATERIAL_3D_WEBGPU_RESPONSE_STRIDE_BYTES, usage: usage.COPY_DST | usage.MAP_READ });
     const eventHeaderReadback = makeBuffer({ label: 'retained-structural-event-header-readback', size: STRUCTURAL_MATERIAL_3D_WEBGPU_EVENT_HEADER_BYTES, usage: usage.COPY_DST | usage.MAP_READ });
     const eventReadback = makeBuffer({ label: 'retained-structural-event-readback', size: packed.eventCapacity * STRUCTURAL_MATERIAL_3D_WEBGPU_EVENT_STRIDE_BYTES, usage: usage.COPY_DST | usage.MAP_READ });
+    const componentLabelReadback = includeComponentTopology
+      ? makeBuffer({ label: 'retained-structural-component-label-readback', size: packed.nodeCount * Uint32Array.BYTES_PER_ELEMENT, usage: usage.COPY_DST | usage.MAP_READ })
+      : null;
     device.queue.writeBuffer(nodeBuffer, 0, packed.nodeData);
     device.queue.writeBuffer(bondBuffer, 0, packed.bondData);
     device.queue.writeBuffer(eventHeaderBuffer, 0, new Uint32Array(4));
+    if (componentLabelBuffer) {
+      device.queue.writeBuffer(componentLabelBuffer, 0, Uint32Array.from({ length: packed.nodeCount }, (_, index) => index));
+    }
 
     result.failurePhase = 'pipeline-compile';
     device.pushErrorScope('validation');
@@ -503,6 +565,31 @@ export async function runLayeredStructuralRetainedWebGpuParity(options = {}) {
         { binding: 5, resource: { buffer: eventBuffer } },
       ],
     });
+    let componentPipeline = null;
+    let componentBindGroup = null;
+    if (includeComponentTopology) {
+      const componentShaderModule = device.createShaderModule({
+        label: STRUCTURAL_MATERIAL_3D_WEBGPU_COMPONENT_AUTHORITY,
+        code: COMPONENT_LABEL_SHADER,
+      });
+      lifecycle.pipelineCreateCount += 1;
+      lifecycle.topologyPipelineCreateCount += 1;
+      const topologyPipelineStart = layeredStructuralGpuNow();
+      componentPipeline = await device.createComputePipelineAsync({
+        label: STRUCTURAL_MATERIAL_3D_WEBGPU_COMPONENT_AUTHORITY,
+        layout: 'auto',
+        compute: { module: componentShaderModule, entryPoint: 'main' },
+      });
+      result.timingsMs.topologyPipelineCompile = layeredStructuralGpuNow() - topologyPipelineStart;
+      componentBindGroup = device.createBindGroup({
+        label: 'retained-structural-component-bind-group',
+        layout: componentPipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: bondBuffer } },
+          { binding: 1, resource: { buffer: componentLabelBuffer } },
+        ],
+      });
+    }
 
     result.failurePhase = 'retained-dispatch-sequence';
     const workgroupCount = Math.ceil(packed.bondCount / STRUCTURAL_MATERIAL_3D_WEBGPU_WORKGROUP_SIZE);
@@ -527,48 +614,84 @@ export async function runLayeredStructuralRetainedWebGpuParity(options = {}) {
     });
     result.timingsMs.dispatchSequenceCpuEnqueue = layeredStructuralGpuNow() - sequenceStart;
 
+    if (includeComponentTopology) {
+      result.failurePhase = 'component-topology-propagation';
+      const topologyStart = layeredStructuralGpuNow();
+      const topologyEncoder = device.createCommandEncoder({ label: 'retained-structural-component-propagation' });
+      for (let passIndex = 0; passIndex < packed.nodeCount; passIndex += 1) {
+        const pass = topologyEncoder.beginComputePass({
+          label: `${STRUCTURAL_MATERIAL_3D_WEBGPU_COMPONENT_AUTHORITY}:pass-${passIndex + 1}`,
+        });
+        pass.setPipeline(componentPipeline);
+        pass.setBindGroup(0, componentBindGroup);
+        pass.dispatchWorkgroups(workgroupCount);
+        pass.end();
+        lifecycle.topologyDispatchCount += 1;
+      }
+      device.queue.submit([topologyEncoder.finish()]);
+      lifecycle.topologySubmissionCount += 1;
+      result.timingsMs.topologyCpuEnqueue = layeredStructuralGpuNow() - topologyStart;
+    }
+
     result.failurePhase = 'terminal-readback-copy';
     const readbackEncoder = device.createCommandEncoder({ label: 'retained-structural-terminal-readback' });
     readbackEncoder.copyBufferToBuffer(bondBuffer, 0, bondReadback, 0, packed.bondCount * STRUCTURAL_MATERIAL_3D_WEBGPU_BOND_STRIDE_BYTES);
     readbackEncoder.copyBufferToBuffer(responseBuffer, 0, responseReadback, 0, packed.bondCount * STRUCTURAL_MATERIAL_3D_WEBGPU_RESPONSE_STRIDE_BYTES);
     readbackEncoder.copyBufferToBuffer(eventHeaderBuffer, 0, eventHeaderReadback, 0, STRUCTURAL_MATERIAL_3D_WEBGPU_EVENT_HEADER_BYTES);
     readbackEncoder.copyBufferToBuffer(eventBuffer, 0, eventReadback, 0, packed.eventCapacity * STRUCTURAL_MATERIAL_3D_WEBGPU_EVENT_STRIDE_BYTES);
+    if (includeComponentTopology) {
+      readbackEncoder.copyBufferToBuffer(componentLabelBuffer, 0, componentLabelReadback, 0, packed.nodeCount * Uint32Array.BYTES_PER_ELEMENT);
+    }
     device.queue.submit([readbackEncoder.finish()]);
     lifecycle.readbackSubmissionCount += 1;
     await device.queue.onSubmittedWorkDone();
-    result.timingsMs.sequenceAndTerminalCopyGpuCompletion = layeredStructuralGpuNow() - sequenceStart;
+    const sequenceAndTerminalCopyGpuCompletion = layeredStructuralGpuNow() - sequenceStart;
+    result.timingsMs.sequenceAndTerminalCopyGpuCompletion = sequenceAndTerminalCopyGpuCompletion;
+    if (includeComponentTopology) {
+      result.timingsMs.sequenceTopologyAndTerminalCopyGpuCompletion = sequenceAndTerminalCopyGpuCompletion;
+    }
 
     result.failurePhase = 'terminal-validation-readback';
     lifecycle.validationReadbackCount += 1;
-    lifecycle.mappedBufferCount += 4;
+    lifecycle.mappedBufferCount += expectedMappedBufferCount;
     const readbackStart = layeredStructuralGpuNow();
-    await Promise.all([
+    const mapPromises = [
       bondReadback.mapAsync(mapMode.READ),
       responseReadback.mapAsync(mapMode.READ),
       eventHeaderReadback.mapAsync(mapMode.READ),
       eventReadback.mapAsync(mapMode.READ),
-    ]);
+    ];
+    if (componentLabelReadback) mapPromises.push(componentLabelReadback.mapAsync(mapMode.READ));
+    await Promise.all(mapPromises);
     const bondBytes = bondReadback.getMappedRange().slice(0);
     const responseBytes = responseReadback.getMappedRange().slice(0);
     const headerBytes = eventHeaderReadback.getMappedRange().slice(0);
     const eventBytes = eventReadback.getMappedRange().slice(0);
+    const componentLabelBytes = componentLabelReadback?.getMappedRange().slice(0) || null;
     bondReadback.unmap();
     responseReadback.unmap();
     eventHeaderReadback.unmap();
     eventReadback.unmap();
+    componentLabelReadback?.unmap();
     result.timingsMs.terminalReadbackMap = layeredStructuralGpuNow() - readbackStart;
 
     const headerView = new DataView(headerBytes);
     const eventCount = headerView.getUint32(0, true);
     const eventOverflowCount = headerView.getUint32(4, true);
     const readableEventCount = Math.min(eventCount, packed.eventCapacity);
+    const finalBondLiveness = parseLayeredStructuralGpuBondLiveness(bondBytes, state);
+    const componentLabels = componentLabelBytes
+      ? Array.from(new Uint32Array(componentLabelBytes))
+      : null;
     const gpuResult = {
       requestedSequenceIdentity,
       effectiveSequenceIdentity,
       lifecycle,
       responses: parseLayeredStructuralGpuResponses(responseBytes, state),
       eventCandidates: parseLayeredStructuralGpuEvents(eventBytes, readableEventCount, state),
-      finalBondLiveness: parseLayeredStructuralGpuBondLiveness(bondBytes, state),
+      finalBondLiveness,
+      componentTopologyEnabled: includeComponentTopology,
+      nodeCount: packed.nodeCount,
       eventCount,
       eventOverflowCount,
     };
@@ -590,6 +713,21 @@ export async function runLayeredStructuralRetainedWebGpuParity(options = {}) {
       finalAliveBondCount: gpuResult.finalBondLiveness.filter(Boolean).length,
       finalBrokenBondCount: gpuResult.finalBondLiveness.filter(alive => !alive).length,
     };
+    result.gpuStructuralState = {
+      finalBondLiveness: [...finalBondLiveness],
+      componentLabels: componentLabels ? [...componentLabels] : null,
+    };
+    if (includeComponentTopology) {
+      const uniqueComponentLabels = [...new Set(componentLabels)].sort((a, b) => a - b);
+      result.topology = {
+        authority: STRUCTURAL_MATERIAL_3D_WEBGPU_COMPONENT_AUTHORITY,
+        passBudget: packed.nodeCount,
+        topologyDispatchCount: lifecycle.topologyDispatchCount,
+        topologySubmissionCount: lifecycle.topologySubmissionCount,
+        componentCount: uniqueComponentLabels.length,
+        componentLabels: uniqueComponentLabels,
+      };
+    }
     result.dispatch = {
       workgroupSize: STRUCTURAL_MATERIAL_3D_WEBGPU_WORKGROUP_SIZE,
       workgroupCount,
@@ -597,6 +735,7 @@ export async function runLayeredStructuralRetainedWebGpuParity(options = {}) {
       bondCount: packed.bondCount,
       nodeCount: packed.nodeCount,
       eventCapacity: packed.eventCapacity,
+      topologyPassCount: includeComponentTopology ? lifecycle.topologyDispatchCount : 0,
     };
     result.effectiveSequenceIdentity = effectiveSequenceIdentity;
     if (!result.parity.ok) throw new Error('retained WebGPU structural state diverged from sequential CPU oracle');
@@ -647,7 +786,10 @@ export async function runLayeredStructuralRetainedWebGpuParity(options = {}) {
       }
     }
   }
-  lifecycle.cleanupMatches = layeredStructuralRetainedCleanupMatches(lifecycle);
+  lifecycle.cleanupMatches = layeredStructuralRetainedCleanupMatches(lifecycle, {
+    expectedMappedBufferCount,
+    expectedBufferAllocationCount,
+  });
   if (result.parity) {
     result.parity.cleanupMatches = lifecycle.cleanupMatches;
     result.parity.ok = result.parity.ok && lifecycle.cleanupMatches;
