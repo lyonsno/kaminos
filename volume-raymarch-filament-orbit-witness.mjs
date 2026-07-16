@@ -245,16 +245,16 @@ try {
   writeFileSync(reportPath, JSON.stringify(report, null, 2));
   const captureMap = new Map(report.captures.map(capture => [capture.key, capture]));
   const familyModes = {
-    'analytic-billboard': ['analyticBillboard', 'camera-facing-billboard-v0'],
-    'learned-billboard': ['learnedBillboard', 'learned-camera-facing-billboard-v0'],
-    'world-tangent-covariance': ['worldCovariance', 'world-gradient-tangent-covariance-v0'],
+    'analytic-billboard': 'analyticBillboard',
+    'learned-billboard': 'learnedBillboard',
+    'world-tangent-covariance': 'worldCovariance',
   };
   const maxRaySteps = Math.max(...rayStepCounts);
   const firstAudit = report.captures.find(capture => capture.footprintAudit)?.footprintAudit;
   const cameraRows = [];
   for (const camera of initialization.cameras) {
     const targetCapture = captureMap.get(`${camera.index}-raymarch-${maxRaySteps}`);
-    for (const [family, [mode, familyAuthority]] of Object.entries(familyModes)) {
+    for (const [family, mode] of Object.entries(familyModes)) {
       const capture = captureMap.get(`${camera.index}-${mode}-${maxRaySteps}`);
       const metrics = covarianceAnalysis.rows.find(row => row.cameraIndex === camera.index && row.mode === mode);
       cameraRows.push({
@@ -262,9 +262,12 @@ try {
         cameraAngle: camera.angle,
         cameraPoseHash: capture.cameraPoseHash,
         family,
-        familyAuthority,
+        familyAuthority: capture.footprintAudit.footprintAuthority,
+        rendererFootprintAuthority: capture.boundarySplatFootprintAuthority,
+        auditFootprintAuthority: capture.footprintAudit.footprintAuthority,
         attributeSetId: capture.footprintAudit.attributeSetId,
-        cameraConditioning: false,
+        attributePayloadAuthority: capture.footprintAudit.attributePayloadAuthority,
+        attributePayloadSha256: capture.footprintAudit.attributePayloadSha256,
         candidateCount: capture.boundarySplatCandidateCount,
         instanceCount: capture.boundarySplatInstanceCount,
         overflowCount: capture.boundarySplatOverflowCount,
@@ -275,8 +278,8 @@ try {
         image: fileArtifact(capture.imagePath),
         conservation: {
           authority: capture.footprintAudit.authority,
-          baseAreaOpacitySum: capture.footprintAudit.baseAreaOpacitySum,
-          effectiveAreaOpacitySum: capture.footprintAudit.effectiveAreaOpacitySum,
+          baseIntegratedAlphaSum: capture.footprintAudit.baseIntegratedAlphaSum,
+          effectiveIntegratedAlphaSum: capture.footprintAudit.effectiveIntegratedAlphaSum,
           relativeError: capture.footprintAudit.relativeError,
         },
         metrics,

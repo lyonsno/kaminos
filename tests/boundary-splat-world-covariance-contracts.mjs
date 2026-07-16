@@ -18,9 +18,10 @@ assert.match(
 );
 assert.match(
   coreSource,
-  /base-area-times-opacity-conserved-v0/,
-  'world covariance must preserve an explicit area/opacity conservation law',
+  /rendered-gaussian-integrated-alpha-conserved-v0/,
+  'world covariance must preserve the fragment kernel integrated-alpha conservation law',
 );
+assert.match(coreSource, /attributePayloadSha256/, 'GPU audit must hash the complete effective per-candidate attribute payload');
 assert.match(
   coreSource,
   /boundarySplatSupportGradient/,
@@ -33,6 +34,8 @@ assert.match(witnessSource, /learned_conserved/, 'camera orbit must capture the 
 assert.match(witnessSource, /world_covariance/, 'camera orbit must capture the world covariance family');
 assert.match(witnessSource, /sampleBoundarySplatFootprintAudit/, 'camera orbit must audit candidate identity and area/opacity conservation');
 assert.match(witnessSource, /heldOutCameraIndices/, 'camera orbit must publish an explicit held-out camera split');
+assert.match(witnessSource, /rendererFootprintAuthority/, 'holdout rows must carry effective renderer footprint authority');
+assert.match(witnessSource, /attributePayloadSha256/, 'holdout rows must carry measured per-candidate attribute identity');
 
 const oracle = await import('../boundary-splat-camera-holdout-oracle.mjs');
 
@@ -62,8 +65,19 @@ for (let cameraIndex = 0; cameraIndex < 3; cameraIndex += 1) {
         'learned-billboard': 'learned-camera-facing-billboard-v0',
         'world-tangent-covariance': 'world-gradient-tangent-covariance-v0',
       }[family],
+      rendererFootprintAuthority: {
+        'analytic-billboard': 'camera-facing-billboard-v0',
+        'learned-billboard': 'learned-camera-facing-billboard-v0',
+        'world-tangent-covariance': 'world-gradient-tangent-covariance-v0',
+      }[family],
+      auditFootprintAuthority: {
+        'analytic-billboard': 'camera-facing-billboard-v0',
+        'learned-billboard': 'learned-camera-facing-billboard-v0',
+        'world-tangent-covariance': 'world-gradient-tangent-covariance-v0',
+      }[family],
       attributeSetId: family === 'analytic-billboard' ? 'analytic-fixed-attrs' : 'learned-fixed-attrs',
-      cameraConditioning: false,
+      attributePayloadAuthority: 'gpu-compacted-boundary-splat-effective-attributes-v0',
+      attributePayloadSha256: family === 'analytic-billboard' ? 'b'.repeat(64) : 'c'.repeat(64),
       candidateCount: 93189,
       instanceCount: 93189,
       overflowCount: 0,
@@ -73,9 +87,9 @@ for (let cameraIndex = 0; cameraIndex < 3; cameraIndex += 1) {
       target,
       image,
       conservation: {
-        authority: 'base-area-times-opacity-conserved-v0',
-        baseAreaOpacitySum: 12.5,
-        effectiveAreaOpacitySum: 12.5,
+        authority: 'rendered-gaussian-integrated-alpha-conserved-v0',
+        baseIntegratedAlphaSum: 12.5,
+        effectiveIntegratedAlphaSum: 12.5,
         relativeError: 0,
       },
     });
@@ -119,19 +133,29 @@ assert.equal(validated.familyCount, 3);
 await assert.rejects(
   () => oracle.validateCameraHoldoutReport({
     ...report,
-    cameraRows: report.cameraRows.map((row, index) => index === 7 ? { ...row, attributeSetId: 'camera-conditioned-cheat' } : row),
+    cameraRows: report.cameraRows.map((row, index) => index === 7 ? { ...row, attributePayloadSha256: 'd'.repeat(64) } : row),
   }),
-  /attribute set.*reused/i,
+  /attribute payload.*reused/i,
+);
+
+await assert.rejects(
+  () => oracle.validateCameraHoldoutReport({
+    ...report,
+    cameraRows: report.cameraRows.map((row, index) => index === 8
+      ? { ...row, rendererFootprintAuthority: 'learned-camera-facing-billboard-v0' }
+      : row),
+  }),
+  /effective.*footprint.*authority/i,
 );
 
 await assert.rejects(
   () => oracle.validateCameraHoldoutReport({
     ...report,
     cameraRows: report.cameraRows.map((row, index) => index === 2
-      ? { ...row, conservation: { ...row.conservation, effectiveAreaOpacitySum: 14, relativeError: 0.12 } }
+      ? { ...row, conservation: { ...row.conservation, effectiveIntegratedAlphaSum: 14, relativeError: 0.12 } }
       : row),
   }),
-  /area.*opacity.*conservation/i,
+  /integrated.*alpha.*conservation/i,
 );
 
 await assert.rejects(

@@ -9,7 +9,8 @@ const FAMILY_AUTHORITIES = Object.freeze({
   'learned-billboard': 'learned-camera-facing-billboard-v0',
   'world-tangent-covariance': 'world-gradient-tangent-covariance-v0',
 });
-const CONSERVATION_AUTHORITY = 'base-area-times-opacity-conserved-v0';
+const CONSERVATION_AUTHORITY = 'rendered-gaussian-integrated-alpha-conserved-v0';
+const ATTRIBUTE_PAYLOAD_AUTHORITY = 'gpu-compacted-boundary-splat-effective-attributes-v0';
 const TARGET_AUTHORITY = 'smoke-off-complete-flame-local-emission-extinction-v0';
 
 function sha256(bytes) {
@@ -89,14 +90,21 @@ export async function validateCameraHoldoutReport(report, options = {}) {
   for (const [rowIndex, row] of report.cameraRows.entries()) {
     const label = `camera row ${rowIndex}`;
     if (!cameraIndices.includes(row.cameraIndex) || typeof row.cameraPoseHash !== 'string') throw new Error(`${label} camera identity is incomplete`);
-    if (!Object.hasOwn(FAMILY_AUTHORITIES, row.family) || row.familyAuthority !== FAMILY_AUTHORITIES[row.family]) {
-      throw new Error(`${label} footprint family authority is wrong`);
+    const expectedFamilyAuthority = FAMILY_AUTHORITIES[row.family];
+    if (!Object.hasOwn(FAMILY_AUTHORITIES, row.family)
+      || row.familyAuthority !== expectedFamilyAuthority
+      || row.rendererFootprintAuthority !== expectedFamilyAuthority
+      || row.auditFootprintAuthority !== expectedFamilyAuthority) {
+      throw new Error(`${label} effective footprint authority is wrong`);
     }
     const key = `${row.cameraIndex}:${row.family}`;
     if (rowKeys.has(key)) throw new Error(`${label} duplicates ${key}`);
     rowKeys.add(key);
-    if (row.cameraConditioning !== false) throw new Error(`${label} enables forbidden camera conditioning`);
     if (typeof row.attributeSetId !== 'string' || !row.attributeSetId) throw new Error(`${label} attribute set identity is missing`);
+    if (row.attributePayloadAuthority !== ATTRIBUTE_PAYLOAD_AUTHORITY
+      || !/^[0-9a-f]{64}$/.test(row.attributePayloadSha256 || '')) {
+      throw new Error(`${label} effective attribute payload identity is missing`);
+    }
     if (row.candidateCount !== candidatePayload.count || row.instanceCount !== candidatePayload.count || row.overflowCount !== 0) {
       throw new Error(`${label} candidate count is missing, partial, or overflowed`);
     }
@@ -104,12 +112,12 @@ export async function validateCameraHoldoutReport(report, options = {}) {
     if (row.fallbackReason != null) throw new Error(`${label} renderer fallback: ${row.fallbackReason}`);
     if (row.targetAuthority !== TARGET_AUTHORITY) throw new Error(`${label} Full Flame target authority is wrong`);
     const conservation = row.conservation || {};
-    const base = finite(conservation.baseAreaOpacitySum, `${label} base area opacity`);
-    const effective = finite(conservation.effectiveAreaOpacitySum, `${label} effective area opacity`);
-    const relativeError = finite(conservation.relativeError, `${label} area opacity relative error`);
+    const base = finite(conservation.baseIntegratedAlphaSum, `${label} base integrated alpha`);
+    const effective = finite(conservation.effectiveIntegratedAlphaSum, `${label} effective integrated alpha`);
+    const relativeError = finite(conservation.relativeError, `${label} integrated alpha relative error`);
     const recomputedError = Math.abs(effective - base) / Math.max(Math.abs(base), 1e-12);
     if (conservation.authority !== CONSERVATION_AUTHORITY || relativeError > 1e-5 || recomputedError > 1e-5) {
-      throw new Error(`${label} area/opacity conservation failed`);
+      throw new Error(`${label} integrated alpha conservation failed`);
     }
     const target = await verifyArtifact(row.target, `${label} target`);
     const image = await verifyArtifact(row.image, `${label} image`);
@@ -124,6 +132,8 @@ export async function validateCameraHoldoutReport(report, options = {}) {
     if (rows.length !== cameraIndices.length) throw new Error(`${family} is missing candidate rows for one or more cameras`);
     const attributeSetIds = new Set(rows.map(row => row.attributeSetId));
     if (attributeSetIds.size !== 1) throw new Error(`${family} attribute set was not reused across held-out cameras`);
+    const attributePayloadHashes = new Set(rows.map(row => row.attributePayloadSha256));
+    if (attributePayloadHashes.size !== 1) throw new Error(`${family} attribute payload was not reused across held-out cameras`);
     const imageHashes = new Set(rows.map(row => row.image.sha256));
     if (imageHashes.size !== rows.length) throw new Error(`${family} cached or static output pretending to be a camera orbit`);
   }
@@ -131,6 +141,11 @@ export async function validateCameraHoldoutReport(report, options = {}) {
   const worldAttributeSet = rowsByFamily.get('world-tangent-covariance')[0].attributeSetId;
   if (learnedAttributeSet !== worldAttributeSet) {
     throw new Error('learned billboard attribute set was not reused by world covariance');
+  }
+  const learnedAttributePayload = rowsByFamily.get('learned-billboard')[0].attributePayloadSha256;
+  const worldAttributePayload = rowsByFamily.get('world-tangent-covariance')[0].attributePayloadSha256;
+  if (learnedAttributePayload !== worldAttributePayload) {
+    throw new Error('learned billboard effective attribute payload was not reused by world covariance');
   }
 
   return {

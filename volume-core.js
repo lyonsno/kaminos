@@ -45,7 +45,7 @@ const BOUNDARY_SPLAT_WORLD_COVARIANCE_RENDERER_IDENTITY = 'live-boundary-sidecar
 const BOUNDARY_SPLAT_CAMERA_FACING_AUTHORITY = 'camera-facing-billboard-v0';
 const BOUNDARY_SPLAT_LEARNED_CAMERA_FACING_AUTHORITY = 'learned-camera-facing-billboard-v0';
 const BOUNDARY_SPLAT_WORLD_TANGENT_AUTHORITY = 'world-gradient-tangent-covariance-v0';
-const BOUNDARY_SPLAT_AREA_OPACITY_CONSERVATION_AUTHORITY = 'base-area-times-opacity-conserved-v0';
+const BOUNDARY_SPLAT_AREA_OPACITY_CONSERVATION_AUTHORITY = 'rendered-gaussian-integrated-alpha-conserved-v0';
 const BOUNDARY_SPLAT_SOURCE_AUTHORITY = 'live-baked-sidecar-plus-fluid-material-v0';
 const EXTERNAL_BOUNDARY_SIDECAR_AUTHORITY = 'externally-uploaded-boundary-sidecar-plus-live-fluid-material-v0';
 const EXTERNAL_BOUNDARY_SIDECAR_UPLOAD_IDENTITY = 'chunked-external-boundary-sidecar-upload-v0';
@@ -153,7 +153,7 @@ const BOUNDARY_SPLAT_CHANNELS = [
   'worldNormalX',
   'worldNormalY',
   'worldNormalZ',
-  'baseAreaOpacity',
+  'baseIntegratedAlpha',
 ];
 const DEFAULT_MAJORANT_GRID_SIZE = 48;
 const SUPPORTED_MAJORANT_GRID_SIZES = [24, 32, 48];
@@ -5397,6 +5397,15 @@ fn applyBoundarySplatAttributeHook(
   return result;
 }
 
+fn boundarySplatKernelIntegral(sharpness: f32) -> f32 {
+  return 3.14159265 * (1.0 - exp(-sharpness)) / sharpness;
+}
+
+fn boundarySplatEnergyCompensation(footprintRadius: f32, sharpness: f32) -> f32 {
+  let energyRatio = (sharpness / 3.4) / max(footprintRadius * footprintRadius, 0.1225);
+  return clamp(sqrt(energyRatio), 0.5, 2.5);
+}
+
 @compute @workgroup_size(4, 4, 4)
 fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (any(gid >= vec3<u32>(GRID))) { return; }
@@ -5429,10 +5438,15 @@ fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
     attributeFeatures,
   );
   let globalRadius = max(boundarySplatCamera.controls.x, 1e-4);
+  let kernelSharpness = clamp(boundarySplatCamera.controls.w, 1.0, 12.0);
   let conserveAreaOpacity = boundarySplatCamera.cameraUp.w > 0.5;
   let axisAreaScale = max(attributeOutput.radiusScale.x * attributeOutput.radiusScale.y * globalRadius * globalRadius, 1e-4);
-  let effectiveOpacity = select(attributeOutput.colorOpacity.a, attributeOutput.colorOpacity.a / axisAreaScale, conserveAreaOpacity);
-  let baseAreaOpacity = 3.14159265 * radius * radius * attributeOutput.colorOpacity.a;
+  let kernelIntegral = boundarySplatKernelIntegral(kernelSharpness);
+  let referenceKernelIntegral = boundarySplatKernelIntegral(3.4);
+  let energyCompensation = boundarySplatEnergyCompensation(globalRadius, kernelSharpness);
+  let renderedEnergyScale = max(axisAreaScale * energyCompensation * kernelIntegral / referenceKernelIntegral, 1e-4);
+  let effectiveOpacity = select(attributeOutput.colorOpacity.a, attributeOutput.colorOpacity.a / renderedEnergyScale, conserveAreaOpacity);
+  let baseIntegratedAlpha = radius * radius * attributeOutput.colorOpacity.a * referenceKernelIntegral;
   let worldNormal = boundarySplatSupportGradient(gid);
   if (boundarySplatCamera.controls.z > 0.5) {
     boundarySplatFeatureRows[candidateIndex].sidecar = sidecar;
@@ -5446,7 +5460,7 @@ fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
     boundarySplats[candidateIndex].colorOpacity.a = effectiveOpacity;
   }
   boundarySplats[candidateIndex].shape = vec4<f32>(radius * attributeOutput.radiusScale.x, radius * attributeOutput.radiusScale.y, sidecar.z, fireSignal);
-  boundarySplats[candidateIndex].worldNormalAreaOpacity = vec4<f32>(worldNormal, baseAreaOpacity);
+  boundarySplats[candidateIndex].worldNormalAreaOpacity = vec4<f32>(worldNormal, baseIntegratedAlpha);
 }
 
 @compute @workgroup_size(1)
@@ -5491,8 +5505,7 @@ fn boundarySplatFs(in: BoundarySplatVertexOut) -> @location(0) vec4<f32> {
   let footprintRadius = clamp(boundarySplatCamera.controls.x, 0.35, 1.5);
   let kernelSharpness = clamp(boundarySplatCamera.controls.w, 1.0, 12.0);
   let gaussian = exp(-radius2 * kernelSharpness);
-  let energyRatio = (kernelSharpness / 3.4) / max(footprintRadius * footprintRadius, 0.1225);
-  let energyCompensation = clamp(sqrt(energyRatio), 0.5, 2.5);
+  let energyCompensation = boundarySplatEnergyCompensation(footprintRadius, kernelSharpness);
   let alpha = in.colorOpacity.a * gaussian * energyCompensation;
   return vec4<f32>(in.colorOpacity.rgb, alpha);
 }
@@ -9859,39 +9872,51 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       readback.unmap();
       const strideFloats = BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES / Float32Array.BYTES_PER_ELEMENT;
       const identity = new Float32Array(draw.instanceCount * 4);
+      const attributes = new Float32Array(draw.instanceCount * (strideFloats - 4));
       const globalRadius = normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius);
-      let baseAreaOpacitySum = 0;
-      let effectiveAreaOpacitySum = 0;
+      const kernelSharpness = normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness);
+      const kernelIntegral = Math.PI * (1 - Math.exp(-kernelSharpness)) / kernelSharpness;
+      const energyRatio = (kernelSharpness / 3.4) / Math.max(globalRadius * globalRadius, 0.1225);
+      const energyCompensation = Math.min(2.5, Math.max(0.5, Math.sqrt(energyRatio)));
+      let baseIntegratedAlphaSum = 0;
+      let effectiveIntegratedAlphaSum = 0;
       for (let index = 0; index < draw.instanceCount; index += 1) {
         const offset = index * strideFloats;
         identity.set(values.subarray(offset, offset + 4), index * 4);
+        attributes.set(values.subarray(offset + 4, offset + strideFloats), index * (strideFloats - 4));
         const opacity = values[offset + 7];
         const radiusX = values[offset + 8] * globalRadius;
         const radiusY = values[offset + 9] * globalRadius;
-        baseAreaOpacitySum += values[offset + 15];
-        effectiveAreaOpacitySum += Math.PI * radiusX * radiusY * opacity;
+        baseIntegratedAlphaSum += values[offset + 15];
+        effectiveIntegratedAlphaSum += radiusX * radiusY * opacity * kernelIntegral * energyCompensation;
       }
       const digest = await crypto.subtle.digest('SHA-256', identity);
       const candidatePayloadSha256 = Array.from(
         new Uint8Array(digest),
         value => value.toString(16).padStart(2, '0'),
       ).join('');
-      const relativeError = Math.abs(effectiveAreaOpacitySum - baseAreaOpacitySum)
-        / Math.max(Math.abs(baseAreaOpacitySum), 1e-12);
+      const attributeDigest = await crypto.subtle.digest('SHA-256', attributes);
+      const attributePayloadSha256 = Array.from(
+        new Uint8Array(attributeDigest),
+        value => value.toString(16).padStart(2, '0'),
+      ).join('');
+      const relativeError = Math.abs(effectiveIntegratedAlphaSum - baseIntegratedAlphaSum)
+        / Math.max(Math.abs(baseIntegratedAlphaSum), 1e-12);
       return {
         ok: true,
         authority: state.boundarySplatAreaOpacityConservationAuthority,
         footprintAuthority: state.boundarySplatFootprintAuthority,
         attributeSetId: state.boundarySplatAttributeSetId,
-        cameraConditioning: false,
         candidatePayloadAuthority: 'gpu-compacted-boundary-splat-position-support-frozen-state-v0',
         candidatePayloadSha256,
+        attributePayloadAuthority: 'gpu-compacted-boundary-splat-effective-attributes-v0',
+        attributePayloadSha256,
         candidateCount: draw.candidateCount,
         instanceCount: draw.instanceCount,
         overflowCount: draw.overflowCount,
         strideFloats,
-        baseAreaOpacitySum,
-        effectiveAreaOpacitySum,
+        baseIntegratedAlphaSum,
+        effectiveIntegratedAlphaSum,
         relativeError,
       };
     } finally {
