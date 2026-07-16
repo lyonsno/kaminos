@@ -32,7 +32,7 @@
   <header>
     <h1>Smoke Extinction Residual Oracle R1</h1>
     <p><strong>Question:</strong> do simulator-native microdetail, interface-shred, and material-detail carriers restore articulated smoke support missing from the frozen 1,024-Gaussian <code>smokeDensity</code> control?</p>
-    <p><strong>Exact target:</strong> <code>0.74 smokeDensity + 0.42 microdetail + 0.34 interfaceShred + 0.12 detail</code>. Source is R160 simulation step 45, manifest <code>sha256:ab980bee...d1d1a</code>, route <code>native-3d-compute-fluid-raymarch-v0</code>, backend <code>WebGPU:apple</code>.</p>
+    <p><strong>Exact pre-absorption body target:</strong> <code>0.74 smokeDensity + 0.42 microdetail + 0.34 interfaceShred + 0.12 detail</code>. Source is R160 simulation step 45, manifest <code>sha256:ab980bee...d1d1a</code>, route <code>native-3d-compute-fluid-raymarch-v0</code>, backend <code>WebGPU:apple</code>. Production <code>absorptionGain</code> is absent from the source manifest, so this is not a production-compositor extinction claim.</p>
     <p><strong>Witness rules:</strong> all panels use the same camera per row, proxy extinction scale <code>0.2</code> calibrated once on combined/native, coverage scale <code>1</code>, and shared display-only exposure <code>8x</code>. The residual panel is an additive missing-support term, not a standalone reconstruction.</p>
     <table>
       <thead><tr><th>Camera</th><th>Control MSE</th><th>Combined MSE</th><th>MSE reduction</th><th>Combined active IoU</th></tr></thead>
@@ -49,7 +49,7 @@
     <h2>Recorded Native</h2>
     <p class="camera-meta">Calibration camera. Identity <code>sha256:52d62666...4d7e</code>.</p>
     <div class="panels">
-      <figure><figcaption><span class="role">A. Exact physical target</span><br><span class="note">Dense source-volume ray integral</span></figcaption><img src="../teachers/recorded-native/dense-raymarch-smoke.png" alt="Exact physical extinction, recorded native camera"></figure>
+      <figure><figcaption><span class="role">A. Exact body target</span><br><span class="note">Pre-absorption source-volume ray integral</span></figcaption><img src="../teachers/recorded-native/dense-raymarch-smoke.png" alt="Exact pre-absorption physical body, recorded native camera"></figure>
       <figure><figcaption><span class="role">B. Frozen control</span><br><span class="note">1,024 coarse smokeDensity Gaussians</span></figcaption><img src="../coarse/render/recorded-native/budget-1024.perspective-render.png" alt="Frozen control, recorded native camera"></figure>
       <figure><figcaption><span class="role">C. Residual only</span><br><span class="note">49,536 uncapped positive blocks</span></figcaption><img src="../residual/render/recorded-native/budget-49536.perspective-render.png" alt="Residual only, recorded native camera"></figure>
       <figure><figcaption><span class="role">D. Control + residual</span><br><span class="note">50,560 additive Gaussians</span></figcaption><img src="../combined/render/recorded-native/budget-50560.perspective-render.png" alt="Combined prediction, recorded native camera"></figure>
@@ -60,7 +60,7 @@
     <h2>Side +90</h2>
     <p class="camera-meta">Held-out world-Y azimuth. Identity <code>sha256:3bd0a787...ff20</code>.</p>
     <div class="panels">
-      <figure><figcaption><span class="role">A. Exact physical target</span><br><span class="note">Dense source-volume ray integral</span></figcaption><img src="../teachers/side-plus-90/dense-raymarch-smoke.png" alt="Exact physical extinction, side camera"></figure>
+      <figure><figcaption><span class="role">A. Exact body target</span><br><span class="note">Pre-absorption source-volume ray integral</span></figcaption><img src="../teachers/side-plus-90/dense-raymarch-smoke.png" alt="Exact pre-absorption physical body, side camera"></figure>
       <figure><figcaption><span class="role">B. Frozen control</span><br><span class="note">1,024 coarse smokeDensity Gaussians</span></figcaption><img src="../coarse/render/side-plus-90/budget-1024.perspective-render.png" alt="Frozen control, side camera"></figure>
       <figure><figcaption><span class="role">C. Residual only</span><br><span class="note">49,536 uncapped positive blocks</span></figcaption><img src="../residual/render/side-plus-90/budget-49536.perspective-render.png" alt="Residual only, side camera"></figure>
       <figure><figcaption><span class="role">D. Control + residual</span><br><span class="note">50,560 additive Gaussians</span></figcaption><img src="../combined/render/side-plus-90/budget-50560.perspective-render.png" alt="Combined prediction, side camera"></figure>
@@ -71,7 +71,7 @@
     <h2>Back +180</h2>
     <p class="camera-meta">Held-out world-Y azimuth. Identity <code>sha256:a0e3db47...274d</code>.</p>
     <div class="panels">
-      <figure><figcaption><span class="role">A. Exact physical target</span><br><span class="note">Dense source-volume ray integral</span></figcaption><img src="../teachers/back-plus-180/dense-raymarch-smoke.png" alt="Exact physical extinction, back camera"></figure>
+      <figure><figcaption><span class="role">A. Exact body target</span><br><span class="note">Pre-absorption source-volume ray integral</span></figcaption><img src="../teachers/back-plus-180/dense-raymarch-smoke.png" alt="Exact pre-absorption physical body, back camera"></figure>
       <figure><figcaption><span class="role">B. Frozen control</span><br><span class="note">1,024 coarse smokeDensity Gaussians</span></figcaption><img src="../coarse/render/back-plus-180/budget-1024.perspective-render.png" alt="Frozen control, back camera"></figure>
       <figure><figcaption><span class="role">C. Residual only</span><br><span class="note">49,536 uncapped positive blocks</span></figcaption><img src="../residual/render/back-plus-180/budget-49536.perspective-render.png" alt="Residual only, back camera"></figure>
       <figure><figcaption><span class="role">D. Control + residual</span><br><span class="note">50,560 additive Gaussians</span></figcaption><img src="../combined/render/back-plus-180/budget-50560.perspective-render.png" alt="Combined prediction, back camera"></figure>
@@ -82,7 +82,7 @@
     <h2>Elevated +35</h2>
     <p class="camera-meta">Held-out camera elevation with radius preserved. Identity <code>sha256:31fff60f...58c6</code>.</p>
     <div class="panels">
-      <figure><figcaption><span class="role">A. Exact physical target</span><br><span class="note">Dense source-volume ray integral</span></figcaption><img src="../teachers/elevated-plus-35/dense-raymarch-smoke.png" alt="Exact physical extinction, elevated camera"></figure>
+      <figure><figcaption><span class="role">A. Exact body target</span><br><span class="note">Pre-absorption source-volume ray integral</span></figcaption><img src="../teachers/elevated-plus-35/dense-raymarch-smoke.png" alt="Exact pre-absorption physical body, elevated camera"></figure>
       <figure><figcaption><span class="role">B. Frozen control</span><br><span class="note">1,024 coarse smokeDensity Gaussians</span></figcaption><img src="../coarse/render/elevated-plus-35/budget-1024.perspective-render.png" alt="Frozen control, elevated camera"></figure>
       <figure><figcaption><span class="role">C. Residual only</span><br><span class="note">49,536 uncapped positive blocks</span></figcaption><img src="../residual/render/elevated-plus-35/budget-49536.perspective-render.png" alt="Residual only, elevated camera"></figure>
       <figure><figcaption><span class="role">D. Control + residual</span><br><span class="note">50,560 additive Gaussians</span></figcaption><img src="../combined/render/elevated-plus-35/budget-50560.perspective-render.png" alt="Combined prediction, elevated camera"></figure>
