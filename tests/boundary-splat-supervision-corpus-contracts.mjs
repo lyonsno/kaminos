@@ -89,6 +89,7 @@ try {
       grid: 1,
       requestedRoute: '?volume_boundary_splat_mode=analytic&volume_resolution=160',
       effectiveRoute: '?volume_boundary_splat_mode=analytic&volume_resolution=160',
+      backend: 'WebGPU:apple',
       rendererIdentity: 'live-boundary-sidecar-analytic-splats-v0',
       sourceAuthority: 'live-baked-sidecar-plus-fluid-material-v0',
       fallbackReason: null,
@@ -187,11 +188,42 @@ try {
     expectedGrid: 1,
     expectedRaySteps: 160,
     expectedRenderScale: 1,
+    requireWebGpuBackend: true,
   });
   const validExactTeacher = await validateExactTeacher();
+  assert.equal(validExactTeacher.backend, 'WebGPU:apple');
   assert.equal(validExactTeacher.frames[0].requestedRaySteps, 160);
   assert.equal(validExactTeacher.frames[0].effectiveRaySteps, 160);
   assert.equal(validExactTeacher.frames[0].renderScale, 1);
+  assert.equal(validExactTeacher.frames[0].backend, 'WebGPU:apple');
+
+  const missingBackendTeacher = structuredClone(manifest);
+  delete missingBackendTeacher.frames[0].backend;
+  await writeFile(manifestPath, JSON.stringify(missingBackendTeacher));
+  await assert.rejects(validateExactTeacher, /backend.*WebGPU/i);
+
+  const fallbackBackendTeacher = structuredClone(manifest);
+  fallbackBackendTeacher.frames[0].backend = 'WebGL2';
+  await writeFile(manifestPath, JSON.stringify(fallbackBackendTeacher));
+  await assert.rejects(validateExactTeacher, /backend.*WebGPU/i);
+
+  const mixedBackendTeacher = structuredClone(manifest);
+  mixedBackendTeacher.frames.push(structuredClone(mixedBackendTeacher.frames[0]));
+  mixedBackendTeacher.frames[1].id = 'frame-001';
+  mixedBackendTeacher.frames[1].sameStateCaptureId = 'same-state-001';
+  mixedBackendTeacher.frames[1].backend = 'WebGPU:other-adapter';
+  mixedBackendTeacher.frames[1].controlConditioning.sameStateCaptureId = 'same-state-001';
+  mixedBackendTeacher.frames[1].structuralSupervision.sameStateCaptureId = 'same-state-001';
+  mixedBackendTeacher.frames[1].structuralSupervision.captureId = 'same-state-001-sidecar';
+  mixedBackendTeacher.frames[1].structuralSupervision.release.captureId = 'same-state-001-sidecar';
+  mixedBackendTeacher.frames[1].structuralSupervision.release.sameStateCaptureId = 'same-state-001';
+  await writeFile(manifestPath, JSON.stringify(mixedBackendTeacher));
+  await assert.rejects(validateExactTeacher, /backend.*must match corpus backend/i);
+
+  const mismatchedStructuralBackendTeacher = structuredClone(manifest);
+  mismatchedStructuralBackendTeacher.frames[0].structuralSupervision.backend = 'WebGPU:other-adapter';
+  await writeFile(manifestPath, JSON.stringify(mismatchedStructuralBackendTeacher));
+  await assert.rejects(validateExactTeacher, /structural backend.*must match frame backend/i);
 
   const missingRequestedTeacher = structuredClone(manifest);
   delete missingRequestedTeacher.frames[0].target.requestedRaySteps;

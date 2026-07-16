@@ -170,6 +170,7 @@ export async function validateBoundarySplatSupervisionCorpus(manifestFile, optio
 
   let candidateCount = 0;
   let structuralFrameCount = 0;
+  let backend = null;
   const frames = [];
   for (const [index, frame] of manifest.frames.entries()) {
     const label = `frame ${index}`;
@@ -182,6 +183,13 @@ export async function validateBoundarySplatSupervisionCorpus(manifestFile, optio
     }
     if (typeof frame.requestedRoute !== 'string' || !frame.requestedRoute || typeof frame.effectiveRoute !== 'string' || !frame.effectiveRoute) {
       throw new Error(`${label} must preserve requested and effective routes`);
+    }
+    if (options.requireWebGpuBackend === true && (typeof frame.backend !== 'string' || !frame.backend.startsWith('WebGPU:'))) {
+      throw new Error(`${label} backend must preserve effective WebGPU identity`);
+    }
+    if (options.requireWebGpuBackend === true) {
+      if (backend == null) backend = frame.backend;
+      else if (frame.backend !== backend) throw new Error(`${label} backend must match corpus backend ${backend}, received ${frame.backend}`);
     }
     if (frame.rendererIdentity !== 'live-boundary-sidecar-analytic-splats-v0') throw new Error(`${label} renderer identity is not the live analytic splat route`);
     if (frame.sourceAuthority !== 'live-baked-sidecar-plus-fluid-material-v0') throw new Error(`${label} source authority is not live baked sidecar plus fluid material`);
@@ -262,6 +270,9 @@ export async function validateBoundarySplatSupervisionCorpus(manifestFile, optio
       if (structural.requestedRoute !== frame.requestedRoute || structural.effectiveRoute !== frame.effectiveRoute) throw new Error(`${label} structural requested/effective route does not match the frame`);
       if (structural.prototypeIdentity !== 'kaminos-volume-prototype-v0') throw new Error(`${label} structural prototype identity is invalid`);
       if (typeof structural.backend !== 'string' || !structural.backend.startsWith('WebGPU:')) throw new Error(`${label} structural backend is not WebGPU`);
+      if (options.requireWebGpuBackend === true && structural.backend !== frame.backend) {
+        throw new Error(`${label} structural backend must match frame backend ${frame.backend}, received ${structural.backend}`);
+      }
       if (structural.fallbackReason != null) throw new Error(`${label} structural supervision contains fallback evidence: ${structural.fallbackReason}`);
       if (structural.dtype !== 'float32-le' || structural.gridAuthority !== 'exact-frame-grid-v0') throw new Error(`${label} structural layout authority is invalid`);
       exactArray(structural.grid, [expectedGrid, expectedGrid, expectedGrid], `${label} structural grid`);
@@ -300,6 +311,7 @@ export async function validateBoundarySplatSupervisionCorpus(manifestFile, optio
       structuralSupervisionIdentity: frame.structuralSupervision?.identity || null,
       controlConditioning,
       captureAdmission,
+      backend: frame.backend ?? null,
       requestedRaySteps: frame.target.requestedRaySteps ?? null,
       effectiveRaySteps: frame.target.effectiveRaySteps ?? null,
       renderScale: frame.target.renderScale ?? null,
@@ -314,6 +326,7 @@ export async function validateBoundarySplatSupervisionCorpus(manifestFile, optio
     frameCount: frames.length,
     candidateCount,
     structuralFrameCount,
+    backend,
     frames,
   };
 }

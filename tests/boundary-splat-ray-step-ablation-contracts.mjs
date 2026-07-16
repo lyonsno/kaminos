@@ -8,6 +8,7 @@ import {
   parseRayStepAblation,
   validateRayStepAblationValues,
   validateRayStepAblationReceipt,
+  validateRayStepAblationSequenceBackends,
 } from '../boundary-splat-ray-step-ablation.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -124,12 +125,30 @@ assert.throws(
   'blank high-step output cannot close the diagnostic',
 );
 
+assert.equal(
+  validateRayStepAblationSequenceBackends([
+    { backend: 'WebGPU:apple' },
+    { backend: 'WebGPU:apple' },
+  ]),
+  'WebGPU:apple',
+  'a coherent sequence returns one validated backend identity',
+);
+assert.throws(
+  () => validateRayStepAblationSequenceBackends([
+    { backend: 'WebGPU:apple' },
+    { backend: 'WebGPU:other-adapter' },
+  ]),
+  /backend.*drift|must match/i,
+  'mixed physical backends cannot collapse to the first frame identity',
+);
+
 assert.match(core, /captureBoundarySplatRayStepAblation/, 'core exposes the frozen-state ray-step ablation');
 assert.doesNotMatch(core, /options\.raySteps\.map\(value => Math\.floor/, 'browser capture must not floor requested step values');
 assert.match(core, /controlsSnapshot\s*=\s*controlsBefore/, 'core restores the exact pre-ablation controls');
 assert.match(witness, /--boundary-splat-ray-step-ablation/, 'witness exposes the explicit ray-step sequence');
 assert.match(witness, /raymarch-steps-\$\{raySteps\}\.png/, 'witness materializes one stable target artifact per requested step count');
 assert.match(witness, /validateRayStepAblationReceipt/, 'witness validates the complete receipt before reporting success');
+assert.match(witness, /validateRayStepAblationSequenceBackends\(frames\)/, 'witness validates one backend identity across the complete sequence');
 assert.match(witness, /rayStepAblationFailureReport/, 'failure before complete output remains durable');
 
 console.log('boundary splat ray-step ablation contracts passed');

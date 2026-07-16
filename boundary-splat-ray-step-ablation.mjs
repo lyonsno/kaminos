@@ -22,6 +22,16 @@ export function parseRayStepAblation(value) {
   return validateRayStepAblationValues(steps);
 }
 
+export function validateRayStepAblationSequenceBackends(frames) {
+  assert.ok(Array.isArray(frames) && frames.length > 0, 'ray-step ablation backend sequence is empty');
+  const backend = frames[0]?.backend;
+  assert.match(String(backend || ''), /^WebGPU:/, 'ray-step ablation sequence did not preserve a WebGPU backend');
+  for (const [index, frame] of frames.entries()) {
+    assert.equal(frame?.backend, backend, `ray-step ablation backend drift at frame ${index}: all frames must match ${backend}`);
+  }
+  return backend;
+}
+
 function sameCamera(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }

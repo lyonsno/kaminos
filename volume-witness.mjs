@@ -16,6 +16,7 @@ import {
   RAY_STEP_ABLATION_AUTHORITY,
   parseRayStepAblation,
   validateRayStepAblationReceipt,
+  validateRayStepAblationSequenceBackends,
 } from './boundary-splat-ray-step-ablation.mjs';
 
 const BOUNDARY_SPLAT_SUPERVISION_TARGET_DECOMPOSITION = 'candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0';
@@ -2618,13 +2619,14 @@ async function captureBoundarySplatRayStepAblationArtifacts(ws, outputDir) {
       };
     }
     rayStepAblationPhase = 'validate-complete-sequence';
+    const backend = validateRayStepAblationSequenceBackends(frames);
     const report = {
       ok: true,
       authority: 'frozen-sim-state-native-raymarch-step-ablation-sequence-v0',
       frameAuthority: RAY_STEP_ABLATION_AUTHORITY,
       requestedRoute: url,
       effectiveRoute: frames[0]?.effectiveRoute || null,
-      backend: frames[0]?.backend || null,
+      backend,
       fallbackReason: frames[0]?.fallbackReason ?? null,
       requestedRaySteps: boundarySplatRayStepAblation,
       requestedFrameCount: boundarySplatRayStepAblationFrames,
@@ -2903,6 +2905,9 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
       if (Math.abs(Number(capture?.target?.renderScale) - 1) > 0.001) {
         throw new Error(`fixed-candidate supervision render-scale teacher mismatch: expected 1, effective ${capture?.target?.renderScale}`);
       }
+      if (typeof capture?.backend !== 'string' || !capture.backend.startsWith('WebGPU:')) {
+        throw new Error(`fixed-candidate supervision backend is not WebGPU: ${capture?.backend || 'missing'}`);
+      }
       lastTrustworthyEvidence = {
         ...lastTrustworthyEvidence,
         effectiveRoute: capture?.effectiveRoute || lastTrustworthyEvidence.effectiveRoute,
@@ -3112,6 +3117,7 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
         grid: capture.grid,
         requestedRoute: capture.requestedRoute,
         effectiveRoute: capture.effectiveRoute,
+        backend: capture.backend,
         rendererIdentity: capture.candidates.rendererIdentity,
         sourceAuthority: capture.candidates.sourceAuthority,
         fallbackReason: capture.candidates.fallbackReason,
@@ -3210,6 +3216,7 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
       expectedGrid,
       expectedRaySteps: boundarySplatSupervisionExpectedRayStepsRequested,
       expectedRenderScale: 1,
+      requireWebGpuBackend: true,
       requireControlConditioning: true,
       requireFreshLiveAdmission: true,
     });
@@ -3238,6 +3245,7 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
       structuralFrameCount: validation.structuralFrameCount,
       requestedRoute: frames[0].requestedRoute,
       effectiveRoute: frames[0].effectiveRoute,
+      backend: validation.backend,
       replayedCamera,
       frameIds: frames.map(frame => frame.id),
       sameStateCaptureIds: frames.map(frame => frame.sameStateCaptureId),

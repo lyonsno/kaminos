@@ -73,6 +73,9 @@ assert.match(witness, /phase:\s*supervisionPhase/, 'supervision failure reports 
 assert.match(witness, /lastTrustworthyEvidence/, 'supervision failure reports preserve the last trustworthy route and simulator evidence');
 assert.match(witness, /const teacherIdentity\s*=\s*\{[\s\S]*expectedRaySteps:[\s\S]*capturedRequestedRaySteps:[\s\S]*capturedEffectiveRaySteps:[\s\S]*capturedRenderScale:/, 'supervision capture owns a structured requested and effective teacher identity receipt');
 assert.match(witness, /const failure\s*=\s*\{[\s\S]*teacherIdentity,/, 'supervision failure reports preserve the structured teacher identity receipt');
+assert.match(witness, /frames\.push\(\{[\s\S]*backend:\s*capture\.backend,/, 'corpus frames persist the effective physical backend identity');
+assert.match(witness, /validateBoundarySplatSupervisionCorpus\(manifestPath,\s*\{[\s\S]*requireWebGpuBackend:\s*true,/, 'witness requires persisted WebGPU backend authority before accepting the corpus');
+assert.match(witness, /const report\s*=\s*\{[\s\S]*backend:\s*validation\.backend,/, 'success reports expose the corpus-validated physical backend identity');
 assert.match(witness, /operationDeadline:[\s\S]*requestedMs:[\s\S]*effectiveMs:/, 'supervision reports state requested and effective operation deadline identity');
 assert.match(witness, /supervisionFailureReport/, 'inner supervision evidence survives the outer witness failure report');
 assert.match(witness, /const supervisionFailureReport\s*=\s*err\?\.supervisionFailureReport[\s\S]*if \(supervisionFailureReport\) \{[\s\S]*state\s*=\s*supervisionFailureReport\.lastTrustworthyEvidence/, 'a supervision timeout bypasses generic CDP recovery so the outer report cannot hang on the same dead runtime');
