@@ -1,0 +1,41 @@
+{
+  "schema": "kaminos.kernel-moment-gallery-smoke.v0",
+  "status": "completed",
+  "requestedRoute": "http://127.0.0.1:18223/artifacts/pyro-gaussian-footprint-kneecapper-0716/kernel-moment-flamebowl-local-r7/index.html",
+  "effectiveRoute": "http://127.0.0.1:18223/artifacts/pyro-gaussian-footprint-kneecapper-0716/kernel-moment-flamebowl-local-r7/index.html",
+  "browser": "Google Chrome headless via CDP",
+  "backend": "software-rendered (--disable-gpu)",
+  "viewport": {
+    "width": 390,
+    "height": 1200,
+    "deviceScaleFactor": 1,
+    "mobile": true
+  },
+  "layout": {
+    "ready": "complete",
+    "title": "Flow Kernel Moment Covariance R7",
+    "cameraBefore": "Camera 02",
+    "cameraAfter": "Camera 03",
+    "splitAfter": "held-out",
+    "innerWidth": 390,
+    "clientWidth": 390,
+    "scrollWidth": 390,
+    "previousButton": {
+      "left": 10,
+      "right": 46
+    },
+    "nextButton": {
+      "left": 344,
+      "right": 380
+    },
+    "heading": {
+      "left": 10,
+      "right": 380
+    },
+    "imageCount": 4,
+    "imageWidth": 314,
+    "imageHeight": 242
+  },
+  "output": "artifacts/pyro-gaussian-footprint-kneecapper-0716/kernel-moment-flamebowl-local-r7/gallery-smoke-mobile.png",
+  "capturedAt": "2026-07-16T23:16:04.285Z"
+}

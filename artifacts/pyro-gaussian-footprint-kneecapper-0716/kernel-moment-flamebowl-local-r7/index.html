@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flow Kernel Moment Covariance R7</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --page: #0b0c0e;
+      --band: #121419;
+      --panel: #191c20;
+      --line: #383d46;
+      --text: #f5f3ee;
+      --muted: #a9aeb7;
+      --cyan: #65c9d0;
+      --green: #6bd39f;
+      --gold: #f1bd58;
+      --blue: #7aa8ff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--page);
+      color: var(--text);
+      font: 14px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      letter-spacing: 0;
+    }
+    header, main > section { border-bottom: 1px solid var(--line); }
+    .inner { width: min(1540px, calc(100% - 32px)); margin: 0 auto; }
+    header .inner { padding: 22px 0 18px; }
+    h1 { margin: 0 0 7px; font: 700 25px/1.15 system-ui, sans-serif; letter-spacing: 0; }
+    h2 { margin: 0; font: 700 16px/1.2 system-ui, sans-serif; letter-spacing: 0; }
+    p { margin: 0; }
+    .subhead { max-width: 1080px; color: var(--muted); }
+    .status { display: flex; flex-wrap: wrap; gap: 7px 18px; margin-top: 14px; color: var(--muted); }
+    .status strong { color: var(--green); }
+    .summary { background: var(--band); }
+    .summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .summary-item { padding: 16px 18px 16px 0; border-right: 1px solid var(--line); }
+    .summary-item + .summary-item { padding-left: 18px; }
+    .summary-item:last-child { border-right: 0; }
+    .label { color: var(--muted); font-size: 11px; text-transform: uppercase; }
+    .value { margin-top: 4px; font: 700 21px/1.1 system-ui, sans-serif; letter-spacing: 0; }
+    .good { color: var(--green); }
+    .neutral { color: var(--gold); }
+    .toolbar .inner { display: grid; grid-template-columns: 36px minmax(180px, 1fr) 36px auto; gap: 10px; align-items: center; padding: 16px 0; }
+    button {
+      width: 36px;
+      height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: var(--panel);
+      color: var(--text);
+      font: 700 18px/1 system-ui, sans-serif;
+      cursor: pointer;
+    }
+    button:hover { border-color: var(--blue); }
+    input[type="range"] { width: 100%; min-width: 0; accent-color: var(--cyan); }
+    .camera-readout { min-width: 245px; text-align: right; color: var(--muted); }
+    .camera-readout strong { color: var(--text); }
+    .gallery .inner { padding: 18px 0 24px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    figure { margin: 0; min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+    figure.target { border-color: #816837; }
+    figure.kernel { border-color: #33868d; }
+    figure img { display: block; width: 100%; aspect-ratio: 314 / 242; object-fit: contain; background: #000; }
+    figcaption { display: flex; justify-content: space-between; gap: 12px; min-height: 48px; padding: 9px 11px; border-top: 1px solid var(--line); }
+    figcaption strong { min-width: 0; font-family: system-ui, sans-serif; overflow-wrap: anywhere; }
+    figcaption span { color: var(--muted); text-align: right; overflow-wrap: anywhere; }
+    .metrics { background: var(--band); }
+    .metrics .inner, .receipt .inner { padding: 20px 0 25px; }
+    .section-head { display: flex; justify-content: space-between; align-items: end; gap: 15px; margin-bottom: 11px; }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+    table { width: 100%; min-width: 800px; border-collapse: collapse; }
+    th, td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: right; }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: var(--muted); background: #15181d; font-size: 11px; font-weight: 500; text-transform: uppercase; }
+    tr:last-child td { border-bottom: 0; }
+    tr.kernel-row td { color: var(--cyan); }
+    .receipt-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
+    .receipt-copy { color: var(--muted); overflow-wrap: anywhere; }
+    .receipt-copy strong { color: var(--text); }
+    .links { display: grid; gap: 8px; align-content: start; }
+    @media (max-width: 900px) {
+      .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .summary-item:nth-child(2) { border-right: 0; }
+      .summary-item:nth-child(n+3) { border-top: 1px solid var(--line); }
+      .receipt-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 650px) {
+      .inner { width: min(100% - 20px, 1540px); }
+      .summary-grid, .grid { grid-template-columns: 1fr; }
+      .summary-item, .summary-item + .summary-item { padding: 13px 0; border-right: 0; border-top: 1px solid var(--line); }
+      .summary-item:first-child { border-top: 0; }
+      .toolbar .inner { grid-template-columns: 36px minmax(0, 1fr) 36px; }
+      .camera-readout { grid-column: 1 / -1; min-width: 0; text-align: left; }
+      figcaption { flex-direction: column; gap: 4px; }
+      figcaption span { min-width: 0; text-align: left; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="inner">
+      <h1>Flow kernel moment covariance R7</h1>
+      <p class="subhead">Validated five-camera Flamebowl comparison with fixed Structural/Ridge-Owned support, explicit non-kernel control reset, and exact preflight-to-admission payload identity.</p>
+      <div class="status">
+        <span><strong>COMPLETED VALIDATED ASSAY</strong></span>
+        <span>WebGPU:apple</span>
+        <span>filament-orbit-f45-s45</span>
+        <span>91,108 candidates</span>
+        <span>0 overflow</span>
+        <span>4 held-out cameras</span>
+      </div>
+    </div>
+  </header>
+  <main>
+    <section class="summary">
+      <div class="inner summary-grid">
+        <div class="summary-item"><div class="label">Held support MAE</div><div class="value good">19.59% lower</div></div>
+        <div class="summary-item"><div class="label">Held support edge loss</div><div class="value good">5.97% lower</div></div>
+        <div class="summary-item"><div class="label">Held Full Flame MAE</div><div class="value neutral">9.40% higher</div></div>
+        <div class="summary-item"><div class="label">Verdict</div><div class="value neutral">Geometry gain</div></div>
+      </div>
+    </section>
+    <section class="toolbar">
+      <div class="inner">
+        <button id="prev" type="button" title="Previous camera" aria-label="Previous camera">&larr;</button>
+        <input id="camera" type="range" min="0" max="4" step="1" value="2" aria-label="Camera index">
+        <button id="next" type="button" title="Next camera" aria-label="Next camera">&rarr;</button>
+        <div class="camera-readout"><strong id="camera-name">Camera 02</strong> <span id="camera-angle">0.000 rad</span> <span id="camera-split">training</span></div>
+      </div>
+    </section>
+    <section class="gallery">
+      <div class="inner grid">
+        <figure class="target"><img id="target" alt="Exact Full Flame target"><figcaption><strong>Exact Full Flame target</strong><span>smoke-off 160-step raymarch</span></figcaption></figure>
+        <figure><img id="support" alt="Support-aligned target"><figcaption><strong>Support-aligned target</strong><span>current candidate support allocation</span></figcaption></figure>
+        <figure><img id="world" alt="World covariance baseline"><figcaption><strong>World covariance</strong><span id="world-loss"></span></figcaption></figure>
+        <figure class="kernel"><img id="kernel" alt="Flow kernel moment covariance"><figcaption><strong>Kernel-moment covariance</strong><span id="kernel-loss"></span></figcaption></figure>
+      </div>
+    </section>
+    <section class="metrics">
+      <div class="inner">
+        <div class="section-head"><h2>Held-out camera means</h2><a href="camera-holdout-report.json">camera-holdout-report.json</a></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Family</th><th>Full Flame pixel</th><th>Support pixel</th><th>Full Flame edge</th><th>Support edge</th></tr></thead>
+            <tbody id="summary-rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+    <section class="receipt">
+      <div class="inner receipt-grid">
+        <div class="receipt-copy">
+          <p><strong>Candidate SHA-256</strong><br>a98f37b3ffa48c3c14335514237305a1d1c46400264edefd59b1011cbdcbbf43</p>
+          <p style="margin-top:12px"><strong>Kernel treatment</strong><br>strength 1, radius 0.03 world units, coherence 1; fixed across all cameras</p>
+          <p style="margin-top:12px"><strong>Evidence boundary</strong><br>validated local five-camera assay on the immutable 128-grid Flamebowl preset; full checksum-anchored Greenroom orbit remains separate</p>
+        </div>
+        <div class="links">
+          <a href="README.md">Decision and route receipt</a>
+          <a href="report.json">Completed capture report</a>
+          <a href="capture-report.json">Capture completeness report</a>
+          <a href="camera-holdout-report.json">Validated holdout report</a>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script type="module">
+    const angles = [-0.42, -0.21, 0, 0.21, 0.42];
+    const report = await fetch('camera-holdout-report.json').then(response => response.json());
+    const rows = new Map(report.cameraRows.map(row => [`${row.cameraIndex}:${row.family}`, row]));
+    const input = document.querySelector('#camera');
+    const pad = value => String(value).padStart(2, '0');
+    const format = value => Number(value).toFixed(5);
+    function updateCamera() {
+      const index = Number(input.value);
+      const world = rows.get(`${index}:world-tangent-covariance`);
+      const kernel = rows.get(`${index}:flow-kernel-moment-covariance`);
+      document.querySelector('#camera-name').textContent = `Camera ${pad(index)}`;
+      document.querySelector('#camera-angle').textContent = `${angles[index].toFixed(3)} rad`;
+      document.querySelector('#camera-split').textContent = index === 2 ? 'training' : 'held-out';
+      document.querySelector('#target').src = `camera-${pad(index)}-raymarch-160.png`;
+      document.querySelector('#support').src = `camera-${pad(index)}-stateDerivedSupport-160.png`;
+      document.querySelector('#world').src = `camera-${pad(index)}-worldCovariance-160.png`;
+      document.querySelector('#kernel').src = `camera-${pad(index)}-kernelMomentCovariance-160.png`;
+      document.querySelector('#world-loss').textContent = `full ${format(world.metrics.fullFlamePixelDelta.meanAbsChannelDelta)} / support ${format(world.metrics.supportAlignedPixelDelta.meanAbsChannelDelta)}`;
+      document.querySelector('#kernel-loss').textContent = `full ${format(kernel.metrics.fullFlamePixelDelta.meanAbsChannelDelta)} / support ${format(kernel.metrics.supportAlignedPixelDelta.meanAbsChannelDelta)}`;
+    }
+    for (const row of report.summary.filter(item => item.split === 'held-out-camera-mean-v0' && ['worldCovariance', 'kernelMomentCovariance'].includes(item.mode))) {
+      const tr = document.createElement('tr');
+      if (row.mode === 'kernelMomentCovariance') tr.className = 'kernel-row';
+      tr.innerHTML = `<td>${row.mode}</td><td>${format(row.fullFlameMeanAbsChannelDelta)}</td><td>${format(row.supportAlignedMeanAbsChannelDelta)}</td><td>${format(row.fullFlameEdgeLoss)}</td><td>${format(row.supportAlignedEdgeLoss)}</td>`;
+      document.querySelector('#summary-rows').append(tr);
+    }
+    input.addEventListener('input', updateCamera);
+    document.querySelector('#prev').addEventListener('click', () => { input.value = Math.max(0, Number(input.value) - 1); updateCamera(); });
+    document.querySelector('#next').addEventListener('click', () => { input.value = Math.min(4, Number(input.value) + 1); updateCamera(); });
+    updateCamera();
+  </script>
+</body>
+</html>

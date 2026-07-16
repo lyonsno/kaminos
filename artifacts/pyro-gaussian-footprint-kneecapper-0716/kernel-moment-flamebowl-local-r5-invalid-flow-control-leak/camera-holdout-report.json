@@ -1,0 +1,1371 @@
+{
+  "schema": "kaminos.boundary-splat-camera-holdout-oracle.v0",
+  "status": "completed",
+  "requestedRoute": "/volume-selective-head-live.html",
+  "effectiveWrapperRoute": "exact-basin-selective-head-live-v0",
+  "effectiveRendererRoute": "native-3d-compute-fluid-raymarch-v0",
+  "backend": "WebGPU:apple",
+  "fallbackReason": null,
+  "sourceSettingsPreset": {
+    "presetId": "vsp-5d9fedbab31583860d39a34751ff5cd847116cd6fe6eeee6b4379909ef4bb2a2",
+    "authority": "shared-volume-settings-preset-v2",
+    "contentHash": "sha256:5d9fedbab31583860d39a34751ff5cd847116cd6fe6eeee6b4379909ef4bb2a2",
+    "label": "big_raymarch_hero_flamebowl",
+    "controlCount": 186
+  },
+  "sourceRouteAuthority": "shared-volume-settings-preset-v2",
+  "replayAuthority": {
+    "warmupAuthority": "fresh-live-settings-no-anchor-v0",
+    "warmupTarget": 0,
+    "warmupComplete": true,
+    "warmupStarted": true,
+    "warmupReceipt": {
+      "ok": true,
+      "authority": "fresh-live-settings-no-anchor-v0",
+      "completedSteps": 0,
+      "importedAnchor": false
+    },
+    "freezeAfterWarmupRequested": false,
+    "postWarmupFreezeReceipt": null
+  },
+  "frozenState": {
+    "sameStateCaptureId": "filament-orbit-f103-s103",
+    "frameCount": 103,
+    "simStepCount": 103,
+    "controlsHash": "cade5c00c040b7dc3ede1037e6f81bc382fa5658d9787f56e1668b3e25175042"
+  },
+  "candidatePayload": {
+    "authority": "gpu-compacted-boundary-splat-candidates-frozen-state-v0",
+    "count": 80011,
+    "strideFloats": 4,
+    "sha256": "7f30521294c43b9895837b77cc866f82914a723536cd9f11a7a2b466f0b35ab8"
+  },
+  "trainCameraIndices": [
+    2
+  ],
+  "heldOutCameraIndices": [
+    0,
+    1,
+    3,
+    4
+  ],
+  "covarianceCeiling": "world-gradient-or-flow-kernel-rank-one-tangent-covariance-no-full-3d-covariance-v0",
+  "supportCeiling": "current-structural-ridge-owned-candidates-omit-legitimate-non-ridge-full-flame-filaments-v0",
+  "cameraRows": [
+    {
+      "cameraIndex": 0,
+      "cameraAngle": -0.42,
+      "cameraPoseHash": "45c3c25b041faae5c1d26fb7fe531e1331e7414542ba7ace601f2f738fc170d4",
+      "family": "analytic-billboard",
+      "familyAuthority": "camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "camera-facing-billboard-v0",
+      "auditFootprintAuthority": "camera-facing-billboard-v0",
+      "attributeSetId": "analytic-boundary-splat-attributes-v0",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "dbdfc60575db364065da233b42aecda5633a9712dd3cf1f2cd4686a953b61a6b",
+      "candidateCount": 80011,
+      "instanceCount": 80011,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "7f30521294c43b9895837b77cc866f82914a723536cd9f11a7a2b466f0b35ab8",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-00-raymarch-160.png",
+        "bytes": 123970,
+        "sha256": "68bf1310a13040a51d054581e83c4c77abb8e608219cf07197795a29184396d3"
+      },
+      "image": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-00-analyticBillboard-160.png",
+        "bytes": 128944,
+        "sha256": "ec768b10ed22c878b49df6dee70fc14398cdb205f067698613bef02bddb5ccff"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 2.782077447348115,
+        "effectiveIntegratedAlphaSum": 2.7820772664329176,
+        "relativeError": 6.502881422732799e-8
+      },
+      "metrics": {
+        "cameraIndex": 0,
+        "cameraAngle": -0.42,
+        "heldOut": true,
+        "mode": "analyticBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 239,
+          "meanAbsChannelDelta": 23.66298297099542,
+          "changedPixels": 75947,
+          "changedFraction": 0.9994604411222825
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 244,
+          "meanAbsChannelDelta": 17.430929883665844,
+          "changedPixels": 75986,
+          "changedFraction": 0.9999736800547455
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 27.824656524714428,
+          "changedPixels": 75946,
+          "changedFraction": 0.9994472811496552
+        },
+        "fullFlameEdgeLoss": 0.015002197987410405,
+        "supportAlignedEdgeLoss": 0.012581052704087256
+      }
+    },
+    {
+      "cameraIndex": 0,
+      "cameraAngle": -0.42,
+      "cameraPoseHash": "45c3c25b041faae5c1d26fb7fe531e1331e7414542ba7ace601f2f738fc170d4",
+      "family": "learned-billboard",
+      "familyAuthority": "learned-camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "auditFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "2bb72bf1b5bfa133b56b244aec6c997b11172e4eeee1805e63dae0c36147dfee",
+      "candidateCount": 80011,
+      "instanceCount": 80011,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "7f30521294c43b9895837b77cc866f82914a723536cd9f11a7a2b466f0b35ab8",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-00-raymarch-160.png",
+        "bytes": 123970,
+        "sha256": "68bf1310a13040a51d054581e83c4c77abb8e608219cf07197795a29184396d3"
+      },
+      "image": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-00-learnedBillboard-160.png",
+        "bytes": 127117,
+        "sha256": "ca44ce928182548322b06f30c30a15a54e9900307a0922b7797f2a9c4d5eba1d"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 2.5577364404103378,
+        "effectiveIntegratedAlphaSum": 2.55773627330513,
+        "relativeError": 6.533323967754304e-8
+      },
+      "metrics": {
+        "cameraIndex": 0,
+        "cameraAngle": -0.42,
+        "heldOut": true,
+        "mode": "learnedBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 239,
+          "meanAbsChannelDelta": 23.729940911722903,
+          "changedPixels": 75943,
+          "changedFraction": 0.9994078012317734
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 242,
+          "meanAbsChannelDelta": 16.343725325051324,
+          "changedPixels": 75986,
+          "changedFraction": 0.9999736800547455
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 253,
+          "meanAbsChannelDelta": 27.746946886350475,
+          "changedPixels": 75949,
+          "changedFraction": 0.999486761067537
+        },
+        "fullFlameEdgeLoss": 0.01481861155062192,
+        "supportAlignedEdgeLoss": 0.012189567950574264
+      }
+    },
+    {
+      "cameraIndex": 0,
+      "cameraAngle": -0.42,
+      "cameraPoseHash": "45c3c25b041faae5c1d26fb7fe531e1331e7414542ba7ace601f2f738fc170d4",
+      "family": "world-tangent-covariance",
+      "familyAuthority": "world-gradient-tangent-covariance-v0",
+      "rendererFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "auditFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "2bb72bf1b5bfa133b56b244aec6c997b11172e4eeee1805e63dae0c36147dfee",
+      "candidateCount": 80011,
+      "instanceCount": 80011,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "7f30521294c43b9895837b77cc866f82914a723536cd9f11a7a2b466f0b35ab8",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-00-raymarch-160.png",
+        "bytes": 123970,
+        "sha256": "68bf1310a13040a51d054581e83c4c77abb8e608219cf07197795a29184396d3"
+      },
+      "image": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-00-worldCovariance-160.png",
+        "bytes": 125148,
+        "sha256": "c5b963d634b42bef3b49382c7bc759ba834066dc40e1484117c9ea884c0ea19c"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 2.5577364404103378,
+        "effectiveIntegratedAlphaSum": 2.557736273305143,
+        "relativeError": 6.533323446876701e-8
+      },
+      "metrics": {
+        "cameraIndex": 0,
+        "cameraAngle": -0.42,
+        "heldOut": true,
+        "mode": "worldCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 241,
+          "meanAbsChannelDelta": 21.82729838921935,
+          "changedPixels": 75930,
+          "changedFraction": 0.9992367215876191
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 148,
+          "meanAbsChannelDelta": 8.28026793704269,
+          "changedPixels": 75986,
+          "changedFraction": 0.9999736800547455
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 249,
+          "meanAbsChannelDelta": 24.12641469705743,
+          "changedPixels": 75944,
+          "changedFraction": 0.9994209612044007
+        },
+        "fullFlameEdgeLoss": 0.01489754351543796,
+        "supportAlignedEdgeLoss": 0.012186517644666982
+      }
+    },
+    {
+      "cameraIndex": 0,
+      "cameraAngle": -0.42,
+      "cameraPoseHash": "45c3c25b041faae5c1d26fb7fe531e1331e7414542ba7ace601f2f738fc170d4",
+      "family": "flow-kernel-moment-covariance",
+      "familyAuthority": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+      "rendererFootprintAuthority": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+      "auditFootprintAuthority": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "ec9393c7d8fc9715e872d087f0ecd5b8109060d9d46ac782c83639216dc86863",
+      "candidateCount": 80011,
+      "instanceCount": 80011,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "7f30521294c43b9895837b77cc866f82914a723536cd9f11a7a2b466f0b35ab8",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-00-raymarch-160.png",
+        "bytes": 123970,
+        "sha256": "68bf1310a13040a51d054581e83c4c77abb8e608219cf07197795a29184396d3"
+      },
+      "image": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-00-kernelMomentCovariance-160.png",
+        "bytes": 124463,
+        "sha256": "34f9bc09786d78df8dc98fc45633bc420b3ed57a378f6d0b03cd8def83648562"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 2.5577364404103378,
+        "effectiveIntegratedAlphaSum": 2.557736273140235,
+        "relativeError": 6.539770869862912e-8
+      },
+      "kernelTreatment": {
+        "identity": "flow-tangent-positive-symmetric-trilinear-v0",
+        "candidateAdmissionAuthority": "structural-splat-candidates-v0",
+        "firstMomentAuthority": "zero-first-moment-candidate-centers-fixed-v0",
+        "strength": 1,
+        "radiusWorld": 0.029999999329447746,
+        "coherence": 1
+      },
+      "metrics": {
+        "cameraIndex": 0,
+        "cameraAngle": -0.42,
+        "heldOut": true,
+        "mode": "kernelMomentCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 241,
+          "meanAbsChannelDelta": 21.992840974890772,
+          "changedPixels": 75943,
+          "changedFraction": 0.9994078012317734
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 141,
+          "meanAbsChannelDelta": 8.03767371163868,
+          "changedPixels": 75983,
+          "changedFraction": 0.9999342001368637
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 249,
+          "meanAbsChannelDelta": 24.176972021898194,
+          "changedPixels": 75943,
+          "changedFraction": 0.9994078012317734
+        },
+        "fullFlameEdgeLoss": 0.013952801813738142,
+        "supportAlignedEdgeLoss": 0.011384526270943175
+      }
+    },
+    {
+      "cameraIndex": 1,
+      "cameraAngle": -0.21,
+      "cameraPoseHash": "7758c0e393b43649c60c01a58766aa31e4f174547b3b4b74ff036e5e6e9f016f",
+      "family": "analytic-billboard",
+      "familyAuthority": "camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "camera-facing-billboard-v0",
+      "auditFootprintAuthority": "camera-facing-billboard-v0",
+      "attributeSetId": "analytic-boundary-splat-attributes-v0",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "dbdfc60575db364065da233b42aecda5633a9712dd3cf1f2cd4686a953b61a6b",
+      "candidateCount": 80011,
+      "instanceCount": 80011,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "7f30521294c43b9895837b77cc866f82914a723536cd9f11a7a2b466f0b35ab8",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-01-raymarch-160.png",
+        "bytes": 120151,
+        "sha256": "bf5822d6718ec9d503c55e4fe6a2b10f2af42a913dccd58478f8f19bc35965f6"
+      },
+      "image": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-01-analyticBillboard-160.png",
+        "bytes": 125268,
+        "sha256": "a4d2afe9ecc701c544069db8e708a5c25513c56c871888ba55d50a6791a40687"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 2.782077447348115,
+        "effectiveIntegratedAlphaSum": 2.7820772664329247,
+        "relativeError": 6.502881167332744e-8
+      },
+      "metrics": {
+        "cameraIndex": 1,
+        "cameraAngle": -0.21,
+        "heldOut": true,
+        "mode": "analyticBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 242,
+          "meanAbsChannelDelta": 23.587448018108123,
+          "changedPixels": 75957,
+          "changedFraction": 0.999592040848555
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 246,
+          "meanAbsChannelDelta": 17.262251934515977,
+          "changedPixels": 75983,
+          "changedFraction": 0.9999342001368637
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 249,
+          "meanAbsChannelDelta": 27.8729963941675,
+          "changedPixels": 75953,
+          "changedFraction": 0.999539400958046
+        },
+        "fullFlameEdgeLoss": 0.014855043075494009,
+        "supportAlignedEdgeLoss": 0.012694907341484107
+      }
+    },
+    {
+      "cameraIndex": 1,
+      "cameraAngle": -0.21,
+      "cameraPoseHash": "7758c0e393b43649c60c01a58766aa31e4f174547b3b4b74ff036e5e6e9f016f",
+      "family": "learned-billboard",
+      "familyAuthority": "learned-camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "auditFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "2bb72bf1b5bfa133b56b244aec6c997b11172e4eeee1805e63dae0c36147dfee",
+      "candidateCount": 80011,
+      "instanceCount": 80011,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "7f30521294c43b9895837b77cc866f82914a723536cd9f11a7a2b466f0b35ab8",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-01-raymarch-160.png",
+        "bytes": 120151,
+        "sha256": "bf5822d6718ec9d503c55e4fe6a2b10f2af42a913dccd58478f8f19bc35965f6"
+      },
+      "image": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-01-learnedBillboard-160.png",
+        "bytes": 123431,
+        "sha256": "0ba128d16d9c96c4c93a1ce8d016e9560f26a0da3b8b23ecbd62d9a06a3fe511"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 2.5577364404103378,
+        "effectiveIntegratedAlphaSum": 2.55773627330514,
+        "relativeError": 6.533323568414809e-8
+      },
+      "metrics": {
+        "cameraIndex": 1,
+        "cameraAngle": -0.21,
+        "heldOut": true,
+        "mode": "learnedBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 243,
+          "meanAbsChannelDelta": 23.62655945675633,
+          "changedPixels": 75957,
+          "changedFraction": 0.999592040848555
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 246,
+          "meanAbsChannelDelta": 16.028392640943306,
+          "changedPixels": 75987,
+          "changedFraction": 0.9999868400273727
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 249,
+          "meanAbsChannelDelta": 27.742344185924093,
+          "changedPixels": 75956,
+          "changedFraction": 0.9995788808759278
+        },
+        "fullFlameEdgeLoss": 0.014601843245908684,
+        "supportAlignedEdgeLoss": 0.012247829043459378
+      }
+    },
+    {
+      "cameraIndex": 1,
+      "cameraAngle": -0.21,
+      "cameraPoseHash": "7758c0e393b43649c60c01a58766aa31e4f174547b3b4b74ff036e5e6e9f016f",
+      "family": "world-tangent-covariance",
+      "familyAuthority": "world-gradient-tangent-covariance-v0",
+      "rendererFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "auditFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "2bb72bf1b5bfa133b56b244aec6c997b11172e4eeee1805e63dae0c36147dfee",
+      "candidateCount": 80011,
+      "instanceCount": 80011,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "7f30521294c43b9895837b77cc866f82914a723536cd9f11a7a2b466f0b35ab8",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-01-raymarch-160.png",
+        "bytes": 120151,
+        "sha256": "bf5822d6718ec9d503c55e4fe6a2b10f2af42a913dccd58478f8f19bc35965f6"
+      },
+      "image": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-01-worldCovariance-160.png",
+        "bytes": 120511,
+        "sha256": "a3ea166b631e5b75d149449fceb2a5cd04755ed24b939e947f1504bde5f668b5"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 2.5577364404103378,
+        "effectiveIntegratedAlphaSum": 2.557736273305131,
+        "relativeError": 6.533323915666544e-8
+      },
+      "metrics": {
+        "cameraIndex": 1,
+        "cameraAngle": -0.21,
+        "heldOut": true,
+        "mode": "worldCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 244,
+          "meanAbsChannelDelta": 22.20913499499921,
+          "changedPixels": 75951,
+          "changedFraction": 0.9995130810127915
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 173,
+          "meanAbsChannelDelta": 8.186262962573037,
+          "changedPixels": 75985,
+          "changedFraction": 0.9999605200821182
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 249,
+          "meanAbsChannelDelta": 24.477358267094804,
+          "changedPixels": 75949,
+          "changedFraction": 0.999486761067537
+        },
+        "fullFlameEdgeLoss": 0.014770043354926527,
+        "supportAlignedEdgeLoss": 0.012280691578528317
+      }
+    },
+    {
+      "cameraIndex": 1,
+      "cameraAngle": -0.21,
+      "cameraPoseHash": "7758c0e393b43649c60c01a58766aa31e4f174547b3b4b74ff036e5e6e9f016f",
+      "family": "flow-kernel-moment-covariance",
+      "familyAuthority": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+      "rendererFootprintAuthority": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+      "auditFootprintAuthority": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "ec9393c7d8fc9715e872d087f0ecd5b8109060d9d46ac782c83639216dc86863",
+      "candidateCount": 80011,
+      "instanceCount": 80011,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "7f30521294c43b9895837b77cc866f82914a723536cd9f11a7a2b466f0b35ab8",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-01-raymarch-160.png",
+        "bytes": 120151,
+        "sha256": "bf5822d6718ec9d503c55e4fe6a2b10f2af42a913dccd58478f8f19bc35965f6"
+      },
+      "image": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-01-kernelMomentCovariance-160.png",
+        "bytes": 119780,
+        "sha256": "8f9817033c69cede893356c2ca215ca35601f2fe1db7594e3a83597da01cd309"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 2.5577364404103378,
+        "effectiveIntegratedAlphaSum": 2.5577362731402182,
+        "relativeError": 6.539771529641211e-8
+      },
+      "kernelTreatment": {
+        "identity": "flow-tangent-positive-symmetric-trilinear-v0",
+        "candidateAdmissionAuthority": "structural-splat-candidates-v0",
+        "firstMomentAuthority": "zero-first-moment-candidate-centers-fixed-v0",
+        "strength": 1,
+        "radiusWorld": 0.029999999329447746,
+        "coherence": 1
+      },
+      "metrics": {
+        "cameraIndex": 1,
+        "cameraAngle": -0.21,
+        "heldOut": true,
+        "mode": "kernelMomentCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 243,
+          "meanAbsChannelDelta": 22.325370453229457,
+          "changedPixels": 75942,
+          "changedFraction": 0.9993946412591462
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 166,
+          "meanAbsChannelDelta": 7.963221166499974,
+          "changedPixels": 75985,
+          "changedFraction": 0.9999605200821182
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 249,
+          "meanAbsChannelDelta": 24.510731957677528,
+          "changedPixels": 75952,
+          "changedFraction": 0.9995262409854188
+        },
+        "fullFlameEdgeLoss": 0.013785158219877325,
+        "supportAlignedEdgeLoss": 0.011447053078917108
+      }
+    },
+    {
+      "cameraIndex": 2,
+      "cameraAngle": 0,
+      "cameraPoseHash": "5d20c917cf1dd8c58a3e5b00a77b604ca330cac831187759b3a248a0b85fd3f0",
+      "family": "analytic-billboard",
+      "familyAuthority": "camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "camera-facing-billboard-v0",
+      "auditFootprintAuthority": "camera-facing-billboard-v0",
+      "attributeSetId": "analytic-boundary-splat-attributes-v0",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "dbdfc60575db364065da233b42aecda5633a9712dd3cf1f2cd4686a953b61a6b",
+      "candidateCount": 80011,
+      "instanceCount": 80011,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "7f30521294c43b9895837b77cc866f82914a723536cd9f11a7a2b466f0b35ab8",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-02-raymarch-160.png",
+        "bytes": 114247,
+        "sha256": "d72d9b8ad7b086a2b3c790eec2ca04f45309264c14e7db765da1aab2e969e3c2"
+      },
+      "image": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-02-analyticBillboard-160.png",
+        "bytes": 114991,
+        "sha256": "b6ecf3f0f1381e43d1e27e9448f52d929779a062d16f2ffe88bbb84b57b50fcb"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 2.782077447348115,
+        "effectiveIntegratedAlphaSum": 2.782077266432914,
+        "relativeError": 6.502881550432828e-8
+      },
+      "metrics": {
+        "cameraIndex": 2,
+        "cameraAngle": 0,
+        "heldOut": false,
+        "mode": "analyticBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 251,
+          "meanAbsChannelDelta": 23.134580460072645,
+          "changedPixels": 75970,
+          "changedFraction": 0.9997631204927093
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 254,
+          "meanAbsChannelDelta": 17.085460862241405,
+          "changedPixels": 75982,
+          "changedFraction": 0.9999210401642364
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 27.497884534400168,
+          "changedPixels": 75970,
+          "changedFraction": 0.9997631204927093
+        },
+        "fullFlameEdgeLoss": 0.015048993598526319,
+        "supportAlignedEdgeLoss": 0.012454114553805903
+      }
+    },
+    {
+      "cameraIndex": 2,
+      "cameraAngle": 0,
+      "cameraPoseHash": "5d20c917cf1dd8c58a3e5b00a77b604ca330cac831187759b3a248a0b85fd3f0",
+      "family": "learned-billboard",
+      "familyAuthority": "learned-camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "auditFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "2bb72bf1b5bfa133b56b244aec6c997b11172e4eeee1805e63dae0c36147dfee",
+      "candidateCount": 80011,
+      "instanceCount": 80011,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "7f30521294c43b9895837b77cc866f82914a723536cd9f11a7a2b466f0b35ab8",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-02-raymarch-160.png",
+        "bytes": 114247,
+        "sha256": "d72d9b8ad7b086a2b3c790eec2ca04f45309264c14e7db765da1aab2e969e3c2"
+      },
+      "image": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-02-learnedBillboard-160.png",
+        "bytes": 113628,
+        "sha256": "12512c3ff9abda6499258439db486753ced5325b49f2f673775d8db12828f522"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 2.5577364404103378,
+        "effectiveIntegratedAlphaSum": 2.5577362733051223,
+        "relativeError": 6.533324262918281e-8
+      },
+      "metrics": {
+        "cameraIndex": 2,
+        "cameraAngle": 0,
+        "heldOut": false,
+        "mode": "learnedBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 248,
+          "meanAbsChannelDelta": 23.202347739116703,
+          "changedPixels": 75970,
+          "changedFraction": 0.9997631204927093
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 252,
+          "meanAbsChannelDelta": 15.842165868294995,
+          "changedPixels": 75988,
+          "changedFraction": 1
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 27.402968231826076,
+          "changedPixels": 75969,
+          "changedFraction": 0.9997499605200821
+        },
+        "fullFlameEdgeLoss": 0.01474510732417262,
+        "supportAlignedEdgeLoss": 0.012048167648059549
+      }
+    },
+    {
+      "cameraIndex": 2,
+      "cameraAngle": 0,
+      "cameraPoseHash": "5d20c917cf1dd8c58a3e5b00a77b604ca330cac831187759b3a248a0b85fd3f0",
+      "family": "world-tangent-covariance",
+      "familyAuthority": "world-gradient-tangent-covariance-v0",
+      "rendererFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "auditFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "2bb72bf1b5bfa133b56b244aec6c997b11172e4eeee1805e63dae0c36147dfee",
+      "candidateCount": 80011,
+      "instanceCount": 80011,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "7f30521294c43b9895837b77cc866f82914a723536cd9f11a7a2b466f0b35ab8",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-02-raymarch-160.png",
+        "bytes": 114247,
+        "sha256": "d72d9b8ad7b086a2b3c790eec2ca04f45309264c14e7db765da1aab2e969e3c2"
+      },
+      "image": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-02-worldCovariance-160.png",
+        "bytes": 111655,
+        "sha256": "5d25f68b8ca60cdf8c97a1aae79ca963119a96ef8e4353eef46ff38be44e0d31"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 2.5577364404103378,
+        "effectiveIntegratedAlphaSum": 2.5577362733051374,
+        "relativeError": 6.53332367259033e-8
+      },
+      "metrics": {
+        "cameraIndex": 2,
+        "cameraAngle": 0,
+        "heldOut": false,
+        "mode": "worldCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 234,
+          "meanAbsChannelDelta": 22.06288492919935,
+          "changedPixels": 75968,
+          "changedFraction": 0.9997368005474548
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 170,
+          "meanAbsChannelDelta": 8.447235089751013,
+          "changedPixels": 75985,
+          "changedFraction": 0.9999605200821182
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 248,
+          "meanAbsChannelDelta": 24.2305660104227,
+          "changedPixels": 75961,
+          "changedFraction": 0.9996446807390641
+        },
+        "fullFlameEdgeLoss": 0.014886806200958017,
+        "supportAlignedEdgeLoss": 0.011969782705493743
+      }
+    },
+    {
+      "cameraIndex": 2,
+      "cameraAngle": 0,
+      "cameraPoseHash": "5d20c917cf1dd8c58a3e5b00a77b604ca330cac831187759b3a248a0b85fd3f0",
+      "family": "flow-kernel-moment-covariance",
+      "familyAuthority": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+      "rendererFootprintAuthority": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+      "auditFootprintAuthority": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "ec9393c7d8fc9715e872d087f0ecd5b8109060d9d46ac782c83639216dc86863",
+      "candidateCount": 80011,
+      "instanceCount": 80011,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "7f30521294c43b9895837b77cc866f82914a723536cd9f11a7a2b466f0b35ab8",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-02-raymarch-160.png",
+        "bytes": 114247,
+        "sha256": "d72d9b8ad7b086a2b3c790eec2ca04f45309264c14e7db765da1aab2e969e3c2"
+      },
+      "image": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-02-kernelMomentCovariance-160.png",
+        "bytes": 111237,
+        "sha256": "7033c505c414f04027abaa43d52989d039bdb72aa3ff6c430c9f548399ca8cb4"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 2.5577364404103378,
+        "effectiveIntegratedAlphaSum": 2.557736273140225,
+        "relativeError": 6.539771269202408e-8
+      },
+      "kernelTreatment": {
+        "identity": "flow-tangent-positive-symmetric-trilinear-v0",
+        "candidateAdmissionAuthority": "structural-splat-candidates-v0",
+        "firstMomentAuthority": "zero-first-moment-candidate-centers-fixed-v0",
+        "strength": 1,
+        "radiusWorld": 0.029999999329447746,
+        "coherence": 1
+      },
+      "metrics": {
+        "cameraIndex": 2,
+        "cameraAngle": 0,
+        "heldOut": false,
+        "mode": "kernelMomentCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 234,
+          "meanAbsChannelDelta": 22.07475851450229,
+          "changedPixels": 75976,
+          "changedFraction": 0.9998420803284729
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 157,
+          "meanAbsChannelDelta": 8.16142351423909,
+          "changedPixels": 75983,
+          "changedFraction": 0.9999342001368637
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 246,
+          "meanAbsChannelDelta": 24.234050113175766,
+          "changedPixels": 75965,
+          "changedFraction": 0.9996973206295731
+        },
+        "fullFlameEdgeLoss": 0.013963240345996998,
+        "supportAlignedEdgeLoss": 0.011154660239978947
+      }
+    },
+    {
+      "cameraIndex": 3,
+      "cameraAngle": 0.21,
+      "cameraPoseHash": "8335bbde7157adec382a65ebf6ec4d2bd32aa024eff6970bed20174147f75d68",
+      "family": "analytic-billboard",
+      "familyAuthority": "camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "camera-facing-billboard-v0",
+      "auditFootprintAuthority": "camera-facing-billboard-v0",
+      "attributeSetId": "analytic-boundary-splat-attributes-v0",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "dbdfc60575db364065da233b42aecda5633a9712dd3cf1f2cd4686a953b61a6b",
+      "candidateCount": 80011,
+      "instanceCount": 80011,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "7f30521294c43b9895837b77cc866f82914a723536cd9f11a7a2b466f0b35ab8",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-03-raymarch-160.png",
+        "bytes": 111976,
+        "sha256": "8b634a51fe83051ac27b5daeaa3eda29ed4620a86f3b8ae3fa2439e146402ddd"
+      },
+      "image": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-03-analyticBillboard-160.png",
+        "bytes": 111864,
+        "sha256": "546e992c39e12c47f4082392fa681768b9dff09f9d02b04ef4e02fa911a7e098"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 2.782077447348115,
+        "effectiveIntegratedAlphaSum": 2.7820772664329123,
+        "relativeError": 6.502881614282842e-8
+      },
+      "metrics": {
+        "cameraIndex": 3,
+        "cameraAngle": 0.21,
+        "heldOut": true,
+        "mode": "analyticBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 248,
+          "meanAbsChannelDelta": 22.653395930936465,
+          "changedPixels": 75976,
+          "changedFraction": 0.9998420803284729
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 250,
+          "meanAbsChannelDelta": 17.573113517923883,
+          "changedPixels": 75982,
+          "changedFraction": 0.9999210401642364
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 26.942224430173184,
+          "changedPixels": 75978,
+          "changedFraction": 0.9998684002737275
+        },
+        "fullFlameEdgeLoss": 0.014621170091729342,
+        "supportAlignedEdgeLoss": 0.01204261192181164
+      }
+    },
+    {
+      "cameraIndex": 3,
+      "cameraAngle": 0.21,
+      "cameraPoseHash": "8335bbde7157adec382a65ebf6ec4d2bd32aa024eff6970bed20174147f75d68",
+      "family": "learned-billboard",
+      "familyAuthority": "learned-camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "auditFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "2bb72bf1b5bfa133b56b244aec6c997b11172e4eeee1805e63dae0c36147dfee",
+      "candidateCount": 80011,
+      "instanceCount": 80011,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "7f30521294c43b9895837b77cc866f82914a723536cd9f11a7a2b466f0b35ab8",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-03-raymarch-160.png",
+        "bytes": 111976,
+        "sha256": "8b634a51fe83051ac27b5daeaa3eda29ed4620a86f3b8ae3fa2439e146402ddd"
+      },
+      "image": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-03-learnedBillboard-160.png",
+        "bytes": 110830,
+        "sha256": "6bafa0d8acb970ad3ab2b599b6122cb9c2241f90cd4d10078e1c9d10449699fa"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 2.5577364404103378,
+        "effectiveIntegratedAlphaSum": 2.557736273305142,
+        "relativeError": 6.533323498964461e-8
+      },
+      "metrics": {
+        "cameraIndex": 3,
+        "cameraAngle": 0.21,
+        "heldOut": true,
+        "mode": "learnedBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 239,
+          "meanAbsChannelDelta": 22.798056930041586,
+          "changedPixels": 75982,
+          "changedFraction": 0.9999210401642364
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 245,
+          "meanAbsChannelDelta": 16.406988603463706,
+          "changedPixels": 75987,
+          "changedFraction": 0.9999868400273727
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 253,
+          "meanAbsChannelDelta": 26.905060667473812,
+          "changedPixels": 75979,
+          "changedFraction": 0.9998815602463547
+        },
+        "fullFlameEdgeLoss": 0.014445612787662857,
+        "supportAlignedEdgeLoss": 0.011763433884841775
+      }
+    },
+    {
+      "cameraIndex": 3,
+      "cameraAngle": 0.21,
+      "cameraPoseHash": "8335bbde7157adec382a65ebf6ec4d2bd32aa024eff6970bed20174147f75d68",
+      "family": "world-tangent-covariance",
+      "familyAuthority": "world-gradient-tangent-covariance-v0",
+      "rendererFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "auditFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "2bb72bf1b5bfa133b56b244aec6c997b11172e4eeee1805e63dae0c36147dfee",
+      "candidateCount": 80011,
+      "instanceCount": 80011,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "7f30521294c43b9895837b77cc866f82914a723536cd9f11a7a2b466f0b35ab8",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-03-raymarch-160.png",
+        "bytes": 111976,
+        "sha256": "8b634a51fe83051ac27b5daeaa3eda29ed4620a86f3b8ae3fa2439e146402ddd"
+      },
+      "image": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-03-worldCovariance-160.png",
+        "bytes": 109689,
+        "sha256": "553330a43daf6c8632d281ee2dfe14054e276e50e5f1a250cfc49a305ee25a1f"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 2.5577364404103378,
+        "effectiveIntegratedAlphaSum": 2.5577362733051414,
+        "relativeError": 6.533323516327048e-8
+      },
+      "metrics": {
+        "cameraIndex": 3,
+        "cameraAngle": 0.21,
+        "heldOut": true,
+        "mode": "worldCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 234,
+          "meanAbsChannelDelta": 20.878563062588828,
+          "changedPixels": 75975,
+          "changedFraction": 0.9998289203558457
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 177,
+          "meanAbsChannelDelta": 8.368265384008001,
+          "changedPixels": 75986,
+          "changedFraction": 0.9999736800547455
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 248,
+          "meanAbsChannelDelta": 23.099380823287888,
+          "changedPixels": 75973,
+          "changedFraction": 0.9998026004105911
+        },
+        "fullFlameEdgeLoss": 0.014890629113019126,
+        "supportAlignedEdgeLoss": 0.011935966741554208
+      }
+    },
+    {
+      "cameraIndex": 3,
+      "cameraAngle": 0.21,
+      "cameraPoseHash": "8335bbde7157adec382a65ebf6ec4d2bd32aa024eff6970bed20174147f75d68",
+      "family": "flow-kernel-moment-covariance",
+      "familyAuthority": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+      "rendererFootprintAuthority": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+      "auditFootprintAuthority": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "ec9393c7d8fc9715e872d087f0ecd5b8109060d9d46ac782c83639216dc86863",
+      "candidateCount": 80011,
+      "instanceCount": 80011,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "7f30521294c43b9895837b77cc866f82914a723536cd9f11a7a2b466f0b35ab8",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-03-raymarch-160.png",
+        "bytes": 111976,
+        "sha256": "8b634a51fe83051ac27b5daeaa3eda29ed4620a86f3b8ae3fa2439e146402ddd"
+      },
+      "image": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-03-kernelMomentCovariance-160.png",
+        "bytes": 109298,
+        "sha256": "f9815af28c65cbdab4e40190a9ff4c8a7bf9f9ebf782a4013a2f540375845227"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 2.5577364404103378,
+        "effectiveIntegratedAlphaSum": 2.557736273140231,
+        "relativeError": 6.539771026126193e-8
+      },
+      "kernelTreatment": {
+        "identity": "flow-tangent-positive-symmetric-trilinear-v0",
+        "candidateAdmissionAuthority": "structural-splat-candidates-v0",
+        "firstMomentAuthority": "zero-first-moment-candidate-centers-fixed-v0",
+        "strength": 1,
+        "radiusWorld": 0.029999999329447746,
+        "coherence": 1
+      },
+      "metrics": {
+        "cameraIndex": 3,
+        "cameraAngle": 0.21,
+        "heldOut": true,
+        "mode": "kernelMomentCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 234,
+          "meanAbsChannelDelta": 20.731714218034426,
+          "changedPixels": 75978,
+          "changedFraction": 0.9998684002737275
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 158,
+          "meanAbsChannelDelta": 7.9629086171500765,
+          "changedPixels": 75988,
+          "changedFraction": 1
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 248,
+          "meanAbsChannelDelta": 23.04758646102016,
+          "changedPixels": 75973,
+          "changedFraction": 0.9998026004105911
+        },
+        "fullFlameEdgeLoss": 0.013868221387477262,
+        "supportAlignedEdgeLoss": 0.01093812122067526
+      }
+    },
+    {
+      "cameraIndex": 4,
+      "cameraAngle": 0.42,
+      "cameraPoseHash": "df5690f8f82524d911f6c690ceea77222ec858955602b950b22780e0e7c8c5d8",
+      "family": "analytic-billboard",
+      "familyAuthority": "camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "camera-facing-billboard-v0",
+      "auditFootprintAuthority": "camera-facing-billboard-v0",
+      "attributeSetId": "analytic-boundary-splat-attributes-v0",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "dbdfc60575db364065da233b42aecda5633a9712dd3cf1f2cd4686a953b61a6b",
+      "candidateCount": 80011,
+      "instanceCount": 80011,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "7f30521294c43b9895837b77cc866f82914a723536cd9f11a7a2b466f0b35ab8",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-04-raymarch-160.png",
+        "bytes": 110616,
+        "sha256": "4f6b993ddca46b2502817bb0948327a99800f2bbf34b774c1b55e7b29fa193da"
+      },
+      "image": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-04-analyticBillboard-160.png",
+        "bytes": 114889,
+        "sha256": "d8da818d6581e22379bac1bde96e69a9b5ec4fd49e82cea7609d3a5d652bf896"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 2.782077447348115,
+        "effectiveIntegratedAlphaSum": 2.7820772664329247,
+        "relativeError": 6.502881167332744e-8
+      },
+      "metrics": {
+        "cameraIndex": 4,
+        "cameraAngle": 0.42,
+        "heldOut": true,
+        "mode": "analyticBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 231,
+          "meanAbsChannelDelta": 21.77428014949729,
+          "changedPixels": 75952,
+          "changedFraction": 0.9995262409854188
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 243,
+          "meanAbsChannelDelta": 17.5354628362373,
+          "changedPixels": 75981,
+          "changedFraction": 0.9999078801916093
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 254,
+          "meanAbsChannelDelta": 25.813371848186556,
+          "changedPixels": 75965,
+          "changedFraction": 0.9996973206295731
+        },
+        "fullFlameEdgeLoss": 0.0142799549736775,
+        "supportAlignedEdgeLoss": 0.01201752508069089
+      }
+    },
+    {
+      "cameraIndex": 4,
+      "cameraAngle": 0.42,
+      "cameraPoseHash": "df5690f8f82524d911f6c690ceea77222ec858955602b950b22780e0e7c8c5d8",
+      "family": "learned-billboard",
+      "familyAuthority": "learned-camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "auditFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "2bb72bf1b5bfa133b56b244aec6c997b11172e4eeee1805e63dae0c36147dfee",
+      "candidateCount": 80011,
+      "instanceCount": 80011,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "7f30521294c43b9895837b77cc866f82914a723536cd9f11a7a2b466f0b35ab8",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-04-raymarch-160.png",
+        "bytes": 110616,
+        "sha256": "4f6b993ddca46b2502817bb0948327a99800f2bbf34b774c1b55e7b29fa193da"
+      },
+      "image": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-04-learnedBillboard-160.png",
+        "bytes": 113493,
+        "sha256": "77b936125a659eefdbcfe78451780e0687067a70e3b75a408b246488818afb4f"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 2.5577364404103378,
+        "effectiveIntegratedAlphaSum": 2.557736273305129,
+        "relativeError": 6.533324002479479e-8
+      },
+      "metrics": {
+        "cameraIndex": 4,
+        "cameraAngle": 0.42,
+        "heldOut": true,
+        "mode": "learnedBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 222,
+          "meanAbsChannelDelta": 21.936351792388272,
+          "changedPixels": 75968,
+          "changedFraction": 0.9997368005474548
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 236,
+          "meanAbsChannelDelta": 16.37718784544928,
+          "changedPixels": 75988,
+          "changedFraction": 1
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 253,
+          "meanAbsChannelDelta": 25.857181397062693,
+          "changedPixels": 75970,
+          "changedFraction": 0.9997631204927093
+        },
+        "fullFlameEdgeLoss": 0.014203418798086717,
+        "supportAlignedEdgeLoss": 0.01169403258000903
+      }
+    },
+    {
+      "cameraIndex": 4,
+      "cameraAngle": 0.42,
+      "cameraPoseHash": "df5690f8f82524d911f6c690ceea77222ec858955602b950b22780e0e7c8c5d8",
+      "family": "world-tangent-covariance",
+      "familyAuthority": "world-gradient-tangent-covariance-v0",
+      "rendererFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "auditFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "2bb72bf1b5bfa133b56b244aec6c997b11172e4eeee1805e63dae0c36147dfee",
+      "candidateCount": 80011,
+      "instanceCount": 80011,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "7f30521294c43b9895837b77cc866f82914a723536cd9f11a7a2b466f0b35ab8",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-04-raymarch-160.png",
+        "bytes": 110616,
+        "sha256": "4f6b993ddca46b2502817bb0948327a99800f2bbf34b774c1b55e7b29fa193da"
+      },
+      "image": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-04-worldCovariance-160.png",
+        "bytes": 112855,
+        "sha256": "adfeec044e98bc141e17ebab69b038c6254c2e603559375d8256733b07998aeb"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 2.5577364404103378,
+        "effectiveIntegratedAlphaSum": 2.5577362733051405,
+        "relativeError": 6.533323551052221e-8
+      },
+      "metrics": {
+        "cameraIndex": 4,
+        "cameraAngle": 0.42,
+        "heldOut": true,
+        "mode": "worldCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 224,
+          "meanAbsChannelDelta": 19.691082802547772,
+          "changedPixels": 75955,
+          "changedFraction": 0.9995657209033005
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 181,
+          "meanAbsChannelDelta": 8.130971337579618,
+          "changedPixels": 75987,
+          "changedFraction": 0.9999868400273727
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 243,
+          "meanAbsChannelDelta": 21.974555192925198,
+          "changedPixels": 75967,
+          "changedFraction": 0.9997236405748277
+        },
+        "fullFlameEdgeLoss": 0.014714524963459482,
+        "supportAlignedEdgeLoss": 0.01177291388306409
+      }
+    },
+    {
+      "cameraIndex": 4,
+      "cameraAngle": 0.42,
+      "cameraPoseHash": "df5690f8f82524d911f6c690ceea77222ec858955602b950b22780e0e7c8c5d8",
+      "family": "flow-kernel-moment-covariance",
+      "familyAuthority": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+      "rendererFootprintAuthority": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+      "auditFootprintAuthority": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "ec9393c7d8fc9715e872d087f0ecd5b8109060d9d46ac782c83639216dc86863",
+      "candidateCount": 80011,
+      "instanceCount": 80011,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "7f30521294c43b9895837b77cc866f82914a723536cd9f11a7a2b466f0b35ab8",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-04-raymarch-160.png",
+        "bytes": 110616,
+        "sha256": "4f6b993ddca46b2502817bb0948327a99800f2bbf34b774c1b55e7b29fa193da"
+      },
+      "image": {
+        "path": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/camera-04-kernelMomentCovariance-160.png",
+        "bytes": 112452,
+        "sha256": "6ea760cb20a299f3fcc9f0d63c1da57af0cf6c1b3bad69d6633fc4931dd53137"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 2.5577364404103378,
+        "effectiveIntegratedAlphaSum": 2.5577362731402298,
+        "relativeError": 6.539771078213954e-8
+      },
+      "kernelTreatment": {
+        "identity": "flow-tangent-positive-symmetric-trilinear-v0",
+        "candidateAdmissionAuthority": "structural-splat-candidates-v0",
+        "firstMomentAuthority": "zero-first-moment-candidate-centers-fixed-v0",
+        "strength": 1,
+        "radiusWorld": 0.029999999329447746,
+        "coherence": 1
+      },
+      "metrics": {
+        "cameraIndex": 4,
+        "cameraAngle": 0.42,
+        "heldOut": true,
+        "mode": "kernelMomentCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 222,
+          "meanAbsChannelDelta": 19.57557443280518,
+          "changedPixels": 75961,
+          "changedFraction": 0.9996446807390641
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 169,
+          "meanAbsChannelDelta": 7.756198347107438,
+          "changedPixels": 75988,
+          "changedFraction": 1
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 242,
+          "meanAbsChannelDelta": 21.929380296888983,
+          "changedPixels": 75967,
+          "changedFraction": 0.9997236405748277
+        },
+        "fullFlameEdgeLoss": 0.013721910923159157,
+        "supportAlignedEdgeLoss": 0.010809368786688305
+      }
+    }
+  ],
+  "summary": [
+    {
+      "mode": "analyticBillboard",
+      "split": "training-camera-v0",
+      "cameraCount": 1,
+      "fullFlameMeanAbsChannelDelta": 23.134580460072645,
+      "fullFlameEdgeLoss": 0.015048993598526319,
+      "supportAlignedMeanAbsChannelDelta": 17.085460862241405,
+      "supportAlignedEdgeLoss": 0.012454114553805903
+    },
+    {
+      "mode": "analyticBillboard",
+      "split": "held-out-camera-mean-v0",
+      "cameraCount": 4,
+      "fullFlameMeanAbsChannelDelta": 22.919526767384323,
+      "fullFlameEdgeLoss": 0.014689591532077814,
+      "supportAlignedMeanAbsChannelDelta": 17.45043954308575,
+      "supportAlignedEdgeLoss": 0.012334024262018474
+    },
+    {
+      "mode": "learnedBillboard",
+      "split": "training-camera-v0",
+      "cameraCount": 1,
+      "fullFlameMeanAbsChannelDelta": 23.202347739116703,
+      "fullFlameEdgeLoss": 0.01474510732417262,
+      "supportAlignedMeanAbsChannelDelta": 15.842165868294995,
+      "supportAlignedEdgeLoss": 0.012048167648059549
+    },
+    {
+      "mode": "learnedBillboard",
+      "split": "held-out-camera-mean-v0",
+      "cameraCount": 4,
+      "fullFlameMeanAbsChannelDelta": 23.022727272727273,
+      "fullFlameEdgeLoss": 0.014517371595570044,
+      "supportAlignedMeanAbsChannelDelta": 16.289073603726905,
+      "supportAlignedEdgeLoss": 0.01197371586472111
+    },
+    {
+      "mode": "worldCovariance",
+      "split": "training-camera-v0",
+      "cameraCount": 1,
+      "fullFlameMeanAbsChannelDelta": 22.06288492919935,
+      "fullFlameEdgeLoss": 0.014886806200958017,
+      "supportAlignedMeanAbsChannelDelta": 8.447235089751013,
+      "supportAlignedEdgeLoss": 0.011969782705493743
+    },
+    {
+      "mode": "worldCovariance",
+      "split": "held-out-camera-mean-v0",
+      "cameraCount": 4,
+      "fullFlameMeanAbsChannelDelta": 21.15151981233879,
+      "fullFlameEdgeLoss": 0.014818185236710774,
+      "supportAlignedMeanAbsChannelDelta": 8.241441905300837,
+      "supportAlignedEdgeLoss": 0.012044022461953399
+    },
+    {
+      "mode": "kernelMomentCovariance",
+      "split": "training-camera-v0",
+      "cameraCount": 1,
+      "fullFlameMeanAbsChannelDelta": 22.07475851450229,
+      "fullFlameEdgeLoss": 0.013963240345996998,
+      "supportAlignedMeanAbsChannelDelta": 8.16142351423909,
+      "supportAlignedEdgeLoss": 0.011154660239978947
+    },
+    {
+      "mode": "kernelMomentCovariance",
+      "split": "held-out-camera-mean-v0",
+      "cameraCount": 4,
+      "fullFlameMeanAbsChannelDelta": 21.15637501973996,
+      "fullFlameEdgeLoss": 0.013832023086062972,
+      "supportAlignedMeanAbsChannelDelta": 7.930000460599042,
+      "supportAlignedEdgeLoss": 0.011144767339305962
+    }
+  ],
+  "sourceOrbitReport": "/tmp/kaminos-kernel-moment-flamebowl-preset-local-r5/capture-report.json"
+}
