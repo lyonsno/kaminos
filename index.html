@@ -9872,6 +9872,12 @@ function fingerFluidCompositionCameraState() {
   };
 }
 
+function setFingerFluidPyroCompositionPilotEnabled(enabled) {
+  const receipt = volumePrototype.setLiquidFireSourcePilotEnabled(enabled === true);
+  fingerFluidPyroCompositionState.sourcePilotEnabled = receipt.enabled;
+  return receipt;
+}
+
 function advanceFingerFluidPyroCompositionSource(stepCount) {
   if (fingerFluidPyroCompositionState.effectiveRoute !== 'same-device-liquid-contact-pyro-near-field-v0') return;
   if (!fingerFluidPyroCompositionSourceTrajectoryEnabled) return;
@@ -9965,7 +9971,7 @@ async function activateFingerFluidPyroComposition() {
   };
   volumePrototype.setVolumePrimitives([compositionSourcePrimitive]);
   volumePrototype.setLiquidFireContactTransferEnabled(true, { reason: 'physical-contact-from-start' });
-  volumePrototype.setLiquidFireSourcePilotEnabled(false);
+  setFingerFluidPyroCompositionPilotEnabled(false);
   volumePrototype.setControls({
     volumeScene: 'tall_plume',
     ...VOLUME_SCENE_PRESETS.tall_plume,
@@ -10199,7 +10205,7 @@ function initKaminosFingerFluidBenchRoute() {
     volume: volumePrototype?.debugState?.() || null,
   });
   window.kaminosFingerFluidPyroSetSimulationPaused = paused => volumePrototype.setSimulationPaused(paused === true);
-  window.kaminosFingerFluidPyroSetPilotEnabled = enabled => volumePrototype.setLiquidFireSourcePilotEnabled(enabled === true);
+  window.kaminosFingerFluidPyroSetPilotEnabled = enabled => setFingerFluidPyroCompositionPilotEnabled(enabled);
   window.kaminosFingerFluidPyroSetSourcePosition = position => setFingerFluidPyroCompositionSourcePosition(position);
   window.kaminosFingerFluidPyroCompositionSample = sampleFingerFluidPyroComposition;
   window.kaminosFingerFluidPyroVolumeSample = () => volumePrototype.sampleFrame();
