@@ -25,6 +25,11 @@ import {
   compactLiveControlState,
   selectFailureRendererIdentity,
 } from './hybrid-raymarch-smoke-boundary-evidence.mjs';
+import {
+  buildSharedVolumeSettingsTarget,
+  DEFAULT_SHARED_VOLUME_SETTINGS_STORE,
+  resolveSharedVolumeSettingsPreset,
+} from './volume-shared-settings-preset.mjs';
 
 const SCHEMA = 'kaminos.volume.boundary-splat-motion-witness.v0';
 const SPLAT_RENDERER = 'live-boundary-sidecar-analytic-splats-v0';
@@ -70,7 +75,12 @@ const PHASE_SOURCE_IDENTITIES = new Set([
 ]);
 
 const args = parseArgs(process.argv.slice(2));
-const requestedRoute = String(args.get('--url') || '');
+const requestedRouteInput = String(args.get('--url') || '');
+const settingsPresetRef = String(args.get('--settings-preset') || '');
+const settingsStorePath = resolve(String(
+  args.get('--settings-store') || DEFAULT_SHARED_VOLUME_SETTINGS_STORE,
+));
+let requestedRoute = requestedRouteInput;
 const outDir = resolve(String(args.get('--out-dir') || '/tmp/kaminos-boundary-splat-motion-witness'));
 const reportPath = resolve(String(args.get('--report') || `${outDir}/motion-witness-report.json`));
 const evidenceRoot = resolve(String(args.get('--evidence-root') || process.cwd()));
@@ -98,6 +108,7 @@ let browserSession = null;
 let ws = null;
 let failurePhase = 'startup';
 let requestedHybridSmokeConfig = null;
+let settingsPresetReceipt = null;
 let liveCoupledHybrid = false;
 let failureReportPathValidated = !hybridOnly;
 let liveWarmupStepIndex = 0;
@@ -112,7 +123,16 @@ try {
     requireHybridWitnessArtifactPath({ evidenceRoot, bundleRoot: outDir, artifact: reportPath });
     failureReportPathValidated = true;
   }
-  if (!requestedRoute) throw new Error('missing --url');
+  if (!requestedRouteInput) throw new Error('missing --url');
+  if (settingsPresetRef) {
+    failurePhase = 'settings-preset-resolution';
+    settingsPresetReceipt = resolveSharedVolumeSettingsPreset({
+      storePath: settingsStorePath,
+      presetRef: settingsPresetRef,
+    });
+    requestedRoute = buildSharedVolumeSettingsTarget(settingsPresetReceipt, requestedRouteInput).toString();
+    lastTrustworthyEvidence.settingsPresetReceipt = compactSettingsPresetReceipt(settingsPresetReceipt);
+  }
   if (hybridOnly) {
     requirePositiveHybridWitnessWallDelay(wallStepMs);
     requestedHybridSmokeConfig = parseSpatialStrataHybridSmokeWitnessRequest(requestedRoute);
@@ -206,6 +226,8 @@ try {
     runStartedAt,
     runCompletedAt: new Date().toISOString(),
     requestedRoute,
+    requestedRouteInput,
+    settingsPresetReceipt: compactSettingsPresetReceipt(settingsPresetReceipt),
     requestedRouteIdentity,
     effectiveRoute: raymarchHybridBoundary
       ? deriveRaymarchHybridBoundaryRoute([staticSequence, grazingSequence])
@@ -308,6 +330,10 @@ try {
     failurePhase,
     error: error?.stack || error?.message || String(error),
     requestedRoute,
+    requestedRouteInput,
+    settingsPresetRef: settingsPresetRef || null,
+    settingsStorePath,
+    settingsPresetReceipt: compactSettingsPresetReceipt(settingsPresetReceipt),
     rendererIdentity: selectFailureRendererIdentity({ hybridOnly, raymarchHybridBoundary }),
     requestedRouteIdentity: {
       requestedRoute,
@@ -342,6 +368,24 @@ try {
 } finally {
   try { ws?.close?.(); } catch {}
   if (!keepBrowserOpen) browserSession?.process?.kill('SIGTERM');
+}
+
+function compactSettingsPresetReceipt(receipt) {
+  if (!receipt) return null;
+  return {
+    requestedPresetRef: receipt.requestedPresetRef,
+    alias: receipt.alias,
+    label: receipt.label,
+    presetId: receipt.presetId,
+    contentHash: receipt.contentHash,
+    schemaIdentity: receipt.schemaIdentity,
+    controlCount: receipt.controlCount,
+    writtenAt: receipt.writtenAt,
+    source: { ...receipt.source },
+    storePath: receipt.storePath,
+    artifactPath: receipt.artifactPath,
+    authority: receipt.authority,
+  };
 }
 
 function parseArgs(argv) {
