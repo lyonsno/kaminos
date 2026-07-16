@@ -141,7 +141,7 @@ try {
         },
       },
       candidates: { path: candidatePath, bytes: candidateBytes.length, sha256: hash(candidateBytes), count: 2, strideFloats: 19, dtype: 'float32-le' },
-      target: { path: targetPath, bytes: targetBytes.length, sha256: hash(targetBytes), authority: 'gpu-rgba8-raymarch-readback-frozen-sim-state', rendererIdentity: 'native-3d-compute-fluid-raymarch-v0', decomposition: 'candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0' },
+      target: { path: targetPath, bytes: targetBytes.length, sha256: hash(targetBytes), authority: 'gpu-rgba8-raymarch-readback-frozen-sim-state', rendererIdentity: 'native-3d-compute-fluid-raymarch-v0', decomposition: 'candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0', requestedRaySteps: 160, effectiveRaySteps: 160, renderScale: 1 },
       structuralSupervision: {
         identity: 'native-boundary-sidecar-structural-supervision-v0',
         captureId: 'same-state-000-sidecar',
@@ -182,6 +182,33 @@ try {
   assert.equal(valid.frames[0].metaPath, metaPath);
   assert.equal(valid.frames[0].controlConditioning.values.inputRadius, 0.24);
   assert.match(valid.corpusIdentity, /^sha256:[a-f0-9]{64}$/);
+
+  const validateExactTeacher = () => validateBoundarySplatSupervisionCorpus(manifestPath, {
+    expectedGrid: 1,
+    expectedRaySteps: 160,
+    expectedRenderScale: 1,
+  });
+  const validExactTeacher = await validateExactTeacher();
+  assert.equal(validExactTeacher.frames[0].requestedRaySteps, 160);
+  assert.equal(validExactTeacher.frames[0].effectiveRaySteps, 160);
+  assert.equal(validExactTeacher.frames[0].renderScale, 1);
+
+  const missingRequestedTeacher = structuredClone(manifest);
+  delete missingRequestedTeacher.frames[0].target.requestedRaySteps;
+  await writeFile(manifestPath, JSON.stringify(missingRequestedTeacher));
+  await assert.rejects(validateExactTeacher, /target requested ray steps/i);
+
+  const cappedEffectiveTeacher = structuredClone(manifest);
+  cappedEffectiveTeacher.frames[0].target.effectiveRaySteps = 96;
+  await writeFile(manifestPath, JSON.stringify(cappedEffectiveTeacher));
+  await assert.rejects(validateExactTeacher, /target effective ray steps/i);
+
+  const scaledTeacher = structuredClone(manifest);
+  scaledTeacher.frames[0].target.renderScale = 0.5;
+  await writeFile(manifestPath, JSON.stringify(scaledTeacher));
+  await assert.rejects(validateExactTeacher, /target render scale/i);
+
+  await writeFile(manifestPath, JSON.stringify(manifest));
 
   const validateFresh = () => validateBoundarySplatSupervisionCorpus(manifestPath, {
     expectedGrid: 1,

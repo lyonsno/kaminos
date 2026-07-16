@@ -7,6 +7,10 @@ assert.match(script, /SCHEMA\s*=\s*["']kaminos\.boundary-splat-radiance-training
 assert.match(script, /kaminos-boundary-splat-supervision-corpus-v0/, 'radiance trainer accepts only the fixed-candidate supervision corpus');
 assert.match(script, /live-simulator-frozen-state-candidate-raymarch-v0/, 'radiance trainer requires frozen-state live-simulator authority');
 assert.match(script, /candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0/, 'radiance trainer accepts only the exact candidate-support-gated intrinsic unit-gain native raymarch target decomposition');
+assert.match(script, /--expected-ray-steps/, 'radiance trainer exposes exact teacher ray-step admission');
+assert.match(script, /--expected-render-scale/, 'radiance trainer exposes exact teacher render-scale admission');
+assert.match(script, /target\.get\("requestedRaySteps"\)\s*!=\s*expected_ray_steps[\s\S]*target\.get\("effectiveRaySteps"\)\s*!=\s*expected_ray_steps/, 'radiance trainer rejects requested or effective teacher step substitution');
+assert.match(script, /abs\(float\(target\.get\("renderScale"[^\n]*\)\s*-\s*expected_render_scale\)\s*>\s*0\.001/, 'radiance trainer rejects non-native teacher render scale');
 assert.match(script, /from boundary_splat_native_sidecar import/, 'radiance trainer imports the dependency-free native sidecar context adapter');
 assert.match(script, /native-sidecar-pyramid/, 'radiance trainer exposes native raw sidecar pyramid conditioning');
 assert.match(script, /complete-native-sidecar-multi-radius-axial-context-v0/, 'native sidecar training receipts distinguish complete-grid context from candidate-only adjacency');

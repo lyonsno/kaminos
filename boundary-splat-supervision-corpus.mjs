@@ -151,6 +151,14 @@ export async function validateBoundarySplatSupervisionCorpus(manifestFile, optio
   const expectedGrid = Number.isInteger(options.expectedGrid) && options.expectedGrid > 0
     ? options.expectedGrid
     : 160;
+  const expectedRaySteps = options.expectedRaySteps == null ? null : Number(options.expectedRaySteps);
+  const expectedRenderScale = options.expectedRenderScale == null ? null : Number(options.expectedRenderScale);
+  if (expectedRaySteps != null && (!Number.isInteger(expectedRaySteps) || expectedRaySteps < 1 || expectedRaySteps > 160)) {
+    throw new Error(`expected ray steps must be an integer within 1..160, received ${options.expectedRaySteps}`);
+  }
+  if (expectedRenderScale != null && (!Number.isFinite(expectedRenderScale) || expectedRenderScale <= 0 || expectedRenderScale > 1)) {
+    throw new Error(`expected render scale must be finite within (0, 1], received ${options.expectedRenderScale}`);
+  }
   const manifestBytes = await readFile(manifestPath);
   if (manifestBytes.length === 0) throw new Error('corpus manifest is blank');
   const manifest = JSON.parse(manifestBytes.toString('utf8'));
@@ -218,6 +226,13 @@ export async function validateBoundarySplatSupervisionCorpus(manifestFile, optio
     if (frame.target.authority !== 'gpu-rgba8-raymarch-readback-frozen-sim-state') throw new Error(`${label} target authority is not frozen GPU raymarch readback`);
     if (frame.target.rendererIdentity !== 'native-3d-compute-fluid-raymarch-v0') throw new Error(`${label} target renderer identity is not the native raymarch`);
     if (frame.target.decomposition !== 'candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0') throw new Error(`${label} target decomposition is not exact candidate-support-gated intrinsic unit-gain native raymarch emission`);
+    if (expectedRaySteps != null) {
+      if (frame.target.requestedRaySteps !== expectedRaySteps) throw new Error(`${label} target requested ray steps must equal ${expectedRaySteps}, received ${frame.target.requestedRaySteps}`);
+      if (frame.target.effectiveRaySteps !== expectedRaySteps) throw new Error(`${label} target effective ray steps must equal ${expectedRaySteps}, received ${frame.target.effectiveRaySteps}`);
+    }
+    if (expectedRenderScale != null && Math.abs(Number(frame.target.renderScale) - expectedRenderScale) > 0.001) {
+      throw new Error(`${label} target render scale must equal ${expectedRenderScale}, received ${frame.target.renderScale}`);
+    }
     let flowDebugArtifact = null;
     if (frame.flowDebug != null) {
       flowDebugArtifact = await validateArtifact(manifestPath, frame.flowDebug, `${label} flow debug`);
@@ -285,6 +300,9 @@ export async function validateBoundarySplatSupervisionCorpus(manifestFile, optio
       structuralSupervisionIdentity: frame.structuralSupervision?.identity || null,
       controlConditioning,
       captureAdmission,
+      requestedRaySteps: frame.target.requestedRaySteps ?? null,
+      effectiveRaySteps: frame.target.effectiveRaySteps ?? null,
+      renderScale: frame.target.renderScale ?? null,
       candidateCount: frame.candidates.count,
     });
   }

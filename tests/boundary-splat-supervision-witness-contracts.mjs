@@ -9,6 +9,8 @@ assert.match(witness, /--boundary-splat-supervision-frames/, 'witness exposes a 
 assert.match(witness, /--boundary-splat-supervision-step-delta-ms/, 'witness exposes deterministic simulator time spacing between supervision frames');
 assert.match(witness, /--boundary-splat-supervision-raw-sidecar/, 'witness exposes native raw sidecar supervision as an explicit requested surface');
 assert.match(witness, /--boundary-splat-supervision-min-sim-step/, 'witness exposes an uncapped simulator warmup floor');
+assert.match(witness, /--boundary-splat-supervision-expected-ray-steps/, 'witness exposes the exact requested ray-step teacher identity');
+assert.match(witness, /boundarySplatSupervisionExpectedRayStepsRequested/, 'witness preserves the requested supervision ray-step identity');
 assert.match(witness, /--boundary-splat-supervision-operation-timeout-ms/, 'witness exposes a caller-configured per-operation CDP deadline instead of a hidden total batch cap');
 assert.match(witness, /boundarySplatSupervisionOperationTimeoutMsRequested/, 'witness preserves the requested supervision operation deadline');
 assert.match(witness, /boundarySplatSupervisionOperationTimeoutMsEffective\s*=\s*boundarySplatSupervisionOperationTimeoutMsRequested/, 'witness does not silently clamp a lawful caller deadline below the requested value');
@@ -18,6 +20,9 @@ assert.match(witness, /live-single-browser-sim-step-floor-v0/, 'witness records 
 assert.match(witness, /while \(warmupSimStepCount\s*<\s*boundarySplatSupervisionMinSimStep\)/, 'witness warms the live simulator until the requested step floor instead of sleeping blindly');
 assert.match(witness, /warmup-progress-stalled|warmup.*stalled/i, 'witness fails loud if simulator warmup stops making progress');
 assert.match(witness, /captureBoundarySplatSupervisionFrame/, 'witness invokes the dedicated same-state live capture API');
+assert.match(witness, /captureBoundarySplatSupervisionFrame\?\.\(\{[\s\S]*expectedRaySteps:\s*boundarySplatSupervisionExpectedRayStepsRequested/, 'witness passes its caller-owned teacher identity into the core capture before runtime-quality routing');
+assert.match(witness, /capture\?\.target\?\.requestedRaySteps\s*!==\s*boundarySplatSupervisionExpectedRayStepsRequested[\s\S]*capture\?\.target\?\.effectiveRaySteps\s*!==\s*boundarySplatSupervisionExpectedRayStepsRequested[\s\S]*ray-step teacher mismatch/, 'witness fails loud when either requested or effective rendered teacher steps differ from the explicit contract');
+assert.match(witness, /Math\.abs\(Number\(capture\?\.target\?\.renderScale\)\s*-\s*1\)\s*>\s*0\.001[\s\S]*render-scale teacher mismatch/, 'witness rejects a supervision target that did not render at native scale');
 assert.match(witness, /captureBoundarySidecarRawFrameWithDeadline\?\.\(\{[\s\S]*sameStateCaptureId:\s*\$\{JSON\.stringify\(capture\.sameStateCaptureId\)\}/, 'raw sidecar capture is tied to the candidate and raymarch same-state identity');
 assert.ok(witness.includes('deadlineMs: ${JSON.stringify(boundarySplatSupervisionOperationTimeoutMsEffective)}'), 'raw sidecar capture receives the literal browser-owned deadline so a host timeout cannot orphan retained capture state');
 assert.match(witness, /boundarySplatSupervisionRawCaptureResponseGraceMs[\s\S]*operationTimeoutMs:\s*boundarySplatSupervisionOperationTimeoutMsEffective\s*\+\s*boundarySplatSupervisionRawCaptureResponseGraceMs/, 'host CDP custody outlives the browser deadline long enough to receive the cleanup-scheduled receipt');
@@ -52,10 +57,12 @@ assert.match(witness, /hash\(targetBytes\)\s*===\s*hash\(flowDebugBytes\)[\s\S]*
 assert.match(witness, /sameStateCaptureId:\s*capture\.sameStateCaptureId/, 'flow-debug corpus custody is tied to the candidate and target same-state identity');
 assert.match(core, /boundarySplatSupervisionFireOnlyTargetActive\s*=\s*false;[\s\S]*flowDebug:\s*1,[\s\S]*fixed-candidate-supervision-flow-debug/, 'flow-debug capture disables the direct-flame supervision bypass before rendering the diagnostic');
 assert.match(witness, /candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0/, 'witness labels the exact candidate-support-gated intrinsic unit-gain native raymarch target instead of implying stock-body or full-volume authority');
+assert.match(witness, /target:[\s\S]*requestedRaySteps:\s*boundarySplatSupervisionExpectedRayStepsRequested,[\s\S]*effectiveRaySteps:\s*capture\.target\.effectiveRaySteps,[\s\S]*renderScale:\s*capture\.target\.renderScale/, 'corpus target persists requested and effective ray-step identity plus effective render scale');
 assert.match(witness, /schema:\s*BOUNDARY_SPLAT_SUPERVISION_SCHEMA/, 'witness writes the validated corpus schema');
 assert.match(witness, /splatControls:\s*capture\.splatControls/, 'corpus preserves the exact live splat footprint controls for differentiable replay');
 assert.match(witness, /live-simulator-frozen-state-candidate-raymarch-v0/, 'witness preserves same-state live authority');
 assert.match(witness, /validateBoundarySplatSupervisionCorpus/, 'witness validates the complete artifact set before reporting success');
+assert.match(witness, /validateBoundarySplatSupervisionCorpus\(manifestPath,\s*\{[\s\S]*expectedRaySteps:\s*boundarySplatSupervisionExpectedRayStepsRequested,[\s\S]*expectedRenderScale:\s*1,/, 'witness revalidates persisted teacher identity rather than trusting transient capture admission');
 assert.match(witness, /targetVisualMetrics\s*=\s*measureScreenshot/, 'witness measures the transported raymarch target before accepting it');
 assert.match(witness, /targetVisualMetrics\.meanLuma\s*>\s*180/, 'witness rejects globally blown-out raymarch targets using the measured invalid-target boundary');
 assert.match(witness, /targetVisualMetrics\.meanLuma\s*<\s*1\.5/, 'witness rejects blank or nearly blank raymarch targets');
@@ -64,6 +71,8 @@ assert.match(witness, /targetVisualMetrics\.litFraction\s*>\s*0\.72/, 'witness r
 assert.match(witness, /targetVisualMetrics/, 'witness preserves target visual diagnostics in its corpus receipt');
 assert.match(witness, /phase:\s*supervisionPhase/, 'supervision failure reports preserve the last trustworthy phase');
 assert.match(witness, /lastTrustworthyEvidence/, 'supervision failure reports preserve the last trustworthy route and simulator evidence');
+assert.match(witness, /const teacherIdentity\s*=\s*\{[\s\S]*expectedRaySteps:[\s\S]*capturedRequestedRaySteps:[\s\S]*capturedEffectiveRaySteps:[\s\S]*capturedRenderScale:/, 'supervision capture owns a structured requested and effective teacher identity receipt');
+assert.match(witness, /const failure\s*=\s*\{[\s\S]*teacherIdentity,/, 'supervision failure reports preserve the structured teacher identity receipt');
 assert.match(witness, /operationDeadline:[\s\S]*requestedMs:[\s\S]*effectiveMs:/, 'supervision reports state requested and effective operation deadline identity');
 assert.match(witness, /supervisionFailureReport/, 'inner supervision evidence survives the outer witness failure report');
 assert.match(witness, /const supervisionFailureReport\s*=\s*err\?\.supervisionFailureReport[\s\S]*if \(supervisionFailureReport\) \{[\s\S]*state\s*=\s*supervisionFailureReport\.lastTrustworthyEvidence/, 'a supervision timeout bypasses generic CDP recovery so the outer report cannot hang on the same dead runtime');

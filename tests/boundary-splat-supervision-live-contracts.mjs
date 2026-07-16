@@ -31,6 +31,10 @@ assert.match(core, /targetSample\.volumeReconstructionStyle\s*===\s*BOUNDARY_SPL
 assert.match(core, /candidateSample\.boundarySplatCandidateCount\s*!==\s*candidateSample\.boundarySplatSupervisionCapture\.rowCount/, 'supervision capture rejects partial candidate rows');
 assert.match(core, /candidateSample\.simStepCount\s*!==\s*targetSample\.simStepCount/, 'supervision capture rejects candidate and raymarch evidence from different simulation states');
 assert.doesNotMatch(supervisionCapture, /targetSample\.simStepCount\s*!==\s*baseSimStepCount/, 'a pre-capture diagnostic counter cannot invalidate an internally identical candidate-target pair');
+assert.match(supervisionCapture, /const requestedRaySteps\s*=\s*Number\(options\.expectedRaySteps\)/, 'supervision capture preserves the caller-owned teacher request before runtime-quality routing');
+assert.match(supervisionCapture, /runtimeQualityRequested:\s*'live_high'[\s\S]*runtimeQualityEffective:\s*'live_high'[\s\S]*gpuPressure:\s*0[\s\S]*raySteps:\s*requestedRaySteps/, 'supervision capture prevents runtime-quality pressure from silently capping the exact teacher');
+assert.match(supervisionCapture, /const effectiveRaySteps\s*=\s*Number\(targetSample\.runtimeQualityReceipt\?\.knobs\?\.raySteps\)/, 'supervision capture derives effective ray steps from the rendered target receipt');
+assert.match(supervisionCapture, /target:[\s\S]*requestedRaySteps:[\s\S]*effectiveRaySteps,[\s\S]*renderScale:\s*targetSample\.renderScale/, 'supervision target preserves requested and effective ray-step identity plus effective render scale');
 assert.match(core, /cameraRight:\s*Array\.from\(/, 'supervision camera metadata includes the exact billboard right basis used by the rasterizer');
 assert.match(core, /cameraUp:\s*Array\.from\(/, 'supervision camera metadata includes the exact billboard up basis used by the rasterizer');
 assert.match(core, /splatControls:[\s\S]*radius:[\s\S]*sharpness:/, 'supervision metadata records the effective splat footprint controls required for differentiable replay');

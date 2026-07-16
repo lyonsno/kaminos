@@ -214,7 +214,13 @@ def load_native_sidecar(manifest_path, frame, label):
     }
 
 
-def load_corpus(manifest_value, require_native_sidecar=False, require_control_conditioning=False):
+def load_corpus(
+    manifest_value,
+    require_native_sidecar=False,
+    require_control_conditioning=False,
+    expected_ray_steps=None,
+    expected_render_scale=None,
+):
     manifest_path = Path(manifest_value).resolve()
     manifest_bytes = manifest_path.read_bytes()
     manifest = json.loads(manifest_bytes)
@@ -239,9 +245,17 @@ def load_corpus(manifest_value, require_native_sidecar=False, require_control_co
         candidates = np.frombuffer(candidate_bytes, dtype="<f4").reshape(candidate_count, stride_floats).copy()
         if not np.all(np.isfinite(candidates)):
             raise ValueError(f"{label} candidates contain non-finite values")
-        target_path, _ = read_verified_artifact(manifest_path, frame["target"], f"{label} target")
-        if frame["target"].get("decomposition") != TARGET_DECOMPOSITION:
+        target = frame["target"]
+        target_path, _ = read_verified_artifact(manifest_path, target, f"{label} target")
+        if target.get("decomposition") != TARGET_DECOMPOSITION:
             raise ValueError(f"{label} target decomposition must be {TARGET_DECOMPOSITION}")
+        if expected_ray_steps is not None:
+            if target.get("requestedRaySteps") != expected_ray_steps:
+                raise ValueError(f"{label} target requested ray steps must equal {expected_ray_steps}, received {target.get('requestedRaySteps')}")
+            if target.get("effectiveRaySteps") != expected_ray_steps:
+                raise ValueError(f"{label} target effective ray steps must equal {expected_ray_steps}, received {target.get('effectiveRaySteps')}")
+        if expected_render_scale is not None and abs(float(target.get("renderScale", float("nan"))) - expected_render_scale) > 0.001:
+            raise ValueError(f"{label} target render scale must equal {expected_render_scale}, received {target.get('renderScale')}")
         flow_debug = frame.get("flowDebug")
         flow_debug_path = None
         if flow_debug is not None:
@@ -275,6 +289,9 @@ def load_corpus(manifest_value, require_native_sidecar=False, require_control_co
             "candidates": candidates,
             "candidatePath": str(candidate_path),
             "targetPath": str(target_path),
+            "requestedRaySteps": target.get("requestedRaySteps"),
+            "effectiveRaySteps": target.get("effectiveRaySteps"),
+            "renderScale": target.get("renderScale"),
             "flowDebugPath": str(flow_debug_path) if flow_debug_path is not None else None,
             "flowDebugAuthority": flow_debug.get("authority") if flow_debug is not None else None,
             "flowDebugSource": flow_debug.get("source") if flow_debug is not None else None,
@@ -1538,6 +1555,8 @@ def parse_args():
     parser.add_argument("--optical-topology-macro-weight", type=float, default=1.0)
     parser.add_argument("--optical-topology-residual-weight", type=float, default=1.0)
     parser.add_argument("--partial-flow-debug-gain", type=float, default=0.0)
+    parser.add_argument("--expected-ray-steps", type=int)
+    parser.add_argument("--expected-render-scale", type=float)
     parser.add_argument("--train-frame-indices")
     parser.add_argument("--eval-frame-indices")
     parser.add_argument("--optical-memorization-oracle", action="store_true")
@@ -1557,6 +1576,10 @@ def main():
     try:
         if args.steps < 0 or args.hidden_size < 0 or args.message_size < 0 or args.render_width <= 0 or args.learning_rate <= 0 or args.depth_bins <= 0 or args.edge_weight < 0 or args.optical_channels <= 0 or args.optical_residual_scale <= 0 or args.optical_topology_scale <= 0 or args.optical_topology_passes <= 0 or args.optical_topology_macro_weight < 0 or args.optical_topology_residual_weight < 0:
             raise ValueError("steps, hidden-size, message-size, edge-weight, and topology weights must be non-negative; render-width, learning-rate, depth-bins, optical channels, optical scales, and topology passes must be positive")
+        if args.expected_ray_steps is not None and not (1 <= args.expected_ray_steps <= 160):
+            raise ValueError("expected-ray-steps must be within 1..160")
+        if args.expected_render_scale is not None and not (0 < args.expected_render_scale <= 1):
+            raise ValueError("expected-render-scale must be within (0, 1]")
         if args.partial_flow_debug_gain != 0.0 and not (0.5 <= args.partial_flow_debug_gain <= 0.75):
             raise ValueError("partial-flow-debug-gain must be zero or within the witnessed range 0.5..0.75")
         frequencies = parse_fourier_frequencies(args.fourier_frequencies)
@@ -1572,6 +1595,8 @@ def main():
             args.corpus,
             require_native_sidecar=args.context_mode == "native-sidecar-pyramid",
             require_control_conditioning=args.optical_condition_mode == "emitter-lifecycle",
+            expected_ray_steps=args.expected_ray_steps,
+            expected_render_scale=args.expected_render_scale,
         )
         frame_split = resolve_frame_splits(
             [frame["id"] for frame in corpus["frames"]],

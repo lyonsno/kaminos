@@ -12201,6 +12201,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   async function captureBoundarySplatSupervisionFrame(options = {}) {
     if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
+    const requestedRaySteps = Number(options.expectedRaySteps);
+    if (!Number.isInteger(requestedRaySteps) || requestedRaySteps < 1 || requestedRaySteps > 160) {
+      return { ok: false, reason: 'invalid-supervision-ray-step-teacher', requestedRaySteps };
+    }
     boundarySplatSupervisionCaptureActive = true;
     cancelAnimationFrame(raf);
     if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
@@ -12276,11 +12280,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
       controlsSnapshot = applyRuntimeQualityControls({
         ...controlsSnapshot,
+        runtimeQualityRequested: 'live_high',
+        runtimeQualityEffective: 'live_high',
+        runtimeQualityReason: 'fixed-candidate-supervision-raymarch',
+        gpuPressure: 0,
         boundarySplatMode: 'off',
         boundarySplatFeatureCapture: false,
         volumeResidualMode: 'off',
         fireRenderMode: 'stock',
         shellInspectMode: 'boundary_fire',
+        raySteps: requestedRaySteps,
         renderScale,
       });
       boundarySplatSupervisionFireOnlyTargetActive = true;
@@ -12303,6 +12312,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       if (!targetSample.image?.rgba?.length) throw new Error('fixed-candidate-supervision-target-image-missing');
       if (candidateSample.simStepCount !== targetSample.simStepCount) {
         throw new Error(`fixed-candidate-supervision-state-drift:${baseSimStepCount}:${candidateSample.simStepCount}:${targetSample.simStepCount}`);
+      }
+      const effectiveRaySteps = Number(targetSample.runtimeQualityReceipt?.knobs?.raySteps);
+      if (!Number.isInteger(requestedRaySteps) || !Number.isInteger(effectiveRaySteps)) {
+        throw new Error(`fixed-candidate-supervision-ray-step-identity-missing:${requestedRaySteps}:${effectiveRaySteps}`);
+      }
+      if (effectiveRaySteps !== requestedRaySteps) {
+        throw new Error(`fixed-candidate-supervision-ray-step-cap:${requestedRaySteps}:${effectiveRaySteps}`);
       }
 
       boundarySplatSupervisionFireOnlyTargetActive = false;
@@ -12402,6 +12418,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           authority: 'gpu-rgba8-raymarch-readback-frozen-sim-state',
           rendererIdentity: ROUTE_IDENTITY,
           decomposition: 'candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0',
+          requestedRaySteps: requestedRaySteps,
+          effectiveRaySteps,
+          renderScale: targetSample.renderScale,
           image: targetSample.image,
         },
         flowDebug: {

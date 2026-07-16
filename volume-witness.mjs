@@ -161,6 +161,9 @@ const boundarySplatSupervisionFrames = Math.max(1, Math.floor(Number(args.get('-
 const boundarySplatSupervisionStepDeltaMs = Math.max(0, Number(args.get('--boundary-splat-supervision-step-delta-ms') || 220));
 const boundarySplatSupervisionRawSidecar = args.has('--boundary-splat-supervision-raw-sidecar');
 const boundarySplatSupervisionMinSimStep = Math.max(0, Math.floor(Number(args.get('--boundary-splat-supervision-min-sim-step') || 120)));
+const boundarySplatSupervisionExpectedRayStepsRequested = args.has('--boundary-splat-supervision-expected-ray-steps')
+  ? Number(args.get('--boundary-splat-supervision-expected-ray-steps'))
+  : null;
 const boundarySplatSupervisionOperationTimeoutMsRequested = args.has('--boundary-splat-supervision-operation-timeout-ms')
   ? Number(args.get('--boundary-splat-supervision-operation-timeout-ms'))
   : 180_000;
@@ -2683,6 +2686,13 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
   let supervisionPhase = 'initialize-sequence';
   let capturedFrameCount = 0;
   let warmupReceipt = null;
+  const teacherIdentity = {
+    expectedRaySteps: boundarySplatSupervisionExpectedRayStepsRequested,
+    expectedRenderScale: 1,
+    capturedRequestedRaySteps: null,
+    capturedEffectiveRaySteps: null,
+    capturedRenderScale: null,
+  };
   let lastTrustworthyEvidence = {
     authority: 'boundary-splat-supervision-last-trustworthy-evidence-v0',
     requestedRoute: url,
@@ -2699,6 +2709,11 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
   });
   try {
     const hash = bytes => createHash('sha256').update(bytes).digest('hex');
+    if (!Number.isInteger(boundarySplatSupervisionExpectedRayStepsRequested)
+      || boundarySplatSupervisionExpectedRayStepsRequested < 1
+      || boundarySplatSupervisionExpectedRayStepsRequested > 160) {
+      throw new Error(`fixed-candidate supervision requires --boundary-splat-supervision-expected-ray-steps within 1..160, received ${args.get('--boundary-splat-supervision-expected-ray-steps')}`);
+    }
     if (!Number.isFinite(boundarySplatSupervisionOperationTimeoutMsEffective) || boundarySplatSupervisionOperationTimeoutMsEffective <= 0) {
       throw new Error(`boundary splat supervision operation timeout must be a positive finite number, received ${args.get('--boundary-splat-supervision-operation-timeout-ms')}`);
     }
@@ -2827,6 +2842,7 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
         expression: `(async () => {
           const capture = await window.__kaminosVolumePrototype?.captureBoundarySplatSupervisionFrame?.({
             renderScale: 1,
+            expectedRaySteps: ${JSON.stringify(boundarySplatSupervisionExpectedRayStepsRequested)},
             resumeRenderLoop: false,
             now: ${JSON.stringify(controlledNowMs)},
             sameStateCaptureId: ${JSON.stringify(`${sequenceIdentity}-${frameId}`)},
@@ -2877,6 +2893,16 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
       assert.equal(capture?.authority, 'live-simulator-frozen-state-candidate-raymarch-v0', 'wrong supervision capture authority');
       assert.equal(capture?.candidates?.rendererIdentity, 'live-boundary-sidecar-analytic-splats-v0', 'wrong supervision candidate renderer');
       assert.equal(capture?.target?.rendererIdentity, 'native-3d-compute-fluid-raymarch-v0', 'wrong supervision target renderer');
+      teacherIdentity.capturedRequestedRaySteps = capture?.target?.requestedRaySteps ?? null;
+      teacherIdentity.capturedEffectiveRaySteps = capture?.target?.effectiveRaySteps ?? null;
+      teacherIdentity.capturedRenderScale = capture?.target?.renderScale ?? null;
+      if (capture?.target?.requestedRaySteps !== boundarySplatSupervisionExpectedRayStepsRequested
+        || capture?.target?.effectiveRaySteps !== boundarySplatSupervisionExpectedRayStepsRequested) {
+        throw new Error(`fixed-candidate supervision ray-step teacher mismatch: expected ${boundarySplatSupervisionExpectedRayStepsRequested}, requested ${capture?.target?.requestedRaySteps}, effective ${capture?.target?.effectiveRaySteps}`);
+      }
+      if (Math.abs(Number(capture?.target?.renderScale) - 1) > 0.001) {
+        throw new Error(`fixed-candidate supervision render-scale teacher mismatch: expected 1, effective ${capture?.target?.renderScale}`);
+      }
       lastTrustworthyEvidence = {
         ...lastTrustworthyEvidence,
         effectiveRoute: capture?.effectiveRoute || lastTrustworthyEvidence.effectiveRoute,
@@ -3112,6 +3138,9 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
           authority: capture.target.authority,
           rendererIdentity: capture.target.rendererIdentity,
           decomposition: capture.target.decomposition,
+          requestedRaySteps: boundarySplatSupervisionExpectedRayStepsRequested,
+          effectiveRaySteps: capture.target.effectiveRaySteps,
+          renderScale: capture.target.renderScale,
           width: capture.target.width,
           height: capture.target.height,
           visualMetrics: targetVisualMetrics,
@@ -3179,6 +3208,8 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
     supervisionPhase = 'validate-corpus';
     const validation = await validateBoundarySplatSupervisionCorpus(manifestPath, {
       expectedGrid,
+      expectedRaySteps: boundarySplatSupervisionExpectedRayStepsRequested,
+      expectedRenderScale: 1,
       requireControlConditioning: true,
       requireFreshLiveAdmission: true,
     });
@@ -3195,6 +3226,7 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
       stepDeltaMs: boundarySplatSupervisionStepDeltaMs,
       sameBrowserSequenceSuitable,
       warmup: warmupReceipt,
+      teacherIdentity,
       operationDeadline: {
         authority: 'caller-configured-per-cdp-operation-deadline-v0',
         requestedMs: boundarySplatSupervisionOperationTimeoutMsRequested,
@@ -3225,6 +3257,7 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
       requestedFrameCount: boundarySplatSupervisionFrames,
       capturedFrameCount,
       warmup: warmupReceipt,
+      teacherIdentity,
       operationDeadline: {
         authority: 'caller-configured-per-cdp-operation-deadline-v0',
         requestedMs: boundarySplatSupervisionOperationTimeoutMsRequested,
