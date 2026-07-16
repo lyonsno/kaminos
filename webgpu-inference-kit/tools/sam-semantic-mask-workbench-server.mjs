@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { existsSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
@@ -29,6 +30,14 @@ const roots = {
 const host = values.host;
 const port = Number(values.port);
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`invalid --port ${values.port}`);
+const trackedCommit = execFileSync('git', ['rev-parse', 'HEAD'], {
+  cwd: roots.kit,
+  encoding: 'utf8',
+}).trim();
+if (!/^[a-f0-9]{40}$/.test(trackedCommit)) throw new Error(`tracked commit is invalid: ${trackedCommit || '<missing>'}`);
+if (values.commit && values.commit !== trackedCommit) {
+  throw new Error(`requested commit ${values.commit} does not match tracked commit ${trackedCommit}`);
+}
 
 const manifestPath = resolve(roots.packet, 'tensor-manifest.json');
 if (!existsSync(manifestPath)) throw new Error(`packet root missing tensor-manifest.json: ${roots.packet}`);
@@ -52,14 +61,15 @@ function contentType(path) {
 }
 
 const requestedRoute = '/smokes/sam-semantic-mask-workbench.html';
-const effectiveRoute = `${requestedRoute}?manifest=${encodeURIComponent('/workbench-packet/tensor-manifest.json')}`;
+const effectiveRoute = `${requestedRoute}?manifest=${encodeURIComponent('/workbench-packet/tensor-manifest.json')}&commit=${trackedCommit}`;
 const routeReceipt = {
   schema: 'kaminos.sam3-semantic-mask-workbench-route.v0',
   registrationState: 'mounted',
   requestedRoute,
   effectiveRoute,
   effectiveUrl: `http://${host}:${port}${effectiveRoute}`,
-  commit: values.commit || null,
+  requestedCommit: values.commit || null,
+  commit: trackedCommit,
   manifestSha256: sha256File(manifestPath),
   mounts: {
     kit: { route: '/', root: roots.kit },

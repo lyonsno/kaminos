@@ -387,12 +387,15 @@ try {
   if (values['expect-empty'] && (output.selectedCandidateCount !== 0 || output.foregroundPixelCount !== 0)) {
     throw new Error(`expected empty output retained ${output.selectedCandidateCount} candidates and ${output.foregroundPixelCount} foreground pixels`);
   }
+  if (!values['expect-empty'] && (output.selectedCandidateCount <= 0 || output.foregroundPixelCount <= 0)) {
+    throw new Error(`positive output is empty: ${output.selectedCandidateCount} candidates and ${output.foregroundPixelCount} foreground pixels`);
+  }
   if (!Array.isArray(output.receiptChain) || output.receiptChain.length < 10) throw new Error('composition receipt chain is incomplete');
   if (canvases.source.nonTransparentPixels === 0 || canvases.overlay.nonTransparentPixels === 0 || canvases.mask.nonTransparentPixels === 0) {
     throw new Error('one or more visible canvases are blank');
   }
-  if (output.foregroundPixelCount > 0 && canvases.source.checksum === canvases.overlay.checksum) throw new Error('non-empty mask did not alter the visible overlay');
-  if (output.foregroundPixelCount > 0 && canvases.mask.brightPixels === 0) throw new Error('non-empty output produced a blank raw-mask witness');
+  if (!values['expect-empty'] && canvases.source.checksum === canvases.overlay.checksum) throw new Error('positive mask did not alter the visible overlay');
+  if (!values['expect-empty'] && canvases.mask.brightPixels === 0) throw new Error('positive output produced a blank raw-mask witness');
 
   report.failurePhase = 'capture';
   const screenshot = await captureCompleteWorkbenchScreenshot('positive');

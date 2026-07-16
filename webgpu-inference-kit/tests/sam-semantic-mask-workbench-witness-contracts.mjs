@@ -29,6 +29,8 @@ assert.match(witness, /actual-webgpu-readback/, 'witness must reject non-GPU out
 assert.match(witness, /output\.promptText\s*!==\s*values\.prompt/, 'witness must reject runtime prompt identity drift');
 assert.match(witness, /output\.imageCache\?\.status\s*!==\s*['"]miss['"]/, 'fresh positive witness must require an authenticated image-cache miss');
 assert.match(witness, /values\[['"]expect-empty['"]\][^]*selectedCandidateCount\s*!==\s*0[^]*foregroundPixelCount\s*!==\s*0/, 'expected-empty witness must reject any retained candidate or foreground pixels');
+assert.match(witness, /!values\[['"]expect-empty['"]\][^]*selectedCandidateCount\s*<=\s*0[^]*foregroundPixelCount\s*<=\s*0/, 'ordinary positive witness must reject an empty semantic result');
+assert.match(witness, /!values\[['"]expect-empty['"]\][^]*canvases\.source\.checksum\s*===\s*canvases\.overlay\.checksum/, 'ordinary positive witness must require a visible mask-overlay delta');
 assert.match(witness, /run-negative-control/, 'optional negative witness must activate the visible operator control');
 assert.match(witness, /negativeControl/, 'report must preserve negative-control output separately from the positive witness');
 assert.match(witness, /negativeOutput\.imageCache\?\.status\s*!==\s*['"]hit['"]/, 'same-page negative witness must require authenticated image-feature reuse');
@@ -49,6 +51,17 @@ mkdirSync(packetRoot);
 mkdirSync(sampleRoot);
 writeFileSync(join(packetRoot, 'tensor-manifest.json'), '{}\n');
 for (const sample of ['truck.jpg', 'groceries.jpg', 'test_image.jpg']) writeFileSync(join(sampleRoot, sample), sample);
+const gitEnvironment = {
+  ...process.env,
+  GIT_AUTHOR_NAME: 'SAM Workbench Contract',
+  GIT_AUTHOR_EMAIL: 'sam-workbench@example.invalid',
+  GIT_COMMITTER_NAME: 'SAM Workbench Contract',
+  GIT_COMMITTER_EMAIL: 'sam-workbench@example.invalid',
+};
+for (const args of [['init', '--quiet'], ['commit', '--allow-empty', '--quiet', '-m', 'fixture']]) {
+  const result = spawnSync('git', args, { cwd: kitRoot, env: gitEnvironment, encoding: 'utf8' });
+  assert.equal(result.status, 0, `git ${args.join(' ')} failed: ${result.stderr}`);
+}
 
 const portProbe = createServer();
 await new Promise(resolveListen => portProbe.listen(0, '127.0.0.1', resolveListen));
