@@ -219,8 +219,14 @@ try {
 
   failurePhase = 'footprint-family-preflight';
   const preflightCamera = initialization.cameras.reduce((best, camera) => Math.abs(camera.angle) < Math.abs(best.angle) ? camera : best);
+  const familyModes = {
+    'analytic-billboard': 'analyticBillboard',
+    'learned-billboard': 'learnedBillboard',
+    'world-tangent-covariance': 'worldCovariance',
+    'flow-kernel-moment-covariance': 'kernelMomentCovariance',
+  };
   const footprintFamilyPreflight = [];
-  for (const mode of ['analyticBillboard', 'learnedBillboard', 'worldCovariance', 'kernelMomentCovariance']) {
+  for (const [family, mode] of Object.entries(familyModes)) {
     const key = `footprint-family-preflight-v0-${mode}`;
     const capture = await evaluate(socket, `window.__kaminosFilamentOrbitWitness.capture(${JSON.stringify({
       key,
@@ -232,6 +238,7 @@ try {
     assert.equal(capture.boundarySplatFallbackReason, null, `${mode} footprint preflight fell back`);
     footprintFamilyPreflight.push({
       identity: 'footprint-family-preflight-v0',
+      family,
       mode,
       candidateCount: capture.boundarySplatCandidateCount,
       candidatePayloadSha256: capture.footprintAudit.candidatePayloadSha256,
@@ -364,15 +371,10 @@ try {
     footprintFamilyPreflight,
     browserEvents: socket.browserEvents,
   };
+  failurePhase = 'false-closure-validation';
   rejectFalseClosure(report);
   writeFileSync(captureReportPath, JSON.stringify(report, null, 2));
   const captureMap = new Map(report.captures.map(capture => [capture.key, capture]));
-  const familyModes = {
-    'analytic-billboard': 'analyticBillboard',
-    'learned-billboard': 'learnedBillboard',
-    'world-tangent-covariance': 'worldCovariance',
-    'flow-kernel-moment-covariance': 'kernelMomentCovariance',
-  };
   const firstAudit = report.captures.find(capture => capture.footprintAudit)?.footprintAudit;
   const cameraRows = [];
   for (const camera of initialization.cameras) {
@@ -447,10 +449,12 @@ try {
     heldOutCameraIndices: initialization.cameras.map(camera => camera.index).filter(index => index !== centerCameraIndex),
     covarianceCeiling: 'world-gradient-or-flow-kernel-rank-one-tangent-covariance-no-full-3d-covariance-v0',
     supportCeiling: 'current-structural-ridge-owned-candidates-omit-legitimate-non-ridge-full-flame-filaments-v0',
+    footprintFamilyPreflight,
     cameraRows,
     summary: covarianceAnalysis.summary,
     sourceOrbitReport: captureReportPath,
   };
+  failurePhase = 'camera-holdout-validation';
   await validateCameraHoldoutReport(holdoutReport, {
     expectedCameraCount: initialization.cameras.length,
     requireKernelMoment: true,
@@ -738,6 +742,9 @@ function runtimeInitializationSource(config) {
       async function capture(request) {
         basinWindow.kaminosSetCameraDebugPose(request.camera.pose);
         prototype.setControls({ raySteps: request.raySteps });
+        if (['analyticSplat', 'analyticBillboard', 'learnedBillboard', 'worldCovariance'].includes(request.mode)) {
+          prototype.setControls({ flowKernelStrength: 0 });
+        }
         let modeAuthority = null;
         if (request.mode === 'stateDerivedSupport') {
           operator.setPresentation('beauty');
@@ -1163,6 +1170,25 @@ function rejectFalseClosure(report) {
   if (report.captures.some(capture => capture.raymarchSmokePresentationReceipt?.effectiveMode !== 'off')) {
     throw new Error('smoke-off request was not effective');
   }
+  const preflightByMode = new Map();
+  for (const row of report.footprintFamilyPreflight || []) {
+    if (preflightByMode.has(row.mode)) throw new Error(`duplicate footprint family preflight: ${row.mode}`);
+    preflightByMode.set(row.mode, row);
+  }
+  const trainingCameraIndex = report.covarianceAnalysis?.trainingCameraIndex;
+  for (const mode of ['analyticBillboard', 'learnedBillboard', 'worldCovariance', 'kernelMomentCovariance']) {
+    const preflight = preflightByMode.get(mode);
+    const admitted = report.captures.find(capture => capture.cameraIndex === trainingCameraIndex && capture.mode === mode);
+    if (!preflight || !admitted?.footprintAudit) throw new Error(`footprint preflight/admission row missing: ${mode}`);
+    if (preflight.candidateCount !== admitted.boundarySplatCandidateCount
+      || preflight.candidatePayloadSha256 !== admitted.footprintAudit.candidatePayloadSha256) {
+      throw new Error(`footprint preflight candidate payload disagrees with admitted training camera: ${mode}`);
+    }
+    if (preflight.attributePayloadSha256 !== admitted.footprintAudit.attributePayloadSha256) {
+      throw new Error(`footprint preflight attribute payload disagrees with admitted training camera: ${mode}`);
+    }
+  }
+  if (preflightByMode.size !== 4) throw new Error('footprint preflight family set is incomplete');
   const raymarchCameraHashes = new Set(report.captures.filter(capture => capture.mode === 'raymarch' && capture.requestedRaySteps === Math.max(...rayStepCounts)).map(capture => capture.pixelHash));
   if (raymarchCameraHashes.size < Math.min(3, orbitAngles.length)) throw new Error('cached or static output pretending to be live');
   if (!report.frozenDeterminism.frameCountStable || !report.frozenDeterminism.simStepCountStable || report.frozenDeterminism.pixelDelta.changedFraction !== 0) {

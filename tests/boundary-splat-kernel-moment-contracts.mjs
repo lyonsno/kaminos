@@ -48,6 +48,11 @@ assert.match(orbitWitness, /kernelMomentCovariance/, 'the orbit witness captures
 assert.match(orbitWitness, /flow-kernel-moment-covariance/, 'the holdout report names the kernel treatment as a distinct family');
 assert.match(orbitWitness, /requireKernelMoment:\s*true/, 'new orbit reports fail if the kernel family is absent');
 assert.match(orbitWitness, /footprint-family-preflight-v0/, 'the witness warms every footprint family before admitting cross-camera attribute hashes');
+assert.match(
+  orbitWitness,
+  /\['analyticSplat', 'analyticBillboard', 'learnedBillboard', 'worldCovariance'\]\.includes\(request\.mode\)[\s\S]*setControls\(\{ flowKernelStrength: 0 \}\)/,
+  'every non-kernel splat family must explicitly clear the kernel reconstruction strength',
+);
 assert.match(holdoutOracle, /base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0/, 'the oracle pins the treatment authority');
 assert.match(holdoutOracle, /structural-splat-candidates-v0/, 'the oracle preserves the producer coverage ceiling');
 
