@@ -229,8 +229,16 @@
     const fixedGateDiscontinuityAssayMode = !native64ManifestMode && params.get('fixed_gate_discontinuity_assay') === '1';
     const candidateHeadBenchmarkEnabled = !native64ManifestMode && params.get('candidate_head_benchmark') === '1';
     const cueBufferLifecycleStressMode = !native64ManifestMode && params.get('cue_buffer_lifecycle_stress') === '1';
-    const manualDualCaptureMode = !native64ManifestMode && (params.get('manual_dual_capture') === '1' || params.get('capture_paused') === '1');
-    const manualSourceGrid = Number(params.get('manual_source_grid') || 96);
+    const causalFeedbackMode = !native64ManifestMode && params.get('causal_feedback_role') !== null;
+    const CAUSAL_FEEDBACK_ROLES = Object.freeze(['control', 'self', 'learnedContinuous', 'learnedRelease']);
+    const causalFeedbackRole = params.get('causal_feedback_role') || 'control';
+    const causalPreRollSteps = Math.max(0, Math.round(Number(params.get('causal_preroll_steps') || 96)));
+    const causalWarmupSteps = Math.max(1, Math.round(Number(params.get('warmup_steps') || 30)));
+    const causalReleaseSteps = Math.max(1, Math.round(Number(params.get('release_steps') || 30)));
+    const causalCurlNoiseGain = Math.max(0, Math.min(3, Number(params.get('causal_curl_noise_gain') || 0.72)));
+    const causalVorticityGain = Math.max(0, Math.min(3, Number(params.get('causal_vorticity_gain') || 0.52)));
+    const manualDualCaptureMode = !native64ManifestMode && !causalFeedbackMode && (params.get('manual_dual_capture') === '1' || params.get('capture_paused') === '1');
+    const manualSourceGrid = causalFeedbackMode ? 64 : Number(params.get('manual_source_grid') || 96);
     const manualSourceGridSupported = [64, 96, 128].includes(manualSourceGrid);
     const nativeControlRoleIdentity = `native${manualSourceGrid}Control`;
     const requestedTransferRouteId = params.get('native_low_transfer_route') || NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE;
@@ -260,7 +268,11 @@
     let latestDiscontinuityAssay = null;
     let latestCueBufferLifecycleStress = null;
     let latestManualDualCapture = null;
-    let capturePaused = manualDualCaptureMode;
+    let latestCausalFeedbackFrame = null;
+    let causalInitialStateReset = null;
+    let causalFeedbackFrameIndex = 0;
+    let learnedCuePrimed = false;
+    let capturePaused = manualDualCaptureMode || causalFeedbackMode;
     let vivisectorCandidateHeadPackageReceipt = {
       identity: VIVISECTOR_CANDIDATE_HEAD_RECEIVER_IDENTITY,
       schema: VIVISECTOR_CANDIDATE_HEAD_PACKAGE_SCHEMA,
@@ -299,11 +311,22 @@
       document.querySelector('#frontTopologyAblatedImage + .pane-label').innerHTML = `candidate96Trained<span>160->96 package applied zero-shot to the same native ${manualSourceGrid} source, splat-only-v0</span>`;
     }
 
+    if (causalFeedbackMode) {
+      if (!CAUSAL_FEEDBACK_ROLES.includes(causalFeedbackRole)) {
+        throw new Error(`unsupportedCausalFeedbackRole:${causalFeedbackRole}`);
+      }
+      title.querySelector('strong').textContent = `Native 64 causal cue uptake: ${causalFeedbackRole}`;
+      title.querySelector('span').textContent = 'Every capture advances exactly one native simulation step; learned cues generated now apply next step';
+      document.querySelector('#controlImage + .pane-label').innerHTML = `${causalFeedbackRole}<span>Actual native 64 source render after this frame's simulation step</span>`;
+      document.querySelector('#treatmentImage').closest('.pane').hidden = true;
+      document.getElementById('panes').style.gridTemplateColumns = '1fr';
+    }
+
     const baseControls = {
       kaminos_volume_smoke: '1',
       volume_scene: 'tall_plume',
       volume_tall_preset: 'rgb_upscale_basin_0711',
-      volume_resolution: native64ManifestMode ? '64' : manualDualCaptureMode ? String(manualSourceGrid) : '128',
+      volume_resolution: native64ManifestMode || causalFeedbackMode ? '64' : manualDualCaptureMode ? String(manualSourceGrid) : '128',
       volume_majorant_grid: '24',
       volume_boundary_sidecar_source: 'baked',
       volume_boundary_sidecar_view: 'off',
@@ -994,6 +1017,226 @@
       return latestManualDualCapture;
     }
 
+    function causalFeedbackPhase() {
+      if (causalFeedbackRole === 'control') return 'off';
+      if (causalFeedbackRole === 'self') return 'self';
+      if (!learnedCuePrimed) return 'priming';
+      if (causalFeedbackRole === 'learnedRelease' && causalFeedbackFrameIndex >= causalWarmupSteps) return 'release';
+      return causalFeedbackRole === 'learnedRelease' ? 'warmup' : 'continuous';
+    }
+
+    async function resetCausalFeedbackInitialState() {
+      if (!causalFeedbackMode) throw new Error('causal feedback mode was not requested');
+      const prototype = await waitForPrototype();
+      prototype.setSelectiveHeadLiveCapturePaused?.(true);
+      prototype.setControls({
+        resolution: 96,
+        oracleActivityCue: 0,
+        oracleActivityDisplay: 0,
+        oracleActivityCurlNoise: 0,
+        oracleActivityVorticity: 0,
+        oracleActivityMaterial: 0,
+        runtimeQualityReason: 'causal-initial-state-reset-intermediate-96',
+      });
+      prototype.setControls({
+        resolution: 64,
+        oracleActivityCue: 0,
+        oracleActivityDisplay: 0,
+        oracleActivityCurlNoise: 0,
+        oracleActivityVorticity: 0,
+        oracleActivityMaterial: 0,
+        runtimeQualityReason: 'causal-initial-state-reset-target-64',
+      });
+      const runnerState = prototype.debugState?.() || null;
+      if (runnerState?.simStepCount !== 0) {
+        throw new Error(`causalInitialStateResetFailed:${runnerState?.simStepCount}`);
+      }
+      let previousPreRollStep = 0;
+      for (let preRollStep = 0; preRollStep < causalPreRollSteps; preRollStep += 1) {
+        failurePhase = 'causal-unforced-deterministic-preroll';
+        prototype.setControls({
+          resolution: 64,
+          boundarySplatMode: 'learned',
+          selectiveHeadLiveRole: 'off',
+          selectiveHeadLiveRenderComposition: requestedComposition,
+          oracleActivityCue: 0,
+          oracleActivityDisplay: 0,
+          oracleActivityCurlNoise: 0,
+          oracleActivityVorticity: 0,
+          oracleActivityMaterial: 0,
+          runtimeQualityReason: 'causal-unforced-deterministic-preroll-v0',
+        });
+        const preRollReceipt = await prototype.captureNativeLowSelectiveSharedDeviceFrame({
+          boundarySplatComposition: requestedComposition,
+          now: performance.now(),
+          deterministicNowMs: (preRollStep + 1) * (1000 / 30),
+          captureVisuals: false,
+          sourceHistoryDetailAdmissionEnabled,
+          sourceHistoryDetailTargetCoverage,
+          supportProbabilityDetailAdmissionEnabled,
+          coarseFrontDetailAdmissionEnabled,
+          treatmentSplatRadianceGain,
+          treatmentSplatOpacityGain,
+          transferRouteId: NATIVE_LOW_TRANSFER_160_TO_96_DEPLOYMENT_GRID_ROUTE,
+          advanceSourceStep: true,
+          learnedCueFeedbackEnabled: false,
+          learnedCueFeedbackDiagnosticsEnabled: false,
+        });
+        if (!preRollReceipt?.ok) {
+          throw new Error(`${preRollReceipt?.failurePhase || 'causal-unforced-deterministic-preroll'}:${preRollReceipt?.error || 'unknown'}`);
+        }
+        const preRollSourceStep = preRollReceipt.sourceStep ?? null;
+        const preRollStepDelta = preRollReceipt.simulationSteppingReceipt?.simStepDelta ?? null;
+        if (preRollStepDelta !== 1 || preRollSourceStep !== previousPreRollStep + 1) {
+          throw new Error(`causalPreRollNonconsecutive:${previousPreRollStep}:${preRollSourceStep}:${preRollStepDelta}`);
+        }
+        if (preRollReceipt.generatedCueFrameId || preRollReceipt.appliedCueFrameId) {
+          throw new Error(`causalPreRollCueLeak:${preRollReceipt.appliedCueFrameId || 'none'}:${preRollReceipt.generatedCueFrameId || 'none'}`);
+        }
+        previousPreRollStep = preRollSourceStep;
+        status.textContent = `${causalFeedbackRole} | unforced pre-roll ${preRollSourceStep}/${causalPreRollSteps}`;
+      }
+      causalFeedbackFrameIndex = 0;
+      learnedCuePrimed = false;
+      latestCausalFeedbackFrame = null;
+      causalInitialStateReset = {
+        identity: 'causal-initial-state-reset-96-to-64-v0',
+        intermediateGrid: 96,
+        nativeGrid: 64,
+        resetSimStepCount: 0,
+        preRollIdentity: 'causal-unforced-deterministic-preroll-v0',
+        preRollSteps: causalPreRollSteps,
+        simStepCount: causalPreRollSteps,
+        firstCapturedSimulationStep: causalPreRollSteps + 1,
+        frameCountBeforePreRoll: runnerState?.frameCount ?? null,
+        receiverDisabled: true,
+        learnedCueFeedbackEnabled: false,
+        effectiveReceiverControls: {
+          oracleActivityCue: 0,
+          oracleActivityCurlNoise: 0,
+          oracleActivityVorticity: 0,
+          oracleActivityMaterial: 0,
+        },
+      };
+      return { ...causalInitialStateReset };
+    }
+
+    async function stepCausalFeedbackFrame() {
+      failurePhase = 'native64-causal-feedback-step';
+      capturePaused = true;
+      const prototype = await waitForPrototype();
+      if (!causalFeedbackMode) throw new Error('causal feedback mode was not requested');
+      if (!prototype?.captureNativeLowSelectiveSharedDeviceFrame) {
+        throw new Error('captureNativeLowSelectiveSharedDeviceFrame missing from renderer prototype');
+      }
+      prototype.setSelectiveHeadLiveCapturePaused?.(true);
+      const forcingPhase = causalFeedbackPhase();
+      const deterministicNowMs = (causalPreRollSteps + causalFeedbackFrameIndex + 1) * (1000 / 30);
+      const learnedRole = causalFeedbackRole === 'learnedContinuous' || causalFeedbackRole === 'learnedRelease';
+      const forceActive = causalFeedbackRole === 'self'
+        || (learnedRole && forcingPhase !== 'priming' && forcingPhase !== 'release');
+      const generateLearnedCue = learnedRole && forcingPhase !== 'release';
+      prototype.setControls({
+        resolution: 64,
+        boundarySplatMode: 'learned',
+        selectiveHeadLiveRole: 'off',
+        selectiveHeadLiveRenderComposition: requestedComposition,
+        oracleActivityCue: forceActive ? 1 : 0,
+        oracleActivityDisplay: 0,
+        oracleActivityCurlNoise: forceActive ? causalCurlNoiseGain : 0,
+        oracleActivityVorticity: forceActive ? causalVorticityGain : 0,
+        oracleActivityMaterial: 0,
+        runtimeQualityReason: `native64-causal-${causalFeedbackRole}-${forcingPhase}`,
+      });
+      const receipt = await prototype.captureNativeLowSelectiveSharedDeviceFrame({
+        boundarySplatComposition: requestedComposition,
+        now: performance.now(),
+        deterministicNowMs,
+        captureVisuals: true,
+        sourceHistoryDetailAdmissionEnabled,
+        sourceHistoryDetailTargetCoverage,
+        supportProbabilityDetailAdmissionEnabled,
+        coarseFrontDetailAdmissionEnabled,
+        treatmentSplatRadianceGain,
+        treatmentSplatOpacityGain,
+        transferRouteId: NATIVE_LOW_TRANSFER_160_TO_96_DEPLOYMENT_GRID_ROUTE,
+        advanceSourceStep: true,
+        learnedCueFeedbackEnabled: generateLearnedCue,
+        learnedCueFeedbackDiagnosticsEnabled: generateLearnedCue && !learnedCuePrimed,
+      });
+      if (!receipt?.ok) {
+        throw new Error(`${receipt?.failurePhase || 'native64-causal-feedback-step'}:${receipt?.error || 'unknown'}`);
+      }
+      if (generateLearnedCue && receipt.generatedCueFrameId) learnedCuePrimed = true;
+      replaceImageUrls({ visuals: { controlObjectUrl: receipt.visuals?.controlObjectUrl } });
+      causalFeedbackFrameIndex += 1;
+      frameIndex += 1;
+      const sourceStepDelta = receipt.simulationSteppingReceipt?.simStepDelta ?? null;
+      const appliedCueAuthority = causalFeedbackRole === 'self' && forceActive
+        ? 'procedural-native64-self-activity-v0'
+        : forceActive ? receipt.appliedCueAuthority : null;
+      latestCausalFeedbackFrame = {
+        ok: sourceStepDelta === 1,
+        status: sourceStepDelta === 1 ? 'captured' : 'failed',
+        identity: 'native64-causal-learned-cue-feedback-frame-v0',
+        role: causalFeedbackRole,
+        forcingPhase,
+        nativeGrid: 64,
+        preRollSteps: causalPreRollSteps,
+        firstCapturedSimulationStep: causalPreRollSteps + 1,
+        simulationStep: receipt.sourceStep,
+        sourceStepIdentity: receipt.sourceStepIdentity,
+        sourceStepDelta,
+        deterministicNowMs: receipt.simulationSteppingReceipt?.deterministicNowMs ?? null,
+        deterministicClockAuthority: receipt.simulationSteppingReceipt?.deterministicClockAuthority || null,
+        consecutiveStepAuthority: 'consecutive-native64-simulation-steps-v0',
+        learnedCuePrimed,
+        forceActive,
+        learnedCueGenerationActive: generateLearnedCue,
+        appliedCueFrameId: forceActive ? receipt.appliedCueFrameId : null,
+        appliedCueAuthority,
+        appliedCueReceiver: receipt.appliedCueReceiver || null,
+        generatedCueFrameId: receipt.generatedCueFrameId || null,
+        generatedForNextSimulationStep: receipt.generatedForNextSimulationStep ?? null,
+        learnedCueAuthority: receipt.learnedCueAuthority || null,
+        learnedCueProjectionIdentity: receipt.learnedCueProjectionIdentity || null,
+        learnedFlowActivityModelIdentity: receipt.learnedFlowActivityModelIdentity || null,
+        learnedFlowActivityModelSha256: receipt.learnedFlowActivityModelSha256 || null,
+        learnedCueDiagnosticStats: receipt.learnedCueDiagnosticStats || null,
+        causalCurlNoiseGain: forceActive ? causalCurlNoiseGain : 0,
+        causalVorticityGain: forceActive ? causalVorticityGain : 0,
+        materialGain: 0,
+        warmupSteps: causalWarmupSteps,
+        releaseSteps: causalReleaseSteps,
+        requestedRoute: NATIVE_LOW_SELECTIVE_LIVE_ROUTE,
+        effectiveRoute: receipt.effectiveRoute || NATIVE_LOW_SHARED_DEVICE_ROUTE,
+        requestedTransferRouteId: NATIVE_LOW_TRANSFER_160_TO_96_DEPLOYMENT_GRID_ROUTE,
+        effectiveTransferRouteId: receipt.effectiveTransferRouteId || null,
+        requestedBackend: 'WebGPU',
+        effectiveBackend: receipt.effectiveBackend || null,
+        fallbackBackend: receipt.fallbackBackend || null,
+        requestedComposition,
+        effectiveComposition: receipt.effectiveComposition || null,
+        modelIdentity: receipt.modelIdentity || null,
+        modelSha256: receipt.modelSha256 || null,
+        runtimeTruthAvailable: false,
+        syntheticDownsampleApplied: false,
+        causalNativeSourceObjectUrl: receipt.visuals?.controlObjectUrl || null,
+        nativeStepMs: receipt.nativeStepMs ?? null,
+        inferenceGpuMs: receipt.inferenceGpuMs ?? null,
+        cueProjectionGpuMs: receipt.nativeLowPredictedActivityCueProjection?.gpuMs ?? null,
+        endToEndFrameMs: receipt.endToEndFrameMs ?? null,
+        failurePhase: sourceStepDelta === 1 ? null : 'native64-causal-nonconsecutive-step',
+      };
+      latestReceipt = latestCausalFeedbackFrame;
+      latestRunnerState = prototype.debugState?.() || null;
+      lastTrustworthyEvidence = { latestCausalFeedbackFrame, runner: latestRunnerState };
+      failurePhase = latestCausalFeedbackFrame.failurePhase;
+      routeStatus = latestCausalFeedbackFrame.ok ? 'paused' : 'failed';
+      status.textContent = `${causalFeedbackRole} | ${forcingPhase} | native step ${receipt.sourceStep} | applied ${latestCausalFeedbackFrame.appliedCueFrameId || 'none'} | next ${latestCausalFeedbackFrame.generatedCueFrameId || 'none'}`;
+      return latestCausalFeedbackFrame;
+    }
+
     function debugState() {
       const durationSeconds = (performance.now() - startedAtMs) / 1000;
       const receipt = latestReceipt || {};
@@ -1010,7 +1253,7 @@
         failurePhase,
         routeIdentity: NATIVE_LOW_SELECTIVE_LIVE_ROUTE,
         sharedDeviceRoute: NATIVE_LOW_SHARED_DEVICE_ROUTE,
-        nativeGrid: manualDualCaptureMode ? manualSourceGrid : (native64ManifestMode ? 64 : 128),
+        nativeGrid: causalFeedbackMode || native64ManifestMode ? 64 : manualDualCaptureMode ? manualSourceGrid : 128,
         capturePaused,
         requestedRoute: NATIVE_LOW_SELECTIVE_LIVE_ROUTE,
         effectiveRoute: NATIVE_LOW_SHARED_DEVICE_ROUTE,
@@ -1025,6 +1268,14 @@
         nativeLowTrainedPackageRouteRegistry: nativeLowTrainedPackageRouteRegistry(),
         nativeLowTrainedPackageRoute: receipt.nativeLowTrainedPackageRoute || null,
         nativeLowDualTrainedPackageManualCapture: latestManualDualCapture,
+        native64CausalFeedbackMode: causalFeedbackMode,
+        native64CausalFeedbackRole: causalFeedbackMode ? causalFeedbackRole : null,
+        native64CausalFeedbackFrame: latestCausalFeedbackFrame,
+        causalInitialStateReset,
+        causalFeedbackFrameIndex,
+        causalPreRollSteps,
+        causalWarmupSteps,
+        causalReleaseSteps,
         nativeControl: latestManualDualCapture?.visualRoles?.[nativeControlRoleIdentity] || null,
         native64Control: manualSourceGrid === 64 ? latestManualDualCapture?.visualRoles?.native64Control || null : null,
         native96Control: manualSourceGrid === 96 ? latestManualDualCapture?.visualRoles?.native96Control || null : null,
@@ -1035,7 +1286,7 @@
         featureAuthority: NATIVE_LOW_FEATURE_AUTHORITY,
         runtimeTruthAvailable,
         syntheticDownsampleApplied,
-        nativeLowControl: { grid: manualDualCaptureMode ? manualSourceGrid : (native64ManifestMode ? 64 : 128), step: receipt.controlStep ?? null, backend: runner?.backend || null },
+        nativeLowControl: { grid: causalFeedbackMode || native64ManifestMode ? 64 : manualDualCaptureMode ? manualSourceGrid : 128, step: receipt.controlStep ?? null, backend: runner?.backend || null },
         nativeLowSelectivePredicted: { grid: 160, step: receipt.treatmentStep ?? null, backend: runner?.backend || null },
         fullFrozenTreatmentReference: receipt.fullFrozenTreatmentReference || null,
         frontTopologyAblatedTreatment: receipt.frontTopologyAblatedTreatment || null,
@@ -1138,7 +1389,7 @@
       runnerFrame.src = `./?${new URLSearchParams(baseControls)}`;
       const prototype = await waitForPrototype();
       prototype.setControls({
-        resolution: native64ManifestMode ? 64 : manualDualCaptureMode ? manualSourceGrid : 128,
+        resolution: native64ManifestMode || causalFeedbackMode ? 64 : manualDualCaptureMode ? manualSourceGrid : 128,
         boundarySplatMode: 'learned',
         selectiveHeadLiveRole: 'off',
         selectiveHeadLiveRenderComposition: requestedComposition,
@@ -1149,6 +1400,13 @@
         routeStatus = 'paused';
         failurePhase = null;
         status.textContent = 'manual capture paused | call window.__kaminosNativeLowSelectiveLive.stepCaptureFrame()';
+        return;
+      }
+      if (causalFeedbackMode) {
+        await resetCausalFeedbackInitialState();
+        routeStatus = 'paused';
+        failurePhase = null;
+        status.textContent = `causal ${causalFeedbackRole} paused | call window.__kaminosNativeLowSelectiveLive.stepCausalFeedbackFrame()`;
         return;
       }
       await tick();
@@ -1189,7 +1447,7 @@
       requestAnimationFrame(loop);
     }
 
-    window.__kaminosNativeLowSelectiveLive = { setCapturePaused, debugState, stepCaptureFrame };
+    window.__kaminosNativeLowSelectiveLive = { setCapturePaused, debugState, stepCaptureFrame, stepCausalFeedbackFrame, resetCausalFeedbackInitialState };
     initialize().catch(error => {
       routeStatus = 'failed';
       failurePhase = failurePhase || 'route-initialize';

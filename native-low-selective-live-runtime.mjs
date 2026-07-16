@@ -6,6 +6,10 @@ import {
   SELECTIVE_HEAD_LIVE_MODEL as SELECTIVE_HEAD_LIVE_MODEL_160_TO_96,
   SELECTIVE_HEAD_LIVE_MODEL_URL as SELECTIVE_HEAD_LIVE_MODEL_URL_160_TO_96,
 } from './models/selective-head-live/exact-basin-160-to-96-v0/model.generated.js';
+import {
+  EXACT_BASIN_ACTIVITY_MODEL,
+  EXACT_BASIN_ACTIVITY_MODEL_URL,
+} from './models/selective-head-live/exact-basin-160-to-96-activity-v0/model.generated.js';
 
 export const SELECTIVE_HEAD_LIVE_MODEL = SELECTIVE_HEAD_LIVE_MODEL_160_TO_128;
 export const SELECTIVE_HEAD_LIVE_MODEL_URL = SELECTIVE_HEAD_LIVE_MODEL_URL_160_TO_128;
@@ -22,6 +26,10 @@ export const NATIVE_LOW_SOURCE_PROXIMAL_TILE_CANDIDATE = 'native-low-source-prox
 export const NATIVE_LOW_CANDIDATE_HEAD_COST_MICROBENCHMARK = 'native-low-candidate-head-cost-microbenchmark-v0';
 export const NATIVE_LOW_RESIDENT_CUE_BUFFER_LIFECYCLE_STRESS = 'native-low-resident-cue-buffer-lifecycle-stress-v0';
 export const NATIVE_LOW_RUNTIME_BUILD_IDENTITY = 'native-low-resident-cue-buffer-lifecycle-stress-v1';
+export const NATIVE_LOW_PREDICTED_ACTIVITY_CUE_PROJECTION = 'native-low-predicted-front-carrier-activity-max-projection-v0';
+export const NATIVE_LOW_LEARNED_FLOW_ACTIVITY_CUE_PROJECTION = 'native-low-learned-flow-activity-head-projection-v0';
+export const NATIVE_LOW_LEARNED_FLOW_ACTIVITY_MODEL_IDENTITY = 'exact-basin-derived-flow-activity-head-160-to-96-v0';
+export const NATIVE_LOW_LEARNED_FLOW_ACTIVITY_MODEL_SHA256 = '34aff071fac1375f6ae44d38ad8047162593f4be0bed9671b18bd438e723274b';
 export const NATIVE_LOW_TRAINED_PACKAGE_ROUTE_REGISTRY_IDENTITY = 'native-low-trained-package-route-registry-v0';
 export const NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE = 'native-low-transfer-160-to-128-zero-shot-v0';
 export const NATIVE_LOW_TRANSFER_160_TO_96_DEPLOYMENT_GRID_ROUTE = 'native-low-transfer-160-to-96-deployment-grid-v0';
@@ -328,6 +336,199 @@ fn upsampleNativeFront(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 `;
 
+function predictedActivityCueProjectionWgsl() {
+  return `
+const LOW_GRID: u32 = ${LOW_GRID}u;
+const HIGH_GRID: u32 = ${HIGH_GRID}u;
+const SLOTS_PER_CELL: u32 = ${SLOTS_PER_CELL}u;
+
+@group(0) @binding(0) var<storage, read> predictedFluid: array<vec4<f32>>;
+@group(0) @binding(1) var<storage, read> predictedFront: array<f32>;
+@group(0) @binding(2) var<storage, read_write> targetActivityCue: array<f32>;
+
+fn index3(cell: vec3<u32>, grid: u32) -> u32 {
+  return cell.x + cell.y * grid + cell.z * grid * grid;
+}
+
+fn smoothstep01(edge0: f32, edge1: f32, value: f32) -> f32 {
+  let t = clamp((value - edge0) / max(edge1 - edge0, 0.000001), 0.0, 1.0);
+  return t * t * (3.0 - 2.0 * t);
+}
+
+fn proceduralReceiverActivityCue(front: f32, fireLayer: vec4<f32>, microLayer: vec4<f32>) -> f32 {
+  let materialEnergy = max(max(fireLayer.x, fireLayer.z), max(microLayer.y, max(front, 0.0)));
+  return clamp(smoothstep01(0.025, 0.74, materialEnergy) * 0.72, 0.0, 1.0);
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn projectPredictedActivityCue(@builtin(global_invocation_id) lowCell: vec3<u32>) {
+  if (any(lowCell >= vec3<u32>(LOW_GRID))) { return; }
+  let highStart = vec3<u32>(floor(vec3<f32>(lowCell) * f32(HIGH_GRID) / f32(LOW_GRID)));
+  let highEnd = min(
+    vec3<u32>(HIGH_GRID),
+    vec3<u32>(ceil(vec3<f32>(lowCell + vec3<u32>(1u)) * f32(HIGH_GRID) / f32(LOW_GRID)))
+  );
+  var cue = 0.0;
+  for (var highZ = highStart.z; highZ < highEnd.z; highZ += 1u) {
+    for (var highY = highStart.y; highY < highEnd.y; highY += 1u) {
+      for (var highX = highStart.x; highX < highEnd.x; highX += 1u) {
+        let highIndex = index3(vec3<u32>(highX, highY, highZ), HIGH_GRID);
+        let fireLayer = predictedFluid[highIndex * SLOTS_PER_CELL + 2u];
+        let microLayer = predictedFluid[highIndex * SLOTS_PER_CELL + 3u];
+        cue = max(cue, proceduralReceiverActivityCue(predictedFront[highIndex], fireLayer, microLayer));
+      }
+    }
+  }
+  targetActivityCue[index3(lowCell, LOW_GRID)] = cue;
+}
+`;
+}
+
+function learnedFlowActivityCueProjectionWgsl() {
+  const offsets = EXACT_BASIN_ACTIVITY_MODEL.offsets;
+  return `
+const LOW_GRID: u32 = ${LOW_GRID}u;
+const HIGH_GRID: u32 = ${HIGH_GRID}u;
+const SLOTS_PER_CELL: u32 = ${SLOTS_PER_CELL}u;
+const FEATURE_COUNT: u32 = ${FEATURE_COUNT}u;
+const HIDDEN_WIDTH: u32 = ${HIDDEN_WIDTH}u;
+
+@group(0) @binding(0) var<storage, read> lowFluid: array<vec4<f32>>;
+@group(0) @binding(1) var<storage, read> lowFront: array<f32>;
+@group(0) @binding(2) var<storage, read> activityModel: array<f32>;
+@group(0) @binding(3) var<storage, read_write> targetActivityCue: array<f32>;
+
+fn index3(cell: vec3<u32>, grid: u32) -> u32 {
+  return cell.x + cell.y * grid + cell.z * grid * grid;
+}
+
+fn clampCell(cell: vec3<i32>) -> vec3<u32> {
+  return vec3<u32>(clamp(cell, vec3<i32>(0), vec3<i32>(i32(LOW_GRID) - 1)));
+}
+
+fn velocityAt(cell: vec3<i32>) -> vec3<f32> {
+  return lowFluid[index3(clampCell(cell), LOW_GRID) * SLOTS_PER_CELL].xyz;
+}
+
+fn smoothstep01(edge0: f32, edge1: f32, value: f32) -> f32 {
+  let t = clamp((value - edge0) / max(edge1 - edge0, 0.000001), 0.0, 1.0);
+  return t * t * (3.0 - 2.0 * t);
+}
+
+fn nativeDiagnosticActivity(cell: vec3<u32>) -> f32 {
+  let c = vec3<i32>(cell);
+  let vx0 = velocityAt(c + vec3<i32>(-1, 0, 0));
+  let vx1 = velocityAt(c + vec3<i32>(1, 0, 0));
+  let vy0 = velocityAt(c + vec3<i32>(0, -1, 0));
+  let vy1 = velocityAt(c + vec3<i32>(0, 1, 0));
+  let vz0 = velocityAt(c + vec3<i32>(0, 0, -1));
+  let vz1 = velocityAt(c + vec3<i32>(0, 0, 1));
+  let curl = vec3<f32>(
+    (vy1.z - vy0.z) - (vz1.y - vz0.y),
+    (vz1.x - vz0.x) - (vx1.z - vx0.z),
+    (vx1.y - vx0.y) - (vy1.x - vy0.x)
+  ) * 0.5;
+  let curlMagnitude = length(curl);
+  let divergenceAbs = abs(((vx1.x - vx0.x) + (vy1.y - vy0.y) + (vz1.z - vz0.z)) * 0.5);
+  let overlay = smoothstep01(0.015, 0.12, curlMagnitude + divergenceAbs);
+  let diagnosticMix = smoothstep01(0.010, 0.085, divergenceAbs);
+  var diagnosticColor = mix(vec3<f32>(0.08, 0.72, 0.95), vec3<f32>(1.0, 0.18, 0.08), diagnosticMix);
+  diagnosticColor *= 0.35 + smoothstep01(0.012, 0.18, curlMagnitude);
+  return clamp(length(diagnosticColor * overlay), 0.0, 1.0);
+}
+
+fn standardizeActivityFeature(raw: f32, featureIndex: u32) -> f32 {
+  return (raw - activityModel[${offsets.featureMean}u + featureIndex]) /
+    activityModel[${offsets.featureStd}u + featureIndex];
+}
+
+fn makeActivityFeatures(highCell: vec3<u32>) -> array<f32, ${FEATURE_COUNT}> {
+  let lowCell = min(vec3<u32>(LOW_GRID - 1u), vec3<u32>(floor(vec3<f32>(highCell) * f32(LOW_GRID) / f32(HIGH_GRID))));
+  let lowIndex = index3(lowCell, LOW_GRID);
+  var lowValues: array<f32, 17>;
+  for (var slot = 0u; slot < SLOTS_PER_CELL; slot += 1u) {
+    let value = lowFluid[lowIndex * SLOTS_PER_CELL + slot];
+    lowValues[slot * 4u + 0u] = value.x;
+    lowValues[slot * 4u + 1u] = value.y;
+    lowValues[slot * 4u + 2u] = value.z;
+    lowValues[slot * 4u + 3u] = value.w;
+  }
+  lowValues[16] = lowFront[lowIndex];
+  var features: array<f32, ${FEATURE_COUNT}>;
+  for (var i = 0u; i < 17u; i += 1u) {
+    features[i] = standardizeActivityFeature(lowValues[i], i);
+    features[17u + i] = standardizeActivityFeature(lowValues[i] * lowValues[i], 17u + i);
+  }
+  let normalized = vec3<f32>(highCell) / f32(HIGH_GRID - 1u) * 2.0 - vec3<f32>(1.0);
+  let radial = length(normalized.xz);
+  let positionFeatures = array<f32, 5>(normalized.x, normalized.y, normalized.z, radial, normalized.y * radial);
+  for (var i = 0u; i < 5u; i += 1u) {
+    features[34u + i] = standardizeActivityFeature(positionFeatures[i], 34u + i);
+  }
+  var featureIndex = 39u;
+  for (var frequencyIndex = 0u; frequencyIndex < 3u; frequencyIndex += 1u) {
+    let frequency = select(select(1.0, 2.0, frequencyIndex == 1u), 4.0, frequencyIndex == 2u);
+    for (var axis = 0u; axis < 3u; axis += 1u) {
+      let phase = 3.141592653589793 * frequency * normalized[axis];
+      features[featureIndex] = standardizeActivityFeature(sin(phase), featureIndex);
+      featureIndex += 1u;
+      features[featureIndex] = standardizeActivityFeature(cos(phase), featureIndex);
+      featureIndex += 1u;
+    }
+  }
+  for (var cyIndex = 0u; cyIndex < 8u; cyIndex += 1u) {
+    let cy = -0.95 + f32(cyIndex) * (1.8 / 7.0);
+    for (var czIndex = 0u; czIndex < 4u; czIndex += 1u) {
+      let cz = -0.75 + f32(czIndex) * 0.5;
+      for (var cxIndex = 0u; cxIndex < 4u; cxIndex += 1u) {
+        let cx = -0.75 + f32(cxIndex) * 0.5;
+        let delta = normalized - vec3<f32>(cx, cy, cz);
+        let rbf = exp(-dot(delta, delta) / (2.0 * 0.30 * 0.30));
+        features[featureIndex] = standardizeActivityFeature(rbf, featureIndex);
+        featureIndex += 1u;
+      }
+    }
+  }
+  return features;
+}
+
+fn inferActivityHead(features: array<f32, ${FEATURE_COUNT}>) -> f32 {
+  var hidden: array<f32, ${HIDDEN_WIDTH}>;
+  for (var hiddenIndex = 0u; hiddenIndex < HIDDEN_WIDTH; hiddenIndex += 1u) {
+    var value = activityModel[${offsets.b1}u + hiddenIndex];
+    for (var featureIndex = 0u; featureIndex < FEATURE_COUNT; featureIndex += 1u) {
+      value += features[featureIndex] * activityModel[${offsets.w1}u + featureIndex * HIDDEN_WIDTH + hiddenIndex];
+    }
+    hidden[hiddenIndex] = tanh(value);
+  }
+  var result = activityModel[${offsets.b2}u];
+  for (var hiddenIndex = 0u; hiddenIndex < HIDDEN_WIDTH; hiddenIndex += 1u) {
+    result += hidden[hiddenIndex] * activityModel[${offsets.w2}u + hiddenIndex];
+  }
+  return result * activityModel[${offsets.targetStd}u] + activityModel[${offsets.targetMean}u];
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn projectLearnedFlowActivityCue(@builtin(global_invocation_id) lowCell: vec3<u32>) {
+  if (any(lowCell >= vec3<u32>(LOW_GRID))) { return; }
+  let highStart = vec3<u32>(floor(vec3<f32>(lowCell) * f32(HIGH_GRID) / f32(LOW_GRID)));
+  let highEnd = min(vec3<u32>(HIGH_GRID), vec3<u32>(ceil(vec3<f32>(lowCell + vec3<u32>(1u)) * f32(HIGH_GRID) / f32(LOW_GRID))));
+  var cue = 0.0;
+  for (var highZ = highStart.z; highZ < highEnd.z; highZ += 1u) {
+    for (var highY = highStart.y; highY < highEnd.y; highY += 1u) {
+      for (var highX = highStart.x; highX < highEnd.x; highX += 1u) {
+        let highCell = vec3<u32>(highX, highY, highZ);
+        let nativeCell = min(vec3<u32>(LOW_GRID - 1u), vec3<u32>(floor(vec3<f32>(highCell) * f32(LOW_GRID) / f32(HIGH_GRID))));
+        let activity = nativeDiagnosticActivity(nativeCell) + inferActivityHead(makeActivityFeatures(highCell));
+        cue = max(cue, clamp(activity, 0.0, 1.0));
+      }
+    }
+  }
+  targetActivityCue[index3(lowCell, LOW_GRID)] = cue;
+}
+`;
+}
+
 const SOURCE_HISTORY_ADMISSION_WGSL = `
 const LOW_GRID: u32 = ${LOW_GRID}u;
 const HIGH_GRID: u32 = ${HIGH_GRID}u;
@@ -622,6 +823,16 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
   if (modelBytes.byteLength !== selectedModel.packed.byteLength || modelSha256 !== selectedModel.packed.sha256) {
     throw new Error(`modelChecksumMismatch:${modelSha256}`);
   }
+  const activityResponse = await fetch(EXACT_BASIN_ACTIVITY_MODEL_URL, { cache: 'no-store' });
+  if (!activityResponse.ok) throw new Error(`activityModelFetchFailed:${activityResponse.status}`);
+  const activityModelBytes = await activityResponse.arrayBuffer();
+  const activityModelSha256 = await sha256Hex(activityModelBytes);
+  if (
+    activityModelBytes.byteLength !== EXACT_BASIN_ACTIVITY_MODEL.packed.byteLength
+    || activityModelSha256 !== EXACT_BASIN_ACTIVITY_MODEL.packed.sha256
+  ) {
+    throw new Error(`activityModelChecksumMismatch:${activityModelSha256}`);
+  }
   const lowCells = lowGrid ** 3;
   const highCells = HIGH_GRID ** 3;
   const lowFluidBytes = lowCells * SLOTS_PER_CELL * 4 * Float32Array.BYTES_PER_ELEMENT;
@@ -653,6 +864,12 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
   );
   const model = makeBuffer(`native-low shared-device model ${selectedModel.identity}`, modelBytes.byteLength, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST);
   device.queue.writeBuffer(model, 0, modelBytes);
+  const activityModel = makeBuffer(
+    `native-low learned flow activity model ${EXACT_BASIN_ACTIVITY_MODEL.identity}`,
+    activityModelBytes.byteLength,
+    GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  );
+  device.queue.writeBuffer(activityModel, 0, activityModelBytes);
   const shader = device.createShaderModule({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} WGSL`, code: specializeLowGridWgsl(WGSL, lowGrid) });
   const compilation = await shader.getCompilationInfo();
   const errors = compilation.messages.filter(message => message.type === 'error');
@@ -688,6 +905,52 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
     label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native front upsample`,
     layout: device.createPipelineLayout({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native front upsample pipeline layout`, bindGroupLayouts: [frontUpsampleLayout] }),
     compute: { module: frontUpsampleShader, entryPoint: 'upsampleNativeFront' },
+  });
+  const predictedActivityCueShader = device.createShaderModule({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} predicted activity cue projection WGSL`,
+    code: specializeLowGridWgsl(predictedActivityCueProjectionWgsl(), lowGrid),
+  });
+  const predictedActivityCueLayout = device.createBindGroupLayout({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} predicted activity cue projection layout`,
+    entries: [
+      { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+    ],
+  });
+  const predictedActivityCuePipeline = device.createComputePipeline({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} predicted activity cue projection`,
+    layout: device.createPipelineLayout({
+      label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} predicted activity cue projection pipeline layout`,
+      bindGroupLayouts: [predictedActivityCueLayout],
+    }),
+    compute: { module: predictedActivityCueShader, entryPoint: 'projectPredictedActivityCue' },
+  });
+  const learnedFlowActivityCueShader = device.createShaderModule({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} learned flow activity cue projection WGSL`,
+    code: specializeLowGridWgsl(learnedFlowActivityCueProjectionWgsl(), lowGrid),
+  });
+  const learnedFlowActivityCompilation = await learnedFlowActivityCueShader.getCompilationInfo();
+  const learnedFlowActivityErrors = learnedFlowActivityCompilation.messages.filter(message => message.type === 'error');
+  if (learnedFlowActivityErrors.length) {
+    throw new Error(`native-low learned flow activity WGSL failed:${learnedFlowActivityErrors.map(error => `${error.lineNum}:${error.linePos} ${error.message}`).join('; ')}`);
+  }
+  const learnedFlowActivityCueLayout = device.createBindGroupLayout({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} learned flow activity cue projection layout`,
+    entries: [
+      { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+    ],
+  });
+  const learnedFlowActivityCuePipeline = device.createComputePipeline({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} learned flow activity cue projection`,
+    layout: device.createPipelineLayout({
+      label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} learned flow activity cue projection pipeline layout`,
+      bindGroupLayouts: [learnedFlowActivityCueLayout],
+    }),
+    compute: { module: learnedFlowActivityCueShader, entryPoint: 'projectLearnedFlowActivityCue' },
   });
   const sourceHistoryAdmissionShader = device.createShaderModule({
     label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} fixed source-delta admission WGSL`,
@@ -1056,6 +1319,8 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
   };
   let lastSupportTileProfile = makeEmptySupportTileProfile();
   let lastSourceTileCandidate = makeEmptySourceTileCandidate();
+  let lastPredictedActivityCueProjection = null;
+  let lastLearnedFlowActivityCueProjection = null;
   return {
     identity: NATIVE_LOW_SHARED_DEVICE_ROUTE,
     transportMode: NATIVE_LOW_TRANSPORT_MODE,
@@ -1299,6 +1564,103 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
       upsamplePass.end();
       encodedFrameCount += 1;
       lastHistoryEpochIdentity = currentHistoryEpochIdentity;
+    },
+    encodePredictedActivityCue(encoder, targetActivityCue, options = {}) {
+      if (!encoder || !targetActivityCue) throw new Error('predictedActivityCueProjectionMissingTarget');
+      const bindGroup = device.createBindGroup({
+        label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} predicted activity cue projection bind group`,
+        layout: predictedActivityCueLayout,
+        entries: [
+          { binding: 0, resource: { buffer: predictedFluid } },
+          { binding: 1, resource: { buffer: predictedFront } },
+          { binding: 2, resource: { buffer: targetActivityCue } },
+        ],
+      });
+      const pass = encoder.beginComputePass({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} predicted activity cue projection` });
+      pass.setPipeline(predictedActivityCuePipeline);
+      pass.setBindGroup(0, bindGroup);
+      pass.dispatchWorkgroups(Math.ceil(lowGrid / 4), Math.ceil(lowGrid / 4), Math.ceil(lowGrid / 4));
+      pass.end();
+      lastPredictedActivityCueProjection = {
+        identity: NATIVE_LOW_PREDICTED_ACTIVITY_CUE_PROJECTION,
+        sourceGrid: HIGH_GRID,
+        receiverGrid: lowGrid,
+        sourceStepIdentity: options.sourceStepIdentity || null,
+        generatedForNextSimulationStep: true,
+        runtimeTruthAvailable: false,
+        syntheticDownsampleApplied: false,
+      };
+      return { ...lastPredictedActivityCueProjection };
+    },
+    encodeLearnedFlowActivityCue(encoder, sourceFluid, sourceFront, targetActivityCue, options = {}) {
+      if (!encoder || !sourceFluid || !sourceFront || !targetActivityCue) {
+        throw new Error('learnedFlowActivityCueProjectionMissingBinding');
+      }
+      const bindGroup = device.createBindGroup({
+        label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} learned flow activity cue projection bind group`,
+        layout: learnedFlowActivityCueLayout,
+        entries: [
+          { binding: 0, resource: { buffer: sourceFluid } },
+          { binding: 1, resource: { buffer: sourceFront } },
+          { binding: 2, resource: { buffer: activityModel } },
+          { binding: 3, resource: { buffer: targetActivityCue } },
+        ],
+      });
+      const pass = encoder.beginComputePass({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} learned flow activity cue projection` });
+      pass.setPipeline(learnedFlowActivityCuePipeline);
+      pass.setBindGroup(0, bindGroup);
+      pass.dispatchWorkgroups(Math.ceil(lowGrid / 4), Math.ceil(lowGrid / 4), Math.ceil(lowGrid / 4));
+      pass.end();
+      lastLearnedFlowActivityCueProjection = {
+        identity: NATIVE_LOW_LEARNED_FLOW_ACTIVITY_CUE_PROJECTION,
+        activityModelIdentity: EXACT_BASIN_ACTIVITY_MODEL.identity,
+        activityModelSha256,
+        targetIdentity: EXACT_BASIN_ACTIVITY_MODEL.target.identity,
+        trainedLowGrid: EXACT_BASIN_ACTIVITY_MODEL.source.lowGrid,
+        trainedHighGrid: EXACT_BASIN_ACTIVITY_MODEL.source.highGrid,
+        effectiveSourceGrid: lowGrid,
+        receiverGrid: lowGrid,
+        sourceStepIdentity: options.sourceStepIdentity || null,
+        generatedForNextSimulationStep: true,
+        runtimeTruthAvailable: false,
+        syntheticDownsampleApplied: false,
+        nativeDeploymentInputSeenDuringTraining: false,
+      };
+      return { ...lastLearnedFlowActivityCueProjection };
+    },
+    async samplePredictedActivityCueStats(targetActivityCue) {
+      if (!targetActivityCue) throw new Error('predictedActivityCueStatsMissingTarget');
+      const byteLength = lowGrid ** 3 * Float32Array.BYTES_PER_ELEMENT;
+      const readback = device.createBuffer({
+        label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} predicted activity cue diagnostic readback`,
+        size: byteLength,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+      });
+      const encoder = device.createCommandEncoder({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} predicted activity cue diagnostic copy` });
+      encoder.copyBufferToBuffer(targetActivityCue, 0, readback, 0, byteLength);
+      device.queue.submit([encoder.finish()]);
+      await readback.mapAsync(GPUMapMode.READ);
+      const values = new Float32Array(readback.getMappedRange().slice(0));
+      readback.unmap();
+      readback.destroy();
+      let nonzeroCount = 0;
+      let sum = 0;
+      let max = 0;
+      for (const value of values) {
+        if (value > 0.0001) nonzeroCount += 1;
+        sum += value;
+        max = Math.max(max, value);
+      }
+      return {
+        identity: 'native-low-predicted-activity-cue-diagnostic-stats-v0',
+        diagnosticCpuReadback: true,
+        runtimeTruthAvailable: false,
+        cellCount: values.length,
+        nonzeroCount,
+        nonzeroFraction: nonzeroCount / values.length,
+        mean: sum / values.length,
+        max,
+      };
     },
     async sampleSupportStats() {
       const values = await readU32Buffer(device, stats, STATS_BYTES, 'native-low shared-device support stats readback');
@@ -1639,6 +2001,10 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
         nativeLowFixedSourceDeltaAdmission: lastSourceHistoryAdmission,
         nativeLowCandidateHeadCostMicrobenchmark: lastCandidateHeadBenchmark,
         nativeLowCandidateCueBufferLifecycle: lastCandidateCueBufferLifecycle,
+        nativeLowPredictedActivityCueProjection: lastPredictedActivityCueProjection,
+        nativeLowLearnedFlowActivityCueProjection: lastLearnedFlowActivityCueProjection,
+        learnedFlowActivityModelIdentity: EXACT_BASIN_ACTIVITY_MODEL.identity,
+        learnedFlowActivityModelSha256: activityModelSha256,
         ...lastStats,
       };
     },
@@ -1657,6 +2023,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
       candidateCueLifecycleParams.destroy();
       stats.destroy();
       model.destroy();
+      activityModel.destroy();
     },
   };
 }

@@ -1,0 +1,107 @@
+{
+  "schema": "kaminos.volume.exact-basin-activity-head.v0",
+  "identity": "exact-basin-derived-flow-activity-head-160-to-96-v0",
+  "status": "captured",
+  "failurePhase": null,
+  "source": {
+    "pairManifestPath": "/private/tmp/kaminos-splat-good-basin-phase-aligned-160-to-96-replay96-v1/pair-manifest.json",
+    "pairManifestSha256": "aef3e732c853c1d80a7b8e4aeece52c955e56e37da7df62c15deeb142418ce21",
+    "lowGrid": 96,
+    "highGrid": 160,
+    "pairAuthority": "downsampled-same-high-history-input-to-exact-high-target",
+    "trainingInputAuthority": "phase-aligned-high-filtered-to-low-grid-v0",
+    "trainingInputSyntheticDownsample": true,
+    "nativeDeploymentInputSeenDuringTraining": false,
+    "lowFluidSha256": "31980213deb932434c44f593b2342be16394411862bf6642e64936092472f261",
+    "highFluidSha256": "d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1"
+  },
+  "target": {
+    "identity": "derived-flow-debug-rgb-norm-activity-v0",
+    "source": "high-grid velocity curl magnitude plus absolute divergence",
+    "formulaAuthority": "legacy-derived-flow-debug-rgb-v0-norm-clamped-v0",
+    "runtimeTruthAvailable": false,
+    "positiveThreshold": 0.08,
+    "highMean": 0.2730772547602052,
+    "highNonzeroFraction": 0.72758642578125
+  },
+  "features": {
+    "identity": "full-low-field-plus-spatial-rbf-features-v0",
+    "featureCount": 185
+  },
+  "architecture": {
+    "identity": "dense-tanh-dense-residual-v0",
+    "hiddenWidth": 48
+  },
+  "training": {
+    "hiddenWidth": 48,
+    "epochs": 60,
+    "batchSize": 1024,
+    "learningRate": 0.002,
+    "weightDecay": 1e-05,
+    "finalTrainLoss": 0.7904736305130853,
+    "loss": "standardized-residual-mse",
+    "split": {
+      "identity": "spatial-block-hash-holdout-v0",
+      "spatialBlockSize": 8,
+      "hashConstants": [
+        73856093,
+        19349663,
+        83492791
+      ],
+      "hashSeed": 9479,
+      "roleBins": {
+        "test": [
+          0,
+          1
+        ],
+        "validation": [
+          2,
+          3
+        ],
+        "train": [
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ]
+      },
+      "roleAuthority": "whole spatial blocks; no random-cell cross-role assignment"
+    },
+    "trainSamples": 90000,
+    "validationSamples": 60000,
+    "testSamples": 80000
+  },
+  "test": {
+    "rmse": 0.22470617289367875,
+    "mae": 0.1382697233895695,
+    "rmseReductionVsLow": 0.16068813314846087,
+    "pearsonCorrelation": 0.8137792557585891
+  },
+  "composition": {
+    "identity": "native-derived-flow-activity-plus-learned-residual-clamped-v0"
+  },
+  "offsets": {
+    "featureMean": 0,
+    "featureStd": 185,
+    "w1": 370,
+    "b1": 9250,
+    "w2": 9298,
+    "b2": 9346,
+    "targetMean": 9347,
+    "targetStd": 9348
+  },
+  "packed": {
+    "path": "model.f32",
+    "dtype": "float32-le",
+    "floatCount": 9349,
+    "byteLength": 37396,
+    "sha256": "34aff071fac1375f6ae44d38ad8047162593f4be0bed9671b18bd438e723274b"
+  },
+  "limitations": [
+    "Single exact phase-aligned basin; native64 deployment is zero-shot.",
+    "Truth-derived activity is used only as an offline training target and metric.",
+    "The model predicts scalar flow activity, not velocity direction."
+  ]
+}

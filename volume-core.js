@@ -17,9 +17,14 @@ import {
 } from './selective-head-live-runtime.mjs';
 import {
   NATIVE_LOW_INPUT_AUTHORITY,
+  NATIVE_LOW_LEARNED_FLOW_ACTIVITY_CUE_PROJECTION,
+  NATIVE_LOW_LEARNED_FLOW_ACTIVITY_MODEL_IDENTITY,
+  NATIVE_LOW_LEARNED_FLOW_ACTIVITY_MODEL_SHA256,
+  NATIVE_LOW_PREDICTED_ACTIVITY_CUE_PROJECTION,
   NATIVE_LOW_SHARED_DEVICE_ROUTE,
   NATIVE_LOW_TRANSPORT_MODE,
   NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE,
+  NATIVE_LOW_TRANSFER_160_TO_96_DEPLOYMENT_GRID_ROUTE,
   createNativeLowSelectiveSharedDeviceRuntime,
 } from './native-low-selective-live-runtime.mjs';
 
@@ -55,6 +60,7 @@ const BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES = BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS
 const TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY = 'truth-oracle-scalar-activity-receiver-v0';
 const TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY = 'truth-high-diagnostic-activity-projected-to-receiver-grid-v0';
 const PROCEDURAL_ACTIVITY_CUE_AUTHORITY = 'procedural-receiver-activity-proxy-no-truth-v0';
+const NATIVE64_LEARNED_CUE_AUTHORITY = 'learned-96-trained-derived-flow-activity-head-v0';
 const SCALAR_ACTIVITY_RECEIVER_HOOK_IDENTITY = 'scalar-activity-receiver-hook-controls-v0';
 const REACTION_FRONT_STAGE_IDENTITY = 'reaction-front-stage-fields-v0';
 const REACTION_FRONT_ATLAS_SCHEMA = 'kaminos.volume.reaction-front-atlas.v0';
@@ -5995,12 +6001,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function scalarActivityReceiverDebug() {
     const controls = normalizeScalarActivityReceiverControls(controlsSnapshot);
-    const externalCueActive = oracleActivityCueUpload.status === 'uploaded' && oracleActivityCueUpload.externalCueCellCount > 0;
+    const externalCueActive = ['uploaded', 'gpu-projected'].includes(oracleActivityCueUpload.status)
+      && oracleActivityCueUpload.externalCueCellCount > 0;
     return {
       identity: TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY,
       hookIdentity: SCALAR_ACTIVITY_RECEIVER_HOOK_IDENTITY,
-      requestedCueAuthority: TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
-      effectiveCueAuthority: externalCueActive ? TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY : PROCEDURAL_ACTIVITY_CUE_AUTHORITY,
+      requestedCueAuthority: oracleActivityCueUpload.requestedCueAuthority || TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
+      effectiveCueAuthority: externalCueActive
+        ? oracleActivityCueUpload.effectiveCueAuthority || TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY
+        : PROCEDURAL_ACTIVITY_CUE_AUTHORITY,
       enabled: controls.enabled,
       display: controls.display,
       curlNoiseGain: controls.curlNoiseGain,
@@ -6061,7 +6070,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     oracleActivityCueBuffer = device.createBuffer({
       label: `kaminos truth-oracle scalar activity cue ${gridSize}^3`,
       size: scalarActivityCueBufferBytes(gridSize),
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
     });
     device.queue.writeBuffer(oracleActivityCueBuffer, 0, new Float32Array(gridCellCount(gridSize)));
   }
@@ -8027,7 +8036,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[318] = selectiveCompositionDefinition.splat ? 1 : 0;
     uniforms[319] = 0;
     const scalarActivityReceiver = normalizeScalarActivityReceiverControls(controlsSnapshot);
-    const externalCueActive = oracleActivityCueUpload.status === 'uploaded' && oracleActivityCueUpload.externalCueCellCount > 0;
+    const externalCueActive = ['uploaded', 'gpu-projected'].includes(oracleActivityCueUpload.status)
+      && oracleActivityCueUpload.externalCueCellCount > 0;
     uniforms[320] = scalarActivityReceiver.enabled;
     uniforms[321] = scalarActivityReceiver.curlNoiseGain;
     uniforms[322] = scalarActivityReceiver.vorticityGain;
@@ -12913,8 +12923,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const captureVisuals = options.captureVisuals === true;
     const frontTopologyAblationEnabled = options.frontTopologyAblation === true;
     const requestedTransferRouteId = String(options.transferRouteId || NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE);
+    const learnedCueFeedbackEnabled = options.learnedCueFeedbackEnabled === true;
     const advanceSourceStep = options.advanceSourceStep !== false;
-    const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+    const deterministicNowMs = Number.isFinite(Number(options.deterministicNowMs)) ? Number(options.deterministicNowMs) : null;
+    const fixedNow = deterministicNowMs ?? (Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now());
     const calibration = nativeLowTreatmentSplatCalibrationDebug({
       radianceGain: options.treatmentSplatRadianceGain,
       opacityGain: options.treatmentSplatOpacityGain,
@@ -12924,6 +12936,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const sourceGrid = gridSize;
     const sourceFrame = state.frameCount;
     const sourceSimStepBefore = state.simStepCount;
+    const appliedCueBeforeStep = scalarActivityReceiverDebug();
     try {
       if (!state.active || !device) throw new Error('inactive');
       if (![64, 96, 128].includes(sourceGrid)) throw new Error(`native-low-shared-device-grid-mismatch:${sourceGrid}`);
@@ -12962,6 +12975,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         simStepDelta,
         requiredSimStepDelta,
         advanceSourceStep,
+        deterministicNowMs,
+        deterministicClockAuthority: deterministicNowMs === null ? null : 'causal-deterministic-step-clock-v0',
         authority: 'renderer-owned-native-source-step-before-model-consumption-v0',
       };
       lastTrustworthyEvidence = { sourceStepIdentity, sourceStep, nativeStepMs, simulationSteppingReceipt };
@@ -13133,6 +13148,61 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         residualHeadEvaluatedCount: nativeLowInferenceWorkProfile?.residualHeadEvaluatedCount ?? null,
       };
       lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inferenceTiming, supportStats, supportStatsMs, nativeLowSupportTileProfile, nativeLowSourceTileCandidate, nativeLowFixedSourceDeltaAdmission, currentSourceFrameConsumption, stalePredictionRejection };
+
+      let nativeLowPredictedActivityCueProjection = null;
+      let learnedCueDiagnosticStats = null;
+      let generatedCueFrameId = null;
+      if (learnedCueFeedbackEnabled) {
+        failurePhase = 'shared-device-learned-cue-feedback-projection';
+        if (sourceGrid !== 64) throw new Error(`learnedCueFeedbackSourceGridMismatch:${sourceGrid}`);
+        if (requestedTransferRouteId !== NATIVE_LOW_TRANSFER_160_TO_96_DEPLOYMENT_GRID_ROUTE) {
+          throw new Error(`learnedCueFeedbackRouteMismatch:${requestedTransferRouteId}`);
+        }
+        ensureOracleActivityCueBuffer();
+        generatedCueFrameId = `learned96:${sourceStepIdentity}:for-step-${sourceStep + 1}`;
+        const cueEncoder = device.createCommandEncoder({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} learned activity cue projection` });
+        nativeLowPredictedActivityCueProjection = runtime.encodeLearnedFlowActivityCue(
+          cueEncoder,
+          sourceFluid,
+          sourceFront,
+          oracleActivityCueBuffer,
+          {
+          sourceStepIdentity,
+          },
+        );
+        device.queue.submit([cueEncoder.finish()]);
+        if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+        if (options.learnedCueFeedbackDiagnosticsEnabled === true) {
+          learnedCueDiagnosticStats = await runtime.samplePredictedActivityCueStats(oracleActivityCueBuffer);
+        }
+        oracleActivityCueSourceValues = null;
+        oracleActivityCueSourceGrid = null;
+        oracleActivityCueUpload = {
+          status: 'gpu-projected',
+          requestedCueAuthority: NATIVE64_LEARNED_CUE_AUTHORITY,
+          effectiveCueAuthority: NATIVE64_LEARNED_CUE_AUTHORITY,
+          projectionIdentity: NATIVE_LOW_LEARNED_FLOW_ACTIVITY_CUE_PROJECTION,
+          learnedFlowActivityModelIdentity: NATIVE_LOW_LEARNED_FLOW_ACTIVITY_MODEL_IDENTITY,
+          learnedFlowActivityModelSha256: NATIVE_LOW_LEARNED_FLOW_ACTIVITY_MODEL_SHA256,
+          grid: sourceGrid,
+          receiverGrid: sourceGrid,
+          externalCueCellCount: gridCellCount(sourceGrid),
+          frameId: generatedCueFrameId,
+          generatedFromSourceStep: sourceStep,
+          generatedForNextSimulationStep: sourceStep + 1,
+          uploadedAtMs: performance.now(),
+          runtimeTruthAvailable: false,
+          syntheticDownsampleApplied: false,
+        };
+        state.scalarActivityReceiver = scalarActivityReceiverDebug();
+        lastTrustworthyEvidence = {
+          ...lastTrustworthyEvidence,
+          nativeLowPredictedActivityCueProjection,
+          generatedCueFrameId,
+          generatedForNextSimulationStep: sourceStep + 1,
+          learnedCueDiagnosticStats,
+        };
+      }
 
       failurePhase = 'shared-device-treatment-materialization';
       const treatmentMaterializeStart = performance.now();
@@ -13627,6 +13697,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         simulationSteppingReceipt,
         currentSourceFrameConsumption,
         stalePredictionRejection,
+        learnedCueFeedbackEnabled,
+        learnedCueAuthority: learnedCueFeedbackEnabled ? NATIVE64_LEARNED_CUE_AUTHORITY : null,
+        learnedCueProjectionIdentity: learnedCueFeedbackEnabled ? NATIVE_LOW_LEARNED_FLOW_ACTIVITY_CUE_PROJECTION : null,
+        learnedFlowActivityModelIdentity: learnedCueFeedbackEnabled ? NATIVE_LOW_LEARNED_FLOW_ACTIVITY_MODEL_IDENTITY : null,
+        learnedFlowActivityModelSha256: learnedCueFeedbackEnabled ? NATIVE_LOW_LEARNED_FLOW_ACTIVITY_MODEL_SHA256 : null,
+        appliedCueFrameId: appliedCueBeforeStep.frameId || null,
+        appliedCueAuthority: appliedCueBeforeStep.effectiveCueAuthority || null,
+        appliedCueReceiver: appliedCueBeforeStep,
+        generatedCueFrameId,
+        generatedForNextSimulationStep: learnedCueFeedbackEnabled ? sourceStep + 1 : null,
+        nativeLowPredictedActivityCueProjection,
+        learnedCueDiagnosticStats,
+        runtimeTruthAvailable: false,
+        syntheticDownsampleApplied: false,
         sourceStepDrift: null,
         controlTreatmentCausalDivergence: null,
         requestedComposition,
