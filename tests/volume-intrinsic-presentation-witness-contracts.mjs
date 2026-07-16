@@ -61,5 +61,15 @@ assert.match(witness, /appearanceDecompositionReceipt[\s\S]*couplingTerms[\s\S]*
 assert.match(witness, /const recompositionDelta\s*=\s*pixelDelta\(appearanceRecomposition\._rgba, appearanceControl\._rgba\)/, 'witness compares A+B against the independently accumulated control');
 assert.match(witness, /recompositionDelta\.maxChannelDelta[\s\S]*recompositionDelta\.changedPixelRatio/, 'witness rejects inexact optical recomposition');
 assert.match(witness, /appearanceStructuralA\.metrics\.nonblank[\s\S]*appearanceBroadCarrierB\.metrics\.nonblank[\s\S]*appearanceBAppliedToFixedA\.metrics\.nonblank/, 'witness rejects blank A, B, and B-on-A diagnostics');
+assert.match(
+  witness,
+  /captureAppearance\('complete-flame-emission'\)[\s\S]*captureAppearance\('complete-flame-extinction'\)[\s\S]*captureAppearance\('ridge-owned-emission'\)[\s\S]*captureAppearance\('ridge-owned-extinction'\)[\s\S]*captureAppearance\('non-ridge-emission'\)[\s\S]*captureAppearance\('non-ridge-extinction'\)[\s\S]*captureAppearance\('positive-optical-recomposition'\)/,
+  'witness captures separate Complete, Ridge-Owned, Non-Ridge emission/extinction and positive recomposition views',
+);
+assert.match(witness, /positiveRecompositionDelta\s*=\s*pixelDelta\(positiveOpticalRecomposition\._rgba, appearanceControl\._rgba\)/, 'positive optical sum is compared against the independent Complete Flame control');
+assert.match(witness, /positiveRecompositionDelta\.maxChannelDelta[\s\S]*positiveRecompositionDelta\.changedPixelRatio/, 'witness rejects inexact positive optical recomposition');
+assert.match(witness, /kaminosSetCameraDebugPose[\s\S]*cameraHoldoutPose[\s\S]*cameraHoldoutPositiveRecomposition[\s\S]*cameraHoldoutControl/, 'witness performs an explicit held-state camera holdout');
+assert.match(witness, /cameraHoldoutRecompositionDelta\s*=\s*pixelDelta\(cameraHoldoutPositiveRecomposition\._rgba, cameraHoldoutControl\._rgba\)/, 'held-out camera requires exact positive recomposition');
+assert.match(witness, /cameraHoldoutBefore\.simStepCount[\s\S]*cameraHoldoutAfter\.simStepCount[\s\S]*cameraRestoredHash/, 'camera holdout records frozen simulation and restored camera authority');
 
 console.log('volume intrinsic presentation witness contracts passed');

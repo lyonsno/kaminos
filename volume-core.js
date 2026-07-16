@@ -63,6 +63,13 @@ const APPEARANCE_DECOMPOSITION_MODES = Object.freeze({
   'b-applied-to-fixed-a': { uniform: 3, targetIdentity: 'pre-tone-map-b-optical-effect-on-fixed-structural-a-v0' },
   'a-plus-b-recomposition': { uniform: 4, targetIdentity: 'nonlinear-optical-a-plus-b-recomposition-v0' },
   'smoke-off-beauty-control': { uniform: 5, targetIdentity: 'smoke-off-beauty-optical-control-v0' },
+  'complete-flame-emission': { uniform: 6, targetIdentity: 'smoke-off-complete-flame-emission-coefficient-v0' },
+  'complete-flame-extinction': { uniform: 7, targetIdentity: 'smoke-off-complete-flame-extinction-coefficient-v0' },
+  'ridge-owned-emission': { uniform: 8, targetIdentity: 'nonnegative-ridge-owned-flame-emission-coefficient-v0' },
+  'ridge-owned-extinction': { uniform: 9, targetIdentity: 'nonnegative-ridge-owned-flame-extinction-coefficient-v0' },
+  'non-ridge-emission': { uniform: 10, targetIdentity: 'nonnegative-non-ridge-flame-emission-coefficient-v0' },
+  'non-ridge-extinction': { uniform: 11, targetIdentity: 'nonnegative-non-ridge-flame-extinction-coefficient-v0' },
+  'positive-optical-recomposition': { uniform: 12, targetIdentity: 'nonnegative-ridge-plus-non-ridge-optical-recomposition-v0' },
 });
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160];
@@ -3988,6 +3995,14 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
   var recomposedTransmittance = 1.0;
   var recomposedColor = vec3<f32>(0.004, 0.005, 0.006);
   var broadCarrierCoefficientColor = vec3<f32>(0.0);
+  var positiveRecomposedTransmittance = 1.0;
+  var positiveRecomposedColor = vec3<f32>(0.004, 0.005, 0.006);
+  var completeFlameEmissionColor = vec3<f32>(0.0);
+  var completeFlameExtinctionColor = vec3<f32>(0.0);
+  var ridgeOwnedEmissionColor = vec3<f32>(0.0);
+  var ridgeOwnedExtinctionColor = vec3<f32>(0.0);
+  var nonRidgeEmissionColor = vec3<f32>(0.0);
+  var nonRidgeExtinctionColor = vec3<f32>(0.0);
   var residualRadianceAuthority = 0.0;
   var residualFireAuthority = 0.0;
   var residualInterfaceAuthority = 0.0;
@@ -4938,6 +4953,15 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     let broadCarrierExtinctionCoefficient = smokeOffBeautyExtinctionCoefficient - structuralAExtinctionCoefficient;
     let recomposedEmissionCoefficient = structuralAEmissionCoefficient + broadCarrierEmissionCoefficient;
     let recomposedExtinctionCoefficient = structuralAExtinctionCoefficient + broadCarrierExtinctionCoefficient;
+    let completeFlameEmissionCoefficient = max(standardRadianceContribution, vec3<f32>(0.0));
+    let completeFlameExtinctionCoefficient = max(standardExtinctionStep, 0.0);
+    let ridgeOwnershipWeight = clamp(directFlameCandidateSupport, 0.0, 1.0);
+    let ridgeOwnedEmissionCoefficient = completeFlameEmissionCoefficient * ridgeOwnershipWeight;
+    let ridgeOwnedExtinctionCoefficient = completeFlameExtinctionCoefficient * ridgeOwnershipWeight;
+    let nonRidgeEmissionCoefficient = completeFlameEmissionCoefficient - ridgeOwnedEmissionCoefficient;
+    let nonRidgeExtinctionCoefficient = completeFlameExtinctionCoefficient - ridgeOwnedExtinctionCoefficient;
+    let positiveRecomposedEmissionCoefficient = ridgeOwnedEmissionCoefficient + nonRidgeEmissionCoefficient;
+    let positiveRecomposedExtinctionCoefficient = ridgeOwnedExtinctionCoefficient + nonRidgeExtinctionCoefficient;
     if (appearanceAssayActive > 0.5) {
       structuralAColor = structuralAColor + structuralATransmittance * structuralAEmissionCoefficient;
       structuralATransmittance = structuralATransmittance * exp(-structuralAExtinctionCoefficient);
@@ -4948,6 +4972,14 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
       broadCarrierCoefficientColor = broadCarrierCoefficientColor
         + broadCarrierEmissionCoefficient
         + vec3<f32>(broadCarrierExtinctionCoefficient * 0.12);
+      positiveRecomposedColor = positiveRecomposedColor + positiveRecomposedTransmittance * positiveRecomposedEmissionCoefficient;
+      positiveRecomposedTransmittance = positiveRecomposedTransmittance * exp(-positiveRecomposedExtinctionCoefficient);
+      completeFlameEmissionColor = completeFlameEmissionColor + completeFlameEmissionCoefficient;
+      completeFlameExtinctionColor = completeFlameExtinctionColor + vec3<f32>(completeFlameExtinctionCoefficient * 2.8);
+      ridgeOwnedEmissionColor = ridgeOwnedEmissionColor + ridgeOwnedEmissionCoefficient;
+      ridgeOwnedExtinctionColor = ridgeOwnedExtinctionColor + vec3<f32>(ridgeOwnedExtinctionCoefficient * 2.8);
+      nonRidgeEmissionColor = nonRidgeEmissionColor + nonRidgeEmissionCoefficient;
+      nonRidgeExtinctionColor = nonRidgeExtinctionColor + vec3<f32>(nonRidgeExtinctionCoefficient * 2.8);
     }
     let extinctionStep = mix(standardExtinctionStep, directFlameSupervisionExtinction, supervisionFireOnlyTarget);
     trans = trans * exp(-extinctionStep);
@@ -4970,8 +5002,22 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     color = bPositive + vec3<f32>(0.18, 0.52, 1.0) * dot(bNegative, vec3<f32>(0.2126, 0.7152, 0.0722));
   } else if (appearanceDecompositionMode > 3.5 && appearanceDecompositionMode < 4.5) {
     color = recomposedColor;
-  } else if (appearanceDecompositionMode > 4.5) {
+  } else if (appearanceDecompositionMode > 4.5 && appearanceDecompositionMode < 5.5) {
     color = controlColor;
+  } else if (appearanceDecompositionMode > 5.5 && appearanceDecompositionMode < 6.5) {
+    color = completeFlameEmissionColor;
+  } else if (appearanceDecompositionMode > 6.5 && appearanceDecompositionMode < 7.5) {
+    color = completeFlameExtinctionColor;
+  } else if (appearanceDecompositionMode > 7.5 && appearanceDecompositionMode < 8.5) {
+    color = ridgeOwnedEmissionColor;
+  } else if (appearanceDecompositionMode > 8.5 && appearanceDecompositionMode < 9.5) {
+    color = ridgeOwnedExtinctionColor;
+  } else if (appearanceDecompositionMode > 9.5 && appearanceDecompositionMode < 10.5) {
+    color = nonRidgeEmissionColor;
+  } else if (appearanceDecompositionMode > 10.5 && appearanceDecompositionMode < 11.5) {
+    color = nonRidgeExtinctionColor;
+  } else if (appearanceDecompositionMode > 11.5) {
+    color = positiveRecomposedColor;
   }
 
   let vignette = 1.0 - smoothstep(0.28, 1.48, length(ndc));
@@ -7817,6 +7863,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       coefficientBoundary: 'per-sample-pre-tone-map-emission-extinction-v0',
       structuralAIdentity: INTRINSIC_PRESENTATION_TARGET_IDENTITY,
       broadCarrierIdentity: 'signed-control-minus-structural-a-local-coefficients-v0',
+      completeFlameIdentity: 'smoke-off-complete-flame-local-emission-extinction-v0',
+      positivePartitionIdentity: 'nonnegative-ridge-owned-plus-non-ridge-complete-flame-v0',
+      ridgeOwnershipIdentity: 'state-derived-direct-flame-candidate-support-allocation-v0',
+      coefficientSigns: {
+        completeFlame: 'nonnegative',
+        ridgeOwned: 'nonnegative',
+        nonRidge: 'nonnegative',
+        signedClosureComparator: 'signed',
+      },
       opticalRecurrence: 'front-to-back-emission-with-exponential-transmittance-v0',
       simulationAdvanced: false,
       simulationReset: false,
@@ -7853,6 +7908,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ...receipt,
       requestedPasses: { ...receipt.requestedPasses },
       passes: { ...receipt.passes },
+      coefficientSigns: { ...receipt.coefficientSigns },
       couplingTerms: [...receipt.couplingTerms],
     };
   }
@@ -12435,6 +12491,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         ...state.appearanceDecompositionReceipt,
         requestedPasses: { ...state.appearanceDecompositionReceipt.requestedPasses },
         passes: { ...state.appearanceDecompositionReceipt.passes },
+        coefficientSigns: { ...state.appearanceDecompositionReceipt.coefficientSigns },
         application: state.appearanceDecompositionReceipt.application
           ? { ...state.appearanceDecompositionReceipt.application }
           : null,

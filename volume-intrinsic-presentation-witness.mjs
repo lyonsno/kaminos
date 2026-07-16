@@ -300,6 +300,13 @@ try {
       const appearanceBAppliedToFixedA = await captureAppearance('b-applied-to-fixed-a');
       const appearanceRecomposition = await captureAppearance('a-plus-b-recomposition');
       const appearanceControl = await captureAppearance('smoke-off-beauty-control');
+      const positiveCompleteEmission = await captureAppearance('complete-flame-emission');
+      const positiveCompleteExtinction = await captureAppearance('complete-flame-extinction');
+      const positiveRidgeOwnedEmission = await captureAppearance('ridge-owned-emission');
+      const positiveRidgeOwnedExtinction = await captureAppearance('ridge-owned-extinction');
+      const positiveNonRidgeEmission = await captureAppearance('non-ridge-emission');
+      const positiveNonRidgeExtinction = await captureAppearance('non-ridge-extinction');
+      const positiveOpticalRecomposition = await captureAppearance('positive-optical-recomposition');
       operator?.setAppearanceAssay?.('off') || prototype.setAppearanceDecompositionMode('off');
       prototype.setRaymarchSmokePresentationMode('on');
       const beautySmokeRestored = await captureMode('beauty');
@@ -317,10 +324,39 @@ try {
         baseSimStepCount: before.simStepCount,
       });
       const compositionRestoreReceipt = operator?.setComposition?.('raymarch-only-v0') || null;
+      const cameraOriginalPose = basinWindow?.kaminosCameraDebugState?.() || null;
+      const cameraOriginalHash = await digest(cameraOriginalPose);
+      const cameraHoldoutBefore = prototype.debugState();
+      if (!cameraOriginalPose?.position || !cameraOriginalPose?.target || !basinWindow?.kaminosSetCameraDebugPose) {
+        throw new Error('camera-holdout-runtime-api-missing');
+      }
+      const orbitAngle = 0.42;
+      const dx = cameraOriginalPose.position[0] - cameraOriginalPose.target[0];
+      const dz = cameraOriginalPose.position[2] - cameraOriginalPose.target[2];
+      const cameraHoldoutPose = {
+        position: [
+          cameraOriginalPose.target[0] + dx * Math.cos(orbitAngle) - dz * Math.sin(orbitAngle),
+          cameraOriginalPose.position[1],
+          cameraOriginalPose.target[2] + dx * Math.sin(orbitAngle) + dz * Math.cos(orbitAngle),
+        ],
+        target: [...cameraOriginalPose.target],
+      };
+      basinWindow.kaminosSetCameraDebugPose(cameraHoldoutPose);
+      const cameraHoldoutPoseHash = await digest(basinWindow.kaminosCameraDebugState());
+      const cameraHoldoutRidgeEmission = await captureAppearance('ridge-owned-emission');
+      const cameraHoldoutNonRidgeEmission = await captureAppearance('non-ridge-emission');
+      const cameraHoldoutPositiveRecomposition = await captureAppearance('positive-optical-recomposition');
+      const cameraHoldoutControl = await captureAppearance('smoke-off-beauty-control');
+      const cameraHoldoutAfter = prototype.debugState();
+      const cameraHoldoutRecompositionDelta = pixelDelta(cameraHoldoutPositiveRecomposition._rgba, cameraHoldoutControl._rgba);
+      basinWindow.kaminosSetCameraDebugPose(cameraOriginalPose);
+      const cameraRestoredHash = await digest(basinWindow.kaminosCameraDebugState());
+      operator?.setAppearanceAssay?.('off') || prototype.setAppearanceDecompositionMode('off');
       const restorationDelta = pixelDelta(beautySmokeOn._rgba, beautySmokeRestored._rgba);
       const smokeIsolationDelta = pixelDelta(beautySmokeOn._rgba, beautySmokeOff._rgba);
       const structuralAParityDelta = pixelDelta(intrinsic._rgba, appearanceStructuralA._rgba);
       const recompositionDelta = pixelDelta(appearanceRecomposition._rgba, appearanceControl._rgba);
+      const positiveRecompositionDelta = pixelDelta(positiveOpticalRecomposition._rgba, appearanceControl._rgba);
       delete beautySmokeOn._rgba;
       delete beautySmokeOff._rgba;
       delete intrinsic._rgba;
@@ -329,6 +365,17 @@ try {
       delete appearanceBAppliedToFixedA._rgba;
       delete appearanceRecomposition._rgba;
       delete appearanceControl._rgba;
+      delete positiveCompleteEmission._rgba;
+      delete positiveCompleteExtinction._rgba;
+      delete positiveRidgeOwnedEmission._rgba;
+      delete positiveRidgeOwnedExtinction._rgba;
+      delete positiveNonRidgeEmission._rgba;
+      delete positiveNonRidgeExtinction._rgba;
+      delete positiveOpticalRecomposition._rgba;
+      delete cameraHoldoutRidgeEmission._rgba;
+      delete cameraHoldoutNonRidgeEmission._rgba;
+      delete cameraHoldoutPositiveRecomposition._rgba;
+      delete cameraHoldoutControl._rgba;
       delete beautySmokeRestored._rgba;
       const afterCompositionProbe = prototype.debugState();
       return {
@@ -372,6 +419,33 @@ try {
         appearanceBAppliedToFixedA,
         appearanceRecomposition,
         appearanceControl,
+        positiveCompleteEmission,
+        positiveCompleteExtinction,
+        positiveRidgeOwnedEmission,
+        positiveRidgeOwnedExtinction,
+        positiveNonRidgeEmission,
+        positiveNonRidgeExtinction,
+        positiveOpticalRecomposition,
+        cameraHoldout: {
+          cameraOriginalPose,
+          cameraOriginalHash,
+          cameraHoldoutPose,
+          cameraHoldoutPoseHash,
+          cameraRestoredHash,
+          cameraHoldoutBefore: {
+            frameCount: cameraHoldoutBefore.frameCount,
+            simStepCount: cameraHoldoutBefore.simStepCount,
+          },
+          cameraHoldoutAfter: {
+            frameCount: cameraHoldoutAfter.frameCount,
+            simStepCount: cameraHoldoutAfter.simStepCount,
+          },
+          cameraHoldoutRidgeEmission,
+          cameraHoldoutNonRidgeEmission,
+          cameraHoldoutPositiveRecomposition,
+          cameraHoldoutControl,
+          cameraHoldoutRecompositionDelta,
+        },
         beautyRestored: beautySmokeRestored,
         beautySmokeRestored,
         intrinsicCompositionControlState,
@@ -391,6 +465,7 @@ try {
         smokeIsolationDelta,
         structuralAParityDelta,
         recompositionDelta,
+        positiveRecompositionDelta,
         restorationDelta,
       };
     })()
@@ -461,6 +536,13 @@ try {
   assert.equal(evidence.appearanceBAppliedToFixedA.metrics.nonblank, true, 'Appearance B-on-A output is blank');
   assert.equal(evidence.appearanceRecomposition.metrics.nonblank, true, 'Appearance A+B output is blank');
   assert.equal(evidence.appearanceControl.metrics.nonblank, true, 'Appearance control output is blank');
+  assert.equal(evidence.positiveCompleteEmission.metrics.nonblank, true, 'Complete Flame emission output is blank');
+  assert.equal(evidence.positiveCompleteExtinction.metrics.nonblank, true, 'Complete Flame extinction output is blank');
+  assert.equal(evidence.positiveRidgeOwnedEmission.metrics.nonblank, true, 'Ridge-Owned emission output is blank');
+  assert.equal(evidence.positiveRidgeOwnedExtinction.metrics.nonblank, true, 'Ridge-Owned extinction output is blank');
+  assert.equal(evidence.positiveNonRidgeEmission.metrics.nonblank, true, 'Non-Ridge emission output is blank');
+  assert.equal(evidence.positiveNonRidgeExtinction.metrics.nonblank, true, 'Non-Ridge extinction output is blank');
+  assert.equal(evidence.positiveOpticalRecomposition.metrics.nonblank, true, 'positive optical recomposition output is blank');
   assert.equal(evidence.beautyRestored.metrics.nonblank, true, 'restored Beauty output is blank');
   assert.notEqual(evidence.beauty.pixelHash, evidence.intrinsic.pixelHash, 'Intrinsic silently substituted Beauty pixels');
   assert.notEqual(evidence.beautySmokeOn.pixelHash, evidence.beautySmokeOff.pixelHash, 'Smoke Off silently reused Smoke On pixels');
@@ -471,6 +553,17 @@ try {
     evidence.appearanceBAppliedToFixedA,
     evidence.appearanceRecomposition,
     evidence.appearanceControl,
+    evidence.positiveCompleteEmission,
+    evidence.positiveCompleteExtinction,
+    evidence.positiveRidgeOwnedEmission,
+    evidence.positiveRidgeOwnedExtinction,
+    evidence.positiveNonRidgeEmission,
+    evidence.positiveNonRidgeExtinction,
+    evidence.positiveOpticalRecomposition,
+    evidence.cameraHoldout.cameraHoldoutRidgeEmission,
+    evidence.cameraHoldout.cameraHoldoutNonRidgeEmission,
+    evidence.cameraHoldout.cameraHoldoutPositiveRecomposition,
+    evidence.cameraHoldout.cameraHoldoutControl,
   ]) {
     assert.equal(capture.receipt.requestedMode, capture.mode, `appearance request identity drifted for ${capture.mode}`);
     assert.equal(capture.receipt.effectiveMode, capture.mode, `appearance effective identity drifted for ${capture.mode}`);
@@ -490,6 +583,16 @@ try {
   assert.equal(evidence.structuralAParityDelta.changedPixelRatio, 0, 'Appearance A changed pixels relative to exact Intrinsic');
   assert.equal(evidence.recompositionDelta.maxChannelDelta, 0, 'A+B did not exactly reconstruct Smoke-Off control pixels');
   assert.equal(evidence.recompositionDelta.changedPixelRatio, 0, 'A+B/control pixel identity was not exact');
+  assert.equal(evidence.positiveRecompositionDelta.maxChannelDelta, 0, 'positive partition did not exactly reconstruct Complete Flame pixels');
+  assert.equal(evidence.positiveRecompositionDelta.changedPixelRatio, 0, 'positive partition changed pixels relative to Complete Flame');
+  assert.notEqual(evidence.cameraHoldout.cameraOriginalHash, evidence.cameraHoldout.cameraHoldoutPoseHash, 'camera holdout did not change camera identity');
+  assert.equal(evidence.cameraHoldout.cameraOriginalHash, evidence.cameraHoldout.cameraRestoredHash, 'camera holdout did not restore the exact camera identity');
+  assert.equal(evidence.cameraHoldout.cameraHoldoutBefore.frameCount, evidence.cameraHoldout.cameraHoldoutAfter.frameCount, 'camera holdout advanced presented frame state');
+  assert.equal(evidence.cameraHoldout.cameraHoldoutBefore.simStepCount, evidence.cameraHoldout.cameraHoldoutAfter.simStepCount, 'camera holdout advanced simulation');
+  assert.equal(evidence.cameraHoldout.cameraHoldoutRidgeEmission.metrics.nonblank, true, 'held-out Ridge-Owned emission is blank');
+  assert.equal(evidence.cameraHoldout.cameraHoldoutNonRidgeEmission.metrics.nonblank, true, 'held-out Non-Ridge emission is blank');
+  assert.equal(evidence.cameraHoldout.cameraHoldoutRecompositionDelta.maxChannelDelta, 0, 'held-out positive partition did not exactly reconstruct Complete Flame pixels');
+  assert.equal(evidence.cameraHoldout.cameraHoldoutRecompositionDelta.changedPixelRatio, 0, 'held-out positive partition changed pixels relative to Complete Flame');
   assert.equal(evidence.intrinsicCompositionControlState.disabled, true, 'Intrinsic did not disable composition controls');
   assert.equal(evidence.intrinsicCompositionControlState.rejectedReceipt?.reason, 'composition-controls-disabled-during-intrinsic', 'Intrinsic composition click was not rejected explicitly');
   assert.equal(evidence.beautyCompositionControlState.enabled, true, 'Beauty did not restore composition controls');
@@ -513,6 +616,17 @@ try {
     ['appearance-b-on-fixed-a.png', evidence.appearanceBAppliedToFixedA],
     ['appearance-a-plus-b.png', evidence.appearanceRecomposition],
     ['appearance-smoke-off-control.png', evidence.appearanceControl],
+    ['positive-complete-emission.png', evidence.positiveCompleteEmission],
+    ['positive-complete-extinction.png', evidence.positiveCompleteExtinction],
+    ['positive-ridge-owned-emission.png', evidence.positiveRidgeOwnedEmission],
+    ['positive-ridge-owned-extinction.png', evidence.positiveRidgeOwnedExtinction],
+    ['positive-non-ridge-emission.png', evidence.positiveNonRidgeEmission],
+    ['positive-non-ridge-extinction.png', evidence.positiveNonRidgeExtinction],
+    ['positive-optical-recomposition.png', evidence.positiveOpticalRecomposition],
+    ['holdout-ridge-owned-emission.png', evidence.cameraHoldout.cameraHoldoutRidgeEmission],
+    ['holdout-non-ridge-emission.png', evidence.cameraHoldout.cameraHoldoutNonRidgeEmission],
+    ['holdout-positive-optical-recomposition.png', evidence.cameraHoldout.cameraHoldoutPositiveRecomposition],
+    ['holdout-complete-flame-control.png', evidence.cameraHoldout.cameraHoldoutControl],
     ['beauty-smoke-restored.png', evidence.beautySmokeRestored],
   ]) {
     writeFileSync(resolve(outDir, name), decodePngDataUrl(capture.pngDataUrl));
@@ -541,6 +655,21 @@ try {
     appearanceBAppliedToFixedA: stripPngData(evidence.appearanceBAppliedToFixedA),
     appearanceRecomposition: stripPngData(evidence.appearanceRecomposition),
     appearanceControl: stripPngData(evidence.appearanceControl),
+    positiveCompleteEmission: stripPngData(evidence.positiveCompleteEmission),
+    positiveCompleteExtinction: stripPngData(evidence.positiveCompleteExtinction),
+    positiveRidgeOwnedEmission: stripPngData(evidence.positiveRidgeOwnedEmission),
+    positiveRidgeOwnedExtinction: stripPngData(evidence.positiveRidgeOwnedExtinction),
+    positiveNonRidgeEmission: stripPngData(evidence.positiveNonRidgeEmission),
+    positiveNonRidgeExtinction: stripPngData(evidence.positiveNonRidgeExtinction),
+    positiveOpticalRecomposition: stripPngData(evidence.positiveOpticalRecomposition),
+    positiveRecompositionDelta: evidence.positiveRecompositionDelta,
+    cameraHoldout: {
+      ...evidence.cameraHoldout,
+      cameraHoldoutRidgeEmission: stripPngData(evidence.cameraHoldout.cameraHoldoutRidgeEmission),
+      cameraHoldoutNonRidgeEmission: stripPngData(evidence.cameraHoldout.cameraHoldoutNonRidgeEmission),
+      cameraHoldoutPositiveRecomposition: stripPngData(evidence.cameraHoldout.cameraHoldoutPositiveRecomposition),
+      cameraHoldoutControl: stripPngData(evidence.cameraHoldout.cameraHoldoutControl),
+    },
     structuralAParityDelta: evidence.structuralAParityDelta,
     recompositionDelta: evidence.recompositionDelta,
     beautyRestored: stripPngData(evidence.beautySmokeRestored),
@@ -561,6 +690,17 @@ try {
       appearanceBAppliedToFixedA: relative(process.cwd(), resolve(outDir, 'appearance-b-on-fixed-a.png')),
       appearanceRecomposition: relative(process.cwd(), resolve(outDir, 'appearance-a-plus-b.png')),
       appearanceControl: relative(process.cwd(), resolve(outDir, 'appearance-smoke-off-control.png')),
+      positiveCompleteEmission: relative(process.cwd(), resolve(outDir, 'positive-complete-emission.png')),
+      positiveCompleteExtinction: relative(process.cwd(), resolve(outDir, 'positive-complete-extinction.png')),
+      positiveRidgeOwnedEmission: relative(process.cwd(), resolve(outDir, 'positive-ridge-owned-emission.png')),
+      positiveRidgeOwnedExtinction: relative(process.cwd(), resolve(outDir, 'positive-ridge-owned-extinction.png')),
+      positiveNonRidgeEmission: relative(process.cwd(), resolve(outDir, 'positive-non-ridge-emission.png')),
+      positiveNonRidgeExtinction: relative(process.cwd(), resolve(outDir, 'positive-non-ridge-extinction.png')),
+      positiveOpticalRecomposition: relative(process.cwd(), resolve(outDir, 'positive-optical-recomposition.png')),
+      cameraHoldoutRidgeEmission: relative(process.cwd(), resolve(outDir, 'holdout-ridge-owned-emission.png')),
+      cameraHoldoutNonRidgeEmission: relative(process.cwd(), resolve(outDir, 'holdout-non-ridge-emission.png')),
+      cameraHoldoutPositiveRecomposition: relative(process.cwd(), resolve(outDir, 'holdout-positive-optical-recomposition.png')),
+      cameraHoldoutControl: relative(process.cwd(), resolve(outDir, 'holdout-complete-flame-control.png')),
       beautyRestored: relative(process.cwd(), resolve(outDir, 'beauty-smoke-restored.png')),
       beautySmokeRestored: relative(process.cwd(), resolve(outDir, 'beauty-smoke-restored.png')),
       cockpitRestoredBeauty: relative(process.cwd(), resolve(outDir, 'operator-cockpit-restored-beauty.png')),
@@ -625,6 +765,20 @@ function stripEvidencePngData(evidence) {
     appearanceBAppliedToFixedA: stripPngData(evidence?.appearanceBAppliedToFixedA),
     appearanceRecomposition: stripPngData(evidence?.appearanceRecomposition),
     appearanceControl: stripPngData(evidence?.appearanceControl),
+    positiveCompleteEmission: stripPngData(evidence?.positiveCompleteEmission),
+    positiveCompleteExtinction: stripPngData(evidence?.positiveCompleteExtinction),
+    positiveRidgeOwnedEmission: stripPngData(evidence?.positiveRidgeOwnedEmission),
+    positiveRidgeOwnedExtinction: stripPngData(evidence?.positiveRidgeOwnedExtinction),
+    positiveNonRidgeEmission: stripPngData(evidence?.positiveNonRidgeEmission),
+    positiveNonRidgeExtinction: stripPngData(evidence?.positiveNonRidgeExtinction),
+    positiveOpticalRecomposition: stripPngData(evidence?.positiveOpticalRecomposition),
+    cameraHoldout: evidence?.cameraHoldout ? {
+      ...evidence.cameraHoldout,
+      cameraHoldoutRidgeEmission: stripPngData(evidence.cameraHoldout.cameraHoldoutRidgeEmission),
+      cameraHoldoutNonRidgeEmission: stripPngData(evidence.cameraHoldout.cameraHoldoutNonRidgeEmission),
+      cameraHoldoutPositiveRecomposition: stripPngData(evidence.cameraHoldout.cameraHoldoutPositiveRecomposition),
+      cameraHoldoutControl: stripPngData(evidence.cameraHoldout.cameraHoldoutControl),
+    } : null,
     beautyRestored: stripPngData(evidence?.beautyRestored),
     beautySmokeRestored: stripPngData(evidence?.beautySmokeRestored),
   };
