@@ -5,13 +5,21 @@ export const STRUCTURAL_MATERIAL_3D_WEBGPU_ROUTE = 'kaminos.structural-material.
 export const STRUCTURAL_MATERIAL_3D_WEBGPU_SOLVER_AUTHORITY = 'webgpu-compute-bond-response-fracture-candidates-v0';
 export const STRUCTURAL_MATERIAL_3D_CPU_ORACLE_AUTHORITY = 'deterministic-layered-bond-response-cpu-oracle-v0';
 
-const WORKGROUP_SIZE = 64;
-const NODE_STRIDE_BYTES = 32;
-const BOND_STRIDE_BYTES = 80;
-const RESPONSE_STRIDE_BYTES = 32;
-const EVENT_STRIDE_BYTES = 48;
-const EVENT_HEADER_BYTES = 16;
-const INTERACTION_BYTES = 48;
+export const STRUCTURAL_MATERIAL_3D_WEBGPU_WORKGROUP_SIZE = 64;
+export const STRUCTURAL_MATERIAL_3D_WEBGPU_NODE_STRIDE_BYTES = 32;
+export const STRUCTURAL_MATERIAL_3D_WEBGPU_BOND_STRIDE_BYTES = 80;
+export const STRUCTURAL_MATERIAL_3D_WEBGPU_RESPONSE_STRIDE_BYTES = 32;
+export const STRUCTURAL_MATERIAL_3D_WEBGPU_EVENT_STRIDE_BYTES = 48;
+export const STRUCTURAL_MATERIAL_3D_WEBGPU_EVENT_HEADER_BYTES = 16;
+export const STRUCTURAL_MATERIAL_3D_WEBGPU_INTERACTION_BYTES = 48;
+
+const WORKGROUP_SIZE = STRUCTURAL_MATERIAL_3D_WEBGPU_WORKGROUP_SIZE;
+const NODE_STRIDE_BYTES = STRUCTURAL_MATERIAL_3D_WEBGPU_NODE_STRIDE_BYTES;
+const BOND_STRIDE_BYTES = STRUCTURAL_MATERIAL_3D_WEBGPU_BOND_STRIDE_BYTES;
+const RESPONSE_STRIDE_BYTES = STRUCTURAL_MATERIAL_3D_WEBGPU_RESPONSE_STRIDE_BYTES;
+const EVENT_STRIDE_BYTES = STRUCTURAL_MATERIAL_3D_WEBGPU_EVENT_STRIDE_BYTES;
+const EVENT_HEADER_BYTES = STRUCTURAL_MATERIAL_3D_WEBGPU_EVENT_HEADER_BYTES;
+const INTERACTION_BYTES = STRUCTURAL_MATERIAL_3D_WEBGPU_INTERACTION_BYTES;
 
 const GEOMETRY_ROLE_CODES = Object.freeze({
   body: 0,
@@ -37,10 +45,10 @@ const GPU_LAYOUT = Object.freeze({
   nodeFields: ['position3', 'pinned', 'displacement3', 'componentOrdinal'],
   bondFields: ['endpointIndices', 'bondKind', 'geometryRole', 'direction3', 'midpoint3', 'rest', 'strength', 'stiffness', 'alive', 'lastStress', 'lastStrain', 'repaired'],
   responseFields: ['stress', 'strain', 'energy', 'shouldBreak', 'bondIndex', 'bondKind', 'geometryRole', 'nextAlive'],
-  eventFields: ['bondIndex', 'bondKind', 'geometryRole', 'cause', 'stress', 'strain', 'energy', 'midpoint3'],
+  eventFields: ['bondIndex', 'bondKind', 'geometryRole', 'cause', 'stress', 'strain', 'energy', 'midpoint3', 'eventEpoch'],
 });
 
-const COMPUTE_SHADER = /* wgsl */ `
+export const STRUCTURAL_MATERIAL_3D_WEBGPU_COMPUTE_SHADER = /* wgsl */ `
 struct NodeRecord {
   position: vec4<f32>,
   displacement: vec4<f32>,
@@ -79,7 +87,7 @@ struct CrackEvent {
 }
 
 @group(0) @binding(0) var<storage, read> nodes: array<NodeRecord>;
-@group(0) @binding(1) var<storage, read> bonds: array<BondRecord>;
+@group(0) @binding(1) var<storage, read_write> bonds: array<BondRecord>;
 @group(0) @binding(2) var<uniform> interaction: Interaction;
 @group(0) @binding(3) var<storage, read_write> responses: array<BondResponse>;
 @group(0) @binding(4) var<storage, read_write> eventHeader: EventHeader;
@@ -92,7 +100,7 @@ fn main(@builtin(global_invocation_id) globalId: vec3<u32>) {
     return;
   }
 
-  let bond = bonds[bondIndex];
+  var bond = bonds[bondIndex];
   let alive = bond.material.w >= 0.5;
   if (!alive) {
     responses[bondIndex].metrics = vec4<f32>(bond.prior.x, bond.prior.y, 0.0, 0.0);
@@ -147,19 +155,25 @@ fn main(@builtin(global_invocation_id) globalId: vec3<u32>) {
 
   responses[bondIndex].metrics = vec4<f32>(stress, strain, energy, select(0.0, 1.0, shouldBreak));
   responses[bondIndex].identity = vec4<u32>(bondIndex, bond.endpoints.z, bond.endpoints.w, select(1u, 0u, shouldBreak));
+  bond.prior.x = stress;
+  bond.prior.y = strain;
 
   if (shouldBreak) {
+    bond.material.w = 0.0;
     let slot = atomicAdd(&eventHeader.count, 1u);
     if (slot < interaction.counts.y) {
       events[slot].identity = vec4<u32>(bondIndex, bond.endpoints.z, bond.endpoints.w, 1u);
       events[slot].metrics = vec4<f32>(stress, strain, energy, 0.0);
-      events[slot].midpoint = bond.midpoint;
+      events[slot].midpoint = vec4<f32>(bond.midpoint.xyz, bitcast<f32>(interaction.counts.w));
     } else {
       atomicAdd(&eventHeader.overflow, 1u);
     }
   }
+  bonds[bondIndex] = bond;
 }
 `;
+
+const COMPUTE_SHADER = STRUCTURAL_MATERIAL_3D_WEBGPU_COMPUTE_SHADER;
 
 function finite(value, fallback = 0) {
   const number = Number(value);
@@ -249,9 +263,26 @@ export function packLayeredStructuralGpuSnapshot(state, interaction = {}) {
     bondView.setFloat32(offset + 76, 0, true);
   });
 
+  const eventCapacity = state.bonds.length;
+  const interactionData = packLayeredStructuralGpuInteraction(state, interaction, { eventCapacity, eventEpoch: 1 });
+
+  return {
+    abi: STRUCTURAL_MATERIAL_3D_WEBGPU_ABI,
+    layout: layeredStructuralGpuAbiDescriptor(),
+    nodeCount: state.nodes.length,
+    bondCount: state.bonds.length,
+    eventCapacity,
+    nodeData,
+    bondData,
+    interactionData,
+  };
+}
+
+export function packLayeredStructuralGpuInteraction(state, interaction = {}, options = {}) {
   const direction = normalizedVector3(interaction.vector);
   const point = normalizedPoint3(interaction.point);
-  const eventCapacity = state.bonds.length;
+  const eventCapacity = Math.max(0, Math.floor(finite(options.eventCapacity, state.bonds.length)));
+  const eventEpoch = Math.max(1, Math.floor(finite(options.eventEpoch, 1)));
   const interactionData = new ArrayBuffer(INTERACTION_BYTES);
   const interactionView = new DataView(interactionData);
   interactionView.setFloat32(0, direction.x, true);
@@ -265,18 +296,8 @@ export function packLayeredStructuralGpuSnapshot(state, interaction = {}) {
   interactionView.setUint32(32, state.bonds.length, true);
   interactionView.setUint32(36, eventCapacity, true);
   interactionView.setUint32(40, state.nodes.length, true);
-  interactionView.setUint32(44, 1, true);
-
-  return {
-    abi: STRUCTURAL_MATERIAL_3D_WEBGPU_ABI,
-    layout: layeredStructuralGpuAbiDescriptor(),
-    nodeCount: state.nodes.length,
-    bondCount: state.bonds.length,
-    eventCapacity,
-    nodeData,
-    bondData,
-    interactionData,
-  };
+  interactionView.setUint32(44, eventEpoch, true);
+  return interactionData;
 }
 
 export function buildLayeredStructuralCpuBondOracle(state, interaction = {}) {
@@ -308,6 +329,7 @@ export function buildLayeredStructuralCpuBondOracle(state, interaction = {}) {
         strain: response.strain,
         energy: response.energy,
         midpoint: { ...bond.midpoint },
+        eventEpoch: 1,
       };
     });
   return {
@@ -451,7 +473,7 @@ export function compareLayeredStructuralGpuParity(cpuOracle, gpuResult, options 
   };
 }
 
-function parseGpuResponses(buffer, state) {
+export function parseLayeredStructuralGpuResponses(buffer, state) {
   const view = new DataView(buffer);
   return state.bonds.map((bond, index) => {
     const offset = index * RESPONSE_STRIDE_BYTES;
@@ -469,7 +491,7 @@ function parseGpuResponses(buffer, state) {
   });
 }
 
-function parseGpuEvents(buffer, count, state) {
+export function parseLayeredStructuralGpuEvents(buffer, count, state) {
   const view = new DataView(buffer);
   const events = [];
   for (let index = 0; index < count; index += 1) {
@@ -490,12 +512,18 @@ function parseGpuEvents(buffer, count, state) {
         y: view.getFloat32(offset + 36, true),
         z: view.getFloat32(offset + 40, true),
       },
+      eventEpoch: view.getUint32(offset + 44, true),
     });
   }
   return events.sort((a, b) => a.bondIndex - b.bondIndex);
 }
 
-function adapterIdentity(adapter) {
+export function parseLayeredStructuralGpuBondLiveness(buffer, state) {
+  const view = new DataView(buffer);
+  return state.bonds.map((_, index) => view.getFloat32(index * BOND_STRIDE_BYTES + 60, true) >= 0.5);
+}
+
+export function layeredStructuralGpuAdapterIdentity(adapter) {
   const info = adapter?.info || {};
   return {
     vendor: info.vendor || null,
@@ -506,7 +534,7 @@ function adapterIdentity(adapter) {
   };
 }
 
-function now() {
+export function layeredStructuralGpuNow() {
   return globalThis.performance?.now?.() ?? Date.now();
 }
 
@@ -550,16 +578,16 @@ export async function runLayeredStructuralWebGpuParity(options = {}) {
   let errorScopeOpen = false;
   const buffers = [];
   try {
-    const adapterStart = now();
+    const adapterStart = layeredStructuralGpuNow();
     const adapter = await gpu.requestAdapter({ powerPreference: options.powerPreference || 'high-performance' });
-    result.timingsMs.adapterRequest = now() - adapterStart;
+    result.timingsMs.adapterRequest = layeredStructuralGpuNow() - adapterStart;
     if (!adapter) throw new Error('WebGPU adapter unavailable');
-    result.adapter = adapterIdentity(adapter);
+    result.adapter = layeredStructuralGpuAdapterIdentity(adapter);
 
     result.failurePhase = 'device-request';
-    const deviceStart = now();
+    const deviceStart = layeredStructuralGpuNow();
     device = await adapter.requestDevice();
-    result.timingsMs.deviceRequest = now() - deviceStart;
+    result.timingsMs.deviceRequest = layeredStructuralGpuNow() - deviceStart;
     const usage = globalThis.GPUBufferUsage;
     const shaderStage = globalThis.GPUShaderStage;
     const mapMode = globalThis.GPUMapMode;
@@ -589,13 +617,13 @@ export async function runLayeredStructuralWebGpuParity(options = {}) {
     device.pushErrorScope('validation');
     errorScopeOpen = true;
     const shaderModule = device.createShaderModule({ label: STRUCTURAL_MATERIAL_3D_WEBGPU_ROUTE, code: COMPUTE_SHADER });
-    const pipelineStart = now();
+    const pipelineStart = layeredStructuralGpuNow();
     const pipeline = await device.createComputePipelineAsync({
       label: STRUCTURAL_MATERIAL_3D_WEBGPU_ROUTE,
       layout: 'auto',
       compute: { module: shaderModule, entryPoint: 'main' },
     });
-    result.timingsMs.pipelineCompile = now() - pipelineStart;
+    result.timingsMs.pipelineCompile = layeredStructuralGpuNow() - pipelineStart;
     const bindGroup = device.createBindGroup({
       label: 'structural-bond-response-bind-group',
       layout: pipeline.getBindGroupLayout(0),
@@ -620,10 +648,10 @@ export async function runLayeredStructuralWebGpuParity(options = {}) {
     encoder.copyBufferToBuffer(responseBuffer, 0, responseReadback, 0, packed.bondCount * RESPONSE_STRIDE_BYTES);
     encoder.copyBufferToBuffer(eventHeaderBuffer, 0, eventHeaderReadback, 0, EVENT_HEADER_BYTES);
     encoder.copyBufferToBuffer(eventBuffer, 0, eventReadback, 0, packed.eventCapacity * EVENT_STRIDE_BYTES);
-    const dispatchStart = now();
+    const dispatchStart = layeredStructuralGpuNow();
     device.queue.submit([encoder.finish()]);
     await device.queue.onSubmittedWorkDone();
-    result.timingsMs.dispatchAndGpuCompletion = now() - dispatchStart;
+    result.timingsMs.dispatchAndGpuCompletion = layeredStructuralGpuNow() - dispatchStart;
     result.dispatch = {
       workgroupSize: WORKGROUP_SIZE,
       workgroupCount: workgroups,
@@ -633,7 +661,7 @@ export async function runLayeredStructuralWebGpuParity(options = {}) {
     };
 
     result.failurePhase = 'readback';
-    const readbackStart = now();
+    const readbackStart = layeredStructuralGpuNow();
     await Promise.all([
       responseReadback.mapAsync(mapMode.READ),
       eventHeaderReadback.mapAsync(mapMode.READ),
@@ -645,14 +673,14 @@ export async function runLayeredStructuralWebGpuParity(options = {}) {
     responseReadback.unmap();
     eventHeaderReadback.unmap();
     eventReadback.unmap();
-    result.timingsMs.readbackMapAndCopy = now() - readbackStart;
+    result.timingsMs.readbackMapAndCopy = layeredStructuralGpuNow() - readbackStart;
     const headerView = new DataView(headerBytes);
     const eventCount = headerView.getUint32(0, true);
     const eventOverflowCount = headerView.getUint32(4, true);
     const readableEventCount = Math.min(eventCount, packed.eventCapacity);
     const gpuResult = {
-      responses: parseGpuResponses(responseBytes, state),
-      eventCandidates: parseGpuEvents(eventBytes, readableEventCount, state),
+      responses: parseLayeredStructuralGpuResponses(responseBytes, state),
+      eventCandidates: parseLayeredStructuralGpuEvents(eventBytes, readableEventCount, state),
       eventCount,
       eventOverflowCount,
     };

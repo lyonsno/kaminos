@@ -150,6 +150,11 @@
       STRUCTURAL_MATERIAL_3D_WEBGPU_ROUTE,
       runLayeredStructuralWebGpuParity,
     } from './structural-material-3d-webgpu-core.js';
+    import {
+      STRUCTURAL_MATERIAL_3D_WEBGPU_RETAINED_ROUTE,
+      buildLayeredStructuralRetainedWitnessInteractions,
+      runLayeredStructuralRetainedWebGpuParity,
+    } from './structural-material-3d-webgpu-retained.js';
 
     const stage = document.querySelector('#stage');
     const readout = document.querySelector('#readout');
@@ -220,6 +225,8 @@
     const cameraInvariantViolations = [];
     let gpuParityReceipt = null;
     let gpuParityPromise = null;
+    let gpuRetainedReceipt = null;
+    let gpuRetainedPromise = null;
 
     function worldPoint(node) {
       return new THREE.Vector3(
@@ -283,10 +290,12 @@
       const summary = summarizeLayeredStructuralState(material);
       readout.textContent = `broken ${summary.brokenBondCount} | depth ${summary.brokenDepthBondCount}/${summary.crossDepthBondCount} | components ${summary.componentCount} | sound ${summary.sound.signature}`;
       route.textContent = `${STRUCTURAL_MATERIAL_3D_ROUTE} | ${STRUCTURAL_MATERIAL_3D_VISUAL_AUTHORITY}`;
-      gpuStatus.textContent = gpuParityReceipt
-        ? `GPU ${gpuParityReceipt.status} ${gpuParityReceipt.parity?.gpuBreakCount ?? 0}/${gpuParityReceipt.parity?.cpuBreakCount ?? 0}`
-        : '';
-      gpuStatus.title = gpuParityReceipt?.effectiveRoute || STRUCTURAL_MATERIAL_3D_WEBGPU_ROUTE;
+      gpuStatus.textContent = gpuRetainedReceipt
+        ? `GPU retained ${gpuRetainedReceipt.status} ${gpuRetainedReceipt.parity?.gpuEventCount ?? 0}/${gpuRetainedReceipt.parity?.cpuEventCount ?? 0}`
+        : gpuParityReceipt
+          ? `GPU ${gpuParityReceipt.status} ${gpuParityReceipt.parity?.gpuBreakCount ?? 0}/${gpuParityReceipt.parity?.cpuBreakCount ?? 0}`
+          : '';
+      gpuStatus.title = gpuRetainedReceipt?.effectiveRoute || gpuParityReceipt?.effectiveRoute || STRUCTURAL_MATERIAL_3D_WEBGPU_ROUTE;
       gesture.textContent = forceEnvelope
         ? `drag ${forceEnvelope.dragLength.toFixed(3)} | mag ${forceEnvelope.magnitude.toFixed(3)} | z ${forceEnvelope.point.z.toFixed(3)} | stress ${summary.maxStress.toFixed(3)}`
         : `drag 0.000 | mag 0.000 | z 0.500 | stress ${summary.maxStress.toFixed(3)}`;
@@ -443,6 +452,7 @@
       cameraControlAuthority: CAMERA_CONTROL_AUTHORITY,
       cameraInvariantViolationCount: cameraInvariantViolations.length,
       gpuParity: gpuParityReceipt,
+      gpuRetainedParity: gpuRetainedReceipt,
     });
 
     window.__structuralMaterial3dCameraWitness = () => ({
@@ -547,6 +557,26 @@
         });
       }
       return gpuParityPromise;
+    };
+
+    window.__structuralMaterial3dRunGpuRetainedParity = async () => {
+      if (!gpuRetainedPromise) {
+        const scenario = buildLayeredStructuralWitnessScenario();
+        const retainedState = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true });
+        const interactions = buildLayeredStructuralRetainedWitnessInteractions(scenario.force);
+        gpuRetainedPromise = runLayeredStructuralRetainedWebGpuParity({
+          state: retainedState,
+          interactions,
+        }).then(receipt => {
+          gpuRetainedReceipt = receipt;
+          updateReadout();
+          renderScene();
+          return receipt;
+        }).finally(() => {
+          gpuRetainedPromise = null;
+        });
+      }
+      return gpuRetainedPromise;
     };
 
     window.addEventListener('resize', resize);
