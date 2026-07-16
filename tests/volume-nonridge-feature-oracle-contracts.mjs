@@ -145,6 +145,44 @@ assert.equal(report.assays.heldSetting.identity, 'whole-effective-control-settin
 assert.equal(report.controlsUsedAsFeatures, false);
 assert.equal(report.lastTrustworthyEvidence.validatedArtifactCount, 12);
 
+const singleMixedHeld = structuredClone(manifest);
+singleMixedHeld.splits.train.settingIds.push('held-negative');
+singleMixedHeld.splits.train.settingIds.sort();
+singleMixedHeld.splits.heldOut.settingIds = ['held-positive'];
+singleMixedHeld.settings.find(value => value.id === 'held-negative').splitRole = 'train';
+const mixedHeldTargets = [
+  1, 1, 0.7, 0.3, 0.9,
+  0, 0, 0, 0, 0,
+  0.2, 0.2, 0.14, 0.06, 0.18,
+  0, 0, 0, 0, 0,
+];
+singleMixedHeld.settings.find(value => value.id === 'held-positive').rows.targets = await artifact(
+  'held-positive-mixed',
+  'supervision-targets-positive-nonridge',
+  mixedHeldTargets,
+  [4, targets.length],
+);
+await writeFile(inputPath, `${JSON.stringify(singleMixedHeld, null, 2)}\n`);
+const mixedHeldOutDir = join(root, 'mixed-held-output');
+await mkdir(mixedHeldOutDir);
+const mixedHeldReportPath = join(mixedHeldOutDir, 'oracle-report.json');
+const acceptSingleMixedHeld = spawnSync('python3', [
+  scriptUrl.pathname,
+  '--input', inputPath,
+  '--out-dir', mixedHeldOutDir,
+  '--report', mixedHeldReportPath,
+  '--probe-only',
+], { encoding: 'utf8' });
+assert.equal(acceptSingleMixedHeld.status, 0, acceptSingleMixedHeld.stderr || acceptSingleMixedHeld.stdout);
+const mixedHeldReport = JSON.parse(await readFile(mixedHeldReportPath, 'utf8'));
+assert.deepEqual(mixedHeldReport.splits.heldOut.settingIds, ['held-positive']);
+assert.deepEqual(mixedHeldReport.splits.targetCoverage.heldOut, {
+  negativeMembershipRows: 2,
+  positiveMembershipRows: 2,
+  positiveOpticalRows: 2,
+});
+
+await writeFile(inputPath, `${JSON.stringify(manifest, null, 2)}\n`);
 if (process.env.KAMINOS_MLX_PYTHON) {
   const mlxOutDir = join(root, 'mlx-output');
   await mkdir(mlxOutDir);
@@ -192,7 +230,7 @@ const rejectUncoveredSplit = spawnSync('python3', [
 ], { encoding: 'utf8' });
 assert.equal(rejectUncoveredSplit.status, 2, 'held split without negative controls must fail');
 const splitFailedReport = JSON.parse(await readFile(splitFailedReportPath, 'utf8'));
-assert.match(splitFailedReport.reason, /heldOut split must contain positive and negative settings/);
+assert.match(splitFailedReport.reason, /heldOut split lacks positive\/negative membership or positive optical evidence/);
 
 const corrupt = structuredClone(manifest);
 corrupt.settings[0].rows.sourceComplete.sha256 = '0'.repeat(64);

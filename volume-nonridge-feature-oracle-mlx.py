@@ -216,7 +216,6 @@ def validate_manifest(manifest: dict[str, Any], manifest_path: Path) -> dict[str
     split_coverage = {}
     for split_role in ("train", "heldOut"):
         split_settings = [setting for setting in settings if setting["splitRole"] == split_role]
-        require(any(setting["negativeControl"] for setting in split_settings) and any(not setting["negativeControl"] for setting in split_settings), f"{split_role} split must contain positive and negative settings")
         summary = {
             key: sum(setting["targetSummary"][key] for setting in split_settings)
             for key in ("positiveMembershipRows", "negativeMembershipRows", "positiveOpticalRows")
