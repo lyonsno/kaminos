@@ -37,10 +37,12 @@ CONTRIBUTION_POLICY = "separate-premultiplied-layer-contributions-under-shared-t
 SPLIT_IDENTITY = "whole-simulator-state-holdout-v0"
 DESCRIPTOR_COMPARISON_IDENTITY = "matched-capacity-post-admission-kernel-descriptor-ablation-v0"
 DESCRIPTOR_AUTHORITY = "camera-independent-flow-kernel-descriptors-v0"
-DESCRIPTOR_SCHEMA = "kaminos.flow-kernel-local-descriptor.v0"
+DESCRIPTOR_SOCKET_IDENTITY = "flow-kernel-local-descriptor-socket-v0"
+DESCRIPTOR_STRIDE_FLOATS = 100
+DESCRIPTOR_ADMISSION_AUTHORITY = "external-native-cell-index-list-v0"
+DESCRIPTOR_KERNEL_IDENTITY = "flow-tangent-positive-symmetric-trilinear-v0"
 DESCRIPTOR_ROLE = "camera-independent-flow-kernel-descriptors"
-DESCRIPTOR_VALIDITY_ROLE = "conservative-kernel-descriptor-validity-majorant"
-DESCRIPTOR_VALIDITY_ORDER = ["kernel.validity", "kernel.majorant"]
+DESCRIPTOR_INDEX_ROLE = "analytical-admission-native-cell-indices"
 BASELINE_ARM_IDENTITY = "current-features-plus-analytical-world-covariance-v0"
 TREATMENT_ARM_IDENTITY = "current-features-plus-smallest-causal-kernel-descriptor-subset-v0"
 ANALYTICAL_GEOMETRY_IDENTITY = "kernel-moment-analytical-geometry-v0"
@@ -57,28 +59,11 @@ COEFFICIENT_ORDER = [
     "nonRidge.emission.b",
     "nonRidge.extinction",
 ]
-STATIC_KERNEL_DESCRIPTOR_CHANNELS = {
-    "kernel.mass",
-    "kernel.meanOffset.x",
-    "kernel.meanOffset.y",
-    "kernel.meanOffset.z",
-    "kernel.secondCentralMoment.xx",
-    "kernel.secondCentralMoment.xy",
-    "kernel.secondCentralMoment.xz",
-    "kernel.secondCentralMoment.yy",
-    "kernel.secondCentralMoment.yz",
-    "kernel.secondCentralMoment.zz",
-    "kernel.frontNormal.x",
-    "kernel.frontNormal.y",
-    "kernel.frontNormal.z",
-    "kernel.flowTangent.x",
-    "kernel.flowTangent.y",
-    "kernel.flowTangent.z",
-    "kernel.flowCoherence",
-    "kernel.curlMagnitude",
-    "kernel.divergence",
-    "kernel.validity",
-    "kernel.majorant",
+DESCRIPTOR_SOURCE_HASH_KEYS = {
+    "fluidSha256",
+    "frontSha256",
+    "boundarySidecarSha256",
+    "majorantSha256",
 }
 
 
@@ -136,22 +121,70 @@ def require_nonblank_unique_order(value: Any, label: str) -> list[str]:
     return value
 
 
-def require_sha_identity(value: Any, label: str) -> str:
+def require_sha256(value: Any, label: str) -> str:
     require(
-        isinstance(value, str) and re.fullmatch(r"sha256:[a-f0-9]{64}", value) is not None,
-        f"{label} must be sha256-bound",
+        isinstance(value, str) and re.fullmatch(r"[a-f0-9]{64}", value) is not None,
+        f"{label} must be a lowercase sha256 digest",
     )
     return value
 
 
-def descriptor_channel_allowed(channel: str, feature_order: list[str]) -> bool:
-    if channel in STATIC_KERNEL_DESCRIPTOR_CHANNELS:
-        return True
-    for field in feature_order:
-        prefix = f"kernel.reconstructed.{field}."
-        if channel.startswith(prefix) and channel[len(prefix):] in {"value", "gradient.x", "gradient.y", "gradient.z"}:
-            return True
-    return False
+def validate_source_hashes(value: Any, label: str) -> dict[str, str]:
+    require(isinstance(value, dict), f"{label} source hashes are missing")
+    require(set(value) == DESCRIPTOR_SOURCE_HASH_KEYS, f"{label} source hashes must bind {sorted(DESCRIPTOR_SOURCE_HASH_KEYS)}")
+    return {key: require_sha256(value[key], f"{label} {key}") for key in sorted(DESCRIPTOR_SOURCE_HASH_KEYS)}
+
+
+def validate_kernel_controls(value: Any, label: str) -> dict[str, float]:
+    require(isinstance(value, dict), f"{label} kernel controls are missing")
+    require(set(value) == {"strength", "radiusWorld", "coherence"}, f"{label} kernel controls must contain strength, radiusWorld, and coherence")
+    require(all(isinstance(item, (int, float)) and math.isfinite(item) for item in value.values()), f"{label} kernel controls must be finite")
+    require(value["strength"] >= 0, f"{label} kernel strength must be nonnegative")
+    require(value["radiusWorld"] > 0, f"{label} kernel radiusWorld must be positive")
+    require(0 <= value["coherence"] <= 1, f"{label} kernel coherence must lie within [0, 1]")
+    return {key: float(value[key]) for key in ("strength", "radiusWorld", "coherence")}
+
+
+def validate_descriptor_socket_module(
+    manifest_path: Path,
+    artifact: Any,
+    last_trustworthy: dict[str, Any],
+) -> dict[str, Any]:
+    path, data = validate_artifact(manifest_path, artifact, "kernel descriptor socket module", last_trustworthy)
+    canonical_path = Path(__file__).with_name("flow-kernel-descriptor-socket.mjs").resolve()
+    require(canonical_path.is_file(), f"canonical kernel descriptor socket module is missing at {canonical_path}")
+    canonical_data = canonical_path.read_bytes()
+    require(
+        sha256_bytes(data) == sha256_bytes(canonical_data),
+        "canonical kernel descriptor socket bytes differ from the supplied module",
+    )
+    validator_source = """
+import { pathToFileURL } from 'node:url';
+const module = await import(pathToFileURL(process.argv[1]).href);
+process.stdout.write(JSON.stringify({
+  identity: module.FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY,
+  strideFloats: module.FLOW_KERNEL_DESCRIPTOR_STRIDE_FLOATS,
+  descriptorOrder: module.FLOW_KERNEL_DESCRIPTOR_ORDER,
+}));
+"""
+    result = subprocess.run(
+        ["node", "--input-type=module", "--eval", validator_source, str(path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    require(result.returncode == 0, f"kernel descriptor socket module validation failed: {result.stderr.strip() or result.stdout.strip()}")
+    receipt = json.loads(result.stdout)
+    require(receipt.get("identity") == DESCRIPTOR_SOCKET_IDENTITY, f"kernel descriptor socket identity must equal {DESCRIPTOR_SOCKET_IDENTITY}")
+    require(receipt.get("strideFloats") == DESCRIPTOR_STRIDE_FLOATS, f"kernel descriptor stride must equal {DESCRIPTOR_STRIDE_FLOATS}")
+    descriptor_order = require_nonblank_unique_order(receipt.get("descriptorOrder"), "kernel descriptor socket")
+    require(len(descriptor_order) == DESCRIPTOR_STRIDE_FLOATS, "kernel descriptor socket order does not match its stride")
+    return {
+        "identity": receipt["identity"],
+        "strideFloats": receipt["strideFloats"],
+        "descriptorOrder": descriptor_order,
+        "moduleSha256": sha256_bytes(data),
+    }
 
 
 def validate_float_artifact(
@@ -170,6 +203,74 @@ def validate_float_artifact(
     values = list(struct.unpack(f"<{math.prod(expected_shape)}f", data))
     require(all(math.isfinite(value) for value in values), f"{label} contains non-finite values")
     return values
+
+
+def validate_uint32_artifact(
+    manifest_path: Path,
+    artifact: Any,
+    label: str,
+    expected_shape: list[int],
+    expected_role: str,
+    last_trustworthy: dict[str, Any],
+) -> list[int]:
+    _, data = validate_artifact(manifest_path, artifact, label, last_trustworthy)
+    require(artifact.get("dtype") == "uint32-le", f"{label} dtype must be uint32-le")
+    require(artifact.get("shape") == expected_shape, f"{label} shape must equal {expected_shape}")
+    require(artifact.get("semanticRole") == expected_role, f"{label} semantic role must equal {expected_role}")
+    require(len(data) == math.prod(expected_shape) * 4, f"{label} bytes do not match shape")
+    return list(struct.unpack(f"<{math.prod(expected_shape)}I", data))
+
+
+def validate_source_field_manifest(
+    training_manifest_path: Path,
+    artifact: Any,
+    label: str,
+    route: dict[str, Any],
+    source_corpus: dict[str, Any],
+    last_trustworthy: dict[str, Any],
+) -> dict[str, Any]:
+    source_manifest_path, data = validate_artifact(
+        training_manifest_path,
+        artifact,
+        f"{label} source field manifest",
+        last_trustworthy,
+    )
+    try:
+        value = json.loads(data)
+    except json.JSONDecodeError as error:
+        raise ValueError(f"{label} source field manifest is invalid JSON: {error}") from error
+    require(isinstance(value, dict), f"{label} source field manifest must be an object")
+    require(value.get("schema") == "kaminos.volume.full-grid-field-export.v0", f"{label} source field manifest schema is invalid")
+    require(value.get("identity") == "full-grid-fluid-front-boundary-sidecars-v0", f"{label} source field manifest identity is invalid")
+    require(value.get("status") == "captured", f"{label} source field manifest is not captured")
+    require(value.get("failurePhase") is None, f"{label} source field manifest contains failure evidence")
+    require(value.get("completeFieldCoverage") is True, f"{label} source field manifest has partial field coverage")
+    require(value.get("routeIdentity") == "native-3d-compute-fluid-raymarch-v0", f"{label} source field route identity is invalid")
+    require(value.get("effectiveRoute") == route["effective"], f"{label} source field effective route differs from the training route")
+    require(value.get("prototypeIdentity") == route["prototypeIdentity"], f"{label} source field prototype differs from the training route")
+    require(value.get("backend") == route["backend"], f"{label} source field backend differs from the training route")
+    require(value.get("backend") == source_corpus["backend"], f"{label} source field backend differs from the coefficient source corpus")
+    require(value.get("grid") == source_corpus["grid"], f"{label} source field grid differs from the coefficient source corpus")
+    sidecars = value.get("sidecars")
+    boundary_sidecar = value.get("boundarySidecar")
+    require(isinstance(sidecars, dict), f"{label} source field sidecars are missing")
+    require(isinstance(boundary_sidecar, dict) and isinstance(boundary_sidecar.get("sidecars"), dict), f"{label} boundary sidecar source is missing")
+    _, fluid_data = validate_artifact(source_manifest_path, sidecars.get("fluid"), f"{label} source fluid", last_trustworthy)
+    _, front_data = validate_artifact(source_manifest_path, sidecars.get("front"), f"{label} source front", last_trustworthy)
+    _, boundary_data = validate_artifact(
+        source_manifest_path,
+        boundary_sidecar["sidecars"].get("boundary"),
+        f"{label} source boundary sidecar",
+        last_trustworthy,
+    )
+    return {
+        "sha256": sha256_bytes(data),
+        "sourceHashes": {
+            "fluidSha256": sha256_bytes(fluid_data),
+            "frontSha256": sha256_bytes(front_data),
+            "boundarySidecarSha256": sha256_bytes(boundary_data),
+        },
+    }
 
 
 def validate_source_corpus(
@@ -254,9 +355,10 @@ try {
 
 def validate_descriptor_comparison(
     value: Any,
+    manifest_path: Path,
     feature_view: dict[str, Any],
-    feature_order: list[str],
     source_corpus: dict[str, Any],
+    last_trustworthy: dict[str, Any],
 ) -> dict[str, Any]:
     require(isinstance(value, dict), "matched-capacity kernel descriptor comparison is missing")
     require(value.get("identity") == DESCRIPTOR_COMPARISON_IDENTITY, f"descriptor comparison identity must equal {DESCRIPTOR_COMPARISON_IDENTITY}")
@@ -269,15 +371,16 @@ def validate_descriptor_comparison(
     require(treatment_parameters == baseline_parameters, "matched-capacity descriptor arms must have equal trainable parameter counts")
 
     producer = value.get("producer")
-    require(isinstance(producer, dict) and producer.get("schema") == DESCRIPTOR_SCHEMA, f"kernel descriptor producer schema must equal {DESCRIPTOR_SCHEMA}")
-    for key, label in [
-        ("socketIdentity", "kernel descriptor socket identity"),
-        ("sourceFieldIdentity", "kernel descriptor source field identity"),
-        ("requestedKernelControlIdentity", "requested kernel control identity"),
-        ("effectiveKernelControlIdentity", "effective kernel control identity"),
-    ]:
-        require_sha_identity(producer.get(key), label)
-    require(producer["requestedKernelControlIdentity"] == producer["effectiveKernelControlIdentity"], "requested and effective kernel control identities differ")
+    require(isinstance(producer, dict), "kernel descriptor producer receipt is missing")
+    socket = validate_descriptor_socket_module(manifest_path, producer.get("socketModule"), last_trustworthy)
+    require(producer.get("identity") == socket["identity"], "kernel descriptor producer identity differs from the checksum-bound socket module")
+    require(producer.get("strideFloats") == socket["strideFloats"], "kernel descriptor producer stride differs from the checksum-bound socket module")
+    require_exact_order(producer.get("descriptorOrder"), socket["descriptorOrder"], "kernel descriptor producer")
+    require(producer.get("kernelIdentity") == DESCRIPTOR_KERNEL_IDENTITY, f"kernel descriptor identity must equal {DESCRIPTOR_KERNEL_IDENTITY}")
+    require(
+        producer.get("candidateAdmissionAuthority") == DESCRIPTOR_ADMISSION_AUTHORITY,
+        f"kernel descriptor candidate admission authority must equal external native-cell index authority {DESCRIPTOR_ADMISSION_AUTHORITY}",
+    )
     require(isinstance(producer.get("requestedRoute"), str) and producer["requestedRoute"], "kernel descriptor requested route is missing")
     require(isinstance(producer.get("effectiveRoute"), str) and producer["effectiveRoute"], "kernel descriptor effective route is missing")
     require(producer.get("prototypeIdentity") == "kaminos-volume-prototype-v0", "kernel descriptor prototype identity is invalid")
@@ -285,18 +388,11 @@ def validate_descriptor_comparison(
     require(producer["backend"] == source_corpus["backend"], "kernel descriptor backend differs from the coefficient source corpus")
     require(producer.get("grid") == source_corpus["grid"], "kernel descriptor grid differs from the coefficient source corpus")
     require(producer.get("fallbackReason") is None, f"kernel descriptor route contains fallback evidence: {producer.get('fallbackReason')}")
-    requested_controls = producer.get("requestedControls")
-    effective_controls = producer.get("effectiveControls")
-    require(isinstance(requested_controls, dict) and isinstance(effective_controls, dict), "requested and effective kernel controls are missing")
-    require(set(requested_controls) == {"strength", "worldRadius", "flowCoherence"}, "requested kernel controls must contain strength, worldRadius, and flowCoherence")
-    require(set(effective_controls) == set(requested_controls), "effective kernel controls do not match the requested control schema")
-    require(all(isinstance(item, (int, float)) and math.isfinite(item) for item in requested_controls.values()), "requested kernel controls must be finite")
-    require(requested_controls["strength"] >= 0, "requested kernel strength must be nonnegative")
-    require(requested_controls["worldRadius"] > 0, "requested kernel world radius must be positive")
-    require(0 <= requested_controls["flowCoherence"] <= 1, "requested kernel flow coherence must lie within [0, 1]")
+    requested_controls = validate_kernel_controls(producer.get("requestedControls"), "requested")
+    effective_controls = validate_kernel_controls(producer.get("effectiveControls"), "effective")
     require(effective_controls == requested_controls, "requested and effective kernel controls differ")
     require(producer.get("cameraIndependent") is True, "kernel descriptor producer must be camera-independent")
-    require(producer.get("literalKernelTapsIncluded") is False, "literal kernel taps must not enter the descriptor learner")
+    require(producer.get("literalTapsExposed") is False, "literal kernel taps must not enter the descriptor learner")
     require(producer.get("strengthZeroIdentity") == "raw-source-field-identity-v0", "kernel descriptor socket must preserve exact strength-zero identity")
     require(producer.get("validityPolicy") == "conservative-support-validity-majorant-v0", "kernel descriptor validity policy must reject partial, stale, or fallback descriptors")
 
@@ -310,7 +406,22 @@ def validate_descriptor_comparison(
     require(treatment.get("descriptorAuthority") == DESCRIPTOR_AUTHORITY, f"descriptor treatment authority must equal {DESCRIPTOR_AUTHORITY}")
     descriptor_order = require_nonblank_unique_order(treatment.get("order"), "kernel descriptor treatment")
     require(all("tap" not in channel.lower() for channel in descriptor_order), "literal kernel tap channels are prohibited")
-    require(all(descriptor_channel_allowed(channel, feature_order) for channel in descriptor_order), "kernel descriptor order contains a channel outside the allowed camera-independent causal socket")
+    require(all(channel in socket["descriptorOrder"] for channel in descriptor_order), "kernel descriptor order contains a channel outside the checksum-bound camera-independent socket")
+    lawful_prefixes = (
+        "kernel.firstMoment.",
+        "kernel.covariance.",
+        "flow.",
+        "validity.",
+        "majorant.",
+        "value.",
+        "gradient.",
+    )
+    prohibited_channels = [
+        channel
+        for channel in descriptor_order
+        if channel != "kernel.normalizedMass" and not channel.startswith(lawful_prefixes)
+    ]
+    require(not prohibited_channels, f"kernel descriptor treatment contains prohibited channels: {prohibited_channels}")
     require(treatment.get("supportPredicted") is False, "support must not be predicted by the post-admission descriptor arm")
     require(treatment.get("footprintPredicted") is False, "footprint must not be predicted by the coefficient learner")
     require(treatment.get("cameraConditioned") is False, "camera conditioning is prohibited in the kernel descriptor arm")
@@ -325,7 +436,12 @@ def validate_descriptor_comparison(
         "identity": DESCRIPTOR_COMPARISON_IDENTITY,
         "selectionPolicy": value["selectionPolicy"],
         "capacityMatch": capacity,
-        "producer": producer,
+        "producer": {
+            **producer,
+            "socketModule": {**producer["socketModule"], "validatedSha256": socket["moduleSha256"]},
+            "requestedControls": requested_controls,
+            "effectiveControls": effective_controls,
+        },
         "baseline": baseline,
         "treatment": {**treatment, "order": descriptor_order, "channelCount": len(descriptor_order)},
         "analyticalGeometryArm": geometry,
@@ -335,23 +451,37 @@ def validate_descriptor_comparison(
 def validate_descriptor_artifact_receipt(
     artifact: Any,
     producer: dict[str, Any],
-    expected_order: list[str],
+    admission: dict[str, Any],
+    admission_artifact: dict[str, Any],
+    index_artifact: dict[str, Any],
+    source_manifest: dict[str, Any],
+    row_count: int,
     label: str,
 ) -> None:
     require(isinstance(artifact, dict), f"{label} artifact receipt is missing")
-    require(
-        artifact.get("socketIdentity") == producer["socketIdentity"],
-        f"{label} descriptor socket identity differs from its artifact receipt",
-    )
-    require(
-        artifact.get("sourceFieldIdentity") == producer["sourceFieldIdentity"],
-        f"{label} descriptor source field identity differs from its artifact receipt",
-    )
-    require(
-        artifact.get("kernelControlIdentity") == producer["effectiveKernelControlIdentity"],
-        f"{label} descriptor kernel control identity differs from its artifact receipt",
-    )
-    require_exact_order(artifact.get("descriptorOrder"), expected_order, f"{label} descriptor artifact")
+    require(artifact.get("socketIdentity") == producer["identity"], f"{label} descriptor socket identity differs from its artifact receipt")
+    require(artifact.get("strideFloats") == producer["strideFloats"], f"{label} descriptor stride differs from its artifact receipt")
+    require_exact_order(artifact.get("descriptorOrder"), producer["descriptorOrder"], f"{label} descriptor artifact")
+    require(artifact.get("kernelIdentity") == producer["kernelIdentity"], f"{label} descriptor kernel identity differs from its artifact receipt")
+    requested_controls = validate_kernel_controls(artifact.get("requestedControls"), f"{label} requested")
+    effective_controls = validate_kernel_controls(artifact.get("effectiveControls"), f"{label} effective")
+    require(requested_controls == producer["requestedControls"], f"{label} requested kernel controls differ from the producer")
+    require(effective_controls == producer["effectiveControls"], f"{label} effective kernel controls differ from the producer")
+    source_hashes = validate_source_hashes(artifact.get("sourceHashes"), label)
+    for key, expected in source_manifest["sourceHashes"].items():
+        require(source_hashes[key] == expected, f"{label} descriptor source hash {key} differs from the source field manifest")
+    require(artifact.get("sourceManifestSha256") == source_manifest["sha256"], f"{label} descriptor source manifest sha256 differs from the source field manifest")
+    require(artifact.get("candidateAdmissionAuthority") == DESCRIPTOR_ADMISSION_AUTHORITY, f"{label} descriptor admission authority must equal external native-cell index authority {DESCRIPTOR_ADMISSION_AUTHORITY}")
+    index_authority = artifact.get("admissionIndexAuthority")
+    require(isinstance(index_authority, dict), f"{label} descriptor admission index authority is missing")
+    require(index_authority.get("identity") == DESCRIPTOR_ADMISSION_AUTHORITY, f"{label} descriptor admission index identity differs from external native-cell index authority")
+    require(index_authority.get("indexSha256") == index_artifact.get("sha256"), f"{label} descriptor admission index sha256 differs from the native-cell index artifact")
+    require(index_authority.get("count") == row_count, f"{label} descriptor admission index count differs from the row count")
+    require(index_authority.get("byteLength") == index_artifact.get("bytes"), f"{label} descriptor admission index byte length differs from the native-cell index artifact")
+    require(index_authority.get("duplicatePolicy") == "forbidden", f"{label} descriptor admission index duplicate policy must be forbidden")
+    require(index_authority.get("orderIdentity") == "caller-ordered", f"{label} descriptor admission index order must be caller-ordered")
+    require(artifact.get("admissionIdentity") == admission["identity"], f"{label} descriptor admission identity differs from the manifest")
+    require(artifact.get("admissionArtifactSha256") == admission_artifact.get("sha256"), f"{label} descriptor admission artifact sha256 differs from the admitted row index")
 
 
 def validate_manifest(
@@ -386,8 +516,16 @@ def validate_manifest(
     feature_view = manifest.get("featureView")
     require(isinstance(feature_view, dict) and isinstance(feature_view.get("identity"), str) and feature_view["identity"], "feature view identity is missing")
     feature_order = require_nonblank_unique_order(feature_view.get("order"), "feature view")
-    descriptor_comparison = validate_descriptor_comparison(manifest.get("descriptorComparison"), feature_view, feature_order, source_corpus)
-    descriptor_order = descriptor_comparison["treatment"]["order"]
+    descriptor_comparison = validate_descriptor_comparison(
+        manifest.get("descriptorComparison"),
+        manifest_path,
+        feature_view,
+        source_corpus,
+        last_trustworthy,
+    )
+    descriptor_producer = descriptor_comparison["producer"]
+    descriptor_order = descriptor_producer["descriptorOrder"]
+    descriptor_indices = {name: index for index, name in enumerate(descriptor_order)}
 
     admission = manifest.get("admission")
     require(isinstance(admission, dict) and isinstance(admission.get("identity"), str) and admission["identity"], "analytical admission identity is missing")
@@ -447,6 +585,14 @@ def validate_manifest(
         count = rows.get("count")
         require(isinstance(count, int) and count > 0, f"{label} row count must be positive")
         retained_rows += count
+        source_manifest = validate_source_field_manifest(
+            manifest_path,
+            state.get("sourceFieldManifest"),
+            label,
+            route,
+            source_corpus,
+            last_trustworthy,
+        )
         features = validate_float_artifact(
             manifest_path,
             rows.get("features"),
@@ -463,6 +609,17 @@ def validate_manifest(
             "analytical-ridge-or-nonridge-admission",
             last_trustworthy,
         )
+        native_cell_indices = validate_uint32_artifact(
+            manifest_path,
+            rows.get("nativeCellIndices"),
+            f"{label} native-cell index",
+            [count],
+            DESCRIPTOR_INDEX_ROLE,
+            last_trustworthy,
+        )
+        require(len(set(native_cell_indices)) == count, f"{label} contains a duplicate native-cell index")
+        grid_cell_count = source_corpus["grid"] ** 3
+        require(all(index < grid_cell_count for index in native_cell_indices), f"{label} contains an out-of-bounds native-cell index")
         coefficients = validate_float_artifact(
             manifest_path,
             rows.get("coefficients"),
@@ -475,37 +632,47 @@ def validate_manifest(
             manifest_path,
             rows.get("kernelDescriptors"),
             f"{label} kernel descriptor",
-            [count, len(descriptor_order)],
+            [count, descriptor_producer["strideFloats"]],
             DESCRIPTOR_ROLE,
             last_trustworthy,
         )
         validate_descriptor_artifact_receipt(
             rows.get("kernelDescriptors"),
-            descriptor_comparison["producer"],
-            descriptor_order,
+            descriptor_producer,
+            admission,
+            rows.get("admission"),
+            rows.get("nativeCellIndices"),
+            source_manifest,
+            count,
             label,
         )
-        descriptor_validity = validate_float_artifact(
-            manifest_path,
-            rows.get("kernelDescriptorValidity"),
-            f"{label} kernel descriptor validity",
-            [count, len(DESCRIPTOR_VALIDITY_ORDER)],
-            DESCRIPTOR_VALIDITY_ROLE,
-            last_trustworthy,
-        )
-        validate_descriptor_artifact_receipt(
-            rows.get("kernelDescriptorValidity"),
-            descriptor_comparison["producer"],
-            DESCRIPTOR_VALIDITY_ORDER,
-            f"{label} validity",
-        )
         require(len(features) == count * len(feature_order), f"{label} feature payload is partial")
-        require(len(descriptors) == count * len(descriptor_order), f"{label} kernel descriptor payload is partial")
+        require(len(descriptors) == count * descriptor_producer["strideFloats"], f"{label} kernel descriptor payload is partial")
+        expected_strength_zero = 1.0 if descriptor_producer["effectiveControls"]["strength"] == 0 else 0.0
         for row in range(count):
-            validity = descriptor_validity[row * 2]
-            majorant = descriptor_validity[row * 2 + 1]
+            offset = row * descriptor_producer["strideFloats"]
+            normalized_mass = descriptors[offset + descriptor_indices["kernel.normalizedMass"]]
+            strength_zero = descriptors[offset + descriptor_indices["validity.strengthZeroIdentity"]]
+            validity = descriptors[offset + descriptor_indices["validity.conservativeMajorant"]]
+            require(abs(normalized_mass - 1.0) <= 1e-5, f"{label} row {row} descriptor normalized mass must equal one")
+            require(abs(strength_zero - expected_strength_zero) <= 1e-5, f"{label} row {row} descriptor strength-zero identity disagrees with effective controls")
+            if expected_strength_zero == 1.0:
+                zero_geometry_channels = (
+                    "kernel.covariance.xx",
+                    "kernel.covariance.xy",
+                    "kernel.covariance.xz",
+                    "kernel.covariance.yy",
+                    "kernel.covariance.yz",
+                    "kernel.covariance.zz",
+                    "kernel.radiusWorld",
+                )
+                require(
+                    all(abs(descriptors[offset + descriptor_indices[channel]]) <= 1e-7 for channel in zero_geometry_channels),
+                    f"{label} row {row} strength-zero moments and radius must be zero",
+                )
             require(0.0 <= validity <= 1.0, f"{label} row {row} descriptor validity must lie within [0, 1]")
-            require(majorant >= 0.0, f"{label} row {row} descriptor majorant must be nonnegative")
+            for channel in ("majorant.density", "majorant.fire", "majorant.extinction", "majorant.importance"):
+                require(descriptors[offset + descriptor_indices[channel]] >= 0.0, f"{label} row {row} descriptor {channel} must be nonnegative")
         require(all(0.0 <= value <= 1.0 for value in admissions), f"{label} analytical admission values must lie within [0, 1]")
         require(all(value >= 0.0 for value in coefficients), f"{label} layer coefficients must be nonnegative")
         for row in range(count):
