@@ -138,9 +138,10 @@ function maskFingerprint(output) {
 }
 
 function updateEvidence(output, controlKind) {
+  const imageCacheText = output.imageCache?.status ? ` · image ${output.imageCache.status}` : '';
   document.getElementById('effective-route').textContent = output.receiptChain.length
-    ? `${output.receiptChain.length} receipts · ${output.effectiveRouteId}`
-    : output.effectiveRouteId;
+    ? `${output.receiptChain.length} receipts · ${output.effectiveRouteId}${imageCacheText}`
+    : `${output.effectiveRouteId}${imageCacheText}`;
   document.getElementById('output-authority').textContent = `${output.outputAuthority} · ${output.verificationState}`;
   document.getElementById('candidate-evidence').textContent = output.selectedCandidateCount === 0
     ? 'No candidate kept'
@@ -173,6 +174,7 @@ function validateRuntimeOutput(output, invocationId) {
   if (!Number.isInteger(output.width) || !Number.isInteger(output.height) || output.width <= 0 || output.height <= 0) throw new Error('invalid mask dimensions');
   if (!output.mask || output.mask.length !== output.width * output.height) throw new Error('partial or blank mask payload');
   if (!Array.isArray(output.receiptChain) || output.receiptChain.length < 10) throw new Error('incomplete SAM3 composition receipt chain');
+  if (!['miss', 'hit'].includes(output.imageCache?.status)) throw new Error(`invalid image-cache route: ${output.imageCache?.status || 'missing'}`);
   if (output.selectedCandidateCount === 0 && output.foregroundPixelCount !== 0) throw new Error('empty selection exposed a non-empty candidate mask');
 }
 
@@ -189,7 +191,7 @@ function waitForRuntime() {
       }
       resolve(runtime);
     }, { once: true });
-    runtimeFrame.src = `./sam-mask-island-parity.html?autorun=0&manifest=${encodeURIComponent(manifestUrl)}`;
+    runtimeFrame.src = `./sam-mask-island-serving.html?autorun=0&manifest=${encodeURIComponent(manifestUrl)}`;
   });
   return runtimeReady;
 }

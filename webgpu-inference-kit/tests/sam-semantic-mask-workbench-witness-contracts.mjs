@@ -20,11 +20,18 @@ assert.match(witness, /overlay-canvas/, 'witness must inspect overlay canvas pix
 assert.match(witness, /mask-canvas/, 'witness must inspect raw mask canvas pixels');
 assert.match(witness, /Page\.captureScreenshot/, 'witness must preserve the visible browser output');
 assert.match(witness, /await settleForVisualCapture\(\)/, 'witness must allow the browser compositor to settle before visual capture');
+assert.match(witness, /captureCompleteWorkbenchScreenshot/, 'witness must gate screenshots through a reusable presentation-completeness check');
+assert.match(witness, /sourceSignalFraction/, 'screenshot gate must prove the visible source panel survived compositor capture');
+assert.match(witness, /runButtonSignalFraction/, 'screenshot gate must prove ordinary control DOM survived compositor capture');
+assert.match(witness, /screenshotCompleteness/, 'durable report must preserve screenshot-completeness evidence');
+assert.match(witness, /for \(let attempt = 1; attempt <= 3; attempt \+= 1\)/, 'partial compositor captures must receive bounded repaint retries');
 assert.match(witness, /actual-webgpu-readback/, 'witness must reject non-GPU output authority');
 assert.match(witness, /output\.promptText\s*!==\s*values\.prompt/, 'witness must reject runtime prompt identity drift');
+assert.match(witness, /output\.imageCache\?\.status\s*!==\s*['"]miss['"]/, 'fresh positive witness must require an authenticated image-cache miss');
 assert.match(witness, /values\[['"]expect-empty['"]\][^]*selectedCandidateCount\s*!==\s*0[^]*foregroundPixelCount\s*!==\s*0/, 'expected-empty witness must reject any retained candidate or foreground pixels');
 assert.match(witness, /run-negative-control/, 'optional negative witness must activate the visible operator control');
 assert.match(witness, /negativeControl/, 'report must preserve negative-control output separately from the positive witness');
+assert.match(witness, /negativeOutput\.imageCache\?\.status\s*!==\s*['"]hit['"]/, 'same-page negative witness must require authenticated image-feature reuse');
 assert.match(witness, /Different from positive|Empty as expected/, 'negative control must fail unless it differs from the positive mask or selects nothing');
 assert.match(witness, /registrationState[^]*mounted/, 'witness must reject an unmounted or projected route');
 assert.match(witness, /requestedUrl\.href\s*!==\s*effectiveRegisteredUrl\.href/, 'witness must bind the complete registered URL including the manifest query');

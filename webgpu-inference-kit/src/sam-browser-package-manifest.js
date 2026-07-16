@@ -55,8 +55,8 @@ function requireNonEmptyString(value, label) {
   return value;
 }
 
-function canonicalArtifactSet(artifacts) {
-  if (!Array.isArray(artifacts) || artifacts.length === 0) throw new Error('static artifacts must be a non-empty array');
+function canonicalArtifactSet(artifacts, { allowEmpty = false } = {}) {
+  if (!Array.isArray(artifacts) || (!allowEmpty && artifacts.length === 0)) throw new Error('static artifacts must be a non-empty array');
   const byIdentity = new Map();
   const urls = new Map();
   for (const artifact of artifacts) {
@@ -200,7 +200,7 @@ export function createSam3BrowserStaticArtifactCache({
 
     configureInvocation(input) {
       invocationId = requireNonEmptyString(input?.invocationId, 'invocationId');
-      dynamicArtifacts = canonicalArtifactSet(input?.artifacts);
+      dynamicArtifacts = canonicalArtifactSet(input?.artifacts, { allowEmpty: true });
       dynamicConfigurationCount += 1;
     },
 
@@ -440,7 +440,10 @@ function composeResolution(root, modelPackage, invocation, verification, effecti
     invocation: { ...root.invocation, effectiveSha256: effectiveHashes.invocation },
     verification: verification
       ? { attached: true, ...root.verification, effectiveSha256: effectiveHashes.verification }
-      : { attached: false },
+      : {
+          attached: false,
+          ...(root.verification ? { requestedRef: { ...root.verification } } : {}),
+        },
   };
   return { manifest, evidence };
 }
@@ -449,14 +452,19 @@ function isSplitManifest(root) {
   return Boolean(root?.modelPackage || root?.invocation || root?.verification);
 }
 
-export async function resolveSam3BrowserPackageManifest(rootManifest, { readArtifactText, sha256Text, contract = SAM3_BROWSER_PACKAGE_CONTRACT }) {
+export async function resolveSam3BrowserPackageManifest(rootManifest, {
+  readArtifactText,
+  sha256Text,
+  contract = SAM3_BROWSER_PACKAGE_CONTRACT,
+  includeVerification = true,
+}) {
   const root = requireObject(rootManifest, 'root manifest');
   if (!isSplitManifest(root)) return { manifest: root, evidence: null };
   validateContractAuthority(contract);
   validateRootAuthority(root, contract);
   validateArtifactRef(root.modelPackage, contract.modelPackageSchema, 'model package');
   validateArtifactRef(root.invocation, contract.invocationSchema, 'invocation');
-  if (root.verification) validateArtifactRef(root.verification, contract.verificationSchema, 'verification');
+  if (includeVerification && root.verification) validateArtifactRef(root.verification, contract.verificationSchema, 'verification');
   const load = async (ref, schema, label) => {
     const text = await readArtifactText(ref.file);
     return parseArtifact(text, ref, schema, label, await sha256Text(text));
@@ -464,7 +472,7 @@ export async function resolveSam3BrowserPackageManifest(rootManifest, { readArti
   const [modelPackage, invocation, verification] = await Promise.all([
     load(root.modelPackage, contract.modelPackageSchema, 'model package'),
     load(root.invocation, contract.invocationSchema, 'invocation'),
-    root.verification ? load(root.verification, contract.verificationSchema, 'verification') : null,
+    includeVerification && root.verification ? load(root.verification, contract.verificationSchema, 'verification') : null,
   ]);
   assertIdentity(
     'model package',
@@ -495,21 +503,26 @@ export async function resolveSam3BrowserPackageManifest(rootManifest, { readArti
   }, contract);
 }
 
-export function resolveSam3BrowserPackageManifestSync(rootManifest, { readArtifactText, sha256Text, contract = SAM3_BROWSER_PACKAGE_CONTRACT }) {
+export function resolveSam3BrowserPackageManifestSync(rootManifest, {
+  readArtifactText,
+  sha256Text,
+  contract = SAM3_BROWSER_PACKAGE_CONTRACT,
+  includeVerification = true,
+}) {
   const root = requireObject(rootManifest, 'root manifest');
   if (!isSplitManifest(root)) return { manifest: root, evidence: null };
   validateContractAuthority(contract);
   validateRootAuthority(root, contract);
   validateArtifactRef(root.modelPackage, contract.modelPackageSchema, 'model package');
   validateArtifactRef(root.invocation, contract.invocationSchema, 'invocation');
-  if (root.verification) validateArtifactRef(root.verification, contract.verificationSchema, 'verification');
+  if (includeVerification && root.verification) validateArtifactRef(root.verification, contract.verificationSchema, 'verification');
   const load = (ref, schema, label) => {
     const text = readArtifactText(ref.file);
     return parseArtifact(text, ref, schema, label, sha256Text(text));
   };
   const modelPackage = load(root.modelPackage, contract.modelPackageSchema, 'model package');
   const invocation = load(root.invocation, contract.invocationSchema, 'invocation');
-  const verification = root.verification ? load(root.verification, contract.verificationSchema, 'verification') : null;
+  const verification = includeVerification && root.verification ? load(root.verification, contract.verificationSchema, 'verification') : null;
   assertIdentity(
     'model package',
     modelPackage.packageId,

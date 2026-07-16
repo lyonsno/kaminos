@@ -514,6 +514,12 @@ export {
 } from './sam-browser-package-manifest.js';
 
 export {
+  SAM3_BROWSER_SERVING_RESOURCES_EVIDENCE_SCHEMA,
+  createSam3BrowserImageCacheKey,
+  createSam3BrowserServingResources,
+} from './sam3-browser-serving-resources.js';
+
+export {
   createRouteReceiptArtifacts,
   createRouteReceiptInputArtifact,
   createWebGpuRouteReceiptFromArtifacts,

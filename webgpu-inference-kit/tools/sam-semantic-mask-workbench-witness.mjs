@@ -44,7 +44,12 @@ const report = {
   workbench: null,
   visualEvidence: null,
   negativeControl: null,
-  screenshot: outPath,
+  screenshot: null,
+  requestedScreenshot: outPath,
+  screenshotCompleteness: {
+    positive: null,
+    negative: null,
+  },
   failurePhase: 'route-registration',
   error: null,
   startedAt: new Date().toISOString(),
@@ -115,6 +120,135 @@ async function settleForVisualCapture() {
   await delay(500);
 }
 
+async function forceWorkbenchPresentation(attempt) {
+  await cdp.request('Page.bringToFront');
+  if (attempt === 2) {
+    await evaluate(cdp, `new Promise(resolve => {
+      const body = document.body;
+      body.style.visibility = 'hidden';
+      void body.offsetHeight;
+      requestAnimationFrame(() => {
+        body.style.visibility = '';
+        requestAnimationFrame(resolve);
+      });
+    })`);
+  } else if (attempt === 3) {
+    await cdp.request('Emulation.setDeviceMetricsOverride', {
+      width: Math.max(1, viewportWidth - 1),
+      height: viewportHeight,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    await delay(100);
+    await cdp.request('Emulation.setDeviceMetricsOverride', {
+      width: viewportWidth,
+      height: viewportHeight,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+  }
+}
+
+async function readWorkbenchScreenshotLayout() {
+  return evaluate(cdp, `(() => {
+    window.scrollTo(0, 0);
+    const rect = id => {
+      const value = document.getElementById(id).getBoundingClientRect();
+      return { left: value.left, top: value.top, right: value.right, bottom: value.bottom };
+    };
+    const heading = document.querySelector('h1').getBoundingClientRect();
+    const layout = {
+      innerWidth: window.innerWidth,
+      innerHeight: window.innerHeight,
+      scrollX: window.scrollX,
+      scrollY: window.scrollY,
+      scrollWidth: document.documentElement.scrollWidth,
+      source: rect('source-canvas'),
+      runButton: rect('run-segmentation'),
+      heading: { left: heading.left, top: heading.top, right: heading.right, bottom: heading.bottom },
+    };
+    layout.layoutPassed = layout.scrollX === 0
+      && layout.scrollY === 0
+      && layout.scrollWidth <= layout.innerWidth
+      && [layout.source, layout.runButton, layout.heading].every(value => value.left >= 0
+        && value.top >= 0
+        && value.right <= layout.innerWidth
+        && value.bottom <= layout.innerHeight);
+    return layout;
+  })()`);
+}
+
+async function inspectWorkbenchScreenshot(pngBase64, layout) {
+  return evaluate(cdp, `(async () => {
+    const image = new Image();
+    image.src = ${JSON.stringify(`data:image/png;base64,${pngBase64}`)};
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    context.drawImage(image, 0, 0);
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    const scaleX = canvas.width / ${JSON.stringify(layout.innerWidth)};
+    const scaleY = canvas.height / ${JSON.stringify(layout.innerHeight)};
+    const fraction = (rect, predicate) => {
+      const left = Math.max(0, Math.floor(rect.left * scaleX));
+      const top = Math.max(0, Math.floor(rect.top * scaleY));
+      const right = Math.min(canvas.width, Math.ceil(rect.right * scaleX));
+      const bottom = Math.min(canvas.height, Math.ceil(rect.bottom * scaleY));
+      let samples = 0;
+      let signals = 0;
+      for (let y = top; y < bottom; y += 3) {
+        for (let x = left; x < right; x += 3) {
+          const offset = (y * canvas.width + x) * 4;
+          samples += 1;
+          if (predicate(pixels[offset], pixels[offset + 1], pixels[offset + 2])) signals += 1;
+        }
+      }
+      return samples ? signals / samples : 0;
+    };
+    const sourceSignalFraction = fraction(${JSON.stringify(layout.source)}, (red, green, blue) => red + green + blue > 120);
+    const runButtonSignalFraction = fraction(${JSON.stringify(layout.runButton)}, (red, green, blue) => green > 170 && red > 110 && blue < 170);
+    const headingSignalFraction = fraction(${JSON.stringify(layout.heading)}, (red, green, blue) => Math.max(red, green, blue) > 170 && red + green + blue > 360);
+    return {
+      width: canvas.width,
+      height: canvas.height,
+      sourceSignalFraction,
+      runButtonSignalFraction,
+      headingSignalFraction,
+    };
+  })()`);
+}
+
+async function captureCompleteWorkbenchScreenshot(kind) {
+  const attempts = [];
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    await forceWorkbenchPresentation(attempt);
+    await settleForVisualCapture();
+    const layout = await readWorkbenchScreenshotLayout();
+    const screenshot = await cdp.request('Page.captureScreenshot', {
+      format: 'png',
+      fromSurface: true,
+      captureBeyondViewport: false,
+      clip: { x: 0, y: 0, width: layout.innerWidth, height: layout.innerHeight, scale: 1 },
+    });
+    const pixels = await inspectWorkbenchScreenshot(screenshot.data, layout);
+    const evidence = {
+      attempt,
+      layout,
+      ...pixels,
+      passed: layout.layoutPassed === true
+        && pixels.sourceSignalFraction >= 0.15
+        && pixels.runButtonSignalFraction >= 0.2
+        && pixels.headingSignalFraction >= 0.005,
+    };
+    attempts.push(evidence);
+    report.screenshotCompleteness[kind] = { passed: evidence.passed, attempts };
+    if (evidence.passed) return screenshot;
+  }
+  throw new Error(`${kind} screenshot remained partial after compositor recovery: ${JSON.stringify(report.screenshotCompleteness[kind])}`);
+}
+
 function canvasInspectionExpression() {
   return `(() => {
     const summarize = id => {
@@ -153,6 +287,7 @@ function canvasInspectionExpression() {
         verificationState: output.verificationState,
         effectiveRouteId: output.effectiveRouteId,
         receiptChain: output.receiptChain,
+        imageCache: output.imageCache,
         promptText: output.promptText,
         selectedCandidateCount: output.selectedCandidateCount,
         selectedMaskIndex: output.selectedMaskIndex,
@@ -248,6 +383,7 @@ try {
   if (output?.outputAuthority !== 'actual-webgpu-readback') throw new Error(`output authority is ${output?.outputAuthority || 'missing'}`);
   if (output.verificationState !== 'not-attached') throw new Error(`dynamic verification state is ${output.verificationState || 'missing'}`);
   if (values.prompt !== undefined && output.promptText !== values.prompt) throw new Error(`runtime prompt identity drift: ${output.promptText || 'missing'}`);
+  if (output.imageCache?.status !== 'miss') throw new Error(`fresh image-cache route is ${output.imageCache?.status || 'missing'}, expected miss`);
   if (values['expect-empty'] && (output.selectedCandidateCount !== 0 || output.foregroundPixelCount !== 0)) {
     throw new Error(`expected empty output retained ${output.selectedCandidateCount} candidates and ${output.foregroundPixelCount} foreground pixels`);
   }
@@ -259,9 +395,10 @@ try {
   if (output.foregroundPixelCount > 0 && canvases.mask.brightPixels === 0) throw new Error('non-empty output produced a blank raw-mask witness');
 
   report.failurePhase = 'capture';
-  const screenshot = await cdp.request('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+  const screenshot = await captureCompleteWorkbenchScreenshot('positive');
   mkdirSync(dirname(outPath), { recursive: true });
   writeFileSync(outPath, Buffer.from(screenshot.data, 'base64'));
+  report.screenshot = outPath;
 
   if (values['negative-control']) {
     report.failurePhase = 'negative-control';
@@ -285,10 +422,11 @@ try {
     const negativeOutput = negativeVisualEvidence.output;
     if (negativeOutput?.outputAuthority !== 'actual-webgpu-readback') throw new Error(`negative output authority is ${negativeOutput?.outputAuthority || 'missing'}`);
     if (negativeOutput.verificationState !== 'not-attached') throw new Error(`negative verification state is ${negativeOutput.verificationState || 'missing'}`);
+    if (negativeOutput.imageCache?.status !== 'hit') throw new Error(`negative image-cache route is ${negativeOutput.imageCache?.status || 'missing'}, expected hit`);
     if (!['Different from positive', 'Empty as expected'].includes(negativeVisualEvidence.controlText)) {
       throw new Error(`negative control did not falsify mask reuse: ${negativeVisualEvidence.controlText || 'missing'}`);
     }
-    const negativeScreenshot = await cdp.request('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+    const negativeScreenshot = await captureCompleteWorkbenchScreenshot('negative');
     mkdirSync(dirname(negativeOutPath), { recursive: true });
     writeFileSync(negativeOutPath, Buffer.from(negativeScreenshot.data, 'base64'));
     report.negativeControl = {
