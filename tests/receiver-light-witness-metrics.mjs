@@ -112,6 +112,26 @@ assert.ok(
   `expected full-frame detached-signal failure, got ${JSON.stringify(mixedAssay)}`,
 );
 
+const receiverWithSmallDetachedLobe = image(100, 100, (x, y) => {
+  if (x >= 20 && x < 80 && y >= 15 && y < 85) return [96, 44, 8];
+  if (x >= 82 && x < 84 && y >= 45 && y < 50) return [72, 36, 6];
+  return [0, 0, 0];
+});
+const smallDetachedLobeAssay = evaluateReceiverLightAssay(
+  receiverWithSmallDetachedLobe,
+  dimReceiverSurface,
+  surfaceAssayOptions,
+);
+assert.equal(
+  smallDetachedLobeAssay.accepted,
+  false,
+  'even a detached lobe below the former global tolerance must fail surface contact',
+);
+assert.ok(
+  smallDetachedLobeAssay.failures.includes('receiver-delta-escaped-surface-mask'),
+  `expected small detached lobe failure, got ${JSON.stringify(smallDetachedLobeAssay)}`,
+);
+
 const detachedAssay = evaluateReceiverLightAssay(binaryReceiver, black, {
   ...surfaceAssayOptions,
   receiverMaskImage: black,

@@ -134,10 +134,7 @@ export function evaluateReceiverLightAssay(onImage, mutedImage, options = {}) {
     : null;
   const minimumSignalPixels = Math.max(100, Math.ceil(onSignal.sampledPixels * 0.002));
   const minimumReceiverMaskPixels = Math.max(100, Math.ceil(onSignal.sampledPixels * 0.002));
-  const maximumDetachedPositivePixels = Math.max(
-    8,
-    Math.floor(delta.warmPositivePixels * Number(options.maximumDetachedPositiveRatio ?? 0.005)),
-  );
+  const maximumDetachedPositivePixels = 0;
   const maximumBackgroundDeltaPixels = backgroundDelta
     ? Math.max(4, Math.floor(backgroundDelta.sampledPixels * 0.0001))
     : null;
@@ -169,7 +166,6 @@ export function evaluateReceiverLightAssay(onImage, mutedImage, options = {}) {
       minimumSignalPixels,
       minimumReceiverMaskPixels,
       maximumDetachedPositivePixels,
-      maximumDetachedPositiveRatio: Number(options.maximumDetachedPositiveRatio ?? 0.005),
       maximumBackgroundDeltaPixels,
       minimumMeanPositiveLumaDelta: 4,
     },
