@@ -1,0 +1,354 @@
+{
+  "schema": "kaminos.ridge-topology-cockpit-witness.v1",
+  "status": "completed",
+  "requestedUrl": "http://127.0.0.1:18225/ridge-topology-cockpit.html",
+  "effectiveRoute": "ridge-topology-cockpit.html",
+  "effectiveWrapperRoute": "exact-basin-selective-head-live-v0",
+  "effectiveRendererRoute": "native-3d-compute-fluid-raymarch-v0",
+  "effectiveBackend": "WebGPU:apple",
+  "fallbackReason": null,
+  "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "browserVersion": {
+    "Browser": "Chrome/150.0.7871.115",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/150.0.0.0 Safari/537.36",
+    "V8-Version": "15.0.245.15",
+    "WebKit-Version": "537.36 (@25f5b661e5b08141ec24b17d1ce96c5ceb5828da)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:49233/devtools/browser/e2f15f5c-2757-4266-ad41-cb015a7c4653"
+  },
+  "browserProfile": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/ridge-topology-cockpit-witness-r6/chrome-profile",
+  "debugPort": 49233,
+  "operationTimeoutMs": 180000,
+  "failurePhase": null,
+  "primaryOutputWritten": true,
+  "outputCompleteness": {
+    "expected": [
+      "splats-baseline.png",
+      "target.png",
+      "splats-cooled.png",
+      "mobile-cooled.png"
+    ],
+    "captured": [
+      "splats-baseline.png",
+      "target.png",
+      "splats-cooled.png",
+      "mobile-cooled.png"
+    ],
+    "complete": true
+  },
+  "captures": [
+    {
+      "name": "splats-baseline.png",
+      "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/ridge-topology-cockpit-witness-r6/splats-baseline.png",
+      "bytes": 730493,
+      "sha256": "b0b25f9f8cd4f291c7f2daadd0217f041ef3139b6580febcc7b5688e2f7d6bf2",
+      "viewport": {
+        "width": 1440,
+        "height": 960,
+        "deviceScaleFactor": 1,
+        "mobile": false
+      },
+      "stageEvidence": {
+        "authority": "same-state-stage-rgba-readback-v0",
+        "mode": "splats",
+        "composition": "splat-only-v0",
+        "imageAuthority": "selective-head-live-lean-frame-readback-v0",
+        "width": 332,
+        "height": 285,
+        "rgbaSha256": "9c6f0187aff4c99ed9cc057b8c84172af99c31800b5921d8f45bd2f6bc323b92",
+        "nonBlankPixelCount": 94620,
+        "distinctColorCountLowerBound": 2,
+        "stageBounds": {
+          "x": 320,
+          "y": 0,
+          "width": 1120,
+          "height": 960,
+          "devicePixelRatio": 1
+        },
+        "simStepCount": 96,
+        "beforeSimStepCount": 96
+      }
+    },
+    {
+      "name": "target.png",
+      "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/ridge-topology-cockpit-witness-r6/target.png",
+      "bytes": 800941,
+      "sha256": "94b7d407dadee817e9bf47af925aaf68e9b5cbd5964646082ddde6f8fcb0b78a",
+      "viewport": {
+        "width": 1440,
+        "height": 960,
+        "deviceScaleFactor": 1,
+        "mobile": false
+      },
+      "stageEvidence": {
+        "authority": "same-state-stage-rgba-readback-v0",
+        "mode": "target",
+        "composition": "raymarch-only-v0",
+        "imageAuthority": "selective-head-live-lean-frame-readback-v0",
+        "width": 332,
+        "height": 285,
+        "rgbaSha256": "8f6a2765d7c9e4678655818e3442fd01d3f69e2c81eb2379e0968e398938be38",
+        "nonBlankPixelCount": 94620,
+        "distinctColorCountLowerBound": 2,
+        "stageBounds": {
+          "x": 320,
+          "y": 0,
+          "width": 1120,
+          "height": 960,
+          "devicePixelRatio": 1
+        },
+        "simStepCount": 96,
+        "beforeSimStepCount": 96
+      }
+    },
+    {
+      "name": "splats-cooled.png",
+      "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/ridge-topology-cockpit-witness-r6/splats-cooled.png",
+      "bytes": 593104,
+      "sha256": "cd548604f0109ee3630cd2a56f9723e85ed89aa534a30bd0667bd41612088b1b",
+      "viewport": {
+        "width": 1440,
+        "height": 960,
+        "deviceScaleFactor": 1,
+        "mobile": false
+      },
+      "stageEvidence": {
+        "authority": "same-state-stage-rgba-readback-v0",
+        "mode": "splats",
+        "composition": "splat-only-v0",
+        "imageAuthority": "selective-head-live-lean-frame-readback-v0",
+        "width": 332,
+        "height": 285,
+        "rgbaSha256": "dcb62781c1bee5f1c6d2a6dc1dbf0b795865d46fb4c4cbe19dfa2fa60a877515",
+        "nonBlankPixelCount": 94620,
+        "distinctColorCountLowerBound": 2,
+        "stageBounds": {
+          "x": 320,
+          "y": 0,
+          "width": 1120,
+          "height": 960,
+          "devicePixelRatio": 1
+        },
+        "simStepCount": 96,
+        "beforeSimStepCount": 96
+      }
+    },
+    {
+      "name": "mobile-cooled.png",
+      "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/ridge-topology-cockpit-witness-r6/mobile-cooled.png",
+      "bytes": 141601,
+      "sha256": "140eccb2840a1645e4536abfd151f699d61cd7def24092abff933b4cde5c2cfd",
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "deviceScaleFactor": 1,
+        "mobile": true
+      },
+      "stageEvidence": {
+        "authority": "same-state-stage-rgba-readback-v0",
+        "mode": "splats",
+        "composition": "splat-only-v0",
+        "imageAuthority": "selective-head-live-lean-frame-readback-v0",
+        "width": 115,
+        "height": 140,
+        "rgbaSha256": "d22e10a25758d99f2ef97358d8c7923c827a06aaaf5949ca027241286587e3e8",
+        "nonBlankPixelCount": 16100,
+        "distinctColorCountLowerBound": 2,
+        "stageBounds": {
+          "x": 0,
+          "y": 0,
+          "width": 390,
+          "height": 472.640625,
+          "devicePixelRatio": 1
+        },
+        "simStepCount": 96,
+        "beforeSimStepCount": 96
+      }
+    }
+  ],
+  "consoleEvents": [
+    {
+      "type": "log",
+      "text": "WebGPU renderer initialized, backend: WebGPUBackend"
+    }
+  ],
+  "lastTrustworthyEvidence": {
+    "status": "running",
+    "error": null,
+    "activeMode": "splats",
+    "requestedControls": {
+      "boundarySplatMode": "world_covariance",
+      "boundarySplatRadius": 0.98,
+      "boundarySplatSharpness": 12,
+      "boundarySplatRadianceGain": 0.55,
+      "boundarySplatOpacityGain": 0.75,
+      "reactionBoundaryTopology": 0.96
+    },
+    "admissionReceipt": {
+      "ok": true,
+      "authority": "checksum-bound-ridge-topology-cockpit-admission-v0",
+      "controlsHash": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+      "candidateCount": 62593,
+      "sourceFrameCount": 96,
+      "frameCount": 97,
+      "simStepCount": 96,
+      "fluidSha256": "d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1",
+      "frontSha256": "1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8"
+    },
+    "controlsReceipt": {
+      "ok": true,
+      "authority": "requested-effective-ridge-topology-cockpit-controls-v0",
+      "requested": {
+        "boundarySplatMode": "world_covariance",
+        "boundarySplatRadius": 0.98,
+        "boundarySplatSharpness": 12,
+        "boundarySplatRadianceGain": 0.55,
+        "boundarySplatOpacityGain": 0.75,
+        "reactionBoundaryTopology": 0.96
+      },
+      "effective": {
+        "boundarySplatMode": "world_covariance",
+        "boundarySplatRadius": 0.98,
+        "boundarySplatSharpness": 12,
+        "boundarySplatRadianceGain": 0.55,
+        "boundarySplatOpacityGain": 0.75,
+        "reactionBoundaryTopology": 0.96
+      }
+    },
+    "wrapper": {
+      "routeIdentity": "exact-basin-selective-head-live-v0",
+      "status": "running",
+      "backend": "WebGPU:apple",
+      "warmupAuthority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+      "warmupTarget": 96,
+      "warmupReceipt": {
+        "ok": true,
+        "authority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+        "completedSteps": 96,
+        "grid": 160,
+        "fluidUrl": "http://127.0.0.1:18537/fluid.f32",
+        "frontUrl": "http://127.0.0.1:18537/front.f32",
+        "fluidSha256": "d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1",
+        "frontSha256": "1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8",
+        "fluidByteLength": 262144000,
+        "frontByteLength": 16384000,
+        "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0"
+      },
+      "frameCount": 109,
+      "simStepCount": 96,
+      "effectiveComposition": "splat-only-v0",
+      "fallbackReason": null,
+      "boundarySplatFallbackReason": null,
+      "boundarySplatCandidateCount": 62593,
+      "boundarySplatInstanceCount": 62593,
+      "boundarySplatOverflowCount": 0
+    },
+    "renderer": {
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "simGrid": 160,
+      "frameCount": 109,
+      "simStepCount": 96,
+      "boundarySplatMode": "world_covariance",
+      "boundarySplatCandidateCount": 62593,
+      "boundarySplatInstanceCount": 62593,
+      "boundarySplatOverflowCount": 0,
+      "boundarySplatFallbackReason": null
+    }
+  },
+  "ok": true,
+  "stderrTail": "\nDevTools listening on ws://127.0.0.1:49233/devtools/browser/e2f15f5c-2757-4266-ad41-cb015a7c4653\nTrying to load the allocator multiple times. This is *not* supported.\n[85855:21217598:0716/170811.388988:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[85855:21217598:0716/170811.396536:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[85855:21217598:0716/170811.396632:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n",
+  "finalState": {
+    "status": "running",
+    "error": null,
+    "activeMode": "splats",
+    "requestedControls": {
+      "boundarySplatMode": "world_covariance",
+      "boundarySplatRadius": 0.98,
+      "boundarySplatSharpness": 12,
+      "boundarySplatRadianceGain": 0.55,
+      "boundarySplatOpacityGain": 0.75,
+      "reactionBoundaryTopology": 0.96
+    },
+    "admissionReceipt": {
+      "ok": true,
+      "authority": "checksum-bound-ridge-topology-cockpit-admission-v0",
+      "controlsHash": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+      "candidateCount": 62593,
+      "sourceFrameCount": 96,
+      "frameCount": 97,
+      "simStepCount": 96,
+      "fluidSha256": "d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1",
+      "frontSha256": "1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8"
+    },
+    "controlsReceipt": {
+      "ok": true,
+      "authority": "requested-effective-ridge-topology-cockpit-controls-v0",
+      "requested": {
+        "boundarySplatMode": "world_covariance",
+        "boundarySplatRadius": 0.98,
+        "boundarySplatSharpness": 12,
+        "boundarySplatRadianceGain": 0.55,
+        "boundarySplatOpacityGain": 0.75,
+        "reactionBoundaryTopology": 0.96
+      },
+      "effective": {
+        "boundarySplatMode": "world_covariance",
+        "boundarySplatRadius": 0.98,
+        "boundarySplatSharpness": 12,
+        "boundarySplatRadianceGain": 0.55,
+        "boundarySplatOpacityGain": 0.75,
+        "reactionBoundaryTopology": 0.96
+      }
+    },
+    "wrapper": {
+      "routeIdentity": "exact-basin-selective-head-live-v0",
+      "status": "running",
+      "backend": "WebGPU:apple",
+      "warmupAuthority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+      "warmupTarget": 96,
+      "warmupReceipt": {
+        "ok": true,
+        "authority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+        "completedSteps": 96,
+        "grid": 160,
+        "fluidUrl": "http://127.0.0.1:18537/fluid.f32",
+        "frontUrl": "http://127.0.0.1:18537/front.f32",
+        "fluidSha256": "d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1",
+        "frontSha256": "1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8",
+        "fluidByteLength": 262144000,
+        "frontByteLength": 16384000,
+        "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0"
+      },
+      "frameCount": 109,
+      "simStepCount": 96,
+      "effectiveComposition": "splat-only-v0",
+      "fallbackReason": null,
+      "boundarySplatFallbackReason": null,
+      "boundarySplatCandidateCount": 62593,
+      "boundarySplatInstanceCount": 62593,
+      "boundarySplatOverflowCount": 0
+    },
+    "renderer": {
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "simGrid": 160,
+      "frameCount": 109,
+      "simStepCount": 96,
+      "boundarySplatMode": "world_covariance",
+      "boundarySplatCandidateCount": 62593,
+      "boundarySplatInstanceCount": 62593,
+      "boundarySplatOverflowCount": 0,
+      "boundarySplatFallbackReason": null
+    }
+  },
+  "admissionReceipt": {
+    "ok": true,
+    "authority": "checksum-bound-ridge-topology-cockpit-admission-v0",
+    "controlsHash": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+    "candidateCount": 62593,
+    "sourceFrameCount": 96,
+    "frameCount": 97,
+    "simStepCount": 96,
+    "fluidSha256": "d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1",
+    "frontSha256": "1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8"
+  }
+}

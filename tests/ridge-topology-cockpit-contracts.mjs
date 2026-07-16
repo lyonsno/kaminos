@@ -53,7 +53,14 @@ assert.match(cockpitSource, /function installBasinCockpitStyles\(\)/, 'the cockp
 assert.match(cockpitSource, /#sidebar\s*\{\s*display:\s*none/, 'the embedded workbench sidebar must not consume the visual stage');
 assert.match(cockpitSource, /#viewport\s*\{\s*position:\s*absolute;\s*inset:\s*0/, 'the native WebGPU viewport must fill the visual stage');
 assert.match(cockpitSource, /async function whenRenderIdle\(\)/, 'the cockpit must expose a settled-presentation barrier');
+assert.match(cockpitSource, /async function captureStageEvidence\(\)/, 'the cockpit must expose stage-only readback evidence for the active mode');
+assert.match(cockpitSource, /rgbaSha256/, 'stage evidence must hash renderer RGBA rather than page UI pixels');
+assert.match(cockpitSource, /stageBounds/, 'stage evidence must preserve the operator-visible assay bounds');
 assert.match(witnessSource, /await cockpit\.whenRenderIdle\(\)/, 'the visual witness must not screenshot queued presentation work');
+assert.match(witnessSource, /await cockpit\.captureStageEvidence\(\)/, 'every witness capture must collect stage-only renderer evidence');
+assert.match(witnessSource, /stageEvidence\.nonBlankPixelCount/, 'the witness must reject a blank stage independently from page chrome');
+assert.match(witnessSource, /stageEvidence\.distinctColorCountLowerBound/, 'the witness must reject a flat stage independently from page chrome');
+assert.match(witnessSource, /row\.stageEvidence\.rgbaSha256/, 'cached/static comparisons must use stage-only RGBA hashes');
 assert.match(witnessSource, /failurePhase/, 'the witness must preserve its failure phase before primary output');
 assert.match(witnessSource, /Page\.captureScreenshot/, 'the witness must capture the operator-visible cockpit');
 assert.match(witnessSource, /target\.png/, 'the witness must preserve the exact raymarch target view');

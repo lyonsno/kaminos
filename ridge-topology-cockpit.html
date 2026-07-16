@@ -237,6 +237,11 @@
       return [...new Uint8Array(hash)].map(byte => byte.toString(16).padStart(2, '0')).join('');
     }
 
+    async function sha256Bytes(value) {
+      const hash = await crypto.subtle.digest('SHA-256', value);
+      return [...new Uint8Array(hash)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+    }
+
     function compositionForMode(mode) {
       if (mode === 'target') return 'raymarch-only-v0';
       if (mode === 'overlay') return 'full-raymarch-under-splats-diagnostic-v0';
@@ -293,6 +298,45 @@
         ok: !lastError,
         frameCount: operator?.debugState?.()?.frameCount ?? null,
         simStepCount: operator?.debugState?.()?.simStepCount ?? null,
+      };
+    }
+
+    async function captureStageEvidence() {
+      await whenRenderIdle();
+      const frameReceipt = await operator.captureFrame({ advanceSim: false, presentToCanvas: false, frameIndex: 0 });
+      if (!frameReceipt?.ok || !Array.isArray(frameReceipt.rgba) || frameReceipt.rgba.length === 0) {
+        throw new Error(frameReceipt?.reason || 'stage readback is missing or partial');
+      }
+      if (frameReceipt.fallbackReason || frameReceipt.boundarySplatFallbackReason) {
+        throw new Error(frameReceipt.fallbackReason || frameReceipt.boundarySplatFallbackReason);
+      }
+      if (frameReceipt.simStepCount !== 96 || frameReceipt.beforeSimStepCount !== 96) {
+        throw new Error('stage evidence changed the frozen simulator state');
+      }
+      const rgba = new Uint8Array(frameReceipt.rgba);
+      const stats = outputStats(rgba);
+      if (stats.nonBlankPixelCount <= 0 || stats.distinctColorCountLowerBound < 2) {
+        throw new Error('stage evidence is blank or flat');
+      }
+      const bounds = frame.getBoundingClientRect();
+      return {
+        authority: 'same-state-stage-rgba-readback-v0',
+        mode: activeMode,
+        composition: frameReceipt.selectiveHeadLiveCompositionEffective,
+        imageAuthority: frameReceipt.imageAuthority,
+        width: frameReceipt.width,
+        height: frameReceipt.height,
+        rgbaSha256: await sha256Bytes(rgba),
+        ...stats,
+        stageBounds: {
+          x: bounds.x,
+          y: bounds.y,
+          width: bounds.width,
+          height: bounds.height,
+          devicePixelRatio,
+        },
+        simStepCount: frameReceipt.simStepCount,
+        beforeSimStepCount: frameReceipt.beforeSimStepCount,
       };
     }
 
@@ -410,6 +454,7 @@
       },
       present,
       whenRenderIdle,
+      captureStageEvidence,
     };
 
     initialize().catch(fail);

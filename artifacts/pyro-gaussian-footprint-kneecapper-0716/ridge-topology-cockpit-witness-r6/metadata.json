@@ -1,0 +1,18 @@
+{
+  "name": "ridge-topology-cockpit",
+  "job_type": "kaminos_ridge_topology_cockpit_witness",
+  "job_id": "54a05ce97a6a",
+  "input_path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/ridge-topology-cockpit.html",
+  "input_name": "ridge-topology-cockpit.html",
+  "params": {},
+  "output_files": [
+    "mobile-cooled.png",
+    "report.json",
+    "server.log",
+    "splats-baseline.png",
+    "splats-cooled.png",
+    "target.png"
+  ],
+  "created_at": 1784236091.90685,
+  "duration_s": 5.0
+}

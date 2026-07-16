@@ -44,7 +44,7 @@ function sha256(bytes) {
 function writeReport(extra = {}) {
   mkdirSync(outputDir, { recursive: true });
   writeFileSync(reportPath, JSON.stringify({
-    schema: 'kaminos.ridge-topology-cockpit-witness.v0',
+    schema: 'kaminos.ridge-topology-cockpit-witness.v1',
     status: extra.ok ? 'completed' : 'failed',
     requestedUrl,
     effectiveRoute: 'ridge-topology-cockpit.html',
@@ -62,7 +62,7 @@ function writeReport(extra = {}) {
     outputCompleteness: {
       expected: ['splats-baseline.png', 'target.png', 'splats-cooled.png', 'mobile-cooled.png'],
       captured: captures.map(capture => capture.name),
-      complete: captures.length === 4,
+      complete: captures.length === 4 && captures.every(capture => capture.stageEvidence?.rgbaSha256),
     },
     captures,
     consoleEvents,
@@ -236,6 +236,18 @@ async function setModeAndControls(socket, mode, controls = {}) {
 }
 
 async function capture(socket, name, viewport) {
+  const stageEvidence = await evaluate(socket, `(async () => {
+    const cockpit = window.__kaminosRidgeTopologyCockpit;
+    await cockpit.whenRenderIdle();
+    return await cockpit.captureStageEvidence();
+  })()`);
+  assert.equal(stageEvidence.authority, 'same-state-stage-rgba-readback-v0', `${name} stage evidence authority is missing`);
+  assert.equal(stageEvidence.simStepCount, 96, `${name} stage evidence changed the frozen simulation step`);
+  assert.equal(stageEvidence.beforeSimStepCount, 96, `${name} stage evidence advanced the simulator`);
+  assert.ok(stageEvidence.nonBlankPixelCount > 0, `${name} rendered stage is blank`);
+  assert.ok(stageEvidence.distinctColorCountLowerBound >= 2, `${name} rendered stage is flat`);
+  assert.match(stageEvidence.rgbaSha256, /^[a-f0-9]{64}$/, `${name} rendered stage hash is invalid`);
+  assert.ok(stageEvidence.stageBounds?.width > 0 && stageEvidence.stageBounds?.height > 0, `${name} operator-visible stage bounds are missing`);
   const screenshot = await request(socket, 'Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
   const bytes = Buffer.from(screenshot.data, 'base64');
   assert.ok(bytes.length > 10_000, `${name} screenshot is blank or partial`);
@@ -243,7 +255,7 @@ async function capture(socket, name, viewport) {
   mkdirSync(outputDir, { recursive: true });
   writeFileSync(path, bytes);
   primaryOutputWritten = true;
-  captures.push({ name, path, bytes: bytes.length, sha256: sha256(bytes), viewport });
+  captures.push({ name, path, bytes: bytes.length, sha256: sha256(bytes), viewport, stageEvidence });
 }
 
 async function main() {
@@ -303,7 +315,21 @@ async function main() {
     state = await setModeAndControls(socket, 'splats', { topology: 0.96, radiance: 0.55, opacity: 0.75, radius: 0.98, sharpness: 12 });
     await capture(socket, 'mobile-cooled.png', mobile);
 
-    assert.equal(new Set(captures.map(row => row.sha256)).size, captures.length, 'captured modes collapsed to cached/static output');
+    const captureByName = Object.fromEntries(captures.map(row => [row.name, row]));
+    assert.notEqual(
+      captureByName['splats-baseline.png'].stageEvidence.rgbaSha256,
+      captureByName['target.png'].stageEvidence.rgbaSha256,
+      'target and baseline stage pixels collapsed to cached/static output',
+    );
+    assert.notEqual(
+      captureByName['splats-baseline.png'].stageEvidence.rgbaSha256,
+      captureByName['splats-cooled.png'].stageEvidence.rgbaSha256,
+      'cooled and baseline stage pixels collapsed to cached/static output',
+    );
+    assert.ok(
+      captures.every(row => row.stageEvidence.rgbaSha256 && row.stageEvidence.nonBlankPixelCount > 0),
+      'one or more captures lack truthful stage-only output evidence',
+    );
     failurePhase = null;
     writeReport({
       ok: true,
