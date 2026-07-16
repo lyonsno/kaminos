@@ -4,7 +4,10 @@ import { createHash, randomInt } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { validateCameraHoldoutReport } from './boundary-splat-camera-holdout-oracle.mjs';
+import {
+  validateCameraHoldoutReport,
+  validateCaptureReportFootprintPreflight,
+} from './boundary-splat-camera-holdout-oracle.mjs';
 
 const SCHEMA = 'kaminos.volume.raymarch-filament-orbit-witness.v0';
 const WRAPPER_ROUTE = 'exact-basin-selective-head-live-v0';
@@ -1170,25 +1173,7 @@ function rejectFalseClosure(report) {
   if (report.captures.some(capture => capture.raymarchSmokePresentationReceipt?.effectiveMode !== 'off')) {
     throw new Error('smoke-off request was not effective');
   }
-  const preflightByMode = new Map();
-  for (const row of report.footprintFamilyPreflight || []) {
-    if (preflightByMode.has(row.mode)) throw new Error(`duplicate footprint family preflight: ${row.mode}`);
-    preflightByMode.set(row.mode, row);
-  }
-  const trainingCameraIndex = report.covarianceAnalysis?.trainingCameraIndex;
-  for (const mode of ['analyticBillboard', 'learnedBillboard', 'worldCovariance', 'kernelMomentCovariance']) {
-    const preflight = preflightByMode.get(mode);
-    const admitted = report.captures.find(capture => capture.cameraIndex === trainingCameraIndex && capture.mode === mode);
-    if (!preflight || !admitted?.footprintAudit) throw new Error(`footprint preflight/admission row missing: ${mode}`);
-    if (preflight.candidateCount !== admitted.boundarySplatCandidateCount
-      || preflight.candidatePayloadSha256 !== admitted.footprintAudit.candidatePayloadSha256) {
-      throw new Error(`footprint preflight candidate payload disagrees with admitted training camera: ${mode}`);
-    }
-    if (preflight.attributePayloadSha256 !== admitted.footprintAudit.attributePayloadSha256) {
-      throw new Error(`footprint preflight attribute payload disagrees with admitted training camera: ${mode}`);
-    }
-  }
-  if (preflightByMode.size !== 4) throw new Error('footprint preflight family set is incomplete');
+  validateCaptureReportFootprintPreflight(report);
   const raymarchCameraHashes = new Set(report.captures.filter(capture => capture.mode === 'raymarch' && capture.requestedRaySteps === Math.max(...rayStepCounts)).map(capture => capture.pixelHash));
   if (raymarchCameraHashes.size < Math.min(3, orbitAngles.length)) throw new Error('cached or static output pretending to be live');
   if (!report.frozenDeterminism.frameCountStable || !report.frozenDeterminism.simStepCountStable || report.frozenDeterminism.pixelDelta.changedFraction !== 0) {
