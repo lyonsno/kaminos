@@ -923,6 +923,9 @@
         identity: role,
         role,
         sourceStepIdentity: receipt?.sourceStepIdentity || null,
+        expectedSourceStepIdentity: receipt?.expectedSourceStepIdentity ?? null,
+        computedSourceStepIdentity: receipt?.computedSourceStepIdentity || null,
+        sourceStepIdentityVerification: receipt?.sourceStepIdentityVerification || null,
         sameNativeStateIdentity: receipt?.sameNativeStateIdentity || null,
         modelIdentity: route.modelIdentity || receipt?.modelIdentity || null,
         modelSha256: route.modelSha256 || receipt?.modelSha256 || null,
@@ -1047,6 +1050,9 @@
         expectedSourceStepIdentity: baseline128.sourceStepIdentity,
       });
       if (!candidate96?.ok) throw new Error(`${candidate96?.failurePhase || 'candidate96Trained'}:${candidate96?.error || 'unknown'}`);
+      if (candidate96.sourceStepIdentity !== baseline128.sourceStepIdentity) {
+        throw new Error(`second-package-source-step-identity-mismatch:expected=${baseline128.sourceStepIdentity}:computed=${candidate96.sourceStepIdentity}`);
+      }
       replaceImageUrls({
         visuals: {
           controlObjectUrl: baseline128.visuals?.controlObjectUrl,

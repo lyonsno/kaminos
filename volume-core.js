@@ -27,6 +27,7 @@ import {
   NATIVE_LOW_TRANSFER_160_TO_96_DEPLOYMENT_GRID_ROUTE,
   createNativeLowSelectiveSharedDeviceRuntime,
 } from './native-low-selective-live-runtime.mjs';
+import { verifyExpectedSourceStepIdentity } from './volume-source-step-identity.mjs';
 
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
@@ -13200,7 +13201,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const sourceFront = frontBuffers[currentFront];
       const sourceFrameAfter = state.frameCount;
       const computedSourceStepIdentity = `native-low-shared-device-step-${sourceStep}-frame-${sourceFrameAfter}`;
-      const sourceStepIdentity = options.expectedSourceStepIdentity || computedSourceStepIdentity;
+      const expectedSourceStepIdentity = options.expectedSourceStepIdentity ?? null;
+      failurePhase = 'native-low-source-step-identity-verification';
+      lastTrustworthyEvidence = {
+        expectedSourceStepIdentity,
+        computedSourceStepIdentity,
+        sourceStep,
+        nativeStepMs,
+      };
+      const sourceStepIdentityVerification = verifyExpectedSourceStepIdentity({
+        expectedSourceStepIdentity,
+        computedSourceStepIdentity,
+      });
+      const sourceStepIdentity = sourceStepIdentityVerification.effectiveSourceStepIdentity;
       const simulationSteppingReceipt = {
         identity: 'native-low-simulation-stepping-receipt-v0',
         sourceFrameBefore: sourceFrame,
@@ -13214,7 +13227,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         deterministicClockAuthority: deterministicNowMs === null ? null : 'causal-deterministic-step-clock-v0',
         authority: 'renderer-owned-native-source-step-before-model-consumption-v0',
       };
-      lastTrustworthyEvidence = { sourceStepIdentity, sourceStep, nativeStepMs, simulationSteppingReceipt };
+      lastTrustworthyEvidence = {
+        sourceStepIdentity,
+        expectedSourceStepIdentity,
+        computedSourceStepIdentity,
+        sourceStepIdentityVerification,
+        sourceStep,
+        nativeStepMs,
+        simulationSteppingReceipt,
+      };
 
       failurePhase = 'shared-device-model-inference';
       const timestampSupported = device.features?.has?.('timestamp-query') && typeof device.createQuerySet === 'function';
@@ -13962,6 +13983,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         transportMode: 'shared-device-gpu-buffers-no-readback-import-v0',
         inputAuthority: NATIVE_LOW_INPUT_AUTHORITY,
         sourceStepIdentity,
+        expectedSourceStepIdentity,
+        computedSourceStepIdentity,
+        sourceStepIdentityVerification,
         sameNativeStateIdentity,
         sourceStep,
         sourceSimStepBefore,
@@ -14114,6 +14138,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         routeIdentity: NATIVE_LOW_SHARED_DEVICE_ROUTE,
         transportMode: 'shared-device-gpu-buffers-no-readback-import-v0',
         failurePhase,
+        errorCode: error?.code || null,
+        expectedSourceStepIdentity: error?.expectedSourceStepIdentity ?? lastTrustworthyEvidence.expectedSourceStepIdentity ?? null,
+        computedSourceStepIdentity: error?.computedSourceStepIdentity ?? lastTrustworthyEvidence.computedSourceStepIdentity ?? null,
         error: error?.message || String(error),
         lastTrustworthyEvidence,
       };
