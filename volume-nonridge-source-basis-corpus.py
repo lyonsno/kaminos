@@ -88,6 +88,10 @@ def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def float32(value: float) -> float:
+    return struct.unpack("<f", struct.pack("<f", value))[0]
+
+
 def atomic_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -680,6 +684,11 @@ def build_corpus(
         phase_state["phase"] = "split-validation"
         requested_controls = validate_controls(setting.get("requestedControls"), f"{setting_id}.requestedControls", sampled_controls)
         effective_controls = validate_controls(setting.get("effectiveControls"), f"{setting_id}.effectiveControls", sampled_controls)
+        gpu_effective_controls = validate_controls(
+            setting.get("gpuEffectiveControls"),
+            f"{setting_id}.gpuEffectiveControls",
+            sampled_controls,
+        )
         negative_control = setting.get("negativeControl")
         if not isinstance(negative_control, bool):
             raise CorpusError(f"{setting_id}.negativeControl must be boolean")
@@ -767,6 +776,7 @@ def build_corpus(
             "negativeControlPredicate": expected_negative_predicate,
             "requestedControls": requested_controls,
             "effectiveControls": effective_controls,
+            "gpuEffectiveControls": gpu_effective_controls,
             "source": {**normalized_source, "controlsHash": controls_hash},
             "rows": normalized_rows,
             "targetSummary": target_summary,
@@ -808,8 +818,12 @@ def build_corpus(
     )
     for setting, generated in zip(output_settings, generated_controls):
         for name in sampled_controls:
-            if not math.isclose(float(setting["requestedControls"][name]), generated[name], rel_tol=0.0, abs_tol=1e-12):
-                raise CorpusError(f"{setting['id']}.requestedControls does not replay from design seed for {name}")
+            expected = generated[name]
+            for receipt in ("requestedControls", "effectiveControls"):
+                if not math.isclose(float(setting[receipt][name]), expected, rel_tol=0.0, abs_tol=1e-12):
+                    raise CorpusError(f"{setting['id']}.{receipt} does not replay from design seed for {name}")
+            if float(setting["gpuEffectiveControls"][name]) != float32(expected):
+                raise CorpusError(f"{setting['id']}.gpuEffectiveControls does not replay from design seed for {name}")
 
     phase_state["phase"] = "manifest-write"
     normalized_design = {
