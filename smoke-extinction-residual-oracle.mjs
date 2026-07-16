@@ -23,7 +23,11 @@ const MICRO_SMOKE_COEFFICIENT = 0.42;
 const INTERFACE_SHRED_COEFFICIENT = 0.34;
 const MATERIAL_DETAIL_COEFFICIENT = 0.12;
 const MASS_TOLERANCE = 1e-5;
-const RESIDUAL_GEOMETRIES = new Set(['diagonal-covariance-v0', 'full-covariance-v0']);
+const RESIDUAL_GEOMETRIES = new Set([
+  'diagonal-covariance-v0',
+  'full-covariance-v0',
+  'two-phase-overlap-full-covariance-v0',
+]);
 
 const GAUSSIAN_CHANNEL_ORDER = Object.freeze([
   'positionX', 'positionY', 'positionZ',
@@ -107,6 +111,13 @@ function residualGeometryIdentity(value) {
   const identity = String(value || 'diagonal-covariance-v0');
   if (!RESIDUAL_GEOMETRIES.has(identity)) throw new Error(`unsupported residual geometry: ${identity}`);
   return identity;
+}
+
+function residualWindowPhases(residualBlockSize, residualGeometry) {
+  if (residualGeometry !== 'two-phase-overlap-full-covariance-v0') return [[0, 0, 0]];
+  if (residualBlockSize % 2 !== 0) throw new Error('two-phase overlap requires an even residualBlockSize');
+  const half = residualBlockSize / 2;
+  return [[0, 0, 0], [half, half, half]];
 }
 
 function symmetricEigenbasis3x3(covariance) {
@@ -215,9 +226,16 @@ function residualRows({ field, residual, grid, residualBlockSize, residualGeomet
   const rows = [];
   const cellWidth = 2 / grid;
   const voxelVariance = cellWidth * cellWidth / 12;
-  for (let bz = 0; bz < grid; bz += residualBlockSize) {
-    for (let by = 0; by < grid; by += residualBlockSize) {
-      for (let bx = 0; bx < grid; bx += residualBlockSize) {
+  const phases = residualWindowPhases(residualBlockSize, residualGeometry);
+  const membershipWeights = new Float64Array(grid ** 3);
+  const partitionWeight = 1 / phases.length;
+  const fullCovariance = residualGeometry !== 'diagonal-covariance-v0';
+  for (let phaseIndex = 0; phaseIndex < phases.length; phaseIndex += 1) {
+    const phase = phases[phaseIndex];
+    const firstStart = phase.map(offset => offset === 0 ? 0 : offset - residualBlockSize);
+    for (let bz = firstStart[2]; bz < grid; bz += residualBlockSize) {
+      for (let by = firstStart[1]; by < grid; by += residualBlockSize) {
+        for (let bx = firstStart[0]; bx < grid; bx += residualBlockSize) {
         let mass = 0;
         let sourceVoxelCount = 0;
         const first = [0, 0, 0];
@@ -225,12 +243,17 @@ function residualRows({ field, residual, grid, residualBlockSize, residualGeomet
         const velocity = [0, 0, 0];
         let densityMass = 0;
         let heatMass = 0;
-        for (let z = bz; z < bz + residualBlockSize; z += 1) {
-          for (let y = by; y < by + residualBlockSize; y += 1) {
-            for (let x = bx; x < bx + residualBlockSize; x += 1) {
+        const windowStart = [bx, by, bz];
+        const windowEndExclusive = windowStart.map(start => start + residualBlockSize);
+        const clippedStart = windowStart.map(start => Math.max(0, start));
+        const clippedEndExclusive = windowEndExclusive.map(end => Math.min(grid, end));
+        for (let z = clippedStart[2]; z < clippedEndExclusive[2]; z += 1) {
+          for (let y = clippedStart[1]; y < clippedEndExclusive[1]; y += 1) {
+            for (let x = clippedStart[0]; x < clippedEndExclusive[0]; x += 1) {
               const cell = index3(x, y, z, grid);
-              const weight = residual[cell];
-              if (!(weight > 0)) continue;
+              if (!(residual[cell] > 0)) continue;
+              const weight = residual[cell] * partitionWeight;
+              membershipWeights[cell] += partitionWeight;
               const position = [x, y, z].map(component => -1 + (component + 0.5) * cellWidth);
               const offset = cell * KAMINOS_FLUID_CHANNEL_ORDER.length;
               mass += weight;
@@ -254,13 +277,13 @@ function residualRows({ field, residual, grid, residualBlockSize, residualGeomet
         const position = first.map(value => value / mass);
         const covariance = [
           Math.max(voxelVariance, second[0] / mass - position[0] * position[0] + voxelVariance),
-          residualGeometry === 'full-covariance-v0' ? second[1] / mass - position[0] * position[1] : 0,
-          residualGeometry === 'full-covariance-v0' ? second[2] / mass - position[0] * position[2] : 0,
+          fullCovariance ? second[1] / mass - position[0] * position[1] : 0,
+          fullCovariance ? second[2] / mass - position[0] * position[2] : 0,
           Math.max(voxelVariance, second[3] / mass - position[1] * position[1] + voxelVariance),
-          residualGeometry === 'full-covariance-v0' ? second[4] / mass - position[1] * position[2] : 0,
+          fullCovariance ? second[4] / mass - position[1] * position[2] : 0,
           Math.max(voxelVariance, second[5] / mass - position[2] * position[2] + voxelVariance),
         ];
-        const eigen = residualGeometry === 'full-covariance-v0' ? symmetricEigenbasis3x3(covariance) : null;
+        const eigen = fullCovariance ? symmetricEigenbasis3x3(covariance) : null;
         rows.push({
           position,
           covariance,
@@ -272,11 +295,32 @@ function residualRows({ field, residual, grid, residualBlockSize, residualGeomet
           velocityWitness: velocity.map(value => value / mass),
           sourceVoxelCount,
           residualBlock: [bx / residualBlockSize, by / residualBlockSize, bz / residualBlockSize],
+          residualPartitionPhase: phaseIndex,
+          residualPartitionOffset: [...phase],
+          residualWindowStart: windowStart,
+          residualWindowEndExclusive: windowEndExclusive,
+          residualClippedWindowStart: clippedStart,
+          residualClippedWindowEndExclusive: clippedEndExclusive,
+          residualMembershipWeight: partitionWeight,
         });
+        }
       }
     }
   }
-  return rows;
+  let minimumMembershipWeight = Infinity;
+  let maximumMembershipWeight = -Infinity;
+  for (let cell = 0; cell < residual.length; cell += 1) {
+    if (!(residual[cell] > 0)) continue;
+    minimumMembershipWeight = Math.min(minimumMembershipWeight, membershipWeights[cell]);
+    maximumMembershipWeight = Math.max(maximumMembershipWeight, membershipWeights[cell]);
+  }
+  const membershipWeightRange = minimumMembershipWeight === Infinity
+    ? [0, 0]
+    : [minimumMembershipWeight, maximumMembershipWeight];
+  if (membershipWeightRange.some(weight => Math.abs(weight - 1) > 1e-12)) {
+    throw new Error(`residual window membership does not conserve per-voxel mass: ${membershipWeightRange.join(',')}`);
+  }
+  return { rows, phases, membershipWeightRange };
 }
 
 export function buildSmokeExtinctionResidualOracle(request = {}) {
@@ -298,7 +342,8 @@ export function buildSmokeExtinctionResidualOracle(request = {}) {
     throw new Error(`control smoke mass ${controlSmokeDensityMass} does not match source smoke mass ${sidecar.smokeDensityMass}`);
   }
   const coarseRows = controlRows.map(row => ({ ...row, extinctionMass: row.extinctionMass * BODY_SMOKE_COEFFICIENT }));
-  const detailRows = residualRows({ field: request.field, residual: sidecar.residual, grid, residualBlockSize, residualGeometry });
+  const detail = residualRows({ field: request.field, residual: sidecar.residual, grid, residualBlockSize, residualGeometry });
+  const detailRows = detail.rows;
   const coarseExtinctionMass = coarseRows.reduce((sum, row) => sum + row.extinctionMass, 0);
   const representedResidualMass = detailRows.reduce((sum, row) => sum + row.extinctionMass, 0);
   const combinedExtinctionMass = coarseExtinctionMass + representedResidualMass;
@@ -310,6 +355,7 @@ export function buildSmokeExtinctionResidualOracle(request = {}) {
     hiddenCandidateCapApplied: false,
     residualBlockSize,
     residualGeometry,
+    residualWindowPhases: detail.phases,
     sidecar: {
       shape: [grid, grid, grid, KAMINOS_SMOKE_EXTINCTION_CHANNEL_ORDER.length],
       channelOrder: [...KAMINOS_SMOKE_EXTINCTION_CHANNEL_ORDER],
@@ -337,7 +383,13 @@ export function buildSmokeExtinctionResidualOracle(request = {}) {
       combinedExtinctionMass,
       combinedRelativeError,
       residualCandidateCount: detailRows.length,
-      residualCandidateCountAuthority: 'all-positive-explicit-blocks-no-cap-v0',
+      residualCandidateCountAuthority: detail.phases.length === 1
+        ? 'all-positive-explicit-blocks-no-cap-v0'
+        : 'all-positive-explicit-overlap-windows-no-cap-v0',
+      residualMassPartitionAuthority: detail.phases.length === 1
+        ? 'single-complete-window-partition-v0'
+        : 'equal-share-across-complete-window-partitions-v0',
+      residualMembershipWeightRange: detail.membershipWeightRange,
       residualGeometry,
     },
   };
@@ -613,6 +665,7 @@ export async function produceSmokeExtinctionResidualOracle(options = {}) {
       grid: inputs.manifest.grid,
       residualBlockSize: oracle.residualBlockSize,
       residualGeometry: oracle.residualGeometry,
+      residualWindowPhases: oracle.residualWindowPhases,
     },
     sidecar: {
       path: sidecarPath,

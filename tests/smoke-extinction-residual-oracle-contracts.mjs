@@ -143,6 +143,34 @@ for (let axis = 0; axis < 3; axis += 1) {
 for (let component = 0; component < 6; component += 1) {
   assert.ok(Math.abs(reconstructed[component] - fullRow.covariance[component]) < 1e-10, `eigenbasis reconstructs covariance component ${component}`);
 }
+
+const overlapGrid = 8;
+const overlapField = field(overlapGrid);
+setCell(overlapField, overlapGrid, 3, 3, 3, { smokeDensity: 1, microdetail: 1 });
+setCell(overlapField, overlapGrid, 4, 4, 4, { smokeDensity: 1, microdetail: 1 });
+const overlapControl = [{ ...controlRows[0], extinctionMass: 2 }];
+const overlapOracle = buildSmokeExtinctionResidualOracle({
+  grid: overlapGrid,
+  field: overlapField,
+  channelOrder: fluidChannels,
+  controlRows: overlapControl,
+  residualBlockSize: 4,
+  residualGeometry: 'two-phase-overlap-full-covariance-v0',
+});
+assert.equal(overlapOracle.residualGeometry, 'two-phase-overlap-full-covariance-v0');
+assert.deepEqual(overlapOracle.residualWindowPhases, [[0, 0, 0], [2, 2, 2]], 'second partition is staggered by half a block in every axis');
+assert.equal(overlapOracle.residualRows.length, 3, 'two rigid rows plus one cross-boundary bridge are emitted without a cap');
+assert.equal(overlapOracle.accounting.residualCandidateCount, 3);
+assert.equal(overlapOracle.accounting.residualCandidateCountAuthority, 'all-positive-explicit-overlap-windows-no-cap-v0');
+assert.equal(overlapOracle.accounting.residualMassPartitionAuthority, 'equal-share-across-complete-window-partitions-v0');
+assert.deepEqual(overlapOracle.accounting.residualMembershipWeightRange, [1, 1], 'every positive voxel contributes exactly one total residual mass across phases');
+assert.ok(Math.abs(overlapOracle.accounting.representedResidualMass - overlapOracle.accounting.residualExtinctionMass) < 1e-12);
+const bridgeRow = overlapOracle.residualRows.find(row => row.residualPartitionPhase === 1 && row.residualWindowStart.join(',') === '2,2,2');
+assert.ok(bridgeRow, 'staggered partition emits the window spanning the old block corner');
+assert.deepEqual(bridgeRow.residualWindowEndExclusive, [6, 6, 6]);
+assert.equal(bridgeRow.sourceVoxelCount, 2, 'bridge carries both positive voxels across the old ownership boundary');
+assert.ok(Math.abs(bridgeRow.extinctionMass - 0.42) < 1e-6, 'bridge receives half of each voxel residual mass');
+assert.equal(bridgeRow.residualMembershipWeight, 0.5);
 assert.throws(
   () => buildSmokeExtinctionResidualOracle({
     grid: correlatedGrid,
@@ -356,6 +384,30 @@ try {
   assert.equal(fullCovarianceReport.effective.residualGeometry, 'full-covariance-v0');
   assert.equal(fullCovarianceReport.accounting.residualCandidateCount, report.accounting.residualCandidateCount);
   assert.ok(fullCovarianceReport.accounting.combinedRelativeError < 1e-6);
+
+  const overlapOut = join(producerRoot, 'two-phase-overlap-out');
+  const overlapArgs = [
+    oraclePath,
+    '--manifest', manifestPath,
+    '--expected-manifest-sha256', sha(readFileSync(manifestPath)),
+    '--control-report', controlReportPath,
+    '--expected-control-report-sha256', sha(readFileSync(controlReportPath)),
+    '--control-artifact', controlArtifactPath,
+    '--expected-control-artifact-sha256', sha(controlBytes),
+    '--control-budget', '1',
+    '--residual-block-size', '2',
+    '--residual-geometry', 'two-phase-overlap-full-covariance-v0',
+    '--out-dir', overlapOut,
+  ];
+  const overlapProduced = spawnSync('node', overlapArgs, { cwd: root, encoding: 'utf8' });
+  assert.equal(overlapProduced.status, 0, overlapProduced.stderr || overlapProduced.stdout);
+  const overlapReport = JSON.parse(readFileSync(join(overlapOut, 'oracle-report.json'), 'utf8'));
+  assert.equal(overlapReport.requested.residualGeometry, 'two-phase-overlap-full-covariance-v0');
+  assert.equal(overlapReport.effective.residualGeometry, 'two-phase-overlap-full-covariance-v0');
+  assert.deepEqual(overlapReport.effective.residualWindowPhases, [[0, 0, 0], [1, 1, 1]]);
+  assert.equal(overlapReport.accounting.residualMassPartitionAuthority, 'equal-share-across-complete-window-partitions-v0');
+  assert.deepEqual(overlapReport.accounting.residualMembershipWeightRange, [1, 1]);
+  assert.ok(overlapReport.accounting.combinedRelativeError < 1e-6);
 
   const wrongRouteManifest = { ...manifest, effectiveRoute: 'fallback-cpu-demo-v0' };
   const wrongRoutePath = join(producerRoot, 'wrong-route.manifest.json');
