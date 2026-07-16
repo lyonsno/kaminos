@@ -215,6 +215,7 @@ try {
       id: settingId,
       requestedControls: { ...effectiveControls },
       effectiveControls,
+      gpuEffectiveControls: { ...effectiveControls },
       negativeControl: isNegative,
       negativeControlPredicate: isNegative ? 'all-targets-zero-v0' : null,
       source: {
@@ -305,6 +306,7 @@ try {
   assert.deepEqual(corpus.targets.order, targets);
   assert.deepEqual(corpus.ablations.map(entry => entry.channel), augmented.slice(current16.length));
   assert.ok(corpus.settings.every(setting => setting.rows.current16.sha256 && setting.rows.sourceComplete.sha256 && setting.rows.targets.sha256));
+  assert.ok(corpus.settings.every(setting => setting.gpuEffectiveControls), 'corpus retains shader-effective control authority');
   assert.deepEqual(corpus.splits.heldOut.settingIds, ['setting-p']);
   assert.equal(corpus.splits.train.settingIds.length, 16);
   assert.equal(new Set([...corpus.splits.train.settingIds, ...corpus.splits.heldOut.settingIds]).size, 17);
@@ -436,6 +438,33 @@ try {
   const generatorOut = join(fixtureRoot, 'generator-mismatch-corpus');
   assert.notEqual(runTool(generatorPath, generatorOut).status, 0, 'setting sequence must replay from the declared seed and generator');
   assert.equal((await readFailure(generatorOut)).failurePhase, 'design-validation');
+
+  const effectiveReplayMismatch = structuredClone(captureManifest);
+  effectiveReplayMismatch.settings[2].effectiveControls['boundary.gradientGain'] += 0.01;
+  effectiveReplayMismatch.settings[2].source.controlsHash = sha256(Buffer.from(canonicalJson(
+    effectiveReplayMismatch.settings[2].effectiveControls,
+  )));
+  const effectiveReplayPath = join(fixtureRoot, 'effective-replay-mismatch.json');
+  await writeFile(effectiveReplayPath, JSON.stringify(effectiveReplayMismatch, null, 2));
+  const effectiveReplayOut = join(fixtureRoot, 'effective-replay-mismatch-corpus');
+  assert.notEqual(
+    runTool(effectiveReplayPath, effectiveReplayOut).status,
+    0,
+    'source-bound effective controls must replay from the corrected deterministic design',
+  );
+  assert.equal((await readFailure(effectiveReplayOut)).failurePhase, 'design-validation');
+
+  const gpuReplayMismatch = structuredClone(captureManifest);
+  gpuReplayMismatch.settings[12].gpuEffectiveControls['boundary.gradientGain'] -= 0.01;
+  const gpuReplayPath = join(fixtureRoot, 'gpu-replay-mismatch.json');
+  await writeFile(gpuReplayPath, JSON.stringify(gpuReplayMismatch, null, 2));
+  const gpuReplayOut = join(fixtureRoot, 'gpu-replay-mismatch-corpus');
+  assert.notEqual(
+    runTool(gpuReplayPath, gpuReplayOut).status,
+    0,
+    'shader-effective controls must replay from the corrected deterministic design',
+  );
+  assert.equal((await readFailure(gpuReplayOut)).failurePhase, 'design-validation');
 
   const curatedRejection = structuredClone(captureManifest);
   curatedRejection.design.expectedSettingIds.push('setting-r');
