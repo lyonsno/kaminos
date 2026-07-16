@@ -28,6 +28,8 @@ const FULL_FIELD_IMPORT_IDENTITY = 'kaminos.volume.full-field-import.v0';
 const COARSE_RECEIVER_INITIALIZATION_AUTHORITY = 'receiver-initialized-from-filtered-high-t-v0';
 const SELECTIVE_COMPOSITION_AUTHORITY = 'learned-selective-head-composition-not-filtered-high-truth-v0';
 const SELECTIVE_COMPOSITION_APPLICATION_IDENTITY = 'learned-selective-head-application-v0';
+const VIVISECTOR_HELD_PACKAGE_AUTHORITY = 'learned-vivisector-held-package-composition-not-truth-v0';
+const VIVISECTOR_HELD_PACKAGE_APPLICATION_IDENTITY = 'vivisector-held-package-render-application-v0';
 const PHASE_ALIGNED_TRUTH_HELD_AUTHORITY = 'offline-high-truth-held-render-only-v0';
 const PHASE_ALIGNED_LOW_HELD_AUTHORITY = 'downsampled-same-high-history-held-control-v0';
 const PHASE_ALIGNED_HELD_APPLICATION_IDENTITY = 'phase-aligned-held-render-application-v0';
@@ -9509,13 +9511,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       && payload.filterIdentity === 'volume-overlap-box-filter-high-to-receiver-v0';
     const isSelectiveComposition = payload.initializationAuthority === SELECTIVE_COMPOSITION_AUTHORITY
       && payload.filterIdentity === SELECTIVE_COMPOSITION_APPLICATION_IDENTITY;
+    const isVivisectorHeldPackage = payload.initializationAuthority === VIVISECTOR_HELD_PACKAGE_AUTHORITY
+      && payload.filterIdentity === VIVISECTOR_HELD_PACKAGE_APPLICATION_IDENTITY;
     const isPhaseAlignedHeld = (
       payload.initializationAuthority === PHASE_ALIGNED_TRUTH_HELD_AUTHORITY
       || payload.initializationAuthority === PHASE_ALIGNED_LOW_HELD_AUTHORITY
     ) && payload.filterIdentity === PHASE_ALIGNED_HELD_APPLICATION_IDENTITY;
     const isLiveReplay = payload.initializationAuthority === CHECKSUM_ADDRESSED_LIVE_REPLAY_AUTHORITY
       && payload.filterIdentity === EXACT_FIELD_LIVE_REPLAY_APPLICATION_IDENTITY;
-    if (!isCoarseReceiver && !isSelectiveComposition && !isPhaseAlignedHeld && !isLiveReplay) {
+    if (!isCoarseReceiver && !isSelectiveComposition && !isVivisectorHeldPackage && !isPhaseAlignedHeld && !isLiveReplay) {
       return fullFieldImportFailure('begin', 'initialization-authority-mismatch', {
         requestedInitializationAuthority: payload.initializationAuthority || null,
         requestedFilterIdentity: payload.filterIdentity || null,
@@ -9761,6 +9765,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     const phaseAlignedHeld = receipt.initializationAuthority === PHASE_ALIGNED_TRUTH_HELD_AUTHORITY
       || receipt.initializationAuthority === PHASE_ALIGNED_LOW_HELD_AUTHORITY;
+    const isVivisectorHeldPackage = receipt.initializationAuthority === VIVISECTOR_HELD_PACKAGE_AUTHORITY;
+    if (isVivisectorHeldPackage && requestedSteps > 0) {
+      return {
+        ok: false,
+        schema: FULL_FIELD_IMPORT_IDENTITY,
+        identity: 'imported-receiver-advance-rejected-v0',
+        status: 'rejected',
+        failurePhase: 'imported-advance',
+        reason: 'vivisector-held-package-render-only',
+        sessionId: receipt.sessionId,
+        requestedSteps,
+        priorAppliedReceipt: receipt,
+      };
+    }
     if ((receipt.initializationAuthority === SELECTIVE_COMPOSITION_AUTHORITY || phaseAlignedHeld) && requestedSteps > 0) {
       return {
         ok: false,
@@ -9790,7 +9808,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     const importedAdvance = {
       identity: requestedSteps === 0
-        ? receipt.initializationAuthority === SELECTIVE_COMPOSITION_AUTHORITY
+        ? isVivisectorHeldPackage
+          ? 'vivisector-held-package-render-only-v0'
+          : receipt.initializationAuthority === SELECTIVE_COMPOSITION_AUTHORITY
           ? 'learned-selective-composition-held-render-v0'
           : phaseAlignedHeld
             ? receipt.initializationAuthority === PHASE_ALIGNED_TRUTH_HELD_AUTHORITY
@@ -12167,6 +12187,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         { loadOp: raymarchApplied ? 'load' : 'clear' },
       );
       splatApplied = splatEncoded;
+      if (splatApplied) encodeBoundarySplatTelemetry(encoder, true);
     }
     if (composition.definition.splat && !splatApplied) {
       readback?.destroy();
@@ -12209,6 +12230,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       readback?.destroy();
       return { ok: false, reason: `lean-frame-readback-validation:${validationError.message || String(validationError)}` };
     }
+    if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
     let rgba = null;
     if (!presentToCanvas) {
       await readback.mapAsync(GPUMapMode.READ);
@@ -12247,6 +12270,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       routeIdentity: SELECTIVE_HEAD_LIVE_ROUTE,
       fallbackReason: state.selectiveHeadLiveFallbackReason,
       boundarySplatFallbackReason: state.boundarySplatFallbackReason,
+      boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
+      boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
+      boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
+      boundarySplatRadius: state.boundarySplatRadius,
+      boundarySplatSharpness: state.boundarySplatSharpness,
+      boundarySplatInstanceCount: state.boundarySplatInstanceCount,
+      boundarySplatCandidateCount: state.boundarySplatCandidateCount,
+      boundarySplatOverflowCount: state.boundarySplatOverflowCount,
+      boundarySplatCountAuthority: state.boundarySplatCountAuthority,
       backend: state.backend,
       reason: null,
     };

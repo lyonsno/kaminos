@@ -15,6 +15,10 @@ const COARSE_RECEIVER_FILTER = 'volume-overlap-box-filter-high-to-receiver-v0';
 const SELECTIVE_COMPOSITION_SCHEMA = 'kaminos.volume.exact-basin-selective-composition.v0';
 const SELECTIVE_COMPOSITION_AUTHORITY = 'learned-selective-head-composition-not-filtered-high-truth-v0';
 const SELECTIVE_COMPOSITION_APPLICATION = 'learned-selective-head-application-v0';
+const VIVISECTOR_HELD_PACKAGE_SCHEMA = 'kaminos.volume.vivisector-held-package-composition.v0';
+const VIVISECTOR_HELD_PACKAGE_AUTHORITY = 'learned-vivisector-held-package-composition-not-truth-v0';
+const VIVISECTOR_HELD_PACKAGE_INFERENCE_AUTHORITY = 'precomputed-held-package-inference-not-live-runtime-v0';
+const VIVISECTOR_HELD_PACKAGE_APPLICATION = 'vivisector-held-package-render-application-v0';
 const PHASE_ALIGNED_HELD_SCHEMA = 'kaminos.volume.phase-aligned-held-field.v0';
 const PHASE_ALIGNED_HELD_APPLICATION = 'phase-aligned-held-render-application-v0';
 const PHASE_ALIGNED_HELD_ROLES = {
@@ -46,6 +50,7 @@ const renderOnly = args.has('--render-only');
 const renderWarmupCount = Math.max(0, Math.floor(Number(args.get('--render-warmup-count') || 0)));
 const renderCompositionExplicit = args.has('--render-composition');
 const renderComposition = String(args.get('--render-composition') || 'splat-only-v0');
+const secondaryRenderComposition = String(args.get('--secondary-render-composition') || renderComposition);
 const targetOrigin = args.has('--target-origin') ? String(args.get('--target-origin')) : null;
 const port = Number(args.get('--debug-port') || randomInt(42000, 62000));
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -60,6 +65,12 @@ const viewportSize = args.has('--viewport-size')
 const viewportDeviceScaleFactor = Number(args.get('--viewport-device-scale-factor') || 2);
 const renderCanvasSize = args.has('--render-canvas-size')
   ? parseDimensions(String(args.get('--render-canvas-size')), '--render-canvas-size')
+  : null;
+const cameraPosition = args.has('--camera-position')
+  ? parseVector(String(args.get('--camera-position')), '--camera-position')
+  : null;
+const cameraTarget = args.has('--camera-target')
+  ? parseVector(String(args.get('--camera-target')), '--camera-target')
   : null;
 const chunkFloats = Math.max(1, Math.floor(Number(args.get('--chunk-floats') || 262144)));
 const exportScope = String(args.get('--export-scope') || FULL_EXPORT_SCOPE);
@@ -83,6 +94,14 @@ function parseDimensions(value, label) {
     throw new Error(`${label} dimensions must be integers >= 64`);
   }
   return { width, height };
+}
+
+function parseVector(value, label) {
+  const parts = String(value).split(',').map(Number);
+  if (parts.length !== 3 || parts.some(part => !Number.isFinite(part))) {
+    throw new Error(`${label} must be finite X,Y,Z`);
+  }
+  return parts;
 }
 
 function writeManifest(payload) {
@@ -109,8 +128,9 @@ function resolveInitialFieldManifest() {
   if (manifest.failurePhase !== null) throw new Error('initial field manifest carries a failure phase');
   const isCoarseReceiver = manifest.schema === COARSE_RECEIVER_SCHEMA;
   const isSelectiveComposition = manifest.schema === SELECTIVE_COMPOSITION_SCHEMA;
+  const isVivisectorHeldPackage = manifest.schema === VIVISECTOR_HELD_PACKAGE_SCHEMA;
   const isPhaseAlignedHeld = manifest.schema === PHASE_ALIGNED_HELD_SCHEMA;
-  if (!isCoarseReceiver && !isSelectiveComposition && !isPhaseAlignedHeld) {
+  if (!isCoarseReceiver && !isSelectiveComposition && !isVivisectorHeldPackage && !isPhaseAlignedHeld) {
     throw new Error(`unsupported initial field manifest: ${manifest.schema || '(missing)'}/${manifest.status || '(missing)'}`);
   }
   if (isCoarseReceiver && manifest.initializationAuthority !== COARSE_RECEIVER_AUTHORITY) {
@@ -128,6 +148,21 @@ function resolveInitialFieldManifest() {
       throw new Error('selective composition mustNotBeAcceptedAs filtered-high receiver state');
     }
   }
+  if (isVivisectorHeldPackage) {
+    if (manifest.compositionAuthority !== VIVISECTOR_HELD_PACKAGE_AUTHORITY
+      || manifest.inferenceAuthority !== VIVISECTOR_HELD_PACKAGE_INFERENCE_AUTHORITY
+      || manifest.runtimeTruthAvailable !== false) {
+      throw new Error('Vivisector held-package authority or runtime truth contract mismatch');
+    }
+    const exclusions = manifest.consumptionContract?.mustNotBeAcceptedAs;
+    if (manifest.consumptionContract?.requiresExplicitSchemaAdmission !== true
+      || !Array.isArray(exclusions)
+      || !exclusions.includes(COARSE_RECEIVER_SCHEMA)
+      || !exclusions.includes(SELECTIVE_COMPOSITION_SCHEMA)
+      || !exclusions.includes('live-runtime-inference')) {
+      throw new Error('Vivisector held-package mustNotBeAcceptedAs contract mismatch');
+    }
+  }
   const heldRole = isPhaseAlignedHeld ? PHASE_ALIGNED_HELD_ROLES[manifest.role] : null;
   if (isPhaseAlignedHeld && (
     !heldRole
@@ -137,11 +172,12 @@ function resolveInitialFieldManifest() {
   )) {
     throw new Error(`phase-aligned held role authority mismatch: ${manifest.role || '(missing)'}`);
   }
-  const layoutIdentity = isCoarseReceiver || isPhaseAlignedHeld ? manifest.layoutIdentity : FIELD_LAYOUT_IDENTITY;
+  const layoutIdentity = isCoarseReceiver || isVivisectorHeldPackage || isPhaseAlignedHeld ? manifest.layoutIdentity : FIELD_LAYOUT_IDENTITY;
   if (layoutIdentity !== FIELD_LAYOUT_IDENTITY) throw new Error(`unsupported receiver layout: ${layoutIdentity || '(missing)'}`);
   const grid = Number(manifest.receiver?.grid);
   const fluid = manifest.receiver?.fluid;
   const front = manifest.receiver?.front;
+  const boundarySidecar = manifest.receiver?.boundarySidecar || null;
   const fluidChannels = [
     'velocityX', 'velocityY', 'velocityZ', 'densityCarrier', 'smokeDensity', 'heat', 'fuel', 'detail',
     'flame', 'ember', 'visibleFireCarrier', 'combustionFront', 'microdetail', 'interfaceShred', 'fireLick', 'emberFleck',
@@ -163,18 +199,27 @@ function resolveInitialFieldManifest() {
     grid,
     initializationAuthority: isSelectiveComposition
       ? SELECTIVE_COMPOSITION_AUTHORITY
+      : isVivisectorHeldPackage
+        ? VIVISECTOR_HELD_PACKAGE_AUTHORITY
       : isPhaseAlignedHeld
         ? heldRole.authority
         : COARSE_RECEIVER_AUTHORITY,
-    filterIdentity: isSelectiveComposition || isPhaseAlignedHeld
-      ? isPhaseAlignedHeld ? PHASE_ALIGNED_HELD_APPLICATION : SELECTIVE_COMPOSITION_APPLICATION
+    filterIdentity: isSelectiveComposition || isVivisectorHeldPackage || isPhaseAlignedHeld
+      ? isPhaseAlignedHeld
+        ? PHASE_ALIGNED_HELD_APPLICATION
+        : isVivisectorHeldPackage
+          ? VIVISECTOR_HELD_PACKAGE_APPLICATION
+          : SELECTIVE_COMPOSITION_APPLICATION
       : COARSE_RECEIVER_FILTER,
     layoutIdentity,
     source: manifest.source || null,
     receiverInitialSimStepCount: Number(manifest.receiver?.initialSimStepCount || 0),
-    heldOnly: isSelectiveComposition || isPhaseAlignedHeld,
+    heldOnly: isSelectiveComposition || isVivisectorHeldPackage || isPhaseAlignedHeld,
     fluid: validateArtifact(fluid, 'initial fluid', [grid, grid, grid, 16], fluidChannels),
     front: validateArtifact(front, 'initial front', [grid, grid, grid, 1], ['frontTopology']),
+    boundarySidecar: boundarySidecar
+      ? validateArtifact(boundarySidecar, 'initial boundary sidecar', [grid, grid, grid, 4], ['support', 'coverage', 'ridge', 'footprint'])
+      : null,
   };
 }
 
@@ -430,6 +475,63 @@ async function uploadInitialArtifact(ws, sessionId, kind, artifact) {
   return { kind, byteLength: bytes.byteLength, sha256: artifact.sha256, chunkCount, chunkFloats };
 }
 
+async function uploadInitialBoundarySidecar(ws, initialField) {
+  const artifact = initialField.boundarySidecar;
+  if (!artifact) return null;
+  const begin = await evaluateByValue(
+    ws,
+    `window.__kaminosVolumePrototype.beginDebugBoundarySidecarOverride(${JSON.stringify({
+      role: initialField.manifest.role || initialField.manifest.identity || initialField.manifest.schema,
+      grid: initialField.grid,
+      byteLength: artifact.byteLength,
+      boundarySidecarSha256: artifact.sha256,
+      sourceManifestPath: initialField.manifestPath,
+      sourceManifestSha256: initialField.manifestSha256,
+      sourceKind: initialField.manifest.schema,
+      packIdentity: initialField.manifest.source?.packageSha256 || null,
+    })})`,
+    'begin-initial-boundary-sidecar-override',
+  );
+  if (begin?.ok !== true || begin.status !== 'receiving') {
+    throw new Error(`initial boundary sidecar override did not begin cleanly: ${JSON.stringify(begin)}`);
+  }
+  const bytes = readFileSync(artifact.path);
+  const chunkBytes = chunkFloats * Float32Array.BYTES_PER_ELEMENT;
+  let byteOffset = 0;
+  let chunkCount = 0;
+  while (byteOffset < bytes.byteLength) {
+    const chunk = bytes.subarray(byteOffset, Math.min(bytes.byteLength, byteOffset + chunkBytes));
+    const receipt = await evaluateByValue(
+      ws,
+      `window.__kaminosVolumePrototype.writeDebugBoundarySidecarOverrideChunk(${JSON.stringify({
+        sessionId: begin.sessionId,
+        byteOffset,
+        base64: chunk.toString('base64'),
+      })})`,
+      'upload-initial-boundary-sidecar-override',
+    );
+    if (receipt?.ok !== true || Number(receipt.receivedBytes) !== byteOffset + chunk.byteLength) {
+      throw new Error(`bad initial boundary sidecar chunk at ${byteOffset}: ${JSON.stringify(receipt)}`);
+    }
+    byteOffset += chunk.byteLength;
+    chunkCount += 1;
+  }
+  const finish = await evaluateByValue(
+    ws,
+    `window.__kaminosVolumePrototype.finishDebugBoundarySidecarOverride(${JSON.stringify({ sessionId: begin.sessionId })})`,
+    'finish-initial-boundary-sidecar-override',
+  );
+  if (finish?.ok !== true || finish.status !== 'applied' || finish.actualSha256 !== artifact.sha256) {
+    throw new Error(`initial boundary sidecar override did not apply cleanly: ${JSON.stringify(finish)}`);
+  }
+  return {
+    identity: 'checksum-bound-initial-boundary-sidecar-override-v0',
+    artifact,
+    chunkCount,
+    effective: finish,
+  };
+}
+
 async function mountImportedRenderCanvas(ws, phase) {
   const canvasMount = await evaluateByValue(ws, `(() => {
     const canvas = window.__kaminosVolumePrototype?.canvasElement?.();
@@ -492,6 +594,7 @@ async function main() {
   let importedAdvance = null;
   let importedRender = null;
   let importedSecondaryRender = null;
+  let cameraContract = null;
   const renderWarmups = [];
   let renderControlOverrides = {};
   let secondaryRenderControlOverrides = {};
@@ -516,6 +619,9 @@ async function main() {
     if (!Number.isFinite(viewportDeviceScaleFactor) || viewportDeviceScaleFactor <= 0) {
       throw new Error('--viewport-device-scale-factor must be finite and greater than zero');
     }
+    if (Boolean(cameraPosition) !== Boolean(cameraTarget)) {
+      throw new Error('--camera-position and --camera-target must be supplied together');
+    }
     if (![FULL_EXPORT_SCOPE, FLUID_FRONT_EXPORT_SCOPE].includes(exportScope)) {
       throw new Error(`unsupported --export-scope: ${exportScope}`);
     }
@@ -524,6 +630,9 @@ async function main() {
     }
     if (!['splat-only-v0', 'raymarch-under-splats-v0'].includes(renderComposition)) {
       throw new Error(`unsupported --render-composition: ${renderComposition}`);
+    }
+    if (!['splat-only-v0', 'raymarch-under-splats-v0'].includes(secondaryRenderComposition)) {
+      throw new Error(`unsupported --secondary-render-composition: ${secondaryRenderComposition}`);
     }
     renderControlOverrides = args.has('--render-control-overrides-json')
       ? JSON.parse(String(args.get('--render-control-overrides-json')))
@@ -669,6 +778,20 @@ async function main() {
       if (importFinish?.ok !== true || importFinish.status !== 'applied') {
         throw new Error(`initial field import did not apply cleanly: ${JSON.stringify(importFinish)}`);
       }
+      phase = 'upload-initial-boundary-sidecar';
+      const boundarySidecarOverride = await uploadInitialBoundarySidecar(ws, initialField);
+      if (cameraPosition && cameraTarget) {
+        phase = 'apply-imported-render-camera';
+        cameraContract = await evaluateByValue(ws, `(() => {
+          if (typeof window.kaminosSetCameraDebugPose !== 'function'
+            || typeof window.kaminosCameraDebugState !== 'function') {
+            return { ok: false, reason: 'camera-debug-api-missing' };
+          }
+          window.kaminosSetCameraDebugPose(${JSON.stringify({ position: cameraPosition, target: cameraTarget })});
+          return { ok: true, authority: 'caller-specified-volume-camera-pose-v0', effective: window.kaminosCameraDebugState() };
+        })()`, phase);
+        if (cameraContract?.ok !== true) throw new Error(`imported render camera did not apply: ${JSON.stringify(cameraContract)}`);
+      }
       initialFieldImport = {
         requested: {
           manifestPath: initialField.manifestPath,
@@ -676,7 +799,7 @@ async function main() {
           grid: initialField.grid,
           advanceImportedSteps,
         },
-        uploads: { fluid: fluidUpload, front: frontUpload },
+        uploads: { fluid: fluidUpload, front: frontUpload, boundarySidecar: boundarySidecarOverride },
         effective: importFinish,
       };
       phase = 'advance-imported-field';
@@ -792,7 +915,7 @@ async function main() {
             `window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
               fullFieldImportSessionId: importFinish.sessionId,
               renderScale: 1,
-              boundarySplatComposition: renderComposition,
+              boundarySplatComposition: secondaryRenderComposition,
               controlOverrides: secondaryRenderControlOverrides,
               now: deterministicReplayStartTimeMs + advanceImportedSteps * deterministicReplayTimeStepMs,
               sameStateCaptureId: `imported-receiver-render-secondary-step-${advanceImportedSteps}`,
@@ -802,8 +925,8 @@ async function main() {
           if (secondaryReceipt?.ok !== true || secondaryReceipt?.imageAuthority !== 'cdp-canvas-clip-capture-after-render-only-frozen-sim-state') {
             throw new Error(`secondary imported receiver render failed: ${JSON.stringify(secondaryReceipt)}`);
           }
-          if (renderCompositionExplicit && secondaryReceipt.boundarySplatCompositionEffective !== renderComposition) {
-            throw new Error(`requested secondary render composition was not effective: ${renderComposition} != ${secondaryReceipt.boundarySplatCompositionEffective || '(missing)'}`);
+          if (secondaryReceipt.boundarySplatCompositionEffective !== secondaryRenderComposition) {
+            throw new Error(`requested secondary render composition was not effective: ${secondaryRenderComposition} != ${secondaryReceipt.boundarySplatCompositionEffective || '(missing)'}`);
           }
           const secondaryRect = secondaryReceipt.canvasCssRect;
           if (secondaryRect.x < 0
@@ -861,6 +984,7 @@ async function main() {
         pageDiagnostics,
         viewportContract,
         renderCanvasContract,
+        cameraContract,
         runtimeEvents,
         initialFieldImport,
         importedAdvance,
@@ -957,6 +1081,7 @@ async function main() {
       pageDiagnostics,
       viewportContract,
       renderCanvasContract,
+      cameraContract,
       runtimeEvents,
       chunkFloats,
       sessionId: begin.sessionId,
