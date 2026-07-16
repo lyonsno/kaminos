@@ -584,7 +584,7 @@ async function main() {
     if (renderOnly && exportScope !== FULL_EXPORT_SCOPE) {
       throw new Error('--render-only does not accept a narrowed --export-scope');
     }
-    if (!['splat-only-v0', 'raymarch-under-splats-v0'].includes(renderComposition)) {
+    if (!['splat-only-v0', 'raymarch-only-v0', 'raymarch-under-splats-v0'].includes(renderComposition)) {
       throw new Error(`unsupported --render-composition: ${renderComposition}`);
     }
     renderControlOverrides = args.has('--render-control-overrides-json')

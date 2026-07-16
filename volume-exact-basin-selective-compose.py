@@ -50,6 +50,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-cells", type=int, default=32768)
     parser.add_argument("--support-threshold", type=float)
     parser.add_argument("--residual-scale", type=float, default=1.0)
+    parser.add_argument("--channels", help="comma-separated deployed application heads; diagnostic-only trained heads remain excluded")
     parser.add_argument("--checkpoint-transfer-mode")
     parser.add_argument("--sequence-start-step", type=int)
     parser.add_argument("--sequence-frame-index", type=int)
@@ -318,7 +319,20 @@ def main() -> int:
         heads_descriptor = probe_report.get("channelHeadArtifact") or {}
         classifier_path = verify_artifact(classifier_descriptor, probe_manifest_path, phase, "support classifier")
         heads_path = verify_artifact(heads_descriptor, probe_manifest_path, phase, "channel heads")
-        requested_channels = [str(item.get("channel")) for item in probe_report.get("gatedChannels", [])]
+        trained_channels = [str(item.get("channel")) for item in probe_report.get("gatedChannels", [])]
+        if args.channels is not None:
+            requested_channels = [item.strip() for item in args.channels.split(",") if item.strip()]
+            if not requested_channels:
+                raise CompositionFailure(phase, "--channels must select at least one application head")
+            if len(set(requested_channels)) != len(requested_channels):
+                raise CompositionFailure(phase, f"--channels contains duplicates: {requested_channels}")
+            missing_channels = [channel for channel in requested_channels if channel not in trained_channels]
+            if missing_channels:
+                raise CompositionFailure(phase, f"selected application heads were not trained: {missing_channels}")
+            application_head_authority = "caller-selected-application-heads-v0"
+        else:
+            requested_channels = trained_channels
+            application_head_authority = "checkpoint-all-trained-heads-v0"
         unsupported = [channel for channel in requested_channels if channel not in SUPPORTED_POLICIES]
         if unsupported:
             raise CompositionFailure(phase, f"no explicit composition policy for channels: {unsupported}")
@@ -433,6 +447,13 @@ def main() -> int:
                 "highGrid": high_grid,
                 "applicationInput": "phase-aligned low field only",
                 "highTruthUse": "offline metrics only; not read by checkpoint application features",
+            },
+            "applicationHeads": {
+                "identity": "explicit-deployed-head-selection-v0",
+                "channels": requested_channels,
+                "trainedChannels": trained_channels,
+                "authority": application_head_authority,
+                "diagnosticOnlyExcluded": [channel for channel in trained_channels if channel not in requested_channels],
             },
             "features": probe_report.get("features"),
             "support": {

@@ -27,6 +27,8 @@ assert.match(composerSource, /--support-threshold/, 'composer accepts an explici
 assert.match(composerSource, /caller-specified-calibration-assay-v0/, 'threshold overrides carry explicit non-checkpoint authority');
 assert.match(composerSource, /--residual-scale/, 'composer accepts an explicit calibration-assay residual scale');
 assert.match(composerSource, /caller-specified-residual-blend-assay-v0/, 'residual-scale overrides carry explicit assay authority');
+assert.match(composerSource, /--channels/, 'composer requires explicit application-head selection when diagnostics and deployed heads differ');
+assert.match(composerSource, /caller-selected-application-heads-v0/, 'selected application heads carry explicit authority');
 assert.match(composerSource, /--checkpoint-transfer-mode/, 'composer requires an explicit mode before applying checkpoints to another frame');
 assert.match(composerSource, /consecutive-phase-aligned-sequence-v0/, 'composer names the narrow lawful temporal transfer mode');
 assert.match(composerSource, /failurePhase/, 'composer writes durable failure-phase reports');
@@ -299,6 +301,25 @@ execFileSync('python3', [
 const blendComposition = JSON.parse(readFileSync(join(blendCompositionDir, 'manifest.json'), 'utf8'));
 assert.equal(blendComposition.residualBlend.scale, 0.5);
 assert.equal(blendComposition.residualBlend.authority, 'caller-specified-residual-blend-assay-v0');
+
+const diagnosticProbePath = join(outDir, 'manifest-with-diagnostic-flame.json');
+const diagnosticProbe = JSON.parse(readFileSync(join(outDir, 'manifest.json'), 'utf8'));
+diagnosticProbe.gatedChannels.push({ ...diagnosticProbe.gatedChannels[0], channel: 'flame', channelIndex: 8 });
+writeFileSync(diagnosticProbePath, `${JSON.stringify(diagnosticProbe, null, 2)}\n`);
+const selectedCompositionDir = join(fixtureRoot, 'composition-selected-application-heads');
+execFileSync('python3', [
+  composerPath,
+  '--pair-manifest', pairPath,
+  '--support-probe-manifest', diagnosticProbePath,
+  '--out-dir', selectedCompositionDir,
+  '--batch-cells', '256',
+  '--channels', 'fuel,frontTopology',
+], { stdio: 'pipe' });
+const selectedComposition = JSON.parse(readFileSync(join(selectedCompositionDir, 'manifest.json'), 'utf8'));
+assert.deepEqual(selectedComposition.applicationHeads.channels, ['fuel', 'frontTopology']);
+assert.equal(selectedComposition.applicationHeads.authority, 'caller-selected-application-heads-v0');
+assert.deepEqual(Object.keys(selectedComposition.channelPolicies), ['fuel', 'frontTopology']);
+assert.ok(!('flame' in selectedComposition.channelMetrics), 'diagnostic-only flame head is not applied');
 
 const applicationLowFluid = new Float32Array(lowFluid);
 for (let cell = 0; cell < lowCells; cell += 1) applicationLowFluid[cell * 16 + 3] += 0.125;
