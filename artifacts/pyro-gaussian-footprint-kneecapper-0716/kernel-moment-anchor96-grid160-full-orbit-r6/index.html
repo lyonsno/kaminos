@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>Kernel Moment Covariance Full Orbit</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --page: #0a0b0d;
+      --band: #111419;
+      --panel: #181c21;
+      --line: #353c45;
+      --text: #f5f3ed;
+      --muted: #a7afb8;
+      --cyan: #65cbd2;
+      --green: #6dd4a0;
+      --gold: #f1bd58;
+      --blue: #82aaff;
+      --red: #e98575;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--page);
+      color: var(--text);
+      font: 14px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      letter-spacing: 0;
+    }
+    header, main > section { border-bottom: 1px solid var(--line); }
+    .inner { width: min(1560px, calc(100% - 32px)); margin: 0 auto; }
+    header .inner { padding: 22px 0 18px; }
+    h1 { margin: 0 0 7px; font: 700 25px/1.15 system-ui, sans-serif; letter-spacing: 0; }
+    h2 { margin: 0; font: 700 16px/1.2 system-ui, sans-serif; letter-spacing: 0; }
+    p { margin: 0; }
+    .subhead { max-width: 1100px; color: var(--muted); }
+    .status { display: flex; flex-wrap: wrap; gap: 7px 18px; margin-top: 14px; color: var(--muted); }
+    .status strong { color: var(--green); }
+    .summary { background: var(--band); }
+    .summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .summary-item { padding: 16px 18px 16px 0; border-right: 1px solid var(--line); }
+    .summary-item + .summary-item { padding-left: 18px; }
+    .summary-item:last-child { border-right: 0; }
+    .label { color: var(--muted); font-size: 11px; text-transform: uppercase; }
+    .value { margin-top: 4px; font: 700 21px/1.1 system-ui, sans-serif; letter-spacing: 0; }
+    .good { color: var(--green); }
+    .neutral { color: var(--gold); }
+    .toolbar .camera-controls { display: grid; grid-template-columns: 36px minmax(180px, 1fr) 36px auto; gap: 10px; align-items: center; padding: 14px 0 9px; }
+    button {
+      height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: var(--panel);
+      color: var(--text);
+      font: 700 14px/1 system-ui, sans-serif;
+      letter-spacing: 0;
+      cursor: pointer;
+    }
+    button:hover { border-color: var(--blue); }
+    .step { width: 36px; font-size: 18px; }
+    input[type="range"] { width: 100%; min-width: 0; accent-color: var(--cyan); }
+    .camera-readout { min-width: 264px; text-align: right; color: var(--muted); }
+    .camera-readout strong { color: var(--text); }
+    .view-tabs { display: flex; gap: 6px; padding: 0 0 14px; }
+    .view-tabs button { width: auto; padding: 0 13px; color: var(--muted); }
+    .view-tabs button[aria-selected="true"] { border-color: var(--cyan); color: var(--text); background: #17252a; }
+    .gallery .inner { padding: 18px 0 24px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    figure { margin: 0; min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+    figure.target { border-color: #806937; }
+    figure.kernel { border-color: #33868d; }
+    figure.exact { border-color: #3f835f; }
+    figure img { display: block; width: 100%; aspect-ratio: 314 / 242; object-fit: contain; background: #000; }
+    figcaption { display: flex; justify-content: space-between; gap: 12px; min-height: 48px; padding: 9px 11px; border-top: 1px solid var(--line); }
+    figcaption strong { min-width: 0; font-family: system-ui, sans-serif; overflow-wrap: anywhere; }
+    figcaption span { color: var(--muted); text-align: right; overflow-wrap: anywhere; }
+    .metrics { background: var(--band); }
+    .metrics .inner, .receipt .inner { padding: 20px 0 25px; }
+    .section-head { display: flex; justify-content: space-between; align-items: end; gap: 15px; margin-bottom: 11px; }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+    table { width: 100%; min-width: 800px; border-collapse: collapse; }
+    th, td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: right; }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: var(--muted); background: #15181d; font-size: 11px; font-weight: 500; text-transform: uppercase; }
+    tr:last-child td { border-bottom: 0; }
+    tr.kernel-row td { color: var(--cyan); }
+    .receipt-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
+    .receipt-copy { color: var(--muted); overflow-wrap: anywhere; }
+    .receipt-copy strong { color: var(--text); }
+    .links { display: grid; gap: 8px; align-content: start; }
+    [hidden] { display: none !important; }
+    @media (max-width: 900px) {
+      .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .summary-item:nth-child(2) { border-right: 0; }
+      .summary-item:nth-child(n+3) { border-top: 1px solid var(--line); }
+      .receipt-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 650px) {
+      .inner { width: min(100% - 20px, 1560px); }
+      .summary-grid, .grid { grid-template-columns: 1fr; }
+      .summary-item, .summary-item + .summary-item { padding: 13px 0; border-right: 0; border-top: 1px solid var(--line); }
+      .summary-item:first-child { border-top: 0; }
+      .toolbar .camera-controls { grid-template-columns: 36px minmax(0, 1fr) 36px; }
+      .camera-readout { grid-column: 1 / -1; min-width: 0; text-align: left; }
+      .view-tabs { overflow-x: auto; }
+      .view-tabs button { flex: 0 0 auto; }
+      figcaption { flex-direction: column; gap: 4px; }
+      figcaption span { min-width: 0; text-align: left; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="inner">
+      <h1>Kernel moment covariance full orbit</h1>
+      <p class="subhead">Exact checksum-bound step-96 Flamebowl state at 160 cubed, fixed Structural/Ridge-Owned support, one view-independent flow-kernel descriptor set, and 20 held-out cameras.</p>
+      <div class="status">
+        <span><strong>GREENROOM COMPLETED AND VALIDATED</strong></span>
+        <span>job 969278ea9565</span>
+        <span>WebGPU:apple</span>
+        <span>filament-orbit-f96-s96</span>
+        <span>147,389 candidates</span>
+        <span>0 admitted overflow</span>
+      </div>
+    </div>
+  </header>
+  <main>
+    <section class="summary">
+      <div class="inner summary-grid">
+        <div class="summary-item"><div class="label">Held support MAE</div><div class="value good">31.17% lower</div></div>
+        <div class="summary-item"><div class="label">Held support edge loss</div><div class="value good">10.15% lower</div></div>
+        <div class="summary-item"><div class="label">Training support MAE</div><div class="value good">30.28% lower</div></div>
+        <div class="summary-item"><div class="label">Decision</div><div class="value neutral">Cross-view gain</div></div>
+      </div>
+    </section>
+    <section class="toolbar">
+      <div class="inner camera-controls">
+        <button class="step" id="prev" type="button" title="Previous camera" aria-label="Previous camera">&#8592;</button>
+        <input id="camera" type="range" min="0" max="20" step="1" value="10" aria-label="Camera index">
+        <button class="step" id="next" type="button" title="Next camera" aria-label="Next camera">&#8594;</button>
+        <div class="camera-readout"><strong id="camera-name">Camera 10</strong> <span id="camera-angle">0.000 rad</span> <span id="camera-split">training</span></div>
+      </div>
+      <div class="inner view-tabs" role="tablist" aria-label="Comparison family">
+        <button type="button" role="tab" data-view="geometry" aria-selected="true">Geometry</button>
+        <button type="button" role="tab" data-view="optics" aria-selected="false">Optical layers</button>
+        <button type="button" role="tab" data-view="raysteps" aria-selected="false">Ray steps</button>
+      </div>
+    </section>
+    <section class="gallery">
+      <div class="inner grid" id="geometry-view">
+        <figure class="target"><img id="target" alt="Exact Full Flame target"><figcaption><strong>Exact Full Flame target</strong><span>smoke-off 160-step raymarch</span></figcaption></figure>
+        <figure><img id="support" alt="Support-aligned target"><figcaption><strong>Support-aligned target</strong><span>current ridge-owned allocation</span></figcaption></figure>
+        <figure><img id="world" alt="World covariance baseline"><figcaption><strong>World covariance</strong><span id="world-loss"></span></figcaption></figure>
+        <figure class="kernel"><img id="kernel" alt="Flow kernel moment covariance"><figcaption><strong>Kernel-moment covariance</strong><span id="kernel-loss"></span></figcaption></figure>
+      </div>
+      <div class="inner grid" id="optics-view" hidden>
+        <figure><img id="ridge-own" alt="Ridge emission with ridge extinction"><figcaption><strong>Ridge / ridge extinction</strong><span>ridge-owned coefficients</span></figcaption></figure>
+        <figure><img id="ridge-total" alt="Ridge emission with total extinction"><figcaption><strong>Ridge / total extinction</strong><span>cross-layer attenuation</span></figcaption></figure>
+        <figure><img id="nonridge-total" alt="Non-ridge emission with total extinction"><figcaption><strong>Non-ridge / total extinction</strong><span>complementary contribution</span></figcaption></figure>
+        <figure class="exact"><img id="shared-sum" alt="Shared transmittance contribution sum"><figcaption><strong>Shared-transmittance sum</strong><span>held mean delta 0.0000028</span></figcaption></figure>
+      </div>
+      <div class="inner grid" id="raysteps-view" hidden>
+        <figure><img id="ray96" alt="Ninety-six ray steps"><figcaption><strong>96 ray steps</strong><span id="ray96-loss">reduced-cost reference</span></figcaption></figure>
+        <figure class="target"><img id="ray160" alt="One hundred sixty ray steps"><figcaption><strong>160 ray steps</strong><span>exact target</span></figcaption></figure>
+        <figure><img id="positive-recomposition" alt="Positive optical recomposition"><figcaption><strong>Positive optical recomposition</strong><span>independent optical check</span></figcaption></figure>
+        <figure><img id="repeat" alt="Frozen repeat"><figcaption><strong>Frozen repeat</strong><span id="repeat-label">camera 10 exact repeat</span></figcaption></figure>
+      </div>
+    </section>
+    <section class="metrics">
+      <div class="inner">
+        <div class="section-head"><h2>Held-out camera means</h2><a href="camera-holdout-report.json">camera-holdout-report.json</a></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Family</th><th>Full Flame pixel</th><th>Support pixel</th><th>Full Flame edge</th><th>Support edge</th></tr></thead>
+            <tbody id="summary-rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+    <section class="receipt">
+      <div class="inner receipt-grid">
+        <div class="receipt-copy">
+          <p><strong>Candidate SHA-256</strong><br>447a7819ac3fc616d58b084708b138ef912f013e7ee56fe820225b4cdb93aa18</p>
+          <p style="margin-top:12px"><strong>Frozen controls SHA-256</strong><br>ba122038332747804203b4d03c6a5e9bf7b1e5969ec5d1f5ef995d3b5adff5b9</p>
+          <p style="margin-top:12px"><strong>Kernel treatment</strong><br>strength 1, radius 0.03 world units, coherence 1; fixed across all cameras</p>
+          <p style="margin-top:12px"><strong>Evidence boundary</strong><br>rank-one tangent covariance on current ridge-owned candidates; no full 3D covariance and no omitted non-ridge candidate support</p>
+        </div>
+        <div class="links">
+          <a href="README.md">Decision and route receipt</a>
+          <a href="report.json">Completed capture report</a>
+          <a href="capture-report.json">Capture completeness report</a>
+          <a href="camera-holdout-report.json">Validated holdout report</a>
+          <a href="greenroom-receipt.json">Greenroom receipt</a>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script type="module">
+    const angles = [-0.42, -0.378, -0.336, -0.294, -0.252, -0.21, -0.168, -0.126, -0.084, -0.042, 0, 0.042, 0.084, 0.126, 0.168, 0.21, 0.252, 0.294, 0.336, 0.378, 0.42];
+    const report = await fetch('camera-holdout-report.json').then(response => response.json());
+    const rows = new Map(report.cameraRows.map(row => [`${row.cameraIndex}:${row.family}`, row]));
+    const input = document.querySelector('#camera');
+    const pad = value => String(value).padStart(2, '0');
+    const format = value => Number(value).toFixed(5);
+    const image = (id, filename) => { document.querySelector(id).src = filename; };
+    function updateCamera() {
+      const index = Number(input.value);
+      const prefix = `camera-${pad(index)}-`;
+      const world = rows.get(`${index}:world-tangent-covariance`);
+      const kernel = rows.get(`${index}:flow-kernel-moment-covariance`);
+      document.querySelector('#camera-name').textContent = `Camera ${pad(index)}`;
+      document.querySelector('#camera-angle').textContent = `${angles[index].toFixed(3)} rad`;
+      document.querySelector('#camera-split').textContent = index === 10 ? 'training' : 'held-out';
+      image('#target', `${prefix}raymarch-160.png`);
+      image('#support', `${prefix}stateDerivedSupport-160.png`);
+      image('#world', `${prefix}worldCovariance-160.png`);
+      image('#kernel', `${prefix}kernelMomentCovariance-160.png`);
+      image('#ridge-own', `${prefix}ridgeTransportRidgeExtinction-160.png`);
+      image('#ridge-total', `${prefix}ridgeTransportTotalExtinction-160.png`);
+      image('#nonridge-total', `${prefix}nonRidgeTransportTotalExtinction-160.png`);
+      image('#shared-sum', `${prefix}sharedTransmittanceContributionSum-160.png`);
+      image('#ray96', `${prefix}raymarch-96.png`);
+      image('#ray160', `${prefix}raymarch-160.png`);
+      image('#positive-recomposition', `${prefix}positiveOpticalRecomposition-160.png`);
+      image('#repeat', index === 10 ? 'camera-10-raymarchRepeat-160.png' : `${prefix}raymarch-160.png`);
+      document.querySelector('#repeat-label').textContent = index === 10 ? 'pixel-identical repeat' : 'target reference';
+      document.querySelector('#world-loss').textContent = `full ${format(world.metrics.fullFlamePixelDelta.meanAbsChannelDelta)} / support ${format(world.metrics.supportAlignedPixelDelta.meanAbsChannelDelta)}`;
+      document.querySelector('#kernel-loss').textContent = `full ${format(kernel.metrics.fullFlamePixelDelta.meanAbsChannelDelta)} / support ${format(kernel.metrics.supportAlignedPixelDelta.meanAbsChannelDelta)}`;
+    }
+    for (const row of report.summary.filter(item => item.split === 'held-out-camera-mean-v0' && ['worldCovariance', 'kernelMomentCovariance'].includes(item.mode))) {
+      const tr = document.createElement('tr');
+      if (row.mode === 'kernelMomentCovariance') tr.className = 'kernel-row';
+      tr.innerHTML = `<td>${row.mode}</td><td>${format(row.fullFlameMeanAbsChannelDelta)}</td><td>${format(row.supportAlignedMeanAbsChannelDelta)}</td><td>${format(row.fullFlameEdgeLoss)}</td><td>${format(row.supportAlignedEdgeLoss)}</td>`;
+      document.querySelector('#summary-rows').append(tr);
+    }
+    for (const tab of document.querySelectorAll('[role="tab"]')) {
+      tab.addEventListener('click', () => {
+        for (const candidate of document.querySelectorAll('[role="tab"]')) candidate.setAttribute('aria-selected', String(candidate === tab));
+        for (const view of ['geometry', 'optics', 'raysteps']) document.querySelector(`#${view}-view`).hidden = view !== tab.dataset.view;
+      });
+    }
+    input.addEventListener('input', updateCamera);
+    document.querySelector('#prev').addEventListener('click', () => { input.value = Math.max(0, Number(input.value) - 1); updateCamera(); });
+    document.querySelector('#next').addEventListener('click', () => { input.value = Math.min(20, Number(input.value) + 1); updateCamera(); });
+    updateCamera();
+  </script>
+</body>
+</html>

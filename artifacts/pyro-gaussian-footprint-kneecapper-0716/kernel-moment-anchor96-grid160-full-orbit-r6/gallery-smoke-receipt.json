@@ -1,0 +1,111 @@
+{
+  "schema": "kaminos.kernel-moment-full-orbit-gallery-smoke.v0",
+  "status": "completed",
+  "requestedRoute": "http://127.0.0.1:18223/artifacts/pyro-gaussian-footprint-kneecapper-0716/kernel-moment-anchor96-grid160-full-orbit-r6/index.html",
+  "effectiveRoute": "http://127.0.0.1:18223/artifacts/pyro-gaussian-footprint-kneecapper-0716/kernel-moment-anchor96-grid160-full-orbit-r6/index.html",
+  "registration": {
+    "server": "kaminos-worktree-artifact-server",
+    "port": 18223,
+    "httpStatus": 200
+  },
+  "browser": "Google Chrome headless via CDP",
+  "backend": "software-rendered (--disable-gpu)",
+  "desktop": {
+    "ready": "complete",
+    "title": "Kernel Moment Covariance Full Orbit",
+    "route": "http://127.0.0.1:18223/artifacts/pyro-gaussian-footprint-kneecapper-0716/kernel-moment-anchor96-grid160-full-orbit-r6/index.html",
+    "innerWidth": 1440,
+    "clientWidth": 1425,
+    "scrollWidth": 1425,
+    "imageCount": 12,
+    "loadedImageCount": 12,
+    "camera": "Camera 10",
+    "split": "training",
+    "activeView": "geometry",
+    "tabs": [
+      {
+        "text": "Geometry",
+        "selected": "true",
+        "left": 16,
+        "right": 112.359375
+      },
+      {
+        "text": "Optical layers",
+        "selected": "false",
+        "left": 118.359375,
+        "right": 240.84375
+      },
+      {
+        "text": "Ray steps",
+        "selected": "false",
+        "left": 246.84375,
+        "right": 342.234375
+      }
+    ],
+    "visibleFigures": 4,
+    "previousButton": {
+      "left": 16,
+      "right": 52
+    },
+    "nextButton": {
+      "left": 1099,
+      "right": 1135
+    },
+    "heading": {
+      "left": 16,
+      "right": 1409
+    }
+  },
+  "mobile": {
+    "ready": "complete",
+    "title": "Kernel Moment Covariance Full Orbit",
+    "route": "http://127.0.0.1:18223/artifacts/pyro-gaussian-footprint-kneecapper-0716/kernel-moment-anchor96-grid160-full-orbit-r6/index.html",
+    "innerWidth": 390,
+    "clientWidth": 390,
+    "scrollWidth": 390,
+    "imageCount": 12,
+    "loadedImageCount": 12,
+    "camera": "Camera 11",
+    "split": "held-out",
+    "activeView": "optics",
+    "tabs": [
+      {
+        "text": "Geometry",
+        "selected": "false",
+        "left": 10,
+        "right": 106.359375
+      },
+      {
+        "text": "Optical layers",
+        "selected": "true",
+        "left": 112.359375,
+        "right": 234.84375
+      },
+      {
+        "text": "Ray steps",
+        "selected": "false",
+        "left": 240.84375,
+        "right": 336.234375
+      }
+    ],
+    "visibleFigures": 4,
+    "previousButton": {
+      "left": 10,
+      "right": 46
+    },
+    "nextButton": {
+      "left": 344,
+      "right": 380
+    },
+    "heading": {
+      "left": 10,
+      "right": 380
+    }
+  },
+  "browserEvents": [],
+  "outputs": [
+    "gallery-smoke-desktop.png",
+    "gallery-smoke-mobile.png"
+  ],
+  "capturedAt": "2026-07-16T23:52:57.219Z"
+}

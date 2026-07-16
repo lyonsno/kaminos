@@ -1,0 +1,7 @@
+Kaminos server at http://localhost:18224
+  Scratch: /private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/scratch
+  Greenroom: /Users/noahlyons/.local/state/gpu-greenroom
+  Splat inbox: /Users/noahlyons/.local/state/kaminos/assets/splats/inbox
+  Production splats: /Users/noahlyons/.local/state/kaminos/assets/splats/production
+  Volume settings store: /Users/noahlyons/.local/share/kaminos/volume-settings-presets
+127.0.0.1 - - [16/Jul/2026 19:28:19] "GET / HTTP/1.1" 200 -
