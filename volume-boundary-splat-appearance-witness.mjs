@@ -222,6 +222,7 @@ try {
       const sameStateCaptureId = 'appearance-f' + before.frameCount + '-s' + before.simStepCount;
       const fixedNow = performance.now();
       prototype.setSelectiveHeadLiveCapturePaused(true);
+      window.__kaminosAppearanceTargetPngs = new Map();
       const cameras = [];
       let candidateSha256;
       let candidateMetadata;
@@ -241,7 +242,7 @@ try {
         'non-ridge-extinction',
         'positive-optical-recomposition',
       ]);
-      const captureAppearance = async (mode, targetIdentity) => {
+      const captureAppearance = async (mode, targetIdentity, pngKey) => {
         markProgress('target-capture-start', { mode, targetIdentity });
         prototype.setVolumePresentationMode('beauty');
         const requestedReceipt = operator.setAppearanceAssay(mode);
@@ -296,9 +297,26 @@ try {
           throw new Error('appearance-assay-blank-target:' + mode + ':' + JSON.stringify(metrics));
         }
         const materializedPngDataUrl = pngDataUrl(sample.image);
+        if (window.__kaminosAppearanceTargetPngs.has(pngKey)) {
+          throw new Error('appearance-target-png-key-collision:' + pngKey);
+        }
+        const pngLength = materializedPngDataUrl.length;
+        const pngSha256 = await digest(new TextEncoder().encode(materializedPngDataUrl));
+        window.__kaminosAppearanceTargetPngs.set(pngKey, {
+          dataUrl: materializedPngDataUrl,
+          pngKey,
+          pngLength,
+          pngSha256,
+          mode,
+          targetIdentity,
+        });
         markProgress('target-capture-complete', { mode, targetIdentity, metrics });
         return {
-          pngDataUrl: materializedPngDataUrl,
+          pngKey,
+          pngLength,
+          pngSha256,
+          mode,
+          targetIdentity,
           width: sample.image.width,
           height: sample.image.height,
           rgba: sample.image.rgba,
@@ -342,18 +360,18 @@ try {
           const cameraState = basinWindow.kaminosCameraDebugState();
           const beforeView = prototype.debugState();
           if (beforeView.simStepCount !== before.simStepCount) throw new Error('appearance-state-advanced-before-view:' + entry.id);
-          const structuralA = await captureAppearance('structural-a', 'candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0');
-          const appearanceBroadCarrierB = await captureAppearance('broad-carrier-b', 'pre-tone-map-signed-broad-carrier-coefficients-v0');
-          const appearanceBAppliedToFixedA = await captureAppearance('b-applied-to-fixed-a', 'pre-tone-map-b-optical-effect-on-fixed-structural-a-v0');
-          const appearanceAPlusB = await captureAppearance('a-plus-b-recomposition', 'nonlinear-optical-a-plus-b-recomposition-v0');
-          const smokeOffBeautyControl = await captureAppearance('smoke-off-beauty-control', 'smoke-off-beauty-optical-control-v0');
-          const positiveCompleteEmission = await captureAppearance('complete-flame-emission', 'smoke-off-complete-flame-emission-coefficient-v0');
-          const positiveCompleteExtinction = await captureAppearance('complete-flame-extinction', 'smoke-off-complete-flame-extinction-coefficient-v0');
-          const positiveRidgeOwnedEmission = await captureAppearance('ridge-owned-emission', 'nonnegative-ridge-owned-flame-emission-coefficient-v0');
-          const positiveRidgeOwnedExtinction = await captureAppearance('ridge-owned-extinction', 'nonnegative-ridge-owned-flame-extinction-coefficient-v0');
-          const positiveNonRidgeEmission = await captureAppearance('non-ridge-emission', 'nonnegative-non-ridge-flame-emission-coefficient-v0');
-          const positiveNonRidgeExtinction = await captureAppearance('non-ridge-extinction', 'nonnegative-non-ridge-flame-extinction-coefficient-v0');
-          const positiveOpticalRecomposition = await captureAppearance('positive-optical-recomposition', 'nonnegative-ridge-plus-non-ridge-optical-recomposition-v0');
+          const structuralA = await captureAppearance('structural-a', 'candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0', entry.id + ':structuralA');
+          const appearanceBroadCarrierB = await captureAppearance('broad-carrier-b', 'pre-tone-map-signed-broad-carrier-coefficients-v0', entry.id + ':appearanceBroadCarrierB');
+          const appearanceBAppliedToFixedA = await captureAppearance('b-applied-to-fixed-a', 'pre-tone-map-b-optical-effect-on-fixed-structural-a-v0', entry.id + ':appearanceBAppliedToFixedA');
+          const appearanceAPlusB = await captureAppearance('a-plus-b-recomposition', 'nonlinear-optical-a-plus-b-recomposition-v0', entry.id + ':appearanceAPlusB');
+          const smokeOffBeautyControl = await captureAppearance('smoke-off-beauty-control', 'smoke-off-beauty-optical-control-v0', entry.id + ':smokeOffBeautyControl');
+          const positiveCompleteEmission = await captureAppearance('complete-flame-emission', 'smoke-off-complete-flame-emission-coefficient-v0', entry.id + ':positiveCompleteEmission');
+          const positiveCompleteExtinction = await captureAppearance('complete-flame-extinction', 'smoke-off-complete-flame-extinction-coefficient-v0', entry.id + ':positiveCompleteExtinction');
+          const positiveRidgeOwnedEmission = await captureAppearance('ridge-owned-emission', 'nonnegative-ridge-owned-flame-emission-coefficient-v0', entry.id + ':positiveRidgeOwnedEmission');
+          const positiveRidgeOwnedExtinction = await captureAppearance('ridge-owned-extinction', 'nonnegative-ridge-owned-flame-extinction-coefficient-v0', entry.id + ':positiveRidgeOwnedExtinction');
+          const positiveNonRidgeEmission = await captureAppearance('non-ridge-emission', 'nonnegative-non-ridge-flame-emission-coefficient-v0', entry.id + ':positiveNonRidgeEmission');
+          const positiveNonRidgeExtinction = await captureAppearance('non-ridge-extinction', 'nonnegative-non-ridge-flame-extinction-coefficient-v0', entry.id + ':positiveNonRidgeExtinction');
+          const positiveOpticalRecomposition = await captureAppearance('positive-optical-recomposition', 'nonnegative-ridge-plus-non-ridge-optical-recomposition-v0', entry.id + ':positiveOpticalRecomposition');
           const afterView = prototype.debugState();
           if (afterView.simStepCount !== before.simStepCount) {
             throw new Error('appearance-state-advanced-during-view:' + entry.id);
@@ -506,8 +524,30 @@ try {
     const targets = {};
     for (const [key, [fileLabel, mode, targetIdentity]] of Object.entries(targetSpecs)) {
       const targetPath = resolve(outDir, `${camera.id}.${fileLabel}.png`);
-      const targetBytes = decodePngDataUrl(camera[key].pngDataUrl);
+      const expectedPngKey = `${camera.id}:${key}`;
+      if (camera[key].pngKey !== expectedPngKey
+        || camera[key].mode !== mode
+        || camera[key].targetIdentity !== targetIdentity) {
+        throw new Error(`appearance target source receipt mismatch: ${JSON.stringify({
+          cameraId: camera.id,
+          key,
+          expectedPngKey,
+          expectedMode: mode,
+          expectedTargetIdentity: targetIdentity,
+          received: camera[key],
+        })}`);
+      }
+      const pngDataUrl = await readBrowserString(
+        socket,
+        'window.__kaminosAppearanceTargetPngs',
+        camera[key],
+      );
+      if (sha256Text(pngDataUrl) !== camera[key].pngSha256) {
+        throw new Error(`appearance target transfer hash drifted from source receipt: ${expectedPngKey}`);
+      }
+      const targetBytes = decodePngDataUrl(pngDataUrl);
       writeFileSync(targetPath, targetBytes);
+      await deleteBrowserString(socket, 'window.__kaminosAppearanceTargetPngs', camera[key]);
       targets[key] = {
         path: targetPath,
         bytes: targetBytes.length,
@@ -820,6 +860,72 @@ async function readBrowserBytes(cdp, expression, expectedLength) {
   return bytes;
 }
 
+async function readBrowserString(cdp, expression, expected) {
+  const key = expected?.pngKey;
+  const expectedLength = expected?.pngLength;
+  if (typeof key !== 'string' || !key) throw new Error('browser string transfer key must be non-empty');
+  if (!Number.isInteger(expectedLength) || expectedLength <= 0) throw new Error('browser string transfer expected length must be positive');
+  if (typeof expected.pngSha256 !== 'string' || !expected.pngSha256) throw new Error('browser string transfer expected hash must be non-empty');
+  if (typeof expected.mode !== 'string' || !expected.mode) throw new Error('browser string transfer expected mode must be non-empty');
+  if (typeof expected.targetIdentity !== 'string' || !expected.targetIdentity) throw new Error('browser string transfer expected target identity must be non-empty');
+  const chunkSize = 256 * 1024;
+  const chunks = [];
+  for (let offset = 0; offset < expectedLength; offset += chunkSize) {
+    const end = Math.min(expectedLength, offset + chunkSize);
+    const chunk = await evaluate(cdp, `(() => {
+      const store = ${expression};
+      if (!(store instanceof Map)) throw new Error('appearance-browser-string-store-missing');
+      const record = store.get(${JSON.stringify(key)});
+      const expected = ${JSON.stringify({
+        pngKey: expected.pngKey,
+        pngLength: expected.pngLength,
+        pngSha256: expected.pngSha256,
+        mode: expected.mode,
+        targetIdentity: expected.targetIdentity,
+      })};
+      if (!record || typeof record.dataUrl !== 'string') throw new Error('appearance-browser-string-source-missing');
+      if (record.pngKey !== expected.pngKey
+        || record.pngSha256 !== expected.pngSha256
+        || record.mode !== expected.mode
+        || record.targetIdentity !== expected.targetIdentity
+        || record.pngLength !== expected.pngLength) {
+        throw new Error('appearance-browser-string-source-receipt-mismatch');
+      }
+      return record.dataUrl.slice(${offset}, ${end});
+    })()`);
+    chunks.push(chunk);
+  }
+  const value = chunks.join('');
+  if (value.length !== expectedLength) throw new Error(`browser string transfer length mismatch: expected ${expectedLength}, actual ${value.length}`);
+  return value;
+}
+
+async function deleteBrowserString(cdp, expression, expected) {
+  const key = expected?.pngKey;
+  const deleted = await evaluate(cdp, `(() => {
+    const store = ${expression};
+    if (!(store instanceof Map)) throw new Error('appearance-browser-string-store-missing');
+    const record = store.get(${JSON.stringify(key)});
+    const expected = ${JSON.stringify({
+      pngKey: expected.pngKey,
+      pngLength: expected.pngLength,
+      pngSha256: expected.pngSha256,
+      mode: expected.mode,
+      targetIdentity: expected.targetIdentity,
+    })};
+    if (!record
+      || record.pngKey !== expected.pngKey
+      || record.pngSha256 !== expected.pngSha256
+      || record.mode !== expected.mode
+      || record.targetIdentity !== expected.targetIdentity
+      || record.pngLength !== expected.pngLength) {
+      throw new Error('appearance-browser-string-delete-receipt-mismatch');
+    }
+    return store.delete(${JSON.stringify(key)});
+  })()`);
+  if (deleted !== true) throw new Error(`browser string transfer key was not deleted: ${key}`);
+}
+
 function decodePngDataUrl(value) {
   if (typeof value !== 'string' || !value.startsWith('data:image/png;base64,')) throw new Error('PNG data URL is missing or invalid');
   const bytes = Buffer.from(value.slice('data:image/png;base64,'.length), 'base64');
@@ -829,6 +935,10 @@ function decodePngDataUrl(value) {
 
 function sha256Buffer(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
+}
+
+function sha256Text(value) {
+  return createHash('sha256').update(value, 'utf8').digest('hex');
 }
 
 function delay(ms) {
