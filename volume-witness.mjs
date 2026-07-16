@@ -2842,7 +2842,19 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
       supervisionPhase = `invoke-live-capture-${frameId}`;
       const captureEval = await supervisionWsRequest(ws, 'Runtime.evaluate', {
         expression: `(async () => {
-          const capture = await window.__kaminosVolumePrototype?.captureBoundarySplatSupervisionFrame?.({
+          const prototype = window.__kaminosVolumePrototype;
+          const supervisionMethod = prototype?.captureBoundarySplatSupervisionFrame;
+          if (typeof supervisionMethod !== 'function') {
+            const methodSurface = Object.keys(prototype || {})
+              .filter(key => typeof prototype?.[key] === 'function')
+              .sort();
+            throw new Error('fixed-candidate supervision method surface missing captureBoundarySplatSupervisionFrame: ' + JSON.stringify({
+              hasPrototype: Boolean(prototype),
+              methodSurface,
+              debugState: prototype?.debugState?.() || null,
+            }));
+          }
+          const capture = await supervisionMethod.call(prototype, {
             renderScale: 1,
             expectedRaySteps: ${JSON.stringify(boundarySplatSupervisionExpectedRayStepsRequested)},
             resumeRenderLoop: false,

@@ -76,6 +76,8 @@ assert.match(script, /--eval-frame-indices/, 'radiance trainer exposes explicit 
 assert.match(script, /explicit-disjoint-frame-holdout-v0/, 'radiance receipts distinguish honest temporal holdout from train-frame evaluation');
 assert.match(script, /explicit-single-frame-memorization-oracle-v0/, 'radiance receipts distinguish a same-frame capacity oracle from honest temporal holdout');
 assert.match(script, /same-frame-memorization-oracle-v0/, 'radiance receipts label same-frame oracle loss without counterfeit generalization language');
+assert.match(script, /explicit-single-frame-per-candidate-table-oracle-v0/, 'per-candidate table receipts distinguish one-frame attribute-table capacity from held-out closure');
+assert.match(script, /same-frame-per-candidate-table-oracle-v0/, 'per-candidate table losses are labeled as same-frame upper bounds');
 assert.match(script, /"trainFrameIds"/, 'training receipts preserve the exact optimized frame identities');
 assert.match(script, /"evaluationFrameIds"/, 'training receipts preserve the exact held-out frame identities');
 assert.match(script, /"evaluationFrames"/, 'radiance receipts preserve per-frame held-out optical metrics and previews');
@@ -100,6 +102,7 @@ assert.match(script, /--candidate-table-oracle/, 'radiance trainer exposes a non
 assert.match(script, /class\s+CandidateAttributeTable\(nn\.Module\)/, 'candidate oracle owns independently trainable attributes per splat');
 assert.match(script, /per-candidate-free-attribute-oracle-v0/, 'candidate oracle receipts distinguish diagnostic authority from deployable MLP authority');
 assert.match(script, /candidate oracle requires exactly one corpus frame/, 'candidate oracle rejects ambiguous cross-frame candidate identity');
+assert.match(script, /candidate_table_oracle/, 'candidate-table mode participates in frame-split custody instead of relying on all-frames evaluation');
 assert.match(script, /--context-mode/, 'radiance trainer exposes explicit spatial conditioning rather than silently changing the live feature contract');
 assert.match(script, /choices=\["none", "world-xyz", "world-fourier", "world-grid-neighborhood", "world-grid-pyramid", "native-sidecar-pyramid"\]/, 'spatial conditioning distinguishes pointwise position, candidate-grid, and complete native-sidecar context');
 assert.match(script, /--fourier-frequencies/, 'Fourier conditioning exposes its exact frequency ladder');

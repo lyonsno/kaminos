@@ -1,0 +1,413 @@
+{
+  "backend": "mlx",
+  "corpus": {
+    "candidateCount": 556448,
+    "frameCount": 3,
+    "identity": "sha256:8f10a764b49190008c11b1a9a79aab51f44c2dae695ddee486b4e222a010a138",
+    "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-global/global-variants/corpus-r0p55-s4p2.json"
+  },
+  "device": "Device(gpu, 0)",
+  "elapsedSeconds": 56.19820523262024,
+  "evaluationFrames": [
+    {
+      "frameId": "frame-002",
+      "frameIndex": 2,
+      "initialEdgeLoss": 0.021106380969285965,
+      "initialLoss": 0.1443721354007721,
+      "initialPixelLoss": 0.1443721354007721,
+      "initialPreview": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-conditioned-bestglobal/runs/conditioned/preview-initial-frame-002.png",
+      "sameStateCaptureId": "same-browser-supervision-449089-frame-002",
+      "targetPreview": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-conditioned-bestglobal/runs/conditioned/preview-target-frame-002.png",
+      "trainedEdgeLoss": 0.008091580122709274,
+      "trainedLoss": 0.0021148694213479757,
+      "trainedPixelLoss": 0.0021148694213479757,
+      "trainedPreview": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-conditioned-bestglobal/runs/conditioned/preview-trained-frame-002.png"
+    }
+  ],
+  "failurePhase": null,
+  "finishedAt": 1784181555.0986292,
+  "lastTrustworthyEvidence": {
+    "evaluationFrameIds": [
+      "frame-002"
+    ],
+    "evaluationFrames": [
+      {
+        "frameId": "frame-002",
+        "frameIndex": 2,
+        "initialEdgeLoss": 0.021106380969285965,
+        "initialLoss": 0.1443721354007721,
+        "initialPixelLoss": 0.1443721354007721,
+        "initialPreview": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-conditioned-bestglobal/runs/conditioned/preview-initial-frame-002.png",
+        "sameStateCaptureId": "same-browser-supervision-449089-frame-002",
+        "targetPreview": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-conditioned-bestglobal/runs/conditioned/preview-target-frame-002.png"
+      }
+    ],
+    "evaluationLossAuthority": "held-out-frame-mean-v0",
+    "frameSplitAuthority": "explicit-disjoint-frame-holdout-v0",
+    "initialEdgeLoss": 0.021106380969285965,
+    "initialLoss": 0.1443721354007721,
+    "initialMacroLoss": null,
+    "initialPixelLoss": 0.1443721354007721,
+    "initialPreview": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-conditioned-bestglobal/runs/conditioned/preview-initial.png",
+    "initialTopologyLoss": null,
+    "targetPreview": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-conditioned-bestglobal/runs/conditioned/preview-target.png",
+    "trainFrameIds": [
+      "frame-000",
+      "frame-001"
+    ],
+    "trainingLossTrace": [
+      {
+        "loss": 0.14925047755241394,
+        "step": 0
+      },
+      {
+        "loss": 0.14925047755241394,
+        "step": 1
+      },
+      {
+        "loss": 0.014549248851835728,
+        "step": 20
+      },
+      {
+        "loss": 0.005729516968131065,
+        "step": 40
+      },
+      {
+        "loss": 0.0033702622167766094,
+        "step": 60
+      },
+      {
+        "loss": 0.0026271354872733355,
+        "step": 80
+      },
+      {
+        "loss": 0.002323517110198736,
+        "step": 100
+      },
+      {
+        "loss": 0.0021864203736186028,
+        "step": 120
+      },
+      {
+        "loss": 0.00209323363378644,
+        "step": 140
+      },
+      {
+        "loss": 0.0020265064667910337,
+        "step": 160
+      }
+    ]
+  },
+  "modelArtifact": {
+    "authority": "shared-position-conditioned-feature-mlp-v0",
+    "deployable": false,
+    "identity": "sha256:8d4d1b816d10f08b81e107a2b05b20c2eb00073f48ef7b2af1e6f4fa93022597",
+    "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-conditioned-bestglobal/runs/conditioned/spatial-model-artifact.json",
+    "schema": "kaminos-boundary-splat-spatial-attribute-mlp-v0"
+  },
+  "partialFlowDebugWitness": {
+    "authority": "display-only-linear-mix-v0",
+    "diagnosticOnly": true,
+    "effectiveGain": 0.0,
+    "frames": [],
+    "requestedGain": 0.0,
+    "semanticRoles": [
+      "reference",
+      "control",
+      "predicted"
+    ]
+  },
+  "phase": "training",
+  "previews": {
+    "frames": [
+      {
+        "frameId": "frame-002",
+        "frameIndex": 2,
+        "initialEdgeLoss": 0.021106380969285965,
+        "initialLoss": 0.1443721354007721,
+        "initialPixelLoss": 0.1443721354007721,
+        "initialPreview": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-conditioned-bestglobal/runs/conditioned/preview-initial-frame-002.png",
+        "sameStateCaptureId": "same-browser-supervision-449089-frame-002",
+        "targetPreview": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-conditioned-bestglobal/runs/conditioned/preview-target-frame-002.png",
+        "trainedEdgeLoss": 0.008091580122709274,
+        "trainedLoss": 0.0021148694213479757,
+        "trainedPixelLoss": 0.0021148694213479757,
+        "trainedPreview": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-conditioned-bestglobal/runs/conditioned/preview-trained-frame-002.png"
+      }
+    ],
+    "initial": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-conditioned-bestglobal/runs/conditioned/preview-initial.png",
+    "target": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-conditioned-bestglobal/runs/conditioned/preview-target.png",
+    "trained": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-conditioned-bestglobal/runs/conditioned/preview-trained.png"
+  },
+  "render": {
+    "blend": "src-alpha-plus-destination-additive-v0",
+    "depthBins": 1,
+    "fragmentCount": 79273015,
+    "frameSizes": [
+      [
+        320,
+        484
+      ],
+      [
+        320,
+        484
+      ],
+      [
+        320,
+        484
+      ]
+    ],
+    "height": 484,
+    "width": 320
+  },
+  "schema": "kaminos.boundary-splat-radiance-training.v0",
+  "startedAt": 1784181498.900424,
+  "status": "trained",
+  "training": {
+    "basePathFrozen": false,
+    "contextMode": "world-fourier",
+    "edgeWeight": 0.0,
+    "evaluationFrameIds": [
+      "frame-002"
+    ],
+    "evaluationFrameIndices": [
+      2
+    ],
+    "evaluationLossAuthority": "held-out-frame-mean-v0",
+    "fourierFrequencies": [
+      1.0,
+      2.0,
+      4.0,
+      8.0
+    ],
+    "frameSplitAuthority": "explicit-disjoint-frame-holdout-v0",
+    "gridContextAuthority": null,
+    "hiddenSize": 64,
+    "hiddenWidthExpansionAuthority": null,
+    "initialEdgeLoss": 0.021106380969285965,
+    "initialLoss": 0.1443721354007721,
+    "initialMacroLoss": null,
+    "initialPixelLoss": 0.1443721354007721,
+    "initialTopologyLoss": null,
+    "inputChannels": 43,
+    "learningRate": 0.00035,
+    "lossTrace": [
+      {
+        "loss": 0.14925047755241394,
+        "step": 0
+      },
+      {
+        "loss": 0.14925047755241394,
+        "step": 1
+      },
+      {
+        "loss": 0.014549248851835728,
+        "step": 20
+      },
+      {
+        "loss": 0.005729516968131065,
+        "step": 40
+      },
+      {
+        "loss": 0.0033702622167766094,
+        "step": 60
+      },
+      {
+        "loss": 0.0026271354872733355,
+        "step": 80
+      },
+      {
+        "loss": 0.002323517110198736,
+        "step": 100
+      },
+      {
+        "loss": 0.0021864203736186028,
+        "step": 120
+      },
+      {
+        "loss": 0.00209323363378644,
+        "step": 140
+      },
+      {
+        "loss": 0.0020265064667910337,
+        "step": 160
+      }
+    ],
+    "messageSize": 0,
+    "modelAuthority": "shared-position-conditioned-feature-mlp-v0",
+    "opticalBaseFrozen": false,
+    "opticalChannels": null,
+    "opticalConditionAuthority": null,
+    "opticalConditionIdentity": null,
+    "opticalConditionMode": null,
+    "opticalConditionNormalization": {},
+    "opticalConditionOrder": [],
+    "opticalDecoder": "none",
+    "opticalFeatureMode": null,
+    "opticalInputAuthority": null,
+    "opticalLossMode": "standard",
+    "opticalMemorizationOracle": false,
+    "opticalResidualScale": null,
+    "opticalRoiMode": "full-frame",
+    "opticalRois": [
+      {
+        "authority": "full-source-viewport-v0",
+        "effectiveMode": "full-frame",
+        "fireChannelThreshold": null,
+        "frameId": "frame-000",
+        "outputSize": [
+          320,
+          484
+        ],
+        "projectedCandidateCount": 187287,
+        "requestedMode": "full-frame",
+        "sameStateCaptureId": "same-browser-supervision-449089-frame-000",
+        "selectedCandidateCount": 187287,
+        "sourceBounds": [
+          0,
+          0,
+          520,
+          786
+        ],
+        "sourceViewport": [
+          520,
+          786
+        ]
+      },
+      {
+        "authority": "full-source-viewport-v0",
+        "effectiveMode": "full-frame",
+        "fireChannelThreshold": null,
+        "frameId": "frame-001",
+        "outputSize": [
+          320,
+          484
+        ],
+        "projectedCandidateCount": 184138,
+        "requestedMode": "full-frame",
+        "sameStateCaptureId": "same-browser-supervision-449089-frame-001",
+        "selectedCandidateCount": 184138,
+        "sourceBounds": [
+          0,
+          0,
+          520,
+          786
+        ],
+        "sourceViewport": [
+          520,
+          786
+        ]
+      },
+      {
+        "authority": "full-source-viewport-v0",
+        "effectiveMode": "full-frame",
+        "fireChannelThreshold": null,
+        "frameId": "frame-002",
+        "outputSize": [
+          320,
+          484
+        ],
+        "projectedCandidateCount": 185023,
+        "requestedMode": "full-frame",
+        "sameStateCaptureId": "same-browser-supervision-449089-frame-002",
+        "selectedCandidateCount": 185023,
+        "sourceBounds": [
+          0,
+          0,
+          520,
+          786
+        ],
+        "sourceViewport": [
+          520,
+          786
+        ]
+      }
+    ],
+    "partialFlowDebugEffectiveGain": 0.0,
+    "partialFlowDebugRequestedGain": 0.0,
+    "requestedSteps": 160,
+    "spatialMixing": "none",
+    "spatialMixingExpansionAuthority": null,
+    "steps": 160,
+    "structuralAdjacencyAuthority": null,
+    "structuralMixingRounds": null,
+    "topologyBandAuthority": null,
+    "topologyBandEvaluationFrameIds": [],
+    "topologyBandHoldoutAuthority": null,
+    "topologyBandMacroWeight": null,
+    "topologyBandPasses": null,
+    "topologyBandResidualWeight": null,
+    "trainFrameIds": [
+      "frame-000",
+      "frame-001"
+    ],
+    "trainFrameIndices": [
+      0,
+      1
+    ],
+    "trainedEdgeLoss": 0.008091580122709274,
+    "trainedLoss": 0.0021148694213479757,
+    "trainedMacroLoss": null,
+    "trainedPixelLoss": 0.0021148694213479757,
+    "trainedTopologyLoss": null,
+    "trainingInitialLoss": 0.14925047755241394,
+    "trainingLossTrace": [
+      {
+        "loss": 0.14925047755241394,
+        "step": 0
+      },
+      {
+        "loss": 0.14925047755241394,
+        "step": 1
+      },
+      {
+        "loss": 0.014549248851835728,
+        "step": 20
+      },
+      {
+        "loss": 0.005729516968131065,
+        "step": 40
+      },
+      {
+        "loss": 0.0033702622167766094,
+        "step": 60
+      },
+      {
+        "loss": 0.0026271354872733355,
+        "step": 80
+      },
+      {
+        "loss": 0.002323517110198736,
+        "step": 100
+      },
+      {
+        "loss": 0.0021864203736186028,
+        "step": 120
+      },
+      {
+        "loss": 0.00209323363378644,
+        "step": 140
+      },
+      {
+        "loss": 0.0020265064667910337,
+        "step": 160
+      }
+    ],
+    "trainingTrainedLoss": 0.0020265064667910337,
+    "warmHiddenSize": 64
+  },
+  "updatedAt": 1784181555.0326731,
+  "warmStart": {
+    "bytes": 44556,
+    "contextExpansionAuthority": null,
+    "contextMode": "none",
+    "continuation": false,
+    "fourierFrequencies": [],
+    "legacyFrequencyRecoveryAuthority": null,
+    "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/models/boundary-splat-attribute/live-support-h64-v0/model-artifact.json",
+    "schema": "kaminos-boundary-splat-attribute-mlp-v0",
+    "sha256": "54090a30e9556dc117a0dfeba6f5fe64641da0a5b4a7d325df3a433f5e2c4811",
+    "spatialMixing": "none",
+    "spatialMixingExpansionAuthority": null
+  }
+}

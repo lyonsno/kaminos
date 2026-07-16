@@ -1,0 +1,40 @@
+{
+  "schema": "kaminos-boundary-splat-attribute-compiled-v0",
+  "identity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+  "inputPath": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-global/runs/global-r0p55-s2p8/model-artifact.json",
+  "inputSha256": "b8c97e5cb850e39171c59cb511ca26d7f9b079fdff28766be9d6efffa5dc5a61",
+  "inputSize": 16,
+  "hiddenSize": 64,
+  "outputSize": 6,
+  "parity": {
+    "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-global/runs/global-r0p55-s2p8/parity-samples.json",
+    "bytes": 39545,
+    "sha256": "f454e2f9ac0e188714facb46dc4a6e3c799b8790367c5da3dd4a4c1c1932fb26",
+    "sampleCount": 64,
+    "meanAbsoluteError": 2.985963590937654e-8,
+    "maxAbsoluteError": 1.6017505521936926e-7,
+    "threshold": 0.00001
+  },
+  "model": {
+    "path": "model-artifact.json",
+    "bytes": 44556,
+    "sha256": "54090a30e9556dc117a0dfeba6f5fe64641da0a5b4a7d325df3a433f5e2c4811"
+  },
+  "wgsl": {
+    "path": "boundary-splat-attribute-model.wgsl",
+    "bytes": 34153,
+    "sha256": "f1e1c7e3b59a7c4987c2709a00932a9df7ef49001b3482b15433ec93c9448b46"
+  },
+  "module": {
+    "path": "boundary-splat-attribute-model.generated.js",
+    "bytes": 34567,
+    "sha256": "85fb8a27fbe2fd51b73429d936627b4cc0f122fc8241b3593701a9d8ae2eb373"
+  },
+  "weights": {
+    "path": "boundary-splat-attribute-weights.f32",
+    "bytes": 5912,
+    "floatCount": 1478,
+    "dtype": "float32-native-little-endian",
+    "sha256": "9cacf966fb0aeb3ad06de799f4a3868d7dfc21d47bbeff5bdd05780dbd2a8a9c"
+  }
+}

@@ -119,10 +119,24 @@ def parse_frame_indices(value, frame_count, label):
     return indices
 
 
-def resolve_frame_splits(frame_ids, train_value, evaluation_value, memorization_oracle=False):
+def resolve_frame_splits(frame_ids, train_value, evaluation_value, memorization_oracle=False, candidate_table_oracle=False):
     frame_count = len(frame_ids)
     if frame_count <= 0:
         raise ValueError("frame split requires at least one corpus frame")
+    if candidate_table_oracle:
+        if train_value is None or evaluation_value is None:
+            raise ValueError("candidate table oracle requires explicit training and evaluation frame indices")
+        train_indices = parse_frame_indices(train_value, frame_count, "train-frame-indices")
+        evaluation_indices = parse_frame_indices(evaluation_value, frame_count, "eval-frame-indices")
+        if len(train_indices) != 1 or train_indices != evaluation_indices:
+            raise ValueError("candidate table oracle requires one identical training and evaluation frame index")
+        return {
+            "authority": "explicit-single-frame-per-candidate-table-oracle-v0",
+            "trainIndices": train_indices,
+            "evaluationIndices": evaluation_indices,
+            "trainFrameIds": [frame_ids[train_indices[0]]],
+            "evaluationFrameIds": [frame_ids[evaluation_indices[0]]],
+        }
     if memorization_oracle:
         if train_value is None or evaluation_value is None:
             raise ValueError("optical memorization oracle requires explicit training and evaluation frame indices")
@@ -168,6 +182,7 @@ def evaluation_loss_authority(frame_split):
     return {
         "explicit-disjoint-frame-holdout-v0": "held-out-frame-mean-v0",
         "explicit-single-frame-memorization-oracle-v0": "same-frame-memorization-oracle-v0",
+        "explicit-single-frame-per-candidate-table-oracle-v0": "same-frame-per-candidate-table-oracle-v0",
     }.get(frame_split["authority"], "train-frame-mean-v0")
 
 
@@ -1603,6 +1618,7 @@ def main():
             args.train_frame_indices,
             args.eval_frame_indices,
             args.optical_memorization_oracle,
+            args.candidate_table_oracle,
         )
         if args.optical_memorization_oracle and args.optical_decoder != "screen-unet":
             raise ValueError("optical memorization oracle requires the screen-unet decoder")

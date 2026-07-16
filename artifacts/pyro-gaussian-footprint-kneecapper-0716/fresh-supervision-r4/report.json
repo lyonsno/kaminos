@@ -1,0 +1,282 @@
+{
+  "ok": true,
+  "phase": "complete",
+  "authority": "live-simulator-frozen-state-candidate-raymarch-v0",
+  "sequenceAuthority": "single-browser-controlled-step-supervision-v0",
+  "requestedFrameCount": 3,
+  "capturedFrameCount": 3,
+  "stepDeltaMs": 220,
+  "sameBrowserSequenceSuitable": true,
+  "warmup": {
+    "authority": "live-single-browser-sim-step-floor-v0",
+    "requestedMinSimStepCount": 240,
+    "startSimStepCount": 21,
+    "achievedSimStepCount": 256,
+    "advancedFrameCount": 106,
+    "uncapped": true
+  },
+  "teacherIdentity": {
+    "expectedRaySteps": 160,
+    "expectedRenderScale": 1,
+    "capturedRequestedRaySteps": 160,
+    "capturedEffectiveRaySteps": 160,
+    "capturedRenderScale": 1
+  },
+  "operationDeadline": {
+    "authority": "caller-configured-per-cdp-operation-deadline-v0",
+    "requestedMs": 180000,
+    "effectiveMs": 180000,
+    "rawCaptureResponseGraceMs": 5000,
+    "totalBatchTimeout": null
+  },
+  "rawSidecarRequested": false,
+  "structuralFrameCount": 0,
+  "requestedRoute": "kaminos_volume_smoke=1",
+  "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+  "backend": "WebGPU:apple",
+  "replayedCamera": null,
+  "frameIds": [
+    "frame-000",
+    "frame-001",
+    "frame-002"
+  ],
+  "sameStateCaptureIds": [
+    "same-browser-supervision-449089-frame-000",
+    "same-browser-supervision-449089-frame-001",
+    "same-browser-supervision-449089-frame-002"
+  ],
+  "simStepCounts": [
+    257,
+    260,
+    263
+  ],
+  "targetVisualMetrics": [
+    {
+      "width": 520,
+      "height": 786,
+      "meanLuma": 17.825779817626707,
+      "litPixels": 26446,
+      "litFraction": 0.3648277669715405,
+      "fireLikePixels": 0,
+      "smokeLikePixels": 365
+    },
+    {
+      "width": 520,
+      "height": 786,
+      "meanLuma": 17.15840890065996,
+      "litPixels": 23558,
+      "litFraction": 0.3249872394432259,
+      "fireLikePixels": 0,
+      "smokeLikePixels": 170
+    },
+    {
+      "width": 520,
+      "height": 786,
+      "meanLuma": 16.536690794464004,
+      "litPixels": 21287,
+      "litFraction": 0.2936583481631696,
+      "fireLikePixels": 0,
+      "smokeLikePixels": 147
+    }
+  ],
+  "flowDebugAuthorities": [
+    "flow-debug-interface-canvas-capture-v0",
+    "flow-debug-interface-canvas-capture-v0",
+    "flow-debug-interface-canvas-capture-v0"
+  ],
+  "manifestPath": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/fresh-supervision-r4/corpus.json",
+  "validation": {
+    "schema": "kaminos-boundary-splat-supervision-corpus-v0",
+    "corpusIdentity": "sha256:06858b340d2a08973e2a5188c5dffb7c9f3b9b8ec5b1b9136e96d12cf763dbd6",
+    "manifestPath": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/fresh-supervision-r4/corpus.json",
+    "frameCount": 3,
+    "candidateCount": 556448,
+    "structuralFrameCount": 0,
+    "backend": "WebGPU:apple",
+    "frames": [
+      {
+        "id": "frame-000",
+        "candidatePath": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/fresh-supervision-r4/frame-000.candidates.f32",
+        "targetPath": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/fresh-supervision-r4/frame-000.raymarch.png",
+        "flowDebugPath": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/fresh-supervision-r4/frame-000.flow-debug.png",
+        "flowDebugAuthority": "flow-debug-interface-canvas-capture-v0",
+        "structurePath": null,
+        "metaPath": null,
+        "structuralSupervisionIdentity": null,
+        "controlConditioning": {
+          "identity": "boundary-splat-emitter-lifecycle-conditioning-v0",
+          "authority": "effective-runtime-controls-frozen-sim-state-v0",
+          "sameStateCaptureId": "same-browser-supervision-449089-frame-000",
+          "simStepCount": 257,
+          "values": {
+            "inputRadius": 0.68,
+            "flowRate": 2.5,
+            "fireScale": 1.19,
+            "reactionFuelScale": 1,
+            "lifecycleEffect": "none",
+            "lifecycleT": 0,
+            "quenchVapor": 0
+          }
+        },
+        "captureAdmission": {
+          "identity": "fresh-live-selective-splat-capture-admission-v0",
+          "authority": "fresh-live-settings-no-anchor-v0",
+          "requestedRole": "truthHigh",
+          "effectiveRole": "truthHigh",
+          "roleAuthority": "current-high-field-reference-no-learned-composition-v0",
+          "requestedComposition": "splat-only-v0",
+          "effectiveComposition": "splat-only-v0",
+          "compositionAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+          "passReceipt": {
+            "identity": "selective-head-live-render-pass-receipt-v0",
+            "composition": "splat-only-v0",
+            "compositionAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+            "raymarchAuthority": "smoke-raymarch-authority-broad-smoke-only-v0",
+            "splatAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+            "raymarchFireAuthority": 0,
+            "raymarchEncoded": false,
+            "raymarchApplied": false,
+            "splatEncoded": true,
+            "splatApplied": true,
+            "fallbackReason": null
+          },
+          "boundarySidecarSource": "baked",
+          "boundarySidecarBuilt": true,
+          "boundarySidecarBuiltThisFrame": true,
+          "boundarySplatSourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+          "boundarySplatFallbackReason": null,
+          "boundarySidecarOverrideReceipt": null,
+          "fullFieldImportReceipt": null,
+          "replayAnchor": null
+        },
+        "backend": "WebGPU:apple",
+        "requestedRaySteps": 160,
+        "effectiveRaySteps": 160,
+        "renderScale": 1,
+        "candidateCount": 187287
+      },
+      {
+        "id": "frame-001",
+        "candidatePath": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/fresh-supervision-r4/frame-001.candidates.f32",
+        "targetPath": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/fresh-supervision-r4/frame-001.raymarch.png",
+        "flowDebugPath": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/fresh-supervision-r4/frame-001.flow-debug.png",
+        "flowDebugAuthority": "flow-debug-interface-canvas-capture-v0",
+        "structurePath": null,
+        "metaPath": null,
+        "structuralSupervisionIdentity": null,
+        "controlConditioning": {
+          "identity": "boundary-splat-emitter-lifecycle-conditioning-v0",
+          "authority": "effective-runtime-controls-frozen-sim-state-v0",
+          "sameStateCaptureId": "same-browser-supervision-449089-frame-001",
+          "simStepCount": 260,
+          "values": {
+            "inputRadius": 0.68,
+            "flowRate": 2.5,
+            "fireScale": 1.19,
+            "reactionFuelScale": 1,
+            "lifecycleEffect": "none",
+            "lifecycleT": 0,
+            "quenchVapor": 0
+          }
+        },
+        "captureAdmission": {
+          "identity": "fresh-live-selective-splat-capture-admission-v0",
+          "authority": "fresh-live-settings-no-anchor-v0",
+          "requestedRole": "truthHigh",
+          "effectiveRole": "truthHigh",
+          "roleAuthority": "current-high-field-reference-no-learned-composition-v0",
+          "requestedComposition": "splat-only-v0",
+          "effectiveComposition": "splat-only-v0",
+          "compositionAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+          "passReceipt": {
+            "identity": "selective-head-live-render-pass-receipt-v0",
+            "composition": "splat-only-v0",
+            "compositionAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+            "raymarchAuthority": "smoke-raymarch-authority-broad-smoke-only-v0",
+            "splatAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+            "raymarchFireAuthority": 0,
+            "raymarchEncoded": false,
+            "raymarchApplied": false,
+            "splatEncoded": true,
+            "splatApplied": true,
+            "fallbackReason": null
+          },
+          "boundarySidecarSource": "baked",
+          "boundarySidecarBuilt": true,
+          "boundarySidecarBuiltThisFrame": true,
+          "boundarySplatSourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+          "boundarySplatFallbackReason": null,
+          "boundarySidecarOverrideReceipt": null,
+          "fullFieldImportReceipt": null,
+          "replayAnchor": null
+        },
+        "backend": "WebGPU:apple",
+        "requestedRaySteps": 160,
+        "effectiveRaySteps": 160,
+        "renderScale": 1,
+        "candidateCount": 184138
+      },
+      {
+        "id": "frame-002",
+        "candidatePath": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/fresh-supervision-r4/frame-002.candidates.f32",
+        "targetPath": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/fresh-supervision-r4/frame-002.raymarch.png",
+        "flowDebugPath": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/fresh-supervision-r4/frame-002.flow-debug.png",
+        "flowDebugAuthority": "flow-debug-interface-canvas-capture-v0",
+        "structurePath": null,
+        "metaPath": null,
+        "structuralSupervisionIdentity": null,
+        "controlConditioning": {
+          "identity": "boundary-splat-emitter-lifecycle-conditioning-v0",
+          "authority": "effective-runtime-controls-frozen-sim-state-v0",
+          "sameStateCaptureId": "same-browser-supervision-449089-frame-002",
+          "simStepCount": 263,
+          "values": {
+            "inputRadius": 0.68,
+            "flowRate": 2.5,
+            "fireScale": 1.19,
+            "reactionFuelScale": 1,
+            "lifecycleEffect": "none",
+            "lifecycleT": 0,
+            "quenchVapor": 0
+          }
+        },
+        "captureAdmission": {
+          "identity": "fresh-live-selective-splat-capture-admission-v0",
+          "authority": "fresh-live-settings-no-anchor-v0",
+          "requestedRole": "truthHigh",
+          "effectiveRole": "truthHigh",
+          "roleAuthority": "current-high-field-reference-no-learned-composition-v0",
+          "requestedComposition": "splat-only-v0",
+          "effectiveComposition": "splat-only-v0",
+          "compositionAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+          "passReceipt": {
+            "identity": "selective-head-live-render-pass-receipt-v0",
+            "composition": "splat-only-v0",
+            "compositionAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+            "raymarchAuthority": "smoke-raymarch-authority-broad-smoke-only-v0",
+            "splatAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+            "raymarchFireAuthority": 0,
+            "raymarchEncoded": false,
+            "raymarchApplied": false,
+            "splatEncoded": true,
+            "splatApplied": true,
+            "fallbackReason": null
+          },
+          "boundarySidecarSource": "baked",
+          "boundarySidecarBuilt": true,
+          "boundarySidecarBuiltThisFrame": true,
+          "boundarySplatSourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+          "boundarySplatFallbackReason": null,
+          "boundarySidecarOverrideReceipt": null,
+          "fullFieldImportReceipt": null,
+          "replayAnchor": null
+        },
+        "backend": "WebGPU:apple",
+        "requestedRaySteps": 160,
+        "effectiveRaySteps": 160,
+        "renderScale": 1,
+        "candidateCount": 185023
+      }
+    ]
+  }
+}

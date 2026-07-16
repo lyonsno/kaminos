@@ -1,0 +1,188 @@
+{
+  "schema": "kaminos.boundary-splat-footprint-oracle.v0",
+  "status": "complete",
+  "authority": "frozen-state-footprint-covariance-opacity-oracle-v0",
+  "sourceCorpus": {
+    "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-global/global-variants/corpus-r0p55-s4p2.json",
+    "identity": "sha256:8f10a764b49190008c11b1a9a79aab51f44c2dae695ddee486b4e222a010a138",
+    "frameCount": 3,
+    "candidateCount": 556448,
+    "frameIds": [
+      "frame-000",
+      "frame-001",
+      "frame-002"
+    ],
+    "sameStateCaptureIds": [
+      "same-browser-supervision-449089-frame-000",
+      "same-browser-supervision-449089-frame-001",
+      "same-browser-supervision-449089-frame-002"
+    ]
+  },
+  "target": {
+    "decomposition": "candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0",
+    "routeIdentityPreserved": true
+  },
+  "footprintPath": {
+    "authority": "current-boundary-splat-footprint-path-map-v0",
+    "candidateBaseRadius": "cellWidth * (0.60 + sidecar.footprint * 2.65 + sidecar.ridge * 0.48)",
+    "learnedRadiusUnits": "dimensionless radiusScale.x/y from the attribute head",
+    "globalRadiusUnits": "dimensionless billboard scale applied in the raster vertex stage",
+    "sharpnessUnits": "dimensionless Gaussian exponent multiplier applied in the fragment kernel",
+    "opacityUnits": "per-splat colorOpacity.a before Gaussian kernel and energy compensation",
+    "radiusMultiplicationOrder": "candidate base radius -> learned radiusScale.x/y -> global radius billboard scale; fragment alpha then applies Gaussian sharpness and energy compensation",
+    "energyCompensation": "sqrt((sharpness / 3.4) / max(globalRadius^2, 0.1225)) clamped to 0.5..2.5",
+    "absoluteRadiusSubstitution": "rejected"
+  },
+  "familyAuthorities": {
+    "global": "best-global-radius-sharpness-grid-v0",
+    "conditioned": "least-expressive-conditioned-footprint-family-v0",
+    "per-splat-table-oracle": "strongest-current-per-splat-footprint-oracle-v0"
+  },
+  "requestedFamilies": [
+    "conditioned"
+  ],
+  "commandReceipts": [
+    {
+      "family": "conditioned",
+      "authority": "least-expressive-conditioned-footprint-family-v0",
+      "command": [
+        "/private/tmp/kaminos-mlx-residual-venv/bin/python",
+        "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/boundary-splat-radiance-mlx.py",
+        "--corpus",
+        "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-global/global-variants/corpus-r0p55-s4p2.json",
+        "--out-dir",
+        "artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-conditioned-bestglobal/runs/conditioned",
+        "--expected-ray-steps",
+        "160",
+        "--expected-render-scale",
+        "1",
+        "--train-frame-indices",
+        "0,1",
+        "--eval-frame-indices",
+        "2",
+        "--render-width",
+        "320",
+        "--edge-weight",
+        "0",
+        "--depth-bins",
+        "1",
+        "--steps",
+        "160",
+        "--context-mode",
+        "world-fourier"
+      ],
+      "executed": true,
+      "exitCode": 0,
+      "stdout": "{\"status\": \"trained\", \"initialLoss\": 0.1443721354007721, \"trainedLoss\": 0.0021148694213479757, \"elapsedSeconds\": 56.19820523262024}\n",
+      "stderr": ""
+    }
+  ],
+  "rows": [
+    {
+      "family": "conditioned",
+      "familyAuthority": "least-expressive-conditioned-footprint-family-v0",
+      "reportPath": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-conditioned-bestglobal/runs/conditioned/training-report.json",
+      "status": "trained",
+      "backend": "mlx",
+      "device": "Device(gpu, 0)",
+      "requestedRadius": null,
+      "requestedSharpness": null,
+      "effectiveRadius": null,
+      "effectiveSharpness": null,
+      "modelAuthority": "shared-position-conditioned-feature-mlp-v0",
+      "modelArtifactAuthority": "shared-position-conditioned-feature-mlp-v0",
+      "modelSchema": "kaminos-boundary-splat-spatial-attribute-mlp-v0",
+      "deployable": false,
+      "frameSplitAuthority": "explicit-disjoint-frame-holdout-v0",
+      "evaluationLossAuthority": "held-out-frame-mean-v0",
+      "trainFrameIds": [
+        "frame-000",
+        "frame-001"
+      ],
+      "evaluationFrameIds": [
+        "frame-002"
+      ],
+      "requestedSteps": 160,
+      "effectiveSteps": 160,
+      "initialLoss": 0.1443721354007721,
+      "trainedLoss": 0.0021148694213479757,
+      "initialPixelLoss": 0.1443721354007721,
+      "trainedPixelLoss": 0.0021148694213479757,
+      "initialEdgeLoss": 0.021106380969285965,
+      "trainedEdgeLoss": 0.008091580122709274,
+      "evaluationFrames": [
+        {
+          "frameId": "frame-002",
+          "frameIndex": 2,
+          "initialEdgeLoss": 0.021106380969285965,
+          "initialLoss": 0.1443721354007721,
+          "initialPixelLoss": 0.1443721354007721,
+          "initialPreview": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-conditioned-bestglobal/runs/conditioned/preview-initial-frame-002.png",
+          "sameStateCaptureId": "same-browser-supervision-449089-frame-002",
+          "targetPreview": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-conditioned-bestglobal/runs/conditioned/preview-target-frame-002.png",
+          "trainedEdgeLoss": 0.008091580122709274,
+          "trainedLoss": 0.0021148694213479757,
+          "trainedPixelLoss": 0.0021148694213479757,
+          "trainedPreview": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-conditioned-bestglobal/runs/conditioned/preview-trained-frame-002.png"
+        }
+      ],
+      "rank": 1
+    }
+  ],
+  "decisionInputs": {
+    "bestGlobal": null,
+    "bestOverall": {
+      "family": "conditioned",
+      "familyAuthority": "least-expressive-conditioned-footprint-family-v0",
+      "reportPath": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-conditioned-bestglobal/runs/conditioned/training-report.json",
+      "status": "trained",
+      "backend": "mlx",
+      "device": "Device(gpu, 0)",
+      "requestedRadius": null,
+      "requestedSharpness": null,
+      "effectiveRadius": null,
+      "effectiveSharpness": null,
+      "modelAuthority": "shared-position-conditioned-feature-mlp-v0",
+      "modelArtifactAuthority": "shared-position-conditioned-feature-mlp-v0",
+      "modelSchema": "kaminos-boundary-splat-spatial-attribute-mlp-v0",
+      "deployable": false,
+      "frameSplitAuthority": "explicit-disjoint-frame-holdout-v0",
+      "evaluationLossAuthority": "held-out-frame-mean-v0",
+      "trainFrameIds": [
+        "frame-000",
+        "frame-001"
+      ],
+      "evaluationFrameIds": [
+        "frame-002"
+      ],
+      "requestedSteps": 160,
+      "effectiveSteps": 160,
+      "initialLoss": 0.1443721354007721,
+      "trainedLoss": 0.0021148694213479757,
+      "initialPixelLoss": 0.1443721354007721,
+      "trainedPixelLoss": 0.0021148694213479757,
+      "initialEdgeLoss": 0.021106380969285965,
+      "trainedEdgeLoss": 0.008091580122709274,
+      "evaluationFrames": [
+        {
+          "frameId": "frame-002",
+          "frameIndex": 2,
+          "initialEdgeLoss": 0.021106380969285965,
+          "initialLoss": 0.1443721354007721,
+          "initialPixelLoss": 0.1443721354007721,
+          "initialPreview": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-conditioned-bestglobal/runs/conditioned/preview-initial-frame-002.png",
+          "sameStateCaptureId": "same-browser-supervision-449089-frame-002",
+          "targetPreview": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-conditioned-bestglobal/runs/conditioned/preview-target-frame-002.png",
+          "trainedEdgeLoss": 0.008091580122709274,
+          "trainedLoss": 0.0021148694213479757,
+          "trainedPixelLoss": 0.0021148694213479757,
+          "trainedPreview": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-conditioned-bestglobal/runs/conditioned/preview-trained-frame-002.png"
+        }
+      ],
+      "rank": 1
+    },
+    "majorityOfRemainingErrorBaseline": null,
+    "heldOutResidualRequired": true,
+    "trainingViewOnlyClosureAllowed": false
+  }
+}

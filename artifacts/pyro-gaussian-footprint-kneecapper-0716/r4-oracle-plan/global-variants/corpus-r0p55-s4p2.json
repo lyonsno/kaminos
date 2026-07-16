@@ -1,0 +1,584 @@
+{
+  "schema": "kaminos-boundary-splat-supervision-corpus-v0",
+  "authority": "live-simulator-frozen-state-candidate-raymarch-v0",
+  "candidateOrder": [
+    "position.x",
+    "position.y",
+    "position.z",
+    "sidecar.support",
+    "sidecar.coverage",
+    "sidecar.ridge",
+    "sidecar.footprint",
+    "material.density",
+    "material.heat",
+    "material.fuel",
+    "material.detail",
+    "fire.energy",
+    "fire.temperature",
+    "fire.emission",
+    "fire.detail",
+    "micro.x",
+    "micro.y",
+    "micro.z",
+    "micro.w"
+  ],
+  "featureOrder": [
+    "sidecar.support",
+    "sidecar.coverage",
+    "sidecar.ridge",
+    "sidecar.footprint",
+    "material.density",
+    "material.heat",
+    "material.fuel",
+    "material.detail",
+    "fire.energy",
+    "fire.temperature",
+    "fire.emission",
+    "fire.detail",
+    "micro.x",
+    "micro.y",
+    "micro.z",
+    "micro.w"
+  ],
+  "sequenceAuthority": "single-browser-controlled-step-supervision-v0",
+  "requestedFrameCount": 3,
+  "stepDeltaMs": 220,
+  "sameBrowserSequenceSuitable": true,
+  "warmup": {
+    "authority": "live-single-browser-sim-step-floor-v0",
+    "requestedMinSimStepCount": 240,
+    "startSimStepCount": 21,
+    "achievedSimStepCount": 256,
+    "advancedFrameCount": 106,
+    "uncapped": true
+  },
+  "frames": [
+    {
+      "id": "frame-000",
+      "sameStateCaptureId": "same-browser-supervision-449089-frame-000",
+      "simStepCount": 257,
+      "grid": 160,
+      "requestedRoute": "kaminos_volume_smoke=1",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "backend": "WebGPU:apple",
+      "rendererIdentity": "live-boundary-sidecar-analytic-splats-v0",
+      "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+      "fallbackReason": null,
+      "camera": {
+        "viewProjection": [
+          3.599241858545854,
+          -0.1497577185421897,
+          -0.49598067886043995,
+          -0.49588149264328957,
+          2.881665594835285e-17,
+          2.731028225135907,
+          -0.1092838783929784,
+          -0.10926202380275882,
+          -2.071758728333711,
+          -0.26017230763685495,
+          -0.8616613488677134,
+          -0.8614890338294436,
+          -9.234837710948702e-16,
+          -0.05462056450271818,
+          2.362260451984144,
+          2.3817860473342116
+        ],
+        "cameraRight": [
+          0.8666778489396199,
+          0,
+          -0.49886822524329344
+        ],
+        "cameraUp": [
+          -0.054507351900972785,
+          0.9940129828903269,
+          -0.09469497576016456
+        ],
+        "viewport": [
+          520,
+          786
+        ]
+      },
+      "replayedCamera": null,
+      "splatControls": {
+        "radius": 0.55,
+        "sharpness": 4.2
+      },
+      "captureAdmission": {
+        "identity": "fresh-live-selective-splat-capture-admission-v0",
+        "authority": "fresh-live-settings-no-anchor-v0",
+        "requestedRole": "truthHigh",
+        "effectiveRole": "truthHigh",
+        "roleAuthority": "current-high-field-reference-no-learned-composition-v0",
+        "requestedComposition": "splat-only-v0",
+        "effectiveComposition": "splat-only-v0",
+        "compositionAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+        "passReceipt": {
+          "identity": "selective-head-live-render-pass-receipt-v0",
+          "composition": "splat-only-v0",
+          "compositionAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+          "raymarchAuthority": "smoke-raymarch-authority-broad-smoke-only-v0",
+          "splatAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+          "raymarchFireAuthority": 0,
+          "raymarchEncoded": false,
+          "raymarchApplied": false,
+          "splatEncoded": true,
+          "splatApplied": true,
+          "fallbackReason": null
+        },
+        "boundarySidecarSource": "baked",
+        "boundarySidecarBuilt": true,
+        "boundarySidecarBuiltThisFrame": true,
+        "boundarySplatSourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+        "boundarySplatFallbackReason": null,
+        "boundarySidecarOverrideReceipt": null,
+        "fullFieldImportReceipt": null,
+        "replayAnchor": null
+      },
+      "controlConditioning": {
+        "identity": "boundary-splat-emitter-lifecycle-conditioning-v0",
+        "authority": "effective-runtime-controls-frozen-sim-state-v0",
+        "sameStateCaptureId": "same-browser-supervision-449089-frame-000",
+        "simStepCount": 257,
+        "values": {
+          "inputRadius": 0.68,
+          "flowRate": 2.5,
+          "fireScale": 1.19,
+          "reactionFuelScale": 1,
+          "lifecycleEffect": "none",
+          "lifecycleT": 0,
+          "quenchVapor": 0
+        }
+      },
+      "stepReceipt": null,
+      "candidates": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/fresh-supervision-r4/frame-000.candidates.f32",
+        "bytes": 14233812,
+        "sha256": "9dac570157eaf0d35b6d48323ce5792d1ec8ac6b3210311762f1a652aad72040",
+        "count": 187287,
+        "strideFloats": 19,
+        "dtype": "float32-le",
+        "transportChunkBytes": 262144,
+        "transportChunkCount": 55
+      },
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/fresh-supervision-r4/frame-000.raymarch.png",
+        "bytes": 365457,
+        "sha256": "93ff788956c458b62d11706a1a9f91c582bd1ca741a182f275d12277f94d2ff4",
+        "authority": "gpu-rgba8-raymarch-readback-frozen-sim-state",
+        "rendererIdentity": "native-3d-compute-fluid-raymarch-v0",
+        "decomposition": "candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0",
+        "requestedRaySteps": 160,
+        "effectiveRaySteps": 160,
+        "renderScale": 1,
+        "width": 520,
+        "height": 786,
+        "visualMetrics": {
+          "width": 520,
+          "height": 786,
+          "meanLuma": 17.825779817626707,
+          "litPixels": 26446,
+          "litFraction": 0.3648277669715405,
+          "fireLikePixels": 0,
+          "smokeLikePixels": 365
+        },
+        "transportChunkBytes": 262144,
+        "transportChunkCount": 7
+      },
+      "flowDebug": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/fresh-supervision-r4/frame-000.flow-debug.png",
+        "bytes": 928508,
+        "sha256": "3b65cbff6099e8ecd4c8cd6aaecbbe5f09f46b845853885b6fe0e5d0c4786399",
+        "authority": "flow-debug-interface-canvas-capture-v0",
+        "imageAuthority": "gpu-rgba8-flow-debug-readback-frozen-sim-state",
+        "source": "volume_flow_debug",
+        "channelLayout": "flow-debug-interface-cyan-red-rgba",
+        "controlOverrides": {
+          "flowDebug": 1
+        },
+        "sampleAuthority": "render-only-frozen-sim-state",
+        "sameStateCaptureId": "same-browser-supervision-449089-frame-000",
+        "frameCount": 44,
+        "simStepCount": 257,
+        "width": 520,
+        "height": 786,
+        "transportChunkBytes": 262144,
+        "transportChunkCount": 7
+      },
+      "structuralSupervision": null,
+      "footprintVariant": {
+        "authority": "best-global-radius-sharpness-grid-v0",
+        "requestedRadius": 0.55,
+        "effectiveRadius": 0.55,
+        "requestedSharpness": 4.2,
+        "effectiveSharpness": 4.2,
+        "footprintSemantics": {
+          "authority": "current-boundary-splat-footprint-path-map-v0",
+          "candidateBaseRadius": "cellWidth * (0.60 + sidecar.footprint * 2.65 + sidecar.ridge * 0.48)",
+          "learnedRadiusUnits": "dimensionless radiusScale.x/y from the attribute head",
+          "globalRadiusUnits": "dimensionless billboard scale applied in the raster vertex stage",
+          "sharpnessUnits": "dimensionless Gaussian exponent multiplier applied in the fragment kernel",
+          "opacityUnits": "per-splat colorOpacity.a before Gaussian kernel and energy compensation",
+          "radiusMultiplicationOrder": "candidate base radius -> learned radiusScale.x/y -> global radius billboard scale; fragment alpha then applies Gaussian sharpness and energy compensation",
+          "energyCompensation": "sqrt((sharpness / 3.4) / max(globalRadius^2, 0.1225)) clamped to 0.5..2.5",
+          "absoluteRadiusSubstitution": "rejected"
+        }
+      }
+    },
+    {
+      "id": "frame-001",
+      "sameStateCaptureId": "same-browser-supervision-449089-frame-001",
+      "simStepCount": 260,
+      "grid": 160,
+      "requestedRoute": "kaminos_volume_smoke=1",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "backend": "WebGPU:apple",
+      "rendererIdentity": "live-boundary-sidecar-analytic-splats-v0",
+      "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+      "fallbackReason": null,
+      "camera": {
+        "viewProjection": [
+          3.599241858545854,
+          -0.1497577185421897,
+          -0.49598067886043995,
+          -0.49588149264328957,
+          2.881665594835285e-17,
+          2.731028225135907,
+          -0.1092838783929784,
+          -0.10926202380275882,
+          -2.071758728333711,
+          -0.26017230763685495,
+          -0.8616613488677134,
+          -0.8614890338294436,
+          -9.234837710948702e-16,
+          -0.05462056450271818,
+          2.362260451984144,
+          2.3817860473342116
+        ],
+        "cameraRight": [
+          0.8666778489396199,
+          0,
+          -0.49886822524329344
+        ],
+        "cameraUp": [
+          -0.054507351900972785,
+          0.9940129828903269,
+          -0.09469497576016456
+        ],
+        "viewport": [
+          520,
+          786
+        ]
+      },
+      "replayedCamera": null,
+      "splatControls": {
+        "radius": 0.55,
+        "sharpness": 4.2
+      },
+      "captureAdmission": {
+        "identity": "fresh-live-selective-splat-capture-admission-v0",
+        "authority": "fresh-live-settings-no-anchor-v0",
+        "requestedRole": "truthHigh",
+        "effectiveRole": "truthHigh",
+        "roleAuthority": "current-high-field-reference-no-learned-composition-v0",
+        "requestedComposition": "splat-only-v0",
+        "effectiveComposition": "splat-only-v0",
+        "compositionAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+        "passReceipt": {
+          "identity": "selective-head-live-render-pass-receipt-v0",
+          "composition": "splat-only-v0",
+          "compositionAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+          "raymarchAuthority": "smoke-raymarch-authority-broad-smoke-only-v0",
+          "splatAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+          "raymarchFireAuthority": 0,
+          "raymarchEncoded": false,
+          "raymarchApplied": false,
+          "splatEncoded": true,
+          "splatApplied": true,
+          "fallbackReason": null
+        },
+        "boundarySidecarSource": "baked",
+        "boundarySidecarBuilt": true,
+        "boundarySidecarBuiltThisFrame": true,
+        "boundarySplatSourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+        "boundarySplatFallbackReason": null,
+        "boundarySidecarOverrideReceipt": null,
+        "fullFieldImportReceipt": null,
+        "replayAnchor": null
+      },
+      "controlConditioning": {
+        "identity": "boundary-splat-emitter-lifecycle-conditioning-v0",
+        "authority": "effective-runtime-controls-frozen-sim-state-v0",
+        "sameStateCaptureId": "same-browser-supervision-449089-frame-001",
+        "simStepCount": 260,
+        "values": {
+          "inputRadius": 0.68,
+          "flowRate": 2.5,
+          "fireScale": 1.19,
+          "reactionFuelScale": 1,
+          "lifecycleEffect": "none",
+          "lifecycleT": 0,
+          "quenchVapor": 0
+        }
+      },
+      "stepReceipt": {
+        "ok": true,
+        "sampleAuthority": "sim-advanced-frame-readback",
+        "beforeFrameCount": 44,
+        "beforeSimStepCount": 257,
+        "afterFrameCount": 44,
+        "afterSimStepCount": 259
+      },
+      "candidates": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/fresh-supervision-r4/frame-001.candidates.f32",
+        "bytes": 13994488,
+        "sha256": "c63bfd6704483eb8fc8b8b1aee0c12960752d7e9fa776c7bf06bf90669d88fdf",
+        "count": 184138,
+        "strideFloats": 19,
+        "dtype": "float32-le",
+        "transportChunkBytes": 262144,
+        "transportChunkCount": 54
+      },
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/fresh-supervision-r4/frame-001.raymarch.png",
+        "bytes": 360926,
+        "sha256": "b4b7a79702e30c5d8130b992411030920c502001f961e41ef15cf3d678d600f8",
+        "authority": "gpu-rgba8-raymarch-readback-frozen-sim-state",
+        "rendererIdentity": "native-3d-compute-fluid-raymarch-v0",
+        "decomposition": "candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0",
+        "requestedRaySteps": 160,
+        "effectiveRaySteps": 160,
+        "renderScale": 1,
+        "width": 520,
+        "height": 786,
+        "visualMetrics": {
+          "width": 520,
+          "height": 786,
+          "meanLuma": 17.15840890065996,
+          "litPixels": 23558,
+          "litFraction": 0.3249872394432259,
+          "fireLikePixels": 0,
+          "smokeLikePixels": 170
+        },
+        "transportChunkBytes": 262144,
+        "transportChunkCount": 7
+      },
+      "flowDebug": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/fresh-supervision-r4/frame-001.flow-debug.png",
+        "bytes": 932313,
+        "sha256": "8397629604d5eeae868d829973fef891fd30f1e1632b67103665365a29237215",
+        "authority": "flow-debug-interface-canvas-capture-v0",
+        "imageAuthority": "gpu-rgba8-flow-debug-readback-frozen-sim-state",
+        "source": "volume_flow_debug",
+        "channelLayout": "flow-debug-interface-cyan-red-rgba",
+        "controlOverrides": {
+          "flowDebug": 1
+        },
+        "sampleAuthority": "render-only-frozen-sim-state",
+        "sameStateCaptureId": "same-browser-supervision-449089-frame-001",
+        "frameCount": 44,
+        "simStepCount": 260,
+        "width": 520,
+        "height": 786,
+        "transportChunkBytes": 262144,
+        "transportChunkCount": 7
+      },
+      "structuralSupervision": null,
+      "footprintVariant": {
+        "authority": "best-global-radius-sharpness-grid-v0",
+        "requestedRadius": 0.55,
+        "effectiveRadius": 0.55,
+        "requestedSharpness": 4.2,
+        "effectiveSharpness": 4.2,
+        "footprintSemantics": {
+          "authority": "current-boundary-splat-footprint-path-map-v0",
+          "candidateBaseRadius": "cellWidth * (0.60 + sidecar.footprint * 2.65 + sidecar.ridge * 0.48)",
+          "learnedRadiusUnits": "dimensionless radiusScale.x/y from the attribute head",
+          "globalRadiusUnits": "dimensionless billboard scale applied in the raster vertex stage",
+          "sharpnessUnits": "dimensionless Gaussian exponent multiplier applied in the fragment kernel",
+          "opacityUnits": "per-splat colorOpacity.a before Gaussian kernel and energy compensation",
+          "radiusMultiplicationOrder": "candidate base radius -> learned radiusScale.x/y -> global radius billboard scale; fragment alpha then applies Gaussian sharpness and energy compensation",
+          "energyCompensation": "sqrt((sharpness / 3.4) / max(globalRadius^2, 0.1225)) clamped to 0.5..2.5",
+          "absoluteRadiusSubstitution": "rejected"
+        }
+      }
+    },
+    {
+      "id": "frame-002",
+      "sameStateCaptureId": "same-browser-supervision-449089-frame-002",
+      "simStepCount": 263,
+      "grid": 160,
+      "requestedRoute": "kaminos_volume_smoke=1",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "backend": "WebGPU:apple",
+      "rendererIdentity": "live-boundary-sidecar-analytic-splats-v0",
+      "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+      "fallbackReason": null,
+      "camera": {
+        "viewProjection": [
+          3.599241858545854,
+          -0.1497577185421897,
+          -0.49598067886043995,
+          -0.49588149264328957,
+          2.881665594835285e-17,
+          2.731028225135907,
+          -0.1092838783929784,
+          -0.10926202380275882,
+          -2.071758728333711,
+          -0.26017230763685495,
+          -0.8616613488677134,
+          -0.8614890338294436,
+          -9.234837710948702e-16,
+          -0.05462056450271818,
+          2.362260451984144,
+          2.3817860473342116
+        ],
+        "cameraRight": [
+          0.8666778489396199,
+          0,
+          -0.49886822524329344
+        ],
+        "cameraUp": [
+          -0.054507351900972785,
+          0.9940129828903269,
+          -0.09469497576016456
+        ],
+        "viewport": [
+          520,
+          786
+        ]
+      },
+      "replayedCamera": null,
+      "splatControls": {
+        "radius": 0.55,
+        "sharpness": 4.2
+      },
+      "captureAdmission": {
+        "identity": "fresh-live-selective-splat-capture-admission-v0",
+        "authority": "fresh-live-settings-no-anchor-v0",
+        "requestedRole": "truthHigh",
+        "effectiveRole": "truthHigh",
+        "roleAuthority": "current-high-field-reference-no-learned-composition-v0",
+        "requestedComposition": "splat-only-v0",
+        "effectiveComposition": "splat-only-v0",
+        "compositionAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+        "passReceipt": {
+          "identity": "selective-head-live-render-pass-receipt-v0",
+          "composition": "splat-only-v0",
+          "compositionAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+          "raymarchAuthority": "smoke-raymarch-authority-broad-smoke-only-v0",
+          "splatAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+          "raymarchFireAuthority": 0,
+          "raymarchEncoded": false,
+          "raymarchApplied": false,
+          "splatEncoded": true,
+          "splatApplied": true,
+          "fallbackReason": null
+        },
+        "boundarySidecarSource": "baked",
+        "boundarySidecarBuilt": true,
+        "boundarySidecarBuiltThisFrame": true,
+        "boundarySplatSourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+        "boundarySplatFallbackReason": null,
+        "boundarySidecarOverrideReceipt": null,
+        "fullFieldImportReceipt": null,
+        "replayAnchor": null
+      },
+      "controlConditioning": {
+        "identity": "boundary-splat-emitter-lifecycle-conditioning-v0",
+        "authority": "effective-runtime-controls-frozen-sim-state-v0",
+        "sameStateCaptureId": "same-browser-supervision-449089-frame-002",
+        "simStepCount": 263,
+        "values": {
+          "inputRadius": 0.68,
+          "flowRate": 2.5,
+          "fireScale": 1.19,
+          "reactionFuelScale": 1,
+          "lifecycleEffect": "none",
+          "lifecycleT": 0,
+          "quenchVapor": 0
+        }
+      },
+      "stepReceipt": {
+        "ok": true,
+        "sampleAuthority": "sim-advanced-frame-readback",
+        "beforeFrameCount": 44,
+        "beforeSimStepCount": 260,
+        "afterFrameCount": 44,
+        "afterSimStepCount": 262
+      },
+      "candidates": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/fresh-supervision-r4/frame-002.candidates.f32",
+        "bytes": 14061748,
+        "sha256": "47ccd24350b0580ec7c03df695680dbb123ac975ee7574e426d0539ddf7038eb",
+        "count": 185023,
+        "strideFloats": 19,
+        "dtype": "float32-le",
+        "transportChunkBytes": 262144,
+        "transportChunkCount": 54
+      },
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/fresh-supervision-r4/frame-002.raymarch.png",
+        "bytes": 348672,
+        "sha256": "994fa5e9a366e5dacf6a62c8edca77bfaea7cc56b76f2fff1f62aafd3d8f343b",
+        "authority": "gpu-rgba8-raymarch-readback-frozen-sim-state",
+        "rendererIdentity": "native-3d-compute-fluid-raymarch-v0",
+        "decomposition": "candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0",
+        "requestedRaySteps": 160,
+        "effectiveRaySteps": 160,
+        "renderScale": 1,
+        "width": 520,
+        "height": 786,
+        "visualMetrics": {
+          "width": 520,
+          "height": 786,
+          "meanLuma": 16.536690794464004,
+          "litPixels": 21287,
+          "litFraction": 0.2936583481631696,
+          "fireLikePixels": 0,
+          "smokeLikePixels": 147
+        },
+        "transportChunkBytes": 262144,
+        "transportChunkCount": 7
+      },
+      "flowDebug": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/fresh-supervision-r4/frame-002.flow-debug.png",
+        "bytes": 923264,
+        "sha256": "cd0b056c51c0a8bc40c318b88cf795d068ee641143618dfe3675ca95ec61a977",
+        "authority": "flow-debug-interface-canvas-capture-v0",
+        "imageAuthority": "gpu-rgba8-flow-debug-readback-frozen-sim-state",
+        "source": "volume_flow_debug",
+        "channelLayout": "flow-debug-interface-cyan-red-rgba",
+        "controlOverrides": {
+          "flowDebug": 1
+        },
+        "sampleAuthority": "render-only-frozen-sim-state",
+        "sameStateCaptureId": "same-browser-supervision-449089-frame-002",
+        "frameCount": 44,
+        "simStepCount": 263,
+        "width": 520,
+        "height": 786,
+        "transportChunkBytes": 262144,
+        "transportChunkCount": 7
+      },
+      "structuralSupervision": null,
+      "footprintVariant": {
+        "authority": "best-global-radius-sharpness-grid-v0",
+        "requestedRadius": 0.55,
+        "effectiveRadius": 0.55,
+        "requestedSharpness": 4.2,
+        "effectiveSharpness": 4.2,
+        "footprintSemantics": {
+          "authority": "current-boundary-splat-footprint-path-map-v0",
+          "candidateBaseRadius": "cellWidth * (0.60 + sidecar.footprint * 2.65 + sidecar.ridge * 0.48)",
+          "learnedRadiusUnits": "dimensionless radiusScale.x/y from the attribute head",
+          "globalRadiusUnits": "dimensionless billboard scale applied in the raster vertex stage",
+          "sharpnessUnits": "dimensionless Gaussian exponent multiplier applied in the fragment kernel",
+          "opacityUnits": "per-splat colorOpacity.a before Gaussian kernel and energy compensation",
+          "radiusMultiplicationOrder": "candidate base radius -> learned radiusScale.x/y -> global radius billboard scale; fragment alpha then applies Gaussian sharpness and energy compensation",
+          "energyCompensation": "sqrt((sharpness / 3.4) / max(globalRadius^2, 0.1225)) clamped to 0.5..2.5",
+          "absoluteRadiusSubstitution": "rejected"
+        }
+      }
+    }
+  ]
+}
