@@ -12596,8 +12596,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         throw new Error(`fixed-candidate-supervision-candidate-failed:${candidateSample.reason || 'unknown'}`);
       }
       if (candidateSample.boundarySplatOverflowCount > 0) {
-        if (!growBoundarySplatCapacity(candidateSample.boundarySplatCandidateCount)) {
+        if (
+          boundarySplatCapacity < candidateSample.boundarySplatCandidateCount
+          && !growBoundarySplatCapacity(candidateSample.boundarySplatCandidateCount)
+        ) {
           throw new Error(`fixed-candidate-supervision-capacity-growth-failed:${candidateSample.boundarySplatCandidateCount}:${candidateSample.boundarySplatOverflowCount}`);
+        }
+        if (boundarySplatCapacity < candidateSample.boundarySplatCandidateCount) {
+          throw new Error(`fixed-candidate-supervision-capacity-remains-insufficient:${boundarySplatCapacity}:${candidateSample.boundarySplatCandidateCount}`);
         }
         resetTemporalHistory('fixed-candidate-supervision-candidates-after-capacity-growth');
         candidateSample = await sampleFrame({

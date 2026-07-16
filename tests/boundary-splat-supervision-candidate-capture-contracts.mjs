@@ -68,6 +68,11 @@ assert.match(core, /async function captureBoundarySplatSupervisionCandidates\(op
 assert.match(core, /captureBoundarySplatSupervisionCandidates[\s\S]*advanceSim:\s*false/, 'candidate capture renders without advancing simulation');
 assert.match(core, /captureBoundarySplatSupervisionCandidates[\s\S]*boundarySplatMode:\s*['"]analytic['"][\s\S]*boundarySplatFeatureCapture:\s*true/, 'candidate capture requests analytic candidates and full feature rows');
 assert.match(core, /captureBoundarySplatSupervisionCandidates[\s\S]*sameStateCaptureId[\s\S]*simStepCount[\s\S]*camera/, 'candidate capture reports frozen-state and camera identity');
+assert.match(
+  core,
+  /boundarySplatCapacity\s*<\s*candidateSample\.boundarySplatCandidateCount[\s\S]*growBoundarySplatCapacity\(candidateSample\.boundarySplatCandidateCount\)/,
+  'overflow recovery accepts telemetry-owned growth and only requests growth while current capacity is insufficient',
+);
 assert.doesNotMatch(core, /captureBoundarySplatSupervisionCandidates[\s\S]*requestedRaySteps/, 'candidate-only capture does not import an obsolete raymarch teacher');
 assert.match(core, /\bcaptureBoundarySplatSupervisionCandidates,/, 'candidate-only capture is exposed through the prototype API');
 

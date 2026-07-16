@@ -12,6 +12,9 @@ const {
   BOUNDARY_SPLAT_APPEARANCE_SCHEMA,
   validateBoundarySplatAppearanceCorpus,
 } = await import(moduleUrl);
+const {
+  BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER,
+} = await import(new URL('../boundary-splat-feature-capture.mjs', import.meta.url));
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const identityMatrix = Array(16).fill(0).map((_, index) => index % 5 === 0 ? 1 : 0);
@@ -172,6 +175,7 @@ try {
       count: 2,
       strideFloats: 19,
       dtype: 'float32-le',
+      candidateOrder: [...BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER],
       sameStateCaptureId: 'appearance-state-000',
       simStepCount: 240,
     },
@@ -227,6 +231,8 @@ try {
   }, /exact A\+B.*control/i);
   await reject(value => { value.cameras[2].appearanceBAppliedToFixedA.trainingAuthority = 'nominal-local-b-target'; }, /diagnostic-only/i);
   await reject(value => { value.candidates.sameStateCaptureId = 'candidate-stale-state'; }, /candidate.*same-state/i);
+  await reject(value => { value.candidates.candidateOrder.reverse(); }, /candidate.*column order/i);
+  await reject(value => { delete value.candidates.candidateOrder; }, /candidate.*column order/i);
   await reject(value => { value.backend = 'WebGL2'; }, /backend.*WebGPU/i);
   await reject(value => { value.fallbackReason = 'route-fallback'; }, /fallback/i);
 

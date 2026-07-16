@@ -2,7 +2,10 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
 
-import { BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_STRIDE_FLOATS } from './boundary-splat-feature-capture.mjs';
+import {
+  BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER,
+  BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_STRIDE_FLOATS,
+} from './boundary-splat-feature-capture.mjs';
 
 export const BOUNDARY_SPLAT_APPEARANCE_SCHEMA = 'kaminos-boundary-splat-appearance-coefficient-corpus-v0';
 export const BOUNDARY_SPLAT_APPEARANCE_AUTHORITY = 'live-simulator-frozen-state-multi-camera-signed-appearance-coefficients-v0';
@@ -191,6 +194,13 @@ export async function validateBoundarySplatAppearanceCorpus(manifestFile, option
     || manifest.candidates.strideFloats !== BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_STRIDE_FLOATS
     || !Number.isInteger(manifest.candidates.count) || manifest.candidates.count <= 0) {
     throw new Error(`candidate layout must be positive-count float32-le with stride ${BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_STRIDE_FLOATS}`);
+  }
+  if (!Array.isArray(manifest.candidates.candidateOrder)
+    || manifest.candidates.candidateOrder.length !== BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER.length
+    || manifest.candidates.candidateOrder.some(
+      (column, index) => column !== BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER[index],
+    )) {
+    throw new Error('candidate column order does not match boundary-splat supervision schema');
   }
   const expectedCandidateBytes = manifest.candidates.count * manifest.candidates.strideFloats * 4;
   if (candidateArtifact.bytes.length !== expectedCandidateBytes) {
