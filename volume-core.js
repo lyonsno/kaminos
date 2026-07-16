@@ -33,6 +33,7 @@ const BOUNDARY_SPLAT_ATTRIBUTE_HOOK_IDENTITY = 'boundary-splat-learned-attribute
 const HYBRID_SMOKE_RENDERER_IDENTITY = 'native-3d-compute-fluid-raymarch-smoke-only-v0';
 const BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_IDENTITY = 'boundary-splat-instance-descriptor-v0';
 const BOUNDARY_SPLAT_FIELD_LAYOUT_IDENTITY = 'boundary-splat-composed-field-v0';
+const FLOW_RECONSTRUCTION_KERNEL_IDENTITY = 'flow-tangent-positive-symmetric-trilinear-v0';
 const BOUNDARY_SPLAT_INITIAL_CAPACITY = 131072;
 const BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES = 48;
 const BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_STRIDE_BYTES = 32;
@@ -389,6 +390,42 @@ export function effectiveBoundarySplatPhaseSourceIdentity(descriptors = []) {
     return 'mixed-current-and-live-history-offset';
   }
   return 'mixed-effective-phase-sources';
+}
+
+function normalizeBoundarySplatRadianceGain(value) {
+  return clampFinite(value, 0.05, 2, 1);
+}
+
+function normalizeFlowKernelStrength(value) {
+  return clampFinite(value, 0, 1, 0);
+}
+
+function normalizeFlowKernelRadius(value) {
+  return clampFinite(value, 0.0025, 0.12, 0.03);
+}
+
+function normalizeFlowKernelCoherence(value) {
+  return clampFinite(value, 0, 2, 1);
+}
+
+function flowKernelRequestedControls(controls = {}) {
+  return {
+    strength: Number(controls.flowKernelStrength ?? 0),
+    radiusWorld: Number(controls.flowKernelRadius ?? 0.03),
+    coherence: Number(controls.flowKernelCoherence ?? 1),
+  };
+}
+
+function flowKernelEffectiveControls(controls = {}) {
+  return {
+    strength: normalizeFlowKernelStrength(controls.flowKernelStrength),
+    radiusWorld: normalizeFlowKernelRadius(controls.flowKernelRadius),
+    coherence: normalizeFlowKernelCoherence(controls.flowKernelCoherence),
+  };
+}
+
+function normalizeBoundarySplatOpacityGain(value) {
+  return clampFinite(value, 0.05, 2, 1);
 }
 
 function boundarySplatEffectiveRendererIdentity(mode) {
@@ -1125,6 +1162,7 @@ struct Uniforms {
   boundary_sidecar_display: vec4<f32>,
   oracle_activity_controls: vec4<f32>,
   oracle_activity_controls2: vec4<f32>,
+  reconstruction_kernel_controls: vec4<f32>,
   previousViewProj: mat4x4<f32>,
 };
 
@@ -1471,6 +1509,106 @@ fn sampleWorldBoundarySidecar(p: vec3<f32>) -> vec4<f32> {
   return mix(y0, y1, f.z);
 }
 
+struct FlowReconstructionSample {
+  velocityDensity: vec4<f32>,
+  material: vec4<f32>,
+  fireLayer: vec4<f32>,
+  microLayer: vec4<f32>,
+  kernelTangentRadius: vec4<f32>,
+  frontTopology: f32,
+};
+
+fn sampleWorldFlowReconstructionRaw(p: vec3<f32>) -> FlowReconstructionSample {
+  var sample: FlowReconstructionSample;
+  sample.velocityDensity = sampleWorldVelocity(p);
+  sample.material = sampleWorldMaterial(p);
+  sample.fireLayer = sampleWorldFireLayer(p);
+  sample.microLayer = sampleWorldMicrodetail(p);
+  sample.kernelTangentRadius = vec4<f32>(0.0);
+  sample.frontTopology = sampleWorldFrontField(p);
+  return sample;
+}
+
+fn flowReconstructionStructure(p: vec3<f32>) -> f32 {
+  return sampleWorldFrontField(p) + sampleWorldBoundarySidecar(p).x * 0.35;
+}
+
+fn flowReconstructionNormal(p: vec3<f32>) -> vec3<f32> {
+  let cellWidthWorld = 2.0 / f32(GRID);
+  let dx = flowReconstructionStructure(p + vec3<f32>(cellWidthWorld, 0.0, 0.0))
+    - flowReconstructionStructure(p - vec3<f32>(cellWidthWorld, 0.0, 0.0));
+  let dy = flowReconstructionStructure(p + vec3<f32>(0.0, cellWidthWorld, 0.0))
+    - flowReconstructionStructure(p - vec3<f32>(0.0, cellWidthWorld, 0.0));
+  let dz = flowReconstructionStructure(p + vec3<f32>(0.0, 0.0, cellWidthWorld))
+    - flowReconstructionStructure(p - vec3<f32>(0.0, 0.0, cellWidthWorld));
+  let gradientWorld = vec3<f32>(dx, dy, dz) / max(2.0 * cellWidthWorld, 0.0001);
+  let gradientLength = length(gradientWorld);
+  return select(vec3<f32>(0.0, 1.0, 0.0), gradientWorld / max(gradientLength, 0.0001), gradientLength > 0.0001);
+}
+
+fn mixFlowReconstructionSample(
+  center: FlowReconstructionSample,
+  forward: FlowReconstructionSample,
+  backward: FlowReconstructionSample,
+  strength: f32,
+) -> FlowReconstructionSample {
+  let centerWeight = 0.5;
+  let neighborWeight = 0.25;
+  var filtered: FlowReconstructionSample;
+  filtered.velocityDensity = center.velocityDensity * centerWeight + (forward.velocityDensity + backward.velocityDensity) * neighborWeight;
+  filtered.material = center.material * centerWeight + (forward.material + backward.material) * neighborWeight;
+  filtered.fireLayer = center.fireLayer * centerWeight + (forward.fireLayer + backward.fireLayer) * neighborWeight;
+  filtered.microLayer = center.microLayer * centerWeight + (forward.microLayer + backward.microLayer) * neighborWeight;
+  filtered.kernelTangentRadius = vec4<f32>(0.0);
+  filtered.frontTopology = center.frontTopology * centerWeight + (forward.frontTopology + backward.frontTopology) * neighborWeight;
+  var result: FlowReconstructionSample;
+  result.velocityDensity = mix(center.velocityDensity, filtered.velocityDensity, strength);
+  result.material = max(vec4<f32>(0.0), mix(center.material, filtered.material, strength));
+  result.fireLayer = max(vec4<f32>(0.0), mix(center.fireLayer, filtered.fireLayer, strength));
+  result.microLayer = max(vec4<f32>(0.0), mix(center.microLayer, filtered.microLayer, strength));
+  result.kernelTangentRadius = vec4<f32>(0.0);
+  result.frontTopology = max(0.0, mix(center.frontTopology, filtered.frontTopology, strength));
+  return result;
+}
+
+fn sampleWorldFlowReconstruction(p: vec3<f32>) -> FlowReconstructionSample {
+  let center = sampleWorldFlowReconstructionRaw(p);
+  let strength = clamp(u.reconstruction_kernel_controls.x, 0.0, 1.0);
+  if (strength <= 0.0) { return center; }
+  let normal = flowReconstructionNormal(p);
+  let velocityTangent = center.velocityDensity.xyz - normal * dot(center.velocityDensity.xyz, normal);
+  let sampleCell = vec3<i32>(floor(clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0))));
+  let curlVector = curlAtCell(sampleCell);
+  let curlTangent = curlVector - normal * dot(curlVector, normal);
+  let fallbackAxis = select(vec3<f32>(1.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 1.0), abs(normal.x) > 0.75);
+  let geometricTangent = normalize(cross(normal, fallbackAxis));
+  let velocityLength = length(velocityTangent);
+  let curlLength = length(curlTangent);
+  let curlOrGeometric = select(geometricTangent, curlTangent / max(curlLength, 0.0001), curlLength > 0.0001);
+  let tangent = select(curlOrGeometric, velocityTangent / max(velocityLength, 0.0001), velocityLength > 0.0001);
+  let coherence = clamp(u.reconstruction_kernel_controls.z, 0.0, 2.0);
+  let kernelCurlActivity = smoothstep(0.015, 0.30, curlMagnitudeAtCell(sampleCell));
+  let radiusWorld = clamp(u.reconstruction_kernel_controls.y, 0.0025, 0.12) * mix(1.0, 1.0 + kernelCurlActivity, coherence * 0.5);
+  let forward = sampleWorldFlowReconstructionRaw(p + tangent * radiusWorld);
+  let backward = sampleWorldFlowReconstructionRaw(p - tangent * radiusWorld);
+  var result = mixFlowReconstructionSample(center, forward, backward, strength);
+  result.kernelTangentRadius = vec4<f32>(tangent, radiusWorld);
+  return result;
+}
+
+fn sampleWorldFlowReconstructedSidecar(p: vec3<f32>, reconstructed: FlowReconstructionSample) -> vec4<f32> {
+  let center = sampleWorldBoundarySidecar(p);
+  let strength = clamp(u.reconstruction_kernel_controls.x, 0.0, 1.0);
+  if (strength <= 0.0) { return center; }
+  let tangent = reconstructed.kernelTangentRadius.xyz;
+  let radiusWorld = reconstructed.kernelTangentRadius.w;
+  let forward = sampleWorldBoundarySidecar(p + tangent * radiusWorld);
+  let backward = sampleWorldBoundarySidecar(p - tangent * radiusWorld);
+  let centerWeight = 0.5;
+  let neighborWeight = 0.25;
+  let filtered = center * centerWeight + (forward + backward) * neighborWeight;
+  return max(vec4<f32>(0.0), mix(center, filtered, strength));
+}
 fn majorantIndex(c: vec3<u32>) -> u32 {
   return c.x + c.y * MAJORANT_GRID + c.z * MAJORANT_GRID * MAJORANT_GRID;
 }
@@ -4046,11 +4184,12 @@ fn raymarchVolume(in: VSOut, hybridSplatDepth: f32, hybridSplatPresent: bool) ->
       t = t + min(skipDt, max(0.0001, endT - t));
       continue;
     }
-    let state = sampleWorldVelocity(p);
-    let material = sampleWorldMaterial(p);
-    let fireLayer = sampleWorldFireLayer(p);
-    let microLayer = sampleWorldMicrodetail(p);
-    let combustionFrontTopology = sampleWorldFrontField(p);
+    let reconstructed = sampleWorldFlowReconstruction(p);
+    let state = reconstructed.velocityDensity;
+    let material = reconstructed.material;
+    let fireLayer = reconstructed.fireLayer;
+    let microLayer = reconstructed.microLayer;
+    let combustionFrontTopology = reconstructed.frontTopology;
     let velMag = length(state.xyz);
     let smokeDensity = material.x;
     let heat = material.y;
@@ -4272,14 +4411,14 @@ fn raymarchVolume(in: VSOut, hybridSplatDepth: f32, hybridSplatPresent: bool) ->
       let boundarySidecarView = clamp(u.boundary_sidecar_display.x, 0.0, 5.0);
       var boundarySidecarDebugSample = vec4<f32>(0.0);
       if (boundarySidecarView > 0.5) {
-        boundarySidecarDebugSample = sampleWorldBoundarySidecar(p);
+        boundarySidecarDebugSample = sampleWorldFlowReconstructedSidecar(p, reconstructed);
       }
       var boundarySupportEffective = 0.0;
       var boundaryGradientEffective = 0.0;
       var boundaryFireRidgeEffective = 0.0;
       var boundarySidecarStepFootprintWidth = 0.0;
       if (boundarySidecarSource > 0.5 && boundarySidecarSource <= 1.5) {
-        let boundarySidecarSample = sampleWorldBoundarySidecar(p);
+        let boundarySidecarSample = sampleWorldFlowReconstructedSidecar(p, reconstructed);
         boundarySidecarDebugSample = boundarySidecarSample;
         let boundarySidecarCoverage = boundarySidecarSample.y;
         let boundarySidecarProximity = clamp(max(boundarySidecarSample.x, max(boundarySidecarCoverage * 0.74, boundarySidecarSample.z * 0.58)), 0.0, 1.8);
@@ -4307,7 +4446,7 @@ fn raymarchVolume(in: VSOut, hybridSplatDepth: f32, hybridSplatPresent: bool) ->
         boundaryGradientEffective = boundaryGradient;
         boundaryFireRidgeEffective = boundaryFireRidge;
         if (boundarySidecarSource > 1.5) {
-          let boundarySidecarSample = sampleWorldBoundarySidecar(p);
+          let boundarySidecarSample = sampleWorldFlowReconstructedSidecar(p, reconstructed);
           boundarySidecarDebugSample = boundarySidecarSample;
           let boundarySidecarCoverage = boundarySidecarSample.y;
           let boundarySidecarProximity = clamp(max(boundarySidecarSample.x, max(boundarySidecarCoverage * 0.74, boundarySidecarSample.z * 0.58)), 0.0, 1.8);
@@ -5152,6 +5291,8 @@ struct BoundarySplatCamera {
   cameraRight: vec4<f32>,
   cameraUp: vec4<f32>,
   controls: vec4<f32>,
+  appearance: vec4<f32>,
+  reconstructionControls: vec4<f32>,
   cameraPosition: vec4<f32>,
   instanceInfo: vec4<f32>,
 };
@@ -5230,6 +5371,130 @@ fn boundarySplatCellIndex(cell: vec3<u32>) -> u32 {
   return cell.x + cell.y * GRID + cell.z * GRID * GRID;
 }
 
+fn boundarySplatSupportAt(cell: vec3<i32>) -> f32 {
+  let bounded = clamp(cell, vec3<i32>(0), vec3<i32>(i32(GRID) - 1));
+  return boundarySidecar[boundarySplatCellIndex(vec3<u32>(bounded))].x;
+}
+
+fn boundarySplatSupportGradient(cell: vec3<u32>) -> vec3<f32> {
+  let c = vec3<i32>(cell);
+  let gradient = vec3<f32>(
+    boundarySplatSupportAt(c + vec3<i32>(1, 0, 0)) - boundarySplatSupportAt(c - vec3<i32>(1, 0, 0)),
+    boundarySplatSupportAt(c + vec3<i32>(0, 1, 0)) - boundarySplatSupportAt(c - vec3<i32>(0, 1, 0)),
+    boundarySplatSupportAt(c + vec3<i32>(0, 0, 1)) - boundarySplatSupportAt(c - vec3<i32>(0, 0, 1)),
+  );
+  if (dot(gradient, gradient) < 1e-8) { return vec3<f32>(0.0, 1.0, 0.0); }
+  return normalize(gradient);
+}
+
+fn boundarySplatClampCell(cell: vec3<i32>) -> vec3<u32> {
+  return vec3<u32>(clamp(cell, vec3<i32>(0), vec3<i32>(i32(GRID) - 1)));
+}
+
+fn boundarySplatReadSlot(cell: vec3<i32>, slot: u32) -> vec4<f32> {
+  return fluid[boundarySplatCellIndex(boundarySplatClampCell(cell)) * SLOTS_PER_CELL + slot];
+}
+
+fn boundarySplatReadSidecar(cell: vec3<i32>) -> vec4<f32> {
+  return boundarySidecar[boundarySplatCellIndex(boundarySplatClampCell(cell))];
+}
+
+fn boundarySplatSampleSlot(world: vec3<f32>, slot: u32) -> vec4<f32> {
+  let q = clamp((world * 0.5 + vec3<f32>(0.5)) * f32(GRID) - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
+  let i0 = vec3<i32>(floor(q));
+  let f = fract(q);
+  let x00 = mix(boundarySplatReadSlot(i0, slot), boundarySplatReadSlot(i0 + vec3<i32>(1, 0, 0), slot), f.x);
+  let x10 = mix(boundarySplatReadSlot(i0 + vec3<i32>(0, 1, 0), slot), boundarySplatReadSlot(i0 + vec3<i32>(1, 1, 0), slot), f.x);
+  let x01 = mix(boundarySplatReadSlot(i0 + vec3<i32>(0, 0, 1), slot), boundarySplatReadSlot(i0 + vec3<i32>(1, 0, 1), slot), f.x);
+  let x11 = mix(boundarySplatReadSlot(i0 + vec3<i32>(0, 1, 1), slot), boundarySplatReadSlot(i0 + vec3<i32>(1, 1, 1), slot), f.x);
+  return mix(mix(x00, x10, f.y), mix(x01, x11, f.y), f.z);
+}
+
+fn boundarySplatSampleSidecar(world: vec3<f32>) -> vec4<f32> {
+  let q = clamp((world * 0.5 + vec3<f32>(0.5)) * f32(GRID) - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
+  let i0 = vec3<i32>(floor(q));
+  let f = fract(q);
+  let x00 = mix(boundarySplatReadSidecar(i0), boundarySplatReadSidecar(i0 + vec3<i32>(1, 0, 0)), f.x);
+  let x10 = mix(boundarySplatReadSidecar(i0 + vec3<i32>(0, 1, 0)), boundarySplatReadSidecar(i0 + vec3<i32>(1, 1, 0)), f.x);
+  let x01 = mix(boundarySplatReadSidecar(i0 + vec3<i32>(0, 0, 1)), boundarySplatReadSidecar(i0 + vec3<i32>(1, 0, 1)), f.x);
+  let x11 = mix(boundarySplatReadSidecar(i0 + vec3<i32>(0, 1, 1)), boundarySplatReadSidecar(i0 + vec3<i32>(1, 1, 1)), f.x);
+  return mix(mix(x00, x10, f.y), mix(x01, x11, f.y), f.z);
+}
+
+struct BoundarySplatReconstructionSample {
+  velocityDensity: vec4<f32>,
+  sidecar: vec4<f32>,
+  material: vec4<f32>,
+  fire: vec4<f32>,
+  micro: vec4<f32>,
+};
+
+fn boundarySplatFlowReconstructionRaw(world: vec3<f32>) -> BoundarySplatReconstructionSample {
+  var sample: BoundarySplatReconstructionSample;
+  sample.velocityDensity = boundarySplatSampleSlot(world, 0u);
+  sample.sidecar = boundarySplatSampleSidecar(world);
+  sample.material = boundarySplatSampleSlot(world, 1u);
+  sample.fire = boundarySplatSampleSlot(world, 2u);
+  sample.micro = boundarySplatSampleSlot(world, 3u);
+  return sample;
+}
+
+fn boundarySplatCurl(cell: vec3<i32>) -> vec3<f32> {
+  let vx0 = boundarySplatReadSlot(cell + vec3<i32>(-1, 0, 0), 0u).xyz;
+  let vx1 = boundarySplatReadSlot(cell + vec3<i32>(1, 0, 0), 0u).xyz;
+  let vy0 = boundarySplatReadSlot(cell + vec3<i32>(0, -1, 0), 0u).xyz;
+  let vy1 = boundarySplatReadSlot(cell + vec3<i32>(0, 1, 0), 0u).xyz;
+  let vz0 = boundarySplatReadSlot(cell + vec3<i32>(0, 0, -1), 0u).xyz;
+  let vz1 = boundarySplatReadSlot(cell + vec3<i32>(0, 0, 1), 0u).xyz;
+  return vec3<f32>((vy1.z - vy0.z) - (vz1.y - vz0.y), (vz1.x - vz0.x) - (vx1.z - vx0.z), (vx1.y - vx0.y) - (vy1.x - vy0.x)) * 0.5;
+}
+
+fn boundarySplatStructure(world: vec3<f32>) -> f32 {
+  let sidecar = boundarySplatSampleSidecar(world);
+  return sidecar.x + sidecar.z * 0.25;
+}
+
+fn boundarySplatStructureNormal(world: vec3<f32>) -> vec3<f32> {
+  let cellWidthWorld = 2.0 / f32(GRID);
+  let dx = boundarySplatStructure(world + vec3<f32>(cellWidthWorld, 0.0, 0.0)) - boundarySplatStructure(world - vec3<f32>(cellWidthWorld, 0.0, 0.0));
+  let dy = boundarySplatStructure(world + vec3<f32>(0.0, cellWidthWorld, 0.0)) - boundarySplatStructure(world - vec3<f32>(0.0, cellWidthWorld, 0.0));
+  let dz = boundarySplatStructure(world + vec3<f32>(0.0, 0.0, cellWidthWorld)) - boundarySplatStructure(world - vec3<f32>(0.0, 0.0, cellWidthWorld));
+  let gradientWorld = vec3<f32>(dx, dy, dz) / max(2.0 * cellWidthWorld, 0.0001);
+  let gradientLength = length(gradientWorld);
+  return select(vec3<f32>(0.0, 1.0, 0.0), gradientWorld / max(gradientLength, 0.0001), gradientLength > 0.0001);
+}
+
+fn boundarySplatFlowReconstruction(world: vec3<f32>) -> BoundarySplatReconstructionSample {
+  let center = boundarySplatFlowReconstructionRaw(world);
+  let strength = clamp(boundarySplatCamera.reconstructionControls.x, 0.0, 1.0);
+  if (strength <= 0.0) { return center; }
+  let normal = boundarySplatStructureNormal(world);
+  let velocityTangent = center.velocityDensity.xyz - normal * dot(center.velocityDensity.xyz, normal);
+  let cell = vec3<i32>(floor(clamp((world * 0.5 + vec3<f32>(0.5)) * f32(GRID), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0))));
+  let curlVector = boundarySplatCurl(cell);
+  let curlTangent = curlVector - normal * dot(curlVector, normal);
+  let fallbackAxis = select(vec3<f32>(1.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 1.0), abs(normal.x) > 0.75);
+  let geometricTangent = normalize(cross(normal, fallbackAxis));
+  let curlLength = length(curlTangent);
+  let velocityLength = length(velocityTangent);
+  let curlOrGeometric = select(geometricTangent, curlTangent / max(curlLength, 0.0001), curlLength > 0.0001);
+  let tangent = select(curlOrGeometric, velocityTangent / max(velocityLength, 0.0001), velocityLength > 0.0001);
+  let coherence = clamp(boundarySplatCamera.reconstructionControls.z, 0.0, 2.0);
+  let kernelCurlActivity = smoothstep(0.015, 0.30, length(curlVector));
+  let radiusWorld = clamp(boundarySplatCamera.reconstructionControls.y, 0.0025, 0.12) * mix(1.0, 1.0 + kernelCurlActivity, coherence * 0.5);
+  let forward = boundarySplatFlowReconstructionRaw(world + tangent * radiusWorld);
+  let backward = boundarySplatFlowReconstructionRaw(world - tangent * radiusWorld);
+  let centerWeight = 0.5;
+  let neighborWeight = 0.25;
+  var result: BoundarySplatReconstructionSample;
+  result.velocityDensity = mix(center.velocityDensity, center.velocityDensity * centerWeight + (forward.velocityDensity + backward.velocityDensity) * neighborWeight, strength);
+  result.sidecar = max(vec4<f32>(0.0), mix(center.sidecar, center.sidecar * centerWeight + (forward.sidecar + backward.sidecar) * neighborWeight, strength));
+  result.material = max(vec4<f32>(0.0), mix(center.material, center.material * centerWeight + (forward.material + backward.material) * neighborWeight, strength));
+  result.fire = max(vec4<f32>(0.0), mix(center.fire, center.fire * centerWeight + (forward.fire + backward.fire) * neighborWeight, strength));
+  result.micro = max(vec4<f32>(0.0), mix(center.micro, center.micro * centerWeight + (forward.micro + backward.micro) * neighborWeight, strength));
+  return result;
+}
+
 fn boundarySplatAttributeFeatures(
   sidecar: vec4<f32>,
   material: vec4<f32>,
@@ -5277,12 +5542,12 @@ fn applyBoundarySplatAttributeHook(
 fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (any(gid >= vec3<u32>(GRID))) { return; }
   let cellIndex = boundarySplatCellIndex(gid);
-  let sidecar = boundarySidecar[cellIndex];
-  let material = fluid[cellIndex * SLOTS_PER_CELL + 1u];
-  let fire = fluid[cellIndex * SLOTS_PER_CELL + 2u];
-  let micro = fluid[cellIndex * SLOTS_PER_CELL + 3u];
-  let fireSignal = fire.x * 1.25 + fire.z * 0.52 + fire.w * 0.86 + micro.z * 0.72 + material.y * 0.24;
-  let structuralSignal = sidecar.z * smoothstep(0.055, 0.32, sidecar.y) * smoothstep(0.018, 0.16, fireSignal);
+  let admissionSidecar = boundarySidecar[cellIndex];
+  let admissionMaterial = fluid[cellIndex * SLOTS_PER_CELL + 1u];
+  let admissionFire = fluid[cellIndex * SLOTS_PER_CELL + 2u];
+  let admissionMicro = fluid[cellIndex * SLOTS_PER_CELL + 3u];
+  let admissionFireSignal = admissionFire.x * 1.25 + admissionFire.z * 0.52 + admissionFire.w * 0.86 + admissionMicro.z * 0.72 + admissionMaterial.y * 0.24;
+  let structuralSignal = admissionSidecar.z * smoothstep(0.055, 0.32, admissionSidecar.y) * smoothstep(0.018, 0.16, admissionFireSignal);
   if (structuralSignal < 0.11) { return; }
   let candidateIndex = atomicAdd(&boundarySplatDraw.candidateCount, 1u);
   if (candidateIndex >= boundarySplatDraw.capacity) {
@@ -5290,6 +5555,19 @@ fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
     return;
   }
   let world = ((vec3<f32>(gid) + vec3<f32>(0.5)) / f32(GRID)) * 2.0 - vec3<f32>(1.0);
+  var sidecar = admissionSidecar;
+  var material = admissionMaterial;
+  var fire = admissionFire;
+  var micro = admissionMicro;
+  let reconstructionStrength = clamp(boundarySplatCamera.reconstructionControls.x, 0.0, 1.0);
+  if (reconstructionStrength > 0.0) {
+    let reconstructed = boundarySplatFlowReconstruction(world);
+    sidecar = reconstructed.sidecar;
+    material = reconstructed.material;
+    fire = reconstructed.fire;
+    micro = reconstructed.micro;
+  }
+  let fireSignal = fire.x * 1.25 + fire.z * 0.52 + fire.w * 0.86 + micro.z * 0.72 + material.y * 0.24;
   let thermal = smoothstep(0.025, 0.78, material.y + fire.x * 0.28);
   let whiteHot = smoothstep(0.42, 1.25, fireSignal);
   let cool = vec3<f32>(0.05, 0.16, 0.72);
@@ -5492,7 +5770,7 @@ export function createKaminosVolumePrototype({
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(340);
+  const uniforms = new Float32Array(344);
   let controlsSnapshot = applyRuntimeQualityControls(getControls());
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
@@ -5738,6 +6016,10 @@ export function createKaminosVolumePrototype({
     boundarySplatFeatureCaptureIdentity: BOUNDARY_SPLAT_FEATURE_CAPTURE_IDENTITY,
     boundarySplatFeatureCapture: null,
     boundarySplatSourceAuthority: BOUNDARY_SPLAT_SOURCE_AUTHORITY,
+    flowKernelIdentity: FLOW_RECONSTRUCTION_KERNEL_IDENTITY,
+    flowKernelRequested: flowKernelRequestedControls(controlsSnapshot),
+    flowKernelEffective: flowKernelEffectiveControls(controlsSnapshot),
+    flowKernelCandidateAdmissionAuthority: 'native-cell-unfiltered',
     boundarySplatCapacity: boundarySplatCapacity,
     boundarySplatCapacityGrowthCount: 0,
     boundarySplatCapacityGrowth: null,
@@ -7040,7 +7322,7 @@ export function createKaminosVolumePrototype({
     });
     boundarySplatCameraBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} camera`,
-      size: 144,
+      size: 176,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     boundarySplatInstanceDescriptorBuffer = device.createBuffer({
@@ -8269,13 +8551,21 @@ export function createKaminosVolumePrototype({
       const cameraMatrix = camera.matrixWorld.elements;
       const requestedInstanceCount = normalizeBoundarySplatInstanceCount(controlsSnapshot.boundarySplatInstances);
       const historyDepth = normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth);
-      const splatCamera = new Float32Array(36);
+      const splatCamera = new Float32Array(44);
       splatCamera.set(viewProj.elements, 0);
       splatCamera.set([cameraMatrix[0], cameraMatrix[1], cameraMatrix[2], 0], 16);
       splatCamera.set([cameraMatrix[4], cameraMatrix[5], cameraMatrix[6], 0], 20);
       splatCamera.set([normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius), boundarySplatLearnedAttributesRequested() ? 1 : 0, state.boundarySplatFeatureCaptureEffective ? 1 : 0, normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness)], 24);
-      splatCamera.set([camera.position.x, camera.position.y, camera.position.z, 1], 28);
-      splatCamera.set([boundarySplatCapacity, requestedInstanceCount, historyDepth, 0], 32);
+      splatCamera.set([normalizeBoundarySplatRadianceGain(controlsSnapshot.boundarySplatRadianceGain), normalizeBoundarySplatOpacityGain(controlsSnapshot.boundarySplatOpacityGain), 0, 0], 28);
+      const effectiveFlowKernel = flowKernelEffectiveControls(controlsSnapshot);
+      splatCamera.set([
+        effectiveFlowKernel.strength,
+        effectiveFlowKernel.radiusWorld,
+        effectiveFlowKernel.coherence,
+        0,
+      ], 32);
+      splatCamera.set([camera.position.x, camera.position.y, camera.position.z, 1], 36);
+      splatCamera.set([boundarySplatCapacity, requestedInstanceCount, historyDepth, 0], 40);
       device.queue.writeBuffer(boundarySplatCameraBuffer, 0, splatCamera);
     }
     const { renderPhaseTimeMs, renderPhaseFrame } = updateRenderPhaseState(now, state, lookFreeze);
@@ -8591,7 +8881,12 @@ export function createKaminosVolumePrototype({
     uniforms[321] = externalCueActive ? 1 : 0;
     uniforms[322] = oracleActivityCueUpload.grid || 0;
     uniforms[323] = oracleActivityCueUpload.externalCueCellCount || 0;
-    uniforms.set(previousViewProj.elements, 324);
+    const effectiveFlowKernel = flowKernelEffectiveControls(controlsSnapshot);
+    uniforms[324] = effectiveFlowKernel.strength;
+    uniforms[325] = effectiveFlowKernel.radiusWorld;
+    uniforms[326] = effectiveFlowKernel.coherence;
+    uniforms[327] = 0;
+    uniforms.set(previousViewProj.elements, 328);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.lookFreeze = lookFreeze;
@@ -8628,6 +8923,14 @@ export function createKaminosVolumePrototype({
     state.boundarySidecarSource = boundarySidecarSourceName;
     state.boundaryStructureSource = boundarySidecarSourceName;
     state.boundarySidecarView = boundarySidecarViewName;
+    state.flowKernelIdentity = FLOW_RECONSTRUCTION_KERNEL_IDENTITY;
+    state.flowKernelRequested = flowKernelRequestedControls(controlsSnapshot);
+    state.flowKernelEffective = {
+      strength: uniforms[324],
+      radiusWorld: uniforms[325],
+      coherence: uniforms[326],
+    };
+    state.flowKernelCandidateAdmissionAuthority = 'native-cell-unfiltered';
     state.boundarySidecarDebug = boundarySidecarDebug(boundarySidecarSourceName);
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
     state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
@@ -13183,6 +13486,21 @@ export function createKaminosVolumePrototype({
         boundarySplatPhaseSources: state.boundarySplatPhaseSources,
         boundarySplatInstanceDescriptors: state.boundarySplatInstanceDescriptors,
         boundarySplatIncrementalInstanceCost: state.boundarySplatIncrementalInstanceCost,
+        boundarySplatRadius: state.boundarySplatRadius,
+        boundarySplatSharpness: state.boundarySplatSharpness,
+        boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
+        boundarySplatInstanceCount: state.boundarySplatInstanceCount,
+        boundarySplatCandidateCount: state.boundarySplatCandidateCount,
+        boundarySplatOverflowCount: state.boundarySplatOverflowCount,
+        boundarySplatCapacity,
+        boundarySplatInitialOverflowCount,
+        boundarySplatCapacityRetryCount,
+        boundarySplatFallbackReason: state.boundarySplatFallbackReason,
+        boundarySplatMode: normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode),
+        flowKernelIdentity: state.flowKernelIdentity,
+        flowKernelRequested: state.flowKernelRequested,
+        flowKernelEffective: state.flowKernelEffective,
+        flowKernelCandidateAdmissionAuthority: state.flowKernelCandidateAdmissionAuthority,
       };
     } finally {
       if (options.restoreControls !== false) {

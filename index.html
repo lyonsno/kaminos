@@ -1367,6 +1367,21 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <input type="range" id="volume-boundary-splat-sharpness" min="1" max="12" step="0.1" value="3.4">
         <span class="slider-val" id="volume-boundary-splat-sharpness-val">3.4</span>
       </div>
+      <div class="slider-row">
+        <span class="slider-label">Kernel strength</span>
+        <input type="range" id="volume-flow-kernel-strength" min="0" max="1" step="0.02" value="0.00">
+        <span class="slider-val" id="volume-flow-kernel-strength-val">0.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Feature scale</span>
+        <input type="range" id="volume-flow-kernel-radius" min="0.0025" max="0.12" step="0.0025" value="0.0300">
+        <span class="slider-val" id="volume-flow-kernel-radius-val">0.0300</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Flow coherence</span>
+        <input type="range" id="volume-flow-kernel-coherence" min="0" max="2" step="0.05" value="1.00">
+        <span class="slider-val" id="volume-flow-kernel-coherence-val">1.00</span>
+      </div>
       <span class="slider-help">Splat authority: support heat/reaction/front/interface, bake blur, baked ridge, and ridge select/cut shape candidate fields; splat radius/sharpness shape raster support. Step width and boundary display/color controls remain raymarch-only.</span>
       <span class="slider-help">baked-boundary-sidecar-v0: prefilters support/coverage/ridge/footprint before the raymarch. Sidecar views expose the reconstruction channels in the primary viewer.</span>
       <div class="slider-row">
@@ -10578,6 +10593,7 @@ const FIRESIM_LOOK_FIELDS = [
   'shellThermal', 'shellReaction', 'shellFront', 'shellEdge', 'shellCoreSuppress',
   'shellBite', 'shellCurl', 'shellHeat', 'shellDivergence', 'shellLuma', 'shellExposure',
   'shellSoftClip', 'shellSmoke',
+  'flowKernelStrength', 'flowKernelRadius', 'flowKernelCoherence',
   'oracleActivityCue', 'oracleActivityDisplay', 'oracleActivityCurlNoise',
   'oracleActivityVorticity', 'oracleActivityMaterial',
 ];
@@ -12251,6 +12267,9 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
   { key: 'boundarySidecarRidge', id: 'volume-boundary-sidecar-ridge', param: 'volume_boundary_sidecar_ridge', min: 0, max: 2, decimals: 2 },
   { key: 'boundarySplatRadius', id: 'volume-boundary-splat-radius', param: 'volume_boundary_splat_radius', min: 0.35, max: 1.5, decimals: 2 },
   { key: 'boundarySplatSharpness', id: 'volume-boundary-splat-sharpness', param: 'volume_boundary_splat_sharpness', min: 1, max: 12, decimals: 1 },
+  { key: 'flowKernelStrength', id: 'volume-flow-kernel-strength', param: 'volume_flow_kernel_strength', min: 0, max: 1, decimals: 2 },
+  { key: 'flowKernelRadius', id: 'volume-flow-kernel-radius', param: 'volume_flow_kernel_radius', min: 0.0025, max: 0.12, decimals: 4 },
+  { key: 'flowKernelCoherence', id: 'volume-flow-kernel-coherence', param: 'volume_flow_kernel_coherence', min: 0, max: 2, decimals: 2 },
   { key: 'reactionHeatMin', id: 'volume-reaction-heat-min', param: 'volume_reaction_heat_min', min: 0, max: 0.2, decimals: 3 },
   { key: 'reactionHeatMax', id: 'volume-reaction-heat-max', param: 'volume_reaction_heat_max', min: 0.04, max: 1.2, decimals: 2 },
   { key: 'reactionFuelMin', id: 'volume-reaction-fuel-min', param: 'volume_reaction_fuel_min', min: 0, max: 0.03, decimals: 4 },
@@ -19995,6 +20014,9 @@ function readVolumeControls() {
     boundarySplatHistoryFrameStride: parseFloat(document.getElementById('volume-boundary-splat-history-frame-stride').value),
     boundarySplatRadius: parseFloat(document.getElementById('volume-boundary-splat-radius').value),
     boundarySplatSharpness: parseFloat(document.getElementById('volume-boundary-splat-sharpness').value),
+    flowKernelStrength: parseFloat(document.getElementById('volume-flow-kernel-strength').value),
+    flowKernelRadius: parseFloat(document.getElementById('volume-flow-kernel-radius').value),
+    flowKernelCoherence: parseFloat(document.getElementById('volume-flow-kernel-coherence').value),
     boundarySidecarControls: {
       identity: 'baked-boundary-sidecar-v0',
       authority: 'band-limited-support-coverage-ridge-proximity-footprint-v1',
