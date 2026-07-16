@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -63,6 +64,9 @@ def main() -> int:
     parser.add_argument("--support-threshold", type=float, default=0.98)
     parser.add_argument("--expected-low-grid", type=int)
     parser.add_argument("--expected-high-grid", type=int)
+    parser.add_argument("--model-identity")
+    parser.add_argument("--training-basin-identity")
+    parser.add_argument("--training-source-capture-sha256")
     args = parser.parse_args()
     probe_path = Path(args.probe_manifest).expanduser().resolve()
     out_dir = Path(args.out_dir).expanduser().resolve()
@@ -79,6 +83,14 @@ def main() -> int:
         require(low_grid == args.expected_low_grid, "probe low grid differs from caller expectation")
     if args.expected_high_grid is not None:
         require(high_grid == args.expected_high_grid, "probe high grid differs from caller expectation")
+    package_identity = args.model_identity or model_identity(high_grid, low_grid)
+    require(re.fullmatch(r"[a-z0-9][a-z0-9-]*", package_identity) is not None, "model identity must be a stable lowercase slug")
+    has_basin_identity = args.training_basin_identity is not None
+    has_source_hash = args.training_source_capture_sha256 is not None
+    require(has_basin_identity == has_source_hash, "training basin identity and source-capture hash must be supplied together")
+    if has_basin_identity:
+        require(re.fullmatch(r"[a-z0-9][a-z0-9-]*", args.training_basin_identity) is not None, "training basin identity must be a stable lowercase slug")
+        require(re.fullmatch(r"[0-9a-f]{64}", args.training_source_capture_sha256) is not None, "training source-capture hash must be lowercase sha256")
     require(inputs.get("pairAuthority") == PAIR_AUTHORITY, "probe pair authority mismatch")
     require(inputs.get("trainingInputAuthority") == TRAINING_INPUT_AUTHORITY, "probe training input authority mismatch")
     require(inputs.get("trainingInputSyntheticDownsample") is True, "probe must record synthetic training downsample")
@@ -122,7 +134,7 @@ def main() -> int:
     values.tofile(data_path)
     model = {
         "schema": SCHEMA,
-        "identity": model_identity(high_grid, low_grid),
+        "identity": package_identity,
         "status": "captured",
         "failurePhase": None,
         "source": {
@@ -136,6 +148,10 @@ def main() -> int:
             "trainingInputAuthority": inputs["trainingInputAuthority"],
             "trainingInputSyntheticDownsample": inputs["trainingInputSyntheticDownsample"],
             "nativeDeploymentInputSeenDuringTraining": inputs["nativeDeploymentInputSeenDuringTraining"],
+            **({
+                "trainingBasinIdentity": args.training_basin_identity,
+                "trainingSourceCaptureSha256": args.training_source_capture_sha256,
+            } if has_basin_identity else {}),
         },
         "features": {
             "identity": "full-low-field-plus-spatial-rbf-features-v0",

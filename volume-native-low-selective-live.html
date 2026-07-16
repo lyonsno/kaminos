@@ -67,6 +67,7 @@
       NATIVE_LOW_TRAINED_PACKAGE_ROUTE_REGISTRY_IDENTITY,
       NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE,
       NATIVE_LOW_TRANSFER_160_TO_96_DEPLOYMENT_GRID_ROUTE,
+      NATIVE_LOW_TRANSFER_LATEST_HAPPY_BOWL_160_TO_96_ROUTE,
       SELECTIVE_HEAD_LIVE_MODEL,
       SELECTIVE_HEAD_LIVE_MODEL_URL,
       nativeLowTrainedPackageRouteRegistry,
@@ -251,6 +252,7 @@
     const causalFlowDebug = Math.max(0, Math.min(1, rawCausalFlowDebug));
     const causalRenderViewIdentity = 'causal-render-view-identity-v0';
     const newBasinZeroShotMode = !native64ManifestMode && !causalFeedbackMode && params.get('new_basin_zero_shot') === '1';
+    const latestBasinTrainedComparisonMode = newBasinZeroShotMode && params.get('latest_basin_trained_comparison') === '1';
     const requestedBasinIdentity = newBasinZeroShotMode
       ? 'vsp-48617494d68e4f24bba358676733f2aaa5f03622b1747c45056de56884fe78d8'
       : 'rgb_upscale_basin_0711';
@@ -348,6 +350,13 @@
       document.querySelector('#deterministicUpscaleImage + .pane-label').innerHTML = 'deterministicUpscale<span>Native field deterministically reconstructed at 160^3, no learned residual</span>';
       document.querySelector('#treatmentImage + .pane-label').innerHTML = `baseline128Trained<span>128-trained frozen residual applied zero-shot, raymarch-only-v0</span>`;
       document.querySelector('#frontTopologyAblatedImage + .pane-label').innerHTML = `candidate96Trained<span>96-trained frozen residual applied zero-shot, raymarch-only-v0</span>`;
+    }
+
+    if (latestBasinTrainedComparisonMode) {
+      title.querySelector('strong').textContent = `Native ${manualSourceGrid}: latest-basin training vs legacy 96`;
+      title.querySelector('span').textContent = 'Same native source step and camera, raymarch-only-v0, with both no-model controls';
+      document.querySelector('#treatmentImage + .pane-label').innerHTML = 'latestBasin96Trained<span>Latest happy-bowl 160->96 step96 package, raymarch-only-v0</span>';
+      document.querySelector('#frontTopologyAblatedImage + .pane-label').innerHTML = 'candidate96Trained<span>Legacy 160->96 package on the same native state, raymarch-only-v0</span>';
     }
 
     if (causalFeedbackMode) {
@@ -978,6 +987,7 @@
       return {
         baseline128Trained: model(NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE),
         candidate96Trained: model(NATIVE_LOW_TRANSFER_160_TO_96_DEPLOYMENT_GRID_ROUTE),
+        latestBasin96Trained: model(NATIVE_LOW_TRANSFER_LATEST_HAPPY_BOWL_160_TO_96_ROUTE),
       };
     }
 
@@ -1019,12 +1029,16 @@
         treatmentSplatOpacityGain,
       };
       const runnerBefore = prototype.debugState?.() || null;
+      const primaryRouteId = latestBasinTrainedComparisonMode
+        ? NATIVE_LOW_TRANSFER_LATEST_HAPPY_BOWL_160_TO_96_ROUTE
+        : NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE;
+      const primaryRoleName = latestBasinTrainedComparisonMode ? 'latestBasin96Trained' : 'baseline128Trained';
       const baseline128 = await prototype.captureNativeLowSelectiveSharedDeviceFrame({
         ...sharedOptions,
-        transferRouteId: NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE,
+        transferRouteId: primaryRouteId,
         advanceSourceStep: true,
       });
-      if (!baseline128?.ok) throw new Error(`${baseline128?.failurePhase || 'baseline128Trained'}:${baseline128?.error || 'unknown'}`);
+      if (!baseline128?.ok) throw new Error(`${baseline128?.failurePhase || primaryRoleName}:${baseline128?.error || 'unknown'}`);
       const candidate96 = await prototype.captureNativeLowSelectiveSharedDeviceFrame({
         ...sharedOptions,
         captureDeterministicUpscale: false,
@@ -1042,7 +1056,7 @@
         },
       });
       frameIndex += 1;
-      const baselineRole = trainedRoleReceipt('baseline128Trained', baseline128);
+      const baselineRole = trainedRoleReceipt(primaryRoleName, baseline128);
       const candidateRole = trainedRoleReceipt('candidate96Trained', candidate96);
       const nativeControl = nativeControlRoleReceipt(baseline128, manualSourceGrid);
       const sameNativeStateIdentity = `native-${manualSourceGrid}-shared-source:${baseline128.sourceStepIdentity}:composition-${requestedComposition}:transport-${NATIVE_LOW_TRANSPORT_MODE}`;
@@ -1088,17 +1102,17 @@
         visualRoles: {
           [nativeControlRoleIdentity]: nativeControl,
           ...(deterministicUpscaleRole ? { deterministicUpscale: deterministicUpscaleRole } : {}),
-          baseline128Trained: baselineRole,
+          [primaryRoleName]: baselineRole,
           candidate96Trained: candidateRole,
         },
         roles: {
           [nativeControlRoleIdentity]: nativeControl,
           ...(deterministicUpscaleRole ? { deterministicUpscale: deterministicUpscaleRole } : {}),
-          baseline128Trained: baselineRole,
+          [primaryRoleName]: baselineRole,
           candidate96Trained: candidateRole,
         },
         modelReceipts: {
-          baseline128Trained: {
+          [primaryRoleName]: {
             modelIdentity: baselineRole.modelIdentity,
             modelSha256: baselineRole.modelSha256,
             packageSha256: baselineRole.packageSha256,
@@ -1121,7 +1135,7 @@
         staleFrameReason: null,
         compositionMismatch: baseline128.effectiveComposition !== requestedComposition || candidate96.effectiveComposition !== requestedComposition ? compositionMismatch : null,
         stalePredictionRejection: {
-          baseline128Trained: baseline128.stalePredictionRejection || null,
+          [primaryRoleName]: baseline128.stalePredictionRejection || null,
           candidate96Trained: candidate96.stalePredictionRejection || null,
           repeatedStaticPrediction: false,
           stalePrediction: false,

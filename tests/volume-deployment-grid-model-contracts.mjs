@@ -82,11 +82,16 @@ const exported = spawnSync('python3', [
   '--out-dir', outDir,
   '--expected-low-grid', '96',
   '--expected-high-grid', '160',
+  '--model-identity', 'latest-happy-bowl-selective-carrier-heads-160-to-96-step96-v0',
+  '--training-basin-identity', 'latest-happy-bowl-vsp-48617494-step96-v0',
+  '--training-source-capture-sha256', '3f1c08a38c61e8affa39ed69cc85bf59e15bd4c3a5b773d4d91a64d7d7cfe035',
 ], { encoding: 'utf8' });
 assert.equal(exported.status, 0, exported.stderr || exported.stdout);
 
 const model = JSON.parse(readFileSync(join(outDir, 'manifest.json'), 'utf8'));
-assert.equal(model.identity, 'exact-basin-selective-carrier-heads-160-to-96-v0');
+assert.equal(model.identity, 'latest-happy-bowl-selective-carrier-heads-160-to-96-step96-v0');
+assert.equal(model.source.trainingBasinIdentity, 'latest-happy-bowl-vsp-48617494-step96-v0');
+assert.equal(model.source.trainingSourceCaptureSha256, '3f1c08a38c61e8affa39ed69cc85bf59e15bd4c3a5b773d4d91a64d7d7cfe035');
 assert.equal(model.source.lowGrid, 96);
 assert.equal(model.source.highGrid, 160);
 assert.equal(model.source.pairAuthority, 'downsampled-same-high-history-input-to-exact-high-target');

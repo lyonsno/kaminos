@@ -7,10 +7,15 @@ import { spawn } from 'node:child_process';
 
 const args = parseArgs(process.argv.slice(2));
 const newBasinZeroShot = args.has('--new-basin-zero-shot');
-const SCHEMA = newBasinZeroShot
+const latestBasinTrainedComparison = args.has('--latest-basin-trained-comparison');
+const SCHEMA = latestBasinTrainedComparison
+  ? 'kaminos.volume.latest-happy-bowl-trained-raymarch-witness.v0'
+  : newBasinZeroShot
   ? 'kaminos.volume.new-basin-zero-shot-raymarch-witness.v0'
   : 'kaminos.volume.native-low-transfer-long-sequence-witness.v0';
-const IDENTITY = newBasinZeroShot
+const IDENTITY = latestBasinTrainedComparison
+  ? 'latest-happy-bowl-trained-raymarch-witness-v0'
+  : newBasinZeroShot
   ? 'new-basin-zero-shot-raymarch-witness-v0'
   : 'native-low-two-model-long-sequence-witness-v0';
 const PRESENTED_FRAME_AUTHORITY = newBasinZeroShot
@@ -22,10 +27,12 @@ const captureViewport = newBasinZeroShot
 const expectedGrid = integerArg('--expected-grid', 96);
 const controlRole = `native${expectedGrid}Control`;
 const SEQUENCE_AUTHORITY = `frame-locked-consecutive-native-${expectedGrid}-simulation-steps-v0`;
-const ROLES = Object.freeze(newBasinZeroShot
+const ROLES = Object.freeze(latestBasinTrainedComparison
+  ? [controlRole, 'latestBasin96Trained', 'candidate96Trained', 'deterministicUpscale']
+  : newBasinZeroShot
   ? [controlRole, 'baseline128Trained', 'candidate96Trained', 'deterministicUpscale']
   : [controlRole, 'baseline128Trained', 'candidate96Trained']);
-const MODELS = Object.freeze({
+const ALL_MODELS = Object.freeze({
   baseline128Trained: Object.freeze({
     identity: 'exact-basin-selective-carrier-heads-160-to-128-v0',
     sha256: 'dc1886384f87c4e51015f6ffd5ac8c0a48ac6f32b6f02a238ac5e3c3bd883dc9',
@@ -34,7 +41,14 @@ const MODELS = Object.freeze({
     identity: 'exact-basin-selective-carrier-heads-160-to-96-v0',
     sha256: 'baa54236f04c28eab278cf60e4a60745cd3c0160a985a9adbb1e06db7958f6e8',
   }),
+  latestBasin96Trained: Object.freeze({
+    identity: 'latest-happy-bowl-selective-carrier-heads-160-to-96-step96-v0',
+    sha256: '97e25caa711395f26e8b39f22c506e38e772bfc1a12cf518d5e048511d2bee08',
+  }),
 });
+const MODELS = Object.freeze(Object.fromEntries(
+  Object.entries(ALL_MODELS).filter(([role]) => ROLES.includes(role)),
+));
 
 let url = null;
 const out = resolve(String(args.get('--out') || '/tmp/kaminos-native-low-transfer-long-sequence.mp4'));
@@ -103,6 +117,12 @@ class CdpSocket {
 
 try {
   url = required('--url');
+  if (latestBasinTrainedComparison) {
+    const requested = new URL(url);
+    requested.searchParams.set('new_basin_zero_shot', '1');
+    requested.searchParams.set('latest_basin_trained_comparison', '1');
+    url = requested.href;
+  }
   assert.ok(requestedFrameCount >= 1, '--frames must be at least one');
   assert.ok(playbackFps > 0, '--fps must be positive');
   assert.ok(timeoutMs > 0, '--timeout-ms must be positive');
@@ -492,7 +512,7 @@ function writeOperatorPage() {
 <title>Native ${expectedGrid} two-model long motion</title><style>
 :root{color-scheme:dark;font-family:Inter,system-ui,sans-serif;background:#080a0b;color:#eef2f3}*{box-sizing:border-box}body{margin:0;background:#080a0b}header{padding:12px 16px;border-bottom:1px solid #30383a;background:#111516}h1{font-size:17px;margin:0 0 4px}p{font-size:12px;color:#aab5b8;margin:0}.roles{display:grid;grid-template-columns:repeat(${newBasinZeroShot ? 4 : 3},1fr);gap:1px;background:#30383a}.role{padding:9px 12px;background:#121617}.role strong{display:block;font-size:13px}.role span{display:block;color:#98a6a9;font-size:10px;margin-top:2px}main{padding:0 0 18px}video{display:block;width:100%;height:auto;background:#000}nav{padding:12px 16px}a{color:#8fd4ff}@media(max-width:760px){.roles{grid-template-columns:1fr}.role{min-height:48px}}
 </style></head><body><header><h1>Native ${expectedGrid} ${newBasinZeroShot ? 'new-basin raymarch reconstruction' : 'control vs both learned transfer models'}</h1><p>${requestedFrameCount} consecutive simulation steps at ${playbackFps} fps. ${newBasinZeroShot ? (expectedGrid === 96 ? 'Raymarch-only, exact latest_happy_bowl preset.' : 'Raymarch-only, latest_happy_bowl preset + explicit source-grid override.') : 'Splat-only.'} No native-phase high-grid truth target.</p></header>
-<section class="roles"><div class="role"><strong>Native ${expectedGrid} control</strong><span>No learned residual</span></div><div class="role"><strong>128-trained zero-shot</strong><span>${MODELS.baseline128Trained.identity}</span></div><div class="role"><strong>96-trained zero-shot</strong><span>${MODELS.candidate96Trained.identity}</span></div>${newBasinZeroShot ? '<div class="role"><strong>Deterministic upscale</strong><span>Native field at 160^3, no learned residual</span></div>' : ''}</section>
+<section class="roles"><div class="role"><strong>Native ${expectedGrid} control</strong><span>No learned residual</span></div>${latestBasinTrainedComparison ? `<div class="role"><strong>Latest-basin 96-trained</strong><span>${MODELS.latestBasin96Trained.identity}</span></div><div class="role"><strong>Legacy 96-trained</strong><span>${MODELS.candidate96Trained.identity}</span></div>` : `<div class="role"><strong>128-trained zero-shot</strong><span>${MODELS.baseline128Trained.identity}</span></div><div class="role"><strong>96-trained zero-shot</strong><span>${MODELS.candidate96Trained.identity}</span></div>`}${newBasinZeroShot ? '<div class="role"><strong>Deterministic upscale</strong><span>Native field at 160^3, no learned residual</span></div>' : ''}</section>
 <main><video autoplay loop controls muted playsinline src="./${videoName}"></video><nav><a href="./${contactName}">Open first / middle / last contact sheet</a></nav></main></body></html>\n`);
 }
 

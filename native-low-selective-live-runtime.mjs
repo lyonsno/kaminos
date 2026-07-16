@@ -7,6 +7,10 @@ import {
   SELECTIVE_HEAD_LIVE_MODEL_URL as SELECTIVE_HEAD_LIVE_MODEL_URL_160_TO_96,
 } from './models/selective-head-live/exact-basin-160-to-96-v0/model.generated.js';
 import {
+  SELECTIVE_HEAD_LIVE_MODEL as SELECTIVE_HEAD_LIVE_MODEL_LATEST_HAPPY_BOWL_160_TO_96,
+  SELECTIVE_HEAD_LIVE_MODEL_URL as SELECTIVE_HEAD_LIVE_MODEL_URL_LATEST_HAPPY_BOWL_160_TO_96,
+} from './models/selective-head-live/latest-happy-bowl-160-to-96-step96-v0/model.generated.js';
+import {
   EXACT_BASIN_ACTIVITY_MODEL,
   EXACT_BASIN_ACTIVITY_MODEL_URL,
 } from './models/selective-head-live/exact-basin-160-to-96-activity-v0/model.generated.js';
@@ -33,10 +37,13 @@ export const NATIVE_LOW_LEARNED_FLOW_ACTIVITY_MODEL_SHA256 = '34aff071fac1375f6a
 export const NATIVE_LOW_TRAINED_PACKAGE_ROUTE_REGISTRY_IDENTITY = 'native-low-trained-package-route-registry-v0';
 export const NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE = 'native-low-transfer-160-to-128-zero-shot-v0';
 export const NATIVE_LOW_TRANSFER_160_TO_96_DEPLOYMENT_GRID_ROUTE = 'native-low-transfer-160-to-96-deployment-grid-v0';
+export const NATIVE_LOW_TRANSFER_LATEST_HAPPY_BOWL_160_TO_96_ROUTE = 'native-low-transfer-latest-happy-bowl-160-to-96-step96-v0';
 export const NATIVE_LOW_TRANSFER_160_TO_128_MODEL_IDENTITY = 'exact-basin-selective-carrier-heads-160-to-128-v0';
 export const NATIVE_LOW_TRANSFER_160_TO_128_MODEL_SHA256 = 'dc1886384f87c4e51015f6ffd5ac8c0a48ac6f32b6f02a238ac5e3c3bd883dc9';
 export const NATIVE_LOW_TRANSFER_160_TO_96_MODEL_IDENTITY = 'exact-basin-selective-carrier-heads-160-to-96-v0';
 export const NATIVE_LOW_TRANSFER_160_TO_96_MODEL_SHA256 = 'baa54236f04c28eab278cf60e4a60745cd3c0160a985a9adbb1e06db7958f6e8';
+export const NATIVE_LOW_TRANSFER_LATEST_HAPPY_BOWL_160_TO_96_MODEL_IDENTITY = 'latest-happy-bowl-selective-carrier-heads-160-to-96-step96-v0';
+export const NATIVE_LOW_TRANSFER_LATEST_HAPPY_BOWL_160_TO_96_MODEL_SHA256 = '97e25caa711395f26e8b39f22c506e38e772bfc1a12cf518d5e048511d2bee08';
 
 export const NATIVE_LOW_TRAINED_PACKAGE_ROUTES = Object.freeze({
   [NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE]: Object.freeze({
@@ -72,6 +79,28 @@ export const NATIVE_LOW_TRAINED_PACKAGE_ROUTES = Object.freeze({
     trainingInputAuthority: SELECTIVE_HEAD_LIVE_MODEL_160_TO_96.source.trainingInputAuthority,
     trainingInputSyntheticDownsample: SELECTIVE_HEAD_LIVE_MODEL_160_TO_96.source.trainingInputSyntheticDownsample,
     nativeDeploymentInputSeenDuringTraining: false,
+    dispatchIdentity: NATIVE_LOW_SUPPORT_POSITIVE_INDIRECT_RESIDUAL_DISPATCH,
+    sourceHistoryDispatchIdentity: 'sourceHistoryDispatchArgs',
+    rankingClaim: false,
+  }),
+  [NATIVE_LOW_TRANSFER_LATEST_HAPPY_BOWL_160_TO_96_ROUTE]: Object.freeze({
+    routeId: NATIVE_LOW_TRANSFER_LATEST_HAPPY_BOWL_160_TO_96_ROUTE,
+    label: 'latest happy bowl 160->96 step96',
+    model: SELECTIVE_HEAD_LIVE_MODEL_LATEST_HAPPY_BOWL_160_TO_96,
+    modelUrl: SELECTIVE_HEAD_LIVE_MODEL_URL_LATEST_HAPPY_BOWL_160_TO_96,
+    packageIdentity: NATIVE_LOW_TRANSFER_LATEST_HAPPY_BOWL_160_TO_96_MODEL_IDENTITY,
+    modelIdentity: NATIVE_LOW_TRANSFER_LATEST_HAPPY_BOWL_160_TO_96_MODEL_IDENTITY,
+    packageSha256: NATIVE_LOW_TRANSFER_LATEST_HAPPY_BOWL_160_TO_96_MODEL_SHA256,
+    modelSha256: NATIVE_LOW_TRANSFER_LATEST_HAPPY_BOWL_160_TO_96_MODEL_SHA256,
+    trainedLowGrid: 96,
+    trainedHighGrid: 160,
+    effectiveSourceGrid: 'native-48-native-64-native-96-or-native-128-runtime-selected-v0',
+    promotionRole: 'latest-basin-diagnostic-candidate',
+    trainingInputAuthority: SELECTIVE_HEAD_LIVE_MODEL_LATEST_HAPPY_BOWL_160_TO_96.source.trainingInputAuthority,
+    trainingInputSyntheticDownsample: SELECTIVE_HEAD_LIVE_MODEL_LATEST_HAPPY_BOWL_160_TO_96.source.trainingInputSyntheticDownsample,
+    nativeDeploymentInputSeenDuringTraining: false,
+    trainingBasinIdentity: SELECTIVE_HEAD_LIVE_MODEL_LATEST_HAPPY_BOWL_160_TO_96.source.trainingBasinIdentity,
+    trainingSourceCaptureSha256: SELECTIVE_HEAD_LIVE_MODEL_LATEST_HAPPY_BOWL_160_TO_96.source.trainingSourceCaptureSha256,
     dispatchIdentity: NATIVE_LOW_SUPPORT_POSITIVE_INDIRECT_RESIDUAL_DISPATCH,
     sourceHistoryDispatchIdentity: 'sourceHistoryDispatchArgs',
     rankingClaim: false,
@@ -142,6 +171,8 @@ export function nativeLowTrainedPackageRouteRegistry() {
       trainingInputAuthority: route.trainingInputAuthority || null,
       trainingInputSyntheticDownsample: route.trainingInputSyntheticDownsample ?? null,
       nativeDeploymentInputSeenDuringTraining: route.nativeDeploymentInputSeenDuringTraining ?? null,
+      trainingBasinIdentity: route.trainingBasinIdentity || null,
+      trainingSourceCaptureSha256: route.trainingSourceCaptureSha256 || null,
       dispatchIdentity: route.dispatchIdentity,
       sourceHistoryDispatchIdentity: route.sourceHistoryDispatchIdentity,
       rankingClaim: false,

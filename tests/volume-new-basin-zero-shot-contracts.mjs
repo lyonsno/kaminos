@@ -8,19 +8,25 @@ const routePath = join(root, 'volume-native-low-selective-live.html');
 const corePath = join(root, 'volume-core.js');
 const runtimePath = join(root, 'native-low-selective-live-runtime.mjs');
 const witnessPath = join(root, 'volume-new-basin-zero-shot-witness.mjs');
+const trainedWitnessPath = join(root, 'volume-latest-happy-bowl-trained-witness.mjs');
 const sharedWitnessPath = join(root, 'volume-native-low-transfer-long-sequence-witness.mjs');
+const trainedModelPath = join(root, 'models/selective-head-live/latest-happy-bowl-160-to-96-step96-v0/manifest.json');
 
 assert.ok(existsSync(routePath), 'native-low live route exists');
 assert.ok(existsSync(corePath), 'volume renderer core exists');
 assert.ok(existsSync(runtimePath), 'native-low inference runtime exists');
 assert.ok(existsSync(witnessPath), 'new-basin zero-shot witness exists');
+assert.ok(existsSync(trainedWitnessPath), 'latest-basin trained witness exists');
 assert.ok(existsSync(sharedWitnessPath), 'continuous shared witness exists');
+assert.ok(existsSync(trainedModelPath), 'latest-basin trained package exists');
 
 const route = readFileSync(routePath, 'utf8');
 const core = readFileSync(corePath, 'utf8');
 const runtime = readFileSync(runtimePath, 'utf8');
 const witness = readFileSync(witnessPath, 'utf8');
+const trainedWitness = readFileSync(trainedWitnessPath, 'utf8');
 const sharedWitness = readFileSync(sharedWitnessPath, 'utf8');
+const trainedModel = JSON.parse(readFileSync(trainedModelPath, 'utf8'));
 const witnessContract = `${witness}\n${sharedWitness}`;
 const combined = `${route}\n${core}\n${witnessContract}`;
 
@@ -44,8 +50,15 @@ assert.match(core, /deterministicUpscaleVisualUrl/, 'shared-device capture retur
 assert.match(runtime, /nativeUpsampleFluid/, 'runtime preserves the deterministic fluid upsample before learned residual mutation');
 assert.match(runtime, /native-low-deterministic-upsample-control-v0/, 'runtime build identity changes with the new preserved buffer contract');
 assert.match(runtime, /\[48, 64, 96, 128\]\.includes\(lowGrid\)/, 'runtime admits every source grid advertised by the new-basin witness');
+assert.equal(trainedModel.identity, 'latest-happy-bowl-selective-carrier-heads-160-to-96-step96-v0');
+assert.equal(trainedModel.source.trainingBasinIdentity, 'latest-happy-bowl-vsp-48617494-step96-v0');
+assert.equal(trainedModel.source.trainingSourceCaptureSha256, '3f1c08a38c61e8affa39ed69cc85bf59e15bd4c3a5b773d4d91a64d7d7cfe035');
+assert.match(runtime, /native-low-transfer-latest-happy-bowl-160-to-96-step96-v0/, 'runtime exposes the latest-basin package as a distinct route');
+assert.match(runtime, /97e25caa711395f26e8b39f22c506e38e772bfc1a12cf518d5e048511d2bee08/, 'runtime pins the latest-basin model checksum');
 
 assert.match(witness, /--new-basin-zero-shot/, 'named witness cannot silently run the legacy three-role mode');
+assert.match(trainedWitness, /--latest-basin-trained-comparison/, 'trained witness cannot silently run the legacy zero-shot comparison');
+assert.match(trainedWitness, /--new-basin-zero-shot/, 'trained witness retains the exact latest-basin renderer and preset route');
 assert.match(witnessContract, /new-basin-zero-shot-raymarch-witness-v0/, 'witness names its evidence identity');
 assert.match(witnessContract, /baseline128Trained[\s\S]*candidate96Trained[\s\S]*deterministicUpscale/, 'witness requires all four visual roles in presentation order');
 assert.match(witnessContract, /requestedBasinIdentity[\s\S]*effectiveBasinIdentity/, 'witness rejects silent basin substitution');
@@ -58,5 +71,7 @@ assert.match(witnessContract, /runtimeTruthAvailable[\s\S]*syntheticDownsampleAp
 assert.match(witnessContract, /modelSha256/, 'witness records frozen model checksums');
 assert.match(witnessContract, /captureViewport[\s\S]*1200[\s\S]*1200/, 'new-basin witness captures four legible square panes');
 assert.match(sharedWitness, /Native \$\{expectedGrid\} control[\s\S]*128-trained zero-shot[\s\S]*96-trained zero-shot[\s\S]*Deterministic upscale/, 'operator legend follows the actual top-left, top-right, bottom-left, bottom-right pane order');
+assert.match(route, /latest_basin_trained_comparison[\s\S]*latestBasin96Trained/, 'live route presents the basin-native package as a distinct visual role');
+assert.match(sharedWitness, /latestBasin96Trained[\s\S]*candidate96Trained[\s\S]*deterministicUpscale/, 'trained witness requires latest-basin, legacy-96, and deterministic controls');
 
 console.log('new-basin zero-shot contracts passed');
