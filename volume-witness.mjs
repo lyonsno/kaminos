@@ -173,6 +173,7 @@ const expectsNoFireVolumeEvidence = evidenceMode === 'no-fire-volume';
 const FLOW_DEBUG_AUXILIARY_CAPTURE_AUTHORITY = 'flow-debug-interface-canvas-capture-v0';
 const BOUNDARY_SIDECAR_SUPPORT_AUXILIARY_CAPTURE_AUTHORITY = 'boundary-sidecar-support-canvas-capture-v0';
 const FLOW_RECONSTRUCTION_KERNEL_IDENTITY = 'flow-tangent-positive-symmetric-trilinear-v0';
+const FLOW_KERNEL_COMPACT_POPULATION_IDENTITY = 'structural-splat-candidates-v0';
 const visualEvidenceMode = expectsNoFireVolumeEvidence
   ? 'no-fire-volume-signal'
   : (expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : (expectsPerformanceVolumeEvidence ? 'performance-volume-signal' : 'fire-volume'));
@@ -2653,7 +2654,11 @@ async function main() {
       }
     }
     assert.equal(state.flowKernelIdentity, FLOW_RECONSTRUCTION_KERNEL_IDENTITY, 'flow reconstruction kernel identity did not reach the live renderer');
-    assert.equal(state.flowKernelCandidateAdmissionAuthority, 'native-cell-unfiltered', 'flow kernel changed or obscured splat admission authority');
+  assert.equal(
+    state.flowKernelCandidateAdmissionAuthority,
+    FLOW_KERNEL_COMPACT_POPULATION_IDENTITY,
+    'compact splat witness did not report structurally admitted descriptor candidates',
+  );
     assert.ok(Math.abs((state.controls?.flowKernelStrength ?? 0) - expectedFlowKernelStrength) < 0.001, 'flow kernel strength route/control did not apply');
     assert.ok(Math.abs((state.controls?.flowKernelRadius ?? 0) - expectedFlowKernelRadius) < 0.001, 'flow kernel radius route/control did not apply');
     assert.ok(Math.abs((state.controls?.flowKernelCoherence ?? 0) - expectedFlowKernelCoherence) < 0.001, 'flow kernel coherence route/control did not apply');
