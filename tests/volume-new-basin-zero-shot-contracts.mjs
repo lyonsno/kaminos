@@ -47,7 +47,7 @@ assert.match(runtime, /\[48, 64, 96, 128\]\.includes\(lowGrid\)/, 'runtime admit
 
 assert.match(witness, /--new-basin-zero-shot/, 'named witness cannot silently run the legacy three-role mode');
 assert.match(witnessContract, /new-basin-zero-shot-raymarch-witness-v0/, 'witness names its evidence identity');
-assert.match(witnessContract, /deterministicUpscale[\s\S]*baseline128Trained[\s\S]*candidate96Trained/, 'witness requires all four visual roles');
+assert.match(witnessContract, /baseline128Trained[\s\S]*candidate96Trained[\s\S]*deterministicUpscale/, 'witness requires all four visual roles in presentation order');
 assert.match(witnessContract, /requestedBasinIdentity[\s\S]*effectiveBasinIdentity/, 'witness rejects silent basin substitution');
 assert.match(witnessContract, /exactPresetRouteApplied[\s\S]*sourceGridOverrideApplied[\s\S]*controlOverrides/, 'witness proves exact preset custody or records the grid override explicitly');
 assert.match(witnessContract, /latest_happy_bowl preset \+ explicit source-grid override/, 'operator page does not call an overridden route the exact preset');
@@ -57,5 +57,6 @@ assert.match(witnessContract, /lastObservedRouteState/, 'route-settle failures p
 assert.match(witnessContract, /runtimeTruthAvailable[\s\S]*syntheticDownsampleApplied/, 'witness records runtime authority boundaries');
 assert.match(witnessContract, /modelSha256/, 'witness records frozen model checksums');
 assert.match(witnessContract, /captureViewport[\s\S]*1200[\s\S]*1200/, 'new-basin witness captures four legible square panes');
+assert.match(sharedWitness, /Native \$\{expectedGrid\} control[\s\S]*128-trained zero-shot[\s\S]*96-trained zero-shot[\s\S]*Deterministic upscale/, 'operator legend follows the actual top-left, top-right, bottom-left, bottom-right pane order');
 
 console.log('new-basin zero-shot contracts passed');

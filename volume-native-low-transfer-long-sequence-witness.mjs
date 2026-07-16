@@ -23,7 +23,7 @@ const expectedGrid = integerArg('--expected-grid', 96);
 const controlRole = `native${expectedGrid}Control`;
 const SEQUENCE_AUTHORITY = `frame-locked-consecutive-native-${expectedGrid}-simulation-steps-v0`;
 const ROLES = Object.freeze(newBasinZeroShot
-  ? [controlRole, 'deterministicUpscale', 'baseline128Trained', 'candidate96Trained']
+  ? [controlRole, 'baseline128Trained', 'candidate96Trained', 'deterministicUpscale']
   : [controlRole, 'baseline128Trained', 'candidate96Trained']);
 const MODELS = Object.freeze({
   baseline128Trained: Object.freeze({
@@ -492,7 +492,7 @@ function writeOperatorPage() {
 <title>Native ${expectedGrid} two-model long motion</title><style>
 :root{color-scheme:dark;font-family:Inter,system-ui,sans-serif;background:#080a0b;color:#eef2f3}*{box-sizing:border-box}body{margin:0;background:#080a0b}header{padding:12px 16px;border-bottom:1px solid #30383a;background:#111516}h1{font-size:17px;margin:0 0 4px}p{font-size:12px;color:#aab5b8;margin:0}.roles{display:grid;grid-template-columns:repeat(${newBasinZeroShot ? 4 : 3},1fr);gap:1px;background:#30383a}.role{padding:9px 12px;background:#121617}.role strong{display:block;font-size:13px}.role span{display:block;color:#98a6a9;font-size:10px;margin-top:2px}main{padding:0 0 18px}video{display:block;width:100%;height:auto;background:#000}nav{padding:12px 16px}a{color:#8fd4ff}@media(max-width:760px){.roles{grid-template-columns:1fr}.role{min-height:48px}}
 </style></head><body><header><h1>Native ${expectedGrid} ${newBasinZeroShot ? 'new-basin raymarch reconstruction' : 'control vs both learned transfer models'}</h1><p>${requestedFrameCount} consecutive simulation steps at ${playbackFps} fps. ${newBasinZeroShot ? (expectedGrid === 96 ? 'Raymarch-only, exact latest_happy_bowl preset.' : 'Raymarch-only, latest_happy_bowl preset + explicit source-grid override.') : 'Splat-only.'} No native-phase high-grid truth target.</p></header>
-<section class="roles"><div class="role"><strong>Native ${expectedGrid} control</strong><span>No learned residual</span></div>${newBasinZeroShot ? '<div class="role"><strong>Deterministic upscale</strong><span>Native field at 160^3, no learned residual</span></div>' : ''}<div class="role"><strong>128-trained zero-shot</strong><span>${MODELS.baseline128Trained.identity}</span></div><div class="role"><strong>96-trained zero-shot</strong><span>${MODELS.candidate96Trained.identity}</span></div></section>
+<section class="roles"><div class="role"><strong>Native ${expectedGrid} control</strong><span>No learned residual</span></div><div class="role"><strong>128-trained zero-shot</strong><span>${MODELS.baseline128Trained.identity}</span></div><div class="role"><strong>96-trained zero-shot</strong><span>${MODELS.candidate96Trained.identity}</span></div>${newBasinZeroShot ? '<div class="role"><strong>Deterministic upscale</strong><span>Native field at 160^3, no learned residual</span></div>' : ''}</section>
 <main><video autoplay loop controls muted playsinline src="./${videoName}"></video><nav><a href="./${contactName}">Open first / middle / last contact sheet</a></nav></main></body></html>\n`);
 }
 
