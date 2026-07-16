@@ -1,0 +1,1021 @@
+{
+  "schema": "kaminos.volume.splat-radiance-parity.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "runStartedAt": "2026-07-16T22:37:37.999Z",
+  "runCompletedAt": "2026-07-16T22:44:10.410Z",
+  "requestedRoute": "/volume-selective-head-live.html",
+  "effectiveWrapperRoute": "exact-basin-selective-head-live-v0",
+  "effectiveRendererRoute": "native-3d-compute-fluid-raymarch-v0",
+  "backend": "WebGPU:apple",
+  "cameraCount": 21,
+  "curve": {
+    "exposure": 0.96,
+    "vignetteBase": 0.8,
+    "vignetteGain": 0.18,
+    "power": 0.84
+  },
+  "source": {
+    "commit": "6b978de1ec63782896803c212679531568fd9e16",
+    "sameStateCaptureId": "filament-orbit-f96-s96",
+    "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+    "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+    "candidateCount": 147389,
+    "fluidSha256": "d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1",
+    "frontSha256": "1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8"
+  },
+  "arms": [
+    {
+      "id": "current-additive-v0",
+      "requestedRoute": "current-additive-v0",
+      "effectiveRoute": "current-additive-v0",
+      "targetFormat": "rgba8unorm",
+      "resolveIdentity": "direct-additive-presentation-v0",
+      "blendIdentity": "additive-rgb-gaussian-alpha-v0",
+      "intermediateClamped": false,
+      "intermediateReadbackStatus": "not-applicable",
+      "fallbackReason": null,
+      "captures": [
+        {
+          "cameraIndex": 0,
+          "cameraPoseHash": "45c3c25b041faae5c1d26fb7fe531e1331e7414542ba7ace601f2f738fc170d4",
+          "pixelHash": "31efcfbf228f20e96d24026ca82c50c692b12e64fa48b5c27acbc3abd91d6b42",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-00-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 38110,
+            "meanLuma": 43.56168817443978,
+            "maxLuma": 254.42239999999998,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 1,
+          "cameraPoseHash": "cf4fab1a382f414305efc33b765312c3dff85a46b1722ed653c427e49d471db7",
+          "pixelHash": "a1f9eaf1352d1a793eafc5eaeb68bc932ee7025bc8d6be5e40059a52c6cbd29d",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-01-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 37489,
+            "meanLuma": 43.313118874024454,
+            "maxLuma": 254.99999999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 2,
+          "cameraPoseHash": "51e69ecf78f4bbb5bafe4538f0689ceea52f2a348c318eb4f4eb45b219c204cd",
+          "pixelHash": "60caf21b9eb65876567b34dd0f749bcb35203d61c99d2d8df2421bd9d8f60aa8",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-02-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 36870,
+            "meanLuma": 43.08874278043072,
+            "maxLuma": 253.48379999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 3,
+          "cameraPoseHash": "05b26ed28713e3c300744fee93c8026433bc518e816effe04c2dc8e04f9f7b03",
+          "pixelHash": "0c7918e1316ce8f254d6b94dce4b32b8982b0465f588bef2cec9b2e8c89e65f9",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-03-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 36098,
+            "meanLuma": 42.83870044216626,
+            "maxLuma": 253.91699999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 4,
+          "cameraPoseHash": "77e73d6c53eaa7642cbe2f5cbc3324eaebd0e996aac5e9abe2d21591e49c5e8d",
+          "pixelHash": "3fbe04c6a656f71aea3156f90a9a422948d92ad7e4978c20adee596c90c16ea0",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-04-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 35458,
+            "meanLuma": 42.63186814232999,
+            "maxLuma": 254.06139999999996,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 5,
+          "cameraPoseHash": "7758c0e393b43649c60c01a58766aa31e4f174547b3b4b74ff036e5e6e9f016f",
+          "pixelHash": "c5eb7940264ce9b8c85934beeb4b1153700394608ef8549d4338451aedbb2b92",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-05-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 34898,
+            "meanLuma": 42.42212904141891,
+            "maxLuma": 253.05059999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 6,
+          "cameraPoseHash": "4385b764d62b5321531c4d0c1cc176a500358cac979798e0e34af23fbf90341d",
+          "pixelHash": "de25e23282ec23e8713fbb6568433df659570c9d6e5e7b1fcfed1ecc575e8299",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-06-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 34408,
+            "meanLuma": 42.22071480496086,
+            "maxLuma": 254.99999999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 7,
+          "cameraPoseHash": "9ca4ccd7748e2b4cb65199ead48f5a3ab8ddebf9c4ddc8d2c88a1532f24e464d",
+          "pixelHash": "c0042e1c2747f4798cc36d89911a546e18bdc526f82caebaa42182186c4db05b",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-07-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 33833,
+            "meanLuma": 42.01815609832299,
+            "maxLuma": 254.20579999999998,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 8,
+          "cameraPoseHash": "74134f304b285292ce863e4611c1ca16d5862fc5df201aa07ac89d3efbcc6af0",
+          "pixelHash": "91074716532c6ecc81ba93d44d880a6e0e70ce30ef1f7e5a3f2b9776bb31a2cb",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-08-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 33264,
+            "meanLuma": 41.762161164912584,
+            "maxLuma": 252.40079999999998,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 9,
+          "cameraPoseHash": "c8fd12aa540ddfcf69a0b8e26119aede00419c1dfc56bc56c81f3a49533450f1",
+          "pixelHash": "66dd3687ca9c318810ea6b46804830d5765d5510321aa081c7447ff079beb86c",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-09-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 32910,
+            "meanLuma": 41.54259824181908,
+            "maxLuma": 252.97839999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 10,
+          "cameraPoseHash": "5d20c917cf1dd8c58a3e5b00a77b604ca330cac831187759b3a248a0b85fd3f0",
+          "pixelHash": "505aea2b47c86b6275bdabd419450374fd6fbebd79d707264a5f0108fb5de2c2",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-10-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 32500,
+            "meanLuma": 41.348437724369106,
+            "maxLuma": 254.99999999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 11,
+          "cameraPoseHash": "ee87c53b2a77093df2d5487aef61205f53a07216050c38c7b70e8cec1c2182d2",
+          "pixelHash": "9cce68d8f95f19875021124fe8a4ac6a0c884a2f5192630d17f461500a859c1c",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-11-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 32121,
+            "meanLuma": 41.13423404484057,
+            "maxLuma": 252.1392,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 12,
+          "cameraPoseHash": "e94122271c9eeef8c9e664d56606bb42c49f210e7afcf1846f3b0cac8668d205",
+          "pixelHash": "1bcab5c9a56697d274349a4440777424257e512ab63a6f84dc54a902479cf9b3",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-12-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 31611,
+            "meanLuma": 40.90253399746443,
+            "maxLuma": 254.99999999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 13,
+          "cameraPoseHash": "22fc95573905f9bf90271b845ace8f54a8e97495e6d7479e824ba2fc38d5cf6a",
+          "pixelHash": "5a4e952461c0a6d7cc076df6b6ba23d2fc8edcf55657aff5723b9b2e55b57bed",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-13-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 31004,
+            "meanLuma": 40.70403784017673,
+            "maxLuma": 254.99999999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 14,
+          "cameraPoseHash": "cc3370c636f4d69b75527dc2306f5dea7e1735e62f7793b68cd7200178d74bcd",
+          "pixelHash": "1a0c10d0de2023bcdedffc37793b9dc3a1e48bbef9516efada98d91932ad4b6e",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-14-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 31351,
+            "meanLuma": 40.52860989365872,
+            "maxLuma": 254.99999999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 15,
+          "cameraPoseHash": "8335bbde7157adec382a65ebf6ec4d2bd32aa024eff6970bed20174147f75d68",
+          "pixelHash": "91acb755085b1c2b6d4187994ac87a7ba9fde6d41bbe8308a16fae9671c3a2ab",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-15-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 31654,
+            "meanLuma": 40.37781726587567,
+            "maxLuma": 254.99999999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 16,
+          "cameraPoseHash": "627a591dc68bc0ab1a9ac07ab1274e6aa7501fe9fc094be6695c32a96936eb9f",
+          "pixelHash": "51dcb478c7d6033ee847ec2c815484b90a1f4b86d414036e3537654a81aaafe3",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-16-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 31973,
+            "meanLuma": 40.34217405378938,
+            "maxLuma": 254.99999999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 17,
+          "cameraPoseHash": "ede20dc45218027be28f051df39f308f45cb5cb4ca03d18873a607ca2ecd2c72",
+          "pixelHash": "ef6822220efcb0dac8fe398a095f48a8135e05bd2027fce114b1a5183926ca8c",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-17-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 32323,
+            "meanLuma": 40.2623044191107,
+            "maxLuma": 254.99999999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 18,
+          "cameraPoseHash": "8dc7ee28d0c6827a5e0d2302d6163e1abf167b667b10f6186b7868a092a1b49e",
+          "pixelHash": "3f1dd7b312d1fe5e563d9ed88e1f6c36fabd2086d90dd4122a1249ffa58ea560",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-18-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 32586,
+            "meanLuma": 40.27046623150213,
+            "maxLuma": 254.63899999999998,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 19,
+          "cameraPoseHash": "9711add1728f84054d43e5be3250217a930c7cb59773688f3ac84da038c8f2f9",
+          "pixelHash": "f7c73c33ca002141e230254320172e991ac4d2d600cab79936ff5161ce054bc7",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-19-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 32686,
+            "meanLuma": 40.27304936041738,
+            "maxLuma": 254.99999999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 20,
+          "cameraPoseHash": "df5690f8f82524d911f6c690ceea77222ec858955602b950b22780e0e7c8c5d8",
+          "pixelHash": "d02b9ba44d223a19196df94b12c0138758e7c7430449f0209059085133b42a1f",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-20-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 32727,
+            "meanLuma": 40.22599607568863,
+            "maxLuma": 254.99999999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        }
+      ]
+    },
+    {
+      "id": "matched-presentation-v0",
+      "requestedRoute": "matched-presentation-v0",
+      "effectiveRoute": "matched-presentation-v0",
+      "targetFormat": "rgba16float",
+      "resolveIdentity": "raymarch-matched-exponential-power-grade-v0",
+      "blendIdentity": "additive-rgb-gaussian-alpha-v0",
+      "intermediateClamped": false,
+      "intermediateReadbackStatus": "complete",
+      "fallbackReason": null,
+      "captures": [
+        {
+          "cameraIndex": 0,
+          "cameraPoseHash": "45c3c25b041faae5c1d26fb7fe531e1331e7414542ba7ace601f2f738fc170d4",
+          "pixelHash": "64cc2ae1c363554f6908f05548f96f2e25a94419f0c4eed268138bf4021d3a57",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-00-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 45353,
+            "meanLuma": 38.0576284018532,
+            "maxLuma": 222.0564,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.73046875,
+            "meanRgb": 0.19660934607051944,
+            "channelsAboveOne": 9356,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.98291015625,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 1,
+          "cameraPoseHash": "cf4fab1a382f414305efc33b765312c3dff85a46b1722ed653c427e49d471db7",
+          "pixelHash": "14f716aab3fb8e13079b9dff35d646f8488ffa4636dfd944f416cb3484092ccc",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-01-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 44228,
+            "meanLuma": 37.792570992788505,
+            "maxLuma": 222.2008,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.7265625,
+            "meanRgb": 0.19553286372340362,
+            "channelsAboveOne": 9382,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.98486328125,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 2,
+          "cameraPoseHash": "51e69ecf78f4bbb5bafe4538f0689ceea52f2a348c318eb4f4eb45b219c204cd",
+          "pixelHash": "f04bf7796b5a5ad67999ec2f6fa71bc3cdd7c39d990b8e4d0447012185675b94",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-02-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 43366,
+            "meanLuma": 37.54914719692599,
+            "maxLuma": 221.48559999999998,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.58203125,
+            "meanRgb": 0.19460797850611594,
+            "channelsAboveOne": 9344,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.98095703125,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 3,
+          "cameraPoseHash": "05b26ed28713e3c300744fee93c8026433bc518e816effe04c2dc8e04f9f7b03",
+          "pixelHash": "df17faaf4b4b7911daf03ae402a960777a16df3f6df95303ac01331b127b86b1",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-03-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 42331,
+            "meanLuma": 37.2874896115176,
+            "maxLuma": 221.05239999999998,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.669921875,
+            "meanRgb": 0.19358880416671873,
+            "channelsAboveOne": 9197,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.9814453125,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 4,
+          "cameraPoseHash": "77e73d6c53eaa7642cbe2f5cbc3324eaebd0e996aac5e9abe2d21591e49c5e8d",
+          "pixelHash": "37a9871364e332417e464bdedeab396b177183044b8ba750993fe87fcc39e069",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-04-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 41422,
+            "meanLuma": 37.04488417644898,
+            "maxLuma": 220.2036,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.52734375,
+            "meanRgb": 0.19258731405379548,
+            "channelsAboveOne": 9135,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.98046875,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 5,
+          "cameraPoseHash": "7758c0e393b43649c60c01a58766aa31e4f174547b3b4b74ff036e5e6e9f016f",
+          "pixelHash": "c71f216b543652845fad9aaa55aa8bd0de7ba71239e6003b3f2173b80d1e665f",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-05-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 40875,
+            "meanLuma": 36.809606680002126,
+            "maxLuma": 221.2008,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.630859375,
+            "meanRgb": 0.19143063574075025,
+            "channelsAboveOne": 8986,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.98193359375,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 6,
+          "cameraPoseHash": "4385b764d62b5321531c4d0c1cc176a500358cac979798e0e34af23fbf90341d",
+          "pixelHash": "9782e6d2e21972e3ae06cb518e72b92f606cfda07175163274c34f7bf261497c",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-06-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 39834,
+            "meanLuma": 36.5897464783913,
+            "maxLuma": 222.7784,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.634765625,
+            "meanRgb": 0.19044201125447646,
+            "channelsAboveOne": 9027,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.982421875,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 7,
+          "cameraPoseHash": "9ca4ccd7748e2b4cb65199ead48f5a3ab8ddebf9c4ddc8d2c88a1532f24e464d",
+          "pixelHash": "f9adf5768c900034025f29f11c28b56f76f5ac1ffec869103a5413d0ab8039a2",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-07-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 39062,
+            "meanLuma": 36.36801818708218,
+            "maxLuma": 222.273,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.732421875,
+            "meanRgb": 0.18936109611742752,
+            "channelsAboveOne": 8904,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.9833984375,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 8,
+          "cameraPoseHash": "74134f304b285292ce863e4611c1ca16d5862fc5df201aa07ac89d3efbcc6af0",
+          "pixelHash": "a6f75a6770b5705c3461c1bd4f54fd6cea5704b53fc4dcf91bace2d49eaa3a00",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-08-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 38484,
+            "meanLuma": 36.12073117334307,
+            "maxLuma": 223.41059999999996,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.849609375,
+            "meanRgb": 0.1880902644055359,
+            "channelsAboveOne": 8796,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.98486328125,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 9,
+          "cameraPoseHash": "c8fd12aa540ddfcf69a0b8e26119aede00419c1dfc56bc56c81f3a49533450f1",
+          "pixelHash": "ee247f22f87391ccb66be1e9a4725b6ca7fadb06dc3a47d30b7a118ea00ff793",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-09-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 37832,
+            "meanLuma": 35.89506491288096,
+            "maxLuma": 221.05239999999998,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.5625,
+            "meanRgb": 0.18704041032888738,
+            "channelsAboveOne": 8829,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.97998046875,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 10,
+          "cameraPoseHash": "5d20c917cf1dd8c58a3e5b00a77b604ca330cac831187759b3a248a0b85fd3f0",
+          "pixelHash": "6dfc4e84b9394f1029d98eb8dbf2f9aba89b7b66045bbb6ccaa7b4fb57b95713",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-10-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 37340,
+            "meanLuma": 35.70194574669669,
+            "maxLuma": 225.9132,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 4.0625,
+            "meanRgb": 0.18600450927564116,
+            "channelsAboveOne": 8735,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.98681640625,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 11,
+          "cameraPoseHash": "ee87c53b2a77093df2d5487aef61205f53a07216050c38c7b70e8cec1c2182d2",
+          "pixelHash": "f0136f972cae6a139b90a781a90b4cc67bc4a4905929568770c77abd85ebe5c0",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-11-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 36924,
+            "meanLuma": 35.50516967415923,
+            "maxLuma": 219.908,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.568359375,
+            "meanRgb": 0.18484798524090068,
+            "channelsAboveOne": 8764,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.9814453125,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 12,
+          "cameraPoseHash": "e94122271c9eeef8c9e664d56606bb42c49f210e7afcf1846f3b0cac8668d205",
+          "pixelHash": "86cbc2fe42ad611a6d094a9e82f6f038f276231a8028fa128e810bfb5d7388ba",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-12-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 36778,
+            "meanLuma": 35.33541380217959,
+            "maxLuma": 218.3372,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.5234375,
+            "meanRgb": 0.18377507398029613,
+            "channelsAboveOne": 8695,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.9794921875,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 13,
+          "cameraPoseHash": "22fc95573905f9bf90271b845ace8f54a8e97495e6d7479e824ba2fc38d5cf6a",
+          "pixelHash": "25431faefc9be316b7ced2fcad0344e26be2a402026a7b126ba6d11e80cee2be",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-13-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 36425,
+            "meanLuma": 35.21170724851337,
+            "maxLuma": 218.3946,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.5703125,
+            "meanRgb": 0.18294122517663222,
+            "channelsAboveOne": 8584,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.97900390625,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 14,
+          "cameraPoseHash": "cc3370c636f4d69b75527dc2306f5dea7e1735e62f7793b68cd7200178d74bcd",
+          "pixelHash": "d9fe5cbbcc3d2f9d044c8e4b50387d70d56f27ab1d0dadbe3b077db14f6bb052",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-14-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 36600,
+            "meanLuma": 35.19374525977798,
+            "maxLuma": 219.6874,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.640625,
+            "meanRgb": 0.18216703972268689,
+            "channelsAboveOne": 8475,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.9814453125,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 15,
+          "cameraPoseHash": "8335bbde7157adec382a65ebf6ec4d2bd32aa024eff6970bed20174147f75d68",
+          "pixelHash": "ce3b5ebc8824dc2fff5c2d64b0fdf4c1a7b27c80baa5533c2ed384548a76c961",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-15-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 37313,
+            "meanLuma": 35.18176563667953,
+            "maxLuma": 223.3344,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.8984375,
+            "meanRgb": 0.18119869469812963,
+            "channelsAboveOne": 8360,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.9833984375,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 16,
+          "cameraPoseHash": "627a591dc68bc0ab1a9ac07ab1274e6aa7501fe9fc094be6695c32a96936eb9f",
+          "pixelHash": "600bb0788a96fa13e05c989c00bb247db20f8a03c707ac95a888ac047d496819",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-16-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 37836,
+            "meanLuma": 35.2416791782912,
+            "maxLuma": 226.5522,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 4.17578125,
+            "meanRgb": 0.18075285443023897,
+            "channelsAboveOne": 8214,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.98779296875,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 17,
+          "cameraPoseHash": "ede20dc45218027be28f051df39f308f45cb5cb4ca03d18873a607ca2ecd2c72",
+          "pixelHash": "f7831e4b2cfe569080afb1ceb0dac0b750ba12e93cfa87ea92c3c404657532a5",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-17-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 38417,
+            "meanLuma": 35.25730522450933,
+            "maxLuma": 223.61239999999998,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 4.0859375,
+            "meanRgb": 0.18017808184041006,
+            "channelsAboveOne": 8189,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.98681640625,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 18,
+          "cameraPoseHash": "8dc7ee28d0c6827a5e0d2302d6163e1abf167b667b10f6186b7868a092a1b49e",
+          "pixelHash": "3ab60ec03bb6ab32b36764ac7fbde7a5f8cf42406dc16de52301149e58f7aac3",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-18-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 38774,
+            "meanLuma": 35.29275073432647,
+            "maxLuma": 226.5562,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 4.046875,
+            "meanRgb": 0.17981640178489872,
+            "channelsAboveOne": 8136,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.98583984375,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 19,
+          "cameraPoseHash": "9711add1728f84054d43e5be3250217a930c7cb59773688f3ac84da038c8f2f9",
+          "pixelHash": "47199ef15a3aba38190b9004a7a2818258341166886d664a147a9498f7a97424",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-19-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 39117,
+            "meanLuma": 35.3140627309576,
+            "maxLuma": 225.4038,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 4.1484375,
+            "meanRgb": 0.17949528901604522,
+            "channelsAboveOne": 8074,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.98486328125,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 20,
+          "cameraPoseHash": "df5690f8f82524d911f6c690ceea77222ec858955602b950b22780e0e7c8c5d8",
+          "pixelHash": "92aa98165c651b49012b2f4378b777db3173f458d2fb88a5dd47ec080855c37a",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/private/tmp/kaminos-pyro-radiance-transfer-bailiff-0716/artifacts/pyro-radiance-transfer-bailiff-0716/matched-presentation-frozen-r3/camera-20-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 39264,
+            "meanLuma": 35.327970626941365,
+            "maxLuma": 216.7408,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.66796875,
+            "meanRgb": 0.17933975054150086,
+            "channelsAboveOne": 7920,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.98095703125,
+            "intermediateClamped": false
+          }
+        }
+      ]
+    }
+  ]
+}
