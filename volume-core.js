@@ -12611,6 +12611,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
   }
 
+  function boundarySplatCameraState() {
+    return {
+      viewProjection: Array.from(viewProj.elements),
+      cameraRight: Array.from(camera.matrixWorld.elements.slice(0, 3)),
+      cameraUp: Array.from(camera.matrixWorld.elements.slice(4, 7)),
+      viewport: [state.width, state.height],
+    };
+  }
+
   async function captureBoundarySplatSupervisionCandidates(options = {}) {
     if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
     const controlsBefore = { ...controlsSnapshot };
@@ -13996,6 +14005,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     beginDebugFullFieldExport,
     readDebugFullFieldExportChunk,
     releaseDebugFullFieldExport,
+    boundarySplatCameraState,
     captureBoundarySplatSupervisionCandidates,
     sampleRenderScaleSet,
     controlledStepFrame,

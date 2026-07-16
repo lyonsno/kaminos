@@ -17,6 +17,12 @@ assert.match(witness, /operator\.setAppearanceAssay\(mode\)/, 'appearance witnes
 assert.match(witness, /hasAppearanceControlApi[\s\S]*hasAppearanceCaptureApi/, 'appearance admission reports control-plane and evidence-plane availability separately');
 assert.match(witness, /kaminosSetCameraDebugPose/, 'appearance witness applies explicit camera poses');
 assert.match(witness, /captureBoundarySplatSupervisionCandidates/, 'appearance witness captures native analytic candidates without importing a teacher target');
+assert.match(witness, /prototype\.boundarySplatCameraState\(\)/, 'appearance witness reads per-view camera matrices without rebuilding the candidate cohort');
+const candidateCaptureCall = witness.indexOf('const capture = await prototype.captureBoundarySplatSupervisionCandidates({');
+const cameraLoop = witness.indexOf('for (const entry of cameraManifest.cameras) {');
+assert.ok(candidateCaptureCall >= 0 && candidateCaptureCall < cameraLoop, 'appearance witness captures one frozen world-space candidate cohort before mutating camera views');
+const candidateCaptureCalls = witness.match(/prototype\.captureBoundarySplatSupervisionCandidates\(\{/g) || [];
+assert.equal(candidateCaptureCalls.length, 1, 'appearance witness must not rebuild nondeterministically compacted candidates per camera');
 assert.doesNotMatch(witness, /captureBoundarySplatSupervisionFrame/, 'appearance witness does not call the obsolete combined candidate-teacher API');
 assert.doesNotMatch(witness, /prototype\.setAppearanceDecompositionMode\(mode\)/, 'appearance witness must not require the nested renderer to own wrapper control');
 assert.match(witness, /captureAppearance\(['"]structural-a['"]/, 'appearance witness captures exact structural A');
@@ -45,7 +51,7 @@ assert.doesNotMatch(witness, /beautySmokeOff/, 'full Beauty must not survive as 
 assert.match(witness, /const pixelMetrics = rgba =>/, 'appearance witness measures target pixel activity before publication');
 assert.match(witness, /if \(!metrics\.nonblank\)[\s\S]*appearance-assay-blank-target/, 'appearance witness rejects blank or near-blank assay targets');
 assert.match(witness, /metrics,[\s\S]*sampleAuthority/, 'appearance witness records target activity metrics beside route authority');
-assert.match(witness, /viewCandidateSha256\s*!==\s*candidateSha256/, 'appearance witness compares candidate hashes across camera views');
+assert.doesNotMatch(witness, /viewCandidateSha256/, 'appearance witness does not mistake nondeterministic GPU compaction order for candidate-state drift');
 assert.match(witness, /candidateBytes\.length\s*!==\s*evidence\.candidateMetadata\.packedByteLength/, 'appearance witness rejects a transferred candidate byte-length mismatch');
 assert.match(witness, /sha256Buffer\(candidateBytes\)\s*!==\s*evidence\.candidateSha256/, 'appearance witness rejects candidate transfer hash drift from the captured cohort');
 assert.match(witness, /count:\s*evidence\.candidateMetadata\.rowCount/, 'appearance manifest maps the packed cohort row count without inventing a second count field');
@@ -53,6 +59,8 @@ assert.match(witness, /dtype:\s*['"]float32-le['"]/, 'appearance manifest declar
 assert.match(witness, /sameStateCaptureId[\s\S]*simStepCount/, 'appearance witness preserves frozen-state and simulator-step evidence');
 assert.match(witness, /camera-manifest-restored/, 'appearance witness restores the original operator camera after capture');
 assert.match(witness, /failurePhase[\s\S]*lastTrustworthyEvidence[\s\S]*writeFile/, 'appearance witness writes a durable failure report with the last trustworthy evidence');
+assert.match(witness, /rmSync\(userDataDir,\s*\{\s*recursive:\s*true,\s*force:\s*true,\s*maxRetries:\s*3,\s*retryDelay:\s*100\s*\}\)/, 'appearance witness retries Chrome profile cleanup without masking primary evidence');
+assert.match(witness, /catch \(cleanupError\)[\s\S]*browser-profile-cleanup[\s\S]*cleanup-failure\.json/, 'appearance witness preserves cleanup failure separately instead of overriding primary evidence');
 
 const browserSpawns = witness.match(/spawn\(chrome/g) || [];
 assert.equal(browserSpawns.length, 1, 'appearance witness must use one browser process for the entire camera cohort');

@@ -74,6 +74,9 @@ assert.match(
   'candidate capture wraps the initial queue drain in the restoration finally block',
 );
 assert.match(core, /captureBoundarySplatSupervisionCandidates[\s\S]*sameStateCaptureId[\s\S]*simStepCount[\s\S]*camera/, 'candidate capture reports frozen-state and camera identity');
+assert.match(core, /function boundarySplatCameraState\(\)/, 'runtime exposes camera matrices independently from candidate compaction');
+assert.match(core, /boundarySplatCameraState[\s\S]*viewProjection[\s\S]*cameraRight[\s\S]*cameraUp[\s\S]*viewport/, 'independent camera state carries the exact splat projection contract');
+assert.match(core, /\bboundarySplatCameraState,/, 'independent camera state is exposed through the prototype API');
 assert.match(
   core,
   /async function sampleFrame[\s\S]*selectiveHeadLiveEffectiveRole:\s*state\.selectiveHeadLiveEffectiveRole[\s\S]*selectiveHeadLiveCompositionEffective:\s*state\.selectiveHeadLiveCompositionEffective[\s\S]*selectiveHeadLivePassReceipt:/,

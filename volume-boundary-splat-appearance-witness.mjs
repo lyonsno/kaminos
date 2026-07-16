@@ -155,6 +155,7 @@ try {
       if (!operator?.setAppearanceAssay
         || !prototype?.debugState
         || !prototype?.captureBoundarySplatSupervisionCandidates
+        || !prototype?.boundarySplatCameraState
         || !prototype?.sampleFrame
         || !prototype?.setSelectiveHeadLiveCapturePaused
         || !prototype?.setVolumePresentationMode
@@ -211,9 +212,9 @@ try {
       const fixedNow = performance.now();
       prototype.setSelectiveHeadLiveCapturePaused(true);
       const cameras = [];
-      let candidateSha256 = null;
-      let candidateMetadata = null;
-      let candidateLength = null;
+      let candidateSha256;
+      let candidateMetadata;
+      let candidateLength;
       const coefficientBoundary = 'per-sample-pre-tone-map-emission-extinction-v0';
       const broadCarrierIdentity = 'signed-control-minus-structural-a-local-coefficients-v0';
       const opticalRecurrence = 'front-to-back-emission-with-exponential-transmittance-v0';
@@ -293,29 +294,24 @@ try {
         };
       };
       try {
+        const capture = await prototype.captureBoundarySplatSupervisionCandidates({
+          renderScale: expectedRenderScale,
+          resumeRenderLoop: false,
+          now: fixedNow,
+          sameStateCaptureId,
+        });
+        if (!capture?.ok) throw new Error('appearance-candidate-capture-failed:' + JSON.stringify(capture));
+        const candidateBytes = candidateBytesFromCapture(capture);
+        candidateSha256 = await digest(candidateBytes);
+        candidateLength = candidateBytes.length;
+        window.__kaminosAppearanceCandidateBytes = candidateBytes;
+        const { packedFloat32Base64, ...metadata } = capture.candidates;
+        candidateMetadata = metadata;
         for (const entry of cameraManifest.cameras) {
           basinWindow.kaminosSetCameraDebugPose(entry.pose);
           const cameraState = basinWindow.kaminosCameraDebugState();
           const beforeView = prototype.debugState();
           if (beforeView.simStepCount !== before.simStepCount) throw new Error('appearance-state-advanced-before-view:' + entry.id);
-          const capture = await prototype.captureBoundarySplatSupervisionCandidates({
-            renderScale: expectedRenderScale,
-            resumeRenderLoop: false,
-            now: fixedNow,
-            sameStateCaptureId,
-          });
-          if (!capture?.ok) throw new Error('appearance-candidate-capture-failed:' + entry.id + ':' + JSON.stringify(capture));
-          const candidateBytes = candidateBytesFromCapture(capture);
-          const viewCandidateSha256 = await digest(candidateBytes);
-          if (candidateSha256 == null) {
-            candidateSha256 = viewCandidateSha256;
-            candidateLength = candidateBytes.length;
-            window.__kaminosAppearanceCandidateBytes = candidateBytes;
-            const { packedFloat32Base64, ...metadata } = capture.candidates;
-            candidateMetadata = metadata;
-          } else if (viewCandidateSha256 !== candidateSha256) {
-            throw new Error('appearance candidate sha256 drift across camera views:' + JSON.stringify({ expected: candidateSha256, actual: viewCandidateSha256, cameraId: entry.id }));
-          }
           const structuralA = await captureAppearance('structural-a', 'candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0');
           const appearanceBroadCarrierB = await captureAppearance('broad-carrier-b', 'pre-tone-map-signed-broad-carrier-coefficients-v0');
           const appearanceBAppliedToFixedA = await captureAppearance('b-applied-to-fixed-a', 'pre-tone-map-b-optical-effect-on-fixed-structural-a-v0');
@@ -332,6 +328,7 @@ try {
           if (afterView.simStepCount !== before.simStepCount) {
             throw new Error('appearance-state-advanced-during-view:' + entry.id);
           }
+          const camera = prototype.boundarySplatCameraState();
           if (appearanceAPlusB.rgba.length !== smokeOffBeautyControl.rgba.length
             || appearanceAPlusB.rgba.some((value, index) => value !== smokeOffBeautyControl.rgba[index])) {
             throw new Error('appearance-a-plus-b-control-pixel-mismatch:' + entry.id);
@@ -352,7 +349,6 @@ try {
           delete positiveNonRidgeEmission.rgba;
           delete positiveNonRidgeExtinction.rgba;
           delete positiveOpticalRecomposition.rgba;
-          const camera = capture.camera;
           cameras.push({
             id: entry.id,
             split: entry.split,
@@ -592,7 +588,21 @@ try {
 } finally {
   socket?.close();
   browser?.kill('SIGTERM');
-  rmSync(userDataDir, { recursive: true, force: true });
+  try {
+    rmSync(userDataDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  } catch (cleanupError) {
+    const cleanupFailure = {
+      identity: 'kaminos.boundary-splat-appearance-witness.cleanup-failure.v0',
+      status: 'failed',
+      failurePhase: 'browser-profile-cleanup',
+      error: cleanupError?.stack || cleanupError?.message || String(cleanupError),
+      primaryReportPath: reportPath,
+      primaryExitCode: process.exitCode ?? 0,
+    };
+    writeFileSync(resolve(outDir, 'cleanup-failure.json'), `${JSON.stringify(cleanupFailure, null, 2)}\n`);
+    console.error(JSON.stringify(cleanupFailure, null, 2));
+    if (!process.exitCode) process.exitCode = 1;
+  }
 }
 
 function parseArgs(tokens) {
@@ -713,6 +723,7 @@ async function waitForRuntime(cdp, timeoutMs) {
           hasAppearanceControlApi: Boolean(operator?.setAppearanceAssay),
           hasAppearanceCaptureApi: Boolean(
             prototype?.captureBoundarySplatSupervisionCandidates
+            && prototype?.boundarySplatCameraState
             && prototype?.sampleFrame
             && prototype?.setSelectiveHeadLiveCapturePaused
             && prototype?.setVolumePresentationMode
