@@ -16,7 +16,7 @@ assert.match(witness, /wrapperError:\s*wrapper\?\.error[\s\S]*if \(last\?\.wrapp
 assert.match(witness, /failurePhase[\s\S]*lastTrustworthyEvidence/, 'witness tracks failure phase and last trustworthy evidence');
 assert.match(witness, /catch \(error\)[\s\S]*writeFileSync\(reportPath/, 'failure before primary output still writes a durable report');
 assert.match(witness, /sourceSettingsPreset[\s\S]*sourcePresetAuthority[\s\S]*controlCount/, 'witness preserves complete shared-preset identity');
-assert.match(witness, /role=truthHigh[\s\S]*composition=smoke-raymarch-under-splats-v0/, 'witness requires the canonical wrapper-owned Beauty role and composition identity');
+assert.match(witness, /role=truthHigh[\s\S]*composition=raymarch-only-v0/, 'witness requires the canonical Flamebowl raymarch-only role and composition identity');
 assert.match(witness, /__kaminosSelectiveHeadLive[\s\S]*contentWindow\?\.__kaminosVolumePrototype/, 'witness resolves the operator wrapper and its nested renderer without confusing their authorities');
 assert.match(witness, /backend\?\.startsWith\('WebGPU'\)/, 'witness admits the effective WebGPU adapter identity without hard-coding one label');
 assert.match(witness, /Object\.keys\(sourceReceipt\.preset\?\.domControls \|\| \{\}\)\.length/, 'witness counts authored controls rather than schema-owned route extras');
@@ -24,6 +24,15 @@ assert.match(witness, /requestedRoute[\s\S]*effectiveRoute[\s\S]*prototypeIdenti
 assert.match(witness, /setSelectiveHeadLiveCapturePaused\(true\)/, 'witness pauses the live renderer before same-state switching');
 assert.match(witness, /sampleFrame\(\{[\s\S]*advanceSim:\s*false[\s\S]*includeRgba:\s*true/, 'witness samples pixels without simulation advance');
 assert.match(witness, /captureMode\('beauty'\)[\s\S]*captureMode\('intrinsic'\)[\s\S]*captureMode\('beauty'\)/, 'witness captures Beauty, Intrinsic, and restored Beauty in order');
+assert.match(
+  witness,
+  /setRaymarchSmokePresentationMode\('on'\)[\s\S]*beautySmokeOn[\s\S]*setRaymarchSmokePresentationMode\('off'\)[\s\S]*beautySmokeOff[\s\S]*captureMode\('intrinsic'\)[\s\S]*setRaymarchSmokePresentationMode\('on'\)[\s\S]*beautySmokeRestored/,
+  'witness captures frozen Beauty Smoke On, Beauty Smoke Off, Intrinsic, and restored Smoke On in order',
+);
+assert.match(witness, /big_raymarch_hero_flamebowl|vsp-5d9fedbab31583860d39a34751ff5cd847116cd6fe6eeee6b4379909ef4bb2a2/, 'first smoke-isolation witness is bound to the immutable Flamebowl basin');
+assert.match(witness, /raySteps[\s\S]*160[\s\S]*adaptiveRays[\s\S]*0[\s\S]*temporalAccum/, 'witness requires 160 rays with adaptive and temporal accumulation off');
+assert.match(witness, /authoredSmokeControl[\s\S]*controlsHash[\s\S]*cameraHash/, 'witness proves Smoke Off did not mutate authored smoke, controls, or camera');
+assert.match(witness, /beautySmokeOn[^\n]+pixelHash[\s\S]*beautySmokeOff[^\n]+pixelHash/, 'witness rejects smoke-on pixels silently reused for Smoke Off');
 assert.match(witness, /simStepCount[\s\S]*temporalHistoryResetCount[\s\S]*controlsHash[\s\S]*cameraHash/, 'witness rejects simulation, reset, authored-control, and camera mutation');
 assert.match(witness, /beauty\.metrics\.nonblank[\s\S]*intrinsic\.metrics\.nonblank[\s\S]*beautyRestored\.metrics\.nonblank/, 'witness rejects blank output in every compared presentation');
 assert.match(witness, /RESTORATION_MAX_CHANNEL_DELTA\s*=\s*1/, 'restored Beauty cannot drift by more than one channel value');

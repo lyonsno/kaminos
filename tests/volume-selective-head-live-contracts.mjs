@@ -129,7 +129,7 @@ assert.match(page, /sourceSettingsPresetAuthority:/, 'preset-backed visual route
 assert.match(page, /sourceSettingsPresetStorePath:/, 'preset-backed visual routes report the effective shared store path');
 assert.match(page, /sourceSettingsPresetContentHash:/, 'preset-backed visual routes report immutable preset content identity');
 assert.match(page, /capture: \$\{state\.sourceCaptureId/, 'operator status names the durable source capture that actually rendered');
-assert.match(page, /effectiveRole === requestedRole[\s\S]*effectiveComposition === requestedComposition[\s\S]*'running'[\s\S]*'settling'/, 'wrapper reports running only after requested renderer role and composition become effective');
+assert.match(page, /presentationSettled[\s\S]*effectiveComposition === requestedComposition[\s\S]*rendererSettled[\s\S]*effectiveRole === requestedRole[\s\S]*presentationSettled[\s\S]*'running'[\s\S]*'settling'/, 'wrapper reports running only after the requested role and presentation-specific pass tuple become effective');
 assert.match(page, /function passReceiptMatchesComposition\(/, 'wrapper has a named exact pass-tuple predicate');
 assert.match(page, /splat-only-v0[\s\S]*splatApplied === true[\s\S]*raymarchApplied === false/, 'splat-only running requires splats applied and raymarch absent');
 assert.match(page, /raymarch-only-v0[\s\S]*raymarchApplied === true[\s\S]*splatApplied === false/, 'raymarch-only running requires raymarch applied and splats absent');

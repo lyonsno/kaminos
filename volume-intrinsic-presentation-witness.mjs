@@ -7,7 +7,9 @@ import { spawn } from 'node:child_process';
 
 const TARGET_IDENTITY = 'candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0';
 const REPORT_IDENTITY = 'kaminos.volume.intrinsic-presentation-witness.v0';
-const REQUIRED_BEAUTY_ROUTE = 'role=truthHigh&composition=smoke-raymarch-under-splats-v0';
+const FLAMEBOWL_PRESET_ID = 'vsp-5d9fedbab31583860d39a34751ff5cd847116cd6fe6eeee6b4379909ef4bb2a2';
+const FLAMEBOWL_PRESET_LABEL = 'big_raymarch_hero_flamebowl';
+const REQUIRED_BEAUTY_ROUTE = 'role=truthHigh&composition=raymarch-only-v0';
 const RESTORATION_MAX_CHANNEL_DELTA = 1;
 const RESTORATION_MAX_MEAN_ABS_CHANNEL_DELTA = 1e-6;
 const RESTORATION_MAX_CHANGED_PIXEL_RATIO = 1e-5;
@@ -90,11 +92,11 @@ class CdpSocket {
 
 try {
   const route = new URL(requestedUrl);
-  assert.ok(route.searchParams.get('settings_preset'), 'witness route requires settings_preset identity');
+  assert.equal(route.searchParams.get('settings_preset'), FLAMEBOWL_PRESET_ID, 'witness route requires immutable Flamebowl preset identity');
   assert.equal(route.searchParams.get('settings_preset_authority'), 'shared-volume-settings-preset-v2', 'witness route requires shared preset authority');
   assert.equal(route.pathname, '/volume-selective-head-live.html', 'witness route must use the selective-head operator wrapper');
   assert.ok(route.search.includes('role=truthHigh'), `witness requires ${REQUIRED_BEAUTY_ROUTE}`);
-  assert.ok(route.search.includes('composition=smoke-raymarch-under-splats-v0'), `witness requires ${REQUIRED_BEAUTY_ROUTE}`);
+  assert.ok(route.search.includes('composition=raymarch-only-v0'), `witness requires ${REQUIRED_BEAUTY_ROUTE}`);
 
   failurePhase = 'browser-launch';
   browser = spawn(chrome, [
@@ -258,6 +260,7 @@ try {
             boundarySplatInstanceCount: sample.boundarySplatInstanceCount,
             boundarySplatCandidateCount: sample.boundarySplatCandidateCount,
             volumePresentationReceipt: sample.volumePresentationReceipt,
+            raymarchSmokePresentationReceipt: sample.raymarchSmokePresentationReceipt,
             selectiveHeadLivePassReceipt: sample.selectiveHeadLivePassReceipt,
           },
           pixelHash: await digest(rgba),
@@ -267,14 +270,38 @@ try {
         };
       }
 
-      const beauty = await captureMode('beauty');
+      prototype.setRaymarchSmokePresentationMode('on');
+      const beautySmokeOn = await captureMode('beauty');
+      prototype.setRaymarchSmokePresentationMode('off');
+      const beautySmokeOff = await captureMode('beauty');
       const intrinsic = await captureMode('intrinsic');
-      const beautyRestored = await captureMode('beauty');
-      const restorationDelta = pixelDelta(beauty._rgba, beautyRestored._rgba);
-      delete beauty._rgba;
+      const intrinsicCompositionControlState = {
+        disabled: [...document.querySelectorAll('[data-composition]')].every(button => button.disabled && button.getAttribute('aria-disabled') === 'true'),
+        rejectedReceipt: operator?.setComposition?.('smoke-raymarch-under-splats-v0') || null,
+      };
+      prototype.setRaymarchSmokePresentationMode('on');
+      const beautySmokeRestored = await captureMode('beauty');
+      const afterPresentation = prototype.debugState();
+      const beautyCompositionControlState = {
+        enabled: [...document.querySelectorAll('[data-composition]')].every(button => !button.disabled && button.getAttribute('aria-disabled') === 'false'),
+        appliedReceipt: operator?.setComposition?.('smoke-raymarch-under-splats-v0') || null,
+      };
+      const compositionProbe = await prototype.sampleFrame({
+        advanceSim: false,
+        includeRgba: false,
+        now: fixedNow,
+        sameStateCaptureId,
+        baseFrameCount: before.frameCount,
+        baseSimStepCount: before.simStepCount,
+      });
+      const compositionRestoreReceipt = operator?.setComposition?.('raymarch-only-v0') || null;
+      const restorationDelta = pixelDelta(beautySmokeOn._rgba, beautySmokeRestored._rgba);
+      const smokeIsolationDelta = pixelDelta(beautySmokeOn._rgba, beautySmokeOff._rgba);
+      delete beautySmokeOn._rgba;
+      delete beautySmokeOff._rgba;
       delete intrinsic._rgba;
-      delete beautyRestored._rgba;
-      const after = prototype.debugState();
+      delete beautySmokeRestored._rgba;
+      const afterCompositionProbe = prototype.debugState();
       return {
         sourceSettingsPreset,
         requestedRoute: before.requestedRoute,
@@ -291,19 +318,43 @@ try {
           frameCount: before.frameCount,
           simStepCount: before.simStepCount,
           temporalHistoryResetCount: before.temporalHistoryResetCount,
+          authoredSmokeControl: before.controls?.smoke,
+          raySteps: before.controls?.raySteps,
+          adaptiveRays: before.controls?.adaptiveRays,
+          temporalAccum: before.controls?.temporalAccum,
+          temporalJitter: before.controls?.temporalJitter,
           controlsHash,
           cameraHash,
         },
         after: {
-          frameCount: after.frameCount,
-          simStepCount: after.simStepCount,
-          temporalHistoryResetCount: after.temporalHistoryResetCount,
-          controlsHash: await digest(after.controls),
+          frameCount: afterPresentation.frameCount,
+          simStepCount: afterPresentation.simStepCount,
+          temporalHistoryResetCount: afterPresentation.temporalHistoryResetCount,
+          authoredSmokeControl: afterPresentation.controls?.smoke,
+          controlsHash: await digest(afterPresentation.controls),
           cameraHash: await digest(basinWindow?.kaminosCameraDebugState?.() || null),
         },
-        beauty,
+        beauty: beautySmokeOn,
+        beautySmokeOn,
+        beautySmokeOff,
         intrinsic,
-        beautyRestored,
+        beautyRestored: beautySmokeRestored,
+        beautySmokeRestored,
+        intrinsicCompositionControlState,
+        beautyCompositionControlState,
+        compositionProbe: {
+          ok: compositionProbe.ok,
+          volumePresentationReceipt: compositionProbe.volumePresentationReceipt,
+          selectiveHeadLivePassReceipt: compositionProbe.selectiveHeadLivePassReceipt,
+        },
+        compositionRestoreReceipt,
+        afterCompositionProbe: {
+          frameCount: afterCompositionProbe.frameCount,
+          simStepCount: afterCompositionProbe.simStepCount,
+          requestedComposition: afterCompositionProbe.selectiveHeadLiveCompositionRequested,
+          effectiveComposition: afterCompositionProbe.selectiveHeadLiveCompositionEffective,
+        },
+        smokeIsolationDelta,
         restorationDelta,
       };
     })()
@@ -315,7 +366,7 @@ try {
       maxChangedPixelRatio: RESTORATION_MAX_CHANGED_PIXEL_RATIO,
     },
     observed: evidence.restorationDelta,
-    exactPixelHashMatch: evidence.beautyRestored.pixelHash === evidence.beauty.pixelHash,
+    exactPixelHashMatch: evidence.beautySmokeRestored.pixelHash === evidence.beautySmokeOn.pixelHash,
     accepted: evidence.restorationDelta.maxChannelDelta <= RESTORATION_MAX_CHANNEL_DELTA
       && evidence.restorationDelta.meanAbsChannelDelta <= RESTORATION_MAX_MEAN_ABS_CHANNEL_DELTA
       && evidence.restorationDelta.changedPixelRatio <= RESTORATION_MAX_CHANGED_PIXEL_RATIO,
@@ -328,6 +379,13 @@ try {
   assert.equal(evidence.before.temporalHistoryResetCount, evidence.after.temporalHistoryResetCount, 'presentation switching reset temporal history');
   assert.equal(evidence.before.controlsHash, evidence.after.controlsHash, 'presentation switching mutated authored controls');
   assert.equal(evidence.before.cameraHash, evidence.after.cameraHash, 'presentation switching mutated camera state');
+  assert.equal(evidence.sourceSettingsPreset.presetId, FLAMEBOWL_PRESET_ID, 'effective preset substituted away from Flamebowl');
+  assert.equal(evidence.sourceSettingsPreset.label, FLAMEBOWL_PRESET_LABEL, 'effective preset label does not identify Flamebowl');
+  assert.equal(evidence.before.raySteps, 160, 'Flamebowl witness did not preserve 160 ray steps');
+  assert.equal(evidence.before.adaptiveRays, 0, 'Flamebowl witness did not disable adaptive rays');
+  assert.equal(evidence.before.temporalAccum, 0, 'Flamebowl witness did not disable temporal accumulation');
+  assert.equal(evidence.before.temporalJitter, 0, 'Flamebowl witness did not disable temporal jitter');
+  assert.equal(evidence.before.authoredSmokeControl, evidence.after.authoredSmokeControl, 'Smoke Off mutated the authored smoke control');
   assert.equal(evidence.intrinsic.receipt.requestedMode, 'intrinsic');
   assert.equal(evidence.intrinsic.receipt.effectiveMode, 'intrinsic');
   assert.equal(evidence.intrinsic.receipt.fallbackReason, null);
@@ -339,8 +397,20 @@ try {
   assert.equal(evidence.intrinsic.receipt.authoredControlsMutated, false);
   assert.equal(evidence.intrinsic.receipt.simulationAdvanced, false);
   assert.equal(evidence.intrinsic.receipt.cameraMutated, false);
-  assert.equal(evidence.beauty.sample.volumePresentationReceipt.application.raymarchApplied, true, 'Beauty raymarch pass was not applied');
-  assert.equal(evidence.beauty.sample.volumePresentationReceipt.application.splatsApplied, true, 'Beauty splat pass was not applied');
+  assert.equal(evidence.beautySmokeOn.sample.volumePresentationReceipt.application.raymarchApplied, true, 'Beauty Smoke On raymarch pass was not applied');
+  assert.equal(evidence.beautySmokeOn.sample.volumePresentationReceipt.application.splatsApplied, false, 'Beauty Smoke On unexpectedly applied splats');
+  assert.equal(evidence.beautySmokeOn.sample.raymarchSmokePresentationReceipt.requestedMode, 'on');
+  assert.equal(evidence.beautySmokeOn.sample.raymarchSmokePresentationReceipt.effectiveMode, 'on');
+  assert.equal(evidence.beautySmokeOn.sample.raymarchSmokePresentationReceipt.fallbackReason, null);
+  assert.equal(evidence.beautySmokeOff.sample.raymarchSmokePresentationReceipt.requestedMode, 'off');
+  assert.equal(evidence.beautySmokeOff.sample.raymarchSmokePresentationReceipt.effectiveMode, 'off');
+  assert.equal(evidence.beautySmokeOff.sample.raymarchSmokePresentationReceipt.fallbackReason, null);
+  assert.equal(evidence.beautySmokeOff.sample.raymarchSmokePresentationReceipt.contributions.radiance, 'suppressed');
+  assert.equal(evidence.beautySmokeOff.sample.raymarchSmokePresentationReceipt.contributions.extinction, 'suppressed');
+  assert.equal(evidence.beautySmokeOff.sample.raymarchSmokePresentationReceipt.contributions.dynamics, 'preserved');
+  assert.equal(evidence.beautySmokeOff.sample.raymarchSmokePresentationReceipt.authoredSmokeControl, evidence.before.authoredSmokeControl);
+  assert.equal(evidence.beautySmokeOff.sample.raymarchSmokePresentationReceipt.authoredSmokeControlMutated, false);
+  assert.equal(evidence.beautySmokeOff.sample.raymarchSmokePresentationReceipt.smokeProducingDynamicsMutated, false);
   assert.equal(evidence.intrinsic.sample.volumePresentationReceipt.application.raymarchApplied, true, 'Intrinsic raymarch pass was not applied');
   assert.equal(evidence.intrinsic.sample.volumePresentationReceipt.application.splatsApplied, false, 'Intrinsic applied splats');
   assert.equal(evidence.intrinsic.sample.volumePresentationReceipt.application.residualEncoded, false, 'Intrinsic encoded residual');
@@ -348,18 +418,31 @@ try {
   assert.equal(evidence.intrinsic.sample.volumePresentationReceipt.application.featureCaptureEncoded, false, 'Intrinsic encoded feature capture');
   assert.equal(evidence.intrinsic.sample.volumePresentationReceipt.application.featureCaptureApplied, false, 'Intrinsic applied feature capture');
   assert.equal(evidence.beauty.metrics.nonblank, true, 'Beauty output is blank');
+  assert.equal(evidence.beautySmokeOff.metrics.nonblank, true, 'Beauty Smoke Off output is blank');
   assert.equal(evidence.intrinsic.metrics.nonblank, true, 'intrinsic output is blank');
   assert.equal(evidence.beautyRestored.metrics.nonblank, true, 'restored Beauty output is blank');
   assert.notEqual(evidence.beauty.pixelHash, evidence.intrinsic.pixelHash, 'Intrinsic silently substituted Beauty pixels');
+  assert.notEqual(evidence.beautySmokeOn.pixelHash, evidence.beautySmokeOff.pixelHash, 'Smoke Off silently reused Smoke On pixels');
+  assert.ok(evidence.smokeIsolationDelta.changedPixelRatio > 0.001, 'Smoke On/Off did not produce a material pixel difference');
+  assert.equal(evidence.intrinsicCompositionControlState.disabled, true, 'Intrinsic did not disable composition controls');
+  assert.equal(evidence.intrinsicCompositionControlState.rejectedReceipt?.reason, 'composition-controls-disabled-during-intrinsic', 'Intrinsic composition click was not rejected explicitly');
+  assert.equal(evidence.beautyCompositionControlState.enabled, true, 'Beauty did not restore composition controls');
+  assert.equal(evidence.beautyCompositionControlState.appliedReceipt?.effectiveComposition, 'smoke-raymarch-under-splats-v0', 'restored Beauty composition control did not apply');
+  assert.equal(evidence.compositionProbe.volumePresentationReceipt.application.raymarchApplied, true, 'restored Beauty composition probe missed raymarch pass');
+  assert.equal(evidence.compositionProbe.volumePresentationReceipt.application.splatsApplied, true, 'restored Beauty composition probe missed splat pass');
+  assert.equal(evidence.compositionRestoreReceipt?.effectiveComposition, 'raymarch-only-v0', 'witness did not restore the Flamebowl raymarch-only composition');
+  assert.equal(evidence.afterCompositionProbe.frameCount, evidence.before.frameCount, 'composition probe advanced presented frame state');
+  assert.equal(evidence.afterCompositionProbe.simStepCount, evidence.before.simStepCount, 'composition probe advanced simulation');
   assert.ok(evidence.restorationDelta.maxChannelDelta <= RESTORATION_MAX_CHANNEL_DELTA, 'restored Beauty channel drift exceeds measured bound');
   assert.ok(evidence.restorationDelta.meanAbsChannelDelta <= RESTORATION_MAX_MEAN_ABS_CHANNEL_DELTA, 'restored Beauty mean drift exceeds measured bound');
   assert.ok(evidence.restorationDelta.changedPixelRatio <= RESTORATION_MAX_CHANGED_PIXEL_RATIO, 'restored Beauty changed-pixel ratio exceeds measured bound');
 
   failurePhase = 'artifact-write';
   for (const [name, capture] of [
-    ['beauty.png', evidence.beauty],
+    ['beauty-smoke-on.png', evidence.beautySmokeOn],
+    ['beauty-smoke-off.png', evidence.beautySmokeOff],
     ['intrinsic.png', evidence.intrinsic],
-    ['beauty-restored.png', evidence.beautyRestored],
+    ['beauty-smoke-restored.png', evidence.beautySmokeRestored],
   ]) {
     writeFileSync(resolve(outDir, name), decodePngDataUrl(capture.pngDataUrl));
   }
@@ -378,14 +461,25 @@ try {
     sameStateCaptureId: evidence.sameStateCaptureId,
     before: evidence.before,
     after: evidence.after,
-    beauty: stripPngData(evidence.beauty),
+    beauty: stripPngData(evidence.beautySmokeOn),
+    beautySmokeOn: stripPngData(evidence.beautySmokeOn),
+    beautySmokeOff: stripPngData(evidence.beautySmokeOff),
     intrinsic: stripPngData(evidence.intrinsic),
-    beautyRestored: stripPngData(evidence.beautyRestored),
+    beautyRestored: stripPngData(evidence.beautySmokeRestored),
+    beautySmokeRestored: stripPngData(evidence.beautySmokeRestored),
+    smokeIsolationDelta: evidence.smokeIsolationDelta,
+    intrinsicCompositionControlState: evidence.intrinsicCompositionControlState,
+    beautyCompositionControlState: evidence.beautyCompositionControlState,
+    compositionProbe: evidence.compositionProbe,
+    compositionRestoreReceipt: evidence.compositionRestoreReceipt,
     restorationAcceptance,
     artifacts: {
-      beauty: resolve(outDir, 'beauty.png'),
+      beauty: resolve(outDir, 'beauty-smoke-on.png'),
+      beautySmokeOn: resolve(outDir, 'beauty-smoke-on.png'),
+      beautySmokeOff: resolve(outDir, 'beauty-smoke-off.png'),
       intrinsic: resolve(outDir, 'intrinsic.png'),
-      beautyRestored: resolve(outDir, 'beauty-restored.png'),
+      beautyRestored: resolve(outDir, 'beauty-smoke-restored.png'),
+      beautySmokeRestored: resolve(outDir, 'beauty-smoke-restored.png'),
       cockpitRestoredBeauty: resolve(outDir, 'operator-cockpit-restored-beauty.png'),
     },
   };
@@ -440,8 +534,11 @@ function stripEvidencePngData(evidence) {
   return {
     ...evidence,
     beauty: stripPngData(evidence?.beauty),
+    beautySmokeOn: stripPngData(evidence?.beautySmokeOn),
+    beautySmokeOff: stripPngData(evidence?.beautySmokeOff),
     intrinsic: stripPngData(evidence?.intrinsic),
     beautyRestored: stripPngData(evidence?.beautyRestored),
+    beautySmokeRestored: stripPngData(evidence?.beautySmokeRestored),
   };
 }
 
@@ -515,7 +612,8 @@ async function waitForRuntime(cdp, timeout) {
     if (last?.active
       && last?.sourceSettingsPreset
       && last?.effectiveRole === 'truthHigh'
-      && last?.effectiveComposition === 'smoke-raymarch-under-splats-v0') return last;
+      && last?.effectiveComposition === 'raymarch-only-v0'
+      && last?.wrapperStatus === 'running') return last;
     if (last?.error) throw new Error(`renderer route failed: ${last.error}`);
     await delay(250);
   }

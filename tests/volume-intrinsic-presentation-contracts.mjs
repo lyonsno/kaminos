@@ -29,6 +29,16 @@ assert.match(
 );
 assert.match(index, /id="volume-presentation-effective"/, 'operator surface exposes effective presentation mode');
 assert.match(index, /id="volume-presentation-ray-quality"/, 'operator surface exposes effective ray quality');
+assert.match(
+  index,
+  /role="group"[^>]+aria-label="Raymarch smoke presentation"[\s\S]*data-raymarch-smoke-presentation="on"[\s\S]*data-raymarch-smoke-presentation="off"/,
+  'native operator surface exposes a top-level Raymarch Smoke On/Off presentation control',
+);
+assert.match(
+  selectiveWrapper,
+  /aria-label="Raymarch smoke presentation"[\s\S]*data-smoke-presentation="on"[\s\S]*data-smoke-presentation="off"/,
+  'selective wrapper exposes the same top-level smoke presentation axis',
+);
 
 const normalizeMode = functionSource(core, 'normalizeVolumePresentationMode');
 assert.match(normalizeMode, /requestedRaw[\s\S]*requested[\s\S]*fallbackReason/, 'mode normalization preserves requested identity and fallback');
@@ -53,10 +63,21 @@ assert.match(
 const setMode = functionSource(core, 'setVolumePresentationMode');
 assert.doesNotMatch(setMode, /controlsSnapshot\s*=/, 'presentation switching does not mutate authored controls');
 assert.doesNotMatch(setMode, /resetTemporalHistory|rebuildFluidState|encodeSim/, 'presentation switching does not reset or advance simulation');
+const setSmokePresentation = functionSource(core, 'setRaymarchSmokePresentationMode');
+assert.match(setSmokePresentation, /requestedMode[\s\S]*effectiveMode[\s\S]*fallbackReason[\s\S]*targetIdentity/, 'smoke presentation has failure-loud requested/effective identity');
+assert.match(setSmokePresentation, /authoredSmokeControlMutated:\s*false[\s\S]*simulationAdvanced:\s*false[\s\S]*cameraMutated:\s*false/, 'smoke presentation receipt names its no-mutation contract');
+assert.doesNotMatch(setSmokePresentation, /controlsSnapshot\s*=|resetTemporalHistory|rebuildFluidState|encodeSim/, 'smoke presentation does not mutate basin controls, reset, or advance simulation');
+assert.match(
+  core,
+  /raymarchSmokeSuppressed[\s\S]*visibleSmokeAlpha[\s\S]*smokeAlpha \* \(1\.0 - raymarchSmokeSuppressed\)/,
+  'shader derives a presentation-only visible smoke carrier without changing simulated smoke',
+);
+assert.match(core, /uniforms\[306\]\s*=\s*raymarchSmokePresentationEffectiveMode\(\) === 'off' \? 1 : 0/, 'smoke presentation is encoded through its own render uniform');
+assert.match(core, /if \(volumePresentationModeEffective !== 'intrinsic' && raymarchSmokePresentationEffectiveMode\(\) === 'on'\) encodeHistoryCopy/, 'smoke-off pixels cannot contaminate preserved smoke-on history');
 assert.match(setMode, /requestedMode[\s\S]*effectiveMode[\s\S]*fallbackReason[\s\S]*targetIdentity[\s\S]*effectiveRayQuality/, 'mode switch returns an honest effective receipt');
 
 assert.match(core, /supervisionFireOnlyTarget\s*=\s*clamp\(u\.boundary_fire_display\.y/, 'raymarch shader reads the exact intrinsic target gate');
-assert.match(core, /smokeAlpha\s*=\s*smokeAlpha\s*\*\s*\(1\.0\s*-\s*supervisionFireOnlyTarget\)/, 'Intrinsic suppresses smoke contribution');
+assert.match(core, /visibleSmokeAlpha\s*=\s*smokeAlpha\s*\*\s*\(1\.0\s*-\s*raymarchSmokeSuppressed\)\s*\*\s*\(1\.0\s*-\s*supervisionFireOnlyTarget\)/, 'Intrinsic suppresses smoke contribution through the shared presentation carrier');
 assert.match(core, /directFlameUnitEmission\s*=\s*fireRadianceEmission\([^;]+1\.0,\s*0\.0\)/s, 'Intrinsic uses unit-gain direct-flame emission');
 assert.match(core, /directFlameCandidateStructuralSignal[\s\S]*directFlameCandidateSupport[\s\S]*step\(0\.11,\s*directFlameCandidateStructuralSignal\)/, 'Intrinsic uses the candidate-support gate');
 assert.match(core, /directFlameCandidateAlpha\s*=\s*clamp\(directFlameCandidateSupport\s*\*\s*rayStepOpacity\s*\*\s*0\.55/, 'Intrinsic uses fixed candidate alpha');
@@ -68,12 +89,12 @@ assert.match(core, /function browserResidualCanApply\(\)[\s\S]*volumePresentatio
 assert.match(core, /uniforms\[305\]\s*=\s*volumePresentationModeEffective === 'intrinsic'\s*\?\s*1\s*:\s*0/, 'Intrinsic activates the exact shader branch through the reserved uniform');
 assert.match(
   core,
-  /temporalAccumulationForPresentation\s*=\s*volumePresentationModeEffective === 'intrinsic'\s*\?\s*0[\s\S]*uniforms\[44\]\s*=\s*temporalAccumulationForPresentation/,
+  /temporalAccumulationForPresentation\s*=\s*\([\s\S]*volumePresentationModeEffective === 'intrinsic'[\s\S]*raymarchSmokePresentationEffectiveMode\(\) === 'off'[\s\S]*\? 0 : uniforms\[44\][\s\S]*uniforms\[44\]\s*=\s*temporalAccumulationForPresentation/,
   'Intrinsic cannot inherit Beauty temporal radiance after a presentation-only switch',
 );
 assert.match(
   core,
-  /if \(volumePresentationModeEffective !== 'intrinsic'\) encodeHistoryCopy\(encoder, currentTexture\)/,
+  /if \(volumePresentationModeEffective !== 'intrinsic' && raymarchSmokePresentationEffectiveMode\(\) === 'on'\) encodeHistoryCopy\(encoder, currentTexture\)/,
   'Intrinsic cannot overwrite the preserved Beauty history used on restoration',
 );
 assert.match(
@@ -109,6 +130,12 @@ assert.match(
   'presentation buttons call the presentation-only runtime API and synchronize requested/effective UI',
 );
 assert.match(index, /params\.get\('volume_presentation'\)/, 'Intrinsic can be requested by an explicit direct route');
+assert.match(index, /params\.get\('volume_raymarch_smoke'\)/, 'raymarch smoke presentation can be requested by an explicit direct route');
+assert.match(
+  selectiveWrapper,
+  /requestedRaymarchSmokePresentationRaw[\s\S]*unsupported-raymarch-smoke-presentation-mode/,
+  'wrapper direct routes fail loud instead of normalizing an unsupported smoke presentation to On',
+);
 assert.match(
   index,
   /setVolumePresentationMode\?\.\(requestedVolumePresentation\)[\s\S]*__kaminosVolumePresentationReceipt/,
@@ -133,6 +160,31 @@ assert.match(
   selectiveWrapper,
   /const appliedPass = state\.volumePresentationReceipt\?\.application \|\| state\.selectiveHeadLivePassReceipt \|\| \{\}/,
   'operator pass status reports the presentation application that produced current pixels',
+);
+assert.match(
+  selectiveWrapper,
+  /function syncCompositionControlAvailability\(presentation\)[\s\S]*button\.disabled = disabled[\s\S]*aria-disabled/,
+  'Intrinsic visibly disables Beauty-only composition controls',
+);
+assert.match(
+  selectiveWrapper,
+  /function setComposition\(composition\)[\s\S]*requestedPresentation !== 'beauty'[\s\S]*composition-controls-disabled-during-intrinsic[\s\S]*requestedComposition = composition/,
+  'Intrinsic composition clicks fail explicitly before mutating remembered Beauty composition',
+);
+assert.match(
+  selectiveWrapper,
+  /function setPresentation\(presentation\)[\s\S]*setVolumePresentationMode[\s\S]*presentation === 'beauty'[\s\S]*setSelectiveHeadLiveRenderComposition\?\.\(requestedComposition\)/,
+  'returning to Beauty explicitly reapplies the remembered Beauty composition',
+);
+assert.match(
+  selectiveWrapper,
+  /function setRaymarchSmokePresentation\(mode\)[\s\S]*setRaymarchSmokePresentationMode[\s\S]*requestedRaymarchSmokePresentation[\s\S]*effectiveRaymarchSmokePresentation/,
+  'wrapper proxies the independent requested/effective smoke presentation identity',
+);
+assert.match(
+  core,
+  /setSelectiveHeadLiveRenderComposition\(composition\)[\s\S]*previousComposition[\s\S]*compositionChanged[\s\S]*if \(compositionChanged\) resetTemporalHistory/,
+  'idempotent Beauty composition reapplication does not reset temporal history',
 );
 
 console.log('volume intrinsic presentation contracts passed');

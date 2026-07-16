@@ -87,6 +87,20 @@ assert.throws(
   /presentation/i,
   'preset target rejects unsupported presentation substitution',
 );
+const smokeOffPresentationTarget = new URL(acceptedUrl);
+smokeOffPresentationTarget.searchParams.set('volume_raymarch_smoke', 'off');
+assert.equal(
+  validateVolumeSettingsPresetTarget(acceptedReceipt, smokeOffPresentationTarget.searchParams),
+  true,
+  'smoke presentation identity is target-only state and does not enter saved controls',
+);
+const invalidSmokePresentationTarget = new URL(acceptedUrl);
+invalidSmokePresentationTarget.searchParams.set('volume_raymarch_smoke', 'forged');
+assert.throws(
+  () => validateVolumeSettingsPresetTarget(acceptedReceipt, invalidSmokePresentationTarget.searchParams),
+  /smoke presentation/i,
+  'preset target rejects unsupported smoke-presentation substitution',
+);
 
 const prototypeBasin = nativeCapture();
 prototypeBasin.identity = 'kaminos-volume-agent-capture-v1';
@@ -186,6 +200,13 @@ assert.equal(
   validateVolumeSettingsPresetVisualTarget(acceptedReceipt, intrinsicVisualTarget.searchParams),
   true,
   'visual routes admit one presentation-only identity without changing the preset control count',
+);
+const smokeOffVisualTarget = new URL(explicitSplatView);
+smokeOffVisualTarget.searchParams.set('volume_raymarch_smoke', 'off');
+assert.equal(
+  validateVolumeSettingsPresetVisualTarget(acceptedReceipt, smokeOffVisualTarget.searchParams),
+  true,
+  'visual routes admit one smoke presentation identity without changing the preset control count',
 );
 const forgedVisualPresentation = new URL(explicitSplatView);
 forgedVisualPresentation.searchParams.set('volume_presentation', 'forged');

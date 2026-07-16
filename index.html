@@ -976,10 +976,16 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <button class="btn active" type="button" data-volume-presentation-mode="beauty">Beauty</button>
         <button class="btn" type="button" data-volume-presentation-mode="intrinsic">Intrinsic</button>
       </div>
+      <div class="volume-presentation-switch" role="group" aria-label="Raymarch smoke presentation">
+        <button class="btn active" type="button" data-raymarch-smoke-presentation="on">Smoke On</button>
+        <button class="btn" type="button" data-raymarch-smoke-presentation="off">Smoke Off</button>
+      </div>
       <div class="field"><span class="field-key">Requested view</span><span class="field-val" id="volume-presentation-requested">beauty</span></div>
       <div class="field"><span class="field-key">Effective view</span><span class="field-val" id="volume-presentation-effective">beauty</span></div>
       <div class="field"><span class="field-key">Ray quality</span><span class="field-val" id="volume-presentation-ray-quality">--</span></div>
       <div class="field"><span class="field-key">View target</span><span class="field-val" id="volume-presentation-target">authored-beauty-renderer-v0</span></div>
+      <div class="field"><span class="field-key">Raymarch smoke</span><span class="field-val" id="volume-raymarch-smoke-effective">on</span></div>
+      <div class="field"><span class="field-key">Smoke target</span><span class="field-val" id="volume-raymarch-smoke-target">authored-raymarch-smoke-radiance-extinction-v0</span></div>
       <div class="volume-actions">
         <button class="btn" id="volume-toggle">Enable</button>
         <button class="btn" id="volume-fit-camera">Frame</button>
@@ -16661,11 +16667,35 @@ function syncVolumePresentationControls(receipt = volumePrototype?.debugState?.(
   document.getElementById('volume-presentation-target').textContent = receipt.targetIdentity || 'missing-target-identity';
 }
 
+function syncRaymarchSmokePresentationControls(receipt = volumePrototype?.debugState?.()?.raymarchSmokePresentationReceipt) {
+  if (!receipt) return;
+  for (const button of document.querySelectorAll('[data-raymarch-smoke-presentation]')) {
+    const requested = button.dataset.raymarchSmokePresentation === receipt.normalizedRequestedMode;
+    button.classList.toggle('active', requested);
+    button.setAttribute('aria-pressed', requested ? 'true' : 'false');
+  }
+  document.getElementById('volume-raymarch-smoke-effective').textContent = receipt.fallbackReason
+    ? `${receipt.requestedMode} -> ${receipt.effectiveMode} / ${receipt.fallbackReason}`
+    : `${receipt.requestedMode} -> ${receipt.effectiveMode}`;
+  document.getElementById('volume-raymarch-smoke-target').textContent = receipt.targetIdentity || 'missing-target-identity';
+}
+
 for (const button of document.querySelectorAll('[data-volume-presentation-mode]')) {
   button.addEventListener('click', () => {
     const receipt = volumePrototype?.setVolumePresentationMode?.(button.dataset.volumePresentationMode);
     window.__kaminosVolumePresentationReceipt = receipt || null;
     syncVolumePresentationControls(receipt);
+    syncRaymarchSmokePresentationControls();
+    window._kaminosDirty?.();
+  });
+}
+
+for (const button of document.querySelectorAll('[data-raymarch-smoke-presentation]')) {
+  button.addEventListener('click', () => {
+    const receipt = volumePrototype?.setRaymarchSmokePresentationMode?.(button.dataset.raymarchSmokePresentation);
+    window.__kaminosRaymarchSmokePresentationReceipt = receipt || null;
+    syncRaymarchSmokePresentationControls(receipt);
+    syncVolumePresentationControls();
     window._kaminosDirty?.();
   });
 }
@@ -16674,6 +16704,7 @@ function refreshVolumeReadout() {
   if (!volumePrototype) return;
   const s = volumePrototype.debugState();
   syncVolumePresentationControls(s.volumePresentationReceipt);
+  syncRaymarchSmokePresentationControls(s.raymarchSmokePresentationReceipt);
   const timing = s.timing || {};
   const canonicalPlumeReadoutActive = s.volumeScene === 'canonical_plume';
   const sceneContentLabel = (() => {
@@ -17468,6 +17499,9 @@ async function initKaminosVolumeRoute() {
   const requestedVolumePresentation = params.get('volume_presentation') || 'beauty';
   window.__kaminosVolumePresentationReceipt = volumePrototype.setVolumePresentationMode?.(requestedVolumePresentation) || null;
   syncVolumePresentationControls(window.__kaminosVolumePresentationReceipt);
+  const requestedRaymarchSmokePresentation = params.get('volume_raymarch_smoke') || 'on';
+  window.__kaminosRaymarchSmokePresentationReceipt = volumePrototype.setRaymarchSmokePresentationMode?.(requestedRaymarchSmokePresentation) || null;
+  syncRaymarchSmokePresentationControls(window.__kaminosRaymarchSmokePresentationReceipt);
   volumeBridge?.dispose?.();
   volumeBridge = createVolumeMainRendererBridge();
   window.__kaminosVolumeBridge = volumeBridge;
