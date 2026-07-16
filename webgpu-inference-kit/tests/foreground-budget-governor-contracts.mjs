@@ -1,0 +1,527 @@
+import assert from 'node:assert/strict';
+
+import {
+  FOREGROUND_BUDGET_GOVERNOR_SCHEMA,
+  createForegroundBudgetGovernor,
+  createWebGpuCommandDutyDescriptor,
+  createWebGpuCommandDutyObservation,
+} from '../src/index.js';
+
+const firingId = 'sharp-firing-a';
+
+function hostCorrelation({
+  status = 'verified',
+  foregroundGapDurationMs = 100,
+  sharpCoveredDurationMs = 80,
+  hostCoveredDurationMs = 10,
+  sharedSharpHostDurationMs = 0,
+  uncoveredDurationMs = 10,
+  phaseRankings = [{ phase: 'presentation', overlapDurationMs: 10 }],
+  unexplained = [],
+  correlationFiringId = firingId,
+} = {}) {
+  return {
+    schema: 'kaminos.foreground-host-event-correlation.v0',
+    status,
+    firingId: correlationFiringId,
+    phaseRankings,
+    totals: {
+      foregroundGapDurationMs,
+      sharpCoveredDurationMs,
+      hostCoveredDurationMs,
+      sharedSharpHostDurationMs,
+      hostOnlyDurationMs: hostCoveredDurationMs - sharedSharpHostDurationMs,
+      combinedCoveredDurationMs: foregroundGapDurationMs - uncoveredDurationMs,
+      uncoveredDurationMs,
+    },
+    unexplainedGapsAtOrAboveThreshold: unexplained,
+    failures: status === 'verified' ? [] : ['host-event-correlation-invalid'],
+  };
+}
+
+function sharpCorrelation({
+  phaseRankings = [{ phase: 'spn-fusion', overlapDurationMs: 72 }],
+  correlationFiringId = firingId,
+} = {}) {
+  return {
+    schema: 'kaminos.foreground-sharp-duty-correlation.v0',
+    status: 'verified',
+    firingId: correlationFiringId,
+    phaseRankings,
+    failures: [],
+  };
+}
+
+function commandDutyObservation({
+  routeId = 'sharp.image-to-splat.webgpu-local.v0',
+  runId = 'sharp-run-governor-a',
+  clockId = 'sharp-worker-clock-a',
+  observationFiringId = firingId,
+  dutyId = `${runId}:spn-fusion:0`,
+  phase = 'spn-fusion-command-buffer',
+  kind = 'compute',
+  controlId = 'spnFusionOutputItems',
+  current = 8,
+  bounds = { min: 1, max: 8, stepFactor: 2 },
+  foregroundOverlapDurationMs = 72,
+  observedDurationMs = 80,
+  controllable = true,
+} = {}) {
+  return createWebGpuCommandDutyObservation({
+    routeId,
+    runId,
+    clockId,
+    firingId: observationFiringId,
+    duties: [{
+      descriptor: createWebGpuCommandDutyDescriptor({
+        routeId,
+        runId,
+        clockId,
+        dutyId,
+        phase,
+        kind,
+        chunkControl: controllable ? {
+          controlId,
+          unit: 'output-item',
+          current,
+          bounds,
+        } : null,
+      }),
+      observedDurationMs,
+      foregroundOverlapDurationMs,
+    }],
+  });
+}
+
+function observation({
+  episodeId,
+  episodeEpochId = 'governor-epoch-a',
+  observationFiringId = firingId,
+  maxFrameGapMs = 120,
+  host = hostCorrelation({ correlationFiringId: observationFiringId }),
+  sharp = sharpCorrelation({ correlationFiringId: observationFiringId }),
+  executionIdentity = null,
+  commandDuty = null,
+} = {}) {
+  return {
+    episodeId,
+    episodeEpochId,
+    firingId: observationFiringId,
+    frameTail: {
+      sampleWindowMs: 30_000,
+      maxFrameGapMs,
+      p95FrameGapMs: 42,
+    },
+    hostEventCorrelation: host,
+    sharpDutyCorrelation: sharp,
+    ...(executionIdentity ? { executionIdentity } : {}),
+    ...(commandDuty ? { commandDutyObservation: commandDuty } : {}),
+  };
+}
+
+function governor({ phaseControlMap = {
+  'spn-fusion': 'spnFusionOutputItems',
+  gaussian: 'gaussianCpuItems',
+} } = {}) {
+  return createForegroundBudgetGovernor({
+    episodeEpochId: 'governor-epoch-a',
+    targetFrameGapMs: 50,
+    failureWindowsBeforeAdjust: 2,
+    successWindowsBeforeRelax: 2,
+    scheduler: {
+      mode: 'cooperative',
+      yieldMs: 4,
+      waitForSubmittedWorkDone: true,
+      phaseChunkSize: {
+        spnFusionOutputItems: 8,
+        gaussianCpuItems: 16_384,
+      },
+    },
+    bounds: {
+      yieldMs: { min: 0, max: 20, step: 4 },
+      phaseChunkSize: {
+        spnFusionOutputItems: { min: 1, max: 8, stepFactor: 2 },
+        gaussianCpuItems: { min: 4_096, max: 16_384, stepFactor: 2 },
+      },
+    },
+    phaseControlMap,
+    attributionPolicy: {
+      minimumCoveredFraction: 0.8,
+      maximumSharedFraction: 0.25,
+    },
+  });
+}
+
+const invalidGovernor = governor();
+const invalid = invalidGovernor.observe(observation({
+  episodeId: 'invalid-a',
+  host: hostCorrelation({ status: 'invalid' }),
+}));
+assert.equal(invalid.schema, FOREGROUND_BUDGET_GOVERNOR_SCHEMA);
+assert.equal(invalid.status, 'held-invalid-evidence');
+assert.equal(invalid.action, 'hold');
+assert.equal(invalid.schedulerChanged, false);
+assert.equal(invalid.applicationAuthority, 'decision-state-only-not-runtime-application');
+assert.equal(invalid.revision, 0);
+assert.deepEqual(invalid.effectiveScheduler, invalid.previousScheduler);
+assert.ok(invalid.failures.includes('host-correlation-invalid'));
+
+const staleFiring = governor().observe(observation({
+  episodeId: 'stale-firing-a',
+  sharp: sharpCorrelation({ correlationFiringId: 'other-firing' }),
+}));
+assert.equal(staleFiring.status, 'held-invalid-evidence');
+assert.ok(staleFiring.failures.includes('sharp-correlation-firing-mismatch'));
+
+const unexplained = governor().observe(observation({
+  episodeId: 'unexplained-a',
+  host: hostCorrelation({
+    unexplained: [{ sampleIndex: 1, startEpochMs: 100, endEpochMs: 180, durationMs: 80 }],
+  }),
+}));
+assert.equal(unexplained.status, 'instrumentation-required');
+assert.equal(unexplained.action, 'instrument-unattributed-gap');
+assert.equal(unexplained.schedulerChanged, false);
+assert.equal(unexplained.revision, 0);
+
+const fragmentedResidual = governor().observe(observation({
+  episodeId: 'fragmented-residual-a',
+  host: hostCorrelation({
+    foregroundGapDurationMs: 5_000,
+    sharpCoveredDurationMs: 100,
+    hostCoveredDurationMs: 0,
+    uncoveredDurationMs: 4_900,
+    phaseRankings: [],
+    unexplained: [],
+  }),
+  sharp: sharpCorrelation({ phaseRankings: [{ phase: 'spn-fusion', overlapDurationMs: 100 }] }),
+}));
+assert.equal(fragmentedResidual.status, 'instrumentation-required');
+assert.equal(fragmentedResidual.action, 'increase-attribution-coverage');
+assert.equal(fragmentedResidual.schedulerChanged, false);
+assert.equal(fragmentedResidual.attribution.coveredFraction, 0.02);
+
+const sharedAmbiguity = governor().observe(observation({
+  episodeId: 'shared-ambiguity-a',
+  host: hostCorrelation({
+    sharpCoveredDurationMs: 90,
+    hostCoveredDurationMs: 80,
+    sharedSharpHostDurationMs: 75,
+    uncoveredDurationMs: 5,
+    phaseRankings: [{ phase: 'browser-longtask', overlapDurationMs: 80 }],
+  }),
+  sharp: sharpCorrelation({ phaseRankings: [{ phase: 'spn-fusion', overlapDurationMs: 90 }] }),
+}));
+assert.equal(sharedAmbiguity.status, 'instrumentation-required');
+assert.equal(sharedAmbiguity.action, 'disambiguate-shared-pressure');
+assert.equal(sharedAmbiguity.schedulerChanged, false);
+assert.equal(sharedAmbiguity.attribution.sharedFraction, 0.75);
+
+const hostBound = governor().observe(observation({
+  episodeId: 'host-bound-a',
+  host: hostCorrelation({
+    sharpCoveredDurationMs: 10,
+    hostCoveredDurationMs: 80,
+    phaseRankings: [{ phase: 'ply-blob-assembly', overlapDurationMs: 75 }],
+  }),
+  sharp: sharpCorrelation({ phaseRankings: [{ phase: 'gaussian', overlapDurationMs: 10 }] }),
+}));
+assert.equal(hostBound.status, 'host-phase-split-required');
+assert.equal(hostBound.action, 'split-host-phase');
+assert.equal(hostBound.target, 'ply-blob-assembly');
+assert.equal(hostBound.schedulerChanged, false, 'host work must not be disguised as a GPU scheduler adjustment');
+
+const chunkGovernor = governor();
+const firstSharpWindow = chunkGovernor.observe(observation({ episodeId: 'sharp-bound-a' }));
+assert.equal(firstSharpWindow.status, 'accumulating-pressure');
+assert.equal(firstSharpWindow.action, 'reduce-phase-chunk');
+assert.equal(firstSharpWindow.schedulerChanged, false);
+assert.equal(firstSharpWindow.consecutivePressureWindows, 1);
+const reducedChunk = chunkGovernor.observe(observation({ episodeId: 'sharp-bound-b' }));
+assert.equal(reducedChunk.status, 'adjusted');
+assert.equal(reducedChunk.action, 'reduce-phase-chunk');
+assert.equal(reducedChunk.measuredPhase, 'spn-fusion');
+assert.equal(reducedChunk.target, 'spnFusionOutputItems');
+assert.equal(reducedChunk.schedulerChanged, true);
+assert.equal(reducedChunk.previousScheduler.phaseChunkSize.spnFusionOutputItems, 8);
+assert.equal(reducedChunk.effectiveScheduler.phaseChunkSize.spnFusionOutputItems, 4);
+assert.equal(reducedChunk.revision, 1);
+assert.equal(reducedChunk.attribution.sharpOnlyDurationMs, 80);
+assert.equal(reducedChunk.attribution.hostOnlyDurationMs, 10);
+
+const commandIdentity = {
+  routeId: 'sharp.image-to-splat.webgpu-local.v0',
+  runId: 'sharp-run-governor-a',
+  clockId: 'sharp-worker-clock-a',
+};
+const portableGovernor = governor({ phaseControlMap: {} });
+const firstPortableWindow = portableGovernor.observe(observation({
+  episodeId: 'portable-duty-a',
+  executionIdentity: commandIdentity,
+  commandDuty: commandDutyObservation(commandIdentity),
+}));
+assert.equal(firstPortableWindow.status, 'accumulating-pressure');
+assert.equal(firstPortableWindow.action, 'reduce-phase-chunk');
+assert.equal(firstPortableWindow.target, 'spnFusionOutputItems');
+assert.equal(firstPortableWindow.measuredPhase, 'spn-fusion-command-buffer');
+assert.equal(firstPortableWindow.commandDutyId, 'sharp-run-governor-a:spn-fusion:0');
+assert.equal(firstPortableWindow.commandDutyKind, 'compute');
+const reducedPortableChunk = portableGovernor.observe(observation({
+  episodeId: 'portable-duty-b',
+  executionIdentity: commandIdentity,
+  commandDuty: commandDutyObservation(commandIdentity),
+}));
+assert.equal(reducedPortableChunk.status, 'adjusted');
+assert.equal(reducedPortableChunk.effectiveScheduler.phaseChunkSize.spnFusionOutputItems, 4);
+
+for (const [label, mutate, failure] of [
+  ['route', value => { value.executionIdentity.routeId = 'stale-route'; }, 'command-duty-route-mismatch'],
+  ['run', value => { value.executionIdentity.runId = 'stale-run'; }, 'command-duty-run-mismatch'],
+  ['clock', value => { value.executionIdentity.clockId = 'stale-clock'; }, 'command-duty-clock-mismatch'],
+  ['firing', value => { value.commandDutyObservation.identity.firingId = 'stale-firing'; }, 'command-duty-firing-mismatch'],
+  ['retention', value => { value.commandDutyObservation.retention = 'first-10'; }, 'command-duty-retention-invalid'],
+  ['count', value => { value.commandDutyObservation.dutyCount = 0; }, 'command-duty-count-mismatch'],
+]) {
+  const value = observation({
+    episodeId: `portable-${label}-mismatch`,
+    executionIdentity: structuredClone(commandIdentity),
+    commandDuty: commandDutyObservation(commandIdentity),
+  });
+  mutate(value);
+  const decision = governor({ phaseControlMap: {} }).observe(value);
+  assert.equal(decision.status, 'held-invalid-evidence');
+  assert.ok(decision.failures.includes(failure));
+}
+
+for (const [label, mutate] of [
+  ['preemption-claim', descriptor => { descriptor.interruptible = true; }],
+  ['missing-control-unit', descriptor => { descriptor.chunkControl.unit = ''; }],
+]) {
+  const commandDuty = commandDutyObservation(commandIdentity);
+  mutate(commandDuty.duties[0].descriptor);
+  const decision = governor({ phaseControlMap: {} }).observe(observation({
+    episodeId: `portable-raw-${label}`,
+    executionIdentity: commandIdentity,
+    commandDuty,
+  }));
+  assert.equal(decision.status, 'held-invalid-evidence');
+  assert.ok(decision.failures.includes('command-duty-descriptor-invalid'));
+  assert.equal(decision.schedulerChanged, false);
+}
+
+for (const [label, duty, failure] of [
+  ['current', commandDutyObservation({ ...commandIdentity, current: 4 }), 'command-duty-control-current-mismatch'],
+  [
+    'bounds',
+    commandDutyObservation({
+      ...commandIdentity,
+      current: 8,
+      bounds: { min: 1, max: 16, stepFactor: 2 },
+    }),
+    'command-duty-control-bounds-mismatch',
+  ],
+]) {
+  const decision = governor({ phaseControlMap: {} }).observe(observation({
+    episodeId: `portable-${label}-stale`,
+    executionIdentity: commandIdentity,
+    commandDuty: duty,
+  }));
+  assert.equal(decision.status, 'held-invalid-evidence');
+  assert.ok(decision.failures.includes(failure));
+}
+
+const uncontrollableGovernor = governor({ phaseControlMap: {} });
+const uncontrollableDuty = commandDutyObservation({ ...commandIdentity, controllable: false });
+uncontrollableGovernor.observe(observation({
+  episodeId: 'portable-uncontrollable-a',
+  executionIdentity: commandIdentity,
+  commandDuty: uncontrollableDuty,
+}));
+const donatedForUncontrollableDuty = uncontrollableGovernor.observe(observation({
+  episodeId: 'portable-uncontrollable-b',
+  executionIdentity: commandIdentity,
+  commandDuty: uncontrollableDuty,
+}));
+assert.equal(donatedForUncontrollableDuty.status, 'adjusted');
+assert.equal(donatedForUncontrollableDuty.action, 'increase-yield-budget');
+assert.equal(donatedForUncontrollableDuty.effectiveScheduler.yieldMs, 8);
+
+const portableDenominatorGovernor = governor({ phaseControlMap: {} });
+const oversizedLegacyHost = hostCorrelation({
+  foregroundGapDurationMs: 1_020,
+  sharpCoveredDurationMs: 1_000,
+  hostCoveredDurationMs: 10,
+  uncoveredDurationMs: 10,
+});
+for (const episodeId of ['portable-denominator-a', 'portable-denominator-b']) {
+  portableDenominatorGovernor.observe(observation({
+    episodeId,
+    executionIdentity: commandIdentity,
+    commandDuty: commandDutyObservation(commandIdentity),
+    host: oversizedLegacyHost,
+  }));
+}
+const portableDenominatorDecision = portableDenominatorGovernor.snapshot();
+assert.equal(
+  portableDenominatorDecision.scheduler.phaseChunkSize.spnFusionOutputItems,
+  4,
+  'portable duty dominance must use its own uncapped overlap total, not legacy SHARP coverage',
+);
+assert.equal(portableDenominatorDecision.scheduler.yieldMs, 4);
+
+const firstHealthyWindow = chunkGovernor.observe(observation({ episodeId: 'healthy-a', maxFrameGapMs: 36 }));
+assert.equal(firstHealthyWindow.status, 'maintaining');
+assert.equal(firstHealthyWindow.schedulerChanged, false);
+const relaxedChunk = chunkGovernor.observe(observation({ episodeId: 'healthy-b', maxFrameGapMs: 34 }));
+assert.equal(relaxedChunk.status, 'relaxed');
+assert.equal(relaxedChunk.action, 'relax-phase-chunk');
+assert.equal(relaxedChunk.effectiveScheduler.phaseChunkSize.spnFusionOutputItems, 8);
+assert.equal(relaxedChunk.revision, 2);
+
+const distributedGovernor = governor();
+const distributedSharp = sharpCorrelation({
+  phaseRankings: [
+    { phase: 'spn-fusion', overlapDurationMs: 32 },
+    { phase: 'gaussian', overlapDurationMs: 28 },
+    { phase: 'monodepth', overlapDurationMs: 20 },
+  ],
+});
+distributedGovernor.observe(observation({ episodeId: 'distributed-a', sharp: distributedSharp }));
+const donated = distributedGovernor.observe(observation({ episodeId: 'distributed-b', sharp: distributedSharp }));
+assert.equal(donated.status, 'adjusted');
+assert.equal(donated.action, 'increase-yield-budget');
+assert.equal(donated.previousScheduler.yieldMs, 4);
+assert.equal(donated.effectiveScheduler.yieldMs, 8);
+assert.equal(donated.revision, 1);
+
+const identityGovernor = governor();
+const firstIdentityDecision = identityGovernor.observe(observation({ episodeId: 'same-episode' }));
+const duplicateIdentityDecision = identityGovernor.observe(observation({ episodeId: 'same-episode' }));
+assert.deepEqual(duplicateIdentityDecision, firstIdentityDecision, 'an exact duplicate must be idempotent');
+const crossFiringDecision = identityGovernor.observe(observation({
+  episodeId: 'same-episode',
+  observationFiringId: 'other-firing',
+}));
+assert.equal(crossFiringDecision.status, 'held-invalid-evidence');
+assert.ok(crossFiringDecision.failures.includes('episode-firing-mismatch'));
+assert.equal(crossFiringDecision.schedulerChanged, false);
+const changedEvidenceDecision = identityGovernor.observe(observation({
+  episodeId: 'same-episode',
+  maxFrameGapMs: 121,
+}));
+assert.equal(changedEvidenceDecision.status, 'held-invalid-evidence');
+assert.ok(changedEvidenceDecision.failures.includes('episode-evidence-mismatch'));
+assert.equal(changedEvidenceDecision.schedulerChanged, false);
+
+for (const mismatchCase of [
+  {
+    label: 'firing',
+    mismatchObservation: observation({
+      episodeId: 'hysteresis-firing-episode',
+      observationFiringId: 'other-firing',
+    }),
+  },
+  {
+    label: 'evidence',
+    mismatchObservation: observation({
+      episodeId: 'hysteresis-evidence-episode',
+      maxFrameGapMs: 121,
+    }),
+  },
+]) {
+  const replayGovernor = governor();
+  const episodeId = `hysteresis-${mismatchCase.label}-episode`;
+  const firstPressure = replayGovernor.observe(observation({ episodeId }));
+  assert.equal(firstPressure.status, 'accumulating-pressure');
+  assert.equal(firstPressure.consecutivePressureWindows, 1);
+
+  const mismatch = replayGovernor.observe(mismatchCase.mismatchObservation);
+  assert.equal(mismatch.status, 'held-invalid-evidence');
+  assert.ok(mismatch.failures.includes(`episode-${mismatchCase.label}-mismatch`));
+
+  const afterMismatch = replayGovernor.observe(observation({
+    episodeId: `hysteresis-${mismatchCase.label}-next`,
+  }));
+  assert.equal(afterMismatch.status, 'accumulating-pressure');
+  assert.equal(afterMismatch.consecutivePressureWindows, 1);
+  assert.equal(afterMismatch.schedulerChanged, false);
+  assert.equal(afterMismatch.revision, 0);
+}
+
+assert.equal(identityGovernor.snapshot().retainedDecisionCount, 1);
+assert.equal(identityGovernor.forgetEpisode('same-episode'), true);
+assert.equal(identityGovernor.snapshot().retainedDecisionCount, 0);
+assert.equal(identityGovernor.snapshot().retainedEpisodeIdentityCount, 1);
+const afterForgetReplay = identityGovernor.observe(observation({ episodeId: 'same-episode' }));
+assert.equal(afterForgetReplay.status, 'duplicate-observation-held');
+assert.equal(afterForgetReplay.action, 'hold');
+assert.equal(afterForgetReplay.schedulerChanged, false);
+assert.equal(afterForgetReplay.revision, firstIdentityDecision.revision);
+assert.deepEqual(afterForgetReplay.effectiveScheduler, firstIdentityDecision.effectiveScheduler);
+const afterForgetChangedEvidence = identityGovernor.observe(observation({
+  episodeId: 'same-episode',
+  maxFrameGapMs: 121,
+}));
+assert.equal(afterForgetChangedEvidence.status, 'held-invalid-evidence');
+assert.ok(afterForgetChangedEvidence.failures.includes('episode-evidence-mismatch'));
+const afterForgetChangedFiring = identityGovernor.observe(observation({
+  episodeId: 'same-episode',
+  observationFiringId: 'other-firing',
+}));
+assert.equal(afterForgetChangedFiring.status, 'held-invalid-evidence');
+assert.ok(afterForgetChangedFiring.failures.includes('episode-firing-mismatch'));
+
+const clearHistoryGovernor = governor();
+const clearHistoryObservation = observation({ episodeId: 'clear-history-episode' });
+const beforeClearHistory = clearHistoryGovernor.observe(clearHistoryObservation);
+clearHistoryGovernor.clearDecisionHistory();
+assert.equal(clearHistoryGovernor.snapshot().retainedDecisionCount, 0);
+assert.equal(clearHistoryGovernor.snapshot().retainedEpisodeIdentityCount, 1);
+const afterClearHistoryReplay = clearHistoryGovernor.observe(clearHistoryObservation);
+assert.equal(afterClearHistoryReplay.status, 'duplicate-observation-held');
+assert.equal(afterClearHistoryReplay.schedulerChanged, false);
+assert.equal(afterClearHistoryReplay.revision, beforeClearHistory.revision);
+assert.deepEqual(afterClearHistoryReplay.effectiveScheduler, beforeClearHistory.effectiveScheduler);
+const afterClearHistoryChangedEvidence = clearHistoryGovernor.observe(observation({
+  episodeId: 'clear-history-episode',
+  maxFrameGapMs: 121,
+}));
+assert.equal(afterClearHistoryChangedEvidence.status, 'held-invalid-evidence');
+assert.ok(afterClearHistoryChangedEvidence.failures.includes('episode-evidence-mismatch'));
+const afterClearHistoryChangedFiring = clearHistoryGovernor.observe(observation({
+  episodeId: 'clear-history-episode',
+  observationFiringId: 'other-firing',
+}));
+assert.equal(afterClearHistoryChangedFiring.status, 'held-invalid-evidence');
+assert.ok(afterClearHistoryChangedFiring.failures.includes('episode-firing-mismatch'));
+
+assert.throws(
+  () => clearHistoryGovernor.beginEpisodeEpoch('governor-epoch-a'),
+  /must differ from the current episode epoch/,
+);
+const epochAdvance = clearHistoryGovernor.beginEpisodeEpoch('governor-epoch-b');
+assert.equal(epochAdvance.previousEpisodeEpochId, 'governor-epoch-a');
+assert.equal(epochAdvance.episodeEpochId, 'governor-epoch-b');
+assert.equal(clearHistoryGovernor.snapshot().retainedEpisodeIdentityCount, 0);
+const oldEpochReplay = clearHistoryGovernor.observe(clearHistoryObservation);
+assert.equal(oldEpochReplay.status, 'held-invalid-evidence');
+assert.ok(oldEpochReplay.failures.includes('episode-epoch-mismatch'));
+const newEpochObservation = observation({
+  episodeId: 'clear-history-episode',
+  episodeEpochId: 'governor-epoch-b',
+});
+const firstNewEpochDecision = clearHistoryGovernor.observe(newEpochObservation);
+assert.equal(firstNewEpochDecision.status, 'accumulating-pressure');
+assert.equal(firstNewEpochDecision.consecutivePressureWindows, 1);
+
+assert.throws(
+  () => createForegroundBudgetGovernor({
+    episodeEpochId: 'invalid-config-epoch',
+    targetFrameGapMs: 50,
+    scheduler: { mode: 'cooperative', yieldMs: 4, waitForSubmittedWorkDone: true, phaseChunkSize: {} },
+  }),
+  /caller-declared bounds/,
+  'the governor must not invent hidden scheduler limits',
+);
+
+console.log('foreground budget governor contracts passed');

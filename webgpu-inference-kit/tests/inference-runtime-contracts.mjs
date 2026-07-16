@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 import {
+  WEBGPU_HOST_PHASE,
   WEBGPU_INFERENCE_RUNTIME_SCHEMA,
   createCooperativeYield,
   createWebGpuInferenceRuntime,
@@ -108,6 +109,14 @@ const runtime = await createWebGpuInferenceRuntime({
     commit: 'abc1234',
   },
   requiredStages: ['encode-image', 'decode-mask'],
+  hostPhases: {
+    runId: 'sam3-run-host-phase-a',
+    clock: {
+      clockId: 'sam3-worker-performance-clock-a',
+      source: 'performance.now',
+      timeOriginEpochMs: 1_700_000_000_000,
+    },
+  },
   now,
   yield: createCooperativeYield({
     queue,
@@ -122,6 +131,45 @@ assert.equal(runtime.schema, WEBGPU_INFERENCE_RUNTIME_SCHEMA);
 assert.equal(runtime.routeId, 'sam3.segment-anything.webgpu-local.v0');
 assert.equal(runtime.backendIdentity.adapterName, 'Test WebGPU Adapter');
 assert.deepEqual(runtime.backendIdentity.features, ['shader-f16']);
+assert.equal(Object.isFrozen(runtime.backendIdentity), true);
+assert.equal(Object.isFrozen(runtime.backendIdentity.features), true);
+assert.throws(
+  () => { runtime.backendIdentity.adapterName = 'forged-direct-runtime-adapter'; },
+  /read only|readonly|not extensible|Cannot assign/i,
+);
+assert.equal(runtime.hostPhases.runId, 'sam3-run-host-phase-a');
+
+await runtime.runInvocation({ invocationId: 'sam3-static-invocation-a' }, async invocation => {
+  assert.throws(
+    () => { invocation.scheduler.yieldMs = 99; },
+    /read only|readonly|not extensible|Cannot assign/i,
+    'static runtime invocations must expose an immutable scheduler snapshot too',
+  );
+  assert.equal(invocation.scheduler.yieldMs, 0);
+});
+
+const inferenceQueue = runtime.createInferenceQueue({ now });
+const queuedInvocation = inferenceQueue.enqueue({
+  jobId: 'sam3-queued-static-invocation-a',
+  async execute(invocation) {
+    return {
+      routeId: invocation.routeId,
+      schedulerRevision: invocation.schedulerRevision,
+    };
+  },
+});
+assert.deepEqual((await queuedInvocation.completion).output, {
+  routeId: runtime.routeId,
+  schedulerRevision: null,
+});
+assert.equal((await inferenceQueue.drain()).status, 'idle');
+
+const preprocessed = await runtime.runHostPhase(
+  WEBGPU_HOST_PHASE.cpuPreprocess,
+  async () => 'preprocessed',
+  { detail: { imageWidth: 512 } },
+);
+assert.equal(preprocessed, 'preprocessed');
 
 const weights = runtime.createBuffer({
   label: 'sam3-mask-decoder.weights',
@@ -159,6 +207,18 @@ assert.equal(profile.profile.stages[0].metadata.yields.length, 1);
 assert.equal(profile.profile.stages[0].metadata.yields[0].reason, 'between-encoder-tiles');
 assert.equal(profile.profile.timingSource, 'host-stage-timer');
 assert.equal(profile.kernel.profile, 'sam3-mask-decoder-minimal');
+
+const directReadback = await runtime.readBuffer(weights, { size: 4 });
+assert.equal(directReadback.byteLength, 4);
+const hostPhaseReport = runtime.finishHostPhases();
+assert.equal(hostPhaseReport.status, 'succeeded');
+assert.equal(hostPhaseReport.routeId, runtime.routeId);
+assert.equal(hostPhaseReport.runId, 'sam3-run-host-phase-a');
+assert.deepEqual(
+  hostPhaseReport.intervals.map(interval => interval.phase),
+  ['cpu-preprocess', 'readback'],
+  'direct mapped buffer reads must be visible to the common host-phase recorder',
+);
 
 await assert.rejects(
   () => createWebGpuInferenceRuntime({

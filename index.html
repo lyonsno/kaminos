@@ -1134,6 +1134,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
           <option value="live">live</option>
           <option value="baked">baked</option>
           <option value="mix">mix</option>
+          <option value="override">imported capture</option>
         </select>
         <span class="slider-val" id="volume-boundary-sidecar-source-val">live</span>
       </div>
@@ -11824,7 +11825,7 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
 ];
 
 const REACTION_FRONT_LIVE_VIEW_VALUES = new Set(['off', 'shell', 'thermal', 'reaction', 'front', 'edge', 'core', 'curl', 'divergence', 'boundary', 'boundary_fire']);
-const BOUNDARY_SIDECAR_SOURCE_VALUES = new Set(['live', 'baked', 'mix']);
+const BOUNDARY_SIDECAR_SOURCE_VALUES = new Set(['live', 'baked', 'mix', 'override']);
 const BOUNDARY_SIDECAR_VIEW_VALUES = new Set(['off', 'support', 'coverage', 'ridge', 'proximity', 'footprint']);
 const BOUNDARY_SPLAT_MODE_VALUES = new Set(['off', 'analytic', 'learned']);
 
@@ -12124,6 +12125,33 @@ function applyVolumeControlsSnapshot(controlsSnapshot = {}) {
   activeVolumeRayBudgetPreset = '';
   routedVolumeRayBudgetPreset = '';
 }
+
+window.kaminosApplyVolumeControlsSnapshot = function kaminosApplyVolumeControlsSnapshot(controlsSnapshot = {}) {
+  applyVolumeControlsSnapshot(controlsSnapshot);
+  updateVolumeControlLabels();
+  const effectiveControls = readVolumeControls();
+  volumePrototype?.setControls(effectiveControls);
+  refreshVolumeReadout();
+  const requestedKeys = VOLUME_BASIN_ROUTE_FIELDS
+    .map(([key]) => key)
+    .filter(key => controlsSnapshot[key] !== undefined && controlsSnapshot[key] !== null);
+  const substitutions = requestedKeys.flatMap(key => {
+    const requested = controlsSnapshot[key];
+    const effective = effectiveControls[key];
+    if (typeof requested === 'number' && typeof effective === 'number') {
+      return Math.abs(requested - effective) <= 0.000001 ? [] : [{ key, requested, effective }];
+    }
+    return String(requested) === String(effective) ? [] : [{ key, requested, effective }];
+  });
+  return {
+    identity: 'native-volume-control-snapshot-application-v0',
+    status: 'applied',
+    requestedKeys,
+    requestedControls: { ...controlsSnapshot },
+    effectiveControls,
+    substitutions,
+  };
+};
 
 function restoreVolumeBasinSnapshot() {
   let snapshot = null;
@@ -18769,6 +18797,373 @@ function greenroomMeshMetadata(display, fileName, source) {
   };
 }
 
+let kaminosAssetSmokeLinkState = {
+  schema: 'kaminos.asset-smoke-link.v0',
+  assetType: null,
+  status: 'idle',
+  requestedRoot: null,
+  requestedPath: null,
+  effectiveUrl: null,
+  fileName: null,
+  label: null,
+  registeredObjectId: null,
+  registeredAt: null,
+  error: null,
+};
+
+function cloneKaminosAssetSmokeLinkState() {
+  return {
+    ...kaminosAssetSmokeLinkState,
+  };
+}
+
+window.kaminosAssetSmokeLinkDebugState = cloneKaminosAssetSmokeLinkState;
+
+function kaminosApiReadRouteFromUrl(value) {
+  if (!value) return null;
+  try {
+    const parsed = new URL(value, window.location.href);
+    if (parsed.pathname !== '/api/read') return null;
+    const requestedRoot = parsed.searchParams.get('root');
+    const requestedPath = parsed.searchParams.get('path');
+    if (!requestedRoot || !requestedPath) return null;
+    return {
+      requestedRoot,
+      requestedPath,
+      sourceParam: 'api_read_url',
+    };
+  } catch {
+    return null;
+  }
+}
+
+function kaminosMeshAssetRouteLabel(path, fileName) {
+  const parts = String(path || '').split('/').filter(Boolean);
+  const genericFile = /^(output|model|scene|asset)\.(glb|gltf)$/i.test(fileName || '');
+  const source = genericFile && parts.length > 1 ? parts[parts.length - 2] : (fileName || parts[parts.length - 1]);
+  return greenroomHumanizeName(source, fileName || 'Mesh asset');
+}
+
+function kaminosSplatAssetRouteLabel(path, fileName) {
+  const parts = String(path || '').split('/').filter(Boolean);
+  const genericFile = /^(output|splat|pointcloud|point-cloud|asset)\.ply$/i.test(fileName || '');
+  const source = genericFile && parts.length > 1 ? parts[parts.length - 2] : (fileName || parts[parts.length - 1]);
+  return greenroomHumanizeName(source, fileName || 'Splat asset');
+}
+
+function kaminosImageAssetRouteLabel(path, fileName) {
+  const parts = String(path || '').split('/').filter(Boolean);
+  const genericFile = /^(output|image|source|asset)\.(png|jpe?g|webp|avif)$/i.test(fileName || '');
+  const source = genericFile && parts.length > 1 ? parts[parts.length - 2] : (fileName || parts[parts.length - 1]);
+  return greenroomHumanizeName(source, fileName || 'Image asset');
+}
+
+function kaminosMeshAssetRouteFromSearch(params = new URLSearchParams(window.location.search)) {
+  const requestedRoot = params.get('mesh_root');
+  const requestedPath = params.get('mesh_path');
+  const legacyGlbPath = params.get('glb_path');
+  const meshUrl = params.get('mesh_url');
+  let route = null;
+  if (requestedRoot && requestedPath) {
+    route = {
+      requestedRoot,
+      requestedPath,
+      sourceParam: 'mesh_root/mesh_path',
+    };
+  } else {
+    route = kaminosApiReadRouteFromUrl(meshUrl) || kaminosApiReadRouteFromUrl(legacyGlbPath);
+    if (!route && legacyGlbPath) {
+      route = {
+        requestedRoot: params.get('glb_root') || 'greenroom',
+        requestedPath: legacyGlbPath,
+        sourceParam: 'glb_path',
+      };
+    }
+  }
+  if (!route) return null;
+  const effectiveUrl = `/api/read?${new URLSearchParams({ root: route.requestedRoot, path: route.requestedPath }).toString()}`;
+  const fileName = route.requestedPath.split('/').pop() || 'asset.glb';
+  return {
+    ...route,
+    effectiveUrl,
+    fileName,
+    label: kaminosMeshAssetRouteLabel(route.requestedPath, fileName),
+  };
+}
+
+function kaminosSplatAssetRouteFromSearch(params = new URLSearchParams(window.location.search)) {
+  const requestedRoot = params.get('splat_root');
+  const requestedPath = params.get('splat_path');
+  const legacyPlyPath = params.get('ply_path');
+  const splatUrl = params.get('splat_url');
+  const plyUrl = params.get('ply_url');
+  let route = null;
+  if (requestedRoot && requestedPath) {
+    route = {
+      requestedRoot,
+      requestedPath,
+      sourceParam: 'splat_root/splat_path',
+    };
+  } else {
+    route = kaminosApiReadRouteFromUrl(splatUrl) || kaminosApiReadRouteFromUrl(plyUrl);
+    if (!route && legacyPlyPath) {
+      route = {
+        requestedRoot: params.get('ply_root') || 'splat-inbox',
+        requestedPath: legacyPlyPath,
+        sourceParam: 'ply_path',
+      };
+    }
+  }
+  if (!route) return null;
+  const effectiveUrl = `/api/read?${new URLSearchParams({ root: route.requestedRoot, path: route.requestedPath }).toString()}`;
+  const fileName = route.requestedPath.split('/').pop() || 'splat.ply';
+  return {
+    ...route,
+    effectiveUrl,
+    fileName,
+    label: kaminosSplatAssetRouteLabel(route.requestedPath, fileName),
+  };
+}
+
+function kaminosImageAssetRouteFromSearch(params = new URLSearchParams(window.location.search)) {
+  const requestedRoot = params.get('image_root');
+  const requestedPath = params.get('image_path');
+  const legacyImagePath = params.get('img_path') || (!requestedRoot ? requestedPath : null);
+  const imageUrl = params.get('image_url');
+  const imgUrl = params.get('img_url');
+  let route = null;
+  if (requestedRoot && requestedPath) {
+    route = {
+      requestedRoot,
+      requestedPath,
+      sourceParam: 'image_root/image_path',
+    };
+  } else {
+    route = kaminosApiReadRouteFromUrl(imageUrl) || kaminosApiReadRouteFromUrl(imgUrl);
+    if (!route && legacyImagePath) {
+      route = {
+        requestedRoot: params.get('img_root') || 'image-inbox',
+        requestedPath: legacyImagePath,
+        sourceParam: params.get('img_path') ? 'img_path' : 'image_path',
+      };
+    }
+  }
+  if (!route) return null;
+  const effectiveUrl = `/api/read?${new URLSearchParams({ root: route.requestedRoot, path: route.requestedPath }).toString()}`;
+  const fileName = route.requestedPath.split('/').pop() || 'image.png';
+  return {
+    ...route,
+    effectiveUrl,
+    fileName,
+    label: kaminosImageAssetRouteLabel(route.requestedPath, fileName),
+  };
+}
+
+async function loadKaminosMeshAssetRoute(route = kaminosMeshAssetRouteFromSearch()) {
+  if (!route) return false;
+  kaminosAssetSmokeLinkState = {
+    schema: 'kaminos.asset-smoke-link.v0',
+    assetType: 'mesh',
+    status: 'loading',
+    requestedRoot: route.requestedRoot,
+    requestedPath: route.requestedPath,
+    effectiveUrl: route.effectiveUrl,
+    fileName: route.fileName,
+    label: route.label,
+    registeredObjectId: null,
+    registeredAt: null,
+    error: null,
+  };
+  window._kaminosDirty?.();
+  setInfo(`Loading mesh asset: ${route.label}`);
+  try {
+    const model = await showGLB(route.effectiveUrl, {
+      clear: true,
+      metadata: {
+        ...greenroomMeshMetadata({ title: route.label }, route.fileName, route.effectiveUrl),
+        assetSmokeLink: {
+          schema: 'kaminos.asset-smoke-link.v0',
+          assetType: 'mesh',
+          requestedRoot: route.requestedRoot,
+          requestedPath: route.requestedPath,
+          effectiveUrl: route.effectiveUrl,
+          sourceParam: route.sourceParam,
+        },
+      },
+    });
+    const registered = model?.userData?.kaminosSceneObject || null;
+    if (!registered?.id) {
+      throw new Error('GLB loaded but no scene object registration was recorded');
+    }
+    kaminosAssetSmokeLinkState = {
+      ...kaminosAssetSmokeLinkState,
+      status: 'loaded',
+      registeredObjectId: registered.id,
+      registeredAt: new Date().toISOString(),
+      error: null,
+    };
+    setInfo(`Mesh asset loaded: ${route.label}`);
+    window._kaminosDirty?.();
+    return true;
+  } catch (error) {
+    kaminosAssetSmokeLinkState = {
+      ...kaminosAssetSmokeLinkState,
+      status: 'failed',
+      error: error?.message || String(error),
+    };
+    console.error('Mesh asset link load failed:', error);
+    setInfo(`Mesh asset link failed: ${kaminosAssetSmokeLinkState.error}`);
+    window._kaminosDirty?.();
+    return false;
+  }
+}
+
+async function loadKaminosSplatAssetRoute(route = kaminosSplatAssetRouteFromSearch()) {
+  if (!route) return false;
+  kaminosAssetSmokeLinkState = {
+    schema: 'kaminos.asset-smoke-link.v0',
+    assetType: 'splat',
+    status: 'loading',
+    requestedRoot: route.requestedRoot,
+    requestedPath: route.requestedPath,
+    effectiveUrl: route.effectiveUrl,
+    fileName: route.fileName,
+    label: route.label,
+    registeredObjectId: null,
+    registeredAt: null,
+    error: null,
+  };
+  window._kaminosDirty?.();
+  setInfo(`Loading splat asset: ${route.label}`);
+  try {
+    const format = route.fileName.split('.').pop()?.toLowerCase() || 'ply';
+    const object = await greenroomImportSplat(route.effectiveUrl, route.fileName, { title: route.label }, {
+      clear: true,
+      metadata: {
+        source: route.effectiveUrl,
+        fileName: route.fileName,
+        label: route.label,
+        assetSmokeLink: {
+          schema: 'kaminos.asset-smoke-link.v0',
+          assetType: 'splat',
+          requestedRoot: route.requestedRoot,
+          requestedPath: route.requestedPath,
+          effectiveUrl: route.effectiveUrl,
+          sourceParam: route.sourceParam,
+        },
+        splat: {
+          schema: 'kaminos.splat-asset.v0',
+          assetSource: route.effectiveUrl,
+          fileName: route.fileName,
+          format,
+          root_id: route.requestedRoot,
+          path: route.requestedPath,
+          bounds: null,
+          splatCount: null,
+          sidecars: [],
+          provenance: provenanceForSource(route.effectiveUrl),
+        },
+      },
+    });
+    const registered = object?.userData?.kaminosSceneObject || null;
+    if (!registered?.id) {
+      throw new Error('PLY loaded but no scene object registration was recorded');
+    }
+    kaminosAssetSmokeLinkState = {
+      ...kaminosAssetSmokeLinkState,
+      status: 'loaded',
+      registeredObjectId: registered.id,
+      registeredAt: new Date().toISOString(),
+      error: null,
+    };
+    setInfo(`Splat asset loaded: ${route.label}`);
+    window._kaminosDirty?.();
+    return true;
+  } catch (error) {
+    kaminosAssetSmokeLinkState = {
+      ...kaminosAssetSmokeLinkState,
+      status: 'failed',
+      error: error?.message || String(error),
+    };
+    console.error('Splat asset link load failed:', error);
+    setInfo(`Splat asset link failed: ${kaminosAssetSmokeLinkState.error}`);
+    window._kaminosDirty?.();
+    return false;
+  }
+}
+
+async function loadKaminosImageAssetRoute(route = kaminosImageAssetRouteFromSearch()) {
+  if (!route) return false;
+  kaminosAssetSmokeLinkState = {
+    schema: 'kaminos.asset-smoke-link.v0',
+    assetType: 'image',
+    status: 'loading',
+    requestedRoot: route.requestedRoot,
+    requestedPath: route.requestedPath,
+    effectiveUrl: route.effectiveUrl,
+    fileName: route.fileName,
+    label: route.label,
+    registeredObjectId: null,
+    registeredAt: null,
+    error: null,
+  };
+  window._kaminosDirty?.();
+  setInfo(`Loading image asset: ${route.label}`);
+  try {
+    const format = route.fileName.split('.').pop()?.toLowerCase() || 'png';
+    const mesh = await showImagePlane(route.effectiveUrl, {
+      clear: true,
+      metadata: {
+        source: route.effectiveUrl,
+        type: 'image',
+        fileName: route.fileName,
+        label: route.label,
+        assetSmokeLink: {
+          schema: 'kaminos.asset-smoke-link.v0',
+          assetType: 'image',
+          requestedRoot: route.requestedRoot,
+          requestedPath: route.requestedPath,
+          effectiveUrl: route.effectiveUrl,
+          sourceParam: route.sourceParam,
+        },
+        image: {
+          schema: 'kaminos.image-plane.v0',
+          assetSource: route.effectiveUrl,
+          fileName: route.fileName,
+          format,
+          root_id: route.requestedRoot,
+          path: route.requestedPath,
+          provenance: provenanceForSource(route.effectiveUrl),
+        },
+      },
+    });
+    const registered = mesh?.userData?.kaminosSceneObject || null;
+    if (!registered?.id) {
+      throw new Error('Image loaded but no scene object registration was recorded');
+    }
+    kaminosAssetSmokeLinkState = {
+      ...kaminosAssetSmokeLinkState,
+      status: 'loaded',
+      registeredObjectId: registered.id,
+      registeredAt: new Date().toISOString(),
+      error: null,
+    };
+    setInfo(`Image asset loaded: ${route.label}`);
+    window._kaminosDirty?.();
+    return true;
+  } catch (error) {
+    kaminosAssetSmokeLinkState = {
+      ...kaminosAssetSmokeLinkState,
+      status: 'failed',
+      error: error?.message || String(error),
+    };
+    console.error('Image asset link load failed:', error);
+    setInfo(`Image asset link failed: ${kaminosAssetSmokeLinkState.error}`);
+    window._kaminosDirty?.();
+    return false;
+  }
+}
+
 async function greenroomViewMesh(url, fileName, display) {
   glbFileName = fileName;
   const metadata = greenroomMeshMetadata(display, fileName, url);
@@ -20641,6 +21036,18 @@ initScene().then(() => {
         console.error('Deep-link load failed:', err);
         setInfo(`Deep-link load failed: ${err.message || err}`);
       }
+    }
+    const meshRoute = kaminosMeshAssetRouteFromSearch(params);
+    if (meshRoute) {
+      await loadKaminosMeshAssetRoute(meshRoute);
+    }
+    const splatRoute = kaminosSplatAssetRouteFromSearch(params);
+    if (splatRoute) {
+      await loadKaminosSplatAssetRoute(splatRoute);
+    }
+    const imageRoute = kaminosImageAssetRouteFromSearch(params);
+    if (imageRoute) {
+      await loadKaminosImageAssetRoute(imageRoute);
     }
   });
   initKaminosVolumeRoute();
