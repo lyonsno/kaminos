@@ -14,6 +14,14 @@ import {
   decodeFlowKernelDescriptorCapture,
 } from './flow-kernel-descriptor-socket.mjs';
 import {
+  NONRIDGE_OPTICAL_ROW_IDENTITY,
+  NONRIDGE_OPTICAL_ROW_STRIDE_FLOATS,
+} from './volume-nonridge-randomized-capture-contract.mjs';
+import {
+  CAUSAL_CONTROL_FIELDS,
+  SOURCE_BASIS_GPU_ROW_FLOATS,
+} from './volume-nonridge-source-basis-capture.mjs';
+import {
   SELECTIVE_HEAD_LIVE_FEATURE_AUTHORITY,
   SELECTIVE_HEAD_LIVE_MODEL,
   SELECTIVE_HEAD_LIVE_MODEL_URL,
@@ -31,6 +39,8 @@ const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
 const FULL_FIELD_EXPORT_IDENTITY = 'kaminos.volume.full-field-export.v0';
 const FULL_FIELD_IMPORT_IDENTITY = 'kaminos.volume.full-field-import.v0';
+const NONRIDGE_OPTICAL_CAPTURE_IDENTITY = 'kaminos.volume.positive-nonridge-optical-capture.v0';
+const NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY = 'kaminos.volume.nonridge-source-basis-full-grid-capture.v0';
 const COARSE_RECEIVER_INITIALIZATION_AUTHORITY = 'receiver-initialized-from-filtered-high-t-v0';
 const SELECTIVE_COMPOSITION_AUTHORITY = 'learned-selective-head-composition-not-filtered-high-truth-v0';
 const SELECTIVE_COMPOSITION_APPLICATION_IDENTITY = 'learned-selective-head-application-v0';
@@ -56,6 +66,8 @@ const BOUNDARY_SPLAT_INITIAL_CAPACITY = 131072;
 const BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES = 48;
 const BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES = BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
 const FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES = FLOW_KERNEL_DESCRIPTOR_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
+const NONRIDGE_OPTICAL_ROW_STRIDE_BYTES = NONRIDGE_OPTICAL_ROW_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
+const NONRIDGE_SOURCE_BASIS_ROW_STRIDE_BYTES = SOURCE_BASIS_GPU_ROW_FLOATS * Float32Array.BYTES_PER_ELEMENT;
 const TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY = 'truth-oracle-scalar-activity-receiver-v0';
 const TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY = 'truth-high-diagnostic-activity-projected-to-receiver-grid-v0';
 const PROCEDURAL_ACTIVITY_CUE_AUTHORITY = 'procedural-receiver-activity-proxy-no-truth-v0';
@@ -1207,6 +1219,26 @@ struct ExternalEmitterInfluence {
   velocity: vec4<f32>,
 };
 
+struct NonRidgeOpticalCaptureHeader {
+  rowCount: atomic<u32>,
+  capacity: u32,
+  mode: u32,
+  overflowCount: atomic<u32>,
+};
+
+struct NonRidgeOpticalCaptureRow {
+  worldPositionSupport: vec4<f32>,
+  currentSidecar: vec4<f32>,
+  currentMaterial: vec4<f32>,
+  currentFire: vec4<f32>,
+  currentMicro: vec4<f32>,
+  sourceVelocity: vec4<f32>,
+  sourceSupports: vec4<f32>,
+  sourceTopology: vec4<f32>,
+  nonRidgeEmissionExtinction: vec4<f32>,
+  completeEmissionExtinction: vec4<f32>,
+};
+
 @group(0) @binding(0) var<uniform> u: Uniforms;
 @group(0) @binding(1) var<storage, read> fluidSrc: array<vec4<f32>>;
 @group(0) @binding(2) var<storage, read_write> fluidDst: array<vec4<f32>>;
@@ -1218,6 +1250,8 @@ struct ExternalEmitterInfluence {
 @group(0) @binding(8) var<storage, read_write> frontDst: array<f32>;
 @group(0) @binding(9) var<storage, read> oracleActivityCue: array<f32>;
 @group(0) @binding(10) var<storage, read> boundarySidecar: array<vec4<f32>>;
+@group(0) @binding(11) var<storage, read_write> nonRidgeOpticalCaptureHeader: NonRidgeOpticalCaptureHeader;
+@group(0) @binding(12) var<storage, read_write> nonRidgeOpticalCaptureRows: array<f32>;
 @group(1) @binding(0) var<storage, read_write> majorantDst: array<vec4<f32>>;
 @group(2) @binding(0) var<storage, read> pressureSrc: array<vec4<f32>>;
 @group(2) @binding(1) var<storage, read_write> pressureDst: array<vec4<f32>>;
@@ -1632,6 +1666,105 @@ fn sampleWorldFlowReconstructedSidecar(p: vec3<f32>, reconstructed: FlowReconstr
   let neighborWeight = 0.25;
   let filtered = center * centerWeight + (forward + backward) * neighborWeight;
   return max(vec4<f32>(0.0), mix(center, filtered, strength));
+}
+
+fn writeNonRidgeOpticalCaptureRow(
+  rowIndex: u32,
+  worldPositionSupport: vec4<f32>,
+  currentSidecar: vec4<f32>,
+  currentMaterial: vec4<f32>,
+  currentFire: vec4<f32>,
+  currentMicro: vec4<f32>,
+  sourceVelocity: vec4<f32>,
+  sourceSupports: vec4<f32>,
+  sourceTopology: vec4<f32>,
+  nonRidgeEmissionExtinction: vec4<f32>,
+  completeEmissionExtinction: vec4<f32>,
+) {
+  let base = rowIndex * 40u;
+  nonRidgeOpticalCaptureRows[base] = worldPositionSupport.x;
+  nonRidgeOpticalCaptureRows[base + 1u] = worldPositionSupport.y;
+  nonRidgeOpticalCaptureRows[base + 2u] = worldPositionSupport.z;
+  nonRidgeOpticalCaptureRows[base + 3u] = worldPositionSupport.w;
+  nonRidgeOpticalCaptureRows[base + 4u] = currentSidecar.x;
+  nonRidgeOpticalCaptureRows[base + 5u] = currentSidecar.y;
+  nonRidgeOpticalCaptureRows[base + 6u] = currentSidecar.z;
+  nonRidgeOpticalCaptureRows[base + 7u] = currentSidecar.w;
+  nonRidgeOpticalCaptureRows[base + 8u] = currentMaterial.x;
+  nonRidgeOpticalCaptureRows[base + 9u] = currentMaterial.y;
+  nonRidgeOpticalCaptureRows[base + 10u] = currentMaterial.z;
+  nonRidgeOpticalCaptureRows[base + 11u] = currentMaterial.w;
+  nonRidgeOpticalCaptureRows[base + 12u] = currentFire.x;
+  nonRidgeOpticalCaptureRows[base + 13u] = currentFire.y;
+  nonRidgeOpticalCaptureRows[base + 14u] = currentFire.z;
+  nonRidgeOpticalCaptureRows[base + 15u] = currentFire.w;
+  nonRidgeOpticalCaptureRows[base + 16u] = currentMicro.x;
+  nonRidgeOpticalCaptureRows[base + 17u] = currentMicro.y;
+  nonRidgeOpticalCaptureRows[base + 18u] = currentMicro.z;
+  nonRidgeOpticalCaptureRows[base + 19u] = currentMicro.w;
+  nonRidgeOpticalCaptureRows[base + 20u] = sourceVelocity.x;
+  nonRidgeOpticalCaptureRows[base + 21u] = sourceVelocity.y;
+  nonRidgeOpticalCaptureRows[base + 22u] = sourceVelocity.z;
+  nonRidgeOpticalCaptureRows[base + 23u] = sourceVelocity.w;
+  nonRidgeOpticalCaptureRows[base + 24u] = sourceSupports.x;
+  nonRidgeOpticalCaptureRows[base + 25u] = sourceSupports.y;
+  nonRidgeOpticalCaptureRows[base + 26u] = sourceSupports.z;
+  nonRidgeOpticalCaptureRows[base + 27u] = sourceSupports.w;
+  nonRidgeOpticalCaptureRows[base + 28u] = sourceTopology.x;
+  nonRidgeOpticalCaptureRows[base + 29u] = sourceTopology.y;
+  nonRidgeOpticalCaptureRows[base + 30u] = sourceTopology.z;
+  nonRidgeOpticalCaptureRows[base + 31u] = sourceTopology.w;
+  nonRidgeOpticalCaptureRows[base + 32u] = nonRidgeEmissionExtinction.x;
+  nonRidgeOpticalCaptureRows[base + 33u] = nonRidgeEmissionExtinction.y;
+  nonRidgeOpticalCaptureRows[base + 34u] = nonRidgeEmissionExtinction.z;
+  nonRidgeOpticalCaptureRows[base + 35u] = nonRidgeEmissionExtinction.w;
+  nonRidgeOpticalCaptureRows[base + 36u] = completeEmissionExtinction.x;
+  nonRidgeOpticalCaptureRows[base + 37u] = completeEmissionExtinction.y;
+  nonRidgeOpticalCaptureRows[base + 38u] = completeEmissionExtinction.z;
+  nonRidgeOpticalCaptureRows[base + 39u] = completeEmissionExtinction.w;
+}
+
+fn writeNonRidgeSourceBasisCaptureRow(
+  cellIndex: u32,
+  currentSidecar: vec4<f32>,
+  currentMaterial: vec4<f32>,
+  currentFire: vec4<f32>,
+  currentMicro: vec4<f32>,
+  sourceBasisFrontVelocity: vec4<f32>,
+  sourceBasisReactionInterfaceCurlDivergence: vec4<f32>,
+  nonRidgeMembershipEmission: vec4<f32>,
+  nonRidgeExtinction: f32,
+) {
+  let base = cellIndex * 29u;
+  nonRidgeOpticalCaptureRows[base] = currentSidecar.x;
+  nonRidgeOpticalCaptureRows[base + 1u] = currentSidecar.y;
+  nonRidgeOpticalCaptureRows[base + 2u] = currentSidecar.z;
+  nonRidgeOpticalCaptureRows[base + 3u] = currentSidecar.w;
+  nonRidgeOpticalCaptureRows[base + 4u] = currentMaterial.x;
+  nonRidgeOpticalCaptureRows[base + 5u] = currentMaterial.y;
+  nonRidgeOpticalCaptureRows[base + 6u] = currentMaterial.z;
+  nonRidgeOpticalCaptureRows[base + 7u] = currentMaterial.w;
+  nonRidgeOpticalCaptureRows[base + 8u] = currentFire.x;
+  nonRidgeOpticalCaptureRows[base + 9u] = currentFire.y;
+  nonRidgeOpticalCaptureRows[base + 10u] = currentFire.z;
+  nonRidgeOpticalCaptureRows[base + 11u] = currentFire.w;
+  nonRidgeOpticalCaptureRows[base + 12u] = currentMicro.x;
+  nonRidgeOpticalCaptureRows[base + 13u] = currentMicro.y;
+  nonRidgeOpticalCaptureRows[base + 14u] = currentMicro.z;
+  nonRidgeOpticalCaptureRows[base + 15u] = currentMicro.w;
+  nonRidgeOpticalCaptureRows[base + 16u] = sourceBasisFrontVelocity.x;
+  nonRidgeOpticalCaptureRows[base + 17u] = sourceBasisFrontVelocity.y;
+  nonRidgeOpticalCaptureRows[base + 18u] = sourceBasisFrontVelocity.z;
+  nonRidgeOpticalCaptureRows[base + 19u] = sourceBasisFrontVelocity.w;
+  nonRidgeOpticalCaptureRows[base + 20u] = sourceBasisReactionInterfaceCurlDivergence.x;
+  nonRidgeOpticalCaptureRows[base + 21u] = sourceBasisReactionInterfaceCurlDivergence.y;
+  nonRidgeOpticalCaptureRows[base + 22u] = sourceBasisReactionInterfaceCurlDivergence.z;
+  nonRidgeOpticalCaptureRows[base + 23u] = sourceBasisReactionInterfaceCurlDivergence.w;
+  nonRidgeOpticalCaptureRows[base + 24u] = nonRidgeMembershipEmission.x;
+  nonRidgeOpticalCaptureRows[base + 25u] = nonRidgeMembershipEmission.y;
+  nonRidgeOpticalCaptureRows[base + 26u] = nonRidgeMembershipEmission.z;
+  nonRidgeOpticalCaptureRows[base + 27u] = nonRidgeMembershipEmission.w;
+  nonRidgeOpticalCaptureRows[base + 28u] = nonRidgeExtinction;
 }
 
 fn majorantIndex(c: vec3<u32>) -> u32 {
@@ -3996,6 +4129,7 @@ fn makeRaymarchResult(color: vec4<f32>, residualFeature: vec4<f32>) -> RaymarchR
 }
 
 fn raymarchVolume(in: VSOut) -> RaymarchResult {
+  let fullGridCapture = nonRidgeOpticalCaptureHeader.mode == 3u;
   let ndc = vec2<f32>(in.uv.x * 2.0 - 1.0, in.uv.y * 2.0 - 1.0);
   let nearClip = vec4<f32>(ndc, -1.0, 1.0);
   let farClip = vec4<f32>(ndc, 1.0, 1.0);
@@ -4006,11 +4140,11 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
   let ro = u.cameraPos_time.xyz;
   let rd = normalize(farWorld - nearWorld);
   let hit = boxHit(ro, rd, vec3<f32>(1.0, 1.0, 1.0));
-  if (hit.y <= max(hit.x, 0.0)) {
+  if (!fullGridCapture && hit.y <= max(hit.x, 0.0)) {
     return makeRaymarchResult(vec4<f32>(0.004, 0.005, 0.006, 1.0), vec4<f32>(0.0));
   }
 
-  let steps = clamp(u.viewport_steps_density.z, 24.0, 192.0);
+  let steps = select(clamp(u.viewport_steps_density.z, 24.0, 192.0), f32(GRID), fullGridCapture);
   let fireScale = clamp(u.scale_controls.x, 0.35, 1.30);
   let detailScale = clamp(u.scale_controls.y, 0.45, 3.20);
   let plumeHeight = clamp(u.scale_controls.z, 0.70, 2.20);
@@ -4134,8 +4268,8 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
   let canonicalFireContent = minimalPlumeRenderScene * step(0.5, canonicalContentMode);
   let canonicalFireRenderContent = mix(1.0, canonicalFireContent, minimalPlumeRenderScene);
   let canonicalSmokeOnlyRender = minimalPlumeRenderScene * step(0.5, canonicalRenderMode);
-  let startT = max(hit.x, 0.0);
-  let endT = hit.y;
+  let startT = select(max(hit.x, 0.0), 0.0, fullGridCapture);
+  let endT = select(hit.y, 2.0, fullGridCapture);
   let dtBase = (endT - startT) / steps;
   let jitter = temporalJitterOffset(in.uv, dtBase);
   let bonfireSpatialRayDephase = (hash31(vec3<f32>(floor(in.uv * u.viewport_steps_density.xy), 37.0)) - 0.5) * dtBase * 0.90 * bonfireRenderScene;
@@ -4175,8 +4309,11 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
   var temporalDetailHistoryProtectSum = 0.0;
 
   for (var i = 0; i < 192; i = i + 1) {
-    if (f32(i) >= steps || raymarchEarlyTermination(trans) || t > endT) { break; }
-    let p = ro + rd * t;
+    if (f32(i) >= steps || (!fullGridCapture && (raymarchEarlyTermination(trans) || t > endT))) { break; }
+    let fullGridX = min(u32(floor(in.uv.x * f32(GRID))), GRID - 1u);
+    let fullGridY = min(u32(floor(in.uv.y * f32(GRID))), GRID - 1u);
+    let fullGridP = (vec3<f32>(f32(fullGridX), f32(fullGridY), f32(i)) + vec3<f32>(0.5)) * (2.0 / f32(GRID)) - vec3<f32>(1.0);
+    let p = select(ro + rd * t, fullGridP, fullGridCapture);
     let majorantNearest = sampleWorldMajorant(p);
     let majorantLinear = sampleWorldMajorantLinear(p);
     let majorantDilated = sampleWorldMajorantDilated(p);
@@ -4191,7 +4328,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     let edgeDamping = 1.0 - smoothstep(0.012, 0.16, majorantEdge * majorantEdgeGuard);
     let majorantSkipGate = majorantEmpty * majorantSkipStrength * edgeDamping;
     temporalMajorantEdge = max(temporalMajorantEdge, majorantEdge * (0.18 + majorantSkipGate));
-    if (majorantSkipGate > 0.42) {
+    if (!fullGridCapture && majorantSkipGate > 0.42) {
       let cellExit = majorantCellExitDistance(p, rd);
       let skipDt = min(cellExit + dtBase * 0.20, dtBase * (1.0 + majorantSkipGate * 6.0));
       t = t + min(skipDt, max(0.0001, endT - t));
@@ -4267,7 +4404,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     let extinction = rawExtinction + tallPlumeTransitionWisps * absorptionGain * 0.34;
     let occupancy = raymarchOccupancySignal(density, smoke, heat, temp, flame, microTextureSignal, velMag, extinction) + tallPlumeTransitionWisps;
     let emptySpanScale = occupancySkipStepScale(occupancy, occupancySkipStrength, adaptiveRays);
-    if (emptySpanScale > 1.08) {
+    if (!fullGridCapture && emptySpanScale > 1.08) {
       t = t + min(dtBase * emptySpanScale, max(0.0001, endT - t));
       continue;
     }
@@ -5117,6 +5254,59 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     let nonRidgeExtinctionCoefficient = completeFlameExtinctionCoefficient - ridgeOwnedExtinctionCoefficient;
     let positiveRecomposedEmissionCoefficient = ridgeOwnedEmissionCoefficient + nonRidgeEmissionCoefficient;
     let positiveRecomposedExtinctionCoefficient = ridgeOwnedExtinctionCoefficient + nonRidgeExtinctionCoefficient;
+    let nonRidgeOpticalCaptureSignal = max(
+      directFlameCandidateSupport,
+      max(max(completeFlameEmissionCoefficient.r, completeFlameEmissionCoefficient.g), max(completeFlameEmissionCoefficient.b, completeFlameExtinctionCoefficient))
+    );
+    if (fullGridCapture) {
+      let cellIndex = fullGridX + fullGridY * GRID + u32(i) * GRID * GRID;
+      let sourceBasisReaction = reactionSupport;
+      let sourceBasisInterface = edgeSupport;
+      let sourceBasisCurl = curlDebug;
+      let sourceBasisDivergence = divergenceAtCell(sampleCell);
+      let nonRidgeOpticalSignal = max(
+        max(nonRidgeEmissionCoefficient.r, nonRidgeEmissionCoefficient.g),
+        max(nonRidgeEmissionCoefficient.b, nonRidgeExtinctionCoefficient)
+      );
+      let nonRidgeMembership = (1.0 - ridgeOwnershipWeight) * step(0.000001, nonRidgeOpticalSignal);
+      if (cellIndex < nonRidgeOpticalCaptureHeader.capacity) {
+        writeNonRidgeSourceBasisCaptureRow(
+          cellIndex,
+          directFlameCandidateSidecar,
+          material,
+          fireLayer,
+          microLayer,
+          vec4<f32>(combustionFrontTopology, state.xyz),
+          vec4<f32>(sourceBasisReaction, sourceBasisInterface, sourceBasisCurl, sourceBasisDivergence),
+          vec4<f32>(nonRidgeMembership, nonRidgeEmissionCoefficient),
+          nonRidgeExtinctionCoefficient,
+        );
+        atomicAdd(&nonRidgeOpticalCaptureHeader.rowCount, 1u);
+      } else {
+        atomicAdd(&nonRidgeOpticalCaptureHeader.overflowCount, 1u);
+      }
+    } else if (nonRidgeOpticalCaptureHeader.mode > 0u && nonRidgeOpticalCaptureSignal > 0.000001) {
+      let captureRowIndex = atomicAdd(&nonRidgeOpticalCaptureHeader.rowCount, 1u);
+      if (nonRidgeOpticalCaptureHeader.mode > 1u) {
+        if (captureRowIndex < nonRidgeOpticalCaptureHeader.capacity) {
+          writeNonRidgeOpticalCaptureRow(
+            captureRowIndex,
+            vec4<f32>(p, directFlameCandidateSupport),
+            directFlameCandidateSidecar,
+            material,
+            fireLayer,
+            microLayer,
+            vec4<f32>(state.xyz, velMag),
+            vec4<f32>(thermalSupport, reactionSupport, frontSupport, edgeSupport),
+            vec4<f32>(combustionFrontTopology, shellCoreBody, curlActivity, divSupport),
+            vec4<f32>(nonRidgeEmissionCoefficient, nonRidgeExtinctionCoefficient),
+            vec4<f32>(completeFlameEmissionCoefficient, completeFlameExtinctionCoefficient),
+          );
+        } else {
+          atomicAdd(&nonRidgeOpticalCaptureHeader.overflowCount, 1u);
+        }
+      }
+    }
     if (appearanceAssayActive > 0.5) {
       structuralAColor = structuralAColor + structuralATransmittance * structuralAEmissionCoefficient;
       structuralATransmittance = structuralATransmittance * exp(-structuralAExtinctionCoefficient);
@@ -6421,6 +6611,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let flowKernelDescriptorIndexBufferCapacity = 0;
   let flowKernelDescriptorIndexUpload = null;
   let boundarySplatDescriptorSource = null;
+  let nonRidgeOpticalCaptureHeaderBuffer = null;
+  let nonRidgeOpticalCaptureRowBuffer = null;
+  let nonRidgeOpticalCaptureSession = null;
+  let nonRidgeSourceBasisCaptureSession = null;
+  let nonRidgeSourceBasisControlsActive = false;
+  let nonRidgeSourceBasisControlApplication = null;
   let boundarySplatTelemetryCopyPending = false;
   let boundarySplatTelemetryMapPending = false;
   let boundarySplatSupervisionCaptureActive = false;
@@ -6702,6 +6898,24 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     device.queue.writeBuffer(oracleActivityCueBuffer, 0, new Float32Array(gridCellCount(gridSize)));
   }
 
+  function ensureNonRidgeOpticalCaptureBuffers() {
+    if (!nonRidgeOpticalCaptureHeaderBuffer) {
+      nonRidgeOpticalCaptureHeaderBuffer = device.createBuffer({
+        label: `kaminos ${NONRIDGE_OPTICAL_CAPTURE_IDENTITY} header`,
+        size: 16,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+      });
+      device.queue.writeBuffer(nonRidgeOpticalCaptureHeaderBuffer, 0, new Uint32Array(4));
+    }
+    if (!nonRidgeOpticalCaptureRowBuffer) {
+      nonRidgeOpticalCaptureRowBuffer = device.createBuffer({
+        label: `kaminos ${NONRIDGE_OPTICAL_CAPTURE_IDENTITY} dummy rows`,
+        size: NONRIDGE_OPTICAL_ROW_STRIDE_BYTES,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+      });
+    }
+  }
+
   function writeOracleActivityCueBuffer(values) {
     if (!device) return;
     ensureOracleActivityCueBuffer();
@@ -6896,6 +7110,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatFeatureBuffer?.destroy();
     flowKernelDescriptorBuffer?.destroy();
     flowKernelDescriptorIndexBuffer?.destroy();
+    nonRidgeOpticalCaptureHeaderBuffer?.destroy();
+    nonRidgeOpticalCaptureRowBuffer?.destroy();
     oracleActivityCueBuffer?.destroy();
     boundarySidecarBuffer = null;
     boundarySplatBuffer = null;
@@ -6913,6 +7129,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.flowKernelDescriptorIndexCount = 0;
     state.flowKernelDescriptorIndexReceipt = null;
     boundarySplatDescriptorSource = null;
+    nonRidgeOpticalCaptureHeaderBuffer = null;
+    nonRidgeOpticalCaptureRowBuffer = null;
+    nonRidgeOpticalCaptureSession = null;
+    nonRidgeSourceBasisCaptureSession = null;
+    nonRidgeSourceBasisControlsActive = false;
+    nonRidgeSourceBasisControlApplication = null;
     boundarySplatTelemetryCopyPending = false;
     oracleActivityCueBuffer = null;
     fluidBuffers = [];
@@ -7081,7 +7303,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function rebuildFluidBindGroups() {
-    if (!device || !bindGroupLayout || !uniformBuffer || !externalEmitterBuffer || !oracleActivityCueBuffer || fluidBuffers.length !== 2 || frontBuffers.length !== 2 || !majorantBuffer || !boundarySidecarBuffer || !historyTexture || !historySampler) return;
+    if (!device || !bindGroupLayout || !uniformBuffer || !externalEmitterBuffer || !oracleActivityCueBuffer || !nonRidgeOpticalCaptureHeaderBuffer || !nonRidgeOpticalCaptureRowBuffer || fluidBuffers.length !== 2 || frontBuffers.length !== 2 || !majorantBuffer || !boundarySidecarBuffer || !historyTexture || !historySampler) return;
     bindGroups = [
       device.createBindGroup({
         label: `kaminos fluid bind group ${gridSize}^3 A to B`,
@@ -7098,6 +7320,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           { binding: 8, resource: { buffer: frontBuffers[1] } },
           { binding: 9, resource: { buffer: oracleActivityCueBuffer } },
           { binding: 10, resource: { buffer: boundarySidecarBuffer } },
+          { binding: 11, resource: { buffer: nonRidgeOpticalCaptureHeaderBuffer } },
+          { binding: 12, resource: { buffer: nonRidgeOpticalCaptureRowBuffer } },
         ],
       }),
       device.createBindGroup({
@@ -7115,6 +7339,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           { binding: 8, resource: { buffer: frontBuffers[0] } },
           { binding: 9, resource: { buffer: oracleActivityCueBuffer } },
           { binding: 10, resource: { buffer: boundarySidecarBuffer } },
+          { binding: 11, resource: { buffer: nonRidgeOpticalCaptureHeaderBuffer } },
+          { binding: 12, resource: { buffer: nonRidgeOpticalCaptureRowBuffer } },
         ],
       }),
     ];
@@ -7133,6 +7359,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       || !historySampler
       || !externalEmitterBuffer
       || !oracleActivityCueBuffer
+      || !nonRidgeOpticalCaptureHeaderBuffer
+      || !nonRidgeOpticalCaptureRowBuffer
       || !boundarySidecarBuffer
       || !boundarySplatBuffer
       || !boundarySplatDrawBuffer
@@ -7161,6 +7389,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           { binding: 8, resource: { buffer: frontBuffers[0] } },
           { binding: 9, resource: { buffer: oracleActivityCueBuffer } },
           { binding: 10, resource: { buffer: boundarySidecarBuffer } },
+          { binding: 11, resource: { buffer: nonRidgeOpticalCaptureHeaderBuffer } },
+          { binding: 12, resource: { buffer: nonRidgeOpticalCaptureRowBuffer } },
         ],
       }),
       majorant: device.createBindGroup({
@@ -7721,6 +7951,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatRenderPipeline = makeBoundarySplatRenderPipeline(format, `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} raster ${gridSize}^3`);
     boundarySplatReadbackPipeline = makeBoundarySplatRenderPipeline('rgba8unorm', `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} witness readback ${gridSize}^3`);
     ensureBoundarySplatBuffers();
+    ensureNonRidgeOpticalCaptureBuffers();
     ensureTemporalHistoryTexture();
     rebuildFluidBindGroups();
     majorantFrontBindGroups = [
@@ -7990,6 +8221,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           binding: 10,
           visibility: GPUShaderStage.FRAGMENT,
           buffer: { type: 'read-only-storage' },
+        },
+        {
+          binding: 11,
+          visibility: GPUShaderStage.FRAGMENT,
+          buffer: { type: 'storage' },
+        },
+        {
+          binding: 12,
+          visibility: GPUShaderStage.FRAGMENT,
+          buffer: { type: 'storage' },
         },
       ],
     });
@@ -8986,6 +9227,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const boundarySidecarControls = controlsSnapshot.boundarySidecarControls || {};
     const boundaryFireInspectActive = shellInspectModeName === 'boundary_fire';
     const boundaryInspectActive = shellInspectModeName === 'boundary' || boundaryFireInspectActive;
+    const boundaryControlUniformsActive = boundaryInspectActive || nonRidgeSourceBasisControlsActive;
+    const boundaryControlUniformAuthority = nonRidgeSourceBasisControlsActive
+      ? 'nonridge-source-basis-capture-controls-v0'
+      : (boundaryInspectActive ? 'boundary-inspect-controls-v0' : 'ordinary-shell-controls-v0');
     const boundaryControls = controlsSnapshot.reactionBoundaryControls || {};
     const boundaryFireControls = controlsSnapshot.reactionBoundaryFireControls || {};
     const boundaryUniforms = {
@@ -9021,20 +9266,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[277] = shellInspectModeValue(shellInspectModeName);
     uniforms[278] = Math.max(0, Math.min(2, controlsSnapshot.shellAmount ?? 1.10));
     uniforms[279] = Math.max(0.05, Math.min(2, controlsSnapshot.shellWidth ?? 0.90));
-    uniforms[280] = boundaryInspectActive ? boundaryUniforms.supportThermal : Math.max(0, Math.min(2, controlsSnapshot.shellThermal ?? 0.85));
-    uniforms[281] = boundaryInspectActive ? boundaryUniforms.supportReaction : Math.max(0, Math.min(2, controlsSnapshot.shellReaction ?? 1.10));
-    uniforms[282] = boundaryInspectActive ? boundaryUniforms.supportFront : Math.max(0, Math.min(2, controlsSnapshot.shellFront ?? 1.25));
-    uniforms[283] = boundaryInspectActive ? boundaryUniforms.supportInterface : Math.max(0, Math.min(2, controlsSnapshot.shellEdge ?? 0.85));
-    uniforms[284] = boundaryInspectActive ? boundaryUniforms.coreReject : Math.max(0, Math.min(1, controlsSnapshot.shellCoreSuppress ?? 0.55));
-    uniforms[285] = boundaryInspectActive ? boundaryUniforms.topologyGain : Math.max(0, Math.min(2, controlsSnapshot.shellBite ?? 0.80));
-    uniforms[286] = boundaryInspectActive ? boundaryUniforms.curlGain : Math.max(0, Math.min(2, controlsSnapshot.shellCurl ?? 0.25));
-    uniforms[287] = boundaryInspectActive ? boundaryUniforms.divergenceGain : Math.max(0, Math.min(1, controlsSnapshot.shellDivergence ?? 0.00));
-    uniforms[288] = boundaryInspectActive ? boundaryUniforms.gradientGain : Math.max(0, Math.min(2, controlsSnapshot.shellSmoke ?? 0.25));
-    uniforms[289] = boundaryInspectActive ? boundaryUniforms.cut : 0;
-    uniforms[290] = boundaryInspectActive ? boundaryUniforms.softness : 0;
-    uniforms[291] = boundaryInspectActive ? boundaryUniforms.displayOpacity : 0;
-    uniforms[292] = boundaryInspectActive ? boundaryUniforms.displayContrast : Math.max(0, Math.min(5, controlsSnapshot.shellLuma ?? 1.35));
-    uniforms[293] = boundaryInspectActive ? boundaryUniforms.displayGamma : Math.max(0, Math.min(4, controlsSnapshot.shellExposure ?? 1.15));
+    uniforms[280] = boundaryControlUniformsActive ? boundaryUniforms.supportThermal : Math.max(0, Math.min(2, controlsSnapshot.shellThermal ?? 0.85));
+    uniforms[281] = boundaryControlUniformsActive ? boundaryUniforms.supportReaction : Math.max(0, Math.min(2, controlsSnapshot.shellReaction ?? 1.10));
+    uniforms[282] = boundaryControlUniformsActive ? boundaryUniforms.supportFront : Math.max(0, Math.min(2, controlsSnapshot.shellFront ?? 1.25));
+    uniforms[283] = boundaryControlUniformsActive ? boundaryUniforms.supportInterface : Math.max(0, Math.min(2, controlsSnapshot.shellEdge ?? 0.85));
+    uniforms[284] = boundaryControlUniformsActive ? boundaryUniforms.coreReject : Math.max(0, Math.min(1, controlsSnapshot.shellCoreSuppress ?? 0.55));
+    uniforms[285] = boundaryControlUniformsActive ? boundaryUniforms.topologyGain : Math.max(0, Math.min(2, controlsSnapshot.shellBite ?? 0.80));
+    uniforms[286] = boundaryControlUniformsActive ? boundaryUniforms.curlGain : Math.max(0, Math.min(2, controlsSnapshot.shellCurl ?? 0.25));
+    uniforms[287] = boundaryControlUniformsActive ? boundaryUniforms.divergenceGain : Math.max(0, Math.min(1, controlsSnapshot.shellDivergence ?? 0.00));
+    uniforms[288] = boundaryControlUniformsActive ? boundaryUniforms.gradientGain : Math.max(0, Math.min(2, controlsSnapshot.shellSmoke ?? 0.25));
+    uniforms[289] = boundaryControlUniformsActive ? boundaryUniforms.cut : 0;
+    uniforms[290] = boundaryControlUniformsActive ? boundaryUniforms.softness : 0;
+    uniforms[291] = boundaryControlUniformsActive ? boundaryUniforms.displayOpacity : 0;
+    uniforms[292] = boundaryControlUniformsActive ? boundaryUniforms.displayContrast : Math.max(0, Math.min(5, controlsSnapshot.shellLuma ?? 1.35));
+    uniforms[293] = boundaryControlUniformsActive ? boundaryUniforms.displayGamma : Math.max(0, Math.min(4, controlsSnapshot.shellExposure ?? 1.15));
     uniforms[294] = Math.max(0.2, Math.min(4, controlsSnapshot.shellSoftClip ?? 1.60));
     uniforms[295] = Math.max(0, Math.min(4, controlsSnapshot.shellHeat ?? 1.65));
     uniforms[296] = boundaryFireUniforms.ridgeGain;
@@ -9087,6 +9332,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.legacyPyroBackedOff = controlsSnapshot.legacyPyroBackedOff === true;
     state.fireRenderMode = fireRenderModeName;
     state.shellInspectMode = shellInspectModeName;
+    state.boundaryControlUniformAuthority = boundaryControlUniformAuthority;
     state.topologyShellControls = {
       amount: uniforms[278],
       width: uniforms[279],
@@ -9106,11 +9352,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
     state.reactionBoundaryControls = {
       ...boundaryUniforms,
-      active: boundaryInspectActive,
+      active: boundaryControlUniformsActive,
     };
     state.reactionBoundaryFireControls = {
       ...boundaryFireUniforms,
-      active: boundaryFireInspectActive,
+      active: boundaryFireInspectActive || nonRidgeSourceBasisControlsActive,
     };
     state.boundarySidecarSource = boundarySidecarSourceName;
     state.boundaryStructureSource = boundarySidecarSourceName;
@@ -11513,6 +11759,690 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.fullFieldImportReceipt = { ...receipt, renderLoopPaused: false, liveReplay };
     emitStatus({ phase: 'full-field-live-replay-running' });
     return { ok: true, schema: FULL_FIELD_IMPORT_IDENTITY, ...liveReplay };
+  }
+
+  function nonRidgeOpticalCapturePublicSession(session) {
+    if (!session) return null;
+    return {
+      schema: NONRIDGE_OPTICAL_CAPTURE_IDENTITY,
+      identity: NONRIDGE_OPTICAL_ROW_IDENTITY,
+      status: session.status,
+      failurePhase: session.failurePhase || null,
+      reason: session.reason || null,
+      sessionId: session.sessionId || null,
+      createdAtMs: session.createdAtMs || null,
+      rowCount: session.rowCount ?? 0,
+      observedRowCount: session.observedRowCount ?? 0,
+      overflowCount: session.overflowCount ?? 0,
+      strideFloats: NONRIDGE_OPTICAL_ROW_STRIDE_FLOATS,
+      byteLength: session.byteLength ?? 0,
+      allocationAuthority: session.allocationAuthority || null,
+      captureTimeMs: session.captureTimeMs ?? null,
+      cohortIdentity: session.cohortIdentity || null,
+      sourceIdentity: session.sourceIdentity || null,
+      rendererPassReceipt: session.rendererPassReceipt || null,
+      positiveRecomposition: session.positiveRecomposition || null,
+      requestedRoute: ROUTE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      backend: state.backend,
+    };
+  }
+
+  async function readNonRidgeOpticalCaptureHeader(readback, encoder, label) {
+    encoder.copyBufferToBuffer(nonRidgeOpticalCaptureHeaderBuffer, 0, readback, 0, 16);
+    device.queue.submit([encoder.finish()]);
+    await readback.mapAsync(GPUMapMode.READ);
+    const header = new Uint32Array(readback.getMappedRange().slice(0));
+    readback.unmap();
+    return {
+      label,
+      rowCount: header[0],
+      capacity: header[1],
+      mode: header[2],
+      overflowCount: header[3],
+    };
+  }
+
+  function rebuildNonRidgeOpticalCaptureBindGroups() {
+    rebuildFluidBindGroups();
+    rebuildSelectiveHeadLiveBindGroups();
+  }
+
+  async function runNonRidgeOpticalCapturePass({ mode, capacity, captureTimeMs, label }) {
+    device.queue.writeBuffer(
+      nonRidgeOpticalCaptureHeaderBuffer,
+      0,
+      new Uint32Array([0, capacity, mode, 0]),
+    );
+    updateUniforms(captureTimeMs);
+    let fullGridDispatchTexture = null;
+    if (mode !== 3) ensureFrameTexture();
+    else {
+      fullGridDispatchTexture = device.createTexture({
+        label: `kaminos ${NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY} ${gridSize}x${gridSize} dispatch`,
+        size: [gridSize, gridSize, 1],
+        format: 'rgba8unorm',
+        usage: GPUTextureUsage.RENDER_ATTACHMENT,
+      });
+    }
+    const readback = device.createBuffer({
+      label: `kaminos ${NONRIDGE_OPTICAL_CAPTURE_IDENTITY} ${label} header readback`,
+      size: 16,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    device.pushErrorScope('validation');
+    const encoder = device.createCommandEncoder({ label: `kaminos ${NONRIDGE_OPTICAL_CAPTURE_IDENTITY} ${label}` });
+    encodeBoundarySidecar(encoder, { readBindGroup: selectiveHeadLiveRoleGroups('sidecar') || null });
+    encodeDraw(
+      encoder,
+      (fullGridDispatchTexture || frameTexture).createView(),
+      `kaminos ${NONRIDGE_OPTICAL_CAPTURE_IDENTITY} ${label} raymarch`,
+      readbackPipeline,
+      { bindGroup: selectiveHeadLiveRoleGroups('render') || null },
+    );
+    let header;
+    try {
+      header = await readNonRidgeOpticalCaptureHeader(readback, encoder, label);
+      const validationError = await device.popErrorScope();
+      if (validationError) throw new Error(validationError.message || String(validationError));
+      return header;
+    } catch (error) {
+      try { await device.popErrorScope(); } catch {}
+      throw error;
+    } finally {
+      readback.destroy();
+      fullGridDispatchTexture?.destroy();
+    }
+  }
+
+  async function readNonRidgeOpticalCaptureRows(byteLength) {
+    if (byteLength === 0) return new Float32Array();
+    const readback = device.createBuffer({
+      label: `kaminos ${NONRIDGE_OPTICAL_CAPTURE_IDENTITY} exact rows readback`,
+      size: byteLength,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    try {
+      const encoder = device.createCommandEncoder({ label: `kaminos ${NONRIDGE_OPTICAL_CAPTURE_IDENTITY} exact rows copy` });
+      encoder.copyBufferToBuffer(nonRidgeOpticalCaptureRowBuffer, 0, readback, 0, byteLength);
+      device.queue.submit([encoder.finish()]);
+      await readback.mapAsync(GPUMapMode.READ);
+      const values = new Float32Array(readback.getMappedRange().slice(0));
+      readback.unmap();
+      return values;
+    } finally {
+      readback.destroy();
+    }
+  }
+
+  function positiveNonRidgeRecompositionReceipt(values, rowCount) {
+    let maxEmissionError = 0;
+    let maxExtinctionError = 0;
+    for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+      const offset = rowIndex * NONRIDGE_OPTICAL_ROW_STRIDE_FLOATS;
+      const ridgeWeight = Math.max(0, Math.min(1, values[offset + 3]));
+      for (let channel = 0; channel < 3; channel += 1) {
+        const nonRidge = values[offset + 32 + channel];
+        const complete = values[offset + 36 + channel];
+        maxEmissionError = Math.max(maxEmissionError, Math.abs((complete * ridgeWeight) + nonRidge - complete));
+      }
+      const nonRidgeExtinction = values[offset + 35];
+      const completeExtinction = values[offset + 39];
+      maxExtinctionError = Math.max(
+        maxExtinctionError,
+        Math.abs((completeExtinction * ridgeWeight) + nonRidgeExtinction - completeExtinction),
+      );
+    }
+    return {
+      identity: 'positive-ridge-plus-nonridge-local-coefficient-recomposition-v0',
+      rowCount,
+      maxEmissionAbsoluteError: maxEmissionError,
+      maxExtinctionAbsoluteError: maxExtinctionError,
+      exactWithinFloat32: maxEmissionError <= 1e-6 && maxExtinctionError <= 1e-6,
+    };
+  }
+
+  async function beginDebugNonRidgeOpticalCapture(options = {}) {
+    const failed = (failurePhase, reason, lastTrustworthyEvidence = null) => {
+      nonRidgeOpticalCaptureSession = {
+        status: 'failed',
+        failurePhase,
+        reason,
+        lastTrustworthyEvidence,
+      };
+      state.nonRidgeOpticalCapture = nonRidgeOpticalCapturePublicSession(nonRidgeOpticalCaptureSession);
+      return { ok: false, ...state.nonRidgeOpticalCapture, lastTrustworthyEvidence };
+    };
+    if (!device) return failed('inactive', 'inactive');
+    if (state.active && !selectiveHeadLiveCapturePaused) {
+      return failed('freeze-authority', 'nonridge-optical-capture-requires-frozen-renderer');
+    }
+    if (nonRidgeOpticalCaptureSession?.status === 'captured') {
+      return failed('session-custody', 'prior-nonridge-optical-capture-session-not-released', {
+        sessionId: nonRidgeOpticalCaptureSession.sessionId,
+      });
+    }
+    const captureTimeMs = Number.isFinite(Number(options.captureTimeMs))
+      ? Number(options.captureTimeMs)
+      : performance.now();
+    const priorAppearanceMode = appearanceDecompositionModeRequestedRaw;
+    let exactRowsBuffer = null;
+    let idleRowsBuffer = null;
+    try {
+      setAppearanceDecompositionMode('non-ridge-emission');
+      ensureNonRidgeOpticalCaptureBuffers();
+      rebuildNonRidgeOpticalCaptureBindGroups();
+      const countOnly = await runNonRidgeOpticalCapturePass({
+        mode: 1,
+        capacity: 0,
+        captureTimeMs,
+        label: 'count-only',
+      });
+      if (countOnly.overflowCount !== 0) {
+        return failed('count-only', `count-only-pass-reported-overflow:${countOnly.overflowCount}`, countOnly);
+      }
+      const observedRowCount = countOnly.rowCount;
+      const byteLength = observedRowCount * NONRIDGE_OPTICAL_ROW_STRIDE_BYTES;
+      const maxBindingBytes = Number(device.limits?.maxStorageBufferBindingSize || 0);
+      if (byteLength > maxBindingBytes) {
+        return failed('exact-observed-row-allocation', `observed-row-bytes-exceed-device-binding-limit:${byteLength}>${maxBindingBytes}`, {
+          observedRowCount,
+          byteLength,
+          maxStorageBufferBindingSize: maxBindingBytes,
+        });
+      }
+      if (observedRowCount > 0) {
+        idleRowsBuffer = nonRidgeOpticalCaptureRowBuffer;
+        exactRowsBuffer = device.createBuffer({
+          label: `kaminos ${NONRIDGE_OPTICAL_CAPTURE_IDENTITY} exact-observed-row-allocation ${observedRowCount}`,
+          size: byteLength,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+        });
+        nonRidgeOpticalCaptureRowBuffer = exactRowsBuffer;
+        rebuildNonRidgeOpticalCaptureBindGroups();
+      }
+      const writePass = await runNonRidgeOpticalCapturePass({
+        mode: 2,
+        capacity: observedRowCount,
+        captureTimeMs,
+        label: 'exact-observed-row-allocation-write',
+      });
+      if (writePass.rowCount !== observedRowCount || writePass.overflowCount !== 0) {
+        return failed('write-pass-verification', 'nonridge-optical-capture-count-drift-or-overflow', {
+          countOnly,
+          writePass,
+        });
+      }
+      const values = await readNonRidgeOpticalCaptureRows(byteLength);
+      const positiveRecomposition = positiveNonRidgeRecompositionReceipt(values, observedRowCount);
+      if (!positiveRecomposition.exactWithinFloat32) {
+        return failed('positive-recomposition', 'positive-nonridge-local-recomposition-failed', positiveRecomposition);
+      }
+      nonRidgeOpticalCaptureSession = {
+        status: observedRowCount === 0 ? 'captured-negative' : 'captured',
+        sessionId: `nonridge-optical-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+        createdAtMs: performance.now(),
+        rowCount: observedRowCount,
+        observedRowCount,
+        overflowCount: writePass.overflowCount,
+        byteLength,
+        values,
+        allocationAuthority: 'count-only-then-exact-observed-row-allocation-v0',
+        captureTimeMs,
+        cohortIdentity: 'visible-ray-samples-with-positive-complete-or-ridge-support-v0',
+        sourceIdentity: {
+          frameCount: state.frameCount,
+          simStepCount: state.simStepCount,
+          grid: gridSize,
+          controlsSignature: temporalControlSignature(controlsSnapshot),
+          appearanceMode: 'non-ridge-emission',
+          boundarySidecar: boundarySidecarDebug(),
+        },
+        rendererPassReceipt: {
+          identity: 'frozen-nonridge-optical-ray-sample-capture-pass-v0',
+          raymarchEncoded: true,
+          raymarchApplied: true,
+          sidecarEncoded: true,
+          sidecarApplied: true,
+          splatsEncoded: false,
+          splatsApplied: false,
+          residualEncoded: false,
+          residualApplied: false,
+          smokeEncoded: false,
+          smokeApplied: false,
+          fallbackReason: null,
+        },
+        positiveRecomposition,
+      };
+      state.nonRidgeOpticalCapture = nonRidgeOpticalCapturePublicSession(nonRidgeOpticalCaptureSession);
+      return { ok: true, ...state.nonRidgeOpticalCapture };
+    } catch (error) {
+      return failed('capture', error?.message || String(error));
+    } finally {
+      setAppearanceDecompositionMode(priorAppearanceMode);
+      if (exactRowsBuffer) {
+        nonRidgeOpticalCaptureRowBuffer = idleRowsBuffer;
+        exactRowsBuffer.destroy();
+        rebuildNonRidgeOpticalCaptureBindGroups();
+      }
+      if (nonRidgeOpticalCaptureHeaderBuffer) {
+        device.queue.writeBuffer(nonRidgeOpticalCaptureHeaderBuffer, 0, new Uint32Array(4));
+      }
+    }
+  }
+
+  function readDebugNonRidgeOpticalCaptureChunk(options = {}) {
+    const session = nonRidgeOpticalCaptureSession;
+    if (!session || !['captured', 'captured-negative'].includes(session.status) || !(session.values instanceof Float32Array)) {
+      return {
+        ok: false,
+        schema: NONRIDGE_OPTICAL_CAPTURE_IDENTITY,
+        status: 'failed',
+        failurePhase: 'chunk-read',
+        reason: 'no-active-nonridge-optical-capture-session',
+      };
+    }
+    const requestedSessionId = String(options.sessionId || '');
+    if (requestedSessionId && requestedSessionId !== session.sessionId) {
+      return {
+        ok: false,
+        schema: NONRIDGE_OPTICAL_CAPTURE_IDENTITY,
+        status: 'failed',
+        failurePhase: 'chunk-read',
+        reason: 'session-id-mismatch',
+        sessionId: session.sessionId,
+        requestedSessionId,
+      };
+    }
+    const startFloat = Math.max(0, Math.min(session.values.length, Math.floor(Number(options.startFloat) || 0)));
+    const requestedFloatCount = Math.floor(Number(options.floatCount) || Math.min(262144, session.values.length - startFloat));
+    const floatCount = Math.max(0, Math.min(session.values.length - startFloat, requestedFloatCount));
+    return {
+      ok: true,
+      schema: NONRIDGE_OPTICAL_CAPTURE_IDENTITY,
+      identity: NONRIDGE_OPTICAL_ROW_IDENTITY,
+      sessionId: session.sessionId,
+      dtype: 'float32',
+      startFloat,
+      floatCount,
+      byteOffset: startFloat * Float32Array.BYTES_PER_ELEMENT,
+      byteLength: floatCount * Float32Array.BYTES_PER_ELEMENT,
+      isFinal: startFloat + floatCount >= session.values.length,
+      base64: encodeFloat32ChunkBase64(session.values, startFloat, floatCount),
+    };
+  }
+
+  function releaseDebugNonRidgeOpticalCapture(options = {}) {
+    const session = nonRidgeOpticalCaptureSession;
+    const requestedSessionId = String(options.sessionId || '');
+    if (!session || (requestedSessionId && requestedSessionId !== session.sessionId)) {
+      return {
+        ok: false,
+        schema: NONRIDGE_OPTICAL_CAPTURE_IDENTITY,
+        status: 'failed',
+        failurePhase: 'release',
+        reason: session ? 'session-id-mismatch' : 'no-active-nonridge-optical-capture-session',
+      };
+    }
+    const released = { ...nonRidgeOpticalCapturePublicSession(session), status: 'released' };
+    nonRidgeOpticalCaptureSession = null;
+    state.nonRidgeOpticalCapture = released;
+    return { ok: true, ...released };
+  }
+
+  function sourceBasisControlReceipt(snapshot) {
+    return Object.fromEntries(CAUSAL_CONTROL_FIELDS.map(field => {
+      const nested = snapshot?.[field.nested[0]];
+      const value = nested && Number.isFinite(Number(nested[field.nested[1]]))
+        ? Number(nested[field.nested[1]])
+        : Number(snapshot?.[field.key]);
+      return [field.name, value];
+    }));
+  }
+
+  function sourceBasisGpuControlReceipt() {
+    return {
+      'support.thermal': uniforms[280],
+      'support.reaction': uniforms[281],
+      'support.front': uniforms[282],
+      'support.interface': uniforms[283],
+      'boundary.gradientGain': uniforms[288],
+      'boundary.cut': uniforms[289],
+      'boundary.softness': uniforms[290],
+      'boundary.coreRejection': uniforms[284],
+      'topology.gain': uniforms[285],
+      'curl.gain': uniforms[286],
+      'divergence.gain': uniforms[287],
+      'ridge.gain': uniforms[296],
+      'ridge.cut': uniforms[297],
+      'tip.breakup': uniforms[298],
+      'topology.erosion': uniforms[299],
+    };
+  }
+
+  function clearNonRidgeSourceBasisControlAuthority() {
+    nonRidgeSourceBasisControlsActive = false;
+    nonRidgeSourceBasisControlApplication = null;
+    if (!device) {
+      state.boundaryControlUniformAuthority = 'inactive';
+      return;
+    }
+    try {
+      updateUniforms(performance.now());
+    } catch {
+      state.boundaryControlUniformAuthority = 'ordinary-shell-controls-v0';
+    }
+  }
+
+  function applyDebugNonRidgeCausalControls(requested = {}) {
+    if (!device) throw new Error('nonridge-source-basis-controls-require-active-gpu');
+    if (state.active && !selectiveHeadLiveCapturePaused) {
+      throw new Error('nonridge-source-basis-controls-require-frozen-renderer');
+    }
+    const names = Object.keys(requested).sort();
+    const expectedNames = CAUSAL_CONTROL_FIELDS.map(field => field.name).sort();
+    if (names.length !== expectedNames.length || names.some((name, index) => name !== expectedNames[index])) {
+      throw new Error('nonridge-source-basis-controls-must-exactly-cover-authorized-causal-order');
+    }
+    const next = { ...controlsSnapshot };
+    const nestedCopies = new Map();
+    for (const field of CAUSAL_CONTROL_FIELDS) {
+      const value = Number(requested[field.name]);
+      if (!Number.isFinite(value) || value < field.min || value > field.max) {
+        throw new Error(`nonridge-source-basis-control-out-of-range:${field.name}:${requested[field.name]}`);
+      }
+      next[field.key] = value;
+      const [group, key] = field.nested;
+      if (!nestedCopies.has(group)) nestedCopies.set(group, { ...(next[group] || {}) });
+      nestedCopies.get(group)[key] = value;
+    }
+    for (const [group, values] of nestedCopies) next[group] = values;
+    controlsSnapshot = applyRuntimeQualityControls(next);
+    nonRidgeSourceBasisControlsActive = true;
+    try {
+      updateUniforms(performance.now());
+    } catch (error) {
+      clearNonRidgeSourceBasisControlAuthority();
+      throw error;
+    }
+    const effectiveControls = sourceBasisControlReceipt(controlsSnapshot);
+    const gpuEffectiveControls = sourceBasisGpuControlReceipt();
+    const controlSubstitutions = CAUSAL_CONTROL_FIELDS.flatMap(field => (
+      effectiveControls[field.name] === Number(requested[field.name])
+        ? []
+        : [{ name: field.name, requested: Number(requested[field.name]), effective: effectiveControls[field.name] }]
+    ));
+    const gpuControlSubstitutions = CAUSAL_CONTROL_FIELDS.flatMap(field => (
+      gpuEffectiveControls[field.name] === Math.fround(Number(requested[field.name]))
+        ? []
+        : [{ name: field.name, requested: Number(requested[field.name]), effective: gpuEffectiveControls[field.name] }]
+    ));
+    const applicationOk = controlSubstitutions.length === 0 && gpuControlSubstitutions.length === 0;
+    nonRidgeSourceBasisControlApplication = applicationOk ? {
+      identity: 'capture-owned-cpu-and-shader-control-application-v0',
+      effectiveControls: { ...effectiveControls },
+      gpuEffectiveControls: { ...gpuEffectiveControls },
+      boundaryControlUniformAuthority: state.boundaryControlUniformAuthority,
+    } : null;
+    if (!applicationOk) clearNonRidgeSourceBasisControlAuthority();
+    return {
+      ok: applicationOk,
+      schema: NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY,
+      identity: 'exact-continuous-renderer-causal-control-application-v0',
+      requestedControls: Object.fromEntries(CAUSAL_CONTROL_FIELDS.map(field => [field.name, Number(requested[field.name])])),
+      effectiveControls,
+      gpuEffectiveControls,
+      controlSubstitutions,
+      gpuControlSubstitutions,
+      boundaryControlUniformAuthority: state.boundaryControlUniformAuthority,
+      rendererPaused: true,
+      simulationAdvanced: false,
+      simulationReset: false,
+      fallbackReason: controlSubstitutions.length
+        ? 'renderer-control-substitution'
+        : (gpuControlSubstitutions.length ? 'shader-uniform-control-substitution' : null),
+    };
+  }
+
+  function nonRidgeSourceBasisPublicSession(session) {
+    if (!session) return null;
+    return {
+      schema: NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY,
+      identity: 'frozen-full-grid-nonridge-source-basis-rows-v0',
+      status: session.status,
+      failurePhase: session.failurePhase || null,
+      reason: session.reason || null,
+      sessionId: session.sessionId || null,
+      rowCount: session.rowCount || 0,
+      observedRowCount: session.observedRowCount || 0,
+      overflowCount: session.overflowCount || 0,
+      strideFloats: SOURCE_BASIS_GPU_ROW_FLOATS,
+      byteLength: session.byteLength || 0,
+      gridShape: session.gridShape || null,
+      gridOrigin: session.gridOrigin || null,
+      gridSpacing: session.gridSpacing || null,
+      gridAxisOrder: 'x-fastest-y-then-z-v0',
+      captureTimeMs: session.captureTimeMs ?? null,
+      sourceIdentity: session.sourceIdentity || null,
+      rendererPassReceipt: session.rendererPassReceipt || null,
+      controlApplicationReceipt: session.controlApplicationReceipt || null,
+      requestedRoute: ROUTE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      backend: state.backend,
+    };
+  }
+
+  function sourceBasisControlApplicationVerification(captureTimeMs) {
+    if (!nonRidgeSourceBasisControlsActive || !nonRidgeSourceBasisControlApplication) {
+      return { ok: false, reason: 'nonridge-source-basis-capture-requires-control-application' };
+    }
+    try {
+      updateUniforms(captureTimeMs);
+    } catch (error) {
+      return {
+        ok: false,
+        reason: 'nonridge-source-basis-capture-uniform-update-failed',
+        error: error?.message || String(error),
+      };
+    }
+    const effectiveControls = sourceBasisControlReceipt(controlsSnapshot);
+    const gpuEffectiveControls = sourceBasisGpuControlReceipt();
+    const cpuControlSubstitutions = CAUSAL_CONTROL_FIELDS.flatMap(field => (
+      effectiveControls[field.name] === nonRidgeSourceBasisControlApplication.effectiveControls[field.name]
+        ? []
+        : [{
+            name: field.name,
+            applied: nonRidgeSourceBasisControlApplication.effectiveControls[field.name],
+            captureEffective: effectiveControls[field.name],
+          }]
+    ));
+    const gpuControlSubstitutions = CAUSAL_CONTROL_FIELDS.flatMap(field => (
+      gpuEffectiveControls[field.name] === nonRidgeSourceBasisControlApplication.gpuEffectiveControls[field.name]
+        ? []
+        : [{
+            name: field.name,
+            applied: nonRidgeSourceBasisControlApplication.gpuEffectiveControls[field.name],
+            captureEffective: gpuEffectiveControls[field.name],
+          }]
+    ));
+    const boundaryControlUniformAuthority = state.boundaryControlUniformAuthority;
+    const ok = cpuControlSubstitutions.length === 0
+      && gpuControlSubstitutions.length === 0
+      && boundaryControlUniformAuthority === 'nonridge-source-basis-capture-controls-v0';
+    return {
+      ok,
+      identity: 'capture-time-cpu-and-shader-control-revalidation-v0',
+      reason: ok ? null : 'nonridge-source-basis-capture-control-authority-drift',
+      effectiveControls,
+      gpuEffectiveControls,
+      cpuControlSubstitutions,
+      gpuControlSubstitutions,
+      boundaryControlUniformAuthority,
+    };
+  }
+
+  async function beginDebugNonRidgeSourceBasisCapture(options = {}) {
+    const failed = (failurePhase, reason, lastTrustworthyEvidence = null) => {
+      nonRidgeSourceBasisCaptureSession = { status: 'failed', failurePhase, reason, lastTrustworthyEvidence };
+      const receipt = { ok: false, ...nonRidgeSourceBasisPublicSession(nonRidgeSourceBasisCaptureSession), lastTrustworthyEvidence };
+      clearNonRidgeSourceBasisControlAuthority();
+      return receipt;
+    };
+    if (!device) return failed('inactive', 'inactive');
+    if (state.active && !selectiveHeadLiveCapturePaused) {
+      return failed('freeze-authority', 'nonridge-source-basis-capture-requires-frozen-renderer');
+    }
+    if (nonRidgeSourceBasisCaptureSession?.values instanceof Float32Array) {
+      return {
+        ok: false,
+        schema: NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY,
+        status: 'rejected',
+        failurePhase: 'session-custody',
+        reason: 'prior-nonridge-source-basis-session-not-released',
+        heldSession: nonRidgeSourceBasisPublicSession(nonRidgeSourceBasisCaptureSession),
+      };
+    }
+    const captureTimeMs = Number.isFinite(Number(options.captureTimeMs))
+      ? Number(options.captureTimeMs)
+      : performance.now();
+    if (!nonRidgeSourceBasisControlsActive || !nonRidgeSourceBasisControlApplication) {
+      return failed('control-authority', 'nonridge-source-basis-capture-requires-control-application');
+    }
+    const controlApplicationReceipt = sourceBasisControlApplicationVerification(captureTimeMs);
+    if (!controlApplicationReceipt.ok) {
+      return failed('control-authority', controlApplicationReceipt.reason, controlApplicationReceipt);
+    }
+    const rowCount = gridCellCount(gridSize);
+    const byteLength = rowCount * NONRIDGE_SOURCE_BASIS_ROW_STRIDE_BYTES;
+    const maxBindingBytes = Number(device.limits?.maxStorageBufferBindingSize || 0);
+    if (byteLength > maxBindingBytes) {
+      return failed('exact-full-grid-allocation', `full-grid-row-bytes-exceed-device-binding-limit:${byteLength}>${maxBindingBytes}`, {
+        rowCount,
+        byteLength,
+        maxStorageBufferBindingSize: maxBindingBytes,
+      });
+    }
+    const priorAppearanceMode = appearanceDecompositionModeRequestedRaw;
+    let exactRowsBuffer = null;
+    let idleRowsBuffer = null;
+    try {
+      setAppearanceDecompositionMode('non-ridge-emission');
+      ensureNonRidgeOpticalCaptureBuffers();
+      idleRowsBuffer = nonRidgeOpticalCaptureRowBuffer;
+      exactRowsBuffer = device.createBuffer({
+        label: `kaminos ${NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY} exact full-grid ${rowCount}`,
+        size: byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+      });
+      nonRidgeOpticalCaptureRowBuffer = exactRowsBuffer;
+      rebuildNonRidgeOpticalCaptureBindGroups();
+      const writePass = await runNonRidgeOpticalCapturePass({
+        mode: 3,
+        capacity: rowCount,
+        captureTimeMs,
+        controlApplicationReceipt,
+        label: 'exact-full-grid-source-basis-write',
+      });
+      if (writePass.rowCount !== rowCount || writePass.overflowCount !== 0) {
+        return failed('write-pass-verification', 'nonridge-source-basis-full-grid-count-drift-or-overflow', {
+          expectedRowCount: rowCount,
+          writePass,
+        });
+      }
+      const values = await readNonRidgeOpticalCaptureRows(byteLength);
+      nonRidgeSourceBasisCaptureSession = {
+        status: 'captured',
+        sessionId: `nonridge-source-basis-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+        createdAtMs: performance.now(),
+        rowCount,
+        observedRowCount: writePass.rowCount,
+        overflowCount: writePass.overflowCount,
+        byteLength,
+        values,
+        gridShape: [gridSize, gridSize, gridSize],
+        gridOrigin: [-1, -1, -1],
+        gridSpacing: [2 / gridSize, 2 / gridSize, 2 / gridSize],
+        captureTimeMs,
+        sourceIdentity: {
+          frameCount: state.frameCount,
+          simStepCount: state.simStepCount,
+          controlsSignature: temporalControlSignature(controlsSnapshot),
+          appearanceMode: 'non-ridge-emission',
+          boundarySidecar: boundarySidecarDebug(),
+        },
+        rendererPassReceipt: {
+          identity: 'frozen-full-grid-nonridge-source-basis-coefficient-pass-v0',
+          fullGridEncoded: true,
+          fullGridApplied: true,
+          expectedRows: rowCount,
+          observedRows: writePass.rowCount,
+          raymarchEncoded: false,
+          raymarchApplied: false,
+          splatsEncoded: false,
+          splatsApplied: false,
+          smokeEncoded: false,
+          smokeApplied: false,
+          fallbackReason: null,
+          boundaryControlUniformAuthority: controlApplicationReceipt.boundaryControlUniformAuthority,
+          effectiveControls: controlApplicationReceipt.effectiveControls,
+          gpuEffectiveControls: controlApplicationReceipt.gpuEffectiveControls,
+          cpuControlSubstitutions: controlApplicationReceipt.cpuControlSubstitutions,
+          gpuControlSubstitutions: controlApplicationReceipt.gpuControlSubstitutions,
+        },
+      };
+      return { ok: true, ...nonRidgeSourceBasisPublicSession(nonRidgeSourceBasisCaptureSession) };
+    } catch (error) {
+      return failed('capture', error?.message || String(error));
+    } finally {
+      setAppearanceDecompositionMode(priorAppearanceMode);
+      if (exactRowsBuffer) {
+        nonRidgeOpticalCaptureRowBuffer = idleRowsBuffer;
+        exactRowsBuffer.destroy();
+        rebuildNonRidgeOpticalCaptureBindGroups();
+      }
+      if (nonRidgeOpticalCaptureHeaderBuffer) {
+        device.queue.writeBuffer(nonRidgeOpticalCaptureHeaderBuffer, 0, new Uint32Array(4));
+      }
+    }
+  }
+
+  function readDebugNonRidgeSourceBasisCaptureChunk(options = {}) {
+    const session = nonRidgeSourceBasisCaptureSession;
+    if (!session || session.status !== 'captured' || !(session.values instanceof Float32Array)) {
+      return { ok: false, schema: NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY, status: 'failed', failurePhase: 'chunk-read', reason: 'no-active-nonridge-source-basis-session' };
+    }
+    const requestedSessionId = String(options.sessionId || '');
+    if (requestedSessionId && requestedSessionId !== session.sessionId) {
+      return { ok: false, schema: NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY, status: 'failed', failurePhase: 'chunk-read', reason: 'session-id-mismatch', sessionId: session.sessionId, requestedSessionId };
+    }
+    const startFloat = Math.max(0, Math.min(session.values.length, Math.floor(Number(options.startFloat) || 0)));
+    const requestedFloatCount = Math.floor(Number(options.floatCount) || Math.min(262144, session.values.length - startFloat));
+    const floatCount = Math.max(0, Math.min(session.values.length - startFloat, requestedFloatCount));
+    return {
+      ok: true,
+      schema: NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY,
+      identity: 'frozen-full-grid-nonridge-source-basis-rows-v0',
+      sessionId: session.sessionId,
+      dtype: 'float32',
+      startFloat,
+      floatCount,
+      byteOffset: startFloat * Float32Array.BYTES_PER_ELEMENT,
+      byteLength: floatCount * Float32Array.BYTES_PER_ELEMENT,
+      isFinal: startFloat + floatCount >= session.values.length,
+      base64: encodeFloat32ChunkBase64(session.values, startFloat, floatCount),
+    };
+  }
+
+  function releaseDebugNonRidgeSourceBasisCapture(options = {}) {
+    const session = nonRidgeSourceBasisCaptureSession;
+    const requestedSessionId = String(options.sessionId || '');
+    if (!session || (requestedSessionId && requestedSessionId !== session.sessionId)) {
+      return { ok: false, schema: NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY, status: 'failed', failurePhase: 'release', reason: session ? 'session-id-mismatch' : 'no-active-nonridge-source-basis-session' };
+    }
+    const released = { ...nonRidgeSourceBasisPublicSession(session), status: 'released' };
+    nonRidgeSourceBasisCaptureSession = null;
+    clearNonRidgeSourceBasisControlAuthority();
+    return { ok: true, ...released };
   }
 
   async function beginDebugFullFieldExport(options = {}) {
@@ -15062,6 +15992,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     finishFlowKernelDescriptorIndexUpload,
     advanceDebugImportedFieldSteps,
     resumeDebugImportedFieldLive,
+    beginDebugNonRidgeOpticalCapture,
+    readDebugNonRidgeOpticalCaptureChunk,
+    releaseDebugNonRidgeOpticalCapture,
+    applyDebugNonRidgeCausalControls,
+    beginDebugNonRidgeSourceBasisCapture,
+    readDebugNonRidgeSourceBasisCaptureChunk,
+    releaseDebugNonRidgeSourceBasisCapture,
     beginDebugFullFieldExport,
     readDebugFullFieldExportChunk,
     releaseDebugFullFieldExport,
