@@ -1,0 +1,38 @@
+{
+  "schema": "kaminos.volume.raymarch-filament-orbit-witness.v0",
+  "status": "failed",
+  "failurePhase": "argument-validation",
+  "error": "Error: unknown argument: \n    at file:///private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/volume-raymarch-filament-orbit-witness.mjs:105:33\n    at ModuleJob.run (node:internal/modules/esm/module_job:437:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:639:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)",
+  "requestedUrl": "1",
+  "rayStepCounts": [
+    48,
+    96,
+    160
+  ],
+  "orbitAngles": [
+    -0.42,
+    -0.378,
+    -0.336,
+    -0.294,
+    -0.252,
+    -0.21,
+    -0.168,
+    -0.126,
+    -0.084,
+    -0.042,
+    0,
+    0.042,
+    0.084,
+    0.126,
+    0.168,
+    0.21,
+    0.252,
+    0.294,
+    0.336,
+    0.378,
+    0.42
+  ],
+  "commit": "e4446923096c9cd7de4daee12a763dc178129f32",
+  "worktree": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716",
+  "lastTrustworthyEvidence": {}
+}

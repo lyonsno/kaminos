@@ -1,0 +1,1505 @@
+{
+  "schema": "kaminos.volume.raymarch-filament-orbit-witness.v0",
+  "status": "failed",
+  "failurePhase": "filament-analysis",
+  "error": "Error: stale or default Full Flame preset replaced the requested source\n    at validateCameraHoldoutReport (file:///private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/boundary-splat-camera-holdout-oracle.mjs:59:11)\n    at file:///private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/volume-raymarch-filament-orbit-witness.mjs:398:9",
+  "requestedUrl": "http://127.0.0.1:18224/volume-selective-head-live.html?volume_scene=tall_plume&volume_pyro_compare=base&volume_reaction_live_view=boundary_fire&volume_reaction_boundary_gradient=1.05&volume_reaction_boundary_support_thermal=0.98&volume_reaction_boundary_support_reaction=1&volume_reaction_boundary_support_front=0.66&volume_reaction_boundary_support_interface=0.78&volume_reaction_boundary_cut=0.365&volume_reaction_boundary_softness=0.135&volume_reaction_boundary_core_reject=1&volume_reaction_boundary_topology=0.96&volume_reaction_boundary_curl=1.18&volume_reaction_boundary_divergence=0.22&volume_reaction_boundary_contrast=0.6&volume_reaction_boundary_gamma=3&volume_reaction_boundary_opacity=3&volume_boundary_sidecar_source=baked&volume_boundary_sidecar_view=off&volume_boundary_splat_mode=learned&volume_boundary_splat_radius=0.98&volume_boundary_splat_sharpness=12&volume_boundary_sidecar_blur=0&volume_boundary_sidecar_width=0&volume_boundary_sidecar_ridge=0.92&volume_reaction_boundary_fire_ridge=1.52&volume_reaction_boundary_fire_ridge_cut=0.145&volume_reaction_boundary_fire_tip=2&volume_reaction_boundary_fire_erosion=0.3&volume_reaction_boundary_fire_clean_blue=0.3&volume_reaction_boundary_fire_soot=0.64&volume_reaction_boundary_fire_yellow=0.44&volume_reaction_boundary_fire_warmth=0.16&volume_reaction_boundary_fire_luma=5&volume_reaction_heat_min=0&volume_reaction_heat_max=0.42&volume_reaction_fuel_min=0&volume_reaction_fuel_max=0.071&volume_reaction_flame_min=0.03&volume_reaction_flame_max=0.16&volume_reaction_front_min=0&volume_reaction_front_max=0.08&volume_reaction_gradient_min=0.02&volume_reaction_gradient_max=0.18&volume_reaction_core_min=0.18&volume_reaction_core_max=0.95&volume_reaction_core_reject=0.82&volume_reaction_topology_gain=0&volume_reaction_stretch_erode=0&volume_reaction_divergence_min=0&volume_reaction_divergence_max=0.07&volume_reaction_divergence_gain=0&volume_reaction_curl_warp=0&volume_reaction_shell_gamma=1.45&volume_reaction_shell_contrast=3.1&volume_density=0.35&volume_fire=2.25&volume_radiance=0&volume_absorption=1&volume_glow=0&volume_smoke=0.1&volume_curl=1.15&volume_microdetail=2.5&volume_interface_shred=5&volume_fire_licks=5&volume_projection=1.5&volume_speed=3.9&volume_fire_scale=1.3&volume_detail_scale=0.45&volume_plume_height=0.9&volume_wind_strength=1.25&volume_wind_angle=-65&volume_wind_height=-0.8&volume_input_radius=0.49&volume_flow_rate=0.85&volume_steps=160&volume_adaptive_rays=0&volume_occupancy_skip=1&volume_majorant_skip=0&volume_majorant_smooth=1&volume_majorant_guard=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=0&volume_render_scale=0.296917052331791&volume_residual_mode=webgpu-direct-residual&volume_residual_strength=0&volume_residual_feature_debug=0&volume_residual_model_url=&volume_resolution=160&volume_majorant_grid=24&volume_grid_overlay=0&volume_flow_debug=0&volume_fire_render_mode=inspect&volume_shell_inspect_mode=&volume_shell_amount=0&volume_shell_width=0.05&volume_shell_thermal=0.85&volume_shell_reaction=1.1&volume_shell_front=1.25&volume_shell_edge=0.85&volume_shell_curl=0.25&volume_shell_core_suppress=0.55&volume_shell_bite=0.8&volume_shell_heat=1.65&volume_shell_divergence=0&volume_shell_luma=1.35&volume_shell_exposure=1.15&volume_shell_soft_clip=0.2&volume_shell_smoke=1.95&volume_oracle_activity_cue=1&volume_oracle_activity_display=0&volume_oracle_activity_curl_noise=0.4&volume_oracle_activity_vorticity=3&volume_oracle_activity_material=0&volume_pyro_detail=0&volume_pyro_material_gain=0&volume_pyro_interface_focus=0&volume_pyro_fire_mode=stock&volume_pyro_flame_paint=0&volume_pyro_stock_mix=1&volume_pyro_flame_luma=1&volume_pyro_flame_core_color=%23ffae00&volume_pyro_flame_edge_color=%23ff4d00&volume_look_freeze=0&volume_pyro_flow_bite=0&volume_pyro_flow_border=0&volume_pyro_flow_teeth=0&volume_pyro_flow_rise=0&volume_pyro_flow_fire_lock=1&volume_pyro_flow_luma=1&volume_pyro_flow_radiance=0&volume_pyro_flow_spikes=0&volume_pyro_flow_cool_color=%23ff6400&volume_pyro_flow_hot_color=%23ff320f&volume_pyro_radiance=0&volume_pyro_radiance_gate=1&volume_pyro_radiance_spill=0&volume_pyro_radiance_warmth=0&volume_pyro_radiance_hue=0.5&volume_pyro_radiance_chroma=0&volume_pyro_radiance_luma=1&volume_pyro_radiance_cool_color=%23eb0000&volume_pyro_radiance_warm_color=%23ffcd75&volume_pyro_radiance_source=fire&volume_pyro_radiance_height=0&volume_pyro_radiance_border=0&volume_pyro_radiance_teeth=0&volume_pyro_radiance_rise=0&volume_pyro_radiance_fire_lock=1&volume_pyro_edge_bite=0&volume_pyro_bite_border=0&volume_pyro_bite_teeth=0&volume_pyro_bite_wake=0&volume_pyro_bite_height=0&volume_pyro_bite_fire_lock=1&volume_pyro_bite_core=0&volume_pyro_bite_core_cut=1&volume_pyro_bite_rim=0&volume_pyro_bite_rim_cut=1&volume_pyro_bite_after=0&volume_pyro_bite_after_cut=1&volume_pyro_bite_heat=0&volume_pyro_bite_chroma=0&volume_pyro_bite_luma=1&volume_pyro_bite_ember_color=%23ff6600&volume_pyro_bite_hot_color=%23ff4000&volume_pyro_smoke_fold=0&volume_pyro_fold_border=0&volume_pyro_fold_wake=0&volume_pyro_wake_lift=0&volume_pyro_wake_warmth=0&volume_pyro_wake_luma=1&volume_pyro_wake_shadow_color=%23384c50&volume_pyro_wake_ember_color=%23b06a2a&volume_pyro_diagnostic_paint=0&volume_pyro_carrier_view=normal&volume_pyro_overdrive=1&volume_pressure_mode=global-p3&volume_pressure_tier_overlay=0&volume_pressure_tier_lower_max=0.61&volume_pressure_tier_hero_min=0&volume_pressure_tier_hero_max=0.34&volume_canonical_spread=1&volume_canonical_centerline=1&volume_canonical_body_balance=0&volume_quality_reason=operator-settings-only-capture&role=truthHigh&composition=raymarch-only-v0&warmup_steps=96&volume_presentation=beauty&volume_raymarch_smoke=off&volume_appearance_decomposition=off&freeze_after_warmup=1",
+  "rayStepCounts": [
+    48,
+    96,
+    160
+  ],
+  "orbitAngles": [
+    -0.42,
+    -0.378,
+    -0.336,
+    -0.294,
+    -0.252,
+    -0.21,
+    -0.168,
+    -0.126,
+    -0.084,
+    -0.042,
+    0,
+    0.042,
+    0.084,
+    0.126,
+    0.168,
+    0.21,
+    0.252,
+    0.294,
+    0.336,
+    0.378,
+    0.42
+  ],
+  "commit": "ea52bd72a1c7d7c05265a537421f58b5f1b26fdd",
+  "worktree": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716",
+  "lastTrustworthyEvidence": {
+    "admitted": {
+      "routeIdentity": "exact-basin-selective-head-live-v0",
+      "status": "running",
+      "requestedRole": "truthHigh",
+      "requestedComposition": "raymarch-only-v0",
+      "requestedPresentation": "beauty",
+      "effectivePresentation": "beauty",
+      "volumePresentationReceipt": {
+        "identity": "volume-presentation-mode-receipt-v0",
+        "requestedMode": "beauty",
+        "effectiveMode": "beauty",
+        "fallbackReason": null,
+        "targetIdentity": "authored-beauty-renderer-v0",
+        "effectiveRayQuality": {
+          "raySteps": 160,
+          "adaptiveRays": 0,
+          "renderScale": 0.296917052331791
+        },
+        "temporalHistoryContribution": "suppressed",
+        "authoredControlsMutated": false,
+        "simulationAdvanced": false,
+        "simulationReset": false,
+        "cameraMutated": false,
+        "passes": {
+          "raymarch": "authored-beauty-renderer-v0",
+          "splats": "authored-control",
+          "residual": "authored-control",
+          "featureCapture": "authored-control",
+          "smoke": "suppressed"
+        }
+      },
+      "requestedRaymarchSmokePresentation": "off",
+      "effectiveRaymarchSmokePresentation": "off",
+      "raymarchSmokePresentationReceipt": {
+        "identity": "raymarch-smoke-presentation-receipt-v0",
+        "requestedMode": "off",
+        "normalizedRequestedMode": "off",
+        "effectiveMode": "off",
+        "effectiveReason": "requested-raymarch-smoke-presentation",
+        "fallbackReason": null,
+        "targetIdentity": "raymarch-smoke-radiance-extinction-suppressed-v0",
+        "authoredSmokeControl": 0.1,
+        "authoredSmokeControlMutated": false,
+        "smokeProducingDynamicsMutated": false,
+        "simulationAdvanced": false,
+        "simulationReset": false,
+        "cameraMutated": false,
+        "contributions": {
+          "radiance": "suppressed",
+          "extinction": "suppressed",
+          "dynamics": "preserved"
+        }
+      },
+      "requestedAppearanceAssay": "off",
+      "effectiveAppearanceAssay": "off",
+      "appearanceDecompositionReceipt": {
+        "identity": "appearance-decomposition-receipt-v0",
+        "requestedMode": "off",
+        "normalizedRequestedMode": "off",
+        "effectiveMode": "off",
+        "fallbackReason": null,
+        "targetIdentity": "appearance-decomposition-off-v0",
+        "coefficientBoundary": "per-sample-pre-tone-map-emission-extinction-v0",
+        "structuralAIdentity": "candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0",
+        "broadCarrierIdentity": "signed-control-minus-structural-a-local-coefficients-v0",
+        "completeFlameIdentity": "smoke-off-complete-flame-local-emission-extinction-v0",
+        "positivePartitionIdentity": "nonnegative-ridge-owned-plus-non-ridge-complete-flame-v0",
+        "ridgeOwnershipIdentity": "state-derived-direct-flame-candidate-support-allocation-v0",
+        "coefficientSigns": {
+          "completeFlame": "nonnegative",
+          "ridgeOwned": "nonnegative",
+          "nonRidge": "nonnegative",
+          "signedClosureComparator": "signed"
+        },
+        "opticalRecurrence": "front-to-back-emission-with-exponential-transmittance-v0",
+        "sharedTransmittanceIdentity": "ridge-plus-non-ridge-extinction-one-running-transmittance-v0",
+        "simulationAdvanced": false,
+        "simulationReset": false,
+        "cameraMutated": false,
+        "controlsMutated": false,
+        "requestedPasses": {
+          "raymarchApplied": false,
+          "splatsApplied": false,
+          "residualApplied": false,
+          "featureCaptureApplied": false,
+          "smokeApplied": false
+        },
+        "passes": {
+          "raymarchApplied": false,
+          "splatsApplied": false,
+          "residualApplied": false,
+          "featureCaptureApplied": false,
+          "smokeApplied": false
+        },
+        "application": null,
+        "couplingTerms": [
+          "b-emission-transported-through-a-plus-b-transmittance",
+          "b-extinction-modulates-downstream-a-and-b-emission",
+          "signed-b-coefficients-are-not-an-independent-positive-radiance-field"
+        ]
+      },
+      "sourceCaptureId": null,
+      "sourceSettingsPresetRequestedId": null,
+      "sourceSettingsPresetId": null,
+      "sourceSettingsPresetAuthority": null,
+      "sourceSettingsPresetAlias": null,
+      "sourceSettingsPresetLabel": null,
+      "sourceSettingsPresetContentHash": null,
+      "sourceSettingsPresetStorePath": null,
+      "sourceSettingsPresetSchemaIdentity": null,
+      "sourceSettingsPresetControlCount": 0,
+      "warmupAuthority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+      "warmupTarget": 96,
+      "warmupComplete": true,
+      "warmupStarted": true,
+      "warmupReceipt": {
+        "ok": true,
+        "authority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+        "completedSteps": 96,
+        "grid": 160,
+        "fluidUrl": "http://127.0.0.1:18537/fluid.f32",
+        "frontUrl": "http://127.0.0.1:18537/front.f32",
+        "fluidSha256": "d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1",
+        "frontSha256": "1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8",
+        "fluidByteLength": 262144000,
+        "frontByteLength": 16384000,
+        "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0"
+      },
+      "freezeAfterWarmupRequested": true,
+      "postWarmupFreezeReceipt": {
+        "paused": true,
+        "frameCount": 96,
+        "simStepCount": 96,
+        "authority": "witness-owned-presented-frame-pause-release-v0"
+      },
+      "configuredRole": "truthHigh",
+      "configuredComposition": "raymarch-only-v0",
+      "effectiveRole": "off",
+      "roleAuthority": "off",
+      "compositionAuthority": "off",
+      "effectiveComposition": "off",
+      "compositionFallbackReason": "requested-effective-composition-mismatch",
+      "selectiveHeadLivePassReceipt": {
+        "identity": "selective-head-live-render-pass-receipt-v0",
+        "composition": "smoke-raymarch-under-splats-v0",
+        "compositionAuthority": "smoke-raymarch-authority-broad-smoke-only-v0+splat-fire-authority-learned-boundary-sheets-v0",
+        "raymarchAuthority": "smoke-raymarch-authority-broad-smoke-only-v0",
+        "splatAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+        "raymarchFireAuthority": 0,
+        "raymarchEncoded": false,
+        "raymarchApplied": false,
+        "splatEncoded": false,
+        "splatApplied": false,
+        "fallbackReason": null
+      },
+      "fallbackReason": null,
+      "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0",
+      "featureAuthority": "full-low-field-plus-spatial-rbf-features-v0",
+      "pairAuthority": "downsampled-same-high-history-input-to-exact-high-target",
+      "backend": "WebGPU:apple",
+      "simGrid": 160,
+      "frameCount": 96,
+      "simStepCount": 96,
+      "encodedFrameCount": 0,
+      "timing": {
+        "timingEvidenceSource": "raf-and-queue-proxy",
+        "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
+        "rafFps": 58.479532163743,
+        "frameDeltaMs": 17.09999999999991,
+        "frameP95Ms": 17.09999999999991,
+        "cpuFrameMs": 0.4000000059604645,
+        "cpuFrameP95Ms": 2.5,
+        "queueDoneMs": null,
+        "queueDoneP95Ms": null,
+        "queueProbePending": false,
+        "queueSamples": 0,
+        "queueTimingAvailable": false
+      },
+      "boundarySplatFallbackReason": null,
+      "error": null
+    },
+    "initialization": {
+      "wrapperRoute": "exact-basin-selective-head-live-v0",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "backend": "WebGPU:apple",
+      "sourceSettingsPreset": {
+        "presetId": null,
+        "authority": null,
+        "contentHash": null,
+        "label": null,
+        "controlCount": 0
+      },
+      "replayAuthority": {
+        "warmupAuthority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+        "warmupTarget": 96,
+        "warmupComplete": true,
+        "warmupStarted": true,
+        "warmupReceipt": {
+          "ok": true,
+          "authority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+          "completedSteps": 96,
+          "grid": 160,
+          "fluidUrl": "http://127.0.0.1:18537/fluid.f32",
+          "frontUrl": "http://127.0.0.1:18537/front.f32",
+          "fluidSha256": "d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1",
+          "frontSha256": "1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8",
+          "fluidByteLength": 262144000,
+          "frontByteLength": 16384000,
+          "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0"
+        },
+        "freezeAfterWarmupRequested": true,
+        "postWarmupFreezeReceipt": {
+          "paused": true,
+          "frameCount": 96,
+          "simStepCount": 96,
+          "authority": "witness-owned-presented-frame-pause-release-v0"
+        }
+      },
+      "sourceAuthority": {
+        "fullFlameTarget": "smoke-off-complete-flame-local-emission-extinction-v0",
+        "stateDerivedSupport": "state-derived-direct-flame-candidate-support-allocation-v0",
+        "nonRidgeFilaments": "nonnegative-non-ridge-flame-emission-coefficient-v0",
+        "analyticSplat": "live-boundary-sidecar-analytic-splats-v0"
+      },
+      "smokeReceipt": {
+        "identity": "raymarch-smoke-presentation-receipt-v0",
+        "requestedMode": "off",
+        "normalizedRequestedMode": "off",
+        "effectiveMode": "off",
+        "effectiveReason": "requested-raymarch-smoke-presentation",
+        "fallbackReason": null,
+        "targetIdentity": "raymarch-smoke-radiance-extinction-suppressed-v0",
+        "authoredSmokeControl": 0.1,
+        "authoredSmokeControlMutated": false,
+        "smokeProducingDynamicsMutated": false,
+        "simulationAdvanced": false,
+        "simulationReset": false,
+        "cameraMutated": false,
+        "contributions": {
+          "radiance": "suppressed",
+          "extinction": "suppressed",
+          "dynamics": "preserved"
+        }
+      },
+      "frozenState": {
+        "sameStateCaptureId": "filament-orbit-f96-s96",
+        "baseFrameCount": 96,
+        "baseSimStepCount": 96,
+        "controlsHash": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+        "originalCamera": {
+          "position": [
+            1.1799999999999993,
+            0.28,
+            2.049999999999998
+          ],
+          "target": [
+            0,
+            0.02,
+            0
+          ],
+          "projectionMatrix": [
+            2.1176311808437984,
+            0,
+            0,
+            0,
+            0,
+            2.7474774194546225,
+            0,
+            0,
+            0,
+            0,
+            -1.0002000200020003,
+            -1,
+            0,
+            0,
+            -0.020002000200020003,
+            0
+          ],
+          "matrixWorldInverse": [
+            0.8666778489396199,
+            -0.05450735190097278,
+            0.49588149264328957,
+            0,
+            6.938893903907228e-18,
+            0.9940129828903268,
+            0.10926202380275882,
+            0,
+            -0.49886822524329344,
+            -0.09469497576016456,
+            0.8614890338294436,
+            0,
+            -2.2236986557677696e-16,
+            -0.019880259657806553,
+            -2.3817860473342116,
+            0.9999999999999999
+          ]
+        }
+      }
+    },
+    "lastCapture": {
+      "key": "10-raymarchRepeat-160",
+      "cameraIndex": 10,
+      "cameraAngle": 0,
+      "mode": "raymarchRepeat",
+      "requestedRaySteps": 160,
+      "effectiveRaySteps": 160,
+      "sameStateCaptureId": "filament-orbit-f96-s96",
+      "frameCount": 96,
+      "simStepCount": 96,
+      "cameraPose": {
+        "position": [
+          1.1799999999999993,
+          0.28,
+          2.049999999999998
+        ],
+        "target": [
+          0,
+          0.02,
+          0
+        ],
+        "projectionMatrix": [
+          2.1176311808437984,
+          0,
+          0,
+          0,
+          0,
+          2.7474774194546225,
+          0,
+          0,
+          0,
+          0,
+          -1.0002000200020003,
+          -1,
+          0,
+          0,
+          -0.020002000200020003,
+          0
+        ],
+        "matrixWorldInverse": [
+          0.8666778489396199,
+          -0.05450735190097278,
+          0.49588149264328957,
+          0,
+          6.938893903907228e-18,
+          0.9940129828903268,
+          0.10926202380275882,
+          0,
+          -0.49886822524329344,
+          -0.09469497576016456,
+          0.8614890338294436,
+          0,
+          -2.2236986557677696e-16,
+          -0.019880259657806553,
+          -2.3817860473342116,
+          0.9999999999999999
+        ]
+      },
+      "cameraPoseHash": "5d20c917cf1dd8c58a3e5b00a77b604ca330cac831187759b3a248a0b85fd3f0",
+      "pixelHash": "ae7a235230c70de89f706ecac3785203c24c6c2dd4a35c7642d03587729ef07d",
+      "width": 314,
+      "height": 242,
+      "metrics": {
+        "litPixels": 56302,
+        "meanLuma": 57.860522185075034,
+        "maxLuma": 216.74239999999998,
+        "nonblank": true
+      },
+      "requestedRoute": "/volume-selective-head-live.html",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "backend": "WebGPU:apple",
+      "modeAuthority": "smoke-off-complete-flame-raymarch-v0",
+      "boundarySplatRendererIdentity": "live-boundary-sidecar-world-tangent-covariance-splats-v0",
+      "boundarySplatFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "boundarySplatAreaOpacityConservationAuthority": "rendered-gaussian-integrated-alpha-conserved-v0",
+      "footprintAudit": null,
+      "boundarySplatSourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+      "boundarySplatCandidateCount": 147389,
+      "boundarySplatInstanceCount": 147389,
+      "boundarySplatOverflowCount": 0,
+      "boundarySplatFallbackReason": null,
+      "volumePresentationReceipt": {
+        "identity": "volume-presentation-mode-receipt-v0",
+        "requestedMode": "beauty",
+        "effectiveMode": "beauty",
+        "fallbackReason": null,
+        "targetIdentity": "authored-beauty-renderer-v0",
+        "effectiveRayQuality": {
+          "raySteps": 160,
+          "adaptiveRays": 0,
+          "renderScale": 0.296917052331791
+        },
+        "temporalHistoryContribution": "suppressed",
+        "authoredControlsMutated": false,
+        "simulationAdvanced": false,
+        "simulationReset": false,
+        "cameraMutated": false,
+        "passes": {
+          "raymarch": "authored-beauty-renderer-v0",
+          "splats": "authored-control",
+          "residual": "authored-control",
+          "featureCapture": "authored-control",
+          "smoke": "suppressed"
+        },
+        "application": {
+          "identity": "volume-presentation-applied-pass-receipt-v0",
+          "effectiveMode": "beauty",
+          "targetIdentity": "authored-beauty-renderer-v0",
+          "compositionEffective": "raymarch-only-v0",
+          "raymarchEncoded": true,
+          "raymarchApplied": true,
+          "splatsEncoded": false,
+          "splatsApplied": false,
+          "residualEncoded": false,
+          "residualApplied": false,
+          "featureCaptureEncoded": false,
+          "featureCaptureApplied": false,
+          "smokeContribution": "suppressed",
+          "raymarchSmokePresentationRequestedMode": "off",
+          "raymarchSmokePresentationEffectiveMode": "off",
+          "raymarchSmokePresentationTargetIdentity": "raymarch-smoke-radiance-extinction-suppressed-v0",
+          "fallbackReason": null
+        }
+      },
+      "raymarchSmokePresentationReceipt": {
+        "identity": "raymarch-smoke-presentation-receipt-v0",
+        "requestedMode": "off",
+        "normalizedRequestedMode": "off",
+        "effectiveMode": "off",
+        "effectiveReason": "requested-raymarch-smoke-presentation",
+        "fallbackReason": null,
+        "targetIdentity": "raymarch-smoke-radiance-extinction-suppressed-v0",
+        "authoredSmokeControl": 0.1,
+        "authoredSmokeControlMutated": false,
+        "smokeProducingDynamicsMutated": false,
+        "simulationAdvanced": false,
+        "simulationReset": false,
+        "cameraMutated": false,
+        "contributions": {
+          "radiance": "suppressed",
+          "extinction": "suppressed",
+          "dynamics": "preserved"
+        }
+      },
+      "appearanceDecompositionReceipt": {
+        "identity": "appearance-decomposition-receipt-v0",
+        "requestedMode": "off",
+        "normalizedRequestedMode": "off",
+        "effectiveMode": "off",
+        "fallbackReason": null,
+        "targetIdentity": "appearance-decomposition-off-v0",
+        "coefficientBoundary": "per-sample-pre-tone-map-emission-extinction-v0",
+        "structuralAIdentity": "candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0",
+        "broadCarrierIdentity": "signed-control-minus-structural-a-local-coefficients-v0",
+        "completeFlameIdentity": "smoke-off-complete-flame-local-emission-extinction-v0",
+        "positivePartitionIdentity": "nonnegative-ridge-owned-plus-non-ridge-complete-flame-v0",
+        "ridgeOwnershipIdentity": "state-derived-direct-flame-candidate-support-allocation-v0",
+        "coefficientSigns": {
+          "completeFlame": "nonnegative",
+          "ridgeOwned": "nonnegative",
+          "nonRidge": "nonnegative",
+          "signedClosureComparator": "signed"
+        },
+        "opticalRecurrence": "front-to-back-emission-with-exponential-transmittance-v0",
+        "sharedTransmittanceIdentity": "ridge-plus-non-ridge-extinction-one-running-transmittance-v0",
+        "simulationAdvanced": false,
+        "simulationReset": false,
+        "cameraMutated": false,
+        "controlsMutated": false,
+        "requestedPasses": {
+          "raymarchApplied": false,
+          "splatsApplied": false,
+          "residualApplied": false,
+          "featureCaptureApplied": false,
+          "smokeApplied": false
+        },
+        "passes": {
+          "raymarchApplied": false,
+          "splatsApplied": false,
+          "residualApplied": false,
+          "featureCaptureApplied": false,
+          "smokeApplied": false
+        },
+        "application": null,
+        "couplingTerms": [
+          "b-emission-transported-through-a-plus-b-transmittance",
+          "b-extinction-modulates-downstream-a-and-b-emission",
+          "signed-b-coefficients-are-not-an-independent-positive-radiance-field"
+        ]
+      },
+      "selectiveHeadLivePassReceipt": {
+        "identity": "selective-head-live-render-pass-receipt-v0",
+        "composition": "raymarch-only-v0",
+        "compositionAuthority": "diagnostic-raymarch-full-selected-field-authority-v0",
+        "raymarchAuthority": "diagnostic-raymarch-selected-fields-fire-smoke-v0",
+        "splatAuthority": "off",
+        "raymarchFireAuthority": 1,
+        "raymarchEncoded": true,
+        "raymarchApplied": true,
+        "splatEncoded": false,
+        "splatApplied": false,
+        "fallbackReason": null
+      },
+      "imagePath": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/ridge-cross-extinction-anchor96-grid160-frozen-r9/camera-10-raymarchRepeat-160.png"
+    },
+    "captureCount": 295,
+    "filamentContinuity": {
+      "byRaySteps": [
+        {
+          "raySteps": 48,
+          "cameraCount": 21,
+          "meanOmissionRatio": 0,
+          "minOmissionRatio": 0,
+          "maxOmissionRatio": 0,
+          "cameraOmissionSwing": 0,
+          "minMeanWidthProxy": 2.9571602882335717,
+          "maxMeanWidthProxy": 4.104628381953964,
+          "cameraWidthSwing": 1.1474680937203927,
+          "meanRaymarchToTargetIntensityRatio": 2.001283252242241
+        },
+        {
+          "raySteps": 96,
+          "cameraCount": 21,
+          "meanOmissionRatio": 0,
+          "minOmissionRatio": 0,
+          "maxOmissionRatio": 0,
+          "cameraOmissionSwing": 0,
+          "minMeanWidthProxy": 2.9571602882335717,
+          "maxMeanWidthProxy": 4.104628381953964,
+          "cameraWidthSwing": 1.1474680937203927,
+          "meanRaymarchToTargetIntensityRatio": 1.535097731703002
+        },
+        {
+          "raySteps": 160,
+          "cameraCount": 21,
+          "meanOmissionRatio": 0,
+          "minOmissionRatio": 0,
+          "maxOmissionRatio": 0,
+          "cameraOmissionSwing": 0,
+          "minMeanWidthProxy": 2.9571602882335717,
+          "maxMeanWidthProxy": 4.104628381953964,
+          "cameraWidthSwing": 1.1474680937203927,
+          "meanRaymarchToTargetIntensityRatio": 0.9409940473180638
+        }
+      ],
+      "rayStepAppearance": [
+        {
+          "raySteps": 48,
+          "meanLuma": 112.26605793684469,
+          "minMeanLuma": 110.60015269779792,
+          "maxMeanLuma": 112.87360065536556,
+          "meanChangedFractionVsMaxSteps": 0.8356382085391929,
+          "meanAbsChannelDeltaVsMaxSteps": 38.89824411498558,
+          "sameCameraDelta": [
+            {
+              "maxChannelDelta": 162,
+              "meanAbsChannelDelta": 38.240942648839294,
+              "changedPixels": 67217,
+              "changedFraction": 0.8845738800863294
+            },
+            {
+              "maxChannelDelta": 161,
+              "meanAbsChannelDelta": 37.99261396536295,
+              "changedPixels": 66881,
+              "changedFraction": 0.8801521292835711
+            },
+            {
+              "maxChannelDelta": 163,
+              "meanAbsChannelDelta": 37.99963810075275,
+              "changedPixels": 66557,
+              "changedFraction": 0.8758882981523398
+            },
+            {
+              "maxChannelDelta": 163,
+              "meanAbsChannelDelta": 37.830055403484764,
+              "changedPixels": 66157,
+              "changedFraction": 0.8706243091014371
+            },
+            {
+              "maxChannelDelta": 161,
+              "meanAbsChannelDelta": 37.872157445912514,
+              "changedPixels": 65748,
+              "changedFraction": 0.865241880296889
+            },
+            {
+              "maxChannelDelta": 159,
+              "meanAbsChannelDelta": 37.90346831078591,
+              "changedPixels": 65329,
+              "changedFraction": 0.8597278517660684
+            },
+            {
+              "maxChannelDelta": 166,
+              "meanAbsChannelDelta": 37.94271463915355,
+              "changedPixels": 64773,
+              "changedFraction": 0.8524109069853135
+            },
+            {
+              "maxChannelDelta": 159,
+              "meanAbsChannelDelta": 38.09164275938306,
+              "changedPixels": 64113,
+              "changedFraction": 0.8437253250513239
+            },
+            {
+              "maxChannelDelta": 161,
+              "meanAbsChannelDelta": 38.15127388535032,
+              "changedPixels": 63333,
+              "changedFraction": 0.8334605464020635
+            },
+            {
+              "maxChannelDelta": 159,
+              "meanAbsChannelDelta": 38.35032834131705,
+              "changedPixels": 62472,
+              "changedFraction": 0.8221298099699953
+            },
+            {
+              "maxChannelDelta": 161,
+              "meanAbsChannelDelta": 38.58052916249934,
+              "changedPixels": 61541,
+              "changedFraction": 0.809877875454019
+            },
+            {
+              "maxChannelDelta": 162,
+              "meanAbsChannelDelta": 38.81393772700953,
+              "changedPixels": 60797,
+              "changedFraction": 0.8000868558193399
+            },
+            {
+              "maxChannelDelta": 164,
+              "meanAbsChannelDelta": 39.00010198978786,
+              "changedPixels": 60225,
+              "changedFraction": 0.7925593514765489
+            },
+            {
+              "maxChannelDelta": 166,
+              "meanAbsChannelDelta": 39.21842922566721,
+              "changedPixels": 60220,
+              "changedFraction": 0.7924935516134126
+            },
+            {
+              "maxChannelDelta": 159,
+              "meanAbsChannelDelta": 39.55683134179081,
+              "changedPixels": 60808,
+              "changedFraction": 0.8002316155182397
+            },
+            {
+              "maxChannelDelta": 169,
+              "meanAbsChannelDelta": 39.88137929673106,
+              "changedPixels": 61557,
+              "changedFraction": 0.8100884350160552
+            },
+            {
+              "maxChannelDelta": 164,
+              "meanAbsChannelDelta": 40.23191819761015,
+              "changedPixels": 62234,
+              "changedFraction": 0.8189977364847081
+            },
+            {
+              "maxChannelDelta": 168,
+              "meanAbsChannelDelta": 40.33964902353003,
+              "changedPixels": 62776,
+              "changedFraction": 0.8261304416486813
+            },
+            {
+              "maxChannelDelta": 159,
+              "meanAbsChannelDelta": 40.350223061536035,
+              "changedPixels": 63238,
+              "changedFraction": 0.832210349002474
+            },
+            {
+              "maxChannelDelta": 155,
+              "meanAbsChannelDelta": 40.294793256830026,
+              "changedPixels": 63591,
+              "changedFraction": 0.8368558193398957
+            },
+            {
+              "maxChannelDelta": 158,
+              "meanAbsChannelDelta": 40.220498631362844,
+              "changedPixels": 63901,
+              "changedFraction": 0.8409354108543454
+            }
+          ]
+        },
+        {
+          "raySteps": 96,
+          "meanLuma": 86.30439688447615,
+          "minMeanLuma": 83.16280834079693,
+          "maxMeanLuma": 87.77346104122185,
+          "meanChangedFractionVsMaxSteps": 0.8287856227925711,
+          "meanAbsChannelDeltaVsMaxSteps": 20.794376994362512,
+          "sameCameraDelta": [
+            {
+              "maxChannelDelta": 106,
+              "meanAbsChannelDelta": 20.47182449860504,
+              "changedPixels": 66688,
+              "changedFraction": 0.8776122545665105
+            },
+            {
+              "maxChannelDelta": 115,
+              "meanAbsChannelDelta": 20.36701847660157,
+              "changedPixels": 66347,
+              "changedFraction": 0.8731247039006159
+            },
+            {
+              "maxChannelDelta": 107,
+              "meanAbsChannelDelta": 20.32015252408275,
+              "changedPixels": 66029,
+              "changedFraction": 0.8689398326051482
+            },
+            {
+              "maxChannelDelta": 100,
+              "meanAbsChannelDelta": 20.357487366426277,
+              "changedPixels": 65670,
+              "changedFraction": 0.8642154024319629
+            },
+            {
+              "maxChannelDelta": 105,
+              "meanAbsChannelDelta": 20.44286926883192,
+              "changedPixels": 65289,
+              "changedFraction": 0.859201452860978
+            },
+            {
+              "maxChannelDelta": 100,
+              "meanAbsChannelDelta": 20.48402379323051,
+              "changedPixels": 64752,
+              "changedFraction": 0.8521345475601411
+            },
+            {
+              "maxChannelDelta": 111,
+              "meanAbsChannelDelta": 20.566056482602516,
+              "changedPixels": 64186,
+              "changedFraction": 0.8446860030531137
+            },
+            {
+              "maxChannelDelta": 101,
+              "meanAbsChannelDelta": 20.66826998999842,
+              "changedPixels": 63518,
+              "changedFraction": 0.835895141338106
+            },
+            {
+              "maxChannelDelta": 109,
+              "meanAbsChannelDelta": 20.702449728904565,
+              "changedPixels": 62732,
+              "changedFraction": 0.825551402853082
+            },
+            {
+              "maxChannelDelta": 102,
+              "meanAbsChannelDelta": 20.789002868874032,
+              "changedPixels": 61861,
+              "changedFraction": 0.8140890666947412
+            },
+            {
+              "maxChannelDelta": 103,
+              "meanAbsChannelDelta": 20.817589619413592,
+              "changedPixels": 61034,
+              "changedFraction": 0.8032057693319998
+            },
+            {
+              "maxChannelDelta": 104,
+              "meanAbsChannelDelta": 20.880918697689108,
+              "changedPixels": 60319,
+              "changedFraction": 0.7937963889035111
+            },
+            {
+              "maxChannelDelta": 100,
+              "meanAbsChannelDelta": 20.92235287150603,
+              "changedPixels": 59825,
+              "changedFraction": 0.7872953624256461
+            },
+            {
+              "maxChannelDelta": 102,
+              "meanAbsChannelDelta": 20.95076854240143,
+              "changedPixels": 59793,
+              "changedFraction": 0.786874243301574
+            },
+            {
+              "maxChannelDelta": 104,
+              "meanAbsChannelDelta": 21.069063536347844,
+              "changedPixels": 60321,
+              "changedFraction": 0.7938227088487656
+            },
+            {
+              "maxChannelDelta": 96,
+              "meanAbsChannelDelta": 21.128776912144023,
+              "changedPixels": 61098,
+              "changedFraction": 0.8040480075801443
+            },
+            {
+              "maxChannelDelta": 102,
+              "meanAbsChannelDelta": 21.212372348265514,
+              "changedPixels": 61705,
+              "changedFraction": 0.8120361109648891
+            },
+            {
+              "maxChannelDelta": 103,
+              "meanAbsChannelDelta": 21.223617544875506,
+              "changedPixels": 62223,
+              "changedFraction": 0.8188529767858083
+            },
+            {
+              "maxChannelDelta": 100,
+              "meanAbsChannelDelta": 21.170773674790755,
+              "changedPixels": 62708,
+              "changedFraction": 0.8252355635100279
+            },
+            {
+              "maxChannelDelta": 96,
+              "meanAbsChannelDelta": 21.114574011686056,
+              "changedPixels": 63061,
+              "changedFraction": 0.8298810338474496
+            },
+            {
+              "maxChannelDelta": 100,
+              "meanAbsChannelDelta": 21.021954124335423,
+              "changedPixels": 63374,
+              "changedFraction": 0.834000105279781
+            }
+          ]
+        },
+        {
+          "raySteps": 160,
+          "meanLuma": 56.89096272555881,
+          "minMeanLuma": 53.46300810126395,
+          "maxMeanLuma": 58.57505671947727,
+          "meanChangedFractionVsMaxSteps": 0,
+          "meanAbsChannelDeltaVsMaxSteps": 0,
+          "sameCameraDelta": [
+            {
+              "maxChannelDelta": 0,
+              "meanAbsChannelDelta": 0,
+              "changedPixels": 0,
+              "changedFraction": 0
+            },
+            {
+              "maxChannelDelta": 0,
+              "meanAbsChannelDelta": 0,
+              "changedPixels": 0,
+              "changedFraction": 0
+            },
+            {
+              "maxChannelDelta": 0,
+              "meanAbsChannelDelta": 0,
+              "changedPixels": 0,
+              "changedFraction": 0
+            },
+            {
+              "maxChannelDelta": 0,
+              "meanAbsChannelDelta": 0,
+              "changedPixels": 0,
+              "changedFraction": 0
+            },
+            {
+              "maxChannelDelta": 0,
+              "meanAbsChannelDelta": 0,
+              "changedPixels": 0,
+              "changedFraction": 0
+            },
+            {
+              "maxChannelDelta": 0,
+              "meanAbsChannelDelta": 0,
+              "changedPixels": 0,
+              "changedFraction": 0
+            },
+            {
+              "maxChannelDelta": 0,
+              "meanAbsChannelDelta": 0,
+              "changedPixels": 0,
+              "changedFraction": 0
+            },
+            {
+              "maxChannelDelta": 0,
+              "meanAbsChannelDelta": 0,
+              "changedPixels": 0,
+              "changedFraction": 0
+            },
+            {
+              "maxChannelDelta": 0,
+              "meanAbsChannelDelta": 0,
+              "changedPixels": 0,
+              "changedFraction": 0
+            },
+            {
+              "maxChannelDelta": 0,
+              "meanAbsChannelDelta": 0,
+              "changedPixels": 0,
+              "changedFraction": 0
+            },
+            {
+              "maxChannelDelta": 0,
+              "meanAbsChannelDelta": 0,
+              "changedPixels": 0,
+              "changedFraction": 0
+            },
+            {
+              "maxChannelDelta": 0,
+              "meanAbsChannelDelta": 0,
+              "changedPixels": 0,
+              "changedFraction": 0
+            },
+            {
+              "maxChannelDelta": 0,
+              "meanAbsChannelDelta": 0,
+              "changedPixels": 0,
+              "changedFraction": 0
+            },
+            {
+              "maxChannelDelta": 0,
+              "meanAbsChannelDelta": 0,
+              "changedPixels": 0,
+              "changedFraction": 0
+            },
+            {
+              "maxChannelDelta": 0,
+              "meanAbsChannelDelta": 0,
+              "changedPixels": 0,
+              "changedFraction": 0
+            },
+            {
+              "maxChannelDelta": 0,
+              "meanAbsChannelDelta": 0,
+              "changedPixels": 0,
+              "changedFraction": 0
+            },
+            {
+              "maxChannelDelta": 0,
+              "meanAbsChannelDelta": 0,
+              "changedPixels": 0,
+              "changedFraction": 0
+            },
+            {
+              "maxChannelDelta": 0,
+              "meanAbsChannelDelta": 0,
+              "changedPixels": 0,
+              "changedFraction": 0
+            },
+            {
+              "maxChannelDelta": 0,
+              "meanAbsChannelDelta": 0,
+              "changedPixels": 0,
+              "changedFraction": 0
+            },
+            {
+              "maxChannelDelta": 0,
+              "meanAbsChannelDelta": 0,
+              "changedPixels": 0,
+              "changedFraction": 0
+            },
+            {
+              "maxChannelDelta": 0,
+              "meanAbsChannelDelta": 0,
+              "changedPixels": 0,
+              "changedFraction": 0
+            }
+          ]
+        }
+      ],
+      "adjacentCameraDelta": [
+        {
+          "raySteps": 48,
+          "meanChangedFraction": 0.8321912670421645,
+          "meanAbsChannelDelta": 6.766922244301732,
+          "maxMeanAbsChannelDelta": 7.042388271832395,
+          "deltas": [
+            {
+              "fromCameraIndex": 0,
+              "toCameraIndex": 1,
+              "maxChannelDelta": 169,
+              "meanAbsChannelDelta": 7.042388271832395,
+              "changedPixels": 66610,
+              "changedFraction": 0.8765857767015844
+            },
+            {
+              "fromCameraIndex": 1,
+              "toCameraIndex": 2,
+              "maxChannelDelta": 150,
+              "meanAbsChannelDelta": 6.998170763804811,
+              "changedPixels": 66399,
+              "changedFraction": 0.8738090224772332
+            },
+            {
+              "fromCameraIndex": 2,
+              "toCameraIndex": 3,
+              "maxChannelDelta": 153,
+              "meanAbsChannelDelta": 7.002016765805127,
+              "changedPixels": 66040,
+              "changedFraction": 0.869084592304048
+            },
+            {
+              "fromCameraIndex": 3,
+              "toCameraIndex": 4,
+              "maxChannelDelta": 144,
+              "meanAbsChannelDelta": 6.9401418645049215,
+              "changedPixels": 65624,
+              "changedFraction": 0.8636100436911092
+            },
+            {
+              "fromCameraIndex": 4,
+              "toCameraIndex": 5,
+              "maxChannelDelta": 154,
+              "meanAbsChannelDelta": 6.7900721166499975,
+              "changedPixels": 65182,
+              "changedFraction": 0.8577933357898616
+            },
+            {
+              "fromCameraIndex": 5,
+              "toCameraIndex": 6,
+              "maxChannelDelta": 155,
+              "meanAbsChannelDelta": 6.7767476443648995,
+              "changedPixels": 64707,
+              "changedFraction": 0.8515423487919145
+            },
+            {
+              "fromCameraIndex": 6,
+              "toCameraIndex": 7,
+              "maxChannelDelta": 145,
+              "meanAbsChannelDelta": 6.768246302047692,
+              "changedPixels": 64168,
+              "changedFraction": 0.844449123545823
+            },
+            {
+              "fromCameraIndex": 7,
+              "toCameraIndex": 8,
+              "maxChannelDelta": 164,
+              "meanAbsChannelDelta": 6.862491446017792,
+              "changedPixels": 63499,
+              "changedFraction": 0.8356451018581882
+            },
+            {
+              "fromCameraIndex": 8,
+              "toCameraIndex": 9,
+              "maxChannelDelta": 167,
+              "meanAbsChannelDelta": 6.886758435542454,
+              "changedPixels": 62793,
+              "changedFraction": 0.8263541611833447
+            },
+            {
+              "fromCameraIndex": 9,
+              "toCameraIndex": 10,
+              "maxChannelDelta": 163,
+              "meanAbsChannelDelta": 6.845524951308101,
+              "changedPixels": 62002,
+              "changedFraction": 0.8159446228351845
+            },
+            {
+              "fromCameraIndex": 10,
+              "toCameraIndex": 11,
+              "maxChannelDelta": 162,
+              "meanAbsChannelDelta": 6.751164657577513,
+              "changedPixels": 61283,
+              "changedFraction": 0.8064826025161868
+            },
+            {
+              "fromCameraIndex": 11,
+              "toCameraIndex": 12,
+              "maxChannelDelta": 156,
+              "meanAbsChannelDelta": 6.620591409169869,
+              "changedPixels": 61184,
+              "changedFraction": 0.8051797652260884
+            },
+            {
+              "fromCameraIndex": 12,
+              "toCameraIndex": 13,
+              "maxChannelDelta": 148,
+              "meanAbsChannelDelta": 6.476052139811549,
+              "changedPixels": 60802,
+              "changedFraction": 0.8001526556824762
+            },
+            {
+              "fromCameraIndex": 13,
+              "toCameraIndex": 14,
+              "maxChannelDelta": 152,
+              "meanAbsChannelDelta": 6.548879428330789,
+              "changedPixels": 60308,
+              "changedFraction": 0.7936516292046113
+            },
+            {
+              "fromCameraIndex": 14,
+              "toCameraIndex": 15,
+              "maxChannelDelta": 156,
+              "meanAbsChannelDelta": 6.697820708532927,
+              "changedPixels": 61022,
+              "changedFraction": 0.8030478496604727
+            },
+            {
+              "fromCameraIndex": 15,
+              "toCameraIndex": 16,
+              "maxChannelDelta": 157,
+              "meanAbsChannelDelta": 6.723538585039743,
+              "changedPixels": 61753,
+              "changedFraction": 0.8126677896509975
+            },
+            {
+              "fromCameraIndex": 16,
+              "toCameraIndex": 17,
+              "maxChannelDelta": 147,
+              "meanAbsChannelDelta": 6.686526162025583,
+              "changedPixels": 62232,
+              "changedFraction": 0.8189714165394536
+            },
+            {
+              "fromCameraIndex": 17,
+              "toCameraIndex": 18,
+              "maxChannelDelta": 151,
+              "meanAbsChannelDelta": 6.619953150497447,
+              "changedPixels": 62687,
+              "changedFraction": 0.8249592040848555
+            },
+            {
+              "fromCameraIndex": 18,
+              "toCameraIndex": 19,
+              "maxChannelDelta": 165,
+              "meanAbsChannelDelta": 6.673316839500973,
+              "changedPixels": 63077,
+              "changedFraction": 0.8300915934094857
+            },
+            {
+              "fromCameraIndex": 19,
+              "toCameraIndex": 20,
+              "maxChannelDelta": 175,
+              "meanAbsChannelDelta": 6.628043243670053,
+              "changedPixels": 63359,
+              "changedFraction": 0.8338027056903722
+            }
+          ]
+        },
+        {
+          "raySteps": 96,
+          "meanChangedFraction": 0.820756566826341,
+          "meanAbsChannelDelta": 6.032555798283939,
+          "maxMeanAbsChannelDelta": 6.197369979470443,
+          "deltas": [
+            {
+              "fromCameraIndex": 0,
+              "toCameraIndex": 1,
+              "maxChannelDelta": 162,
+              "meanAbsChannelDelta": 5.99501237037427,
+              "changedPixels": 65334,
+              "changedFraction": 0.8597936516292046
+            },
+            {
+              "fromCameraIndex": 1,
+              "toCameraIndex": 2,
+              "maxChannelDelta": 131,
+              "meanAbsChannelDelta": 5.941293362109807,
+              "changedPixels": 65160,
+              "changedFraction": 0.8575038163920619
+            },
+            {
+              "fromCameraIndex": 2,
+              "toCameraIndex": 3,
+              "maxChannelDelta": 150,
+              "meanAbsChannelDelta": 5.957901247565405,
+              "changedPixels": 64864,
+              "changedFraction": 0.8536084644943939
+            },
+            {
+              "fromCameraIndex": 3,
+              "toCameraIndex": 4,
+              "maxChannelDelta": 132,
+              "meanAbsChannelDelta": 5.890841317050061,
+              "changedPixels": 64587,
+              "changedFraction": 0.8499631520766436
+            },
+            {
+              "fromCameraIndex": 4,
+              "toCameraIndex": 5,
+              "maxChannelDelta": 149,
+              "meanAbsChannelDelta": 5.855799599936832,
+              "changedPixels": 64123,
+              "changedFraction": 0.8438569247775964
+            },
+            {
+              "fromCameraIndex": 5,
+              "toCameraIndex": 6,
+              "maxChannelDelta": 136,
+              "meanAbsChannelDelta": 5.85656616834237,
+              "changedPixels": 63670,
+              "changedFraction": 0.8378954571774491
+            },
+            {
+              "fromCameraIndex": 6,
+              "toCameraIndex": 7,
+              "maxChannelDelta": 144,
+              "meanAbsChannelDelta": 5.936058982997316,
+              "changedPixels": 63015,
+              "changedFraction": 0.8292756751065958
+            },
+            {
+              "fromCameraIndex": 7,
+              "toCameraIndex": 8,
+              "maxChannelDelta": 149,
+              "meanAbsChannelDelta": 5.988892983102595,
+              "changedPixels": 62389,
+              "changedFraction": 0.821037532241933
+            },
+            {
+              "fromCameraIndex": 8,
+              "toCameraIndex": 9,
+              "maxChannelDelta": 148,
+              "meanAbsChannelDelta": 6.13376783176291,
+              "changedPixels": 61856,
+              "changedFraction": 0.814023266831605
+            },
+            {
+              "fromCameraIndex": 9,
+              "toCameraIndex": 10,
+              "maxChannelDelta": 156,
+              "meanAbsChannelDelta": 6.156004895509818,
+              "changedPixels": 61200,
+              "changedFraction": 0.8053903247881244
+            },
+            {
+              "fromCameraIndex": 10,
+              "toCameraIndex": 11,
+              "maxChannelDelta": 156,
+              "meanAbsChannelDelta": 6.1788374480181085,
+              "changedPixels": 60644,
+              "changedFraction": 0.7980733800073696
+            },
+            {
+              "fromCameraIndex": 11,
+              "toCameraIndex": 12,
+              "maxChannelDelta": 160,
+              "meanAbsChannelDelta": 6.082430778543981,
+              "changedPixels": 60576,
+              "changedFraction": 0.7971785018687161
+            },
+            {
+              "fromCameraIndex": 12,
+              "toCameraIndex": 13,
+              "maxChannelDelta": 151,
+              "meanAbsChannelDelta": 6.02771819234616,
+              "changedPixels": 60323,
+              "changedFraction": 0.7938490287940201
+            },
+            {
+              "fromCameraIndex": 13,
+              "toCameraIndex": 14,
+              "maxChannelDelta": 144,
+              "meanAbsChannelDelta": 6.099393983260515,
+              "changedPixels": 59748,
+              "changedFraction": 0.7862820445333474
+            },
+            {
+              "fromCameraIndex": 14,
+              "toCameraIndex": 15,
+              "maxChannelDelta": 140,
+              "meanAbsChannelDelta": 6.185262804653366,
+              "changedPixels": 60446,
+              "changedFraction": 0.7954677054271727
+            },
+            {
+              "fromCameraIndex": 15,
+              "toCameraIndex": 16,
+              "maxChannelDelta": 128,
+              "meanAbsChannelDelta": 6.197369979470443,
+              "changedPixels": 61101,
+              "changedFraction": 0.804087487498026
+            },
+            {
+              "fromCameraIndex": 16,
+              "toCameraIndex": 17,
+              "maxChannelDelta": 144,
+              "meanAbsChannelDelta": 6.169395167658052,
+              "changedPixels": 61533,
+              "changedFraction": 0.809772595673001
+            },
+            {
+              "fromCameraIndex": 17,
+              "toCameraIndex": 18,
+              "maxChannelDelta": 144,
+              "meanAbsChannelDelta": 6.01329157235353,
+              "changedPixels": 61952,
+              "changedFraction": 0.8152866242038217
+            },
+            {
+              "fromCameraIndex": 18,
+              "toCameraIndex": 19,
+              "maxChannelDelta": 142,
+              "meanAbsChannelDelta": 5.990906458914566,
+              "changedPixels": 62284,
+              "changedFraction": 0.8196557351160709
+            },
+            {
+              "fromCameraIndex": 19,
+              "toCameraIndex": 20,
+              "maxChannelDelta": 146,
+              "meanAbsChannelDelta": 5.994370821708691,
+              "changedPixels": 62548,
+              "changedFraction": 0.8231299678896667
+            }
+          ]
+        },
+        {
+          "raySteps": 160,
+          "meanChangedFraction": 0.802041769753119,
+          "meanAbsChannelDelta": 4.561134817339579,
+          "maxMeanAbsChannelDelta": 4.720057772279834,
+          "deltas": [
+            {
+              "fromCameraIndex": 0,
+              "toCameraIndex": 1,
+              "maxChannelDelta": 99,
+              "meanAbsChannelDelta": 4.564753645312417,
+              "changedPixels": 63460,
+              "changedFraction": 0.8351318629257252
+            },
+            {
+              "fromCameraIndex": 1,
+              "toCameraIndex": 2,
+              "maxChannelDelta": 97,
+              "meanAbsChannelDelta": 4.4791184134337,
+              "changedPixels": 63227,
+              "changedFraction": 0.8320655893035742
+            },
+            {
+              "fromCameraIndex": 2,
+              "toCameraIndex": 3,
+              "maxChannelDelta": 104,
+              "meanAbsChannelDelta": 4.472903616360478,
+              "changedPixels": 62938,
+              "changedFraction": 0.828262357214297
+            },
+            {
+              "fromCameraIndex": 3,
+              "toCameraIndex": 4,
+              "maxChannelDelta": 101,
+              "meanAbsChannelDelta": 4.440993972732537,
+              "changedPixels": 62583,
+              "changedFraction": 0.8235905669316208
+            },
+            {
+              "fromCameraIndex": 4,
+              "toCameraIndex": 5,
+              "maxChannelDelta": 100,
+              "meanAbsChannelDelta": 4.406975443491078,
+              "changedPixels": 62282,
+              "changedFraction": 0.8196294151708164
+            },
+            {
+              "fromCameraIndex": 5,
+              "toCameraIndex": 6,
+              "maxChannelDelta": 90,
+              "meanAbsChannelDelta": 4.409712717797547,
+              "changedPixels": 62075,
+              "changedFraction": 0.8169053008369742
+            },
+            {
+              "fromCameraIndex": 6,
+              "toCameraIndex": 7,
+              "maxChannelDelta": 95,
+              "meanAbsChannelDelta": 4.470255171869242,
+              "changedPixels": 61482,
+              "changedFraction": 0.8091014370690109
+            },
+            {
+              "fromCameraIndex": 7,
+              "toCameraIndex": 8,
+              "maxChannelDelta": 100,
+              "meanAbsChannelDelta": 4.566658551350213,
+              "changedPixels": 60996,
+              "changedFraction": 0.802705690372164
+            },
+            {
+              "fromCameraIndex": 8,
+              "toCameraIndex": 9,
+              "maxChannelDelta": 110,
+              "meanAbsChannelDelta": 4.6724318313417905,
+              "changedPixels": 60534,
+              "changedFraction": 0.7966257830183713
+            },
+            {
+              "fromCameraIndex": 9,
+              "toCameraIndex": 10,
+              "maxChannelDelta": 110,
+              "meanAbsChannelDelta": 4.720057772279834,
+              "changedPixels": 60006,
+              "changedFraction": 0.7896773174711796
+            },
+            {
+              "fromCameraIndex": 10,
+              "toCameraIndex": 11,
+              "maxChannelDelta": 109,
+              "meanAbsChannelDelta": 4.718643075222404,
+              "changedPixels": 59681,
+              "changedFraction": 0.7854003263673212
+            },
+            {
+              "fromCameraIndex": 11,
+              "toCameraIndex": 12,
+              "maxChannelDelta": 109,
+              "meanAbsChannelDelta": 4.654692188240248,
+              "changedPixels": 59761,
+              "changedFraction": 0.7864531241775017
+            },
+            {
+              "fromCameraIndex": 12,
+              "toCameraIndex": 13,
+              "maxChannelDelta": 119,
+              "meanAbsChannelDelta": 4.628730852239827,
+              "changedPixels": 59389,
+              "changedFraction": 0.7815576143601621
+            },
+            {
+              "fromCameraIndex": 13,
+              "toCameraIndex": 14,
+              "maxChannelDelta": 113,
+              "meanAbsChannelDelta": 4.646736984787071,
+              "changedPixels": 58757,
+              "changedFraction": 0.7732405116597357
+            },
+            {
+              "fromCameraIndex": 14,
+              "toCameraIndex": 15,
+              "maxChannelDelta": 101,
+              "meanAbsChannelDelta": 4.683979707322209,
+              "changedPixels": 59336,
+              "changedFraction": 0.7808601358109175
+            },
+            {
+              "fromCameraIndex": 15,
+              "toCameraIndex": 16,
+              "maxChannelDelta": 99,
+              "meanAbsChannelDelta": 4.665197136389956,
+              "changedPixels": 59843,
+              "changedFraction": 0.7875322419329368
+            },
+            {
+              "fromCameraIndex": 16,
+              "toCameraIndex": 17,
+              "maxChannelDelta": 100,
+              "meanAbsChannelDelta": 4.600963309996315,
+              "changedPixels": 60319,
+              "changedFraction": 0.7937963889035111
+            },
+            {
+              "fromCameraIndex": 17,
+              "toCameraIndex": 18,
+              "maxChannelDelta": 98,
+              "meanAbsChannelDelta": 4.487827025319787,
+              "changedPixels": 60583,
+              "changedFraction": 0.7972706216771069
+            },
+            {
+              "fromCameraIndex": 18,
+              "toCameraIndex": 19,
+              "maxChannelDelta": 101,
+              "meanAbsChannelDelta": 4.440036584723904,
+              "changedPixels": 60751,
+              "changedFraction": 0.799481497078486
+            },
+            {
+              "fromCameraIndex": 19,
+              "toCameraIndex": 20,
+              "maxChannelDelta": 100,
+              "meanAbsChannelDelta": 4.492028346581039,
+              "changedPixels": 60908,
+              "changedFraction": 0.8015476127809654
+            }
+          ]
+        }
+      ]
+    },
+    "captureReport": {
+      "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/ridge-cross-extinction-anchor96-grid160-frozen-r9/capture-report.json",
+      "bytes": 6510123,
+      "sha256": "a0754e02c42e7dccf42a736713c4f77650f1f847017369dc75223f67d27e9555"
+    }
+  }
+}

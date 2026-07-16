@@ -1,0 +1,11 @@
+{
+  "name": "volume-raymarch-filament-orbit-witness",
+  "job_type": "kaminos_static_node_syntax",
+  "job_id": "854844be1140",
+  "input_path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/volume-raymarch-filament-orbit-witness.mjs",
+  "input_name": "volume-raymarch-filament-orbit-witness.mjs",
+  "params": {},
+  "output_files": [],
+  "created_at": 1784230488.5441349,
+  "duration_s": 0.1
+}

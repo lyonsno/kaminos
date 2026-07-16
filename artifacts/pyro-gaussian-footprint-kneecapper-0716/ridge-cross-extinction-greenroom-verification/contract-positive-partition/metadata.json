@@ -1,0 +1,13 @@
+{
+  "name": "volume-positive-flame-partition-contracts",
+  "job_type": "kaminos_static_node_contract",
+  "job_id": "e38f14c5d64d",
+  "input_path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/tests/volume-positive-flame-partition-contracts.mjs",
+  "input_name": "volume-positive-flame-partition-contracts.mjs",
+  "params": {
+    "cwd": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716"
+  },
+  "output_files": [],
+  "created_at": 1784227969.635851,
+  "duration_s": 0.2
+}

@@ -1,0 +1,11 @@
+{
+  "name": "boundary-splat-camera-holdout-oracle",
+  "job_type": "kaminos_static_node_syntax",
+  "job_id": "a50b067e34e3",
+  "input_path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/boundary-splat-camera-holdout-oracle.mjs",
+  "input_name": "boundary-splat-camera-holdout-oracle.mjs",
+  "params": {},
+  "output_files": [],
+  "created_at": 1784231322.056732,
+  "duration_s": 0.1
+}

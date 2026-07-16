@@ -1,0 +1,13 @@
+{
+  "name": "volume-core",
+  "job_type": "kaminos_static_node_syntax",
+  "job_id": "a0ff33ea7930",
+  "input_path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/volume-core.js",
+  "input_name": "volume-core.js",
+  "params": {
+    "cwd": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716"
+  },
+  "output_files": [],
+  "created_at": 1784227969.021407,
+  "duration_s": 0.5
+}

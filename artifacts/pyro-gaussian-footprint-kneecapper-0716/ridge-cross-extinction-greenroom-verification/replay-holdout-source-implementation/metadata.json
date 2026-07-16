@@ -1,0 +1,11 @@
+{
+  "name": "boundary-splat-world-covariance-contracts",
+  "job_type": "kaminos_static_node_contract",
+  "job_id": "94623a4377a2",
+  "input_path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/tests/boundary-splat-world-covariance-contracts.mjs",
+  "input_name": "boundary-splat-world-covariance-contracts.mjs",
+  "params": {},
+  "output_files": [],
+  "created_at": 1784231321.9759119,
+  "duration_s": 0.1
+}

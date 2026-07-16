@@ -1,0 +1,13 @@
+{
+  "name": "volume-ridge-cross-extinction-contracts",
+  "job_type": "kaminos_static_node_contract",
+  "job_id": "c40e615a0f3f",
+  "input_path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/tests/volume-ridge-cross-extinction-contracts.mjs",
+  "input_name": "volume-ridge-cross-extinction-contracts.mjs",
+  "params": {
+    "cwd": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716"
+  },
+  "output_files": [],
+  "created_at": 1784228029.1688802,
+  "duration_s": 0.1
+}

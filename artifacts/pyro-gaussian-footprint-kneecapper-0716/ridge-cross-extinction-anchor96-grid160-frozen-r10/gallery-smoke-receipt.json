@@ -1,0 +1,41 @@
+{
+  "schema": "kaminos.ridge-cross-extinction-gallery-smoke.v0",
+  "status": "completed",
+  "requestedRoute": "http://127.0.0.1:18223/artifacts/pyro-gaussian-footprint-kneecapper-0716/ridge-cross-extinction-anchor96-grid160-frozen-r10/index.html",
+  "effectiveRoute": "http://127.0.0.1:18223/artifacts/pyro-gaussian-footprint-kneecapper-0716/ridge-cross-extinction-anchor96-grid160-frozen-r10/index.html",
+  "browser": "Google Chrome headless via CDP",
+  "backend": "software-rendered (--disable-gpu)",
+  "viewport": {
+    "width": 390,
+    "height": 1200,
+    "deviceScaleFactor": 1,
+    "mobile": true
+  },
+  "state": {
+    "ready": "complete",
+    "status": "COMPLETED",
+    "error": "none",
+    "images": 8
+  },
+  "layout": {
+    "innerWidth": 390,
+    "clientWidth": 390,
+    "scrollWidth": 390,
+    "prev": {
+      "left": 10,
+      "right": 46
+    },
+    "next": {
+      "left": 344,
+      "right": 380
+    },
+    "heading": {
+      "left": 10,
+      "right": 380
+    },
+    "camera": "Camera 10",
+    "status": "COMPLETED"
+  },
+  "output": "artifacts/pyro-gaussian-footprint-kneecapper-0716/ridge-cross-extinction-anchor96-grid160-frozen-r10/gallery-smoke-mobile.png",
+  "capturedAt": "2026-07-16T20:06:52.882Z"
+}
