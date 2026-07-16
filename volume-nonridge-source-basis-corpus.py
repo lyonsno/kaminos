@@ -48,6 +48,16 @@ REQUIRED_TARGETS = [
     "nonRidge.emission.b",
     "nonRidge.extinction",
 ]
+EXACT_ONE_NEGATIVE_POLICY = "exactly-one-measured-all-target-zero-control-v0"
+EXPECTED_DESIGN_CORRECTION = {
+    "identity": "single-axis-setting-transposition-v0",
+    "control": "boundary.gradientGain",
+    "settingAIndex": 2,
+    "settingBIndex": 12,
+    "settingA": "setting-c",
+    "settingB": "setting-m",
+    "reason": "replace-redundant-all-target-zero-setting-m-while-preserving-latin-levels-v0",
+}
 FROZEN_SOURCE_KEYS = [
     "presetId", "stateIdentity", "stateHash", "generation", "generationHash", "simStepCount",
     "simStepHash", "gridShape", "gridHash", "gridOrigin", "gridSpacing", "gridAxisOrder",
@@ -440,6 +450,7 @@ def deterministic_control_design(
     setting_count: int,
     sampled_controls: list[str],
     ranges: dict[str, tuple[float, float]],
+    correction: dict[str, Any] | None = None,
 ) -> list[dict[str, float]]:
     columns: list[list[float]] = []
     for control_index, name in enumerate(sampled_controls):
@@ -456,10 +467,18 @@ def deterministic_control_design(
             minimum + (maximum - minimum) * level / (setting_count - 1)
             for level in permutation
         ])
-    return [
+    design = [
         {name: columns[control_index][setting_index] for control_index, name in enumerate(sampled_controls)}
         for setting_index in range(setting_count)
     ]
+    if correction is not None:
+        control = correction["control"]
+        setting_a = correction["settingAIndex"]
+        setting_b = correction["settingBIndex"]
+        design[setting_a][control], design[setting_b][control] = (
+            design[setting_b][control], design[setting_a][control]
+        )
+    return design
 
 
 def validate_design_evidence(
@@ -571,6 +590,11 @@ def build_corpus(
         raise CorpusError("design.sampledControls must preserve the complete operator-authorized causal control order")
     if design.get("retentionPolicy") != "retain-all-admitted-settings-and-rows-uncapped-v0":
         raise CorpusError("design retentionPolicy must preserve every admitted setting and row without a cap")
+    if design.get("negativeControlPolicy") != EXACT_ONE_NEGATIVE_POLICY:
+        raise CorpusError(f"design.negativeControlPolicy must be {EXACT_ONE_NEGATIVE_POLICY}")
+    design_correction = require_object(design.get("designCorrection"), "design.designCorrection")
+    if design_correction != EXPECTED_DESIGN_CORRECTION:
+        raise CorpusError("design.designCorrection must match the measured one-black single-axis transposition")
     if design.get("campaignStatus") != "capture-tranche-complete-awaiting-verdict-v0":
         raise CorpusError("first corpus must remain capture-tranche-complete-awaiting-verdict-v0")
 
@@ -748,6 +772,13 @@ def build_corpus(
             "targetSummary": target_summary,
         })
 
+    phase_state["phase"] = "negative-control-policy"
+    if negative_settings != 1:
+        raise CorpusError(
+            "first learner slate must contain exactly one measured all-target-zero control; "
+            f"observed {negative_settings}"
+        )
+
     phase_state["phase"] = "split-validation"
     split_target_coverage: dict[str, dict[str, int]] = {}
     for split_role in ("train", "heldOut"):
@@ -768,7 +799,13 @@ def build_corpus(
         name: tuple(float(value) for value in design["controlRanges"][name])
         for name in sampled_controls
     }
-    generated_controls = deterministic_control_design(design_seed, len(output_settings), sampled_controls, ranges)
+    generated_controls = deterministic_control_design(
+        design_seed,
+        len(output_settings),
+        sampled_controls,
+        ranges,
+        design_correction,
+    )
     for setting, generated in zip(output_settings, generated_controls):
         for name in sampled_controls:
             if not math.isclose(float(setting["requestedControls"][name]), generated[name], rel_tol=0.0, abs_tol=1e-12):

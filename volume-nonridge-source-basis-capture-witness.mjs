@@ -19,6 +19,7 @@ import {
   SOURCE_BASIS_CAPTURE_AUTHORITY,
   SOURCE_BASIS_CAPTURE_SCHEMA,
   SOURCE_BASIS_CAPTURE_SEED,
+  SOURCE_BASIS_DESIGN_CORRECTION,
   SOURCE_BASIS_GPU_ROW_FLOATS,
   SOURCE_BASIS_ORDER,
   SOURCE_BASIS_SETTING_COUNT,
@@ -394,6 +395,12 @@ try {
       admittedSettingIds: completedSettings.map(setting => setting.id),
       rejectedSettings: [],
       retentionPolicy: 'retain-all-admitted-settings-and-rows-uncapped-v0',
+      negativeControlPolicy: 'exactly-one-measured-all-target-zero-control-v0',
+      designCorrection: {
+        ...SOURCE_BASIS_DESIGN_CORRECTION,
+        settingA: settingIdFor(SOURCE_BASIS_DESIGN_CORRECTION.settingAIndex),
+        settingB: settingIdFor(SOURCE_BASIS_DESIGN_CORRECTION.settingBIndex),
+      },
       campaignStatus: selectedSettingIndex === null
         ? 'capture-tranche-complete-awaiting-verdict-v0'
         : 'explicit-diagnostic-subset-not-packer-authority-v0',
