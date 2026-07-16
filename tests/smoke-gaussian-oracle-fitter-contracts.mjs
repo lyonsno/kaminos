@@ -355,6 +355,51 @@ try {
     structurePrincipalReport.budgetCurve.at(-1).artifact.sha256,
     'gradient-plus-principal allocation must differ from principal-only allocation on the same teacher field',
   );
+  const dualBankReport = await fitSmokeGaussianOracleFrame({
+    manifestPath: structureManifestPath,
+    outDir: join(directory, 'dual-bank-fit'),
+    budgets: [2, 4, 8],
+    densityThreshold: 0.000001,
+    optimizerStrategy: 'recursive-dual-bank-principal-moment-split',
+    detailBudgetFraction: 0.5,
+    detailMassFraction: 0.5,
+  });
+  assert.equal(dualBankReport.optimizer.identity, 'recursive-dual-bank-principal-axis-moment-split-v0');
+  assert.equal(dualBankReport.optimizer.allocationAuthority, 'positive-coarse-plus-normalized-gradient-detail-mass-principal-banks-v0');
+  assert.equal(dualBankReport.optimizer.detailBudgetFraction, 0.5);
+  assert.equal(dualBankReport.optimizer.detailMassFraction, 0.5);
+  assert.ok(dualBankReport.optimizer.gradientDiagnostics.maximumSmokeGradient > 0);
+  for (const entry of dualBankReport.budgetCurve) {
+    assert.equal(entry.activeGaussianCount, entry.requestedBudget);
+    assert.equal(entry.bankAccounting.authority, 'explicit-positive-coarse-gradient-detail-extinction-partition-v0');
+    assert.equal(entry.bankAccounting.coarse.activeGaussianCount, entry.requestedBudget / 2);
+    assert.equal(entry.bankAccounting.detail.activeGaussianCount, entry.requestedBudget / 2);
+    assert.ok(entry.bankAccounting.coarse.totalAssignedExtinction > 0);
+    assert.ok(entry.bankAccounting.detail.totalAssignedExtinction > 0);
+    assert.ok(entry.extinctionAccounting.relativeError < 1e-6);
+    assert.ok(Math.abs(
+      entry.bankAccounting.coarse.totalAssignedExtinction
+      + entry.bankAccounting.detail.totalAssignedExtinction
+      - entry.totalAssignedExtinction
+    ) < 1e-9);
+  }
+  assert.notEqual(
+    dualBankReport.budgetCurve.at(-1).artifact.sha256,
+    gradientPrincipalReport.budgetCurve.at(-1).artifact.sha256,
+    'explicit coarse/detail banks must materially change the same-budget product',
+  );
+  await assert.rejects(
+    () => fitSmokeGaussianOracleFrame({
+      manifestPath: structureManifestPath,
+      outDir: join(directory, 'invalid-dual-bank-fit'),
+      budgets: [7],
+      optimizerStrategy: 'recursive-dual-bank-principal-moment-split',
+      detailBudgetFraction: 0.5,
+      detailMassFraction: 0.5,
+    }),
+    /integer coarse and detail budgets/i,
+    'dual-bank fitting must reject hidden record-count rounding',
+  );
 
   const nextManifestPath = await writeFrame(join(directory, 'next-frame'), {
     deterministicReplay: {

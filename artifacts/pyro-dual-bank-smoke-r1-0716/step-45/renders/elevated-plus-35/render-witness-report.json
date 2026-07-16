@@ -1,0 +1,172 @@
+{
+  "schema": "kaminos.smoke-gaussian-oracle-render-witness-report.v0",
+  "identity": "smoke-gaussian-oracle-render-witness-v1",
+  "status": "passed",
+  "createdAt": "2026-07-16T09:17:26.486Z",
+  "hiddenBudgetCapApplied": false,
+  "fitReportPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-dual-bank-smoke-r1-0716/step-45/cameras/elevated-plus-35/oracle-fit-report.json",
+  "teacher": {
+    "raymarchPngPath": "/private/tmp/kaminos-handy-smoke-temporal-ceiling-0715/artifacts/temporal-gaussian-ceiling-0715/hostile-gradient4/sim-step-45/elevated-plus-35/teacher-640x455/dense-raymarch-smoke.png",
+    "raymarchSha256": "sha256:add0db5b11a226b26d9a1a779142a4e9c69ef5952f0716acd13ed93ba9b079ce",
+    "width": 640,
+    "height": 455,
+    "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+    "prototypeIdentity": "kaminos-volume-prototype-v0",
+    "backend": "WebGPU:apple",
+    "worldSpace": {
+      "coordinateFrame": "kaminos-volume-world-v0",
+      "transformAuthority": "native-volume-grid-world-transform-v0",
+      "bounds": {
+        "minimum": [
+          -1,
+          -1,
+          -1
+        ],
+        "maximum": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    "cameraIdentity": "sha256:31fff60f656e0b261563e0ff602f404edea4584002fe7c438fde064c328758c6",
+    "camera": {
+      "position": [
+        0.8922032569616167,
+        1.589690904672157,
+        1.5500141328570456
+      ],
+      "target": [
+        0,
+        0.02,
+        0
+      ],
+      "projectionMatrix": [
+        2.9306425807515972,
+        0,
+        0,
+        0,
+        0,
+        2.7474774194546225,
+        0,
+        0,
+        0,
+        0,
+        -1.0002000200020003,
+        -1,
+        0,
+        0,
+        -0.020002000200020003,
+        0
+      ],
+      "matrixWorldInverse": [
+        0.8666778489396199,
+        -0.3290757481412369,
+        0.37493820576553505,
+        0,
+        0,
+        0.7515776447431204,
+        0.6596446345740894,
+        0,
+        -0.49886822524329355,
+        -0.5716993929572334,
+        0.6513756964570734,
+        0,
+        0,
+        -0.015031552894862465,
+        -2.392793699549639,
+        1
+      ]
+    }
+  },
+  "renderer": {
+    "identity": "cpu-perspective-full-covariance-gaussian-smoke-v0",
+    "cameraAuthority": "checksum-bound-fit-teacher-camera-v0",
+    "cameraIdentity": "sha256:31fff60f656e0b261563e0ff602f404edea4584002fe7c438fde064c328758c6",
+    "compositorAuthority": "single-channel-smoke-luma-proxy-not-production-compositor-v0",
+    "projectionAuthority": "full-view-projection-jacobian-covariance-v0",
+    "scaleSelection": "explicit-extinction-scale-sweep-min-luma-mse-v0",
+    "requestedExtinctionScales": [
+      0.1,
+      0.2,
+      0.4
+    ],
+    "coverageSelection": "explicit-mass-preserving-covariance-dilation-sweep-min-luma-mse-v0",
+    "requestedCoverageScales": [
+      1,
+      1.5,
+      2
+    ]
+  },
+  "requestedBudgets": [
+    1024
+  ],
+  "budgetCurve": [
+    {
+      "requestedBudget": 1024,
+      "activeGaussianCount": 1024,
+      "selectedExtinctionScale": 0.2,
+      "selectedCoverageScale": 1.5,
+      "scaleSweep": [
+        0.1,
+        0.2,
+        0.4
+      ],
+      "coverageSweep": [
+        1,
+        1.5,
+        2
+      ],
+      "timing": {
+        "cpuProxyRenderMs": 531.5609999999999
+      },
+      "projectionDiagnostics": {
+        "identity": "perspective-full-covariance-overlap-diagnostics-v0",
+        "coverageScale": 1.5,
+        "requestedGaussianCount": 1024,
+        "visibleGaussianCount": 1024,
+        "rejectedGaussianCount": 0,
+        "rejectionReasons": {},
+        "supportPixelCount": 94997,
+        "singleContributorPixelCount": 8001,
+        "singleContributorPixelFraction": 0.08422371232775772,
+        "meanContributorsPerSupportPixel": 40.19694306135983,
+        "maxContributors": 230,
+        "meanPeakContributionFraction": 0.399484116170761,
+        "minimumProjectedCovarianceDeterminant": 29.96251799332772,
+        "maximumProjectedCovarianceDeterminant": 216595.00736120777
+      },
+      "gaussianArtifact": {
+        "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-dual-bank-smoke-r1-0716/step-45/budget-1024.gaussians.f32",
+        "identity": "sha256:89a07ba1b4bd6a18c8f7c31aa2458f8791070e529d79c8e7e34be9e651ecf4af"
+      },
+      "metrics": {
+        "lumaMse": 0.0000017737083826953757,
+        "lumaMae": 0.000396614443816754,
+        "renderMeanLuma": 0.0022866872060562644,
+        "teacherMeanLuma": 0.002062446208556239,
+        "renderActivePixels": 5757,
+        "teacherActivePixels": 5167,
+        "activePixelIoU": 0.8418479177204519
+      },
+      "support": {
+        "supportLeakageGaussianCount": 0,
+        "supportLeakageFraction": 0,
+        "maxThreeSigmaDiameter": 0.2956721546447026
+      },
+      "images": {
+        "renderPngPath": "artifacts/pyro-dual-bank-smoke-r1-0716/step-45/renders/elevated-plus-35/budget-1024.perspective-render.png",
+        "diffPngPath": "artifacts/pyro-dual-bank-smoke-r1-0716/step-45/renders/elevated-plus-35/budget-1024.perspective-diff.png"
+      }
+    }
+  ],
+  "contactSheet": {
+    "path": "artifacts/pyro-dual-bank-smoke-r1-0716/step-45/renders/elevated-plus-35/perspective-render-contact-sheet.png",
+    "sha256": "sha256:0ca968e20ddb1397d166ed80ff7aa3acd13eac74a04ceb50448576267f21bb25",
+    "layout": "columns: teacher-raymarch | gaussian-proxy-render | abs-luma-diff; rows: requested budgets",
+    "inspected": false,
+    "inspectionNote": null
+  },
+  "reportPath": "artifacts/pyro-dual-bank-smoke-r1-0716/step-45/renders/elevated-plus-35/render-witness-report.json",
+  "reportIdentity": "sha256:fedc65eb3af99e6e789c720ef52774640ba4fb755f3777dfcbe4dd84b7fb40a7"
+}

@@ -596,10 +596,16 @@ function extractDenseSmokeIndices(frame, densityThreshold, structureGradientGain
   };
 }
 
+function extinctionWeight(source, cellIndex) {
+  return source.extinctionWeights
+    ? source.extinctionWeights[cellIndex]
+    : source.frame.field[cellIndex * KAMINOS_FLUID_CHANNEL_ORDER.length + CHANNEL.smokeDensity];
+}
+
 function allocationWeight(source, cellIndex) {
-  const density = source.frame.field[cellIndex * KAMINOS_FLUID_CHANNEL_ORDER.length + CHANNEL.smokeDensity];
-  if (!(source.structureGradientGain > 0)) return density;
-  return density * (1 + source.structureGradientGain * source.normalizedSmokeGradients[cellIndex]);
+  const extinction = extinctionWeight(source, cellIndex);
+  if (!(source.structureGradientGain > 0)) return extinction;
+  return extinction * (1 + source.structureGradientGain * source.normalizedSmokeGradients[cellIndex]);
 }
 
 function gaussianForDenseIndices(source, indices) {
@@ -616,7 +622,7 @@ function gaussianForDenseIndices(source, indices) {
     const [x, y, z] = cellCoordinates(cellIndex, grid);
     const position = [x, y, z].map((coordinate, axis) => bounds.minimum[axis] + (coordinate + 0.5) * cellSize[axis]);
     const offset = cellIndex * stride;
-    const weight = field[offset + CHANNEL.smokeDensity];
+    const weight = extinctionWeight(source, cellIndex);
     mass += weight;
     first[0] += position[0] * weight;
     first[1] += position[1] * weight;
@@ -700,8 +706,7 @@ export function chooseLegalWeightedSplitCut(counts, masses, leafCount) {
 }
 
 function splitDenseLeaf(source, leaf) {
-  const { grid, field } = source.frame;
-  const stride = KAMINOS_FLUID_CHANNEL_ORDER.length;
+  const { grid } = source.frame;
   let allocationVariances = [leaf.gaussian.covariance[0], leaf.gaussian.covariance[3], leaf.gaussian.covariance[5]];
   if (source.structureGradientGain > 0) {
     const weightSums = [0, 0, 0];
@@ -726,9 +731,7 @@ function splitDenseLeaf(source, leaf) {
     const masses = new Float64Array(grid);
     for (const cellIndex of leaf.indices) {
       const coordinate = cellCoordinates(cellIndex, grid)[axis];
-      const weight = source.structureGradientGain > 0
-        ? allocationWeight(source, cellIndex)
-        : field[cellIndex * stride + CHANNEL.smokeDensity];
+      const weight = allocationWeight(source, cellIndex);
       counts[coordinate] += 1;
       masses[coordinate] += weight;
     }
@@ -897,6 +900,175 @@ async function recursiveMomentBudgetCurve({ frame, requestedBudgets, densityThre
   return { source, budgetCurve };
 }
 
+function recursivePrincipalBank(source, budget) {
+  if (!Number.isInteger(budget) || budget <= 0) throw new Error(`dual-bank principal budget must be a positive integer, got ${budget}`);
+  if (budget > source.activeVoxelCount) {
+    throw new Error(`dual-bank ${source.bankIdentity} budget ${budget} exceeds positive-mass voxel count ${source.activeVoxelCount}; refusing to substitute a hidden cap`);
+  }
+  const leaves = [makeDenseLeaf(source, source.indices)];
+  const partition = {
+    authority: 'leaf-covariance-principal-axis-distinct-projection-weighted-median-v1',
+    splitCount: 0,
+    obliqueSplitCount: 0,
+    axisAlignedSplitCount: 0,
+    minimumCutProjectionGap: Infinity,
+    tiedProjectionBoundaryCount: 0,
+  };
+  while (leaves.length < budget) {
+    let splitIndex = -1;
+    let maximumSse = -Infinity;
+    for (let index = 0; index < leaves.length; index += 1) {
+      if (leaves[index].indices.length <= 1) continue;
+      if (leaves[index].massWeightedSse > maximumSse) {
+        maximumSse = leaves[index].massWeightedSse;
+        splitIndex = index;
+      }
+    }
+    if (splitIndex < 0) throw new Error(`cannot reach dual-bank ${source.bankIdentity} budget ${budget} without substituting active count`);
+    const result = splitDenseLeafAlongPrincipalAxis(source, leaves[splitIndex]);
+    if (result.split.oblique) partition.obliqueSplitCount += 1;
+    else partition.axisAlignedSplitCount += 1;
+    partition.minimumCutProjectionGap = Math.min(partition.minimumCutProjectionGap, result.split.projectionGap);
+    partition.tiedProjectionBoundaryCount += result.split.tiedProjectionBoundaryCount;
+    leaves.splice(splitIndex, 1, ...result.children);
+  }
+  partition.splitCount = leaves.length - 1;
+  partition.minimumCutProjectionGap = Number.isFinite(partition.minimumCutProjectionGap)
+    ? partition.minimumCutProjectionGap
+    : null;
+  return { leaves, partition };
+}
+
+function buildDualBankSources(frame, densityThreshold, detailMassFraction) {
+  const measured = extractDenseSmokeIndices(frame, densityThreshold, 1);
+  const coarseWeights = new Float64Array(frame.grid ** 3);
+  const detailWeights = new Float64Array(frame.grid ** 3);
+  const stride = KAMINOS_FLUID_CHANNEL_ORDER.length;
+  let coarseExtinction = 0;
+  let detailExtinction = 0;
+  let maximumCoarseWeight = 0;
+  let maximumDetailWeight = 0;
+  for (const cellIndex of measured.indices) {
+    const density = frame.field[cellIndex * stride + CHANNEL.smokeDensity];
+    const detail = density * detailMassFraction * measured.normalizedSmokeGradients[cellIndex];
+    const coarse = density - detail;
+    coarseWeights[cellIndex] = coarse;
+    detailWeights[cellIndex] = detail;
+    coarseExtinction += coarse;
+    detailExtinction += detail;
+    maximumCoarseWeight = Math.max(maximumCoarseWeight, coarse);
+    maximumDetailWeight = Math.max(maximumDetailWeight, detail);
+  }
+  const sourceFor = (bankIdentity, extinctionWeights, totalSmokeExtinction, maxSmokeDensity) => {
+    const indices = Int32Array.from(measured.indices.filter(cellIndex => extinctionWeights[cellIndex] > 0));
+    if (indices.length === 0 || !(totalSmokeExtinction > 0)) throw new Error(`dual-bank ${bankIdentity} source has no positive extinction mass`);
+    return {
+      ...measured,
+      indices,
+      activeVoxelCount: indices.length,
+      totalSmokeExtinction,
+      maxSmokeDensity,
+      structureGradientGain: 0,
+      extinctionWeights,
+      bankIdentity,
+    };
+  };
+  return {
+    source: { ...measured, structureGradientGain: 0 },
+    coarse: sourceFor('coarse-support', coarseWeights, coarseExtinction, maximumCoarseWeight),
+    detail: sourceFor('gradient-detail', detailWeights, detailExtinction, maximumDetailWeight),
+  };
+}
+
+async function recursiveDualBankBudgetCurve({
+  frame,
+  requestedBudgets,
+  densityThreshold,
+  outDir,
+  detailBudgetFraction,
+  detailMassFraction,
+}) {
+  const sources = buildDualBankSources(frame, densityThreshold, detailMassFraction);
+  const budgetCurve = [];
+  for (const budget of requestedBudgets) {
+    const detailBudget = budget * detailBudgetFraction;
+    const coarseBudget = budget - detailBudget;
+    if (!Number.isInteger(detailBudget) || !Number.isInteger(coarseBudget) || detailBudget <= 0 || coarseBudget <= 0) {
+      throw new Error(`dual-bank budget ${budget} and detailBudgetFraction ${detailBudgetFraction} must produce positive integer coarse and detail budgets`);
+    }
+    const coarse = recursivePrincipalBank(sources.coarse, coarseBudget);
+    const detail = recursivePrincipalBank(sources.detail, detailBudget);
+    const coarseGaussians = coarse.leaves.map(leaf => leaf.gaussian).sort((left, right) => (
+      left.position[0] - right.position[0]
+      || left.position[1] - right.position[1]
+      || left.position[2] - right.position[2]
+    ));
+    const detailGaussians = detail.leaves.map(leaf => leaf.gaussian).sort((left, right) => (
+      left.position[0] - right.position[0]
+      || left.position[1] - right.position[1]
+      || left.position[2] - right.position[2]
+    ));
+    const gaussians = [...coarseGaussians, ...detailGaussians];
+    const coarseAssignedExtinction = coarseGaussians.reduce((sum, gaussian) => sum + gaussian.extinctionMass, 0);
+    const detailAssignedExtinction = detailGaussians.reduce((sum, gaussian) => sum + gaussian.extinctionMass, 0);
+    const totalAssignedExtinction = coarseAssignedExtinction + detailAssignedExtinction;
+    const massWeightedSse = [...coarse.leaves, ...detail.leaves].reduce((sum, leaf) => sum + leaf.massWeightedSse, 0);
+    const artifact = await writeGaussianArtifact(outDir, budget, gaussians);
+    budgetCurve.push({
+      requestedBudget: budget,
+      activeGaussianCount: gaussians.length,
+      iterationCount: 0,
+      splitCount: gaussians.length - 2,
+      totalAssignedExtinction,
+      massWeightedSse,
+      structureWeightedSse: massWeightedSse,
+      meanSquaredErrorPerExtinction: massWeightedSse / Math.max(sources.source.totalSmokeExtinction, 1e-12),
+      extinctionAccounting: {
+        teacherTotalExtinction: sources.source.totalSmokeExtinction,
+        representedExtinction: totalAssignedExtinction,
+        absoluteError: Math.abs(totalAssignedExtinction - sources.source.totalSmokeExtinction),
+        relativeError: Math.abs(totalAssignedExtinction - sources.source.totalSmokeExtinction) / Math.max(sources.source.totalSmokeExtinction, 1e-12),
+      },
+      bankAccounting: {
+        authority: 'explicit-positive-coarse-gradient-detail-extinction-partition-v0',
+        detailBudgetFraction,
+        detailMassFraction,
+        coarse: {
+          identity: sources.coarse.bankIdentity,
+          requestedBudget: coarseBudget,
+          activeGaussianCount: coarseGaussians.length,
+          activeVoxelCount: sources.coarse.activeVoxelCount,
+          totalAssignedExtinction: coarseAssignedExtinction,
+          artifactRowRange: [0, coarseGaussians.length],
+        },
+        detail: {
+          identity: sources.detail.bankIdentity,
+          requestedBudget: detailBudget,
+          activeGaussianCount: detailGaussians.length,
+          activeVoxelCount: sources.detail.activeVoxelCount,
+          totalAssignedExtinction: detailAssignedExtinction,
+          artifactRowRange: [coarseGaussians.length, gaussians.length],
+        },
+      },
+      covariance: {
+        axisSystem: 'jacobi-eigenbasis-3x3-v0',
+        minRadius: Math.min(...gaussians.flatMap(gaussian => gaussian.radii)),
+        maxRadius: Math.max(...gaussians.flatMap(gaussian => gaussian.radii)),
+        maxEigenValue: Math.max(...gaussians.flatMap(gaussian => gaussian.eigenValues)),
+      },
+      support: supportDiagnostics(gaussians, sources.source.bounds),
+      partition: {
+        authority: 'independent-coarse-and-gradient-detail-principal-banks-v0',
+        coarse: coarse.partition,
+        detail: detail.partition,
+      },
+      artifact,
+      preview: gaussians.slice(0, 8),
+    });
+  }
+  return { source: sources.source, budgetCurve };
+}
+
 function packGaussians(gaussians) {
   const channelOrder = [
     'positionX', 'positionY', 'positionZ',
@@ -1041,6 +1213,8 @@ export async function fitSmokeGaussianOracleFrame({
   warmStartReportPath = null,
   maxCenterResidual = null,
   structureGradientGain = null,
+  detailBudgetFraction = null,
+  detailMassFraction = null,
 } = {}) {
   const startedAt = performance.now();
   if (!manifestPath) throw new Error('manifestPath is required');
@@ -1048,14 +1222,32 @@ export async function fitSmokeGaussianOracleFrame({
   const requestedBudgets = normalizeBudgets(budgets);
   const iterations = Math.max(1, Math.floor(Number(maxIterations) || 12));
   const threshold = Math.max(0, Number(densityThreshold) || 0);
-  if (!['weighted-kmeans', 'recursive-moment-split', 'recursive-gradient-moment-split', 'recursive-principal-moment-split', 'recursive-gradient-principal-moment-split'].includes(optimizerStrategy)) throw new Error(`unsupported optimizer strategy ${optimizerStrategy}`);
+  if (!['weighted-kmeans', 'recursive-moment-split', 'recursive-gradient-moment-split', 'recursive-principal-moment-split', 'recursive-gradient-principal-moment-split', 'recursive-dual-bank-principal-moment-split'].includes(optimizerStrategy)) throw new Error(`unsupported optimizer strategy ${optimizerStrategy}`);
   if (warmStartReportPath && optimizerStrategy !== 'weighted-kmeans') throw new Error('warm start is only supported by weighted-kmeans');
-  const recursiveStrategy = ['recursive-moment-split', 'recursive-gradient-moment-split', 'recursive-principal-moment-split', 'recursive-gradient-principal-moment-split'].includes(optimizerStrategy);
+  const dualBankStrategy = optimizerStrategy === 'recursive-dual-bank-principal-moment-split';
+  const recursiveStrategy = ['recursive-moment-split', 'recursive-gradient-moment-split', 'recursive-principal-moment-split', 'recursive-gradient-principal-moment-split', 'recursive-dual-bank-principal-moment-split'].includes(optimizerStrategy);
   const gradientStrategy = ['recursive-gradient-moment-split', 'recursive-gradient-principal-moment-split'].includes(optimizerStrategy);
   const principalStrategy = ['recursive-principal-moment-split', 'recursive-gradient-principal-moment-split'].includes(optimizerStrategy);
   const gradientGain = gradientStrategy ? Number(structureGradientGain) : 0;
   if (gradientStrategy && (!(gradientGain > 0) || !Number.isFinite(gradientGain))) {
     throw new Error('recursive gradient moment split requires a positive finite structureGradientGain');
+  }
+  const effectiveDetailBudgetFraction = dualBankStrategy ? Number(detailBudgetFraction) : null;
+  const effectiveDetailMassFraction = dualBankStrategy ? Number(detailMassFraction) : null;
+  if (dualBankStrategy && (!(effectiveDetailBudgetFraction > 0) || !(effectiveDetailBudgetFraction < 1) || !Number.isFinite(effectiveDetailBudgetFraction))) {
+    throw new Error('recursive dual-bank principal split requires detailBudgetFraction strictly between zero and one');
+  }
+  if (dualBankStrategy && (!(effectiveDetailMassFraction > 0) || !(effectiveDetailMassFraction <= 1) || !Number.isFinite(effectiveDetailMassFraction))) {
+    throw new Error('recursive dual-bank principal split requires detailMassFraction greater than zero and at most one');
+  }
+  if (dualBankStrategy) {
+    for (const budget of requestedBudgets) {
+      const detailBudget = budget * effectiveDetailBudgetFraction;
+      const coarseBudget = budget - detailBudget;
+      if (!Number.isInteger(detailBudget) || !Number.isInteger(coarseBudget) || detailBudget <= 0 || coarseBudget <= 0) {
+        throw new Error(`dual-bank budget ${budget} and detailBudgetFraction ${effectiveDetailBudgetFraction} must produce positive integer coarse and detail budgets`);
+      }
+    }
   }
   const residualLimit = warmStartReportPath ? Number(maxCenterResidual) : null;
   if (warmStartReportPath && (!(residualLimit > 0) || !Number.isFinite(residualLimit))) throw new Error('warm start requires a positive finite maxCenterResidual');
@@ -1065,7 +1257,18 @@ export async function fitSmokeGaussianOracleFrame({
   const warmStart = warmStartReportPath ? await loadWarmStartReport(warmStartReportPath, requestedBudgets, frame) : null;
   let smoke;
   let budgetCurve;
-  if (recursiveStrategy) {
+  if (dualBankStrategy) {
+    const recursive = await recursiveDualBankBudgetCurve({
+      frame,
+      requestedBudgets,
+      densityThreshold: threshold,
+      outDir,
+      detailBudgetFraction: effectiveDetailBudgetFraction,
+      detailMassFraction: effectiveDetailMassFraction,
+    });
+    smoke = recursive.source;
+    budgetCurve = recursive.budgetCurve;
+  } else if (recursiveStrategy) {
     const recursive = await recursiveMomentBudgetCurve({
       frame,
       requestedBudgets,
@@ -1124,6 +1327,8 @@ export async function fitSmokeGaussianOracleFrame({
     optimizer: {
       identity: warmStart
         ? 'warm-started-weighted-kmeans-anisotropic-moment-fit-v0'
+        : optimizerStrategy === 'recursive-dual-bank-principal-moment-split'
+        ? 'recursive-dual-bank-principal-axis-moment-split-v0'
         : optimizerStrategy === 'recursive-gradient-principal-moment-split'
         ? 'recursive-gradient-principal-axis-moment-split-v0'
         : optimizerStrategy === 'recursive-principal-moment-split'
@@ -1139,14 +1344,18 @@ export async function fitSmokeGaussianOracleFrame({
       covarianceAuthority: 'cluster-smoke-density-weighted-world-covariance',
       sampleSelectionAuthority: 'all-voxels-above-explicit-density-threshold-no-subsampling-v0',
       structureGradientGain: gradientStrategy ? gradientGain : null,
-      allocationAuthority: optimizerStrategy === 'recursive-gradient-principal-moment-split'
+      detailBudgetFraction: dualBankStrategy ? effectiveDetailBudgetFraction : null,
+      detailMassFraction: dualBankStrategy ? effectiveDetailMassFraction : null,
+      allocationAuthority: optimizerStrategy === 'recursive-dual-bank-principal-moment-split'
+        ? 'positive-coarse-plus-normalized-gradient-detail-mass-principal-banks-v0'
+        : optimizerStrategy === 'recursive-gradient-principal-moment-split'
         ? 'density-times-one-plus-normalized-smoke-gradient-gain-principal-axis-sse-v0'
         : optimizerStrategy === 'recursive-gradient-moment-split'
         ? 'density-times-one-plus-normalized-smoke-gradient-gain-v0'
         : optimizerStrategy === 'recursive-principal-moment-split'
         ? 'smoke-density-mass-weighted-principal-axis-sse-v0'
         : 'smoke-density-mass-weighted-sse-v0',
-      gradientDiagnostics: gradientStrategy ? smoke.gradientDiagnostics : null,
+      gradientDiagnostics: gradientStrategy || dualBankStrategy ? smoke.gradientDiagnostics : null,
     },
     warmStart: warmStart ? {
       authority: 'prior-static-fit-artifact-bounded-residual-v0',
@@ -1204,6 +1413,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const warmStartReportPath = args.get('--warm-start-report') || null;
   const maxCenterResidual = args.has('--max-center-residual') ? Number(args.get('--max-center-residual')) : null;
   const structureGradientGain = args.has('--structure-gradient-gain') ? Number(args.get('--structure-gradient-gain')) : null;
+  const detailBudgetFraction = args.has('--detail-budget-fraction') ? Number(args.get('--detail-budget-fraction')) : null;
+  const detailMassFraction = args.has('--detail-mass-fraction') ? Number(args.get('--detail-mass-fraction')) : null;
   try {
     const report = await fitSmokeGaussianOracleFrame({
       manifestPath,
@@ -1216,6 +1427,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       warmStartReportPath,
       maxCenterResidual,
       structureGradientGain,
+      detailBudgetFraction,
+      detailMassFraction,
     });
     console.log(JSON.stringify(report, null, 2));
   } catch (error) {
