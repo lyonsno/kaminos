@@ -15,6 +15,10 @@ import {
   SELECTIVE_HEAD_LIVE_ROUTE,
   createSelectiveHeadLiveRuntime,
 } from './selective-head-live-runtime.mjs';
+import {
+  COMBUSTIBLE_OBJECT_FIRE_ROUTE,
+  createCombustibleObjectFireReceiver,
+} from './combustible-object-fire-gpu.mjs';
 
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
@@ -45,9 +49,246 @@ const TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY = 'truth-oracle-scalar-activity-re
 const TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY = 'truth-high-diagnostic-activity-projected-to-receiver-grid-v0';
 const PROCEDURAL_ACTIVITY_CUE_AUTHORITY = 'procedural-receiver-activity-proxy-no-truth-v0';
 const SCALAR_ACTIVITY_RECEIVER_HOOK_IDENTITY = 'scalar-activity-receiver-hook-controls-v0';
+export const COMBUSTIBLE_OBJECT_FIRE_RECEIVER_SCHEMA = 'kaminos.pyro-combustible-object-source-consumer.v0';
+export const COMBUSTIBLE_OBJECT_FIRE_RECEIVER_TRANSFORM_ID = 'affine-object-world-to-pyro-near-domain-v0';
+const COMBUSTIBLE_OBJECT_SOURCE_SCHEMA = 'kaminos.combustible-object-source-descriptor.v0';
+const COMBUSTIBLE_OBJECT_SOURCE_PACKING = 'gpu-sparse-combustible-object-source-vec4x8-v0';
 const REACTION_FRONT_STAGE_IDENTITY = 'reaction-front-stage-fields-v0';
 const REACTION_FRONT_ATLAS_SCHEMA = 'kaminos.volume.reaction-front-atlas.v0';
 const BROWSER_RESIDUAL_FEATURE_AUTHORITY = 'shader-material-authority-residual-feature-v0';
+
+function combustibleObjectNonnegativeInteger(value, label) {
+  const integer = Number(value);
+  if (!Number.isInteger(integer) || integer < 0) throw new Error(`${label} must be a nonnegative integer`);
+  return integer;
+}
+
+function combustibleObjectFiniteVector(value, length, label) {
+  if (!Array.isArray(value) || value.length !== length) throw new Error(`${label} must contain ${length} finite values`);
+  const result = value.map(Number);
+  if (result.some(component => !Number.isFinite(component))) throw new Error(`${label} must contain ${length} finite values`);
+  return result;
+}
+
+function combustibleObjectStable(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Number(number.toFixed(12)) : 0;
+}
+
+export function validateCombustibleObjectSourceDescriptor(descriptor, {
+  device,
+  expectedGeneration = null,
+  expectedTopologyEpoch = null,
+} = {}) {
+  if (!descriptor || typeof descriptor !== 'object') throw new Error('Combustible object source descriptor is required');
+  if (descriptor.schema !== COMBUSTIBLE_OBJECT_SOURCE_SCHEMA) throw new Error('Combustible object source descriptor schema mismatch');
+  if (descriptor.packing !== COMBUSTIBLE_OBJECT_SOURCE_PACKING) throw new Error('Combustible object source descriptor packing mismatch');
+  if (!device || descriptor.device !== device) throw new Error('Combustible object source descriptor must use the same GPUDevice as Pyro');
+  if (descriptor.queue !== device.queue) throw new Error('Combustible object source descriptor must use the same GPUQueue as Pyro');
+  if (!descriptor.headerBuffer || !descriptor.recordsBuffer) throw new Error('Combustible object source GPU buffers are unavailable');
+  if (descriptor.headerBytes !== 80 || descriptor.recordBytes !== 128 || descriptor.recordFloats !== 32) {
+    throw new Error('Combustible object source descriptor byte layout mismatch');
+  }
+  const capacity = combustibleObjectNonnegativeInteger(descriptor.capacity, 'Combustible object source capacity');
+  if (capacity < 1) throw new Error('Combustible object source descriptor must have positive capacity');
+  const allocationGeneration = combustibleObjectNonnegativeInteger(descriptor.allocationGeneration, 'Combustible object source generation');
+  const topologyEpoch = combustibleObjectNonnegativeInteger(descriptor.topologyEpoch, 'Combustible object topology epoch');
+  combustibleObjectNonnegativeInteger(descriptor.materialStep, 'Combustible object material step');
+  combustibleObjectNonnegativeInteger(descriptor.writeTick, 'Combustible object source write tick');
+  if (expectedGeneration !== null && allocationGeneration !== combustibleObjectNonnegativeInteger(expectedGeneration, 'Expected combustible object generation')) {
+    throw new Error(`Combustible object source generation mismatch: expected ${expectedGeneration}, received ${allocationGeneration}`);
+  }
+  if (expectedTopologyEpoch !== null && topologyEpoch !== combustibleObjectNonnegativeInteger(expectedTopologyEpoch, 'Expected combustible object topology epoch')) {
+    throw new Error(`Combustible object topology epoch mismatch: expected ${expectedTopologyEpoch}, received ${topologyEpoch}`);
+  }
+  if (!Number.isInteger(descriptor.sourceFrameHash) || descriptor.sourceFrameHash === 0 || !String(descriptor.sourceFrameId || '')) {
+    throw new Error('Combustible object source frame identity is unavailable');
+  }
+  if (!String(descriptor.transformId || '')) throw new Error('Combustible object transform identity is unavailable');
+  combustibleObjectFiniteVector(descriptor.objectToWorld, 16, 'Combustible object object-to-world transform');
+  const sourceCount = combustibleObjectNonnegativeInteger(descriptor.sourceCount, 'Combustible object source count');
+  const packedCount = combustibleObjectNonnegativeInteger(descriptor.packedCount, 'Combustible object packed count');
+  const rejectedCount = combustibleObjectNonnegativeInteger(descriptor.rejectedCount, 'Combustible object rejected count');
+  const overflowCount = combustibleObjectNonnegativeInteger(descriptor.overflowCount, 'Combustible object overflow count');
+  const malformedCount = combustibleObjectNonnegativeInteger(descriptor.malformedCount, 'Combustible object malformed count');
+  if (overflowCount > 0) throw new Error(`Combustible object source overflow is not consumable: ${overflowCount} record(s)`);
+  if (malformedCount > 0) throw new Error(`Combustible object malformed source records are not consumable: ${malformedCount}`);
+  if (sourceCount !== packedCount + rejectedCount + overflowCount) throw new Error('Combustible object source count accounting mismatch');
+  if (packedCount > capacity || !Array.isArray(descriptor.records) || descriptor.records.length !== packedCount) {
+    throw new Error('Combustible object packed record accounting mismatch');
+  }
+  const emittedVolatileMass = Number(descriptor.emittedVolatileMass);
+  const emittedFuelMass = Number(descriptor.emittedFuelMass);
+  const emittedSootMass = Number(descriptor.emittedSootMass);
+  if (![emittedVolatileMass, emittedFuelMass, emittedSootMass].every(value => Number.isFinite(value) && value >= 0)) {
+    throw new Error('Combustible object material accounting is invalid');
+  }
+  if (Math.abs(emittedVolatileMass - emittedFuelMass - emittedSootMass) > 1e-9 || Math.abs(Number(descriptor.accountingResidual)) > 1e-9) {
+    throw new Error('Combustible object volatile mass accounting mismatch');
+  }
+  return descriptor;
+}
+
+function combustibleObjectTransformPoint(matrix, point) {
+  return [
+    matrix[0] * point[0] + matrix[4] * point[1] + matrix[8] * point[2] + matrix[12],
+    matrix[1] * point[0] + matrix[5] * point[1] + matrix[9] * point[2] + matrix[13],
+    matrix[2] * point[0] + matrix[6] * point[1] + matrix[10] * point[2] + matrix[14],
+  ];
+}
+
+function combustibleObjectReceiverRadius(objectToWorld, receiverScale, localRadius) {
+  const radius = Number(localRadius);
+  if (!Number.isFinite(radius) || radius < 0) throw new Error('Combustible object source radius must be finite and nonnegative');
+  const columnLengths = [0, 1, 2].map(column => {
+    const offset = column * 4;
+    return Math.hypot(
+      objectToWorld[offset] * receiverScale[0],
+      objectToWorld[offset + 1] * receiverScale[1],
+      objectToWorld[offset + 2] * receiverScale[2],
+    );
+  });
+  return radius * Math.max(...columnLengths);
+}
+
+function combustibleObjectSpatialKernel(receiverUnit, receiverRadius, grid) {
+  const supportRadius = Math.max(receiverRadius * 1.8, 1.5 / grid);
+  const sigma = Math.max(receiverRadius, 0.75 / grid);
+  const lower = receiverUnit.map(component => Math.max(0, Math.floor((component - supportRadius) * grid)));
+  const upper = receiverUnit.map(component => Math.min(grid - 1, Math.floor((component + supportRadius) * grid)));
+  const cells = [];
+  let rawWeightSum = 0;
+  for (let z = lower[2]; z <= upper[2]; z += 1) {
+    for (let y = lower[1]; y <= upper[1]; y += 1) {
+      for (let x = lower[0]; x <= upper[0]; x += 1) {
+        const center = [(x + 0.5) / grid, (y + 0.5) / grid, (z + 0.5) / grid];
+        const distanceSquared = center.reduce((sum, component, index) => {
+          const delta = component - receiverUnit[index];
+          return sum + delta * delta;
+        }, 0);
+        if (distanceSquared > supportRadius * supportRadius) continue;
+        const rawWeight = Math.exp(-distanceSquared / (sigma * sigma));
+        rawWeightSum += rawWeight;
+        cells.push({ cell: [x, y, z], cellIndex: x + y * grid + z * grid * grid, rawWeight });
+      }
+    }
+  }
+  if (!(rawWeightSum > 0) || cells.length === 0) throw new Error('Combustible object spatial kernel resolved no receiver cells');
+  return cells.map(cell => ({ ...cell, weight: cell.rawWeight / rawWeightSum }));
+}
+
+function emptyCombustibleObjectTransfer(status, lastConsumedTick, source = {}) {
+  return {
+    ok: false,
+    status,
+    lastConsumedTick,
+    expectedGeneration: source.expectedGeneration ?? null,
+    expectedTopologyEpoch: source.expectedTopologyEpoch ?? null,
+    acceptedRecords: 0,
+    rejectedRecords: 0,
+    touchedCells: 0,
+    injectedHeat: 0,
+    injectedFuel: 0,
+    injectedSoot: 0,
+    sourceVolatileMass: 0,
+    acceptedVolatileMass: 0,
+    rejectedVolatileMass: 0,
+    accountingResidual: 0,
+    accepted: [],
+  };
+}
+
+export function consumeCombustibleObjectSourceTickReference(state = {}, descriptor, {
+  device,
+  transform,
+  gridSize = 32,
+  transfer = [1, 1, 1, 1],
+} = {}) {
+  const expectedGeneration = state.expectedGeneration ?? descriptor?.allocationGeneration;
+  const expectedTopologyEpoch = state.expectedTopologyEpoch ?? descriptor?.topologyEpoch;
+  validateCombustibleObjectSourceDescriptor(descriptor, { device, expectedGeneration, expectedTopologyEpoch });
+  if (transform?.id !== COMBUSTIBLE_OBJECT_FIRE_RECEIVER_TRANSFORM_ID) {
+    throw new Error(`Combustible object receiver transform identity mismatch: ${String(transform?.id || 'missing')}`);
+  }
+  const scale = combustibleObjectFiniteVector(transform.scale, 3, 'Combustible object receiver scale');
+  const offset = combustibleObjectFiniteVector(transform.offset, 3, 'Combustible object receiver offset');
+  const grid = combustibleObjectNonnegativeInteger(gridSize, 'Combustible object receiver grid');
+  if (grid < 4) throw new Error('Combustible object receiver grid must be at least 4');
+  const fieldTransfer = combustibleObjectFiniteVector(transfer, 4, 'Combustible object field transfer');
+  if (fieldTransfer.some(component => component < 0)) throw new Error('Combustible object field transfer must be nonnegative');
+  const lastConsumedTick = combustibleObjectNonnegativeInteger(state.lastConsumedTick ?? 0, 'Last consumed combustible object tick');
+  if (descriptor.writeTick <= lastConsumedTick) {
+    return emptyCombustibleObjectTransfer('stale-source-tick', lastConsumedTick, { expectedGeneration, expectedTopologyEpoch });
+  }
+  if (descriptor.packedCount === 0) {
+    return {
+      ...emptyCombustibleObjectTransfer('fresh-no-exchange', descriptor.writeTick, { expectedGeneration, expectedTopologyEpoch }),
+      sourceVolatileMass: combustibleObjectStable(descriptor.emittedVolatileMass),
+    };
+  }
+
+  const accepted = [];
+  const touched = new Set();
+  let rejectedRecords = descriptor.rejectedCount;
+  let injectedHeat = 0;
+  let injectedFuel = 0;
+  let injectedSoot = 0;
+  let acceptedVolatileMass = 0;
+  let rejectedVolatileMass = Number(descriptor.rejectedVolatileMass) || 0;
+  for (const record of descriptor.records) {
+    const local = combustibleObjectFiniteVector(record.localPositionRadius, 4, 'Combustible object source record position');
+    const emission = combustibleObjectFiniteVector(record.emission, 4, 'Combustible object source record emission');
+    const world = combustibleObjectTransformPoint(descriptor.objectToWorld, local);
+    const receiverUnit = world.map((component, index) => component * scale[index] + offset[index]);
+    const recordVolatileMass = Math.max(0, emission[1]) + Math.max(0, emission[2]);
+    if (receiverUnit.some(component => component < 0 || component > 1)) {
+      rejectedRecords += 1;
+      rejectedVolatileMass += recordVolatileMass;
+      continue;
+    }
+    const cell = receiverUnit.map(component => Math.min(grid - 1, Math.floor(component * grid)));
+    const cellIndex = cell[0] + cell[1] * grid + cell[2] * grid * grid;
+    const receiverRadius = combustibleObjectReceiverRadius(descriptor.objectToWorld, scale, local[3]);
+    const kernel = combustibleObjectSpatialKernel(receiverUnit, receiverRadius, grid);
+    kernel.forEach(entry => touched.add(entry.cellIndex));
+    const kernelWeightSum = kernel.reduce((sum, entry) => sum + entry.weight, 0);
+    injectedHeat += Math.max(0, emission[0]) * fieldTransfer[0];
+    injectedFuel += Math.max(0, emission[1]) * fieldTransfer[1];
+    injectedSoot += Math.max(0, emission[2]) * fieldTransfer[2];
+    acceptedVolatileMass += recordVolatileMass;
+    accepted.push({
+      receiverUnit: receiverUnit.map(combustibleObjectStable),
+      receiverRadius: combustibleObjectStable(receiverRadius),
+      cell,
+      cellIndex,
+      kernelCellCount: kernel.length,
+      kernelWeightSum: combustibleObjectStable(kernelWeightSum),
+      heat: combustibleObjectStable(Math.max(0, emission[0]) * fieldTransfer[0]),
+      fuel: combustibleObjectStable(Math.max(0, emission[1]) * fieldTransfer[1]),
+      soot: combustibleObjectStable(Math.max(0, emission[2]) * fieldTransfer[2]),
+    });
+  }
+  const sourceVolatileMass = Number(descriptor.emittedVolatileMass) || 0;
+  const accountingResidualRaw = sourceVolatileMass - acceptedVolatileMass - rejectedVolatileMass;
+  return {
+    ok: accepted.length > 0,
+    status: accepted.length > 0 ? 'applied' : 'fresh-no-contact',
+    lastConsumedTick: descriptor.writeTick,
+    expectedGeneration,
+    expectedTopologyEpoch,
+    acceptedRecords: accepted.length,
+    rejectedRecords,
+    touchedCells: touched.size,
+    injectedHeat: combustibleObjectStable(injectedHeat),
+    injectedFuel: combustibleObjectStable(injectedFuel),
+    injectedSoot: combustibleObjectStable(injectedSoot),
+    sourceVolatileMass: combustibleObjectStable(sourceVolatileMass),
+    acceptedVolatileMass: combustibleObjectStable(acceptedVolatileMass),
+    rejectedVolatileMass: combustibleObjectStable(rejectedVolatileMass),
+    accountingResidual: Math.abs(accountingResidualRaw) < 1e-9 ? 0 : combustibleObjectStable(accountingResidualRaw),
+    accepted,
+  };
+}
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160];
 const SELECTIVE_HEAD_LIVE_ROLES = new Set(['off', 'truthHigh', 'lowPhaseAligned', 'selectiveFullResidual']);
@@ -5345,6 +5586,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     externalEmitterCount: 0,
     externalEmitterAgeMs: null,
     externalEmitterFrameId: null,
+    combustibleObjectSource: null,
     scalarActivityReceiver: null,
     temporalAccumEffective: 0,
     temporalReprojectionConfidence: 0,
@@ -5747,6 +5989,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let uniformBuffer = null;
   let externalEmitterBuffer = null;
   let externalEmitterState = normalizeExternalEmitters();
+  let combustibleObjectSourceReceiver = null;
   let volumePrimitives = [];
   let majorantBuffer = null;
   let boundarySidecarBuffer = null;
@@ -6253,6 +6496,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pressureWriteBindGroup = null;
     pressureJacobiBindGroups = [];
     pressureReadBindGroups = [];
+    if (combustibleObjectSourceReceiver && combustibleObjectSourceReceiver.gridSize !== gridSize) {
+      combustibleObjectSourceReceiver.destroy();
+      combustibleObjectSourceReceiver = null;
+      state.combustibleObjectSource = combustibleObjectSourceDebug('receiver-grid-rebuilt');
+    }
   }
 
   function destroyMajorantState() {
@@ -8453,6 +8701,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function encodeSim(encoder, options = {}) {
+    if (combustibleObjectSourceReceiver && fluidBuffers[currentFluid]) {
+      combustibleObjectSourceReceiver.encode(encoder, fluidBuffers[currentFluid]);
+      state.combustibleObjectSource = combustibleObjectSourceDebug();
+    }
     const pass = encoder.beginComputePass({
       label: 'kaminos fluid sim pass',
       ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
@@ -8470,6 +8722,32 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     encodePressureProjection(encoder);
     state.simStepCount += 1;
     updateSimCostLedger();
+  }
+
+  function combustibleObjectSourceDebug(reason = null) {
+    const debug = combustibleObjectSourceReceiver?.debug() || {
+      schema: COMBUSTIBLE_OBJECT_FIRE_RECEIVER_SCHEMA,
+      routeIdentity: COMBUSTIBLE_OBJECT_FIRE_ROUTE,
+      status: 'off',
+      gridSize,
+      sourceSchema: null,
+      sourceFrameId: null,
+      sourceFrameHash: null,
+      allocationGeneration: null,
+      topologyEpoch: null,
+      writeTick: null,
+      sourceCount: 0,
+      packedCount: 0,
+      rejectedCount: 0,
+      overflowCount: 0,
+      emittedVolatileMass: 0,
+      sameDevice: null,
+      transformIdentity: null,
+      dispatchCount: 0,
+      lastReceipt: null,
+      fallback: null,
+    };
+    return reason ? { ...debug, reason } : debug;
   }
 
   function encodePressureProjection(encoder) {
@@ -12990,6 +13268,51 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         frameId: state.externalEmitterFrameId,
       };
     },
+    async borrowCombustibleObjectSourceGpuContext() {
+      await ensureGpu();
+      return {
+        device,
+        queue: device.queue,
+        receiverSchema: COMBUSTIBLE_OBJECT_FIRE_RECEIVER_SCHEMA,
+        routeIdentity: COMBUSTIBLE_OBJECT_FIRE_ROUTE,
+        gridSize,
+        fluidStateGeneration: state.fluidStateResetCount,
+        ownership: 'borrowed-device-queue-no-destruction-authority',
+      };
+    },
+    async setCombustibleObjectSources(descriptor, options = {}) {
+      await ensureGpu();
+      validateCombustibleObjectSourceDescriptor(descriptor, {
+        device,
+        expectedGeneration: options.expectedGeneration ?? descriptor?.allocationGeneration,
+        expectedTopologyEpoch: options.expectedTopologyEpoch ?? descriptor?.topologyEpoch,
+      });
+      if (!combustibleObjectSourceReceiver || combustibleObjectSourceReceiver.gridSize !== gridSize) {
+        combustibleObjectSourceReceiver?.destroy();
+        combustibleObjectSourceReceiver = await createCombustibleObjectFireReceiver({
+          device,
+          gridSize,
+          validateDescriptor: validateCombustibleObjectSourceDescriptor,
+          transformIdentity: COMBUSTIBLE_OBJECT_FIRE_RECEIVER_TRANSFORM_ID,
+        });
+      }
+      const debug = combustibleObjectSourceReceiver.setSource(descriptor, options.transform, options.transfer);
+      state.combustibleObjectSource = debug;
+      emitStatus({ phase: 'combustible-object-source-bound', source: debug });
+      return { ...debug };
+    },
+    clearCombustibleObjectSources() {
+      const debug = combustibleObjectSourceReceiver?.clearSource() || combustibleObjectSourceDebug();
+      state.combustibleObjectSource = debug;
+      emitStatus({ phase: 'combustible-object-source-cleared', source: debug });
+      return { ...debug };
+    },
+    async readCombustibleObjectSourceReceipt() {
+      if (!combustibleObjectSourceReceiver) return null;
+      const receipt = await combustibleObjectSourceReceiver.readReceipt();
+      state.combustibleObjectSource = combustibleObjectSourceDebug();
+      return receipt;
+    },
     setSelectiveHeadLiveRole(role) {
       const requestedRole = normalizeSelectiveHeadLiveRole(role);
       controlsSnapshot = { ...controlsSnapshot, selectiveHeadLiveRole: requestedRole };
@@ -13147,6 +13470,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         ...state,
         controls: { ...controlsSnapshot },
         scalarActivityReceiver: scalarActivityReceiverDebug(),
+        combustibleObjectSource: combustibleObjectSourceDebug(),
         pyroDynamicDetail: clonePyroDynamicDetail(),
         pyroMaterialRendererCoupling: state.pyroMaterialRendererCoupling ? { ...state.pyroMaterialRendererCoupling } : null,
       };
@@ -13171,6 +13495,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     renderFrozenScaleToCanvas,
     dispose() {
       this.setActive(false);
+      combustibleObjectSourceReceiver?.destroy();
+      combustibleObjectSourceReceiver = null;
       frameTexture?.destroy();
       browserResidualFeatureTexture?.destroy();
       externalEmitterBuffer?.destroy();

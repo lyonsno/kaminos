@@ -3,6 +3,8 @@ export const COMBUSTIBLE_PLANK_ROUTE = 'kaminos.combustible-plank-support-collap
 export const COMBUSTIBLE_PLANK_SOURCE_AUTHORITY = 'internal-object-side-combustion-v0';
 export const COMBUSTIBLE_PLANK_MATERIAL_AUTHORITY = 'deterministic-fuel-char-support-capacity-v0';
 export const COMBUSTIBLE_PLANK_MOTION_AUTHORITY = 'post-support-loss-gravity-hinge-v0';
+export const COMBUSTIBLE_OBJECT_SOURCE_SCHEMA = 'kaminos.combustible-object-source-descriptor.v0';
+export const COMBUSTIBLE_OBJECT_SOURCE_PACKING = 'gpu-sparse-combustible-object-source-vec4x8-v0';
 
 const CHAR_YIELD = 0.22;
 const VOLATILE_YIELD = 0.68;
@@ -38,6 +40,128 @@ function supportCapacity(material) {
   const virginSupport = material.remainingFuel * 0.85;
   const charSupport = material.charMass * 0.25;
   return round(clamp(0.15 + virginSupport + charSupport, 0, 1));
+}
+
+function nonnegativeInteger(value, label) {
+  const integer = Number(value);
+  if (!Number.isInteger(integer) || integer < 0) throw new Error(`${label} must be a nonnegative integer`);
+  return integer;
+}
+
+function finiteVector(value, length, label, fallback) {
+  const source = Array.isArray(value) ? value : fallback;
+  if (!Array.isArray(source) || source.length !== length) throw new Error(`${label} must contain ${length} finite values`);
+  const result = source.map(Number);
+  if (result.some(component => !Number.isFinite(component))) throw new Error(`${label} must contain ${length} finite values`);
+  return result;
+}
+
+function identityMatrix4() {
+  return [
+    1, 0, 0, 0,
+    0, 1, 0, 0,
+    0, 0, 1, 0,
+    0, 0, 0, 1,
+  ];
+}
+
+export function deriveCombustibleObjectSourceFrame(previous, current, options = {}) {
+  if (!previous?.material || !current?.material || !current?.combustion || !current?.support || !current?.motion) {
+    throw new Error('Combustible object source derivation requires consecutive material states');
+  }
+  if (current.step <= previous.step) throw new Error('Combustible object source write tick requires a newer material state');
+
+  const capacity = nonnegativeInteger(options.capacity ?? 1, 'Combustible object source capacity');
+  if (capacity < 1) throw new Error('Combustible object source capacity must be positive');
+  const allocationGeneration = nonnegativeInteger(options.allocationGeneration ?? 1, 'Combustible object source generation');
+  const topologyEpoch = nonnegativeInteger(options.topologyEpoch ?? 0, 'Combustible object topology epoch');
+  const writeTick = nonnegativeInteger(options.writeTick ?? current.step, 'Combustible object source write tick');
+  const sourceFrameId = String(options.sourceFrameId || 'combustible-object/material-frame');
+  const sourceFrameHash = nonnegativeInteger(options.sourceFrameHash ?? 1, 'Combustible object source frame hash');
+  if (!sourceFrameId || sourceFrameHash === 0) throw new Error('Combustible object source frame identity is required');
+  const transformId = String(options.transformId || 'combustible-object-object-to-world-v0');
+  if (!transformId) throw new Error('Combustible object transform identity is required');
+
+  const objectToWorld = finiteVector(options.objectToWorld, 16, 'Combustible object transform', identityMatrix4());
+  const localSourcePosition = finiteVector(options.localSourcePosition, 3, 'Combustible object local source position', [0, 0, 0]);
+  const localSourceNormal = finiteVector(options.localSourceNormal, 3, 'Combustible object local source normal', [0, 1, 0]);
+  const localVelocity = finiteVector(options.localVelocity, 3, 'Combustible object local source velocity', [0, 0, 0]);
+  const radius = clamp(finite(options.sourceRadius, 0.08), 0.001, 4);
+  const volatileDelta = Math.max(0, finite(current.material.emittedVolatiles) - finite(previous.material.emittedVolatiles));
+  const emittedFuelMass = round(volatileDelta * 0.94, 12);
+  const emittedSootMass = Math.max(0, volatileDelta - emittedFuelMass);
+  const emittedVolatileMass = emittedFuelMass + emittedSootMass;
+  const emittedHeat = emittedVolatileMass > 0
+    ? round(emittedVolatileMass * (0.75 + clamp(finite(current.material.temperature), 0, 2)), 12)
+    : 0;
+  const smokeSignal = emittedVolatileMass > 0 ? round(emittedSootMass * 12 + emittedFuelMass * 0.08, 12) : 0;
+  const sourceCount = emittedVolatileMass > 0 ? 1 : 0;
+  const packedCount = Math.min(sourceCount, capacity);
+  const overflowCount = Math.max(0, sourceCount - packedCount);
+  const packedFraction = sourceCount > 0 ? packedCount / sourceCount : 0;
+  const packedVolatileMass = emittedVolatileMass * packedFraction;
+  const overflowVolatileMass = emittedVolatileMass - packedVolatileMass;
+  const sourceIdHash = sourceFrameHash >>> 0;
+  const record = {
+    localPositionRadius: [...localSourcePosition, radius],
+    localNormalExtent: [...localSourceNormal, radius * 2],
+    velocityAngular: [...localVelocity, finite(current.motion.angularVelocity)],
+    emission: [emittedHeat, emittedFuelMass, emittedSootMass, smokeSignal],
+    material: [
+      finite(current.material.remainingFuel),
+      finite(current.material.charMass),
+      finite(current.material.inertResidue),
+      finite(current.material.temperature),
+    ],
+    sourceGenerationEpochTick: [allocationGeneration, topologyEpoch, writeTick, sourceIdHash],
+    support: [
+      finite(current.support.capacity),
+      finite(current.support.demand),
+      current.support.failed ? 1 : 0,
+      finite(current.motion.angleRad),
+    ],
+    reserved: [current.step, 0, 0, 1],
+  };
+  const records = packedCount > 0 ? [record] : [];
+  const accountingResidualRaw = emittedVolatileMass - packedVolatileMass - overflowVolatileMass;
+
+  return {
+    schema: COMBUSTIBLE_OBJECT_SOURCE_SCHEMA,
+    packing: COMBUSTIBLE_OBJECT_SOURCE_PACKING,
+    materialAuthority: COMBUSTIBLE_PLANK_SOURCE_AUTHORITY,
+    device: options.device ?? null,
+    queue: options.queue ?? options.device?.queue ?? null,
+    headerBuffer: options.headerBuffer ?? null,
+    recordsBuffer: options.recordsBuffer ?? null,
+    headerBytes: 80,
+    recordBytes: 128,
+    recordFloats: 32,
+    capacity,
+    allocationGeneration,
+    topologyEpoch,
+    materialStep: current.step,
+    writeTick,
+    valid: true,
+    complete: true,
+    sourceFrameId,
+    sourceFrameHash,
+    transformId,
+    objectToWorld,
+    sourceCount,
+    packedCount,
+    rejectedCount: 0,
+    overflowCount,
+    malformedCount: 0,
+    emittedVolatileMass,
+    emittedFuelMass,
+    emittedSootMass,
+    emittedHeat,
+    packedVolatileMass,
+    rejectedVolatileMass: 0,
+    overflowVolatileMass,
+    accountingResidual: Math.abs(accountingResidualRaw) < 1e-12 ? 0 : accountingResidualRaw,
+    records,
+  };
 }
 
 export function createCombustiblePlankState(options = {}) {

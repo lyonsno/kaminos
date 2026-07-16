@@ -1,0 +1,634 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kaminos Combustible Object / Pyro Bridge</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      background: #111310;
+      color: #f1eee5;
+    }
+    * { box-sizing: border-box; }
+    html, body, #stage { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #111310; }
+    #stage { position: fixed; inset: 0; }
+    #stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    #kaminos-volume-canvas { z-index: 2; mix-blend-mode: screen; }
+    #object-layer { z-index: 1; pointer-events: none; }
+    #topbar {
+      position: fixed;
+      z-index: 4;
+      inset: 0 0 auto 0;
+      min-height: 56px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 9px 14px;
+      border-bottom: 1px solid rgba(237, 224, 191, 0.22);
+      background: rgba(15, 17, 14, 0.88);
+      backdrop-filter: blur(8px);
+    }
+    #title { min-width: 210px; }
+    #title strong { display: block; font-size: 13px; line-height: 1.2; }
+    #title span { display: block; margin-top: 3px; color: #a9aca2; font: 10px/1.2 "SF Mono", Menlo, monospace; }
+    #phase {
+      flex: 1;
+      min-width: 0;
+      color: #f3c765;
+      font: 10px/1.35 "SF Mono", Menlo, monospace;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #reset {
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      border: 1px solid #5d6057;
+      border-radius: 4px;
+      background: #252820;
+      color: #f1eee5;
+      font-size: 20px;
+      cursor: pointer;
+    }
+    #reset:hover { background: #33372d; border-color: #919685; }
+    .bay-label {
+      position: fixed;
+      z-index: 3;
+      left: 15px;
+      pointer-events: none;
+      font: 10px/1.25 "SF Mono", Menlo, monospace;
+      color: #b6b8ae;
+    }
+    .bay-label strong { display: block; color: #f1eee5; font: 600 11px/1.2 Inter, sans-serif; }
+    #control-label { top: 30%; }
+    #burning-label { top: 61%; }
+    #ledger {
+      position: fixed;
+      z-index: 4;
+      inset: auto 0 0;
+      min-height: 48px;
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      border-top: 1px solid rgba(237, 224, 191, 0.20);
+      background: rgba(15, 17, 14, 0.90);
+      backdrop-filter: blur(8px);
+    }
+    .metric { min-width: 0; padding: 8px 11px; border-right: 1px solid rgba(237, 224, 191, 0.12); }
+    .metric:last-child { border-right: 0; }
+    .metric b { display: block; color: #989c91; font-size: 8px; font-weight: 600; text-transform: uppercase; }
+    .metric span { display: block; margin-top: 4px; font: 10px/1.15 "SF Mono", Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #error {
+      position: fixed;
+      z-index: 6;
+      inset: 56px 0 48px;
+      display: none;
+      place-items: center;
+      padding: 24px;
+      color: #ffad99;
+      background: #17120f;
+      font: 12px/1.5 "SF Mono", Menlo, monospace;
+      text-align: center;
+    }
+    @media (max-width: 760px) {
+      #topbar { gap: 8px; padding: 8px 9px; }
+      #title { min-width: 155px; }
+      #title strong { font-size: 11px; }
+      #title span, #phase { font-size: 8px; }
+      .bay-label { left: 9px; }
+      #ledger { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .metric:nth-child(n + 4) { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+  <div id="topbar">
+    <div id="title">
+      <strong>Combustible object / Pyro</strong>
+      <span>same-device native source exchange</span>
+    </div>
+    <div id="phase">Initializing shared GPU route</div>
+    <button id="reset" type="button" title="Restart witness" aria-label="Restart witness">&#8635;</button>
+  </div>
+  <div id="control-label" class="bay-label"><strong>Control</strong>no source records</div>
+  <div id="burning-label" class="bay-label"><strong>Combustible member</strong>object state into native Pyro</div>
+  <div id="ledger">
+    <div class="metric"><b>Fuel</b><span id="fuel">1.000</span></div>
+    <div class="metric"><b>Capacity / load</b><span id="capacity">1.000 / 0.560</span></div>
+    <div class="metric"><b>Source / packed</b><span id="source-count">0 / 0</span></div>
+    <div class="metric"><b>Accepted / touched</b><span id="accepted">0 / 0</span></div>
+    <div class="metric"><b>Injected H / F / S</b><span id="injected">0 / 0 / 0</span></div>
+    <div class="metric"><b>GPU cell</b><span id="cell">none</span></div>
+  </div>
+  <div id="error"></div>
+  <script type="module">
+    import * as THREE from './lib/three.webgpu.js';
+    import {
+      COMBUSTIBLE_PLANK_SOURCE_AUTHORITY,
+      createCombustiblePlankState,
+      deriveCombustibleObjectSourceFrame,
+      stepCombustiblePlank,
+    } from './combustible-plank-core.js';
+    import { createCombustibleObjectSourceProducer } from './combustible-object-fire-gpu.mjs';
+    import {
+      COMBUSTIBLE_OBJECT_FIRE_RECEIVER_TRANSFORM_ID,
+      createKaminosVolumePrototype,
+    } from './volume-core.js';
+
+    const ROUTE = 'kaminos.combustible-object-native-pyro-bridge.v0';
+    const SOURCE_FRAME_HASH = 0x53746e72;
+    const FIELD_TRANSFER_IDENTITY = 'combustible-plank-material-to-pyro-field-v0';
+    const FIELD_TRANSFER = Object.freeze([96, 128, 96, 96]);
+    const RENDER_CALIBRATION_IDENTITY = 'combustible-object-native-pyro-render-v0';
+    const stage = document.getElementById('stage');
+    const phaseEl = document.getElementById('phase');
+    const errorEl = document.getElementById('error');
+    const fuelEl = document.getElementById('fuel');
+    const capacityEl = document.getElementById('capacity');
+    const sourceCountEl = document.getElementById('source-count');
+    const acceptedEl = document.getElementById('accepted');
+    const injectedEl = document.getElementById('injected');
+    const cellEl = document.getElementById('cell');
+    const params = new URLSearchParams(location.search);
+    const autoplay = params.get('bridge_autoplay') !== '0';
+    const speed = Math.max(0.1, Math.min(4, Number(params.get('bridge_speed') || 1.15)));
+
+    const volumeControls = {
+      runtimeQualityRequested: 'live_full',
+      runtimeQualityReason: 'combustible-object-native-pyro-witness',
+      gpuPressure: 0,
+      resolution: 32,
+      majorantGrid: 24,
+      volumeScene: 'compact_plume',
+      inputRadius: 0.08,
+      flowRate: 0,
+      raySteps: 96,
+      density: 1.8,
+      fire: 2.8,
+      smoke: 1.45,
+      curl: 0.72,
+      speed: 1,
+      radiance: 3.5,
+      absorption: 0.72,
+      glow: 1.8,
+      projection: 0.42,
+      pressureIterations: 1,
+      pressureStrategy: 'global',
+      reactionFuelScale: 1,
+      renderScale: 0.82,
+      adaptiveRays: 0.62,
+      occupancySkip: 0,
+      majorantSkip: 0,
+      majorantSmooth: 0.82,
+      majorantGuard: 0.78,
+      temporalAccum: 0.18,
+      temporalJitter: 0.72,
+      historyClamp: 0.78,
+      fireScale: 0.82,
+      detailScale: 1.35,
+      plumeHeight: 1.1,
+      canonicalSourceInjection: 0,
+      canonicalBuoyancy: 1,
+      canonicalContentMode: 'fire_smoke',
+      canonicalMotionMode: 'animated',
+      boundarySplatMode: 'off',
+      pyroRadiance: 0,
+      pyroFlamePaint: 0,
+      pyroFlowBite: 0,
+    };
+
+    let burning = createCombustiblePlankState({ ignition: true });
+    let control = createCombustiblePlankState({ ignition: false });
+    let lastPublishedBurning = burning;
+    let publicationTick = 0;
+    let producer = null;
+    let volume = null;
+    let renderer = null;
+    let bridgePending = false;
+    let receiptPending = false;
+    let lastDescriptor = null;
+    let lastBoundDebug = null;
+    let lastReceipt = null;
+    let observedTransferReceipt = null;
+    let observedSpatialTransferReceipt = null;
+    let nativeFieldBaseline = null;
+    let controlSourceCount = 0;
+    let frameCount = 0;
+    let sceneStatus = 'initializing';
+    let failurePhase = null;
+    let sceneError = null;
+    let accumulator = 0;
+    let lastNow = null;
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(innerWidth <= 760 ? 55 : 43, innerWidth / innerHeight, 0.05, 20);
+    camera.position.set(0, 0.12, 3.25);
+    camera.lookAt(0, 0, 0);
+    scene.add(new THREE.HemisphereLight(0xffe7bc, 0x51616c, 2.5));
+    const key = new THREE.DirectionalLight(0xffe0a0, 3.6);
+    key.position.set(1.5, 2.8, 3.5);
+    scene.add(key);
+    const cool = new THREE.DirectionalLight(0x8dbfd2, 1.6);
+    cool.position.set(-2, 1, 2);
+    scene.add(cool);
+
+    const wood = new THREE.Color(0xb46d30);
+    const char = new THREE.Color(0x17120e);
+    const supportMaterial = new THREE.MeshStandardMaterial({ color: 0x747c74, roughness: 0.86, metalness: 0.08 });
+    const loadMaterial = new THREE.MeshStandardMaterial({ color: 0x4d5557, roughness: 0.35, metalness: 0.72 });
+
+    function createMember(y, burningMember) {
+      const root = new THREE.Group();
+      root.position.set(-0.42, y, 0.02);
+      scene.add(root);
+      const material = new THREE.MeshStandardMaterial({ color: wood.clone(), roughness: 0.74 });
+      const member = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.105, 0.18), material);
+      member.position.x = 0.46;
+      root.add(member);
+      const load = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.18, 0.20), loadMaterial);
+      load.position.set(0.80, 0.13, 0);
+      root.add(load);
+      const support = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.25, 0.22), supportMaterial);
+      support.position.set(-0.02, -0.16, 0);
+      scene.add(support);
+      support.position.y += y;
+      const charBand = new THREE.Mesh(
+        new THREE.BoxGeometry(0.18, 0.112, 0.186),
+        new THREE.MeshStandardMaterial({ color: 0x21150f, roughness: 0.98 }),
+      );
+      charBand.position.set(0.38, 0, 0);
+      charBand.visible = burningMember;
+      root.add(charBand);
+      return { root, member, material, load, charBand };
+    }
+
+    const burningMember = createMember(-0.34, true);
+    const controlMember = createMember(0.43, false);
+
+    function objectToWorld(state) {
+      const angle = -state.motion.angleRad;
+      const c = Math.cos(angle);
+      const s = Math.sin(angle);
+      return [
+        c, s, 0, 0,
+        -s, c, 0, 0,
+        0, 0, 1, 0,
+        burningMember.root.position.x,
+        burningMember.root.position.y,
+        burningMember.root.position.z,
+        1,
+      ];
+    }
+
+    const receiverTransform = {
+      id: COMBUSTIBLE_OBJECT_FIRE_RECEIVER_TRANSFORM_ID,
+      scale: [0.5, 0.5, 0.5],
+      offset: [0.5, 0.5, 0.5],
+    };
+
+    function sourceWorldPosition(state) {
+      const matrix = objectToWorld(state);
+      const local = [0.38, 0, 0];
+      return [
+        matrix[0] * local[0] + matrix[4] * local[1] + matrix[12],
+        matrix[1] * local[0] + matrix[5] * local[1] + matrix[13],
+        matrix[2] * local[0] + matrix[6] * local[1] + matrix[14],
+      ];
+    }
+
+    function publishLatestSource() {
+      if (!producer || !volume || bridgePending || burning.step <= lastPublishedBurning.step) return;
+      const previous = lastPublishedBurning;
+      const current = burning;
+      publicationTick += 1;
+      const descriptor = deriveCombustibleObjectSourceFrame(previous, current, {
+        ...producer.descriptorOptions(),
+        writeTick: publicationTick,
+        sourceFrameId: 'combustible-plank/burning-member',
+        sourceFrameHash: SOURCE_FRAME_HASH,
+        transformId: 'combustible-plank-object-to-world-v0',
+        objectToWorld: objectToWorld(current),
+        localSourcePosition: [0.38, 0, 0],
+        localSourceNormal: [0, 1, 0],
+        sourceRadius: 0.09,
+      });
+      const controlDescriptor = deriveCombustibleObjectSourceFrame(control, stepCombustiblePlank(control, 1 / 60), {
+        ...producer.descriptorOptions(),
+        writeTick: publicationTick,
+        sourceFrameId: 'combustible-plank/control-member',
+        sourceFrameHash: 0x4374726c,
+        transformId: 'combustible-plank-object-to-world-v0',
+        objectToWorld: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, controlMember.root.position.x, controlMember.root.position.y, controlMember.root.position.z, 1],
+      });
+      controlSourceCount = controlDescriptor.sourceCount;
+      producer.writeFrame(descriptor);
+      lastDescriptor = descriptor;
+      lastPublishedBurning = current;
+      bridgePending = true;
+      volume.setCombustibleObjectSources(descriptor, {
+        expectedGeneration: descriptor.allocationGeneration,
+        expectedTopologyEpoch: descriptor.topologyEpoch,
+        transform: receiverTransform,
+        transfer: FIELD_TRANSFER,
+      }).then(debug => {
+        lastBoundDebug = debug;
+      }).catch(error => fail('source-bind', error)).finally(() => {
+        bridgePending = false;
+        publishLatestSource();
+      });
+    }
+
+    function pollReceipt() {
+      if (!volume || receiptPending || frameCount % 4 !== 0 || !lastDescriptor) return;
+      receiptPending = true;
+      volume.readCombustibleObjectSourceReceipt().then(receipt => {
+        if (!receipt) return;
+        lastReceipt = receipt;
+        if (receipt.injectedHeat > 0 || receipt.injectedFuel > 0 || receipt.injectedSoot > 0 || receipt.injectedSmoke > 0) {
+          observedTransferReceipt = receipt;
+          if (receipt.touchedCells > 1) observedSpatialTransferReceipt = receipt;
+        }
+      }).catch(error => fail('receiver-readback', error)).finally(() => {
+        receiptPending = false;
+      });
+    }
+
+    function updateObjects() {
+      burningMember.root.rotation.z = -burning.motion.angleRad;
+      controlMember.root.rotation.z = -control.motion.angleRad;
+      const damage = 1 - burning.material.remainingFuel;
+      burningMember.material.color.copy(wood).lerp(char, Math.min(0.76, damage * 0.92));
+      burningMember.charBand.scale.x = 0.45 + damage * 1.25;
+      burningMember.charBand.material.color.setRGB(0.10 + damage * 0.025, 0.06, 0.035);
+      fuelEl.textContent = burning.material.remainingFuel.toFixed(3);
+      capacityEl.textContent = `${burning.support.capacity.toFixed(3)} / ${burning.support.demand.toFixed(3)}`;
+      sourceCountEl.textContent = `${lastDescriptor?.sourceCount ?? 0} / ${lastDescriptor?.packedCount ?? 0}`;
+      acceptedEl.textContent = `${lastReceipt?.acceptedRecords ?? 0} / ${lastReceipt?.touchedCells ?? 0}`;
+      injectedEl.textContent = `${(lastReceipt?.injectedHeat ?? 0).toFixed(4)} / ${(lastReceipt?.injectedFuel ?? 0).toFixed(4)} / ${(lastReceipt?.injectedSoot ?? 0).toFixed(4)}`;
+      cellEl.textContent = lastReceipt?.acceptedCell?.join(',') ?? 'none';
+      phaseEl.textContent = `${burning.phase} | material ${burning.step} / write ${lastDescriptor?.writeTick ?? 0} | ${lastReceipt?.status ?? 'awaiting-gpu-receipt'} | control sources ${controlSourceCount}`;
+    }
+
+    function debugState() {
+      const worldSource = sourceWorldPosition(burning);
+      return JSON.parse(JSON.stringify({
+        schema: 'kaminos.combustible-object-native-pyro-witness.v0',
+        requestedRoute: ROUTE,
+        effectiveRoute: ROUTE,
+        status: sceneError ? 'failed' : sceneStatus,
+        failurePhase,
+        error: sceneError,
+        fallback: null,
+        primaryOutput: renderer && volume ? { status: 'rendering', frameCount } : { status: 'missing', frameCount },
+        materialAuthority: COMBUSTIBLE_PLANK_SOURCE_AUTHORITY,
+        exchangeAuthority: 'same-device-source-accounted-native-pyro-scatter-v0',
+        learnedPresentationAuthority: 'not-claimed',
+        fieldTransferIdentity: FIELD_TRANSFER_IDENTITY,
+        fieldTransfer: [...FIELD_TRANSFER],
+        renderCalibrationIdentity: RENDER_CALIBRATION_IDENTITY,
+        frameCount,
+        burning,
+        control,
+        controlSourceCount,
+        source: lastDescriptor ? {
+          schema: lastDescriptor.schema,
+          packing: lastDescriptor.packing,
+          sourceFrameId: lastDescriptor.sourceFrameId,
+          sourceFrameHash: lastDescriptor.sourceFrameHash,
+          allocationGeneration: lastDescriptor.allocationGeneration,
+          topologyEpoch: lastDescriptor.topologyEpoch,
+          materialStep: lastDescriptor.materialStep,
+          writeTick: lastDescriptor.writeTick,
+          sourceCount: lastDescriptor.sourceCount,
+          packedCount: lastDescriptor.packedCount,
+          rejectedCount: lastDescriptor.rejectedCount,
+          overflowCount: lastDescriptor.overflowCount,
+          malformedCount: lastDescriptor.malformedCount,
+          emittedVolatileMass: lastDescriptor.emittedVolatileMass,
+          emittedFuelMass: lastDescriptor.emittedFuelMass,
+          emittedSootMass: lastDescriptor.emittedSootMass,
+          accountingResidual: lastDescriptor.accountingResidual,
+          objectToWorld: lastDescriptor.objectToWorld,
+          worldSource,
+          receiverUnit: worldSource.map(value => value * 0.5 + 0.5),
+        } : null,
+        producer: producer?.debug() ?? null,
+        receiver: lastBoundDebug,
+        gpuReceipt: lastReceipt,
+        observedTransferReceipt,
+        observedSpatialTransferReceipt,
+        volume: volume?.debugState()?.combustibleObjectSource ?? null,
+      }));
+    }
+    window.kaminosCombustibleObjectPyroDebugState = debugState;
+    window.kaminosCombustibleObjectPyroSetRenderActive = async active => {
+      if (!volume) throw new Error('Native Pyro volume is unavailable');
+      volume.setControls({ lookFreeze: active ? 0 : 1 });
+      const debug = volume.debugState();
+      return {
+        active: debug.active,
+        simulationFrozen: !active,
+        simStepCount: debug.simStepCount,
+      };
+    };
+    window.kaminosCombustibleObjectPyroSampleNativeField = async () => {
+      if (!volume) throw new Error('Native Pyro volume is unavailable');
+      const sample = await volume.sampleFrame({ advanceSim: false, includeRgba: false });
+      const field = sample.simReadback;
+      if (!sample.ok || !field) throw new Error(`Native Pyro field sample failed: ${sample.reason || 'missing-readback'}`);
+      const preview = sample.preview;
+      let pixelDelta;
+      if (!nativeFieldBaseline || nativeFieldBaseline.width !== preview.width || nativeFieldBaseline.height !== preview.height) {
+        nativeFieldBaseline = { width: preview.width, height: preview.height, rgba: [...preview.rgba] };
+        pixelDelta = { status: 'baseline-recorded', changedPixels: 0, meanAbsoluteDelta: 0, maxChannelDelta: 0 };
+      } else {
+        let changedPixels = 0;
+        let absoluteDelta = 0;
+        let maxChannelDelta = 0;
+        const pixelCount = preview.width * preview.height;
+        for (let i = 0; i < preview.rgba.length; i += 4) {
+          const redDelta = Math.abs(preview.rgba[i] - nativeFieldBaseline.rgba[i]);
+          const greenDelta = Math.abs(preview.rgba[i + 1] - nativeFieldBaseline.rgba[i + 1]);
+          const blueDelta = Math.abs(preview.rgba[i + 2] - nativeFieldBaseline.rgba[i + 2]);
+          const pixelMax = Math.max(redDelta, greenDelta, blueDelta);
+          if (pixelMax > 2) changedPixels += 1;
+          absoluteDelta += redDelta + greenDelta + blueDelta;
+          maxChannelDelta = Math.max(maxChannelDelta, pixelMax);
+        }
+        pixelDelta = {
+          status: 'compared-to-initial-native-field',
+          changedPixels,
+          meanAbsoluteDelta: absoluteDelta / Math.max(1, pixelCount * 3),
+          maxChannelDelta,
+        };
+      }
+      return {
+        authority: sample.sampleAuthority,
+        effectiveRoute: sample.effectiveRoute,
+        grid: field.grid,
+        densityMax: field.densityMax,
+        densityMean: field.densityMean,
+        heatMean: field.heatMean,
+        fuelMean: field.fuelMean,
+        fireLayerMean: field.fireLayerMean,
+        smokeWeight: field.smokeWeight,
+        fireWeight: field.fireWeight,
+        meanLuma: sample.meanLuma,
+        litPixels: sample.litPixels,
+        fireLikePixels: sample.fireLikePixels,
+        emissiveLikePixels: sample.emissiveLikePixels,
+        smokeLikePixels: sample.smokeLikePixels,
+        volumeBounds: sample.volumeBounds,
+        pixelDelta,
+      };
+    };
+
+    function reset() {
+      burning = createCombustiblePlankState({ ignition: true });
+      control = createCombustiblePlankState({ ignition: false });
+      lastPublishedBurning = burning;
+      lastDescriptor = null;
+      lastBoundDebug = null;
+      lastReceipt = null;
+      observedTransferReceipt = null;
+      observedSpatialTransferReceipt = null;
+      nativeFieldBaseline = null;
+      controlSourceCount = 0;
+      accumulator = 0;
+      lastNow = null;
+      burningMember.root.rotation.z = 0;
+      controlMember.root.rotation.z = 0;
+      volume?.clearCombustibleObjectSources();
+      volume?.setVolumePrimitives([{
+        id: 'combustible-object-native-source-domain',
+        transform: { position: [0, -0.34, 0], rotation: [0, 0, 0], scale: [0.08, 0.08, 0.08] },
+        simulation: { sourceRadius: 0.08, flowRate: 0 },
+      }]);
+      sceneStatus = 'running';
+    }
+    document.getElementById('reset').addEventListener('click', reset);
+    window.kaminosCombustibleObjectPyroReset = reset;
+    window.kaminosCombustibleObjectPyroAdvance = steps => {
+      const count = Math.max(0, Math.floor(Number(steps) || 0));
+      for (let i = 0; i < count; i += 1) {
+        burning = stepCombustiblePlank(burning, 1 / 60);
+        control = stepCombustiblePlank(control, 1 / 60);
+      }
+      publishLatestSource();
+      updateObjects();
+      return debugState();
+    };
+    window.kaminosCombustibleObjectPyroAdvanceLive = async steps => {
+      const count = Math.max(0, Math.floor(Number(steps) || 0));
+      for (let i = 0; i < count; i += 1) {
+        burning = stepCombustiblePlank(burning, 1 / 60);
+        control = stepCombustiblePlank(control, 1 / 60);
+        publishLatestSource();
+        updateObjects();
+        await new Promise(resolve => requestAnimationFrame(resolve));
+      }
+      return debugState();
+    };
+    window.kaminosCombustibleObjectPyroSettle = async frames => {
+      const count = Math.max(0, Math.floor(Number(frames) || 0));
+      for (let i = 0; i < count; i += 1) {
+        await new Promise(resolve => requestAnimationFrame(resolve));
+      }
+      return debugState();
+    };
+
+    function resize() {
+      camera.fov = innerWidth <= 760 ? 55 : 43;
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      if (renderer) {
+        renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+        renderer.setSize(innerWidth, innerHeight);
+      }
+    }
+    addEventListener('resize', resize);
+
+    function fail(phase, error) {
+      if (sceneError) return;
+      failurePhase = phase;
+      sceneError = error?.message || String(error);
+      sceneStatus = 'failed';
+      errorEl.style.display = 'grid';
+      errorEl.textContent = `Bridge failed during ${phase}: ${sceneError}`;
+      phaseEl.textContent = `failed / ${phase}`;
+    }
+
+    async function initialize() {
+      try {
+        failurePhase = 'volume-create';
+        volume = createKaminosVolumePrototype({
+          THREE,
+          viewport: stage,
+          camera,
+          controls: { update() {} },
+          getControls: () => ({ ...volumeControls }),
+          onStatus: status => {
+            if (status?.phase === 'gpu-error') fail('volume-gpu', new Error(status.error));
+          },
+        });
+        volume.setVolumePrimitives([{
+          id: 'combustible-object-native-source-domain',
+          transform: { position: [0, -0.34, 0], rotation: [0, 0, 0], scale: [0.08, 0.08, 0.08] },
+          simulation: { sourceRadius: 0.08, flowRate: 0 },
+        }]);
+        failurePhase = 'volume-activate';
+        await volume.setActive(true);
+        failurePhase = 'gpu-borrow';
+        const gpu = await volume.borrowCombustibleObjectSourceGpuContext();
+        producer = createCombustibleObjectSourceProducer({
+          device: gpu.device,
+          capacity: 1,
+          allocationGeneration: 1,
+          topologyEpoch: 0,
+          label: 'combustible plank moving source',
+        });
+        failurePhase = 'object-renderer';
+        renderer = new THREE.WebGPURenderer({ antialias: true, alpha: true });
+        renderer.domElement.id = 'object-layer';
+        renderer.setClearColor(0x000000, 0);
+        renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+        renderer.setSize(innerWidth, innerHeight);
+        stage.appendChild(renderer.domElement);
+        await renderer.init();
+        renderer.setClearColor(0x000000, 0);
+        renderer.setClearAlpha(0);
+        resize();
+        failurePhase = null;
+        sceneStatus = 'running';
+        renderer.setAnimationLoop(now => {
+          const seconds = now * 0.001;
+          if (lastNow === null) lastNow = seconds;
+          const elapsed = Math.min(0.1, Math.max(0, seconds - lastNow));
+          lastNow = seconds;
+          if (autoplay && (burning.material.remainingFuel > 0 || !burning.motion.impacted)) {
+            accumulator += elapsed * speed;
+            while (accumulator >= 1 / 60) {
+              burning = stepCombustiblePlank(burning, 1 / 60);
+              control = stepCombustiblePlank(control, 1 / 60);
+              accumulator -= 1 / 60;
+            }
+          }
+          publishLatestSource();
+          pollReceipt();
+          updateObjects();
+          renderer.render(scene, camera);
+          frameCount += 1;
+        });
+      } catch (error) {
+        fail(failurePhase || 'initialize', error);
+      }
+    }
+
+    initialize();
+  </script>
+</body>
+</html>
