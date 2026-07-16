@@ -5,7 +5,10 @@ import {
   assessMinimumRadiusMaturityCandidate,
   buildMinimumRadiusTeacherContract,
   buildRadiusCandidateTeacherContract,
+  buildTemporalCeilingTeacherContract,
   isTeacherCaptureRouteReady,
+  validateTeacherFrameCamera,
+  validateTemporalCeilingEffectiveState,
   validateMinimumRadiusEffectiveState,
 } from '../smoke-oracle-minimum-radius-teacher.mjs';
 
@@ -28,6 +31,84 @@ assert.equal(
   }),
   true,
   'an initialized autonomous native route must satisfy readiness',
+);
+
+const temporalCeilingRoute = 'http://127.0.0.1:8097/?kaminos_volume_smoke=1'
+  + '&volume_scene=tall_plume&volume_tall_preset=operator_fire_0622'
+  + '&volume_input_radius=0.12&volume_flow_rate=0.35&volume_resolution=160'
+  + '&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=1';
+const temporalCeilingContract = buildTemporalCeilingTeacherContract({ requestedRoute: temporalCeilingRoute });
+assert.equal(temporalCeilingContract.schema, 'kaminos.smoke-oracle-temporal-ceiling-teacher-contract.v0');
+assert.equal(temporalCeilingContract.expectedControls.inputRadius, 0.12);
+assert.equal(temporalCeilingContract.expectedControls.flowRate, 0.35);
+assert.equal(temporalCeilingContract.expectedControls.resolution, 160);
+assert.equal(temporalCeilingContract.cameraAuthority, 'record-current-native-camera-then-lock-v0');
+
+assert.throws(
+  () => buildTemporalCeilingTeacherContract({
+    requestedRoute: temporalCeilingRoute.replace('volume_input_radius=0.12', 'volume_input_radius=0.08'),
+  }),
+  /volume_input_radius=0.12/,
+  'the slider floor must not impersonate the accepted viable source radius',
+);
+assert.throws(
+  () => buildTemporalCeilingTeacherContract({
+    requestedRoute: temporalCeilingRoute.replace('volume_flow_rate=0.35', 'volume_flow_rate=2.5'),
+  }),
+  /volume_flow_rate=0.35/,
+  'the accepted radius must remain paired with its operator-proven flow rate',
+);
+
+const recordedTemporalCamera = {
+  identity: 'checksum-bound-native-camera-matrices-v0',
+  position: [-4, 2, 8],
+  target: [0, 0, 0],
+  projectionMatrix: Array.from({ length: 16 }, (_, index) => index + 0.5),
+  matrixWorldInverse: Array.from({ length: 16 }, (_, index) => index + 20.5),
+};
+const temporalCeilingParity = validateTemporalCeilingEffectiveState(temporalCeilingContract, {
+  effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
+  prototypeIdentity: 'kaminos-volume-prototype-v0',
+  backend: 'WebGPU:apple',
+  controls: {
+    volumeScene: 'tall_plume',
+    inputRadius: 0.12,
+    flowRate: 0.35,
+    resolution: 160,
+  },
+  camera: recordedTemporalCamera,
+});
+assert.equal(temporalCeilingParity.ok, true);
+assert.match(temporalCeilingParity.cameraIdentity, /^sha256:[a-f0-9]{64}$/);
+assert.deepEqual(temporalCeilingParity.lockedCamera, recordedTemporalCamera);
+assert.equal(
+  validateTeacherFrameCamera({
+    ...temporalCeilingContract,
+    cameraIdentity: temporalCeilingParity.cameraIdentity,
+  }, recordedTemporalCamera).ok,
+  true,
+);
+const driftedTemporalCamera = structuredClone(recordedTemporalCamera);
+driftedTemporalCamera.position[0] += 0.25;
+assert.throws(
+  () => validateTeacherFrameCamera({
+    ...temporalCeilingContract,
+    cameraIdentity: temporalCeilingParity.cameraIdentity,
+  }, driftedTemporalCamera),
+  /teacher frame camera identity mismatch/,
+  'every adjacent teacher frame must remain in the recorded locked camera',
+);
+
+assert.throws(
+  () => validateTemporalCeilingEffectiveState(temporalCeilingContract, {
+    effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
+    prototypeIdentity: 'kaminos-volume-prototype-v0',
+    backend: 'WebGPU:apple',
+    controls: { volumeScene: 'tall_plume', inputRadius: 0.12, flowRate: 2.5, resolution: 160 },
+    camera: recordedTemporalCamera,
+  }),
+  /controls\.flowRate/,
+  'stale held-basin flow must fail before an expensive temporal teacher capture',
 );
 
 const heldManifest = {

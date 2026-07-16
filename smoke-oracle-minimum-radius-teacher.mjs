@@ -3,6 +3,8 @@ import { createHash } from 'node:crypto';
 const BASELINE_INPUT_RADIUS = 0.68;
 const MINIMUM_INPUT_RADIUS = 0.08;
 const NATIVE_ROUTE = 'native-3d-compute-fluid-raymarch-v0';
+const TEMPORAL_CEILING_INPUT_RADIUS = 0.12;
+const TEMPORAL_CEILING_FLOW_RATE = 0.35;
 
 export function isTeacherCaptureRouteReady({ state, teacherContract, attachWithoutNavigate = false } = {}) {
   const routeActive = state?.active === true && state?.effectiveRoute === NATIVE_ROUTE;
@@ -84,6 +86,79 @@ function validateCamera(camera, label = 'camera') {
     projectionMatrix: value.projectionMatrix.map(Number),
     matrixWorldInverse: value.matrixWorldInverse.map(Number),
   };
+}
+
+function requireRouteValue(route, key, expected) {
+  const actual = route.searchParams.get(key);
+  if (actual !== String(expected)) throw new Error(`requested route must carry ${key}=${expected}`);
+}
+
+export function buildTemporalCeilingTeacherContract({ requestedRoute } = {}) {
+  const route = new URL(String(requestedRoute || ''));
+  requireRouteValue(route, 'kaminos_volume_smoke', 1);
+  requireRouteValue(route, 'volume_scene', 'tall_plume');
+  requireRouteValue(route, 'volume_tall_preset', 'operator_fire_0622');
+  requireRouteValue(route, 'volume_input_radius', TEMPORAL_CEILING_INPUT_RADIUS);
+  requireRouteValue(route, 'volume_flow_rate', TEMPORAL_CEILING_FLOW_RATE);
+  requireRouteValue(route, 'volume_resolution', 160);
+  requireRouteValue(route, 'volume_temporal_accum', 0);
+  requireRouteValue(route, 'volume_temporal_jitter', 0);
+  requireRouteValue(route, 'volume_history_clamp', 1);
+  return {
+    schema: 'kaminos.smoke-oracle-temporal-ceiling-teacher-contract.v0',
+    identity: 'operator-fire-0622-r160-paired-source-temporal-teacher-v0',
+    requestedRoute: route.href,
+    effectiveRouteRequired: NATIVE_ROUTE,
+    expectedPreset: 'operator_fire_0622',
+    expectedControls: {
+      volumeScene: 'tall_plume',
+      inputRadius: TEMPORAL_CEILING_INPUT_RADIUS,
+      flowRate: TEMPORAL_CEILING_FLOW_RATE,
+      resolution: 160,
+    },
+    cameraAuthority: 'record-current-native-camera-then-lock-v0',
+    admissionAuthority: 'machine-candidate-plus-agent-original-resolution-visual-disposition-v0',
+  };
+}
+
+export function validateTemporalCeilingEffectiveState(contractValue, stateValue) {
+  const contract = requireObject(contractValue, 'contract');
+  const state = requireObject(stateValue, 'state');
+  if (contract.identity !== 'operator-fire-0622-r160-paired-source-temporal-teacher-v0') {
+    throw new Error('temporal ceiling teacher contract identity mismatch');
+  }
+  if (state.effectiveRoute !== contract.effectiveRouteRequired) {
+    throw new Error(`effective route mismatch: ${state.effectiveRoute}`);
+  }
+  if (state.prototypeIdentity !== 'kaminos-volume-prototype-v0') throw new Error('prototype identity mismatch');
+  if (!String(state.backend || '').startsWith('WebGPU:')) throw new Error('backend identity mismatch');
+  const mismatches = [];
+  compareExpected(contract.expectedControls, state.controls, 'controls', mismatches);
+  if (mismatches.length) throw new Error(`temporal ceiling effective state mismatch at ${mismatches.join(', ')}`);
+  const lockedCamera = validateCamera(state.camera, 'state.camera');
+  return {
+    ok: true,
+    identity: 'temporal-ceiling-effective-state-parity-v0',
+    effectiveRoute: state.effectiveRoute,
+    prototypeIdentity: state.prototypeIdentity,
+    backend: state.backend,
+    cameraIdentity: sha256Identity(lockedCamera),
+    lockedCamera,
+    expectedControls: structuredClone(contract.expectedControls),
+  };
+}
+
+export function validateTeacherFrameCamera(contractValue, cameraValue) {
+  const contract = requireObject(contractValue, 'contract');
+  if (!/^sha256:[a-f0-9]{64}$/i.test(String(contract.cameraIdentity || ''))) {
+    throw new Error('teacher contract must carry a checksum-bound camera identity');
+  }
+  const camera = validateCamera(cameraValue, 'frame.camera');
+  const cameraIdentity = sha256Identity(camera);
+  if (cameraIdentity !== contract.cameraIdentity) {
+    throw new Error(`teacher frame camera identity mismatch: ${cameraIdentity} != ${contract.cameraIdentity}`);
+  }
+  return { ok: true, cameraIdentity };
 }
 
 export function buildRadiusCandidateTeacherContract({

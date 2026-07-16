@@ -84,6 +84,35 @@ assert.match(
 
 assert.match(
   source,
+  /--temporal-ceiling-source/,
+  'the competent temporal teacher must have an explicit accepted-source invocation mode',
+);
+
+assert.match(
+  source,
+  /buildTemporalCeilingTeacherContract/,
+  'the accepted source route must be validated before browser or GPU work begins',
+);
+
+const invalidTemporalSourceDir = mkdtempSync(join(tmpdir(), 'kaminos-teacher-invalid-temporal-source-'));
+try {
+  const invalidTemporalSource = spawnSync(process.execPath, [
+    scriptUrl.pathname,
+    '--out-dir', invalidTemporalSourceDir,
+    '--temporal-ceiling-source',
+    '--url', 'http://127.0.0.1:8097/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_tall_preset=operator_fire_0622&volume_input_radius=0.08&volume_flow_rate=0.35&volume_resolution=160',
+  ], { encoding: 'utf8' });
+  assert.notEqual(invalidTemporalSource.status, 0, 'the floor-radius source must fail temporal-ceiling preflight');
+  const failureReport = JSON.parse(readFileSync(join(invalidTemporalSourceDir, 'teacher-capture-report.json'), 'utf8'));
+  assert.equal(failureReport.status, 'failed');
+  assert.equal(failureReport.failurePhase, 'contract-preflight');
+  assert.match(failureReport.failures.at(-1)?.message || '', /volume_input_radius=0.12/);
+} finally {
+  rmSync(invalidTemporalSourceDir, { recursive: true, force: true });
+}
+
+assert.match(
+  source,
   /candidateInputRadius/,
   'the capture report must preserve the requested radius independently of the held manifest',
 );

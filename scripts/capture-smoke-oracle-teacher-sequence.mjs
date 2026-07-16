@@ -10,7 +10,10 @@ import {
   assessMinimumRadiusMaturityCandidate,
   buildMinimumRadiusTeacherContract,
   buildRadiusCandidateTeacherContract,
+  buildTemporalCeilingTeacherContract,
   isTeacherCaptureRouteReady,
+  validateTeacherFrameCamera,
+  validateTemporalCeilingEffectiveState,
   validateMinimumRadiusEffectiveState,
 } from '../smoke-oracle-minimum-radius-teacher.mjs';
 
@@ -549,6 +552,7 @@ const reuseBrowser = args.has('--reuse-browser');
 const attachWithoutNavigate = args.has('--attach-without-navigate');
 const controlledStep = !args.has('--no-controlled-step');
 const probeUntilMature = args.has('--probe-until-mature');
+const temporalCeilingSource = args.has('--temporal-ceiling-source');
 const heldManifestPath = args.get('--held-manifest') ? resolve(String(args.get('--held-manifest'))) : null;
 const candidateInputRadius = args.has('--candidate-radius') ? Number(args.get('--candidate-radius')) : null;
 const candidateRadiusBracket = candidateInputRadius === null ? null : {
@@ -567,6 +571,7 @@ const preflightReport = {
   outDir,
   reportPath,
   heldManifestPath,
+  temporalCeilingSource,
   candidateInputRadius,
   candidateRadiusBracket,
   failures: [],
@@ -578,6 +583,12 @@ let teacherContract = null;
 let captureRouteUrl = null;
 try {
   captureRouteUrl = new URL(requestedRoute);
+  if (temporalCeilingSource && heldManifestPath) {
+    throw new Error('--temporal-ceiling-source cannot be combined with --held-manifest');
+  }
+  if (temporalCeilingSource && candidateInputRadius !== null) {
+    throw new Error('--temporal-ceiling-source cannot be combined with --candidate-radius');
+  }
   if (candidateInputRadius !== null && !heldManifestPath) {
     throw new Error('--candidate-radius requires --held-manifest');
   }
@@ -595,6 +606,9 @@ try {
         candidateInputRadius,
         bracket: candidateRadiusBracket,
       });
+  }
+  if (temporalCeilingSource) {
+    teacherContract = buildTemporalCeilingTeacherContract({ requestedRoute });
   }
   if (probeUntilMature && !teacherContract) {
     throw new Error('--probe-until-mature requires --held-manifest so maturity cannot detach from source authority');
@@ -618,6 +632,7 @@ try {
     lastTrustworthyEvidence: {
       requestedRoute,
       heldManifestPath,
+      temporalCeilingSource,
       candidateInputRadius,
       candidateRadiusBracket,
     },
@@ -664,6 +679,7 @@ const report = {
   controlledStep,
   probeUntilMature,
   heldManifestPath,
+  temporalCeilingSource,
   candidateInputRadius,
   candidateRadiusBracket,
   teacherContract,
@@ -780,8 +796,23 @@ try {
   }
 
   if (teacherContract) {
-    await updateReportPhase('minimum-radius-effective-state-validation');
-    const effectiveState = await evaluate(ws, `(() => {
+    const isTemporalCeilingTeacher = teacherContract.identity === 'operator-fire-0622-r160-paired-source-temporal-teacher-v0';
+    await updateReportPhase(isTemporalCeilingTeacher
+      ? 'temporal-ceiling-effective-state-validation'
+      : 'minimum-radius-effective-state-validation');
+    const effectiveState = await evaluate(ws, isTemporalCeilingTeacher ? `(() => {
+      const prototype = window.__kaminosVolumePrototype;
+      const camera = prototype.currentCameraState();
+      const lockedCamera = prototype.setCameraState({ ...camera, lock: true });
+      const state = prototype.debugState();
+      return {
+        effectiveRoute: state.effectiveRoute,
+        prototypeIdentity: state.prototypeIdentity,
+        backend: state.backend,
+        controls: state.controls,
+        camera: lockedCamera
+      };
+    })()` : `(() => {
       const prototype = window.__kaminosVolumePrototype;
       prototype.setControls(${JSON.stringify(teacherContract.expectedControls)});
       const camera = prototype.setCameraState(${JSON.stringify({ ...teacherContract.expectedCamera, lock: true })});
@@ -794,16 +825,30 @@ try {
         camera
       };
     })()`);
-    report.minimumRadiusEffectiveState = effectiveState;
+    report.teacherEffectiveState = effectiveState;
     report.lastTrustworthyEvidence = {
-      phase: 'minimum-radius-effective-state-observed',
+      phase: isTemporalCeilingTeacher
+        ? 'temporal-ceiling-effective-state-observed'
+        : 'minimum-radius-effective-state-observed',
       effectiveState,
       observedAt: new Date().toISOString(),
     };
     await writeJson(reportPath, report);
-    report.effectiveStateParity = validateMinimumRadiusEffectiveState(teacherContract, effectiveState);
+    report.effectiveStateParity = isTemporalCeilingTeacher
+      ? validateTemporalCeilingEffectiveState(teacherContract, effectiveState)
+      : validateMinimumRadiusEffectiveState(teacherContract, effectiveState);
+    if (isTemporalCeilingTeacher) {
+      teacherContract = {
+        ...teacherContract,
+        expectedCamera: report.effectiveStateParity.lockedCamera,
+        cameraIdentity: report.effectiveStateParity.cameraIdentity,
+      };
+      report.teacherContract = teacherContract;
+    }
     report.lastTrustworthyEvidence = {
-      phase: 'minimum-radius-effective-state-validation',
+      phase: isTemporalCeilingTeacher
+        ? 'temporal-ceiling-effective-state-validation'
+        : 'minimum-radius-effective-state-validation',
       effectiveStateParity: report.effectiveStateParity,
       observedAt: new Date().toISOString(),
     };
@@ -820,6 +865,7 @@ try {
     if (sample.image.rgba.length !== expectedRgbaLength) {
       throw new Error(`sampleFrame RGBA image was partial for frame ${frameIndex}: ${sample.image.rgba.length}/${expectedRgbaLength}`);
     }
+    if (teacherContract) validateTeacherFrameCamera(teacherContract, sample.camera);
   }
 
   async function persistTeacherFrame({ captured, frameIndex, existingImage = null }) {
