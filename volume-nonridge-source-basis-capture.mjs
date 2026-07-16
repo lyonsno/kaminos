@@ -3,6 +3,13 @@ export const SOURCE_BASIS_CAPTURE_AUTHORITY = 'integration-positive-nonridge-ran
 export const SOURCE_BASIS_CAPTURE_SEED = 7162026;
 export const SOURCE_BASIS_SETTING_COUNT = 17;
 export const SOURCE_BASIS_GPU_ROW_FLOATS = 29;
+export const SOURCE_BASIS_DESIGN_CORRECTION = Object.freeze({
+  identity: 'single-axis-setting-transposition-v0',
+  control: 'boundary.gradientGain',
+  settingAIndex: 2,
+  settingBIndex: 12,
+  reason: 'replace-redundant-all-target-zero-setting-m-while-preserving-latin-levels-v0',
+});
 
 export const CURRENT16_ORDER = Object.freeze([
   'sidecar.support', 'sidecar.coverage', 'sidecar.ridge', 'sidecar.footprint',
@@ -86,9 +93,17 @@ export function buildVivisectorControlDesign({
     const [minimum, maximum] = range;
     return permutation.map(level => minimum + (maximum - minimum) * level / (settingCount - 1));
   });
-  return Array.from({ length: settingCount }, (_, settingIndex) => Object.fromEntries(
+  const design = Array.from({ length: settingCount }, (_, settingIndex) => Object.fromEntries(
     CAUSAL_CONTROL_ORDER.map((name, controlIndex) => [name, columns[controlIndex][settingIndex]]),
   ));
+  if (seed === SOURCE_BASIS_CAPTURE_SEED && settingCount === SOURCE_BASIS_SETTING_COUNT) {
+    const { control, settingAIndex, settingBIndex } = SOURCE_BASIS_DESIGN_CORRECTION;
+    [design[settingAIndex][control], design[settingBIndex][control]] = [
+      design[settingBIndex][control],
+      design[settingAIndex][control],
+    ];
+  }
+  return design;
 }
 
 export function buildFullGridWorldPositions({ shape, origin, spacing }) {

@@ -49,6 +49,25 @@ for (const name of CAUSAL_CONTROL_ORDER) {
   assert.equal(new Set(values).size, design.length, `${name} preserves one space-filling level per setting`);
 }
 
+const campaignDesign = buildVivisectorControlDesign();
+assert.equal(
+  campaignDesign[2]['boundary.gradientGain'],
+  0.25,
+  'setting-c receives setting-m\'s low gradient level under the measured one-black correction',
+);
+assert.equal(
+  campaignDesign[12]['boundary.gradientGain'],
+  3.25,
+  'setting-m receives setting-c\'s high gradient level under the measured one-black correction',
+);
+for (const name of CAUSAL_CONTROL_ORDER) {
+  assert.equal(
+    new Set(campaignDesign.map(setting => setting[name])).size,
+    campaignDesign.length,
+    `${name} remains a complete Latin-hypercube column after correction`,
+  );
+}
+
 const positions = buildFullGridWorldPositions({ shape: [2, 2, 2], origin: [-1, -1, -1], spacing: [1, 1, 1] });
 assert.deepEqual(Array.from(positions), [
   -0.5, -0.5, -0.5, 0.5, -0.5, -0.5,
@@ -58,6 +77,7 @@ assert.deepEqual(Array.from(positions), [
 ], 'world positions are unique x-fastest cell centers');
 
 const core = readFileSync(corePath, 'utf8');
+const contract = readFileSync(contractPath, 'utf8');
 const witness = readFileSync(witnessPath, 'utf8');
 assert.match(core, /NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY/, 'core names the source-basis capture identity');
 assert.match(core, /applyDebugNonRidgeCausalControls/, 'core exposes explicit bounded causal-control application');
@@ -80,6 +100,9 @@ assert.match(core, /releaseDebugNonRidgeSourceBasisCapture[\s\S]*clearNonRidgeSo
 assert.match(witness, /kaminos\.volume\.nonridge-source-setting-captures\.v0/, 'witness writes the exact capture-manifest schema');
 assert.match(witness, /integration-positive-nonridge-randomized-source-captures-v0/, 'witness names Integration capture authority');
 assert.match(witness, /retain-all-admitted-settings-and-rows-uncapped-v0/, 'witness cannot hide a setting or row cap');
+assert.match(witness, /exactly-one-measured-all-target-zero-control-v0/, 'witness declares the one-black learner-slate policy');
+assert.match(contract, /single-axis-setting-transposition-v0/, 'design contract names the deterministic measured correction');
+assert.match(witness, /designCorrection:[\s\S]*SOURCE_BASIS_DESIGN_CORRECTION/, 'witness emits the deterministic measured design correction');
 assert.match(witness, /frozenStateArtifact[\s\S]*generationHash[\s\S]*simStepHash/, 'witness binds the frozen state hash chain');
 assert.match(witness, /requestedControls[\s\S]*effectiveControls[\s\S]*gpuEffectiveControls/, 'witness keeps all three control authority receipts');
 assert.match(witness, /gpuControlSubstitutions[\s\S]*boundaryControlUniformAuthority/, 'witness rejects shader-effective control drift even when CPU controls look exact');

@@ -58,9 +58,13 @@ function deterministicControlDesign(seed, settingCount) {
     }
     return permutation.map(level => level / (settingCount - 1));
   });
-  return Array.from({ length: settingCount }, (_, settingIndex) => Object.fromEntries(
+  const design = Array.from({ length: settingCount }, (_, settingIndex) => Object.fromEntries(
     causalControls.map((name, controlIndex) => [name, columns[controlIndex][settingIndex]]),
   ));
+  [design[2]['boundary.gradientGain'], design[12]['boundary.gradientGain']] = [
+    design[12]['boundary.gradientGain'], design[2]['boundary.gradientGain'],
+  ];
+  return design;
 }
 
 function canonicalJson(value) {
@@ -263,6 +267,16 @@ try {
       admittedSettingIds: settings.map(setting => setting.id),
       rejectedSettings: [],
       retentionPolicy: 'retain-all-admitted-settings-and-rows-uncapped-v0',
+      negativeControlPolicy: 'exactly-one-measured-all-target-zero-control-v0',
+      designCorrection: {
+        identity: 'single-axis-setting-transposition-v0',
+        control: 'boundary.gradientGain',
+        settingAIndex: 2,
+        settingBIndex: 12,
+        settingA: 'setting-c',
+        settingB: 'setting-m',
+        reason: 'replace-redundant-all-target-zero-setting-m-while-preserving-latin-levels-v0',
+      },
       campaignStatus: 'capture-tranche-complete-awaiting-verdict-v0',
     },
     settings,
@@ -295,6 +309,28 @@ try {
   assert.equal(corpus.splits.train.settingIds.length, 16);
   assert.equal(new Set([...corpus.splits.train.settingIds, ...corpus.splits.heldOut.settingIds]).size, 17);
   assert.match(corpus.identity, /^sha256:[a-f0-9]{64}$/);
+
+  const redundantBlackControl = structuredClone(captureManifest);
+  const redundantBlackTargets = await writeF32(
+    join(artifactsDir, 'redundant-black-control-targets.f32'),
+    Array.from({ length: rowCount * targets.length }, () => 0),
+    'supervision-targets-positive-nonridge',
+  );
+  redundantBlackControl.settings[0].negativeControl = true;
+  redundantBlackControl.settings[0].negativeControlPredicate = 'all-targets-zero-v0';
+  redundantBlackControl.settings[0].rows.targets = {
+    ...redundantBlackTargets,
+    shape: [rowCount, targets.length],
+  };
+  const redundantBlackPath = join(fixtureRoot, 'redundant-black-control.json');
+  await writeFile(redundantBlackPath, JSON.stringify(redundantBlackControl, null, 2));
+  const redundantBlackOut = join(fixtureRoot, 'redundant-black-control-corpus');
+  assert.notEqual(
+    runTool(redundantBlackPath, redundantBlackOut).status,
+    0,
+    'the first learner slate must retain exactly one measured all-target-zero control',
+  );
+  assert.equal((await readFailure(redundantBlackOut)).failurePhase, 'negative-control-policy');
 
   const allNegativeHoldoutOut = join(fixtureRoot, 'all-negative-holdout-corpus');
   assert.notEqual(
