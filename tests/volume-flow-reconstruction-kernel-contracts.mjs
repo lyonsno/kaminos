@@ -70,6 +70,10 @@ assert.match(core, /flowKernelIdentity:\s*FLOW_RECONSTRUCTION_KERNEL_IDENTITY/, 
 assert.match(core, /flowKernelRequested:[\s\S]*strength:[\s\S]*radiusWorld:[\s\S]*coherence:/, 'runtime state records requested authoring values');
 assert.match(core, /flowKernelEffective:[\s\S]*strength:[\s\S]*radiusWorld:[\s\S]*coherence:/, 'runtime state records normalized effective values');
 assert.match(core, /flowKernelCandidateAdmissionAuthority:\s*'native-cell-unfiltered'/, 'runtime state makes unchanged splat admission authority explicit');
+const temporalControlSignature = core.match(/function temporalControlSignature\(snapshot = controlsSnapshot\) \{([\s\S]*?)\n  \}/)?.[1] || '';
+for (const [key] of expectedControls) {
+  assert.match(temporalControlSignature, new RegExp(`snapshot\\.${key}`), `${key} changes invalidate temporal history`);
+}
 assert.match(witness, /expectedFlowKernelStrength/, 'visual witness derives expected kernel strength from the requested route');
 assert.match(witness, /function quantizeFlowKernelControl/, 'visual witness models the declared HTML range steps instead of expecting impossible values');
 assert.match(witness, /state\.flowKernelIdentity[\s\S]*FLOW_RECONSTRUCTION_KERNEL_IDENTITY/, 'visual witness verifies effective kernel identity');
