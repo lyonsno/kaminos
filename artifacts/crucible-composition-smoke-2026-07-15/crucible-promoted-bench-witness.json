@@ -2,8 +2,8 @@
   "schema": "kaminos.crucible-composition-witness.v0",
   "status": "passed",
   "phase": "complete",
-  "startedAt": "2026-07-16T01:39:51.557Z",
-  "finishedAt": "2026-07-16T01:39:56.361Z",
+  "startedAt": "2026-07-16T02:08:07.333Z",
+  "finishedAt": "2026-07-16T02:08:12.001Z",
   "requestedUrl": "http://127.0.0.1:8197/?composition=promoted-bench-2026-07-15",
   "requestedCompositionId": "promoted-bench-2026-07-15",
   "effectiveCompositionId": "promoted-bench-2026-07-15",
@@ -23,16 +23,35 @@
     "quantizedColorCount": 50,
     "minLuma": 2,
     "maxLuma": 220.2808,
-    "meanLuma": 90.02198901367079,
-    "variance": 7105.623374566982,
+    "meanLuma": 90.02174487304579,
+    "variance": 7105.649471084046,
     "darkFraction": 0.27587890625,
-    "canvasRect": {
+    "regionRect": {
       "left": 380,
       "top": 0,
       "width": 1220,
       "height": 1000
     }
   },
+  "sidebarPixelEvidence": {
+    "ok": true,
+    "reason": "sampled-sidebar-screenshot",
+    "sampleWidth": 64,
+    "sampleHeight": 64,
+    "quantizedColorCount": 49,
+    "minLuma": 25.999999999999996,
+    "maxLuma": 229.99999999999997,
+    "meanLuma": 33.385558691406146,
+    "variance": 188.76281731523318,
+    "darkFraction": 0,
+    "regionRect": {
+      "left": 0,
+      "top": 0,
+      "width": 380,
+      "height": 1000
+    }
+  },
+  "cleanup": null,
   "lastTrustworthyEvidence": {
     "schema": "kaminos.crucible-composition-debug.v0",
     "status": "loaded",
@@ -45,7 +64,23 @@
       "titan-hammer"
     ],
     "aoEnabled": false,
+    "viewportFraming": {
+      "viewportWidth": 1220,
+      "viewportHeight": 1000,
+      "viewportAspect": 1.22,
+      "distanceScale": 1,
+      "cameraPosition": [
+        3.7,
+        2.45,
+        -3.9000000000000004
+      ],
+      "cameraTarget": [
+        0,
+        0.38,
+        0.25
+      ]
+    },
     "error": null
   },
-  "stderr": "DevTools listening on ws://127.0.0.1:9364/devtools/browser/5e865afd-06bc-4377-a1d0-f9b101323448\nTrying to load the allocator multiple times. This is *not* supported.\n[83625:15471105:0715/213954.492408:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT\n[83625:15471105:0715/213954.493476:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR"
+  "stderr": "DevTools listening on ws://127.0.0.1:9364/devtools/browser/db4be274-24c0-4947-b5d9-87b5bf1677b9\nTrying to load the allocator multiple times. This is *not* supported.\n[13679:15668216:0715/220811.103581:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[13679:15668216:0715/220811.103725:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[13679:15668216:0715/220811.111486:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR"
 }

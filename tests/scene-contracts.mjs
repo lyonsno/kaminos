@@ -459,6 +459,8 @@ assert.match(index, /aoPass\s*=\s*aoCompute\(depthTexNode,\s*normalTexNode,\s*ca
 assert.match(index, /const aoResolved\s*=\s*convertToTexture\(aoPass\.getTextureNode\(\)\)/, 'AO recovery bridges the storage texture through TSL convertToTexture');
 assert.match(index, /const denoisePass\s*=\s*denoise\(aoResolved,\s*prePassDepth,\s*prePassNormal,\s*camera\)/, 'AO recovery denoises the managed AO output');
 assert.match(index, /renderPipeline\.outputNode\s*=\s*scenePass\.mul\(vec4\(vec3\(aoOutput\),\s*1\)\)/, 'AO recovery composites scene color through the managed AO output node');
+assert.match(index, /const aoLiveIntensity\s*=\s*aoEnabled\s*\?\s*\(ao\.intensity\s*\?\?\s*ao\.scale\s*\?\?\s*1\)\s*:\s*0;/, 'scene restore resolves the effective live AO intensity from enabled state');
+assert.match(index, /if \(aoIntensity\) aoIntensity\.value\s*=\s*aoLiveIntensity;/, 'scene restore applies AO state to the live render uniform');
 assert.match(index, /renderPipeline\.render\(\)/, 'render loop must render the managed pipeline rather than bypassing AO with renderer.render');
 assert.doesNotMatch(index, /device\.queue\.submit/, 'Kaminos main AO recovery must not submit raw WebGPU command buffers');
 

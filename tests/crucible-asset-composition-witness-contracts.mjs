@@ -18,6 +18,9 @@ assert.match(witness, /writeReport\(/);
 assert.match(witness, /catch \(error\)/);
 assert.match(witness, /browser-exit/);
 assert.match(witness, /cleanup-failed/);
-assert.match(witness, /writeReport\('failed',[\s\S]*cleanup/);
+assert.match(witness, /let cleanupEvidence\s*=\s*null/);
+assert.match(witness, /cleanupEvidence\s*=\s*\{\s*userDataDir/);
+assert.match(witness, /cleanup:\s*cleanupEvidence/);
+assert.doesNotMatch(witness, /catch \(cleanupError\) \{[\s\S]*?writeReport\('failed'/);
 
 console.log('crucible asset composition witness contracts passed');

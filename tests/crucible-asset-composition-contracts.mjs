@@ -6,6 +6,10 @@ const index = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8')
 const gitignore = fs.readFileSync(new URL('../.gitignore', import.meta.url), 'utf8');
 const compositionUrl = new URL('../scenes/crucible-promoted-bench.kaminos.json', import.meta.url);
 const composition = JSON.parse(fs.readFileSync(compositionUrl, 'utf8'));
+const desktopWitness = JSON.parse(fs.readFileSync(
+  new URL('../artifacts/crucible-composition-smoke-2026-07-15/crucible-promoted-bench-witness.json', import.meta.url),
+  'utf8',
+));
 
 assert.equal(composition.schema, 'kaminos.scene.v1');
 assert.equal(composition.version, 4);
@@ -57,5 +61,7 @@ assert.match(index, /viewportFraming/);
 assert.match(index, /@media\s*\(max-width:\s*720px\)[\s\S]*#sidebar\s*\{[^}]*width:\s*42vw;/);
 assert.match(index, /#viewport\s*\{[^}]*min-width:\s*0;/);
 assert.match(gitignore, /!scenes\/crucible-promoted-bench\.kaminos\.json/);
+assert.equal(desktopWitness.status, 'passed');
+assert.equal(desktopWitness.sidebarPixelEvidence?.ok, true, 'desktop positive receipt must prove sidebar paint');
 
 console.log('crucible asset composition contracts passed');

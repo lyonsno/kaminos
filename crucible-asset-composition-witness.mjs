@@ -41,6 +41,7 @@ let primaryOutputWritten = false;
 let lastTrustworthyEvidence = null;
 let canvasPixelEvidence = null;
 let sidebarPixelEvidence = null;
+let cleanupEvidence = null;
 let finalStatus = 'failed';
 let finalError = null;
 
@@ -69,6 +70,7 @@ function writeReport(status, extra = {}) {
     primaryOutputWritten,
     canvasPixelEvidence,
     sidebarPixelEvidence,
+    cleanup: cleanupEvidence,
     lastTrustworthyEvidence,
     stderr: stderr.trim().slice(-4000),
     ...extra,
@@ -323,8 +325,8 @@ try {
       phase = 'cleanup-failed';
       finalStatus = 'failed';
       finalError = `cleanup failed: ${cleanupError?.stack || cleanupError}`;
+      cleanupEvidence = { userDataDir, error: finalError };
       process.exitCode = 1;
-      writeReport('failed', { error: finalError, cleanup: { userDataDir } });
     }
   }
 }

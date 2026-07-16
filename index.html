@@ -23061,8 +23061,10 @@ async function loadSceneFile(file) {
     const ao = data.postprocessing.ao;
     if (ao) {
       const aoEnabled = ao.enabled ?? true;
+      const aoLiveIntensity = aoEnabled ? (ao.intensity ?? ao.scale ?? 1) : 0;
       document.getElementById('ao-toggle').checked = aoEnabled;
       document.getElementById('ao-controls').style.display = aoEnabled ? '' : 'none';
+      if (aoIntensity) aoIntensity.value = aoLiveIntensity;
       if (ao.radius !== undefined) {
         document.getElementById('ao-radius').value = ao.radius;
         document.getElementById('ao-radius-val').textContent = ao.radius.toFixed(2);
