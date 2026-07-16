@@ -153,6 +153,57 @@ assert.equal(validated.cameraCount, 3);
 assert.deepEqual(validated.heldOutCameraIndices, [0, 2]);
 assert.equal(validated.familyCount, 3);
 
+const replayBridgeReport = {
+  ...report,
+  sourceSettingsPreset: {
+    presetId: null,
+    authority: null,
+  },
+  sourceRouteAuthority: 'checksum-anchor-bridge-explicit-controls-hash-v0',
+  replayAuthority: {
+    warmupAuthority: 'checksum-bound-exact-basin-step96-field-anchor-v0',
+    warmupTarget: 96,
+    warmupComplete: true,
+    warmupReceipt: {
+      ok: true,
+      authority: 'checksum-bound-exact-basin-step96-field-anchor-v0',
+      completedSteps: 96,
+      grid: 160,
+      fluidSha256: 'd58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1',
+      frontSha256: '1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8',
+    },
+    freezeAfterWarmupRequested: true,
+    postWarmupFreezeReceipt: {
+      paused: true,
+      frameCount: 96,
+      simStepCount: 96,
+      authority: 'witness-owned-presented-frame-pause-release-v0',
+    },
+  },
+  frozenState: {
+    sameStateCaptureId: 'filament-orbit-f96-s96',
+    frameCount: 96,
+    simStepCount: 96,
+    controlsHash: 'dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f',
+  },
+};
+const validatedReplayBridge = await oracle.validateCameraHoldoutReport(replayBridgeReport);
+assert.equal(validatedReplayBridge.cameraCount, 3);
+
+await assert.rejects(
+  () => oracle.validateCameraHoldoutReport({
+    ...replayBridgeReport,
+    replayAuthority: {
+      ...replayBridgeReport.replayAuthority,
+      warmupReceipt: {
+        ...replayBridgeReport.replayAuthority.warmupReceipt,
+        fluidSha256: '0'.repeat(64),
+      },
+    },
+  }),
+  /replay source identity/i,
+);
+
 await assert.rejects(
   () => oracle.validateCameraHoldoutReport({
     ...report,

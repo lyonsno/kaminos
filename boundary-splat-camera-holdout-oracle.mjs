@@ -12,6 +12,12 @@ const FAMILY_AUTHORITIES = Object.freeze({
 const CONSERVATION_AUTHORITY = 'rendered-gaussian-integrated-alpha-conserved-v0';
 const ATTRIBUTE_PAYLOAD_AUTHORITY = 'gpu-compacted-boundary-splat-effective-attributes-v0';
 const TARGET_AUTHORITY = 'smoke-off-complete-flame-local-emission-extinction-v0';
+const REPLAY_ROUTE_AUTHORITY = 'checksum-anchor-bridge-explicit-controls-hash-v0';
+const REPLAY_WARMUP_AUTHORITY = 'checksum-bound-exact-basin-step96-field-anchor-v0';
+const REPLAY_FREEZE_AUTHORITY = 'witness-owned-presented-frame-pause-release-v0';
+const REPLAY_FLUID_SHA256 = 'd58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1';
+const REPLAY_FRONT_SHA256 = '1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8';
+const REPLAY_CONTROLS_SHA256 = 'dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f';
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -44,6 +50,32 @@ function exactIndexSet(actual, expected, label) {
   }
 }
 
+function hasExactReplaySourceIdentity(report) {
+  const replay = report.replayAuthority || {};
+  const receipt = replay.warmupReceipt || {};
+  const freeze = replay.postWarmupFreezeReceipt || {};
+  return report.sourceSettingsPreset?.presetId == null
+    && report.sourceSettingsPreset?.authority == null
+    && report.sourceRouteAuthority === REPLAY_ROUTE_AUTHORITY
+    && replay.warmupAuthority === REPLAY_WARMUP_AUTHORITY
+    && replay.warmupTarget === 96
+    && replay.warmupComplete === true
+    && receipt.ok === true
+    && receipt.authority === REPLAY_WARMUP_AUTHORITY
+    && receipt.completedSteps === 96
+    && receipt.grid === 160
+    && receipt.fluidSha256 === REPLAY_FLUID_SHA256
+    && receipt.frontSha256 === REPLAY_FRONT_SHA256
+    && replay.freezeAfterWarmupRequested === true
+    && freeze.paused === true
+    && freeze.frameCount === 96
+    && freeze.simStepCount === 96
+    && freeze.authority === REPLAY_FREEZE_AUTHORITY
+    && report.frozenState?.frameCount === 96
+    && report.frozenState?.simStepCount === 96
+    && report.frozenState?.controlsHash === REPLAY_CONTROLS_SHA256;
+}
+
 export async function validateCameraHoldoutReport(report, options = {}) {
   if (!report || report.schema !== SCHEMA) throw new Error(`camera holdout report schema must be ${SCHEMA}`);
   if (report.status !== 'completed') throw new Error(`camera holdout report is incomplete: ${report.status || 'missing'}`);
@@ -54,9 +86,10 @@ export async function validateCameraHoldoutReport(report, options = {}) {
   }
   if (typeof report.backend !== 'string' || !report.backend.startsWith('WebGPU:')) throw new Error('effective WebGPU backend is missing');
   if (report.fallbackReason != null) throw new Error(`renderer fallback: ${report.fallbackReason}`);
-  if (report.sourceSettingsPreset?.presetId !== PRESET_ID
-    || report.sourceSettingsPreset?.authority !== 'shared-volume-settings-preset-v2') {
-    throw new Error('stale or default Full Flame preset replaced the requested source');
+  const hasSharedPresetSource = report.sourceSettingsPreset?.presetId === PRESET_ID
+    && report.sourceSettingsPreset?.authority === 'shared-volume-settings-preset-v2';
+  if (!hasSharedPresetSource && !hasExactReplaySourceIdentity(report)) {
+    throw new Error('stale/default preset or incomplete replay source identity replaced the requested source');
   }
   if (!report.frozenState?.sameStateCaptureId
     || !Number.isInteger(report.frozenState.frameCount)
