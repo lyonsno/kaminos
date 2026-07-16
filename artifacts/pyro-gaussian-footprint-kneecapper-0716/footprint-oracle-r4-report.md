@@ -8,6 +8,8 @@ This report records the first reproducible frozen-state footprint oracle slice f
 
 The r4 corpus is a three-frame same-browser sequence, not a same-state multi-camera corpus. Its disjoint evaluation frame is temporal/frame holdout evidence (`frame-002`), not held-out camera closure. Do not use this report to claim that one optimized 3D attribute set survives camera changes.
 
+Image gallery: `artifacts/pyro-gaussian-footprint-kneecapper-0716/footprint-oracle-r4-gallery.html`.
+
 ## Source Corpus
 
 - Corpus: `artifacts/pyro-gaussian-footprint-kneecapper-0716/fresh-supervision-r4/corpus.json`
@@ -64,32 +66,42 @@ The global optimum sits at the smallest/sharpest tested corner and materially be
 
 Visual inspection showed the conditioned preview tracks the Intrinsic target's broad sheet mass, cavities, and vertical filament channels far better than the global row. This is strong evidence that a small view-independent attribute family over existing candidate features can explain the majority of the r4 temporal held-out residual relative to the best-global baseline.
 
-## Pending Upper Bound
+## Same-Frame Per-Candidate Upper Bound Attempt
 
 - Greenroom job: `372d90d7b3a2`
-- Status at report time: `pending`
+- Status: `done`, exit code `0`
 - Job type: `kaminos_splat_radiance_oracle_mlx_pyro_0716`
 - Input: `r4-oracle-per-candidate-frame000/corpus-frame000.json`
 - Output: `r4-oracle-per-candidate-frame000/greenroom-run`
 - Params: `steps=160`, `render_width=320`, `depth_bins=1`, `edge_weight=0`, `expected_ray_steps=160`, `expected_render_scale=1`, `train_frame_indices=0`, `eval_frame_indices=0`
-- Expected report authority after execution: `explicit-single-frame-per-candidate-table-oracle-v0` with `same-frame-per-candidate-table-oracle-v0`
+- Frame split authority: `explicit-single-frame-per-candidate-table-oracle-v0`
+- Evaluation authority: `same-frame-per-candidate-table-oracle-v0`
+- Model authority: `per-candidate-free-attribute-oracle-v0`
+- Initial same-frame loss: `0.15282151103019714`
+- Trained same-frame loss: `0.02469077706336975`
+- Initial same-frame edge loss: `0.02234981209039688`
+- Trained same-frame edge loss: `0.014711985364556313`
+- Preview target: `r4-oracle-per-candidate-frame000/greenroom-run/preview-target-frame-000.png`
+- Preview trained: `r4-oracle-per-candidate-frame000/greenroom-run/preview-trained-frame-000.png`
 
-This job is a same-frame per-candidate attribute-table upper bound only. It cannot close held-out camera or held-out frame generalization. It is useful for asking whether the current renderer can match one Intrinsic view when every candidate's RGB, opacity, and x/y radius are free.
+This job is a same-frame per-candidate attribute-table upper bound attempt only. It cannot close held-out camera or held-out frame generalization. It is useful for asking whether the current renderer can match one Intrinsic view when every candidate's RGB, opacity, and x/y radius are free.
 
-The Greenroom status reported `volatile_output` because this worktree is under `/private/tmp`. The branch artifacts are still present in the worktree, but a final cross-session archival step should copy any completed Greenroom output to a non-volatile durable location if it becomes load-bearing.
+Visual inspection showed the trained per-candidate image remains too bright and Beauty-like versus the Intrinsic target. It improves over its initial frame, but it is weaker than the conditioned temporal held-out row. Do not treat this as a current-renderer ceiling or a candidate-support closure.
+
+The Greenroom status reported `volatile_output` because this worktree is under `/private/tmp`. The output was added to the branch artifact set, but a final cross-session archival step should copy any completed Greenroom output to a non-volatile durable location if it becomes load-bearing.
 
 ## Decision Table Status
 
 - Global calibration closes: no. It improves over defaults/manual-comparison baseline directionally, but visible residual remains large and Beauty-like.
 - Conditioned view-independent family closes across held-out temporal frame: yes for this r4 temporal split, with held-out loss `0.0021148694213479757` from best-global `0.1443721354007721`.
 - Training-view closes but held-out views fail: not tested yet. Same-state multi-camera corpus is still missing.
-- No current footprint family closes training view: not established. Per-candidate single-frame oracle is queued as `372d90d7b3a2`.
+- No current footprint family closes training view: still not cleared. The same-frame per-candidate table run improved loss to `0.02469077706336975` but visibly did not match the Intrinsic target.
 
 ## Current Verdict
 
 The current candidate support is substantially more sufficient than default renders imply. The best evidence is the conditioned family: with candidate positions and Intrinsic target identity fixed, a small position-conditioned attribute head on the best-global footprint constants removes nearly all r4 temporal held-out residual relative to the best-global baseline.
 
-This does not justify a full covariance promotion yet. The completed experiment is a coupled current-renderer attribute/footprint result, not isolated covariance, and it lacks same-state held-out camera proof. The next contract boundary is either a camera-holdout supervision corpus or Tiger-owned trainer routing for a focused view-independent conditioned head once camera evidence exists.
+This does not justify a full covariance promotion yet. The completed experiment is a coupled current-renderer attribute/footprint result, not isolated covariance, and it lacks same-state held-out camera proof. The per-candidate table result also says the current "free table" setup is not actually the strongest truthful upper bound. The next contract boundary is either a camera-holdout supervision corpus or a better-defined current-renderer upper bound that can explain why the conditioned head beats the free table attempt.
 
 ## Verification
 

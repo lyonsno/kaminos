@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pyro Gaussian Footprint Kneecapper R4 Gallery</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      background: #111;
+      color: #eee;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    body {
+      margin: 0;
+      padding: 24px;
+      background: #111;
+    }
+    h1, h2, h3 {
+      margin: 0 0 12px;
+      font-weight: 700;
+    }
+    p {
+      max-width: 980px;
+      line-height: 1.45;
+      color: #d8d8d8;
+    }
+    code {
+      color: #f5d187;
+      overflow-wrap: anywhere;
+    }
+    .section {
+      margin: 28px 0 40px;
+      border-top: 1px solid #333;
+      padding-top: 24px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 18px;
+      align-items: start;
+    }
+    figure {
+      margin: 0;
+      background: #181818;
+      border: 1px solid #333;
+      padding: 12px;
+    }
+    img {
+      width: 100%;
+      height: auto;
+      display: block;
+      background: #050505;
+      object-fit: contain;
+    }
+    figcaption {
+      margin-top: 10px;
+      font-size: 13px;
+      line-height: 1.35;
+      color: #ccc;
+    }
+    .path {
+      display: block;
+      margin-top: 6px;
+      color: #f5d187;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+    .metric {
+      color: #a8d5ff;
+    }
+  </style>
+</head>
+<body>
+  <h1>R4 Footprint Oracle Gallery</h1>
+  <p>
+    Local inspection page for the r4 frozen-state Intrinsic footprint oracle.
+    Open path:
+    <code>/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/footprint-oracle-r4-gallery.html</code>
+  </p>
+  <p>
+    Scope caveat: the completed held-out evidence is a temporal/frame split, not a same-state held-out-camera split.
+    The per-candidate table result is a same-frame upper bound attempt, not generalization evidence.
+  </p>
+
+  <section class="section">
+    <h2>Fresh r4 Intrinsic Targets</h2>
+    <p>Native target captures from the supervision corpus. These are the structural Intrinsic targets, not Beauty output.</p>
+    <div class="grid">
+      <figure>
+        <a href="fresh-supervision-r4/frame-000.raymarch.png"><img src="fresh-supervision-r4/frame-000.raymarch.png" alt="r4 frame 000 Intrinsic target"></a>
+        <figcaption>Frame 000 Intrinsic target<span class="path">/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/fresh-supervision-r4/frame-000.raymarch.png</span></figcaption>
+      </figure>
+      <figure>
+        <a href="fresh-supervision-r4/frame-001.raymarch.png"><img src="fresh-supervision-r4/frame-001.raymarch.png" alt="r4 frame 001 Intrinsic target"></a>
+        <figcaption>Frame 001 Intrinsic target<span class="path">/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/fresh-supervision-r4/frame-001.raymarch.png</span></figcaption>
+      </figure>
+      <figure>
+        <a href="fresh-supervision-r4/frame-002.raymarch.png"><img src="fresh-supervision-r4/frame-002.raymarch.png" alt="r4 frame 002 Intrinsic target"></a>
+        <figcaption>Frame 002 Intrinsic target, held-out temporal frame<span class="path">/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/fresh-supervision-r4/frame-002.raymarch.png</span></figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Best Global Held-Out Frame</h2>
+    <p>
+      Best global row: radius <code>0.55</code>, sharpness <code>4.2</code>.
+      Held-out frame loss <span class="metric">0.1443721354007721</span>.
+      This improves the global constants but remains visibly too bright and Beauty-like.
+    </p>
+    <div class="grid">
+      <figure>
+        <a href="r4-oracle-global/runs/global-r0p55-s4p2/preview-target-frame-002.png"><img src="r4-oracle-global/runs/global-r0p55-s4p2/preview-target-frame-002.png" alt="best global target frame 002"></a>
+        <figcaption>Target, frame 002<span class="path">/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-global/runs/global-r0p55-s4p2/preview-target-frame-002.png</span></figcaption>
+      </figure>
+      <figure>
+        <a href="r4-oracle-global/runs/global-r0p55-s4p2/preview-trained-frame-002.png"><img src="r4-oracle-global/runs/global-r0p55-s4p2/preview-trained-frame-002.png" alt="best global trained frame 002"></a>
+        <figcaption>Best global prediction, frame 002<span class="path">/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-global/runs/global-r0p55-s4p2/preview-trained-frame-002.png</span></figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Least-Expressive Conditioned Held-Out Frame</h2>
+    <p>
+      Conditioned family: <code>shared-position-conditioned-feature-mlp-v0</code>.
+      Held-out frame loss <span class="metric">0.0021148694213479757</span>, from best-global baseline <span class="metric">0.1443721354007721</span>.
+      This is the strongest completed evidence in the slice.
+    </p>
+    <div class="grid">
+      <figure>
+        <a href="r4-oracle-conditioned-bestglobal/runs/conditioned/preview-target-frame-002.png"><img src="r4-oracle-conditioned-bestglobal/runs/conditioned/preview-target-frame-002.png" alt="conditioned target frame 002"></a>
+        <figcaption>Target, frame 002<span class="path">/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-conditioned-bestglobal/runs/conditioned/preview-target-frame-002.png</span></figcaption>
+      </figure>
+      <figure>
+        <a href="r4-oracle-conditioned-bestglobal/runs/conditioned/preview-initial-frame-002.png"><img src="r4-oracle-conditioned-bestglobal/runs/conditioned/preview-initial-frame-002.png" alt="conditioned initial frame 002"></a>
+        <figcaption>Initial prediction, frame 002<span class="path">/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-conditioned-bestglobal/runs/conditioned/preview-initial-frame-002.png</span></figcaption>
+      </figure>
+      <figure>
+        <a href="r4-oracle-conditioned-bestglobal/runs/conditioned/preview-trained-frame-002.png"><img src="r4-oracle-conditioned-bestglobal/runs/conditioned/preview-trained-frame-002.png" alt="conditioned trained frame 002"></a>
+        <figcaption>Conditioned trained prediction, frame 002<span class="path">/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-conditioned-bestglobal/runs/conditioned/preview-trained-frame-002.png</span></figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Per-Candidate Same-Frame Upper Bound Attempt</h2>
+    <p>
+      Greenroom job <code>372d90d7b3a2</code>, route <code>kaminos_splat_radiance_oracle_mlx_pyro_0716</code>.
+      Same-frame table authority: <code>explicit-single-frame-per-candidate-table-oracle-v0</code>.
+      Loss improved from <span class="metric">0.15282151103019714</span> to <span class="metric">0.02469077706336975</span>.
+      Visually, this remains too Beauty-like, so it is not a closure result.
+    </p>
+    <div class="grid">
+      <figure>
+        <a href="r4-oracle-per-candidate-frame000/greenroom-run/preview-target-frame-000.png"><img src="r4-oracle-per-candidate-frame000/greenroom-run/preview-target-frame-000.png" alt="per-candidate target frame 000"></a>
+        <figcaption>Target, frame 000<span class="path">/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-per-candidate-frame000/greenroom-run/preview-target-frame-000.png</span></figcaption>
+      </figure>
+      <figure>
+        <a href="r4-oracle-per-candidate-frame000/greenroom-run/preview-initial-frame-000.png"><img src="r4-oracle-per-candidate-frame000/greenroom-run/preview-initial-frame-000.png" alt="per-candidate initial frame 000"></a>
+        <figcaption>Initial prediction, frame 000<span class="path">/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-per-candidate-frame000/greenroom-run/preview-initial-frame-000.png</span></figcaption>
+      </figure>
+      <figure>
+        <a href="r4-oracle-per-candidate-frame000/greenroom-run/preview-trained-frame-000.png"><img src="r4-oracle-per-candidate-frame000/greenroom-run/preview-trained-frame-000.png" alt="per-candidate trained frame 000"></a>
+        <figcaption>Per-candidate trained prediction, frame 000<span class="path">/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-per-candidate-frame000/greenroom-run/preview-trained-frame-000.png</span></figcaption>
+      </figure>
+    </div>
+  </section>
+</body>
+</html>

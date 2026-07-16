@@ -1,0 +1,31 @@
+{
+  "name": "corpus-frame000",
+  "job_type": "kaminos_splat_radiance_oracle_mlx_pyro_0716",
+  "job_id": "372d90d7b3a2",
+  "input_path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/r4-oracle-per-candidate-frame000/corpus-frame000.json",
+  "input_name": "corpus-frame000.json",
+  "params": {
+    "steps": "160",
+    "render_width": "320",
+    "learning_rate": "0.001",
+    "radius_preservation": "0",
+    "depth_bins": "1",
+    "edge_weight": "0",
+    "expected_ray_steps": "160",
+    "expected_render_scale": "1",
+    "train_frame_indices": "0",
+    "eval_frame_indices": "0"
+  },
+  "output_files": [
+    "candidate-attributes.f32",
+    "preview-initial-frame-000.png",
+    "preview-initial.png",
+    "preview-target-frame-000.png",
+    "preview-target.png",
+    "preview-trained-frame-000.png",
+    "preview-trained.png",
+    "training-report.json"
+  ],
+  "created_at": 1784188694.174111,
+  "duration_s": 22.9
+}
