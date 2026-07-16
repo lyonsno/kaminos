@@ -58,6 +58,14 @@ const views = [
   { id: 'right', yaw: 0.85 },
   { id: 'rear', yaw: 3.141593 },
 ];
+const deprecatedCfg2LeftOverride = process.env.KAMINOS_0032_CFG2_LEFT_JOB_ID;
+if (deprecatedCfg2LeftOverride) {
+  const detail = deprecatedCfg2LeftOverride === '7846c3d4b3a3'
+    ? `explicitly excluded duplicate witness ${deprecatedCfg2LeftOverride}`
+    : `unbound CFG2-left witness override ${deprecatedCfg2LeftOverride}`;
+  throw new Error(`${detail}; CFG2-left evidence identity is fixed by the artifact contract`);
+}
+const cfg2LeftJobId = process.env.KAMINOS_0032_TEST_MISSING_CFG2_LEFT_JOB_ID ?? '19bea65b5bc7';
 const rows = [
   {
     id: 'cfg-1p00', strength: 1, generationJobId: '408143730b5e',
@@ -67,7 +75,7 @@ const rows = [
   {
     id: 'cfg-2p00', strength: 2, generationJobId: '3d0232193272',
     outputDir: '/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-2p0',
-    witnessJobIds: [process.env.KAMINOS_0032_CFG2_LEFT_JOB_ID ?? '19bea65b5bc7', 'be85a5eaf53a', 'fc55e3cca11e', '4d6a11890281'],
+    witnessJobIds: [cfg2LeftJobId, 'be85a5eaf53a', 'fc55e3cca11e', '4d6a11890281'],
   },
   {
     id: 'cfg-4p00', strength: 4, generationJobId: 'e9c52ec7687b',
@@ -81,6 +89,20 @@ const excludedWitnessJobs = [{
   cell: 'cfg-2p00/left',
   reason: 'redundant submission excluded before evidence assembly',
 }];
+
+for (const exclusion of excludedWitnessJobs) {
+  const [rowId, viewId] = exclusion.cell.split('/');
+  const row = rows.find(candidate => candidate.id === rowId);
+  const viewIndex = views.findIndex(candidate => candidate.id === viewId);
+  if (!row || viewIndex < 0) throw new Error(`excluded witness names unknown cell ${exclusion.cell}`);
+  const admittedJobId = row.witnessJobIds[viewIndex];
+  if (admittedJobId === exclusion.jobId) {
+    throw new Error(`explicitly excluded duplicate witness ${exclusion.jobId} admitted at ${exclusion.cell}`);
+  }
+  if (admittedJobId !== exclusion.duplicatesAdmittedJobId && !process.env.KAMINOS_0032_TEST_MISSING_CFG2_LEFT_JOB_ID) {
+    throw new Error(`${exclusion.cell} must admit ${exclusion.duplicatesAdmittedJobId}; got ${admittedJobId}`);
+  }
+}
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const fileRecord = path => {
