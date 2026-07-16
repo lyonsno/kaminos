@@ -284,7 +284,8 @@ assert.match(volumeSource, /setLiquidFireSourcePilotEnabled\(enabled\)/, 'Pyro e
 const livePilotControlSource = volumeSource.match(/setLiquidFireSourcePilotEnabled\(enabled\)[\s\S]*?\n\s*},\n\s*setLiquidFireContactTransferEnabled/)?.[0] || '';
 assert.match(livePilotControlSource, /sourcePilotEnabled\s*=\s*enabled\s*===\s*true/, 'live pilot control normalizes its policy input');
 assert.doesNotMatch(livePilotControlSource, /rebuildFluidState/, 'changing pilot policy cannot reset the established fluid or Pyro field');
-assert.match(indexSource, /kaminosFingerFluidPyroSetPilotEnabled\s*=\s*enabled\s*=>\s*volumePrototype\.setLiquidFireSourcePilotEnabled\(enabled\s*===\s*true\)/, 'composition exposes the explicit pilot policy to the dynamic witness and operator');
+assert.match(indexSource, /function setFingerFluidPyroCompositionPilotEnabled\(enabled\)[\s\S]*setLiquidFireSourcePilotEnabled\(enabled\s*===\s*true\)[\s\S]*fingerFluidPyroCompositionState\.sourcePilotEnabled\s*=\s*receipt\.enabled/, 'composition mirrors the live pilot receipt into its operator-facing summary authority');
+assert.match(indexSource, /kaminosFingerFluidPyroSetPilotEnabled\s*=\s*enabled\s*=>\s*setFingerFluidPyroCompositionPilotEnabled\(enabled\)/, 'composition exposes the state-coherent pilot policy to the dynamic witness and operator');
 assert.match(indexSource, /kaminosFingerFluidPyroSetSourcePosition\s*=\s*position\s*=>\s*setFingerFluidPyroCompositionSourcePosition\(position\)/, 'composition exposes live source placement for a dry same-field pilot recovery witness');
 assert.match(indexSource, /fingerFluidPyroCompositionSourceTrajectoryEnabled\s*=\s*false/, 'explicit source placement cannot be overwritten by the authored one-shot trajectory');
 assert.match(volumeSource, /sourceCombustionResponse\s*=\s*select\(0\.028,\s*0\.020,/, 'source extinction has a visibly progressive multi-frame response horizon');
@@ -336,6 +337,7 @@ assert.doesNotMatch(witnessSource, /source\?\.sourceContactWetness[^\n]+\|\|[^\n
 assert.match(witnessSource, /verify_manual_pilot_recovery[\s\S]*kaminosFingerFluidPyroSetPilotEnabled\(false\)[\s\S]*sourceWetness[\s\S]*kaminosFingerFluidPyroSetPilotEnabled\(true\)/, 'dynamic witness proves a dry no-auto-reignite interval before applying the explicit pilot');
 assert.match(witnessSource, /sourceIgnited[^\n]+0\.5[^\n]+sourceCombustion[^\n]+0\.45/, 'pilot recovery waits for materially restored combustion before judging the recovered flame body');
 assert.match(witnessSource, /recoveryWitness\.consumerWitness\?\.sourcePilotEnabled\s*!==\s*true/, 'dynamic recovery must report the live pilot as effective authority');
+assert.match(witnessSource, /recoveryWitness\.sourcePilotEnabled\s*!==\s*recoveryWitness\.consumerWitness\?\.sourcePilotEnabled/, 'dynamic recovery rejects contradictory top-level and live-consumer pilot authority');
 assert.match(witnessSource, /recoveryComposedSample\.recoveryFireRatio\s*>\s*0\.15/, 'pilot recovery must restore a material fixed-view luminous flame, not only a state bit');
 assert.match(witnessSource, /lastCompositionSample/, 'visual witness preserves the latest source geometry and thermal state when contact fails');
 assert.match(witnessSource, /preContactOut/, 'visual witness owns a distinct pre-contact image artifact');

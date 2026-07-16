@@ -745,6 +745,9 @@ async function main() {
       }
       if (!recoveryWitness) throw new Error('explicit pilot failed to recover the dry extinguished live source');
       if (recoveryWitness.consumerWitness?.sourcePilotEnabled !== true) throw new Error('recovered source did not report explicit pilot authority');
+      if (recoveryWitness.sourcePilotEnabled !== recoveryWitness.consumerWitness?.sourcePilotEnabled) {
+        throw new Error(`recovered source exposed contradictory pilot authority: ${JSON.stringify({ composition: recoveryWitness.sourcePilotEnabled, consumer: recoveryWitness.consumerWitness?.sourcePilotEnabled })}`);
+      }
       if (recoveryWitness.volume?.fluidStateResetCount !== recoveryStartResetCount) {
         throw new Error(`pilot recovery reset the established field: ${JSON.stringify({ recoveryStartResetCount, final: recoveryWitness.volume?.fluidStateResetCount })}`);
       }
