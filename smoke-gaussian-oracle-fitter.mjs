@@ -753,7 +753,47 @@ function splitDenseLeaf(source, leaf) {
   throw new Error(`cannot split dense smoke leaf containing ${leaf.indices.length} distinct voxels`);
 }
 
-async function recursiveMomentBudgetCurve({ frame, requestedBudgets, densityThreshold, outDir, structureGradientGain = 0 }) {
+function splitDenseLeafAlongPrincipalAxis(source, leaf) {
+  const { grid } = source.frame;
+  const principalAxis = leaf.gaussian.orientation[0];
+  const projected = Array.from(leaf.indices, cellIndex => {
+    const coordinates = cellCoordinates(cellIndex, grid);
+    const position = coordinates.map((coordinate, axis) => (
+      source.bounds.minimum[axis] + (coordinate + 0.5) * source.cellSize[axis]
+    ));
+    return {
+      cellIndex,
+      projection: position.reduce((sum, component, axis) => sum + component * principalAxis[axis], 0),
+      weight: allocationWeight(source, cellIndex),
+    };
+  }).sort((left, right) => left.projection - right.projection || left.cellIndex - right.cellIndex);
+  const totalWeight = projected.reduce((sum, entry) => sum + entry.weight, 0);
+  let accumulatedWeight = 0;
+  let selectedIndex = -1;
+  let minimumImbalance = Infinity;
+  for (let index = 0; index < projected.length - 1; index += 1) {
+    accumulatedWeight += projected[index].weight;
+    const imbalance = Math.abs(accumulatedWeight - totalWeight / 2);
+    if (imbalance < minimumImbalance) {
+      minimumImbalance = imbalance;
+      selectedIndex = index;
+    }
+  }
+  if (selectedIndex < 0) throw new Error(`cannot split principal smoke leaf containing ${leaf.indices.length} distinct voxels`);
+  const left = Int32Array.from(projected.slice(0, selectedIndex + 1), entry => entry.cellIndex);
+  const right = Int32Array.from(projected.slice(selectedIndex + 1), entry => entry.cellIndex);
+  const maximumAxisComponent = Math.max(...principalAxis.map(Math.abs));
+  return {
+    children: [makeDenseLeaf(source, left), makeDenseLeaf(source, right)],
+    split: {
+      principalAxis,
+      cutProjection: (projected[selectedIndex].projection + projected[selectedIndex + 1].projection) / 2,
+      oblique: maximumAxisComponent < 1 - 1e-6,
+    },
+  };
+}
+
+async function recursiveMomentBudgetCurve({ frame, requestedBudgets, densityThreshold, outDir, structureGradientGain = 0, principalAxisSplit = false }) {
   const source = extractDenseSmokeIndices(frame, densityThreshold, structureGradientGain);
   const maximumBudget = Math.max(...requestedBudgets);
   if (maximumBudget > source.activeVoxelCount) {
@@ -762,6 +802,7 @@ async function recursiveMomentBudgetCurve({ frame, requestedBudgets, densityThre
   const requested = new Set(requestedBudgets);
   const leaves = [makeDenseLeaf(source, source.indices)];
   const budgetCurve = [];
+  const partition = { obliqueSplitCount: 0, axisAlignedSplitCount: 0 };
   while (leaves.length <= maximumBudget) {
     if (requested.has(leaves.length)) {
       const gaussians = leaves.map(leaf => leaf.gaussian).sort((left, right) => (
@@ -793,6 +834,12 @@ async function recursiveMomentBudgetCurve({ frame, requestedBudgets, densityThre
           maxEigenValue: Math.max(...gaussians.flatMap(gaussian => gaussian.eigenValues)),
         },
         support: supportDiagnostics(gaussians, source.bounds),
+        partition: principalAxisSplit ? {
+          authority: 'leaf-covariance-principal-axis-weighted-median-v0',
+          splitCount: leaves.length - 1,
+          obliqueSplitCount: partition.obliqueSplitCount,
+          axisAlignedSplitCount: partition.axisAlignedSplitCount,
+        } : null,
         artifact,
         preview: gaussians.slice(0, 8),
       });
@@ -811,8 +858,15 @@ async function recursiveMomentBudgetCurve({ frame, requestedBudgets, densityThre
       }
     }
     if (splitIndex < 0) throw new Error(`cannot reach requested budget ${maximumBudget} without substituting active count`);
-    const children = splitDenseLeaf(source, leaves[splitIndex]);
-    leaves.splice(splitIndex, 1, ...children);
+    if (principalAxisSplit) {
+      const result = splitDenseLeafAlongPrincipalAxis(source, leaves[splitIndex]);
+      if (result.split.oblique) partition.obliqueSplitCount += 1;
+      else partition.axisAlignedSplitCount += 1;
+      leaves.splice(splitIndex, 1, ...result.children);
+    } else {
+      const children = splitDenseLeaf(source, leaves[splitIndex]);
+      leaves.splice(splitIndex, 1, ...children);
+    }
   }
   return { source, budgetCurve };
 }
@@ -968,11 +1022,13 @@ export async function fitSmokeGaussianOracleFrame({
   const requestedBudgets = normalizeBudgets(budgets);
   const iterations = Math.max(1, Math.floor(Number(maxIterations) || 12));
   const threshold = Math.max(0, Number(densityThreshold) || 0);
-  if (!['weighted-kmeans', 'recursive-moment-split', 'recursive-gradient-moment-split'].includes(optimizerStrategy)) throw new Error(`unsupported optimizer strategy ${optimizerStrategy}`);
+  if (!['weighted-kmeans', 'recursive-moment-split', 'recursive-gradient-moment-split', 'recursive-principal-moment-split', 'recursive-gradient-principal-moment-split'].includes(optimizerStrategy)) throw new Error(`unsupported optimizer strategy ${optimizerStrategy}`);
   if (warmStartReportPath && optimizerStrategy !== 'weighted-kmeans') throw new Error('warm start is only supported by weighted-kmeans');
-  const recursiveStrategy = ['recursive-moment-split', 'recursive-gradient-moment-split'].includes(optimizerStrategy);
-  const gradientGain = optimizerStrategy === 'recursive-gradient-moment-split' ? Number(structureGradientGain) : 0;
-  if (optimizerStrategy === 'recursive-gradient-moment-split' && (!(gradientGain > 0) || !Number.isFinite(gradientGain))) {
+  const recursiveStrategy = ['recursive-moment-split', 'recursive-gradient-moment-split', 'recursive-principal-moment-split', 'recursive-gradient-principal-moment-split'].includes(optimizerStrategy);
+  const gradientStrategy = ['recursive-gradient-moment-split', 'recursive-gradient-principal-moment-split'].includes(optimizerStrategy);
+  const principalStrategy = ['recursive-principal-moment-split', 'recursive-gradient-principal-moment-split'].includes(optimizerStrategy);
+  const gradientGain = gradientStrategy ? Number(structureGradientGain) : 0;
+  if (gradientStrategy && (!(gradientGain > 0) || !Number.isFinite(gradientGain))) {
     throw new Error('recursive gradient moment split requires a positive finite structureGradientGain');
   }
   const residualLimit = warmStartReportPath ? Number(maxCenterResidual) : null;
@@ -990,6 +1046,7 @@ export async function fitSmokeGaussianOracleFrame({
       densityThreshold: threshold,
       outDir,
       structureGradientGain: gradientGain,
+      principalAxisSplit: principalStrategy,
     });
     smoke = recursive.source;
     budgetCurve = recursive.budgetCurve;
@@ -1041,6 +1098,10 @@ export async function fitSmokeGaussianOracleFrame({
     optimizer: {
       identity: warmStart
         ? 'warm-started-weighted-kmeans-anisotropic-moment-fit-v0'
+        : optimizerStrategy === 'recursive-gradient-principal-moment-split'
+        ? 'recursive-gradient-principal-axis-moment-split-v0'
+        : optimizerStrategy === 'recursive-principal-moment-split'
+        ? 'recursive-principal-axis-moment-split-v0'
         : optimizerStrategy === 'recursive-gradient-moment-split'
         ? 'recursive-gradient-weighted-moment-split-v0'
         : optimizerStrategy === 'recursive-moment-split'
@@ -1051,11 +1112,15 @@ export async function fitSmokeGaussianOracleFrame({
       positionAuthority: 'continuous-mass-weighted-world-centroids',
       covarianceAuthority: 'cluster-smoke-density-weighted-world-covariance',
       sampleSelectionAuthority: 'all-voxels-above-explicit-density-threshold-no-subsampling-v0',
-      structureGradientGain: optimizerStrategy === 'recursive-gradient-moment-split' ? gradientGain : null,
-      allocationAuthority: optimizerStrategy === 'recursive-gradient-moment-split'
+      structureGradientGain: gradientStrategy ? gradientGain : null,
+      allocationAuthority: optimizerStrategy === 'recursive-gradient-principal-moment-split'
+        ? 'density-times-one-plus-normalized-smoke-gradient-gain-principal-axis-sse-v0'
+        : optimizerStrategy === 'recursive-gradient-moment-split'
         ? 'density-times-one-plus-normalized-smoke-gradient-gain-v0'
+        : optimizerStrategy === 'recursive-principal-moment-split'
+        ? 'smoke-density-mass-weighted-principal-axis-sse-v0'
         : 'smoke-density-mass-weighted-sse-v0',
-      gradientDiagnostics: optimizerStrategy === 'recursive-gradient-moment-split' ? smoke.gradientDiagnostics : null,
+      gradientDiagnostics: gradientStrategy ? smoke.gradientDiagnostics : null,
     },
     warmStart: warmStart ? {
       authority: 'prior-static-fit-artifact-bounded-residual-v0',

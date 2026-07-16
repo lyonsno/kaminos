@@ -1,0 +1,51 @@
+{
+  "schema": "kaminos.smoke-oracle-hostile-camera-split.v0",
+  "identity": "smoke-oracle-hostile-camera-split-v0",
+  "status": "passed",
+  "createdAt": "2026-07-16T08:06:01.745Z",
+  "sourceFitReportPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716/artifacts/pyro-principal-smoke-allocation-r1-0716/gradient-principal-step-45/oracle-fit-report.json",
+  "sourceFitReportIdentity": "sha256:67f2f8849fd77fd7b62beaf4d5860a42a8c575a4d0dfb86e5e4172297d2ecceb",
+  "cameraSplit": {
+    "authority": "explicit-disjoint-world-space-hostile-camera-split-v0",
+    "calibrationCameraIds": [
+      "recorded-native"
+    ],
+    "heldOutCameraIds": [
+      "side-plus-90",
+      "back-plus-180",
+      "elevated-plus-35"
+    ],
+    "overlap": 0
+  },
+  "products": [
+    {
+      "cameraId": "recorded-native",
+      "role": "calibration",
+      "transform": "recorded-camera-unchanged",
+      "cameraIdentity": "sha256:52d62666d901cd0fbdbc11d5658ae3f40fd035b404cf4aaab674cab2837a4d7e",
+      "fitReportPath": "artifacts/pyro-principal-smoke-allocation-r1-0716/gradient-principal-step-45/hostile-cameras/recorded-native/oracle-fit-report.json"
+    },
+    {
+      "cameraId": "side-plus-90",
+      "role": "held-out",
+      "transform": "world-y-azimuth-plus-90-degrees",
+      "cameraIdentity": "sha256:3bd0a7873986b8caaf12384d92766e4d763b2148b861677080aedffc6b41ff20",
+      "fitReportPath": "artifacts/pyro-principal-smoke-allocation-r1-0716/gradient-principal-step-45/hostile-cameras/side-plus-90/oracle-fit-report.json"
+    },
+    {
+      "cameraId": "back-plus-180",
+      "role": "held-out",
+      "transform": "world-y-azimuth-plus-180-degrees",
+      "cameraIdentity": "sha256:a0e3db4747cdb916b9706a925ad70c49398a00cf9e1bcb836132d166d8c4274d",
+      "fitReportPath": "artifacts/pyro-principal-smoke-allocation-r1-0716/gradient-principal-step-45/hostile-cameras/back-plus-180/oracle-fit-report.json"
+    },
+    {
+      "cameraId": "elevated-plus-35",
+      "role": "held-out",
+      "transform": "camera-elevation-plus-35-degrees-radius-preserved",
+      "cameraIdentity": "sha256:31fff60f656e0b261563e0ff602f404edea4584002fe7c438fde064c328758c6",
+      "fitReportPath": "artifacts/pyro-principal-smoke-allocation-r1-0716/gradient-principal-step-45/hostile-cameras/elevated-plus-35/oracle-fit-report.json"
+    }
+  ],
+  "reportPath": "artifacts/pyro-principal-smoke-allocation-r1-0716/gradient-principal-step-45/hostile-cameras/hostile-camera-split-report.json"
+}

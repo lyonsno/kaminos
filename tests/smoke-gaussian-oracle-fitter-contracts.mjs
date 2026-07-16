@@ -250,6 +250,31 @@ try {
   assert.equal(recursiveReport.budgetCurve.every(entry => entry.extinctionAccounting.relativeError < 1e-6), true);
   assert.ok(recursiveReport.budgetCurve[2].massWeightedSse <= recursiveReport.budgetCurve[0].massWeightedSse);
 
+  const principalReport = await fitSmokeGaussianOracleFrame({
+    manifestPath,
+    outDir: join(directory, 'principal-fit'),
+    budgets: [1, 2, 4, 8],
+    densityThreshold: 0.000001,
+    optimizerStrategy: 'recursive-principal-moment-split',
+  });
+  assert.equal(principalReport.optimizer.identity, 'recursive-principal-axis-moment-split-v0');
+  assert.equal(principalReport.optimizer.allocationAuthority, 'smoke-density-mass-weighted-principal-axis-sse-v0');
+  assert.equal(principalReport.budgetCurve.every(entry => entry.activeGaussianCount === entry.requestedBudget), true);
+  assert.equal(principalReport.budgetCurve.every(entry => entry.extinctionAccounting.relativeError < 1e-6), true);
+  assert.equal(
+    principalReport.budgetCurve.every(entry => entry.partition.authority === 'leaf-covariance-principal-axis-weighted-median-v0'),
+    true,
+  );
+  assert.ok(
+    principalReport.budgetCurve.at(-1).partition.obliqueSplitCount > 0,
+    'a diagonal plume must exercise at least one genuinely oblique principal-axis partition',
+  );
+  assert.notEqual(
+    principalReport.budgetCurve.at(-1).artifact.sha256,
+    recursiveReport.budgetCurve.at(-1).artifact.sha256,
+    'principal-axis partitioning must materially change the fixed-budget product',
+  );
+
   const structureManifestPath = await writeFrame(join(directory, 'structure-frame'), {}, 'interior-pocket');
   const structureControl = await fitSmokeGaussianOracleFrame({
     manifestPath: structureManifestPath,
@@ -278,6 +303,26 @@ try {
     structureControl.budgetCurve[3].artifact.sha256,
     'boundary-weighted allocation must materially change the fixed-budget product on an articulated field',
   );
+  const gradientPrincipalReport = await fitSmokeGaussianOracleFrame({
+    manifestPath: structureManifestPath,
+    outDir: join(directory, 'gradient-principal-fit'),
+    budgets: [1, 2, 4, 8],
+    densityThreshold: 0.000001,
+    optimizerStrategy: 'recursive-gradient-principal-moment-split',
+    structureGradientGain: 128,
+  });
+  assert.equal(gradientPrincipalReport.optimizer.identity, 'recursive-gradient-principal-axis-moment-split-v0');
+  assert.equal(gradientPrincipalReport.optimizer.structureGradientGain, 128);
+  assert.equal(
+    gradientPrincipalReport.optimizer.allocationAuthority,
+    'density-times-one-plus-normalized-smoke-gradient-gain-principal-axis-sse-v0',
+  );
+  assert.ok(gradientPrincipalReport.optimizer.gradientDiagnostics.maximumSmokeGradient > 0);
+  assert.equal(gradientPrincipalReport.budgetCurve.every(entry => entry.activeGaussianCount === entry.requestedBudget), true);
+  assert.equal(gradientPrincipalReport.budgetCurve.every(entry => entry.extinctionAccounting.relativeError < 1e-6), true);
+  assert.ok(gradientPrincipalReport.budgetCurve.at(-1).partition.obliqueSplitCount > 0);
+  assert.notEqual(gradientPrincipalReport.budgetCurve.at(-1).artifact.sha256, structureReport.budgetCurve.at(-1).artifact.sha256);
+  assert.notEqual(gradientPrincipalReport.budgetCurve.at(-1).artifact.sha256, principalReport.budgetCurve.at(-1).artifact.sha256);
 
   const nextManifestPath = await writeFrame(join(directory, 'next-frame'), {
     deterministicReplay: {
