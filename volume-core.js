@@ -1734,8 +1734,9 @@ fn writeNonRidgeSourceBasisCaptureRow(
   sourceBasisReactionInterfaceCurlDivergence: vec4<f32>,
   nonRidgeMembershipEmission: vec4<f32>,
   nonRidgeExtinction: f32,
+  ridgeEmissionExtinction: vec4<f32>,
 ) {
-  let base = cellIndex * 29u;
+  let base = cellIndex * 33u;
   nonRidgeOpticalCaptureRows[base] = currentSidecar.x;
   nonRidgeOpticalCaptureRows[base + 1u] = currentSidecar.y;
   nonRidgeOpticalCaptureRows[base + 2u] = currentSidecar.z;
@@ -1765,6 +1766,10 @@ fn writeNonRidgeSourceBasisCaptureRow(
   nonRidgeOpticalCaptureRows[base + 26u] = nonRidgeMembershipEmission.z;
   nonRidgeOpticalCaptureRows[base + 27u] = nonRidgeMembershipEmission.w;
   nonRidgeOpticalCaptureRows[base + 28u] = nonRidgeExtinction;
+  nonRidgeOpticalCaptureRows[base + 29u] = ridgeEmissionExtinction.x;
+  nonRidgeOpticalCaptureRows[base + 30u] = ridgeEmissionExtinction.y;
+  nonRidgeOpticalCaptureRows[base + 31u] = ridgeEmissionExtinction.z;
+  nonRidgeOpticalCaptureRows[base + 32u] = ridgeEmissionExtinction.w;
 }
 
 fn majorantIndex(c: vec3<u32>) -> u32 {
@@ -5280,6 +5285,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
           vec4<f32>(sourceBasisReaction, sourceBasisInterface, sourceBasisCurl, sourceBasisDivergence),
           vec4<f32>(nonRidgeMembership, nonRidgeEmissionCoefficient),
           nonRidgeExtinctionCoefficient,
+          vec4<f32>(ridgeOwnedEmissionCoefficient, ridgeOwnedExtinctionCoefficient),
         );
         atomicAdd(&nonRidgeOpticalCaptureHeader.rowCount, 1u);
       } else {

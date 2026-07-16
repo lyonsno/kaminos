@@ -2,7 +2,7 @@ export const SOURCE_BASIS_CAPTURE_SCHEMA = 'kaminos.volume.nonridge-source-setti
 export const SOURCE_BASIS_CAPTURE_AUTHORITY = 'integration-positive-nonridge-randomized-source-captures-v0';
 export const SOURCE_BASIS_CAPTURE_SEED = 7162026;
 export const SOURCE_BASIS_SETTING_COUNT = 17;
-export const SOURCE_BASIS_GPU_ROW_FLOATS = 29;
+export const SOURCE_BASIS_GPU_ROW_FLOATS = 33;
 export const SOURCE_BASIS_DESIGN_CORRECTION = Object.freeze({
   identity: 'single-axis-setting-transposition-v0',
   control: 'boundary.gradientGain',
@@ -35,6 +35,10 @@ export const TARGET_ORDER = Object.freeze([
   'nonRidge.emission.g',
   'nonRidge.emission.b',
   'nonRidge.extinction',
+  'ridge.emission.r',
+  'ridge.emission.g',
+  'ridge.emission.b',
+  'ridge.extinction',
 ]);
 
 export const CAUSAL_CONTROL_FIELDS = Object.freeze([

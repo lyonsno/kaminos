@@ -30,6 +30,10 @@ const targets = [
   'nonRidge.emission.g',
   'nonRidge.emission.b',
   'nonRidge.extinction',
+  'ridge.emission.r',
+  'ridge.emission.g',
+  'ridge.emission.b',
+  'ridge.extinction',
 ];
 const causalControls = [
   'support.thermal', 'support.reaction', 'support.front', 'support.interface',
@@ -204,7 +208,9 @@ try {
     }
     const isNegative = settingId === 'setting-q';
     const targetValues = Array.from({ length: rowCount }, (_, row) => (
-      isNegative || row === 0 ? [0, 0, 0, 0, 0] : [1, 0.3 + row / 100, 0.2, 0.1, 0.4]
+      isNegative || row === 0
+        ? Array.from({ length: targets.length }, () => 0)
+        : [1, 0.3 + row / 100, 0.2, 0.1, 0.4, 0.6, 0.5, 0.4, 0.3]
     )).flat();
     const target = await writeF32(
       join(artifactsDir, `${settingId}-targets.f32`),
@@ -530,7 +536,7 @@ try {
   const invalidTargets = structuredClone(captureManifest);
   const invalidTargetArtifact = await writeF32(
     join(artifactsDir, 'invalid-targets.f32'),
-    Array.from({ length: rowCount }, () => [1.5, -1, 0, 0, -0.25]).flat(),
+    Array.from({ length: rowCount }, () => [1.5, -1, 0, 0, -0.25, -1, 0, 0, -0.5]).flat(),
     'supervision-targets-positive-nonridge',
   );
   invalidTargets.settings[0].rows.targets = { ...invalidTargetArtifact, shape: [rowCount, targets.length] };

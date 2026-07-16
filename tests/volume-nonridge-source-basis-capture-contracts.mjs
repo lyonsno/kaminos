@@ -16,6 +16,7 @@ assert.ok(existsSync(packerPath), 'the exact Vivisector corpus packer is present
 const {
   CAUSAL_CONTROL_ORDER,
   CURRENT16_ORDER,
+  SOURCE_BASIS_GPU_ROW_FLOATS,
   SOURCE_BASIS_ORDER,
   TARGET_ORDER,
   buildVivisectorControlDesign,
@@ -29,6 +30,7 @@ assert.deepEqual(CAUSAL_CONTROL_ORDER, [
   'ridge.gain', 'ridge.cut', 'tip.breakup', 'topology.erosion',
 ]);
 assert.equal(CURRENT16_ORDER.length, 16);
+assert.equal(SOURCE_BASIS_GPU_ROW_FLOATS, 33, 'full-grid rows preserve the 29-float prefix and append four Ridge coefficients');
 assert.deepEqual(SOURCE_BASIS_ORDER, [
   'front.topology', 'velocity.x', 'velocity.y', 'velocity.z',
   'support.reaction', 'support.interface', 'flow.curlMagnitude', 'flow.divergence',
@@ -36,6 +38,7 @@ assert.deepEqual(SOURCE_BASIS_ORDER, [
 assert.deepEqual(TARGET_ORDER, [
   'candidate.nonRidgeMembership',
   'nonRidge.emission.r', 'nonRidge.emission.g', 'nonRidge.emission.b', 'nonRidge.extinction',
+  'ridge.emission.r', 'ridge.emission.g', 'ridge.emission.b', 'ridge.extinction',
 ]);
 
 const ranges = Object.fromEntries(CAUSAL_CONTROL_ORDER.map((name, index) => [name, [index, index + 1]]));
@@ -86,6 +89,7 @@ assert.match(core, /readDebugNonRidgeSourceBasisCaptureChunk/, 'core exposes unc
 assert.match(core, /releaseDebugNonRidgeSourceBasisCapture/, 'core exposes explicit full-grid capture release custody');
 assert.match(core, /fullGridCapture[\s\S]*GRID[\s\S]*cellIndex/, 'shader capture visits exact grid cells rather than visible ray samples');
 assert.match(core, /nonRidgeMembership[\s\S]*nonRidgeEmissionCoefficient[\s\S]*nonRidgeExtinctionCoefficient/, 'membership and positive optical targets come from the exact local partition');
+assert.match(core, /writeNonRidgeSourceBasisCaptureRow\([\s\S]*ridgeOwnedEmissionCoefficient[\s\S]*ridgeOwnedExtinctionCoefficient/, 'full-grid rows retain exact Ridge coefficients from the same local partition invocation');
 assert.match(core, /sourceBasisReaction[\s\S]*sourceBasisInterface[\s\S]*sourceBasisCurl[\s\S]*sourceBasisDivergence/, 'source basis is written from independent local fields');
 assert.match(core, /nonRidgeSourceBasisControlsActive[\s\S]*boundaryControlUniformAuthority/, 'source-basis capture owns the boundary-control uniform mapping independently of presentation mode');
 assert.match(core, /sourceBasisGpuControlReceipt[\s\S]*uniforms\[280\][\s\S]*uniforms\[299\]/, 'GPU-effective receipts come from the actual shader uniform payload');

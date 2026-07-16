@@ -47,6 +47,10 @@ REQUIRED_TARGETS = [
     "nonRidge.emission.g",
     "nonRidge.emission.b",
     "nonRidge.extinction",
+    "ridge.emission.r",
+    "ridge.emission.g",
+    "ridge.emission.b",
+    "ridge.extinction",
 ]
 EXACT_ONE_NEGATIVE_POLICY = "exactly-one-measured-all-target-zero-control-v0"
 EXPECTED_DESIGN_CORRECTION = {
