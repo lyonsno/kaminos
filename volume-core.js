@@ -122,7 +122,7 @@ const APPEARANCE_DECOMPOSITION_MODES = Object.freeze({
   },
 });
 const DEFAULT_GRID_SIZE = 96;
-const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160];
+const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 140, 160];
 const SELECTIVE_HEAD_LIVE_ROLES = new Set(['off', 'truthHigh', 'lowPhaseAligned', 'selectiveFullResidual']);
 const SELECTIVE_HEAD_LIVE_ROLE_AUTHORITIES = Object.freeze({
   off: 'off',
@@ -14797,6 +14797,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       flowKernelDescriptorCaptureRequested: state.flowKernelDescriptorCaptureRequested,
       flowKernelDescriptorCaptureEffective: state.flowKernelDescriptorCaptureEffective,
       flowKernelDescriptorCapture,
+      flowKernelIdentity: state.flowKernelIdentity,
+      flowKernelRequested: state.flowKernelRequested ? { ...state.flowKernelRequested } : null,
+      flowKernelEffective: state.flowKernelEffective ? { ...state.flowKernelEffective } : null,
+      flowKernelCandidateAdmissionAuthority: state.flowKernelCandidateAdmissionAuthority,
       boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
       boundarySidecarOverrideReceipt: state.boundarySidecarOverrideReceipt,
       boundarySplatCapacity: state.boundarySplatCapacity,

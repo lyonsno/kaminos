@@ -1182,10 +1182,14 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       </div>
       <div class="slider-row">
         <span class="slider-label">Boundary raster</span>
-        <select id="volume-boundary-splat-mode" class="select-input">
-          <option value="off">raymarch</option>
-          <option value="analytic">analytic splats</option>
-          <option value="learned">learned attributes</option>
+          <select id="volume-boundary-splat-mode" class="select-input">
+            <option value="off">raymarch</option>
+            <option value="analytic">analytic splats</option>
+            <option value="learned">learned attributes</option>
+            <option value="analytic_conserved">analytic conserved</option>
+            <option value="learned_conserved">learned conserved</option>
+            <option value="world_covariance">world covariance</option>
+            <option value="kernel_moment_covariance">kernel moment covariance</option>
         </select>
         <span class="slider-val" id="volume-boundary-splat-mode-val">raymarch</span>
       </div>
@@ -1600,6 +1604,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <option value="64">64^3</option>
         <option value="96" selected>96^3</option>
         <option value="128">128^3</option>
+        <option value="140">140^3</option>
         <option value="160">160^3</option>
       </select>
       <span class="slider-val" id="volume-resolution-val">96^3</span>
@@ -11853,7 +11858,15 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
 const REACTION_FRONT_LIVE_VIEW_VALUES = new Set(['off', 'shell', 'thermal', 'reaction', 'front', 'edge', 'core', 'curl', 'divergence', 'boundary', 'boundary_fire']);
 const BOUNDARY_SIDECAR_SOURCE_VALUES = new Set(['live', 'baked', 'mix', 'override']);
 const BOUNDARY_SIDECAR_VIEW_VALUES = new Set(['off', 'support', 'coverage', 'ridge', 'proximity', 'footprint']);
-const BOUNDARY_SPLAT_MODE_VALUES = new Set(['off', 'analytic', 'learned']);
+const BOUNDARY_SPLAT_MODE_VALUES = new Set([
+  'off',
+  'analytic',
+  'learned',
+  'analytic_conserved',
+  'learned_conserved',
+  'world_covariance',
+  'kernel_moment_covariance',
+]);
 
 function normalizeReactionFrontLiveView(value) {
   const mode = String(value || 'off').toLowerCase().replace(/-/g, '_');
@@ -12292,9 +12305,17 @@ function syncReactionFrontExtractorLabels(controlsSnapshot) {
   const boundarySplatModeLabel = document.getElementById('volume-boundary-splat-mode-val');
   if (boundarySplatModeLabel) boundarySplatModeLabel.textContent = boundarySplatMode === 'learned'
     ? 'learned attributes'
-    : boundarySplatMode === 'analytic'
-      ? 'analytic splats'
-      : 'raymarch';
+    : boundarySplatMode === 'kernel_moment_covariance'
+      ? 'kernel moment covariance'
+    : boundarySplatMode === 'world_covariance'
+      ? 'world covariance'
+      : boundarySplatMode === 'learned_conserved'
+        ? 'learned conserved'
+        : boundarySplatMode === 'analytic_conserved'
+          ? 'analytic conserved'
+            : boundarySplatMode === 'analytic'
+              ? 'analytic splats'
+              : 'raymarch';
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     const label = document.getElementById(`${field.id}-val`);
     const value = controlsSnapshot[field.key];
@@ -17066,7 +17087,7 @@ async function initKaminosVolumeRoute() {
     routedVolumeQualityReason = normalizeVolumeQualityReason(params.get('volume_quality_reason'));
   }
   const routeResolution = parseInt(params.get('volume_resolution') || '', 10);
-  if ([32, 48, 64, 96, 128, 160].includes(routeResolution)) {
+  if ([32, 48, 64, 96, 128, 140, 160].includes(routeResolution)) {
     document.getElementById('volume-resolution').value = String(routeResolution);
   }
   const routeMajorantGrid = parseInt(params.get('volume_majorant_grid') || '', 10);
