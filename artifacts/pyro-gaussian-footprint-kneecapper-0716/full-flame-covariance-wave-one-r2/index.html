@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Full Flame Covariance Holdout</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --page: #0b0c0e;
+      --band: #121419;
+      --panel: #181b20;
+      --line: #343841;
+      --text: #f4f2ed;
+      --muted: #aaaeb7;
+      --gold: #f2b84b;
+      --green: #63d09b;
+      --blue: #74a7ff;
+      --red: #ef786f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--page);
+      color: var(--text);
+      font: 14px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      letter-spacing: 0;
+    }
+    header, main > section { border-bottom: 1px solid var(--line); }
+    .inner { width: min(1520px, calc(100% - 32px)); margin: 0 auto; }
+    header .inner { padding: 24px 0 20px; }
+    h1 { margin: 0 0 8px; font: 700 26px/1.15 system-ui, sans-serif; letter-spacing: 0; }
+    h2 { margin: 0; font: 700 16px/1.2 system-ui, sans-serif; letter-spacing: 0; }
+    p { margin: 0; }
+    .subhead { color: var(--muted); max-width: 1050px; }
+    .status-line { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 16px; color: var(--muted); }
+    .status-line strong { color: var(--green); font-weight: 700; }
+    .summary-band { background: var(--band); }
+    .summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .summary-item { padding: 18px 20px 18px 0; border-right: 1px solid var(--line); }
+    .summary-item + .summary-item { padding-left: 20px; }
+    .summary-item:last-child { border-right: 0; }
+    .label { color: var(--muted); font-size: 11px; text-transform: uppercase; }
+    .value { margin-top: 4px; font: 700 22px/1.1 system-ui, sans-serif; letter-spacing: 0; }
+    .value.good { color: var(--green); }
+    .value.partial { color: var(--gold); }
+    .value.fail { color: var(--red); }
+    .camera-band .inner { padding: 18px 0; }
+    .camera-toolbar { display: grid; grid-template-columns: 36px minmax(180px, 1fr) 36px auto; gap: 10px; align-items: center; }
+    button {
+      width: 36px;
+      height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      color: var(--text);
+      background: var(--panel);
+      font: 700 18px/1 system-ui, sans-serif;
+      cursor: pointer;
+    }
+    button:hover { border-color: var(--blue); }
+    input[type="range"] { width: 100%; accent-color: var(--blue); }
+    .camera-readout { min-width: 170px; text-align: right; color: var(--muted); }
+    .camera-readout strong { color: var(--text); }
+    .gallery-band .inner { padding: 20px 0 24px; }
+    .gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    figure { margin: 0; min-width: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--panel); }
+    figure img { display: block; width: 100%; aspect-ratio: 314 / 242; object-fit: contain; background: #000; image-rendering: auto; }
+    figcaption { display: flex; justify-content: space-between; gap: 12px; min-height: 48px; padding: 9px 11px; border-top: 1px solid var(--line); }
+    figcaption strong { font-family: system-ui, sans-serif; }
+    figcaption span { color: var(--muted); text-align: right; overflow-wrap: anywhere; }
+    .target { border-color: #7e6432; }
+    .world { border-color: #347b61; }
+    .metrics-band { background: var(--band); }
+    .metrics-band .inner { padding: 22px 0 26px; }
+    .section-head { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+    .section-head a, .links a { color: var(--blue); text-decoration: none; }
+    .section-head a:hover, .links a:hover { text-decoration: underline; }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+    table { width: 100%; border-collapse: collapse; min-width: 820px; }
+    th, td { padding: 10px 12px; text-align: right; border-bottom: 1px solid var(--line); }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: var(--muted); font-size: 11px; font-weight: 500; text-transform: uppercase; background: #15181d; }
+    tr:last-child td { border-bottom: 0; }
+    tr.world-row td { color: var(--green); }
+    .receipt-band .inner { padding: 22px 0 30px; }
+    .receipt-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
+    .receipt { color: var(--muted); overflow-wrap: anywhere; }
+    .receipt strong { color: var(--text); }
+    .links { display: grid; gap: 8px; align-content: start; }
+    @media (max-width: 920px) {
+      .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .summary-item:nth-child(2) { border-right: 0; }
+      .summary-item:nth-child(n+3) { border-top: 1px solid var(--line); }
+      .gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .receipt-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 620px) {
+      .inner { width: min(100% - 20px, 1520px); }
+      .summary-grid, .gallery { grid-template-columns: 1fr; }
+      .summary-item, .summary-item + .summary-item { padding: 14px 0; border-right: 0; border-top: 1px solid var(--line); }
+      .summary-item:first-child { border-top: 0; }
+      .camera-toolbar { grid-template-columns: 36px minmax(100px, 1fr) 36px; }
+      .camera-readout { grid-column: 1 / -1; min-width: 0; text-align: left; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="inner">
+      <h1>Full Flame covariance holdout</h1>
+      <p class="subhead">One frozen Flamebowl state, one 3D candidate payload, 21 cameras, conserved analytic and learned billboards, and support-gradient world tangent covariance.</p>
+      <div class="status-line">
+        <span><strong>COMPLETED</strong></span>
+        <span>WebGPU:apple</span>
+        <span>filament-orbit-f75-s75</span>
+        <span>80,935 candidates</span>
+        <span>0 overflow</span>
+        <span>20 held-out cameras</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="summary-band">
+      <div class="inner summary-grid">
+        <div class="summary-item"><div class="label">Support residual removed</div><div class="value good">58.0%</div></div>
+        <div class="summary-item"><div class="label">Full Flame residual removed</div><div class="value partial">22.6%</div></div>
+        <div class="summary-item"><div class="label">Support edge loss removed</div><div class="value partial">10.5%</div></div>
+        <div class="summary-item"><div class="label">Decision</div><div class="value fail">No full closure</div></div>
+      </div>
+    </section>
+
+    <section class="camera-band">
+      <div class="inner camera-toolbar">
+        <button id="prev" type="button" title="Previous camera" aria-label="Previous camera">&larr;</button>
+        <input id="camera" type="range" min="0" max="20" step="1" value="10" aria-label="Camera index">
+        <button id="next" type="button" title="Next camera" aria-label="Next camera">&rarr;</button>
+        <div class="camera-readout"><strong id="camera-name">Camera 10</strong> <span id="camera-angle">0.000 rad</span> <span id="camera-split">training</span></div>
+      </div>
+    </section>
+
+    <section class="gallery-band">
+      <div class="inner gallery">
+        <figure class="target"><img id="target" alt="Full Flame target"><figcaption><strong>Full Flame target</strong><span>smoke-off 160-step raymarch</span></figcaption></figure>
+        <figure><img id="non-ridge" alt="Non-Ridge Full Flame partition"><figcaption><strong>Non-Ridge filaments</strong><span>omitted by current candidate support</span></figcaption></figure>
+        <figure><img id="support" alt="State-derived support target"><figcaption><strong>Support-aligned target</strong><span>current candidate support allocation</span></figcaption></figure>
+        <figure><img id="analytic" alt="Conserved analytic billboard"><figcaption><strong>Analytic billboard</strong><span id="analytic-loss"></span></figcaption></figure>
+        <figure><img id="learned" alt="Conserved learned billboard"><figcaption><strong>Learned billboard</strong><span id="learned-loss"></span></figcaption></figure>
+        <figure class="world"><img id="world" alt="World tangent covariance"><figcaption><strong>World tangent covariance</strong><span id="world-loss"></span></figcaption></figure>
+      </div>
+    </section>
+
+    <section class="metrics-band">
+      <div class="inner">
+        <div class="section-head"><h2>Held-out camera means</h2><a href="camera-holdout-report.json">camera-holdout-report.json</a></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Family</th><th>Full Flame pixel</th><th>Support pixel</th><th>Full Flame edge</th><th>Support edge</th></tr></thead>
+            <tbody id="summary-rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="receipt-band">
+      <div class="inner receipt-grid">
+        <div class="receipt">
+          <p><strong>Candidate SHA-256</strong><br>ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18</p>
+          <p style="margin-top:12px"><strong>Covariance ceiling</strong><br>world-gradient tangent-plane diagonal covariance; no free 3D rotation</p>
+          <p style="margin-top:12px"><strong>Support ceiling</strong><br>current Structural/Ridge-Owned candidates omit legitimate Non-Ridge Full Flame filaments</p>
+        </div>
+        <div class="links">
+          <a href="report.json">Completed orbit report</a>
+          <a href="capture-report.json">Complete capture report</a>
+          <a href="README.md">Decision report</a>
+          <a href="../full-flame-covariance-wave-one-r1/report.json">Failed r1 receipt</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    const modes = {
+      'analytic-billboard': { image: 'analyticBillboard', label: 'Analytic billboard' },
+      'learned-billboard': { image: 'learnedBillboard', label: 'Learned billboard' },
+      'world-tangent-covariance': { image: 'worldCovariance', label: 'World covariance' },
+    };
+    const pad = value => String(value).padStart(2, '0');
+    const format = value => Number(value).toFixed(5);
+    const report = await fetch('camera-holdout-report.json').then(response => response.json());
+    const rowByKey = new Map(report.cameraRows.map(row => [`${row.cameraIndex}:${row.family}`, row]));
+    const cameraInput = document.querySelector('#camera');
+
+    function updateCamera() {
+      const index = Number(cameraInput.value);
+      const first = rowByKey.get(`${index}:analytic-billboard`);
+      document.querySelector('#camera-name').textContent = `Camera ${pad(index)}`;
+      document.querySelector('#camera-angle').textContent = `${Number(first.cameraAngle).toFixed(3)} rad`;
+      document.querySelector('#camera-split').textContent = report.trainCameraIndices.includes(index) ? 'training' : 'held-out';
+      document.querySelector('#target').src = `camera-${pad(index)}-raymarch-160.png`;
+      document.querySelector('#non-ridge').src = `camera-${pad(index)}-nonRidgeFilaments-160.png`;
+      document.querySelector('#support').src = `camera-${pad(index)}-stateDerivedSupport-160.png`;
+      for (const [family, config] of Object.entries(modes)) {
+        const row = rowByKey.get(`${index}:${family}`);
+        const short = family === 'analytic-billboard' ? 'analytic' : family === 'learned-billboard' ? 'learned' : 'world';
+        document.querySelector(`#${short}`).src = `camera-${pad(index)}-${config.image}-160.png`;
+        document.querySelector(`#${short}-loss`).textContent = `full ${format(row.metrics.fullFlamePixelDelta.meanAbsChannelDelta)} / support ${format(row.metrics.supportAlignedPixelDelta.meanAbsChannelDelta)}`;
+      }
+    }
+
+    const heldOut = report.summary.filter(row => row.split === 'held-out-camera-mean-v0');
+    for (const row of heldOut) {
+      const tr = document.createElement('tr');
+      if (row.mode === 'worldCovariance') tr.className = 'world-row';
+      tr.innerHTML = `<td>${row.mode}</td><td>${format(row.fullFlameMeanAbsChannelDelta)}</td><td>${format(row.supportAlignedMeanAbsChannelDelta)}</td><td>${format(row.fullFlameEdgeLoss)}</td><td>${format(row.supportAlignedEdgeLoss)}</td>`;
+      document.querySelector('#summary-rows').append(tr);
+    }
+    cameraInput.addEventListener('input', updateCamera);
+    document.querySelector('#prev').addEventListener('click', () => { cameraInput.value = Math.max(0, Number(cameraInput.value) - 1); updateCamera(); });
+    document.querySelector('#next').addEventListener('click', () => { cameraInput.value = Math.min(20, Number(cameraInput.value) + 1); updateCamera(); });
+    updateCamera();
+  </script>
+</body>
+</html>

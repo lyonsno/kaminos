@@ -1,0 +1,3894 @@
+{
+  "schema": "kaminos.boundary-splat-camera-holdout-oracle.v0",
+  "status": "completed",
+  "requestedRoute": "/volume-selective-head-live.html",
+  "effectiveWrapperRoute": "exact-basin-selective-head-live-v0",
+  "effectiveRendererRoute": "native-3d-compute-fluid-raymarch-v0",
+  "backend": "WebGPU:apple",
+  "fallbackReason": null,
+  "sourceSettingsPreset": {
+    "presetId": "vsp-5d9fedbab31583860d39a34751ff5cd847116cd6fe6eeee6b4379909ef4bb2a2",
+    "authority": "shared-volume-settings-preset-v2",
+    "contentHash": "sha256:5d9fedbab31583860d39a34751ff5cd847116cd6fe6eeee6b4379909ef4bb2a2",
+    "label": "big_raymarch_hero_flamebowl",
+    "controlCount": 186
+  },
+  "frozenState": {
+    "sameStateCaptureId": "filament-orbit-f75-s75",
+    "frameCount": 75,
+    "simStepCount": 75,
+    "controlsHash": "cfa8700f93bb4e5c4720b5e399fc50d2c818d21545dbb0d403c1acbc5d25635a"
+  },
+  "candidatePayload": {
+    "authority": "gpu-compacted-boundary-splat-candidates-frozen-state-v0",
+    "count": 80935,
+    "strideFloats": 4,
+    "sha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18"
+  },
+  "trainCameraIndices": [
+    10
+  ],
+  "heldOutCameraIndices": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20
+  ],
+  "covarianceCeiling": "world-gradient-tangent-plane-diagonal-covariance-no-free-3d-rotation-v0",
+  "supportCeiling": "current-structural-ridge-owned-candidates-omit-legitimate-non-ridge-full-flame-filaments-v0",
+  "cameraRows": [
+    {
+      "cameraIndex": 0,
+      "cameraAngle": -0.42,
+      "cameraPoseHash": "45c3c25b041faae5c1d26fb7fe531e1331e7414542ba7ace601f2f738fc170d4",
+      "family": "analytic-billboard",
+      "familyAuthority": "camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "camera-facing-billboard-v0",
+      "auditFootprintAuthority": "camera-facing-billboard-v0",
+      "attributeSetId": "analytic-boundary-splat-attributes-v0",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "37ffe20cd8214a0d9a2988238f7a820c89f78ecc944316caef3b93fbfb334c1a",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-00-raymarch-160.png",
+        "bytes": 122314,
+        "sha256": "75b24e56fe9104b24d85ce1f5062e49fefed7bb968194eab33403fcc184f601f"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-00-analyticBillboard-160.png",
+        "bytes": 121824,
+        "sha256": "b6bd46cdf9eb4ebc2f29f344b510660b4b34886f974b53be9685f8ea56bbd617"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.288171417385456,
+        "effectiveIntegratedAlphaSum": 3.288171361922983,
+        "relativeError": 1.6867269445702666e-8
+      },
+      "metrics": {
+        "cameraIndex": 0,
+        "cameraAngle": -0.42,
+        "heldOut": true,
+        "mode": "analyticBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 252,
+          "meanAbsChannelDelta": 24.35852042427752,
+          "changedPixels": 75979,
+          "changedFraction": 0.9998815602463547
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 20.627016765805127,
+          "changedPixels": 75986,
+          "changedFraction": 0.9999736800547455
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 29.135478628204453,
+          "changedPixels": 75957,
+          "changedFraction": 0.999592040848555
+        },
+        "fullFlameEdgeLoss": 0.014433021013583873,
+        "supportAlignedEdgeLoss": 0.012416720897365292
+      }
+    },
+    {
+      "cameraIndex": 0,
+      "cameraAngle": -0.42,
+      "cameraPoseHash": "45c3c25b041faae5c1d26fb7fe531e1331e7414542ba7ace601f2f738fc170d4",
+      "family": "learned-billboard",
+      "familyAuthority": "learned-camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "auditFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-00-raymarch-160.png",
+        "bytes": 122314,
+        "sha256": "75b24e56fe9104b24d85ce1f5062e49fefed7bb968194eab33403fcc184f601f"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-00-learnedBillboard-160.png",
+        "bytes": 123986,
+        "sha256": "5d605edf94e35c10fa887e2a01ace54431c326f5cd6ed6ff285597e9e5f6c7c7"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.215588257569856,
+        "relativeError": 5.788305071261274e-8
+      },
+      "metrics": {
+        "cameraIndex": 0,
+        "cameraAngle": -0.42,
+        "heldOut": true,
+        "mode": "learnedBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 252,
+          "meanAbsChannelDelta": 24.09547231141759,
+          "changedPixels": 75972,
+          "changedFraction": 0.9997894404379639
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 20.45073893246302,
+          "changedPixels": 75988,
+          "changedFraction": 1
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 28.843866794757066,
+          "changedPixels": 75962,
+          "changedFraction": 0.9996578407116913
+        },
+        "fullFlameEdgeLoss": 0.014303277418241502,
+        "supportAlignedEdgeLoss": 0.012319707315906273
+      }
+    },
+    {
+      "cameraIndex": 0,
+      "cameraAngle": -0.42,
+      "cameraPoseHash": "45c3c25b041faae5c1d26fb7fe531e1331e7414542ba7ace601f2f738fc170d4",
+      "family": "world-tangent-covariance",
+      "familyAuthority": "world-gradient-tangent-covariance-v0",
+      "rendererFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "auditFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-00-raymarch-160.png",
+        "bytes": 122314,
+        "sha256": "75b24e56fe9104b24d85ce1f5062e49fefed7bb968194eab33403fcc184f601f"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-00-worldCovariance-160.png",
+        "bytes": 123402,
+        "sha256": "5187ca6562ed2122d9514213ed95755f6c7efefae40a98a2091de7cc77a0a737"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.215588257569841,
+        "relativeError": 5.788305540818664e-8
+      },
+      "metrics": {
+        "cameraIndex": 0,
+        "cameraAngle": -0.42,
+        "heldOut": true,
+        "mode": "worldCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 237,
+          "meanAbsChannelDelta": 18.636294546507344,
+          "changedPixels": 75973,
+          "changedFraction": 0.9998026004105911
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 149,
+          "meanAbsChannelDelta": 8.42147115334,
+          "changedPixels": 75986,
+          "changedFraction": 0.9999736800547455
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 246,
+          "meanAbsChannelDelta": 21.79915578775596,
+          "changedPixels": 75952,
+          "changedFraction": 0.9995262409854188
+        },
+        "fullFlameEdgeLoss": 0.014154552813131792,
+        "supportAlignedEdgeLoss": 0.011013457489739358
+      }
+    },
+    {
+      "cameraIndex": 1,
+      "cameraAngle": -0.378,
+      "cameraPoseHash": "cf4fab1a382f414305efc33b765312c3dff85a46b1722ed653c427e49d471db7",
+      "family": "analytic-billboard",
+      "familyAuthority": "camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "camera-facing-billboard-v0",
+      "auditFootprintAuthority": "camera-facing-billboard-v0",
+      "attributeSetId": "analytic-boundary-splat-attributes-v0",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "37ffe20cd8214a0d9a2988238f7a820c89f78ecc944316caef3b93fbfb334c1a",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-01-raymarch-160.png",
+        "bytes": 122817,
+        "sha256": "c14482324f9465b46ffe26624a38a8afbf56b79a28ddaae05dfcf482dcd90dc1"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-01-analyticBillboard-160.png",
+        "bytes": 121700,
+        "sha256": "d6c1628444fdd6e178cb9e934368c2824bd56153733685cb50f4c282d986cf57"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.288171417385456,
+        "effectiveIntegratedAlphaSum": 3.2881713619229767,
+        "relativeError": 1.6867271336494888e-8
+      },
+      "metrics": {
+        "cameraIndex": 1,
+        "cameraAngle": -0.378,
+        "heldOut": true,
+        "mode": "analyticBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 252,
+          "meanAbsChannelDelta": 24.382524214349633,
+          "changedPixels": 75973,
+          "changedFraction": 0.9998026004105911
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 20.467435647733854,
+          "changedPixels": 75983,
+          "changedFraction": 0.9999342001368637
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 29.195889482549877,
+          "changedPixels": 75967,
+          "changedFraction": 0.9997236405748277
+        },
+        "fullFlameEdgeLoss": 0.014527650877301145,
+        "supportAlignedEdgeLoss": 0.012402239577362653
+      }
+    },
+    {
+      "cameraIndex": 1,
+      "cameraAngle": -0.378,
+      "cameraPoseHash": "cf4fab1a382f414305efc33b765312c3dff85a46b1722ed653c427e49d471db7",
+      "family": "learned-billboard",
+      "familyAuthority": "learned-camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "auditFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-01-raymarch-160.png",
+        "bytes": 122817,
+        "sha256": "c14482324f9465b46ffe26624a38a8afbf56b79a28ddaae05dfcf482dcd90dc1"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-01-learnedBillboard-160.png",
+        "bytes": 123738,
+        "sha256": "7ee08032583abff54367c63ae19d5dce0fa1c7f2d1f35eb467e4113e30c9c45d"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.2155882575698476,
+        "relativeError": 5.788305333660992e-8
+      },
+      "metrics": {
+        "cameraIndex": 1,
+        "cameraAngle": -0.378,
+        "heldOut": true,
+        "mode": "learnedBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 252,
+          "meanAbsChannelDelta": 24.12190411643944,
+          "changedPixels": 75974,
+          "changedFraction": 0.9998157603832184
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 20.28443964836553,
+          "changedPixels": 75986,
+          "changedFraction": 0.9999736800547455
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 28.908311180712744,
+          "changedPixels": 75971,
+          "changedFraction": 0.9997762804653366
+        },
+        "fullFlameEdgeLoss": 0.014374761948208723,
+        "supportAlignedEdgeLoss": 0.012308349125818033
+      }
+    },
+    {
+      "cameraIndex": 1,
+      "cameraAngle": -0.378,
+      "cameraPoseHash": "cf4fab1a382f414305efc33b765312c3dff85a46b1722ed653c427e49d471db7",
+      "family": "world-tangent-covariance",
+      "familyAuthority": "world-gradient-tangent-covariance-v0",
+      "rendererFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "auditFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-01-raymarch-160.png",
+        "bytes": 122817,
+        "sha256": "c14482324f9465b46ffe26624a38a8afbf56b79a28ddaae05dfcf482dcd90dc1"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-01-worldCovariance-160.png",
+        "bytes": 123093,
+        "sha256": "cec0a8b7e800961766f1cbde7211c5d0952fbac4e20ccbd4ba604b594dda83d2"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.2155882575698485,
+        "relativeError": 5.7883053060399686e-8
+      },
+      "metrics": {
+        "cameraIndex": 1,
+        "cameraAngle": -0.378,
+        "heldOut": true,
+        "mode": "worldCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 235,
+          "meanAbsChannelDelta": 18.81996828446597,
+          "changedPixels": 75971,
+          "changedFraction": 0.9997762804653366
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 166,
+          "meanAbsChannelDelta": 8.34527820182134,
+          "changedPixels": 75985,
+          "changedFraction": 0.9999605200821182
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 244,
+          "meanAbsChannelDelta": 22.00310904353319,
+          "changedPixels": 75964,
+          "changedFraction": 0.9996841606569459
+        },
+        "fullFlameEdgeLoss": 0.014271577504306758,
+        "supportAlignedEdgeLoss": 0.011085966026727158
+      }
+    },
+    {
+      "cameraIndex": 2,
+      "cameraAngle": -0.336,
+      "cameraPoseHash": "51e69ecf78f4bbb5bafe4538f0689ceea52f2a348c318eb4f4eb45b219c204cd",
+      "family": "analytic-billboard",
+      "familyAuthority": "camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "camera-facing-billboard-v0",
+      "auditFootprintAuthority": "camera-facing-billboard-v0",
+      "attributeSetId": "analytic-boundary-splat-attributes-v0",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "37ffe20cd8214a0d9a2988238f7a820c89f78ecc944316caef3b93fbfb334c1a",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-02-raymarch-160.png",
+        "bytes": 122918,
+        "sha256": "ac664ca874cf4e944b31146c98b676868c147e20d1ceba91a372d48a0a58109b"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-02-analyticBillboard-160.png",
+        "bytes": 121283,
+        "sha256": "bf6e48830df5ac9781baac8ad44895ac5ad6f7db12d4c3be32aef33ca088d6d5"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.288171417385456,
+        "effectiveIntegratedAlphaSum": 3.2881713619229735,
+        "relativeError": 1.6867272281891e-8
+      },
+      "metrics": {
+        "cameraIndex": 2,
+        "cameraAngle": -0.336,
+        "heldOut": true,
+        "mode": "analyticBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 252,
+          "meanAbsChannelDelta": 24.326650260567458,
+          "changedPixels": 75978,
+          "changedFraction": 0.9998684002737275
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 20.324952624098543,
+          "changedPixels": 75986,
+          "changedFraction": 0.9999736800547455
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 29.170474285413487,
+          "changedPixels": 75962,
+          "changedFraction": 0.9996578407116913
+        },
+        "fullFlameEdgeLoss": 0.014738021737508931,
+        "supportAlignedEdgeLoss": 0.012637723521951335
+      }
+    },
+    {
+      "cameraIndex": 2,
+      "cameraAngle": -0.336,
+      "cameraPoseHash": "51e69ecf78f4bbb5bafe4538f0689ceea52f2a348c318eb4f4eb45b219c204cd",
+      "family": "learned-billboard",
+      "familyAuthority": "learned-camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "auditFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-02-raymarch-160.png",
+        "bytes": 122918,
+        "sha256": "ac664ca874cf4e944b31146c98b676868c147e20d1ceba91a372d48a0a58109b"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-02-learnedBillboard-160.png",
+        "bytes": 123467,
+        "sha256": "045b98f59d9ab12fe04ff6d986f3d5b3e9938c3ef6b360d1a7827edbb7a2ba2d"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.2155882575698347,
+        "relativeError": 5.7883057341658235e-8
+      },
+      "metrics": {
+        "cameraIndex": 2,
+        "cameraAngle": -0.336,
+        "heldOut": true,
+        "mode": "learnedBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 252,
+          "meanAbsChannelDelta": 24.075436253092594,
+          "changedPixels": 75975,
+          "changedFraction": 0.9998289203558457
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 20.143749671000684,
+          "changedPixels": 75986,
+          "changedFraction": 0.9999736800547455
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 28.88199123545823,
+          "changedPixels": 75976,
+          "changedFraction": 0.9998420803284729
+        },
+        "fullFlameEdgeLoss": 0.014602960492404367,
+        "supportAlignedEdgeLoss": 0.01257633936673554
+      }
+    },
+    {
+      "cameraIndex": 2,
+      "cameraAngle": -0.336,
+      "cameraPoseHash": "51e69ecf78f4bbb5bafe4538f0689ceea52f2a348c318eb4f4eb45b219c204cd",
+      "family": "world-tangent-covariance",
+      "familyAuthority": "world-gradient-tangent-covariance-v0",
+      "rendererFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "auditFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-02-raymarch-160.png",
+        "bytes": 122918,
+        "sha256": "ac664ca874cf4e944b31146c98b676868c147e20d1ceba91a372d48a0a58109b"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-02-worldCovariance-160.png",
+        "bytes": 122879,
+        "sha256": "745ae5cebaf6e4facce3de2da9c482979a747f26d298ea8aa375c21eafe5abac"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.2155882575698524,
+        "relativeError": 5.788305181745366e-8
+      },
+      "metrics": {
+        "cameraIndex": 2,
+        "cameraAngle": -0.336,
+        "heldOut": true,
+        "mode": "worldCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 234,
+          "meanAbsChannelDelta": 18.95544033268411,
+          "changedPixels": 75976,
+          "changedFraction": 0.9998420803284729
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 153,
+          "meanAbsChannelDelta": 8.29101963467916,
+          "changedPixels": 75985,
+          "changedFraction": 0.9999605200821182
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 244,
+          "meanAbsChannelDelta": 22.169487287466442,
+          "changedPixels": 75959,
+          "changedFraction": 0.9996183607938095
+        },
+        "fullFlameEdgeLoss": 0.01437092071057513,
+        "supportAlignedEdgeLoss": 0.011168840817834834
+      }
+    },
+    {
+      "cameraIndex": 3,
+      "cameraAngle": -0.294,
+      "cameraPoseHash": "05b26ed28713e3c300744fee93c8026433bc518e816effe04c2dc8e04f9f7b03",
+      "family": "analytic-billboard",
+      "familyAuthority": "camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "camera-facing-billboard-v0",
+      "auditFootprintAuthority": "camera-facing-billboard-v0",
+      "attributeSetId": "analytic-boundary-splat-attributes-v0",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "37ffe20cd8214a0d9a2988238f7a820c89f78ecc944316caef3b93fbfb334c1a",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-03-raymarch-160.png",
+        "bytes": 123143,
+        "sha256": "76bae29b5ccadd191f81ce0d53a671edca3a9a78d977e75f51ce887357122558"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-03-analyticBillboard-160.png",
+        "bytes": 121088,
+        "sha256": "8be76bc85caf25c6c1eeb6914f2db1281a6bf6fd616c26ec079b487cc7d1c016"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.288171417385456,
+        "effectiveIntegratedAlphaSum": 3.2881713619229713,
+        "relativeError": 1.6867272957173934e-8
+      },
+      "metrics": {
+        "cameraIndex": 3,
+        "cameraAngle": -0.294,
+        "heldOut": true,
+        "mode": "analyticBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 251,
+          "meanAbsChannelDelta": 24.33249328841396,
+          "changedPixels": 75978,
+          "changedFraction": 0.9998684002737275
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 254,
+          "meanAbsChannelDelta": 20.262251934515977,
+          "changedPixels": 75985,
+          "changedFraction": 0.9999605200821182
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 254,
+          "meanAbsChannelDelta": 29.23702097699637,
+          "changedPixels": 75955,
+          "changedFraction": 0.9995657209033005
+        },
+        "fullFlameEdgeLoss": 0.014944894929483013,
+        "supportAlignedEdgeLoss": 0.012745384131301168
+      }
+    },
+    {
+      "cameraIndex": 3,
+      "cameraAngle": -0.294,
+      "cameraPoseHash": "05b26ed28713e3c300744fee93c8026433bc518e816effe04c2dc8e04f9f7b03",
+      "family": "learned-billboard",
+      "familyAuthority": "learned-camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "auditFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-03-raymarch-160.png",
+        "bytes": 123143,
+        "sha256": "76bae29b5ccadd191f81ce0d53a671edca3a9a78d977e75f51ce887357122558"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-03-learnedBillboard-160.png",
+        "bytes": 123040,
+        "sha256": "bde8e5675227cf084ca4c357f2c08a3c57d068928b14794c66d4db019428b274"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.215588257569839,
+        "relativeError": 5.788305596060709e-8
+      },
+      "metrics": {
+        "cameraIndex": 3,
+        "cameraAngle": -0.294,
+        "heldOut": true,
+        "mode": "learnedBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 251,
+          "meanAbsChannelDelta": 24.080236353108386,
+          "changedPixels": 75983,
+          "changedFraction": 0.9999342001368637
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 254,
+          "meanAbsChannelDelta": 20.080223193135758,
+          "changedPixels": 75987,
+          "changedFraction": 0.9999868400273727
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 254,
+          "meanAbsChannelDelta": 28.951383771121755,
+          "changedPixels": 75969,
+          "changedFraction": 0.9997499605200821
+        },
+        "fullFlameEdgeLoss": 0.014769707089761669,
+        "supportAlignedEdgeLoss": 0.012636082533181407
+      }
+    },
+    {
+      "cameraIndex": 3,
+      "cameraAngle": -0.294,
+      "cameraPoseHash": "05b26ed28713e3c300744fee93c8026433bc518e816effe04c2dc8e04f9f7b03",
+      "family": "world-tangent-covariance",
+      "familyAuthority": "world-gradient-tangent-covariance-v0",
+      "rendererFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "auditFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-03-raymarch-160.png",
+        "bytes": 123143,
+        "sha256": "76bae29b5ccadd191f81ce0d53a671edca3a9a78d977e75f51ce887357122558"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-03-worldCovariance-160.png",
+        "bytes": 122260,
+        "sha256": "853f9b5f8bbb5447dc471320e95b27ab6981b784f51edbf70f137431a79789b1"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.2155882575698413,
+        "relativeError": 5.788305527008152e-8
+      },
+      "metrics": {
+        "cameraIndex": 3,
+        "cameraAngle": -0.294,
+        "heldOut": true,
+        "mode": "worldCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 237,
+          "meanAbsChannelDelta": 19.059864715481392,
+          "changedPixels": 75979,
+          "changedFraction": 0.9998815602463547
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 174,
+          "meanAbsChannelDelta": 8.247716744749171,
+          "changedPixels": 75987,
+          "changedFraction": 0.9999868400273727
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 247,
+          "meanAbsChannelDelta": 22.313815997262726,
+          "changedPixels": 75952,
+          "changedFraction": 0.9995262409854188
+        },
+        "fullFlameEdgeLoss": 0.014453007652811663,
+        "supportAlignedEdgeLoss": 0.01112758352237248
+      }
+    },
+    {
+      "cameraIndex": 4,
+      "cameraAngle": -0.252,
+      "cameraPoseHash": "77e73d6c53eaa7642cbe2f5cbc3324eaebd0e996aac5e9abe2d21591e49c5e8d",
+      "family": "analytic-billboard",
+      "familyAuthority": "camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "camera-facing-billboard-v0",
+      "auditFootprintAuthority": "camera-facing-billboard-v0",
+      "attributeSetId": "analytic-boundary-splat-attributes-v0",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "37ffe20cd8214a0d9a2988238f7a820c89f78ecc944316caef3b93fbfb334c1a",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-04-raymarch-160.png",
+        "bytes": 123159,
+        "sha256": "83364741e9385cab4ce908c2dfca6b032955200ba50f413927450122a268407b"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-04-analyticBillboard-160.png",
+        "bytes": 120898,
+        "sha256": "1774d35a9054866fce146b51c634172b896a5643dc723b212782f4e850d55203"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.288171417385456,
+        "effectiveIntegratedAlphaSum": 3.2881713619229807,
+        "relativeError": 1.6867270120985602e-8
+      },
+      "metrics": {
+        "cameraIndex": 4,
+        "cameraAngle": -0.252,
+        "heldOut": true,
+        "mode": "analyticBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 240,
+          "meanAbsChannelDelta": 24.450031583934305,
+          "changedPixels": 75979,
+          "changedFraction": 0.9998815602463547
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 251,
+          "meanAbsChannelDelta": 20.319945254513872,
+          "changedPixels": 75983,
+          "changedFraction": 0.9999342001368637
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 253,
+          "meanAbsChannelDelta": 29.41482865715639,
+          "changedPixels": 75968,
+          "changedFraction": 0.9997368005474548
+        },
+        "fullFlameEdgeLoss": 0.014856443591157323,
+        "supportAlignedEdgeLoss": 0.012706189338779254
+      }
+    },
+    {
+      "cameraIndex": 4,
+      "cameraAngle": -0.252,
+      "cameraPoseHash": "77e73d6c53eaa7642cbe2f5cbc3324eaebd0e996aac5e9abe2d21591e49c5e8d",
+      "family": "learned-billboard",
+      "familyAuthority": "learned-camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "auditFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-04-raymarch-160.png",
+        "bytes": 123159,
+        "sha256": "83364741e9385cab4ce908c2dfca6b032955200ba50f413927450122a268407b"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-04-learnedBillboard-160.png",
+        "bytes": 122707,
+        "sha256": "b5967db22398ab3039341e22f840d4bd484aacf1d21688e5f6dd177d876d3745"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.215588257569842,
+        "relativeError": 5.7883055131976406e-8
+      },
+      "metrics": {
+        "cameraIndex": 4,
+        "cameraAngle": -0.252,
+        "heldOut": true,
+        "mode": "learnedBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 239,
+          "meanAbsChannelDelta": 24.18858240774859,
+          "changedPixels": 75982,
+          "changedFraction": 0.9999210401642364
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 242,
+          "meanAbsChannelDelta": 20.124526240985418,
+          "changedPixels": 75986,
+          "changedFraction": 0.9999736800547455
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 252,
+          "meanAbsChannelDelta": 29.121591567089542,
+          "changedPixels": 75974,
+          "changedFraction": 0.9998157603832184
+        },
+        "fullFlameEdgeLoss": 0.01472177915059305,
+        "supportAlignedEdgeLoss": 0.012617796101617408
+      }
+    },
+    {
+      "cameraIndex": 4,
+      "cameraAngle": -0.252,
+      "cameraPoseHash": "77e73d6c53eaa7642cbe2f5cbc3324eaebd0e996aac5e9abe2d21591e49c5e8d",
+      "family": "world-tangent-covariance",
+      "familyAuthority": "world-gradient-tangent-covariance-v0",
+      "rendererFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "auditFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-04-raymarch-160.png",
+        "bytes": 123159,
+        "sha256": "83364741e9385cab4ce908c2dfca6b032955200ba50f413927450122a268407b"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-04-worldCovariance-160.png",
+        "bytes": 121840,
+        "sha256": "c4e191c536b495b3a124fdb64c997b5537cdeefd4a3f7eb8d8518c92b77b2128"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.2155882575698453,
+        "relativeError": 5.788305402713549e-8
+      },
+      "metrics": {
+        "cameraIndex": 4,
+        "cameraAngle": -0.252,
+        "heldOut": true,
+        "mode": "worldCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 239,
+          "meanAbsChannelDelta": 19.112840185292416,
+          "changedPixels": 75978,
+          "changedFraction": 0.9998684002737275
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 183,
+          "meanAbsChannelDelta": 8.195590093172607,
+          "changedPixels": 75987,
+          "changedFraction": 0.9999868400273727
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 248,
+          "meanAbsChannelDelta": 22.408827709638363,
+          "changedPixels": 75962,
+          "changedFraction": 0.9996578407116913
+        },
+        "fullFlameEdgeLoss": 0.014453793936861201,
+        "supportAlignedEdgeLoss": 0.011176082689143777
+      }
+    },
+    {
+      "cameraIndex": 5,
+      "cameraAngle": -0.21,
+      "cameraPoseHash": "7758c0e393b43649c60c01a58766aa31e4f174547b3b4b74ff036e5e6e9f016f",
+      "family": "analytic-billboard",
+      "familyAuthority": "camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "camera-facing-billboard-v0",
+      "auditFootprintAuthority": "camera-facing-billboard-v0",
+      "attributeSetId": "analytic-boundary-splat-attributes-v0",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "37ffe20cd8214a0d9a2988238f7a820c89f78ecc944316caef3b93fbfb334c1a",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-05-raymarch-160.png",
+        "bytes": 123128,
+        "sha256": "bff4ba51651b80ebf6cfc0809e06be4d750984b5f6612c8a355cbb5bec843db8"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-05-analyticBillboard-160.png",
+        "bytes": 120838,
+        "sha256": "4bf8a498fa02a4a9ef5022da0626a542fa7188a90618a63efcc878eafd3f1eb4"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.288171417385456,
+        "effectiveIntegratedAlphaSum": 3.2881713619229758,
+        "relativeError": 1.686727160660806e-8
+      },
+      "metrics": {
+        "cameraIndex": 5,
+        "cameraAngle": -0.21,
+        "heldOut": true,
+        "mode": "analyticBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 233,
+          "meanAbsChannelDelta": 24.64632573564247,
+          "changedPixels": 75982,
+          "changedFraction": 0.9999210401642364
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 248,
+          "meanAbsChannelDelta": 20.45100542190872,
+          "changedPixels": 75986,
+          "changedFraction": 0.9999736800547455
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 253,
+          "meanAbsChannelDelta": 29.68620045270306,
+          "changedPixels": 75969,
+          "changedFraction": 0.9997499605200821
+        },
+        "fullFlameEdgeLoss": 0.014865312851321213,
+        "supportAlignedEdgeLoss": 0.012721395883582195
+      }
+    },
+    {
+      "cameraIndex": 5,
+      "cameraAngle": -0.21,
+      "cameraPoseHash": "7758c0e393b43649c60c01a58766aa31e4f174547b3b4b74ff036e5e6e9f016f",
+      "family": "learned-billboard",
+      "familyAuthority": "learned-camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "auditFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-05-raymarch-160.png",
+        "bytes": 123128,
+        "sha256": "bff4ba51651b80ebf6cfc0809e06be4d750984b5f6612c8a355cbb5bec843db8"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-05-learnedBillboard-160.png",
+        "bytes": 122900,
+        "sha256": "eea526c7a6201f10a3ede36cd7b50918fc1759ad0ab59cbf9ee0ef032eed928d"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.2155882575698467,
+        "relativeError": 5.788305361282015e-8
+      },
+      "metrics": {
+        "cameraIndex": 5,
+        "cameraAngle": -0.21,
+        "heldOut": true,
+        "mode": "learnedBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 233,
+          "meanAbsChannelDelta": 24.362882955203453,
+          "changedPixels": 75982,
+          "changedFraction": 0.9999210401642364
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 248,
+          "meanAbsChannelDelta": 20.247713454756013,
+          "changedPixels": 75986,
+          "changedFraction": 0.9999736800547455
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 249,
+          "meanAbsChannelDelta": 29.369943280517976,
+          "changedPixels": 75970,
+          "changedFraction": 0.9997631204927093
+        },
+        "fullFlameEdgeLoss": 0.01472081814195352,
+        "supportAlignedEdgeLoss": 0.012641620121010926
+      }
+    },
+    {
+      "cameraIndex": 5,
+      "cameraAngle": -0.21,
+      "cameraPoseHash": "7758c0e393b43649c60c01a58766aa31e4f174547b3b4b74ff036e5e6e9f016f",
+      "family": "world-tangent-covariance",
+      "familyAuthority": "world-gradient-tangent-covariance-v0",
+      "rendererFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "auditFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-05-raymarch-160.png",
+        "bytes": 123128,
+        "sha256": "bff4ba51651b80ebf6cfc0809e06be4d750984b5f6612c8a355cbb5bec843db8"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-05-worldCovariance-160.png",
+        "bytes": 121970,
+        "sha256": "97a25dda9e54c8afa97b303e9880b9618559285d253cf44511a3fcfe25727a6e"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.215588257569834,
+        "relativeError": 5.7883057617868466e-8
+      },
+      "metrics": {
+        "cameraIndex": 5,
+        "cameraAngle": -0.21,
+        "heldOut": true,
+        "mode": "worldCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 234,
+          "meanAbsChannelDelta": 19.187381560246354,
+          "changedPixels": 75983,
+          "changedFraction": 0.9999342001368637
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 165,
+          "meanAbsChannelDelta": 8.173024030110017,
+          "changedPixels": 75988,
+          "changedFraction": 1
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 247,
+          "meanAbsChannelDelta": 22.488067194820236,
+          "changedPixels": 75963,
+          "changedFraction": 0.9996710006843186
+        },
+        "fullFlameEdgeLoss": 0.014442755901029938,
+        "supportAlignedEdgeLoss": 0.011224286114960024
+      }
+    },
+    {
+      "cameraIndex": 6,
+      "cameraAngle": -0.168,
+      "cameraPoseHash": "4385b764d62b5321531c4d0c1cc176a500358cac979798e0e34af23fbf90341d",
+      "family": "analytic-billboard",
+      "familyAuthority": "camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "camera-facing-billboard-v0",
+      "auditFootprintAuthority": "camera-facing-billboard-v0",
+      "attributeSetId": "analytic-boundary-splat-attributes-v0",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "37ffe20cd8214a0d9a2988238f7a820c89f78ecc944316caef3b93fbfb334c1a",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-06-raymarch-160.png",
+        "bytes": 122695,
+        "sha256": "9172ce820806996d36a37f6d9e8a3281f5ee16e66eaecdc2d042369c761f4774"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-06-analyticBillboard-160.png",
+        "bytes": 120978,
+        "sha256": "2bd4ede3eefa0d53f23c64c08d9e85e75823d96fb5a127affbc85b608fb130e1"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.288171417385456,
+        "effectiveIntegratedAlphaSum": 3.2881713619229704,
+        "relativeError": 1.686727322728711e-8
+      },
+      "metrics": {
+        "cameraIndex": 6,
+        "cameraAngle": -0.168,
+        "heldOut": true,
+        "mode": "analyticBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 245,
+          "meanAbsChannelDelta": 24.750875138179712,
+          "changedPixels": 75982,
+          "changedFraction": 0.9999210401642364
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 252,
+          "meanAbsChannelDelta": 20.58077920197926,
+          "changedPixels": 75988,
+          "changedFraction": 1
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 29.86488985102911,
+          "changedPixels": 75974,
+          "changedFraction": 0.9998157603832184
+        },
+        "fullFlameEdgeLoss": 0.014929745102978113,
+        "supportAlignedEdgeLoss": 0.012749330872247727
+      }
+    },
+    {
+      "cameraIndex": 6,
+      "cameraAngle": -0.168,
+      "cameraPoseHash": "4385b764d62b5321531c4d0c1cc176a500358cac979798e0e34af23fbf90341d",
+      "family": "learned-billboard",
+      "familyAuthority": "learned-camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "auditFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-06-raymarch-160.png",
+        "bytes": 122695,
+        "sha256": "9172ce820806996d36a37f6d9e8a3281f5ee16e66eaecdc2d042369c761f4774"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-06-learnedBillboard-160.png",
+        "bytes": 123049,
+        "sha256": "77707ce8ab6a671a685e30e2fa3f1488ba53fe8ae8748b47da01eeb188a8f4dd"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.2155882575698485,
+        "relativeError": 5.7883053060399686e-8
+      },
+      "metrics": {
+        "cameraIndex": 6,
+        "cameraAngle": -0.168,
+        "heldOut": true,
+        "mode": "learnedBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 244,
+          "meanAbsChannelDelta": 24.46098397115334,
+          "changedPixels": 75983,
+          "changedFraction": 0.9999342001368637
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 252,
+          "meanAbsChannelDelta": 20.362938885087118,
+          "changedPixels": 75988,
+          "changedFraction": 1
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 254,
+          "meanAbsChannelDelta": 29.532630152129283,
+          "changedPixels": 75985,
+          "changedFraction": 0.9999605200821182
+        },
+        "fullFlameEdgeLoss": 0.014789972719590627,
+        "supportAlignedEdgeLoss": 0.012670914056182078
+      }
+    },
+    {
+      "cameraIndex": 6,
+      "cameraAngle": -0.168,
+      "cameraPoseHash": "4385b764d62b5321531c4d0c1cc176a500358cac979798e0e34af23fbf90341d",
+      "family": "world-tangent-covariance",
+      "familyAuthority": "world-gradient-tangent-covariance-v0",
+      "rendererFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "auditFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-06-raymarch-160.png",
+        "bytes": 122695,
+        "sha256": "9172ce820806996d36a37f6d9e8a3281f5ee16e66eaecdc2d042369c761f4774"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-06-worldCovariance-160.png",
+        "bytes": 122029,
+        "sha256": "56ead1cfe7fd64bd31dd3b6fc2424197609a8eb952a3f1d6929fc79fb50ebcd9"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.2155882575698502,
+        "relativeError": 5.788305250797923e-8
+      },
+      "metrics": {
+        "cameraIndex": 6,
+        "cameraAngle": -0.168,
+        "heldOut": true,
+        "mode": "worldCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 232,
+          "meanAbsChannelDelta": 19.261255066589463,
+          "changedPixels": 75985,
+          "changedFraction": 0.9999605200821182
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 182,
+          "meanAbsChannelDelta": 8.195326893720061,
+          "changedPixels": 75987,
+          "changedFraction": 0.9999868400273727
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 246,
+          "meanAbsChannelDelta": 22.52818208138127,
+          "changedPixels": 75969,
+          "changedFraction": 0.9997499605200821
+        },
+        "fullFlameEdgeLoss": 0.014479398780842805,
+        "supportAlignedEdgeLoss": 0.01116534143401626
+      }
+    },
+    {
+      "cameraIndex": 7,
+      "cameraAngle": -0.126,
+      "cameraPoseHash": "9ca4ccd7748e2b4cb65199ead48f5a3ab8ddebf9c4ddc8d2c88a1532f24e464d",
+      "family": "analytic-billboard",
+      "familyAuthority": "camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "camera-facing-billboard-v0",
+      "auditFootprintAuthority": "camera-facing-billboard-v0",
+      "attributeSetId": "analytic-boundary-splat-attributes-v0",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "37ffe20cd8214a0d9a2988238f7a820c89f78ecc944316caef3b93fbfb334c1a",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-07-raymarch-160.png",
+        "bytes": 122407,
+        "sha256": "853b74585242186147f94bcda57bd83f3b16e330c0d1c07db4260e82c9bb8bcf"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-07-analyticBillboard-160.png",
+        "bytes": 120884,
+        "sha256": "1182837517966be951adbfeb334caef8ff6e7b54bd9c6877e4a2d8089d050d02"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.288171417385456,
+        "effectiveIntegratedAlphaSum": 3.2881713619229687,
+        "relativeError": 1.6867273767513457e-8
+      },
+      "metrics": {
+        "cameraIndex": 7,
+        "cameraAngle": -0.126,
+        "heldOut": true,
+        "mode": "analyticBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 246,
+          "meanAbsChannelDelta": 24.961921619203032,
+          "changedPixels": 75984,
+          "changedFraction": 0.9999473601094909
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 248,
+          "meanAbsChannelDelta": 20.750210559562035,
+          "changedPixels": 75988,
+          "changedFraction": 1
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 30.15524819708375,
+          "changedPixels": 75972,
+          "changedFraction": 0.9997894404379639
+        },
+        "fullFlameEdgeLoss": 0.014834057216857937,
+        "supportAlignedEdgeLoss": 0.01269659486421245
+      }
+    },
+    {
+      "cameraIndex": 7,
+      "cameraAngle": -0.126,
+      "cameraPoseHash": "9ca4ccd7748e2b4cb65199ead48f5a3ab8ddebf9c4ddc8d2c88a1532f24e464d",
+      "family": "learned-billboard",
+      "familyAuthority": "learned-camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "auditFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-07-raymarch-160.png",
+        "bytes": 122407,
+        "sha256": "853b74585242186147f94bcda57bd83f3b16e330c0d1c07db4260e82c9bb8bcf"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-07-learnedBillboard-160.png",
+        "bytes": 123249,
+        "sha256": "2dc4c98e80cb2db08c967312afb2ff2af5aa10794662f102c4c91d0e03453a92"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.21558825756984,
+        "relativeError": 5.788305568439686e-8
+      },
+      "metrics": {
+        "cameraIndex": 7,
+        "cameraAngle": -0.126,
+        "heldOut": true,
+        "mode": "learnedBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 245,
+          "meanAbsChannelDelta": 24.668520029478337,
+          "changedPixels": 75982,
+          "changedFraction": 0.9999210401642364
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 247,
+          "meanAbsChannelDelta": 20.528004421750804,
+          "changedPixels": 75984,
+          "changedFraction": 0.9999473601094909
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 254,
+          "meanAbsChannelDelta": 29.814128546612622,
+          "changedPixels": 75977,
+          "changedFraction": 0.9998552403011002
+        },
+        "fullFlameEdgeLoss": 0.014693442834480347,
+        "supportAlignedEdgeLoss": 0.012598391492982818
+      }
+    },
+    {
+      "cameraIndex": 7,
+      "cameraAngle": -0.126,
+      "cameraPoseHash": "9ca4ccd7748e2b4cb65199ead48f5a3ab8ddebf9c4ddc8d2c88a1532f24e464d",
+      "family": "world-tangent-covariance",
+      "familyAuthority": "world-gradient-tangent-covariance-v0",
+      "rendererFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "auditFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-07-raymarch-160.png",
+        "bytes": 122407,
+        "sha256": "853b74585242186147f94bcda57bd83f3b16e330c0d1c07db4260e82c9bb8bcf"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-07-worldCovariance-160.png",
+        "bytes": 122177,
+        "sha256": "24bde616c0e66d85f0b689b363cdd2c21a26686fc5fac05f50206b47f5739851"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.215588257569847,
+        "relativeError": 5.788305347471503e-8
+      },
+      "metrics": {
+        "cameraIndex": 7,
+        "cameraAngle": -0.126,
+        "heldOut": true,
+        "mode": "worldCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 228,
+          "meanAbsChannelDelta": 19.35780649576249,
+          "changedPixels": 75979,
+          "changedFraction": 0.9998815602463547
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 205,
+          "meanAbsChannelDelta": 8.273358951413382,
+          "changedPixels": 75984,
+          "changedFraction": 0.9999473601094909
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 244,
+          "meanAbsChannelDelta": 22.56300336895299,
+          "changedPixels": 75970,
+          "changedFraction": 0.9997631204927093
+        },
+        "fullFlameEdgeLoss": 0.014470361211338977,
+        "supportAlignedEdgeLoss": 0.011241041126484485
+      }
+    },
+    {
+      "cameraIndex": 8,
+      "cameraAngle": -0.084,
+      "cameraPoseHash": "74134f304b285292ce863e4611c1ca16d5862fc5df201aa07ac89d3efbcc6af0",
+      "family": "analytic-billboard",
+      "familyAuthority": "camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "camera-facing-billboard-v0",
+      "auditFootprintAuthority": "camera-facing-billboard-v0",
+      "attributeSetId": "analytic-boundary-splat-attributes-v0",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "37ffe20cd8214a0d9a2988238f7a820c89f78ecc944316caef3b93fbfb334c1a",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-08-raymarch-160.png",
+        "bytes": 122247,
+        "sha256": "08163264bf5b59546d3c0f625aea44069efde34d3b0faf48a41c241d05338825"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-08-analyticBillboard-160.png",
+        "bytes": 120304,
+        "sha256": "c812be7a2753820d8e8f08514e64e025283456fe891c705c48367d71e9a021a4"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.288171417385456,
+        "effectiveIntegratedAlphaSum": 3.288171361922976,
+        "relativeError": 1.6867271471551476e-8
+      },
+      "metrics": {
+        "cameraIndex": 8,
+        "cameraAngle": -0.084,
+        "heldOut": true,
+        "mode": "analyticBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 251,
+          "meanAbsChannelDelta": 25.125585618781912,
+          "changedPixels": 75978,
+          "changedFraction": 0.9998684002737275
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 253,
+          "meanAbsChannelDelta": 20.8738419224088,
+          "changedPixels": 75984,
+          "changedFraction": 0.9999473601094909
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 254,
+          "meanAbsChannelDelta": 30.333977075327685,
+          "changedPixels": 75974,
+          "changedFraction": 0.9998157603832184
+        },
+        "fullFlameEdgeLoss": 0.01490110677622512,
+        "supportAlignedEdgeLoss": 0.012633685626226082
+      }
+    },
+    {
+      "cameraIndex": 8,
+      "cameraAngle": -0.084,
+      "cameraPoseHash": "74134f304b285292ce863e4611c1ca16d5862fc5df201aa07ac89d3efbcc6af0",
+      "family": "learned-billboard",
+      "familyAuthority": "learned-camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "auditFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-08-raymarch-160.png",
+        "bytes": 122247,
+        "sha256": "08163264bf5b59546d3c0f625aea44069efde34d3b0faf48a41c241d05338825"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-08-learnedBillboard-160.png",
+        "bytes": 122686,
+        "sha256": "58b7d8bff9f7e77cf3c56604744344a924469274371a3b8bbcb226dbfce458a1"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.215588257569844,
+        "relativeError": 5.7883054441450835e-8
+      },
+      "metrics": {
+        "cameraIndex": 8,
+        "cameraAngle": -0.084,
+        "heldOut": true,
+        "mode": "learnedBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 249,
+          "meanAbsChannelDelta": 24.863442254040113,
+          "changedPixels": 75983,
+          "changedFraction": 0.9999342001368637
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 253,
+          "meanAbsChannelDelta": 20.659673237879666,
+          "changedPixels": 75988,
+          "changedFraction": 1
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 254,
+          "meanAbsChannelDelta": 30.028425540874874,
+          "changedPixels": 75979,
+          "changedFraction": 0.9998815602463547
+        },
+        "fullFlameEdgeLoss": 0.014801929269527454,
+        "supportAlignedEdgeLoss": 0.012590414321707733
+      }
+    },
+    {
+      "cameraIndex": 8,
+      "cameraAngle": -0.084,
+      "cameraPoseHash": "74134f304b285292ce863e4611c1ca16d5862fc5df201aa07ac89d3efbcc6af0",
+      "family": "world-tangent-covariance",
+      "familyAuthority": "world-gradient-tangent-covariance-v0",
+      "rendererFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "auditFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-08-raymarch-160.png",
+        "bytes": 122247,
+        "sha256": "08163264bf5b59546d3c0f625aea44069efde34d3b0faf48a41c241d05338825"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-08-worldCovariance-160.png",
+        "bytes": 121771,
+        "sha256": "9a521fc6f260c343320b7ab9921a91c1240445dfd113115d2c512f769afec570"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.2155882575698382,
+        "relativeError": 5.788305623681732e-8
+      },
+      "metrics": {
+        "cameraIndex": 8,
+        "cameraAngle": -0.084,
+        "heldOut": true,
+        "mode": "worldCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 224,
+          "meanAbsChannelDelta": 19.494035242406696,
+          "changedPixels": 75983,
+          "changedFraction": 0.9999342001368637
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 184,
+          "meanAbsChannelDelta": 8.406718824024846,
+          "changedPixels": 75987,
+          "changedFraction": 0.9999868400273727
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 242,
+          "meanAbsChannelDelta": 22.628704532294574,
+          "changedPixels": 75973,
+          "changedFraction": 0.9998026004105911
+        },
+        "fullFlameEdgeLoss": 0.014593717868837652,
+        "supportAlignedEdgeLoss": 0.011254679745666823
+      }
+    },
+    {
+      "cameraIndex": 9,
+      "cameraAngle": -0.042,
+      "cameraPoseHash": "c8fd12aa540ddfcf69a0b8e26119aede00419c1dfc56bc56c81f3a49533450f1",
+      "family": "analytic-billboard",
+      "familyAuthority": "camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "camera-facing-billboard-v0",
+      "auditFootprintAuthority": "camera-facing-billboard-v0",
+      "attributeSetId": "analytic-boundary-splat-attributes-v0",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "37ffe20cd8214a0d9a2988238f7a820c89f78ecc944316caef3b93fbfb334c1a",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-09-raymarch-160.png",
+        "bytes": 121966,
+        "sha256": "312071772b33f94e7775b0612af8bb2f626d4b6f567a7a4aea6644f265d3d488"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-09-analyticBillboard-160.png",
+        "bytes": 119849,
+        "sha256": "2ccaae6192095cf178b2d39f0c87e0c0b347b89ecf3496f3b4d19e62cea0da0a"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.288171417385456,
+        "effectiveIntegratedAlphaSum": 3.288171361922975,
+        "relativeError": 1.6867271876721235e-8
+      },
+      "metrics": {
+        "cameraIndex": 9,
+        "cameraAngle": -0.042,
+        "heldOut": true,
+        "mode": "analyticBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 252,
+          "meanAbsChannelDelta": 25.33763554771806,
+          "changedPixels": 75983,
+          "changedFraction": 0.9999342001368637
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 21.041457203769017,
+          "changedPixels": 75983,
+          "changedFraction": 0.9999342001368637
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 30.537565141864505,
+          "changedPixels": 75975,
+          "changedFraction": 0.9998289203558457
+        },
+        "fullFlameEdgeLoss": 0.014925256876443907,
+        "supportAlignedEdgeLoss": 0.012654602377957288
+      }
+    },
+    {
+      "cameraIndex": 9,
+      "cameraAngle": -0.042,
+      "cameraPoseHash": "c8fd12aa540ddfcf69a0b8e26119aede00419c1dfc56bc56c81f3a49533450f1",
+      "family": "learned-billboard",
+      "familyAuthority": "learned-camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "auditFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-09-raymarch-160.png",
+        "bytes": 121966,
+        "sha256": "312071772b33f94e7775b0612af8bb2f626d4b6f567a7a4aea6644f265d3d488"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-09-learnedBillboard-160.png",
+        "bytes": 122228,
+        "sha256": "415b22fe1bc55cdcf5437c277186acd2689c0e5d6bb891cdf111cf81b05c7e30"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.2155882575698507,
+        "relativeError": 5.7883052369874115e-8
+      },
+      "metrics": {
+        "cameraIndex": 9,
+        "cameraAngle": -0.042,
+        "heldOut": true,
+        "mode": "learnedBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 251,
+          "meanAbsChannelDelta": 25.110662209822603,
+          "changedPixels": 75985,
+          "changedFraction": 0.9999605200821182
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 254,
+          "meanAbsChannelDelta": 20.85543770068958,
+          "changedPixels": 75983,
+          "changedFraction": 0.9999342001368637
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 30.25724127493815,
+          "changedPixels": 75978,
+          "changedFraction": 0.9998684002737275
+        },
+        "fullFlameEdgeLoss": 0.014841168282566498,
+        "supportAlignedEdgeLoss": 0.012633855645952655
+      }
+    },
+    {
+      "cameraIndex": 9,
+      "cameraAngle": -0.042,
+      "cameraPoseHash": "c8fd12aa540ddfcf69a0b8e26119aede00419c1dfc56bc56c81f3a49533450f1",
+      "family": "world-tangent-covariance",
+      "familyAuthority": "world-gradient-tangent-covariance-v0",
+      "rendererFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "auditFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-09-raymarch-160.png",
+        "bytes": 121966,
+        "sha256": "312071772b33f94e7775b0612af8bb2f626d4b6f567a7a4aea6644f265d3d488"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-09-worldCovariance-160.png",
+        "bytes": 121182,
+        "sha256": "54db3c2c7bd4ba9afdaa171a9d3ee9866237296b98dad1d04a9afec8610a7441"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.215588257569848,
+        "relativeError": 5.78830531985048e-8
+      },
+      "metrics": {
+        "cameraIndex": 9,
+        "cameraAngle": -0.042,
+        "heldOut": true,
+        "mode": "worldCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 224,
+          "meanAbsChannelDelta": 19.551136363636363,
+          "changedPixels": 75975,
+          "changedFraction": 0.9998289203558457
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 169,
+          "meanAbsChannelDelta": 8.56444109596252,
+          "changedPixels": 75986,
+          "changedFraction": 0.9999736800547455
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 243,
+          "meanAbsChannelDelta": 22.664111438648206,
+          "changedPixels": 75974,
+          "changedFraction": 0.9998157603832184
+        },
+        "fullFlameEdgeLoss": 0.01471059580466578,
+        "supportAlignedEdgeLoss": 0.011403278473586135
+      }
+    },
+    {
+      "cameraIndex": 10,
+      "cameraAngle": 0,
+      "cameraPoseHash": "5d20c917cf1dd8c58a3e5b00a77b604ca330cac831187759b3a248a0b85fd3f0",
+      "family": "analytic-billboard",
+      "familyAuthority": "camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "camera-facing-billboard-v0",
+      "auditFootprintAuthority": "camera-facing-billboard-v0",
+      "attributeSetId": "analytic-boundary-splat-attributes-v0",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "37ffe20cd8214a0d9a2988238f7a820c89f78ecc944316caef3b93fbfb334c1a",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-10-raymarch-160.png",
+        "bytes": 121282,
+        "sha256": "8fddcaa9cd0fb07fc7d7947c9ee32f797d640978fe0c62232bc762e68ee04909"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-10-analyticBillboard-160.png",
+        "bytes": 119269,
+        "sha256": "f01a0eb480c72b2d635bf9c63718a631e15bf52406f1b94c35e1a0b5847e0d95"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.288171417385456,
+        "effectiveIntegratedAlphaSum": 3.2881713619229727,
+        "relativeError": 1.686727255200417e-8
+      },
+      "metrics": {
+        "cameraIndex": 10,
+        "cameraAngle": 0,
+        "heldOut": false,
+        "mode": "analyticBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 239,
+          "meanAbsChannelDelta": 25.557581460230562,
+          "changedPixels": 75982,
+          "changedFraction": 0.9999210401642364
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 246,
+          "meanAbsChannelDelta": 21.23460941201242,
+          "changedPixels": 75981,
+          "changedFraction": 0.9999078801916093
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 254,
+          "meanAbsChannelDelta": 30.761919645207136,
+          "changedPixels": 75971,
+          "changedFraction": 0.9997762804653366
+        },
+        "fullFlameEdgeLoss": 0.015018699799302895,
+        "supportAlignedEdgeLoss": 0.012646960073385302
+      }
+    },
+    {
+      "cameraIndex": 10,
+      "cameraAngle": 0,
+      "cameraPoseHash": "5d20c917cf1dd8c58a3e5b00a77b604ca330cac831187759b3a248a0b85fd3f0",
+      "family": "learned-billboard",
+      "familyAuthority": "learned-camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "auditFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-10-raymarch-160.png",
+        "bytes": 121282,
+        "sha256": "8fddcaa9cd0fb07fc7d7947c9ee32f797d640978fe0c62232bc762e68ee04909"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-10-learnedBillboard-160.png",
+        "bytes": 121646,
+        "sha256": "beb1136415059b79a5b5fa0d59d88ed481d27779ae3a4bdeb8637d873a9e2cbe"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.2155882575698493,
+        "relativeError": 5.788305278418946e-8
+      },
+      "metrics": {
+        "cameraIndex": 10,
+        "cameraAngle": 0,
+        "heldOut": false,
+        "mode": "learnedBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 238,
+          "meanAbsChannelDelta": 25.32097831236511,
+          "changedPixels": 75984,
+          "changedFraction": 0.9999473601094909
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 245,
+          "meanAbsChannelDelta": 21.04753382112965,
+          "changedPixels": 75985,
+          "changedFraction": 0.9999605200821182
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 254,
+          "meanAbsChannelDelta": 30.480723930094225,
+          "changedPixels": 75978,
+          "changedFraction": 0.9998684002737275
+        },
+        "fullFlameEdgeLoss": 0.01495008619257792,
+        "supportAlignedEdgeLoss": 0.012616222020683977
+      }
+    },
+    {
+      "cameraIndex": 10,
+      "cameraAngle": 0,
+      "cameraPoseHash": "5d20c917cf1dd8c58a3e5b00a77b604ca330cac831187759b3a248a0b85fd3f0",
+      "family": "world-tangent-covariance",
+      "familyAuthority": "world-gradient-tangent-covariance-v0",
+      "rendererFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "auditFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-10-raymarch-160.png",
+        "bytes": 121282,
+        "sha256": "8fddcaa9cd0fb07fc7d7947c9ee32f797d640978fe0c62232bc762e68ee04909"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-10-worldCovariance-160.png",
+        "bytes": 120367,
+        "sha256": "e5bade53689e77de1f17ddf88c9399b3427d4dafca2a46aa4302d5d7c7b96293"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.215588257569849,
+        "relativeError": 5.788305292229458e-8
+      },
+      "metrics": {
+        "cameraIndex": 10,
+        "cameraAngle": 0,
+        "heldOut": false,
+        "mode": "worldCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 224,
+          "meanAbsChannelDelta": 19.584625203979577,
+          "changedPixels": 75981,
+          "changedFraction": 0.9999078801916093
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 168,
+          "meanAbsChannelDelta": 8.640436647891772,
+          "changedPixels": 75986,
+          "changedFraction": 0.9999736800547455
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 242,
+          "meanAbsChannelDelta": 22.66527280623256,
+          "changedPixels": 75968,
+          "changedFraction": 0.9997368005474548
+        },
+        "fullFlameEdgeLoss": 0.014787895899308961,
+        "supportAlignedEdgeLoss": 0.011358824693930245
+      }
+    },
+    {
+      "cameraIndex": 11,
+      "cameraAngle": 0.042,
+      "cameraPoseHash": "ee87c53b2a77093df2d5487aef61205f53a07216050c38c7b70e8cec1c2182d2",
+      "family": "analytic-billboard",
+      "familyAuthority": "camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "camera-facing-billboard-v0",
+      "auditFootprintAuthority": "camera-facing-billboard-v0",
+      "attributeSetId": "analytic-boundary-splat-attributes-v0",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "37ffe20cd8214a0d9a2988238f7a820c89f78ecc944316caef3b93fbfb334c1a",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-11-raymarch-160.png",
+        "bytes": 120315,
+        "sha256": "d11f971f0d06c68447e7b9c40890587188aaeaac31515747ec81213aad37c285"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-11-analyticBillboard-160.png",
+        "bytes": 117965,
+        "sha256": "d17c139511968d1b0781bcc1272d217d004058165a68ff6c603f252aae7a26ad"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.288171417385456,
+        "effectiveIntegratedAlphaSum": 3.2881713619229775,
+        "relativeError": 1.6867271066381712e-8
+      },
+      "metrics": {
+        "cameraIndex": 11,
+        "cameraAngle": 0.042,
+        "heldOut": true,
+        "mode": "analyticBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 246,
+          "meanAbsChannelDelta": 25.46715928830868,
+          "changedPixels": 75854,
+          "changedFraction": 0.9982365636679476
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 249,
+          "meanAbsChannelDelta": 21.273608990893297,
+          "changedPixels": 75858,
+          "changedFraction": 0.9982892035584566
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 254,
+          "meanAbsChannelDelta": 30.622210085803022,
+          "changedPixels": 75846,
+          "changedFraction": 0.9981312838869295
+        },
+        "fullFlameEdgeLoss": 0.014975622870627122,
+        "supportAlignedEdgeLoss": 0.01272411780042144
+      }
+    },
+    {
+      "cameraIndex": 11,
+      "cameraAngle": 0.042,
+      "cameraPoseHash": "ee87c53b2a77093df2d5487aef61205f53a07216050c38c7b70e8cec1c2182d2",
+      "family": "learned-billboard",
+      "familyAuthority": "learned-camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "auditFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-11-raymarch-160.png",
+        "bytes": 120315,
+        "sha256": "d11f971f0d06c68447e7b9c40890587188aaeaac31515747ec81213aad37c285"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-11-learnedBillboard-160.png",
+        "bytes": 120205,
+        "sha256": "db7158fcc50224ff8c0e11e8ec08bf4b9f9d9e3b9f75196fe3299af04fca985b"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.2155882575698556,
+        "relativeError": 5.788305085071786e-8
+      },
+      "metrics": {
+        "cameraIndex": 11,
+        "cameraAngle": 0.042,
+        "heldOut": true,
+        "mode": "learnedBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 233,
+          "meanAbsChannelDelta": 25.229681002263515,
+          "changedPixels": 75856,
+          "changedFraction": 0.998262883613202
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 243,
+          "meanAbsChannelDelta": 21.09252118755593,
+          "changedPixels": 75860,
+          "changedFraction": 0.9983155235037111
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 254,
+          "meanAbsChannelDelta": 30.350259251460756,
+          "changedPixels": 75854,
+          "changedFraction": 0.9982365636679476
+        },
+        "fullFlameEdgeLoss": 0.01487995956416873,
+        "supportAlignedEdgeLoss": 0.012664738026187438
+      }
+    },
+    {
+      "cameraIndex": 11,
+      "cameraAngle": 0.042,
+      "cameraPoseHash": "ee87c53b2a77093df2d5487aef61205f53a07216050c38c7b70e8cec1c2182d2",
+      "family": "world-tangent-covariance",
+      "familyAuthority": "world-gradient-tangent-covariance-v0",
+      "rendererFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "auditFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-11-raymarch-160.png",
+        "bytes": 120315,
+        "sha256": "d11f971f0d06c68447e7b9c40890587188aaeaac31515747ec81213aad37c285"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-11-worldCovariance-160.png",
+        "bytes": 119087,
+        "sha256": "632f0d3209f33502b2ed6c694bfb394b15bafac27cd2273c0bb5fe3c4c7cb533"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.2155882575698613,
+        "relativeError": 5.7883049055351375e-8
+      },
+      "metrics": {
+        "cameraIndex": 11,
+        "cameraAngle": 0.042,
+        "heldOut": true,
+        "mode": "worldCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 225,
+          "meanAbsChannelDelta": 19.47243643733221,
+          "changedPixels": 75857,
+          "changedFraction": 0.9982760435858293
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 170,
+          "meanAbsChannelDelta": 8.755862767805443,
+          "changedPixels": 75860,
+          "changedFraction": 0.9983155235037111
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 240,
+          "meanAbsChannelDelta": 22.547606200979104,
+          "changedPixels": 75840,
+          "changedFraction": 0.998052324051166
+        },
+        "fullFlameEdgeLoss": 0.014760933429302492,
+        "supportAlignedEdgeLoss": 0.01129977901178612
+      }
+    },
+    {
+      "cameraIndex": 12,
+      "cameraAngle": 0.084,
+      "cameraPoseHash": "e94122271c9eeef8c9e664d56606bb42c49f210e7afcf1846f3b0cac8668d205",
+      "family": "analytic-billboard",
+      "familyAuthority": "camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "camera-facing-billboard-v0",
+      "auditFootprintAuthority": "camera-facing-billboard-v0",
+      "attributeSetId": "analytic-boundary-splat-attributes-v0",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "37ffe20cd8214a0d9a2988238f7a820c89f78ecc944316caef3b93fbfb334c1a",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-12-raymarch-160.png",
+        "bytes": 119178,
+        "sha256": "b590822426a3592929a3dc9e2fd00737ec7d8cd080a98926297f17edbc89981e"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-12-analyticBillboard-160.png",
+        "bytes": 116966,
+        "sha256": "0fdc755edf548179cdacfbe6ea08eadb453bb22480b078c14f13aa4b56740768"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.288171417385456,
+        "effectiveIntegratedAlphaSum": 3.2881713619229767,
+        "relativeError": 1.6867271336494888e-8
+      },
+      "metrics": {
+        "cameraIndex": 12,
+        "cameraAngle": 0.084,
+        "heldOut": true,
+        "mode": "analyticBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 231,
+          "meanAbsChannelDelta": 25.339994472811497,
+          "changedPixels": 75227,
+          "changedFraction": 0.9899852608306575
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 241,
+          "meanAbsChannelDelta": 21.259106701058062,
+          "changedPixels": 75231,
+          "changedFraction": 0.9900379007211665
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 253,
+          "meanAbsChannelDelta": 30.441046612623047,
+          "changedPixels": 75219,
+          "changedFraction": 0.9898799810496394
+        },
+        "fullFlameEdgeLoss": 0.014853087126012403,
+        "supportAlignedEdgeLoss": 0.012635403753960764
+      }
+    },
+    {
+      "cameraIndex": 12,
+      "cameraAngle": 0.084,
+      "cameraPoseHash": "e94122271c9eeef8c9e664d56606bb42c49f210e7afcf1846f3b0cac8668d205",
+      "family": "learned-billboard",
+      "familyAuthority": "learned-camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "auditFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-12-raymarch-160.png",
+        "bytes": 119178,
+        "sha256": "b590822426a3592929a3dc9e2fd00737ec7d8cd080a98926297f17edbc89981e"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-12-learnedBillboard-160.png",
+        "bytes": 119396,
+        "sha256": "5a652925959448b1edb9787e3dc6efa0192cc97ecc13a8393db00364b2c2e66a"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.2155882575698493,
+        "relativeError": 5.788305278418946e-8
+      },
+      "metrics": {
+        "cameraIndex": 12,
+        "cameraAngle": 0.084,
+        "heldOut": true,
+        "mode": "learnedBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 223,
+          "meanAbsChannelDelta": 25.114077222719377,
+          "changedPixels": 75229,
+          "changedFraction": 0.990011580775912
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 241,
+          "meanAbsChannelDelta": 21.08988919303048,
+          "changedPixels": 75230,
+          "changedFraction": 0.9900247407485392
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 252,
+          "meanAbsChannelDelta": 30.186499842080327,
+          "changedPixels": 75224,
+          "changedFraction": 0.9899457809127757
+        },
+        "fullFlameEdgeLoss": 0.014772421244875673,
+        "supportAlignedEdgeLoss": 0.01259262349161658
+      }
+    },
+    {
+      "cameraIndex": 12,
+      "cameraAngle": 0.084,
+      "cameraPoseHash": "e94122271c9eeef8c9e664d56606bb42c49f210e7afcf1846f3b0cac8668d205",
+      "family": "world-tangent-covariance",
+      "familyAuthority": "world-gradient-tangent-covariance-v0",
+      "rendererFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "auditFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-12-raymarch-160.png",
+        "bytes": 119178,
+        "sha256": "b590822426a3592929a3dc9e2fd00737ec7d8cd080a98926297f17edbc89981e"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-12-worldCovariance-160.png",
+        "bytes": 118365,
+        "sha256": "567a92227400766f820d0631cd84d2c3dc2e249efb6f16ff6c95f42ccaec723b"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.215588257569853,
+        "relativeError": 5.7883051679348544e-8
+      },
+      "metrics": {
+        "cameraIndex": 12,
+        "cameraAngle": 0.084,
+        "heldOut": true,
+        "mode": "worldCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 225,
+          "meanAbsChannelDelta": 19.30811114912881,
+          "changedPixels": 75230,
+          "changedFraction": 0.9900247407485392
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 163,
+          "meanAbsChannelDelta": 8.884498210243724,
+          "changedPixels": 75232,
+          "changedFraction": 0.9900510606937938
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 243,
+          "meanAbsChannelDelta": 22.37405906195715,
+          "changedPixels": 75219,
+          "changedFraction": 0.9898799810496394
+        },
+        "fullFlameEdgeLoss": 0.014736241677135843,
+        "supportAlignedEdgeLoss": 0.011227301100599829
+      }
+    },
+    {
+      "cameraIndex": 13,
+      "cameraAngle": 0.126,
+      "cameraPoseHash": "22fc95573905f9bf90271b845ace8f54a8e97495e6d7479e824ba2fc38d5cf6a",
+      "family": "analytic-billboard",
+      "familyAuthority": "camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "camera-facing-billboard-v0",
+      "auditFootprintAuthority": "camera-facing-billboard-v0",
+      "attributeSetId": "analytic-boundary-splat-attributes-v0",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "37ffe20cd8214a0d9a2988238f7a820c89f78ecc944316caef3b93fbfb334c1a",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-13-raymarch-160.png",
+        "bytes": 117589,
+        "sha256": "6288a76f3226241acbec53cd63b859733ae89e1218911d2a3dfede3ad84193f0"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-13-analyticBillboard-160.png",
+        "bytes": 116368,
+        "sha256": "3b3e25c8b6a37371a623b11462844627244a358f689b1f37bb4c5bdda187694e"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.288171417385456,
+        "effectiveIntegratedAlphaSum": 3.2881713619229824,
+        "relativeError": 1.6867269580759254e-8
+      },
+      "metrics": {
+        "cameraIndex": 13,
+        "cameraAngle": 0.126,
+        "heldOut": true,
+        "mode": "analyticBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 230,
+          "meanAbsChannelDelta": 25.105217271148074,
+          "changedPixels": 75985,
+          "changedFraction": 0.9999605200821182
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 248,
+          "meanAbsChannelDelta": 21.25293467389588,
+          "changedPixels": 75978,
+          "changedFraction": 0.9998684002737275
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 250,
+          "meanAbsChannelDelta": 30.104960651681843,
+          "changedPixels": 75975,
+          "changedFraction": 0.9998289203558457
+        },
+        "fullFlameEdgeLoss": 0.014777409621783894,
+        "supportAlignedEdgeLoss": 0.012576248872197198
+      }
+    },
+    {
+      "cameraIndex": 13,
+      "cameraAngle": 0.126,
+      "cameraPoseHash": "22fc95573905f9bf90271b845ace8f54a8e97495e6d7479e824ba2fc38d5cf6a",
+      "family": "learned-billboard",
+      "familyAuthority": "learned-camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "auditFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-13-raymarch-160.png",
+        "bytes": 117589,
+        "sha256": "6288a76f3226241acbec53cd63b859733ae89e1218911d2a3dfede3ad84193f0"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-13-learnedBillboard-160.png",
+        "bytes": 118995,
+        "sha256": "9cf4374169629f26ebb30a84f615b62a8d9c59a19e4eb11203c0cf1ba4fb20cd"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.2155882575698485,
+        "relativeError": 5.7883053060399686e-8
+      },
+      "metrics": {
+        "cameraIndex": 13,
+        "cameraAngle": 0.126,
+        "heldOut": true,
+        "mode": "learnedBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 229,
+          "meanAbsChannelDelta": 24.865485339790492,
+          "changedPixels": 75984,
+          "changedFraction": 0.9999473601094909
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 243,
+          "meanAbsChannelDelta": 21.08506277306943,
+          "changedPixels": 75986,
+          "changedFraction": 0.9999736800547455
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 250,
+          "meanAbsChannelDelta": 29.838862715165554,
+          "changedPixels": 75980,
+          "changedFraction": 0.999894720218982
+        },
+        "fullFlameEdgeLoss": 0.014669915793342645,
+        "supportAlignedEdgeLoss": 0.012537739768026582
+      }
+    },
+    {
+      "cameraIndex": 13,
+      "cameraAngle": 0.126,
+      "cameraPoseHash": "22fc95573905f9bf90271b845ace8f54a8e97495e6d7479e824ba2fc38d5cf6a",
+      "family": "world-tangent-covariance",
+      "familyAuthority": "world-gradient-tangent-covariance-v0",
+      "rendererFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "auditFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-13-raymarch-160.png",
+        "bytes": 117589,
+        "sha256": "6288a76f3226241acbec53cd63b859733ae89e1218911d2a3dfede3ad84193f0"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-13-worldCovariance-160.png",
+        "bytes": 118585,
+        "sha256": "a4d0e696fc0445c3a5a998193ebf514659a6d7c28f34d2db4065fc19c59c1e06"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.2155882575698382,
+        "relativeError": 5.788305623681732e-8
+      },
+      "metrics": {
+        "cameraIndex": 13,
+        "cameraAngle": 0.126,
+        "heldOut": true,
+        "mode": "worldCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 217,
+          "meanAbsChannelDelta": 19.110599699952623,
+          "changedPixels": 75978,
+          "changedFraction": 0.9998684002737275
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 174,
+          "meanAbsChannelDelta": 9.036380744328051,
+          "changedPixels": 75986,
+          "changedFraction": 0.9999736800547455
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 239,
+          "meanAbsChannelDelta": 22.1271483655314,
+          "changedPixels": 75971,
+          "changedFraction": 0.9997762804653366
+        },
+        "fullFlameEdgeLoss": 0.014723678194621935,
+        "supportAlignedEdgeLoss": 0.011295467818084333
+      }
+    },
+    {
+      "cameraIndex": 14,
+      "cameraAngle": 0.168,
+      "cameraPoseHash": "cc3370c636f4d69b75527dc2306f5dea7e1735e62f7793b68cd7200178d74bcd",
+      "family": "analytic-billboard",
+      "familyAuthority": "camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "camera-facing-billboard-v0",
+      "auditFootprintAuthority": "camera-facing-billboard-v0",
+      "attributeSetId": "analytic-boundary-splat-attributes-v0",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "37ffe20cd8214a0d9a2988238f7a820c89f78ecc944316caef3b93fbfb334c1a",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-14-raymarch-160.png",
+        "bytes": 117123,
+        "sha256": "b5a101b5b4326bca3b49188d8c2cf809f69728b5d65fc44685351600b7d229fa"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-14-analyticBillboard-160.png",
+        "bytes": 116695,
+        "sha256": "2839abb21a01fcac2d21a0b4d5eb169f6db125e6ea4dd5090c67a34c60f03711"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.288171417385456,
+        "effectiveIntegratedAlphaSum": 3.2881713619229784,
+        "relativeError": 1.6867270796268537e-8
+      },
+      "metrics": {
+        "cameraIndex": 14,
+        "cameraAngle": 0.168,
+        "heldOut": true,
+        "mode": "analyticBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 252,
+          "meanAbsChannelDelta": 24.75808680317945,
+          "changedPixels": 75975,
+          "changedFraction": 0.9998289203558457
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 254,
+          "meanAbsChannelDelta": 21.200886982155076,
+          "changedPixels": 75983,
+          "changedFraction": 0.9999342001368637
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 29.64525977785966,
+          "changedPixels": 75981,
+          "changedFraction": 0.9999078801916093
+        },
+        "fullFlameEdgeLoss": 0.014584006594087092,
+        "supportAlignedEdgeLoss": 0.012601260705838377
+      }
+    },
+    {
+      "cameraIndex": 14,
+      "cameraAngle": 0.168,
+      "cameraPoseHash": "cc3370c636f4d69b75527dc2306f5dea7e1735e62f7793b68cd7200178d74bcd",
+      "family": "learned-billboard",
+      "familyAuthority": "learned-camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "auditFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-14-raymarch-160.png",
+        "bytes": 117123,
+        "sha256": "b5a101b5b4326bca3b49188d8c2cf809f69728b5d65fc44685351600b7d229fa"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-14-learnedBillboard-160.png",
+        "bytes": 119260,
+        "sha256": "be26501c6f7a982c0ac7b12c1c0ec22dedfbccd1d6c5bbd80a79ae61186f96df"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.215588257569859,
+        "relativeError": 5.7883049745876946e-8
+      },
+      "metrics": {
+        "cameraIndex": 14,
+        "cameraAngle": 0.168,
+        "heldOut": true,
+        "mode": "learnedBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 251,
+          "meanAbsChannelDelta": 24.509767989682583,
+          "changedPixels": 75983,
+          "changedFraction": 0.9999342001368637
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 254,
+          "meanAbsChannelDelta": 21.0274484129073,
+          "changedPixels": 75981,
+          "changedFraction": 0.9999078801916093
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 29.370509159340948,
+          "changedPixels": 75984,
+          "changedFraction": 0.9999473601094909
+        },
+        "fullFlameEdgeLoss": 0.014479805374617759,
+        "supportAlignedEdgeLoss": 0.01256999586959763
+      }
+    },
+    {
+      "cameraIndex": 14,
+      "cameraAngle": 0.168,
+      "cameraPoseHash": "cc3370c636f4d69b75527dc2306f5dea7e1735e62f7793b68cd7200178d74bcd",
+      "family": "world-tangent-covariance",
+      "familyAuthority": "world-gradient-tangent-covariance-v0",
+      "rendererFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "auditFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-14-raymarch-160.png",
+        "bytes": 117123,
+        "sha256": "b5a101b5b4326bca3b49188d8c2cf809f69728b5d65fc44685351600b7d229fa"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-14-worldCovariance-160.png",
+        "bytes": 118937,
+        "sha256": "98a9bea8fe7aa77ada942b2f67433ad8bd2d5e8351d593a07a298ee6f4f0a4c3"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.2155882575698373,
+        "relativeError": 5.788305651302755e-8
+      },
+      "metrics": {
+        "cameraIndex": 14,
+        "cameraAngle": 0.168,
+        "heldOut": true,
+        "mode": "worldCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 215,
+          "meanAbsChannelDelta": 18.908353950623784,
+          "changedPixels": 75977,
+          "changedFraction": 0.9998552403011002
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 194,
+          "meanAbsChannelDelta": 9.139693109438332,
+          "changedPixels": 75983,
+          "changedFraction": 0.9999342001368637
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 237,
+          "meanAbsChannelDelta": 21.845324261725537,
+          "changedPixels": 75978,
+          "changedFraction": 0.9998684002737275
+        },
+        "fullFlameEdgeLoss": 0.01471666252586708,
+        "supportAlignedEdgeLoss": 0.01135917128380096
+      }
+    },
+    {
+      "cameraIndex": 15,
+      "cameraAngle": 0.21,
+      "cameraPoseHash": "8335bbde7157adec382a65ebf6ec4d2bd32aa024eff6970bed20174147f75d68",
+      "family": "analytic-billboard",
+      "familyAuthority": "camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "camera-facing-billboard-v0",
+      "auditFootprintAuthority": "camera-facing-billboard-v0",
+      "attributeSetId": "analytic-boundary-splat-attributes-v0",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "37ffe20cd8214a0d9a2988238f7a820c89f78ecc944316caef3b93fbfb334c1a",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-15-raymarch-160.png",
+        "bytes": 116656,
+        "sha256": "f4d028489625b0a89198344cb68f8660bf1cd1e7620b90b91e0c7afbc904416c"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-15-analyticBillboard-160.png",
+        "bytes": 116762,
+        "sha256": "47aebcd0ad2c36c42951a11503b2d65727d0681ccfacf5477b5b03ecf1a85951"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.288171417385456,
+        "effectiveIntegratedAlphaSum": 3.2881713619229833,
+        "relativeError": 1.686726931064608e-8
+      },
+      "metrics": {
+        "cameraIndex": 15,
+        "cameraAngle": 0.21,
+        "heldOut": true,
+        "mode": "analyticBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 252,
+          "meanAbsChannelDelta": 24.438684397536452,
+          "changedPixels": 75975,
+          "changedFraction": 0.9998289203558457
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 21.16248618202874,
+          "changedPixels": 75981,
+          "changedFraction": 0.9999078801916093
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 29.20083105227141,
+          "changedPixels": 75971,
+          "changedFraction": 0.9997762804653366
+        },
+        "fullFlameEdgeLoss": 0.014540579691158347,
+        "supportAlignedEdgeLoss": 0.012610882910506016
+      }
+    },
+    {
+      "cameraIndex": 15,
+      "cameraAngle": 0.21,
+      "cameraPoseHash": "8335bbde7157adec382a65ebf6ec4d2bd32aa024eff6970bed20174147f75d68",
+      "family": "learned-billboard",
+      "familyAuthority": "learned-camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "auditFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-15-raymarch-160.png",
+        "bytes": 116656,
+        "sha256": "f4d028489625b0a89198344cb68f8660bf1cd1e7620b90b91e0c7afbc904416c"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-15-learnedBillboard-160.png",
+        "bytes": 119083,
+        "sha256": "099c47b87c9496ffc55bc97fddcac605ac72afe7077cd182c60b6e2c7785e13d"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.215588257569844,
+        "relativeError": 5.7883054441450835e-8
+      },
+      "metrics": {
+        "cameraIndex": 15,
+        "cameraAngle": 0.21,
+        "heldOut": true,
+        "mode": "learnedBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 252,
+          "meanAbsChannelDelta": 24.2019595199242,
+          "changedPixels": 75981,
+          "changedFraction": 0.9999078801916093
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 20.998674132757802,
+          "changedPixels": 75984,
+          "changedFraction": 0.9999473601094909
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 28.925751434437018,
+          "changedPixels": 75979,
+          "changedFraction": 0.9998815602463547
+        },
+        "fullFlameEdgeLoss": 0.014443540230351227,
+        "supportAlignedEdgeLoss": 0.012581214359034816
+      }
+    },
+    {
+      "cameraIndex": 15,
+      "cameraAngle": 0.21,
+      "cameraPoseHash": "8335bbde7157adec382a65ebf6ec4d2bd32aa024eff6970bed20174147f75d68",
+      "family": "world-tangent-covariance",
+      "familyAuthority": "world-gradient-tangent-covariance-v0",
+      "rendererFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "auditFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-15-raymarch-160.png",
+        "bytes": 116656,
+        "sha256": "f4d028489625b0a89198344cb68f8660bf1cd1e7620b90b91e0c7afbc904416c"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-15-worldCovariance-160.png",
+        "bytes": 118637,
+        "sha256": "7b43354ca33e535f058055aeb2cd44be381e5e8692bca7f0981a08db5bfbe764"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.21558825756984,
+        "relativeError": 5.788305568439686e-8
+      },
+      "metrics": {
+        "cameraIndex": 15,
+        "cameraAngle": 0.21,
+        "heldOut": true,
+        "mode": "worldCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 217,
+          "meanAbsChannelDelta": 18.7438213928515,
+          "changedPixels": 75976,
+          "changedFraction": 0.9998420803284729
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 191,
+          "meanAbsChannelDelta": 9.230072511449176,
+          "changedPixels": 75985,
+          "changedFraction": 0.9999605200821182
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 240,
+          "meanAbsChannelDelta": 21.547599620992788,
+          "changedPixels": 75968,
+          "changedFraction": 0.9997368005474548
+        },
+        "fullFlameEdgeLoss": 0.014514917302278281,
+        "supportAlignedEdgeLoss": 0.011287835307946043
+      }
+    },
+    {
+      "cameraIndex": 16,
+      "cameraAngle": 0.252,
+      "cameraPoseHash": "627a591dc68bc0ab1a9ac07ab1274e6aa7501fe9fc094be6695c32a96936eb9f",
+      "family": "analytic-billboard",
+      "familyAuthority": "camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "camera-facing-billboard-v0",
+      "auditFootprintAuthority": "camera-facing-billboard-v0",
+      "attributeSetId": "analytic-boundary-splat-attributes-v0",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "37ffe20cd8214a0d9a2988238f7a820c89f78ecc944316caef3b93fbfb334c1a",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-16-raymarch-160.png",
+        "bytes": 115921,
+        "sha256": "9c024df6d417aa7c47190f19fdbea07a9fc0cbc9d9a6008e313af09366d82809"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-16-analyticBillboard-160.png",
+        "bytes": 116330,
+        "sha256": "d7cf81e7d8b375aef1a65afb5b2d96e3c91153c160cb17ce40b7d66d2dda8dd2"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.288171417385456,
+        "effectiveIntegratedAlphaSum": 3.2881713619229718,
+        "relativeError": 1.6867272822117346e-8
+      },
+      "metrics": {
+        "cameraIndex": 16,
+        "cameraAngle": 0.252,
+        "heldOut": true,
+        "mode": "analyticBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 252,
+          "meanAbsChannelDelta": 24.23466534189609,
+          "changedPixels": 75977,
+          "changedFraction": 0.9998552403011002
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 21.213727825446124,
+          "changedPixels": 75984,
+          "changedFraction": 0.9999473601094909
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 28.90233326314681,
+          "changedPixels": 75978,
+          "changedFraction": 0.9998684002737275
+        },
+        "fullFlameEdgeLoss": 0.014532848836378249,
+        "supportAlignedEdgeLoss": 0.01257008079628091
+      }
+    },
+    {
+      "cameraIndex": 16,
+      "cameraAngle": 0.252,
+      "cameraPoseHash": "627a591dc68bc0ab1a9ac07ab1274e6aa7501fe9fc094be6695c32a96936eb9f",
+      "family": "learned-billboard",
+      "familyAuthority": "learned-camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "auditFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-16-raymarch-160.png",
+        "bytes": 115921,
+        "sha256": "9c024df6d417aa7c47190f19fdbea07a9fc0cbc9d9a6008e313af09366d82809"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-16-learnedBillboard-160.png",
+        "bytes": 118888,
+        "sha256": "5468094aecaeeaa0367bb9c6c72015660a33f99fbf7e83c320b9cd2ee79cd844"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.21558825756985,
+        "relativeError": 5.7883052646084346e-8
+      },
+      "metrics": {
+        "cameraIndex": 16,
+        "cameraAngle": 0.252,
+        "heldOut": true,
+        "mode": "learnedBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 252,
+          "meanAbsChannelDelta": 24.00406972153498,
+          "changedPixels": 75983,
+          "changedFraction": 0.9999342001368637
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 21.056920171606045,
+          "changedPixels": 75987,
+          "changedFraction": 0.9999868400273727
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 28.642311943991157,
+          "changedPixels": 75983,
+          "changedFraction": 0.9999342001368637
+        },
+        "fullFlameEdgeLoss": 0.014427647492918746,
+        "supportAlignedEdgeLoss": 0.01256262923362939
+      }
+    },
+    {
+      "cameraIndex": 16,
+      "cameraAngle": 0.252,
+      "cameraPoseHash": "627a591dc68bc0ab1a9ac07ab1274e6aa7501fe9fc094be6695c32a96936eb9f",
+      "family": "world-tangent-covariance",
+      "familyAuthority": "world-gradient-tangent-covariance-v0",
+      "rendererFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "auditFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-16-raymarch-160.png",
+        "bytes": 115921,
+        "sha256": "9c024df6d417aa7c47190f19fdbea07a9fc0cbc9d9a6008e313af09366d82809"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-16-worldCovariance-160.png",
+        "bytes": 118055,
+        "sha256": "f26b98cf9be2b1eb426909f7af27d30765fede308daa8a1870c6a886f394ad3a"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.2155882575698493,
+        "relativeError": 5.788305278418946e-8
+      },
+      "metrics": {
+        "cameraIndex": 16,
+        "cameraAngle": 0.252,
+        "heldOut": true,
+        "mode": "worldCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 219,
+          "meanAbsChannelDelta": 18.530439016686845,
+          "changedPixels": 75973,
+          "changedFraction": 0.9998026004105911
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 173,
+          "meanAbsChannelDelta": 9.279984997631205,
+          "changedPixels": 75983,
+          "changedFraction": 0.9999342001368637
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 243,
+          "meanAbsChannelDelta": 21.323442517239563,
+          "changedPixels": 75979,
+          "changedFraction": 0.9998815602463547
+        },
+        "fullFlameEdgeLoss": 0.01460846154346047,
+        "supportAlignedEdgeLoss": 0.011286034551372701
+      }
+    },
+    {
+      "cameraIndex": 17,
+      "cameraAngle": 0.294,
+      "cameraPoseHash": "ede20dc45218027be28f051df39f308f45cb5cb4ca03d18873a607ca2ecd2c72",
+      "family": "analytic-billboard",
+      "familyAuthority": "camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "camera-facing-billboard-v0",
+      "auditFootprintAuthority": "camera-facing-billboard-v0",
+      "attributeSetId": "analytic-boundary-splat-attributes-v0",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "37ffe20cd8214a0d9a2988238f7a820c89f78ecc944316caef3b93fbfb334c1a",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-17-raymarch-160.png",
+        "bytes": 115540,
+        "sha256": "e5c6d7d5ba228dc2d03aaff4ea4835e55e3538d1e8330fa51640fbbbf407fec7"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-17-analyticBillboard-160.png",
+        "bytes": 116054,
+        "sha256": "0cda317c57f19de1d20bf7356ad665450c61e88adb18b5a6b7e59acd9f0c94d3"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.288171417385456,
+        "effectiveIntegratedAlphaSum": 3.288171361922977,
+        "relativeError": 1.68672712014383e-8
+      },
+      "metrics": {
+        "cameraIndex": 17,
+        "cameraAngle": 0.294,
+        "heldOut": true,
+        "mode": "analyticBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 251,
+          "meanAbsChannelDelta": 24.152760962257197,
+          "changedPixels": 75980,
+          "changedFraction": 0.999894720218982
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 21.368327893877982,
+          "changedPixels": 75981,
+          "changedFraction": 0.9999078801916093
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 254,
+          "meanAbsChannelDelta": 28.779231589198293,
+          "changedPixels": 75977,
+          "changedFraction": 0.9998552403011002
+        },
+        "fullFlameEdgeLoss": 0.014481994877677712,
+        "supportAlignedEdgeLoss": 0.012557931300156215
+      }
+    },
+    {
+      "cameraIndex": 17,
+      "cameraAngle": 0.294,
+      "cameraPoseHash": "ede20dc45218027be28f051df39f308f45cb5cb4ca03d18873a607ca2ecd2c72",
+      "family": "learned-billboard",
+      "familyAuthority": "learned-camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "auditFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-17-raymarch-160.png",
+        "bytes": 115540,
+        "sha256": "e5c6d7d5ba228dc2d03aaff4ea4835e55e3538d1e8330fa51640fbbbf407fec7"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-17-learnedBillboard-160.png",
+        "bytes": 118328,
+        "sha256": "9b1c14b8057eb848cfff9b425893fa9ecb114c798d691964732d23e9527c46dd"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.2155882575698493,
+        "relativeError": 5.788305278418946e-8
+      },
+      "metrics": {
+        "cameraIndex": 17,
+        "cameraAngle": 0.294,
+        "heldOut": true,
+        "mode": "learnedBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 250,
+          "meanAbsChannelDelta": 23.921879112491446,
+          "changedPixels": 75986,
+          "changedFraction": 0.9999736800547455
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 254,
+          "meanAbsChannelDelta": 21.217017818602937,
+          "changedPixels": 75988,
+          "changedFraction": 1
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 254,
+          "meanAbsChannelDelta": 28.512350634310682,
+          "changedPixels": 75983,
+          "changedFraction": 0.9999342001368637
+        },
+        "fullFlameEdgeLoss": 0.014365175276956578,
+        "supportAlignedEdgeLoss": 0.01250991601688823
+      }
+    },
+    {
+      "cameraIndex": 17,
+      "cameraAngle": 0.294,
+      "cameraPoseHash": "ede20dc45218027be28f051df39f308f45cb5cb4ca03d18873a607ca2ecd2c72",
+      "family": "world-tangent-covariance",
+      "familyAuthority": "world-gradient-tangent-covariance-v0",
+      "rendererFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "auditFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-17-raymarch-160.png",
+        "bytes": 115540,
+        "sha256": "e5c6d7d5ba228dc2d03aaff4ea4835e55e3538d1e8330fa51640fbbbf407fec7"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-17-worldCovariance-160.png",
+        "bytes": 117845,
+        "sha256": "1aeab9a16520c7ccb9acf15bc38f68554884351d6a2c0f53f6b1392cba2af7cf"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.2155882575698516,
+        "relativeError": 5.788305209366389e-8
+      },
+      "metrics": {
+        "cameraIndex": 17,
+        "cameraAngle": 0.294,
+        "heldOut": true,
+        "mode": "worldCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 221,
+          "meanAbsChannelDelta": 18.244383981681317,
+          "changedPixels": 75981,
+          "changedFraction": 0.9999078801916093
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 168,
+          "meanAbsChannelDelta": 9.27171724482813,
+          "changedPixels": 75987,
+          "changedFraction": 0.9999868400273727
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 245,
+          "meanAbsChannelDelta": 21.104101963467915,
+          "changedPixels": 75978,
+          "changedFraction": 0.9998684002737275
+        },
+        "fullFlameEdgeLoss": 0.014386998876811602,
+        "supportAlignedEdgeLoss": 0.011111018836869095
+      }
+    },
+    {
+      "cameraIndex": 18,
+      "cameraAngle": 0.336,
+      "cameraPoseHash": "8dc7ee28d0c6827a5e0d2302d6163e1abf167b667b10f6186b7868a092a1b49e",
+      "family": "analytic-billboard",
+      "familyAuthority": "camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "camera-facing-billboard-v0",
+      "auditFootprintAuthority": "camera-facing-billboard-v0",
+      "attributeSetId": "analytic-boundary-splat-attributes-v0",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "37ffe20cd8214a0d9a2988238f7a820c89f78ecc944316caef3b93fbfb334c1a",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-18-raymarch-160.png",
+        "bytes": 115341,
+        "sha256": "7471748d835ac6ad639c31f5b258039b4a10dbdef8bc585d4cbdd3a22b72b289"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-18-analyticBillboard-160.png",
+        "bytes": 115774,
+        "sha256": "b26a282722d569269dbca3baf3c092070ce650a5c674768d717c345128ff901b"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.288171417385456,
+        "effectiveIntegratedAlphaSum": 3.288171361922975,
+        "relativeError": 1.6867271876721235e-8
+      },
+      "metrics": {
+        "cameraIndex": 18,
+        "cameraAngle": 0.336,
+        "heldOut": true,
+        "mode": "analyticBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 251,
+          "meanAbsChannelDelta": 24.075495472969415,
+          "changedPixels": 75974,
+          "changedFraction": 0.9998157603832184
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 21.551343633205242,
+          "changedPixels": 75986,
+          "changedFraction": 0.9999736800547455
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 254,
+          "meanAbsChannelDelta": 28.725851450228983,
+          "changedPixels": 75980,
+          "changedFraction": 0.999894720218982
+        },
+        "fullFlameEdgeLoss": 0.014303859630790478,
+        "supportAlignedEdgeLoss": 0.012426039568160664
+      }
+    },
+    {
+      "cameraIndex": 18,
+      "cameraAngle": 0.336,
+      "cameraPoseHash": "8dc7ee28d0c6827a5e0d2302d6163e1abf167b667b10f6186b7868a092a1b49e",
+      "family": "learned-billboard",
+      "familyAuthority": "learned-camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "auditFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-18-raymarch-160.png",
+        "bytes": 115341,
+        "sha256": "7471748d835ac6ad639c31f5b258039b4a10dbdef8bc585d4cbdd3a22b72b289"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-18-learnedBillboard-160.png",
+        "bytes": 118213,
+        "sha256": "7b54f021b8fe5f19a9f314ab3044453ff544d39e7f88016190af20538fa806a3"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.2155882575698422,
+        "relativeError": 5.788305499387129e-8
+      },
+      "metrics": {
+        "cameraIndex": 18,
+        "cameraAngle": 0.336,
+        "heldOut": true,
+        "mode": "learnedBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 251,
+          "meanAbsChannelDelta": 23.834519924198556,
+          "changedPixels": 75981,
+          "changedFraction": 0.9999078801916093
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 21.41492406695794,
+          "changedPixels": 75985,
+          "changedFraction": 0.9999605200821182
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 254,
+          "meanAbsChannelDelta": 28.451633810601674,
+          "changedPixels": 75981,
+          "changedFraction": 0.9999078801916093
+        },
+        "fullFlameEdgeLoss": 0.01421299381895336,
+        "supportAlignedEdgeLoss": 0.01235148305872212
+      }
+    },
+    {
+      "cameraIndex": 18,
+      "cameraAngle": 0.336,
+      "cameraPoseHash": "8dc7ee28d0c6827a5e0d2302d6163e1abf167b667b10f6186b7868a092a1b49e",
+      "family": "world-tangent-covariance",
+      "familyAuthority": "world-gradient-tangent-covariance-v0",
+      "rendererFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "auditFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-18-raymarch-160.png",
+        "bytes": 115341,
+        "sha256": "7471748d835ac6ad639c31f5b258039b4a10dbdef8bc585d4cbdd3a22b72b289"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-18-worldCovariance-160.png",
+        "bytes": 117531,
+        "sha256": "b86b4b3e55640151846f0a146273ebb8d80986c440f312187cd8e4dfc5af3114"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.2155882575698485,
+        "relativeError": 5.7883053060399686e-8
+      },
+      "metrics": {
+        "cameraIndex": 18,
+        "cameraAngle": 0.336,
+        "heldOut": true,
+        "mode": "worldCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 218,
+          "meanAbsChannelDelta": 17.931173343159447,
+          "changedPixels": 75979,
+          "changedFraction": 0.9998815602463547
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 186,
+          "meanAbsChannelDelta": 9.278343291045955,
+          "changedPixels": 75985,
+          "changedFraction": 0.9999605200821182
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 242,
+          "meanAbsChannelDelta": 20.88266239406222,
+          "changedPixels": 75980,
+          "changedFraction": 0.999894720218982
+        },
+        "fullFlameEdgeLoss": 0.014368656943455927,
+        "supportAlignedEdgeLoss": 0.01120287091804345
+      }
+    },
+    {
+      "cameraIndex": 19,
+      "cameraAngle": 0.378,
+      "cameraPoseHash": "9711add1728f84054d43e5be3250217a930c7cb59773688f3ac84da038c8f2f9",
+      "family": "analytic-billboard",
+      "familyAuthority": "camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "camera-facing-billboard-v0",
+      "auditFootprintAuthority": "camera-facing-billboard-v0",
+      "attributeSetId": "analytic-boundary-splat-attributes-v0",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "37ffe20cd8214a0d9a2988238f7a820c89f78ecc944316caef3b93fbfb334c1a",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-19-raymarch-160.png",
+        "bytes": 114818,
+        "sha256": "9075da15d4e10f64b0d5df3e6b9d26525709550ec48a2a8eebf66cf4fe8583fa"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-19-analyticBillboard-160.png",
+        "bytes": 115647,
+        "sha256": "ee6e439a95059189985a8c2514a2bb0fb690ad84d6deb1531c7e4b0a7d32cd86"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.288171417385456,
+        "effectiveIntegratedAlphaSum": 3.2881713619229753,
+        "relativeError": 1.6867271741664648e-8
+      },
+      "metrics": {
+        "cameraIndex": 19,
+        "cameraAngle": 0.378,
+        "heldOut": true,
+        "mode": "analyticBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 252,
+          "meanAbsChannelDelta": 23.939885245038692,
+          "changedPixels": 75973,
+          "changedFraction": 0.9998026004105911
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 254,
+          "meanAbsChannelDelta": 21.69263238932463,
+          "changedPixels": 75983,
+          "changedFraction": 0.9999342001368637
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 28.622226535768807,
+          "changedPixels": 75982,
+          "changedFraction": 0.9999210401642364
+        },
+        "fullFlameEdgeLoss": 0.014067651386778006,
+        "supportAlignedEdgeLoss": 0.012327130586992576
+      }
+    },
+    {
+      "cameraIndex": 19,
+      "cameraAngle": 0.378,
+      "cameraPoseHash": "9711add1728f84054d43e5be3250217a930c7cb59773688f3ac84da038c8f2f9",
+      "family": "learned-billboard",
+      "familyAuthority": "learned-camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "auditFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-19-raymarch-160.png",
+        "bytes": 114818,
+        "sha256": "9075da15d4e10f64b0d5df3e6b9d26525709550ec48a2a8eebf66cf4fe8583fa"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-19-learnedBillboard-160.png",
+        "bytes": 118007,
+        "sha256": "6150e6c46f84c8bc5bfb9013975b06129e28ca9abf4f9c3dadecda2d5e8ca5dc"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.2155882575698387,
+        "relativeError": 5.788305609871221e-8
+      },
+      "metrics": {
+        "cameraIndex": 19,
+        "cameraAngle": 0.378,
+        "heldOut": true,
+        "mode": "learnedBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 251,
+          "meanAbsChannelDelta": 23.69176383113123,
+          "changedPixels": 75983,
+          "changedFraction": 0.9999342001368637
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 254,
+          "meanAbsChannelDelta": 21.557081381270727,
+          "changedPixels": 75988,
+          "changedFraction": 1
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 255,
+          "meanAbsChannelDelta": 28.34413986418908,
+          "changedPixels": 75984,
+          "changedFraction": 0.9999473601094909
+        },
+        "fullFlameEdgeLoss": 0.013953519926656098,
+        "supportAlignedEdgeLoss": 0.012252717791635562
+      }
+    },
+    {
+      "cameraIndex": 19,
+      "cameraAngle": 0.378,
+      "cameraPoseHash": "9711add1728f84054d43e5be3250217a930c7cb59773688f3ac84da038c8f2f9",
+      "family": "world-tangent-covariance",
+      "familyAuthority": "world-gradient-tangent-covariance-v0",
+      "rendererFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "auditFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-19-raymarch-160.png",
+        "bytes": 114818,
+        "sha256": "9075da15d4e10f64b0d5df3e6b9d26525709550ec48a2a8eebf66cf4fe8583fa"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-19-worldCovariance-160.png",
+        "bytes": 117474,
+        "sha256": "01d2673c0c05b7d78a8c5bf03b53c9b7bd2c0f58874760a286139498ba20f9cb"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.2155882575698453,
+        "relativeError": 5.788305402713549e-8
+      },
+      "metrics": {
+        "cameraIndex": 19,
+        "cameraAngle": 0.378,
+        "heldOut": true,
+        "mode": "worldCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 221,
+          "meanAbsChannelDelta": 17.62577314839185,
+          "changedPixels": 75976,
+          "changedFraction": 0.9998420803284729
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 217,
+          "meanAbsChannelDelta": 9.270279517818603,
+          "changedPixels": 75986,
+          "changedFraction": 0.9999736800547455
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 245,
+          "meanAbsChannelDelta": 20.619479391482866,
+          "changedPixels": 75984,
+          "changedFraction": 0.9999473601094909
+        },
+        "fullFlameEdgeLoss": 0.014201736349332882,
+        "supportAlignedEdgeLoss": 0.0110385212432379
+      }
+    },
+    {
+      "cameraIndex": 20,
+      "cameraAngle": 0.42,
+      "cameraPoseHash": "df5690f8f82524d911f6c690ceea77222ec858955602b950b22780e0e7c8c5d8",
+      "family": "analytic-billboard",
+      "familyAuthority": "camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "camera-facing-billboard-v0",
+      "auditFootprintAuthority": "camera-facing-billboard-v0",
+      "attributeSetId": "analytic-boundary-splat-attributes-v0",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "37ffe20cd8214a0d9a2988238f7a820c89f78ecc944316caef3b93fbfb334c1a",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-20-raymarch-160.png",
+        "bytes": 114542,
+        "sha256": "6e6d42c4e657bf188e594b59d1ee14b92f04b5a464cf9293eff5799b3ebb3036"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-20-analyticBillboard-160.png",
+        "bytes": 115859,
+        "sha256": "820e990a2fb1bba66b1b8b29b7b08755200a24a98d2db19ea7abd0e04542b993"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.288171417385456,
+        "effectiveIntegratedAlphaSum": 3.288171361922969,
+        "relativeError": 1.686727363245687e-8
+      },
+      "metrics": {
+        "cameraIndex": 20,
+        "cameraAngle": 0.42,
+        "heldOut": true,
+        "mode": "analyticBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 240,
+          "meanAbsChannelDelta": 23.73785334526504,
+          "changedPixels": 75978,
+          "changedFraction": 0.9998684002737275
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 249,
+          "meanAbsChannelDelta": 21.679149997368004,
+          "changedPixels": 75986,
+          "changedFraction": 0.9999736800547455
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 254,
+          "meanAbsChannelDelta": 28.456568800336896,
+          "changedPixels": 75981,
+          "changedFraction": 0.9999078801916093
+        },
+        "fullFlameEdgeLoss": 0.013961341322763346,
+        "supportAlignedEdgeLoss": 0.012264757750222344
+      }
+    },
+    {
+      "cameraIndex": 20,
+      "cameraAngle": 0.42,
+      "cameraPoseHash": "df5690f8f82524d911f6c690ceea77222ec858955602b950b22780e0e7c8c5d8",
+      "family": "learned-billboard",
+      "familyAuthority": "learned-camera-facing-billboard-v0",
+      "rendererFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "auditFootprintAuthority": "learned-camera-facing-billboard-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-20-raymarch-160.png",
+        "bytes": 114542,
+        "sha256": "6e6d42c4e657bf188e594b59d1ee14b92f04b5a464cf9293eff5799b3ebb3036"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-20-learnedBillboard-160.png",
+        "bytes": 118264,
+        "sha256": "e81289eec710e2dee3a6785c7315edac04e1e54ec0770a842ace857fb20a5c66"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.2155882575698462,
+        "relativeError": 5.7883053750925264e-8
+      },
+      "metrics": {
+        "cameraIndex": 20,
+        "cameraAngle": 0.42,
+        "heldOut": true,
+        "mode": "learnedBillboard",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 239,
+          "meanAbsChannelDelta": 23.485405590356372,
+          "changedPixels": 75981,
+          "changedFraction": 0.9999078801916093
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 249,
+          "meanAbsChannelDelta": 21.535429936305732,
+          "changedPixels": 75987,
+          "changedFraction": 0.9999868400273727
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 252,
+          "meanAbsChannelDelta": 28.178136679475706,
+          "changedPixels": 75984,
+          "changedFraction": 0.9999473601094909
+        },
+        "fullFlameEdgeLoss": 0.013845881786278047,
+        "supportAlignedEdgeLoss": 0.012206114778391603
+      }
+    },
+    {
+      "cameraIndex": 20,
+      "cameraAngle": 0.42,
+      "cameraPoseHash": "df5690f8f82524d911f6c690ceea77222ec858955602b950b22780e0e7c8c5d8",
+      "family": "world-tangent-covariance",
+      "familyAuthority": "world-gradient-tangent-covariance-v0",
+      "rendererFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "auditFootprintAuthority": "world-gradient-tangent-covariance-v0",
+      "attributeSetId": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "attributePayloadAuthority": "gpu-compacted-boundary-splat-effective-attributes-v0",
+      "attributePayloadSha256": "713edec6a15f657db22fd88398843b75489c6c8019c20dcebbe72d3a5c82c603",
+      "candidateCount": 80935,
+      "instanceCount": 80935,
+      "overflowCount": 0,
+      "candidatePayloadSha256": "ed17483d44563502dd05f4126f899eea3711292565c57a1fac2aba9684206f18",
+      "fallbackReason": null,
+      "targetAuthority": "smoke-off-complete-flame-local-emission-extinction-v0",
+      "target": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-20-raymarch-160.png",
+        "bytes": 114542,
+        "sha256": "6e6d42c4e657bf188e594b59d1ee14b92f04b5a464cf9293eff5799b3ebb3036"
+      },
+      "image": {
+        "path": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/camera-20-worldCovariance-160.png",
+        "bytes": 117406,
+        "sha256": "6084b418de74458c2a4a6883bc7a99f42cc9b14d6c4999aaf82219a029913834"
+      },
+      "conservation": {
+        "authority": "rendered-gaussian-integrated-alpha-conserved-v0",
+        "baseIntegratedAlphaSum": 3.215588443697925,
+        "effectiveIntegratedAlphaSum": 3.2155882575698524,
+        "relativeError": 5.788305181745366e-8
+      },
+      "metrics": {
+        "cameraIndex": 20,
+        "cameraAngle": 0.42,
+        "heldOut": true,
+        "mode": "worldCovariance",
+        "fullFlamePixelDelta": {
+          "maxChannelDelta": 222,
+          "meanAbsChannelDelta": 17.375957388008633,
+          "changedPixels": 75979,
+          "changedFraction": 0.9998815602463547
+        },
+        "supportAlignedPixelDelta": {
+          "maxChannelDelta": 194,
+          "meanAbsChannelDelta": 9.288782439332525,
+          "changedPixels": 75985,
+          "changedFraction": 0.9999605200821182
+        },
+        "nonRidgeResidualPixelDelta": {
+          "maxChannelDelta": 244,
+          "meanAbsChannelDelta": 20.400214507553823,
+          "changedPixels": 75981,
+          "changedFraction": 0.9999078801916093
+        },
+        "fullFlameEdgeLoss": 0.014042049636049015,
+        "supportAlignedEdgeLoss": 0.01103606612594504
+      }
+    }
+  ],
+  "summary": [
+    {
+      "mode": "analyticBillboard",
+      "split": "training-camera-v0",
+      "cameraCount": 1,
+      "fullFlameMeanAbsChannelDelta": 25.557581460230562,
+      "fullFlameEdgeLoss": 0.015018699799302895,
+      "supportAlignedMeanAbsChannelDelta": 21.23460941201242,
+      "supportAlignedEdgeLoss": 0.012646960073385302
+    },
+    {
+      "mode": "analyticBillboard",
+      "split": "held-out-camera-mean-v0",
+      "cameraCount": 20,
+      "fullFlameMeanAbsChannelDelta": 24.59611830157393,
+      "fullFlameEdgeLoss": 0.014651695646545861,
+      "supportAlignedMeanAbsChannelDelta": 20.96765509027741,
+      "supportAlignedEdgeLoss": 0.012582886056786096
+    },
+    {
+      "mode": "learnedBillboard",
+      "split": "training-camera-v0",
+      "cameraCount": 1,
+      "fullFlameMeanAbsChannelDelta": 25.32097831236511,
+      "fullFlameEdgeLoss": 0.01495008619257792,
+      "supportAlignedMeanAbsChannelDelta": 21.04753382112965,
+      "supportAlignedEdgeLoss": 0.012616222020683977
+    },
+    {
+      "mode": "learnedBillboard",
+      "split": "held-out-camera-mean-v0",
+      "cameraCount": 20,
+      "fullFlameMeanAbsChannelDelta": 24.344336605779862,
+      "fullFlameEdgeLoss": 0.014533533892822331,
+      "supportAlignedMeanAbsChannelDelta": 20.790620723008896,
+      "supportAlignedEdgeLoss": 0.012521132123741244
+    },
+    {
+      "mode": "worldCovariance",
+      "split": "training-camera-v0",
+      "cameraCount": 1,
+      "fullFlameMeanAbsChannelDelta": 19.584625203979577,
+      "fullFlameEdgeLoss": 0.014787895899308961,
+      "supportAlignedMeanAbsChannelDelta": 8.640436647891772,
+      "supportAlignedEdgeLoss": 0.011358824693930245
+    },
+    {
+      "mode": "worldCovariance",
+      "split": "held-out-camera-mean-v0",
+      "cameraCount": 20,
+      "fullFlameMeanAbsChannelDelta": 18.83435361504448,
+      "fullFlameEdgeLoss": 0.014473050933135858,
+      "supportAlignedMeanAbsChannelDelta": 8.727478022845713,
+      "supportAlignedEdgeLoss": 0.01120023118191084
+    }
+  ],
+  "sourceOrbitReport": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/full-flame-covariance-wave-one-r2/capture-report.json"
+}
