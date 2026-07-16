@@ -26,6 +26,10 @@ const orbitAngles = parseNumberList(args.get('--orbit-angles') || '-0.42,-0.28,-
 const expectedFrameCount = optionalInteger('--expected-frame-count');
 const expectedSimStepCount = optionalInteger('--expected-sim-step-count');
 const expectedControlsHash = args.get('--expected-controls-hash') ? String(args.get('--expected-controls-hash')) : null;
+const expectedWarmupAuthority = args.get('--expected-warmup-authority') ? String(args.get('--expected-warmup-authority')) : null;
+const expectedWarmupTarget = optionalInteger('--expected-warmup-target');
+const expectedAnchorFluidSha256 = optionalSha256('--expected-anchor-fluid-sha256');
+const expectedAnchorFrontSha256 = optionalSha256('--expected-anchor-front-sha256');
 const timeoutMs = Number(args.get('--timeout-ms') || 240000);
 const settleMs = Number(args.get('--settle-ms') || 1800);
 const debugPort = Number(args.get('--debug-port') || randomInt(42000, 62000));
@@ -105,9 +109,23 @@ try {
   if (args.errors.length) throw new Error(args.errors.join('; '));
   if (!requestedUrl) throw new Error('missing --url');
   const route = new URL(requestedUrl);
+  const requestedPresetId = route.searchParams.get('settings_preset');
+  const replayBridgeRequested = requestedPresetId === null;
   assert.equal(route.pathname, '/volume-selective-head-live.html', 'requested route must use the selective-head live wrapper');
-  assert.equal(route.searchParams.get('settings_preset'), PRESET_ID, 'requested route must pin the Flamebowl preset');
-  assert.equal(route.searchParams.get('settings_preset_authority'), PRESET_AUTHORITY, 'requested route must pin preset authority');
+  if (replayBridgeRequested) {
+    assert.ok(expectedWarmupAuthority, 'checksum-anchor bridge must request an exact warmup authority');
+    assert.ok(expectedWarmupTarget !== null && expectedWarmupTarget > 0, 'checksum-anchor bridge must request a positive exact warmup target');
+    assert.ok(expectedAnchorFluidSha256 && expectedAnchorFrontSha256, 'checksum-anchor bridge must request both exact field hashes');
+    assert.ok(expectedControlsHash, 'checksum-anchor bridge must request an exact controls hash');
+    assert.equal(expectedFrameCount, expectedWarmupTarget, 'checksum-anchor bridge frame authority must equal the warmup target');
+    assert.equal(expectedSimStepCount, expectedWarmupTarget, 'checksum-anchor bridge simulation authority must equal the warmup target');
+    assert.equal(route.searchParams.get('warmup_steps'), String(expectedWarmupTarget), 'checksum-anchor bridge URL must request the exact warmup target');
+    assert.equal(route.searchParams.get('settings_preset_authority'), null, 'checksum-anchor bridge cannot impersonate shared-preset visual admission');
+  } else {
+    assert.equal(requestedPresetId, PRESET_ID, 'requested route must pin the Flamebowl preset');
+    assert.equal(route.searchParams.get('settings_preset_authority'), PRESET_AUTHORITY, 'requested route must pin preset authority');
+    assert.equal(route.searchParams.get('warmup_steps'), '0', 'shared-preset visual admission must remain fresh-live');
+  }
   assert.equal(route.searchParams.get('role'), 'truthHigh', 'requested role must be truthHigh');
   assert.equal(route.searchParams.get('composition'), 'raymarch-only-v0', 'requested initial composition must be raymarch-only-v0');
   assert.ok(rayStepCounts.length >= 2, 'at least two ray-step counts are required');
@@ -144,8 +162,21 @@ try {
   lastTrustworthyEvidence = { admitted };
   assert.equal(admitted.routeIdentity, WRAPPER_ROUTE, 'requested/effective route disagreement at wrapper admission');
   assert.equal(admitted.status, 'running', 'wrapper did not settle on the requested route');
-  assert.equal(admitted.sourceSettingsPresetId, PRESET_ID, 'stale/default preset replaced requested preset');
-  assert.equal(admitted.sourceSettingsPresetAuthority, PRESET_AUTHORITY, 'effective preset authority disagreement');
+  if (replayBridgeRequested) {
+    assert.equal(admitted.sourceSettingsPresetId, null, 'checksum-anchor bridge silently acquired a preset identity');
+    assert.equal(admitted.sourceSettingsPresetAuthority, null, 'checksum-anchor bridge silently acquired preset authority');
+    assert.equal(admitted.warmupAuthority, expectedWarmupAuthority, 'effective replay authority disagrees with requested bridge authority');
+    assert.equal(admitted.warmupTarget, expectedWarmupTarget, 'effective replay target disagrees with requested bridge target');
+    assert.equal(admitted.warmupComplete, true, 'checksum-anchor bridge did not complete before route admission');
+    assert.equal(admitted.warmupReceipt?.ok, true, 'checksum-anchor bridge receipt is missing or failed');
+    assert.equal(admitted.warmupReceipt?.authority, expectedWarmupAuthority, 'effective anchor receipt authority disagrees');
+    assert.equal(admitted.warmupReceipt?.completedSteps, expectedWarmupTarget, 'effective anchor receipt step disagrees');
+    assert.equal(admitted.warmupReceipt?.fluidSha256, expectedAnchorFluidSha256, 'effective fluid anchor hash disagrees');
+    assert.equal(admitted.warmupReceipt?.frontSha256, expectedAnchorFrontSha256, 'effective front anchor hash disagrees');
+  } else {
+    assert.equal(admitted.sourceSettingsPresetId, PRESET_ID, 'stale/default preset replaced requested preset');
+    assert.equal(admitted.sourceSettingsPresetAuthority, PRESET_AUTHORITY, 'effective preset authority disagreement');
+  }
   assert.equal(admitted.effectiveRole, 'truthHigh', 'effective role disagreement');
   assert.equal(admitted.effectiveComposition, 'raymarch-only-v0', 'effective composition disagreement');
   assert.equal(admitted.fallbackReason, null, 'renderer fallback at admission');
@@ -158,6 +189,10 @@ try {
   assert.equal(initialization.summary.wrapperRoute, WRAPPER_ROUTE, 'requested/effective route disagreement after pause');
   assert.equal(initialization.summary.effectiveRoute, RENDERER_ROUTE, 'requested/effective route disagreement in renderer');
   assert.equal(initialization.summary.smokeReceipt?.effectiveMode, 'off', 'smoke presentation did not become disabled');
+  if (expectedWarmupAuthority !== null) assert.equal(initialization.summary.replayAuthority.warmupAuthority, expectedWarmupAuthority, 'effective replay authority changed after pause');
+  if (expectedWarmupTarget !== null) assert.equal(initialization.summary.replayAuthority.warmupReceipt?.completedSteps, expectedWarmupTarget, 'effective replay step changed after pause');
+  if (expectedAnchorFluidSha256 !== null) assert.equal(initialization.summary.replayAuthority.warmupReceipt?.fluidSha256, expectedAnchorFluidSha256, 'effective replay fluid hash changed after pause');
+  if (expectedAnchorFrontSha256 !== null) assert.equal(initialization.summary.replayAuthority.warmupReceipt?.frontSha256, expectedAnchorFrontSha256, 'effective replay front hash changed after pause');
   if (expectedFrameCount !== null) assert.equal(initialization.summary.frozenState.baseFrameCount, expectedFrameCount, 'effective frozen frame count disagrees with requested authority');
   if (expectedSimStepCount !== null) assert.equal(initialization.summary.frozenState.baseSimStepCount, expectedSimStepCount, 'effective frozen simulation step disagrees with requested authority');
   if (expectedControlsHash !== null) assert.equal(initialization.summary.frozenState.controlsHash, expectedControlsHash, 'effective controls hash disagrees with requested authority');
@@ -228,7 +263,11 @@ try {
     requestedRoute: '/volume-selective-head-live.html',
     effectiveWrapperRoute: initialization.summary.wrapperRoute,
     effectiveRendererRoute: initialization.summary.effectiveRoute,
+    sourceRouteAuthority: replayBridgeRequested
+      ? 'checksum-anchor-bridge-explicit-controls-hash-v0'
+      : 'shared-volume-settings-preset-v2',
     sourceSettingsPreset: initialization.summary.sourceSettingsPreset,
+    replayAuthority: initialization.summary.replayAuthority,
     sourceAuthority: initialization.summary.sourceAuthority,
     commit: gitValue(['rev-parse', 'HEAD']),
     branch: gitValue(['branch', '--show-current']),
@@ -241,7 +280,19 @@ try {
       userDataDir,
       keptOpen: keepBrowserOpen,
     },
-    captureConfig: { orbitAngles, rayStepCounts, smoke: 'off', simulatorAdvance: false },
+    captureConfig: {
+      orbitAngles,
+      rayStepCounts,
+      smoke: 'off',
+      simulatorAdvance: false,
+      expectedFrameCount,
+      expectedSimStepCount,
+      expectedControlsHash,
+      expectedWarmupAuthority,
+      expectedWarmupTarget,
+      expectedAnchorFluidSha256,
+      expectedAnchorFrontSha256,
+    },
     frozenState: initialization.summary.frozenState,
     finalState,
     captures: captures.map(({ pngDataUrl, ...capture }) => capture),
@@ -315,6 +366,8 @@ try {
     backend: report.captures[0]?.backend || null,
     fallbackReason: null,
     sourceSettingsPreset: initialization.summary.sourceSettingsPreset,
+    sourceRouteAuthority: report.sourceRouteAuthority,
+    replayAuthority: initialization.summary.replayAuthority,
     frozenState: {
       sameStateCaptureId: initialization.summary.frozenState.sameStateCaptureId,
       frameCount: initialization.summary.frozenState.baseFrameCount,
@@ -973,6 +1026,13 @@ function runtimeInitializationSource(config) {
           effectiveRoute: before.effectiveRoute,
           backend: before.backend,
           sourceSettingsPreset,
+          replayAuthority: {
+            warmupAuthority: wrapperBefore.warmupAuthority,
+            warmupTarget: wrapperBefore.warmupTarget,
+            warmupComplete: wrapperBefore.warmupComplete,
+            warmupStarted: wrapperBefore.warmupStarted,
+            warmupReceipt: wrapperBefore.warmupReceipt,
+          },
           sourceAuthority: {
             fullFlameTarget: 'smoke-off-complete-flame-local-emission-extinction-v0',
             stateDerivedSupport: '${SUPPORT_AUTHORITY}',
@@ -1024,6 +1084,17 @@ function rejectFalseClosure(report) {
   if (report.crossExtinctionAnalysis.rows.some(row => row.sharedRecompositionPixelDelta.maxChannelDelta > 1)) {
     throw new Error('shared contribution recomposition exceeds byte-quantization tolerance');
   }
+  if (report.captureConfig.expectedWarmupAuthority !== null) {
+    const replay = report.replayAuthority;
+    if (!replay?.warmupComplete
+      || replay.warmupAuthority !== report.captureConfig.expectedWarmupAuthority
+      || replay.warmupReceipt?.authority !== report.captureConfig.expectedWarmupAuthority
+      || replay.warmupReceipt?.completedSteps !== report.captureConfig.expectedWarmupTarget
+      || replay.warmupReceipt?.fluidSha256 !== report.captureConfig.expectedAnchorFluidSha256
+      || replay.warmupReceipt?.frontSha256 !== report.captureConfig.expectedAnchorFrontSha256) {
+      throw new Error('completed report lost checksum-anchor bridge authority');
+    }
+  }
 }
 
 function parseArgs(argv) {
@@ -1037,6 +1108,10 @@ function parseArgs(argv) {
     '--expected-frame-count',
     '--expected-sim-step-count',
     '--expected-controls-hash',
+    '--expected-warmup-authority',
+    '--expected-warmup-target',
+    '--expected-anchor-fluid-sha256',
+    '--expected-anchor-front-sha256',
     '--timeout-ms',
     '--settle-ms',
     '--debug-port',
@@ -1079,6 +1154,13 @@ function optionalInteger(name) {
   if (!args.has(name)) return null;
   const value = Number(args.get(name));
   if (!Number.isInteger(value) || value < 0) args.errors.push(`${name} must be a nonnegative integer`);
+  return value;
+}
+
+function optionalSha256(name) {
+  if (!args.has(name)) return null;
+  const value = String(args.get(name)).toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(value)) args.errors.push(`${name} must be a lowercase SHA-256 hex digest`);
   return value;
 }
 

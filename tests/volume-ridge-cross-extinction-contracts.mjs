@@ -40,5 +40,10 @@ assert.match(witness, /analyzeCrossExtinction/, 'witness computes the cross-exti
 assert.match(witness, /expectedTransportMasks/, 'witness rejects effective emission or extinction mask substitution');
 assert.match(witness, /sharedRecompositionPixelDelta/, 'witness reports shared-contribution recomposition error');
 assert.match(witness, /crossExtinctionResidualReduction/, 'witness reports improvement against the fixed world-covariance reconstruction');
+assert.match(witness, /replayAuthority:\s*\{[\s\S]*warmupAuthority:\s*wrapperBefore\.warmupAuthority[\s\S]*warmupReceipt:\s*wrapperBefore\.warmupReceipt/, 'completed report preserves effective checksum-anchor replay authority');
+assert.match(witness, /expectedWarmupAuthority[\s\S]*initialization\.summary\.replayAuthority\.warmupAuthority/, 'witness rejects replay-authority substitution');
+assert.match(witness, /expectedWarmupTarget[\s\S]*initialization\.summary\.replayAuthority\.warmupReceipt\?\.completedSteps/, 'witness rejects replay-step substitution');
+assert.match(witness, /expectedAnchorFluidSha256[\s\S]*initialization\.summary\.replayAuthority\.warmupReceipt\?\.fluidSha256/, 'witness rejects replay fluid-anchor substitution');
+assert.match(witness, /expectedAnchorFrontSha256[\s\S]*initialization\.summary\.replayAuthority\.warmupReceipt\?\.frontSha256/, 'witness rejects replay front-anchor substitution');
 
 console.log('volume ridge cross-extinction contracts passed');
