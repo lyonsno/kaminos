@@ -23,6 +23,11 @@ export const assertCleanJob = (receipt, expected, label = receipt?.job_id ?? 'jo
   if (expected.effectiveCwd && receipt.effective_cwd !== expected.effectiveCwd) {
     fail(`${label}: expected effective_cwd ${expected.effectiveCwd}, got ${receipt.effective_cwd}`);
   }
+  for (const required of expected.effectiveRouteIncludes ?? []) {
+    if (typeof receipt.effective_route !== 'string' || !receipt.effective_route.includes(required)) {
+      fail(`${label}: effective_route must include ${JSON.stringify(required)}`);
+    }
+  }
 };
 
 const paeth = (left, above, upperLeft) => {

@@ -1,0 +1,1266 @@
+{
+  "schema": "kaminos.lirm-trellis-0032-identity-midpoint-route-receipts.v1",
+  "allDoneExitZero": true,
+  "upstreamIdentityBracket": {
+    "path": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/lirm-trellis-0032-identity-bracket-v1/route-receipts.json",
+    "sha256": "fa584df51752a0d7e4830bdbff8d2ddf2fb1f8eeb376f5fea28a39ac3beeec64",
+    "bytes": 63631
+  },
+  "generationJobs": [
+    {
+      "row": "cfg-2p00",
+      "receipt": {
+        "job_id": "3d0232193272",
+        "job_type": "trellis2mlx_molten_sparse_pressure_ee75fdb",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-2p0",
+        "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-2p0/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first --sparse-guidance-strength 2.0 --sparse-guidance-rescale 0.7 --sparse-guidance-low 0.6 --sparse-guidance-high 1.0 --shape-guidance-strength 7.5 --shape-guidance-rescale 0.5 --shape-guidance-low 0.6 --shape-guidance-high 1.0",
+        "effective_cwd": "/private/tmp/trellis2mlx-molten-shape-guidance-pressure-0715",
+        "effective_env": {
+          "PYTHONPATH": "."
+        },
+        "effective_defaults": {
+          "seed": "42",
+          "steps": "6",
+          "target_faces": "200000",
+          "texture_size": "1024",
+          "sparse_guidance_strength": "7.5",
+          "sparse_guidance_rescale": "0.7",
+          "sparse_guidance_low": "0.6",
+          "sparse_guidance_high": "1.0",
+          "shape_guidance_strength": "7.5",
+          "shape_guidance_rescale": "0.5",
+          "shape_guidance_low": "0.6",
+          "shape_guidance_high": "1.0"
+        },
+        "effective_timeout": null,
+        "ignored_params": null,
+        "started_at": 1784159453.6458838,
+        "finished_at": 1784159522.598018,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "trellis2mlx_molten_sparse_pressure_ee75fdb",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-2p0",
+        "params": {
+          "seed": "42",
+          "steps": "6",
+          "target_faces": "200000",
+          "texture_size": "1024",
+          "sparse_guidance_strength": "2.0",
+          "sparse_guidance_rescale": "0.7",
+          "sparse_guidance_low": "0.6",
+          "sparse_guidance_high": "1.0",
+          "shape_guidance_strength": "7.5",
+          "shape_guidance_rescale": "0.5",
+          "shape_guidance_low": "0.6",
+          "shape_guidance_high": "1.0",
+          "cwd": "/private/tmp/trellis2mlx-molten-shape-guidance-pressure-0715"
+        },
+        "job_id": "3d0232193272",
+        "submitted_at": 1784159441.812646
+      },
+      "receiptSha256": "bf26618e98d7d6bba73a182790439dceab94f555c5430e86cb348dc978269854",
+      "requestSha256": "76bd53945dff73d5c0fbb6273faa7f9695639d24372245aa82b8fd42e6a5ddfa",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "sha256": "9b937bc6e4a6727f2c420228ca311f240ae271f8cc496bf2b73cb8ba510a3852",
+        "bytes": 262363
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-2p0/output.glb",
+        "sha256": "56356ef92cbaaa6f9d77c022591fbab12fbcd63cd5fe3e071ff489215c415655",
+        "bytes": 8729636
+      },
+      "requested": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-2p0/output.glb",
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "strength": 2,
+        "rescale": 0.7,
+        "interval": [
+          0.6,
+          1
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
+      },
+      "effective": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-2p0/output.glb",
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "strength": 2,
+        "rescale": 0.7,
+        "interval": [
+          0.6,
+          1
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
+      },
+      "metrics": {
+        "sparseVoxels": 1189,
+        "denseVoxels": 321844,
+        "rawVertices": 321844,
+        "rawTriangles": 647854,
+        "finalTriangles": 195783,
+        "duplicateFacesRemoved": 1675,
+        "nonManifoldFacesRemoved": 8142,
+        "holesFilled": 1319,
+        "holesTooLarge": 96
+      },
+      "evidenceSource": "reviewed identity bracket"
+    },
+    {
+      "row": "cfg-3p00",
+      "strength": 3,
+      "evidenceSource": "canonical Greenroom job",
+      "receipt": {
+        "job_id": "595078505e92",
+        "job_type": "trellis2mlx_molten_sparse_pressure_ee75fdb",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/cfg-3p0",
+        "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/cfg-3p0/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first --sparse-guidance-strength 3 --sparse-guidance-rescale 0.7 --sparse-guidance-low 0.6 --sparse-guidance-high 1.0 --shape-guidance-strength 7.5 --shape-guidance-rescale 0.5 --shape-guidance-low 0.6 --shape-guidance-high 1.0",
+        "effective_cwd": "/private/tmp/trellis2mlx-molten-shape-guidance-pressure-0715",
+        "effective_env": {
+          "PYTHONPATH": "."
+        },
+        "effective_defaults": {
+          "seed": "42",
+          "steps": "6",
+          "target_faces": "200000",
+          "texture_size": "1024",
+          "sparse_guidance_strength": "7.5",
+          "sparse_guidance_rescale": "0.7",
+          "sparse_guidance_low": "0.6",
+          "sparse_guidance_high": "1.0",
+          "shape_guidance_strength": "7.5",
+          "shape_guidance_rescale": "0.5",
+          "shape_guidance_low": "0.6",
+          "shape_guidance_high": "1.0"
+        },
+        "effective_timeout": null,
+        "ignored_params": null,
+        "started_at": 1784166102.875057,
+        "finished_at": 1784166214.950859,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "trellis2mlx_molten_sparse_pressure_ee75fdb",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/cfg-3p0",
+        "params": {
+          "seed": "42",
+          "steps": "6",
+          "target_faces": "200000",
+          "texture_size": "1024",
+          "sparse_guidance_strength": "3",
+          "sparse_guidance_rescale": "0.7",
+          "sparse_guidance_low": "0.6",
+          "sparse_guidance_high": "1.0",
+          "shape_guidance_strength": "7.5",
+          "shape_guidance_rescale": "0.5",
+          "shape_guidance_low": "0.6",
+          "shape_guidance_high": "1.0",
+          "cwd": "/private/tmp/trellis2mlx-molten-shape-guidance-pressure-0715"
+        },
+        "job_id": "595078505e92",
+        "submitted_at": 1784164043.3160388
+      },
+      "receiptSha256": "4ecba411a51a0eca99db7794cd7171e816cf06b0ae0add473748b1097f398562",
+      "requestSha256": "bccf672f050b6d6c78b8b36034c862505832e3e722e554fdf3a3c91ff82f28fe",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "sha256": "9b937bc6e4a6727f2c420228ca311f240ae271f8cc496bf2b73cb8ba510a3852",
+        "bytes": 262363
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/cfg-3p0/output.glb",
+        "sha256": "44ab70a945f892e48bf3f8fab36cb4c5bb58bce7a9c8a18fe243eb21a0e08769",
+        "bytes": 8663992
+      }
+    },
+    {
+      "row": "cfg-4p00",
+      "receipt": {
+        "job_id": "e9c52ec7687b",
+        "job_type": "trellis2mlx_molten_sparse_pressure_ee75fdb",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-4p0",
+        "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-4p0/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first --sparse-guidance-strength 4.0 --sparse-guidance-rescale 0.7 --sparse-guidance-low 0.6 --sparse-guidance-high 1.0 --shape-guidance-strength 7.5 --shape-guidance-rescale 0.5 --shape-guidance-low 0.6 --shape-guidance-high 1.0",
+        "effective_cwd": "/private/tmp/trellis2mlx-molten-shape-guidance-pressure-0715",
+        "effective_env": {
+          "PYTHONPATH": "."
+        },
+        "effective_defaults": {
+          "seed": "42",
+          "steps": "6",
+          "target_faces": "200000",
+          "texture_size": "1024",
+          "sparse_guidance_strength": "7.5",
+          "sparse_guidance_rescale": "0.7",
+          "sparse_guidance_low": "0.6",
+          "sparse_guidance_high": "1.0",
+          "shape_guidance_strength": "7.5",
+          "shape_guidance_rescale": "0.5",
+          "shape_guidance_low": "0.6",
+          "shape_guidance_high": "1.0"
+        },
+        "effective_timeout": null,
+        "ignored_params": null,
+        "started_at": 1784159522.600522,
+        "finished_at": 1784159583.553834,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "trellis2mlx_molten_sparse_pressure_ee75fdb",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-4p0",
+        "params": {
+          "seed": "42",
+          "steps": "6",
+          "target_faces": "200000",
+          "texture_size": "1024",
+          "sparse_guidance_strength": "4.0",
+          "sparse_guidance_rescale": "0.7",
+          "sparse_guidance_low": "0.6",
+          "sparse_guidance_high": "1.0",
+          "shape_guidance_strength": "7.5",
+          "shape_guidance_rescale": "0.5",
+          "shape_guidance_low": "0.6",
+          "shape_guidance_high": "1.0",
+          "cwd": "/private/tmp/trellis2mlx-molten-shape-guidance-pressure-0715"
+        },
+        "job_id": "e9c52ec7687b",
+        "submitted_at": 1784159442.1668952
+      },
+      "receiptSha256": "a16bc62ed8c408fd1722d16559d7dc2f17d714bfcee7fe8b28fdfccac235c299",
+      "requestSha256": "89959c61f053568b6993cf55c51462385600d08e61f9ab975bf18b724e2b50d4",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "sha256": "9b937bc6e4a6727f2c420228ca311f240ae271f8cc496bf2b73cb8ba510a3852",
+        "bytes": 262363
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-4p0/output.glb",
+        "sha256": "29fbcbe8f6613d578b0a920846b2cb92be5ecc784fba4358787a6d866d5221bc",
+        "bytes": 8357672
+      },
+      "requested": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-4p0/output.glb",
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "strength": 4,
+        "rescale": 0.7,
+        "interval": [
+          0.6,
+          1
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
+      },
+      "effective": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-4p0/output.glb",
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "strength": 4,
+        "rescale": 0.7,
+        "interval": [
+          0.6,
+          1
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
+      },
+      "metrics": {
+        "sparseVoxels": 1362,
+        "denseVoxels": 351120,
+        "rawVertices": 351120,
+        "rawTriangles": 699290,
+        "finalTriangles": 198299,
+        "duplicateFacesRemoved": 976,
+        "nonManifoldFacesRemoved": 4849,
+        "holesFilled": 1036,
+        "holesTooLarge": 99
+      },
+      "evidenceSource": "reviewed identity bracket"
+    }
+  ],
+  "witnessJobs": [
+    {
+      "row": "cfg-2p00",
+      "strength": 2,
+      "view": "left",
+      "receipt": {
+        "job_id": "19bea65b5bc7",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-2p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-2p0/left",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-2p0/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-2p0/left/render.png -0.85 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784163645.8951209,
+        "finished_at": 1784163647.068589,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-2p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-2p0/left",
+        "params": {
+          "yaw": "-0.85",
+          "pitch": "0.2",
+          "cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714"
+        },
+        "job_id": "19bea65b5bc7",
+        "submitted_at": 1784159953.5334988
+      },
+      "receiptSha256": "3d1aa90209b80fc73b73f04db1732f15cd905968b05c83c4ee554ea29ac45a91",
+      "requestSha256": "ceba7e110fc4d4c3d2e7898fc7f93ee13bf7ddb19d5a50d1261c4bf262075d09",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-2p0/output.glb",
+        "sha256": "56356ef92cbaaa6f9d77c022591fbab12fbcd63cd5fe3e071ff489215c415655",
+        "bytes": 8729636
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-2p0/left/render.png",
+        "sha256": "37c83d94122c529137bdcac3bf5058ac46148efd4d26eacccecda8463e01e41e",
+        "bytes": 602764
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 11.135543574440435,
+        "edgeRatio": 0.0029459049544994943,
+        "activePixelRatio": 0.05761313131313131,
+        "activeBoundsRatio": 0.18553030303030302,
+        "activeBounds": {
+          "minX": 437,
+          "minY": 258,
+          "maxX": 831,
+          "maxY": 722
+        }
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-2p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-2p0/left/render.png",
+        "yaw": -0.85,
+        "pitch": 0.2
+      },
+      "evidenceSource": "reviewed identity bracket"
+    },
+    {
+      "row": "cfg-2p00",
+      "strength": 2,
+      "view": "front",
+      "receipt": {
+        "job_id": "be85a5eaf53a",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-2p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-2p0/front",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-2p0/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-2p0/front/render.png 0 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784163651.749784,
+        "finished_at": 1784163652.918036,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-2p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-2p0/front",
+        "params": {
+          "yaw": "0",
+          "pitch": "0.2",
+          "cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714"
+        },
+        "job_id": "be85a5eaf53a",
+        "submitted_at": 1784159953.966008
+      },
+      "receiptSha256": "c869898978eda726bb7dadd2df69cc0941a589866fc988b3b545fe77a2afab31",
+      "requestSha256": "860bda302542ede966bf10d17c4ed71a0e9a8561d86fd80238c6b68bbc06d10a",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-2p0/output.glb",
+        "sha256": "56356ef92cbaaa6f9d77c022591fbab12fbcd63cd5fe3e071ff489215c415655",
+        "bytes": 8729636
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-2p0/front/render.png",
+        "sha256": "3548382f23326ba10ec2d81657dbcceb420eb37b306bd0de2bc9b4f4e478c8f0",
+        "bytes": 622831
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 12.204287186359263,
+        "edgeRatio": 0.004303842264914055,
+        "activePixelRatio": 0.07111111111111111,
+        "activeBoundsRatio": 0.24909090909090909,
+        "activeBounds": {
+          "minX": 250,
+          "minY": 279,
+          "maxX": 849,
+          "maxY": 689
+        }
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-2p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-2p0/front/render.png",
+        "yaw": 0,
+        "pitch": 0.2
+      },
+      "evidenceSource": "reviewed identity bracket"
+    },
+    {
+      "row": "cfg-2p00",
+      "strength": 2,
+      "view": "right",
+      "receipt": {
+        "job_id": "fc55e3cca11e",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-2p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-2p0/right",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-2p0/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-2p0/right/render.png 0.85 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784163649.419116,
+        "finished_at": 1784163650.591956,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-2p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-2p0/right",
+        "params": {
+          "yaw": "0.85",
+          "pitch": "0.2",
+          "cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714"
+        },
+        "job_id": "fc55e3cca11e",
+        "submitted_at": 1784159953.683223
+      },
+      "receiptSha256": "c7e672e2ab7072a23a8514bad21d869f7dc802b12c063c6817bfc304cd46358b",
+      "requestSha256": "1f946d3989794c0180e7a4e7eff634919c0b0d7c2374eb6287c35e921772bd71",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-2p0/output.glb",
+        "sha256": "56356ef92cbaaa6f9d77c022591fbab12fbcd63cd5fe3e071ff489215c415655",
+        "bytes": 8729636
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-2p0/right/render.png",
+        "sha256": "556e37e76a1a3788f08a6b37385674128a270260924cca757124a29c3efa797f",
+        "bytes": 635946
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 12.919052026766504,
+        "edgeRatio": 0.005608190091001011,
+        "activePixelRatio": 0.08255252525252525,
+        "activeBoundsRatio": 0.2923,
+        "activeBounds": {
+          "minX": 176,
+          "minY": 278,
+          "maxX": 886,
+          "maxY": 684
+        }
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-2p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-2p0/right/render.png",
+        "yaw": 0.85,
+        "pitch": 0.2
+      },
+      "evidenceSource": "reviewed identity bracket"
+    },
+    {
+      "row": "cfg-2p00",
+      "strength": 2,
+      "view": "rear",
+      "receipt": {
+        "job_id": "4d6a11890281",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-2p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-2p0/rear",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-2p0/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-2p0/rear/render.png 3.141593 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784163644.694011,
+        "finished_at": 1784163645.892997,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-2p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-2p0/rear",
+        "params": {
+          "yaw": "3.141593",
+          "pitch": "0.2",
+          "cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714"
+        },
+        "job_id": "4d6a11890281",
+        "submitted_at": 1784159953.528946
+      },
+      "receiptSha256": "a407014025cd9c7d51f753fca980641fb58d2023d33e1a244b45a1b42697da9e",
+      "requestSha256": "f8e3e304bc0bf2c8a8b0e6176af9f9502d768e2fbaa40f34bbee25a077df7e76",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-2p0/output.glb",
+        "sha256": "56356ef92cbaaa6f9d77c022591fbab12fbcd63cd5fe3e071ff489215c415655",
+        "bytes": 8729636
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-2p0/rear/render.png",
+        "sha256": "b84dab5fe3157414c8bea478e208f0ae13232dcb97fb845c8599d3aefa82c816",
+        "bytes": 629480
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 12.850829999230653,
+        "edgeRatio": 0.0047664307381193125,
+        "activePixelRatio": 0.07875555555555555,
+        "activeBoundsRatio": 0.2921212121212121,
+        "activeBounds": {
+          "minX": 250,
+          "minY": 221,
+          "maxX": 849,
+          "maxY": 702
+        }
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-2p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-2p0/rear/render.png",
+        "yaw": 3.141593,
+        "pitch": 0.2
+      },
+      "evidenceSource": "reviewed identity bracket"
+    },
+    {
+      "row": "cfg-3p00",
+      "strength": 3,
+      "view": "left",
+      "evidenceSource": "canonical corrected Greenroom witness",
+      "receipt": {
+        "job_id": "d3ece88fcb12",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/cfg-3p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/witness-v2/cfg-3p0/left",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/cfg-3p0/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/witness-v2/cfg-3p0/left/render.png -0.85 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "pitch": "0.2",
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784218120.1183958,
+        "finished_at": 1784218122.273011,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/cfg-3p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/witness-v2/cfg-3p0/left",
+        "params": {
+          "yaw": "-0.85",
+          "pitch": "0.2",
+          "cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714"
+        },
+        "job_id": "d3ece88fcb12",
+        "submitted_at": 1784218119.4121358
+      },
+      "receiptSha256": "0ea825befb1870055ae1d163c4bf726e1165ad6370ee9c75b3c70884bdc8fb52",
+      "requestSha256": "67afa0eee60c8d5e5781dd9c51febf753281b7406a3eea9957f6c359b8a2cff0",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/cfg-3p0/output.glb",
+        "sha256": "44ab70a945f892e48bf3f8fab36cb4c5bb58bce7a9c8a18fe243eb21a0e08769",
+        "bytes": 8663992
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/witness-v2/cfg-3p0/left/render.png",
+        "sha256": "a44a2496442755b901e879fc4b94a0522092f51d807eb258d0a73ed1137daf00",
+        "bytes": 607454
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 8.803907407292085,
+        "edgeRatio": 0.003468149646107179,
+        "activePixelRatio": 0.04575454545454546,
+        "activeBoundsRatio": 0.16838787878787878,
+        "activeBounds": {
+          "minX": 370,
+          "minY": 290,
+          "maxX": 822,
+          "maxY": 657
+        }
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/cfg-3p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/witness-v2/cfg-3p0/left/render.png",
+        "yaw": -0.85,
+        "pitch": 0.2
+      }
+    },
+    {
+      "row": "cfg-3p00",
+      "strength": 3,
+      "view": "front",
+      "evidenceSource": "canonical corrected Greenroom witness",
+      "receipt": {
+        "job_id": "c9bf6adf51f2",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/cfg-3p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/witness-v2/cfg-3p0/front",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/cfg-3p0/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/witness-v2/cfg-3p0/front/render.png 0 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "pitch": "0.2",
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784218122.276371,
+        "finished_at": 1784218123.2569768,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/cfg-3p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/witness-v2/cfg-3p0/front",
+        "params": {
+          "yaw": "0",
+          "pitch": "0.2",
+          "cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714"
+        },
+        "job_id": "c9bf6adf51f2",
+        "submitted_at": 1784218119.4545631
+      },
+      "receiptSha256": "b57e77c858d12d71565ca8477253e959cf54fbd8a9816e1d4c8ef22aba2a4d99",
+      "requestSha256": "773ffbbcfb42320009528b00ab1ae5bba302b85c469ac0307801285ff19d6218",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/cfg-3p0/output.glb",
+        "sha256": "44ab70a945f892e48bf3f8fab36cb4c5bb58bce7a9c8a18fe243eb21a0e08769",
+        "bytes": 8663992
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/witness-v2/cfg-3p0/front/render.png",
+        "sha256": "68f8b08ec47d03d57c1073c99df50c39399de0a332d2abec85ca095f97519b9a",
+        "bytes": 619703
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 8.724077592564473,
+        "edgeRatio": 0.0036445904954499494,
+        "activePixelRatio": 0.05088282828282828,
+        "activeBoundsRatio": 0.1908,
+        "activeBounds": {
+          "minX": 253,
+          "minY": 304,
+          "maxX": 846,
+          "maxY": 621
+        }
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/cfg-3p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/witness-v2/cfg-3p0/front/render.png",
+        "yaw": 0,
+        "pitch": 0.2
+      }
+    },
+    {
+      "row": "cfg-3p00",
+      "strength": 3,
+      "view": "right",
+      "evidenceSource": "canonical corrected Greenroom witness",
+      "receipt": {
+        "job_id": "4c4fdb3b934e",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/cfg-3p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/witness-v2/cfg-3p0/right",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/cfg-3p0/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/witness-v2/cfg-3p0/right/render.png 0.85 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "pitch": "0.2",
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784218123.259752,
+        "finished_at": 1784218124.2409139,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/cfg-3p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/witness-v2/cfg-3p0/right",
+        "params": {
+          "yaw": "0.85",
+          "pitch": "0.2",
+          "cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714"
+        },
+        "job_id": "4c4fdb3b934e",
+        "submitted_at": 1784218119.4880059
+      },
+      "receiptSha256": "1986e34a019d855a7eb5d9cad09be55b32c23e0ecd4a251d271e72436a13037b",
+      "requestSha256": "cee57ceef9e008f9bb71f036880779b2eab0e8e14c66e244026504adb4a622fb",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/cfg-3p0/output.glb",
+        "sha256": "44ab70a945f892e48bf3f8fab36cb4c5bb58bce7a9c8a18fe243eb21a0e08769",
+        "bytes": 8663992
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/witness-v2/cfg-3p0/right/render.png",
+        "sha256": "7a7380e9ba96f1ffdb3d0741dc7c5d0f255a5ac4289571e0d49756eb6f017eb4",
+        "bytes": 627884
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 8.38722169188884,
+        "edgeRatio": 0.004128412537917088,
+        "activePixelRatio": 0.05426868686868687,
+        "activeBoundsRatio": 0.23271111111111112,
+        "activeBounds": {
+          "minX": 178,
+          "minY": 311,
+          "maxX": 925,
+          "maxY": 618
+        }
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/cfg-3p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/witness-v2/cfg-3p0/right/render.png",
+        "yaw": 0.85,
+        "pitch": 0.2
+      }
+    },
+    {
+      "row": "cfg-3p00",
+      "strength": 3,
+      "view": "rear",
+      "evidenceSource": "canonical corrected Greenroom witness",
+      "receipt": {
+        "job_id": "54daeabe16ad",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/cfg-3p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/witness-v2/cfg-3p0/rear",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/cfg-3p0/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/witness-v2/cfg-3p0/rear/render.png 3.141593 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "pitch": "0.2",
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784218124.2433972,
+        "finished_at": 1784218125.2252421,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/cfg-3p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/witness-v2/cfg-3p0/rear",
+        "params": {
+          "yaw": "3.141593",
+          "pitch": "0.2",
+          "cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714"
+        },
+        "job_id": "54daeabe16ad",
+        "submitted_at": 1784218119.518902
+      },
+      "receiptSha256": "5c935be55de036fa146cefc5cd677a7134e0100e9b808ff51d79f0bbd0a17618",
+      "requestSha256": "5a0688076af225e0b4a079b0f4a723c597cece8ecfda4f3387a776c62be43c7c",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/cfg-3p0/output.glb",
+        "sha256": "44ab70a945f892e48bf3f8fab36cb4c5bb58bce7a9c8a18fe243eb21a0e08769",
+        "bytes": 8663992
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/witness-v2/cfg-3p0/rear/render.png",
+        "sha256": "660b115d30ab2eb39ddfac0ae461592bcfcce4ba6d22a65af3b597af0b22e0fb",
+        "bytes": 623006
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 10.323368673347943,
+        "edgeRatio": 0.004756319514661274,
+        "activePixelRatio": 0.06352121212121212,
+        "activeBoundsRatio": 0.1962,
+        "activeBounds": {
+          "minX": 253,
+          "minY": 317,
+          "maxX": 846,
+          "maxY": 643
+        }
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/cfg-3p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-midpoint-20260715/witness-v2/cfg-3p0/rear/render.png",
+        "yaw": 3.141593,
+        "pitch": 0.2
+      }
+    },
+    {
+      "row": "cfg-4p00",
+      "strength": 4,
+      "view": "left",
+      "receipt": {
+        "job_id": "24723c1686bf",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-4p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-4p0/left",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-4p0/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-4p0/left/render.png -0.85 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784163647.071712,
+        "finished_at": 1784163648.268229,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-4p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-4p0/left",
+        "params": {
+          "yaw": "-0.85",
+          "pitch": "0.2",
+          "cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714"
+        },
+        "job_id": "24723c1686bf",
+        "submitted_at": 1784159953.586874
+      },
+      "receiptSha256": "b0301aa6721178c97e9172d08f075d29667b339563478a431b1b81ecf91a152b",
+      "requestSha256": "8fa9093b7d74c5aed8c91c2db87ff2f5c75c46f7ee40730cb58fb64272a32289",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-4p0/output.glb",
+        "sha256": "29fbcbe8f6613d578b0a920846b2cb92be5ecc784fba4358787a6d866d5221bc",
+        "bytes": 8357672
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-4p0/left/render.png",
+        "sha256": "7fbd9114f28141c1880009adc9b5f2cd37dcc21e7d47d830a0aa018020f54b40",
+        "bytes": 629611
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 11.03005111983255,
+        "edgeRatio": 0.004372598584428716,
+        "activePixelRatio": 0.07217070707070707,
+        "activeBoundsRatio": 0.17741515151515153,
+        "activeBounds": {
+          "minX": 365,
+          "minY": 277,
+          "maxX": 825,
+          "maxY": 657
+        }
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-4p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-4p0/left/render.png",
+        "yaw": -0.85,
+        "pitch": 0.2
+      },
+      "evidenceSource": "reviewed identity bracket"
+    },
+    {
+      "row": "cfg-4p00",
+      "strength": 4,
+      "view": "front",
+      "receipt": {
+        "job_id": "74de4b1eeed6",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-4p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-4p0/front",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-4p0/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-4p0/front/render.png 0 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784163650.594126,
+        "finished_at": 1784163651.7464142,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-4p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-4p0/front",
+        "params": {
+          "yaw": "0",
+          "pitch": "0.2",
+          "cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714"
+        },
+        "job_id": "74de4b1eeed6",
+        "submitted_at": 1784159953.791801
+      },
+      "receiptSha256": "69d12ecd7535b078c0f469f8c284a14e38fc2b47235c9308e6108e5a3ca96e6e",
+      "requestSha256": "9242016cbff761e03a80e01d7df2a5b3bc87e40a5343030fab8e791668472dc8",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-4p0/output.glb",
+        "sha256": "29fbcbe8f6613d578b0a920846b2cb92be5ecc784fba4358787a6d866d5221bc",
+        "bytes": 8357672
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-4p0/front/render.png",
+        "sha256": "f68f9fb67df0a593336c2b150baa18eb5ce1c37fbef164aeec8966e01fd9d7cd",
+        "bytes": 616011
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 9.791501978273635,
+        "edgeRatio": 0.004227502527805864,
+        "activePixelRatio": 0.05579292929292929,
+        "activeBoundsRatio": 0.1887090909090909,
+        "activeBounds": {
+          "minX": 259,
+          "minY": 305,
+          "maxX": 840,
+          "maxY": 625
+        }
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-4p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-4p0/front/render.png",
+        "yaw": 0,
+        "pitch": 0.2
+      },
+      "evidenceSource": "reviewed identity bracket"
+    },
+    {
+      "row": "cfg-4p00",
+      "strength": 4,
+      "view": "right",
+      "receipt": {
+        "job_id": "9b9a6d64009d",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-4p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-4p0/right",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-4p0/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-4p0/right/render.png 0.85 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784163642.747338,
+        "finished_at": 1784163644.6917272,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-4p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-4p0/right",
+        "params": {
+          "yaw": "0.85",
+          "pitch": "0.2",
+          "cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714"
+        },
+        "job_id": "9b9a6d64009d",
+        "submitted_at": 1784159953.493527
+      },
+      "receiptSha256": "e37992bc38eb5051c051cd2251bbf98efeca42d4d294bdbff7296c249a44b2fc",
+      "requestSha256": "67ab6bac2843dedb56ac314272d2b7d1aa09b4c3f2b13248ad7039f276c85176",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-4p0/output.glb",
+        "sha256": "29fbcbe8f6613d578b0a920846b2cb92be5ecc784fba4358787a6d866d5221bc",
+        "bytes": 8357672
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-4p0/right/render.png",
+        "sha256": "b818fa22f39c8788959ff02d274a3f400497bc05e7ad28c4a3e253f0c872bb46",
+        "bytes": 624442
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 10.503524267767292,
+        "edgeRatio": 0.00516835187057634,
+        "activePixelRatio": 0.06844646464646464,
+        "activeBoundsRatio": 0.1885090909090909,
+        "activeBounds": {
+          "minX": 182,
+          "minY": 330,
+          "maxX": 829,
+          "maxY": 617
+        }
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-4p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-4p0/right/render.png",
+        "yaw": 0.85,
+        "pitch": 0.2
+      },
+      "evidenceSource": "reviewed identity bracket"
+    },
+    {
+      "row": "cfg-4p00",
+      "strength": 4,
+      "view": "rear",
+      "receipt": {
+        "job_id": "0354022cc1b4",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-4p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-4p0/rear",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-4p0/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-4p0/rear/render.png 3.141593 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784163648.271884,
+        "finished_at": 1784163649.4170182,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-4p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-4p0/rear",
+        "params": {
+          "yaw": "3.141593",
+          "pitch": "0.2",
+          "cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714"
+        },
+        "job_id": "0354022cc1b4",
+        "submitted_at": 1784159953.634325
+      },
+      "receiptSha256": "98617c5bb798cf277c0a8eb9cbc695a2d65e71b9c9403c3cdaf9595f858af0b8",
+      "requestSha256": "57db91ba7ff21c1ed920eca5c5e9205084bd2f189b6ac1907f9d1aebe0361679",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-4p0/output.glb",
+        "sha256": "29fbcbe8f6613d578b0a920846b2cb92be5ecc784fba4358787a6d866d5221bc",
+        "bytes": 8357672
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-4p0/rear/render.png",
+        "sha256": "e785b6ee74897c761adb935481a587d07ee3534af78485d42ac82023061a0ce7",
+        "bytes": 618331
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 12.551821113526584,
+        "edgeRatio": 0.005018705763397371,
+        "activePixelRatio": 0.07513535353535354,
+        "activeBoundsRatio": 0.1992909090909091,
+        "activeBounds": {
+          "minX": 259,
+          "minY": 294,
+          "maxX": 840,
+          "maxY": 632
+        }
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/cfg-4p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0032-identity-bracket-20260715/witness/cfg-4p0/rear/render.png",
+        "yaw": 3.141593,
+        "pitch": 0.2
+      },
+      "evidenceSource": "reviewed identity bracket"
+    }
+  ],
+  "excludedMidpointWitnesses": [
+    {
+      "jobId": "bfc1691e1509",
+      "labeledView": "left",
+      "requestedYaw": -0.85,
+      "effectiveYaw": 0,
+      "reason": "submission omitted yaw and silently used the job-type default; excluded before evidence assembly",
+      "receiptSha256": "514cf47140e04d4ce6d1b190b7d4f9658291c2b3ec271e036d7b522c6dd8ec87",
+      "requestSha256": "0a8ebc4667b5eb415c9880839783603c2a0c1ceed93441b2578b6156f7fa4ba9"
+    },
+    {
+      "jobId": "fc7be0d4597a",
+      "labeledView": "front",
+      "requestedYaw": 0,
+      "effectiveYaw": 0,
+      "reason": "submission omitted yaw and silently used the job-type default; excluded before evidence assembly",
+      "receiptSha256": "d96378b54979c35f73065ff8e83269b51dfc95b209c83fef62759f335dd9723c",
+      "requestSha256": "0c35260281c8f391a3c22e47c69a09da9fb97a9205582f0a8db9ae02c3eedafb"
+    },
+    {
+      "jobId": "1ee0f8f4f0be",
+      "labeledView": "right",
+      "requestedYaw": 0.85,
+      "effectiveYaw": 0,
+      "reason": "submission omitted yaw and silently used the job-type default; excluded before evidence assembly",
+      "receiptSha256": "7e10a88f13b1547a5f40902d3c7ffdaf43aa044462a0f12c0509ef700a37d3f2",
+      "requestSha256": "c6ffaa3b6578f98919c38fdd01d31172224ab20bf9c47869e193500a22f4d59f"
+    },
+    {
+      "jobId": "b7c2b7f1bbc1",
+      "labeledView": "rear",
+      "requestedYaw": 3.141593,
+      "effectiveYaw": 0,
+      "reason": "submission omitted yaw and silently used the job-type default; excluded before evidence assembly",
+      "receiptSha256": "cab611223c39f0f2548d32ef98c34e538b98b06f6f8626afa4967bf2343c0688",
+      "requestSha256": "2191ac93d881438b9da00c75240109be880b80a7f2b421c7e07418d032079b82"
+    }
+  ]
+}

@@ -60,6 +60,7 @@ const clean = {
   ignored_params: null,
   job_type: expectedIdentity.jobType,
   effective_cwd: expectedIdentity.effectiveCwd,
+  effective_route: 'blender -- source.glb left.png 0.0 0.2',
 };
 
 assert.doesNotThrow(() => assertCleanJob(clean, expectedIdentity));
@@ -78,6 +79,15 @@ for (const [label, mutation] of [
     `${label} must fail before evidence assembly`,
   );
 }
+
+assert.throws(
+  () => assertCleanJob(clean, {
+    ...expectedIdentity,
+    effectiveRouteIncludes: [' left.png -0.85 0.2'],
+  }),
+  /effective_route must include/,
+  'a labeled left witness must reject a route that silently used the default yaw',
+);
 
 const uniform = rgbaPng(32, 32, () => [80, 80, 80, 255]);
 const horizonOnly = rgbaPng(32, 32, (_x, y) => y < 16 ? [8, 8, 8, 255] : [130, 130, 130, 255]);
