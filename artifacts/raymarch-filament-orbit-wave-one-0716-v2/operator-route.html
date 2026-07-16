@@ -1,0 +1,21 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Wave One Filament Orbit Route</title>
+<p id="status">Validating the frozen filament-orbit receipt...</p>
+<script type="module">
+  const status = document.querySelector('#status');
+  try {
+    const response = await fetch('./report.json', { cache: 'no-store' });
+    if (!response.ok) throw new Error(`report fetch failed (${response.status})`);
+    const report = await response.json();
+    if (report.status !== 'completed') throw new Error(`report status is ${report.status || 'missing'}`);
+    if (report.commit !== 'd555e3156812f0c213c21ef371aeb9daea1e89a7') throw new Error('report commit disagreement');
+    if (report.effectiveWrapperRoute !== 'exact-basin-selective-head-live-v0') throw new Error('effective wrapper disagreement');
+    if (report.effectiveRendererRoute !== 'native-3d-compute-fluid-raymarch-v0') throw new Error('effective renderer disagreement');
+    if (!report.requestedUrl) throw new Error('requested route missing');
+    status.textContent = 'Receipt validated. Opening the exact live route...';
+    location.replace(report.requestedUrl);
+  } catch (error) {
+    status.textContent = `Wave One route rejected: ${error?.message || String(error)}`;
+  }
+</script>
