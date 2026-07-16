@@ -71,6 +71,8 @@ assert.match(core, /flowKernelRequested:[\s\S]*strength:[\s\S]*radiusWorld:[\s\S
 assert.match(core, /flowKernelEffective:[\s\S]*strength:[\s\S]*radiusWorld:[\s\S]*coherence:/, 'runtime state records normalized effective values');
 assert.match(core, /flowKernelCandidateAdmissionAuthority:\s*FLOW_KERNEL_COMPACT_POPULATION_IDENTITY/, 'runtime state names compact splat structural admission without claiming unfiltered native cells');
 assert.doesNotMatch(core, /native-cell-unfiltered/, 'no runtime path may mislabel structurally admitted compact splats as unfiltered native cells');
+assert.doesNotMatch(witness, /native-cell-unfiltered/, 'the live witness must not enforce the retracted unfiltered admission claim');
+assert.match(witness, /structural-splat-candidates-v0/, 'the live compact-splat witness names its structurally admitted descriptor population');
 const temporalControlSignature = core.match(/function temporalControlSignature\(snapshot = controlsSnapshot\) \{([\s\S]*?)\n  \}/)?.[1] || '';
 for (const [key] of expectedControls) {
   assert.match(temporalControlSignature, new RegExp(`snapshot\\.${key}`), `${key} changes invalidate temporal history`);
