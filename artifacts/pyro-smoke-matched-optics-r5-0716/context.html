@@ -1,0 +1,41 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pyro Smoke Matched Optics R5</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; background: #0d1012; color: #f4f6f7; font: 15px/1.45 system-ui, sans-serif; letter-spacing: 0; }
+  header { max-width: 1180px; margin: 0 auto 20px; }
+  h1 { margin: 0 0 8px; font-size: 26px; letter-spacing: 0; }
+  p { margin: 6px 0; color: #c5ccd0; }
+  code { color: #fff; }
+  main { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: 150px repeat(3, minmax(0, 1fr)); border-top: 1px solid #4a5257; border-left: 1px solid #4a5257; }
+  .cell { min-width: 0; padding: 10px; border-right: 1px solid #4a5257; border-bottom: 1px solid #4a5257; background: #171b1e; }
+  .head { min-height: 72px; background: #20262a; }
+  .rowhead { display: flex; flex-direction: column; justify-content: center; }
+  strong { display: block; color: #fff; }
+  small { display: block; margin-top: 4px; color: #aeb7bc; }
+  img { display: block; width: 100%; aspect-ratio: 320 / 228; object-fit: contain; background: #000; }
+  .caption { min-height: 86px; margin-top: 8px; color: #c5ccd0; }
+</style>
+<header>
+  <h1>Exact smoke body under matched Beer-Lambert optics</h1>
+  <p>R160 step 45. Every role uses the same physical-body mass, camera, finite volume, coefficient <code>0.731</code>, and <code>1 - exp(-optical depth)</code>. Images use display-only <code>8x</code> exposure; metrics remain linear.</p>
+  <p>This page tests representation, not production-compositor parity. Compare tongue shape, cavities, interior folds, horizontal bands, and granular support.</p>
+</header>
+<main>
+  <div class="cell head"></div>
+  <div class="cell head"><strong>Dense direct</strong><small>Exact trilinear physical-body grid</small></div>
+  <div class="cell head"><strong>Connected sparse grid</strong><small>All positive cells plus six-neighbor identity</small></div>
+  <div class="cell head"><strong>Analytic Gaussian</strong><small>50,560 R2 full-covariance moments; finite-ray integral</small></div>
+
+  <div class="cell rowhead"><strong>Native</strong><small>Camera 52d62666...</small></div>
+  <div class="cell"><img src="native/dense-direct/display.png"><div class="caption">Reference representation. Broad bent tongue and asymmetric bright interior fold remain connected.</div></div>
+  <div class="cell"><img src="native/connected-sparse-grid/display.png"><div class="caption">Byte-identical to dense. 2,993,279 positive cells; one component; no support or optical error.</div></div>
+  <div class="cell"><img src="native/analytic-gaussian/display.png"><div class="caption">Matched mass and optics, but horizontal bands and a stippled central core replace the connected fold. Peak-local error is 19.60% of target peak.</div></div>
+
+  <div class="cell rowhead"><strong>Elevated +35</strong><small>Camera 31fff60f...</small></div>
+  <div class="cell"><img src="elevated-plus-35/dense-direct/display.png"><div class="caption">Reference representation. Lateral fold and cavity boundary remain legible from the hostile view.</div></div>
+  <div class="cell"><img src="elevated-plus-35/connected-sparse-grid/display.png"><div class="caption">Byte-identical to dense under the same elevated rays.</div></div>
+  <div class="cell"><img src="elevated-plus-35/analytic-gaussian/display.png"><div class="caption">The lateral fold contracts into granular central support. Peak-local error is 19.81% of target peak.</div></div>
+</main>
