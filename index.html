@@ -2814,9 +2814,11 @@ let fingerFluidBenchSolver = null;
 let fingerFluidBenchSolverPromise = null;
 let fingerFluidBenchRunning = false;
 let fingerFluidBenchCamera = { yaw: -0.62, pitch: 0.52, distance: 6.2, target: [0, -0.48, 0.2] };
-const FINGER_FLUID_PYRO_CONTACT_DELAY_MS = 5500;
 const FINGER_FLUID_PYRO_PRE_CONTACT_CAPTURE_MIN_SIM_STEPS = 180;
-const FINGER_FLUID_PYRO_CONTACT_MIN_SIM_STEPS = 240;
+const FINGER_FLUID_PYRO_SOURCE_MOTION_START_STEP = 220;
+const FINGER_FLUID_PYRO_SOURCE_MOTION_END_STEP = 230;
+const FINGER_FLUID_PYRO_SOURCE_DRY_POSITION = [0.65, -0.35, 0.51];
+const FINGER_FLUID_PYRO_SOURCE_WET_POSITION = [0.0, -0.96, 0.51];
 let fingerFluidBenchConfig = null;
 let fingerFluidPyroCompositionState = {
   schema: 'kaminos.finger-fluid-pyro-composition.v0',
@@ -9868,6 +9870,25 @@ function fingerFluidCompositionCameraState() {
   };
 }
 
+function advanceFingerFluidPyroCompositionSource(stepCount) {
+  if (fingerFluidPyroCompositionState.effectiveRoute !== 'same-device-liquid-contact-pyro-near-field-v0') return;
+  const linear = Math.max(0, Math.min(1,
+    (Number(stepCount) - FINGER_FLUID_PYRO_SOURCE_MOTION_START_STEP)
+      / (FINGER_FLUID_PYRO_SOURCE_MOTION_END_STEP - FINGER_FLUID_PYRO_SOURCE_MOTION_START_STEP),
+  ));
+  const progress = linear * linear * (3 - 2 * linear);
+  const position = FINGER_FLUID_PYRO_SOURCE_DRY_POSITION.map((start, axis) =>
+    start + (FINGER_FLUID_PYRO_SOURCE_WET_POSITION[axis] - start) * progress);
+  const updated = volumePrototype.updateVolumePrimitiveTransform(
+    fingerFluidPyroCompositionState.sourcePrimitiveId,
+    { position },
+  );
+  if (!updated) return;
+  fingerFluidPyroCompositionState.sourcePrimitivePosition = [...updated.transform.position];
+  fingerFluidPyroCompositionState.sourceTrajectoryProgress = progress;
+  fingerFluidPyroCompositionState.sourceTrajectoryStep = Number(stepCount);
+}
+
 function installFingerFluidCompositionCameraControls(panel) {
   if (!panel || panel.dataset.compositionCameraControls === 'installed') return;
   panel.dataset.compositionCameraControls = 'installed';
@@ -9896,27 +9917,6 @@ function installFingerFluidCompositionCameraControls(panel) {
   }, { passive: false });
 }
 
-function updateFingerFluidPyroCompositionContactGate(now = performance.now()) {
-  if (
-    fingerFluidPyroCompositionState.effectiveRoute !== 'same-device-liquid-contact-pyro-near-field-v0' ||
-    fingerFluidPyroCompositionState.contactTransferEnabled ||
-    fingerFluidPyroCompositionActivatedAtMs === null
-  ) return;
-  const elapsedMs = now - fingerFluidPyroCompositionActivatedAtMs;
-  const simStepCount = Number(volumePrototype.debugState()?.simStepCount || 0);
-  fingerFluidPyroCompositionState.contactElapsedMs = elapsedMs;
-  fingerFluidPyroCompositionState.observedContactSimStepCount = simStepCount;
-  if (
-    elapsedMs >= FINGER_FLUID_PYRO_CONTACT_DELAY_MS
-    && simStepCount >= FINGER_FLUID_PYRO_CONTACT_MIN_SIM_STEPS
-  ) {
-    const gate = volumePrototype.setLiquidFireContactTransferEnabled(true, { reason: 'composition-observation-window-complete' });
-    fingerFluidPyroCompositionState.contactTransferEnabled = gate.enabled;
-    fingerFluidPyroCompositionState.contactPhase = 'coupled';
-    fingerFluidPyroCompositionState.contactEnabledAtMs = now;
-  }
-}
-
 async function activateFingerFluidPyroComposition() {
   if (!fingerFluidPyroCompositionRequested() || !fingerFluidBenchSolver?.available || !volumePrototype) return false;
   if (fingerFluidPyroCompositionState.effectiveRoute === 'same-device-liquid-contact-pyro-near-field-v0') return true;
@@ -9928,7 +9928,19 @@ async function activateFingerFluidPyroComposition() {
   panel.prepend(volumeCanvas);
   panel.dataset.pyroComposition = 'active';
   volumeCanvas.dataset.liquidFireComposition = 'true';
-  volumePrototype.setLiquidFireContactTransferEnabled(false, { reason: 'composition-observation-window' });
+  const compositionSourcePrimitive = createVolumePrimitiveFixture('fire_sphere');
+  compositionSourcePrimitive.id = 'finger-fluid-downstream-burner';
+  compositionSourcePrimitive.transform = {
+    ...compositionSourcePrimitive.transform,
+    position: [...FINGER_FLUID_PYRO_SOURCE_DRY_POSITION],
+  };
+  compositionSourcePrimitive.simulation = {
+    ...compositionSourcePrimitive.simulation,
+    sourceRadius: VOLUME_SCENE_PRESETS.tall_plume.inputRadius,
+    flowRate: VOLUME_SCENE_PRESETS.tall_plume.flowRate,
+  };
+  volumePrototype.setVolumePrimitives([compositionSourcePrimitive]);
+  volumePrototype.setLiquidFireContactTransferEnabled(true, { reason: 'physical-contact-from-start' });
   volumePrototype.setControls({
     volumeScene: 'tall_plume',
     ...VOLUME_SCENE_PRESETS.tall_plume,
@@ -9953,13 +9965,15 @@ async function activateFingerFluidPyroComposition() {
     requestedLiveFieldRole: 'truthHigh',
     requestedRenderComposition: 'smoke-raymarch-under-splats-v0',
     camera: fingerFluidCompositionCameraState(),
-    contactDelayMs: FINGER_FLUID_PYRO_CONTACT_DELAY_MS,
     preContactCaptureMinSimSteps: FINGER_FLUID_PYRO_PRE_CONTACT_CAPTURE_MIN_SIM_STEPS,
-    contactMinSimSteps: FINGER_FLUID_PYRO_CONTACT_MIN_SIM_STEPS,
-    observedContactSimStepCount: 0,
-    contactPhase: 'uncoupled-observation',
-    contactTransferEnabled: false,
+    contactPhase: 'physical-contact-awaiting-overlap',
+    contactTransferEnabled: true,
     contactActivatedAtMs: fingerFluidPyroCompositionActivatedAtMs,
+    sourcePrimitiveId: compositionSourcePrimitive.id,
+    sourcePrimitivePosition: [...compositionSourcePrimitive.transform.position],
+    sourceTrajectory: 'simulation-step-dry-ridge-to-obstacle-channel-v0',
+    sourceTrajectoryProgress: 0,
+    sourceTrajectoryStep: 0,
     source: descriptor.schema,
     sourcePacking: descriptor.packing,
     sourceGeneration: descriptor.allocationGeneration,
@@ -9977,16 +9991,18 @@ async function activateFingerFluidPyroComposition() {
 async function sampleFingerFluidPyroComposition() {
   const consumer = await volumePrototype?.sampleLiquidFireContactConsumer?.();
   const volume = volumePrototype?.debugState?.() || null;
+  const contactPhase = (consumer?.sourceContactWetness || 0) > 0
+    ? 'physical-contact-active'
+    : 'physical-contact-awaiting-overlap';
+  fingerFluidPyroCompositionState.contactPhase = contactPhase;
   return {
     ...fingerFluidPyroCompositionState,
+    contactPhase,
     consumerWitness: consumer || null,
     volume,
     liquid: fingerFluidBenchSolver?.getDebugState?.() || null,
     camera: fingerFluidCompositionCameraState(),
-    uncoupledFrameCount: volume?.liquidFireContactSuppressedFrameCount ?? 0,
-    observedContactDelayMs: volume?.liquidFireContactFirstDispatchAtMs !== null && fingerFluidPyroCompositionActivatedAtMs !== null
-      ? volume.liquidFireContactFirstDispatchAtMs - fingerFluidPyroCompositionActivatedAtMs
-      : null,
+    physicalTransferDispatchCount: volume?.liquidFireContactDispatchCount ?? 0,
   };
 }
 
@@ -10011,7 +10027,6 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
     return;
   }
   const frameStart = performance.now();
-  updateFingerFluidPyroCompositionContactGate(now);
   syncFingerFluidCompositionCamera();
   const { width, height } = ensureFingerFluidBenchCanvasSize(canvas);
   const t = (now - fingerFluidBenchFrameStartedAt) * 0.001;
@@ -10028,6 +10043,7 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
     ...fingerFluidBenchCamera,
   });
   const gpuState = fingerFluidBenchSolver.getDebugState();
+  advanceFingerFluidPyroCompositionSource(volumePrototype.debugState().simStepCount);
   gpuState.requestedColorMode = fingerFluidBenchConfig.requestedColorMode;
   gpuState.effectiveColorMode = gpuState.colorMode;
   gpuState.requestedParticleShiftStrength = fingerFluidBenchConfig.requestedParticleShiftStrength;
@@ -10151,7 +10167,11 @@ function initKaminosFingerFluidBenchRoute() {
   window.kaminosFingerFluidBenchDebugState = kaminosFingerFluidBenchDebugState;
   window.__kaminosFingerFluidBenchDebugState = kaminosFingerFluidBenchDebugState;
   window.kaminosFingerFluidBenchRequestDiagnostics = requestFingerFluidBenchDiagnostics;
-  window.kaminosFingerFluidPyroCompositionDebugState = () => fingerFluidPyroCompositionState;
+  window.kaminosFingerFluidPyroCompositionDebugState = () => ({
+    ...fingerFluidPyroCompositionState,
+    volume: volumePrototype?.debugState?.() || null,
+  });
+  window.kaminosFingerFluidPyroSetSimulationPaused = paused => volumePrototype.setSimulationPaused(paused === true);
   window.kaminosFingerFluidPyroCompositionSample = sampleFingerFluidPyroComposition;
   window.kaminosFingerFluidPyroVolumeSample = () => volumePrototype.sampleFrame();
   window.kaminosFingerFluidCompositionCameraState = fingerFluidCompositionCameraState;
