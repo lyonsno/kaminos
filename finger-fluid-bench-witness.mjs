@@ -247,7 +247,7 @@ async function main() {
         if (
           preContactWitness?.contactPhase === 'uncoupled-observation'
           && volume?.active === true
-          && Number(volume?.frameCount || 0) >= 2
+          && Number(volume?.simStepCount || 0) >= Number(preContactWitness?.preContactCaptureMinSimSteps || Infinity)
           && volume?.selectiveHeadLivePassReceipt?.raymarchApplied === true
           && volume?.selectiveHeadLivePassReceipt?.splatApplied === true
         ) break;
@@ -394,10 +394,20 @@ async function main() {
       return request();
     })()`);
 
-    lastDebugState = await evaluate(ws, `(() => {
-      const read = window.kaminosFingerFluidBenchDebugState || window.__kaminosFingerFluidBenchDebugState;
-      return typeof read === 'function' ? read() : null;
-    })()`);
+    const diagnosticsStateDeadline = Date.now() + 5000;
+    while (Date.now() < diagnosticsStateDeadline) {
+      lastDebugState = await evaluate(ws, `(() => {
+        const read = window.kaminosFingerFluidBenchDebugState || window.__kaminosFingerFluidBenchDebugState;
+        return typeof read === 'function' ? read() : null;
+      })()`);
+      const diagnosticsRequestCount = lastDebugState?.runtime?.diagnosticsRequestCount;
+      const diagnosticsCompletionCount = lastDebugState?.runtime?.diagnosticsCompletionCount;
+      if (
+        diagnosticsRequestCount === explicitDiagnosticsReceipt?.diagnosticsRequestCount
+        && diagnosticsCompletionCount === explicitDiagnosticsReceipt?.diagnosticsCompletionCount
+      ) break;
+      await delay(50);
+    }
 
     if (new URL(url).searchParams.get('finger_fluid_pyro_composition') === '1') {
       phase = 'read_liquid_fire_composition';
@@ -509,7 +519,8 @@ async function main() {
           compositionWitness.consumerWitness.touchedCells > 0 &&
           compositionWitness.consumerWitness.quenchDeposited > 0 &&
           compositionWitness.consumerWitness.quenchedCells > 0 &&
-          compositionWitness.consumerWitness.sourceQuench >= 0.8 &&
+          compositionWitness.consumerWitness.sourceQuenchContact >= 0.8 &&
+          compositionWitness.consumerWitness.persistentSourceQuench >= 0.8 &&
           compositionWitness.consumerWitness.addedVapor > 0
         ) break;
         await delay(100);
@@ -523,6 +534,9 @@ async function main() {
       if (!(compositionWitness?.observedContactDelayMs >= compositionWitness?.contactDelayMs)) {
         throw new Error(`liquid/fire contact gate opened prematurely: ${JSON.stringify({ observedContactDelayMs: compositionWitness?.observedContactDelayMs, contactDelayMs: compositionWitness?.contactDelayMs })}`);
       }
+      if (!(compositionWitness?.observedContactSimStepCount >= compositionWitness?.contactMinSimSteps)) {
+        throw new Error(`liquid/fire contact gate opened before simulation maturity: ${JSON.stringify({ observedContactSimStepCount: compositionWitness?.observedContactSimStepCount, contactMinSimSteps: compositionWitness?.contactMinSimSteps })}`);
+      }
       if (compositionWitness?.sameDevice !== true) throw new Error('liquid/fire composition did not preserve the same GPUDevice');
       if (compositionWitness?.source !== 'kaminos.liquid-fire-contact-descriptor.v1') throw new Error(`liquid/fire composition source schema mismatch: ${compositionWitness?.source}`);
       if (compositionWitness?.sourceFrameId !== 'kaminos/finger-fluid-bench:gpu-simulation-frame') throw new Error(`liquid/fire composition source frame mismatch: ${compositionWitness?.sourceFrameId}`);
@@ -534,7 +548,8 @@ async function main() {
       if (!(compositionWitness.consumerWitness.touchedCells > 0)) throw new Error('liquid/fire composition touched no Pyro cells');
       if (!(compositionWitness.consumerWitness.quenchDeposited > 0)) throw new Error('liquid/fire composition deposited no persistent quench state');
       if (!(compositionWitness.consumerWitness.quenchedCells > 0)) throw new Error('liquid/fire composition suppressed no Pyro cells');
-      if (!(compositionWitness.consumerWitness.sourceQuench >= 0.8)) throw new Error('liquid/fire composition did not quench the persistent burner source');
+      if (!(compositionWitness.consumerWitness.sourceQuenchContact >= 0.8)) throw new Error('current liquid/fire transfer did not contact the burner neighborhood');
+      if (!(compositionWitness.consumerWitness.persistentSourceQuench >= 0.8)) throw new Error('liquid/fire composition did not quench the persistent burner source');
       if (!(compositionWitness.consumerWitness.addedVapor > 0)) throw new Error('liquid/fire composition added no local vapor');
       postContactComposedSample = await evaluate(ws, `window.__kaminosCaptureComposedFireSample()`);
       const preContactFirePixels = preContactComposedSample?.composedFireBounds?.pixelCount || 0;

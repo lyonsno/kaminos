@@ -6,7 +6,7 @@ export const LIQUID_FIRE_CONTACT_ACCUMULATION_LAYOUT = 'atomic-u32-wetness-heat-
 export const LIQUID_FIRE_CONTACT_MAGIC = 0x4b4c4643;
 export const LIQUID_FIRE_CONTACT_VERSION = 1;
 export const LIQUID_FIRE_CONTACT_FIXED_POINT_SCALE = 65536;
-export const LIQUID_FIRE_CONTACT_STATS_WORDS = 15;
+export const LIQUID_FIRE_CONTACT_STATS_WORDS = 16;
 
 function nonnegativeInteger(value, label) {
   const integer = Number(value);
@@ -94,6 +94,7 @@ export function consumeLiquidFireContactTickReference(state = {}, source = {}) {
   const lastConsumedTick = nonnegativeInteger(state.lastConsumedTick || 0, 'Last consumed liquid fire contact tick');
   const writeTick = nonnegativeInteger(source.writeTick, 'Liquid fire contact write tick');
   const cell = { ...(state.cell || {}) };
+  const persistentSourceQuench = clamp(state.persistentSourceQuench, 0, 1);
   const evidence = {
     acceptedContacts: 0,
     rejectedContacts: 0,
@@ -102,6 +103,8 @@ export function consumeLiquidFireContactTickReference(state = {}, source = {}) {
     removedFuel: 0,
     removedFlame: 0,
     addedVapor: 0,
+    sourceQuenchContact: 0,
+    persistentSourceQuench,
   };
   if (source.valid !== true) {
     return { ok: false, status: 'invalid-source-header', lastConsumedTick, cell, ...evidence };
@@ -113,6 +116,9 @@ export function consumeLiquidFireContactTickReference(state = {}, source = {}) {
     return { ok: false, status: 'fresh-no-exchange', lastConsumedTick: writeTick, cell, ...evidence };
   }
   const transfer = applyLiquidFireContactCellReference(cell, source.contact);
+  const sourceQuenchContact = source.contact.inSourceNeighborhood === true
+    ? clamp(source.contact.wetness * 4.5, 0, 1)
+    : 0;
   const nextCell = {
     density: transfer.density,
     smoke: transfer.smoke,
@@ -133,6 +139,8 @@ export function consumeLiquidFireContactTickReference(state = {}, source = {}) {
     removedFuel: transfer.removedFuel,
     removedFlame: transfer.removedFlame,
     addedVapor: transfer.addedVapor,
+    sourceQuenchContact,
+    persistentSourceQuench: Math.max(persistentSourceQuench, sourceQuenchContact),
   };
 }
 
@@ -202,7 +210,8 @@ struct ConsumerStats {
   sourceFrameHash: atomic<u32>,
   quenchDeposited: atomic<u32>,
   quenchedCells: atomic<u32>,
-  sourceQuench: atomic<u32>,
+  sourceQuenchContact: atomic<u32>,
+  persistentSourceQuench: atomic<u32>,
 };
 
 struct ConsumerParams {
@@ -258,7 +267,8 @@ fn clear_liquid_fire_contact_consumer_stats(@builtin(global_invocation_id) gid: 
   atomicStore(&consumerStats.sourceFrameHash, 0u);
   atomicStore(&consumerStats.quenchDeposited, 0u);
   atomicStore(&consumerStats.quenchedCells, 0u);
-  atomicStore(&consumerStats.sourceQuench, 0u);
+  atomicStore(&consumerStats.sourceQuenchContact, 0u);
+  atomicStore(&consumerStats.persistentSourceQuench, 0u);
 }
 
 @compute @workgroup_size(64)
@@ -330,7 +340,9 @@ fn apply_liquid_fire_contact_transfer(@builtin(global_invocation_id) gid: vec3<u
   let receiverUnit = (vec3<f32>(receiverCell) + vec3<f32>(0.5)) / f32(GRID);
   let sourceContactDistance = distance(receiverUnit, consumerParams.sourceQuench.xyz);
   if (sourceContactDistance <= consumerParams.sourceQuench.w) {
-    atomicMax(&quenchField[GRID_CELL_COUNT], fixedPoint(min(1.0, wetness * 4.5)));
+    let sourceContactQuench = fixedPoint(min(1.0, wetness * 4.5));
+    atomicMax(&quenchField[GRID_CELL_COUNT], sourceContactQuench);
+    atomicMax(&consumerStats.sourceQuenchContact, sourceContactQuench);
   }
   requestedHeatRemoval = max(requestedHeatRemoval, quenchStrength * 4.0);
   requestedFlameRemoval = max(requestedFlameRemoval, quenchStrength * 8.0);
@@ -374,7 +386,7 @@ fn finalize_liquid_fire_contact_transfer(@builtin(global_invocation_id) gid: vec
   atomicStore(&consumerStats.sourceGeneration, atomicLoad(&sourceHeader.allocationGeneration));
   atomicStore(&consumerStats.sourceEpoch, atomicLoad(&sourceHeader.epoch));
   atomicStore(&consumerStats.sourceFrameHash, atomicLoad(&sourceHeader.sourceFrameHash));
-  atomicStore(&consumerStats.sourceQuench, atomicLoad(&quenchField[GRID_CELL_COUNT]));
+  atomicStore(&consumerStats.persistentSourceQuench, atomicLoad(&quenchField[GRID_CELL_COUNT]));
   let acceptedContacts = atomicLoad(&consumerStats.acceptedContacts);
   if (acceptedContacts > 0u) {
     atomicStore(&consumerStats.status, 1u);
