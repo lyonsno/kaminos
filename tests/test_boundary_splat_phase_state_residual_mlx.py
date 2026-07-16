@@ -1,4 +1,6 @@
 import importlib.util
+import json
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -13,6 +15,30 @@ SPEC.loader.exec_module(MODULE)
 
 
 class DestinationStateTrainerContracts(unittest.TestCase):
+    def test_corpus_receipt_preserves_exact_uniform_fine_cadence(self):
+        manifest = {
+            "schema": "kaminos-boundary-splat-phase-candidate-corpus-v0",
+            "featureOrder": list(MODULE.CORE.FEATURES),
+            "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+            "requestedRoute": "http://127.0.0.1:18218/?volume_resolution=160",
+            "frames": [
+                {"id": "frame-0", "controlledStepFrameIndex": 0, "controlledStepDeltaMs": 16.667},
+                {"id": "frame-1", "controlledStepFrameIndex": 1, "controlledStepDeltaMs": 16.667},
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "phase-corpus.json"
+            path.write_text(json.dumps(manifest), encoding="utf-8")
+            with patch.object(MODULE.CORE, "load_frame", return_value={}):
+                *_, receipt = MODULE.load_corpus_manifest(path)
+            self.assertEqual(receipt["controlledStepDeltaMs"], 16.667)
+
+            manifest["frames"][1]["controlledStepDeltaMs"] = 20.0
+            path.write_text(json.dumps(manifest), encoding="utf-8")
+            with patch.object(MODULE.CORE, "load_frame", return_value={}):
+                with self.assertRaisesRegex(ValueError, "uniform controlled-step cadence"):
+                    MODULE.load_corpus_manifest(path)
+
     def test_route_validation_rejects_cpu_and_fallback(self):
         self.assertEqual(
             MODULE.validate_training_route("Device(gpu, 0)", fallback_reason=None)["backend"],

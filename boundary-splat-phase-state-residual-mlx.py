@@ -325,6 +325,13 @@ def load_corpus_manifest(path):
     indices = [int(frame.get("controlledStepFrameIndex", -1)) for frame in frame_documents]
     if len(frame_documents) < 2 or indices != list(range(len(frame_documents))):
         raise ValueError("destination-state corpus requires a contiguous multi-frame controlled episode")
+    cadences = [float(frame.get("controlledStepDeltaMs", 160)) for frame in frame_documents]
+    if (
+        not math.isfinite(cadences[0])
+        or cadences[0] <= 0
+        or any(not math.isclose(value, cadences[0], rel_tol=0, abs_tol=1e-9) for value in cadences[1:])
+    ):
+        raise ValueError("destination-state corpus requires uniform controlled-step cadence")
     query = parse_qs(urlparse(document.get("requestedRoute", "")).query)
     grid_size = int(query.get("volume_resolution", [160])[0])
     if grid_size <= 0:
@@ -335,7 +342,7 @@ def load_corpus_manifest(path):
         "sha256": CORE.sha256_bytes(data),
         "effectiveRoute": document["effectiveRoute"],
         "frameCount": len(frame_documents),
-        "controlledStepDeltaMs": int(frame_documents[0].get("controlledStepDeltaMs", 160)),
+        "controlledStepDeltaMs": cadences[0],
     }
     frames = {
         frame["id"]: CORE.load_frame(frame, path.parent)
