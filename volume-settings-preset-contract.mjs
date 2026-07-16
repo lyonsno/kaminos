@@ -12,6 +12,13 @@ const VOLUME_APPEARANCE_DECOMPOSITION_MODES = Object.freeze([
   'b-applied-to-fixed-a',
   'a-plus-b-recomposition',
   'smoke-off-beauty-control',
+  'complete-flame-emission',
+  'complete-flame-extinction',
+  'ridge-owned-emission',
+  'ridge-owned-extinction',
+  'non-ridge-emission',
+  'non-ridge-extinction',
+  'positive-optical-recomposition',
 ]);
 
 function validateAppearanceDecompositionTarget(params, prefix = '') {
