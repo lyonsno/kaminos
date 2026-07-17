@@ -58,4 +58,20 @@ assert.match(
   'The direct route must load the composition before revealing the operational Generate surface',
 );
 
+const loadedFocusStateSource = index.match(
+  /function kaminosCrucibleLoadedFocusState\(\)\s*\{[\s\S]*?\n\}/,
+)?.[0];
+assert.ok(loadedFocusStateSource, 'The whole-bench load transition must have an executable focus-state contract');
+const loadedFocusState = Function(`${loadedFocusStateSource}; return kaminosCrucibleLoadedFocusState;`)();
+assert.deepEqual(
+  loadedFocusState(),
+  { focusedObjectId: null, focusFraming: null },
+  'Whole-bench framing must not claim that one object received focus',
+);
+assert.match(
+  index,
+  /status:\s*'loaded',[\s\S]*?viewportFraming,[\s\S]*?\.\.\.kaminosCrucibleLoadedFocusState\(\)/,
+  'The loaded composition transition must consume the honest focus-state contract',
+);
+
 console.log('crucible operational composition contracts: ok');

@@ -13176,6 +13176,13 @@ function kaminosCrucibleCompositionDebugState() {
   return { ...kaminosCrucibleCompositionState };
 }
 
+function kaminosCrucibleLoadedFocusState() {
+  return {
+    focusedObjectId: null,
+    focusFraming: null,
+  };
+}
+
 window.kaminosCrucibleCompositionDebugState = kaminosCrucibleCompositionDebugState;
 
 function applyKaminosCrucibleCompositionFraming(manifest) {
@@ -23276,7 +23283,7 @@ async function loadKaminosCrucibleComposition(compositionId = CRUCIBLE_PROMOTED_
       registeredObjectIds,
       aoEnabled: false,
       viewportFraming,
-      focusedObjectId: manifest.activeObjectId || null,
+      ...kaminosCrucibleLoadedFocusState(),
     };
     if (!activateTab) crucibleViewportConsolePreference = 'auto';
     renderCrucibleViewportWorkspace();
