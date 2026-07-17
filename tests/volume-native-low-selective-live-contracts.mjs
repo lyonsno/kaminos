@@ -55,7 +55,7 @@ const native96ExactFrontTeacherGenerated = readFileSync(native96ExactFrontTeache
 const combined = `${route}\n${witness}\n${native64Witness}\n${runtime}\n${core}\n${candidateHeadPackage}\n${vivisectorWidth32Package}\n${vivisectorWidth32Generated}\n${native96ExactFrontTeacherGenerated}`;
 
 assert.match(route, /native-low-live-browser-webgpu-inference-v0/, 'route names browser/WebGPU frozen-model inference authority');
-assert.match(combined, /native96-sparse-front-continuity-v1/, 'route and witness carry fail-loud runtime build identity');
+assert.match(combined, /native-low-live-research-cockpit-v1/, 'route and witness carry fail-loud runtime build identity');
 assert.match(witness, /expectedRuntimeBuildIdentity[\s\S]*runtimeBuildIdentity[\s\S]*cachedCodeRejection/, 'witness records expected/effective runtime build identity and cached-code rejection');
 assert.match(witness, /user-data-dir[\s\S]*Network\.setCacheDisabled[\s\S]*cacheBustUrl/, 'witness uses a fresh browser profile, disables cache, and cache-busts the route URL');
 assert.match(witness, /servedSourceBundleSha256[\s\S]*fresh-http-served-source-bundle-sha256-v0[\s\S]*runtimeBuildIdentityPresent/, 'witness binds receipt to the HTTP-served source bundle hash and runtime marker');
@@ -264,6 +264,24 @@ assert.match(combined, /learnedSupportAndCarrierResidualsRetained[\s\S]*learnedF
 assert.match(combined, /frontTopologyVisualDecision[\s\S]*frontTopologyLoadBearing/, 'frontTopology ablation emits visual decision fields');
 assert.match(witness, /nativeLowFrontTopologyAblation[\s\S]*sameSourceStepIdentity[\s\S]*offlineImporterUsed:\s*false/, 'witness preserves shared-device same-source frontTopology ablation without offline importer');
 assert.match(route, /durationSeconds/, 'route reports continuous comparison duration');
+assert.match(combined, /native-low-live-research-cockpit-v0/, 'route names the continuously stepped native-low research cockpit');
+assert.match(route, /cockpit=1[\s\S]*native96[\s\S]*direct-canvas/, 'cockpit route is an explicit native96 direct-canvas surface');
+assert.match(route, /native96Control[\s\S]*deterministic96To160[\s\S]*modelBypass[\s\S]*selectedLearnedPackage/, 'cockpit exposes native, deterministic materialization, bypass, and learned roles');
+assert.match(combined, /setCockpitRole[\s\S]*roleSwitchSourceStepDelta[\s\S]*0[\s\S]*roleSwitchHistoryEpochChanged[\s\S]*false/, 'role switching proves zero source-step delta and no history-epoch change');
+assert.match(combined, /sameHistoryRoleSwitch[\s\S]*sameSourceStepIdentity[\s\S]*sameHistoryEpochIdentity/, 'all cockpit roles bind to one source step and history epoch');
+assert.match(route, /runUntilExplicitPause:\s*true[\s\S]*hiddenDurationLimit:\s*false[\s\S]*hiddenFrameLimit:\s*false/, 'cockpit runs until explicit pause without hidden duration or frame limits');
+assert.doesNotMatch(route, /targetSeconds\s*=\s*Math\.max\(5,\s*Math\.min\(30/, 'cockpit cannot retain the misleading 5..30 second target clamp');
+assert.match(route, /setEmitterRadius[\s\S]*setFlowRate[\s\S]*triggerRadiusDiscontinuity[\s\S]*setCapturePaused[\s\S]*stepCaptureFrame[\s\S]*resetCockpit/, 'cockpit exposes radius, flow, discontinuity, pause, exact step, and explicit reset controls');
+assert.match(combined, /requestedControlValue[\s\S]*effectiveControlValue[\s\S]*controlValueMismatch[\s\S]*ignoredControlRejected/, 'live controls report requested/effective values and fail loud when ignored');
+assert.match(combined, /radius-discontinuity-without-history-rebuild-v0[\s\S]*historyEpochChanged:\s*false/, 'radius discontinuity perturbs the live source without rebuilding history');
+assert.match(combined, /residentPackageSlots[\s\S]*slotA[\s\S]*slotB[\s\S]*requestedPackageIdentity[\s\S]*effectivePackageIdentity/, 'cockpit exposes two checksum-bound resident package slots with requested/effective identities');
+assert.match(combined, /stalePackageRejected[\s\S]*fallbackPackageRejected[\s\S]*packageChecksumMismatch/, 'cockpit fails loud on stale, fallback, or checksum-mismatched packages');
+assert.match(combined, /unsmoothedTiming[\s\S]*sourceDeltaAdmissionGpuMs[\s\S]*learnedModelGpuMs[\s\S]*reconstructionGpuMs[\s\S]*materializationMs[\s\S]*renderMs[\s\S]*totalFrameMs/, 'cockpit publishes unsmoothed per-frame stage timing');
+assert.match(combined, /presentationFps[\s\S]*cadenceBelow5Fps[\s\S]*telemetryStale[\s\S]*hiddenWorkReduction/, 'cockpit reports live cadence and stale/fallback/work-reduction warnings');
+assert.match(combined, /candidateCount[\s\S]*instanceCount[\s\S]*coverage[\s\S]*candidateInstanceEquality[\s\S]*overflowCount/, 'cockpit telemetry preserves uncapped candidate/instance work accounting');
+assert.match(combined, /cameraAutoRotation:\s*false[\s\S]*cameraStateStableAcrossRoleSwitch:\s*true/, 'cockpit disables automatic camera rotation and preserves camera state across role switches');
+assert.match(combined, /directCanvasPresentation:\s*true[\s\S]*blobImageReplacement:\s*false[\s\S]*partialPresentationRejected/, 'cockpit presents the renderer canvas directly and rejects blank, partial, or stale presentation');
+assert.match(witness, /cockpit-interaction-assay[\s\S]*setCockpitRole\('modelBypass'\)[\s\S]*setEmitterRadius\(0\.61\)[\s\S]*setFlowRate\(1\.2\)[\s\S]*triggerRadiusDiscontinuity/, 'cockpit witness exercises same-history switching, effective controls, and a live discontinuity');
 assert.match(route, /blankFrameRejection/, 'route refuses blank frames as evidence');
 assert.match(route, /frameCacheKey/, 'route distinguishes live frames from cached screenshots');
 assert.match(route, /failurePhase/, 'route writes a failure phase');

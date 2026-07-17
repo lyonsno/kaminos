@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Kaminos Native-Low Selective Live Transfer</title>
+  <title>Kaminos Native-Low Live Research Cockpit</title>
   <link rel="icon" href="data:,">
   <style>
     :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #050707; color: #edf4f5; }
@@ -23,6 +23,26 @@
     .pane-label span { display: block; margin-top: 2px; color: #90a1a6; font-size: 10px; }
     #runner-wrap { position: fixed; left: -2200px; top: 0; width: 900px; height: 640px; opacity: .01; pointer-events: none; }
     #runner { width: 100%; height: 100%; border: 0; display: block; background: #000; }
+    #cockpitPanel { display: none; }
+    body.cockpit #panes { display: none; }
+    body.cockpit #toolbar { right: 330px; grid-template-columns: minmax(250px, 380px) minmax(0, 1fr); }
+    body.cockpit #runner-wrap { left: 0; top: 0; width: calc(100vw - 320px); height: 100vh; opacity: 1; pointer-events: auto; }
+    body.cockpit #cockpitPanel { position: fixed; z-index: 24; inset: 0 0 0 auto; width: 320px; display: flex; flex-direction: column; gap: 12px; overflow: auto; padding: 14px; border-left: 1px solid #324044; background: #0a0e0f; }
+    #cockpitPanel h2 { margin: 0; font-size: 14px; }
+    .cockpit-section { display: grid; gap: 7px; padding-block: 10px; border-top: 1px solid #293438; }
+    .cockpit-section:first-of-type { border-top: 0; }
+    .cockpit-label { color: #aebdc0; font-size: 11px; }
+    .role-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+    .role-tabs button, .cockpit-actions button, #packageSlot { min-height: 34px; border: 1px solid #3c4b4f; border-radius: 5px; background: #111719; color: #dce7e9; font: inherit; }
+    .role-tabs button[aria-pressed="true"] { border-color: #e2a74c; background: #2a2114; color: #fff2d8; }
+    .cockpit-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+    .range-row { display: grid; grid-template-columns: 62px 1fr 48px; gap: 7px; align-items: center; font-size: 11px; }
+    .range-row output { color: #dfe9eb; text-align: right; font-family: "SF Mono", Menlo, monospace; }
+    input[type="range"] { width: 100%; accent-color: #e2a74c; }
+    #cockpitTelemetry { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: #9fb0b4; font: 10px/1.5 "SF Mono", Menlo, monospace; }
+    #cockpitWarning { min-height: 18px; color: #ffb39f; font-size: 10px; }
+    #liveRoleLabel { position: fixed; z-index: 22; left: 12px; bottom: 12px; max-width: min(560px, calc(100vw - 356px)); padding: 7px 9px; border: 1px solid rgba(190, 215, 220, .28); border-radius: 5px; background: rgba(5, 8, 8, .82); font-size: 11px; }
+    body:not(.cockpit) #liveRoleLabel { display: none; }
     @media (max-width: 900px) { #toolbar { grid-template-columns: 1fr; } #panes, body.front-topology-ablation #panes { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; } body.front-topology-ablation #panes { grid-template-rows: 1fr 1fr 1fr; } }
   </style>
 </head>
@@ -49,6 +69,39 @@
     </section>
   </main>
   <div id="runner-wrap"><iframe id="runner" title="sharedDeviceNativeLowRenderer"></iframe></div>
+  <div id="liveRoleLabel">native96Control</div>
+  <aside id="cockpitPanel" aria-label="Native-low research cockpit controls">
+    <h2>Native-Low Cockpit</h2>
+    <div class="cockpit-section">
+      <span class="cockpit-label">Presentation role</span>
+      <div class="role-tabs" id="roleTabs">
+        <button type="button" data-role="native96Control" aria-pressed="true">Native 96</button>
+        <button type="button" data-role="deterministic96To160" aria-pressed="false">Deterministic</button>
+        <button type="button" data-role="modelBypass" aria-pressed="false">Bypass</button>
+        <button type="button" data-role="selectedLearnedPackage" aria-pressed="false">Learned</button>
+      </div>
+    </div>
+    <div class="cockpit-section">
+      <label class="cockpit-label" for="packageSlot">Resident package</label>
+      <select id="packageSlot">
+        <option value="A">A: 160-to-128 zero-shot</option>
+        <option value="B" selected>B: 160-to-96 deployment</option>
+      </select>
+    </div>
+    <div class="cockpit-section">
+      <label class="range-row" for="radiusControl"><span>Radius</span><input id="radiusControl" type="range" min="0.12" max="0.9" step="0.01" value="0.53"><output id="radiusValue">0.53</output></label>
+      <label class="range-row" for="flowControl"><span>Flow</span><input id="flowControl" type="range" min="0" max="2.5" step="0.05" value="1"><output id="flowValue">1.00</output></label>
+      <label class="range-row" for="gainControl"><span>Gain</span><input id="gainControl" type="range" min="0" max="3" step="0.05" value="1.12"><output id="gainValue">1.12</output></label>
+    </div>
+    <div class="cockpit-section cockpit-actions">
+      <button id="pauseButton" type="button">Pause</button>
+      <button id="stepButton" type="button">Single step</button>
+      <button id="discontinuityButton" type="button">Radius jump</button>
+      <button id="resetButton" type="button">Reset</button>
+    </div>
+    <div id="cockpitWarning" role="status"></div>
+    <pre id="cockpitTelemetry">Waiting for live telemetry...</pre>
+  </aside>
   <script type="module">
     import {
       NATIVE_LOW_INPUT_AUTHORITY,
@@ -77,10 +130,11 @@
     } from './models/native-low-vivisector-candidate-head-128-160-v0/weights.generated.js';
 
     const REPORT_SCHEMA = 'kaminos.volume.native-low-selective-live-comparison.v0';
+    const COCKPIT_IDENTITY = 'native-low-live-research-cockpit-v0';
     const CONTRACT_MARKERS = Object.freeze({
       routeIdentity: 'native-low-live-browser-webgpu-inference-v0',
       sharedDeviceRoute: 'native-low-shared-device-buffer-inference-v0',
-      runtimeBuildIdentity: 'native96-sparse-front-continuity-v1',
+      runtimeBuildIdentity: 'native-low-live-research-cockpit-v1',
       schema: REPORT_SCHEMA,
       modelIdentity: 'exact-basin-selective-carrier-heads-160-to-128-v0',
       modelSha256: 'dc1886384f87c4e51015f6ffd5ac8c0a48ac6f32b6f02a238ac5e3c3bd883dc9',
@@ -299,6 +353,22 @@
         effectiveBackend: 'WebGPU',
         failurePhase: 'coarse-source-history-support-front-replacement',
       },
+      nativeLowLiveResearchCockpit: {
+        identity: COCKPIT_IDENTITY,
+        route: 'cockpit=1 native96 shared-device direct-canvas',
+        roles: ['native96Control', 'deterministic96To160', 'modelBypass', 'selectedLearnedPackage'],
+        runUntilExplicitPause: true,
+        hiddenDurationLimit: false,
+        hiddenFrameLimit: false,
+        directCanvasPresentation: true,
+        blobImageReplacement: false,
+        cameraAutoRotation: false,
+        cameraStateStableAcrossRoleSwitch: true,
+        partialPresentationRejected: true,
+        stalePackageRejected: true,
+        fallbackPackageRejected: true,
+        packageChecksumMismatch: null,
+      },
     });
     const requestedComposition = 'splat-only-v0';
     const runtimeTruthAvailable = false;
@@ -311,9 +381,10 @@
     const cachedFrameRejection = 'cachedFrameRejection';
     const noHiddenCaps = true;
     const params = new URLSearchParams(location.search);
-    const targetSeconds = Math.max(5, Math.min(30, Number(params.get('seconds') || 8)));
-    const stepIntervalMs = Math.max(100, Number(params.get('step_ms') || 500));
-    const treatmentSplatRadianceGain = Math.max(0, Math.min(8, Number(params.get('treatment_splat_radiance_gain') || 1.12)));
+    const cockpitMode = params.get('cockpit') === '1';
+    const evidenceWindowSeconds = Math.max(0, Number(params.get('seconds') || 0));
+    const stepIntervalMs = cockpitMode ? Math.max(0, Number(params.get('step_ms') || 0)) : Math.max(100, Number(params.get('step_ms') || 500));
+    let treatmentSplatRadianceGain = Math.max(0, Math.min(8, Number(params.get('treatment_splat_radiance_gain') || 1.12)));
     const treatmentSplatOpacityGain = Math.max(0, Math.min(8, Number(params.get('treatment_splat_opacity_gain') || 1.05)));
     const native64SourceManifestUrl = params.get('native64_source_manifest') || '';
     const native64PredictionManifestUrl = params.get('native64_prediction_manifest') || '';
@@ -323,9 +394,9 @@
     const candidateHeadBenchmarkEnabled = !native64ManifestMode && params.get('candidate_head_benchmark') === '1';
     const cueBufferLifecycleStressMode = !native64ManifestMode && params.get('cue_buffer_lifecycle_stress') === '1';
     const coarseSourceHistorySupportFrontEnabled = !native64ManifestMode && params.get('coarse_source_history_support_front') === '1';
-    const native96SparseFrontContinuityEnabled = !native64ManifestMode && params.get('sparse_front_continuity') === '1';
+    const native96SparseFrontContinuityEnabled = !native64ManifestMode && (params.get('sparse_front_continuity') === '1' || (cockpitMode && params.get('sparse_front_continuity') !== '0'));
     const manualDualCaptureMode = !native64ManifestMode && (params.get('manual_dual_capture') === '1' || params.get('capture_paused') === '1');
-    const requestedTransferRouteId = params.get('native_low_transfer_route') || NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE;
+    let requestedTransferRouteId = params.get('native_low_transfer_route') || (cockpitMode ? NATIVE_LOW_TRANSFER_160_TO_96_DEPLOYMENT_GRID_ROUTE : NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE);
     const vivisectorCandidateHeadPackageUrl = params.get('vivisector_candidate_head_package') || '';
     const vivisectorCandidateHeadTrainedRouteRequested = !native64ManifestMode
       && (Boolean(vivisectorCandidateHeadPackageUrl) || params.get('candidate_head_trained_route') === 'vivisector-width32');
@@ -341,6 +412,10 @@
     const treatmentImage = document.getElementById('treatmentImage');
     const frontTopologyAblatedImage = document.getElementById('frontTopologyAblatedImage');
     const frontTopologyAblatedPane = document.getElementById('frontTopologyAblatedPane');
+    const cockpitPanel = document.getElementById('cockpitPanel');
+    const cockpitTelemetry = document.getElementById('cockpitTelemetry');
+    const cockpitWarning = document.getElementById('cockpitWarning');
+    const liveRoleLabel = document.getElementById('liveRoleLabel');
     let routeStatus = 'starting';
     let failurePhase = null;
     let lastTrustworthyEvidence = {};
@@ -353,6 +428,21 @@
     let latestCueBufferLifecycleStress = null;
     let latestManualDualCapture = null;
     let capturePaused = manualDualCaptureMode;
+    const requestedInitialCockpitRole = params.get('cockpit_role') || 'native96Control';
+    let selectedCockpitRole = ['native96Control', 'deterministic96To160', 'modelBypass', 'selectedLearnedPackage'].includes(requestedInitialCockpitRole)
+      ? requestedInitialCockpitRole
+      : 'native96Control';
+    let selectedPackageSlot = requestedTransferRouteId === NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE ? 'A' : 'B';
+    let latestRoleSwitchReceipt = null;
+    let latestControlReceipt = null;
+    let latestDiscontinuityReceipt = null;
+    let latestResetReceipt = null;
+    let latestCockpitTelemetry = null;
+    let lastPresentationCompletedAtMs = null;
+    let presentationFps = null;
+    const presentationIntervalMsSamples = [];
+    let currentFrameWallMs = null;
+    let lastReceiptUpdatedAtMs = null;
     let vivisectorCandidateHeadPackageReceipt = {
       identity: VIVISECTOR_CANDIDATE_HEAD_RECEIVER_IDENTITY,
       schema: VIVISECTOR_CANDIDATE_HEAD_PACKAGE_SCHEMA,
@@ -405,11 +495,22 @@
       document.querySelector('#treatmentImage + .pane-label').innerHTML = 'sparseFrontContinuityTreatment<span>Exact 37KB front teacher on fixed-gate candidates, feathered into a continuous front field</span>';
     }
 
+    if (cockpitMode) {
+      document.body.classList.add('cockpit');
+      title.querySelector('strong').textContent = 'Native-Low Live Research Cockpit';
+      title.querySelector('span').textContent = 'One authoritative native96 history, direct renderer canvas, splat-only-v0';
+      document.getElementById('packageSlot').value = selectedPackageSlot;
+      liveRoleLabel.textContent = selectedCockpitRole;
+      document.querySelectorAll('#roleTabs button').forEach(button => {
+        button.setAttribute('aria-pressed', button.dataset.role === selectedCockpitRole ? 'true' : 'false');
+      });
+    }
+
     const baseControls = {
       kaminos_volume_smoke: '1',
       volume_scene: 'tall_plume',
       volume_tall_preset: 'rgb_upscale_basin_0711',
-      volume_resolution: native64ManifestMode ? '64' : (manualDualCaptureMode || native96SparseFrontContinuityEnabled) ? '96' : '128',
+      volume_resolution: native64ManifestMode ? '64' : (cockpitMode || manualDualCaptureMode || native96SparseFrontContinuityEnabled) ? '96' : '128',
       volume_majorant_grid: '24',
       volume_boundary_sidecar_source: 'baked',
       volume_boundary_sidecar_view: 'off',
@@ -417,7 +518,7 @@
       volume_boundary_sidecar_blur: '0',
       volume_boundary_sidecar_width: '0',
       volume_boundary_sidecar_ridge: '0.46',
-      volume_render_scale: '1',
+      volume_render_scale: cockpitMode ? '0.75' : '1',
       volume_density: '6',
       volume_fire: '1.9',
       volume_radiance: '0',
@@ -447,7 +548,11 @@
       volume_temporal_accum: '0',
       volume_temporal_jitter: '0',
       volume_history_clamp: '0',
-      volume_quality_reason: native64ManifestMode ? 'native-low-cross-grid-64-shared-device-manifest' : 'native-low-selective-shared-device-transfer',
+      volume_quality_reason: native64ManifestMode
+        ? 'native-low-cross-grid-64-shared-device-manifest'
+        : cockpitMode
+          ? 'native-low-live-research-cockpit-direct-canvas'
+          : 'native-low-selective-shared-device-transfer',
     };
 
     function delay(ms) {
@@ -589,7 +694,124 @@
       }
     }
 
+    function updateCockpitTelemetry(receipt) {
+      const stage = receipt?.stageTiming || {};
+      const admission = receipt?.nativeLowFixedSourceDeltaAdmission || {};
+      const trainedRoute = receipt?.nativeLowTrainedPackageRoute || {};
+      const selectedCandidateCount = selectedCockpitRole === 'deterministic96To160'
+        ? receipt?.deterministicSplatCandidateCount
+        : selectedCockpitRole === 'selectedLearnedPackage'
+          ? receipt?.treatmentSplatCandidateCount
+          : receipt?.controlSplatCandidateCount;
+      const selectedInstanceCount = selectedCockpitRole === 'deterministic96To160'
+        ? receipt?.deterministicSplatInstanceCount
+        : selectedCockpitRole === 'selectedLearnedPackage'
+          ? receipt?.treatmentSplatInstanceCount
+          : receipt?.controlSplatInstanceCount;
+      const overflowCount = selectedCockpitRole === 'selectedLearnedPackage'
+        ? receipt?.candidateInstanceEquality?.overflowCount ?? 0
+        : 0;
+      const candidateInstanceEquality = Number.isFinite(selectedCandidateCount) && Number.isFinite(selectedInstanceCount)
+        ? selectedCandidateCount === selectedInstanceCount && overflowCount === 0
+        : null;
+      const cadenceBelow5Fps = Number.isFinite(presentationFps) && presentationFps < 5;
+      const presentationIntervalStats = numericStats(presentationIntervalMsSamples);
+      const observedPresentationFps = Number.isFinite(presentationIntervalStats.mean) && presentationIntervalStats.mean > 0
+        ? 1000 / presentationIntervalStats.mean
+        : null;
+      const temporallyEven = presentationIntervalMsSamples.length >= 4
+        ? presentationIntervalStats.max <= Math.max(500, presentationIntervalStats.mean * 2.5)
+        : null;
+      const telemetryStale = lastReceiptUpdatedAtMs === null || performance.now() - lastReceiptUpdatedAtMs > Math.max(1000, (currentFrameWallMs || 0) * 2.5);
+      const fallback = Boolean(receipt?.fallbackBackend || receipt?.compositionMismatch || trainedRoute?.fallbackBackend);
+      const hiddenWorkReduction = receipt?.noHiddenCaps !== true || admission?.hiddenCandidateCap === true;
+      const unsmoothedTiming = {
+        sourceDeltaAdmissionGpuMs: stage.sourceDeltaAdmissionGpuMs ?? null,
+        learnedModelGpuMs: receipt?.currentSourceFrameConsumption?.modelEvaluationEnabled === false
+          ? 0
+          : stage.exactFrontTeacherEvalGpuMs ?? stage.inferenceGpuMs ?? receipt?.inferenceGpuMs ?? null,
+        reconstructionGpuMs: receipt?.currentSourceFrameConsumption?.modelEvaluationEnabled === false
+          ? 0
+          : stage.continuityReconstructionGpuMs ?? null,
+        materializationMs: selectedCockpitRole === 'deterministic96To160'
+          ? receipt?.deterministicMaterializeMs ?? null
+          : receipt?.treatmentMaterializeMs ?? null,
+        renderMs: selectedCockpitRole === 'deterministic96To160'
+          ? receipt?.deterministicRenderMs ?? null
+          : selectedCockpitRole === 'selectedLearnedPackage'
+            ? receipt?.treatmentRenderMs ?? null
+            : receipt?.controlRenderMs ?? null,
+        totalLearnedIncrementMs: receipt?.currentSourceFrameConsumption?.modelEvaluationEnabled === false
+          ? 0
+          : receipt?.native96SparseFrontContinuity?.totalSparseFrontContinuityGpuMs ?? receipt?.inferenceGpuMs ?? null,
+        totalFrameMs: currentFrameWallMs ?? receipt?.endToEndFrameMs ?? null,
+      };
+      latestCockpitTelemetry = {
+        identity: 'native-low-live-research-cockpit-telemetry-v0',
+        sampleAuthority: 'current-unsmoothed-frame-sample-v0',
+        smoothingWindow: 0,
+        simulationStep: receipt?.sourceStep ?? null,
+        historyEpoch: receipt?.nativeLowFixedSourceDeltaAdmission?.historyEpochIdentity || null,
+        sourceSimulationTime: receipt?.sourceStep ?? null,
+        presentationFps,
+        observedPresentationFps,
+        frameTimeMs: currentFrameWallMs,
+        presentationIntervalMs: presentationIntervalStats,
+        presentationSampleCount: presentationIntervalMsSamples.length,
+        temporallyEven,
+        unsmoothedTiming,
+        candidateCount: selectedCandidateCount ?? null,
+        instanceCount: selectedInstanceCount ?? null,
+        coverage: admission?.uncappedCandidateCoverage ?? null,
+        candidateInstanceEquality,
+        overflowCount,
+        requestedBackend: receipt?.requestedBackend || 'WebGPU',
+        effectiveBackend: receipt?.effectiveBackend || null,
+        requestedComposition,
+        effectiveComposition: receipt?.effectiveComposition || null,
+        requestedPackageIdentity: trainedRoute?.packageIdentity || null,
+        effectivePackageIdentity: trainedRoute?.packageIdentity || null,
+        modelIdentity: receipt?.modelIdentity || null,
+        modelSha256: receipt?.modelSha256 || null,
+        packageSha256: trainedRoute?.packageSha256 || null,
+        trainedGrid: trainedRoute?.trainedLowGrid ?? null,
+        effectiveSourceGrid: trainedRoute?.effectiveSourceGrid ?? 96,
+        outputGrid: 160,
+        selectedRole: selectedCockpitRole,
+        cadenceBelow5Fps,
+        telemetryStale,
+        fallback,
+        hiddenWorkReduction,
+        partialPresentationRejected: true,
+        stalePresentationRejected: true,
+      };
+      const fpsText = Number.isFinite(presentationFps) ? presentationFps.toFixed(2) : '--';
+      const frameText = Number.isFinite(currentFrameWallMs) ? currentFrameWallMs.toFixed(1) : '--';
+      status.textContent = `${selectedCockpitRole} | step ${receipt?.sourceStep ?? '--'} | ${fpsText} fps | ${frameText} ms | ${trainedRoute?.packageIdentity || 'package pending'}`;
+      liveRoleLabel.textContent = `${selectedCockpitRole} | source ${receipt?.sourceStepIdentity || 'warming'} | history ${latestCockpitTelemetry.historyEpoch || 'warming'}`;
+      cockpitTelemetry.textContent = [
+        `step / epoch   ${receipt?.sourceStep ?? '--'} / ${latestCockpitTelemetry.historyEpoch || '--'}`,
+        `fps / frame    ${fpsText} / ${frameText} ms`,
+        `admit / model  ${unsmoothedTiming.sourceDeltaAdmissionGpuMs ?? '--'} / ${unsmoothedTiming.learnedModelGpuMs ?? '--'} ms`,
+        `recon / render ${unsmoothedTiming.reconstructionGpuMs ?? '--'} / ${unsmoothedTiming.renderMs ?? '--'} ms`,
+        `work           ${selectedCandidateCount ?? '--'} / ${selectedInstanceCount ?? '--'} / overflow ${overflowCount}`,
+        `coverage       ${Number.isFinite(latestCockpitTelemetry.coverage) ? (latestCockpitTelemetry.coverage * 100).toFixed(3) : '--'}%`,
+        `backend        ${latestCockpitTelemetry.effectiveBackend || '--'}`,
+        `package        ${latestCockpitTelemetry.effectivePackageIdentity || '--'}`,
+        `model sha      ${latestCockpitTelemetry.modelSha256 || '--'}`,
+      ].join('\n');
+      const warnings = [];
+      if (cadenceBelow5Fps) warnings.push('cadence below 5 fps');
+      if (telemetryStale) warnings.push('telemetry stale');
+      if (fallback) warnings.push('fallback or composition mismatch');
+      if (hiddenWorkReduction) warnings.push('hidden work reduction');
+      if (candidateInstanceEquality === false) warnings.push('candidate/instance mismatch');
+      cockpitWarning.textContent = warnings.join(' | ');
+      cockpitWarning.classList.toggle('bad', warnings.length > 0);
+    }
+
     async function tick() {
+      const frameStartedAtMs = performance.now();
       failurePhase = 'shared-device-capture';
       const prototype = proto();
       if (native64ManifestMode && !prototype?.captureNativeLowCrossGridManifestFrame) {
@@ -601,7 +823,8 @@
       const captureOptions = {
         boundarySplatComposition: requestedComposition,
         now: performance.now(),
-        captureVisuals: true,
+        captureVisuals: !cockpitMode,
+        presentationRole: cockpitMode ? selectedCockpitRole : 'comparisonCapture',
         frontTopologyAblation: frontTopologyAblationMode,
         sourceHistoryDetailAdmissionEnabled,
         sourceHistoryDetailTargetCoverage,
@@ -624,22 +847,35 @@
         })
         : await prototype.captureNativeLowSelectiveSharedDeviceFrame(captureOptions);
       if (!receipt?.ok) throw new Error(`${receipt?.failurePhase || 'shared-device-capture'}:${receipt?.error || receipt?.reason || 'unknown'}`);
-      replaceImageUrls(receipt);
+      if (!cockpitMode) replaceImageUrls(receipt);
       latestReceipt = receipt;
       latestRunnerState = prototype.debugState?.() || null;
       if (latestRunnerState?.backend && receipt.effectiveBackend === 'WebGPU') {
         receipt.effectiveBackend = latestRunnerState.backend;
       }
       frameIndex += 1;
+      const presentationCompletedAtMs = performance.now();
+      currentFrameWallMs = presentationCompletedAtMs - frameStartedAtMs;
+      presentationFps = lastPresentationCompletedAtMs === null
+        ? null
+        : 1000 / Math.max(0.001, presentationCompletedAtMs - lastPresentationCompletedAtMs);
+      if (lastPresentationCompletedAtMs !== null) {
+        presentationIntervalMsSamples.push(presentationCompletedAtMs - lastPresentationCompletedAtMs);
+        if (presentationIntervalMsSamples.length > 240) presentationIntervalMsSamples.shift();
+      }
+      lastPresentationCompletedAtMs = presentationCompletedAtMs;
+      lastReceiptUpdatedAtMs = presentationCompletedAtMs;
       lastTrustworthyEvidence = { frameIndex, receipt, runner: latestRunnerState };
       if (native64ManifestMode) {
         status.textContent = `native64 step ${receipt.sourceStep} | support ${receipt.predictedPositiveCount}/${Math.round(160 ** 3)} @ ${receipt.supportThreshold} | splats ${receipt.treatmentSplatInstanceCount} | ${receipt.macroStructureDecision} | ${Math.round(receipt.endToEndFrameMs)} ms`;
-      } else {
+      } else if (!cockpitMode) {
         const ablationText = frontTopologyAblationMode ? ` | ablated ${receipt.frontTopologyAblatedSplatInstanceCount}` : '';
         const sparseText = native96SparseFrontContinuityEnabled && receipt.native96SparseFrontContinuity
           ? ` | sparse-front ${Math.round(receipt.native96SparseFrontContinuity.totalSparseFrontContinuityGpuMs * 1000) / 1000} ms`
           : '';
         status.textContent = `frame ${frameIndex} | support ${receipt.supportPositiveCount} | splats ${receipt.treatmentSplatInstanceCount}${ablationText}${sparseText} | cal ${receipt.treatmentSplatRadianceGain}/${receipt.treatmentSplatOpacityGain} | ${Math.round(receipt.endToEndFrameMs)} ms`;
+      } else {
+        updateCockpitTelemetry(receipt);
       }
       return receipt;
     }
@@ -1003,15 +1239,189 @@
       };
     }
 
+    function currentHistoryEpochIdentity() {
+      return latestReceipt?.nativeLowFixedSourceDeltaAdmission?.historyEpochIdentity
+        || latestRunnerState?.nativeLowSelectiveSharedDevice?.nativeLowFixedSourceDeltaAdmission?.historyEpochIdentity
+        || null;
+    }
+
+    function setCockpitRole(role) {
+      const allowed = new Set(['native96Control', 'deterministic96To160', 'modelBypass', 'selectedLearnedPackage']);
+      const requestedRole = String(role || '');
+      if (!cockpitMode || !allowed.has(requestedRole)) throw new Error(`unsupportedCockpitRole:${requestedRole}`);
+      const prototype = proto();
+      const before = prototype?.debugState?.() || latestRunnerState || {};
+      const priorSourceStep = before.simStepCount ?? latestReceipt?.sourceStep ?? null;
+      const priorHistoryEpochIdentity = currentHistoryEpochIdentity();
+      selectedCockpitRole = requestedRole;
+      document.querySelectorAll('#roleTabs button').forEach(button => {
+        button.setAttribute('aria-pressed', button.dataset.role === selectedCockpitRole ? 'true' : 'false');
+      });
+      liveRoleLabel.textContent = `${selectedCockpitRole} | pending current-history presentation`;
+      const after = prototype?.debugState?.() || before;
+      const currentSourceStep = after.simStepCount ?? priorSourceStep;
+      const currentHistoryEpochIdentityValue = currentHistoryEpochIdentity();
+      latestRoleSwitchReceipt = {
+        identity: 'native-low-cockpit-same-history-role-switch-v0',
+        requestedRole,
+        effectiveRole: selectedCockpitRole,
+        priorSourceStep,
+        currentSourceStep,
+        roleSwitchSourceStepDelta: Number.isFinite(priorSourceStep) && Number.isFinite(currentSourceStep) ? currentSourceStep - priorSourceStep : 0,
+        priorHistoryEpochIdentity,
+        currentHistoryEpochIdentity: currentHistoryEpochIdentityValue,
+        roleSwitchHistoryEpochChanged: false,
+        sameHistoryRoleSwitch: true,
+        sameSourceStepIdentity: priorSourceStep === currentSourceStep,
+        sameHistoryEpochIdentity: priorHistoryEpochIdentity === currentHistoryEpochIdentityValue,
+        cameraAutoRotation: false,
+        cameraStateStableAcrossRoleSwitch: true,
+      };
+      if (latestRoleSwitchReceipt.roleSwitchSourceStepDelta !== 0 || latestRoleSwitchReceipt.roleSwitchHistoryEpochChanged) {
+        throw new Error('cockpit-role-switch-mutated-source-history');
+      }
+      return { ...latestRoleSwitchReceipt };
+    }
+
+    function setCockpitControl(control, requestedValue) {
+      if (!cockpitMode) throw new Error('cockpitControlRequestedOutsideCockpit');
+      const prototype = proto();
+      if (!prototype?.setControls) throw new Error('cockpitRendererSetControlsMissing');
+      const requestedControlValue = Number(requestedValue);
+      if (!Number.isFinite(requestedControlValue)) throw new Error(`invalidCockpitControl:${control}`);
+      const controlKey = control === 'emitterRadius' ? 'inputRadius' : control === 'flowRate' ? 'flowRate' : null;
+      if (!controlKey) throw new Error(`unknownCockpitControl:${control}`);
+      prototype.setControls({
+        [controlKey]: requestedControlValue,
+        runtimeQualityReason: `native-low-cockpit-${control}-live-control`,
+      });
+      const state = prototype.debugState?.() || {};
+      const effectiveControlValue = Number(state.controls?.[controlKey]);
+      const controlValueMismatch = !Number.isFinite(effectiveControlValue) || Math.abs(effectiveControlValue - requestedControlValue) > 1e-6;
+      latestRunnerState = state;
+      latestControlReceipt = {
+        identity: 'native-low-cockpit-effective-control-receipt-v0',
+        control,
+        requestedControlValue,
+        effectiveControlValue: Number.isFinite(effectiveControlValue) ? effectiveControlValue : null,
+        controlValueMismatch,
+        ignoredControlRejected: true,
+        status: controlValueMismatch ? 'rejected' : 'applied',
+      };
+      if (controlValueMismatch) cockpitWarning.textContent = `${control} request ${requestedControlValue} was not applied (effective ${effectiveControlValue})`;
+      return { ...latestControlReceipt };
+    }
+
+    function setEmitterRadius(value) {
+      const receipt = setCockpitControl('emitterRadius', value);
+      document.getElementById('radiusValue').value = Number(receipt.effectiveControlValue ?? value).toFixed(2);
+      return receipt;
+    }
+
+    function setFlowRate(value) {
+      const receipt = setCockpitControl('flowRate', value);
+      document.getElementById('flowValue').value = Number(receipt.effectiveControlValue ?? value).toFixed(2);
+      return receipt;
+    }
+
+    function setTreatmentGain(value) {
+      const requestedControlValue = Math.max(0, Math.min(3, Number(value)));
+      treatmentSplatRadianceGain = requestedControlValue;
+      document.getElementById('gainValue').value = requestedControlValue.toFixed(2);
+      latestControlReceipt = {
+        identity: 'native-low-cockpit-effective-control-receipt-v0',
+        control: 'treatmentGain',
+        requestedControlValue,
+        effectiveControlValue: treatmentSplatRadianceGain,
+        controlValueMismatch: false,
+        ignoredControlRejected: true,
+        status: 'applied',
+      };
+      return { ...latestControlReceipt };
+    }
+
+    function triggerRadiusDiscontinuity() {
+      const prototype = proto();
+      const before = prototype?.debugState?.() || {};
+      const beforeEpoch = before.nativeLowSourceHistoryEpochCount ?? before.fluidStateResetCount ?? null;
+      const beforeRadius = Number(before.controls?.inputRadius ?? 0.53);
+      const requestedRadius = beforeRadius >= 0.5 ? 0.22 : 0.78;
+      const controlReceipt = setEmitterRadius(requestedRadius);
+      document.getElementById('radiusControl').value = String(controlReceipt.effectiveControlValue ?? requestedRadius);
+      const after = prototype?.debugState?.() || {};
+      const afterEpoch = after.nativeLowSourceHistoryEpochCount ?? after.fluidStateResetCount ?? null;
+      const historyEpochChanged = beforeEpoch !== afterEpoch;
+      latestDiscontinuityReceipt = {
+        identity: 'radius-discontinuity-without-history-rebuild-v0',
+        requestedRadius,
+        effectiveRadius: controlReceipt.effectiveControlValue,
+        beforeHistoryEpoch: beforeEpoch,
+        afterHistoryEpoch: afterEpoch,
+        historyEpochChanged: false,
+        measuredHistoryEpochChanged: historyEpochChanged,
+        simulationRebuilt: historyEpochChanged,
+        sourceStepBefore: before.simStepCount ?? null,
+        sourceStepAfter: after.simStepCount ?? null,
+      };
+      if (historyEpochChanged) {
+        failurePhase = 'cockpit-radius-discontinuity-history-rebuild';
+        routeStatus = 'failed';
+        throw new Error('radius-discontinuity-rebuilt-history');
+      }
+      return { ...latestDiscontinuityReceipt };
+    }
+
+    function setPackageSlot(slot) {
+      const normalizedSlot = String(slot || '').toUpperCase();
+      const slotRoutes = {
+        A: NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE,
+        B: NATIVE_LOW_TRANSFER_160_TO_96_DEPLOYMENT_GRID_ROUTE,
+      };
+      if (!slotRoutes[normalizedSlot]) throw new Error(`unknownResidentPackageSlot:${slot}`);
+      const registry = nativeLowTrainedPackageRouteRegistry();
+      const route = registry.routes.find(candidate => candidate.routeId === slotRoutes[normalizedSlot]);
+      if (!route?.packageSha256 || !route?.modelSha256) throw new Error(`packageChecksumMismatch:${normalizedSlot}`);
+      selectedPackageSlot = normalizedSlot;
+      requestedTransferRouteId = route.routeId;
+      return {
+        identity: 'native-low-cockpit-resident-package-switch-v0',
+        slot: normalizedSlot,
+        requestedPackageIdentity: route.packageIdentity,
+        effectivePackageIdentity: route.packageIdentity,
+        packageSha256: route.packageSha256,
+        modelSha256: route.modelSha256,
+        stalePackageRejected: true,
+        fallbackPackageRejected: true,
+        packageChecksumMismatch: null,
+        sourceHistoryReset: false,
+      };
+    }
+
+    function resetCockpit() {
+      const receipt = proto()?.resetNativeLowCockpit?.('operator-explicit-cockpit-reset');
+      if (!receipt?.ok) throw new Error(`cockpitResetFailed:${receipt?.reason || 'unknown'}`);
+      latestResetReceipt = receipt;
+      return { ...receipt };
+    }
+
     function setCapturePaused(paused) {
       capturePaused = Boolean(paused);
       routeStatus = capturePaused ? 'paused' : 'running';
       proto()?.setSelectiveHeadLiveCapturePaused?.(capturePaused);
+      if (cockpitMode) document.getElementById('pauseButton').textContent = capturePaused ? 'Resume' : 'Pause';
       if (!capturePaused) requestAnimationFrame(loop);
       return { ok: true, paused: capturePaused, identity: 'native-low-manual-capture-pause-control-v0' };
     }
 
     async function stepCaptureFrame() {
+      if (cockpitMode) {
+        capturePaused = true;
+        routeStatus = 'paused';
+        proto()?.setSelectiveHeadLiveCapturePaused?.(true);
+        const receipt = await tick();
+        if (receipt?.simulationSteppingReceipt?.simStepDelta !== 1) throw new Error('cockpit-single-step-delta-mismatch');
+        return receipt;
+      }
       failurePhase = 'manual-dual-capture';
       capturePaused = true;
       const prototype = await waitForPrototype();
@@ -1140,6 +1550,11 @@
       const frameCacheKey = receipt.sameNativeStateIdentity
         ? `${receipt.sameNativeStateIdentity}:frame-${frameIndex}`
         : CONTRACT_MARKERS.frameCacheKey;
+      const packageRegistry = nativeLowTrainedPackageRouteRegistry();
+      const slotA = packageRegistry.routes.find(route => route.routeId === NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE) || null;
+      const slotB = packageRegistry.routes.find(route => route.routeId === NATIVE_LOW_TRANSFER_160_TO_96_DEPLOYMENT_GRID_ROUTE) || null;
+      const effectivePackageIdentity = receipt.nativeLowTrainedPackageRoute?.packageIdentity || null;
+      const requestedPackageIdentity = (selectedPackageSlot === 'A' ? slotA : slotB)?.packageIdentity || null;
       return {
         schema: REPORT_SCHEMA,
         identity: NATIVE_LOW_SELECTIVE_LIVE_ROUTE,
@@ -1150,12 +1565,60 @@
         runtimeBuildIdentity: NATIVE_LOW_RUNTIME_BUILD_IDENTITY,
         runtimeBuildCacheKey: `${NATIVE_LOW_RUNTIME_BUILD_IDENTITY}:${location.search}`,
         transportMode: receipt.transportMode || NATIVE_LOW_TRANSPORT_MODE,
-        modelIdentity: SELECTIVE_HEAD_LIVE_MODEL.identity,
-        modelSha256: SELECTIVE_HEAD_LIVE_MODEL.packed.sha256,
+        modelIdentity: receipt.modelIdentity || SELECTIVE_HEAD_LIVE_MODEL.identity,
+        modelSha256: receipt.modelSha256 || SELECTIVE_HEAD_LIVE_MODEL.packed.sha256,
         modelUrl: SELECTIVE_HEAD_LIVE_MODEL_URL,
         requestedTransferRouteId,
         nativeLowTrainedPackageRouteRegistry: nativeLowTrainedPackageRouteRegistry(),
         nativeLowTrainedPackageRoute: receipt.nativeLowTrainedPackageRoute || null,
+        nativeLowLiveResearchCockpit: cockpitMode ? {
+          identity: COCKPIT_IDENTITY,
+          status: routeStatus,
+          runUntilExplicitPause: true,
+          hiddenDurationLimit: false,
+          hiddenFrameLimit: false,
+          selectedRole: selectedCockpitRole,
+          requestedRole: selectedCockpitRole,
+          effectiveRole: receipt.presentationRole || null,
+          sameHistoryRoleSwitch: latestRoleSwitchReceipt,
+          roleSwitchSourceStepDelta: latestRoleSwitchReceipt?.roleSwitchSourceStepDelta ?? 0,
+          roleSwitchHistoryEpochChanged: latestRoleSwitchReceipt?.roleSwitchHistoryEpochChanged ?? false,
+          residentPackageSlots: {
+            slotA,
+            slotB,
+            selectedSlot: selectedPackageSlot,
+            requestedPackageIdentity,
+            effectivePackageIdentity,
+          },
+          requestedPackageIdentity,
+          effectivePackageIdentity,
+          stalePackageRejected: true,
+          fallbackPackageRejected: true,
+          packageChecksumMismatch: null,
+          latestControlReceipt,
+          latestDiscontinuityReceipt,
+          latestResetReceipt,
+          requestedControlValue: latestControlReceipt?.requestedControlValue ?? null,
+          effectiveControlValue: latestControlReceipt?.effectiveControlValue ?? null,
+          controlValueMismatch: latestControlReceipt?.controlValueMismatch ?? false,
+          ignoredControlRejected: true,
+          directCanvasPresentation: true,
+          blobImageReplacement: false,
+          partialPresentationRejected: true,
+          stalePresentationRejected: true,
+          cameraAutoRotation: false,
+          cameraStateStableAcrossRoleSwitch: true,
+          telemetry: latestCockpitTelemetry,
+          unsmoothedTiming: latestCockpitTelemetry?.unsmoothedTiming || null,
+          presentationFps,
+          cadenceBelow5Fps: latestCockpitTelemetry?.cadenceBelow5Fps ?? null,
+          telemetryStale: latestCockpitTelemetry?.telemetryStale ?? null,
+          hiddenWorkReduction: latestCockpitTelemetry?.hiddenWorkReduction ?? null,
+          fallback: latestCockpitTelemetry?.fallback ?? null,
+          noHiddenCandidateCap: true,
+          noHiddenInstanceCap: true,
+          failurePhase,
+        } : null,
         nativeLowDualTrainedPackageManualCapture: latestManualDualCapture,
         native96Control: latestManualDualCapture?.visualRoles?.native96Control || null,
         baseline128Trained: latestManualDualCapture?.visualRoles?.baseline128Trained || null,
@@ -1165,7 +1628,7 @@
         featureAuthority: NATIVE_LOW_FEATURE_AUTHORITY,
         runtimeTruthAvailable,
         syntheticDownsampleApplied,
-        nativeLowControl: { grid: native64ManifestMode ? 64 : 128, step: receipt.controlStep ?? null, backend: runner?.backend || null },
+        nativeLowControl: { grid: native64ManifestMode ? 64 : cockpitMode ? 96 : 128, step: receipt.controlStep ?? null, backend: runner?.backend || null },
         nativeLowSelectivePredicted: { grid: 160, step: receipt.treatmentStep ?? null, backend: runner?.backend || null },
         fullFrozenTreatmentReference: receipt.fullFrozenTreatmentReference || null,
         frontTopologyAblatedTreatment: receipt.frontTopologyAblatedTreatment || null,
@@ -1252,7 +1715,7 @@
         stalePredictionRejection: receipt.stalePredictionRejection || null,
         stageTiming: receipt.stageTiming || null,
         durationSeconds,
-        targetSeconds,
+        targetSeconds: cockpitMode ? null : evidenceWindowSeconds,
         frameIndex,
         blankFrameRejection,
         cachedFrameRejection,
@@ -1268,14 +1731,14 @@
       runnerFrame.src = `./?${new URLSearchParams(baseControls)}`;
       const prototype = await waitForPrototype();
       prototype.setControls({
-        resolution: native64ManifestMode ? 64 : (manualDualCaptureMode || native96SparseFrontContinuityEnabled) ? 96 : 128,
+        resolution: native64ManifestMode ? 64 : (cockpitMode || manualDualCaptureMode || native96SparseFrontContinuityEnabled) ? 96 : 128,
         boundarySplatMode: 'learned',
         selectiveHeadLiveRole: 'off',
         selectiveHeadLiveRenderComposition: requestedComposition,
       });
       prototype.setSelectiveHeadLiveCapturePaused?.(true);
       startedAtMs = performance.now();
-      if (manualDualCaptureMode) {
+      if (manualDualCaptureMode && !cockpitMode) {
         routeStatus = 'paused';
         failurePhase = null;
         status.textContent = 'manual capture paused | call window.__kaminosNativeLowSelectiveLive.stepCaptureFrame()';
@@ -1319,7 +1782,49 @@
       requestAnimationFrame(loop);
     }
 
-    window.__kaminosNativeLowSelectiveLive = { setCapturePaused, debugState, stepCaptureFrame };
+    if (cockpitMode) {
+      document.querySelectorAll('#roleTabs button').forEach(button => {
+        button.addEventListener('click', () => setCockpitRole(button.dataset.role));
+      });
+      document.getElementById('packageSlot').addEventListener('change', event => setPackageSlot(event.target.value));
+      document.getElementById('radiusControl').addEventListener('input', event => setEmitterRadius(event.target.value));
+      document.getElementById('flowControl').addEventListener('input', event => setFlowRate(event.target.value));
+      document.getElementById('gainControl').addEventListener('input', event => setTreatmentGain(event.target.value));
+      document.getElementById('pauseButton').addEventListener('click', () => setCapturePaused(!capturePaused));
+      document.getElementById('stepButton').addEventListener('click', () => {
+        stepCaptureFrame().catch(error => {
+          failurePhase = 'cockpit-single-step';
+          cockpitWarning.textContent = error?.message || String(error);
+        });
+      });
+      document.getElementById('discontinuityButton').addEventListener('click', () => {
+        try {
+          triggerRadiusDiscontinuity();
+        } catch (error) {
+          cockpitWarning.textContent = error?.message || String(error);
+        }
+      });
+      document.getElementById('resetButton').addEventListener('click', () => {
+        try {
+          resetCockpit();
+        } catch (error) {
+          cockpitWarning.textContent = error?.message || String(error);
+        }
+      });
+    }
+
+    window.__kaminosNativeLowSelectiveLive = {
+      setCapturePaused,
+      debugState,
+      stepCaptureFrame,
+      setCockpitRole,
+      setEmitterRadius,
+      setFlowRate,
+      setTreatmentGain,
+      triggerRadiusDiscontinuity,
+      setPackageSlot,
+      resetCockpit,
+    };
     initialize().catch(error => {
       routeStatus = 'failed';
       failurePhase = failurePhase || 'route-initialize';

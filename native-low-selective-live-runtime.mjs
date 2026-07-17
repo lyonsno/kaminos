@@ -32,7 +32,7 @@ export const NATIVE_LOW_VIVISECTOR_WIDTH32_LIVE_RECEIVER = 'native-low-vivisecto
 export const NATIVE_LOW_RESIDENT_CUE_BUFFER_LIFECYCLE_STRESS = 'native-low-resident-cue-buffer-lifecycle-stress-v0';
 export const NATIVE_LOW_COARSE_SOURCE_HISTORY_SUPPORT_FRONT_REPLACEMENT = 'native-low-coarse-source-history-support-front-replacement-v0';
 export const NATIVE96_SPARSE_FRONT_CONTINUITY = 'native96-sparse-front-continuity-v0';
-export const NATIVE_LOW_RUNTIME_BUILD_IDENTITY = 'native96-sparse-front-continuity-v1';
+export const NATIVE_LOW_RUNTIME_BUILD_IDENTITY = 'native-low-live-research-cockpit-v1';
 export const NATIVE_LOW_TRAINED_PACKAGE_ROUTE_REGISTRY_IDENTITY = 'native-low-trained-package-route-registry-v0';
 export const NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE = 'native-low-transfer-160-to-128-zero-shot-v0';
 export const NATIVE_LOW_TRANSFER_160_TO_96_DEPLOYMENT_GRID_ROUTE = 'native-low-transfer-160-to-96-deployment-grid-v0';
@@ -349,6 +349,33 @@ fn upsampleNativeFront(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (any(gid >= vec3<u32>(HIGH_GRID))) { return; }
   let lowCell = min(vec3<u32>(LOW_GRID - 1u), vec3<u32>(floor(vec3<f32>(gid) * f32(LOW_GRID) / f32(HIGH_GRID))));
   nativeUpsampleFront[index3(gid, HIGH_GRID)] = lowFront[index3(lowCell, LOW_GRID)];
+}
+`;
+
+const DETERMINISTIC_NATIVE_UPSAMPLE_WGSL = `
+const LOW_GRID: u32 = ${LOW_GRID}u;
+const HIGH_GRID: u32 = ${HIGH_GRID}u;
+const SLOTS_PER_CELL: u32 = ${SLOTS_PER_CELL}u;
+
+@group(0) @binding(0) var<storage, read> lowFluid: array<vec4<f32>>;
+@group(0) @binding(1) var<storage, read> lowFront: array<f32>;
+@group(0) @binding(2) var<storage, read_write> highFluid: array<vec4<f32>>;
+@group(0) @binding(3) var<storage, read_write> highFront: array<f32>;
+
+fn index3(cell: vec3<u32>, grid: u32) -> u32 {
+  return cell.x + cell.y * grid + cell.z * grid * grid;
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn upsampleNativeState(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (any(gid >= vec3<u32>(HIGH_GRID))) { return; }
+  let lowCell = min(vec3<u32>(LOW_GRID - 1u), vec3<u32>(floor(vec3<f32>(gid) * f32(LOW_GRID) / f32(HIGH_GRID))));
+  let lowIndex = index3(lowCell, LOW_GRID);
+  let highIndex = index3(gid, HIGH_GRID);
+  for (var slot = 0u; slot < SLOTS_PER_CELL; slot += 1u) {
+    highFluid[highIndex * SLOTS_PER_CELL + slot] = lowFluid[lowIndex * SLOTS_PER_CELL + slot];
+  }
+  highFront[highIndex] = lowFront[lowIndex];
 }
 `;
 
@@ -963,6 +990,27 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
     label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native front upsample`,
     layout: device.createPipelineLayout({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native front upsample pipeline layout`, bindGroupLayouts: [frontUpsampleLayout] }),
     compute: { module: frontUpsampleShader, entryPoint: 'upsampleNativeFront' },
+  });
+  const deterministicNativeUpsampleShader = device.createShaderModule({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} deterministic native state upsample WGSL`,
+    code: specializeLowGridWgsl(DETERMINISTIC_NATIVE_UPSAMPLE_WGSL, lowGrid),
+  });
+  const deterministicNativeUpsampleLayout = device.createBindGroupLayout({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} deterministic native state upsample layout`,
+    entries: [
+      { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+    ],
+  });
+  const deterministicNativeUpsamplePipeline = device.createComputePipeline({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} deterministic native state upsample`,
+    layout: device.createPipelineLayout({
+      label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} deterministic native state upsample pipeline layout`,
+      bindGroupLayouts: [deterministicNativeUpsampleLayout],
+    }),
+    compute: { module: deterministicNativeUpsampleShader, entryPoint: 'upsampleNativeState' },
   });
   const sourceHistoryAdmissionShader = device.createShaderModule({
     label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} fixed source-delta admission WGSL`,
@@ -1771,6 +1819,30 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
           visualClaim: false,
         };
       }
+      if (options.historyOnly === true) {
+        encoder.copyBufferToBuffer(sourceFluid, 0, lowSnapshotFluid, 0, lowFluidBytes);
+        encoder.copyBufferToBuffer(sourceFront, 0, lowSnapshotFront, 0, lowFrontBytes);
+        coarseSourceHistorySupportFrontActive = false;
+        lastNative96SparseFrontContinuity = {
+          identity: NATIVE96_SPARSE_FRONT_CONTINUITY,
+          enabled: false,
+          authority: 'resident-package-history-only-no-model-evaluation-v0',
+          candidateListSource: 'real-uncapped-fixed-gate-sourceHistoryCandidates-v0',
+          exactFrontTeacherModelIdentity: NATIVE96_EXACT_FRONT_TEACHER_MODEL.identity,
+          exactFrontTeacherModelSha256: exactFrontTeacherSha256,
+          packageResident: true,
+          sourceHistoryAdvanced: true,
+          modelEvaluationEnabled: false,
+          modelOutputConsumed: false,
+          hiddenCandidateCap: false,
+          runtimeTopK: false,
+          dynamicPercentile: false,
+          failurePhase: null,
+        };
+        encodedFrameCount += 1;
+        lastHistoryEpochIdentity = currentHistoryEpochIdentity;
+        return;
+      }
       coarseSourceHistorySupportFrontActive = options.coarseSourceHistorySupportFrontEnabled === true;
       const native96SparseFrontContinuityActive = options.native96SparseFrontContinuityEnabled === true;
       if (native96SparseFrontContinuityActive) {
@@ -1941,6 +2013,30 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
       upsamplePass.end();
       encodedFrameCount += 1;
       lastHistoryEpochIdentity = currentHistoryEpochIdentity;
+    },
+    encodeDeterministicNativeUpsample(encoder, targetFluid, targetFront) {
+      if (!encoder || !targetFluid || !targetFront) throw new Error('deterministicNativeUpsampleMissingTarget');
+      const bindGroup = device.createBindGroup({
+        label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} deterministic native state upsample bind group`,
+        layout: deterministicNativeUpsampleLayout,
+        entries: [
+          { binding: 0, resource: { buffer: lowSnapshotFluid } },
+          { binding: 1, resource: { buffer: lowSnapshotFront } },
+          { binding: 2, resource: { buffer: targetFluid } },
+          { binding: 3, resource: { buffer: targetFront } },
+        ],
+      });
+      const pass = encoder.beginComputePass({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} deterministic native 96-to-160 materialization` });
+      pass.setPipeline(deterministicNativeUpsamplePipeline);
+      pass.setBindGroup(0, bindGroup);
+      pass.dispatchWorkgroups(Math.ceil(HIGH_GRID / 4), Math.ceil(HIGH_GRID / 4), Math.ceil(HIGH_GRID / 4));
+      pass.end();
+      return {
+        identity: 'deterministic-native-low-nearest-96-to-160-materialization-v0',
+        sourceGrid: lowGrid,
+        outputGrid: HIGH_GRID,
+        hiddenCellCap: false,
+      };
     },
     async sampleSupportStats() {
       const values = await readU32Buffer(device, stats, STATS_BYTES, 'native-low shared-device support stats readback');
