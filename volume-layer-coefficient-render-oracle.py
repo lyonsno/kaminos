@@ -388,6 +388,35 @@ def selective_split_pixel_samples(
         )
 
 
+def selective_split_raster_samples(
+    pixel_x: np.ndarray,
+    pixel_y: np.ndarray,
+    negative_x: np.ndarray,
+    negative_y: np.ndarray,
+    positive_x: np.ndarray,
+    positive_y: np.ndarray,
+    tangent_x: np.ndarray,
+    tangent_y: np.ndarray,
+    major_px: np.ndarray,
+    split_mask: np.ndarray,
+    parent_depth_index: np.ndarray,
+    negative_depth_index: np.ndarray,
+    positive_depth_index: np.ndarray,
+):
+    child_rows = (
+        (negative_x, negative_y, negative_depth_index, 0.25),
+        (pixel_x, pixel_y, parent_depth_index, 0.50),
+        (positive_x, positive_y, positive_depth_index, 0.25),
+    )
+    for child_index, (child_x, child_y, child_depth_index, child_mass) in enumerate(child_rows):
+        unsplit_mass = 1.0 if child_index == 1 else 0.0
+        candidate_weight = np.where(split_mask, child_mass, unsplit_mass).astype(np.float32)
+        for sx, sy, sample_weight in weighted_tangent_pixel_samples(
+            child_x, child_y, tangent_x, tangent_y, major_px, candidate_weight,
+        ):
+            yield sx, sy, sample_weight, child_depth_index
+
+
 def core_skirt_pixel_samples(
     pixel_x: np.ndarray,
     pixel_y: np.ndarray,
@@ -625,10 +654,10 @@ def rasterize_coefficients(
         require(footprint_mode == "selective-split", f"unknown footprint mode {footprint_mode}")
         require(split_mask is not None and split_mask.shape == (positions.shape[0],), "selective-split requires one frozen split mask for every candidate")
         require(split_world_offsets is not None and split_world_offsets.shape == positions.shape, "selective-split requires one frozen world offset for every candidate")
-        negative_ndc, _, negative_valid = project(
+        negative_ndc, negative_depth, negative_valid = project(
             positions - split_world_offsets, pose["matrixWorldInverse"], pose["projectionMatrix"],
         )
-        positive_ndc, _, positive_valid = project(
+        positive_ndc, positive_depth, positive_valid = project(
             positions + split_world_offsets, pose["matrixWorldInverse"], pose["projectionMatrix"],
         )
         negative_x = (negative_ndc[:, 0] * 0.5 + 0.5) * width
@@ -636,9 +665,17 @@ def rasterize_coefficients(
         positive_x = (positive_ndc[:, 0] * 0.5 + 0.5) * width
         positive_y = (1.0 - (positive_ndc[:, 1] * 0.5 + 0.5)) * height
         valid &= (~split_mask) | (negative_valid & positive_valid)
-        pixel_samples = selective_split_pixel_samples(
+        negative_depth_index = np.clip(
+            ((negative_depth - near) / max(far - near, 1e-6) * (depth_bins - 1)).astype(np.int32),
+            0, depth_bins - 1,
+        )
+        positive_depth_index = np.clip(
+            ((positive_depth - near) / max(far - near, 1e-6) * (depth_bins - 1)).astype(np.int32),
+            0, depth_bins - 1,
+        )
+        pixel_samples = selective_split_raster_samples(
             pixel_x, pixel_y, negative_x, negative_y, positive_x, positive_y,
-            tx, ty, major_px, split_mask,
+            tx, ty, major_px, split_mask, depth_index, negative_depth_index, positive_depth_index,
         )
         nominal_quadrature_samples = None
         nominal_pixel_deposits = None
@@ -651,11 +688,16 @@ def rasterize_coefficients(
     effective_projected_rows = int(np.count_nonzero(valid & tangent_valid))
     require(effective_projected_rows > 0, f"camera {camera['cameraIndex']} retained zero effective projected rows")
     projected_fragments = 0
-    for sx, sy, sample_weight in pixel_samples:
+    if footprint_mode != "selective-split":
+        pixel_samples = (
+            (sx, sy, sample_weight, depth_index)
+            for sx, sy, sample_weight in pixel_samples
+        )
+    for sx, sy, sample_weight, sample_depth_index in pixel_samples:
         selected = valid & tangent_valid & (sample_weight > 0.0) & (sx >= 0) & (sx < width) & (sy >= 0) & (sy < height)
         rows = np.flatnonzero(selected)
         projected_fragments += int(rows.size)
-        flat = ((depth_index[rows] * height + sy[rows]) * width + sx[rows]).astype(np.int64)
+        flat = ((sample_depth_index[rows] * height + sy[rows]) * width + sx[rows]).astype(np.int64)
         for channel in range(8):
             planes[..., channel] += scatter_channel(flat, coefficients[rows, channel] * sample_weight[rows], raster_size).reshape(depth_bins, height, width)
     return planes, {
@@ -1097,7 +1139,7 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
         split_receipt = {
             "identity": "view-independent-multiview-residual-three-child-subcell-split-v0",
             "attributionCameras": attribution_cameras,
-            "heldOutCameras": [index for index in range(21) if index not in attribution_camera_set],
+            "heldOutCameras": [index for index in range(21) if index not in attribution_camera_set and index != 10],
             "scoreIdentity": "target-tail-plus-target-wisp-underfit-times-pre-bin-transmitted-optical-weight-v0",
             "scoreThreshold": float(footprint_controls["splitScoreThreshold"]),
             "minimumCameraSupport": int(footprint_controls["splitMinCameraSupport"]),

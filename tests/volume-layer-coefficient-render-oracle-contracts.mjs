@@ -60,6 +60,8 @@ assert.match(
 );
 assert.match(source, /def candidate_residual_importance\(/, 'oracle exposes multiview residual backprojection');
 assert.match(source, /def selective_split_pixel_samples\(/, 'oracle exposes deterministic three-child splitting');
+assert.match(source, /negative_depth_index/, 'selective split assigns the negative child its own projected depth bin');
+assert.match(source, /positive_depth_index/, 'selective split assigns the positive child its own projected depth bin');
 assert.match(source, /--split-attribution-cameras/, 'selective splitting requires an explicit attribution cohort');
 assert.match(source, /--split-score-threshold/, 'selective splitting has an explicit uncapped selection threshold');
 assert.match(source, /--split-min-camera-support/, 'selective splitting requires explicit multiview support');
