@@ -711,6 +711,12 @@
       const overflowCount = selectedCockpitRole === 'selectedLearnedPackage'
         ? receipt?.candidateInstanceEquality?.overflowCount ?? 0
         : 0;
+      const selectedRendererGridCells = selectedCockpitRole === 'selectedLearnedPackage' || selectedCockpitRole === 'deterministic96To160'
+        ? 160 ** 3
+        : 96 ** 3;
+      const selectedRendererCoverage = Number.isFinite(selectedCandidateCount)
+        ? selectedCandidateCount / selectedRendererGridCells
+        : null;
       const candidateInstanceEquality = Number.isFinite(selectedCandidateCount) && Number.isFinite(selectedInstanceCount)
         ? selectedCandidateCount === selectedInstanceCount && overflowCount === 0
         : null;
@@ -762,7 +768,9 @@
         unsmoothedTiming,
         candidateCount: selectedCandidateCount ?? null,
         instanceCount: selectedInstanceCount ?? null,
-        coverage: admission?.uncappedCandidateCoverage ?? null,
+        coverage: selectedRendererCoverage,
+        sourceDeltaAdmissionCandidateCount: admission?.uncappedCandidateCount ?? null,
+        sourceDeltaAdmissionCoverage: admission?.uncappedCandidateCoverage ?? null,
         candidateInstanceEquality,
         overflowCount,
         requestedBackend: receipt?.requestedBackend || 'WebGPU',
@@ -795,7 +803,8 @@
         `admit / model  ${unsmoothedTiming.sourceDeltaAdmissionGpuMs ?? '--'} / ${unsmoothedTiming.learnedModelGpuMs ?? '--'} ms`,
         `recon / render ${unsmoothedTiming.reconstructionGpuMs ?? '--'} / ${unsmoothedTiming.renderMs ?? '--'} ms`,
         `work           ${selectedCandidateCount ?? '--'} / ${selectedInstanceCount ?? '--'} / overflow ${overflowCount}`,
-        `coverage       ${Number.isFinite(latestCockpitTelemetry.coverage) ? (latestCockpitTelemetry.coverage * 100).toFixed(3) : '--'}%`,
+        `render coverage ${Number.isFinite(latestCockpitTelemetry.coverage) ? (latestCockpitTelemetry.coverage * 100).toFixed(3) : '--'}%`,
+        `delta admission ${latestCockpitTelemetry.sourceDeltaAdmissionCandidateCount ?? '--'} / ${Number.isFinite(latestCockpitTelemetry.sourceDeltaAdmissionCoverage) ? (latestCockpitTelemetry.sourceDeltaAdmissionCoverage * 100).toFixed(3) : '--'}%`,
         `backend        ${latestCockpitTelemetry.effectiveBackend || '--'}`,
         `package        ${latestCockpitTelemetry.effectivePackageIdentity || '--'}`,
         `model sha      ${latestCockpitTelemetry.modelSha256 || '--'}`,
@@ -877,6 +886,7 @@
       } else {
         updateCockpitTelemetry(receipt);
       }
+      failurePhase = null;
       return receipt;
     }
 
@@ -1567,7 +1577,8 @@
         transportMode: receipt.transportMode || NATIVE_LOW_TRANSPORT_MODE,
         modelIdentity: receipt.modelIdentity || SELECTIVE_HEAD_LIVE_MODEL.identity,
         modelSha256: receipt.modelSha256 || SELECTIVE_HEAD_LIVE_MODEL.packed.sha256,
-        modelUrl: SELECTIVE_HEAD_LIVE_MODEL_URL,
+        modelUrl: cockpitMode ? null : SELECTIVE_HEAD_LIVE_MODEL_URL,
+        selectedModelUrlAuthority: cockpitMode ? 'checksum-bound-trained-package-route-registry-v0' : 'static-default-model-url-v0',
         requestedTransferRouteId,
         nativeLowTrainedPackageRouteRegistry: nativeLowTrainedPackageRouteRegistry(),
         nativeLowTrainedPackageRoute: receipt.nativeLowTrainedPackageRoute || null,
