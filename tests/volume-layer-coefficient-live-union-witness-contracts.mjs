@@ -6,6 +6,10 @@ const witness = readFileSync(new URL('../volume-layer-coefficient-live-union-wit
 
 assert.match(witness, /kaminos\.volume\.layer-coefficient-live-union-witness\.v0/, 'witness publishes a stable report schema');
 assert.equal((witness.match(/spawn\(chromeExecutable\(\)/g) || []).length, 1, 'witness owns exactly one Chrome process');
+assert.ok(
+  witness.indexOf('class CdpSocket') < witness.indexOf('socket = new CdpSocket'),
+  'CDP client must be initialized before top-level witness execution enters browser launch',
+);
 for (const token of [
   '--source-field-manifest',
   '--source-capture-report',

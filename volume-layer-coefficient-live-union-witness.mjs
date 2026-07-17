@@ -78,6 +78,63 @@ let lastTrustworthyEvidence = {
   effectiveServerRoots,
 };
 
+class CdpSocket {
+  constructor(url, timeout) {
+    this.url = url;
+    this.timeout = timeout;
+    this.socket = null;
+    this.nextId = 1;
+    this.pending = new Map();
+    this.browserEvents = [];
+  }
+
+  open() {
+    return new Promise((resolveOpen, reject) => {
+      this.socket = new WebSocket(this.url);
+      this.socket.addEventListener('open', resolveOpen, { once: true });
+      this.socket.addEventListener('error', reject, { once: true });
+      this.socket.addEventListener('close', () => this.rejectPending(new Error('CDP socket closed')));
+      this.socket.addEventListener('message', event => {
+        const message = JSON.parse(event.data);
+        if (!message.id) {
+          if (['Runtime.exceptionThrown', 'Runtime.consoleAPICalled', 'Log.entryAdded'].includes(message.method)) this.browserEvents.push(message);
+          return;
+        }
+        const pending = this.pending.get(message.id);
+        if (!pending) return;
+        this.pending.delete(message.id);
+        clearTimeout(pending.timer);
+        if (message.error) pending.reject(new Error(message.error.message));
+        else pending.resolve(message.result);
+      });
+    });
+  }
+
+  call(method, params = {}) {
+    return new Promise((resolveCall, reject) => {
+      const id = this.nextId++;
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`CDP call timed out: ${method}`));
+      }, this.timeout);
+      this.pending.set(id, { resolve: resolveCall, reject, timer });
+      this.socket.send(JSON.stringify({ id, method, params }));
+    });
+  }
+
+  rejectPending(error) {
+    for (const pending of this.pending.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(error);
+    }
+    this.pending.clear();
+  }
+
+  close() {
+    this.socket?.close();
+  }
+}
+
 mkdirSync(outDir, { recursive: true });
 mkdirSync(dirname(reportPath), { recursive: true });
 
@@ -526,63 +583,6 @@ function contentType(path) {
     '.jpg': 'image/jpeg',
     '.jpeg': 'image/jpeg',
   })[extname(path).toLowerCase()] || 'application/octet-stream';
-}
-
-class CdpSocket {
-  constructor(url, timeout) {
-    this.url = url;
-    this.timeout = timeout;
-    this.socket = null;
-    this.nextId = 1;
-    this.pending = new Map();
-    this.browserEvents = [];
-  }
-
-  open() {
-    return new Promise((resolveOpen, reject) => {
-      this.socket = new WebSocket(this.url);
-      this.socket.addEventListener('open', resolveOpen, { once: true });
-      this.socket.addEventListener('error', reject, { once: true });
-      this.socket.addEventListener('close', () => this.rejectPending(new Error('CDP socket closed')));
-      this.socket.addEventListener('message', event => {
-        const message = JSON.parse(event.data);
-        if (!message.id) {
-          if (['Runtime.exceptionThrown', 'Runtime.consoleAPICalled', 'Log.entryAdded'].includes(message.method)) this.browserEvents.push(message);
-          return;
-        }
-        const pending = this.pending.get(message.id);
-        if (!pending) return;
-        this.pending.delete(message.id);
-        clearTimeout(pending.timer);
-        if (message.error) pending.reject(new Error(message.error.message));
-        else pending.resolve(message.result);
-      });
-    });
-  }
-
-  call(method, params = {}) {
-    return new Promise((resolveCall, reject) => {
-      const id = this.nextId++;
-      const timer = setTimeout(() => {
-        this.pending.delete(id);
-        reject(new Error(`CDP call timed out: ${method}`));
-      }, this.timeout);
-      this.pending.set(id, { resolve: resolveCall, reject, timer });
-      this.socket.send(JSON.stringify({ id, method, params }));
-    });
-  }
-
-  rejectPending(error) {
-    for (const pending of this.pending.values()) {
-      clearTimeout(pending.timer);
-      pending.reject(error);
-    }
-    this.pending.clear();
-  }
-
-  close() {
-    this.socket?.close();
-  }
 }
 
 async function waitForTarget(port, timeout) {
