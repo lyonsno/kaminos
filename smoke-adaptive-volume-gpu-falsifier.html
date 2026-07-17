@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Adaptive Smoke Volume GPU Falsifier</title>
+  <style>
+    :root { color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    body { margin: 0; background: #0b0d0e; color: #edf1f2; }
+    header { padding: 18px 22px; border-bottom: 1px solid #343b3f; }
+    h1 { margin: 0 0 6px; font: 700 22px/1.2 system-ui, sans-serif; letter-spacing: 0; }
+    #status { color: #b8c1c5; }
+    main { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: #343b3f; }
+    figure { margin: 0; background: #111517; min-width: 0; }
+    canvas { display: block; width: 100%; aspect-ratio: 320 / 228; background: #000; image-rendering: auto; }
+    figcaption { min-height: 88px; padding: 10px 12px; color: #cbd2d5; font-size: 12px; line-height: 1.45; }
+    strong { display: block; color: #fff; font: 700 14px/1.3 system-ui, sans-serif; }
+    pre { margin: 0; padding: 16px 22px 28px; overflow: auto; background: #0b0d0e; color: #aeb9bd; font-size: 11px; }
+    @media (max-width: 760px) { main { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Adaptive Smoke Volume GPU Falsifier</h1>
+    <div id="status">Initializing exact R160 source and persisted R40+98% selection...</div>
+  </header>
+  <main>
+    <figure><canvas id="dense"></canvas><figcaption><strong>Dense R160</strong><span id="dense-label">Pending</span></figcaption></figure>
+    <figure><canvas id="prebuilt"></canvas><figcaption><strong>Compact Prebuilt</strong><span id="prebuilt-label">Pending</span></figcaption></figure>
+    <figure><canvas id="built"></canvas><figcaption><strong>GPU Build + Compact</strong><span id="built-label">Pending</span></figcaption></figure>
+  </main>
+  <pre id="report">No report yet.</pre>
+  <script type="module" src="./smoke-adaptive-volume-gpu-falsifier-browser.js"></script>
+</body>
+</html>

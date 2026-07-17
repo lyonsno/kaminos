@@ -1,0 +1,139 @@
+#!/usr/bin/env node
+
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+import {
+  buildCompactSmokeProduct,
+  validateAdaptiveVolumeGpuReport,
+} from '../smoke-adaptive-volume-gpu-falsifier.mjs';
+
+const grid = 4;
+const blockSize = 2;
+const source = new Float32Array(grid ** 3);
+for (let z = 0; z < grid; z += 1) {
+  for (let y = 0; y < grid; y += 1) {
+    for (let x = 0; x < grid; x += 1) source[x + y * grid + z * grid * grid] = x + y * 10 + z * 100;
+  }
+}
+
+const product = buildCompactSmokeProduct({ source, grid, blockSize, selectedBrickIndices: [0, 7] });
+assert.equal(product.identity, 'compact-parent-mean-halo-atlas-v0');
+assert.equal(product.coarseGrid, 2);
+assert.equal(product.haloEdge, 4);
+assert.equal(product.coarseValues.length, 8);
+assert.equal(product.indirection.length, 8);
+assert.equal(product.atlasValues.length, 2 * 4 ** 3);
+assert.equal(product.indirection[0], 0);
+assert.equal(product.indirection[7], 1);
+assert.equal(product.indirection[1], -1);
+assert.equal(product.coarseValues[0], (0 + 1 + 10 + 11 + 100 + 101 + 110 + 111) / 8);
+assert.equal(product.atlasValues[0], source[0], 'low halo clamps to source boundary');
+assert.equal(product.atlasValues[4 ** 3 - 1], source[2 + 2 * grid + 2 * grid * grid], 'high halo includes one neighboring cell');
+assert.equal('sourceValues' in product, false, 'compact product must not retain the dense source');
+assert.deepEqual(product.allocationBytes, {
+  coarse: 8 * 4,
+  indirection: 8 * 4,
+  fineAtlas: 2 * 4 ** 3 * 4,
+  total: 8 * 4 + 8 * 4 + 2 * 4 ** 3 * 4,
+});
+
+const validReport = {
+  schema: 'kaminos.smoke-adaptive-volume-gpu-falsifier.v0',
+  status: 'passed',
+  requested: { selectedBrickCount: 2, hiddenBrickCapApplied: false },
+  effective: {
+    route: 'isolated-adaptive-volume-webgpu-v0',
+    backend: 'WebGPU:apple',
+    timestampFeature: 'timestamp-query',
+    timestampStatus: 'available',
+    sourceGrid: 4,
+    coarseGrid: 2,
+    blockSize: 2,
+  },
+  runtime: {
+    gitCommit: '0123456789012345678901234567890123456789',
+    gitBranch: 'cc/test',
+    gitStatusShort: '',
+    sourceFileSha256s: {
+      module: 'sha256:a', browser: 'sha256:b', witness: 'sha256:c', html: 'sha256:d',
+    },
+  },
+  source: {
+    matchedReportSha256: 'sha256:a',
+    fitReportSha256: 'sha256:b',
+    sourceSidecarSha256: 'sha256:c',
+    selectionArtifactSha256: 'sha256:d',
+    referenceDepthSha256: 'sha256:e',
+  },
+  arms: {
+    dense: { outputComplete: true, gpuMs: 2 },
+    compactPrebuilt: { outputComplete: true, gpuMs: 1, denseBindingCount: 0 },
+    buildCompactRender: { outputComplete: true, buildGpuMs: 1, renderGpuMs: 1, totalGpuMs: 2, denseBindingCountDuringRender: 0 },
+  },
+  compactProduct: {
+    selectedBrickCount: 2,
+    selectionMismatchCount: 0,
+    allocationBytes: product.allocationBytes,
+    allocationComplete: true,
+    hiddenDenseAllocationBytes: 0,
+  },
+  denseDenial: {
+    method: 'destroy-dense-source-before-compact-rerender-v0',
+    preDenialOutputSha256: 'sha256:a',
+    postDenialOutputSha256: 'sha256:a',
+    maximumAbsoluteOutputDelta: 0,
+    passed: true,
+  },
+  validation: {
+    compactPrebuiltMaximumAbsoluteError: 0.01,
+    buildCompactMaximumAbsoluteError: 0.01,
+    complete: true,
+  },
+  falseClosureChecks: {
+    fallbackRoute: false,
+    missingTimestampSupport: false,
+    hiddenDenseBinding: false,
+    hiddenDenseAllocation: false,
+    incompleteOutput: false,
+    staleSelection: false,
+    hiddenCap: false,
+  },
+};
+assert.equal(validateAdaptiveVolumeGpuReport(validReport).optimizationClaimAllowed, true);
+
+for (const mutate of [
+  report => { report.effective.backend = 'WebGPU:unknown'; },
+  report => { report.effective.timestampStatus = 'unsupported'; },
+  report => { report.arms.compactPrebuilt.denseBindingCount = 1; },
+  report => { report.compactProduct.hiddenDenseAllocationBytes = 64; },
+  report => { report.denseDenial.postDenialOutputSha256 = 'sha256:b'; },
+  report => { report.validation.complete = false; },
+  report => { report.requested.hiddenBrickCapApplied = true; },
+  report => { delete report.source.referenceDepthSha256; },
+  report => { delete report.runtime.sourceFileSha256s.browser; },
+]) {
+  const report = structuredClone(validReport);
+  mutate(report);
+  assert.equal(validateAdaptiveVolumeGpuReport(report).optimizationClaimAllowed, false);
+}
+
+const browser = readFileSync(new URL('../smoke-adaptive-volume-gpu-falsifier-browser.js', import.meta.url), 'utf8');
+assert.match(browser, /timestamp-query/);
+assert.match(browser, /timestampWrites/);
+assert.doesNotMatch(browser, /encoder\.writeTimestamp/);
+assert.match(browser, /destroy\(\)[\s\S]*dense/i, 'browser falsifier must destroy dense state before compact rerender');
+assert.match(browser, /denseBindingCountDuringRender:\s*0/);
+assert.match(browser, /allocationComplete/);
+
+const witness = readFileSync(new URL('../smoke-adaptive-volume-gpu-witness.mjs', import.meta.url), 'utf8');
+assert.match(witness, /failed-before-primary-output/);
+assert.match(witness, /failurePhase/);
+assert.match(witness, /requestedRoute[\s\S]*effectiveRoute/);
+assert.match(witness, /reuseBrowser/);
+assert.match(witness, /optimizationClaimAllowed/);
+assert.match(witness, /gitCommit[\s\S]*gitBranch[\s\S]*gitStatusShort/);
+assert.match(witness, /sourceFileSha256s/);
+assert.match(browser, /matchedReportSha256[\s\S]*fitReportSha256[\s\S]*sourceSidecarSha256[\s\S]*selectionArtifactSha256[\s\S]*referenceDepthSha256/);
+
+console.log('smoke adaptive volume GPU falsifier contracts passed');

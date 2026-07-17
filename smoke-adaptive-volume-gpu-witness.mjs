@@ -1,0 +1,270 @@
+#!/usr/bin/env node
+
+import { createHash, randomInt } from 'node:crypto';
+import { spawn } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+
+import { validateAdaptiveVolumeGpuReport } from './smoke-adaptive-volume-gpu-falsifier.mjs';
+
+const args = new Map();
+for (let index = 2; index < process.argv.length; index += 1) {
+  const key = process.argv[index];
+  if (!key.startsWith('--')) continue;
+  const next = process.argv[index + 1];
+  const value = next && !next.startsWith('--') ? next : true;
+  args.set(key, value);
+  if (value !== true) index += 1;
+}
+
+function positiveInteger(value, label) {
+  const number = Number(value);
+  if (!Number.isInteger(number) || number <= 0) throw new Error(`${label} must be a positive integer`);
+  return number;
+}
+
+const root = new URL('.', import.meta.url).pathname;
+const outDir = resolve(String(args.get('--out-dir') || '/tmp/kaminos-adaptive-volume-gpu-falsifier'));
+const reportPath = resolve(String(args.get('--report') || `${outDir}/witness-report.json`));
+const browserReportPath = resolve(String(args.get('--browser-report') || `${outDir}/browser-report.json`));
+const screenshotPath = resolve(String(args.get('--screenshot') || `${outDir}/context.png`));
+const serverPort = positiveInteger(args.get('--server-port') || randomInt(20000, 32000), '--server-port');
+const debugPort = positiveInteger(args.get('--debug-port') || randomInt(42000, 62000), '--debug-port');
+const chrome = String(args.get('--chrome') || process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');
+const userDataDir = resolve(String(args.get('--user-data-dir') || `/tmp/kaminos-adaptive-volume-gpu-profile-${debugPort}-${process.pid}`));
+const windowSize = String(args.get('--window-size') || '1600,1100');
+function gitValue(gitArgs, fallback = '') {
+  try { return execFileSync('git', gitArgs, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { return fallback; }
+}
+const gitCommit = gitValue(['rev-parse', 'HEAD']);
+const gitBranch = gitValue(['branch', '--show-current']);
+const gitStatusShort = gitValue(['status', '--short']);
+const requestedUrlObject = new URL(String(args.get('--url') || `http://127.0.0.1:${serverPort}/smoke-adaptive-volume-gpu-falsifier.html`));
+requestedUrlObject.searchParams.set('git_commit', gitCommit);
+requestedUrlObject.searchParams.set('git_branch', gitBranch);
+requestedUrlObject.searchParams.set('git_status_short', gitStatusShort);
+const requestedUrl = requestedUrlObject.toString();
+const runTimeoutMs = Number(args.get('--run-timeout-ms') || 0);
+const reuseBrowser = true;
+
+let failurePhase = 'initialization';
+let primaryOutputWritten = false;
+let browserReport = null;
+let serverProcess = null;
+let chromeProcess = null;
+let consoleEvents = [];
+
+function delay(ms) { return new Promise(resolveDelay => setTimeout(resolveDelay, ms)); }
+
+function sha256(bytes) { return `sha256:${createHash('sha256').update(bytes).digest('hex')}`; }
+
+function writeReport(extra = {}) {
+  mkdirSync(dirname(reportPath), { recursive: true });
+  const report = {
+    schema: 'kaminos.smoke-adaptive-volume-gpu-witness.v0',
+    status: primaryOutputWritten ? 'completed' : 'failed-before-primary-output',
+    createdAt: new Date().toISOString(),
+    requestedRoute: requestedUrl,
+    effectiveRoute: browserReport?.effective?.route || null,
+    backend: browserReport?.effective?.backend || null,
+    timestampStatus: browserReport?.effective?.timestampStatus || null,
+    failurePhase,
+    primaryOutputWritten,
+    reportPath,
+    browserReportPath: primaryOutputWritten ? browserReportPath : null,
+    screenshotPath: primaryOutputWritten ? screenshotPath : null,
+    serverPort,
+    debugPort,
+    chrome,
+    userDataDir,
+    windowSize,
+    reuseBrowser,
+    browserCount: chromeProcess ? 1 : 0,
+    runTimeoutMs: runTimeoutMs > 0 ? runTimeoutMs : null,
+    gitCommit,
+    gitBranch,
+    gitStatusShort,
+    sourceFileSha256s: browserReport?.runtime?.sourceFileSha256s || null,
+    consoleEvents,
+    optimizationClaimAllowed: browserReport?.optimizationClaimAllowed === true,
+    ...extra,
+  };
+  writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+  return report;
+}
+
+async function fetchJson(path) {
+  const response = await fetch(`http://127.0.0.1:${debugPort}${path}`);
+  if (!response.ok) throw new Error(`CDP ${path} failed ${response.status}`);
+  return response.json();
+}
+
+async function waitForEndpoint(url, label, attempts = 160) {
+  let lastError;
+  for (let index = 0; index < attempts; index += 1) {
+    try {
+      const response = await fetch(url, { cache: 'no-store' });
+      if (response.ok) return response;
+      lastError = new Error(`${label} returned ${response.status}`);
+    } catch (error) {
+      lastError = error;
+    }
+    await delay(125);
+  }
+  throw new Error(`${label} did not become reachable: ${lastError?.message || 'unknown'}`);
+}
+
+function waitForWebSocketOpen(socket) {
+  return new Promise((resolveOpen, rejectOpen) => {
+    socket.addEventListener('open', resolveOpen, { once: true });
+    socket.addEventListener('error', () => rejectOpen(new Error('CDP WebSocket open failed')), { once: true });
+  });
+}
+
+function wsRequest(socket, method, params = {}, timeoutMs = 30000) {
+  const id = socket._nextId = (socket._nextId || 0) + 1;
+  socket.send(JSON.stringify({ id, method, params }));
+  return new Promise((resolveRequest, rejectRequest) => {
+    const timer = setTimeout(() => {
+      socket.removeEventListener('message', onMessage);
+      rejectRequest(new Error(`${method}: CDP request timed out`));
+    }, timeoutMs);
+    const onMessage = event => {
+      const message = JSON.parse(String(event.data));
+      if (message.method === 'Runtime.consoleAPICalled') {
+        consoleEvents.push({
+          type: message.params.type,
+          text: (message.params.args || []).map(arg => arg.value ?? arg.description ?? '').join(' '),
+        });
+      }
+      if (message.method === 'Runtime.exceptionThrown') {
+        consoleEvents.push({
+          type: 'exception',
+          text: message.params.exceptionDetails?.exception?.description || message.params.exceptionDetails?.text || 'Runtime exception',
+        });
+      }
+      if (message.id !== id) return;
+      clearTimeout(timer);
+      socket.removeEventListener('message', onMessage);
+      if (message.error) rejectRequest(new Error(`${method}: ${message.error.message}`));
+      else resolveRequest(message.result);
+    };
+    socket.addEventListener('message', onMessage);
+  });
+}
+
+async function evaluate(socket, expression) {
+  const result = await wsRequest(socket, 'Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
+  if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text || 'Runtime evaluation failed');
+  return result.result.value;
+}
+
+async function waitForBrowserReport(socket) {
+  const started = Date.now();
+  for (;;) {
+    const current = await evaluate(socket, 'window.__kaminosAdaptiveVolumeGpuFalsifier?.state?.() || null');
+    if (current?.phase === 'complete') return current.report;
+    if (current?.phase === 'failed') throw new Error(current.error || 'browser falsifier failed');
+    if (runTimeoutMs > 0 && Date.now() - started > runTimeoutMs) throw new Error(`browser falsifier exceeded requested run timeout ${runTimeoutMs}ms`);
+    await delay(250);
+  }
+}
+
+async function closeProcess(process, label) {
+  if (!process || process.exitCode != null) return;
+  process.kill('SIGTERM');
+  await Promise.race([
+    new Promise(resolveExit => process.once('exit', resolveExit)),
+    delay(2000),
+  ]);
+  if (process.exitCode == null) process.kill('SIGKILL');
+  consoleEvents.push({ type: 'cleanup', text: `${label} closed` });
+}
+
+async function main() {
+  mkdirSync(outDir, { recursive: true });
+  writeReport({ status: 'running' });
+  if (!existsSync(chrome)) throw new Error(`Chrome executable is missing: ${chrome}`);
+
+  try {
+    failurePhase = 'server-launch';
+    const routeResponse = await fetch(requestedUrl, { cache: 'no-store' }).catch(() => null);
+    if (routeResponse?.ok) {
+      const text = await routeResponse.text();
+      if (!text.includes('<title>Adaptive Smoke Volume GPU Falsifier</title>')) throw new Error('requested server port is occupied by the wrong route');
+    } else {
+      serverProcess = spawn('python3', ['serve.py', String(serverPort)], { cwd: root, stdio: ['ignore', 'ignore', 'pipe'] });
+      let serverStderr = '';
+      serverProcess.stderr.on('data', chunk => { serverStderr += String(chunk); });
+      serverProcess.once('error', error => { consoleEvents.push({ type: 'server-error', text: error.message }); });
+      await waitForEndpoint(requestedUrl, 'Kaminos falsifier route');
+      if (serverProcess.exitCode != null) throw new Error(`Kaminos server exited during launch: ${serverStderr}`);
+    }
+
+    failurePhase = 'browser-launch';
+    const stale = await fetch(`http://127.0.0.1:${debugPort}/json/version`).catch(() => null);
+    if (stale?.ok) throw new Error(`CDP debug port ${debugPort} is already in use`);
+    chromeProcess = spawn(chrome, [
+      `--remote-debugging-port=${debugPort}`,
+      `--user-data-dir=${userDataDir}`,
+      '--no-first-run',
+      '--disable-background-timer-throttling',
+      '--disable-renderer-backgrounding',
+      '--disable-features=UseSkiaRenderer',
+      `--window-size=${windowSize}`,
+      requestedUrl,
+    ], { stdio: ['ignore', 'ignore', 'pipe'] });
+    chromeProcess.stderr.on('data', chunk => {
+      const text = String(chunk);
+      if (/ERROR|GPU|WebGPU/i.test(text)) consoleEvents.push({ type: 'chrome-stderr', text: text.slice(0, 2000) });
+    });
+    chromeProcess.once('error', error => { consoleEvents.push({ type: 'chrome-launch-error', text: error.message }); });
+    await waitForEndpoint(`http://127.0.0.1:${debugPort}/json/version`, 'Chrome CDP endpoint');
+    const targets = await fetchJson('/json/list');
+    const page = targets.find(target => target.type === 'page' && target.url.includes('smoke-adaptive-volume-gpu-falsifier.html'))
+      || targets.find(target => target.type === 'page');
+    if (!page?.webSocketDebuggerUrl) throw new Error('no falsifier page target appeared');
+    const socket = new WebSocket(page.webSocketDebuggerUrl);
+    await waitForWebSocketOpen(socket);
+    await wsRequest(socket, 'Runtime.enable');
+    await wsRequest(socket, 'Page.enable');
+    await wsRequest(socket, 'Page.bringToFront');
+
+    failurePhase = 'browser-run';
+    browserReport = await waitForBrowserReport(socket);
+    const validation = validateAdaptiveVolumeGpuReport(browserReport);
+    if (validation.optimizationClaimAllowed !== browserReport.optimizationClaimAllowed) {
+      throw new Error(`browser/host report validation disagreement: ${validation.reasons.join(',')}`);
+    }
+
+    failurePhase = 'primary-output';
+    const screenshot = await wsRequest(socket, 'Page.captureScreenshot', { format: 'png', captureBeyondViewport: true }, 60000);
+    const pngBytes = Buffer.from(screenshot.data, 'base64');
+    if (pngBytes.byteLength < 1000 || pngBytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') throw new Error('captured screenshot is blank or partial');
+    writeFileSync(screenshotPath, pngBytes);
+    writeFileSync(browserReportPath, `${JSON.stringify(browserReport, null, 2)}\n`);
+    primaryOutputWritten = true;
+    failurePhase = null;
+    const report = writeReport({
+      status: browserReport.optimizationClaimAllowed ? 'valid-optimization-evidence' : 'invalid-for-optimization-claim',
+      browserReportSha256: sha256(readFileSync(browserReportPath)),
+      screenshotSha256: sha256(pngBytes),
+      optimizationClaimRejectionReasons: browserReport.optimizationClaimRejectionReasons,
+      browserReport,
+    });
+    socket.close();
+    process.stdout.write(`${JSON.stringify({ status: report.status, reportPath, browserReportPath, screenshotPath, optimizationClaimAllowed: report.optimizationClaimAllowed })}\n`);
+  } catch (error) {
+    writeReport({ status: 'failed-before-primary-output', error: error?.stack || error?.message || String(error) });
+    throw error;
+  } finally {
+    await closeProcess(chromeProcess, 'Chrome');
+    if (serverProcess) await closeProcess(serverProcess, 'Kaminos server');
+  }
+}
+
+main().catch(error => {
+  console.error(error?.stack || error?.message || String(error));
+  process.exitCode = 1;
+});
