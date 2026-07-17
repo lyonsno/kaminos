@@ -68,6 +68,7 @@ TREATMENT_ARCHITECTURE_IDENTITY = "treatment-gated24-plus-31x204x8-8192-v0"
 TRAINABLE_PARAMETER_COUNT = 8192
 DESCRIPTOR_PAIRING_CONTROL_IDENTITY = "statewise-long-cycle-descriptor-pairing-control-v0"
 DESCRIPTOR_PAIRING_MODES = {"paired", "all-permuted"}
+DESCRIPTOR_GROUP_IDENTITY = "normalized-descriptor-slot-mean-mute-v0"
 DEFAULT_DESCRIPTOR_CHANNELS = [
     "flow.coherence",
     "flow.curlMagnitude",
@@ -77,6 +78,11 @@ DEFAULT_DESCRIPTOR_CHANNELS = [
     "majorant.fire",
     "majorant.extinction",
 ]
+DESCRIPTOR_GROUPS = {
+    "all": list(DEFAULT_DESCRIPTOR_CHANNELS),
+    "flow-only": list(DEFAULT_DESCRIPTOR_CHANNELS[:4]),
+    "majorant-only": list(DEFAULT_DESCRIPTOR_CHANNELS[4:]),
+}
 
 
 def require(condition: bool, message: str) -> None:
@@ -879,6 +885,32 @@ def descriptor_pairing_receipt(
     }
 
 
+def descriptor_group_receipt(mode: str) -> dict[str, Any]:
+    require(mode in DESCRIPTOR_GROUPS, f"unknown descriptor group {mode}")
+    active_channels = DESCRIPTOR_GROUPS[mode]
+    return {
+        "identity": DESCRIPTOR_GROUP_IDENTITY,
+        "mode": mode,
+        "activeChannels": list(active_channels),
+        "meanMutedChannels": [channel for channel in DEFAULT_DESCRIPTOR_CHANNELS if channel not in active_channels],
+        "descriptorSlotCount": len(DEFAULT_DESCRIPTOR_CHANNELS),
+        "graphParameterCountPreserved": True,
+        "muteAuthority": "zero-after-training-state-zscore-equals-training-mean-v0",
+    }
+
+
+def descriptor_group_mask(feature_count: int, mode: str) -> Any:
+    import numpy as np
+
+    receipt = descriptor_group_receipt(mode)
+    active_channels = set(receipt["activeChannels"])
+    return np.asarray(
+        [1.0] * feature_count
+        + [1.0 if channel in active_channels else 0.0 for channel in DEFAULT_DESCRIPTOR_CHANNELS],
+        dtype=np.float32,
+    )
+
+
 def iter_state_batches(
     states: list[dict[str, Any]],
     split_role: str,
@@ -984,10 +1016,12 @@ def train_arm(
     seed: int,
     output_path: Path,
     descriptor_pairing: str,
+    descriptor_group: str,
 ) -> tuple[Any, dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
     import mlx.core as mx
     import mlx.nn as nn
     import mlx.optimizers as optim
+    import numpy as np
     from mlx.utils import tree_flatten
 
     feature_count = states[0]["features"].shape[1]
@@ -1030,9 +1064,14 @@ def train_arm(
     feature_mean = mx.array(normalization["featureMean"])
     feature_std = mx.array(normalization["featureStd"])
     target_scale = mx.array(normalization["targetScale"])
+    normalized_feature_mask = mx.array(
+        np.ones(feature_count, dtype=np.float32)
+        if arm == "baseline"
+        else descriptor_group_mask(feature_count, descriptor_group)
+    )
 
     def loss_fn(active_model: Any, raw_features: Any, raw_targets: Any) -> Any:
-        normalized_features = (raw_features - feature_mean) / feature_std
+        normalized_features = ((raw_features - feature_mean) / feature_std) * normalized_feature_mask
         normalized_targets = raw_targets / target_scale
         predictions = active_model(normalized_features)
         return mx.mean(mx.square(predictions - normalized_targets))
@@ -1098,6 +1137,7 @@ def train_arm(
         "outputTransform": OUTPUT_TRANSFORM,
         "sharedFeatureCount": feature_count,
         "descriptorFeatureCount": 0 if arm == "baseline" else len(descriptor_indices),
+        "descriptorGroup": "none" if arm == "baseline" else descriptor_group,
         "sharedFeatureGate": "none" if arm == "baseline" else "24-trainable-useful-multiplicative-gates-v0",
     }
     return model, normalization, trace, {"architecture": architecture, "normalization": normalization_receipt, "modelArtifact": model_artifact}
@@ -1112,6 +1152,7 @@ def evaluate_arm(
     descriptor_indices: list[int] | None,
     descriptor_pairing: str = "paired",
     descriptor_pairing_seed: int = 0,
+    descriptor_group: str = "all",
 ) -> dict[str, Any]:
     import mlx.core as mx
     import numpy as np
@@ -1132,6 +1173,8 @@ def evaluate_arm(
         descriptor_pairing_seed=descriptor_pairing_seed,
     ):
         normalized_features = (features - normalization["featureMean"]) / normalization["featureStd"]
+        if descriptor_indices is not None:
+            normalized_features *= descriptor_group_mask(states[0]["features"].shape[1], descriptor_group)
         normalized_predictions = np.asarray(model(mx.array(normalized_features)), dtype=np.float32)
         predictions = normalized_predictions * normalization["targetScale"]
         difference = predictions - targets
@@ -1175,6 +1218,7 @@ def train_comparison(
     learning_rate: float,
     seed: int,
     descriptor_pairing: str,
+    descriptor_group: str,
 ) -> dict[str, Any]:
     import mlx.core as mx
 
@@ -1193,6 +1237,7 @@ def train_comparison(
             seed,
             output_dir / f"{arm}-model.safetensors",
             descriptor_pairing,
+            descriptor_group,
         )
         active_descriptor_indices = None if arm == "baseline" else descriptor_indices
         active_descriptor_pairing = descriptor_pairing if arm == "treatment" else "paired"
@@ -1208,6 +1253,7 @@ def train_comparison(
                 active_descriptor_indices,
                 active_descriptor_pairing,
                 seed,
+                descriptor_group,
             ),
             "heldState": evaluate_arm(
                 model,
@@ -1218,6 +1264,7 @@ def train_comparison(
                 active_descriptor_indices,
                 active_descriptor_pairing,
                 seed,
+                descriptor_group,
             ),
         }
     baseline_mse = arms["baseline"]["heldState"]["normalizedMse"]
@@ -1238,6 +1285,7 @@ def train_comparison(
             "rowPolicy": "every-retained-row-every-epoch-no-sampling-cap-v0",
             "blockOrder": "same-seed-same-contiguous-block-permutation-per-arm-v0",
             "descriptorPairing": descriptor_pairing_receipt(states, descriptor_pairing, seed),
+            "descriptorGroup": descriptor_group_receipt(descriptor_group),
         },
         "arms": arms,
         "comparison": {
@@ -1261,6 +1309,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--learning-rate", type=float, default=0.002)
     parser.add_argument("--seed", type=int, default=7162026)
     parser.add_argument("--descriptor-pairing", choices=sorted(DESCRIPTOR_PAIRING_MODES), default="paired")
+    parser.add_argument("--descriptor-group", choices=sorted(DESCRIPTOR_GROUPS), default="all")
     parser.add_argument("--revalidation-marker", type=Path)
     parser.add_argument("--revalidation-delay-ms", type=float, default=0.0)
     return parser.parse_args()
@@ -1304,6 +1353,7 @@ def main() -> int:
                 args.learning_rate,
                 args.seed,
                 args.descriptor_pairing,
+                args.descriptor_group,
             )
         phase = "completion-revalidation"
         if args.revalidation_marker is not None:

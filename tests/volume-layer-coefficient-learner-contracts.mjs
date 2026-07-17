@@ -607,6 +607,7 @@ if (mlxPython) {
     '--learning-rate', '0.002',
     '--seed', '7162026',
     '--descriptor-pairing', 'all-permuted',
+    '--descriptor-group', 'flow-only',
   ], { encoding: 'utf8' });
   assert.equal(pairingControlRun.status, 0, pairingControlRun.stderr || pairingControlRun.stdout);
   const pairingControlReport = JSON.parse(await readFile(pairingControlReportPath, 'utf8'));
@@ -615,6 +616,19 @@ if (mlxPython) {
   assert.equal(pairingControlReport.settings.descriptorPairing.distributionPreserved, true);
   assert.equal(pairingControlReport.settings.descriptorPairing.identityPairCount, 0);
   assert.equal(pairingControlReport.settings.descriptorPairing.permutedDescriptorChannels.length, 7);
+  assert.equal(pairingControlReport.settings.descriptorGroup.identity, 'normalized-descriptor-slot-mean-mute-v0');
+  assert.equal(pairingControlReport.settings.descriptorGroup.mode, 'flow-only');
+  assert.deepEqual(pairingControlReport.settings.descriptorGroup.activeChannels, [
+    'flow.coherence',
+    'flow.curlMagnitude',
+    'flow.divergence',
+    'flow.curlActivity',
+  ]);
+  assert.deepEqual(pairingControlReport.settings.descriptorGroup.meanMutedChannels, [
+    'validity.conservativeMajorant',
+    'majorant.fire',
+    'majorant.extinction',
+  ]);
   assert.equal(pairingControlReport.arms.treatment.architecture.identity, 'treatment-gated24-plus-31x204x8-8192-v0');
   assert.equal(pairingControlReport.arms.treatment.architecture.trainableParameters, 8192);
 }
