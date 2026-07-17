@@ -169,6 +169,11 @@ assert.match(browser, /sortOrderViolationCount/);
 assert.match(browser, /allocationBytes\.total = allocationBytes\.totalBuildAndProduct/);
 assert.match(browser, /applyHostGpuIdentity/);
 assert.match(browser, /backendIdentitySource/);
+assert.match(
+  browser,
+  /applyHostGpuIdentity\(identity\)[\s\S]*state\.report\.status = 'passed'[\s\S]*falseClosureChecks\.fallbackRoute = false[\s\S]*applyReportDisposition/,
+  'authoritative CDP upgrade must clear provisional fallback state before redisposition',
+);
 assert.match(browser, /const initializeBindGroup\s*=/, 'entry-point-specific auto layouts require an initialize bind group');
 assert.match(browser, /const scatterBindGroup\s*=/, 'entry-point-specific auto layouts require a scatter bind group');
 assert.match(browser, /setPipeline\(initializePipeline\);[^\n]*setBindGroup\(2, initializeBindGroup\)/);
