@@ -112,6 +112,26 @@ assert.match(core, /flowKernelDescriptorCaptureRequested/, 'runtime distinguishe
 assert.match(core, /flowKernelDescriptorCaptureEffective/, 'runtime reports effective descriptor capture');
 assert.match(core, /sampleBoundarySplatKernelDescriptorCapture/, 'runtime reads the candidate-local descriptor socket');
 assert.match(core, /readFlowKernelDescriptorCaptureChunk/, 'runtime exposes session-bound chunk reads instead of one giant CDP payload');
+assert.match(
+  core,
+  /function readFlowKernelDescriptorCaptureProjectionChunk\(payload = \{\}\)/,
+  'runtime exposes a session-bound compact column projection for temporal evidence capture',
+);
+assert.match(
+  core,
+  /session-bound-float32-column-projection-chunk-export-v0/,
+  'compact descriptor projection publishes a stable export identity',
+);
+assert.match(
+  core,
+  /flow-kernel-descriptor-projection-columns-invalid/,
+  'compact descriptor projection rejects malformed or duplicate column requests',
+);
+assert.match(
+  core,
+  /flow-kernel-descriptor-projection-row-overflow/,
+  'compact descriptor projection rejects partial or overflowing row ranges',
+);
 assert.match(core, /releaseFlowKernelDescriptorCapture/, 'runtime releases retained descriptor snapshots explicitly');
 assert.match(
   ensureGpuSource,

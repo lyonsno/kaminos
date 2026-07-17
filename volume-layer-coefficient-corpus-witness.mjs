@@ -8,6 +8,7 @@ import {
   openSync,
   readFileSync,
   statSync,
+  unlinkSync,
   writeFileSync,
   writeSync,
 } from 'node:fs';
@@ -40,6 +41,10 @@ const LIVE_REPLAY_FILTER = 'exact-field-live-replay-application-v0';
 const FIELD_LAYOUT_IDENTITY = 'fluid-front-grid-x-fastest-y-then-z-f32-v0';
 const DESCRIPTOR_KERNEL_IDENTITY = 'flow-tangent-positive-symmetric-trilinear-v0';
 const DESCRIPTOR_CONTROLS = Object.freeze({ strength: 0.6, radiusWorld: 0.018, coherence: 0.7 });
+const MOTION_DESCRIPTOR_COLUMNS = Object.freeze([0, 1, 2, 3, 20, 21, 22, 23]);
+const MOTION_DESCRIPTOR_ORDER = Object.freeze(MOTION_DESCRIPTOR_COLUMNS.map(index => FLOW_KERNEL_DESCRIPTOR_ORDER[index]));
+const MOTION_TARGET_MODE = 'shared-transmittance-contribution-sum';
+const MOTION_TARGET_IDENTITY = 'ridge-plus-non-ridge-contributions-under-shared-transmittance-v0';
 const DESCRIPTOR_TREATMENT_ORDER = Object.freeze([
   'flow.coherence',
   'flow.curlMagnitude',
@@ -61,6 +66,8 @@ const trainingManifestPath = resolve(String(args.get('--training-manifest') || j
 const probeReportPath = resolve(String(args.get('--probe-report') || join(outDir, 'probe-report.json')));
 const sourceAppearanceCorpusPath = resolve(String(args.get('--source-appearance-corpus') || DEFAULT_APPEARANCE_CORPUS));
 const stateSteps = String(args.get('--state-steps') || '80,120').split(',').map(value => Number(value.trim()));
+const motionCapture = args.has('--motion-capture');
+const targetRaySteps = Number(args.get('--target-ray-steps') || 160);
 const timeoutMs = Number(args.get('--timeout-ms') || 900000);
 const settleMs = Number(args.get('--settle-ms') || 2500);
 const viewportWidth = Number(args.get('--viewport-width') || 1280);
@@ -78,6 +85,7 @@ let socket = null;
 let failurePhase = 'argument-validation';
 let lastTrustworthyEvidence = { witnessIdentity: WITNESS_IDENTITY };
 let runtimeIdentity = { requestedRoute: requestedUrl, effectiveRoute: null, prototypeIdentity: null, backend: null };
+const targetPixelHashes = new Set();
 
 mkdirSync(artifactsDir, { recursive: true });
 mkdirSync(dirname(reportPath), { recursive: true });
@@ -179,7 +187,7 @@ class ArtifactSink {
 
 try {
   validateArguments();
-  const sourceAppearanceCorpus = readSourceAppearanceCorpus();
+  const sourceAppearanceCorpus = motionCapture ? null : readSourceAppearanceCorpus();
 
   failurePhase = 'browser-launch';
   browser = spawn(chrome, [
@@ -216,15 +224,24 @@ try {
   assert.equal(runtimeIdentity.effectiveRoute, 'native-3d-compute-fluid-raymarch-v0', 'wrong effective route');
   assert.equal(runtimeIdentity.prototypeIdentity, 'kaminos-volume-prototype-v0', 'wrong prototype identity');
   assert.ok(String(runtimeIdentity.backend).startsWith('WebGPU'), 'wrong renderer backend');
-  assert.equal(runtimeIdentity.grid, sourceAppearanceCorpus.receipt.expectedGrid, 'source appearance corpus grid differs from runtime grid');
+  if (sourceAppearanceCorpus) assert.equal(runtimeIdentity.grid, sourceAppearanceCorpus.receipt.expectedGrid, 'source appearance corpus grid differs from runtime grid');
   await delay(settleMs);
+  let browserEventCursor = assertNoBrowserFailures(0, 'route admission');
+
+  const fixedCameraPose = motionCapture ? await evaluate(socket, `(() => {
+    const basinWindow = document.querySelector('#basin')?.contentWindow || window;
+    const pose = basinWindow.kaminosCameraDebugState?.();
+    if (!pose?.position || !pose?.target || !pose?.projectionMatrix || !pose?.matrixWorldInverse) throw new Error('fixed-camera-debug-state-missing');
+    return pose;
+  })()`) : null;
 
   const states = [];
   for (let stateIndex = 0; stateIndex < stateSteps.length; stateIndex += 1) {
     const steps = stateSteps[stateIndex];
     const stateId = `coefficient-state-${String(steps).padStart(3, '0')}`;
     const splitRole = stateIndex === stateSteps.length - 1 ? 'heldOut' : 'train';
-    states.push(await captureState({ stateId, splitRole, steps, stateIndex }));
+    states.push(await captureState({ stateId, splitRole, steps, stateIndex, fixedCameraPose }));
+    browserEventCursor = assertNoBrowserFailures(browserEventCursor, stateId);
     lastTrustworthyEvidence = {
       ...lastTrustworthyEvidence,
       completedStateIds: states.map(state => state.id),
@@ -233,7 +250,9 @@ try {
   }
 
   failurePhase = 'training-manifest';
-  const manifest = buildTrainingManifest({ states, sourceAppearanceCorpus });
+  const manifest = motionCapture
+    ? buildMotionManifest({ states, fixedCameraPose })
+    : buildTrainingManifest({ states, sourceAppearanceCorpus });
   writeFileSync(trainingManifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   lastTrustworthyEvidence = {
     ...lastTrustworthyEvidence,
@@ -241,17 +260,20 @@ try {
     trainingManifestSha256: sha256(readFileSync(trainingManifestPath)),
   };
 
-  failurePhase = 'probe-only-airlock';
-  const probe = spawnSync('python3', [
-    learnerPath,
-    '--input', trainingManifestPath,
-    '--report', probeReportPath,
-    '--probe-only',
-  ], { encoding: 'utf8' });
-  if (probe.status !== 0) throw new Error(probe.stderr || probe.stdout || `probe exited ${probe.status}`);
-  const probeReport = JSON.parse(readFileSync(probeReportPath, 'utf8'));
-  assert.equal(probeReport.status, 'contract-valid', 'learner probe did not validate the corpus');
-  assert.equal(probeReport.trainingStarted, false, 'probe-only airlock started training');
+  let probeReport = null;
+  if (!motionCapture) {
+    failurePhase = 'probe-only-airlock';
+    const probe = spawnSync('python3', [
+      learnerPath,
+      '--input', trainingManifestPath,
+      '--report', probeReportPath,
+      '--probe-only',
+    ], { encoding: 'utf8' });
+    if (probe.status !== 0) throw new Error(probe.stderr || probe.stdout || `probe exited ${probe.status}`);
+    probeReport = JSON.parse(readFileSync(probeReportPath, 'utf8'));
+    assert.equal(probeReport.status, 'contract-valid', 'learner probe did not validate the corpus');
+    assert.equal(probeReport.trainingStarted, false, 'probe-only airlock started training');
+  }
 
   failurePhase = 'complete';
   writeReport({
@@ -259,8 +281,8 @@ try {
     failurePhase: null,
     lastTrustworthyEvidence: {
       ...lastTrustworthyEvidence,
-      probeReportPath,
-      probeReportSha256: sha256(readFileSync(probeReportPath)),
+      probeReportPath: probeReport ? probeReportPath : null,
+      probeReportSha256: probeReport ? sha256(readFileSync(probeReportPath)) : null,
     },
     effectiveRoute: runtimeIdentity.effectiveRoute,
     prototypeIdentity: runtimeIdentity.prototypeIdentity,
@@ -269,12 +291,13 @@ try {
     retainedRowCount: states.reduce((total, state) => total + state.rows.count, 0),
     sampleCap: null,
     droppedRowCount: 0,
+    motionCapture,
   });
   console.log(JSON.stringify({
     status: 'captured',
     reportPath,
     trainingManifestPath,
-    probeReportPath,
+    probeReportPath: probeReport ? probeReportPath : null,
     stateCount: states.length,
     retainedRowCount: states.reduce((total, state) => total + state.rows.count, 0),
   }, null, 2));
@@ -295,12 +318,14 @@ try {
   browser?.kill('SIGTERM');
 }
 
-async function captureState({ stateId, splitRole, steps, stateIndex }) {
+async function captureState({ stateId, splitRole, steps, stateIndex, fixedCameraPose }) {
   failurePhase = `${stateId}:deterministic-replay`;
+  const replayStartTimeMs = motionCapture ? 1000 : 1000 + stateIndex * 10000;
+  const exactStateTimeMs = replayStartTimeMs + steps * (1000 / 60);
   const replay = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.sampleDeterministicReplayFrame(${JSON.stringify({
     steps,
     timeStepMs: 1000 / 60,
-    startTimeMs: 1000 + stateIndex * 10000,
+    startTimeMs: replayStartTimeMs,
     restoreControls: true,
   })})`);
   assert.equal(replay?.ok, true, `${stateId} replay failed: ${JSON.stringify(replay)}`);
@@ -329,6 +354,10 @@ async function captureState({ stateId, splitRole, steps, stateIndex }) {
   assert.equal(frozen.active, false, `${stateId} renderer did not freeze`);
   const effectiveControls = causalControlsFromRuntime(frozen.controls);
   const controlIdentity = `sha256:${sha256(Buffer.from(canonicalJson(effectiveControls)))}`;
+
+  const target = motionCapture
+    ? await captureMotionTarget({ stateId, fixedCameraPose, frozen, exactStateTimeMs })
+    : null;
 
   failurePhase = `${stateId}:causal-controls`;
   const controlApplication = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.applyDebugNonRidgeCausalControls(${JSON.stringify(effectiveControls)})`);
@@ -396,7 +425,7 @@ async function captureState({ stateId, splitRole, steps, stateIndex }) {
       flowKernelRadius: DESCRIPTOR_CONTROLS.radiusWorld,
       flowKernelCoherence: DESCRIPTOR_CONTROLS.coherence,
     },
-    now: 1000 + stateIndex * 10000 + steps * (1000 / 60),
+    now: exactStateTimeMs,
     sameStateCaptureId: stateId,
   })})`);
   assert.equal(descriptorRender?.ok, true, `${stateId} descriptor render failed: ${JSON.stringify(descriptorRender)}`);
@@ -410,6 +439,10 @@ async function captureState({ stateId, splitRole, steps, stateIndex }) {
     indexReceipt,
   });
 
+  const sourceFieldRetention = motionCapture
+    ? releaseTransientSourceFields(sourceFieldManifest)
+    : { identity: 'retained-full-field-source-artifacts-v0', deleted: false };
+
   failurePhase = `${stateId}:live-resume`;
   const resume = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.resumeDebugImportedFieldLive(${JSON.stringify({
     sessionId: importFinish.sessionId,
@@ -421,9 +454,18 @@ async function captureState({ stateId, splitRole, steps, stateIndex }) {
     id: stateId,
     splitRole,
     sameStateCaptureId: stateId,
-    sourceFieldManifest: sourceFieldManifest.artifact,
+    sourceFieldManifest: motionCapture
+      ? {
+          identity: 'transient-full-field-source-receipt-v0',
+          retained: false,
+          sha256: sourceFieldRetention.sourceManifestSha256,
+          sourceHashes: sourceFieldRetention.sourceHashes,
+        }
+      : sourceFieldManifest.artifact,
     requestedControlIdentity: controlIdentity,
     effectiveControlIdentity: controlIdentity,
+    target,
+    sourceFieldRetention,
     replay,
     rows: {
       count: rows.count,
@@ -433,6 +475,115 @@ async function captureState({ stateId, splitRole, steps, stateIndex }) {
       coefficients: rows.coefficients,
       kernelDescriptors,
     },
+  };
+}
+
+async function captureMotionTarget({ stateId, fixedCameraPose, frozen, exactStateTimeMs }) {
+  failurePhase = `${stateId}:exact-target`;
+  const capture = await evaluate(socket, `(async () => {
+    const basinWindow = document.querySelector('#basin')?.contentWindow || window;
+    const prototype = ${VOLUME_PROTOTYPE_EXPRESSION};
+    const before = prototype.debugState();
+    const priorRaySteps = before.controls?.raySteps;
+    const priorAppearanceMode = before.appearanceDecompositionModeRequestedRaw ?? before.appearanceDecompositionModeRequested ?? 'off';
+    const priorSmokeMode = before.raymarchSmokePresentationModeRequestedRaw ?? before.raymarchSmokePresentationModeRequested ?? 'on';
+    basinWindow.kaminosSetCameraDebugPose(${JSON.stringify(fixedCameraPose)});
+    prototype.setControls({ raySteps: ${targetRaySteps} });
+    const appearance = prototype.setAppearanceDecompositionMode('${MOTION_TARGET_MODE}');
+    const smoke = prototype.setRaymarchSmokePresentationMode('off');
+    const sample = await prototype.sampleFrame({
+      advanceSim: false,
+      includeRgba: true,
+      now: ${Number(exactStateTimeMs)},
+      sameStateCaptureId: ${JSON.stringify(stateId)},
+      baseFrameCount: ${Number(frozen.frameCount)},
+      baseSimStepCount: ${Number(frozen.simStepCount)},
+    });
+    if (!sample?.ok || !sample.image?.rgba?.length) throw new Error('missing-partial-or-blank-exact-target');
+    const rgba = Uint8Array.from(sample.image.rgba);
+    let litPixels = 0;
+    for (let index = 0; index < rgba.length; index += 4) {
+      if (0.2126 * rgba[index] + 0.7152 * rgba[index + 1] + 0.0722 * rgba[index + 2] > 8) litPixels += 1;
+    }
+    if (litPixels <= 64) throw new Error('missing-partial-or-blank-exact-target');
+    const hash = await crypto.subtle.digest('SHA-256', rgba);
+    const targetPixelSha256 = [...new Uint8Array(hash)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+    const canvas = document.createElement('canvas');
+    canvas.width = sample.image.width;
+    canvas.height = sample.image.height;
+    canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(rgba), canvas.width, canvas.height), 0, 0);
+    const pngDataUrl = canvas.toDataURL('image/png');
+    const appearanceRestore = prototype.setAppearanceDecompositionMode(priorAppearanceMode);
+    const smokeRestore = prototype.setRaymarchSmokePresentationMode(priorSmokeMode);
+    prototype.setControls({ raySteps: priorRaySteps });
+    const after = prototype.debugState();
+    return {
+      stateId: ${JSON.stringify(stateId)},
+      frameCount: sample.frameCount,
+      simStepCount: sample.simStepCount,
+      width: sample.image.width,
+      height: sample.image.height,
+      litPixels,
+      targetPixelSha256,
+      pngDataUrl,
+      cameraPose: basinWindow.kaminosCameraDebugState(),
+      appearance,
+      smoke,
+      restoration: {
+        priorRaySteps,
+        effectiveRaySteps: after.controls?.raySteps ?? null,
+        priorAppearanceMode,
+        effectiveAppearanceMode: after.appearanceDecompositionModeRequestedRaw ?? after.appearanceDecompositionModeRequested ?? null,
+        priorSmokeMode,
+        effectiveSmokeMode: after.raymarchSmokePresentationModeRequestedRaw ?? after.raymarchSmokePresentationModeRequested ?? null,
+        appearanceRestore,
+        smokeRestore,
+      },
+      effectiveRoute: sample.effectiveRoute,
+      backend: sample.backend,
+      effectiveRaySteps: sample.volumePresentationReceipt?.effectiveRayQuality?.raySteps ?? sample.controls?.raySteps ?? null,
+    };
+  })()`);
+  assert.equal(capture.frameCount, frozen.frameCount, `${stateId} exact target frame advanced`);
+  assert.equal(capture.simStepCount, frozen.simStepCount, `${stateId} exact target simulation advanced`);
+  assert.equal(capture.appearance?.effectiveMode, MOTION_TARGET_MODE, `${stateId} exact target mode substituted`);
+  assert.equal(capture.appearance?.targetIdentity, MOTION_TARGET_IDENTITY, `${stateId} exact target identity drifted`);
+  assert.equal(capture.appearance?.emissionMask, 'ridge-owned-plus-non-ridge', `${stateId} exact target emission mask drifted`);
+  assert.equal(capture.appearance?.extinctionMask, 'complete-flame', `${stateId} exact target extinction mask drifted`);
+  assert.equal(capture.smoke?.effectiveMode, 'off', `${stateId} exact target retained smoke`);
+  assert.equal(capture.effectiveRaySteps, targetRaySteps, `${stateId} exact target ray steps drifted`);
+  assert.equal(capture.effectiveRoute, runtimeIdentity.effectiveRoute, `${stateId} exact target route drifted`);
+  assert.equal(capture.backend, runtimeIdentity.backend, `${stateId} exact target backend drifted`);
+  assert.equal(capture.restoration?.effectiveRaySteps, capture.restoration?.priorRaySteps, `${stateId} exact target leaked ray-step controls`);
+  assert.equal(capture.restoration?.effectiveAppearanceMode, capture.restoration?.priorAppearanceMode, `${stateId} exact target leaked appearance mode`);
+  assert.equal(capture.restoration?.effectiveSmokeMode, capture.restoration?.priorSmokeMode, `${stateId} exact target leaked smoke mode`);
+  assert.equal(
+    sha256(Buffer.from(canonicalJson(capture.cameraPose))),
+    sha256(Buffer.from(canonicalJson(fixedCameraPose))),
+    `${stateId} exact target camera drifted from the fixed trajectory camera`,
+  );
+  assert.equal(targetPixelHashes.has(capture.targetPixelSha256), false, `cached-or-duplicate-target: ${stateId}`);
+  targetPixelHashes.add(capture.targetPixelSha256);
+  const path = join(artifactsDir, `${stateId}-shared-transmittance-target.png`);
+  writeDataUrl(path, capture.pngDataUrl);
+  return {
+    identity: MOTION_TARGET_IDENTITY,
+    mode: MOTION_TARGET_MODE,
+    path,
+    bytes: statSync(path).size,
+    sha256: sha256(readFileSync(path)),
+    targetPixelSha256: capture.targetPixelSha256,
+    width: capture.width,
+    height: capture.height,
+    litPixels: capture.litPixels,
+    frameCount: capture.frameCount,
+    simStepCount: capture.simStepCount,
+    effectiveRaySteps: capture.effectiveRaySteps,
+    cameraPose: capture.cameraPose,
+    cameraPoseSha256: sha256(Buffer.from(canonicalJson(capture.cameraPose))),
+    appearanceReceipt: capture.appearance,
+    smokeReceipt: capture.smoke,
+    restorationReceipt: capture.restoration,
   };
 }
 
@@ -638,6 +789,57 @@ async function drainDescriptorCapture({ stateId, capture, rows, sourceFieldManif
   assert.deepEqual(capture.sourceHashes, expectedHashes, `${stateId} descriptor source hashes differ from coefficient state`);
   const session = capture.exportSession;
   assert.equal(session?.identity, 'session-bound-float32-chunk-export-v0', `${stateId} descriptor export session is missing`);
+  if (motionCapture) {
+    assert.equal(session.projectionChunkApi, 'readFlowKernelDescriptorCaptureProjectionChunk', `${stateId} compact descriptor projection API is missing`);
+    const sink = new ArtifactSink(join(artifactsDir, `${stateId}-kernel-descriptor-projection.f32`), {
+      dtype: 'float32-le', semanticRole: 'camera-independent-flow-kernel-descriptor-projection',
+    });
+    const indexBytes = readFileSync(rows.nativeCellIndices.path);
+    const expectedIndices = new Uint32Array(indexBytes.buffer, indexBytes.byteOffset, indexBytes.byteLength / Uint32Array.BYTES_PER_ELEMENT);
+    for (let startRow = 0; startRow < rows.count; startRow += chunkRows) {
+      const rowCount = Math.min(chunkRows, rows.count - startRow);
+      const chunk = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.readFlowKernelDescriptorCaptureProjectionChunk(${JSON.stringify({
+        sessionId: session.sessionId,
+        startRow,
+        rowCount,
+        columns: MOTION_DESCRIPTOR_COLUMNS,
+      })})`);
+      assert.equal(chunk?.ok, true, `${stateId} descriptor projection failed at row ${startRow}`);
+      assert.equal(chunk.startRow, startRow, `${stateId} descriptor projection row offset drifted`);
+      assert.equal(chunk.rowCount, rowCount, `${stateId} descriptor projection row count drifted`);
+      assert.deepEqual(chunk.columns, [...MOTION_DESCRIPTOR_COLUMNS], `${stateId} descriptor projection columns drifted`);
+      assert.deepEqual(chunk.columnNames, [...MOTION_DESCRIPTOR_ORDER], `${stateId} descriptor projection names drifted`);
+      assert.equal(chunk.descriptorSha256, capture.descriptorSha256, `${stateId} descriptor projection source hash drifted`);
+      const bytes = Buffer.from(chunk.base64, 'base64');
+      assert.equal(bytes.byteLength, rowCount * MOTION_DESCRIPTOR_COLUMNS.length * Float32Array.BYTES_PER_ELEMENT, `${stateId} descriptor projection byte length drifted`);
+      const values = new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / Float32Array.BYTES_PER_ELEMENT);
+      for (let rowOffset = 0; rowOffset < rowCount; rowOffset += 1) {
+        assert.equal(Math.round(values[rowOffset * MOTION_DESCRIPTOR_COLUMNS.length + 3]), expectedIndices[startRow + rowOffset], `${stateId} projected native identity drifted at row ${startRow + rowOffset}`);
+      }
+      sink.write(bytes);
+    }
+    const artifact = sink.close([rows.count, MOTION_DESCRIPTOR_COLUMNS.length], {
+      socketIdentity: FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY,
+      sourceDescriptorSha256: capture.descriptorSha256,
+      sourceStrideFloats: FLOW_KERNEL_DESCRIPTOR_STRIDE_FLOATS,
+      projectionIdentity: 'session-bound-float32-column-projection-chunk-export-v0',
+      projectionColumns: [...MOTION_DESCRIPTOR_COLUMNS],
+      descriptorOrder: [...MOTION_DESCRIPTOR_ORDER],
+      kernelIdentity: DESCRIPTOR_KERNEL_IDENTITY,
+      requestedControls: { ...DESCRIPTOR_CONTROLS },
+      effectiveControls: { ...DESCRIPTOR_CONTROLS },
+      sourceHashes: expectedHashes,
+      candidateAdmissionAuthority: 'external-native-cell-index-list-v0',
+      admissionIndexSha256: rows.nativeCellIndices.sha256,
+      admissionIdentity: ANALYTICAL_ADMISSION_IDENTITY,
+    });
+    const release = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.releaseFlowKernelDescriptorCapture(${JSON.stringify({
+      sessionId: session.sessionId,
+    })})`);
+    assert.equal(release?.ok, true, `${stateId} descriptor projection release failed`);
+    assert.equal(release.descriptorSha256, capture.descriptorSha256, `${stateId} descriptor projection release hash drifted`);
+    return artifact;
+  }
   const sink = new ArtifactSink(join(artifactsDir, `${stateId}-kernel-descriptors.f32`), {
     dtype: 'float32-le', semanticRole: 'camera-independent-flow-kernel-descriptors',
   });
@@ -683,6 +885,29 @@ async function drainDescriptorCapture({ stateId, capture, rows, sourceFieldManif
   assert.equal(release?.ok, true, `${stateId} descriptor export release failed`);
   assert.equal(release.descriptorSha256, artifact.sha256, `${stateId} descriptor release checksum drifted`);
   return artifact;
+}
+
+function releaseTransientSourceFields(sourceFieldManifest) {
+  const paths = [
+    sourceFieldManifest.sidecars.fluid.path,
+    sourceFieldManifest.sidecars.front.path,
+    sourceFieldManifest.sidecars.majorant.path,
+    sourceFieldManifest.boundarySidecar.sidecars.boundary.path,
+    sourceFieldManifest.artifact.path,
+  ];
+  for (const path of paths) unlinkSync(path);
+  return {
+    identity: 'checksum-bound-transient-full-field-deletion-v0',
+    deleted: true,
+    deletedArtifactCount: paths.length,
+    sourceManifestSha256: sourceFieldManifest.artifact.sha256,
+    sourceHashes: {
+      fluidSha256: sourceFieldManifest.sidecars.fluid.sha256,
+      frontSha256: sourceFieldManifest.sidecars.front.sha256,
+      boundarySidecarSha256: sourceFieldManifest.boundarySidecar.sidecars.boundary.sha256,
+      majorantSha256: sourceFieldManifest.sidecars.majorant.sha256,
+    },
+  };
 }
 
 function buildTrainingManifest({ states, sourceAppearanceCorpus }) {
@@ -797,6 +1022,65 @@ function buildTrainingManifest({ states, sourceAppearanceCorpus }) {
   return { ...body, identity: `sha256:${sha256(Buffer.from(canonicalJson(body)))}` };
 }
 
+function buildMotionManifest({ states, fixedCameraPose }) {
+  const controlIdentities = new Set(states.map(state => state.requestedControlIdentity));
+  assert.equal(controlIdentities.size, 1, 'motion sequence changed causal controls between exact states');
+  const [trajectoryControlIdentity] = controlIdentities;
+  const body = {
+    schema: 'kaminos.volume.layer-coefficient-bilinear-motion-manifest.v0',
+    status: 'complete',
+    authority: 'single-browser-multi-state-exact-bilinear-motion-v0',
+    route: {
+      requested: requestedUrl,
+      effective: runtimeIdentity.effectiveRoute,
+      prototypeIdentity: runtimeIdentity.prototypeIdentity,
+      backend: runtimeIdentity.backend,
+      fallbackReason: null,
+    },
+    sequence: {
+      identity: 'single-browser-multi-state-exact-bilinear-motion-v0',
+      trajectoryAuthority: 'adjacent-exact-state-one-trajectory-v0',
+      replayStartTimeMs: 1000,
+      stateSteps: [...stateSteps],
+      stateCount: states.length,
+      targetMode: MOTION_TARGET_MODE,
+      targetIdentity: MOTION_TARGET_IDENTITY,
+      targetRaySteps,
+      fixedCameraAuthority: 'fixed-held-camera-across-consecutive-states-v0',
+      fixedCameraPose,
+      fixedCameraPoseSha256: sha256(Buffer.from(canonicalJson(fixedCameraPose))),
+      trajectoryControlIdentity,
+      sampleCap: null,
+      droppedRowCount: 0,
+    },
+    featureView: {
+      identity: 'post-admission-source-complete-local-features-v0',
+      order: [...POST_ADMISSION_FEATURE_ORDER],
+    },
+    coefficientTargets: {
+      identity: 'separate-nonnegative-ridge-and-nonridge-local-coefficients-v0',
+      order: [...COEFFICIENT_ORDER],
+    },
+    descriptorProjection: {
+      identity: 'session-bound-float32-column-projection-chunk-export-v0',
+      sourceSocketIdentity: FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY,
+      sourceStrideFloats: FLOW_KERNEL_DESCRIPTOR_STRIDE_FLOATS,
+      columns: [...MOTION_DESCRIPTOR_COLUMNS],
+      order: [...MOTION_DESCRIPTOR_ORDER],
+      kernelIdentity: DESCRIPTOR_KERNEL_IDENTITY,
+    },
+    transportEvaluation: {
+      identity: 'one-shared-total-transmittance-v0',
+      depthBins: 96,
+      footprint: 'five-tap-flow-tangent-bilinear-v0',
+      globalPathScale: 'fit-on-final-designated-state-once-v0',
+      perStateRefit: false,
+    },
+    states,
+  };
+  return { ...body, identity: `sha256:${sha256(Buffer.from(canonicalJson(body)))}` };
+}
+
 function readSourceAppearanceCorpus() {
   const bytes = readFileSync(sourceAppearanceCorpusPath);
   const corpus = JSON.parse(bytes.toString('utf8'));
@@ -839,15 +1123,38 @@ function validateArguments() {
   assert.ok(stateSteps.length >= 2, 'coefficient corpus requires at least one train state and one held state');
   assert.ok(stateSteps.every(value => Number.isInteger(value) && value > 0), 'state steps must be positive integers');
   assert.equal(new Set(stateSteps).size, stateSteps.length, 'state steps must identify distinct simulator states');
+  if (motionCapture) {
+    assert.ok(
+      stateSteps.every((value, index) => index === 0 || value > stateSteps[index - 1]),
+      'motion state steps must be strictly increasing',
+    );
+  }
   assert.ok(Number.isInteger(chunkRows) && chunkRows > 0, 'chunk rows must be a positive integer');
   assert.ok(Number.isInteger(chunkFloats) && chunkFloats > 0, 'chunk floats must be a positive integer');
   assert.ok(Number.isInteger(viewportWidth) && viewportWidth >= 128, 'viewport width must be at least 128');
   assert.ok(Number.isInteger(viewportHeight) && viewportHeight >= 128, 'viewport height must be at least 128');
+  assert.ok(Number.isInteger(targetRaySteps) && targetRaySteps > 0, 'target ray steps must be a positive integer');
   assert.equal(
     FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY,
     REVIEWED_DESCRIPTOR_SOCKET_IDENTITY,
     'descriptor socket module differs from the reviewed ABI identity',
   );
+}
+
+function assertNoBrowserFailures(startIndex, label) {
+  const events = socket?.browserEvents || [];
+  const failures = events.slice(startIndex).filter(event => {
+    if (event.method === 'Runtime.exceptionThrown') return true;
+    if (event.method === 'Log.entryAdded') return ['error', 'assert'].includes(event.params?.entry?.level);
+    if (event.method === 'Runtime.consoleAPICalled') return ['error', 'assert'].includes(event.params?.type);
+    return false;
+  });
+  assert.equal(
+    failures.length,
+    0,
+    `${label} emitted browser failures: ${JSON.stringify(failures.map(summarizeBrowserEvent))}`,
+  );
+  return events.length;
 }
 
 function writeReport(payload) {
@@ -879,6 +1186,14 @@ function f32Bytes(values) {
 
 function u32Bytes(values) {
   return Buffer.from(values.buffer, values.byteOffset, values.byteLength);
+}
+
+function writeDataUrl(path, value) {
+  const match = String(value).match(/^data:image\/png;base64,(.+)$/);
+  assert.ok(match, `invalid PNG data URL for ${path}`);
+  const bytes = Buffer.from(match[1], 'base64');
+  assert.ok(bytes.byteLength > 100, `blank PNG payload for ${path}`);
+  writeFileSync(path, bytes);
 }
 
 function sha256(bytes) {

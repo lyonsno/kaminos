@@ -9,6 +9,7 @@ import {
   packBoundarySplatSupervisionCandidates,
 } from './boundary-splat-feature-capture.mjs';
 import {
+  FLOW_KERNEL_DESCRIPTOR_ORDER,
   FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY,
   FLOW_KERNEL_DESCRIPTOR_STRIDE_FLOATS,
   decodeFlowKernelDescriptorCapture,
@@ -112,6 +113,10 @@ const APPEARANCE_DECOMPOSITION_MODES = Object.freeze({
   'non-ridge-emission': { uniform: 10, targetIdentity: 'nonnegative-non-ridge-flame-emission-coefficient-v0' },
   'non-ridge-extinction': { uniform: 11, targetIdentity: 'nonnegative-non-ridge-flame-extinction-coefficient-v0' },
   'positive-optical-recomposition': { uniform: 12, targetIdentity: 'nonnegative-ridge-plus-non-ridge-optical-recomposition-v0' },
+  'ridge-transport-ridge-extinction': { uniform: 13, targetIdentity: 'ridge-emission-under-ridge-extinction-v0', emissionMask: 'ridge-owned', extinctionMask: 'ridge-owned' },
+  'ridge-transport-total-extinction': { uniform: 14, targetIdentity: 'ridge-emission-under-complete-flame-extinction-v0', emissionMask: 'ridge-owned', extinctionMask: 'complete-flame' },
+  'non-ridge-transport-total-extinction': { uniform: 15, targetIdentity: 'non-ridge-emission-under-complete-flame-extinction-v0', emissionMask: 'non-ridge', extinctionMask: 'complete-flame' },
+  'shared-transmittance-contribution-sum': { uniform: 16, targetIdentity: 'ridge-plus-non-ridge-contributions-under-shared-transmittance-v0', emissionMask: 'ridge-owned-plus-non-ridge', extinctionMask: 'complete-flame' },
 });
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160];
@@ -4438,6 +4443,11 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
   var broadCarrierCoefficientColor = vec3<f32>(0.0);
   var positiveRecomposedTransmittance = 1.0;
   var positiveRecomposedColor = vec3<f32>(0.004, 0.005, 0.006);
+  var ridgeOnlyTransportTransmittance = 1.0;
+  var ridgeOnlyTransportColor = vec3<f32>(0.004, 0.005, 0.006);
+  var sharedFlameTransmittance = 1.0;
+  var ridgeSharedTransportColor = vec3<f32>(0.004, 0.005, 0.006);
+  var nonRidgeSharedTransportColor = vec3<f32>(0.0);
   var completeFlameEmissionColor = vec3<f32>(0.0);
   var completeFlameExtinctionColor = vec3<f32>(0.0);
   var ridgeOwnedEmissionColor = vec3<f32>(0.0);
@@ -5474,6 +5484,11 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
         + vec3<f32>(broadCarrierExtinctionCoefficient * 0.12);
       positiveRecomposedColor = positiveRecomposedColor + positiveRecomposedTransmittance * positiveRecomposedEmissionCoefficient;
       positiveRecomposedTransmittance = positiveRecomposedTransmittance * exp(-positiveRecomposedExtinctionCoefficient);
+      ridgeOnlyTransportColor = ridgeOnlyTransportColor + ridgeOnlyTransportTransmittance * ridgeOwnedEmissionCoefficient;
+      ridgeOnlyTransportTransmittance = ridgeOnlyTransportTransmittance * exp(-ridgeOwnedExtinctionCoefficient);
+      ridgeSharedTransportColor = ridgeSharedTransportColor + sharedFlameTransmittance * ridgeOwnedEmissionCoefficient;
+      nonRidgeSharedTransportColor = nonRidgeSharedTransportColor + sharedFlameTransmittance * nonRidgeEmissionCoefficient;
+      sharedFlameTransmittance = sharedFlameTransmittance * exp(-positiveRecomposedExtinctionCoefficient);
       completeFlameEmissionColor = completeFlameEmissionColor + completeFlameEmissionCoefficient;
       completeFlameExtinctionColor = completeFlameExtinctionColor + vec3<f32>(completeFlameExtinctionCoefficient * 2.8);
       ridgeOwnedEmissionColor = ridgeOwnedEmissionColor + ridgeOwnedEmissionCoefficient;
@@ -5484,12 +5499,19 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     let extinctionStep = mix(standardExtinctionStep, directFlameSupervisionExtinction, supervisionFireOnlyTarget);
     trans = trans * exp(-extinctionStep);
     if (appearanceAssayActive > 0.5) {
-      trans = select(controlTransmittance, structuralATransmittance, appearanceDecompositionMode < 1.5);
+      if (appearanceDecompositionMode > 12.5 && appearanceDecompositionMode < 13.5) {
+        trans = ridgeOnlyTransportTransmittance;
+      } else if (appearanceDecompositionMode > 13.5) {
+        trans = sharedFlameTransmittance;
+      } else {
+        trans = select(controlTransmittance, structuralATransmittance, appearanceDecompositionMode < 1.5);
+      }
     }
     t = t + localDt;
   }
 
   let bAppliedToFixedAColor = recomposedColor - structuralAColor;
+  let sharedContributionColor = ridgeSharedTransportColor + nonRidgeSharedTransportColor;
   if (appearanceDecompositionMode > 0.5 && appearanceDecompositionMode < 1.5) {
     color = structuralAColor;
   } else if (appearanceDecompositionMode > 1.5 && appearanceDecompositionMode < 2.5) {
@@ -5516,8 +5538,16 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     color = nonRidgeEmissionColor;
   } else if (appearanceDecompositionMode > 10.5 && appearanceDecompositionMode < 11.5) {
     color = nonRidgeExtinctionColor;
-  } else if (appearanceDecompositionMode > 11.5) {
+  } else if (appearanceDecompositionMode > 11.5 && appearanceDecompositionMode < 12.5) {
     color = positiveRecomposedColor;
+  } else if (appearanceDecompositionMode > 12.5 && appearanceDecompositionMode < 13.5) {
+    color = ridgeOnlyTransportColor;
+  } else if (appearanceDecompositionMode > 13.5 && appearanceDecompositionMode < 14.5) {
+    color = ridgeSharedTransportColor;
+  } else if (appearanceDecompositionMode > 14.5 && appearanceDecompositionMode < 15.5) {
+    color = nonRidgeSharedTransportColor;
+  } else if (appearanceDecompositionMode > 15.5) {
+    color = sharedContributionColor;
   }
 
   let vignette = 1.0 - smoothstep(0.28, 1.48, length(ndc));
@@ -9009,7 +9039,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     appearanceDecompositionModeRequested = request.requested;
     appearanceDecompositionModeEffective = request.requested;
     appearanceDecompositionModeFallbackReason = request.fallbackReason;
-    const targetIdentity = APPEARANCE_DECOMPOSITION_MODES[appearanceDecompositionModeEffective].targetIdentity;
+    const modeContract = APPEARANCE_DECOMPOSITION_MODES[appearanceDecompositionModeEffective];
+    const targetIdentity = modeContract.targetIdentity;
     const receipt = {
       identity: 'appearance-decomposition-receipt-v0',
       requestedMode: appearanceDecompositionModeRequestedRaw,
@@ -9017,6 +9048,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       effectiveMode: appearanceDecompositionModeEffective,
       fallbackReason: appearanceDecompositionModeFallbackReason,
       targetIdentity,
+      emissionMask: modeContract.emissionMask,
+      extinctionMask: modeContract.extinctionMask,
       coefficientBoundary: 'per-sample-pre-tone-map-emission-extinction-v0',
       structuralAIdentity: INTRINSIC_PRESENTATION_TARGET_IDENTITY,
       broadCarrierIdentity: 'signed-control-minus-structural-a-local-coefficients-v0',
@@ -9030,6 +9063,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         signedClosureComparator: 'signed',
       },
       opticalRecurrence: 'front-to-back-emission-with-exponential-transmittance-v0',
+      sharedTransmittanceIdentity: 'ridge-plus-non-ridge-extinction-one-running-transmittance-v0',
       simulationAdvanced: false,
       simulationReset: false,
       cameraMutated: false,
@@ -11523,6 +11557,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       sessionId,
       values: descriptorValues,
       descriptorSha256,
+      rowCount: instanceCount,
+      strideFloats: FLOW_KERNEL_DESCRIPTOR_STRIDE_FLOATS,
     };
     return {
       ...decoded,
@@ -11536,6 +11572,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         floatCount: descriptorValues.length,
         byteLength: descriptorData.byteLength,
         chunkApi: 'readFlowKernelDescriptorCaptureChunk',
+        projectionChunkApi: 'readFlowKernelDescriptorCaptureProjectionChunk',
         releaseApi: 'releaseFlowKernelDescriptorCapture',
       },
       rendererIdentity: state.boundarySplatRendererIdentity,
@@ -11609,6 +11646,71 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       totalFloats: session.values.length,
       base64: encodeFloat32ChunkBase64(session.values, startFloat, floatCount),
       isFinal: startFloat + floatCount === session.values.length,
+    };
+  }
+
+  function readFlowKernelDescriptorCaptureProjectionChunk(payload = {}) {
+    const session = flowKernelDescriptorExportSession;
+    if (!session || payload.sessionId !== session.sessionId) {
+      return { ok: false, reason: 'flow-kernel-descriptor-session-mismatch' };
+    }
+    const columns = Array.isArray(payload.columns)
+      ? payload.columns.map(value => Math.floor(Number(value)))
+      : [];
+    const uniqueColumns = new Set(columns);
+    if (columns.length === 0
+      || uniqueColumns.size !== columns.length
+      || columns.some(column => !Number.isInteger(column)
+        || column < 0
+        || column >= session.strideFloats)) {
+      return {
+        ok: false,
+        reason: 'flow-kernel-descriptor-projection-columns-invalid',
+        columns,
+        strideFloats: session.strideFloats,
+      };
+    }
+    const startRow = Math.floor(Number(payload.startRow));
+    const rowCount = Math.floor(Number(payload.rowCount));
+    if (!Number.isInteger(startRow) || startRow < 0 || !Number.isInteger(rowCount) || rowCount <= 0) {
+      return {
+        ok: false,
+        reason: 'flow-kernel-descriptor-projection-row-range-invalid',
+        startRow,
+        rowCount,
+      };
+    }
+    if (startRow + rowCount > session.rowCount) {
+      return {
+        ok: false,
+        reason: 'flow-kernel-descriptor-projection-row-overflow',
+        startRow,
+        rowCount,
+        totalRows: session.rowCount,
+      };
+    }
+    const projected = new Float32Array(rowCount * columns.length);
+    for (let localRow = 0; localRow < rowCount; localRow += 1) {
+      const sourceOffset = (startRow + localRow) * session.strideFloats;
+      const targetOffset = localRow * columns.length;
+      for (let columnIndex = 0; columnIndex < columns.length; columnIndex += 1) {
+        projected[targetOffset + columnIndex] = session.values[sourceOffset + columns[columnIndex]];
+      }
+    }
+    return {
+      ok: true,
+      identity: 'session-bound-float32-column-projection-chunk-export-v0',
+      sessionId: session.sessionId,
+      descriptorSha256: session.descriptorSha256,
+      startRow,
+      rowCount,
+      totalRows: session.rowCount,
+      columns,
+      columnNames: columns.map(column => FLOW_KERNEL_DESCRIPTOR_ORDER[column]),
+      projectedStrideFloats: columns.length,
+      floatCount: projected.length,
+      base64: encodeFloat32ChunkBase64(projected, 0, projected.length),
+      isFinal: startRow + rowCount === session.rowCount,
     };
   }
 
@@ -17067,6 +17169,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     captureSelectiveHeadLiveFrame,
     renderFrozenScaleToCanvas,
     readFlowKernelDescriptorCaptureChunk,
+    readFlowKernelDescriptorCaptureProjectionChunk,
     releaseFlowKernelDescriptorCapture,
     dispose() {
       this.setActive(false);
