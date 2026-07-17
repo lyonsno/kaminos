@@ -1,0 +1,107 @@
+{
+  "schema": "kaminos.volume.deposition-subcell-evidence.v0",
+  "status": "complete",
+  "failurePhase": null,
+  "sourceCommit": "fd670573",
+  "cameraCount": 21,
+  "frozen": {
+    "stateStep": 120,
+    "grid": 160,
+    "depthBins": 96,
+    "rowCount": 1899742,
+    "sampleCap": null,
+    "droppedRowCount": 0,
+    "pathScale": 4.557231148404257
+  },
+  "cohorts": {
+    "attributionCameras": [0, 5, 10, 15, 20],
+    "heldOutCameras": [1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 19]
+  },
+  "massAuthority": {
+    "nominalKernelMass": "decision-bearing-conserved-all-arms-all-cameras-v0",
+    "viewportMass": "non-decision-bearing-clipped-framing-v0",
+    "imageMetrics": "decision-bearing-exact-frozen-viewport-v0",
+    "clippedCameraCountPerArm": 21
+  },
+  "arms": [
+    {
+      "id": "bilinear",
+      "label": "Exact bilinear baseline",
+      "jobId": "bad0f6439e28",
+      "report": "reports/bilinear.json",
+      "receipt": "receipts/bilinear.json",
+      "held16": {
+        "mae": 0.03432410769164562,
+        "topTailUnderfit": 0.08126130362506956,
+        "wispUnderfit": 0.03656145720742643,
+        "dotSpectralPower": 0.0009782994056877214,
+        "projectedFragmentsMean": 35244031.625
+      }
+    },
+    {
+      "id": "higher-order",
+      "label": "7 x 7 Gauss-Hermite",
+      "jobId": "007b2d101883",
+      "report": "reports/higher-order.json",
+      "receipt": "receipts/higher-order.json",
+      "held16": {
+        "mae": 0.033671916578896344,
+        "topTailUnderfit": 0.08582752430811524,
+        "wispUnderfit": 0.05535575607791543,
+        "dotSpectralPower": 0.0008712748276593629,
+        "projectedFragmentsMean": 344208859.125
+      }
+    },
+    {
+      "id": "compound",
+      "label": "75% core + 25% halo",
+      "jobId": "6e9e3296b240",
+      "report": "reports/compound.json",
+      "receipt": "receipts/compound.json",
+      "held16": {
+        "mae": 0.03384589310735464,
+        "topTailUnderfit": 0.08228168205823749,
+        "wispUnderfit": 0.04154842160642147,
+        "dotSpectralPower": 0.000890957257070113,
+        "projectedFragmentsMean": 379452890.75
+      }
+    },
+    {
+      "id": "selective",
+      "label": "View-independent selective split",
+      "jobId": "59d3377cc496",
+      "report": "reports/selective.json",
+      "receipt": "receipts/selective.json",
+      "held16": {
+        "mae": 0.03431876748800278,
+        "topTailUnderfit": 0.08134104579221457,
+        "wispUnderfit": 0.036712076514959335,
+        "dotSpectralPower": 0.0009761441579030361,
+        "projectedFragmentsMean": 35417148.125
+      }
+    }
+  ],
+  "selectiveSplit": {
+    "requestedCount": 6932,
+    "effectiveCount": 4336,
+    "orientationRejectedCount": 2596,
+    "selectionCap": null,
+    "worldOffset": 0.00625,
+    "importanceArtifact": "selective/split-importance.f32",
+    "nativeCellArtifact": "selective/split-native-cell-indices.u32"
+  },
+  "r1FailureJobs": {
+    "bilinear": "42474b93078e",
+    "higher-order": "24a8a886aa15",
+    "compound": "d68ea081806d",
+    "selective": "2f6c97f67f62"
+  },
+  "verdict": {
+    "decisionTableRow": "no-current-footprint-family-closes-even-training-view-v0",
+    "bestCurrentTreatment": "bilinear",
+    "higherOrder": "small-mae-and-dot-gain-with-material-peak-wisp-loss-and-9.77x-work-v0",
+    "compound": "small-mae-and-dot-gain-with-peak-wisp-loss-and-10.77x-work-v0",
+    "selective": "held-view-near-null-with-worse-peak-and-wisp-underfit-v0",
+    "localizedPressure": "missing-or-misallocated-optical-support-at-luminance-peaks-and-edge-wisps-before-denser-blur-v0"
+  }
+}

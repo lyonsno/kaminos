@@ -1,0 +1,30 @@
+{
+  "job_id": "2f6c97f67f62",
+  "job_type": "kaminos_coefficient_selective_split_deposition_oracle_state120",
+  "status": "failed",
+  "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-layer-coefficient-corpus-r4/training-manifest.json",
+  "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-kneecapper-deposition-state120-r1-selective-mv5-min3-off00625",
+  "effective_route": "/private/tmp/kaminos-mlx-residual-venv/bin/python volume-layer-coefficient-render-oracle.py --manifest /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-layer-coefficient-corpus-r4/training-manifest.json --capture-report /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-imported-coefficient-orbit-state120-r2/capture-report.json --out-dir /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-kneecapper-deposition-state120-r1-selective-mv5-min3-off00625 --report /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-kneecapper-deposition-state120-r1-selective-mv5-min3-off00625/report.json --state-step 120 --depth-bins 96 --footprint-mode selective-split --path-scale 4.557231148404257 --split-attribution-cameras 0,5,10,15,20 --split-score-threshold 0 --split-min-camera-support 3 --split-offset-world 0.00625",
+  "effective_cwd": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716",
+  "effective_env": {
+    "PYTHONPATH": "."
+  },
+  "effective_defaults": {
+    "capture_report": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-imported-coefficient-orbit-state120-r2/capture-report.json",
+    "depth_bins": "96",
+    "path_scale": "4.557231148404257",
+    "split_attribution_cameras": "0,5,10,15,20",
+    "split_min_camera_support": "3",
+    "split_offset_world": "0.00625",
+    "split_score_threshold": "0",
+    "state_step": "120"
+  },
+  "effective_timeout": null,
+  "ignored_params": null,
+  "started_at": 1784326994.542016,
+  "finished_at": 1784327000.173022,
+  "exit_code": 1,
+  "failure_phase": "execution",
+  "error_message": "Process exited with code 1",
+  "warnings": null
+}

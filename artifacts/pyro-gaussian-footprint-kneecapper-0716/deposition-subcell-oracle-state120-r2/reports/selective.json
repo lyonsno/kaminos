@@ -1,0 +1,4573 @@
+{
+  "schema": "kaminos.volume.layer-coefficient-render-oracle.v0",
+  "startedAtUnix": 1784329722.216948,
+  "finishedAtUnix": 1784329976.730211,
+  "status": "complete",
+  "failurePhase": null,
+  "requested": {
+    "manifest": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-layer-coefficient-corpus-r4/training-manifest.json",
+    "captureReport": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-imported-coefficient-orbit-state120-r2/capture-report.json",
+    "stateStep": 120,
+    "sampleCap": null,
+    "depthBins": 96,
+    "footprintMode": "selective-split",
+    "pathScale": 4.557231148404257,
+    "footprintControls": {
+      "skirtMix": null,
+      "skirtMinorScale": null,
+      "skirtRidgeRejection": null
+    },
+    "depositionControls": {
+      "compoundHaloMass": null,
+      "splitAttributionCameras": "0,5,10,15,20",
+      "splitScoreThreshold": 0.0,
+      "splitMinCameraSupport": 3,
+      "splitOffsetWorld": 0.00625
+    }
+  },
+  "effective": {
+    "stateId": "coefficient-state-120",
+    "stateStep": 120,
+    "rowCount": 1899742,
+    "candidateAdmissionAuthority": "external-native-cell-index-list-v0",
+    "coefficientBoundary": "per-sample-pre-tone-map-emission-extinction-v0",
+    "sharedTransmittanceIdentity": "ridge-plus-non-ridge-extinction-one-running-transmittance-v0",
+    "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+    "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+    "sampleCap": null,
+    "droppedRowCount": 0,
+    "footprintMode": "view-independent-multiview-residual-three-child-subcell-split-v0",
+    "pathScale": 4.557231148404257,
+    "footprintControls": {
+      "skirtMix": null,
+      "skirtMinorScale": 1.0,
+      "skirtRidgeRejection": null,
+      "conditioningFeature": null,
+      "controlsExplicit": true,
+      "compoundHaloMass": null,
+      "splitAttributionCameras": [
+        0,
+        5,
+        10,
+        15,
+        20
+      ],
+      "splitScoreThreshold": 0.0,
+      "splitMinCameraSupport": 3,
+      "splitOffsetWorld": 0.00625
+    },
+    "splitSelectionCap": null,
+    "momentMatchReference": null,
+    "independentlyRenderedToneMappedImageAdditivity": false
+  },
+  "descriptorReceipt": {
+    "socketIdentity": "flow-kernel-local-descriptor-socket-v0",
+    "kernelIdentity": "flow-tangent-positive-symmetric-trilinear-v0",
+    "sourceHashes": {
+      "fluidSha256": "98d1d0650d67fcdf32f2fc7f5c353bac5355f7df01f45d1e0211c51eb02a7620",
+      "frontSha256": "27491552ce2c0294125d35658c3dd47289c91d0d068909c0c244e5167d7c7e35",
+      "boundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216",
+      "majorantSha256": "0b73c83d00b34d7fd2176f3d0709800b5b9a6617f04c736a359c3d30b2d71da1"
+    },
+    "sourceManifestSha256": "2841b79f3ae625bba8b7f36f2b5f7ae40755814b95214a2607a95b3390456483",
+    "indexSha256": "995f195f0079108fd9de2b51c3e011fb758af4c0e3a594c2d24b9dcc5306e9f9",
+    "descriptorSha256": "4cae2517538cf701ac97aad9382f4d150526de8c11e6513c3b98a82d4b5f0122",
+    "requestedControls": {
+      "strength": 0.6,
+      "radiusWorld": 0.018,
+      "coherence": 0.7
+    },
+    "effectiveControls": {
+      "strength": 0.6,
+      "radiusWorld": 0.018,
+      "coherence": 0.7
+    },
+    "runtimeReceipt": {
+      "ok": true,
+      "identity": "external-native-cell-index-list-v0",
+      "status": "applied",
+      "failurePhase": null,
+      "sessionId": "flow-kernel-index-mro8h41h-zpry2g7g",
+      "grid": 160,
+      "count": 1899742,
+      "byteLength": 7598968,
+      "indexSha256": "995f195f0079108fd9de2b51c3e011fb758af4c0e3a594c2d24b9dcc5306e9f9",
+      "duplicatePolicy": "forbidden",
+      "orderIdentity": "caller-ordered",
+      "chunkCount": 8,
+      "routeIdentity": "native-3d-compute-fluid-raymarch-v0",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "backend": "WebGPU:apple"
+    }
+  },
+  "frozenStateBinding": {
+    "sameStateCaptureId": "filament-orbit-f120-s120",
+    "controlsHash": "ba122038332747804203b4d03c6a5e9bf7b1e5969ec5d1f5ef995d3b5adff5b9",
+    "fluidSha256": "98d1d0650d67fcdf32f2fc7f5c353bac5355f7df01f45d1e0211c51eb02a7620",
+    "frontSha256": "27491552ce2c0294125d35658c3dd47289c91d0d068909c0c244e5167d7c7e35",
+    "hashMatch": true
+  },
+  "calibration": {
+    "identity": "caller-frozen-global-optical-path-v0",
+    "cameraIndex": 10,
+    "pathScale": 4.557231148404257,
+    "objective": "native-rgb-mae-to-shared-transmittance-target-v0",
+    "trials": [],
+    "calibrationBoundaryHit": false,
+    "calibrationExpansionCount": 0,
+    "calibrationExpansionDiagnostic": false,
+    "bracketUpper": null
+  },
+  "selectiveSplit": {
+    "identity": "view-independent-multiview-residual-three-child-subcell-split-v0",
+    "attributionCameras": [
+      0,
+      5,
+      10,
+      15,
+      20
+    ],
+    "heldOutCameras": [
+      1,
+      2,
+      3,
+      4,
+      6,
+      7,
+      8,
+      9,
+      11,
+      12,
+      13,
+      14,
+      16,
+      17,
+      18,
+      19
+    ],
+    "scoreIdentity": "target-tail-plus-target-wisp-underfit-times-pre-bin-transmitted-optical-weight-v0",
+    "scoreThreshold": 0.0,
+    "minimumCameraSupport": 3,
+    "scoreQuantiles": {
+      "50.0": 0.0,
+      "90.0": 8.256062574218959e-05,
+      "95.0": 0.00034374522510915995,
+      "99.0": 0.0022094068117439747,
+      "99.9": 0.007903612218797207,
+      "100.0": 0.03293798491358757
+    },
+    "cameraAttribution": [
+      {
+        "cameraIndex": 0,
+        "tailThreshold": 0.8227621912956238,
+        "wispThreshold": 0.07790348678827286,
+        "positiveResidualPixels": 2289,
+        "attributedCandidateRows": 64372,
+        "scoreMaximum": 0.07862181216478348,
+        "scoreMeanPositive": 0.0034398071002215147
+      },
+      {
+        "cameraIndex": 5,
+        "tailThreshold": 0.8297867178916931,
+        "wispThreshold": 0.0783831849694252,
+        "positiveResidualPixels": 2256,
+        "attributedCandidateRows": 69350,
+        "scoreMaximum": 0.07095441222190857,
+        "scoreMeanPositive": 0.0035454051103442907
+      },
+      {
+        "cameraIndex": 10,
+        "tailThreshold": 0.7950241565704346,
+        "wispThreshold": 0.07872321456670761,
+        "positiveResidualPixels": 2182,
+        "attributedCandidateRows": 61291,
+        "scoreMaximum": 0.06492147594690323,
+        "scoreMeanPositive": 0.002954484662041068
+      },
+      {
+        "cameraIndex": 15,
+        "tailThreshold": 0.7658321857452393,
+        "wispThreshold": 0.07647376507520676,
+        "positiveResidualPixels": 2069,
+        "attributedCandidateRows": 54688,
+        "scoreMaximum": 0.06369448453187943,
+        "scoreMeanPositive": 0.0021605140063911676
+      },
+      {
+        "cameraIndex": 20,
+        "tailThreshold": 0.7549372315406799,
+        "wispThreshold": 0.07379848510026932,
+        "positiveResidualPixels": 1981,
+        "attributedCandidateRows": 51021,
+        "scoreMaximum": 0.07617319375276566,
+        "scoreMeanPositive": 0.0017086006700992584
+      }
+    ],
+    "requestedSplitCount": 6932,
+    "effectiveSplitCount": 4336,
+    "orientationRejectedCount": 2596,
+    "splitOffsetWorld": 0.00625,
+    "orientationIdentity": "structure-normal-cross-flow-tangent-bitangent-v0",
+    "splitSelectionCap": null,
+    "importanceArtifact": {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-kneecapper-deposition-state120-r2-selective-mv5-min3-off00625/split-importance.f32",
+      "dtype": "float32-le",
+      "shape": [
+        1899742
+      ],
+      "bytes": 7598968,
+      "sha256": "78edacf5643b635879cbe7f72d0fc9a44ad05e1f3b7014f9a2da3479b9a1d477"
+    },
+    "selectedNativeCellArtifact": {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-kneecapper-deposition-state120-r2-selective-mv5-min3-off00625/split-native-cell-indices.u32",
+      "dtype": "uint32-le",
+      "shape": [
+        4336
+      ],
+      "bytes": 17344,
+      "sha256": "5aa05f88a2a13418e84cfa251756b4248d1920d184716877a41704f629e8a47c"
+    }
+  },
+  "massAccounting": {
+    "identity": "all-camera-nominal-mass-and-frozen-viewport-retention-summary-v1",
+    "cameraCount": 21,
+    "clippedCameraCount": 21,
+    "allNominalKernelMassConserved": true,
+    "minimumViewportRetentionByChannel": [
+      0.9972858451756259,
+      0.9961383601697953,
+      0.9882842415362291,
+      0.9947958994645512,
+      0.9991186235336812,
+      0.9987427004316023,
+      0.99661003126091,
+      0.9975327371317624
+    ],
+    "meanViewportRetentionByChannel": [
+      0.9975070758529063,
+      0.9964258792948096,
+      0.98976607353577,
+      0.9951281389899128,
+      0.9991871329743677,
+      0.9988064681169795,
+      0.9967294377286732,
+      0.9979806835255959
+    ],
+    "viewportMassEvidenceAuthority": "non-decision-bearing-clipped-framing-v0",
+    "imageMetricAuthority": "decision-bearing-exact-frozen-viewport-v0",
+    "imageMetricInterpretation": "includes-boundary-clipping-of-frozen-framing-v0"
+  },
+  "metrics": {
+    "cameras": [
+      {
+        "cameraIndex": 0,
+        "cameraAngle": -0.42,
+        "split": "attribution",
+        "expanded": {
+          "mae": 0.041107144206762314,
+          "mse": 0.004405816551297903,
+          "lumaMae": 0.040969230234622955,
+          "gradientMae": 0.015892649069428444,
+          "targetTopTailLumaUnderfit": 0.10747424513101578,
+          "targetTopTailLumaThreshold": 0.8227621912956238,
+          "targetHighGradientUnderfit": 0.022758930921554565,
+          "targetHighGradientThreshold": 0.04757088050246239,
+          "targetWispUnderfit": 0.039911698549985886,
+          "targetWispGradientThreshold": 0.07790348678827286,
+          "structuredDotSpectralPower": 0.0011032919865101576,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.19070039689540863,
+          "targetMeanLuma": 0.19719769060611725
+        },
+        "current": {
+          "mae": 0.0958554670214653,
+          "mse": 0.02986142411828041,
+          "lumaMae": 0.09823746234178543,
+          "gradientMae": 0.02091720513999462,
+          "targetTopTailLumaUnderfit": 0.0673912987112999,
+          "targetTopTailLumaThreshold": 0.8227621912956238,
+          "targetHighGradientUnderfit": 0.04467640817165375,
+          "targetHighGradientThreshold": 0.04757088050246239,
+          "targetWispUnderfit": 0.06682346761226654,
+          "targetWispGradientThreshold": 0.07790348678827286,
+          "structuredDotSpectralPower": 0.003743911162018776,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.1096280962228775,
+          "targetMeanLuma": 0.19719769060611725
+        },
+        "ridgeRidge": {
+          "mae": 0.08524328470230103,
+          "mse": 0.021842945367097855,
+          "lumaMae": 0.08691208064556122,
+          "gradientMae": 0.024091657251119614,
+          "targetTopTailLumaUnderfit": 0.1324576884508133,
+          "targetTopTailLumaThreshold": 0.8227621912956238,
+          "targetHighGradientUnderfit": 0.026835793629288673,
+          "targetHighGradientThreshold": 0.04757088050246239,
+          "targetWispUnderfit": 0.04395433887839317,
+          "targetWispGradientThreshold": 0.07790348678827286,
+          "structuredDotSpectralPower": 0.0029002595692873,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.11968565732240677,
+          "targetMeanLuma": 0.19719769060611725
+        },
+        "ridgeTotal": {
+          "mae": 0.10593027621507645,
+          "mse": 0.0320081003010273,
+          "lumaMae": 0.11055240780115128,
+          "gradientMae": 0.02242005616426468,
+          "targetTopTailLumaUnderfit": 0.32259389758110046,
+          "targetTopTailLumaThreshold": 0.8227621912956238,
+          "targetHighGradientUnderfit": 0.028873933479189873,
+          "targetHighGradientThreshold": 0.04757088050246239,
+          "targetWispUnderfit": 0.04694685339927673,
+          "targetWispGradientThreshold": 0.07790348678827286,
+          "structuredDotSpectralPower": 0.002426053863018751,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.09069699794054031,
+          "targetMeanLuma": 0.19719769060611725
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1724297,
+          "nearDepth": 1.3252747058868408,
+          "farDepth": 3.341144561767578,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "orientation": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "nominalQuadratureSamples": null,
+          "nominalPixelDepositsPerCandidate": null,
+          "nominalProjectedFragments": 34658172,
+          "projectedFragments": 34487200,
+          "projectedFragmentsPerProjectedRow": 20.00073073258261,
+          "coefficientMass": {
+            "identity": "nominal-kernel-mass-with-explicit-viewport-retention-v1",
+            "expectedCenterVisible": [
+              5034.102635458602,
+              2446.8737250843005,
+              1888.7470609450784,
+              1110.50946159891,
+              7840.3310627601095,
+              3282.744662391802,
+              1730.646087890232,
+              8325.080021646103
+            ],
+            "nominalKernel": [
+              5034.102635269099,
+              2446.8737249821597,
+              1888.747060899558,
+              1110.509461571059,
+              7840.331062778979,
+              3282.744662399809,
+              1730.6460879181343,
+              8325.080021651256
+            ],
+            "nominalKernelDelta": [
+              -1.895032255561091e-07,
+              -1.021408024826087e-07,
+              -4.55204371974105e-08,
+              -2.7851001505041495e-08,
+              1.8869286577682942e-08,
+              8.006736607057974e-09,
+              2.7902387955691665e-08,
+              5.153196980245411e-09
+            ],
+            "nominalKernelMassConserved": true,
+            "inViewportDeposited": [
+              5022.095861127043,
+              2438.711802649153,
+              1871.4996748510198,
+              1105.5130511332686,
+              7833.420779473245,
+              3278.617268944617,
+              1724.883542835889,
+              8304.539860833589
+            ],
+            "inViewportDelta": [
+              -12.006774331559427,
+              -8.161922435147517,
+              -17.247386094058584,
+              -4.996410465641475,
+              -6.9102832868647965,
+              -4.1273934471851135,
+              -5.762545054342809,
+              -20.540160812513932
+            ],
+            "inViewportMassConserved": false,
+            "viewportRetentionFraction": [
+              0.9976149126863272,
+              0.9966643466920769,
+              0.9908683452375945,
+              0.995500794330516,
+              0.9991186235336812,
+              0.9987427004316023,
+              0.9966702926180778,
+              0.9975327371317624
+            ],
+            "clippingDetected": true,
+            "viewportMassEvidenceAuthority": "non-decision-bearing-clipped-framing-v0",
+            "tolerance": [
+              0.2519051317729301,
+              0.12254368625421504,
+              0.09463735304725393,
+              0.055725473079945506,
+              0.39221655313800546,
+              0.16433723311959011,
+              0.0867323043945116,
+              0.4164540010823051
+            ],
+            "centerVisibleRows": 1724297
+          },
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": null,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": null,
+            "conditioningFeature": null,
+            "controlsExplicit": true,
+            "compoundHaloMass": null,
+            "splitAttributionCameras": [
+              0,
+              5,
+              10,
+              15,
+              20
+            ],
+            "splitScoreThreshold": 0.0,
+            "splitMinCameraSupport": 3,
+            "splitOffsetWorld": 0.00625
+          },
+          "effectiveSkirtMix": null,
+          "compoundHaloMass": null,
+          "splitCandidateCount": 4336,
+          "splitSelectionCap": null,
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6516927480697632
+      },
+      {
+        "cameraIndex": 1,
+        "cameraAngle": -0.378,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.04203283414244652,
+          "mse": 0.0045488933101296425,
+          "lumaMae": 0.04201490059494972,
+          "gradientMae": 0.01603858172893524,
+          "targetTopTailLumaUnderfit": 0.11301055550575256,
+          "targetTopTailLumaThreshold": 0.8294878602027893,
+          "targetHighGradientUnderfit": 0.02371605858206749,
+          "targetHighGradientThreshold": 0.047832101583480835,
+          "targetWispUnderfit": 0.040451787412166595,
+          "targetWispGradientThreshold": 0.08001945167779922,
+          "structuredDotSpectralPower": 0.0011237337021157146,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.19058214128017426,
+          "targetMeanLuma": 0.19863560795783997
+        },
+        "current": {
+          "mae": 0.09714561700820923,
+          "mse": 0.030820857733488083,
+          "lumaMae": 0.09961742907762527,
+          "gradientMae": 0.021126726642251015,
+          "targetTopTailLumaUnderfit": 0.080515556037426,
+          "targetTopTailLumaThreshold": 0.8294878602027893,
+          "targetHighGradientUnderfit": 0.045630037784576416,
+          "targetHighGradientThreshold": 0.047832101583480835,
+          "targetWispUnderfit": 0.06764943897724152,
+          "targetWispGradientThreshold": 0.08001945167779922,
+          "structuredDotSpectralPower": 0.003795058699324727,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.10935430973768234,
+          "targetMeanLuma": 0.19863560795783997
+        },
+        "ridgeRidge": {
+          "mae": 0.08644916862249374,
+          "mse": 0.022742852568626404,
+          "lumaMae": 0.08831346780061722,
+          "gradientMae": 0.024432944133877754,
+          "targetTopTailLumaUnderfit": 0.13894464075565338,
+          "targetTopTailLumaThreshold": 0.8294878602027893,
+          "targetHighGradientUnderfit": 0.02822704240679741,
+          "targetHighGradientThreshold": 0.047832101583480835,
+          "targetWispUnderfit": 0.04592745006084442,
+          "targetWispGradientThreshold": 0.08001945167779922,
+          "structuredDotSpectralPower": 0.002928300993517041,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.1195070743560791,
+          "targetMeanLuma": 0.19863560795783997
+        },
+        "ridgeTotal": {
+          "mae": 0.1073823869228363,
+          "mse": 0.03308667615056038,
+          "lumaMae": 0.11207933723926544,
+          "gradientMae": 0.022772671654820442,
+          "targetTopTailLumaUnderfit": 0.3305932283401489,
+          "targetTopTailLumaThreshold": 0.8294878602027893,
+          "targetHighGradientUnderfit": 0.03048940934240818,
+          "targetHighGradientThreshold": 0.047832101583480835,
+          "targetWispUnderfit": 0.04892529919743538,
+          "targetWispGradientThreshold": 0.08001945167779922,
+          "structuredDotSpectralPower": 0.0024465483147650957,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.09070300310850143,
+          "targetMeanLuma": 0.19863560795783997
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1728698,
+          "nearDepth": 1.326470136642456,
+          "farDepth": 3.345355272293091,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "orientation": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "nominalQuadratureSamples": null,
+          "nominalPixelDepositsPerCandidate": null,
+          "nominalProjectedFragments": 34746372,
+          "projectedFragments": 34575534,
+          "projectedFragmentsPerProjectedRow": 20.00091051184186,
+          "coefficientMass": {
+            "identity": "nominal-kernel-mass-with-explicit-viewport-retention-v1",
+            "expectedCenterVisible": [
+              5036.799886944463,
+              2447.771268149374,
+              1888.2544055331841,
+              1110.7386275026533,
+              7841.244378525644,
+              3283.1322532192044,
+              1730.558160802507,
+              8333.92307719749
+            ],
+            "nominalKernel": [
+              5036.799887046814,
+              2447.771268220491,
+              1888.2544056855213,
+              1110.7386275379674,
+              7841.244378501339,
+              3283.1322532137083,
+              1730.5581608020047,
+              8333.923077194988
+            ],
+            "nominalKernelDelta": [
+              1.0235089575871825e-07,
+              7.111702871043235e-08,
+              1.5233717931550927e-07,
+              3.53140876541147e-08,
+              -2.430442691547796e-08,
+              -5.496076482813805e-09,
+              -5.022684490540996e-10,
+              -2.5029294192790985e-09
+            ],
+            "nominalKernelMassConserved": true,
+            "inViewportDeposited": [
+              5024.821044073873,
+              2439.6189146071,
+              1870.91685202885,
+              1105.7938287376169,
+              7834.429421346007,
+              3279.070398327907,
+              1724.969272547291,
+              8313.525520813771
+            ],
+            "inViewportDelta": [
+              -11.978842870589688,
+              -8.152353542273886,
+              -17.33755350433421,
+              -4.944798765036467,
+              -6.814957179636622,
+              -4.061854891297571,
+              -5.588888255216034,
+              -20.397556383719348
+            ],
+            "inViewportMassConserved": false,
+            "viewportRetentionFraction": [
+              0.9976217353995661,
+              0.9966694790283909,
+              0.9908182110135532,
+              0.9955481887074061,
+              0.9991308832054386,
+              0.9987628110663788,
+              0.9967704707175954,
+              0.9975524664441013
+            ],
+            "clippingDetected": true,
+            "viewportMassEvidenceAuthority": "non-decision-bearing-clipped-framing-v0",
+            "tolerance": [
+              0.25203999434722313,
+              0.12258856340746871,
+              0.09461272027665922,
+              0.05573693137513267,
+              0.39226221892628216,
+              0.16435661266096024,
+              0.08672790804012537,
+              0.41689615385987455
+            ],
+            "centerVisibleRows": 1728698
+          },
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": null,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": null,
+            "conditioningFeature": null,
+            "controlsExplicit": true,
+            "compoundHaloMass": null,
+            "splitAttributionCameras": [
+              0,
+              5,
+              10,
+              15,
+              20
+            ],
+            "splitScoreThreshold": 0.0,
+            "splitMinCameraSupport": 3,
+            "splitOffsetWorld": 0.00625
+          },
+          "effectiveSkirtMix": null,
+          "compoundHaloMass": null,
+          "splitCandidateCount": 4336,
+          "splitSelectionCap": null,
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.651759922504425
+      },
+      {
+        "cameraIndex": 2,
+        "cameraAngle": -0.336,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.04267372936010361,
+          "mse": 0.00466908561065793,
+          "lumaMae": 0.042716462165117264,
+          "gradientMae": 0.01603892631828785,
+          "targetTopTailLumaUnderfit": 0.12049223482608795,
+          "targetTopTailLumaThreshold": 0.8339919447898865,
+          "targetHighGradientUnderfit": 0.0237321425229311,
+          "targetHighGradientThreshold": 0.048356905579566956,
+          "targetWispUnderfit": 0.040041062980890274,
+          "targetWispGradientThreshold": 0.07995825260877609,
+          "structuredDotSpectralPower": 0.0011154224630445242,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.19048096239566803,
+          "targetMeanLuma": 0.19944804906845093
+        },
+        "current": {
+          "mae": 0.09772321581840515,
+          "mse": 0.031411245465278625,
+          "lumaMae": 0.10018527507781982,
+          "gradientMae": 0.02110697515308857,
+          "targetTopTailLumaUnderfit": 0.09818761795759201,
+          "targetTopTailLumaThreshold": 0.8339919447898865,
+          "targetHighGradientUnderfit": 0.046694833785295486,
+          "targetHighGradientThreshold": 0.048356905579566956,
+          "targetWispUnderfit": 0.06962566077709198,
+          "targetWispGradientThreshold": 0.07995825260877609,
+          "structuredDotSpectralPower": 0.0037427740171551704,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.1091017872095108,
+          "targetMeanLuma": 0.19944804906845093
+        },
+        "ridgeRidge": {
+          "mae": 0.0872776210308075,
+          "mse": 0.023414377123117447,
+          "lumaMae": 0.08913716673851013,
+          "gradientMae": 0.02436867356300354,
+          "targetTopTailLumaUnderfit": 0.14856776595115662,
+          "targetTopTailLumaThreshold": 0.8339919447898865,
+          "targetHighGradientUnderfit": 0.029247453436255455,
+          "targetHighGradientThreshold": 0.048356905579566956,
+          "targetWispUnderfit": 0.046797722578048706,
+          "targetWispGradientThreshold": 0.07995825260877609,
+          "structuredDotSpectralPower": 0.0029682612512260675,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.11948643624782562,
+          "targetMeanLuma": 0.19944804906845093
+        },
+        "ridgeTotal": {
+          "mae": 0.10827769339084625,
+          "mse": 0.03382006287574768,
+          "lumaMae": 0.11301936209201813,
+          "gradientMae": 0.022805972024798393,
+          "targetTopTailLumaUnderfit": 0.3391624093055725,
+          "targetTopTailLumaThreshold": 0.8339919447898865,
+          "targetHighGradientUnderfit": 0.031243301928043365,
+          "targetHighGradientThreshold": 0.048356905579566956,
+          "targetWispUnderfit": 0.04996265843510628,
+          "targetWispGradientThreshold": 0.07995825260877609,
+          "structuredDotSpectralPower": 0.002496152650564909,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.09080902487039566,
+          "targetMeanLuma": 0.19944804906845093
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1733385,
+          "nearDepth": 1.3290181159973145,
+          "farDepth": 3.3486475944519043,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "orientation": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "nominalQuadratureSamples": null,
+          "nominalPixelDepositsPerCandidate": null,
+          "nominalProjectedFragments": 34840164,
+          "projectedFragments": 34670400,
+          "projectedFragmentsPerProjectedRow": 20.001557645877863,
+          "coefficientMass": {
+            "identity": "nominal-kernel-mass-with-explicit-viewport-retention-v1",
+            "expectedCenterVisible": [
+              5038.783685527823,
+              2448.0515645744817,
+              1885.913837232356,
+              1110.8689766388763,
+              7842.410999608708,
+              3283.6279272063693,
+              1730.6558205185881,
+              8343.611246524892
+            ],
+            "nominalKernel": [
+              5038.783685783565,
+              2448.051564708236,
+              1885.913837354301,
+              1110.8689766744424,
+              7842.410999692856,
+              3283.627927244476,
+              1730.6558205793738,
+              8343.611246566126
+            ],
+            "nominalKernelDelta": [
+              2.5574172468623146e-07,
+              1.337543835688848e-07,
+              1.2194504961371422e-07,
+              3.55660176865058e-08,
+              8.414826879743487e-08,
+              3.8106463762233034e-08,
+              6.078562364564277e-08,
+              4.123467078898102e-08
+            ],
+            "nominalKernelMassConserved": true,
+            "inViewportDeposited": [
+              5027.238425979803,
+              2440.3111909997538,
+              1869.6412751166667,
+              1106.0519019443843,
+              7835.675565489678,
+              3279.6354587033165,
+              1725.2508582885396,
+              8323.492632167723
+            ],
+            "inViewportDelta": [
+              -11.545259548020113,
+              -7.7403735747279825,
+              -16.272562115689198,
+              -4.817074694492021,
+              -6.7354341190302875,
+              -3.9924685030528053,
+              -5.404962230048568,
+              -20.118614357168553
+            ],
+            "inViewportMassConserved": false,
+            "viewportRetentionFraction": [
+              0.9977087209397022,
+              0.9968381492911594,
+              0.9913715240885184,
+              0.995663687801358,
+              0.9991411526226608,
+              0.9987841288381143,
+              0.9968769282915947,
+              0.9975887402034044
+            ],
+            "clippingDetected": true,
+            "viewportMassEvidenceAuthority": "non-decision-bearing-clipped-framing-v0",
+            "tolerance": [
+              0.25213918427639115,
+              0.1226025782287241,
+              0.09449569186161781,
+              0.05574344883194382,
+              0.3923205499804354,
+              0.16438139636031848,
+              0.08673279102592941,
+              0.4173805623262446
+            ],
+            "centerVisibleRows": 1733385
+          },
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": null,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": null,
+            "conditioningFeature": null,
+            "controlsExplicit": true,
+            "compoundHaloMass": null,
+            "splitAttributionCameras": [
+              0,
+              5,
+              10,
+              15,
+              20
+            ],
+            "splitScoreThreshold": 0.0,
+            "splitMinCameraSupport": 3,
+            "splitOffsetWorld": 0.00625
+          },
+          "effectiveSkirtMix": null,
+          "compoundHaloMass": null,
+          "splitCandidateCount": 4336,
+          "splitSelectionCap": null,
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6518020033836365
+      },
+      {
+        "cameraIndex": 3,
+        "cameraAngle": -0.294,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.042838048189878464,
+          "mse": 0.004712563473731279,
+          "lumaMae": 0.04289867356419563,
+          "gradientMae": 0.016092611476778984,
+          "targetTopTailLumaUnderfit": 0.1307695209980011,
+          "targetTopTailLumaThreshold": 0.8368260860443115,
+          "targetHighGradientUnderfit": 0.02313215471804142,
+          "targetHighGradientThreshold": 0.048250384628772736,
+          "targetWispUnderfit": 0.03985153138637543,
+          "targetWispGradientThreshold": 0.07930250465869904,
+          "structuredDotSpectralPower": 0.001139792613685131,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.19027942419052124,
+          "targetMeanLuma": 0.19985850155353546
+        },
+        "current": {
+          "mae": 0.09806222468614578,
+          "mse": 0.03168145939707756,
+          "lumaMae": 0.10050354897975922,
+          "gradientMae": 0.021311748772859573,
+          "targetTopTailLumaUnderfit": 0.11309181898832321,
+          "targetTopTailLumaThreshold": 0.8368260860443115,
+          "targetHighGradientUnderfit": 0.04675076901912689,
+          "targetHighGradientThreshold": 0.048250384628772736,
+          "targetWispUnderfit": 0.06971309334039688,
+          "targetWispGradientThreshold": 0.07930250465869904,
+          "structuredDotSpectralPower": 0.00367771927267313,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.10886268317699432,
+          "targetMeanLuma": 0.19985850155353546
+        },
+        "ridgeRidge": {
+          "mae": 0.08776148408651352,
+          "mse": 0.02380903996527195,
+          "lumaMae": 0.08960872888565063,
+          "gradientMae": 0.02445899322628975,
+          "targetTopTailLumaUnderfit": 0.1613389253616333,
+          "targetTopTailLumaThreshold": 0.8368260860443115,
+          "targetHighGradientUnderfit": 0.029094990342855453,
+          "targetHighGradientThreshold": 0.048250384628772736,
+          "targetWispUnderfit": 0.04784630984067917,
+          "targetWispGradientThreshold": 0.07930250465869904,
+          "structuredDotSpectralPower": 0.0029588863253593445,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.11944504082202911,
+          "targetMeanLuma": 0.19985850155353546
+        },
+        "ridgeTotal": {
+          "mae": 0.10880832374095917,
+          "mse": 0.03420446068048477,
+          "lumaMae": 0.1135520413517952,
+          "gradientMae": 0.022887185215950012,
+          "targetTopTailLumaUnderfit": 0.3604937195777893,
+          "targetTopTailLumaThreshold": 0.8368260860443115,
+          "targetHighGradientUnderfit": 0.030954444780945778,
+          "targetHighGradientThreshold": 0.048250384628772736,
+          "targetWispUnderfit": 0.05050422623753548,
+          "targetWispGradientThreshold": 0.07930250465869904,
+          "structuredDotSpectralPower": 0.002532379003241658,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.09086738526821136,
+          "targetMeanLuma": 0.19985850155353546
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1738459,
+          "nearDepth": 1.3323416709899902,
+          "farDepth": 3.3512604236602783,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "orientation": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "nominalQuadratureSamples": null,
+          "nominalPixelDepositsPerCandidate": null,
+          "nominalProjectedFragments": 34941728,
+          "projectedFragments": 34773101,
+          "projectedFragmentsPerProjectedRow": 20.002255445771226,
+          "coefficientMass": {
+            "identity": "nominal-kernel-mass-with-explicit-viewport-retention-v1",
+            "expectedCenterVisible": [
+              5041.783819915886,
+              2449.340944909178,
+              1886.577393146571,
+              1111.3812455559735,
+              7843.519028517088,
+              3284.0670665209364,
+              1730.6101781115055,
+              8353.793915912578
+            ],
+            "nominalKernel": [
+              5041.783819683478,
+              2449.3409447804397,
+              1886.577393045631,
+              1111.381245511984,
+              7843.5190289224365,
+              3284.0670666766123,
+              1730.610178193994,
+              8353.793916103697
+            ],
+            "nominalKernelDelta": [
+              -2.3240772861754522e-07,
+              -1.2873806554125622e-07,
+              -1.00940042102593e-07,
+              -4.398953024065122e-08,
+              4.053481461596675e-07,
+              1.556759343657177e-07,
+              8.248844096669927e-08,
+              1.911193976411596e-07
+            ],
+            "nominalKernelMassConserved": true,
+            "inViewportDeposited": [
+              5029.836648392273,
+              2441.2861855587826,
+              1869.57477441196,
+              1106.3921154183745,
+              7836.83417737957,
+              3280.132744031773,
+              1725.3911487978216,
+              8334.037632965401
+            ],
+            "inViewportDelta": [
+              -11.947171523613179,
+              -8.054759350395216,
+              -17.002618734610905,
+              -4.989130137598977,
+              -6.684851137518308,
+              -3.9343224891631507,
+              -5.2190293136839045,
+              -19.75628294717717
+            ],
+            "inViewportMassConserved": false,
+            "viewportRetentionFraction": [
+              0.99763036814938,
+              0.9967114584977903,
+              0.990987584820863,
+              0.9955108742768976,
+              0.9991477229655192,
+              0.9988019969113082,
+              0.9969842837054275,
+              0.9976350526304527
+            ],
+            "clippingDetected": true,
+            "viewportMassEvidenceAuthority": "non-decision-bearing-clipped-framing-v0",
+            "tolerance": [
+              0.2522891909957943,
+              0.1226670472454589,
+              0.09452886965732855,
+              0.055769062277798674,
+              0.3923759514258544,
+              0.16440335332604683,
+              0.0867305089055753,
+              0.4178896957956289
+            ],
+            "centerVisibleRows": 1738459
+          },
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": null,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": null,
+            "conditioningFeature": null,
+            "controlsExplicit": true,
+            "compoundHaloMass": null,
+            "splitAttributionCameras": [
+              0,
+              5,
+              10,
+              15,
+              20
+            ],
+            "splitScoreThreshold": 0.0,
+            "splitMinCameraSupport": 3,
+            "splitOffsetWorld": 0.00625
+          },
+          "effectiveSkirtMix": null,
+          "compoundHaloMass": null,
+          "splitCandidateCount": 4336,
+          "splitSelectionCap": null,
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.651836633682251
+      },
+      {
+        "cameraIndex": 4,
+        "cameraAngle": -0.252,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.04251355677843094,
+          "mse": 0.0046175033785402775,
+          "lumaMae": 0.04261370748281479,
+          "gradientMae": 0.016211189329624176,
+          "targetTopTailLumaUnderfit": 0.13130827248096466,
+          "targetTopTailLumaThreshold": 0.8379490375518799,
+          "targetHighGradientUnderfit": 0.023507695645093918,
+          "targetHighGradientThreshold": 0.04845041036605835,
+          "targetWispUnderfit": 0.0405200757086277,
+          "targetWispGradientThreshold": 0.07951558381319046,
+          "structuredDotSpectralPower": 0.001134806196205318,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.18997697532176971,
+          "targetMeanLuma": 0.20007972419261932
+        },
+        "current": {
+          "mae": 0.09822551906108856,
+          "mse": 0.03173857554793358,
+          "lumaMae": 0.10065393894910812,
+          "gradientMae": 0.021337367594242096,
+          "targetTopTailLumaUnderfit": 0.11361782252788544,
+          "targetTopTailLumaThreshold": 0.8379490375518799,
+          "targetHighGradientUnderfit": 0.04726352542638779,
+          "targetHighGradientThreshold": 0.04845041036605835,
+          "targetWispUnderfit": 0.07114792615175247,
+          "targetWispGradientThreshold": 0.07951558381319046,
+          "structuredDotSpectralPower": 0.0035378276370465755,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.10860933363437653,
+          "targetMeanLuma": 0.20007972419261932
+        },
+        "ridgeRidge": {
+          "mae": 0.08792814612388611,
+          "mse": 0.023883255198597908,
+          "lumaMae": 0.08976404368877411,
+          "gradientMae": 0.024854978546500206,
+          "targetTopTailLumaUnderfit": 0.15973713994026184,
+          "targetTopTailLumaThreshold": 0.8379490375518799,
+          "targetHighGradientUnderfit": 0.029499337077140808,
+          "targetHighGradientThreshold": 0.04845041036605835,
+          "targetWispUnderfit": 0.048004135489463806,
+          "targetWispGradientThreshold": 0.07951558381319046,
+          "structuredDotSpectralPower": 0.0028904140926897526,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.11942272633314133,
+          "targetMeanLuma": 0.20007972419261932
+        },
+        "ridgeTotal": {
+          "mae": 0.10916545242071152,
+          "mse": 0.034358881413936615,
+          "lumaMae": 0.1139158084988594,
+          "gradientMae": 0.023224778473377228,
+          "targetTopTailLumaUnderfit": 0.3651385009288788,
+          "targetTopTailLumaThreshold": 0.8379490375518799,
+          "targetHighGradientUnderfit": 0.031275369226932526,
+          "targetHighGradientThreshold": 0.04845041036605835,
+          "targetWispUnderfit": 0.05046328902244568,
+          "targetWispGradientThreshold": 0.07951558381319046,
+          "structuredDotSpectralPower": 0.002502304269000888,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.09085176885128021,
+          "targetMeanLuma": 0.20007972419261932
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1743863,
+          "nearDepth": 1.33753502368927,
+          "farDepth": 3.354090690612793,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "orientation": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "nominalQuadratureSamples": null,
+          "nominalPixelDepositsPerCandidate": null,
+          "nominalProjectedFragments": 35049962,
+          "projectedFragments": 34882298,
+          "projectedFragmentsPerProjectedRow": 20.002888988412508,
+          "coefficientMass": {
+            "identity": "nominal-kernel-mass-with-explicit-viewport-retention-v1",
+            "expectedCenterVisible": [
+              5044.757812409939,
+              2450.9296422972075,
+              1888.3939132702749,
+              1111.9444354016719,
+              7844.9367182536735,
+              3284.785074540093,
+              1731.3475192017565,
+              8364.504582903559
+            ],
+            "nominalKernel": [
+              5044.757812764202,
+              2450.9296424564586,
+              1888.393913306827,
+              1111.9444354542302,
+              7844.936718386784,
+              3284.7850745979486,
+              1731.3475192579265,
+              8364.504582896496
+            ],
+            "nominalKernelDelta": [
+              3.542627382557839e-07,
+              1.5925115803838708e-07,
+              3.65521373169031e-08,
+              5.2558334573404863e-08,
+              1.3311091606738046e-07,
+              5.7855686463881284e-08,
+              5.616993803414516e-08,
+              -7.063135853968561e-09
+            ],
+            "nominalKernelMassConserved": true,
+            "inViewportDeposited": [
+              5032.275337317945,
+              2442.462664328829,
+              1870.6859287298637,
+              1106.805806468062,
+              7838.189319472433,
+              3280.7714532247824,
+              1725.8692819499906,
+              8344.974257561687
+            ],
+            "inViewportDelta": [
+              -12.482475091994274,
+              -8.466977968378615,
+              -17.70798454041119,
+              -5.13862893360988,
+              -6.747398781240008,
+              -4.013621315310502,
+              -5.478237251765904,
+              -19.530325341871503
+            ],
+            "inViewportMassConserved": false,
+            "viewportRetentionFraction": [
+              0.9975256542422537,
+              0.9965454014581819,
+              0.9906227273790854,
+              0.9953786998972177,
+              0.9991399039885764,
+              0.9987781175254298,
+              0.9968358534661536,
+              0.9976650947885437
+            ],
+            "clippingDetected": true,
+            "viewportMassEvidenceAuthority": "non-decision-bearing-clipped-framing-v0",
+            "tolerance": [
+              0.25243789062049693,
+              0.12274648211486039,
+              0.09461969566351375,
+              0.055797221770083595,
+              0.39244683591268364,
+              0.16443925372700466,
+              0.08676737596008784,
+              0.41842522914517793
+            ],
+            "centerVisibleRows": 1743863
+          },
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": null,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": null,
+            "conditioningFeature": null,
+            "controlsExplicit": true,
+            "compoundHaloMass": null,
+            "splitAttributionCameras": [
+              0,
+              5,
+              10,
+              15,
+              20
+            ],
+            "splitScoreThreshold": 0.0,
+            "splitMinCameraSupport": 3,
+            "splitOffsetWorld": 0.00625
+          },
+          "effectiveSkirtMix": null,
+          "compoundHaloMass": null,
+          "splitCandidateCount": 4336,
+          "splitSelectionCap": null,
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.65187007188797
+      },
+      {
+        "cameraIndex": 5,
+        "cameraAngle": -0.21,
+        "split": "attribution",
+        "expanded": {
+          "mae": 0.04146002233028412,
+          "mse": 0.004332148935645819,
+          "lumaMae": 0.04152272269129753,
+          "gradientMae": 0.016154097393155098,
+          "targetTopTailLumaUnderfit": 0.12123435735702515,
+          "targetTopTailLumaThreshold": 0.8297867178916931,
+          "targetHighGradientUnderfit": 0.023306535556912422,
+          "targetHighGradientThreshold": 0.04860622435808182,
+          "targetWispUnderfit": 0.03935571759939194,
+          "targetWispGradientThreshold": 0.0783831849694252,
+          "structuredDotSpectralPower": 0.0010805848287418485,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.18971771001815796,
+          "targetMeanLuma": 0.20001818239688873
+        },
+        "current": {
+          "mae": 0.09803851693868637,
+          "mse": 0.03146564960479736,
+          "lumaMae": 0.1004369929432869,
+          "gradientMae": 0.021185319870710373,
+          "targetTopTailLumaUnderfit": 0.10703238844871521,
+          "targetTopTailLumaThreshold": 0.8297867178916931,
+          "targetHighGradientUnderfit": 0.04665889963507652,
+          "targetHighGradientThreshold": 0.04860622435808182,
+          "targetWispUnderfit": 0.07016723603010178,
+          "targetWispGradientThreshold": 0.0783831849694252,
+          "structuredDotSpectralPower": 0.0033595156855881214,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.10836129635572433,
+          "targetMeanLuma": 0.20001818239688873
+        },
+        "ridgeRidge": {
+          "mae": 0.08739467710256577,
+          "mse": 0.0234821904450655,
+          "lumaMae": 0.0891202837228775,
+          "gradientMae": 0.024413954466581345,
+          "targetTopTailLumaUnderfit": 0.14634495973587036,
+          "targetTopTailLumaThreshold": 0.8297867178916931,
+          "targetHighGradientUnderfit": 0.02866041101515293,
+          "targetHighGradientThreshold": 0.04860622435808182,
+          "targetWispUnderfit": 0.045973118394613266,
+          "targetWispGradientThreshold": 0.0783831849694252,
+          "structuredDotSpectralPower": 0.0027038801927119493,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.11961011588573456,
+          "targetMeanLuma": 0.20001818239688873
+        },
+        "ridgeTotal": {
+          "mae": 0.10915112495422363,
+          "mse": 0.03402342647314072,
+          "lumaMae": 0.11385499686002731,
+          "gradientMae": 0.022878754884004593,
+          "targetTopTailLumaUnderfit": 0.35003936290740967,
+          "targetTopTailLumaThreshold": 0.8297867178916931,
+          "targetHighGradientUnderfit": 0.030227383598685265,
+          "targetHighGradientThreshold": 0.04860622435808182,
+          "targetWispUnderfit": 0.04827486723661423,
+          "targetWispGradientThreshold": 0.0783831849694252,
+          "structuredDotSpectralPower": 0.0023053379263728857,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.09093405306339264,
+          "targetMeanLuma": 0.20001818239688873
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1749513,
+          "nearDepth": 1.342123031616211,
+          "farDepth": 3.356788396835327,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "orientation": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "nominalQuadratureSamples": null,
+          "nominalPixelDepositsPerCandidate": null,
+          "nominalProjectedFragments": 35163050,
+          "projectedFragments": 34998463,
+          "projectedFragmentsPerProjectedRow": 20.004688733378945,
+          "coefficientMass": {
+            "identity": "nominal-kernel-mass-with-explicit-viewport-retention-v1",
+            "expectedCenterVisible": [
+              5048.410953059286,
+              2452.805591593182,
+              1890.825951744349,
+              1112.8091041137518,
+              7846.141936271817,
+              3285.4186096883423,
+              1732.0688806569517,
+              8375.249196171546
+            ],
+            "nominalKernel": [
+              5048.4109535340485,
+              2452.8055918225973,
+              1890.825951867286,
+              1112.8091041989667,
+              7846.141936364381,
+              3285.418609732324,
+              1732.0688806764265,
+              8375.249196237193
+            ],
+            "nominalKernelDelta": [
+              4.7476260078838095e-07,
+              2.2941549104871228e-07,
+              1.2293708095967304e-07,
+              8.521487870893907e-08,
+              9.256382327293977e-08,
+              4.398179953568615e-08,
+              1.947478267538827e-08,
+              6.564732757396996e-08
+            ],
+            "nominalKernelMassConserved": true,
+            "inViewportDeposited": [
+              5035.2811516261,
+              2443.9242528903146,
+              1872.1843777005672,
+              1107.3620744002606,
+              7839.464816259302,
+              3281.4032222743085,
+              1726.4821977156685,
+              8356.240965138542
+            ],
+            "inViewportDelta": [
+              -13.129801433186003,
+              -8.881338702867197,
+              -18.641574043781702,
+              -5.447029713491247,
+              -6.6771200125149335,
+              -4.015387414033739,
+              -5.586682941283243,
+              -19.00823103300354
+            ],
+            "inViewportMassConserved": false,
+            "viewportRetentionFraction": [
+              0.9973992209518463,
+              0.9963791102183934,
+              0.9901410417883337,
+              0.9951051535314053,
+              0.9991489932164435,
+              0.9987778155872762,
+              0.9967745607558262,
+              0.9977304280042566
+            ],
+            "clippingDetected": true,
+            "viewportMassEvidenceAuthority": "non-decision-bearing-clipped-framing-v0",
+            "tolerance": [
+              0.25262054765296427,
+              0.12284027957965911,
+              0.09474129758721746,
+              0.05584045520568759,
+              0.39250709681359086,
+              0.16447093048441713,
+              0.0868034440328476,
+              0.41896245980857727
+            ],
+            "centerVisibleRows": 1749513
+          },
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": null,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": null,
+            "conditioningFeature": null,
+            "controlsExplicit": true,
+            "compoundHaloMass": null,
+            "splitAttributionCameras": [
+              0,
+              5,
+              10,
+              15,
+              20
+            ],
+            "splitScoreThreshold": 0.0,
+            "splitMinCameraSupport": 3,
+            "splitOffsetWorld": 0.00625
+          },
+          "effectiveSkirtMix": null,
+          "compoundHaloMass": null,
+          "splitCandidateCount": 4336,
+          "splitSelectionCap": null,
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6518852114677429
+      },
+      {
+        "cameraIndex": 6,
+        "cameraAngle": -0.168,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.0398620180785656,
+          "mse": 0.003972206264734268,
+          "lumaMae": 0.03983018547296524,
+          "gradientMae": 0.016076883301138878,
+          "targetTopTailLumaUnderfit": 0.11126358807086945,
+          "targetTopTailLumaThreshold": 0.8219122290611267,
+          "targetHighGradientUnderfit": 0.022655600681900978,
+          "targetHighGradientThreshold": 0.04874772951006889,
+          "targetWispUnderfit": 0.038158223032951355,
+          "targetWispGradientThreshold": 0.0779799073934555,
+          "structuredDotSpectralPower": 0.0010227010352537036,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.18943347036838531,
+          "targetMeanLuma": 0.1997811198234558
+        },
+        "current": {
+          "mae": 0.09780285507440567,
+          "mse": 0.031157290562987328,
+          "lumaMae": 0.1001974493265152,
+          "gradientMae": 0.021198416128754616,
+          "targetTopTailLumaUnderfit": 0.10855931788682938,
+          "targetTopTailLumaThreshold": 0.8219122290611267,
+          "targetHighGradientUnderfit": 0.0456346832215786,
+          "targetHighGradientThreshold": 0.04874772951006889,
+          "targetWispUnderfit": 0.06687355786561966,
+          "targetWispGradientThreshold": 0.0779799073934555,
+          "structuredDotSpectralPower": 0.003342240583151579,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.10820712894201279,
+          "targetMeanLuma": 0.1997811198234558
+        },
+        "ridgeRidge": {
+          "mae": 0.08673775941133499,
+          "mse": 0.02309134043753147,
+          "lumaMae": 0.08829852938652039,
+          "gradientMae": 0.024296756833791733,
+          "targetTopTailLumaUnderfit": 0.1332569271326065,
+          "targetTopTailLumaThreshold": 0.8219122290611267,
+          "targetHighGradientUnderfit": 0.027325497940182686,
+          "targetHighGradientThreshold": 0.04874772951006889,
+          "targetWispUnderfit": 0.04307352751493454,
+          "targetWispGradientThreshold": 0.0779799073934555,
+          "structuredDotSpectralPower": 0.0027313032187521458,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.11971994489431381,
+          "targetMeanLuma": 0.1997811198234558
+        },
+        "ridgeTotal": {
+          "mae": 0.10883142799139023,
+          "mse": 0.033537983894348145,
+          "lumaMae": 0.11348000913858414,
+          "gradientMae": 0.022737402468919754,
+          "targetTopTailLumaUnderfit": 0.3391631543636322,
+          "targetTopTailLumaThreshold": 0.8219122290611267,
+          "targetHighGradientUnderfit": 0.029040196910500526,
+          "targetHighGradientThreshold": 0.04874772951006889,
+          "targetWispUnderfit": 0.04565931484103203,
+          "targetWispGradientThreshold": 0.0779799073934555,
+          "structuredDotSpectralPower": 0.002287395531311631,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.09104233235120773,
+          "targetMeanLuma": 0.1997811198234558
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1755402,
+          "nearDepth": 1.3459011316299438,
+          "farDepth": 3.358262777328491,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "orientation": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "nominalQuadratureSamples": null,
+          "nominalPixelDepositsPerCandidate": null,
+          "nominalProjectedFragments": 35280982,
+          "projectedFragments": 35120165,
+          "projectedFragmentsPerProjectedRow": 20.006907249735388,
+          "coefficientMass": {
+            "identity": "nominal-kernel-mass-with-explicit-viewport-retention-v1",
+            "expectedCenterVisible": [
+              5053.324173352711,
+              2455.564159459721,
+              1895.2284414632486,
+              1113.924240276192,
+              7847.560735829404,
+              3286.1724100252804,
+              1733.1543155586971,
+              8385.898894879116
+            ],
+            "nominalKernel": [
+              5053.3241734384055,
+              2455.5641595036705,
+              1895.2284414674841,
+              1113.9242402866646,
+              7847.560736045947,
+              3286.1724101049604,
+              1733.1543155749623,
+              8385.898894948974
+            ],
+            "nominalKernelDelta": [
+              8.569440979044884e-08,
+              4.394951247377321e-08,
+              4.235516826156527e-09,
+              1.0472604117239825e-08,
+              2.1654341253452003e-07,
+              7.967992132762447e-08,
+              1.6265175872831605e-08,
+              6.985828804317862e-08
+            ],
+            "nominalKernelMassConserved": true,
+            "inViewportDeposited": [
+              5039.6086691684795,
+              2446.266735679111,
+              1875.4413996536996,
+              1108.2913304828714,
+              7840.925355845892,
+              3282.148721195376,
+              1727.416570175715,
+              8367.495311591712
+            ],
+            "inViewportDelta": [
+              -13.715504184231577,
+              -9.297423780609734,
+              -19.78704180954901,
+              -5.63290979332055,
+              -6.635379983511484,
+              -4.023688829904586,
+              -5.737745382982212,
+              -18.403583287403308
+            ],
+            "inViewportMassConserved": false,
+            "viewportRetentionFraction": [
+              0.9972858451756259,
+              0.9962137320889,
+              0.989559547874729,
+              0.9949431841146361,
+              0.999154465928092,
+              0.9987755697730194,
+              0.9966894203640877,
+              0.9978054131682125
+            ],
+            "clippingDetected": true,
+            "viewportMassEvidenceAuthority": "non-decision-bearing-clipped-framing-v0",
+            "tolerance": [
+              0.25286620866763554,
+              0.12297820797298606,
+              0.09496142207316244,
+              0.0558962120138096,
+              0.3925780367914702,
+              0.16450862050126402,
+              0.08685771577793487,
+              0.41949494474395577
+            ],
+            "centerVisibleRows": 1755402
+          },
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": null,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": null,
+            "conditioningFeature": null,
+            "controlsExplicit": true,
+            "compoundHaloMass": null,
+            "splitAttributionCameras": [
+              0,
+              5,
+              10,
+              15,
+              20
+            ],
+            "splitScoreThreshold": 0.0,
+            "splitMinCameraSupport": 3,
+            "splitOffsetWorld": 0.00625
+          },
+          "effectiveSkirtMix": null,
+          "compoundHaloMass": null,
+          "splitCandidateCount": 4336,
+          "splitSelectionCap": null,
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.651915967464447
+      },
+      {
+        "cameraIndex": 7,
+        "cameraAngle": -0.126,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.03792960196733475,
+          "mse": 0.003587825922295451,
+          "lumaMae": 0.03778551518917084,
+          "gradientMae": 0.016283249482512474,
+          "targetTopTailLumaUnderfit": 0.10388664901256561,
+          "targetTopTailLumaThreshold": 0.8132509589195251,
+          "targetHighGradientUnderfit": 0.02330385521054268,
+          "targetHighGradientThreshold": 0.049024760723114014,
+          "targetWispUnderfit": 0.03922155126929283,
+          "targetWispGradientThreshold": 0.07944520562887192,
+          "structuredDotSpectralPower": 0.0010245686862617731,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.18912428617477417,
+          "targetMeanLuma": 0.1991971880197525
+        },
+        "current": {
+          "mae": 0.09729411453008652,
+          "mse": 0.030729465186595917,
+          "lumaMae": 0.0996098667383194,
+          "gradientMae": 0.0212696585804224,
+          "targetTopTailLumaUnderfit": 0.121065154671669,
+          "targetTopTailLumaThreshold": 0.8132509589195251,
+          "targetHighGradientUnderfit": 0.04642980918288231,
+          "targetHighGradientThreshold": 0.049024760723114014,
+          "targetWispUnderfit": 0.06777357310056686,
+          "targetWispGradientThreshold": 0.07944520562887192,
+          "structuredDotSpectralPower": 0.0035899558570235968,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.10793710500001907,
+          "targetMeanLuma": 0.1991971880197525
+        },
+        "ridgeRidge": {
+          "mae": 0.0861281082034111,
+          "mse": 0.02255954220890999,
+          "lumaMae": 0.0874573215842247,
+          "gradientMae": 0.024302266538143158,
+          "targetTopTailLumaUnderfit": 0.13062278926372528,
+          "targetTopTailLumaThreshold": 0.8132509589195251,
+          "targetHighGradientUnderfit": 0.027657514438033104,
+          "targetHighGradientThreshold": 0.049024760723114014,
+          "targetWispUnderfit": 0.043990060687065125,
+          "targetWispGradientThreshold": 0.07944520562887192,
+          "structuredDotSpectralPower": 0.0027464621234685183,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.11986330896615982,
+          "targetMeanLuma": 0.1991971880197525
+        },
+        "ridgeTotal": {
+          "mae": 0.10832403600215912,
+          "mse": 0.03282206878066063,
+          "lumaMae": 0.11281745135784149,
+          "gradientMae": 0.022830910980701447,
+          "targetTopTailLumaUnderfit": 0.32149073481559753,
+          "targetTopTailLumaThreshold": 0.8132509589195251,
+          "targetHighGradientUnderfit": 0.02922639809548855,
+          "targetHighGradientThreshold": 0.049024760723114014,
+          "targetWispUnderfit": 0.04576617479324341,
+          "targetWispGradientThreshold": 0.07944520562887192,
+          "structuredDotSpectralPower": 0.0022702275309711695,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.09117055684328079,
+          "targetMeanLuma": 0.1991971880197525
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1761505,
+          "nearDepth": 1.3493596315383911,
+          "farDepth": 3.358963966369629,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "orientation": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "nominalQuadratureSamples": null,
+          "nominalPixelDepositsPerCandidate": null,
+          "nominalProjectedFragments": 35403198,
+          "projectedFragments": 35245279,
+          "projectedFragmentsPerProjectedRow": 20.00861706324989,
+          "coefficientMass": {
+            "identity": "nominal-kernel-mass-with-explicit-viewport-retention-v1",
+            "expectedCenterVisible": [
+              5057.871775923914,
+              2458.219254008104,
+              1900.3111078233273,
+              1115.4025553850913,
+              7848.787514379006,
+              3286.771569057585,
+              1733.8482228256491,
+              8395.908152992411
+            ],
+            "nominalKernel": [
+              5057.871775690421,
+              2458.2192539457124,
+              1900.3111079627347,
+              1115.4025553680444,
+              7848.787514293155,
+              3286.7715690228747,
+              1733.8482228204475,
+              8395.908152948874
+            ],
+            "nominalKernelDelta": [
+              -2.334936652914621e-07,
+              -6.239179128897376e-08,
+              1.3940734788775444e-07,
+              -1.7046886569005437e-08,
+              -8.585084287915379e-08,
+              -3.471041054581292e-08,
+              -5.20162757311482e-09,
+              -4.3537511373870075e-08
+            ],
+            "nominalKernelMassConserved": true,
+            "inViewportDeposited": [
+              5044.357291005335,
+              2448.8985305526467,
+              1879.7498651627589,
+              1109.5978883493708,
+              7842.177638704948,
+              3282.7611584591577,
+              1728.116447545406,
+              8378.099665331758
+            ],
+            "inViewportDelta": [
+              -13.514484918579,
+              -9.320723455457482,
+              -20.561242660568496,
+              -5.804667035720513,
+              -6.609875674058458,
+              -4.01041059842737,
+              -5.731775280243255,
+              -17.808487660653554
+            ],
+            "inViewportMassConserved": false,
+            "viewportRetentionFraction": [
+              0.9973280293535891,
+              0.9962083433199621,
+              0.9891800650030826,
+              0.9947958994645512,
+              0.9991578475449935,
+              0.9987798328803309,
+              0.9966941885657661,
+              0.9978789087093209
+            ],
+            "clippingDetected": true,
+            "viewportMassEvidenceAuthority": "non-decision-bearing-clipped-framing-v0",
+            "tolerance": [
+              0.2530935887961957,
+              0.12311096270040522,
+              0.09521555539116638,
+              0.055970127769254564,
+              0.3926393757189503,
+              0.16453857845287928,
+              0.08689241114128246,
+              0.41999540764962057
+            ],
+            "centerVisibleRows": 1761505
+          },
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": null,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": null,
+            "conditioningFeature": null,
+            "controlsExplicit": true,
+            "compoundHaloMass": null,
+            "splitAttributionCameras": [
+              0,
+              5,
+              10,
+              15,
+              20
+            ],
+            "splitScoreThreshold": 0.0,
+            "splitMinCameraSupport": 3,
+            "splitOffsetWorld": 0.00625
+          },
+          "effectiveSkirtMix": null,
+          "compoundHaloMass": null,
+          "splitCandidateCount": 4336,
+          "splitSelectionCap": null,
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6520030498504639
+      },
+      {
+        "cameraIndex": 8,
+        "cameraAngle": -0.084,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.03580121323466301,
+          "mse": 0.0032080737873911858,
+          "lumaMae": 0.03547818213701248,
+          "gradientMae": 0.01596512645483017,
+          "targetTopTailLumaUnderfit": 0.09665995091199875,
+          "targetTopTailLumaThreshold": 0.8053874969482422,
+          "targetHighGradientUnderfit": 0.022349273785948753,
+          "targetHighGradientThreshold": 0.04919713735580444,
+          "targetWispUnderfit": 0.03640439361333847,
+          "targetWispGradientThreshold": 0.07823975384235382,
+          "structuredDotSpectralPower": 0.0010039169574156404,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.18885120749473572,
+          "targetMeanLuma": 0.19833216071128845
+        },
+        "current": {
+          "mae": 0.09715184569358826,
+          "mse": 0.030547060072422028,
+          "lumaMae": 0.09936454147100449,
+          "gradientMae": 0.021162256598472595,
+          "targetTopTailLumaUnderfit": 0.12273871153593063,
+          "targetTopTailLumaThreshold": 0.8053874969482422,
+          "targetHighGradientUnderfit": 0.04571393504738808,
+          "targetHighGradientThreshold": 0.04919713735580444,
+          "targetWispUnderfit": 0.06615570187568665,
+          "targetWispGradientThreshold": 0.07823975384235382,
+          "structuredDotSpectralPower": 0.0035832785069942474,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.10763349384069443,
+          "targetMeanLuma": 0.19833216071128845
+        },
+        "ridgeRidge": {
+          "mae": 0.08545944094657898,
+          "mse": 0.02216036431491375,
+          "lumaMae": 0.08658300340175629,
+          "gradientMae": 0.02393636479973793,
+          "targetTopTailLumaUnderfit": 0.12784874439239502,
+          "targetTopTailLumaThreshold": 0.8053874969482422,
+          "targetHighGradientUnderfit": 0.026077965274453163,
+          "targetHighGradientThreshold": 0.04919713735580444,
+          "targetWispUnderfit": 0.0400649793446064,
+          "targetWispGradientThreshold": 0.07823975384235382,
+          "structuredDotSpectralPower": 0.0026978994719684124,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.11992296576499939,
+          "targetMeanLuma": 0.19833216071128845
+        },
+        "ridgeTotal": {
+          "mae": 0.10752451419830322,
+          "mse": 0.03218179941177368,
+          "lumaMae": 0.11187361925840378,
+          "gradientMae": 0.022425631061196327,
+          "targetTopTailLumaUnderfit": 0.31045979261398315,
+          "targetTopTailLumaThreshold": 0.8053874969482422,
+          "targetHighGradientUnderfit": 0.027693044394254684,
+          "targetHighGradientThreshold": 0.04919713735580444,
+          "targetWispUnderfit": 0.04208716005086899,
+          "targetWispGradientThreshold": 0.07823975384235382,
+          "structuredDotSpectralPower": 0.0022116336040198803,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.09125636518001556,
+          "targetMeanLuma": 0.19833216071128845
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1767587,
+          "nearDepth": 1.3540103435516357,
+          "farDepth": 3.3585760593414307,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "orientation": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "nominalQuadratureSamples": null,
+          "nominalPixelDepositsPerCandidate": null,
+          "nominalProjectedFragments": 35524960,
+          "projectedFragments": 35371653,
+          "projectedFragmentsPerProjectedRow": 20.01126564067285,
+          "coefficientMass": {
+            "identity": "nominal-kernel-mass-with-explicit-viewport-retention-v1",
+            "expectedCenterVisible": [
+              5062.392462090077,
+              2460.977710479312,
+              1905.4105850518904,
+              1116.7877998958263,
+              7849.947280177024,
+              3287.4030800868222,
+              1734.796587954612,
+              8405.072439186013
+            ],
+            "nominalKernel": [
+              5062.392462203156,
+              2460.9777105323774,
+              1905.4105850946257,
+              1116.7877999176635,
+              7849.947280437519,
+              3287.4030801894305,
+              1734.796588007463,
+              8405.07243921392
+            ],
+            "nominalKernelDelta": [
+              1.1307929526083171e-07,
+              5.306537786964327e-08,
+              4.273533704690635e-08,
+              2.183719516324345e-08,
+              2.604947439976968e-07,
+              1.0260828275931999e-07,
+              5.28509644937003e-08,
+              2.790693542920053e-08
+            ],
+            "nominalKernelMassConserved": true,
+            "inViewportDeposited": [
+              5049.0675816479625,
+              2451.6839973745973,
+              1884.7159883758723,
+              1111.0188365660208,
+              7843.372631700988,
+              3283.3812624395105,
+              1728.9550551505768,
+              8387.81264050322
+            ],
+            "inViewportDelta": [
+              -13.32488044211459,
+              -9.293713104714698,
+              -20.694596676018136,
+              -5.768963329805501,
+              -6.5746484760366,
+              -4.021817647311764,
+              -5.841532804035296,
+              -17.25979868279319
+            ],
+            "inViewportMassConserved": false,
+            "viewportRetentionFraction": [
+              0.9973678689390642,
+              0.9962235687608464,
+              0.989139035524223,
+              0.9948343245419196,
+              0.9991624595374495,
+              0.9987765973477138,
+              0.9966327275228719,
+              0.9979465020905323
+            ],
+            "clippingDetected": true,
+            "viewportMassEvidenceAuthority": "non-decision-bearing-clipped-framing-v0",
+            "tolerance": [
+              0.25331962310450384,
+              0.12324888552396561,
+              0.09547052925259453,
+              0.056039389994791314,
+              0.3926973640088512,
+              0.16457015400434113,
+              0.08693982939773061,
+              0.42045362195930064
+            ],
+            "centerVisibleRows": 1767587
+          },
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": null,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": null,
+            "conditioningFeature": null,
+            "controlsExplicit": true,
+            "compoundHaloMass": null,
+            "splitAttributionCameras": [
+              0,
+              5,
+              10,
+              15,
+              20
+            ],
+            "splitScoreThreshold": 0.0,
+            "splitMinCameraSupport": 3,
+            "splitOffsetWorld": 0.00625
+          },
+          "effectiveSkirtMix": null,
+          "compoundHaloMass": null,
+          "splitCandidateCount": 4336,
+          "splitSelectionCap": null,
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6521767973899841
+      },
+      {
+        "cameraIndex": 9,
+        "cameraAngle": -0.042,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.033694881945848465,
+          "mse": 0.0028860336169600487,
+          "lumaMae": 0.03316841274499893,
+          "gradientMae": 0.01601722650229931,
+          "targetTopTailLumaUnderfit": 0.0931563749909401,
+          "targetTopTailLumaThreshold": 0.7997643947601318,
+          "targetHighGradientUnderfit": 0.02246994338929653,
+          "targetHighGradientThreshold": 0.04890713468194008,
+          "targetWispUnderfit": 0.03628464415669441,
+          "targetWispGradientThreshold": 0.0785885900259018,
+          "structuredDotSpectralPower": 0.0009745817515067756,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.18851949274539948,
+          "targetMeanLuma": 0.1969500482082367
+        },
+        "current": {
+          "mae": 0.09683006256818771,
+          "mse": 0.030383523553609848,
+          "lumaMae": 0.09893957525491714,
+          "gradientMae": 0.021266281604766846,
+          "targetTopTailLumaUnderfit": 0.12097274512052536,
+          "targetTopTailLumaThreshold": 0.7997643947601318,
+          "targetHighGradientUnderfit": 0.046067316085100174,
+          "targetHighGradientThreshold": 0.04890713468194008,
+          "targetWispUnderfit": 0.06655032187700272,
+          "targetWispGradientThreshold": 0.0785885900259018,
+          "structuredDotSpectralPower": 0.0034924978390336037,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.10720335692167282,
+          "targetMeanLuma": 0.1969500482082367
+        },
+        "ridgeRidge": {
+          "mae": 0.08457960188388824,
+          "mse": 0.02168470062315464,
+          "lumaMae": 0.08542456477880478,
+          "gradientMae": 0.023904262110590935,
+          "targetTopTailLumaUnderfit": 0.1258566975593567,
+          "targetTopTailLumaThreshold": 0.7997643947601318,
+          "targetHighGradientUnderfit": 0.02634376473724842,
+          "targetHighGradientThreshold": 0.04890713468194008,
+          "targetWispUnderfit": 0.04045913740992546,
+          "targetWispGradientThreshold": 0.0785885900259018,
+          "structuredDotSpectralPower": 0.0026930540334433317,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.12002558261156082,
+          "targetMeanLuma": 0.1969500482082367
+        },
+        "ridgeTotal": {
+          "mae": 0.10624098777770996,
+          "mse": 0.03140762075781822,
+          "lumaMae": 0.1103929728269577,
+          "gradientMae": 0.022387348115444183,
+          "targetTopTailLumaUnderfit": 0.29618051648139954,
+          "targetTopTailLumaThreshold": 0.7997643947601318,
+          "targetHighGradientUnderfit": 0.02787148579955101,
+          "targetHighGradientThreshold": 0.04890713468194008,
+          "targetWispUnderfit": 0.042440321296453476,
+          "targetWispGradientThreshold": 0.0785885900259018,
+          "structuredDotSpectralPower": 0.0021876348182559013,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.09132447093725204,
+          "targetMeanLuma": 0.1969500482082367
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1773507,
+          "nearDepth": 1.3592523336410522,
+          "farDepth": 3.3575360774993896,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "orientation": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "nominalQuadratureSamples": null,
+          "nominalPixelDepositsPerCandidate": null,
+          "nominalProjectedFragments": 35643492,
+          "projectedFragments": 35495204,
+          "projectedFragmentsPerProjectedRow": 20.01413245056264,
+          "coefficientMass": {
+            "identity": "nominal-kernel-mass-with-explicit-viewport-retention-v1",
+            "expectedCenterVisible": [
+              5065.568050401028,
+              2462.8771947227197,
+              1908.3223348685833,
+              1117.7487246826365,
+              7851.097001140608,
+              3288.0423418539876,
+              1735.8195661402794,
+              8412.835763502662
+            ],
+            "nominalKernel": [
+              5065.568050569771,
+              2462.8771948269423,
+              1908.322335058235,
+              1117.7487247362717,
+              7851.097001179129,
+              3288.0423418733585,
+              1735.8195661733416,
+              8412.835763504056
+            ],
+            "nominalKernelDelta": [
+              1.6874309949344024e-07,
+              1.0422263585496694e-07,
+              1.8965170056617353e-07,
+              5.363517630030401e-08,
+              3.85207385988906e-08,
+              1.9370872905710712e-08,
+              3.306217877252493e-08,
+              1.393345883116126e-09
+            ],
+            "nominalKernelMassConserved": true,
+            "inViewportDeposited": [
+              5052.830977829448,
+              2453.8999973319583,
+              1888.5183353812442,
+              1112.167064145795,
+              7844.59161592117,
+              3284.0407557561257,
+              1729.9351920743632,
+              8396.079722511618
+            ],
+            "inViewportDelta": [
+              -12.737072571580029,
+              -8.977197390761376,
+              -19.80399948733907,
+              -5.581660536841582,
+              -6.505385219437812,
+              -4.001586097861946,
+              -5.88437406591629,
+              -16.756040991043847
+            ],
+            "inViewportMassConserved": false,
+            "viewportRetentionFraction": [
+              0.9974855588860223,
+              0.996354995933213,
+              0.9896222985365295,
+              0.9950063369220784,
+              0.9991714042994893,
+              0.9987829882702771,
+              0.99661003126091,
+              0.9980082767021631
+            ],
+            "clippingDetected": true,
+            "viewportMassEvidenceAuthority": "non-decision-bearing-clipped-framing-v0",
+            "tolerance": [
+              0.2534784025200514,
+              0.123343859736136,
+              0.09561611674342918,
+              0.05608743623413183,
+              0.39275485005703037,
+              0.1646021170926994,
+              0.08699097830701398,
+              0.4208417881751331
+            ],
+            "centerVisibleRows": 1773507
+          },
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": null,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": null,
+            "conditioningFeature": null,
+            "controlsExplicit": true,
+            "compoundHaloMass": null,
+            "splitAttributionCameras": [
+              0,
+              5,
+              10,
+              15,
+              20
+            ],
+            "splitScoreThreshold": 0.0,
+            "splitMinCameraSupport": 3,
+            "splitOffsetWorld": 0.00625
+          },
+          "effectiveSkirtMix": null,
+          "compoundHaloMass": null,
+          "splitCandidateCount": 4336,
+          "splitSelectionCap": null,
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6524965167045593
+      },
+      {
+        "cameraIndex": 10,
+        "cameraAngle": 0.0,
+        "split": "attribution",
+        "expanded": {
+          "mae": 0.031918253749608994,
+          "mse": 0.00263830809853971,
+          "lumaMae": 0.031194597482681274,
+          "gradientMae": 0.01580260694026947,
+          "targetTopTailLumaUnderfit": 0.0849200114607811,
+          "targetTopTailLumaThreshold": 0.7950241565704346,
+          "targetHighGradientUnderfit": 0.022011250257492065,
+          "targetHighGradientThreshold": 0.04864761605858803,
+          "targetWispUnderfit": 0.03568533807992935,
+          "targetWispGradientThreshold": 0.07872321456670761,
+          "structuredDotSpectralPower": 0.000937065517064184,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.1880522519350052,
+          "targetMeanLuma": 0.19482989609241486
+        },
+        "current": {
+          "mae": 0.09580127894878387,
+          "mse": 0.029929494485259056,
+          "lumaMae": 0.09765975922346115,
+          "gradientMae": 0.021093245595693588,
+          "targetTopTailLumaUnderfit": 0.10470913350582123,
+          "targetTopTailLumaThreshold": 0.7950241565704346,
+          "targetHighGradientUnderfit": 0.045194290578365326,
+          "targetHighGradientThreshold": 0.04864761605858803,
+          "targetWispUnderfit": 0.0643288716673851,
+          "targetWispGradientThreshold": 0.07872321456670761,
+          "structuredDotSpectralPower": 0.003351406892761588,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.10683651268482208,
+          "targetMeanLuma": 0.19482989609241486
+        },
+        "ridgeRidge": {
+          "mae": 0.08327457308769226,
+          "mse": 0.021052801981568336,
+          "lumaMae": 0.08373867720365524,
+          "gradientMae": 0.02375262975692749,
+          "targetTopTailLumaUnderfit": 0.11307875066995621,
+          "targetTopTailLumaThreshold": 0.7950241565704346,
+          "targetHighGradientUnderfit": 0.02527223713696003,
+          "targetHighGradientThreshold": 0.04864761605858803,
+          "targetWispUnderfit": 0.03825363889336586,
+          "targetWispGradientThreshold": 0.07872321456670761,
+          "structuredDotSpectralPower": 0.0025550206191837788,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.11994960159063339,
+          "targetMeanLuma": 0.19482989609241486
+        },
+        "ridgeTotal": {
+          "mae": 0.10446694493293762,
+          "mse": 0.030459076166152954,
+          "lumaMae": 0.1084054559469223,
+          "gradientMae": 0.0223135557025671,
+          "targetTopTailLumaUnderfit": 0.27630311250686646,
+          "targetTopTailLumaThreshold": 0.7950241565704346,
+          "targetHighGradientUnderfit": 0.026748593896627426,
+          "targetHighGradientThreshold": 0.04864761605858803,
+          "targetWispUnderfit": 0.0402090810239315,
+          "targetWispGradientThreshold": 0.07872321456670761,
+          "structuredDotSpectralPower": 0.0020767056848853827,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.09122862666845322,
+          "targetMeanLuma": 0.19482989609241486
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1778738,
+          "nearDepth": 1.364598274230957,
+          "farDepth": 3.355426549911499,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "orientation": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "nominalQuadratureSamples": null,
+          "nominalPixelDepositsPerCandidate": null,
+          "nominalProjectedFragments": 35748106,
+          "projectedFragments": 35607612,
+          "projectedFragmentsPerProjectedRow": 20.018469274283227,
+          "coefficientMass": {
+            "identity": "nominal-kernel-mass-with-explicit-viewport-retention-v1",
+            "expectedCenterVisible": [
+              5068.887715888067,
+              2464.5192808492184,
+              1910.219118733888,
+              1118.670099789095,
+              7852.261392759363,
+              3288.5551173270924,
+              1736.1492142808872,
+              8419.70706521326
+            ],
+            "nominalKernel": [
+              5068.887715272349,
+              2464.5192805506626,
+              1910.219118584115,
+              1118.670099672221,
+              7852.261392775518,
+              3288.5551173282593,
+              1736.149214279859,
+              8419.707065189355
+            ],
+            "nominalKernelDelta": [
+              -6.157179086585529e-07,
+              -2.985557330248412e-07,
+              -1.4977308637753595e-07,
+              -1.1687393453030381e-07,
+              1.6155354387592524e-08,
+              1.166881702374667e-09,
+              -1.0281837603542954e-09,
+              -2.3905158741399646e-08
+            ],
+            "nominalKernelMassConserved": true,
+            "inViewportDeposited": [
+              5055.898551468979,
+              2455.3972782374917,
+              1889.9619587387144,
+              1112.9754898549058,
+              7845.843937819738,
+              3284.592975631127,
+              1730.3213300756383,
+              8403.583909790654
+            ],
+            "inViewportDelta": [
+              -12.989164419087501,
+              -9.122002611726657,
+              -20.25715999517365,
+              -5.694609934189202,
+              -6.417454939624804,
+              -3.962141695965329,
+              -5.827884205248893,
+              -16.123155422606942
+            ],
+            "inViewportMassConserved": false,
+            "viewportRetentionFraction": [
+              0.9974374724501445,
+              0.9962986685952875,
+              0.9893953736529449,
+              0.9949094823082669,
+              0.9991827252534483,
+              0.9987951724831707,
+              0.996643212370624,
+              0.9980850693144395
+            ],
+            "clippingDetected": true,
+            "viewportMassEvidenceAuthority": "non-decision-bearing-clipped-framing-v0",
+            "tolerance": [
+              0.25364438579440335,
+              0.12342596404246094,
+              0.09571095593669442,
+              0.056133504989454755,
+              0.39281306963796814,
+              0.16462775586635464,
+              0.08700746071404437,
+              0.42118535326066303
+            ],
+            "centerVisibleRows": 1778738
+          },
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": null,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": null,
+            "conditioningFeature": null,
+            "controlsExplicit": true,
+            "compoundHaloMass": null,
+            "splitAttributionCameras": [
+              0,
+              5,
+              10,
+              15,
+              20
+            ],
+            "splitScoreThreshold": 0.0,
+            "splitMinCameraSupport": 3,
+            "splitOffsetWorld": 0.00625
+          },
+          "effectiveSkirtMix": null,
+          "compoundHaloMass": null,
+          "splitCandidateCount": 4336,
+          "splitSelectionCap": null,
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6529404520988464
+      },
+      {
+        "cameraIndex": 11,
+        "cameraAngle": 0.042,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.030867602676153183,
+          "mse": 0.0025144407991319895,
+          "lumaMae": 0.02996477484703064,
+          "gradientMae": 0.016020311042666435,
+          "targetTopTailLumaUnderfit": 0.07622590661048889,
+          "targetTopTailLumaThreshold": 0.7890851497650146,
+          "targetHighGradientUnderfit": 0.02230065129697323,
+          "targetHighGradientThreshold": 0.04828780144453049,
+          "targetWispUnderfit": 0.036496516317129135,
+          "targetWispGradientThreshold": 0.07856810837984085,
+          "structuredDotSpectralPower": 0.000895360775757581,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.18749958276748657,
+          "targetMeanLuma": 0.19223961234092712
+        },
+        "current": {
+          "mae": 0.0944206565618515,
+          "mse": 0.029210165143013,
+          "lumaMae": 0.09621366858482361,
+          "gradientMae": 0.021030696108937263,
+          "targetTopTailLumaUnderfit": 0.09116031229496002,
+          "targetTopTailLumaThreshold": 0.7890851497650146,
+          "targetHighGradientUnderfit": 0.044715676456689835,
+          "targetHighGradientThreshold": 0.04828780144453049,
+          "targetWispUnderfit": 0.06443043798208237,
+          "targetWispGradientThreshold": 0.07856810837984085,
+          "structuredDotSpectralPower": 0.003635826986283064,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.1063881441950798,
+          "targetMeanLuma": 0.19223961234092712
+        },
+        "ridgeRidge": {
+          "mae": 0.08166186511516571,
+          "mse": 0.02030112035572529,
+          "lumaMae": 0.0817839726805687,
+          "gradientMae": 0.023956088349223137,
+          "targetTopTailLumaUnderfit": 0.1059424951672554,
+          "targetTopTailLumaThreshold": 0.7890851497650146,
+          "targetHighGradientUnderfit": 0.02510640397667885,
+          "targetHighGradientThreshold": 0.04828780144453049,
+          "targetWispUnderfit": 0.03883662074804306,
+          "targetWispGradientThreshold": 0.07856810837984085,
+          "structuredDotSpectralPower": 0.002517270389944315,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.1197628602385521,
+          "targetMeanLuma": 0.19223961234092712
+        },
+        "ridgeTotal": {
+          "mae": 0.10234864056110382,
+          "mse": 0.02935374714434147,
+          "lumaMae": 0.10609189420938492,
+          "gradientMae": 0.022494368255138397,
+          "targetTopTailLumaUnderfit": 0.2557292878627777,
+          "targetTopTailLumaThreshold": 0.7890851497650146,
+          "targetHighGradientUnderfit": 0.026662973687052727,
+          "targetHighGradientThreshold": 0.04828780144453049,
+          "targetWispUnderfit": 0.040896885097026825,
+          "targetWispGradientThreshold": 0.07856810837984085,
+          "structuredDotSpectralPower": 0.002046804642304778,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.09105761349201202,
+          "targetMeanLuma": 0.19223961234092712
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1782332,
+          "nearDepth": 1.3701984882354736,
+          "farDepth": 3.351924419403076,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "orientation": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "nominalQuadratureSamples": null,
+          "nominalPixelDepositsPerCandidate": null,
+          "nominalProjectedFragments": 35819972,
+          "projectedFragments": 35688693,
+          "projectedFragmentsPerProjectedRow": 20.023594369623616,
+          "coefficientMass": {
+            "identity": "nominal-kernel-mass-with-explicit-viewport-retention-v1",
+            "expectedCenterVisible": [
+              5070.861856122138,
+              2465.1693721417532,
+              1910.5588702641862,
+              1118.989927644336,
+              7853.29291921249,
+              3288.9918008206105,
+              1736.2207138147562,
+              8423.564773158709
+            ],
+            "nominalKernel": [
+              5070.86185597157,
+              2465.1693720805047,
+              1910.5588703229919,
+              1118.9899276208184,
+              7853.292919415398,
+              3288.99180090595,
+              1736.2207138993772,
+              8423.564773235981
+            ],
+            "nominalKernelDelta": [
+              -1.5056866686791182e-07,
+              -6.124855644884519e-08,
+              5.880565367988311e-08,
+              -2.3517486624768935e-08,
+              2.0290735847083852e-07,
+              8.53397068567574e-08,
+              8.462097866868135e-08,
+              7.727248885203153e-08
+            ],
+            "nominalKernelMassConserved": true,
+            "inViewportDeposited": [
+              5058.373379362389,
+              2456.4474302781746,
+              1890.7881124265177,
+              1113.4361716725946,
+              7846.909051862926,
+              3285.0702298746996,
+              1730.531363633737,
+              8407.869812906723
+            ],
+            "inViewportDelta": [
+              -12.488476759749574,
+              -8.72194186357865,
+              -19.770757837668498,
+              -5.553755971741339,
+              -6.383867349563843,
+              -3.921570945910844,
+              -5.689350181019108,
+              -15.694960251985322
+            ],
+            "inViewportMassConserved": false,
+            "viewportRetentionFraction": [
+              0.9975372082470217,
+              0.9964619299744094,
+              0.9896518457790653,
+              0.9950368132594072,
+              0.9991871094819414,
+              0.9988076677646529,
+              0.9967231411676234,
+              0.9981367793001371
+            ],
+            "clippingDetected": true,
+            "viewportMassEvidenceAuthority": "non-decision-bearing-clipped-framing-v0",
+            "tolerance": [
+              0.2537430928061069,
+              0.12345846860708767,
+              0.09572794351320932,
+              0.0561494963822168,
+              0.3928646459606245,
+              0.16464959004103052,
+              0.08701103569073781,
+              0.42137823865793544
+            ],
+            "centerVisibleRows": 1782332
+          },
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": null,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": null,
+            "conditioningFeature": null,
+            "controlsExplicit": true,
+            "compoundHaloMass": null,
+            "splitAttributionCameras": [
+              0,
+              5,
+              10,
+              15,
+              20
+            ],
+            "splitScoreThreshold": 0.0,
+            "splitMinCameraSupport": 3,
+            "splitOffsetWorld": 0.00625
+          },
+          "effectiveSkirtMix": null,
+          "compoundHaloMass": null,
+          "splitCandidateCount": 4336,
+          "splitSelectionCap": null,
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6536093950271606
+      },
+      {
+        "cameraIndex": 12,
+        "cameraAngle": 0.084,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.030108967795968056,
+          "mse": 0.002443677047267556,
+          "lumaMae": 0.0290914848446846,
+          "gradientMae": 0.015905631706118584,
+          "targetTopTailLumaUnderfit": 0.07208018749952316,
+          "targetTopTailLumaThreshold": 0.7840760946273804,
+          "targetHighGradientUnderfit": 0.021586986258625984,
+          "targetHighGradientThreshold": 0.0477583222091198,
+          "targetWispUnderfit": 0.035206183791160583,
+          "targetWispGradientThreshold": 0.07756860554218292,
+          "structuredDotSpectralPower": 0.0009133424027822912,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.18697582185268402,
+          "targetMeanLuma": 0.1896449476480484
+        },
+        "current": {
+          "mae": 0.09308358281850815,
+          "mse": 0.028613194823265076,
+          "lumaMae": 0.09481552243232727,
+          "gradientMae": 0.02076355181634426,
+          "targetTopTailLumaUnderfit": 0.0937436893582344,
+          "targetTopTailLumaThreshold": 0.7840760946273804,
+          "targetHighGradientUnderfit": 0.04338322952389717,
+          "targetHighGradientThreshold": 0.0477583222091198,
+          "targetWispUnderfit": 0.061760060489177704,
+          "targetWispGradientThreshold": 0.07756860554218292,
+          "structuredDotSpectralPower": 0.003520526457577944,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.10590701550245285,
+          "targetMeanLuma": 0.1896449476480484
+        },
+        "ridgeRidge": {
+          "mae": 0.07988014072179794,
+          "mse": 0.019574491307139397,
+          "lumaMae": 0.07981544733047485,
+          "gradientMae": 0.0235414057970047,
+          "targetTopTailLumaUnderfit": 0.1021222174167633,
+          "targetTopTailLumaThreshold": 0.7840760946273804,
+          "targetHighGradientUnderfit": 0.0239829421043396,
+          "targetHighGradientThreshold": 0.0477583222091198,
+          "targetWispUnderfit": 0.03724813833832741,
+          "targetWispGradientThreshold": 0.07756860554218292,
+          "structuredDotSpectralPower": 0.002573592821136117,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.11962810903787613,
+          "targetMeanLuma": 0.1896449476480484
+        },
+        "ridgeTotal": {
+          "mae": 0.10011103004217148,
+          "mse": 0.02836397849023342,
+          "lumaMae": 0.10371382534503937,
+          "gradientMae": 0.022148897871375084,
+          "targetTopTailLumaUnderfit": 0.24586573243141174,
+          "targetTopTailLumaThreshold": 0.7840760946273804,
+          "targetHighGradientUnderfit": 0.025500398129224777,
+          "targetHighGradientThreshold": 0.0477583222091198,
+          "targetWispUnderfit": 0.03910987451672554,
+          "targetWispGradientThreshold": 0.07756860554218292,
+          "structuredDotSpectralPower": 0.0020785892847925425,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.09092287719249725,
+          "targetMeanLuma": 0.1896449476480484
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1783991,
+          "nearDepth": 1.376676321029663,
+          "farDepth": 3.3474762439727783,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "orientation": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "nominalQuadratureSamples": null,
+          "nominalPixelDepositsPerCandidate": null,
+          "nominalProjectedFragments": 35853166,
+          "projectedFragments": 35726645,
+          "projectedFragmentsPerProjectedRow": 20.026247329723077,
+          "coefficientMass": {
+            "identity": "nominal-kernel-mass-with-explicit-viewport-retention-v1",
+            "expectedCenterVisible": [
+              5073.279232786404,
+              2466.174682945042,
+              1911.0770266411523,
+              1119.2611146664228,
+              7854.105573820891,
+              3289.309348282817,
+              1735.9886246814187,
+              8425.993870785831
+            ],
+            "nominalKernel": [
+              5073.279232738909,
+              2466.174682917897,
+              1911.0770266255324,
+              1119.261114664493,
+              7854.105573974104,
+              3289.309348326052,
+              1735.988624691174,
+              8425.993870773777
+            ],
+            "nominalKernelDelta": [
+              -4.7494722821284086e-08,
+              -2.7145233616465703e-08,
+              -1.5619889381923713e-08,
+              -1.9297203834867105e-09,
+              1.532134774606675e-07,
+              4.323464963817969e-08,
+              9.755240171216428e-09,
+              -1.2054442777298391e-08
+            ],
+            "nominalKernelMassConserved": true,
+            "inViewportDeposited": [
+              5060.352868797555,
+              2457.342664036508,
+              1891.6361506486178,
+              1113.6518328426394,
+              7847.8132285522315,
+              3285.4590523024044,
+              1730.4986335143824,
+              8410.56658310028
+            ],
+            "inViewportDelta": [
+              -12.926363988848607,
+              -8.832018908534337,
+              -19.44087599253453,
+              -5.609281823783476,
+              -6.292345268659119,
+              -3.8502959804127386,
+              -5.489991167036351,
+              -15.427287685550255
+            ],
+            "inViewportMassConserved": false,
+            "viewportRetentionFraction": [
+              0.9974520692838448,
+              0.9964187375007891,
+              0.9898272671789147,
+              0.9949884064135872,
+              0.9991988463600957,
+              0.998829451543552,
+              0.9968375419694677,
+              0.9981690839179175
+            ],
+            "clippingDetected": true,
+            "viewportMassEvidenceAuthority": "non-decision-bearing-clipped-framing-v0",
+            "tolerance": [
+              0.2538639616393202,
+              0.12350873414725212,
+              0.09575385133205763,
+              0.05616305573332114,
+              0.3929052786910445,
+              0.16466546741414087,
+              0.08699943123407095,
+              0.42149969353929156
+            ],
+            "centerVisibleRows": 1783991
+          },
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": null,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": null,
+            "conditioningFeature": null,
+            "controlsExplicit": true,
+            "compoundHaloMass": null,
+            "splitAttributionCameras": [
+              0,
+              5,
+              10,
+              15,
+              20
+            ],
+            "splitScoreThreshold": 0.0,
+            "splitMinCameraSupport": 3,
+            "splitOffsetWorld": 0.00625
+          },
+          "effectiveSkirtMix": null,
+          "compoundHaloMass": null,
+          "splitCandidateCount": 4336,
+          "splitSelectionCap": null,
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6543988585472107
+      },
+      {
+        "cameraIndex": 13,
+        "cameraAngle": 0.126,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.029525404796004295,
+          "mse": 0.0023936282377690077,
+          "lumaMae": 0.02836269699037075,
+          "gradientMae": 0.016049282625317574,
+          "targetTopTailLumaUnderfit": 0.06363365799188614,
+          "targetTopTailLumaThreshold": 0.7784352898597717,
+          "targetHighGradientUnderfit": 0.020880641415715218,
+          "targetHighGradientThreshold": 0.04708435758948326,
+          "targetWispUnderfit": 0.035240288823843,
+          "targetWispGradientThreshold": 0.07765848189592361,
+          "structuredDotSpectralPower": 0.0008972595678642392,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.1863761842250824,
+          "targetMeanLuma": 0.18731717765331268
+        },
+        "current": {
+          "mae": 0.09220355749130249,
+          "mse": 0.028177132830023766,
+          "lumaMae": 0.09385353326797485,
+          "gradientMae": 0.020641494542360306,
+          "targetTopTailLumaUnderfit": 0.08684876561164856,
+          "targetTopTailLumaThreshold": 0.7784352898597717,
+          "targetHighGradientUnderfit": 0.04289242997765541,
+          "targetHighGradientThreshold": 0.04708435758948326,
+          "targetWispUnderfit": 0.06391189247369766,
+          "targetWispGradientThreshold": 0.07765848189592361,
+          "structuredDotSpectralPower": 0.0035074541810899973,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.1054808497428894,
+          "targetMeanLuma": 0.18731717765331268
+        },
+        "ridgeRidge": {
+          "mae": 0.07838943600654602,
+          "mse": 0.018974578008055687,
+          "lumaMae": 0.0780821368098259,
+          "gradientMae": 0.023581532761454582,
+          "targetTopTailLumaUnderfit": 0.09220972657203674,
+          "targetTopTailLumaThreshold": 0.7784352898597717,
+          "targetHighGradientUnderfit": 0.02288401871919632,
+          "targetHighGradientThreshold": 0.04708435758948326,
+          "targetWispUnderfit": 0.035246457904577255,
+          "targetWispGradientThreshold": 0.07765848189592361,
+          "structuredDotSpectralPower": 0.0025669948663562536,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.11938908696174622,
+          "targetMeanLuma": 0.18731717765331268
+        },
+        "ridgeTotal": {
+          "mae": 0.09818744659423828,
+          "mse": 0.027535347267985344,
+          "lumaMae": 0.10161985456943512,
+          "gradientMae": 0.02220447175204754,
+          "targetTopTailLumaUnderfit": 0.23134280741214752,
+          "targetTopTailLumaThreshold": 0.7784352898597717,
+          "targetHighGradientUnderfit": 0.024397175759077072,
+          "targetHighGradientThreshold": 0.04708435758948326,
+          "targetWispUnderfit": 0.037550199776887894,
+          "targetWispGradientThreshold": 0.07765848189592361,
+          "structuredDotSpectralPower": 0.0020622170995920897,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.09069104492664337,
+          "targetMeanLuma": 0.18731717765331268
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1785545,
+          "nearDepth": 1.3848398923873901,
+          "farDepth": 3.3426358699798584,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "orientation": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "nominalQuadratureSamples": null,
+          "nominalPixelDepositsPerCandidate": null,
+          "nominalProjectedFragments": 35884236,
+          "projectedFragments": 35758128,
+          "projectedFragmentsPerProjectedRow": 20.026450187477774,
+          "coefficientMass": {
+            "identity": "nominal-kernel-mass-with-explicit-viewport-retention-v1",
+            "expectedCenterVisible": [
+              5075.27535564598,
+              2467.0104508707027,
+              1911.4817885621674,
+              1119.49757266239,
+              7854.868486583344,
+              3289.6462272513527,
+              1735.905724820552,
+              8428.243593140149
+            ],
+            "nominalKernel": [
+              5075.275355482444,
+              2467.010450789026,
+              1911.4817885277082,
+              1119.4975726373282,
+              7854.8684868494565,
+              3289.6462273451234,
+              1735.905724847132,
+              8428.24359327674
+            ],
+            "nominalKernelDelta": [
+              -1.6353624232579023e-07,
+              -8.167671694536693e-08,
+              -3.445916263444815e-08,
+              -2.5061808628379367e-08,
+              2.6611269277054816e-07,
+              9.377072274219245e-08,
+              2.6579982659313828e-08,
+              1.3659155229106545e-07
+            ],
+            "nominalKernelMassConserved": true,
+            "inViewportDeposited": [
+              5062.290197902533,
+              2458.0666988804373,
+              1891.7189718764205,
+              1113.814665652406,
+              7848.659596057518,
+              3285.8223184860303,
+              1730.4255348840225,
+              8413.028951131382
+            ],
+            "inViewportDelta": [
+              -12.985157743447417,
+              -8.943751990265355,
+              -19.762816685746884,
+              -5.682907009984092,
+              -6.208890525826064,
+              -3.823908765322358,
+              -5.480189936529541,
+              -15.214642008766532
+            ],
+            "inViewportMassConserved": false,
+            "viewportRetentionFraction": [
+              0.9974414870458207,
+              0.9963746598693537,
+              0.9896609966132021,
+              0.9949236986763008,
+              0.9992095487612006,
+              0.9988375927071899,
+              0.9968430371199473,
+              0.9981948027675481
+            ],
+            "clippingDetected": true,
+            "viewportMassEvidenceAuthority": "non-decision-bearing-clipped-framing-v0",
+            "tolerance": [
+              0.253963767782299,
+              0.12355052254353514,
+              0.09577408942810837,
+              0.0561748786331195,
+              0.3929434243291672,
+              0.16468231136256764,
+              0.0869952862410276,
+              0.4216121796570074
+            ],
+            "centerVisibleRows": 1785545
+          },
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": null,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": null,
+            "conditioningFeature": null,
+            "controlsExplicit": true,
+            "compoundHaloMass": null,
+            "splitAttributionCameras": [
+              0,
+              5,
+              10,
+              15,
+              20
+            ],
+            "splitScoreThreshold": 0.0,
+            "splitMinCameraSupport": 3,
+            "splitOffsetWorld": 0.00625
+          },
+          "effectiveSkirtMix": null,
+          "compoundHaloMass": null,
+          "splitCandidateCount": 4336,
+          "splitSelectionCap": null,
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6552271246910095
+      },
+      {
+        "cameraIndex": 14,
+        "cameraAngle": 0.168,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.029007745906710625,
+          "mse": 0.0023567071184515953,
+          "lumaMae": 0.027755381539463997,
+          "gradientMae": 0.016211004927754402,
+          "targetTopTailLumaUnderfit": 0.05391041561961174,
+          "targetTopTailLumaThreshold": 0.7702953815460205,
+          "targetHighGradientUnderfit": 0.020013507455587387,
+          "targetHighGradientThreshold": 0.046820610761642456,
+          "targetWispUnderfit": 0.03403853625059128,
+          "targetWispGradientThreshold": 0.07668086886405945,
+          "structuredDotSpectralPower": 0.0008829297730699182,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.18572093546390533,
+          "targetMeanLuma": 0.1851930022239685
+        },
+        "current": {
+          "mae": 0.09158104658126831,
+          "mse": 0.0278927031904459,
+          "lumaMae": 0.09316723048686981,
+          "gradientMae": 0.02064480073750019,
+          "targetTopTailLumaUnderfit": 0.08027923852205276,
+          "targetTopTailLumaThreshold": 0.7702953815460205,
+          "targetHighGradientUnderfit": 0.042603958398103714,
+          "targetHighGradientThreshold": 0.046820610761642456,
+          "targetWispUnderfit": 0.06440115720033646,
+          "targetWispGradientThreshold": 0.07668086886405945,
+          "structuredDotSpectralPower": 0.0035616944078356028,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.10505673289299011,
+          "targetMeanLuma": 0.1851930022239685
+        },
+        "ridgeRidge": {
+          "mae": 0.0772571936249733,
+          "mse": 0.018517592921853065,
+          "lumaMae": 0.07679124176502228,
+          "gradientMae": 0.02367216907441616,
+          "targetTopTailLumaUnderfit": 0.08066998422145844,
+          "targetTopTailLumaThreshold": 0.7702953815460205,
+          "targetHighGradientUnderfit": 0.02244182489812374,
+          "targetHighGradientThreshold": 0.046820610761642456,
+          "targetWispUnderfit": 0.03401647135615349,
+          "targetWispGradientThreshold": 0.07668086886405945,
+          "structuredDotSpectralPower": 0.0025620816741138697,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.11898817867040634,
+          "targetMeanLuma": 0.1851930022239685
+        },
+        "ridgeTotal": {
+          "mae": 0.096619613468647,
+          "mse": 0.026798097416758537,
+          "lumaMae": 0.09992648661136627,
+          "gradientMae": 0.022408654913306236,
+          "targetTopTailLumaUnderfit": 0.2161167562007904,
+          "targetTopTailLumaThreshold": 0.7702953815460205,
+          "targetHighGradientUnderfit": 0.023968860507011414,
+          "targetHighGradientThreshold": 0.046820610761642456,
+          "targetWispUnderfit": 0.036176253110170364,
+          "targetWispGradientThreshold": 0.07668086886405945,
+          "structuredDotSpectralPower": 0.002048396971076727,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.09040965139865875,
+          "targetMeanLuma": 0.1851930022239685
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1787072,
+          "nearDepth": 1.3939889669418335,
+          "farDepth": 3.3363590240478516,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "orientation": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "nominalQuadratureSamples": null,
+          "nominalPixelDepositsPerCandidate": null,
+          "nominalProjectedFragments": 35914788,
+          "projectedFragments": 35789398,
+          "projectedFragmentsPerProjectedRow": 20.026836075994698,
+          "coefficientMass": {
+            "identity": "nominal-kernel-mass-with-explicit-viewport-retention-v1",
+            "expectedCenterVisible": [
+              5076.931399375512,
+              2467.4004978422954,
+              1910.3163323282724,
+              1119.451860212149,
+              7855.913139525193,
+              3290.1131278252114,
+              1735.930826726538,
+              8430.484147130697
+            ],
+            "nominalKernel": [
+              5076.931399152104,
+              2467.400497754717,
+              1910.3163323473013,
+              1119.4518601723958,
+              7855.913139557995,
+              3290.113127847614,
+              1735.9308267671777,
+              8430.484147185738
+            ],
+            "nominalKernelDelta": [
+              -2.234082785435021e-07,
+              -8.757842806517147e-08,
+              1.902890289784409e-08,
+              -3.9753331293468364e-08,
+              3.280183591414243e-08,
+              2.240267349407077e-08,
+              4.063963388034608e-08,
+              5.504080036189407e-08
+            ],
+            "nominalKernelMassConserved": true,
+            "inViewportDeposited": [
+              5064.403118311183,
+              2458.7588438532134,
+              1891.1336918439013,
+              1113.9602235772493,
+              7849.636379278154,
+              3286.2121037188253,
+              1730.2134298104536,
+              8415.319548683554
+            ],
+            "inViewportDelta": [
+              -12.528281064329349,
+              -8.641653989081988,
+              -19.182640484371177,
+              -5.491636634899805,
+              -6.2767602470394195,
+              -3.901024106386103,
+              -5.7173969160844536,
+              -15.164598447143362
+            ],
+            "inViewportMassConserved": false,
+            "viewportRetentionFraction": [
+              0.9975323123204165,
+              0.9964976687016806,
+              0.989958395811341,
+              0.9950943521288543,
+              0.999201014556098,
+              0.998814319157176,
+              0.9967064373602571,
+              0.9982012185560772
+            ],
+            "clippingDetected": true,
+            "viewportMassEvidenceAuthority": "non-decision-bearing-clipped-framing-v0",
+            "tolerance": [
+              0.2540465699687756,
+              0.12357002489211479,
+              0.09571581661641364,
+              0.05617259301060746,
+              0.39299565697625966,
+              0.16470565639126059,
+              0.08699654133632691,
+              0.4217242073565349
+            ],
+            "centerVisibleRows": 1787072
+          },
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": null,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": null,
+            "conditioningFeature": null,
+            "controlsExplicit": true,
+            "compoundHaloMass": null,
+            "splitAttributionCameras": [
+              0,
+              5,
+              10,
+              15,
+              20
+            ],
+            "splitScoreThreshold": 0.0,
+            "splitMinCameraSupport": 3,
+            "splitOffsetWorld": 0.00625
+          },
+          "effectiveSkirtMix": null,
+          "compoundHaloMass": null,
+          "splitCandidateCount": 4336,
+          "splitSelectionCap": null,
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6560342907905579
+      },
+      {
+        "cameraIndex": 15,
+        "cameraAngle": 0.21,
+        "split": "attribution",
+        "expanded": {
+          "mae": 0.0286036916077137,
+          "mse": 0.0023302307818084955,
+          "lumaMae": 0.02728951722383499,
+          "gradientMae": 0.016428103670477867,
+          "targetTopTailLumaUnderfit": 0.04474016651511192,
+          "targetTopTailLumaThreshold": 0.7658321857452393,
+          "targetHighGradientUnderfit": 0.019687090069055557,
+          "targetHighGradientThreshold": 0.04646844416856766,
+          "targetWispUnderfit": 0.03361615166068077,
+          "targetWispGradientThreshold": 0.07647376507520676,
+          "structuredDotSpectralPower": 0.0008931913762353361,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.18509812653064728,
+          "targetMeanLuma": 0.18332871794700623
+        },
+        "current": {
+          "mae": 0.09098726511001587,
+          "mse": 0.027651485055685043,
+          "lumaMae": 0.09243705868721008,
+          "gradientMae": 0.020506316795945168,
+          "targetTopTailLumaUnderfit": 0.06869049370288849,
+          "targetTopTailLumaThreshold": 0.7658321857452393,
+          "targetHighGradientUnderfit": 0.0414755716919899,
+          "targetHighGradientThreshold": 0.04646844416856766,
+          "targetWispUnderfit": 0.06295280903577805,
+          "targetWispGradientThreshold": 0.07647376507520676,
+          "structuredDotSpectralPower": 0.0035745685454458,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.10471782088279724,
+          "targetMeanLuma": 0.18332871794700623
+        },
+        "ridgeRidge": {
+          "mae": 0.07622149586677551,
+          "mse": 0.018121248111128807,
+          "lumaMae": 0.07563704252243042,
+          "gradientMae": 0.023733094334602356,
+          "targetTopTailLumaUnderfit": 0.06883782148361206,
+          "targetTopTailLumaThreshold": 0.7658321857452393,
+          "targetHighGradientUnderfit": 0.022015094757080078,
+          "targetHighGradientThreshold": 0.04646844416856766,
+          "targetWispUnderfit": 0.03463129326701164,
+          "targetWispGradientThreshold": 0.07647376507520676,
+          "structuredDotSpectralPower": 0.002564499154686928,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.11864275485277176,
+          "targetMeanLuma": 0.18332871794700623
+        },
+        "ridgeTotal": {
+          "mae": 0.09500925987958908,
+          "mse": 0.026101617142558098,
+          "lumaMae": 0.09818440675735474,
+          "gradientMae": 0.022448908537626266,
+          "targetTopTailLumaUnderfit": 0.20285069942474365,
+          "targetTopTailLumaThreshold": 0.7658321857452393,
+          "targetHighGradientUnderfit": 0.023280052468180656,
+          "targetHighGradientThreshold": 0.04646844416856766,
+          "targetWispUnderfit": 0.036652471870183945,
+          "targetWispGradientThreshold": 0.07647376507520676,
+          "structuredDotSpectralPower": 0.0020516756922006607,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.09019380062818527,
+          "targetMeanLuma": 0.18332871794700623
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1788588,
+          "nearDepth": 1.40484619140625,
+          "farDepth": 3.3292295932769775,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "orientation": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "nominalQuadratureSamples": null,
+          "nominalPixelDepositsPerCandidate": null,
+          "nominalProjectedFragments": 35945114,
+          "projectedFragments": 35820378,
+          "projectedFragmentsPerProjectedRow": 20.027182336010306,
+          "coefficientMass": {
+            "identity": "nominal-kernel-mass-with-explicit-viewport-retention-v1",
+            "expectedCenterVisible": [
+              5079.003702642244,
+              2468.3790665545675,
+              1911.176487999409,
+              1119.6457549071558,
+              7856.942500473357,
+              3290.5596475829616,
+              1735.8833276717712,
+              8432.605051328166
+            ],
+            "nominalKernel": [
+              5079.003702662339,
+              2468.379066590009,
+              1911.1764880859944,
+              1119.64575492998,
+              7856.942500614727,
+              3290.5596476400656,
+              1735.8833277347167,
+              8432.605051396004
+            ],
+            "nominalKernelDelta": [
+              2.0094375940971076e-08,
+              3.5441644286038354e-08,
+              8.658548722451087e-08,
+              2.282422428834252e-08,
+              1.4137003745418042e-07,
+              5.710398909286596e-08,
+              6.294544618867803e-08,
+              6.783739081583917e-08
+            ],
+            "nominalKernelMassConserved": true,
+            "inViewportDeposited": [
+              5066.532592927411,
+              2459.7083764018344,
+              1891.8871928890464,
+              1114.2282589741324,
+              7850.705301874653,
+              3286.6352771826,
+              1730.0057153144944,
+              8417.472730458507
+            ],
+            "inViewportDelta": [
+              -12.471109714832892,
+              -8.670690152733187,
+              -19.289295110362445,
+              -5.417495933023474,
+              -6.237198598703799,
+              -3.9243704003615676,
+              -5.877612357276803,
+              -15.132320869659452
+            ],
+            "inViewportMassConserved": false,
+            "viewportRetentionFraction": [
+              0.9975445755811627,
+              0.9964872939208499,
+              0.9899071094524848,
+              0.9951614196639609,
+              0.9992061544807884,
+              0.9988073851196576,
+              0.9966140510346625,
+              0.9982054986830818
+            ],
+            "clippingDetected": true,
+            "viewportMassEvidenceAuthority": "non-decision-bearing-clipped-framing-v0",
+            "tolerance": [
+              0.2541501851321122,
+              0.12361895332772839,
+              0.09575882439997045,
+              0.056182287745357794,
+              0.39304712502366784,
+              0.1647279823791481,
+              0.08699416638358858,
+              0.4218302525664083
+            ],
+            "centerVisibleRows": 1788588
+          },
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": null,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": null,
+            "conditioningFeature": null,
+            "controlsExplicit": true,
+            "compoundHaloMass": null,
+            "splitAttributionCameras": [
+              0,
+              5,
+              10,
+              15,
+              20
+            ],
+            "splitScoreThreshold": 0.0,
+            "splitMinCameraSupport": 3,
+            "splitOffsetWorld": 0.00625
+          },
+          "effectiveSkirtMix": null,
+          "compoundHaloMass": null,
+          "splitCandidateCount": 4336,
+          "splitSelectionCap": null,
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.656832754611969
+      },
+      {
+        "cameraIndex": 16,
+        "cameraAngle": 0.252,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.02831425704061985,
+          "mse": 0.00230608182027936,
+          "lumaMae": 0.026969008147716522,
+          "gradientMae": 0.01683734357357025,
+          "targetTopTailLumaUnderfit": 0.038949497044086456,
+          "targetTopTailLumaThreshold": 0.761063277721405,
+          "targetHighGradientUnderfit": 0.018938468769192696,
+          "targetHighGradientThreshold": 0.04572064429521561,
+          "targetWispUnderfit": 0.0325174555182457,
+          "targetWispGradientThreshold": 0.076048344373703,
+          "structuredDotSpectralPower": 0.0008697373559698462,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.18444417417049408,
+          "targetMeanLuma": 0.18157169222831726
+        },
+        "current": {
+          "mae": 0.09007315337657928,
+          "mse": 0.027351737022399902,
+          "lumaMae": 0.09139220416545868,
+          "gradientMae": 0.020217500627040863,
+          "targetTopTailLumaUnderfit": 0.06522634625434875,
+          "targetTopTailLumaThreshold": 0.761063277721405,
+          "targetHighGradientUnderfit": 0.041406404227018356,
+          "targetHighGradientThreshold": 0.04572064429521561,
+          "targetWispUnderfit": 0.0626206025481224,
+          "targetWispGradientThreshold": 0.076048344373703,
+          "structuredDotSpectralPower": 0.003453807206824422,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.10444934666156769,
+          "targetMeanLuma": 0.18157169222831726
+        },
+        "ridgeRidge": {
+          "mae": 0.07526906579732895,
+          "mse": 0.01774139143526554,
+          "lumaMae": 0.07458195090293884,
+          "gradientMae": 0.024167006835341454,
+          "targetTopTailLumaUnderfit": 0.06671527028083801,
+          "targetTopTailLumaThreshold": 0.761063277721405,
+          "targetHighGradientUnderfit": 0.02174539491534233,
+          "targetHighGradientThreshold": 0.04572064429521561,
+          "targetWispUnderfit": 0.03243469074368477,
+          "targetWispGradientThreshold": 0.076048344373703,
+          "structuredDotSpectralPower": 0.0024325905833393335,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.11837133020162582,
+          "targetMeanLuma": 0.18157169222831726
+        },
+        "ridgeTotal": {
+          "mae": 0.09354794025421143,
+          "mse": 0.025451673194766045,
+          "lumaMae": 0.09663231670856476,
+          "gradientMae": 0.022793244570493698,
+          "targetTopTailLumaUnderfit": 0.18991945683956146,
+          "targetTopTailLumaThreshold": 0.761063277721405,
+          "targetHighGradientUnderfit": 0.023091521114110947,
+          "targetHighGradientThreshold": 0.04572064429521561,
+          "targetWispUnderfit": 0.034546781331300735,
+          "targetWispGradientThreshold": 0.076048344373703,
+          "structuredDotSpectralPower": 0.0019391034729778767,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.0899735540151596,
+          "targetMeanLuma": 0.18157169222831726
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1790094,
+          "nearDepth": 1.4174913167953491,
+          "farDepth": 3.3222262859344482,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "orientation": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "nominalQuadratureSamples": null,
+          "nominalPixelDepositsPerCandidate": null,
+          "nominalProjectedFragments": 35975222,
+          "projectedFragments": 35851252,
+          "projectedFragmentsPerProjectedRow": 20.02758067453441,
+          "coefficientMass": {
+            "identity": "nominal-kernel-mass-with-explicit-viewport-retention-v1",
+            "expectedCenterVisible": [
+              5081.432028514079,
+              2469.7868981071697,
+              1914.1077090527506,
+              1120.155330223299,
+              7857.921808540945,
+              3290.918479641744,
+              1735.5223199374525,
+              8434.644101267091
+            ],
+            "nominalKernel": [
+              5081.432028517843,
+              2469.7868981260517,
+              1914.107709071747,
+              1120.1553302332654,
+              7857.9218084276445,
+              3290.9184795975,
+              1735.5223199414838,
+              8434.644101245169
+            ],
+            "nominalKernelDelta": [
+              3.763489075936377e-09,
+              1.8882019503507763e-08,
+              1.899638846225571e-08,
+              9.966470315703191e-09,
+              -1.1330030247336254e-07,
+              -4.4243734009796754e-08,
+              4.0313352656085044e-09,
+              -2.1922460291534662e-08
+            ],
+            "nominalKernelMassConserved": true,
+            "inViewportDeposited": [
+              5068.927152354753,
+              2460.9068462570995,
+              1893.758948467189,
+              1114.7040981178152,
+              7851.839989719299,
+              3287.079655911662,
+              1729.755089502253,
+              8419.627926609426
+            ],
+            "inViewportDelta": [
+              -12.504876159326159,
+              -8.880051850070231,
+              -20.34876058556165,
+              -5.4512321054837685,
+              -6.081818821645356,
+              -3.838823730081913,
+              -5.767230435199508,
+              -15.016174657665033
+            ],
+            "inViewportMassConserved": false,
+            "viewportRetentionFraction": [
+              0.9975391039200847,
+              0.9964045271043928,
+              0.9893690618927439,
+              0.995133503400464,
+              0.9992260270629016,
+              0.9988335099292707,
+              0.9966769482772153,
+              0.9982197026362488
+            ],
+            "clippingDetected": true,
+            "viewportMassEvidenceAuthority": "non-decision-bearing-clipped-framing-v0",
+            "tolerance": [
+              0.25427160142570393,
+              0.1236893449053585,
+              0.09590538545263753,
+              0.05620776651116495,
+              0.39309609042704724,
+              0.1647459239820872,
+              0.08697611599687263,
+              0.42193220506335455
+            ],
+            "centerVisibleRows": 1790094
+          },
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": null,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": null,
+            "conditioningFeature": null,
+            "controlsExplicit": true,
+            "compoundHaloMass": null,
+            "splitAttributionCameras": [
+              0,
+              5,
+              10,
+              15,
+              20
+            ],
+            "splitScoreThreshold": 0.0,
+            "splitMinCameraSupport": 3,
+            "splitOffsetWorld": 0.00625
+          },
+          "effectiveSkirtMix": null,
+          "compoundHaloMass": null,
+          "splitCandidateCount": 4336,
+          "splitSelectionCap": null,
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6576268672943115
+      },
+      {
+        "cameraIndex": 17,
+        "cameraAngle": 0.294,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.02810567617416382,
+          "mse": 0.0022835703566670418,
+          "lumaMae": 0.02668887935578823,
+          "gradientMae": 0.016543764621019363,
+          "targetTopTailLumaUnderfit": 0.03574342280626297,
+          "targetTopTailLumaThreshold": 0.7596774697303772,
+          "targetHighGradientUnderfit": 0.019619833678007126,
+          "targetHighGradientThreshold": 0.04559498652815819,
+          "targetWispUnderfit": 0.034611016511917114,
+          "targetWispGradientThreshold": 0.07653048634529114,
+          "structuredDotSpectralPower": 0.0008802265510894358,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.18395628035068512,
+          "targetMeanLuma": 0.18002326786518097
+        },
+        "current": {
+          "mae": 0.08911552280187607,
+          "mse": 0.026953142136335373,
+          "lumaMae": 0.09014667570590973,
+          "gradientMae": 0.020178334787487984,
+          "targetTopTailLumaUnderfit": 0.06671310216188431,
+          "targetTopTailLumaThreshold": 0.7596774697303772,
+          "targetHighGradientUnderfit": 0.04176809638738632,
+          "targetHighGradientThreshold": 0.04559498652815819,
+          "targetWispUnderfit": 0.06523352116346359,
+          "targetWispGradientThreshold": 0.07653048634529114,
+          "structuredDotSpectralPower": 0.00340471719391644,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.10446161031723022,
+          "targetMeanLuma": 0.18002326786518097
+        },
+        "ridgeRidge": {
+          "mae": 0.07398715615272522,
+          "mse": 0.01719577983021736,
+          "lumaMae": 0.07308636605739594,
+          "gradientMae": 0.02373197115957737,
+          "targetTopTailLumaUnderfit": 0.06601599603891373,
+          "targetTopTailLumaThreshold": 0.7596774697303772,
+          "targetHighGradientUnderfit": 0.022308405488729477,
+          "targetHighGradientThreshold": 0.04559498652815819,
+          "targetWispUnderfit": 0.03593423217535019,
+          "targetWispGradientThreshold": 0.07653048634529114,
+          "structuredDotSpectralPower": 0.0025196706410497427,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.11838531494140625,
+          "targetMeanLuma": 0.18002326786518097
+        },
+        "ridgeTotal": {
+          "mae": 0.09196313470602036,
+          "mse": 0.024708179756999016,
+          "lumaMae": 0.09498558938503265,
+          "gradientMae": 0.022463209927082062,
+          "targetTopTailLumaUnderfit": 0.19020763039588928,
+          "targetTopTailLumaThreshold": 0.7596774697303772,
+          "targetHighGradientUnderfit": 0.02371211349964142,
+          "targetHighGradientThreshold": 0.04559498652815819,
+          "targetWispUnderfit": 0.038246795535087585,
+          "targetWispGradientThreshold": 0.07653048634529114,
+          "structuredDotSpectralPower": 0.001987951574847102,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.08995968103408813,
+          "targetMeanLuma": 0.18002326786518097
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1791549,
+          "nearDepth": 1.4312946796417236,
+          "farDepth": 3.3147802352905273,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "orientation": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "nominalQuadratureSamples": null,
+          "nominalPixelDepositsPerCandidate": null,
+          "nominalProjectedFragments": 36004292,
+          "projectedFragments": 35881360,
+          "projectedFragmentsPerProjectedRow": 20.02812091659229,
+          "coefficientMass": {
+            "identity": "nominal-kernel-mass-with-explicit-viewport-retention-v1",
+            "expectedCenterVisible": [
+              5083.88811158567,
+              2471.4654502547646,
+              1918.346790535088,
+              1120.9216645169734,
+              7859.06898407952,
+              3291.447926843949,
+              1735.6535246333776,
+              8436.94130040782
+            ],
+            "nominalKernel": [
+              5083.888111346398,
+              2471.4654501508076,
+              1918.3467904441354,
+              1120.9216644760713,
+              7859.068983906444,
+              3291.4479267730508,
+              1735.6535245907241,
+              8436.941300339198
+            ],
+            "nominalKernelDelta": [
+              -2.392725946265273e-07,
+              -1.0395706340204924e-07,
+              -9.095265340874903e-08,
+              -4.090202310180757e-08,
+              -1.7307593225268647e-07,
+              -7.089829523465596e-08,
+              -4.265348252374679e-08,
+              -6.862137524876744e-08
+            ],
+            "nominalKernelMassConserved": true,
+            "inViewportDeposited": [
+              5071.687205106404,
+              2462.5214435600687,
+              1896.9338227916257,
+              1115.37757830784,
+              7853.062211970965,
+              3287.6219996438103,
+              1729.8502130338402,
+              8421.938273662148
+            ],
+            "inViewportDelta": [
+              -12.20090647926645,
+              -8.944006694695872,
+              -21.412967743462332,
+              -5.544086209133411,
+              -6.006772108555197,
+              -3.8259272001387217,
+              -5.803311599537437,
+              -15.003026745671377
+            ],
+            "inViewportMassConserved": false,
+            "viewportRetentionFraction": [
+              0.9976000835951795,
+              0.9963810917551876,
+              0.9888378014605537,
+              0.9950539931695205,
+              0.9992356890974333,
+              0.9988376157590294,
+              0.9966564112496108,
+              0.9982217457474848
+            ],
+            "clippingDetected": true,
+            "viewportMassEvidenceAuthority": "non-decision-bearing-clipped-framing-v0",
+            "tolerance": [
+              0.2543944055792835,
+              0.12377327251273824,
+              0.09611733952675441,
+              0.05624608322584867,
+              0.393153449203976,
+              0.16477239634219748,
+              0.08698267623166889,
+              0.42204706502039097
+            ],
+            "centerVisibleRows": 1791549
+          },
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": null,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": null,
+            "conditioningFeature": null,
+            "controlsExplicit": true,
+            "compoundHaloMass": null,
+            "splitAttributionCameras": [
+              0,
+              5,
+              10,
+              15,
+              20
+            ],
+            "splitScoreThreshold": 0.0,
+            "splitMinCameraSupport": 3,
+            "splitOffsetWorld": 0.00625
+          },
+          "effectiveSkirtMix": null,
+          "compoundHaloMass": null,
+          "splitCandidateCount": 4336,
+          "splitSelectionCap": null,
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6583504676818848
+      },
+      {
+        "cameraIndex": 18,
+        "cameraAngle": 0.336,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.027943870052695274,
+          "mse": 0.0022850148379802704,
+          "lumaMae": 0.026452278718352318,
+          "gradientMae": 0.016590775921940804,
+          "targetTopTailLumaUnderfit": 0.03253418579697609,
+          "targetTopTailLumaThreshold": 0.7569259405136108,
+          "targetHighGradientUnderfit": 0.01921670138835907,
+          "targetHighGradientThreshold": 0.04511463642120361,
+          "targetWispUnderfit": 0.0346040241420269,
+          "targetWispGradientThreshold": 0.07574323564767838,
+          "structuredDotSpectralPower": 0.0008862718241289258,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.18334808945655823,
+          "targetMeanLuma": 0.17846229672431946
+        },
+        "current": {
+          "mae": 0.08822191506624222,
+          "mse": 0.02652083896100521,
+          "lumaMae": 0.08904585242271423,
+          "gradientMae": 0.01983870007097721,
+          "targetTopTailLumaUnderfit": 0.06815308332443237,
+          "targetTopTailLumaThreshold": 0.7569259405136108,
+          "targetHighGradientUnderfit": 0.04087178409099579,
+          "targetHighGradientThreshold": 0.04511463642120361,
+          "targetWispUnderfit": 0.0639580562710762,
+          "targetWispGradientThreshold": 0.07574323564767838,
+          "structuredDotSpectralPower": 0.0033898307010531425,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.10441704094409943,
+          "targetMeanLuma": 0.17846229672431946
+        },
+        "ridgeRidge": {
+          "mae": 0.07286543399095535,
+          "mse": 0.016743546351790428,
+          "lumaMae": 0.07184774428606033,
+          "gradientMae": 0.02410794608294964,
+          "targetTopTailLumaUnderfit": 0.0647868886590004,
+          "targetTopTailLumaThreshold": 0.7569259405136108,
+          "targetHighGradientUnderfit": 0.021855344995856285,
+          "targetHighGradientThreshold": 0.04511463642120361,
+          "targetWispUnderfit": 0.036538008600473404,
+          "targetWispGradientThreshold": 0.07574323564767838,
+          "structuredDotSpectralPower": 0.00256953458301723,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.11824622005224228,
+          "targetMeanLuma": 0.17846229672431946
+        },
+        "ridgeTotal": {
+          "mae": 0.09052380919456482,
+          "mse": 0.024042049422860146,
+          "lumaMae": 0.09349276125431061,
+          "gradientMae": 0.022782329469919205,
+          "targetTopTailLumaUnderfit": 0.19089756906032562,
+          "targetTopTailLumaThreshold": 0.7569259405136108,
+          "targetHighGradientUnderfit": 0.023156804963946342,
+          "targetHighGradientThreshold": 0.04511463642120361,
+          "targetWispUnderfit": 0.0385952927172184,
+          "targetWispGradientThreshold": 0.07574323564767838,
+          "structuredDotSpectralPower": 0.0020527085289359093,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.08981051295995712,
+          "targetMeanLuma": 0.17846229672431946
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1792910,
+          "nearDepth": 1.4460127353668213,
+          "farDepth": 3.3060495853424072,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "orientation": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "nominalQuadratureSamples": null,
+          "nominalPixelDepositsPerCandidate": null,
+          "nominalProjectedFragments": 36031462,
+          "projectedFragments": 35909776,
+          "projectedFragmentsPerProjectedRow": 20.02876664193964,
+          "coefficientMass": {
+            "identity": "nominal-kernel-mass-with-explicit-viewport-retention-v1",
+            "expectedCenterVisible": [
+              5088.077090536885,
+              2473.935961082432,
+              1922.6459863715036,
+              1121.8880259131386,
+              7860.239024178201,
+              3292.029617470369,
+              1735.968585392782,
+              8439.266030619216
+            ],
+            "nominalKernel": [
+              5088.077090115091,
+              2473.935960879847,
+              1922.6459861608857,
+              1121.8880258186355,
+              7860.23902417701,
+              3292.029617465964,
+              1735.968585350007,
+              8439.266030698978
+            ],
+            "nominalKernelDelta": [
+              -4.217945388518274e-07,
+              -2.025853973464109e-07,
+              -2.1061782717879396e-07,
+              -9.45030933507951e-08,
+              -1.191438059322536e-09,
+              -4.405137588037178e-09,
+              -4.2774900066433474e-08,
+              7.97626853454858e-08
+            ],
+            "nominalKernelMassConserved": true,
+            "inViewportDeposited": [
+              5075.498164824917,
+              2464.715944949086,
+              1900.9353006328272,
+              1116.3084724733174,
+              7854.354746188289,
+              3288.231475377561,
+              1730.1115801365086,
+              8424.450970860826
+            ],
+            "inViewportDelta": [
+              -12.578925711968623,
+              -9.220016133346235,
+              -21.710685738676375,
+              -5.579553439821211,
+              -5.884277989912334,
+              -3.7981420928081207,
+              -5.857005256273396,
+              -14.815059758389907
+            ],
+            "inViewportMassConserved": false,
+            "viewportRetentionFraction": [
+              0.9975277643227215,
+              0.9962731387237234,
+              0.9887079130050095,
+              0.9950266396369817,
+              0.9992513868888958,
+              0.9988462612630664,
+              0.9966260879917086,
+              0.998244508502915
+            ],
+            "clippingDetected": true,
+            "viewportMassEvidenceAuthority": "non-decision-bearing-clipped-framing-v0",
+            "tolerance": [
+              0.25460385452684425,
+              0.12389679805412163,
+              0.09633229931857519,
+              0.05629440129565693,
+              0.39321195120891006,
+              0.16480148087351845,
+              0.0869984292696391,
+              0.42216330153096077
+            ],
+            "centerVisibleRows": 1792910
+          },
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": null,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": null,
+            "conditioningFeature": null,
+            "controlsExplicit": true,
+            "compoundHaloMass": null,
+            "splitAttributionCameras": [
+              0,
+              5,
+              10,
+              15,
+              20
+            ],
+            "splitScoreThreshold": 0.0,
+            "splitMinCameraSupport": 3,
+            "splitOffsetWorld": 0.00625
+          },
+          "effectiveSkirtMix": null,
+          "compoundHaloMass": null,
+          "splitCandidateCount": 4336,
+          "splitSelectionCap": null,
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6590481400489807
+      },
+      {
+        "cameraIndex": 19,
+        "cameraAngle": 0.378,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.027880871668457985,
+          "mse": 0.002304382622241974,
+          "lumaMae": 0.026304783299565315,
+          "gradientMae": 0.01616796851158142,
+          "targetTopTailLumaUnderfit": 0.027832312509417534,
+          "targetTopTailLumaThreshold": 0.7568585276603699,
+          "targetHighGradientUnderfit": 0.019031619653105736,
+          "targetHighGradientThreshold": 0.044274959713220596,
+          "targetWispUnderfit": 0.03374593332409859,
+          "targetWispGradientThreshold": 0.07466994971036911,
+          "structuredDotSpectralPower": 0.0008536548702977598,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.18261189758777618,
+          "targetMeanLuma": 0.1768222153186798
+        },
+        "current": {
+          "mae": 0.08711356669664383,
+          "mse": 0.025999633595347404,
+          "lumaMae": 0.08781873434782028,
+          "gradientMae": 0.01946745254099369,
+          "targetTopTailLumaUnderfit": 0.07457837462425232,
+          "targetTopTailLumaThreshold": 0.7568585276603699,
+          "targetHighGradientUnderfit": 0.040213268250226974,
+          "targetHighGradientThreshold": 0.044274959713220596,
+          "targetWispUnderfit": 0.06251731514930725,
+          "targetWispGradientThreshold": 0.07466994971036911,
+          "structuredDotSpectralPower": 0.0032228005584329367,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.10446047782897949,
+          "targetMeanLuma": 0.1768222153186798
+        },
+        "ridgeRidge": {
+          "mae": 0.07166004180908203,
+          "mse": 0.016272298991680145,
+          "lumaMae": 0.07049230486154556,
+          "gradientMae": 0.02348598651587963,
+          "targetTopTailLumaUnderfit": 0.05925031006336212,
+          "targetTopTailLumaThreshold": 0.7568585276603699,
+          "targetHighGradientUnderfit": 0.021955128759145737,
+          "targetHighGradientThreshold": 0.044274959713220596,
+          "targetWispUnderfit": 0.036471638828516006,
+          "targetWispGradientThreshold": 0.07466994971036911,
+          "structuredDotSpectralPower": 0.0024857763200998306,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.11806990206241608,
+          "targetMeanLuma": 0.1768222153186798
+        },
+        "ridgeTotal": {
+          "mae": 0.08902174234390259,
+          "mse": 0.02336176112294197,
+          "lumaMae": 0.09193410724401474,
+          "gradientMae": 0.022293586283922195,
+          "targetTopTailLumaUnderfit": 0.19225358963012695,
+          "targetTopTailLumaThreshold": 0.7568585276603699,
+          "targetHighGradientUnderfit": 0.023307595402002335,
+          "targetHighGradientThreshold": 0.044274959713220596,
+          "targetWispUnderfit": 0.03856837376952171,
+          "targetWispGradientThreshold": 0.07466994971036911,
+          "structuredDotSpectralPower": 0.0019633735064417124,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.08963941782712936,
+          "targetMeanLuma": 0.1768222153186798
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1794137,
+          "nearDepth": 1.4623174667358398,
+          "farDepth": 3.296684741973877,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "orientation": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "nominalQuadratureSamples": null,
+          "nominalPixelDepositsPerCandidate": null,
+          "nominalProjectedFragments": 36055984,
+          "projectedFragments": 35935484,
+          "projectedFragmentsPerProjectedRow": 20.029397977969353,
+          "coefficientMass": {
+            "identity": "nominal-kernel-mass-with-explicit-viewport-retention-v1",
+            "expectedCenterVisible": [
+              5093.106347269336,
+              2476.980589504419,
+              1928.4916790701204,
+              1123.2937801627438,
+              7861.189481714497,
+              3292.426778071541,
+              1735.860451122702,
+              8441.380668401227
+            ],
+            "nominalKernel": [
+              5093.106347468642,
+              2476.9805896008556,
+              1928.491679180317,
+              1123.293780207643,
+              7861.189481697654,
+              3292.426778072759,
+              1735.8604511411045,
+              8441.3806684316
+            ],
+            "nominalKernelDelta": [
+              1.9930575945181772e-07,
+              9.64364517130889e-08,
+              1.1019665180356242e-07,
+              4.489925231609959e-08,
+              -1.6842932382132858e-08,
+              1.2182681530248374e-09,
+              1.8402488421997987e-08,
+              3.037348506040871e-08
+            ],
+            "nominalKernelMassConserved": true,
+            "inViewportDeposited": [
+              5080.103835779388,
+              2467.415382601345,
+              1905.8979363587428,
+              1117.5606202547144,
+              7855.5312052355985,
+              3288.752883319362,
+              1730.2222843565992,
+              8426.845542122852
+            ],
+            "inViewportDelta": [
+              -13.00251148994812,
+              -9.56520690307434,
+              -22.593742711377672,
+              -5.733159908029393,
+              -5.658276478898188,
+              -3.673894752178967,
+              -5.638166766102813,
+              -14.535126278375174
+            ],
+            "inViewportMassConserved": false,
+            "viewportRetentionFraction": [
+              0.9974470371118562,
+              0.9961383601697953,
+              0.9882842415362291,
+              0.9948961171073174,
+              0.9992802264222151,
+              0.9988841377501094,
+              0.9967519469883329,
+              0.9982781103175711
+            ],
+            "clippingDetected": true,
+            "viewportMassEvidenceAuthority": "non-decision-bearing-clipped-framing-v0",
+            "tolerance": [
+              0.2548553173634668,
+              0.12404902947522096,
+              0.09662458395350604,
+              0.056364689008137195,
+              0.3932594740857248,
+              0.16482133890357706,
+              0.08699302255613511,
+              0.42226903342006133
+            ],
+            "centerVisibleRows": 1794137
+          },
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": null,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": null,
+            "conditioningFeature": null,
+            "controlsExplicit": true,
+            "compoundHaloMass": null,
+            "splitAttributionCameras": [
+              0,
+              5,
+              10,
+              15,
+              20
+            ],
+            "splitScoreThreshold": 0.0,
+            "splitMinCameraSupport": 3,
+            "splitOffsetWorld": 0.00625
+          },
+          "effectiveSkirtMix": null,
+          "compoundHaloMass": null,
+          "splitCandidateCount": 4336,
+          "splitSelectionCap": null,
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.65980464220047
+      },
+      {
+        "cameraIndex": 20,
+        "cameraAngle": 0.42,
+        "split": "attribution",
+        "expanded": {
+          "mae": 0.027961328625679016,
+          "mse": 0.0023290379904210567,
+          "lumaMae": 0.026333972811698914,
+          "gradientMae": 0.01585465669631958,
+          "targetTopTailLumaUnderfit": 0.02518729865550995,
+          "targetTopTailLumaThreshold": 0.7549372315406799,
+          "targetHighGradientUnderfit": 0.018804578110575676,
+          "targetHighGradientThreshold": 0.04446827247738838,
+          "targetWispUnderfit": 0.033283818513154984,
+          "targetWispGradientThreshold": 0.07379848510026932,
+          "structuredDotSpectralPower": 0.000861192645970732,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.18177276849746704,
+          "targetMeanLuma": 0.1750679314136505
+        },
+        "current": {
+          "mae": 0.08596979826688766,
+          "mse": 0.025504095479846,
+          "lumaMae": 0.08660528808832169,
+          "gradientMae": 0.019352367147803307,
+          "targetTopTailLumaUnderfit": 0.08085121959447861,
+          "targetTopTailLumaThreshold": 0.7549372315406799,
+          "targetHighGradientUnderfit": 0.039883583784103394,
+          "targetHighGradientThreshold": 0.04446827247738838,
+          "targetWispUnderfit": 0.06151321902871132,
+          "targetWispGradientThreshold": 0.07379848510026932,
+          "structuredDotSpectralPower": 0.003296446753665805,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.1043957993388176,
+          "targetMeanLuma": 0.1750679314136505
+        },
+        "ridgeRidge": {
+          "mae": 0.07051987946033478,
+          "mse": 0.015844840556383133,
+          "lumaMae": 0.0691962018609047,
+          "gradientMae": 0.023329617455601692,
+          "targetTopTailLumaUnderfit": 0.059078432619571686,
+          "targetTopTailLumaThreshold": 0.7549372315406799,
+          "targetHighGradientUnderfit": 0.021572943776845932,
+          "targetHighGradientThreshold": 0.04446827247738838,
+          "targetWispUnderfit": 0.03592517971992493,
+          "targetWispGradientThreshold": 0.07379848510026932,
+          "structuredDotSpectralPower": 0.002470930339768529,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.11783533543348312,
+          "targetMeanLuma": 0.1750679314136505
+        },
+        "ridgeTotal": {
+          "mae": 0.08765142410993576,
+          "mse": 0.0227871872484684,
+          "lumaMae": 0.09047840535640717,
+          "gradientMae": 0.022169440984725952,
+          "targetTopTailLumaUnderfit": 0.19371382892131805,
+          "targetTopTailLumaThreshold": 0.7549372315406799,
+          "targetHighGradientUnderfit": 0.023157453164458275,
+          "targetHighGradientThreshold": 0.04446827247738838,
+          "targetWispUnderfit": 0.03849703446030617,
+          "targetWispGradientThreshold": 0.07379848510026932,
+          "structuredDotSpectralPower": 0.0019319286802783608,
+          "structuredDotFrequencyBandCyclesPerPixel": [
+            0.08,
+            0.45
+          ],
+          "meanLuma": 0.08933519572019577,
+          "targetMeanLuma": 0.1750679314136505
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1795207,
+          "nearDepth": 1.4768134355545044,
+          "farDepth": 3.29015851020813,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "orientation": "view-independent-multiview-residual-three-child-subcell-split-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "nominalQuadratureSamples": null,
+          "nominalPixelDepositsPerCandidate": null,
+          "nominalProjectedFragments": 36077346,
+          "projectedFragments": 35958533,
+          "projectedFragmentsPerProjectedRow": 20.030299012871495,
+          "coefficientMass": {
+            "identity": "nominal-kernel-mass-with-explicit-viewport-retention-v1",
+            "expectedCenterVisible": [
+              5097.502136644917,
+              2479.454610087232,
+              1932.7286093986986,
+              1124.511010402551,
+              7862.491681392303,
+              3293.0320819452318,
+              1736.298613524292,
+              8443.645715724339
+            ],
+            "nominalKernel": [
+              5097.502136331684,
+              2479.454609915276,
+              1932.7286091746996,
+              1124.5110103419377,
+              7862.491681346367,
+              3293.032081914336,
+              1736.2986134824755,
+              8443.64571559859
+            ],
+            "nominalKernelDelta": [
+              -3.132336132694036e-07,
+              -1.71956344274804e-07,
+              -2.239989953523036e-07,
+              -6.06132743996568e-08,
+              -4.5935848902445287e-08,
+              -3.089598976657726e-08,
+              -4.181652002444025e-08,
+              -1.257485564565286e-07
+            ],
+            "nominalKernelMassConserved": true,
+            "inViewportDeposited": [
+              5085.3780556301945,
+              2470.525607038251,
+              1911.8109903286627,
+              1119.090135765495,
+              7856.811874439018,
+              3289.344407459301,
+              1730.569903744256,
+              8429.242666631173
+            ],
+            "inViewportDelta": [
+              -12.124081014722833,
+              -8.92900304898103,
+              -20.917619070035926,
+              -5.420874637055931,
+              -5.679806953285151,
+              -3.687674485930984,
+              -5.72870978003607,
+              -14.403049093165464
+            ],
+            "inViewportMassConserved": false,
+            "viewportRetentionFraction": [
+              0.9976215643093967,
+              0.9963988035866215,
+              0.9891771566021659,
+              0.9951793494355246,
+              0.999277607254361,
+              0.9988801583482441,
+              0.9967006195043788,
+              0.9982942144213437
+            ],
+            "clippingDetected": true,
+            "viewportMassEvidenceAuthority": "non-decision-bearing-clipped-framing-v0",
+            "tolerance": [
+              0.2550751068322459,
+              0.12417273050436162,
+              0.09683643046993494,
+              0.05642555052012755,
+              0.3933245840696151,
+              0.1648516040972616,
+              0.08701493067621462,
+              0.42238228578621695
+            ],
+            "centerVisibleRows": 1795207
+          },
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": null,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": null,
+            "conditioningFeature": null,
+            "controlsExplicit": true,
+            "compoundHaloMass": null,
+            "splitAttributionCameras": [
+              0,
+              5,
+              10,
+              15,
+              20
+            ],
+            "splitScoreThreshold": 0.0,
+            "splitMinCameraSupport": 3,
+            "splitOffsetWorld": 0.00625
+          },
+          "effectiveSkirtMix": null,
+          "compoundHaloMass": null,
+          "splitCandidateCount": 4336,
+          "splitSelectionCap": null,
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6605618596076965
+      }
+    ],
+    "heldOutMean": {
+      "cameraCount": 16,
+      "expandedMae": 0.03431876748800278,
+      "expandedMaeStdDev": 0.005878755481361296,
+      "targetTopTailLumaUnderfit": 0.08134104579221457,
+      "targetWispUnderfit": 0.036712076514959335,
+      "structuredDotSpectralPower": 0.0009761441579030361,
+      "projectedFragmentsMean": 35417148.125,
+      "projectedFragmentsTotal": 566674370,
+      "currentMae": 0.0941280284896493,
+      "ridgeRidgeMae": 0.08145572897046804,
+      "ridgeTotalMae": 0.10167988622561097
+    }
+  },
+  "artifacts": {
+    "gallery": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-kneecapper-deposition-state120-r2-selective-mv5-min3-off00625/index.html",
+    "cameraCount": 21
+  },
+  "ceiling": {
+    "truthful": true,
+    "notExactFullCovariance": true,
+    "notExactPerSplatOrder": true,
+    "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+    "orientationApproximation": "view-independent-multiview-residual-three-child-subcell-split-v0",
+    "interpretation": "coefficient/extinction transplant assay; not a shipping-renderer parity claim"
+  }
+}

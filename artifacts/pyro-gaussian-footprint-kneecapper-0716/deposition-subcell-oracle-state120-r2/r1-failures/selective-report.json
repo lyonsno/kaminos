@@ -1,0 +1,27 @@
+{
+  "schema": "kaminos.volume.layer-coefficient-render-oracle.v0",
+  "status": "failed",
+  "failurePhase": "calibration-raster",
+  "error": "viewport clipping changed deposited coefficient mass: {\"delta\":[-12.989204577063902,-9.12202587802176,-20.257219674515227,-5.69470926525878,-6.417344137869804,-3.9620687238648316,-5.827666009561426,-16.123106110248045],\"deposited\":[5055.898511311003,2455.3972549711966,1889.9618990593729,1112.9753905238363,7845.844048621493,3284.5930486032275,1730.3215482713258,8403.583959103013],\"expected\":[5068.887715888067,2464.5192808492184,1910.219118733888,1118.670099789095,7852.261392759363,3288.5551173270924,1736.1492142808872,8419.70706521326],\"failedChannels\":[0,1,2,3,4,5,6,7],\"tolerance\":[0.25364438579440335,0.12342596404246094,0.09571095593669442,0.056133504989454755,0.39281306963796814,0.16462775586635464,0.08700746071404437,0.42118535326066303]}",
+  "startedAtUnix": 1784326994.6434839,
+  "finishedAtUnix": 1784327000.122049,
+  "requested": {
+    "footprintMode": "selective-split",
+    "footprintControls": {
+      "skirtMix": null,
+      "skirtMinorScale": null,
+      "skirtRidgeRejection": null
+    },
+    "depositionControls": {
+      "compoundHaloMass": null,
+      "splitAttributionCameras": "0,5,10,15,20",
+      "splitScoreThreshold": 0.0,
+      "splitMinCameraSupport": 3,
+      "splitOffsetWorld": 0.00625
+    },
+    "pathScale": 4.557231148404257,
+    "stateStep": 120,
+    "depthBins": 96
+  },
+  "traceback": "Traceback (most recent call last):\n  File \"/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/volume-layer-coefficient-render-oracle.py\", line 1609, in main\n    result = run_oracle(args, phase_state)\n  File \"/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/volume-layer-coefficient-render-oracle.py\", line 1107, in run_oracle\n    calibration_planes, calibration_raster = rasterize_coefficients(\n                                             ~~~~~~~~~~~~~~~~~~~~~~^\n        descriptors[:, 0:3], descriptors[:, 20:23], features, coefficients, calibration_camera,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n        args.depth_bins, calibration_footprint_mode, calibration_footprint_controls,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/volume-layer-coefficient-render-oracle.py\", line 709, in rasterize_coefficients\n    require(\n    ~~~~~~~^\n        bool(np.all(mass_conserved)),\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<7 lines>...\n        }),\n        ^^^\n    )\n    ^\n  File \"/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/volume-layer-coefficient-render-oracle.py\", line 91, in require\n    raise ValueError(message)\nValueError: viewport clipping changed deposited coefficient mass: {\"delta\":[-12.989204577063902,-9.12202587802176,-20.257219674515227,-5.69470926525878,-6.417344137869804,-3.9620687238648316,-5.827666009561426,-16.123106110248045],\"deposited\":[5055.898511311003,2455.3972549711966,1889.9618990593729,1112.9753905238363,7845.844048621493,3284.5930486032275,1730.3215482713258,8403.583959103013],\"expected\":[5068.887715888067,2464.5192808492184,1910.219118733888,1118.670099789095,7852.261392759363,3288.5551173270924,1736.1492142808872,8419.70706521326],\"failedChannels\":[0,1,2,3,4,5,6,7],\"tolerance\":[0.25364438579440335,0.12342596404246094,0.09571095593669442,0.056133504989454755,0.39281306963796814,0.16462775586635464,0.08700746071404437,0.42118535326066303]}\n"
+}

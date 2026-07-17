@@ -1,0 +1,27 @@
+{
+  "job_id": "6e9e3296b240",
+  "job_type": "kaminos_coefficient_compound_deposition_oracle_state120",
+  "status": "done",
+  "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-layer-coefficient-corpus-r4/training-manifest.json",
+  "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-kneecapper-deposition-state120-r2-compound-h025",
+  "effective_route": "/private/tmp/kaminos-mlx-residual-venv/bin/python volume-layer-coefficient-render-oracle.py --manifest /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-layer-coefficient-corpus-r4/training-manifest.json --capture-report /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-imported-coefficient-orbit-state120-r2/capture-report.json --out-dir /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-kneecapper-deposition-state120-r2-compound-h025 --report /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-kneecapper-deposition-state120-r2-compound-h025/report.json --state-step 120 --depth-bins 96 --footprint-mode compound --path-scale 4.557231148404257 --compound-halo-mass 0.25",
+  "effective_cwd": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716",
+  "effective_env": {
+    "PYTHONPATH": "."
+  },
+  "effective_defaults": {
+    "capture_report": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-imported-coefficient-orbit-state120-r2/capture-report.json",
+    "compound_halo_mass": "0.25",
+    "depth_bins": "96",
+    "path_scale": "4.557231148404257",
+    "state_step": "120"
+  },
+  "effective_timeout": null,
+  "ignored_params": null,
+  "started_at": 1784328819.431426,
+  "finished_at": 1784329722.0357718,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "warnings": null
+}
