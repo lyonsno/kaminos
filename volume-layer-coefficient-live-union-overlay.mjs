@@ -234,6 +234,49 @@ export async function loadLayerCoefficientLiveUnionOverlay({ manifestUrl, fetchI
   };
 }
 
+export function auditLayerCoefficientLiveUnionPopulation({ overlay, audit, exactUnionModeEffective }) {
+  requireContract(overlay?.receipt?.status === 'complete', 'validated overlay is required for population audit');
+  requireContract(audit?.ok === true || Array.isArray(audit?.stableNativeCellIds), 'live population audit is missing');
+  const stableNativeCellIdSha256 = audit.stableNativeCellIdSha256;
+  const admissionIndexSha256 = overlay.manifest.source.state.admissionIndexSha256;
+  const stableNativeCellIds = audit.stableNativeCellIds || [];
+  let lookupMissCount = 0;
+  let matchedLookupCount = 0;
+  for (const nativeCellId of stableNativeCellIds) {
+    const rowPlusOne = overlay.denseLookup[nativeCellId] || 0;
+    if (rowPlusOne === 0) lookupMissCount += 1;
+    else matchedLookupCount += 1;
+  }
+  const lookupExtraCount = overlay.receipt.lookupPopulation - matchedLookupCount;
+  const failures = [];
+  if (!exactUnionModeEffective) failures.push('exact-live-union-mode-not-effective');
+  if (stableNativeCellIdSha256 !== admissionIndexSha256) {
+    failures.push(`stable-native-cell-sha256-mismatch:${stableNativeCellIdSha256}:${admissionIndexSha256}`);
+  }
+  if (audit.overflowCount !== 0 || audit.candidateCount !== audit.instanceCount) {
+    failures.push(`partial-live-union-population:${audit.candidateCount}:${audit.instanceCount}:${audit.overflowCount}`);
+  }
+  if (audit.instanceCount !== overlay.receipt.admittedRowCount) {
+    failures.push(`admitted-row-count-mismatch:${audit.instanceCount}:${overlay.receipt.admittedRowCount}`);
+  }
+  if (lookupMissCount !== 0) failures.push(`lookup-misses:${lookupMissCount}`);
+  if (lookupExtraCount !== 0) failures.push(`lookup-extras:${lookupExtraCount}`);
+  return {
+    identity: 'layer-coefficient-live-union-population-audit-v0',
+    status: failures.length === 0 ? 'effective' : 'failed',
+    stableNativeCellIdSha256,
+    admissionIndexSha256,
+    candidateCount: audit.candidateCount,
+    instanceCount: audit.instanceCount,
+    overflowCount: audit.overflowCount,
+    admittedRowCount: overlay.receipt.admittedRowCount,
+    lookupPopulation: overlay.receipt.lookupPopulation,
+    lookupMissCount,
+    lookupExtraCount,
+    failures,
+  };
+}
+
 export function createLayerCoefficientLiveUnionGpuResources({ device, overlay }) {
   requireContract(device?.queue && typeof device.createBuffer === 'function' && typeof device.queue.writeBuffer === 'function', 'WebGPU device is invalid');
   requireContract(overlay?.receipt?.status === 'complete' && overlay.receipt.authority === LOADER_AUTHORITY, 'validated overlay load receipt is required');

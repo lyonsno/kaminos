@@ -33,6 +33,11 @@ import {
   normalizeVolumeScene,
   volumeSceneReceipt,
 } from './volume-scene-ontology.mjs';
+import {
+  auditLayerCoefficientLiveUnionPopulation,
+  createLayerCoefficientLiveUnionGpuResources,
+  loadLayerCoefficientLiveUnionOverlay,
+} from './volume-layer-coefficient-live-union-overlay.mjs';
 
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
@@ -5675,8 +5680,9 @@ struct BoundarySplatVertexOut {
   @builtin(position) position: vec4<f32>,
   @location(0) colorOpacity: vec4<f32>,
   @location(1) local: vec2<f32>,
-  @location(2) ridgeNonRidgeOptical: vec4<f32>,
-  @location(3) unionEnabled: f32,
+  @location(2) ridgeOptical: vec4<f32>,
+  @location(3) nonRidgeOptical: vec4<f32>,
+  @location(4) unionEnabled: f32,
 };
 
 struct BoundarySplatAttributeHookOutput {
@@ -5731,6 +5737,8 @@ ${BOUNDARY_SPLAT_ATTRIBUTE_MODEL_WGSL}
 @group(0) @binding(7) var<storage, read> boundarySplatMajorant: array<vec4<f32>>;
 @group(0) @binding(8) var<storage, read_write> flowKernelDescriptorRows: array<FlowKernelDescriptorRow>;
 @group(0) @binding(9) var<storage, read> flowKernelDescriptorCellIndices: array<u32>;
+@group(0) @binding(10) var<storage, read> boundarySplatLiveUnionCoefficients: array<vec4<f32>>;
+@group(0) @binding(11) var<storage, read> boundarySplatLiveUnionLookup: array<u32>;
 
 fn boundarySplatCellIndex(cell: vec3<u32>) -> u32 {
   return cell.x + cell.y * GRID + cell.z * GRID * GRID;
@@ -6155,7 +6163,19 @@ fn boundarySplatVs(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_in
   out.position = boundarySplatCamera.viewProj * vec4<f32>(splat.positionSupport.xyz + offset, 1.0);
   out.colorOpacity = splat.colorOpacity;
   out.local = corner;
-  out.ridgeNonRidgeOptical = splat.ridgeNonRidgeOptical;
+  var ridgeOptical = vec4<f32>(splat.colorOpacity.rgb * splat.ridgeNonRidgeOptical.x, splat.ridgeNonRidgeOptical.y);
+  var nonRidgeOptical = vec4<f32>(splat.colorOpacity.rgb * splat.ridgeNonRidgeOptical.z, splat.ridgeNonRidgeOptical.w);
+  if (boundarySplatCamera.unionControls.z > 0.5) {
+    let nativeCellIndex = u32(splat.nativeCellMembership.x);
+    let rowPlusOne = boundarySplatLiveUnionLookup[nativeCellIndex];
+    if (rowPlusOne > 0u) {
+      let coefficientOffset = (rowPlusOne - 1u) * 2u;
+      ridgeOptical = boundarySplatLiveUnionCoefficients[coefficientOffset];
+      nonRidgeOptical = boundarySplatLiveUnionCoefficients[coefficientOffset + 1u];
+    }
+  }
+  out.ridgeOptical = ridgeOptical;
+  out.nonRidgeOptical = nonRidgeOptical;
   out.unionEnabled = boundarySplatCamera.unionControls.x;
   return out;
 }
@@ -6170,15 +6190,11 @@ fn boundarySplatFs(in: BoundarySplatVertexOut) -> @location(0) vec4<f32> {
   let energyRatio = (kernelSharpness / 3.4) / max(footprintRadius * footprintRadius, 0.1225);
   let energyCompensation = clamp(sqrt(energyRatio), 0.5, 2.5);
   if (in.unionEnabled > 0.5) {
-    let ridgeEmissionCoefficient = in.ridgeNonRidgeOptical.x;
-    let ridgeExtinctionCoefficient = in.ridgeNonRidgeOptical.y;
-    let nonRidgeEmissionCoefficient = in.ridgeNonRidgeOptical.z;
-    let nonRidgeExtinctionCoefficient = in.ridgeNonRidgeOptical.w;
-    let sharedTotalExtinctionCoefficient = ridgeExtinctionCoefficient + nonRidgeExtinctionCoefficient;
-    let sharedEmissionCoefficient = ridgeEmissionCoefficient + nonRidgeEmissionCoefficient;
+    let sharedTotalExtinctionCoefficient = in.ridgeOptical.w + in.nonRidgeOptical.w;
+    let sharedEmissionCoefficient = in.ridgeOptical.rgb + in.nonRidgeOptical.rgb;
     let opticalKernel = gaussian * energyCompensation;
     let alpha = 1.0 - exp(-sharedTotalExtinctionCoefficient * opticalKernel);
-    let sourceColor = in.colorOpacity.rgb * sharedEmissionCoefficient / max(sharedTotalExtinctionCoefficient, 0.000001);
+    let sourceColor = sharedEmissionCoefficient / max(sharedTotalExtinctionCoefficient, 0.000001);
     return vec4<f32>(sourceColor, alpha);
   }
   let alpha = in.colorOpacity.a * gaussian * energyCompensation;
@@ -6425,6 +6441,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatFeatureCaptureEffective: false,
     boundarySplatFeatureCaptureIdentity: BOUNDARY_SPLAT_FEATURE_CAPTURE_IDENTITY,
     boundarySplatFeatureCapture: null,
+    boundarySplatLiveUnionOverlayRequestedIdentity: null,
+    boundarySplatLiveUnionOverlayEffectiveIdentity: null,
+    boundarySplatLiveUnionOverlayFallbackReason: null,
+    boundarySplatLiveUnionOverlayStatus: 'off',
+    boundarySplatLiveUnionOverlayReceipt: null,
     flowKernelDescriptorCaptureRequested: normalizeFlowKernelDescriptorCapture(controlsSnapshot.flowKernelDescriptorCapture),
     flowKernelDescriptorCaptureEffective: false,
     flowKernelDescriptorCaptureIdentity: FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY,
@@ -6814,6 +6835,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySplatReadbackBuffer = null;
   let boundarySplatFeatureBuffer = null;
   let boundarySplatFeatureBufferCapacity = 0;
+  let boundarySplatLiveUnionOverlay = null;
+  let boundarySplatLiveUnionOverlayGpuResources = null;
+  let boundarySplatLiveUnionCoefficientDummyBuffer = null;
+  let boundarySplatLiveUnionLookupDummyBuffer = null;
   let flowKernelDescriptorBuffer = null;
   let flowKernelDescriptorBufferCapacity = 0;
   let flowKernelDescriptorExportSession = null;
@@ -7318,6 +7343,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatIndirectBuffer?.destroy();
     boundarySplatReadbackBuffer?.destroy();
     boundarySplatFeatureBuffer?.destroy();
+    boundarySplatLiveUnionCoefficientDummyBuffer?.destroy();
+    boundarySplatLiveUnionLookupDummyBuffer?.destroy();
     flowKernelDescriptorBuffer?.destroy();
     flowKernelDescriptorIndexBuffer?.destroy();
     nonRidgeOpticalCaptureHeaderBuffer?.destroy();
@@ -7330,6 +7357,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatReadbackBuffer = null;
     boundarySplatFeatureBuffer = null;
     boundarySplatFeatureBufferCapacity = 0;
+    boundarySplatLiveUnionCoefficientDummyBuffer = null;
+    boundarySplatLiveUnionLookupDummyBuffer = null;
     flowKernelDescriptorBuffer = null;
     flowKernelDescriptorBufferCapacity = 0;
     flowKernelDescriptorExportSession = null;
@@ -7803,7 +7832,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function ensureBoundarySplatBuffers() {
-    if (boundarySplatBuffer && boundarySplatDrawBuffer && boundarySplatIndirectBuffer && boundarySplatCameraBuffer && boundarySplatReadbackBuffer && boundarySplatFeatureBuffer && flowKernelDescriptorBuffer && flowKernelDescriptorIndexBuffer) return;
+    if (boundarySplatBuffer && boundarySplatDrawBuffer && boundarySplatIndirectBuffer && boundarySplatCameraBuffer && boundarySplatReadbackBuffer && boundarySplatFeatureBuffer && boundarySplatLiveUnionCoefficientDummyBuffer && boundarySplatLiveUnionLookupDummyBuffer && flowKernelDescriptorBuffer && flowKernelDescriptorIndexBuffer) return;
     boundarySplatBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} candidates`,
       size: boundarySplatCapacity * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES,
@@ -7838,6 +7867,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     state.boundarySplatFeatureCaptureRequested = featureCaptureRequested;
     state.boundarySplatFeatureCaptureEffective = featureCaptureRequested && boundarySplatFeatureBufferCapacity === boundarySplatCapacity;
+    boundarySplatLiveUnionCoefficientDummyBuffer = device.createBuffer({
+      label: 'kaminos live-union coefficient overlay dummy',
+      size: 2 * 4 * Float32Array.BYTES_PER_ELEMENT,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    boundarySplatLiveUnionLookupDummyBuffer = device.createBuffer({
+      label: 'kaminos live-union coefficient lookup dummy',
+      size: Uint32Array.BYTES_PER_ELEMENT,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(boundarySplatLiveUnionCoefficientDummyBuffer, 0, new Float32Array(8));
+    device.queue.writeBuffer(boundarySplatLiveUnionLookupDummyBuffer, 0, new Uint32Array([0]));
     const descriptorCaptureRequested = normalizeFlowKernelDescriptorCapture(controlsSnapshot.flowKernelDescriptorCapture);
     const descriptorMode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
     const descriptorRowsRequested = descriptorCaptureRequested
@@ -7892,6 +7933,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       || !boundarySplatDrawBuffer
       || !boundarySplatCameraBuffer
       || !boundarySplatFeatureBuffer
+      || !boundarySplatLiveUnionCoefficientDummyBuffer
+      || !boundarySplatLiveUnionLookupDummyBuffer
       || !flowKernelDescriptorBuffer
       || !flowKernelDescriptorIndexBuffer
       || !majorantBuffer
@@ -7918,6 +7961,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       entries: [
         { binding: 4, resource: { buffer: boundarySplatCameraBuffer } },
         { binding: 5, resource: { buffer: boundarySplatBuffer } },
+        {
+          binding: 10,
+          resource: {
+            buffer: boundarySplatLiveUnionOverlayGpuResources?.coefficientBuffer
+              || boundarySplatLiveUnionCoefficientDummyBuffer,
+          },
+        },
+        {
+          binding: 11,
+          resource: {
+            buffer: boundarySplatLiveUnionOverlayGpuResources?.lookupBuffer
+              || boundarySplatLiveUnionLookupDummyBuffer,
+          },
+        },
       ],
     });
     rebuildSelectiveHeadLiveBindGroups();
@@ -8003,6 +8060,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function rebuildFluidState(nextGridSize = gridSize, nextMajorantGridSize = majorantGridSize, reason = 'grid-rebuilt') {
     gridSize = normalizeGridSize(nextGridSize);
     majorantGridSize = normalizeMajorantGridSize(nextMajorantGridSize);
+    if (boundarySplatLiveUnionOverlay) {
+      state.boundarySplatLiveUnionOverlayEffectiveIdentity = null;
+      state.boundarySplatLiveUnionOverlayFallbackReason = `fluid-state-rebuilt:${reason}`;
+      state.boundarySplatLiveUnionOverlayStatus = 'awaiting-population-audit';
+    }
     destroyFluidState();
     boundarySplatCapacity = Math.min(BOUNDARY_SPLAT_INITIAL_CAPACITY, gridCellCount(gridSize));
     state.boundarySplatCapacity = boundarySplatCapacity;
@@ -8525,6 +8587,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       entries: [
         { binding: 4, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
         { binding: 5, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+        { binding: 10, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+        { binding: 11, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
       ],
     });
     pressureWriteBindGroupLayout = device.createBindGroupLayout({
@@ -9208,7 +9272,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       splatCamera.set([
         boundarySplatMode === 'kernel_moment_full_flame_union' ? 1 : 0,
         Math.max(0, Math.min(4, Number(controlsSnapshot.reactionBoundaryGradient ?? 2.60))),
-        0.00392156862745098,
+        state.boundarySplatLiveUnionOverlayEffectiveIdentity ? 1 : 0,
         0.011764705882352941,
       ], 36);
       device.queue.writeBuffer(boundarySplatCameraBuffer, 0, splatCamera);
@@ -11048,6 +11112,176 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       };
     } finally {
       readback.destroy();
+    }
+  }
+
+  function boundarySplatLiveUnionOverlayRuntimeReceipt(overrides = {}) {
+    return {
+      identity: 'boundary-splat-live-union-coefficient-overlay-runtime-receipt-v0',
+      status: state.boundarySplatLiveUnionOverlayStatus,
+      authority: 'checksum-and-exact-native-cell-population-gated-live-union-overlay-v0',
+      requestedOverlayIdentity: state.boundarySplatLiveUnionOverlayRequestedIdentity,
+      effectiveOverlayIdentity: state.boundarySplatLiveUnionOverlayEffectiveIdentity,
+      fallbackReason: state.boundarySplatLiveUnionOverlayFallbackReason,
+      routeIdentity: ROUTE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      backend: state.backend,
+      grid: gridSize,
+      frameCount: state.frameCount,
+      simStepCount: state.simStepCount,
+      ...overrides,
+    };
+  }
+
+  function destroyBoundarySplatLiveUnionOverlayResources() {
+    boundarySplatLiveUnionOverlayGpuResources?.coefficientBuffer?.destroy();
+    boundarySplatLiveUnionOverlayGpuResources?.lookupBuffer?.destroy();
+    boundarySplatLiveUnionOverlayGpuResources = null;
+    boundarySplatLiveUnionOverlay = null;
+  }
+
+  function clearBoundarySplatLiveUnionCoefficientOverlay(options = {}) {
+    destroyBoundarySplatLiveUnionOverlayResources();
+    state.boundarySplatLiveUnionOverlayRequestedIdentity = null;
+    state.boundarySplatLiveUnionOverlayEffectiveIdentity = null;
+    state.boundarySplatLiveUnionOverlayFallbackReason = options.reason || null;
+    state.boundarySplatLiveUnionOverlayStatus = 'off';
+    state.boundarySplatLiveUnionOverlayReceipt = boundarySplatLiveUnionOverlayRuntimeReceipt({
+      status: 'off',
+      failurePhase: null,
+    });
+    if (!options.skipBindGroupRebuild) rebuildBoundarySplatBindGroups();
+    if (!options.silent) emitStatus({ phase: 'boundary-splat-live-union-overlay-cleared' });
+    return { ...state.boundarySplatLiveUnionOverlayReceipt };
+  }
+
+  async function loadBoundarySplatLiveUnionCoefficientOverlay(payload = {}) {
+    const manifestUrl = String(payload.manifestUrl || '');
+    const requestedIdentity = String(payload.overlayIdentity || manifestUrl || 'missing-manifest-url');
+    clearBoundarySplatLiveUnionCoefficientOverlay({ reason: 'replacement-requested', silent: true });
+    state.boundarySplatLiveUnionOverlayRequestedIdentity = requestedIdentity;
+    state.boundarySplatLiveUnionOverlayStatus = 'loading';
+    state.boundarySplatLiveUnionOverlayFallbackReason = null;
+    state.boundarySplatLiveUnionOverlayReceipt = boundarySplatLiveUnionOverlayRuntimeReceipt({
+      status: 'loading',
+      manifestUrl,
+      failurePhase: null,
+    });
+    let failurePhase = 'ensure-gpu';
+    let loadedOverlay = null;
+    let loadedGpuResources = null;
+    try {
+      await ensureGpu();
+      failurePhase = 'load-and-validate-overlay';
+      loadedOverlay = await loadLayerCoefficientLiveUnionOverlay({
+        manifestUrl,
+        fetchImpl: payload.fetchImpl || globalThis.fetch,
+        expectedSource: payload.expectedSource,
+      });
+      if (loadedOverlay.receipt.grid !== gridSize) {
+        throw new Error(`live-union-overlay-runtime-grid-mismatch:${loadedOverlay.receipt.grid}:${gridSize}`);
+      }
+      failurePhase = 'create-gpu-resources';
+      loadedGpuResources = createLayerCoefficientLiveUnionGpuResources({ device, overlay: loadedOverlay });
+      boundarySplatLiveUnionOverlay = loadedOverlay;
+      boundarySplatLiveUnionOverlayGpuResources = loadedGpuResources;
+      state.boundarySplatLiveUnionOverlayRequestedIdentity = loadedOverlay.receipt.overlayIdentity;
+      state.boundarySplatLiveUnionOverlayEffectiveIdentity = null;
+      state.boundarySplatLiveUnionOverlayFallbackReason = 'awaiting-exact-live-population-audit';
+      state.boundarySplatLiveUnionOverlayStatus = 'awaiting-population-audit';
+      rebuildBoundarySplatBindGroups();
+      state.boundarySplatLiveUnionOverlayReceipt = boundarySplatLiveUnionOverlayRuntimeReceipt({
+        status: 'awaiting-population-audit',
+        manifestUrl,
+        failurePhase: null,
+        admissionIndexSha256: loadedOverlay.manifest.source.state.admissionIndexSha256,
+        sourceHashes: { ...loadedOverlay.manifest.source.state.sourceHashes },
+        admittedRowCount: loadedOverlay.receipt.admittedRowCount,
+        loadReceipt: { ...loadedOverlay.receipt },
+        gpuResourceReceipt: { ...loadedGpuResources.receipt },
+      });
+      emitStatus({ phase: 'boundary-splat-live-union-overlay-loaded-awaiting-audit' });
+      return { ...state.boundarySplatLiveUnionOverlayReceipt };
+    } catch (error) {
+      loadedGpuResources?.coefficientBuffer?.destroy();
+      loadedGpuResources?.lookupBuffer?.destroy();
+      boundarySplatLiveUnionOverlay = null;
+      boundarySplatLiveUnionOverlayGpuResources = null;
+      state.boundarySplatLiveUnionOverlayEffectiveIdentity = null;
+      state.boundarySplatLiveUnionOverlayFallbackReason = error?.message || String(error);
+      state.boundarySplatLiveUnionOverlayStatus = 'failed';
+      rebuildBoundarySplatBindGroups();
+      state.boundarySplatLiveUnionOverlayReceipt = boundarySplatLiveUnionOverlayRuntimeReceipt({
+        status: 'failed',
+        manifestUrl,
+        failurePhase,
+        error: state.boundarySplatLiveUnionOverlayFallbackReason,
+      });
+      emitStatus({ phase: 'boundary-splat-live-union-overlay-load-failed' });
+      return { ...state.boundarySplatLiveUnionOverlayReceipt };
+    }
+  }
+
+  async function auditBoundarySplatLiveUnionCoefficientOverlayPopulation(options = {}) {
+    if (!boundarySplatLiveUnionOverlay || !boundarySplatLiveUnionOverlayGpuResources) {
+      state.boundarySplatLiveUnionOverlayEffectiveIdentity = null;
+      state.boundarySplatLiveUnionOverlayFallbackReason = 'overlay-not-loaded';
+      state.boundarySplatLiveUnionOverlayStatus = 'failed';
+      state.boundarySplatLiveUnionOverlayReceipt = boundarySplatLiveUnionOverlayRuntimeReceipt({
+        status: 'failed',
+        failurePhase: 'population-audit-precondition',
+      });
+      return { ...state.boundarySplatLiveUnionOverlayReceipt };
+    }
+    const overlay = boundarySplatLiveUnionOverlay;
+    let audit = null;
+    try {
+      audit = await sampleBoundarySplatFootprintAudit(options);
+      const populationAudit = auditLayerCoefficientLiveUnionPopulation({
+        overlay,
+        audit,
+        exactUnionModeEffective: normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode) === 'kernel_moment_full_flame_union',
+      });
+      const effective = populationAudit.status === 'effective';
+      state.boundarySplatLiveUnionOverlayEffectiveIdentity = effective ? overlay.receipt.overlayIdentity : null;
+      state.boundarySplatLiveUnionOverlayFallbackReason = effective ? null : populationAudit.failures.join('|');
+      state.boundarySplatLiveUnionOverlayStatus = effective ? 'effective' : 'failed';
+      state.boundarySplatLiveUnionOverlayReceipt = boundarySplatLiveUnionOverlayRuntimeReceipt({
+        status: state.boundarySplatLiveUnionOverlayStatus,
+        failurePhase: effective ? null : 'population-audit',
+        stableNativeCellIdSha256: populationAudit.stableNativeCellIdSha256,
+        admissionIndexSha256: populationAudit.admissionIndexSha256,
+        candidateCount: populationAudit.candidateCount,
+        instanceCount: populationAudit.instanceCount,
+        overflowCount: populationAudit.overflowCount,
+        admittedRowCount: populationAudit.admittedRowCount,
+        lookupPopulation: populationAudit.lookupPopulation,
+        lookupMissCount: populationAudit.lookupMissCount,
+        lookupExtraCount: populationAudit.lookupExtraCount,
+        populationAudit: { ...populationAudit },
+        sourceHashes: { ...overlay.manifest.source.state.sourceHashes },
+        footprintAuditAuthority: audit.stableNativeCellIdAuthority,
+        unionReceipt: audit.unionReceipt,
+      });
+      emitStatus({ phase: effective
+        ? 'boundary-splat-live-union-overlay-effective'
+        : 'boundary-splat-live-union-overlay-population-audit-failed' });
+      return { ...state.boundarySplatLiveUnionOverlayReceipt };
+    } catch (error) {
+      state.boundarySplatLiveUnionOverlayEffectiveIdentity = null;
+      state.boundarySplatLiveUnionOverlayFallbackReason = error?.message || String(error);
+      state.boundarySplatLiveUnionOverlayStatus = 'failed';
+      state.boundarySplatLiveUnionOverlayReceipt = boundarySplatLiveUnionOverlayRuntimeReceipt({
+        status: 'failed',
+        failurePhase: 'population-audit',
+        error: state.boundarySplatLiveUnionOverlayFallbackReason,
+        stableNativeCellIdSha256: audit?.stableNativeCellIdSha256 ?? null,
+        admissionIndexSha256: overlay.manifest.source.state.admissionIndexSha256,
+        lookupMissCount: null,
+        lookupExtraCount: null,
+      });
+      emitStatus({ phase: 'boundary-splat-live-union-overlay-population-audit-failed' });
+      return { ...state.boundarySplatLiveUnionOverlayReceipt };
     }
   }
 
@@ -16609,6 +16843,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     beginDebugFullFieldExport,
     readDebugFullFieldExportChunk,
     releaseDebugFullFieldExport,
+    loadBoundarySplatLiveUnionCoefficientOverlay,
+    auditBoundarySplatLiveUnionCoefficientOverlayPopulation,
+    clearBoundarySplatLiveUnionCoefficientOverlay,
+    sampleBoundarySplatFootprintAudit,
     boundarySplatCameraState,
     captureBoundarySplatSupervisionCandidates,
     sampleRenderScaleSet,
@@ -16620,6 +16858,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     releaseFlowKernelDescriptorCapture,
     dispose() {
       this.setActive(false);
+      clearBoundarySplatLiveUnionCoefficientOverlay({ skipBindGroupRebuild: true, silent: true });
       frameTexture?.destroy();
       browserResidualFeatureTexture?.destroy();
       externalEmitterBuffer?.destroy();
