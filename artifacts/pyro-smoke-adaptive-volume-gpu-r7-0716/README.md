@@ -2,62 +2,82 @@
 
 ## Disposition
 
-This is a **positive compact-product result and a negative online-builder result** on one exact static native-camera state.
+R7 establishes a **truthful, independently resident compact smoke product and a correct on-device builder, but no frame-time win in this isolated implementation**.
 
-- The independently prebuilt R40 parent field plus 614 selected R160 residual bricks renders close to dense, remains bit-identical after the dense GPU source buffer is destroyed, and occupies 1,042,576 bytes, or 6.363% of the 16,384,000-byte dense scalar field.
-- The attempted on-device hierarchy, residual ranking, bitonic selection, indirection, and atlas builder does not reproduce the persisted top-614 selection. The final report rejects the optimization claim. Do not use its timing or image as product evidence.
-- This experiment does not time formation of the scalar extinction field from the live 16-channel simulator state, production compositing, temporal rebuild churn, or a full scene.
+- The prebuilt and GPU-built compact arms both reproduce the persisted R6 top-614 selection: zero membership mismatch, zero sort-order violations, and `98.0021%` retained residual energy.
+- Both compact arms have maximum optical-depth error `9.39794e-4` versus dense, inside the immutable `1e-3` limit. Dense matches the committed reference within `7.56234e-7`, inside `1e-5`.
+- Compact rendering remains bit-identical after the dense GPU source buffer is destroyed. No dense binding or hidden dense allocation is present during compact rerender.
+- Product residency is 1,042,576 bytes, or `6.3634%` of one dense scalar field. Product plus build scratch is 1,601,680 bytes, or `9.7759%`.
+- The final compact render median is `0.393216 ms`, slower than dense at `0.327680 ms`. GPU build plus compact render is `5.439488 ms` median. This route therefore does not justify per-frame replacement or low-cadence amortization as currently implemented.
+
+`valid-optimization-evidence` means the evidence packet passed route, backend, timestamp, numerical, allocation, selection, and independence gates. It does **not** mean the measured optimization is economically positive.
 
 ## Visual Context
 
-The image below is **not a temporal sequence**. All three panels use the same source state, camera, optics, and output dimensions. They are alternate implementation roles:
+The image below is **not a temporal sequence**. All panels render the same static source state through the same native camera, bounds, optics, and `320x228` output:
 
-1. **Dense R160**: exact dense traversal and control. It matches the committed dense reference with maximum depth error `7.56234e-7`.
-2. **Compact Prebuilt**: treatment built from the persisted R6 selection. The dense source GPU buffer is destroyed before the displayed rerender. Maximum error versus dense is `9.39794e-4`; the pre/post-destruction output hashes are identical.
-3. **GPU Build + Compact**: rejected construction arm. It attempts to derive the hierarchy and top residual bricks on GPU from the dense state, then renders without a dense binding. The final selection is wrong and the visible horizontal banding/weakened structure is evidence of that failure, not an acceptable alternate appearance.
+1. **Dense R160**: control and committed-reference traversal.
+2. **Compact Prebuilt**: persisted R6 R40 parent field plus 614 selected R160 residual bricks, rerendered after dense-source destruction.
+3. **GPU Build + Compact**: treatment built on device from the dense scalar state using parent means, residual scoring, sentinel-padded bitonic sort, top-K selection, indirection, and halo-atlas packing; compact rendering has no dense binding.
 
-![Role-labeled dense, compact-prebuilt, and rejected GPU-built smoke depth](final/context.png)
+All three retain the same visible tongue/body structure at this scale. The compact roles carry the bounded depth error above; visible similarity alone is not the acceptance authority.
 
-Inspected at original resolution after Greenroom job `a70112651c8a`. Screenshot SHA-256: `970293f3b3aa9f7bc45c6c238a176fde97fb9fb96c0896282b88987cdf27d589`.
+![Same-state dense control, compact-prebuilt treatment, and GPU-built compact treatment](final/context.png)
 
-## Final Hardware Result
+Inspected at original resolution after Greenroom job `431665604d14`. Screenshot SHA-256: `85228dba7cc93897b3162ac5bc0e32ebe87afca11a72bc84accc8f23c8b7bfb8`.
+
+## Final Route
 
 | Gate | Result |
 | --- | --- |
-| Greenroom job | `a70112651c8a`, exit `0`, no queue warnings |
-| Witness timestamp | `2026-07-17T01:40:25.752Z` |
-| Kaminos commit | `ffff211af4260a0700613f7cb95d873f5f8cc361`, clean worktree receipt |
+| Greenroom job | `431665604d14`, exit `0`, no queue warnings |
+| Witness timestamp | `2026-07-17T01:52:46.081Z` |
+| Kaminos commit | `669cd5cb11ba1459e2b5f7a45fc968f0900ec3d9`, clean worktree receipt |
 | Effective route | `isolated-adaptive-volume-webgpu-v0` |
-| Backend | `WebGPU:apple`; `navigatorPlatform=MacIntel`; adapter info unavailable |
-| Browser | Google Chrome at `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`; one persistent browser; `1600x1100` window; CDP `49413` |
+| GPU identity | `WebGPU:apple`, authority `cdp-system-info` |
+| Effective device | `ANGLE Metal Renderer: Apple M4 Max, Version 15.6 (Build 24G84)` |
+| Browser | one persistent Google Chrome; `1600x1100` window; CDP port `49413` |
 | Timestamp authority | required `timestamp-query`, available |
-| Source grid | R160; 4,096,000 scalar cells |
-| Hierarchy | R40; 64,000 physical bricks |
-| Sort domain | 65,536 records with 1,536 explicit `score=-1` sentinels; 136 bitonic stages |
-| Requested selection | 614 persisted bricks, no hidden cap |
-| Final selection | 614 mismatches; 624 ascending-order violations; 53.5853% retained residual energy |
-| Dense denial | passed; pre/post compact output SHA `9402abe4ac4189afeefbadd442cb10de8c07417d2408c1758d225e1eddf0c42d`; maximum delta `0` |
-| Compact resident bytes | 1,042,576; 6.3634% of dense scalar |
-| Build scratch | 559,104 bytes |
-| Product plus scratch | 1,601,680 bytes; 9.7759% of dense scalar |
-| Dense render median | `0.589824 ms`; samples include a `52.887552 ms` scheduler outlier |
-| Prebuilt render median | `0.262144 ms`; samples include a `29.687808 ms` scheduler outlier |
-| Rejected builder combined median | build `35.192832 ms`, render `0.327680 ms`, total `35.323904 ms`; highly unstable across runs |
+| Source/hierarchy | R160 scalar source; R40 hierarchy; 64,000 physical bricks |
+| Sort | 65,536 records, 1,536 explicit `score=-1` sentinels, 136 complete stages |
+| Selection | 614 requested/built; zero mismatch; zero order violations; no hidden cap |
+| Dense denial | pre/post SHA `9402abe4ac4189afeefbadd442cb10de8c07417d2408c1758d225e1eddf0c42d`; maximum delta `0` |
+| False-closure checks | all false |
+| Claim rejection reasons | none |
 
-The render-only compact direction is faster in the final median and in prior complete diagnostics, but the sample distributions have severe Apple scheduling outliers. No stable production speedup is claimed. The online builder is invalid independently of timing because selection and sort-order gates fail.
+## Timing And Storage
 
-## Source Identity
+| Arm | GPU median | Sample range | Result |
+| --- | ---: | ---: | --- |
+| Dense R160 render | `0.327680 ms` | `0.262144..0.655360 ms` | reference control |
+| Compact prebuilt render | `0.393216 ms` | `0.196608..0.917504 ms` | truthful but no median speedup |
+| GPU build only | `3.997696 ms` | `1.048576..8.978432 ms` | expensive and variable |
+| GPU build within combined arm | `5.046272 ms` | `1.048576..9.109504 ms` | expensive and variable |
+| GPU-built compact render | `0.327680 ms` | `0.327680..0.393216 ms` | truthful compact traversal |
+| GPU build plus render | `5.439488 ms` | `1.376256..9.437184 ms` | no per-frame economic win |
 
-- Matched-optics report: `sha256:34cd9544b823289054558eae09247353772599fe21add665623ac8163cec9382`
-- Extinction/support sidecar: `sha256:564efca0905957a8a44592309b7ce1618b14cfc486e658d92c6cd0f323b26b5a`
-- Persisted R6 selection: `sha256:4bbc3105534b61a92e41e45fa2b2d52f3178a191cba95424dfb41df74ceaf8ec`
-- Dense reference depth: `sha256:16002db6417d46601fe513a87954b1dc58197a4536f2a17902fe732e6b40551f`
-- Final browser report: `sha256:203ceb78d1b7d03e9a04c2aa41e5fbc208eed648b5a867d857a771aa0faf1e15`
-- Final witness report: `sha256:9be3a58dc22fe4b57daec769d947890b402245f68690640793f79875bac82e55`
+Storage is more encouraging than time:
+
+- coarse R40: `256,000` bytes
+- indirection: `256,000` bytes
+- padded fine atlas: `530,496` bytes
+- resident product including params: `1,042,576` bytes (`6.3634%` of dense scalar)
+- sort and parameter scratch: `559,104` bytes
+- build product plus scratch: `1,601,680` bytes (`9.7759%` of dense scalar)
+
+No double buffer is used in this isolated static harness. A production temporal implementation would need to charge any double buffering, scalar formation, synchronization, and generation churn separately.
+
+## Source And Output Hashes
+
+- Matched-optics report: `34cd9544b823289054558eae09247353772599fe21add665623ac8163cec9382`
+- Extinction/support sidecar: `564efca0905957a8a44592309b7ce1618b14cfc486e658d92c6cd0f323b26b5a`
+- Persisted R6 selection: `4bbc3105534b61a92e41e45fa2b2d52f3178a191cba95424dfb41df74ceaf8ec`
+- Dense reference depth: `16002db6417d46601fe513a87954b1dc58197a4536f2a17902fe732e6b40551f`
+- Final browser report: `34b7012ed7f1d9fab4d964a43951e1a213f8aed796a7e7d1d4f7b0c65319064e`
+- Final witness report: `b23fdbe23f800114851a64a98c37df3319fce0acc9f569c72e37340c5f2f4de6`
+- Final screenshot: `85228dba7cc93897b3162ac5bc0e32ebe87afca11a72bc84accc8f23c8b7bfb8`
 
 ## Commands
-
-Focused verification:
 
 ```sh
 node tests/smoke-adaptive-volume-gpu-falsifier-contracts.mjs
@@ -68,32 +88,34 @@ node --check smoke-adaptive-volume-gpu-witness.mjs
 git diff --check
 ```
 
-Greenroom submission:
-
 ```sh
 cd /Users/noahlyons/dev/gpu-greenroom
 uv run gpu-greenroom submit \
   kaminos_adaptive_smoke_volume_gpu_falsifier \
   /private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/native/b4-e0980000/selected-brick-indices.sbrk \
-  /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-gpu-r7-0716-run7
+  /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-gpu-r7-0716-run9
 ```
 
-The exact expanded command, cwd, environment, null timeout, input, output, timestamps, and exit status are in `final/greenroom-receipt.json`.
+The expanded command, cwd, environment, null timeout, input, output, timestamps, and exit status are in `final/greenroom-receipt.json`.
 
 ## Diagnostic Chain
 
-The `diagnostics/` directory preserves receipts and durable witness envelopes for the preceding runs:
+Every earlier run is preserved under `diagnostics/`; no prior image or report was overwritten.
 
-| Run | Job | Disposition |
+| Run | Job | Finding |
 | --- | --- | --- |
-| 1 | `be31058cc471` | bind-group failure followed by terminal-state polling defect; externally terminated after CDP proved failure |
-| 2 | `4630bc8d1ffc` | correctly rejected stale orphan server left by forced run-1 termination |
+| 1 | `be31058cc471` | bind-group failure plus terminal-state polling defect |
+| 2 | `4630bc8d1ffc` | stale orphan server correctly rejected |
 | 3 | `ee8f121328f6` | empty marker-pass timestamp remained zero |
-| 4 | `968e8d235fd8` | first complete three-arm diagnostic; exposed incomplete sort generation and wrong selection |
-| 5 | `6fb64093f32a` | failed loud on non-power-of-two 64,000-record bitonic domain |
-| 6 | `09e3dee50a24` | complete padded-sort diagnostic; proved ascending orientation and wrong prefix interpretation |
-| 7 | `a70112651c8a` | final ascending-suffix result; rejected for 624 remaining order violations and total membership mismatch |
+| 4 | `968e8d235fd8` | incomplete sort generation and wrong selection exposed |
+| 5 | `6fb64093f32a` | non-power-of-two 64,000-record sort rejected |
+| 6 | `09e3dee50a24` | padded sort established ascending orientation |
+| 7 | `a70112651c8a` | review later identified partial 64,000-thread sort dispatch |
+| 8 | `75d7f3a39fc7` | all substantive gates passed; provisional fallback state poisoned host redisposition |
+| 9 | `431665604d14` | all authority, correctness, independence, and evidence gates passed |
 
 ## Claim Boundary
 
-R7 establishes that the **prebuilt compact representation is independently resident, visually coherent on this state, and much smaller than one dense scalar field**. It does not establish that the current GPU builder can construct the required selection truthfully or cheaply each live frame. The final builder failure is consistent with a flawed global selection implementation, not a falsification of the already-verified compact representation. A future builder should use a proven top-K primitive, radix/merge path, or CPU/low-cadence selection only if its transfer and cadence costs are charged honestly. Temporal coherence and full production economics remain unmeasured.
+R7 closes the hidden-oracle question for this static scalar product: the compact renderer does not require retained dense state, and the on-device builder can reproduce the persisted 98%-energy selection and rendered output. It also falsifies the current economic thesis: sparse traversal is not faster than dense in the final matched median, while construction is an order of magnitude more expensive than dense traversal.
+
+This does not time scalar extinction formation from the live 16-channel fluid buffer, the production compositor, full-scene ray coverage, temporal selection churn, or double buffering. It is one native camera and one static state. The next admissible move is not temporal learning or integration; it is either a substantially cheaper selection/build algorithm plus a traversal that wins on broader scene geometry, or disposition of this representation as a memory-quality trade rather than a simulator/render-cost win.

@@ -1,0 +1,25 @@
+{
+  "job_id": "75d7f3a39fc7",
+  "job_type": "kaminos_adaptive_smoke_volume_gpu_falsifier",
+  "status": "done",
+  "input_path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/native/b4-e0980000/selected-brick-indices.sbrk",
+  "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-gpu-r7-0716-run8",
+  "effective_route": "/opt/homebrew/Cellar/node/25.9.0_2/bin/node smoke-adaptive-volume-gpu-witness.mjs --out-dir /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-gpu-r7-0716-run8 --report /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-gpu-r7-0716-run8/witness-report.json --browser-report /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-gpu-r7-0716-run8/browser-report.json --screenshot /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-gpu-r7-0716-run8/context.png --user-data-dir /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-gpu-r7-0716-run8/chrome-profile --server-port 19137 --debug-port 49413 --window-size 1600,1100",
+  "effective_cwd": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2",
+  "effective_env": {
+    "PATH": "/opt/homebrew/Cellar/node/25.9.0_2/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+  },
+  "effective_defaults": {
+    "debug_port": "49413",
+    "server_port": "19137",
+    "window_size": "1600,1100"
+  },
+  "effective_timeout": null,
+  "ignored_params": null,
+  "started_at": 1784253044.358966,
+  "finished_at": 1784253047.915025,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "warnings": null
+}

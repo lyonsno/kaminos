@@ -1,58 +1,49 @@
 {
   "schema": "kaminos.smoke-adaptive-volume-gpu-witness.v0",
-  "status": "valid-optimization-evidence",
-  "createdAt": "2026-07-17T01:52:46.081Z",
-  "requestedRoute": "http://127.0.0.1:19137/smoke-adaptive-volume-gpu-falsifier.html?git_commit=669cd5cb11ba1459e2b5f7a45fc968f0900ec3d9&git_branch=cc%2Fpyro-tall-articulated-smoke-0716&git_status_short=",
+  "status": "invalid-for-optimization-claim",
+  "createdAt": "2026-07-17T01:40:25.752Z",
+  "requestedRoute": "http://127.0.0.1:19137/smoke-adaptive-volume-gpu-falsifier.html?git_commit=ffff211af4260a0700613f7cb95d873f5f8cc361&git_branch=cc%2Fpyro-tall-articulated-smoke-0716&git_status_short=",
   "effectiveRoute": "isolated-adaptive-volume-webgpu-v0",
   "backend": "WebGPU:apple",
   "timestampStatus": "available",
   "failurePhase": null,
   "primaryOutputWritten": true,
-  "reportPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-gpu-r7-0716-run9/witness-report.json",
-  "browserReportPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-gpu-r7-0716-run9/browser-report.json",
-  "screenshotPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-gpu-r7-0716-run9/context.png",
+  "reportPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-gpu-r7-0716-run7/witness-report.json",
+  "browserReportPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-gpu-r7-0716-run7/browser-report.json",
+  "screenshotPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-gpu-r7-0716-run7/context.png",
   "serverPort": 19137,
   "debugPort": 49413,
   "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-  "userDataDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-gpu-r7-0716-run9/chrome-profile",
+  "userDataDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-gpu-r7-0716-run7/chrome-profile",
   "windowSize": "1600,1100",
   "reuseBrowser": true,
   "browserCount": 1,
   "runTimeoutMs": null,
-  "gitCommit": "669cd5cb11ba1459e2b5f7a45fc968f0900ec3d9",
+  "gitCommit": "ffff211af4260a0700613f7cb95d873f5f8cc361",
   "gitBranch": "cc/pyro-tall-articulated-smoke-0716",
   "gitStatusShort": "",
   "sourceFileSha256s": {
-    "module": "sha256:5affbc1be26e29ce356bc4c9e438f964c1d92b9c3e229a6be4dfcd72c4f0fb3b",
-    "browser": "sha256:248b4619bdbeb88702c06e76497e2393cafd760fef98416d05fdf58981cc3faa",
-    "witness": "sha256:6a1ada473697c427b9db2e12fa590478624a3f3dd0dd3f1cff96a9339ba91c5f",
+    "module": "sha256:0d3603e75db485b14b19cc089f3c212a591ec58cb60450f1750136d6b5b877de",
+    "browser": "sha256:10f3e53fa77c49d842c0b7a1e79a0cfdb8e66e345fa252ef8413d0c41e29299d",
+    "witness": "sha256:1b21888780a20e972a85cbc23f5358e80b18424879e6521c1f28137089d984e1",
     "html": "sha256:efe267faad00d8ff0c9ae9f06791c93f33eb40e1b93b1d9a73d2d70fd4b230af"
   },
-  "cdpGpuIdentity": {
-    "source": "cdp-system-info",
-    "appleDeviceObserved": true,
-    "devices": [
-      {
-        "vendorId": 4203,
-        "deviceId": 0,
-        "vendorString": "Google Inc. (Apple)",
-        "deviceString": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Max, Version 15.6 (Build 24G84))",
-        "driverVendor": "Apple",
-        "driverVersion": "15.6"
-      }
-    ]
-  },
   "consoleEvents": [],
-  "optimizationClaimAllowed": true,
-  "browserReportSha256": "sha256:34b7012ed7f1d9fab4d964a43951e1a213f8aed796a7e7d1d4f7b0c65319064e",
-  "screenshotSha256": "sha256:85228dba7cc93897b3162ac5bc0e32ebe87afca11a72bc84accc8f23c8b7bfb8",
-  "optimizationClaimRejectionReasons": [],
+  "optimizationClaimAllowed": false,
+  "browserReportSha256": "sha256:203ceb78d1b7d03e9a04c2aa41e5fbc208eed648b5a867d857a771aa0faf1e15",
+  "screenshotSha256": "sha256:970293f3b3aa9f7bc45c6c238a176fde97fb9fb96c0896282b88987cdf27d589",
+  "optimizationClaimRejectionReasons": [
+    "stale-selection",
+    "sort-order-invalid",
+    "false-closure:staleSelection",
+    "false-closure:sortOrderInvalid"
+  ],
   "browserReport": {
     "schema": "kaminos.smoke-adaptive-volume-gpu-falsifier.v0",
     "identity": "adaptive-smoke-volume-three-arm-gpu-falsifier-v0",
-    "status": "passed",
+    "status": "invalid-for-optimization-claim",
     "requested": {
-      "route": "http://127.0.0.1:19137/smoke-adaptive-volume-gpu-falsifier.html?git_commit=669cd5cb11ba1459e2b5f7a45fc968f0900ec3d9&git_branch=cc%2Fpyro-tall-articulated-smoke-0716&git_status_short=",
+      "route": "http://127.0.0.1:19137/smoke-adaptive-volume-gpu-falsifier.html?git_commit=ffff211af4260a0700613f7cb95d873f5f8cc361&git_branch=cc%2Fpyro-tall-articulated-smoke-0716&git_status_short=",
       "sourceSidecar": "./artifacts/pyro-smoke-extinction-residual-oracle-r2-full-covariance-0716/source-step45/smoke-extinction-support-sidecar.f32",
       "selectionArtifact": "./artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/native/b4-e0980000/selected-brick-indices.sbrk",
       "selectedBrickCount": 614,
@@ -65,10 +56,8 @@
     "effective": {
       "route": "isolated-adaptive-volume-webgpu-v0",
       "backend": "WebGPU:apple",
-      "backendIdentitySource": "cdp-system-info",
       "adapterInfo": {},
       "navigatorPlatform": "MacIntel",
-      "platformAppleHint": true,
       "timestampFeature": "timestamp-query",
       "timestampStatus": "available",
       "sourceGrid": 160,
@@ -81,21 +70,7 @@
       "samplesPerCell": 1,
       "extinctionCoefficient": 0.731,
       "selectionPolicy": "gpu-f32-residual-energy-bitonic-ascending-suffix-top-614-v2",
-      "sortStageCount": 136,
-      "cdpGpuInfo": {
-        "source": "cdp-system-info",
-        "appleDeviceObserved": true,
-        "devices": [
-          {
-            "vendorId": 4203,
-            "deviceId": 0,
-            "vendorString": "Google Inc. (Apple)",
-            "deviceString": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Max, Version 15.6 (Build 24G84))",
-            "driverVendor": "Apple",
-            "driverVersion": "15.6"
-          }
-        ]
-      }
+      "sortStageCount": 136
     },
     "source": {
       "matchedReport": "./artifacts/pyro-smoke-matched-optics-r5-0716/native/matched-optics-report.json",
@@ -110,126 +85,126 @@
       "referenceDepthSha256": "sha256:16002db6417d46601fe513a87954b1dc58197a4536f2a17902fe732e6b40551f"
     },
     "runtime": {
-      "gitCommit": "669cd5cb11ba1459e2b5f7a45fc968f0900ec3d9",
+      "gitCommit": "ffff211af4260a0700613f7cb95d873f5f8cc361",
       "gitBranch": "cc/pyro-tall-articulated-smoke-0716",
       "gitStatusShort": "",
       "sourceFileSha256s": {
-        "module": "sha256:5affbc1be26e29ce356bc4c9e438f964c1d92b9c3e229a6be4dfcd72c4f0fb3b",
-        "browser": "sha256:248b4619bdbeb88702c06e76497e2393cafd760fef98416d05fdf58981cc3faa",
-        "witness": "sha256:6a1ada473697c427b9db2e12fa590478624a3f3dd0dd3f1cff96a9339ba91c5f",
+        "module": "sha256:0d3603e75db485b14b19cc089f3c212a591ec58cb60450f1750136d6b5b877de",
+        "browser": "sha256:10f3e53fa77c49d842c0b7a1e79a0cfdb8e66e345fa252ef8413d0c41e29299d",
+        "witness": "sha256:1b21888780a20e972a85cbc23f5358e80b18424879e6521c1f28137089d984e1",
         "html": "sha256:efe267faad00d8ff0c9ae9f06791c93f33eb40e1b93b1d9a73d2d70fd4b230af"
       }
     },
     "arms": {
       "dense": {
         "outputComplete": true,
-        "gpuMs": 0.32768,
+        "gpuMs": 0.589824,
         "profile": {
           "samples": [
-            0.262144,
-            0.262144,
-            0.262144,
-            0.262144,
-            0.32768,
-            0.32768,
-            0.32768,
-            0.458752,
-            0.458752,
+            0.131072,
+            0.131072,
+            0.131072,
+            0.196608,
+            0.393216,
+            0.393216,
             0.589824,
-            0.589824,
-            0.65536
+            0.65536,
+            0.65536,
+            0.720896,
+            1.114112,
+            52.887552
           ],
           "count": 12,
-          "minimum": 0.262144,
-          "median": 0.32768,
-          "mean": 0.39867733333333333,
-          "maximum": 0.65536
+          "minimum": 0.131072,
+          "median": 0.589824,
+          "mean": 4.833279999999999,
+          "maximum": 52.887552
         },
         "denseBindingCount": 1
       },
       "compactPrebuilt": {
         "outputComplete": true,
-        "gpuMs": 0.393216,
+        "gpuMs": 0.262144,
         "profile": {
           "samples": [
+            0.131072,
+            0.131072,
+            0.131072,
             0.196608,
-            0.196608,
             0.262144,
             0.262144,
             0.262144,
-            0.262144,
-            0.393216,
-            0.393216,
-            0.458752,
+            0.32768,
             0.589824,
-            0.720896,
-            0.917504
+            0.589824,
+            1.507328,
+            29.687808
           ],
           "count": 12,
-          "minimum": 0.196608,
-          "median": 0.393216,
-          "mean": 0.4096,
-          "maximum": 0.917504
+          "minimum": 0.131072,
+          "median": 0.262144,
+          "mean": 2.839893333333334,
+          "maximum": 29.687808
         },
         "denseBindingCount": 0
       },
       "buildCompactRender": {
         "outputComplete": true,
-        "buildGpuMs": 5.046272,
+        "buildGpuMs": 35.192832,
         "renderGpuMs": 0.32768,
-        "totalGpuMs": 5.439488,
+        "totalGpuMs": 35.323904,
         "buildOnlyProfile": {
           "samples": [
-            1.048576,
-            3.407872,
-            3.997696,
-            8.978432
+            0.65536,
+            0.65536,
+            7.20896,
+            33.09568
           ],
           "count": 4,
-          "minimum": 1.048576,
-          "median": 3.997696,
-          "mean": 4.358143999999999,
-          "maximum": 8.978432
+          "minimum": 0.65536,
+          "median": 7.20896,
+          "mean": 10.40384,
+          "maximum": 33.09568
         },
         "combinedProfile": {
           "build": {
             "samples": [
-              1.048576,
-              3.014656,
-              5.046272,
-              9.109504
+              5.89824,
+              6.946816,
+              35.192832,
+              42.729472
             ],
             "count": 4,
-            "minimum": 1.048576,
-            "median": 5.046272,
-            "mean": 4.554752000000001,
-            "maximum": 9.109504
+            "minimum": 5.89824,
+            "median": 35.192832,
+            "mean": 22.69184,
+            "maximum": 42.729472
           },
           "render": {
             "samples": [
+              0.131072,
+              0.262144,
               0.32768,
-              0.32768,
-              0.32768,
-              0.393216
+              1.114112
             ],
             "count": 4,
-            "minimum": 0.32768,
+            "minimum": 0.131072,
             "median": 0.32768,
-            "mean": 0.34406400000000004,
-            "maximum": 0.393216
+            "mean": 0.458752,
+            "maximum": 1.114112
           },
           "total": {
             "samples": [
-              1.376256,
-              3.342336,
-              5.439488,
-              9.437184
+              6.22592,
+              7.20896,
+              35.323904,
+              43.843584
             ],
             "count": 4,
-            "minimum": 1.376256,
-            "median": 5.439488,
-            "mean": 4.898816,
-            "maximum": 9.437184
+            "minimum": 6.22592,
+            "median": 35.323904,
+            "mean": 23.150592,
+            "maximum": 43.843584
           }
         },
         "denseBindingCountDuringBuild": 1,
@@ -240,12 +215,12 @@
       "identity": "compact-parent-mean-halo-atlas-v0",
       "selectedBrickCount": 614,
       "gpuSelectedBrickCount": 614,
-      "selectionMismatchCount": 0,
-      "sortOrderViolationCount": 0,
-      "actualRetainedResidualEnergyFraction": 0.9800212174909615,
+      "selectionMismatchCount": 614,
+      "sortOrderViolationCount": 624,
+      "actualRetainedResidualEnergyFraction": 0.5358534047068882,
       "sortEndpointScores": {
         "first": -1,
-        "last": 0.7494366765022278
+        "last": 0.7375648021697998
       },
       "haloEdge": 6,
       "allocationBytes": {
@@ -275,11 +250,6 @@
     },
     "validation": {
       "complete": true,
-      "thresholds": {
-        "denseAgainstCommittedReferenceMaximumAbsoluteError": 0.00001,
-        "compactPrebuiltAgainstDenseMaximumAbsoluteError": 0.001,
-        "buildCompactAgainstDenseMaximumAbsoluteError": 0.001
-      },
       "denseAgainstCommittedReference": {
         "meanSquaredError": 1.71055035567251e-15,
         "maximumAbsoluteError": 7.562339305877686e-7
@@ -289,11 +259,11 @@
         "maximumAbsoluteError": 0.0009397938847541809
       },
       "buildCompactAgainstDense": {
-        "meanSquaredError": 4.172998052497664e-9,
-        "maximumAbsoluteError": 0.0009397938847541809
+        "meanSquaredError": 1.0725458958098296e-7,
+        "maximumAbsoluteError": 0.00604935921728611
       },
       "compactPrebuiltMaximumAbsoluteError": 0.0009397938847541809,
-      "buildCompactMaximumAbsoluteError": 0.0009397938847541809
+      "buildCompactMaximumAbsoluteError": 0.00604935921728611
     },
     "falseClosureChecks": {
       "fallbackRoute": false,
@@ -301,12 +271,17 @@
       "hiddenDenseBinding": false,
       "hiddenDenseAllocation": false,
       "incompleteOutput": false,
-      "staleSelection": false,
-      "sortOrderInvalid": false,
+      "staleSelection": true,
+      "sortOrderInvalid": true,
       "hiddenCap": false
     },
     "claimBoundary": "Static isolated single-channel Apple WebGPU compute evidence. Source scalar formation from the live 16-channel fluid buffer and the production compositor are not timed. GPU build includes parent means, residual scoring, complete 65536-record bitonic sorting, top-K selection application, indirection, and padded fine-atlas packing. Dense denial destroys the source buffer before compact rerender.",
-    "optimizationClaimAllowed": true,
-    "optimizationClaimRejectionReasons": []
+    "optimizationClaimAllowed": false,
+    "optimizationClaimRejectionReasons": [
+      "stale-selection",
+      "sort-order-invalid",
+      "false-closure:staleSelection",
+      "false-closure:sortOrderInvalid"
+    ]
   }
 }

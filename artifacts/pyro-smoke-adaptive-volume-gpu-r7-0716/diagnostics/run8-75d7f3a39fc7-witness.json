@@ -1,30 +1,30 @@
 {
   "schema": "kaminos.smoke-adaptive-volume-gpu-witness.v0",
-  "status": "valid-optimization-evidence",
-  "createdAt": "2026-07-17T01:52:46.081Z",
-  "requestedRoute": "http://127.0.0.1:19137/smoke-adaptive-volume-gpu-falsifier.html?git_commit=669cd5cb11ba1459e2b5f7a45fc968f0900ec3d9&git_branch=cc%2Fpyro-tall-articulated-smoke-0716&git_status_short=",
+  "status": "invalid-for-optimization-claim",
+  "createdAt": "2026-07-17T01:50:45.841Z",
+  "requestedRoute": "http://127.0.0.1:19137/smoke-adaptive-volume-gpu-falsifier.html?git_commit=4843c0adbb806f1dfb0c314f3d2497b74e2125d7&git_branch=cc%2Fpyro-tall-articulated-smoke-0716&git_status_short=",
   "effectiveRoute": "isolated-adaptive-volume-webgpu-v0",
   "backend": "WebGPU:apple",
   "timestampStatus": "available",
   "failurePhase": null,
   "primaryOutputWritten": true,
-  "reportPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-gpu-r7-0716-run9/witness-report.json",
-  "browserReportPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-gpu-r7-0716-run9/browser-report.json",
-  "screenshotPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-gpu-r7-0716-run9/context.png",
+  "reportPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-gpu-r7-0716-run8/witness-report.json",
+  "browserReportPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-gpu-r7-0716-run8/browser-report.json",
+  "screenshotPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-gpu-r7-0716-run8/context.png",
   "serverPort": 19137,
   "debugPort": 49413,
   "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-  "userDataDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-gpu-r7-0716-run9/chrome-profile",
+  "userDataDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-gpu-r7-0716-run8/chrome-profile",
   "windowSize": "1600,1100",
   "reuseBrowser": true,
   "browserCount": 1,
   "runTimeoutMs": null,
-  "gitCommit": "669cd5cb11ba1459e2b5f7a45fc968f0900ec3d9",
+  "gitCommit": "4843c0adbb806f1dfb0c314f3d2497b74e2125d7",
   "gitBranch": "cc/pyro-tall-articulated-smoke-0716",
   "gitStatusShort": "",
   "sourceFileSha256s": {
     "module": "sha256:5affbc1be26e29ce356bc4c9e438f964c1d92b9c3e229a6be4dfcd72c4f0fb3b",
-    "browser": "sha256:248b4619bdbeb88702c06e76497e2393cafd760fef98416d05fdf58981cc3faa",
+    "browser": "sha256:babec6eac0220e5095c220a554671ff5ebd7a10d283576b05181ae1f2d073dc0",
     "witness": "sha256:6a1ada473697c427b9db2e12fa590478624a3f3dd0dd3f1cff96a9339ba91c5f",
     "html": "sha256:efe267faad00d8ff0c9ae9f06791c93f33eb40e1b93b1d9a73d2d70fd4b230af"
   },
@@ -43,16 +43,19 @@
     ]
   },
   "consoleEvents": [],
-  "optimizationClaimAllowed": true,
-  "browserReportSha256": "sha256:34b7012ed7f1d9fab4d964a43951e1a213f8aed796a7e7d1d4f7b0c65319064e",
-  "screenshotSha256": "sha256:85228dba7cc93897b3162ac5bc0e32ebe87afca11a72bc84accc8f23c8b7bfb8",
-  "optimizationClaimRejectionReasons": [],
+  "optimizationClaimAllowed": false,
+  "browserReportSha256": "sha256:c7381c508e5667dea2b883ddbfbc7245888a89409f91c286337d687cdcd4e665",
+  "screenshotSha256": "sha256:ded0f6db9c523dd97d530e92fd83401b1cd50e2072d692d4f4c2e189ca77fe1b",
+  "optimizationClaimRejectionReasons": [
+    "report-not-passed",
+    "false-closure:fallbackRoute"
+  ],
   "browserReport": {
     "schema": "kaminos.smoke-adaptive-volume-gpu-falsifier.v0",
     "identity": "adaptive-smoke-volume-three-arm-gpu-falsifier-v0",
-    "status": "passed",
+    "status": "invalid-for-optimization-claim",
     "requested": {
-      "route": "http://127.0.0.1:19137/smoke-adaptive-volume-gpu-falsifier.html?git_commit=669cd5cb11ba1459e2b5f7a45fc968f0900ec3d9&git_branch=cc%2Fpyro-tall-articulated-smoke-0716&git_status_short=",
+      "route": "http://127.0.0.1:19137/smoke-adaptive-volume-gpu-falsifier.html?git_commit=4843c0adbb806f1dfb0c314f3d2497b74e2125d7&git_branch=cc%2Fpyro-tall-articulated-smoke-0716&git_status_short=",
       "sourceSidecar": "./artifacts/pyro-smoke-extinction-residual-oracle-r2-full-covariance-0716/source-step45/smoke-extinction-support-sidecar.f32",
       "selectionArtifact": "./artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/native/b4-e0980000/selected-brick-indices.sbrk",
       "selectedBrickCount": 614,
@@ -110,12 +113,12 @@
       "referenceDepthSha256": "sha256:16002db6417d46601fe513a87954b1dc58197a4536f2a17902fe732e6b40551f"
     },
     "runtime": {
-      "gitCommit": "669cd5cb11ba1459e2b5f7a45fc968f0900ec3d9",
+      "gitCommit": "4843c0adbb806f1dfb0c314f3d2497b74e2125d7",
       "gitBranch": "cc/pyro-tall-articulated-smoke-0716",
       "gitStatusShort": "",
       "sourceFileSha256s": {
         "module": "sha256:5affbc1be26e29ce356bc4c9e438f964c1d92b9c3e229a6be4dfcd72c4f0fb3b",
-        "browser": "sha256:248b4619bdbeb88702c06e76497e2393cafd760fef98416d05fdf58981cc3faa",
+        "browser": "sha256:babec6eac0220e5095c220a554671ff5ebd7a10d283576b05181ae1f2d073dc0",
         "witness": "sha256:6a1ada473697c427b9db2e12fa590478624a3f3dd0dd3f1cff96a9339ba91c5f",
         "html": "sha256:efe267faad00d8ff0c9ae9f06791c93f33eb40e1b93b1d9a73d2d70fd4b230af"
       }
@@ -123,113 +126,113 @@
     "arms": {
       "dense": {
         "outputComplete": true,
-        "gpuMs": 0.32768,
+        "gpuMs": 0.524288,
         "profile": {
           "samples": [
             0.262144,
             0.262144,
-            0.262144,
-            0.262144,
-            0.32768,
-            0.32768,
             0.32768,
             0.458752,
             0.458752,
-            0.589824,
-            0.589824,
-            0.65536
+            0.458752,
+            0.524288,
+            0.65536,
+            0.65536,
+            0.851968,
+            0.917504,
+            0.917504
           ],
           "count": 12,
           "minimum": 0.262144,
-          "median": 0.32768,
-          "mean": 0.39867733333333333,
-          "maximum": 0.65536
+          "median": 0.524288,
+          "mean": 0.5625173333333334,
+          "maximum": 0.917504
         },
         "denseBindingCount": 1
       },
       "compactPrebuilt": {
         "outputComplete": true,
-        "gpuMs": 0.393216,
+        "gpuMs": 0.458752,
         "profile": {
           "samples": [
-            0.196608,
-            0.196608,
             0.262144,
             0.262144,
             0.262144,
-            0.262144,
-            0.393216,
+            0.32768,
             0.393216,
             0.458752,
+            0.458752,
+            0.524288,
             0.589824,
-            0.720896,
+            0.589824,
+            0.917504,
             0.917504
           ],
           "count": 12,
-          "minimum": 0.196608,
-          "median": 0.393216,
-          "mean": 0.4096,
+          "minimum": 0.262144,
+          "median": 0.458752,
+          "mean": 0.49698133333333333,
           "maximum": 0.917504
         },
         "denseBindingCount": 0
       },
       "buildCompactRender": {
         "outputComplete": true,
-        "buildGpuMs": 5.046272,
+        "buildGpuMs": 5.701632,
         "renderGpuMs": 0.32768,
-        "totalGpuMs": 5.439488,
+        "totalGpuMs": 6.160384,
         "buildOnlyProfile": {
           "samples": [
-            1.048576,
-            3.407872,
-            3.997696,
-            8.978432
+            3.735552,
+            5.57056,
+            7.86432,
+            8.650752
           ],
           "count": 4,
-          "minimum": 1.048576,
-          "median": 3.997696,
-          "mean": 4.358143999999999,
-          "maximum": 8.978432
+          "minimum": 3.735552,
+          "median": 7.86432,
+          "mean": 6.455296000000001,
+          "maximum": 8.650752
         },
         "combinedProfile": {
           "build": {
             "samples": [
-              1.048576,
-              3.014656,
-              5.046272,
-              9.109504
+              3.2768,
+              5.24288,
+              5.701632,
+              8.585216
             ],
             "count": 4,
-            "minimum": 1.048576,
-            "median": 5.046272,
-            "mean": 4.554752000000001,
-            "maximum": 9.109504
+            "minimum": 3.2768,
+            "median": 5.701632,
+            "mean": 5.701632,
+            "maximum": 8.585216
           },
           "render": {
             "samples": [
+              0.262144,
+              0.262144,
               0.32768,
-              0.32768,
-              0.32768,
-              0.393216
+              0.458752
             ],
             "count": 4,
-            "minimum": 0.32768,
+            "minimum": 0.262144,
             "median": 0.32768,
-            "mean": 0.34406400000000004,
-            "maximum": 0.393216
+            "mean": 0.32768,
+            "maximum": 0.458752
           },
           "total": {
             "samples": [
-              1.376256,
-              3.342336,
-              5.439488,
-              9.437184
+              3.538944,
+              5.505024,
+              6.160384,
+              8.912896
             ],
             "count": 4,
-            "minimum": 1.376256,
-            "median": 5.439488,
-            "mean": 4.898816,
-            "maximum": 9.437184
+            "minimum": 3.538944,
+            "median": 6.160384,
+            "mean": 6.029312,
+            "maximum": 8.912896
           }
         },
         "denseBindingCountDuringBuild": 1,
@@ -296,7 +299,7 @@
       "buildCompactMaximumAbsoluteError": 0.0009397938847541809
     },
     "falseClosureChecks": {
-      "fallbackRoute": false,
+      "fallbackRoute": true,
       "missingTimestampSupport": false,
       "hiddenDenseBinding": false,
       "hiddenDenseAllocation": false,
@@ -306,7 +309,10 @@
       "hiddenCap": false
     },
     "claimBoundary": "Static isolated single-channel Apple WebGPU compute evidence. Source scalar formation from the live 16-channel fluid buffer and the production compositor are not timed. GPU build includes parent means, residual scoring, complete 65536-record bitonic sorting, top-K selection application, indirection, and padded fine-atlas packing. Dense denial destroys the source buffer before compact rerender.",
-    "optimizationClaimAllowed": true,
-    "optimizationClaimRejectionReasons": []
+    "optimizationClaimAllowed": false,
+    "optimizationClaimRejectionReasons": [
+      "report-not-passed",
+      "false-closure:fallbackRoute"
+    ]
   }
 }
