@@ -1,0 +1,39 @@
+{
+  "schema": "kaminos.gpu-combustible-object-ignition-witness-report.v0",
+  "requestedUrl": "http://127.0.0.1:8097/gpu-combustible-object-ignition.html",
+  "effectiveUrl": null,
+  "requestedRoute": "kaminos.gpu-combustible-object-ignition.v0",
+  "effectiveRoute": null,
+  "authority": null,
+  "phase": "waiting-for-initial",
+  "browserVersion": {
+    "Browser": "Chrome/150.0.7871.128",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/150.0.0.0 Safari/537.36",
+    "V8-Version": "15.0.1240245",
+    "WebKit-Version": "537.36 (@81891e5ca708047763816c778216799ef14c66cb)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:19472/devtools/browser/d8bc1b8c-e2a7-4000-98e1-296dc4eddf0f"
+  },
+  "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "debugPort": 19472,
+  "requestedViewport": {
+    "width": 1468,
+    "height": 960
+  },
+  "ignitionFrames": 70,
+  "finalFrames": 190,
+  "userDataDir": "/tmp/kaminos-gpu-object-ignition-19472-79331",
+  "screenshots": {
+    "initial": null,
+    "ignition": null,
+    "final": null
+  },
+  "stderrTail": "\nDevTools listening on ws://127.0.0.1:19472/devtools/browser/d8bc1b8c-e2a7-4000-98e1-296dc4eddf0f\n",
+  "browserEvents": [],
+  "initialState": null,
+  "ignitionState": null,
+  "finalState": null,
+  "terminalReceipt": null,
+  "status": "failed",
+  "error": "Error: Error: GPU object route failed: {\"schema\":\"kaminos.gpu-combustible-object-ignition-browser.v0\",\"requestedRoute\":\"kaminos.gpu-combustible-object-ignition.v0\",\"effectiveRoute\":\"kaminos.gpu-combustible-object-ignition.v0\",\"authority\":\"same-device-pyro-material-emission-mechanics-v0\",\"loopSchema\":\"kaminos.gpu-combustible-object-loop.v0\",\"status\":\"failed\",\"failurePhase\":\"gpu-loop-bind\",\"error\":\"Combustible object source descriptor byte layout mismatch\",\"fallback\":null,\"frameCount\":19,\"simStepCount\":19,\"backend\":\"WebGPU:apple\",\"volumeRoute\":\"native-3d-compute-fluid-raymarch-v0\",\"gpuLoop\":{\"schema\":\"kaminos.gpu-combustible-object-loop.v0\",\"authority\":\"same-device-pyro-material-emission-mechanics-v0\",\"status\":\"active\",\"dispatchCount\":10,\"presentationCount\":10,\"hostCausalFeedbackCount\":0,\"runtimeReadbackCount\":0,\"sourceFrameHash\":1196447055},\"terminalReceipt\":null}\n    at <anonymous>:7:47\n    at evaluate (file:///private/tmp/kaminos-sinter-gpu-object-ignition-0717/gpu-combustible-object-ignition-witness.mjs:141:11)\n    at async file:///private/tmp/kaminos-sinter-gpu-object-ignition-0717/gpu-combustible-object-ignition-witness.mjs:211:18"
+}

@@ -562,7 +562,10 @@ export async function createCombustibleObjectFireReceiver({
 
   function encode(encoder, fluidBuffer) {
     if (!descriptor || destroyed) return false;
-    const scheduledIdentity = `${descriptor.allocationGeneration}:${descriptor.topologyEpoch}:${descriptor.writeTick}:${descriptor.sourceFrameHash}`;
+    const dynamicSource = descriptor.gpuAuthoredDynamic === true;
+    const scheduledIdentity = dynamicSource
+      ? `${descriptor.allocationGeneration}:${descriptor.topologyEpoch}:gpu-dispatch-${dispatchCount + 1}:${descriptor.sourceFrameHash}`
+      : `${descriptor.allocationGeneration}:${descriptor.topologyEpoch}:${descriptor.writeTick}:${descriptor.sourceFrameHash}`;
     if (lastScheduledIdentity === scheduledIdentity) return false;
     const pass = encoder.beginComputePass({ label: 'kaminos combustible object source injection' });
     pass.setBindGroup(0, bindGroupFor(fluidBuffer));
@@ -645,6 +648,7 @@ export async function createCombustibleObjectFireReceiver({
       lastScheduledIdentity,
       lastReceipt: lastReceipt ? { ...lastReceipt } : null,
       fallback: null,
+      gpuAuthoredDynamic: descriptor?.gpuAuthoredDynamic === true,
     };
   }
 
