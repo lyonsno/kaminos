@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -25,6 +26,7 @@ const {
 } = await import(contractPath);
 
 const sha = character => character.repeat(64);
+const hash = value => createHash('sha256').update(value).digest('hex');
 const source = {
   commit: 'a'.repeat(40),
   presentationBaselineCommit: '0859abf8d5b06359e4d2708f5b597c327b43c4af',
@@ -38,11 +40,11 @@ const source = {
   frontSha256: sha('7'),
   candidateCount: 147389,
 };
-const cameraHashes = Array.from({ length: 21 }, (_, index) => `camera-${index}`);
+const cameraHashes = Array.from({ length: 21 }, (_, index) => hash(`camera-${index}`));
 const captures = arm => cameraHashes.map((cameraPoseHash, cameraIndex) => ({
   cameraIndex,
   cameraPoseHash,
-  pixelHash: `${arm}-${cameraIndex}`,
+  pixelHash: hash(`${arm}-${cameraIndex}`),
   controlsSha256: source.controlsSha256,
   candidatePayloadSha256: source.candidatePayloadSha256,
   supportSha256: source.supportSha256,
@@ -100,6 +102,24 @@ const validReport = {
 
 assert.doesNotThrow(() => validateSplatOpticalRecurrenceReport(validReport), 'complete checksum-bound optical recurrence evidence must validate');
 
+const acceptedFalseClosures = [];
+const recordFalseClosureAcceptance = (label, validation) => {
+  try {
+    validation();
+    acceptedFalseClosures.push(label);
+  } catch {
+    // Rejection is the required evidence boundary.
+  }
+};
+const placeholderCaptureReport = structuredClone(validReport);
+placeholderCaptureReport.arms[0].captures[0].cameraPoseHash = 'camera-0';
+placeholderCaptureReport.arms[1].captures[0].cameraPoseHash = 'camera-0';
+placeholderCaptureReport.arms[0].captures[0].pixelHash = 'presentation-0';
+placeholderCaptureReport.arms[1].captures[0].pixelHash = 'optical-0';
+recordFalseClosureAcceptance('placeholder capture and camera hashes', () => {
+  validateSplatOpticalRecurrenceReport(placeholderCaptureReport);
+});
+
 for (const [label, mutate] of [
   ['fallback route', report => { report.arms[1].fallbackReason = 'additive-fallback'; }],
   ['partial orbit', report => { report.arms[1].captures.pop(); }],
@@ -131,8 +151,22 @@ assert.equal(manifest.visualQuality, 'operator-unseen');
 assert.equal(manifest.authoredFork.originalWitnessImmutable, true);
 assert.equal(manifest.producer.identity, 'radiance-transfer-producer-v0');
 
+const arbitraryArtifactManifest = structuredClone(manifest);
+arbitraryArtifactManifest.artifacts = arbitraryArtifactManifest.artifacts.map((artifact, index) => ({
+  ...artifact,
+  id: `debug-artifact-${index}`,
+  loadRoute: 'debug-only-v0',
+}));
+recordFalseClosureAcceptance('arbitrary cockpit artifact roles and routes', () => {
+  validateSplatOpticalCockpitManifest(arbitraryArtifactManifest);
+});
+
 for (const [label, mutate] of [
   ['missing artifact hash', value => { delete value.artifacts[0].sha256; }],
+  ['missing original artifact role', value => { value.artifacts[0].id = 'debug-original'; }],
+  ['wrong original artifact route', value => { value.artifacts[0].loadRoute = 'debug-only-v0'; }],
+  ['wrong treatment artifact route', value => { value.artifacts[1].loadRoute = 'debug-only-v0'; }],
+  ['duplicate artifact role', value => { value.artifacts[1].id = value.artifacts[0].id; }],
   ['fallback hidden', value => { value.renderer.fallbackReason = 'silent-fallback'; }],
   ['missing locked covariance', value => { value.controls.locked = value.controls.locked.filter(item => item !== 'covariance'); }],
   ['overwritten original', value => { value.authoredFork.originalWitnessImmutable = false; }],
@@ -144,5 +178,7 @@ for (const [label, mutate] of [
   mutate(candidate);
   assert.throws(() => validateSplatOpticalCockpitManifest(candidate), undefined, `${label} cannot claim cockpit-loadable evidence`);
 }
+
+assert.deepEqual(acceptedFalseClosures, [], `false closure evidence was accepted: ${acceptedFalseClosures.join(', ')}`);
 
 console.log('volume splat optical recurrence contracts passed');

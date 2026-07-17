@@ -59,8 +59,9 @@ function validateCaptures(arm, source) {
     assert.ok(Number.isInteger(capture.cameraIndex) && capture.cameraIndex >= 0 && capture.cameraIndex < CAMERA_COUNT, `invalid camera index in ${arm.id}`);
     assert.ok(!seen.has(capture.cameraIndex), `duplicate camera index in ${arm.id}`);
     seen.add(capture.cameraIndex);
-    assert.ok(capture.nonblank === true && capture.pixelHash, `blank or missing capture in ${arm.id}`);
-    assert.ok(capture.cameraPoseHash, `camera pose hash missing in ${arm.id}`);
+    assert.equal(capture.nonblank, true, `blank or missing capture in ${arm.id}`);
+    assert.match(capture.pixelHash || '', SHA256, `capture pixel hash is missing or invalid in ${arm.id}`);
+    assert.match(capture.cameraPoseHash || '', SHA256, `camera pose hash is missing or invalid in ${arm.id}`);
     for (const field of SOURCE_HASH_FIELDS) {
       assert.equal(capture[field], source[field], `${field} drift in ${arm.id}`);
     }
@@ -149,6 +150,10 @@ export function validateSplatOpticalCockpitManifest(manifest) {
   assert.equal(manifest.identities?.presentation, 'raymarch-matched-exponential-power-grade-v0', 'manifest presentation identity changed');
   assert.ok(Array.isArray(manifest.artifacts) && manifest.artifacts.length >= 2, 'cockpit manifest requires original and treatment artifacts');
   manifest.artifacts.forEach(validateArtifact);
+  const artifactMap = new Map(manifest.artifacts.map(artifact => [artifact.id, artifact]));
+  assert.equal(artifactMap.size, manifest.artifacts.length, 'cockpit artifact ids must be unique');
+  assert.equal(artifactMap.get('original-presentation')?.loadRoute, 'matched-presentation-v0', 'immutable presentation artifact or route is missing');
+  assert.equal(artifactMap.get('matched-optical')?.loadRoute, 'matched-optical-recurrence-v0', 'matched optical artifact or route is missing');
   assert.equal(manifest.routes?.requested, '/volume-selective-head-live.html', 'manifest requested route changed');
   assert.equal(manifest.routes?.effectiveWrapper, WRAPPER_ROUTE, 'manifest effective wrapper changed');
   assert.equal(manifest.routes?.effectiveRenderer, RENDERER_ROUTE, 'manifest effective renderer changed');
