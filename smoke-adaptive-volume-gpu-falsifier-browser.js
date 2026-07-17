@@ -23,13 +23,13 @@ const DEFAULTS = Object.freeze({
   buildSteadySamples: 4,
 });
 
-const state = { phase: 'initializing', report: null, error: null };
+const state = { phase: 'initializing', message: 'Initializing', report: null, error: null };
 const statusNode = document.getElementById('status');
 const reportNode = document.getElementById('report');
 
 function setStatus(message) {
   statusNode.textContent = message;
-  state.phase = message;
+  state.message = message;
 }
 
 function queryConfig() {
@@ -589,8 +589,13 @@ async function run() {
     { binding: 0, resource: { buffer: pairAllocation.buffer } },
     { binding: 1, resource: { buffer: sortParamAllocation.buffer, size: 16 } },
   ] });
-  const selectBindGroup = device.createBindGroup({ layout: initializePipeline.getBindGroupLayout(2), entries: [
-    { binding: 0, resource: { buffer: builtIndirectAllocation.buffer } }, { binding: 1, resource: { buffer: pairAllocation.buffer } },
+  const initializeBindGroup = device.createBindGroup({ layout: initializePipeline.getBindGroupLayout(2), entries: [
+    { binding: 0, resource: { buffer: builtIndirectAllocation.buffer } },
+    { binding: 2, resource: { buffer: paramsAllocation.buffer } },
+  ] });
+  const scatterBindGroup = device.createBindGroup({ layout: scatterPipeline.getBindGroupLayout(2), entries: [
+    { binding: 0, resource: { buffer: builtIndirectAllocation.buffer } },
+    { binding: 1, resource: { buffer: pairAllocation.buffer } },
     { binding: 2, resource: { buffer: paramsAllocation.buffer } },
   ] });
   const packBindGroup = device.createBindGroup({ layout: packPipeline.getBindGroupLayout(3), entries: [
@@ -612,8 +617,8 @@ async function run() {
       pass = encoder.beginComputePass();
       pass.setPipeline(dynamicSortPipeline); pass.setBindGroup(1, sortBindGroup, [stage * 256]); pass.dispatchWorkgroups(Math.ceil(brickCount / 256)); pass.end();
     }
-    pass = encoder.beginComputePass(); pass.setPipeline(initializePipeline); pass.setBindGroup(2, selectBindGroup); pass.dispatchWorkgroups(Math.ceil(brickCount / 256)); pass.end();
-    pass = encoder.beginComputePass(); pass.setPipeline(scatterPipeline); pass.setBindGroup(2, selectBindGroup); pass.dispatchWorkgroups(Math.ceil(selected.length / 256)); pass.end();
+    pass = encoder.beginComputePass(); pass.setPipeline(initializePipeline); pass.setBindGroup(2, initializeBindGroup); pass.dispatchWorkgroups(Math.ceil(brickCount / 256)); pass.end();
+    pass = encoder.beginComputePass(); pass.setPipeline(scatterPipeline); pass.setBindGroup(2, scatterBindGroup); pass.dispatchWorkgroups(Math.ceil(selected.length / 256)); pass.end();
     pass = encoder.beginComputePass({ timestampWrites: includeRender ? undefined : { querySet, endOfPassWriteIndex: 1 } });
     pass.setPipeline(packPipeline); pass.setBindGroup(3, packBindGroup); pass.dispatchWorkgroups(Math.ceil(product.atlasValues.length / 256)); pass.end();
     if (includeRender) {

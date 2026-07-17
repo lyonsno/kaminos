@@ -122,9 +122,18 @@ const browser = readFileSync(new URL('../smoke-adaptive-volume-gpu-falsifier-bro
 assert.match(browser, /timestamp-query/);
 assert.match(browser, /timestampWrites/);
 assert.doesNotMatch(browser, /encoder\.writeTimestamp/);
+assert.doesNotMatch(
+  browser,
+  /function setStatus\([^)]*\)\s*\{[^}]*state\.phase\s*=/s,
+  'human-readable status updates must not overwrite terminal machine state',
+);
 assert.match(browser, /destroy\(\)[\s\S]*dense/i, 'browser falsifier must destroy dense state before compact rerender');
 assert.match(browser, /denseBindingCountDuringRender:\s*0/);
 assert.match(browser, /allocationComplete/);
+assert.match(browser, /const initializeBindGroup\s*=/, 'entry-point-specific auto layouts require an initialize bind group');
+assert.match(browser, /const scatterBindGroup\s*=/, 'entry-point-specific auto layouts require a scatter bind group');
+assert.match(browser, /setPipeline\(initializePipeline\);[^\n]*setBindGroup\(2, initializeBindGroup\)/);
+assert.match(browser, /setPipeline\(scatterPipeline\);[^\n]*setBindGroup\(2, scatterBindGroup\)/);
 
 const witness = readFileSync(new URL('../smoke-adaptive-volume-gpu-witness.mjs', import.meta.url), 'utf8');
 assert.match(witness, /failed-before-primary-output/);
