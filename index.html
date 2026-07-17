@@ -75,7 +75,7 @@ canvas { display: block; }
 #volume-authored-mix-panel[data-collapsed="true"] { flex-basis: 34px; width: 34px; min-width: 34px; }
 #volume-authored-mix-toggle { flex: 0 0 34px; width: 34px; height: 100%; border: 0; border-right: 1px solid #283033; background: rgba(16,19,20,0.98); color: #8fa0a5; font: 16px 'SF Mono', monospace; cursor: pointer; }
 #volume-authored-mix-toggle:hover { background: #202628; color: #fff; }
-#volume-authored-mix-body { flex: 1; min-width: 0; height: 100%; overflow-y: auto; padding: calc(16px + var(--kaminos-operator-overlay-safe-top, 0px)) 14px 24px; }
+#volume-authored-mix-body { flex: 1; min-width: 0; height: 100%; overflow-y: auto; padding: 16px 14px 24px; }
 #volume-authored-mix-body::-webkit-scrollbar { width: 6px; }
 #volume-authored-mix-body::-webkit-scrollbar-track { background: transparent; }
 #volume-authored-mix-body::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
@@ -2721,6 +2721,9 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+
+const initialViewerParams = new URLSearchParams(window.location.search);
+if (isKaminosVolumeSmokeRoute(initialViewerParams)) setActiveTab('volume');
 
 const volumeCockpitLayoutReady = initializeVolumeCockpitLayout({ documentRef: document });
 volumeCockpitLayoutReady.then(receipt => {
@@ -9360,6 +9363,9 @@ function setActiveTab(tabName) {
   if (pipelineBrowser) pipelineBrowser.hidden = tabName !== 'pipeline';
   if (tabName === 'pipeline') loadPipelineAssetBrowser().catch(err => setInfo(err.message || String(err)));
 }
+
+window.__kaminosSetActiveTab = setActiveTab;
+window.__kaminosActiveTab = () => document.querySelector('.tab.active[data-tab]')?.dataset.tab || null;
 
 function currentWorldChambersDebugState() {
   return worldChamberDebugState(worldChambersRegistry);

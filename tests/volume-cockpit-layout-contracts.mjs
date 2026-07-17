@@ -23,8 +23,8 @@ assert.match(
 );
 assert.match(
   witness,
-  /outerToolbarBottom[\s\S]*authoredTitleTop[\s\S]*authoredControlTop[\s\S]*authoredContentObscured/,
-  'visual witness rejects authored-mix controls hidden beneath the outer assay toolbar',
+  /assayViewportGeometry[\s\S]*kaminos-volume-assay-viewport-placement-v0[\s\S]*nonVolumeTabs[\s\S]*for \(const tabName of nonVolumeTabs\)[\s\S]*assay cockpit leaked into the \$\{tabName\} tab/,
+  'visual witness proves viewport containment and rejects assay controls leaking into non-volume tabs',
 );
 assert.match(witness, /collapsedWidth[\s\S]*collapsedBodyDisplay[\s\S]*cockpitCollapsedScreenshot/, 'visual witness proves the compact rail state and preserves its pixels');
 assert.match(
@@ -48,13 +48,50 @@ assert.match(
 );
 assert.match(
   selectiveLive,
-  /--kaminos-operator-overlay-safe-top[\s\S]*kaminos-operator-overlay-safe-area-v0[\s\S]*new ResizeObserver\(syncOperatorOverlaySafeArea\)/,
-  'the assay shell must publish its measured toolbar occlusion to the inner cockpit',
+  /function syncVolumeAssayViewportPlacement\(\)[\s\S]*#viewport[\s\S]*\.tab\.active\[data-tab\][\s\S]*activeTab === 'volume'[\s\S]*kaminos-volume-assay-viewport-placement-v0/,
+  'the assay cockpit must measure and receipt placement inside the active volume viewport',
 );
 assert.match(
-  index,
-  /#volume-authored-mix-body\s*\{[^}]*var\(--kaminos-operator-overlay-safe-top,\s*0px\)[^}]*\}/,
-  'the authored-mix body must consume the shell overlay safe area without changing standalone routes',
+  selectiveLive,
+  /#volume-authored-mix-panel[\s\S]*availableViewportRight[\s\S]*insufficient-volume-viewport-space/,
+  'responsive placement must subtract the visible authored-mix overlay and fail closed when no flame viewport remains',
+);
+assert.match(
+  selectiveLive,
+  /innerWindow\.__kaminosSetActiveTab\?\.\('volume'\)[\s\S]*new ResizeObserver\(syncVolumeAssayViewportPlacement\)/,
+  'the assay route must explicitly activate volume and track viewport geometry',
+);
+assert.match(index, /window\.__kaminosSetActiveTab\s*=\s*setActiveTab/, 'the viewer exposes an explicit tab admission API to same-origin volume wrappers');
+assert.match(index, /window\.__kaminosActiveTab\s*=\s*\(\)\s*=>/, 'the viewer exposes effective tab identity for volume-only overlay gating');
+assert.ok(
+  index.indexOf("if (isKaminosVolumeSmokeRoute(initialViewerParams)) setActiveTab('volume');") < index.indexOf('initScene().then(() => {'),
+  'volume-route tab admission must occur before asynchronous renderer and environment initialization',
+);
+assert.doesNotMatch(
+  selectiveLive,
+  /#toolbar\s*\{[^}]*top:\s*12px[^}]*left:\s*12px[^}]*right:\s*12px/,
+  'the assay cockpit must not span the shared shell as a global fixed toolbar',
+);
+assert.doesNotMatch(index, /--kaminos-operator-overlay-safe-top/, 'the shared authored-mix panel must not reserve space for a volume-only viewport overlay');
+assert.match(
+  selectiveLive,
+  /for \(const button of compositionButtons\) button\.setAttribute\('aria-pressed',[^\n]+\);\s*compositionSelect\.value = requestedComposition;\s*setRole\(requestedRole\);/,
+  'the compact renderer menu must initialize from requested composition instead of displaying its first option',
+);
+assert.match(
+  selectiveLive,
+  /function syncCompositionControlAvailability\(presentation\)[\s\S]*compositionSelect\.disabled = disabled[\s\S]*compositionSelect\.setAttribute\('aria-disabled'/,
+  'the renderer select itself must become visibly and semantically unavailable when its pass axis is suppressed',
+);
+assert.match(
+  selectiveLive,
+  /raymarchSmokeApplied[\s\S]*appearanceApplication\?\.smokeApplied[\s\S]*passReceipt\?\.raymarchApplied === true[\s\S]*raymarch smoke:.*applied:/,
+  'operator status must distinguish remembered smoke presentation from smoke actually applied to current pixels',
+);
+assert.match(
+  witness,
+  /nonVolumeTabs[\s\S]*for \(const tabName of nonVolumeTabs\)[\s\S]*Emulation\.setDeviceMetricsOverride[\s\S]*responsiveIsolation/,
+  'the browser witness must exercise every non-volume tab and the fixed authored-mix responsive breakpoint',
 );
 assert.match(index, /collectVolumeCockpitControlElements\(document\)/, 'preset capture reads every explicit canonical control root');
 assert.doesNotMatch(

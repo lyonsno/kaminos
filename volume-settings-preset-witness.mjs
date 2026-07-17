@@ -249,8 +249,6 @@ try {
     const toggle = operatorDocument.getElementById('volume-authored-mix-toggle');
     const authoredRoot = operatorDocument.getElementById('volume-authored-mix-control-root');
     const canary = operatorDocument.getElementById('volume-reaction-boundary-support-thermal');
-    const canaryRow = canary?.closest('.slider-row');
-    const authoredTitle = operatorDocument.querySelector('.volume-authored-mix-title');
     const viewport = operatorDocument.getElementById('viewport');
     const hostRendererCanvas = operatorDocument.getElementById('kaminos-host-renderer-canvas');
     const outerToolbar = document.getElementById('toolbar');
@@ -258,16 +256,10 @@ try {
     const bodyRect = body?.getBoundingClientRect();
     const toggleRect = toggle?.getBoundingClientRect();
     const canaryRect = canary?.getBoundingClientRect();
-    const canaryRowRect = canaryRow?.getBoundingClientRect();
-    const authoredTitleRect = authoredTitle?.getBoundingClientRect();
     const viewportRect = viewport?.getBoundingClientRect();
     const hostRendererCanvasRect = hostRendererCanvas?.getBoundingClientRect();
     const outerToolbarRect = outerToolbar?.getBoundingClientRect();
-    const shellSafeAreaReceipt = operatorWindow.__kaminosOperatorOverlaySafeAreaReceipt || null;
-    const shellSafeTop = Number.parseFloat(
-      operatorWindow.getComputedStyle(operatorDocument.documentElement)
-        .getPropertyValue('--kaminos-operator-overlay-safe-top'),
-    ) || 0;
+    const assayPlacementReceipt = operatorWindow.__kaminosVolumeAssayViewportPlacementReceipt || null;
     const hit = bodyRect && bodyRect.width > 0 && bodyRect.height > 0
       ? operatorDocument.elementFromPoint(bodyRect.left + Math.min(24, bodyRect.width / 2), bodyRect.top + Math.min(24, bodyRect.height / 2))
       : null;
@@ -278,16 +270,23 @@ try {
       anchorId,
       anchorFound: !anchorId || !!anchor,
       layoutReceipt,
-      shellOcclusionGeometry: {
-        outerToolbarBottom: outerToolbarRect?.bottom || 0,
-        shellSafeTop,
-        shellSafeAreaReceipt,
-        authoredTitleTop: authoredTitleRect?.top ?? null,
-        authoredControlTop: canaryRowRect?.top ?? null,
-        authoredContentObscured: !!outerToolbarRect && (
-          authoredTitleRect?.top < outerToolbarRect.bottom
-          || canaryRowRect?.top < outerToolbarRect.bottom
-        ),
+      assayViewportGeometry: {
+        activeTab: operatorWindow.__kaminosActiveTab?.() || null,
+        toolbarHidden: outerToolbar?.hidden ?? true,
+        placementReceipt: assayPlacementReceipt,
+        toolbarLeft: outerToolbarRect?.left ?? null,
+        toolbarTop: outerToolbarRect?.top ?? null,
+        toolbarRight: outerToolbarRect?.right ?? null,
+        toolbarBottom: outerToolbarRect?.bottom ?? null,
+        viewportLeft: viewportRect?.left ?? null,
+        viewportTop: viewportRect?.top ?? null,
+        viewportRight: viewportRect?.right ?? null,
+        viewportBottom: viewportRect?.bottom ?? null,
+        contained: Boolean(outerToolbarRect && viewportRect)
+          && outerToolbarRect.left >= viewportRect.left
+          && outerToolbarRect.top >= viewportRect.top
+          && outerToolbarRect.right <= viewportRect.right
+          && outerToolbarRect.bottom <= viewportRect.bottom,
       },
       hostRendererCanvasGeometry: hostRendererCanvasRect ? {
         hostCanvasLeft: hostRendererCanvasRect.left,
@@ -342,26 +341,17 @@ try {
   assert.equal(cockpitVisibility.layoutReceipt?.rootControlCounts?.['volume-primary-control-root'], 188, 'primary root count changed');
   assert.equal(cockpitVisibility.layoutReceipt?.rootControlCounts?.['volume-authored-mix-control-root'], 1, 'authored-mix root count changed');
   assert.equal(cockpitVisibility.layoutReceipt?.fallbackApplied, false, 'cockpit layout silently fell back');
+  assert.equal(cockpitVisibility.assayViewportGeometry?.activeTab, 'volume', 'assay route did not admit the Volume tab');
+  assert.equal(cockpitVisibility.assayViewportGeometry?.toolbarHidden, false, 'assay cockpit is hidden on the Volume tab');
+  assert.equal(cockpitVisibility.assayViewportGeometry?.contained, true, 'assay cockpit crosses the volume viewport boundary');
   assert.equal(
-    cockpitVisibility.shellOcclusionGeometry?.authoredContentObscured,
-    false,
-    'authored-mix controls are hidden beneath the outer assay toolbar',
+    cockpitVisibility.assayViewportGeometry?.placementReceipt?.identity,
+    'kaminos-volume-assay-viewport-placement-v0',
+    'volume viewport placement receipt is missing',
   );
-  assert.equal(
-    cockpitVisibility.shellOcclusionGeometry?.shellSafeAreaReceipt?.identity,
-    'kaminos-operator-overlay-safe-area-v0',
-    'outer assay shell did not publish an overlay safe-area receipt',
-  );
-  assert.equal(
-    cockpitVisibility.shellOcclusionGeometry?.shellSafeAreaReceipt?.applied,
-    true,
-    'outer assay shell safe area was not applied',
-  );
-  assert.ok(
-    cockpitVisibility.shellOcclusionGeometry?.shellSafeTop
-      > cockpitVisibility.shellOcclusionGeometry?.outerToolbarBottom,
-    'authored-mix shell safe area does not clear the outer toolbar',
-  );
+  assert.equal(cockpitVisibility.assayViewportGeometry?.placementReceipt?.visible, true, 'placement receipt did not apply to Volume');
+  assert.equal(cockpitVisibility.assayViewportGeometry?.placementReceipt?.contained, true, 'placement receipt reports viewport overflow');
+  assert.equal(cockpitVisibility.assayViewportGeometry?.placementReceipt?.fallbackApplied, false, 'assay placement silently fell back');
   assert.ok(cockpitVisibility.hostRendererCanvasGeometry, 'host renderer canvas geometry is missing');
   assert.equal(
     cockpitVisibility.hostRendererCanvasGeometry?.hostCanvasCrossesPanel,
@@ -384,6 +374,70 @@ try {
   assert.equal(cockpitVisibility.panelGeometry?.canaryInAuthoredRoot, true, 'authored-mix canary was cloned or left in the primary root');
   assert.ok(cockpitVisibility.panelGeometry?.canaryWidth > 0, 'authored-mix canary has no rendered width');
   assert.equal(cockpitVisibility.panelGeometry?.hitInsidePanel, true, 'authored-mix panel is painted behind another surface');
+  const nonVolumeTabs = await evaluate(initialSocket, operatorContext(`[
+    ...operatorDocument.querySelectorAll('.tab[data-tab]'),
+  ].map(tab => tab.dataset.tab).filter(tabName => tabName !== 'volume')`));
+  const nonVolumeIsolation = [];
+  for (const tabName of nonVolumeTabs) {
+    await evaluate(initialSocket, operatorContext(`operatorWindow.__kaminosSetActiveTab(${JSON.stringify(tabName)})`));
+    await delay(50);
+    const isolation = await evaluate(initialSocket, `(() => {
+      const operatorWindow = document.querySelector('#basin')?.contentWindow;
+      const toolbar = document.getElementById('toolbar');
+      return {
+        requestedTab: ${JSON.stringify(tabName)},
+        activeTab: operatorWindow?.__kaminosActiveTab?.() || null,
+        toolbarHidden: toolbar?.hidden ?? false,
+        receipt: operatorWindow?.__kaminosVolumeAssayViewportPlacementReceipt || null,
+      };
+    })()`);
+    assert.equal(isolation.activeTab, tabName, `tab-isolation witness did not select ${tabName}`);
+    assert.equal(isolation.toolbarHidden, true, `assay cockpit leaked into the ${tabName} tab`);
+    assert.equal(isolation.receipt?.visible, false, `non-volume placement receipt claims visible controls on ${tabName}`);
+    nonVolumeIsolation.push(isolation);
+  }
+  await evaluate(initialSocket, operatorContext(`operatorWindow.__kaminosSetActiveTab('volume')`));
+  await delay(100);
+  const restoredPlacement = await evaluate(initialSocket, `(() => {
+    const operatorWindow = document.querySelector('#basin')?.contentWindow;
+    return operatorWindow?.__kaminosVolumeAssayViewportPlacementReceipt || null;
+  })()`);
+  assert.equal(restoredPlacement?.activeTab, 'volume', 'Volume tab did not restore after isolation witness');
+  assert.equal(restoredPlacement?.visible, true, 'assay cockpit did not restore with Volume');
+  await initialSocket.call('Emulation.setDeviceMetricsOverride', {
+    width: 700,
+    height: 900,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await delay(150);
+  const responsiveIsolation = await evaluate(initialSocket, `(() => {
+    const operatorWindow = document.querySelector('#basin')?.contentWindow;
+    const toolbar = document.getElementById('toolbar');
+    const panel = operatorWindow?.document.querySelector('#volume-authored-mix-panel');
+    const toolbarRect = toolbar?.hidden ? null : toolbar?.getBoundingClientRect();
+    const panelRect = panel?.getBoundingClientRect();
+    return {
+      toolbarHidden: toolbar?.hidden ?? false,
+      toolbarRight: toolbarRect?.right ?? null,
+      panelLeft: panelRect?.left ?? null,
+      receipt: operatorWindow?.__kaminosVolumeAssayViewportPlacementReceipt || null,
+    };
+  })()`);
+  assert.equal(
+    responsiveIsolation.toolbarHidden || responsiveIsolation.toolbarRight <= responsiveIsolation.panelLeft,
+    true,
+    'assay cockpit overlaps the fixed authored-mix panel at the 700px breakpoint',
+  );
+  assert.equal(responsiveIsolation.receipt?.fallbackApplied, false, 'responsive assay placement silently fell back');
+  if (responsiveIsolation.toolbarHidden) {
+    assert.equal(responsiveIsolation.receipt?.reason, 'insufficient-volume-viewport-space', 'responsive placement hid without an explicit reason');
+  }
+  await initialSocket.call('Emulation.clearDeviceMetricsOverride');
+  await delay(150);
+  lastTrustworthyEvidence.nonVolumeIsolation = nonVolumeIsolation;
+  lastTrustworthyEvidence.responsiveIsolation = responsiveIsolation;
+  lastTrustworthyEvidence.restoredPlacement = restoredPlacement;
   await delay(200);
   const cockpitScreenshot = await initialSocket.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
   writeFileSync(cockpitOut, Buffer.from(cockpitScreenshot.data, 'base64'));
@@ -510,6 +564,9 @@ try {
     continuousSimStepDelta,
     cockpitAnchor: cockpitVisibility.anchorId || null,
     cockpitVisibility,
+    nonVolumeIsolation,
+    responsiveIsolation,
+    restoredPlacement,
     cockpitScreenshot: cockpitOut,
     cockpitCollapsedScreenshot: cockpitCollapsedOut,
     cockpitCollapsedState: collapsed,

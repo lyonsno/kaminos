@@ -201,6 +201,11 @@ assert.match(compositionWitness, /splat-only-v0/);
 assert.match(compositionWitness, /smoke-raymarch-under-splats-v0/);
 assert.match(compositionWitness, /full-raymarch-under-splats-diagnostic-v0/);
 assert.match(compositionWitness, /selectiveHeadLivePassReceipt/);
+assert.match(
+  compositionWitness,
+  /composition === 'splat-only-v0'[\s\S]*requestedRaymarchSmokePresentation[\s\S]*raymarchSmokeApplied, false[\s\S]*raymarch pass was absent/,
+  'same-state composition witness rejects Smoke On looking applied when splat-only has no raymarch pass',
+);
 assert.match(compositionWitness, /renderElapsedMs/);
 assert.match(compositionWitness, /isInspectablePageTarget/);
 assert.ok(compositionWitness.includes('chrome-extension://'));
