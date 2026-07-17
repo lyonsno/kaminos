@@ -6,16 +6,19 @@ const root = new URL('..', import.meta.url).pathname;
 const benchCorePath = join(root, 'finger-fluid-bench-core.js');
 const webgpuCorePath = join(root, 'finger-fluid-webgpu-core.js');
 const benchWitnessPath = join(root, 'finger-fluid-bench-witness.mjs');
+const truthWitnessPath = join(root, 'finger-fluid-truth-witness.mjs');
 const indexPath = join(root, 'index.html');
 
 assert.ok(existsSync(benchCorePath), 'Kaminos-native finger fluid bench core exists');
 assert.ok(existsSync(webgpuCorePath), 'Kaminos-native WebGPU 3D fluid core exists');
 assert.ok(existsSync(benchWitnessPath), 'Kaminos-native finger fluid bench witness exists');
+assert.ok(existsSync(truthWitnessPath), 'Kaminos-native fluid-truth trajectory witness exists');
 assert.ok(existsSync(indexPath), 'Kaminos app shell exists');
 
 const benchCoreSource = readFileSync(benchCorePath, 'utf8');
 const webgpuCoreSource = readFileSync(webgpuCorePath, 'utf8');
 const benchWitnessSource = readFileSync(benchWitnessPath, 'utf8');
+const truthWitnessSource = readFileSync(truthWitnessPath, 'utf8');
 const indexSource = readFileSync(indexPath, 'utf8');
 
 assert.match(benchCoreSource, /KAMINOS_FINGER_FLUID_BENCH_STATE_SCHEMA\s*=\s*'kaminos\.finger-fluid-bench\.state\.v0'/, 'bench state schema is explicit');
@@ -33,6 +36,9 @@ assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_VORTICITY_CONTRACT\s*=\s*'w
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_OBSTACLE_CONTRACT\s*=\s*'shared-solver-render-obstacle-v0'/, 'solver and renderer share an obstacle contract');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_GPU_RENDERER_ROUTE\s*=\s*'webgpu-particle-sphere-renderer-v0'/, 'direct GPU renderer route is explicit');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_STABILITY_CONTRACT\s*=\s*'bounded-pbf-energy-v0'/, 'bounded-energy stability contract is explicit');
+assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_TRUTH_GAUNTLET_CONTRACT\s*=\s*'kaminos-fluid-truth-gauntlet-v0'/, 'fluid-truth gauntlet has an explicit contract');
+assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_TRUTH_SCENES/, 'canonical truth-scene registry is explicit');
+assert.match(webgpuCoreSource, /measureFingerFluidTruthSnapshot/, 'authoritative diagnostics expose one reusable fluid-truth snapshot');
 assert.match(webgpuCoreSource, /MAX_FLUID_SPEED\s*=\s*3\.2/, 'fluid speed ceiling is explicit and source-owned');
 assert.match(webgpuCoreSource, /restDensity:\s*24\.3/, 'calibrated packed-state rest density is exposed');
 assert.match(webgpuCoreSource, /GRID_DIMS\s*=\s*\[32, 20, 32\]/, 'linked-cell domain has 3D neighborhood resolution');
@@ -212,6 +218,9 @@ assert.match(indexSource, /finger_fluid_particle_shift/, 'native route accepts a
 assert.match(indexSource, /requestedColorMode/, 'native debug state preserves requested color-mode identity');
 assert.match(indexSource, /particleShiftStrength/, 'native debug state preserves effective particle-shift strength');
 assert.match(indexSource, /finger_fluid_chemistry_diffusion/, 'native route accepts explicit passive tracer diffusion strength');
+assert.match(indexSource, /finger_fluid_truth_scene/, 'native route accepts an explicit canonical fluid-truth scene');
+assert.match(indexSource, /requestedTruthScene/, 'native debug state preserves requested fluid-truth scene identity');
+assert.match(indexSource, /effectiveTruthScene/, 'native debug state preserves effective fluid-truth scene identity');
 assert.match(indexSource, /requestedChemistryDiffusion/, 'native config records requested tracer diffusion');
 assert.match(indexSource, /effectiveChemistryDiffusion/, 'native config records effective tracer diffusion');
 assert.match(indexSource, /fingerFluidBenchCamera = \{ yaw: -0\.62, pitch: 0\.52, distance: 6\.2/, 'default camera gives the multi-regime playground material viewport occupancy');
@@ -313,6 +322,19 @@ assert.ok(
   'visual evidence is preserved before a later cadence failure',
 );
 
+assert.match(truthWitnessSource, /kaminos\.finger-fluid-truth-witness\.v0/, 'truth witness writes a distinct durable report schema');
+assert.match(truthWitnessSource, /requestedTruthScene\s*!==\s*effectiveTruthScene/, 'truth witness rejects silent scene fallback');
+assert.match(truthWitnessSource, /primary_output_written/, 'truth witness reports failures before primary visual output');
+assert.match(truthWitnessSource, /diagnosticsRequestCount/, 'truth witness records explicit full-diagnostics request identity');
+assert.match(truthWitnessSource, /trajectory/, 'truth witness records multiple dynamics checkpoints');
+assert.match(truthWitnessSource, /fluidTruthSnapshot/, 'truth witness consumes the authoritative dynamics snapshot');
+assert.match(truthWitnessSource, /retainedParticleRatio/, 'truth witness rejects particle loss in closed-population scenes');
+assert.match(truthWitnessSource, /relativeDensityErrorMean/, 'truth witness measures density convergence against the declared basin');
+assert.match(truthWitnessSource, /totalKineticEnergy/, 'truth witness measures energy evolution rather than one final speed');
+assert.match(truthWitnessSource, /occupiedCellCount/, 'truth witness records support-volume occupancy rather than particle count alone');
+assert.match(truthWitnessSource, /requestedUrl/, 'truth witness records the exact requested route');
+assert.match(truthWitnessSource, /effectiveUrl/, 'truth witness records the effective browser route');
+
 const mod = await import(benchCorePath);
 assert.equal(mod.KAMINOS_FINGER_FLUID_BENCH_STATE_SCHEMA, 'kaminos.finger-fluid-bench.state.v0');
 assert.equal(mod.KAMINOS_FINGER_FLUID_BENCH_ROUTE, 'kaminos/finger-fluid-bench');
@@ -355,6 +377,83 @@ assert.equal(state.acceptance.iframeAcceptance, false);
 assert.equal(state.acceptance.openDirectAcceptance, false);
 
 const webgpuMod = await import(webgpuCorePath);
+assert.deepEqual(webgpuMod.KAMINOS_FINGER_FLUID_TRUTH_SCENES, ['multi_regime_playground', 'deep_pool_rest', 'dam_break']);
+assert.equal(webgpuMod.resolveFingerFluidTruthScene('deep_pool_rest'), 'deep_pool_rest');
+assert.throws(() => webgpuMod.resolveFingerFluidTruthScene('quietly_default'), /Unsupported finger fluid truth scene/);
+assert.equal(typeof webgpuMod.createFingerFluidTruthSceneParticles, 'function');
+assert.equal(typeof webgpuMod.measureFingerFluidTruthSnapshot, 'function');
+assert.equal(typeof webgpuMod.evaluateFingerFluidTruthTrajectory, 'function');
+const multiRegimeInitial = webgpuMod.createFingerFluidTruthSceneParticles(1024, 'multi_regime_playground');
+const deepPoolInitial = webgpuMod.createFingerFluidTruthSceneParticles(1024, 'deep_pool_rest');
+const damBreakInitial = webgpuMod.createFingerFluidTruthSceneParticles(1024, 'dam_break');
+assert.equal(multiRegimeInitial.length, 1024 * 16);
+assert.equal(deepPoolInitial.length, 1024 * 16);
+assert.equal(damBreakInitial.length, 1024 * 16);
+assert.ok(Array.from({ length: 1024 }, (_, index) => Math.hypot(...multiRegimeInitial.slice(index * 16 + 8, index * 16 + 11))).some(speed => speed > 0.1), 'multi-regime scene preserves authored transport');
+assert.ok(Array.from({ length: 1024 }, (_, index) => Math.hypot(...deepPoolInitial.slice(index * 16 + 8, index * 16 + 11))).every(speed => speed === 0), 'deep-pool scene begins at rest');
+assert.ok(Array.from({ length: 1024 }, (_, index) => Math.hypot(...damBreakInitial.slice(index * 16 + 8, index * 16 + 11))).every(speed => speed === 0), 'dam-break scene begins from gravity rather than hidden launch velocity');
+const damBreakHeights = Array.from({ length: 1024 }, (_, index) => damBreakInitial[index * 16 + 1]);
+assert.ok(Math.max(...damBreakHeights) - Math.min(...damBreakHeights) > 0.5, 'dam-break scene starts as a materially tall retained column');
+const syntheticTruthParticles = new Float32Array(2 * 16);
+syntheticTruthParticles.set([0, -0.5, 0, 1, 0, -0.5, 0, 0, 1, 0, 0, 0.4, 0, 0, 0, 24.3], 0);
+syntheticTruthParticles.set([0.2, -0.5, 0, 1, 0.2, -0.5, 0, 0, 0, 0, 0, 0.4, 0, 0, 0, 20], 16);
+const syntheticTruthSnapshot = webgpuMod.measureFingerFluidTruthSnapshot(syntheticTruthParticles, 2, {
+  scene: 'deep_pool_rest',
+  restDensity: 24.3,
+  sourceRecirculationCount: 0,
+});
+assert.equal(syntheticTruthSnapshot.schema, 'kaminos.finger-fluid-truth-snapshot.v0');
+assert.equal(syntheticTruthSnapshot.scene, 'deep_pool_rest');
+assert.equal(syntheticTruthSnapshot.finiteParticleCount, 2);
+assert.equal(syntheticTruthSnapshot.retainedParticleRatio, 1);
+assert.equal(syntheticTruthSnapshot.totalKineticEnergy, 0.5);
+assert.equal(syntheticTruthSnapshot.occupiedCellCount, 1);
+assert.ok(syntheticTruthSnapshot.relativeDensityErrorMean > 0 && syntheticTruthSnapshot.relativeDensityErrorMean < 0.1);
+const truthCheckpoint = (elapsedMs, overrides = {}) => ({
+  elapsedMs,
+  fluidTruthSnapshot: {
+    particleCount: 100,
+    finiteParticleCount: 100,
+    retainedParticleRatio: 1,
+    sourceRecirculationCount: 0,
+    centerOfMass: [0, 0, 0],
+    totalKineticEnergy: 100,
+    occupiedVolumeProxy: 5,
+    ...overrides,
+  },
+});
+const deepPoolTrajectory = webgpuMod.evaluateFingerFluidTruthTrajectory('deep_pool_rest', [
+  truthCheckpoint(500),
+  truthCheckpoint(7000, { totalKineticEnergy: 20, occupiedVolumeProxy: 5.1 }),
+]);
+assert.equal(deepPoolTrajectory.accepted, true);
+assert.equal(deepPoolTrajectory.contract, 'kaminos-fluid-truth-trajectory-v0');
+assert.equal(deepPoolTrajectory.energyRetentionRatio, 0.2);
+assert.throws(() => webgpuMod.evaluateFingerFluidTruthTrajectory('deep_pool_rest', [
+  truthCheckpoint(500),
+  truthCheckpoint(7000, { totalKineticEnergy: 85 }),
+]), /failed to dissipate/);
+assert.throws(() => webgpuMod.evaluateFingerFluidTruthTrajectory('deep_pool_rest', [
+  truthCheckpoint(500),
+  truthCheckpoint(1000, { totalKineticEnergy: 20 }),
+]), /requires at least 5000ms/);
+const damBreakTrajectory = webgpuMod.evaluateFingerFluidTruthTrajectory('dam_break', [
+  truthCheckpoint(250, { centerOfMass: [0, 0.35, -1.7], totalKineticEnergy: 100, occupiedVolumeProxy: 5 }),
+  truthCheckpoint(1500, { centerOfMass: [0, -0.4, -0.5], totalKineticEnergy: 70, occupiedVolumeProxy: 5.8 }),
+  truthCheckpoint(9000, { centerOfMass: [0, -0.9, 0.4], totalKineticEnergy: 4, occupiedVolumeProxy: 5.2 }),
+]);
+assert.equal(damBreakTrajectory.accepted, true);
+assert.equal(damBreakTrajectory.downstreamDisplacement, 2.1);
+assert.equal(damBreakTrajectory.verticalCollapse, 1.25);
+assert.throws(() => webgpuMod.evaluateFingerFluidTruthTrajectory('dam_break', [
+  truthCheckpoint(250, { centerOfMass: [0, 0.35, -1.7] }),
+  truthCheckpoint(1500, { centerOfMass: [0, -0.4, -1.6], totalKineticEnergy: 70, occupiedVolumeProxy: 5.8 }),
+  truthCheckpoint(9000, { centerOfMass: [0, -0.9, -1.5], totalKineticEnergy: 4 }),
+]), /failed to travel downstream/);
+assert.throws(() => webgpuMod.evaluateFingerFluidTruthTrajectory('dam_break', [
+  truthCheckpoint(250, { centerOfMass: [0, 0.35, -1.7] }),
+  truthCheckpoint(9000, { centerOfMass: [0, -0.9, 0.4], totalKineticEnergy: 4, occupiedVolumeProxy: 5.8 }),
+]), /requires at least three checkpoints/);
 assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_SUPPORT_TRANSPORT_CONTRACT, 'wgsl-support-tangential-transport-v0');
 assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_TOPOLOGY_CONTRACT, 'wgsl-four-neighbor-topology-retention-v0');
 assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_PARTICLE_SHIFT_CONTRACT, 'wgsl-opt-in-support-tangential-particle-shift-v0');
