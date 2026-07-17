@@ -104,6 +104,11 @@ assert.throws(() => decodeFlowKernelDescriptorCapture(row, 1, 1, {
 assert.match(page, /volume_flow_kernel_descriptor_capture/, 'URL route exposes the diagnostic descriptor socket explicitly');
 assert.match(core, /flowKernelDescriptorCaptureRequested/, 'runtime distinguishes requested descriptor capture');
 assert.match(core, /flowKernelDescriptorCaptureEffective/, 'runtime reports effective descriptor capture');
+assert.match(
+  core,
+  /adapter\.limits\?\.maxStorageBuffersPerShaderStage \?\? 0\) >= 10[\s\S]*requiredLimits\.maxStorageBuffersPerShaderStage = 10/,
+  'device request must cover all ten boundary-splat compute storage bindings after descriptor and majorant sockets are attached',
+);
 assert.match(core, /sampleBoundarySplatKernelDescriptorCapture/, 'runtime reads the candidate-local descriptor socket');
 assert.match(core, /readFlowKernelDescriptorCaptureChunk/, 'runtime exposes session-bound chunk reads instead of one giant CDP payload');
 assert.match(core, /releaseFlowKernelDescriptorCapture/, 'runtime releases retained descriptor snapshots explicitly');

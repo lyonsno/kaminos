@@ -6234,6 +6234,8 @@ fn boundarySplatNestedSourceIndex(rank: u32, sourceCount: u32) -> u32 {
     }
   }
   return ((rank % sourceCount) * multiplier) % sourceCount;
+}
+
 fn boundarySplatClampCell(cell: vec3<i32>) -> vec3<u32> {
   return vec3<u32>(clamp(cell, vec3<i32>(0), vec3<i32>(i32(GRID) - 1)));
 }
@@ -9323,8 +9325,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if ((adapter.limits?.maxStorageBufferBindingSize ?? 0) >= maxRequestedFluidBufferBytes) {
       requiredLimits.maxStorageBufferBindingSize = maxRequestedFluidBufferBytes;
     }
-    if ((adapter.limits?.maxStorageBuffersPerShaderStage ?? 0) >= 9) {
-      requiredLimits.maxStorageBuffersPerShaderStage = 9;
+    if ((adapter.limits?.maxStorageBuffersPerShaderStage ?? 0) >= 10) {
+      requiredLimits.maxStorageBuffersPerShaderStage = 10;
     }
     const requiredFeatures = [];
     if (adapter.features?.has?.('timestamp-query')) {
@@ -9392,6 +9394,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       throw new Error(`Browser residual WGSL compilation failed:\n${detail}`);
     }
     const computeStart = BOUNDARY_SPLAT_WGSL.indexOf('@compute @workgroup_size(4, 4, 4)\nfn compactBoundarySplats');
+    const computeHelpersStart = BOUNDARY_SPLAT_WGSL.indexOf('fn boundarySplatClampCell');
     const archiveStart = BOUNDARY_SPLAT_WGSL.indexOf('@compute @workgroup_size(64)\nfn archiveBoundarySplatHistory');
     const archiveEnd = BOUNDARY_SPLAT_WGSL.indexOf('fn boundarySplatQuadCorner', archiveStart);
     const renderStart = BOUNDARY_SPLAT_WGSL.indexOf('fn boundarySplatQuadCorner');
@@ -9399,8 +9402,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ? BOUNDARY_SPLAT_WGSL.slice(0, renderStart)
           .replace('@group(0) @binding(9) var<storage, read> boundarySplatHistoryForRender: array<BoundarySplat>;\n', '')
       : BOUNDARY_SPLAT_WGSL;
-    const boundarySplatRenderWgsl = computeStart >= 0 && archiveEnd > computeStart
-      ? `${BOUNDARY_SPLAT_WGSL.slice(0, computeStart)}${BOUNDARY_SPLAT_WGSL.slice(archiveEnd)}`
+    const boundarySplatRenderWgsl = computeHelpersStart >= 0 && computeStart > computeHelpersStart && archiveEnd > computeStart
+      ? `${BOUNDARY_SPLAT_WGSL.slice(0, computeHelpersStart)}${BOUNDARY_SPLAT_WGSL.slice(archiveEnd)}`
           .replace('@group(0) @binding(0) var<storage, read> boundarySidecar: array<vec4<f32>>;\n', '')
           .replace('@group(0) @binding(1) var<storage, read> fluid: array<vec4<f32>>;\n', '')
           .replace('@group(0) @binding(2) var<storage, read_write> boundarySplats: array<BoundarySplat>;\n', '')
