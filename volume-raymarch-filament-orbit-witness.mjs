@@ -784,12 +784,15 @@ function runtimeInitializationSource(config) {
           modeAuthority = 'learned-camera-facing-billboard-v0';
         } else if (request.mode === 'worldCovariance'
           || request.mode === 'worldCovarianceAdditive'
-          || request.mode === 'worldCovarianceMatchedPresentation') {
+          || request.mode === 'worldCovarianceMatchedPresentation'
+          || request.mode === 'worldCovarianceMatchedOpticalRecurrence') {
           operator.setAppearanceAssay('off');
           operator.setPresentation('beauty');
           prototype.setControls({ boundarySplatMode: 'world_covariance', raySteps: request.raySteps });
           prototype.setBoundarySplatPresentationMode(
-            request.mode === 'worldCovarianceMatchedPresentation' ? 'matched-presentation-v0' : 'current-additive-v0',
+            request.mode === 'worldCovarianceMatchedOpticalRecurrence'
+              ? 'matched-optical-recurrence-v0'
+              : (request.mode === 'worldCovarianceMatchedPresentation' ? 'matched-presentation-v0' : 'current-additive-v0'),
           );
           operator.setComposition('splat-only-v0');
           modeAuthority = 'world-gradient-tangent-covariance-v0';
@@ -824,7 +827,7 @@ function runtimeInitializationSource(config) {
         const metrics = pixelMetrics({ ...sample.image, rgba });
         if (!metrics.nonblank) throw new Error('missing, partial, or blank capture: ' + request.key);
         const effectiveRaySteps = sample.volumePresentationReceipt?.effectiveRayQuality?.raySteps ?? sample.controls?.raySteps ?? null;
-        const footprintAudit = ['analyticBillboard', 'learnedBillboard', 'worldCovariance', 'worldCovarianceAdditive', 'worldCovarianceMatchedPresentation'].includes(request.mode)
+        const footprintAudit = ['analyticBillboard', 'learnedBillboard', 'worldCovariance', 'worldCovarianceAdditive', 'worldCovarianceMatchedPresentation', 'worldCovarianceMatchedOpticalRecurrence'].includes(request.mode)
           ? await prototype.sampleBoundarySplatFootprintAudit()
           : null;
         const record = {
