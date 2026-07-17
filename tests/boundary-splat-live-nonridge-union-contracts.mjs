@@ -23,7 +23,7 @@ assert.match(
 );
 assert.match(
   page,
-  /<option value="kernel_moment_full_flame_union">kernel moment full flame union<\/option>/,
+  /<option value="kernel_moment_full_flame_union">ridge \+ fire-active union<\/option>/,
   'cockpit must request the union explicitly instead of silently changing the covariance mode',
 );
 

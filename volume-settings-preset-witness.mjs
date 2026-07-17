@@ -19,6 +19,7 @@ const TARGET_ONLY_VOLUME_PARAMS = new Set([
   'volume_presentation',
   'volume_raymarch_smoke',
   'volume_appearance_decomposition',
+  'volume_appearance_selection',
 ]);
 const expectedComposition = PRESET_VIEW_COMPOSITIONS[requestedView];
 const PASS_TUPLES = Object.freeze({

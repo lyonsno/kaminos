@@ -20,6 +20,9 @@ export function resolveVolumeSettingsPresetVisualView(selectedView, rendererStat
   if (rendererState?.status !== 'running') {
     throw new Error('current renderer view is not running; select an explicit preset renderer view');
   }
+  if (rendererState.compositionOverrideReason) {
+    throw new Error(`current renderer view is overridden: ${rendererState.compositionOverrideReason}; select an explicit preset renderer view`);
+  }
   if (rendererState.requestedComposition !== rendererState.effectiveComposition) {
     throw new Error(
       `current renderer requested/effective composition substitution: ${rendererState.requestedComposition || 'missing'} -> ${rendererState.effectiveComposition || 'missing'}`,
@@ -54,6 +57,13 @@ const VOLUME_APPEARANCE_DECOMPOSITION_MODES = Object.freeze([
   'nonridge-emission-under-total-flame-extinction',
   'complete-flame-under-total-extinction',
 ]);
+const VOLUME_APPEARANCE_DECOMPOSITION_SELECTIONS = Object.freeze(
+  VOLUME_APPEARANCE_DECOMPOSITION_MODES.filter(mode => mode !== 'off'),
+);
+const VOLUME_COMPOSITION_REQUIRED_SMOKE_PRESENTATION = Object.freeze({
+  'splat-only-v0': 'off',
+  'smoke-raymarch-under-splats-v0': 'on',
+});
 
 function validateAppearanceDecompositionTarget(params, prefix = '') {
   const requestedAppearanceDecompositionModes = params.getAll('volume_appearance_decomposition');
@@ -63,6 +73,20 @@ function validateAppearanceDecompositionTarget(params, prefix = '') {
   if (requestedAppearanceDecompositionModes.length === 1
     && !VOLUME_APPEARANCE_DECOMPOSITION_MODES.includes(requestedAppearanceDecompositionModes[0])) {
     throw new Error(`unsupported ${prefix}target appearance decomposition: ${requestedAppearanceDecompositionModes[0]}`);
+  }
+  const requestedAppearanceSelections = params.getAll('volume_appearance_selection');
+  if (requestedAppearanceSelections.length > 1) {
+    throw new Error(`${prefix}target duplicates appearance decomposition selection`);
+  }
+  if (requestedAppearanceSelections.length === 1
+    && !VOLUME_APPEARANCE_DECOMPOSITION_SELECTIONS.includes(requestedAppearanceSelections[0])) {
+    throw new Error(`unsupported ${prefix}target appearance decomposition selection: ${requestedAppearanceSelections[0]}`);
+  }
+  if (requestedAppearanceDecompositionModes.length === 1
+    && requestedAppearanceDecompositionModes[0] !== 'off'
+    && requestedAppearanceSelections.length === 1
+    && requestedAppearanceSelections[0] !== requestedAppearanceDecompositionModes[0]) {
+    throw new Error(`${prefix}target active appearance decomposition conflicts with remembered selection`);
   }
 }
 
@@ -247,7 +271,7 @@ export function buildVolumeSettingsPresetVisualTarget(receipt, origin, view) {
   target.searchParams.set('composition', viewSpec.composition);
   target.searchParams.set('warmup_steps', '0');
   target.searchParams.set('volume_presentation', 'beauty');
-  target.searchParams.set('volume_raymarch_smoke', 'on');
+  target.searchParams.set('volume_raymarch_smoke', viewSpec.composition === 'splat-only-v0' ? 'off' : 'on');
   target.searchParams.set('settings_preset', receipt.presetId);
   target.searchParams.set('settings_preset_authority', receipt.sourcePresetAuthority);
   return target;
@@ -275,6 +299,12 @@ export function validateVolumeSettingsPresetVisualTarget(receipt, params) {
   if (requestedSmokePresentationModes.length === 1 && !['on', 'off'].includes(requestedSmokePresentationModes[0])) {
     throw new Error(`unsupported visual target raymarch smoke presentation: ${requestedSmokePresentationModes[0]}`);
   }
+  const expectedSmokeForComposition = VOLUME_COMPOSITION_REQUIRED_SMOKE_PRESENTATION[viewSpec.composition];
+  if (requestedSmokePresentationModes.length === 1
+    && expectedSmokeForComposition
+    && requestedSmokePresentationModes[0] !== expectedSmokeForComposition) {
+    throw new Error(`visual target composition/smoke identity mismatch: ${viewSpec.composition} requires ${expectedSmokeForComposition}`);
+  }
   validateAppearanceDecompositionTarget(params, 'visual ');
   const allowed = new Set([
     ...receipt.routeVolumeEntries.map(([key]) => key),
@@ -286,6 +316,7 @@ export function validateVolumeSettingsPresetVisualTarget(receipt, params) {
     'volume_presentation',
     'volume_raymarch_smoke',
     'volume_appearance_decomposition',
+    'volume_appearance_selection',
   ]);
   const unexpected = [...params].map(([key]) => key).filter(key => !allowed.has(key));
   if (unexpected.length > 0) {
@@ -299,6 +330,7 @@ export function validateVolumeSettingsPresetVisualTarget(receipt, params) {
       && key !== 'volume_presentation'
       && key !== 'volume_raymarch_smoke'
       && key !== 'volume_appearance_decomposition'
+      && key !== 'volume_appearance_selection'
   ));
   if (requestedVolumeEntries.length !== receipt.routeVolumeEntries.length) {
     throw new Error('visual target volume route is partial or contains extra settings');
@@ -338,6 +370,7 @@ export function validateVolumeSettingsPresetTarget(receipt, params) {
     'volume_presentation',
     'volume_raymarch_smoke',
     'volume_appearance_decomposition',
+    'volume_appearance_selection',
   ]);
   const unexpected = [...params].map(([key]) => key).filter(key => !allowed.has(key));
   if (unexpected.length > 0) throw new Error(`target settings route contains unexpected parameters: ${unexpected.join(',')}`);

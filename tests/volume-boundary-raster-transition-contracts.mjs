@@ -137,12 +137,12 @@ assert.match(
 );
 assert.match(
   cockpitSource,
-  /function setPresentation\(presentation\)[\s\S]*presentation === 'intrinsic'[\s\S]*setAppearanceAssay\('off'\)/,
+  /function setPresentation\(presentation\)[\s\S]*presentation === 'intrinsic'[\s\S]*setAppearanceAssayEnabled\(false\)/,
   'Intrinsic must explicitly turn off an incompatible optical assay instead of presenting black pixels',
 );
 assert.match(
   cockpitSource,
-  /function setAppearanceAssay\(mode\)[\s\S]*mode !== 'off'[\s\S]*requestedPresentation !== 'beauty'[\s\S]*setPresentation\('beauty'\)/,
+  /function setAppearanceAssayEnabled\(enabled\)[\s\S]*nextEnabled[\s\S]*requestedPresentation !== 'beauty'[\s\S]*setPresentation\('beauty'\)/,
   'an optical assay must explicitly select its Beauty raymarch presentation substrate',
 );
 assert.match(

@@ -1980,9 +1980,11 @@ assert.match(core, /setControls\(next\)[\s\S]*selectiveHeadLiveRenderComposition
 assert.match(core, /smoke-raymarch-authority-broad-smoke-only-v0/, 'smoke-hybrid mode names the raymarch authority partition');
 assert.match(core, /splat-fire-authority-learned-boundary-sheets-v0/, 'smoke-hybrid mode names the splat fire-sheet authority partition');
 assert.doesNotMatch(core, /const selectiveHybrid = state\.selectiveHeadLiveEffectiveRole !== 'off';[\s\S]*loadOp: selectiveHybrid \? 'load' : 'clear'/, 'selective-head live must not silently equate role-on with full raymarch-under-splats');
-assert.match(selectiveHeadLivePage, /data-composition="smoke-raymarch-under-splats-v0"/, 'operator page exposes smoke-hybrid as an explicit composition control');
-assert.match(selectiveHeadLivePage, /data-composition="splat-only-v0"/, 'operator page exposes splat-only as an explicit attribution composition control');
-assert.match(selectiveHeadLivePage, /data-composition="full-raymarch-under-splats-diagnostic-v0"/, 'operator page exposes the old full hybrid only as a diagnostic composition');
+assert.match(selectiveHeadLivePage, /data-splats-enabled/, 'operator page exposes ordinary splat authority explicitly');
+assert.match(selectiveHeadLivePage, /data-smoke-presentation="on"[\s\S]*data-smoke-presentation="off"/, 'operator page exposes ordinary smoke authority explicitly');
+assert.match(selectiveHeadLivePage, /function deriveRequestedBeautyComposition\(\)[\s\S]*smoke-raymarch-under-splats-v0[\s\S]*splat-only-v0[\s\S]*raymarch-only-v0/, 'operator page derives ordinary composition without ambiguous full-fire duplication');
+assert.doesNotMatch(selectiveHeadLivePage, /data-composition="full-raymarch-under-splats-diagnostic-v0"/, 'operator page keeps the old full hybrid out of compact controls');
+assert.match(selectiveHeadLivePage, /legacyDiagnosticCompositionRequested/, 'explicit diagnostic composition routes remain compatible');
 assert.match(selectiveHeadLivePage, /composition authority/i, 'operator status labels renderer composition authority');
 assert.match(selectiveHeadLivePage, /pass receipt/i, 'operator status labels applied pass receipts');
 assert.match(selectiveHeadLiveWitness, /expectedComposition/, 'selective-head live witness verifies requested renderer composition');

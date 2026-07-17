@@ -1191,7 +1191,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
             <option value="learned_conserved">learned conserved</option>
             <option value="world_covariance">world covariance</option>
             <option value="kernel_moment_covariance">kernel moment covariance</option>
-            <option value="kernel_moment_full_flame_union">kernel moment full flame union</option>
+            <option value="kernel_moment_full_flame_union">ridge + fire-active union</option>
         </select>
         <span class="slider-val" id="volume-boundary-splat-mode-val">raymarch</span>
       </div>
@@ -12221,11 +12221,22 @@ function currentVolumeSettingsPresetRendererState() {
   } catch {}
   const ordinaryState = window.__kaminosVolumePrototype?.debugState?.();
   if (!ordinaryState) return null;
+  const effectiveAppearanceAssay = ordinaryState.appearanceDecompositionReceipt?.effectiveMode
+    || ordinaryState.appearanceDecompositionModeEffective
+    || 'off';
+  const effectivePresentation = ordinaryState.volumePresentationReceipt?.effectiveMode
+    || ordinaryState.volumePresentationModeEffective
+    || 'beauty';
   return {
     source: 'ordinary-live-prototype',
     status: ordinaryState.active && !ordinaryState.error ? 'running' : 'unavailable',
     requestedComposition: ordinaryState.selectiveHeadLiveCompositionRequested,
     effectiveComposition: ordinaryState.selectiveHeadLiveCompositionEffective,
+    compositionOverrideReason: effectiveAppearanceAssay !== 'off'
+      ? 'appearance-assay-overrides-beauty-composition'
+      : effectivePresentation === 'intrinsic'
+        ? 'intrinsic-overrides-beauty-composition'
+        : null,
     fallbackReason: ordinaryState.error || ordinaryState.selectiveHeadLiveFallbackReason || null,
     compositionFallbackReason: ordinaryState.selectiveHeadLiveCompositionFallbackReason || null,
     boundarySplatFallbackReason: ordinaryState.boundarySplatFallbackReason || null,
@@ -12330,7 +12341,7 @@ function syncReactionFrontExtractorLabels(controlsSnapshot) {
   if (boundarySplatModeLabel) boundarySplatModeLabel.textContent = boundarySplatMode === 'learned'
     ? 'learned attributes'
     : boundarySplatMode === 'kernel_moment_full_flame_union'
-      ? 'full flame union'
+      ? 'ridge + fire-active union'
     : boundarySplatMode === 'kernel_moment_covariance'
       ? 'kernel moment covariance'
     : boundarySplatMode === 'world_covariance'

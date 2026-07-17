@@ -27,9 +27,7 @@ const isPresetLoader = requestedUrl.pathname.endsWith('/volume-settings-preset.h
 const requestedPresetView = isPresetLoader ? requestedParams.get('view') : null;
 const requestedPresetRef = requestedParams.get('settings_preset')
   || (isPresetLoader ? requestedParams.get('preset') : null);
-const expectedComposition = requestedParams.get('composition')
-  || PRESET_VIEW_COMPOSITIONS[requestedPresetView]
-  || 'smoke-raymarch-under-splats-v0';
+const expectedComposition = expectedCompositionFromAxes(requestedParams, requestedPresetView);
 const out = resolve(String(args.get('--out') || '/tmp/kaminos-selective-head-live.png'));
 const reportPath = resolve(String(args.get('--report') || '/tmp/kaminos-selective-head-live.json'));
 const minimumContinuousSeconds = Number(args.get('--minimum-seconds') || 5);
@@ -119,6 +117,9 @@ try {
     state = await evaluate(socket, 'window.__kaminosSelectiveHeadLive?.debugState?.()');
     expectedRoleAuthority = ROLE_AUTHORITIES[state?.requestedRole] || null;
     if (state?.status === 'failed') throw new Error(state.error || state.fallbackReason || 'live route failed');
+    if (state?.compositionOverrideReason) {
+      throw new Error(`unexpected-composition-override:${state.compositionOverrideReason}`);
+    }
     if (
       state?.routeIdentity === ROUTE
       && state?.status === 'running'
@@ -143,6 +144,7 @@ try {
   assert.equal(state?.status, 'running', 'live route did not reach running state');
   assert.equal(state?.effectiveRole, state?.requestedRole, 'requested role silently fell back');
   assert.equal(state?.effectiveComposition, expectedComposition, 'requested composition silently fell back');
+  assert.equal(state?.compositionOverrideReason, null, 'unexpected-composition-override');
   assert.equal(state?.roleAuthority, expectedRoleAuthority, 'requested role used the wrong composition authority');
   assert.equal(state?.modelIdentity, MODEL, 'wrong frozen model identity');
   assert.equal(state?.fallbackReason, null, 'selective route reported fallback');
@@ -165,6 +167,7 @@ try {
   else assert.ok(continuousEncodedFrameDelta >= 2, 'learned fields did not update continuously');
   assert.equal(endState?.effectiveRole, startState?.effectiveRole, 'effective role drifted during observation');
   assert.equal(endState?.effectiveComposition, startState?.effectiveComposition, 'composition drift during observation');
+  assert.equal(endState?.compositionOverrideReason, null, 'unexpected-composition-override during observation');
   assert.equal(endState?.fallbackReason, null, 'selective route fell back during observation');
   assert.equal(endState?.compositionFallbackReason, null, 'selective composition fell back during observation');
   assert.equal(endState?.boundarySplatFallbackReason, null, 'splat route fell back during observation');
@@ -206,6 +209,7 @@ try {
     requestedComposition: endState.requestedComposition,
     effectiveComposition: endState.effectiveComposition,
     compositionAuthority: endState.compositionAuthority,
+    compositionOverrideReason: endState.compositionOverrideReason,
     compositionFallbackReason: endState.compositionFallbackReason,
     selectiveHeadLivePassReceipt: endState.selectiveHeadLivePassReceipt,
     fallbackReason: endState.fallbackReason,
@@ -241,6 +245,17 @@ try {
 } finally {
   try { socket?.close(); } catch {}
   browser?.kill('SIGTERM');
+}
+
+function expectedCompositionFromAxes(params, presetView = null) {
+  const requestedComposition = params.get('composition')
+    || PRESET_VIEW_COMPOSITIONS[presetView]
+    || 'smoke-raymarch-under-splats-v0';
+  if (requestedComposition === 'full-raymarch-under-splats-diagnostic-v0') return requestedComposition;
+  if (requestedComposition === 'raymarch-only-v0') return requestedComposition;
+  const requestedSmoke = params.get('volume_raymarch_smoke')
+    || (requestedComposition === 'splat-only-v0' ? 'off' : 'on');
+  return requestedSmoke === 'off' ? 'splat-only-v0' : 'smoke-raymarch-under-splats-v0';
 }
 
 function parseArgs(argv) {

@@ -27,7 +27,7 @@ for (const mode of modes) {
   assert.match(core, new RegExp(`['"]${mode}['"]`), `core declares ${mode}`);
   assert.match(wrapper, new RegExp(`data-appearance-assay=['"]${mode}['"]`), `wrapper exposes ${mode}`);
 }
-assert.match(wrapper, /data-appearance-assay=['"]off['"]/, 'operator can explicitly leave the appearance assay');
+assert.match(wrapper, /data-assay-enabled[^>]*aria-pressed=['"]false['"]/, 'operator can explicitly leave the appearance assay without using a fake optical-view identity');
 
 const normalize = functionSource(core, 'normalizeAppearanceDecompositionMode');
 assert.match(normalize, /requestedRaw[\s\S]*requested[\s\S]*fallbackReason/, 'normalization preserves requested and effective identity');
@@ -66,7 +66,7 @@ assert.match(presetContract, /requestedAppearanceDecompositionModes[\s\S]*volume
 assert.match(presetContract, /key !== 'volume_appearance_decomposition'/, 'target-only assay identity is excluded from the immutable preset control count');
 assert.match(wrapper, /unsupported-appearance-decomposition-mode/, 'wrapper rejects unsupported assay substitution');
 assert.match(wrapper, /requestedAppearanceAssay[\s\S]*effectiveAppearanceAssay[\s\S]*appearanceDecompositionReceipt/, 'wrapper reports requested and effective assay identity');
-assert.match(wrapper, /function syncCompositionControlAvailability\(presentation\)[\s\S]*appearanceAssay\s*=\s*requestedAppearanceAssay[\s\S]*appearanceAssay !== 'off'[\s\S]*button\.disabled = disabled/, 'assay visibly disables composition controls whose passes it suppresses');
-assert.match(wrapper, /function setComposition\(composition\)[\s\S]*requestedAppearanceAssay !== 'off'[\s\S]*composition-controls-disabled-during-appearance-assay/, 'assay composition clicks fail before mutating remembered Beauty composition');
+assert.match(wrapper, /function syncSubordinateControlAvailability\(\)[\s\S]*requestedAppearanceAssayEnabled[\s\S]*button\.disabled = disabled/, 'assay visibly disables subordinate controls whose passes it suppresses');
+assert.match(wrapper, /function setComposition\(composition\)[\s\S]*requestedAppearanceAssayEnabled[\s\S]*composition-controls-disabled-during-appearance-assay/, 'assay composition calls fail before mutating remembered Beauty composition');
 
 console.log('volume appearance decomposition contracts passed');

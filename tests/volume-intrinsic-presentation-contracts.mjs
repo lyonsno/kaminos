@@ -163,8 +163,8 @@ assert.match(
 );
 assert.match(
   selectiveWrapper,
-  /function syncCompositionControlAvailability\(presentation\)[\s\S]*button\.disabled = disabled[\s\S]*aria-disabled/,
-  'Intrinsic visibly disables Beauty-only composition controls',
+  /function syncSubordinateControlAvailability\(\)[\s\S]*requestedPresentation !== 'beauty'[\s\S]*button\.disabled = disabled[\s\S]*aria-disabled/,
+  'Intrinsic visibly disables Beauty-only Splats and Smoke controls',
 );
 assert.match(
   selectiveWrapper,
@@ -173,12 +173,12 @@ assert.match(
 );
 assert.match(
   selectiveWrapper,
-  /function setPresentation\(presentation\)[\s\S]*setVolumePresentationMode[\s\S]*presentation === 'beauty'[\s\S]*setSelectiveHeadLiveRenderComposition\?\.\(requestedComposition\)/,
+  /function setPresentation\(presentation\)[\s\S]*setVolumePresentationMode[\s\S]*presentation === 'beauty'[\s\S]*applyRequestedBeautyComposition\(\)/,
   'returning to Beauty explicitly reapplies the remembered Beauty composition',
 );
 assert.match(
   selectiveWrapper,
-  /function setRaymarchSmokePresentation\(mode\)[\s\S]*setRaymarchSmokePresentationMode[\s\S]*requestedRaymarchSmokePresentation[\s\S]*effectiveRaymarchSmokePresentation/,
+  /function setRaymarchSmokePresentation\(mode, \{ preserveDiagnostic = false \} = \{\}\)[\s\S]*setRaymarchSmokePresentationMode[\s\S]*requestedRaymarchSmokePresentation[\s\S]*effectiveRaymarchSmokePresentation/,
   'wrapper proxies the independent requested/effective smoke presentation identity',
 );
 assert.match(

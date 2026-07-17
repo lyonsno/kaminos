@@ -42,11 +42,24 @@ assert.throws(
   /boundary-splat-route-unavailable/,
   'ordinary current-view resolution reports the exact renderer fallback',
 );
+assert.throws(
+  () => resolveVolumeSettingsPresetVisualView('current', {
+    ...cleanOrdinaryState,
+    compositionOverrideReason: 'appearance-assay-overrides-beauty-composition',
+  }),
+  /override|select an explicit preset renderer view/i,
+  'current-view resolution cannot label an Assay or Intrinsic override as its dormant Beauty composition',
+);
 
 assert.match(
   index,
   /function currentVolumeSettingsPresetRendererState\(\)[\s\S]*__kaminosSelectiveHeadLive[\s\S]*__kaminosVolumePrototype[\s\S]*selectiveHeadLiveCompositionRequested[\s\S]*selectiveHeadLiveCompositionEffective/,
   'current-view loading reads both selective-wrapper and ordinary-live requested/effective composition receipts',
+);
+assert.match(
+  index,
+  /compositionOverrideReason:[\s\S]*appearance-assay-overrides-beauty-composition[\s\S]*intrinsic-overrides-beauty-composition/,
+  'standalone ordinary-live current-view receipts expose Assay and Intrinsic composition overrides',
 );
 assert.match(
   index,

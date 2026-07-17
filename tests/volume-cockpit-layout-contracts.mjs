@@ -29,7 +29,7 @@ assert.match(
 assert.match(witness, /collapsedWidth[\s\S]*collapsedBodyDisplay[\s\S]*cockpitCollapsedScreenshot/, 'visual witness proves the compact rail state and preserves its pixels');
 assert.match(
   witness,
-  /TARGET_ONLY_VOLUME_PARAMS[\s\S]*volume_presentation[\s\S]*volume_raymarch_smoke[\s\S]*volume_appearance_decomposition[\s\S]*!TARGET_ONLY_VOLUME_PARAMS\.has\(key\)/,
+  /TARGET_ONLY_VOLUME_PARAMS[\s\S]*volume_presentation[\s\S]*volume_raymarch_smoke[\s\S]*volume_appearance_decomposition[\s\S]*volume_appearance_selection[\s\S]*!TARGET_ONLY_VOLUME_PARAMS\.has\(key\)/,
   'visual witness distinguishes target-only presentation identity from immutable basin settings',
 );
 assert.match(index, /id="volume-primary-control-root"[^>]+data-volume-control-root="primary"/, 'left controls have an explicit canonical root');
@@ -75,13 +75,13 @@ assert.doesNotMatch(
 assert.doesNotMatch(index, /--kaminos-operator-overlay-safe-top/, 'the shared authored-mix panel must not reserve space for a volume-only viewport overlay');
 assert.match(
   selectiveLive,
-  /for \(const button of compositionButtons\) button\.setAttribute\('aria-pressed',[^\n]+\);\s*compositionSelect\.value = requestedComposition;\s*setRole\(requestedRole\);/,
-  'the compact renderer menu must initialize from requested composition instead of displaying its first option',
+  /appearanceAssaySelect\.value = requestedAppearanceAssaySelection;[\s\S]*splatsEnabledButton\.setAttribute\('aria-pressed', String\(requestedSplatsEnabled\)\);[\s\S]*setRole\(requestedRole\);/,
+  'the compact controls must initialize from remembered Assay and Splats requests instead of displaying their markup defaults',
 );
 assert.match(
   selectiveLive,
-  /function syncCompositionControlAvailability\(presentation\)[\s\S]*compositionSelect\.disabled = disabled[\s\S]*compositionSelect\.setAttribute\('aria-disabled'/,
-  'the renderer select itself must become visibly and semantically unavailable when its pass axis is suppressed',
+  /function syncSubordinateControlAvailability\(\)[\s\S]*splatsEnabledButton\.disabled = disabled[\s\S]*button\.disabled = disabled[\s\S]*aria-disabled/,
+  'Splats and Smoke controls must become visibly and semantically unavailable when their pass axes are overridden',
 );
 assert.match(
   selectiveLive,
