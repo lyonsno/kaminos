@@ -5,7 +5,7 @@ import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeF
 import { createServer } from 'node:http';
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { spawn } from 'node:child_process';
-import { deflateSync, inflateSync } from 'node:zlib';
+import { inflateSync } from 'node:zlib';
 
 const SCHEMA = 'kaminos.volume.layer-coefficient-live-union-witness.v0';
 const EFFECTIVE_ROUTE = 'native-3d-compute-fluid-raymarch-v0';
@@ -402,11 +402,11 @@ async function captureCondition({ label, captureContext, overlay, raymarch = fal
     sameStateCaptureId: captureContext.sameStateCaptureId,
     baseFrameCount: captureContext.sourceFrameCount,
     baseSimStepCount: captureContext.sourceSimStepCount,
-    includeRgba: true,
+    includeRgba: !overlay,
     restoreControls: false,
     resumeRenderLoop: false,
   };
-  let render = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.renderFrozenScaleToCanvas(${JSON.stringify(renderOptions)})`);
+  let render = await evaluate(socket, compactFrozenRenderExpression(renderOptions));
   assert.equal(render?.ok, true, `${label} render failed: ${JSON.stringify(render)}`);
 
   let overlayReceipt = null;
@@ -414,7 +414,7 @@ async function captureCondition({ label, captureContext, overlay, raymarch = fal
   if (overlay) {
     overlayReceipt = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.auditBoundarySplatLiveUnionCoefficientOverlayPopulation(${JSON.stringify({ now: FIXED_NOW_MS })})`);
     if (overlayReceipt.status !== 'effective') throw new Error(`population-audit:${label}:${JSON.stringify(overlayReceipt)}`);
-    render = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.renderFrozenScaleToCanvas(${JSON.stringify(renderOptions)})`);
+    render = await evaluate(socket, compactFrozenRenderExpression({ ...renderOptions, includeRgba: true }));
     assert.equal(render?.ok, true, `${label} post-audit render failed: ${JSON.stringify(render)}`);
     populationAudit = overlayReceipt.populationAudit;
   } else if (!raymarch) {
@@ -436,9 +436,10 @@ async function captureCondition({ label, captureContext, overlay, raymarch = fal
   const rgbaCapture = render.rgbaCapture;
   assert.ok(rgbaCapture?.width >= 64 && rgbaCapture?.height >= 64, `${label} exact RGBA readback is missing`);
   assert.equal(rgbaCapture.imageAuthority, 'gpu-rgba8-readback-frozen-sim-state-v0', `${label} image authority drifted`);
-  assert.equal(rgbaCapture.rgba?.length, rgbaCapture.width * rgbaCapture.height * 4, `${label} RGBA payload is partial`);
+  assert.equal(rgbaCapture.rgbaByteLength, rgbaCapture.width * rgbaCapture.height * 4, `${label} RGBA payload is partial`);
+  assert.ok(typeof rgbaCapture.pngBase64 === 'string' && rgbaCapture.pngBase64.length > 64, `${label} compact PNG transport is missing`);
   const imagePath = join(outDir, `${label}.png`);
-  const imageBytes = encodePngRgba(rgbaCapture.width, rgbaCapture.height, Uint8Array.from(rgbaCapture.rgba));
+  const imageBytes = Buffer.from(rgbaCapture.pngBase64, 'base64');
   writeFileSync(imagePath, imageBytes);
   const metrics = pngPixelMetrics(imageBytes);
   if (!metrics.nonblank) throw new Error(`blank-capture:${label}`);
@@ -453,7 +454,8 @@ async function captureCondition({ label, captureContext, overlay, raymarch = fal
       authority: 'gpu-rgba8-readback-frozen-sim-state-v0',
       width: rgbaCapture.width,
       height: rgbaCapture.height,
-      byteLength: rgbaCapture.rgba.length,
+      rgbaByteLength: rgbaCapture.rgbaByteLength,
+      pngByteLength: imageBytes.byteLength,
     },
     image: artifact(imagePath),
   };
@@ -594,45 +596,32 @@ function contentType(path) {
   })[extname(path).toLowerCase()] || 'application/octet-stream';
 }
 
-function encodePngRgba(width, height, rgba) {
-  assert.equal(rgba.byteLength, width * height * 4, 'PNG RGBA payload length mismatch');
-  const stride = width * 4;
-  const scanlines = Buffer.alloc((stride + 1) * height);
-  for (let row = 0; row < height; row += 1) {
-    const outputOffset = row * (stride + 1);
-    scanlines[outputOffset] = 0;
-    Buffer.from(rgba.buffer, rgba.byteOffset + row * stride, stride).copy(scanlines, outputOffset + 1);
-  }
-  const header = Buffer.alloc(13);
-  header.writeUInt32BE(width, 0);
-  header.writeUInt32BE(height, 4);
-  header[8] = 8;
-  header[9] = 6;
-  return Buffer.concat([
-    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
-    pngChunk('IHDR', header),
-    pngChunk('IDAT', deflateSync(scanlines)),
-    pngChunk('IEND', Buffer.alloc(0)),
-  ]);
-}
-
-function pngChunk(type, data) {
-  const typeBytes = Buffer.from(type, 'ascii');
-  const chunk = Buffer.alloc(12 + data.byteLength);
-  chunk.writeUInt32BE(data.byteLength, 0);
-  typeBytes.copy(chunk, 4);
-  data.copy(chunk, 8);
-  chunk.writeUInt32BE(crc32(Buffer.concat([typeBytes, data])), 8 + data.byteLength);
-  return chunk;
-}
-
-function crc32(bytes) {
-  let crc = 0xffffffff;
-  for (const byte of bytes) {
-    crc ^= byte;
-    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0);
-  }
-  return (crc ^ 0xffffffff) >>> 0;
+function compactFrozenRenderExpression(renderOptions) {
+  return `(async () => {
+    const render = await ${VOLUME_PROTOTYPE_EXPRESSION}.renderFrozenScaleToCanvas(${JSON.stringify(renderOptions)});
+    const capture = render?.rgbaCapture;
+    if (!capture?.rgba) return render;
+    const rgba = Uint8ClampedArray.from(capture.rgba);
+    const surface = new OffscreenCanvas(capture.width, capture.height);
+    const context = surface.getContext('2d', { alpha: true });
+    if (!context) throw new Error('exact-rgba-png-context-unavailable');
+    context.putImageData(new ImageData(rgba, capture.width, capture.height), 0, 0);
+    const blob = await surface.convertToBlob({ type: 'image/png' });
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let binary = '';
+    for (let offset = 0; offset < bytes.length; offset += 32768) {
+      binary += String.fromCharCode(...bytes.subarray(offset, Math.min(bytes.length, offset + 32768)));
+    }
+    return {
+      ...render,
+      rgbaCapture: {
+        ...capture,
+        rgba: null,
+        rgbaByteLength: rgba.byteLength,
+        pngBase64: btoa(binary),
+      },
+    };
+  })()`;
 }
 
 async function waitForTarget(port, timeout) {

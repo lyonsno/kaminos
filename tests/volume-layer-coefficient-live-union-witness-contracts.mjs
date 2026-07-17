@@ -42,6 +42,9 @@ assert.match(witness, /document\.querySelector\('#basin'\)/, 'witness resolves t
 assert.match(witness, /includeRgba:\s*true/, 'witness requests exact frozen-render RGBA readback');
 assert.match(witness, /render\.rgbaCapture/, 'witness consumes pixels returned by the frozen renderer instead of page-shell pixels');
 assert.match(witness, /gpu-rgba8-readback-frozen-sim-state-v0/, 'report names the exact GPU readback image authority');
+assert.match(witness, /OffscreenCanvas/, 'witness PNG-encodes exact GPU pixels in the child runtime before CDP transport');
+assert.match(witness, /pngBase64/, 'witness transports a compact PNG instead of millions of JSON integers');
+assert.match(witness, /includeRgba:\s*!overlay/, 'overlay population priming does not request an unused pixel payload');
 assert.doesNotMatch(witness, /Page\.captureScreenshot/, 'witness must not let application-shell pixels satisfy visual evidence gates');
 assert.match(witness, /condition\.render\.controlOverrides\.boundarySplatMode/, 'union-mode assertion reads a field actually returned by the frozen renderer');
 assert.match(witness, /condition\.overlay\?\.unionReceipt \|\| condition\.populationAudit\?\.unionReceipt/, 'union assertion reads the receipt from analytical and overlay condition shapes');
