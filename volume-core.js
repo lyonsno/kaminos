@@ -16111,6 +16111,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       await device.queue.onSubmittedWorkDone();
     }
     const controlsBefore = { ...controlsSnapshot };
+    const includeRgba = options.includeRgba === true;
     const renderScale = normalizeRenderScale(options.renderScale ?? controlsSnapshot.renderScale);
     const controlOverrides = {
       ...(options.controlOverrides && typeof options.controlOverrides === 'object' ? options.controlOverrides : {}),
@@ -16330,6 +16331,72 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           };
         }
       }
+      let rgbaCapture = null;
+      if (includeRgba) {
+        ensureFrameTexture();
+        device.pushErrorScope('validation');
+        const readbackEncoder = device.createCommandEncoder({ label: 'kaminos frozen render-scale exact rgba8 readback' });
+        const readbackView = frameTexture.createView();
+        let readbackRaymarchEncoded = false;
+        let readbackSplatEncoded = false;
+        if (explicitCompositionRoute && compositionDefinition.raymarch) {
+          encodeDraw(
+            readbackEncoder,
+            readbackView,
+            `kaminos frozen ${boundarySplatCompositionRequested} exact rgba8 raymarch`,
+            readbackPipeline,
+          );
+          readbackRaymarchEncoded = true;
+        }
+        if (explicitCompositionRoute && compositionDefinition.splat) {
+          readbackSplatEncoded = encodeBoundarySplatDraw(
+            readbackEncoder,
+            readbackView,
+            boundarySplatReadbackPipeline,
+            { loadOp: readbackRaymarchEncoded ? 'load' : 'clear' },
+          );
+        }
+        if (!explicitCompositionRoute) {
+          encodeDraw(
+            readbackEncoder,
+            readbackView,
+            'kaminos frozen render-scale exact rgba8 raymarch',
+            readbackPipeline,
+          );
+          readbackRaymarchEncoded = true;
+        }
+        if (compositionDefinition.splat && !readbackSplatEncoded) {
+          const validationError = await device.popErrorScope();
+          return {
+            ok: false,
+            reason: 'boundary-splat-frozen-rgba8-readback-route-unavailable',
+            boundarySplatCompositionRequestedRaw,
+            boundarySplatCompositionRequested,
+            boundarySplatCompositionEffective: 'unavailable',
+            readbackRaymarchEncoded,
+            readbackSplatEncoded,
+            validationError: validationError?.message || null,
+          };
+        }
+        device.queue.submit([readbackEncoder.finish()]);
+        const validationError = await device.popErrorScope();
+        if (validationError) {
+          return {
+            ok: false,
+            reason: 'frozen-rgba8-readback-validation',
+            validationError: validationError.message || String(validationError),
+            readbackRaymarchEncoded,
+            readbackSplatEncoded,
+          };
+        }
+        if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+        rgbaCapture = await readTextureRgba8(
+          frameTexture,
+          state.width,
+          state.height,
+          'kaminos frozen render-scale exact rgba8 readback',
+        );
+      }
       const flowKernelDescriptorCapture = state.flowKernelDescriptorCaptureRequested && externalFlowKernelDescriptorsEncoded
         ? await sampleBoundarySplatKernelDescriptorCapture(state.flowKernelDescriptorIndexCount, {
           populationIdentity: FLOW_KERNEL_EXTERNAL_INDEX_POPULATION_IDENTITY,
@@ -16354,7 +16421,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return {
         ok: true,
         sampleAuthority: 'render-only-frozen-sim-state',
-        imageAuthority: 'cdp-canvas-clip-capture-after-render-only-frozen-sim-state',
+        imageAuthority: rgbaCapture
+          ? 'gpu-rgba8-readback-frozen-sim-state-v0'
+          : 'cdp-canvas-clip-capture-after-render-only-frozen-sim-state',
+        rgbaCapture: rgbaCapture ? {
+          ...rgbaCapture,
+          imageAuthority: 'gpu-rgba8-readback-frozen-sim-state-v0',
+        } : null,
         controlOverrides,
         boundarySplatCompositionRequestedRaw,
         boundarySplatCompositionRequested,

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const witness = readFileSync(new URL('../volume-layer-coefficient-live-union-witness.mjs', import.meta.url), 'utf8');
+const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 
 assert.match(witness, /kaminos\.volume\.layer-coefficient-live-union-witness\.v0/, 'witness publishes a stable report schema');
 assert.equal((witness.match(/spawn\(chromeExecutable\(\)/g) || []).length, 1, 'witness owns exactly one Chrome process');
@@ -24,7 +25,6 @@ for (const token of [
   'learned-baseline',
   'learned-flow',
   'matched-raymarch',
-  'Page.captureScreenshot',
   'sameStateCaptureId',
   'sourceSimStepCount',
   'effectiveOverlayIdentity',
@@ -39,10 +39,22 @@ assert.match(witness, /population-audit/, 'witness rejects partial, overflowed, 
 assert.match(witness, /blank-capture/, 'witness rejects blank operator-visible output');
 assert.match(witness, /same-state-drift/, 'witness rejects simulation movement between matched conditions');
 assert.match(witness, /document\.querySelector\('#basin'\)/, 'witness resolves the child renderer iframe on the top-level page');
-assert.match(witness, /frameRect\.left \+ rect\.x/, 'screenshot clipping includes the iframe page offset instead of capturing parent-shell UI');
-assert.match(witness, /top-level-page-clip-from-iframe-plus-child-canvas-rect-v0/, 'report names the effective cross-frame screenshot authority');
+assert.match(witness, /includeRgba:\s*true/, 'witness requests exact frozen-render RGBA readback');
+assert.match(witness, /render\.rgbaCapture/, 'witness consumes pixels returned by the frozen renderer instead of page-shell pixels');
+assert.match(witness, /gpu-rgba8-readback-frozen-sim-state-v0/, 'report names the exact GPU readback image authority');
+assert.doesNotMatch(witness, /Page\.captureScreenshot/, 'witness must not let application-shell pixels satisfy visual evidence gates');
 assert.match(witness, /condition\.render\.controlOverrides\.boundarySplatMode/, 'union-mode assertion reads a field actually returned by the frozen renderer');
+assert.match(witness, /condition\.overlay\?\.unionReceipt \|\| condition\.populationAudit\?\.unionReceipt/, 'union assertion reads the receipt from analytical and overlay condition shapes');
 assert.match(witness, /gpu-validation-error/, 'witness rejects WebGPU validation errors instead of presenting black captures');
+const frozenStart = core.indexOf('async function renderFrozenScaleToCanvas');
+const frozenEnd = core.indexOf('async function sampleDeterministicReplayFrame', frozenStart);
+const frozenBody = core.slice(frozenStart, frozenEnd);
+assert.match(frozenBody, /options\.includeRgba === true/, 'frozen renderer accepts an exact RGBA readback request');
+assert.match(frozenBody, /boundarySplatReadbackPipeline/, 'frozen RGBA path uses the splat pipeline matching the rgba8 readback target');
+assert.match(frozenBody, /readbackPipeline/, 'frozen RGBA path uses the raymarch pipeline matching the rgba8 readback target');
+assert.match(frozenBody, /device\.pushErrorScope\('validation'\)/, 'frozen RGBA pass opens a validation scope before encoding');
+assert.match(frozenBody, /frozen-rgba8-readback-validation/, 'frozen RGBA pass fails loud on scoped GPU validation errors');
+assert.match(frozenBody, /readTextureRgba8\(\s*frameTexture/, 'frozen renderer reads the exact offscreen rgba8 target after rendering');
 assert.match(
   witness,
   /catch \(error\) \{\s*last = \{ error: error\?\.message \|\| String\(error\) \};\s*await delay\(250\);\s*continue;\s*\}\s*if \(last\?\.error\) throw new Error\(`volume runtime reported error:/,

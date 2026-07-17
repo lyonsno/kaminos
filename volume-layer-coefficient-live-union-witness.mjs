@@ -5,7 +5,7 @@ import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeF
 import { createServer } from 'node:http';
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { spawn } from 'node:child_process';
-import { inflateSync } from 'node:zlib';
+import { deflateSync, inflateSync } from 'node:zlib';
 
 const SCHEMA = 'kaminos.volume.layer-coefficient-live-union-witness.v0';
 const EFFECTIVE_ROUTE = 'native-3d-compute-fluid-raymarch-v0';
@@ -195,13 +195,11 @@ try {
   lastTrustworthyEvidence = { ...lastTrustworthyEvidence, admission };
   await delay(settleMs);
 
-  failurePhase = 'camera-and-canvas-contract';
+  failurePhase = 'camera-and-render-contract';
   const presentation = await evaluate(socket, `(async () => {
     const basin = document.querySelector('#basin');
     if (!basin) throw new Error('operator-visible-basin-iframe-missing');
     const basinWindow = basin?.contentWindow || window;
-    const canvas = basinWindow.document.querySelector('canvas');
-    if (!canvas) throw new Error('operator-visible-canvas-missing');
     const setPose = basinWindow.kaminosSetCameraDebugPose || window.kaminosSetCameraDebugPose;
     if (typeof setPose !== 'function') throw new Error('camera-debug-pose-api-missing');
     const camera = setPose(${JSON.stringify(FRONT_LEFT_CAMERA)});
@@ -211,7 +209,7 @@ try {
     prototype.setVolumePresentationMode?.('beauty');
     await prototype.setActive(false);
     const state = prototype.debugState();
-    return { camera, frame: basin.getBoundingClientRect().toJSON(), canvas: canvas.getBoundingClientRect().toJSON(), state: {
+    return { camera, state: {
       active: state.active,
       frameCount: state.frameCount,
       simStepCount: state.simStepCount,
@@ -258,7 +256,6 @@ try {
     sameStateCaptureId,
     sourceFrameCount: sourceState.frameCount,
     sourceSimStepCount: sourceState.simStepCount,
-    pageFrameRect: presentation.frame,
   };
 
   failurePhase = 'analytical-exact';
@@ -315,7 +312,8 @@ try {
     assert.equal(condition.render.boundarySplatRendererIdentity, UNION_RENDERER, `${condition.label} renderer drifted`);
     assert.equal(condition.render.boundarySplatOverflowCount, 0, `${condition.label} overflowed`);
     assert.equal(condition.populationAudit.stableNativeCellIdSha256, expectedSource.admissionIndexSha256, `${condition.label} stable native-cell population drifted`);
-    assert.equal(condition.populationAudit.unionReceipt?.effectiveMode, UNION_MODE, `${condition.label} union receipt drifted`);
+    const unionReceipt = condition.overlay?.unionReceipt || condition.populationAudit?.unionReceipt;
+    assert.equal(unionReceipt?.effectiveMode, UNION_MODE, `${condition.label} union receipt drifted`);
   }
   assert.equal(learnedBaseline.overlay.effectiveOverlayIdentity, baselineOverlayManifest.identity, 'baseline overlay did not become effective');
   assert.equal(learnedFlow.overlay.effectiveOverlayIdentity, flowOverlayManifest.identity, 'flow overlay did not become effective');
@@ -404,6 +402,7 @@ async function captureCondition({ label, captureContext, overlay, raymarch = fal
     sameStateCaptureId: captureContext.sameStateCaptureId,
     baseFrameCount: captureContext.sourceFrameCount,
     baseSimStepCount: captureContext.sourceSimStepCount,
+    includeRgba: true,
     restoreControls: false,
     resumeRenderLoop: false,
   };
@@ -434,25 +433,12 @@ async function captureCondition({ label, captureContext, overlay, raymarch = fal
     if (populationAudit.status !== 'effective') throw new Error(`population-audit:${label}:${JSON.stringify(populationAudit)}`);
   }
 
-  const rect = render.canvasCssRect;
-  assert.ok(rect?.width >= 64 && rect?.height >= 64, `${label} canvas clip is missing`);
-  const frameRect = captureContext.pageFrameRect;
-  assert.ok(frameRect?.width >= rect.width && frameRect?.height >= rect.height, `${label} basin iframe clip is missing`);
-  const captureClip = {
-    x: frameRect.left + rect.x,
-    y: frameRect.top + rect.y,
-    width: rect.width,
-    height: rect.height,
-    scale: 1,
-  };
-  const shot = await socket.call('Page.captureScreenshot', {
-    format: 'png',
-    fromSurface: true,
-    captureBeyondViewport: true,
-    clip: captureClip,
-  });
+  const rgbaCapture = render.rgbaCapture;
+  assert.ok(rgbaCapture?.width >= 64 && rgbaCapture?.height >= 64, `${label} exact RGBA readback is missing`);
+  assert.equal(rgbaCapture.imageAuthority, 'gpu-rgba8-readback-frozen-sim-state-v0', `${label} image authority drifted`);
+  assert.equal(rgbaCapture.rgba?.length, rgbaCapture.width * rgbaCapture.height * 4, `${label} RGBA payload is partial`);
   const imagePath = join(outDir, `${label}.png`);
-  const imageBytes = Buffer.from(shot.data, 'base64');
+  const imageBytes = encodePngRgba(rgbaCapture.width, rgbaCapture.height, Uint8Array.from(rgbaCapture.rgba));
   writeFileSync(imagePath, imageBytes);
   const metrics = pngPixelMetrics(imageBytes);
   if (!metrics.nonblank) throw new Error(`blank-capture:${label}`);
@@ -464,10 +450,10 @@ async function captureCondition({ label, captureContext, overlay, raymarch = fal
     populationAudit,
     metrics,
     capture: {
-      authority: 'top-level-page-clip-from-iframe-plus-child-canvas-rect-v0',
-      frameRect,
-      childCanvasRect: rect,
-      pageClip: captureClip,
+      authority: 'gpu-rgba8-readback-frozen-sim-state-v0',
+      width: rgbaCapture.width,
+      height: rgbaCapture.height,
+      byteLength: rgbaCapture.rgba.length,
     },
     image: artifact(imagePath),
   };
@@ -606,6 +592,47 @@ function contentType(path) {
     '.jpg': 'image/jpeg',
     '.jpeg': 'image/jpeg',
   })[extname(path).toLowerCase()] || 'application/octet-stream';
+}
+
+function encodePngRgba(width, height, rgba) {
+  assert.equal(rgba.byteLength, width * height * 4, 'PNG RGBA payload length mismatch');
+  const stride = width * 4;
+  const scanlines = Buffer.alloc((stride + 1) * height);
+  for (let row = 0; row < height; row += 1) {
+    const outputOffset = row * (stride + 1);
+    scanlines[outputOffset] = 0;
+    Buffer.from(rgba.buffer, rgba.byteOffset + row * stride, stride).copy(scanlines, outputOffset + 1);
+  }
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8;
+  header[9] = 6;
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    pngChunk('IHDR', header),
+    pngChunk('IDAT', deflateSync(scanlines)),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+function pngChunk(type, data) {
+  const typeBytes = Buffer.from(type, 'ascii');
+  const chunk = Buffer.alloc(12 + data.byteLength);
+  chunk.writeUInt32BE(data.byteLength, 0);
+  typeBytes.copy(chunk, 4);
+  data.copy(chunk, 8);
+  chunk.writeUInt32BE(crc32(Buffer.concat([typeBytes, data])), 8 + data.byteLength);
+  return chunk;
+}
+
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
 }
 
 async function waitForTarget(port, timeout) {
