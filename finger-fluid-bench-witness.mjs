@@ -12,6 +12,8 @@ const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json
 const canvasOut = resolve(args.get('--canvas-out') || out.replace(/\.png$/i, '.canvas.png'));
 const screenSpaceSurfaceOut = resolve(args.get('--screen-space-surface-out') || out.replace(/\.png$/i, '.screen-space-surface.png'));
 const sphereDebugOut = resolve(args.get('--sphere-debug-out') || out.replace(/\.png$/i, '.sphere-debug.png'));
+const resizedSurfaceOut = resolve(args.get('--resized-surface-out') || out.replace(/\.png$/i, '.screen-space-resized.png'));
+const invalidRendererOut = resolve(args.get('--invalid-renderer-out') || out.replace(/\.png$/i, '.invalid-renderer.png'));
 const preContactOut = resolve(args.get('--pre-contact-out') || out.replace(/\.png$/i, '.pre-contact.png'));
 const midContactOut = resolve(args.get('--mid-contact-out') || out.replace(/\.png$/i, '.mid-contact.png'));
 const postContactOut = resolve(args.get('--post-contact-out') || out.replace(/\.png$/i, '.post-contact.png'));
@@ -37,6 +39,8 @@ let lastDebugState = null;
 let canvasActivity = null;
 let screenSpaceSurfaceEvidence = null;
 let sameStateRendererComparison = null;
+let rendererResizeWitness = null;
+let invalidRendererWitness = null;
 let cadenceProbe = null;
 let automaticDiagnosticsRequestCount = null;
 let explicitDiagnosticsReceipt = null;
@@ -107,6 +111,10 @@ function writeReport(report = {}) {
     sphereDebugOut,
     screenSpaceSurfaceEvidence,
     sameStateRendererComparison,
+    rendererResizeWitness,
+    invalidRendererWitness,
+    resizedSurfaceOut,
+    invalidRendererOut,
     preContactOut,
     midContactOut,
     postContactOut,
@@ -1085,7 +1093,17 @@ async function main() {
     if (canvasActivity.supportPixelRatio < 0.025) throw new Error(`shared playground support is not materially visible: ${JSON.stringify(canvasActivity)}`);
 
     phase = 'same_state_renderer_comparison';
-    const renderSameState = async (mode, path) => {
+    const rendererCountersBefore = await evaluate(ws, `(() => {
+      const read = window.kaminosFingerFluidBenchDebugState || window.__kaminosFingerFluidBenchDebugState;
+      const runtime = typeof read === 'function' ? read()?.runtime : null;
+      return runtime ? {
+        stepCount: runtime.stepCount,
+        sphereDebugRenderFrameCount: runtime.sphereDebugRenderFrameCount,
+        screenSpaceSurfaceRenderFrameCount: runtime.screenSpaceSurfaceRenderFrameCount,
+      } : null;
+    })()`);
+    if (!rendererCountersBefore) throw new Error('missing pre-comparison renderer counters');
+    const renderSameState = async (mode, path, captureRect = canvasRect) => {
       const receipt = await evaluate(ws, `(() => {
         const render = window.kaminosFingerFluidBenchRenderCurrentStateForWitness;
         if (typeof render !== 'function') throw new Error('pre-output failure: missing same-state renderer witness hook');
@@ -1097,7 +1115,7 @@ async function main() {
       const shot = await wsRequest(ws, 'Page.captureScreenshot', {
         format: 'png',
         captureBeyondViewport: false,
-        clip: { ...canvasRect, scale: 1 },
+        clip: { ...captureRect, scale: 1 },
       });
       mkdirSync(dirname(path), { recursive: true });
       writeFileSync(path, Buffer.from(shot.data, 'base64'));
@@ -1112,6 +1130,14 @@ async function main() {
     };
     const sphereDebug = await renderSameState('sphere_debug', sphereDebugOut);
     const screenSpaceSurface = await renderSameState('screen_space_surface', screenSpaceSurfaceOut);
+    if (
+      sphereDebug.receipt.sphereDebugRenderFrameCount !== rendererCountersBefore.sphereDebugRenderFrameCount + 1
+      || sphereDebug.receipt.screenSpaceSurfaceRenderFrameCount !== rendererCountersBefore.screenSpaceSurfaceRenderFrameCount
+      || screenSpaceSurface.receipt.sphereDebugRenderFrameCount !== sphereDebug.receipt.sphereDebugRenderFrameCount
+      || screenSpaceSurface.receipt.screenSpaceSurfaceRenderFrameCount !== sphereDebug.receipt.screenSpaceSurfaceRenderFrameCount + 1
+    ) {
+      throw new Error(`route-specific renderer counters crossed modes: ${JSON.stringify({ rendererCountersBefore, sphereDebug: sphereDebug.receipt, screenSpaceSurface: screenSpaceSurface.receipt })}`);
+    }
     sameStateRendererComparison = {
       schema: 'kaminos.finger-fluid.same-state-renderer-comparison.v0',
       stepCount: screenSpaceSurface.receipt.stepCount,
@@ -1124,6 +1150,69 @@ async function main() {
       },
     };
     if (!sameStateRendererComparison.sameSimulationState) throw new Error(`same-state renderer comparison stepped the simulation: ${JSON.stringify(sameStateRendererComparison)}`);
+
+    phase = 'renderer_resize_recreate';
+    const resizedViewport = {
+      width: viewportWidth,
+      height: viewportHeight >= 720 ? viewportHeight - 140 : viewportHeight + 140,
+    };
+    await wsRequest(ws, 'Emulation.setDeviceMetricsOverride', {
+      ...resizedViewport,
+      deviceScaleFactor,
+      mobile: false,
+    });
+    await delay(160);
+    const resizedCanvasRect = await evaluate(ws, `(() => {
+      const canvas = document.getElementById('finger-fluid-bench-canvas');
+      if (!canvas) return null;
+      const rect = canvas.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    })()`);
+    if (!resizedCanvasRect || resizedCanvasRect.width < 100 || resizedCanvasRect.height < 100) {
+      throw new Error(`resized fluid canvas unavailable: ${JSON.stringify(resizedCanvasRect)}`);
+    }
+    const resizedSurface = await renderSameState('screen_space_surface', resizedSurfaceOut, resizedCanvasRect);
+    const initialExtent = screenSpaceSurface.receipt.screenSpaceSurfaceEvidence?.accumulationTexture?.extent;
+    const resizedExtent = resizedSurface.receipt.screenSpaceSurfaceEvidence?.accumulationTexture?.extent;
+    if (
+      !initialExtent
+      || !resizedExtent
+      || initialExtent === resizedExtent
+      || resizedSurface.receipt.stepCount !== screenSpaceSurface.receipt.stepCount
+      || resizedSurface.receipt.sphereDebugRenderFrameCount !== screenSpaceSurface.receipt.sphereDebugRenderFrameCount
+      || resizedSurface.receipt.screenSpaceSurfaceRenderFrameCount !== screenSpaceSurface.receipt.screenSpaceSurfaceRenderFrameCount + 1
+    ) {
+      throw new Error(`renderer resize/recreate evidence mismatch: ${JSON.stringify({ initialExtent, resizedExtent, screenSpaceSurface: screenSpaceSurface.receipt, resizedSurface: resizedSurface.receipt })}`);
+    }
+    await wsRequest(ws, 'Emulation.setDeviceMetricsOverride', {
+      width: viewportWidth,
+      height: viewportHeight,
+      deviceScaleFactor,
+      mobile: false,
+    });
+    await delay(160);
+    const restoredReceipt = await evaluate(ws, `(() => window.kaminosFingerFluidBenchRenderCurrentStateForWitness?.('screen_space_surface'))()`);
+    const restoredExtent = restoredReceipt?.screenSpaceSurfaceEvidence?.accumulationTexture?.extent;
+    if (
+      restoredReceipt?.stepCount !== screenSpaceSurface.receipt.stepCount
+      || restoredReceipt?.sphereDebugRenderFrameCount !== resizedSurface.receipt.sphereDebugRenderFrameCount
+      || restoredReceipt?.screenSpaceSurfaceRenderFrameCount !== resizedSurface.receipt.screenSpaceSurfaceRenderFrameCount + 1
+      || restoredExtent !== initialExtent
+    ) {
+      throw new Error(`route-specific renderer counters or restored extent diverged: ${JSON.stringify({ initialExtent, restoredExtent, resizedSurface: resizedSurface.receipt, restoredReceipt })}`);
+    }
+    rendererResizeWitness = {
+      schema: 'kaminos.finger-fluid.renderer-resize-witness.v0',
+      sameSimulationState: true,
+      stepCount: restoredReceipt.stepCount,
+      originalViewport: { width: viewportWidth, height: viewportHeight, canvas: canvasRect },
+      resizedViewport: { ...resizedViewport, canvas: resizedCanvasRect },
+      initialExtent,
+      resizedExtent,
+      restoredExtent,
+      resizedSurface,
+      restoredReceipt,
+    };
     await evaluate(ws, `(() => { window.kaminosFingerFluidBenchResumeAfterWitness?.(); return true; })()`);
 
     phase = 'capture_screenshot';
@@ -1192,6 +1281,64 @@ async function main() {
     ) {
       throw new Error(`final published GPU diagnostics are stale: ${JSON.stringify({ finalDiagnosticsAgeMs, finalDiagnosticsLagSteps, finalDiagnosticsReceipt, stepCount: lastDebugState.runtime.stepCount, diagnosticsStepCount: lastDebugState.runtime.diagnostics?.stepCount })}`);
     }
+
+    phase = 'invalid_renderer_route';
+    const invalidRendererUrl = new URL(url);
+    invalidRendererUrl.searchParams.set('finger_fluid_renderer', 'fallback');
+    await wsRequest(ws, 'Page.navigate', { url: invalidRendererUrl.href });
+    const invalidRendererDeadline = Date.now() + hookWaitMs;
+    let invalidState = null;
+    while (Date.now() < invalidRendererDeadline) {
+      try {
+        invalidState = await evaluate(ws, `(() => {
+          const read = window.kaminosFingerFluidBenchDebugState || window.__kaminosFingerFluidBenchDebugState;
+          return typeof read === 'function' ? read() : null;
+        })()`);
+      } catch {
+        invalidState = null;
+      }
+      if (invalidState?.schema === 'kaminos.finger-fluid-bench.state.v0' && invalidState.status !== 'loading') break;
+      await delay(100);
+    }
+    if (
+      invalidState?.status !== 'error'
+      || invalidState?.solver?.backend !== 'config_rejected'
+      || invalidState?.renderer?.backend !== 'config_rejected'
+      || !String(invalidState?.runtime?.configError || '').includes('Unsupported finger fluid renderer mode: fallback')
+    ) {
+      throw new Error(`invalid renderer route did not fail closed: ${JSON.stringify(invalidState)}`);
+    }
+    const invalidCanvasRect = await evaluate(ws, `(() => {
+      document.getElementById('finger-fluid-bench-overlay')?.setAttribute('hidden', '');
+      const canvas = document.getElementById('finger-fluid-bench-canvas');
+      if (!canvas) return null;
+      const rect = canvas.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    })()`);
+    if (!invalidCanvasRect || invalidCanvasRect.width < 100 || invalidCanvasRect.height < 100) {
+      throw new Error(`invalid renderer canvas unavailable: ${JSON.stringify(invalidCanvasRect)}`);
+    }
+    const invalidShot = await wsRequest(ws, 'Page.captureScreenshot', {
+      format: 'png',
+      captureBeyondViewport: false,
+      clip: { ...invalidCanvasRect, scale: 1 },
+    });
+    mkdirSync(dirname(invalidRendererOut), { recursive: true });
+    writeFileSync(invalidRendererOut, Buffer.from(invalidShot.data, 'base64'));
+    const invalidActivity = measureCapturedPng(invalidRendererOut, 'invalid_renderer');
+    if (invalidActivity.activeRatio > 0.002) {
+      throw new Error(`invalid renderer route retained stale painted fallback evidence: ${JSON.stringify(invalidActivity)}`);
+    }
+    invalidRendererWitness = {
+      schema: 'kaminos.finger-fluid.invalid-renderer-witness.v0',
+      requestedUrl: invalidRendererUrl.href,
+      status: invalidState.status,
+      solverBackend: invalidState.solver.backend,
+      rendererBackend: invalidState.renderer.backend,
+      configError: invalidState.runtime.configError,
+      canvasActivity: invalidActivity,
+      outputPath: invalidRendererOut,
+    };
 
     phase = null;
     writeReport({

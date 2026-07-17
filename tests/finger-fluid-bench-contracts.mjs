@@ -332,6 +332,10 @@ assert.match(benchWitnessSource, /sameStateRendererComparison/, 'bench witness c
 assert.match(benchWitnessSource, /screenSpaceSurfaceEvidence/, 'bench witness records reconstructed-surface visual evidence');
 assert.match(benchWitnessSource, /renderer disagreement/, 'bench witness rejects requested/effective renderer disagreement');
 assert.match(benchWitnessSource, /blank reconstructed-surface output/, 'bench witness rejects blank screen-space surface captures');
+assert.match(benchWitnessSource, /rendererResizeWitness/, 'bench witness records a live accumulation resize/recreate receipt');
+assert.match(benchWitnessSource, /route-specific renderer counters/, 'bench witness rejects cross-mode pass-counter drift');
+assert.match(benchWitnessSource, /invalidRendererWitness/, 'bench witness records invalid renderer route rejection');
+assert.match(benchWitnessSource, /stale painted fallback evidence/, 'bench witness rejects invalid-route canvas residue');
 assert.match(benchWitnessSource, /pre-output failure/, 'bench witness reports failures before primary output without pretending success');
 assert.ok(
   benchWitnessSource.indexOf("phase = 'measure_canvas'") < benchWitnessSource.indexOf("phase = 'cadence_probe'"),
