@@ -35,6 +35,11 @@ assert.match(
 
 const compactor = core.match(/fn compactBoundarySplats[\s\S]*?(?=\n@compute @workgroup_size\(1\)\nfn finalizeBoundarySplats)/)?.[0] || '';
 assert.match(
+  core,
+  /fn boundarySplatKernelIntegral\(sharpness: f32\)[\s\S]*fn boundarySplatEnergyCompensation\(footprintRadius: f32, sharpness: f32\)/,
+  'the composed WGSL must define both energy helpers before the compactor calls them',
+);
+assert.match(
   compactor,
   /admissionSidecar\s*=\s*boundarySidecar\[cellIndex\][\s\S]*structuralSignal[\s\S]*structuralSignal < 0\.11[\s\S]*atomicAdd\(&boundarySplatDraw\.candidateCount/,
   'the baked support sidecar must retain candidate admission authority',
@@ -73,6 +78,11 @@ assert.match(
   footprintAudit,
   /overflowCount[\s\S]*growBoundarySplatCapacity\(draw\.candidateCount\)[\s\S]*encodeBoundarySplats[\s\S]*boundary-splat-footprint-audit-partial-candidates/,
   'the combined witness must retry the full support-selected population and fail loud on partial evidence',
+);
+assert.match(
+  core,
+  /sampleFrame,\s*sampleBoundarySplatFootprintAudit,\s*sampleDeterministicReplayFrame/,
+  'the full-population audit must be exposed on the live prototype instead of remaining unreachable',
 );
 
 console.log('boundary splat support and covariance composition contracts passed');
