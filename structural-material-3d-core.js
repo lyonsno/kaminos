@@ -437,6 +437,69 @@ export function createLayeredStructuralDragInteraction({ start, current, depthBi
   };
 }
 
+export function createLayeredStructuralPickedDragInteraction({
+  start,
+  current,
+  contactPoint,
+  screenRight,
+  screenDown,
+} = {}) {
+  const dragStart = normalizedPoint2(start);
+  const dragCurrent = normalizedPoint2(current, dragStart);
+  const contact = normalizedPoint3(contactPoint, { x: 0.5, y: 0.5, z: 0.5 });
+  const rightRaw = {
+    x: finite(screenRight?.x, 1),
+    y: finite(screenRight?.y, 0),
+    z: finite(screenRight?.z, 0),
+  };
+  const downRaw = {
+    x: finite(screenDown?.x, 0),
+    y: finite(screenDown?.y, 1),
+    z: finite(screenDown?.z, 0),
+  };
+  const right = normalizedVector3(rightRaw);
+  const down = normalizedVector3(downRaw);
+  const dx = dragCurrent.x - dragStart.x;
+  const dy = dragCurrent.y - dragStart.y;
+  const length = Math.hypot(dx, dy);
+  const direction = length < 0.000001
+    ? right
+    : normalizedVector3({
+      x: rightRaw.x * dx + downRaw.x * dy,
+      y: rightRaw.y * dx + downRaw.y * dy,
+      z: rightRaw.z * dx + downRaw.z * dy,
+    });
+  const magnitude = clamp(length * 3.65, 0, 1.95);
+  const radius = clamp(0.12 + length * 0.27, 0.12, 0.34);
+  const contactRamp = magnitude < 0.45
+    ? clamp(magnitude / 0.45, 0, 1) * 0.52
+    : 1;
+  const visualLength = Math.min(length, 0.42);
+  const visualEnd = {
+    x: contact.x + direction.x * visualLength,
+    y: contact.y + direction.y * visualLength,
+    z: contact.z + direction.z * visualLength,
+  };
+  return {
+    kind: 'camera-relative-picked-layered-drag',
+    authority: 'camera-relative-picked-contact-force-envelope-v0',
+    start: { ...contact },
+    point: { ...contact },
+    visualEnd: { x: round(visualEnd.x), y: round(visualEnd.y), z: round(visualEnd.z) },
+    vector: { x: round(direction.x), y: round(direction.y), z: round(direction.z) },
+    screenBasis: {
+      right: { x: round(right.x), y: round(right.y), z: round(right.z) },
+      down: { x: round(down.x), y: round(down.y), z: round(down.z) },
+    },
+    screenDelta: { x: round(dx), y: round(dy) },
+    dragLength: round(length),
+    magnitude: round(magnitude),
+    inputLoad: round(magnitude / 1.95),
+    contactRamp: round(contactRamp),
+    radius: round(radius),
+  };
+}
+
 export function bindLayeredStructuralConnectivity(state, binding = {}) {
   let next = cloneState(state);
   const point = normalizedPoint3(binding.point, { x: 0.5, y: 0.5, z: 0.5 });

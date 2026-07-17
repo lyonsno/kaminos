@@ -1,0 +1,145 @@
+{
+  "schema": "kaminos.structural-material.camera-browser-witness.v0",
+  "status": "passed",
+  "failurePhase": null,
+  "requestedRoute": "kaminos.structural-material.layered-slab-fracture.v0",
+  "effectiveRoute": "kaminos.structural-material.layered-slab-fracture.v0",
+  "requestedCameraAuthority": "operator-camera-controls-v0",
+  "effectiveCameraAuthority": "operator-camera-controls-v0",
+  "requestedConfig": {
+    "url": "http://127.0.0.1:8395/structural-material-3d.html?hapticCompanion=off",
+    "debugPort": 9231,
+    "width": 1280,
+    "height": 820,
+    "deviceScaleFactor": 1,
+    "loadTimeoutMs": 30000,
+    "reportPath": "/private/tmp/kaminos-structural-material-sidecar-recovery-0716/artifacts/structural-material-3d/camera-picked-contact-report.json",
+    "screenshotPath": "/private/tmp/kaminos-structural-material-sidecar-recovery-0716/artifacts/structural-material-3d/camera-picked-contact.png"
+  },
+  "effectiveConfig": {
+    "url": "http://127.0.0.1:8395/structural-material-3d.html?hapticCompanion=off",
+    "debugPort": 9231,
+    "loadTimeoutMs": 30000,
+    "initialViewport": {
+      "width": 1280,
+      "height": 820,
+      "deviceScaleFactor": 1
+    },
+    "reportPath": "/private/tmp/kaminos-structural-material-sidecar-recovery-0716/artifacts/structural-material-3d/camera-picked-contact-report.json",
+    "screenshotPath": "/private/tmp/kaminos-structural-material-sidecar-recovery-0716/artifacts/structural-material-3d/camera-picked-contact.png",
+    "browserTarget": "first-page-target",
+    "resizeProbeViewport": {
+      "width": 1075,
+      "height": 738,
+      "deviceScaleFactor": 1
+    },
+    "captureViewport": {
+      "width": 1075,
+      "height": 738,
+      "devicePixelRatio": 1
+    }
+  },
+  "checks": {
+    "routeIdentity": true,
+    "cameraAuthority": true,
+    "idlePointerPreservedCamera": true,
+    "buttonIsolationPassed": true,
+    "materialDragPreservedCamera": true,
+    "materialDragProducedForce": true,
+    "materialDragWasPicked": true,
+    "orbitChangedCamera": true,
+    "backgroundDragAuthoredNoForce": true,
+    "postOrbitMaterialPreservedCamera": true,
+    "postOrbitForceFollowedCamera": true,
+    "postOrbitContactStayedPicked": true,
+    "panChangedTarget": true,
+    "postCameraActionsPreservedCamera": true,
+    "zoomChangedDistance": true,
+    "resizePreservedCamera": true,
+    "screenshotWritten": true,
+    "noRuntimeErrors": true,
+    "noCameraInvariantViolations": true
+  },
+  "pixelProbe": {
+    "ok": true,
+    "source": "canvas-blob-pixels",
+    "nonDarkPixels": 2649,
+    "width": 1075,
+    "height": 683,
+    "sampleWidth": 96,
+    "sampleHeight": 96
+  },
+  "runtimeErrors": [],
+  "lastTrustworthyEvidence": {
+    "phase": "visual-evidence",
+    "pixelProbe": {
+      "ok": true,
+      "source": "canvas-blob-pixels",
+      "nonDarkPixels": 2649,
+      "width": 1075,
+      "height": 683,
+      "sampleWidth": 96,
+      "sampleHeight": 96
+    },
+    "screenshotPath": "/private/tmp/kaminos-structural-material-sidecar-recovery-0716/artifacts/structural-material-3d/camera-picked-contact.png"
+  },
+  "error": null,
+  "postOrbitInteraction": {
+    "pick": {
+      "kind": "bond",
+      "id": "b571",
+      "point": {
+        "x": 0.23502504512296146,
+        "y": 0.7200500748166779,
+        "z": 0.9999999937258268
+      },
+      "distance": 2.7510979918820997
+    },
+    "forceEnvelope": {
+      "kind": "camera-relative-picked-layered-drag",
+      "authority": "camera-relative-picked-contact-force-envelope-v0",
+      "start": {
+        "x": 0.23502504512296146,
+        "y": 0.7200500748166779,
+        "z": 0.9999999937258268
+      },
+      "point": {
+        "x": 0.23502504512296146,
+        "y": 0.7200500748166779,
+        "z": 0.9999999937258268
+      },
+      "visualEnd": {
+        "x": 0.32089,
+        "y": 0.7549,
+        "z": 1.17724
+      },
+      "vector": {
+        "x": 0.42933,
+        "y": 0.17424,
+        "z": 0.88618
+      },
+      "screenBasis": {
+        "right": {
+          "x": 0.42933,
+          "y": 0.17424,
+          "z": 0.88618
+        },
+        "down": {
+          "x": 0.02683,
+          "y": 0.91937,
+          "z": -0.39249
+        }
+      },
+      "screenDelta": {
+        "x": 0.2,
+        "y": 0
+      },
+      "dragLength": 0.2,
+      "magnitude": 0.73,
+      "inputLoad": 0.37436,
+      "contactRamp": 1,
+      "radius": 0.174
+    },
+    "cameraRelativeDot": 0.9999988188999999
+  }
+}

@@ -155,6 +155,54 @@ export function createLatestStructuralInteractionScheduler({ execute } = {}) {
   };
 }
 
+export function createLatestStructuralGpuOperationTracker() {
+  let sequence = 0;
+  let latest = null;
+
+  return {
+    begin(kind, request = {}) {
+      if (kind !== 'tear' && kind !== 'binding') {
+        throw new Error(`unsupported structural GPU operation kind: ${kind}`);
+      }
+      sequence += 1;
+      latest = {
+        operationId: sequence,
+        kind,
+        status: 'pending',
+        receipt: {
+          status: 'pending',
+          requestedRoute: request.requestedRoute || null,
+          requestedExecutionRoute: request.requestedExecutionRoute || null,
+        },
+      };
+      return sequence;
+    },
+    settle(operationId, receipt) {
+      if (!latest || latest.operationId !== operationId) return false;
+      latest = {
+        ...latest,
+        status: receipt?.status || 'failed',
+        receipt: receipt || {
+          status: 'failed',
+          failurePhase: 'missing-operation-receipt',
+        },
+      };
+      return true;
+    },
+    clear() {
+      latest = null;
+    },
+    snapshot() {
+      return latest
+        ? {
+          ...latest,
+          receipt: latest.receipt ? { ...latest.receipt } : null,
+        }
+        : null;
+    },
+  };
+}
+
 function safeGamepads(navigatorRef) {
   if (typeof navigatorRef?.getGamepads !== 'function') return [];
   try {

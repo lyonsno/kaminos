@@ -87,7 +87,10 @@ async function connectCdp(debugPort) {
       else handlers.resolve(message.result);
     }
     if (message.method === 'Runtime.exceptionThrown') {
-      runtimeErrors.push(message.params.exceptionDetails.text);
+      runtimeErrors.push(
+        message.params.exceptionDetails.exception?.description ||
+        message.params.exceptionDetails.text,
+      );
     }
   });
   const send = (method, params = {}) => {
@@ -273,6 +276,8 @@ try {
   const { send, evaluate } = cdp;
   await send('Runtime.enable');
   await send('Page.enable');
+  await send('Network.enable');
+  await send('Network.setCacheDisabled', { cacheDisabled: true });
   report.browserVersion = await send('Browser.getVersion');
   await send('Emulation.setDeviceMetricsOverride', {
     width: config.width,
@@ -295,6 +300,7 @@ try {
   };
 
   report.failurePhase = 'page-load';
+  cdp.runtimeErrors.length = 0;
   await send('Page.navigate', { url: config.url });
   const loadDeadline = Date.now() + config.loadTimeoutMs;
   while (Date.now() < loadDeadline) {
@@ -323,13 +329,15 @@ try {
     const rect = document.querySelector('#stage').getBoundingClientRect();
     return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
   })()`);
+  const pickTarget = await evaluate('window.__structuralMaterial3dPickTarget()');
+  assertCheck(pickTarget, 'page exposed no projected structural pick target for the effigy drag');
   const dragStart = {
-    x: stageRect.left + stageRect.width * 0.54,
-    y: stageRect.top + stageRect.height * 0.52,
+    x: pickTarget.clientX,
+    y: pickTarget.clientY,
   };
   const dragEnd = {
-    x: stageRect.left + stageRect.width * 0.92,
-    y: stageRect.top + stageRect.height * 0.52,
+    x: Math.min(stageRect.left + stageRect.width - 4, dragStart.x + stageRect.width * 0.38),
+    y: dragStart.y,
   };
   await send('Input.dispatchMouseEvent', {
     type: 'mousePressed',
@@ -338,11 +346,11 @@ try {
     buttons: 1,
     clickCount: 1,
   });
-  const denseDragSamples = [0.66, 0.78, 0.92].map(fraction => ({
-    x: stageRect.left + stageRect.width * fraction,
+  const denseDragSamples = [0.34, 0.68, 1].map(fraction => ({
+    x: dragStart.x + (dragEnd.x - dragStart.x) * fraction,
     y: dragEnd.y,
   }));
-  await evaluate(`(() => {
+  const immediateDrag = await evaluate(`(() => {
     const canvas = document.querySelector('#stage canvas');
     const pointerId = window.__structuralMaterial3dWitness().liveDrag.pointerId;
     const samples = ${JSON.stringify(denseDragSamples)};
@@ -357,7 +365,26 @@ try {
         clientY: sample.y,
       }));
     }
+    const witness = window.__structuralMaterial3dWitness();
+    return {
+      interactionDiagnostics: witness.interactionDiagnostics,
+      gesture: document.querySelector('#gesture')?.textContent || '',
+      gpuStatus: document.querySelector('#gpu-status')?.textContent || '',
+      gpuRouteTitle: document.querySelector('#gpu-status')?.title || '',
+    };
   })()`);
+  report.immediateDragDiagnostics = immediateDrag;
+  report.checks.immediateInputLoadVisible = immediateDrag.interactionDiagnostics?.inputLoad > 0 &&
+    /input\s+[1-9]\d*%/.test(immediateDrag.gesture);
+  report.checks.immediateGpuPendingVisible = immediateDrag.interactionDiagnostics?.gpuPending === true &&
+    /GPU tear pending/.test(immediateDrag.gpuStatus);
+  report.checks.immediateGpuRequestedRouteVisible =
+    immediateDrag.interactionDiagnostics?.gpuOperationRequestedRoute === STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_ROUTE &&
+    immediateDrag.interactionDiagnostics?.gpuOperationRequestedExecutionRoute === STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE &&
+    immediateDrag.gpuRouteTitle === `requested ${STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE}; effective pending`;
+  assertCheck(report.checks.immediateInputLoadVisible, 'pointer load was not visible in the same task as the drag input');
+  assertCheck(report.checks.immediateGpuPendingVisible, 'GPU pending state was not distinguishable from immediate input load');
+  assertCheck(report.checks.immediateGpuRequestedRouteVisible, 'pending GPU work omitted requested route identity');
   const dragged = await evaluate('window.__structuralMaterial3dWitness()');
   report.checks.effigyDragProducedForce = dragged.forceEnvelope?.dragLength > 0.3 &&
     dragged.forceEnvelope?.magnitude > 1;
@@ -649,11 +676,38 @@ try {
     report.screenshotPixelProbe.minimumNonDarkPixels;
   report.checks.routeStatusVisible = await evaluate(`(() => {
     const status = document.querySelector('#gpu-status');
-    return status?.textContent.includes('GPU bind no-op | repaired 12') && status?.title === ${JSON.stringify(STRUCTURAL_MATERIAL_3D_WEBGPU_BINDING_ROUTE)};
+    const repaired = window.__structuralMaterial3dWitness().summary.repairedBondCount;
+    return status?.textContent.includes(\`GPU bind no-op | repaired \${repaired}\`) && status?.title === ${JSON.stringify(STRUCTURAL_MATERIAL_3D_WEBGPU_BINDING_ROUTE)};
   })()`);
   report.checks.noHorizontalOverflow = await evaluate('document.documentElement.scrollWidth === document.documentElement.clientWidth');
   assertCheck(report.checks.routeStatusVisible, 'operator-visible GPU binding status lacks effective-route identity');
   assertCheck(report.checks.noHorizontalOverflow, 'GPU binding route has horizontal overflow');
+
+  report.failurePhase = 'latest-operation-failure-identity';
+  report.latestOperationFailure = await evaluate(`(async () => {
+    const pending = window.__structuralMaterial3dRunGpuSympatheticTear({ interaction: ${JSON.stringify(dragged.forceEnvelope)} });
+    window.__structuralMaterial3dInvalidateGpuRequestForWitness();
+    const receipt = await pending;
+    return {
+      receipt,
+      status: window.__structuralMaterial3dGpuStatusWitness(),
+      diagnostics: window.__structuralMaterial3dWitness().interactionDiagnostics,
+    };
+  })()`, true);
+  report.checks.latestTearFailureVisible = report.latestOperationFailure.receipt?.status === 'failed' &&
+    report.latestOperationFailure.receipt?.failurePhase === 'request-invalidated-before-execution' &&
+    report.latestOperationFailure.status?.latestGpuOperation?.kind === 'tear' &&
+    report.latestOperationFailure.status?.latestGpuOperation?.status === 'failed' &&
+    report.latestOperationFailure.status?.text.includes('GPU tear failed') &&
+    report.latestOperationFailure.status?.latestGpuOperation?.receipt?.effectiveRoute === null &&
+    report.latestOperationFailure.status?.latestGpuOperation?.receipt?.requestedExecutionRoute === STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE &&
+    report.latestOperationFailure.status?.routeTitle === `requested ${STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE}; effective unavailable` &&
+    report.latestOperationFailure.diagnostics?.gpuOperation === 'tear' &&
+    report.latestOperationFailure.diagnostics?.gpuOperationStatus === 'failed' &&
+    report.latestOperationFailure.diagnostics?.gpuOperationRoute === null &&
+    report.latestOperationFailure.diagnostics?.gpuOperationRequestedExecutionRoute === STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE &&
+    report.latestOperationFailure.diagnostics?.gpuOperationFailurePhase === 'request-invalidated-before-execution';
+  assertCheck(report.checks.latestTearFailureVisible, 'latest tear failure was hidden behind an older binding receipt');
 
   report.failurePhase = 'post-binding-refracture';
   const repairedBondIndices = residentBinding.binding.events.map(event => event.bondIndex);
@@ -746,6 +800,81 @@ try {
   );
   assertCheck(report.checks.samplingInvariant, 'dense and coarse pointer sampling produced different structural state');
   assertCheck(report.checks.samplingPreservedCamera, 'sampling-invariance interaction changed operator camera state');
+
+  report.failurePhase = 'cancelled-in-flight-tear';
+  await evaluate("document.querySelector('#reset').click()");
+  const cancelResetDeadline = Date.now() + config.loadTimeoutMs;
+  while (Date.now() < cancelResetDeadline) {
+    const resetState = await evaluate('window.__structuralMaterial3dWitness()');
+    if (resetState.summary?.brokenBondCount === 0 && resetState.summary?.componentCount === 1) break;
+    await new Promise(resolveWait => setTimeout(resolveWait, 20));
+  }
+  const cancelPickTarget = await evaluate('window.__structuralMaterial3dPickTarget()');
+  assertCheck(cancelPickTarget, 'cancel-race probe exposed no projected structural pick target');
+  const cancelStart = { x: cancelPickTarget.clientX, y: cancelPickTarget.clientY };
+  const cancelEnd = { x: cancelStart.x + stageRect.width * 0.3, y: cancelStart.y };
+  await evaluate('window.__structuralMaterial3dArmPostExecutionHoldForWitness()');
+  await send('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    ...cancelStart,
+    button: 'left',
+    buttons: 1,
+    clickCount: 1,
+  });
+  await send('Input.dispatchMouseEvent', {
+    type: 'mouseMoved',
+    ...cancelEnd,
+    button: 'left',
+    buttons: 1,
+  });
+  const holdDeadline = Date.now() + config.loadTimeoutMs;
+  while (Date.now() < holdDeadline) {
+    if (await evaluate('window.__structuralMaterial3dPostExecutionHoldStatus().reached')) break;
+    await new Promise(resolveWait => setTimeout(resolveWait, 10));
+  }
+  assertCheck(
+    await evaluate('window.__structuralMaterial3dPostExecutionHoldStatus().reached'),
+    'GPU tear never reached the post-execution cancellation boundary',
+  );
+  await evaluate(`(() => {
+    const canvas = document.querySelector('#stage canvas');
+    const pointerId = window.__structuralMaterial3dWitness().liveDrag.pointerId;
+    if (!Number.isInteger(pointerId)) throw new Error('cancel-race material pointer id missing');
+    canvas.dispatchEvent(new PointerEvent('pointercancel', {
+      pointerId,
+      isPrimary: true,
+      bubbles: true,
+      buttons: 0,
+      clientX: ${cancelEnd.x},
+      clientY: ${cancelEnd.y},
+    }));
+    window.__structuralMaterial3dReleasePostExecutionHoldForWitness();
+  })()`);
+  const cancelDeadline = Date.now() + config.loadTimeoutMs;
+  let cancelled = null;
+  while (Date.now() < cancelDeadline) {
+    cancelled = await evaluate(`({
+      structural: window.__structuralMaterial3dWitness(),
+      status: window.__structuralMaterial3dGpuStatusWitness()
+    })`);
+    if (cancelled.status?.latestGpuOperation?.status === 'failed' &&
+        cancelled.structural?.liveDrag?.scheduler?.pointerExecutionActive === false) break;
+    await new Promise(resolveWait => setTimeout(resolveWait, 20));
+  }
+  report.cancelledInFlightTear = cancelled;
+  const cancelledReceipt = cancelled?.status?.latestGpuOperation?.receipt;
+  report.checks.cancelledInFlightTearRejected = cancelledReceipt?.status === 'failed' &&
+    cancelledReceipt?.failurePhase === 'request-invalidated-after-execution' &&
+    cancelledReceipt?.effectiveRoute === null &&
+    cancelledReceipt?.discardedExecution?.status === 'passed' &&
+    Number.isFinite(cancelledReceipt?.discardedExecution?.timingsMs?.warmTotal) &&
+    cancelled?.status?.text.includes('GPU tear failed') &&
+    cancelled?.structural?.interactionDiagnostics?.gpuOperationStatus === 'failed' &&
+    cancelled?.structural?.interactionDiagnostics?.latestWarmTotalMs === null &&
+    cancelled?.structural?.summary?.brokenBondCount === 0 &&
+    cancelled?.structural?.summary?.componentCount === 1 &&
+    cancelled?.structural?.visibleTear === null;
+  assertCheck(report.checks.cancelledInFlightTearRejected, 'cancelled in-flight tear remained operator-visible as passed');
 
   report.runtimeErrors = cdp.runtimeErrors.slice();
   report.checks.noRuntimeErrors = report.runtimeErrors.length === 0;

@@ -12,6 +12,7 @@ import {
   buildLayeredStructuralWitnessScenario,
   createLayeredStructuralDragInteraction,
   createLayeredStructuralMaterial,
+  createLayeredStructuralPickedDragInteraction,
   summarizeLayeredStructuralState,
 } from '../structural-material-3d-core.js';
 
@@ -45,7 +46,11 @@ assert.match(cameraWitnessSource, /requestedRoute/, 'camera witness records requ
 assert.match(cameraWitnessSource, /effectiveRoute/, 'camera witness records effective structural route');
 assert.match(cameraWitnessSource, /materialDragPreservedCamera/, 'camera witness rejects material/camera ownership collisions');
 assert.match(cameraWitnessSource, /orbitChangedCamera/, 'camera witness proves camera controls are not inert');
+assert.match(cameraWitnessSource, /backgroundDragAuthoredNoForce/, 'camera witness rejects material force authored from an empty-canvas orbit');
+assert.match(cameraWitnessSource, /postOrbitForceFollowedCamera/, 'camera witness proves post-orbit drag uses the current camera basis');
+assert.match(cameraWitnessSource, /postOrbitContactStayedPicked/, 'camera witness proves drag remains anchored at its picked contact');
 assert.match(cameraWitnessSource, /pixelProbe/, 'camera witness rejects blank visual output');
+assert.match(cameraWitnessSource, /Network\.setCacheDisabled/, 'camera witness cannot consume stale module cache as current evidence');
 assert.match(pageSource, /threejs-sidecar-consumer-not-truth-v0/, 'browser declares the Three.js consumer is not structural authority');
 assert.match(pageSource, /window\.__structuralMaterial3dWitness/, 'browser exposes smoke witness state for automation');
 assert.match(pageSource, /window\.__structuralMaterial3dPixelProbe/, 'browser exposes renderer pixel probe for visual smoke');
@@ -54,6 +59,12 @@ assert.match(pageSource, /readPixels/, 'browser route supports canvas pixel evid
 assert.match(pageSource, /OrbitControls/, 'browser provides independent operator camera controls');
 assert.match(pageSource, /operator-camera-controls-v0/, 'browser reports operator camera-control authority');
 assert.match(pageSource, /runStructuralMutation/, 'structural actions enforce camera-state isolation');
+assert.match(pageSource, /new THREE\.Raycaster\(\)/, 'primary contact uses rendered-geometry picking');
+assert.match(pageSource, /function pickStructuralContact\(/, 'material drag begins only from an explicit structural hit');
+assert.match(pageSource, /function cameraBasisInMaterial\(/, 'screen drag is projected through the live camera basis');
+assert.match(pageSource, /LEFT:\s*THREE\.MOUSE\.ROTATE/, 'primary drag on empty canvas belongs to operator orbit');
+assert.match(pageSource, /pointerdown[^]*?pickStructuralContact[^]*?addEventListener\([^]*?true\s*\)/, 'material hit arbitration runs before OrbitControls consumes primary down');
+assert.match(pageSource, /inputLoad[^]*?gpuPending/, 'browser witness separates immediate input load from GPU completion state');
 assert.doesNotMatch(pageSource, /yaw\s*\+=\s*event\.movementX/, 'idle pointer motion cannot rotate the material or camera');
 const resizeSource = pageSource.match(/function resize\(\) \{[\s\S]*?\n    \}/)?.[0] || '';
 assert.ok(resizeSource, 'browser route exposes a bounded resize handler');
@@ -93,6 +104,42 @@ assert.equal(longDrag.authority, 'screen-space-drag-to-layered-force-envelope-v0
 assert.ok(longDrag.magnitude > shortDrag.magnitude, 'longer drag gestures produce stronger layered force');
 assert.ok(longDrag.point.z > shortDrag.point.z, 'depth bias can move the force toward the front/back skin');
 assert.ok(longDrag.vector.z < -0.2, 'layered drag can include through-thickness shear');
+
+const pickedContact = { x: 0.61, y: 0.44, z: 0.73 };
+const pickedScreenDrag = createLayeredStructuralPickedDragInteraction({
+  start: { x: 0.4, y: 0.5 },
+  current: { x: 0.7, y: 0.65 },
+  contactPoint: pickedContact,
+  screenRight: { x: 1, y: 0, z: 0 },
+  screenDown: { x: 0, y: 1, z: 0 },
+});
+assert.deepEqual(pickedScreenDrag.point, pickedContact, 'picked force remains anchored at the structural contact point');
+assert.deepEqual(pickedScreenDrag.start, pickedContact, 'force visualization begins at the picked structural contact');
+assert.ok(pickedScreenDrag.vector.x > 0.85 && pickedScreenDrag.vector.y > 0.4, 'screen delta composes through the supplied camera basis');
+assert.equal(pickedScreenDrag.authority, 'camera-relative-picked-contact-force-envelope-v0');
+assert.ok(pickedScreenDrag.inputLoad > 0, 'nonzero pointer displacement reports immediate input load');
+assert.equal(pickedScreenDrag.contactRamp, 1, 'strong input reports saturated solver contact ramp separately');
+
+const pickedAfterOrbit = createLayeredStructuralPickedDragInteraction({
+  start: { x: 0.4, y: 0.5 },
+  current: { x: 0.7, y: 0.5 },
+  contactPoint: pickedContact,
+  screenRight: { x: 0, y: 0, z: -1 },
+  screenDown: { x: 0, y: 1, z: 0 },
+});
+assert.deepEqual(pickedAfterOrbit.point, pickedContact, 'camera changes do not move the picked contact');
+assert.ok(pickedAfterOrbit.vector.z < -0.99, 'rightward screen drag follows the post-orbit camera right basis');
+assert.ok(Math.abs(pickedAfterOrbit.vector.x) < 0.001, 'post-orbit drag does not leak the original structural x basis');
+
+const pickedWithoutMotion = createLayeredStructuralPickedDragInteraction({
+  start: { x: 0.4, y: 0.5 },
+  current: { x: 0.4, y: 0.5 },
+  contactPoint: pickedContact,
+  screenRight: { x: 0, y: 0, z: -1 },
+  screenDown: { x: 0, y: 1, z: 0 },
+});
+assert.equal(pickedWithoutMotion.inputLoad, 0, 'pointer down alone does not impersonate applied load');
+assert.equal(pickedWithoutMotion.contactRamp, 0, 'zero input has no solver contact-ramp occupancy');
 
 const notchedAfter = applyLayeredStructuralInteraction(notched, force, { steps: 4 });
 const unnotchedAfter = applyLayeredStructuralInteraction(unnotched, force, { steps: 4 });

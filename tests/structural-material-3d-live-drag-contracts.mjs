@@ -15,6 +15,8 @@ const pageSource = readFileSync(pagePath, 'utf8');
 const witnessSource = readFileSync(witnessPath, 'utf8');
 
 assert.match(pageSource, /createLatestStructuralInteractionScheduler/, 'page owns a latest-envelope scheduler');
+assert.match(pageSource, /latestGpuOperationTracker/, 'page renders GPU state through latest-operation order');
+assert.match(pageSource, /request-invalidated-after-execution/, 'discarded post-execution tears cannot settle as passed');
 
 assert.ok(existsSync(liveDragPath), 'live sympathetic drag has a reusable scheduling and haptic contract');
 assert.ok(existsSync(nativeCompanionPath), 'native AppKit companion source is present');
@@ -25,6 +27,7 @@ const {
   STRUCTURAL_MATERIAL_3D_HAPTIC_ROUTE,
   STRUCTURAL_MATERIAL_NATIVE_HAPTIC_ROUTE,
   buildLayeredStructuralHapticImpulse,
+  createLatestStructuralGpuOperationTracker,
   createLatestStructuralInteractionScheduler,
   detectStructuralHapticCapabilities,
   dispatchStructuralHapticImpulse,
@@ -33,6 +36,42 @@ const {
 assert.equal(STRUCTURAL_MATERIAL_3D_HAPTIC_ROUTE, 'kaminos.structural-material.causal-haptics.v0');
 assert.equal(STRUCTURAL_MATERIAL_NATIVE_HAPTIC_ROUTE, 'kaminos.structural-material.native-trackpad-haptics.v0');
 assert.equal(DEFAULT_STRUCTURAL_MATERIAL_NATIVE_HAPTIC_URL, 'http://127.0.0.1:8396');
+assert.equal(typeof createLatestStructuralGpuOperationTracker, 'function', 'live route exports latest GPU operation ordering');
+
+const operationTracker = createLatestStructuralGpuOperationTracker();
+const bindingOperation = operationTracker.begin('binding');
+operationTracker.settle(bindingOperation, {
+  status: 'passed',
+  effectiveRoute: 'binding-route',
+  timingsMs: { warmTotal: 4.2 },
+});
+assert.equal(operationTracker.snapshot().kind, 'binding');
+assert.equal(operationTracker.snapshot().status, 'passed');
+
+const failedTearOperation = operationTracker.begin('tear');
+operationTracker.settle(failedTearOperation, {
+  status: 'failed',
+  effectiveRoute: 'tear-route',
+  failurePhase: 'forced-test-failure',
+});
+assert.equal(operationTracker.snapshot().kind, 'tear', 'newer tear supersedes older binding identity');
+assert.equal(operationTracker.snapshot().status, 'failed', 'newer tear failure remains operator-visible');
+assert.equal(operationTracker.snapshot().receipt.effectiveRoute, 'tear-route');
+
+const staleTearOperation = operationTracker.begin('tear');
+const latestBindingOperation = operationTracker.begin('binding');
+operationTracker.settle(staleTearOperation, { status: 'failed', effectiveRoute: 'stale-tear-route' });
+assert.equal(operationTracker.snapshot().operationId, latestBindingOperation, 'older completion cannot replace newer pending identity');
+assert.equal(operationTracker.snapshot().status, 'pending');
+operationTracker.clear();
+operationTracker.settle(latestBindingOperation, { status: 'passed', effectiveRoute: 'late-binding-route' });
+assert.equal(operationTracker.snapshot(), null, 'clear invalidates completion from an earlier operation');
+operationTracker.begin('tear', {
+  requestedRoute: 'tear-route',
+  requestedExecutionRoute: 'hot-sidecar-route',
+});
+assert.equal(operationTracker.snapshot().receipt.requestedRoute, 'tear-route', 'pending operation preserves requested product route');
+assert.equal(operationTracker.snapshot().receipt.requestedExecutionRoute, 'hot-sidecar-route', 'pending operation preserves requested execution route');
 
 function deferred() {
   let resolve;
@@ -215,6 +254,13 @@ assert.match(witnessSource, /preReleaseStructuralMutation/, 'browser witness req
 assert.match(witnessSource, /releaseFlushedFinalEnvelope/, 'browser witness proves release flushes the final envelope');
 assert.match(witnessSource, /latestEnvelopeCoalescing/, 'browser witness forces dense move events through latest-envelope coalescing');
 assert.match(witnessSource, /samplingInvariant/, 'browser witness compares dense and coarse sampling fingerprints');
+assert.match(witnessSource, /__structuralMaterial3dPickTarget/, 'browser witness begins from a rendered structural pick target');
+assert.match(witnessSource, /immediateInputLoadVisible/, 'browser witness observes input load in the pointer event task');
+assert.match(witnessSource, /immediateGpuPendingVisible/, 'browser witness distinguishes pending GPU work from applied input load');
+assert.match(witnessSource, /immediateGpuRequestedRouteVisible/, 'browser witness requires requested route identity while GPU work is pending');
+assert.match(witnessSource, /latestTearFailureVisible/, 'browser witness rejects a latest tear failure hidden by older bind success');
+assert.match(witnessSource, /cancelledInFlightTearRejected/, 'browser witness rejects passed status from a cancelled in-flight tear');
+assert.match(witnessSource, /Network\.setCacheDisabled/, 'GPU browser witness cannot consume stale module cache as current evidence');
 assert.match(witnessSource, /nativeHapticCompanionRequirementSatisfied/, 'browser witness can require native companion receipt identity');
 
 const invalidBooleanReportPath = `/private/tmp/kaminos-invalid-native-haptics-${process.pid}.json`;

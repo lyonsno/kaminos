@@ -141,8 +141,8 @@
       STRUCTURAL_MATERIAL_3D_VISUAL_AUTHORITY,
       applyLayeredStructuralInteraction,
       buildLayeredStructuralWitnessScenario,
-      createLayeredStructuralDragInteraction,
       createLayeredStructuralMaterial,
+      createLayeredStructuralPickedDragInteraction,
       summarizeLayeredStructuralState,
     } from './structural-material-3d-core.js';
     import {
@@ -155,6 +155,7 @@
       runLayeredStructuralRetainedWebGpuParity,
     } from './structural-material-3d-webgpu-retained.js';
     import {
+      STRUCTURAL_MATERIAL_3D_WEBGPU_BINDING_ROUTE,
       STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE,
       createLayeredStructuralHotWebGpuSidecar,
       validateLayeredStructuralHotBindingReceipt,
@@ -174,6 +175,7 @@
     import {
       DEFAULT_STRUCTURAL_MATERIAL_NATIVE_HAPTIC_URL,
       buildLayeredStructuralHapticImpulse,
+      createLatestStructuralGpuOperationTracker,
       createLatestStructuralInteractionScheduler,
       detectStructuralHapticCapabilities,
       dispatchStructuralHapticImpulse,
@@ -214,12 +216,12 @@
     controls.maxDistance = 14;
     controls.target.set(0, 0, 0);
     controls.mouseButtons = {
-      LEFT: null,
+      LEFT: THREE.MOUSE.ROTATE,
       MIDDLE: THREE.MOUSE.PAN,
       RIGHT: THREE.MOUSE.ROTATE,
     };
     controls.touches = {
-      ONE: null,
+      ONE: THREE.TOUCH.ROTATE,
       TWO: THREE.TOUCH.DOLLY_PAN,
     };
     controls.update();
@@ -243,10 +245,14 @@
     const looseMaterial = new THREE.MeshStandardMaterial({ color: 0xffe078, roughness: 0.66, metalness: 0.05 });
     const forceMaterial = new THREE.LineBasicMaterial({ color: 0xf1cc62, transparent: true, opacity: 0.96 });
     const forceNodeMaterial = new THREE.MeshBasicMaterial({ color: 0xff785a });
+    const structuralRaycaster = new THREE.Raycaster();
+    structuralRaycaster.params.Line.threshold = 0.075;
+    const structuralPointerNdc = new THREE.Vector2();
 
     let material = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true });
     let materialPointerId = null;
     let dragStart = null;
+    let latestStructuralPick = null;
     let forceEnvelope = null;
     let lastPoint = { x: 0.92, y: 0.52, z: 0.85 };
     const cameraInvariantViolations = [];
@@ -256,6 +262,7 @@
     let gpuRetainedPromise = null;
     let gpuTearReceipt = null;
     let gpuTearPromise = null;
+    let gpuTearPostExecutionWitnessHold = null;
     let gpuBindingReceipt = null;
     let gpuBindingPromise = null;
     let gpuTearOperationQueue = Promise.resolve();
@@ -272,6 +279,7 @@
     let latestHapticDispatchReceipt = null;
     const hapticCapabilities = detectStructuralHapticCapabilities(undefined, { nativeCompanionUrl: nativeHapticCompanionUrl });
     const gpuTearRequestGate = createLayeredStructuralGpuTearRequestGate();
+    const latestGpuOperationTracker = createLatestStructuralGpuOperationTracker();
     const liveDragScheduler = createLatestStructuralInteractionScheduler({
       execute: interaction => requestGpuSympatheticTear(material, interaction),
     });
@@ -316,6 +324,7 @@
               : liveMaterial
           : brokenMaterial;
         const line = lineBetween(a, b, lineMaterial);
+        line.userData.structuralPick = { kind: 'bond', id: bond.id };
         if (!bond.alive) line.computeLineDistances?.();
         world.add(line);
       }
@@ -326,14 +335,17 @@
         );
         mesh.position.copy(worldPoint(node));
         mesh.scale.setScalar(node.pinned ? 1.32 : 1);
+        mesh.userData.structuralPick = { kind: 'node', id: node.id };
         world.add(mesh);
       }
       if (forceEnvelope) {
-        const start = new THREE.Vector3((forceEnvelope.start.x - 0.5) * 2.35, (0.5 - forceEnvelope.start.y) * 1.25, (forceEnvelope.start.z - 0.5) * 0.95);
-        const end = new THREE.Vector3((forceEnvelope.point.x - 0.5) * 2.35, (0.5 - forceEnvelope.point.y) * 1.25, (forceEnvelope.point.z - 0.5) * 0.95);
+        const contactPoint = forceEnvelope.point || forceEnvelope.start;
+        const visualEnd = forceEnvelope.visualEnd || forceEnvelope.point;
+        const start = new THREE.Vector3((contactPoint.x - 0.5) * 2.35, (0.5 - contactPoint.y) * 1.25, (contactPoint.z - 0.5) * 0.95);
+        const end = new THREE.Vector3((visualEnd.x - 0.5) * 2.35, (0.5 - visualEnd.y) * 1.25, (visualEnd.z - 0.5) * 0.95);
         world.add(lineBetween(start, end, forceMaterial));
         const contact = new THREE.Mesh(new THREE.SphereGeometry(0.055 + forceEnvelope.radius * 0.05, 18, 10), forceNodeMaterial);
-        contact.position.copy(end);
+        contact.position.copy(start);
         world.add(contact);
       }
     }
@@ -342,21 +354,33 @@
       const summary = summarizeLayeredStructuralState(material);
       readout.textContent = `broken ${summary.brokenBondCount} | repaired ${summary.repairedBondCount} | depth ${summary.brokenDepthBondCount}/${summary.crossDepthBondCount} | components ${summary.componentCount} | sound ${summary.sound.signature}`;
       route.textContent = `${STRUCTURAL_MATERIAL_3D_ROUTE} | ${STRUCTURAL_MATERIAL_3D_VISUAL_AUTHORITY}`;
-      gpuStatus.textContent = gpuBindingReceipt
-        ? gpuBindingReceipt.binding?.noOp && material.sympatheticBinding
-          ? `GPU bind no-op | repaired ${material.sympatheticBinding.repairedBondCount}`
-          : `GPU bind ${gpuBindingReceipt.status} ${gpuBindingReceipt.binding?.eventCount ?? 0} edges`
-        : gpuTearReceipt
-        ? `GPU tear ${gpuTearReceipt.status} ${gpuTearReceipt.topology?.componentCount ?? 0} components`
+      const latestGpuOperation = latestGpuOperationTracker.snapshot();
+      const latestGpuReceipt = latestGpuOperation?.receipt;
+      const latestWarmTotal = latestGpuReceipt?.timingsMs?.warmTotal;
+      const timingSuffix = Number.isFinite(latestWarmTotal) ? ` | ${latestWarmTotal.toFixed(1)} ms` : '';
+      gpuStatus.textContent = latestGpuOperation?.status === 'pending'
+        ? `GPU ${latestGpuOperation.kind === 'binding' ? 'bind' : 'tear'} pending`
+        : latestGpuOperation?.status === 'failed'
+          ? `GPU ${latestGpuOperation.kind === 'binding' ? 'bind' : 'tear'} failed | ${latestGpuReceipt?.failurePhase || 'unknown'}${timingSuffix}`
+        : latestGpuOperation?.kind === 'binding'
+        ? latestGpuReceipt?.binding?.noOp && material.sympatheticBinding
+          ? `GPU bind no-op | repaired ${material.sympatheticBinding.repairedBondCount}${timingSuffix}`
+          : `GPU bind ${latestGpuReceipt?.status} ${latestGpuReceipt?.binding?.eventCount ?? 0} edges${timingSuffix}`
+        : latestGpuOperation?.kind === 'tear'
+        ? `GPU tear ${latestGpuReceipt?.status} ${latestGpuReceipt?.topology?.componentCount ?? 0} components${timingSuffix}`
         : gpuRetainedReceipt
           ? `GPU retained ${gpuRetainedReceipt.status} ${gpuRetainedReceipt.parity?.gpuEventCount ?? 0}/${gpuRetainedReceipt.parity?.cpuEventCount ?? 0}`
         : gpuParityReceipt
           ? `GPU ${gpuParityReceipt.status} ${gpuParityReceipt.parity?.gpuBreakCount ?? 0}/${gpuParityReceipt.parity?.cpuBreakCount ?? 0}`
           : '';
-      gpuStatus.title = gpuBindingReceipt?.effectiveRoute || gpuTearReceipt?.effectiveRoute || gpuRetainedReceipt?.effectiveRoute || gpuParityReceipt?.effectiveRoute || STRUCTURAL_MATERIAL_3D_WEBGPU_ROUTE;
+      gpuStatus.title = latestGpuReceipt?.effectiveRoute || (latestGpuReceipt?.requestedExecutionRoute
+        ? `requested ${latestGpuReceipt.requestedExecutionRoute}; effective ${latestGpuOperation?.status === 'pending' ? 'pending' : 'unavailable'}`
+        : latestGpuReceipt?.requestedRoute
+          ? `requested ${latestGpuReceipt.requestedRoute}; effective unavailable`
+          : gpuRetainedReceipt?.effectiveRoute || gpuParityReceipt?.effectiveRoute || STRUCTURAL_MATERIAL_3D_WEBGPU_ROUTE);
       gesture.textContent = forceEnvelope
-        ? `drag ${forceEnvelope.dragLength.toFixed(3)} | mag ${forceEnvelope.magnitude.toFixed(3)} | z ${forceEnvelope.point.z.toFixed(3)} | stress ${summary.maxStress.toFixed(3)}`
-        : `drag 0.000 | mag 0.000 | z 0.500 | stress ${summary.maxStress.toFixed(3)}`;
+        ? `input ${Math.round((forceEnvelope.inputLoad ?? forceEnvelope.magnitude / 1.95) * 100)}% | ramp ${Math.round((forceEnvelope.contactRamp ?? Math.min(1, forceEnvelope.magnitude / 0.45)) * 100)}% | stress ${summary.maxStress.toFixed(3)}`
+        : `input 0% | ramp 0% | stress ${summary.maxStress.toFixed(3)}`;
     }
 
     function visibleTearState() {
@@ -462,20 +486,88 @@
     }
 
     function eventPoint(event) {
-      const rect = stage.getBoundingClientRect();
+      const rect = renderer.domElement.getBoundingClientRect();
       return {
         x: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)),
         y: Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)),
       };
     }
 
+    function structuralPointFromWorld(hitPoint) {
+      const local = world.worldToLocal(hitPoint.clone());
+      return {
+        x: Math.max(0, Math.min(1, local.x / 2.35 + 0.5)),
+        y: Math.max(0, Math.min(1, 0.5 - local.y / 1.25)),
+        z: Math.max(0, Math.min(1, local.z / 0.95 + 0.5)),
+      };
+    }
+
+    function cameraBasisInMaterial() {
+      camera.updateMatrixWorld(true);
+      world.updateMatrixWorld(true);
+      const inverseWorldQuaternion = world.getWorldQuaternion(new THREE.Quaternion()).invert();
+      const toStructuralDirection = worldDirection => {
+        const local = worldDirection.clone().applyQuaternion(inverseWorldQuaternion);
+        return local.set(local.x / 2.35, -local.y / 1.25, local.z / 0.95);
+      };
+      const screenRight = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).normalize();
+      const screenDown = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1).multiplyScalar(-1).normalize();
+      const right = toStructuralDirection(screenRight);
+      const down = toStructuralDirection(screenDown);
+      return {
+        screenRight: { x: right.x, y: right.y, z: right.z },
+        screenDown: { x: down.x, y: down.y, z: down.z },
+      };
+    }
+
+    function pickStructuralContact(event) {
+      const point = eventPoint(event);
+      structuralPointerNdc.set(point.x * 2 - 1, 1 - point.y * 2);
+      camera.updateMatrixWorld(true);
+      world.updateMatrixWorld(true);
+      structuralRaycaster.setFromCamera(structuralPointerNdc, camera);
+      const hit = structuralRaycaster
+        .intersectObjects(world.children, false)
+        .find(intersection => intersection.object.userData.structuralPick);
+      if (!hit) return null;
+      return {
+        ...hit.object.userData.structuralPick,
+        point: structuralPointFromWorld(hit.point),
+        distance: hit.distance,
+      };
+    }
+
+    function projectedStructuralPickTarget() {
+      camera.updateMatrixWorld(true);
+      world.updateMatrixWorld(true);
+      const rect = renderer.domElement.getBoundingClientRect();
+      const candidates = world.children
+        .filter(child => child.userData.structuralPick?.kind === 'node')
+        .map(child => {
+          const worldPosition = child.getWorldPosition(new THREE.Vector3());
+          const projected = worldPosition.clone().project(camera);
+          return {
+            kind: child.userData.structuralPick.kind,
+            id: child.userData.structuralPick.id,
+            clientX: rect.left + (projected.x + 1) * 0.5 * rect.width,
+            clientY: rect.top + (1 - projected.y) * 0.5 * rect.height,
+            ndc: { x: projected.x, y: projected.y, z: projected.z },
+            centerDistance: Math.hypot(projected.x, projected.y),
+          };
+        })
+        .filter(candidate => Math.abs(candidate.ndc.x) < 0.82 && Math.abs(candidate.ndc.y) < 0.82 && candidate.ndc.z > -1 && candidate.ndc.z < 1)
+        .sort((a, b) => a.centerDistance - b.centerDistance);
+      return candidates[0] || null;
+    }
+
     function applyDrag(point) {
       return runStructuralMutation('material-drag', () => {
-        const depthBias = -0.65;
-        forceEnvelope = createLayeredStructuralDragInteraction({
-          start: dragStart || point,
+        forceEnvelope = createLayeredStructuralPickedDragInteraction({
+          start: dragStart?.screen || point,
           current: point,
-          depthBias,
+          contactPoint: dragStart?.contactPoint || lastPoint,
+          screenRight: dragStart?.screenRight,
+          screenDown: dragStart?.screenDown,
         });
         lastPoint = forceEnvelope.point;
         return forceEnvelope;
@@ -515,6 +607,12 @@
 
     function requestGpuSympatheticTear(sourceState, interaction, { applyToWorld = true } = {}) {
       const requestEpoch = gpuTearRequestGate.begin();
+      const operationId = latestGpuOperationTracker.begin('tear', {
+        requestedRoute: STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_ROUTE,
+        requestedExecutionRoute: applyToWorld
+          ? STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE
+          : STRUCTURAL_MATERIAL_3D_WEBGPU_RETAINED_ROUTE,
+      });
       const operation = async () => {
         if (!gpuTearRequestGate.accepts(requestEpoch)) {
           gpuTearDiscardedCount += 1;
@@ -543,9 +641,31 @@
               ? STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE
               : STRUCTURAL_MATERIAL_3D_WEBGPU_RETAINED_ROUTE,
           ));
+        if (gpuTearPostExecutionWitnessHold) {
+          const hold = gpuTearPostExecutionWitnessHold;
+          hold.reached = true;
+          await hold.releasePromise;
+          if (gpuTearPostExecutionWitnessHold === hold) gpuTearPostExecutionWitnessHold = null;
+        }
         if (!gpuTearRequestGate.accepts(requestEpoch)) {
           gpuTearDiscardedCount += 1;
-          return receipt;
+          return {
+            ...buildLayeredStructuralHotSympatheticTearFailureReceipt(
+              new Error('structural interaction invalidated after GPU execution'),
+              'request-invalidated-after-execution',
+              applyToWorld
+                ? STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE
+                : STRUCTURAL_MATERIAL_3D_WEBGPU_RETAINED_ROUTE,
+            ),
+            discardedExecution: {
+              status: receipt.status,
+              effectiveRoute: receipt.effectiveRoute,
+              executionRoute: receipt.executionRoute,
+              objectIdentity: receipt.objectIdentity,
+              eventEpoch: receipt.eventEpoch,
+              timingsMs: receipt.timingsMs ? { ...receipt.timingsMs } : null,
+            },
+          };
         }
         gpuTearReceipt = receipt;
         if (applyToWorld && receipt.status === 'passed') {
@@ -565,16 +685,43 @@
         }
         return receipt;
       };
-      const promise = gpuTearOperationQueue.then(operation, operation).finally(() => {
-        if (gpuTearPromise === promise) gpuTearPromise = null;
+      const trackedOperation = async () => {
+        let receipt;
+        try {
+          receipt = await operation();
+        } catch (error) {
+          receipt = buildLayeredStructuralHotSympatheticTearFailureReceipt(
+            error,
+            'unhandled-live-tear-operation',
+            applyToWorld
+              ? STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE
+              : STRUCTURAL_MATERIAL_3D_WEBGPU_RETAINED_ROUTE,
+          );
+          gpuTearReceipt = receipt;
+        }
+        latestGpuOperationTracker.settle(operationId, receipt);
+        return receipt;
+      };
+      const promise = gpuTearOperationQueue.then(trackedOperation, trackedOperation).finally(() => {
+        if (gpuTearPromise === promise) {
+          gpuTearPromise = null;
+          updateReadout();
+          renderScene();
+        }
       });
       gpuTearOperationQueue = promise.catch(() => undefined);
       gpuTearPromise = promise;
+      updateReadout();
+      renderScene();
       return promise;
     }
 
     function requestGpuBinding(binding) {
       const requestEpoch = gpuTearRequestGate.begin();
+      const operationId = latestGpuOperationTracker.begin('binding', {
+        requestedRoute: STRUCTURAL_MATERIAL_3D_WEBGPU_BINDING_ROUTE,
+        requestedExecutionRoute: STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE,
+      });
       const operation = async () => {
         if (!gpuTearRequestGate.accepts(requestEpoch)) {
           return buildLayeredStructuralGpuBindingFailureReceipt(
@@ -602,11 +749,31 @@
         }
         return receipt;
       };
-      const promise = gpuTearOperationQueue.then(operation, operation).finally(() => {
-        if (gpuBindingPromise === promise) gpuBindingPromise = null;
+      const trackedOperation = async () => {
+        let receipt;
+        try {
+          receipt = await operation();
+        } catch (error) {
+          receipt = buildLayeredStructuralGpuBindingFailureReceipt(
+            error,
+            'unhandled-live-binding-operation',
+          );
+          gpuBindingReceipt = receipt;
+        }
+        latestGpuOperationTracker.settle(operationId, receipt);
+        return receipt;
+      };
+      const promise = gpuTearOperationQueue.then(trackedOperation, trackedOperation).finally(() => {
+        if (gpuBindingPromise === promise) {
+          gpuBindingPromise = null;
+          updateReadout();
+          renderScene();
+        }
       });
       gpuTearOperationQueue = promise.catch(() => undefined);
       gpuBindingPromise = promise;
+      updateReadout();
+      renderScene();
       return promise;
     }
 
@@ -652,26 +819,49 @@
 
     renderer.domElement.addEventListener('pointerdown', (event) => {
       if (event.button !== 0 || !event.isPrimary) return;
+      const pick = pickStructuralContact(event);
+      if (!pick) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
       materialPointerId = event.pointerId;
       renderer.domElement.setPointerCapture(event.pointerId);
       runStructuralMutation('material-drag-start', () => {
-        dragStart = eventPoint(event);
-        forceEnvelope = createLayeredStructuralDragInteraction({ start: dragStart, current: dragStart, depthBias: -0.65 });
+        const screen = eventPoint(event);
+        const basis = cameraBasisInMaterial();
+        latestStructuralPick = pick;
+        dragStart = {
+          screen,
+          contactPoint: pick.point,
+          screenRight: basis.screenRight,
+          screenDown: basis.screenDown,
+        };
+        forceEnvelope = createLayeredStructuralPickedDragInteraction({
+          start: screen,
+          current: screen,
+          contactPoint: pick.point,
+          screenRight: basis.screenRight,
+          screenDown: basis.screenDown,
+        });
       });
-    });
+    }, true);
     renderer.domElement.addEventListener('pointermove', (event) => {
       if (event.pointerId !== materialPointerId) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
       const interaction = applyDrag(eventPoint(event));
       consumeLiveDragPromise(
         liveDragScheduler.offer(interaction),
         'live-drag-pointer-move',
       );
-    });
+    }, true);
     renderer.domElement.addEventListener('pointerup', (event) => {
       if (event.pointerId !== materialPointerId) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
       applyDrag(eventPoint(event));
       const releasedForce = forceEnvelope;
       materialPointerId = null;
+      dragStart = null;
       if (renderer.domElement.hasPointerCapture(event.pointerId)) {
         renderer.domElement.releasePointerCapture(event.pointerId);
       }
@@ -679,24 +869,27 @@
         liveDragScheduler.flush(releasedForce),
         'live-drag-pointer-release',
       );
-    });
+    }, true);
     renderer.domElement.addEventListener('pointercancel', (event) => {
       if (event.pointerId !== materialPointerId) return;
+      event.stopImmediatePropagation();
       materialPointerId = null;
       dragStart = null;
       liveDragScheduler.invalidate();
       gpuTearRequestGate.invalidate();
       synchronizeHotSidecar(material);
-    });
+    }, true);
     document.querySelector('#reset').addEventListener('click', () => {
       runStructuralMutation('reset', () => {
         liveDragScheduler.invalidate();
         gpuTearRequestGate.invalidate();
         material = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true });
         dragStart = null;
+        latestStructuralPick = null;
         forceEnvelope = null;
         gpuTearReceipt = null;
         gpuBindingReceipt = null;
+        latestGpuOperationTracker.clear();
       });
       synchronizeHotSidecar(material);
     });
@@ -730,7 +923,9 @@
       });
     });
 
-    window.__structuralMaterial3dWitness = () => ({
+    window.__structuralMaterial3dWitness = () => {
+      const latestGpuOperation = latestGpuOperationTracker.snapshot();
+      return {
       requestedRoute: STRUCTURAL_MATERIAL_3D_ROUTE,
       effectiveRoute: STRUCTURAL_MATERIAL_3D_ROUTE,
       visualConsumerAuthority: STRUCTURAL_MATERIAL_3D_VISUAL_AUTHORITY,
@@ -743,6 +938,20 @@
       gpuRetainedParity: gpuRetainedReceipt,
       gpuSympatheticTear: gpuTearReceipt,
       gpuResidentBinding: gpuBindingReceipt,
+      latestGpuOperation,
+      interactionDiagnostics: {
+        pick: latestStructuralPick,
+        inputLoad: forceEnvelope?.inputLoad ?? 0,
+        contactRamp: forceEnvelope?.contactRamp ?? 0,
+        gpuPending: latestGpuOperation?.status === 'pending',
+        gpuOperation: latestGpuOperation?.kind || null,
+        gpuOperationStatus: latestGpuOperation?.status || null,
+        gpuOperationRoute: latestGpuOperation?.receipt?.effectiveRoute || null,
+        gpuOperationRequestedRoute: latestGpuOperation?.receipt?.requestedRoute || null,
+        gpuOperationRequestedExecutionRoute: latestGpuOperation?.receipt?.requestedExecutionRoute || null,
+        gpuOperationFailurePhase: latestGpuOperation?.receipt?.failurePhase || null,
+        latestWarmTotalMs: latestGpuOperation?.receipt?.timingsMs?.warmTotal ?? null,
+      },
       gpuHotSidecar: gpuHotSidecar?.snapshot() || null,
       gpuTearAppliedCount,
       gpuTearRecentAppliedReceipts: [gpuTearPreviousAppliedReceipt, gpuTearLatestAppliedReceipt]
@@ -767,18 +976,41 @@
       sympatheticBinding: material.sympatheticBinding || null,
       visibleBinding: visibleBindingState(),
       gpuBindingPending: gpuBindingPromise !== null,
-    });
+      };
+    };
 
     window.__structuralMaterial3dCameraWitness = () => ({
       authority: CAMERA_CONTROL_AUTHORITY,
       state: cameraState(),
-      materialInput: 'primary-pointer-drag',
-      orbitInput: 'secondary-pointer-drag',
+      materialInput: 'primary-pointer-drag-on-structural-hit',
+      orbitInput: 'primary-pointer-drag-on-background',
       panInput: 'auxiliary-pointer-drag',
       zoomInput: 'wheel',
       invariantViolationCount: cameraInvariantViolations.length,
       invariantViolations: cameraInvariantViolations.slice(),
     });
+
+    window.__structuralMaterial3dPickTarget = projectedStructuralPickTarget;
+    window.__structuralMaterial3dPickProbe = (clientX, clientY) => pickStructuralContact({ clientX, clientY });
+    window.__structuralMaterial3dGpuStatusWitness = () => ({
+      latestGpuOperation: latestGpuOperationTracker.snapshot(),
+      text: gpuStatus.textContent,
+      routeTitle: gpuStatus.title,
+    });
+    window.__structuralMaterial3dInvalidateGpuRequestForWitness = () => gpuTearRequestGate.invalidate();
+    window.__structuralMaterial3dArmPostExecutionHoldForWitness = () => {
+      if (gpuTearPostExecutionWitnessHold) throw new Error('post-execution witness hold already armed');
+      let release;
+      const releasePromise = new Promise(resolve => { release = resolve; });
+      gpuTearPostExecutionWitnessHold = { reached: false, release, releasePromise };
+    };
+    window.__structuralMaterial3dPostExecutionHoldStatus = () => ({
+      armed: gpuTearPostExecutionWitnessHold !== null,
+      reached: gpuTearPostExecutionWitnessHold?.reached === true,
+    });
+    window.__structuralMaterial3dReleasePostExecutionHoldForWitness = () => {
+      gpuTearPostExecutionWitnessHold?.release();
+    };
 
     async function countCanvasPixelsFromBlob() {
       const blob = await new Promise(resolve => renderer.domElement.toBlob(resolve, 'image/png'));

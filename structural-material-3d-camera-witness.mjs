@@ -73,7 +73,10 @@ async function connectCdp(debugPort) {
       else handlers.resolve(message.result);
     }
     if (message.method === 'Runtime.exceptionThrown') {
-      runtimeErrors.push(message.params.exceptionDetails.text);
+      runtimeErrors.push(
+        message.params.exceptionDetails.exception?.description ||
+        message.params.exceptionDetails.text,
+      );
     }
   });
 
@@ -158,6 +161,8 @@ try {
   const { send, evaluate } = cdp;
   await send('Runtime.enable');
   await send('Page.enable');
+  await send('Network.enable');
+  await send('Network.setCacheDisabled', { cacheDisabled: true });
   await send('Emulation.setDeviceMetricsOverride', {
     width: config.width,
     height: config.height,
@@ -179,6 +184,7 @@ try {
   };
 
   report.failurePhase = 'page-load';
+  cdp.runtimeErrors.length = 0;
   await send('Page.navigate', { url: config.url });
   const loadDeadline = Date.now() + config.loadTimeoutMs;
   while (Date.now() < loadDeadline) {
@@ -226,8 +232,10 @@ try {
 
   report.failurePhase = 'material-drag';
   const beforeMaterialDrag = await evaluate('window.__structuralMaterial3dCameraWitness()');
-  const dragStart = point(0.46, 0.46);
-  const dragEnd = point(0.72, 0.58);
+  const initialPickTarget = await evaluate('window.__structuralMaterial3dPickTarget()');
+  assertCheck(initialPickTarget, 'page exposed no projected structural pick target');
+  const dragStart = { x: initialPickTarget.clientX, y: initialPickTarget.clientY };
+  const dragEnd = { x: dragStart.x + canvasRect.width * 0.2, y: dragStart.y + canvasRect.height * 0.08 };
   await send('Input.dispatchMouseEvent', { type: 'mousePressed', ...dragStart, button: 'left', buttons: 1, clickCount: 1 });
   await send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...dragEnd, button: 'left', buttons: 1 });
   await send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...dragEnd, button: 'left', buttons: 0, clickCount: 1 });
@@ -235,18 +243,63 @@ try {
   const structuralAfterDrag = await evaluate('window.__structuralMaterial3dWitness()');
   report.checks.materialDragPreservedCamera = sameState(beforeMaterialDrag, afterMaterialDrag);
   report.checks.materialDragProducedForce = structuralAfterDrag.forceEnvelope?.dragLength > 0;
+  report.checks.materialDragWasPicked = structuralAfterDrag.interactionDiagnostics?.pick !== null;
   assertCheck(report.checks.materialDragPreservedCamera, 'material drag changed camera state');
   assertCheck(report.checks.materialDragProducedForce, 'material drag produced no force envelope');
+  assertCheck(report.checks.materialDragWasPicked, 'material drag lacked a structural pick receipt');
 
-  report.failurePhase = 'camera-orbit';
-  const orbitStart = point(0.6, 0.38);
-  const orbitEnd = point(0.76, 0.5);
-  await send('Input.dispatchMouseEvent', { type: 'mousePressed', ...orbitStart, button: 'right', buttons: 2, clickCount: 1 });
-  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...orbitEnd, button: 'right', buttons: 2 });
-  await send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...orbitEnd, button: 'right', buttons: 0, clickCount: 1 });
+  report.failurePhase = 'background-primary-orbit';
+  const missCandidates = [point(0.06, 0.9), point(0.94, 0.9), point(0.06, 0.16), point(0.94, 0.16)];
+  let orbitStart = null;
+  for (const candidate of missCandidates) {
+    const hit = await evaluate(`window.__structuralMaterial3dPickProbe(${candidate.x}, ${candidate.y})`);
+    if (!hit) {
+      orbitStart = candidate;
+      break;
+    }
+  }
+  assertCheck(orbitStart, 'no empty-canvas orbit start could be proven by the page picker');
+  const orbitEnd = { x: orbitStart.x + canvasRect.width * 0.16, y: orbitStart.y - canvasRect.height * 0.12 };
+  const forceBeforeOrbit = JSON.stringify(structuralAfterDrag.forceEnvelope);
+  await send('Input.dispatchMouseEvent', { type: 'mousePressed', ...orbitStart, button: 'left', buttons: 1, clickCount: 1 });
+  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...orbitEnd, button: 'left', buttons: 1 });
+  await send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...orbitEnd, button: 'left', buttons: 0, clickCount: 1 });
   const afterOrbit = await evaluate('window.__structuralMaterial3dCameraWitness()');
+  const structuralAfterOrbit = await evaluate('window.__structuralMaterial3dWitness()');
   report.checks.orbitChangedCamera = !sameState(afterMaterialDrag, afterOrbit);
-  assertCheck(report.checks.orbitChangedCamera, 'secondary drag did not orbit the camera');
+  report.checks.backgroundDragAuthoredNoForce = JSON.stringify(structuralAfterOrbit.forceEnvelope) === forceBeforeOrbit &&
+    structuralAfterOrbit.liveDrag?.pointerActive === false;
+  assertCheck(report.checks.orbitChangedCamera, 'primary drag on proven empty canvas did not orbit the camera');
+  assertCheck(report.checks.backgroundDragAuthoredNoForce, 'empty-canvas camera drag authored a material force');
+
+  report.failurePhase = 'post-orbit-material-drag';
+  const postOrbitPickTarget = await evaluate('window.__structuralMaterial3dPickTarget()');
+  assertCheck(postOrbitPickTarget, 'post-orbit view exposed no projected structural pick target');
+  const postOrbitDragStart = { x: postOrbitPickTarget.clientX, y: postOrbitPickTarget.clientY };
+  const postOrbitDragEnd = { x: postOrbitDragStart.x + canvasRect.width * 0.2, y: postOrbitDragStart.y };
+  await send('Input.dispatchMouseEvent', { type: 'mousePressed', ...postOrbitDragStart, button: 'left', buttons: 1, clickCount: 1 });
+  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...postOrbitDragEnd, button: 'left', buttons: 1 });
+  await send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...postOrbitDragEnd, button: 'left', buttons: 0, clickCount: 1 });
+  const postOrbitStructural = await evaluate('window.__structuralMaterial3dWitness()');
+  const postOrbitCamera = await evaluate('window.__structuralMaterial3dCameraWitness()');
+  const postOrbitForce = postOrbitStructural.forceEnvelope;
+  const basisRight = postOrbitForce?.screenBasis?.right;
+  const direction = postOrbitForce?.vector;
+  const cameraRelativeDot = basisRight && direction
+    ? basisRight.x * direction.x + basisRight.y * direction.y + basisRight.z * direction.z
+    : -1;
+  report.checks.postOrbitMaterialPreservedCamera = sameState(afterOrbit, postOrbitCamera);
+  report.checks.postOrbitForceFollowedCamera = cameraRelativeDot > 0.999;
+  report.checks.postOrbitContactStayedPicked = JSON.stringify(postOrbitForce?.point) ===
+    JSON.stringify(postOrbitStructural.interactionDiagnostics?.pick?.point);
+  report.postOrbitInteraction = {
+    pick: postOrbitStructural.interactionDiagnostics?.pick,
+    forceEnvelope: postOrbitForce,
+    cameraRelativeDot,
+  };
+  assertCheck(report.checks.postOrbitMaterialPreservedCamera, 'post-orbit material drag changed the camera');
+  assertCheck(report.checks.postOrbitForceFollowedCamera, `post-orbit force missed current camera-right basis: dot ${cameraRelativeDot}`);
+  assertCheck(report.checks.postOrbitContactStayedPicked, 'post-orbit force moved away from the picked structural contact');
 
   report.failurePhase = 'camera-pan';
   const panStart = point(0.62, 0.54);
@@ -255,7 +308,7 @@ try {
   await send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...panEnd, button: 'middle', buttons: 4 });
   await send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...panEnd, button: 'middle', buttons: 0, clickCount: 1 });
   const afterPan = await evaluate('window.__structuralMaterial3dCameraWitness()');
-  report.checks.panChangedTarget = targetDistance(afterOrbit, afterPan) > 1e-5;
+  report.checks.panChangedTarget = targetDistance(postOrbitCamera, afterPan) > 1e-5;
   assertCheck(report.checks.panChangedTarget, 'auxiliary drag did not pan the camera target');
 
   report.failurePhase = 'post-camera-isolation';
