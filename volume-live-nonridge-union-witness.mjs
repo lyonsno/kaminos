@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { createHash, randomInt } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
 import { inflateSync } from 'node:zlib';
 
@@ -15,6 +15,7 @@ const EFFECTIVE_RENDERER_ROUTE = 'native-3d-compute-fluid-raymarch-v0';
 
 const args = parseArgs(process.argv.slice(2));
 const requestedUrl = required('--url');
+const directRoute = args.has('--direct-route');
 const outDir = resolve(String(args.get('--out-dir') || '/tmp/kaminos-live-nonridge-union-witness'));
 const reportPath = resolve(String(args.get('--report') || join(outDir, 'report.json')));
 const timeoutMs = Number(args.get('--timeout-ms') || 240000);
@@ -130,6 +131,9 @@ try {
   assert.equal(admitted.effectiveRoute, EFFECTIVE_RENDERER_ROUTE, 'effective renderer route drifted');
   await delay(settleMs);
 
+  if (directRoute) {
+    await captureDirectRouteWitness();
+  } else {
   failurePhase = 'live-union-and-zero-gradient-falsifier';
   const evidence = await evaluate(socket, `
     (async () => {
@@ -342,6 +346,7 @@ try {
     zeroGradientFalsifier: zero.audit.decodedMembershipCounts,
     performance: report.performance,
   }, null, 2));
+  }
 } catch (error) {
   writeReport({
     schema: SCHEMA,
@@ -364,6 +369,134 @@ try {
 } finally {
   try { socket?.close(); } catch {}
   browser?.kill('SIGTERM');
+}
+
+async function captureDirectRouteWitness() {
+  failurePhase = 'direct-route-pre-mutation-audit';
+  const directRouteReceipt = await evaluate(socket, `
+    (async () => {
+      const basinWindow = document.querySelector('#basin')?.contentWindow || window;
+      const prototype = basinWindow.__kaminosVolumePrototype || window.__kaminosVolumePrototype;
+      if (!prototype?.debugState || !prototype?.sampleBoundarySplatFootprintAudit || !prototype?.canvasElement) {
+        throw new Error('live-union-direct-route-runtime-api-missing');
+      }
+      const initial = prototype.debugState();
+      const route = new URL(location.href);
+      const numberParam = name => route.searchParams.has(name) ? Number(route.searchParams.get(name)) : null;
+      const directRouteRequestedControls = {
+        boundarySplatMode: route.searchParams.get('volume_boundary_splat_mode'),
+        boundarySidecarSource: route.searchParams.get('volume_boundary_sidecar_source'),
+        flowKernelStrength: numberParam('volume_flow_kernel_strength'),
+        flowKernelRadius: numberParam('volume_flow_kernel_radius'),
+        flowKernelCoherence: numberParam('volume_flow_kernel_coherence'),
+        reactionBoundaryGradient: numberParam('volume_reaction_boundary_gradient'),
+      };
+      const directRouteEffectiveControls = Object.fromEntries(
+        Object.keys(directRouteRequestedControls).map(key => [key, initial.controls?.[key] ?? null]),
+      );
+      const directRouteControlSubstitutions = Object.entries(directRouteRequestedControls)
+        .filter(([, requested]) => requested !== null)
+        .flatMap(([key, requested]) => {
+          const effective = directRouteEffectiveControls[key];
+          if (typeof requested === 'number' && typeof effective === 'number') {
+            return Math.abs(requested - effective) <= 0.000001 ? [] : [{ key, requested, effective }];
+          }
+          return String(requested) === String(effective) ? [] : [{ key, requested, effective }];
+        });
+      let audit = null;
+      let auditError = null;
+      try {
+        audit = await prototype.sampleBoundarySplatFootprintAudit({ now: performance.now() });
+      } catch (error) {
+        auditError = error?.message || String(error);
+      }
+      const final = prototype.debugState();
+      const rect = prototype.canvasElement()?.getBoundingClientRect?.() || null;
+      return {
+        identity: 'live-union-direct-route-pre-mutation-v0',
+        directRouteRequestedControls,
+        directRouteEffectiveControls,
+        directRouteControlSubstitutions,
+        directRouteCandidateCounts: audit ? {
+          candidateCount: audit.candidateCount,
+          instanceCount: audit.instanceCount,
+          overflowCount: audit.overflowCount,
+          decodedMembershipCounts: audit.decodedMembershipCounts,
+        } : null,
+        directRouteAppliedPasses: {
+          unionCompaction: Boolean(audit?.ok),
+          splatRasterRequested: final.boundarySplatMode === '${MODE}',
+          rendererIdentity: final.boundarySplatRendererIdentity,
+          fallbackReason: final.boundarySplatFallbackReason || null,
+          selectiveHeadLivePassReceipt: final.selectiveHeadLivePassReceipt
+            ? { ...final.selectiveHeadLivePassReceipt }
+            : null,
+        },
+        directRouteSourceMaturity: {
+          sourceFrameCount: initial.frameCount,
+          sourceSimStepCount: initial.simStepCount,
+          finalFrameCount: final.frameCount,
+          finalSimStepCount: final.simStepCount,
+          active: final.active,
+          backend: final.backend,
+          effectiveRoute: final.effectiveRoute,
+        },
+        postLoadControlMutation: false,
+        postLoadCompositionMutation: false,
+        audit,
+        auditError,
+        canvasCssRect: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
+      };
+    })()
+  `);
+  lastTrustworthyEvidence = { directRouteReceipt };
+  assert.equal(directRouteReceipt.directRouteControlSubstitutions.length, 0, 'direct-route-controls-were-substituted');
+  assert.equal(directRouteReceipt.directRouteEffectiveControls.boundarySplatMode, MODE, 'direct-route-union-mode-was-not-effective');
+  assert.equal(directRouteReceipt.audit?.ok, true, `direct-route-union-candidate-population-is-zero:${directRouteReceipt.auditError || 'unknown'}`);
+  assert.ok(directRouteReceipt.directRouteCandidateCounts?.candidateCount > 0, 'direct-route-union-candidate-population-is-zero');
+  assert.equal(directRouteReceipt.directRouteCandidateCounts?.overflowCount, 0, 'direct-route-union-overflow-is-nonzero');
+  assert.equal(directRouteReceipt.directRouteAppliedPasses?.fallbackReason, null, 'direct-route-union-used-fallback');
+  assert.equal(directRouteReceipt.directRouteAppliedPasses?.selectiveHeadLivePassReceipt?.splatApplied, true, 'direct-route-splat-pass-was-not-applied');
+
+  failurePhase = 'direct-route-visible-canvas-capture';
+  const rect = directRouteReceipt.canvasCssRect;
+  assert.ok(rect?.width > 0 && rect?.height > 0, 'direct-route-canvas-clip-is-unavailable');
+  const screenshot = await socket.call('Page.captureScreenshot', {
+    format: 'png',
+    captureBeyondViewport: true,
+    clip: { x: rect.x, y: rect.y, width: rect.width, height: rect.height, scale: 1 },
+  });
+  const screenshotPath = join(outDir, 'full-flame-live-union-direct-route.png');
+  const screenshotBytes = Buffer.from(screenshot.data, 'base64');
+  assert.ok(screenshotBytes.length > 1000, 'direct-route-visible-screenshot-is-missing-or-partial');
+  writeFileSync(screenshotPath, screenshotBytes);
+  const pixels = pngPixelMetrics(screenshotBytes);
+  assert.equal(pixels.nonblank, true, 'direct-route-visible-screenshot-is-blank');
+
+  const report = {
+    schema: SCHEMA,
+    status: 'captured',
+    failurePhase: null,
+    requestedUrl,
+    requestedMode: MODE,
+    directRouteAuthority: 'exact-url-no-post-load-mutation-v0',
+    directRouteReceipt,
+    pixels,
+    screenshot: artifact(screenshotPath),
+    backend: directRouteReceipt.directRouteSourceMaturity.backend,
+    effectiveRoute: directRouteReceipt.directRouteSourceMaturity.effectiveRoute,
+    browserEvents: socket.browserEvents,
+    lastTrustworthyEvidence: 'exact URL controls, union counts, and visible canvas satisfied without post-load mutation',
+  };
+  writeReport(report);
+  console.log(JSON.stringify({
+    ok: true,
+    report: reportPath,
+    screenshot: screenshotPath,
+    directRouteCandidateCounts: directRouteReceipt.directRouteCandidateCounts,
+    directRouteSourceMaturity: directRouteReceipt.directRouteSourceMaturity,
+    pixels,
+  }, null, 2));
 }
 
 function parseArgs(argv) {

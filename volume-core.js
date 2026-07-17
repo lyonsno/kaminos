@@ -11488,7 +11488,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function updateSelectiveHeadLiveCompositionState() {
     const request = selectiveHeadLiveRenderCompositionRequest(controlsSnapshot.selectiveHeadLiveRenderComposition);
-    const effective = state.selectiveHeadLiveEffectiveRole === 'off' ? 'off' : request.requested;
+    const effective = state.selectiveHeadLiveEffectiveRole === 'off'
+      ? (boundarySplatRequested() ? request.requested : 'off')
+      : request.requested;
     state.selectiveHeadLiveCompositionRequestedRaw = request.raw;
     state.selectiveHeadLiveCompositionRequested = request.requested;
     state.selectiveHeadLiveCompositionEffective = effective;
