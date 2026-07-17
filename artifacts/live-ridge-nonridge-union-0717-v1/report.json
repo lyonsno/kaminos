@@ -1,0 +1,5086 @@
+{
+  "schema": "kaminos.volume.live-nonridge-union-witness.v0",
+  "status": "captured",
+  "failurePhase": null,
+  "requestedUrl": "http://127.0.0.1:18781/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_resolution=64&volume_boundary_sidecar_source=baked&volume_boundary_sidecar_view=off&volume_boundary_splat_mode=off&volume_render_scale=1&volume_steps=88",
+  "requestedMode": "kernel_moment_full_flame_union",
+  "effectiveMode": "kernel_moment_full_flame_union",
+  "requestedSelectorAuthority": "explicit-source-field-operator-v0",
+  "effectiveSelectorAuthority": "explicit-source-field-operator-v0",
+  "selectorRecipeSha256": "541836e6c45ef014ab0b8be23ebd8dce9898900a7639a0c4e21f38336daef8f9",
+  "source": {
+    "commit": "db060b42c203188331d0ead73460896a230e4c18",
+    "branch": null,
+    "worktree": null,
+    "branchAuthority": "private-source-control-coordination-ref",
+    "worktreeAuthority": "private-source-control-coordination-ref"
+  },
+  "backend": "WebGPU:apple",
+  "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+  "sameStateCaptureId": "live-union-f137-s137",
+  "sourceFrameCount": 137,
+  "sourceSimStepCount": 137,
+  "main": {
+    "receipt": {
+      "ok": true,
+      "sampleAuthority": "render-only-frozen-sim-state",
+      "imageAuthority": "cdp-canvas-clip-capture-after-render-only-frozen-sim-state",
+      "controlOverrides": {
+        "boundarySplatMode": "kernel_moment_full_flame_union",
+        "reactionBoundaryGradient": 0.65,
+        "flowKernelStrength": 1,
+        "flowKernelRadius": 0.03,
+        "flowKernelCoherence": 1,
+        "boundarySplatRadianceGain": 2,
+        "boundarySplatOpacityGain": 2,
+        "selectiveHeadLiveRenderComposition": "splat-only-v0"
+      },
+      "boundarySplatCompositionRequestedRaw": "splat-only-v0",
+      "boundarySplatCompositionRequested": "splat-only-v0",
+      "boundarySplatCompositionEffective": "splat-only-v0",
+      "compositionAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+      "raymarchFireAuthority": 0,
+      "raymarchEncoded": false,
+      "splatEncoded": true,
+      "raymarchApplied": false,
+      "splatApplied": true,
+      "residualApplied": false,
+      "residualSourcePassEncodeMs": null,
+      "residualPassEncodeMs": null,
+      "featureCapture": null,
+      "featureCaptureSourcePassApplied": false,
+      "sameStateCaptureId": "live-union-f137-s137",
+      "baseFrameCount": 137,
+      "baseSimStepCount": 137,
+      "frameCount": 137,
+      "simStepCount": 137,
+      "sampleNowMs": 7000,
+      "requestedRenderScale": 1,
+      "renderScale": 1,
+      "renderPixelRatio": 1,
+      "displayWidth": 672,
+      "displayHeight": 960,
+      "renderWidth": 672,
+      "renderHeight": 960,
+      "volumeReconstructionStyle": "splat-only-v0",
+      "canvasCssRect": {
+        "x": 380,
+        "y": 0,
+        "width": 672,
+        "height": 960
+      },
+      "devicePixelRatio": 1,
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "prototypeIdentity": "kaminos-volume-prototype-v0",
+      "backend": "WebGPU:apple",
+      "boundarySidecarIdentity": "baked-boundary-sidecar-v0",
+      "boundarySidecarAuthority": "band-limited-support-coverage-ridge-proximity-footprint-v1",
+      "boundarySidecarSource": "baked",
+      "boundarySidecarOverrideReceipt": null,
+      "boundarySplatRendererIdentity": "live-ridge-nonridge-union-kernel-moment-covariance-splats-v0",
+      "boundarySplatAttributeModelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "boundarySplatRadius": 1,
+      "boundarySplatSharpness": 3.4,
+      "boundarySplatSourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+      "boundarySplatInstanceCount": 3033,
+      "boundarySplatCandidateCount": 3033,
+      "boundarySplatOverflowCount": 0,
+      "boundarySplatRidgeOnlyCount": 0,
+      "boundarySplatNonRidgeOnlyCount": 2565,
+      "boundarySplatOverlapCount": 468,
+      "boundarySplatUnionCount": 3033,
+      "boundarySplatZeroGradientAdmissionCount": 0,
+      "boundarySplatUnionReceipt": {
+        "requestedMode": "kernel_moment_full_flame_union",
+        "effectiveMode": "kernel_moment_full_flame_union",
+        "selectorAuthorityRequested": "explicit-source-field-operator-v0",
+        "selectorAuthorityEffective": "explicit-source-field-operator-v0",
+        "selectorRecipeSha256": "541836e6c45ef014ab0b8be23ebd8dce9898900a7639a0c4e21f38336daef8f9",
+        "compositionIdentity": "separate-ridge-nonridge-shared-total-extinction-v0",
+        "ridgeLayerIdentity": "authored-ridge-support-coefficient-layer-v0",
+        "nonRidgeLayerIdentity": "authored-nonridge-support-coefficient-layer-v0",
+        "compositionLaw": "sigma_total=sigma_ridge+sigma_nonridge",
+        "gradientGain": 0.65,
+        "counts": {
+          "ridgeOnly": 0,
+          "nonRidgeOnly": 2565,
+          "overlap": 468,
+          "union": 3033
+        },
+        "zeroGradientAdmissionCount": 0,
+        "stableNativeCellIdSource": "boundary-splat-candidate-native-cell-membership-v0:nativeCellIndex",
+        "fallbackReason": null,
+        "backend": "WebGPU:apple"
+      },
+      "boundarySplatCapacity": 131072,
+      "boundarySplatInitialOverflowCount": 0,
+      "boundarySplatCapacityRetryCount": 0,
+      "boundarySplatFallbackReason": null,
+      "boundarySplatMode": "kernel_moment_full_flame_union",
+      "flowKernelIdentity": "flow-tangent-positive-symmetric-trilinear-v0",
+      "flowKernelRequested": {
+        "strength": 1,
+        "radiusWorld": 0.03,
+        "coherence": 1
+      },
+      "flowKernelEffective": {
+        "strength": 1,
+        "radiusWorld": 0.029999999329447746,
+        "coherence": 1
+      },
+      "flowKernelCandidateAdmissionAuthority": "structural-splat-candidates-v0",
+      "flowKernelDescriptorCaptureRequested": false,
+      "flowKernelDescriptorCaptureEffective": false,
+      "flowKernelDescriptorCapture": null
+    },
+    "audit": {
+      "ok": true,
+      "candidateCount": 3033,
+      "instanceCount": 3033,
+      "overflowCount": 0,
+      "initialDraw": {
+        "instanceCount": 3033,
+        "candidateCount": 3033,
+        "overflowCount": 0,
+        "ridgeOnlyCount": 0,
+        "nonRidgeOnlyCount": 2565,
+        "overlapCount": 468,
+        "unionCount": 3033,
+        "zeroGradientAdmissionCount": 0,
+        "authority": "gpu-indirect-post-submit-witness-readback",
+        "capacityBeforeRetry": 131072
+      },
+      "capacityRetryCount": 0,
+      "capacityAfterRetry": 131072,
+      "candidatePayloadSha256": "100c5a832385b0116a745cebfe8ba6f0fa0af3c27834eb53a03c4b3bee144aa5",
+      "attributePayloadSha256": "ae11207df70b0f05ab318028f2a78d5d8e348115b9d1f8d5bc68f83b171bf140",
+      "stateWitnessAuthority": "live-frame-step-plus-canonical-compacted-candidate-payload-sha256-v0",
+      "stateWitnessSha256": "02b112cdbde41267b4487233bcd7bdc4118ac70ec35adf91fefe23909341918d",
+      "controlAuthority": "effective-runtime-controls-canonical-json-sha256-v0",
+      "controlSha256": "b0de82c6a4896d8325df870470749bdbf6e146d11974c370a0d3793852773049",
+      "stableNativeCellIdAuthority": "gpu-compacted-native-grid-linear-index-v0",
+      "stableNativeCellIdSha256": "b94126d0c2e6442d1b219f0e6996dd5bc25ca132be9d8c5eff9715b565b8517a",
+      "stableNativeCellIdCount": 3033,
+      "stableNativeCellIdRanges": [
+        [
+          107937,
+          107937
+        ],
+        [
+          108001,
+          108002
+        ],
+        [
+          108066,
+          108067
+        ],
+        [
+          108132,
+          108132
+        ],
+        [
+          111010,
+          111010
+        ],
+        [
+          111074,
+          111074
+        ],
+        [
+          111905,
+          111905
+        ],
+        [
+          111968,
+          111969
+        ],
+        [
+          112032,
+          112033
+        ],
+        [
+          112096,
+          112101
+        ],
+        [
+          112161,
+          112166
+        ],
+        [
+          112226,
+          112230
+        ],
+        [
+          112291,
+          112294
+        ],
+        [
+          112355,
+          112357
+        ],
+        [
+          112420,
+          112420
+        ],
+        [
+          113248,
+          113248
+        ],
+        [
+          114977,
+          114977
+        ],
+        [
+          115041,
+          115041
+        ],
+        [
+          115105,
+          115107
+        ],
+        [
+          115169,
+          115172
+        ],
+        [
+          115233,
+          115234
+        ],
+        [
+          115294,
+          115294
+        ],
+        [
+          115297,
+          115298
+        ],
+        [
+          115358,
+          115358
+        ],
+        [
+          115422,
+          115422
+        ],
+        [
+          115552,
+          115553
+        ],
+        [
+          115871,
+          115871
+        ],
+        [
+          115934,
+          115936
+        ],
+        [
+          115998,
+          116001
+        ],
+        [
+          116063,
+          116065
+        ],
+        [
+          116127,
+          116129
+        ],
+        [
+          116192,
+          116195
+        ],
+        [
+          116257,
+          116261
+        ],
+        [
+          116322,
+          116325
+        ],
+        [
+          116386,
+          116390
+        ],
+        [
+          116451,
+          116454
+        ],
+        [
+          116516,
+          116517
+        ],
+        [
+          117152,
+          117152
+        ],
+        [
+          117216,
+          117216
+        ],
+        [
+          117280,
+          117280
+        ],
+        [
+          117344,
+          117344
+        ],
+        [
+          119071,
+          119073
+        ],
+        [
+          119135,
+          119137
+        ],
+        [
+          119199,
+          119202
+        ],
+        [
+          119263,
+          119269
+        ],
+        [
+          119327,
+          119330
+        ],
+        [
+          119390,
+          119394
+        ],
+        [
+          119453,
+          119458
+        ],
+        [
+          119517,
+          119522
+        ],
+        [
+          119582,
+          119587
+        ],
+        [
+          119646,
+          119651
+        ],
+        [
+          119710,
+          119717
+        ],
+        [
+          119775,
+          119781
+        ],
+        [
+          119844,
+          119845
+        ],
+        [
+          119906,
+          119909
+        ],
+        [
+          119967,
+          119967
+        ],
+        [
+          119970,
+          119974
+        ],
+        [
+          120030,
+          120038
+        ],
+        [
+          120094,
+          120102
+        ],
+        [
+          120159,
+          120165
+        ],
+        [
+          120223,
+          120229
+        ],
+        [
+          120287,
+          120293
+        ],
+        [
+          120353,
+          120357
+        ],
+        [
+          120418,
+          120421
+        ],
+        [
+          120482,
+          120486
+        ],
+        [
+          120546,
+          120550
+        ],
+        [
+          120610,
+          120613
+        ],
+        [
+          120674,
+          120674
+        ],
+        [
+          120801,
+          120801
+        ],
+        [
+          120865,
+          120865
+        ],
+        [
+          121058,
+          121058
+        ],
+        [
+          121184,
+          121184
+        ],
+        [
+          121247,
+          121248
+        ],
+        [
+          121311,
+          121312
+        ],
+        [
+          121375,
+          121376
+        ],
+        [
+          123039,
+          123039
+        ],
+        [
+          123102,
+          123105
+        ],
+        [
+          123166,
+          123169
+        ],
+        [
+          123226,
+          123228
+        ],
+        [
+          123230,
+          123233
+        ],
+        [
+          123294,
+          123298
+        ],
+        [
+          123358,
+          123366
+        ],
+        [
+          123422,
+          123428
+        ],
+        [
+          123485,
+          123492
+        ],
+        [
+          123549,
+          123555
+        ],
+        [
+          123613,
+          123621
+        ],
+        [
+          123677,
+          123686
+        ],
+        [
+          123741,
+          123750
+        ],
+        [
+          123806,
+          123815
+        ],
+        [
+          123870,
+          123879
+        ],
+        [
+          123934,
+          123943
+        ],
+        [
+          123998,
+          124006
+        ],
+        [
+          124062,
+          124071
+        ],
+        [
+          124126,
+          124135
+        ],
+        [
+          124190,
+          124199
+        ],
+        [
+          124255,
+          124263
+        ],
+        [
+          124319,
+          124327
+        ],
+        [
+          124383,
+          124391
+        ],
+        [
+          124448,
+          124455
+        ],
+        [
+          124513,
+          124519
+        ],
+        [
+          124577,
+          124583
+        ],
+        [
+          124641,
+          124647
+        ],
+        [
+          124705,
+          124709
+        ],
+        [
+          124769,
+          124773
+        ],
+        [
+          124833,
+          124833
+        ],
+        [
+          124897,
+          124897
+        ],
+        [
+          124961,
+          124961
+        ],
+        [
+          125025,
+          125025
+        ],
+        [
+          125089,
+          125090
+        ],
+        [
+          125152,
+          125154
+        ],
+        [
+          125215,
+          125216
+        ],
+        [
+          125279,
+          125280
+        ],
+        [
+          125343,
+          125344
+        ],
+        [
+          125407,
+          125408
+        ],
+        [
+          125472,
+          125472
+        ],
+        [
+          127134,
+          127136
+        ],
+        [
+          127197,
+          127201
+        ],
+        [
+          127261,
+          127265
+        ],
+        [
+          127322,
+          127330
+        ],
+        [
+          127389,
+          127394
+        ],
+        [
+          127453,
+          127462
+        ],
+        [
+          127517,
+          127525
+        ],
+        [
+          127581,
+          127589
+        ],
+        [
+          127645,
+          127654
+        ],
+        [
+          127709,
+          127718
+        ],
+        [
+          127773,
+          127784
+        ],
+        [
+          127837,
+          127848
+        ],
+        [
+          127901,
+          127912
+        ],
+        [
+          127965,
+          127976
+        ],
+        [
+          128029,
+          128040
+        ],
+        [
+          128093,
+          128103
+        ],
+        [
+          128158,
+          128168
+        ],
+        [
+          128223,
+          128231
+        ],
+        [
+          128287,
+          128295
+        ],
+        [
+          128351,
+          128359
+        ],
+        [
+          128415,
+          128423
+        ],
+        [
+          128479,
+          128487
+        ],
+        [
+          128544,
+          128552
+        ],
+        [
+          128608,
+          128615
+        ],
+        [
+          128672,
+          128679
+        ],
+        [
+          128737,
+          128743
+        ],
+        [
+          128801,
+          128805
+        ],
+        [
+          128807,
+          128807
+        ],
+        [
+          128863,
+          128869
+        ],
+        [
+          128928,
+          128929
+        ],
+        [
+          128992,
+          128993
+        ],
+        [
+          129057,
+          129057
+        ],
+        [
+          129120,
+          129121
+        ],
+        [
+          129184,
+          129187
+        ],
+        [
+          129247,
+          129250
+        ],
+        [
+          129311,
+          129312
+        ],
+        [
+          129375,
+          129376
+        ],
+        [
+          129439,
+          129440
+        ],
+        [
+          129504,
+          129504
+        ],
+        [
+          131230,
+          131232
+        ],
+        [
+          131293,
+          131297
+        ],
+        [
+          131357,
+          131361
+        ],
+        [
+          131418,
+          131426
+        ],
+        [
+          131485,
+          131490
+        ],
+        [
+          131549,
+          131554
+        ],
+        [
+          131613,
+          131618
+        ],
+        [
+          131677,
+          131685
+        ],
+        [
+          131741,
+          131750
+        ],
+        [
+          131805,
+          131815
+        ],
+        [
+          131869,
+          131880
+        ],
+        [
+          131933,
+          131944
+        ],
+        [
+          131997,
+          132008
+        ],
+        [
+          132061,
+          132072
+        ],
+        [
+          132125,
+          132137
+        ],
+        [
+          132190,
+          132199
+        ],
+        [
+          132254,
+          132264
+        ],
+        [
+          132319,
+          132327
+        ],
+        [
+          132382,
+          132391
+        ],
+        [
+          132447,
+          132455
+        ],
+        [
+          132511,
+          132519
+        ],
+        [
+          132575,
+          132584
+        ],
+        [
+          132640,
+          132647
+        ],
+        [
+          132704,
+          132711
+        ],
+        [
+          132768,
+          132775
+        ],
+        [
+          132832,
+          132839
+        ],
+        [
+          132893,
+          132903
+        ],
+        [
+          132959,
+          132965
+        ],
+        [
+          133024,
+          133028
+        ],
+        [
+          133088,
+          133089
+        ],
+        [
+          133152,
+          133154
+        ],
+        [
+          133216,
+          133218
+        ],
+        [
+          133279,
+          133282
+        ],
+        [
+          133343,
+          133346
+        ],
+        [
+          133408,
+          133409
+        ],
+        [
+          133472,
+          133472
+        ],
+        [
+          133536,
+          133536
+        ],
+        [
+          135327,
+          135328
+        ],
+        [
+          135390,
+          135393
+        ],
+        [
+          135453,
+          135458
+        ],
+        [
+          135515,
+          135522
+        ],
+        [
+          135581,
+          135585
+        ],
+        [
+          135645,
+          135649
+        ],
+        [
+          135709,
+          135713
+        ],
+        [
+          135773,
+          135777
+        ],
+        [
+          135781,
+          135782
+        ],
+        [
+          135837,
+          135847
+        ],
+        [
+          135901,
+          135912
+        ],
+        [
+          135965,
+          135976
+        ],
+        [
+          136029,
+          136040
+        ],
+        [
+          136093,
+          136104
+        ],
+        [
+          136158,
+          136169
+        ],
+        [
+          136222,
+          136233
+        ],
+        [
+          136286,
+          136297
+        ],
+        [
+          136351,
+          136360
+        ],
+        [
+          136415,
+          136424
+        ],
+        [
+          136478,
+          136488
+        ],
+        [
+          136543,
+          136551
+        ],
+        [
+          136607,
+          136615
+        ],
+        [
+          136671,
+          136680
+        ],
+        [
+          136736,
+          136744
+        ],
+        [
+          136800,
+          136807
+        ],
+        [
+          136864,
+          136871
+        ],
+        [
+          136924,
+          136935
+        ],
+        [
+          136989,
+          136999
+        ],
+        [
+          137055,
+          137062
+        ],
+        [
+          137119,
+          137125
+        ],
+        [
+          137184,
+          137187
+        ],
+        [
+          137248,
+          137252
+        ],
+        [
+          137312,
+          137314
+        ],
+        [
+          137375,
+          137378
+        ],
+        [
+          137440,
+          137442
+        ],
+        [
+          137504,
+          137506
+        ],
+        [
+          137568,
+          137569
+        ],
+        [
+          139487,
+          139488
+        ],
+        [
+          139550,
+          139552
+        ],
+        [
+          139611,
+          139616
+        ],
+        [
+          139676,
+          139680
+        ],
+        [
+          139740,
+          139744
+        ],
+        [
+          139805,
+          139808
+        ],
+        [
+          139869,
+          139872
+        ],
+        [
+          139878,
+          139878
+        ],
+        [
+          139934,
+          139936
+        ],
+        [
+          139938,
+          139944
+        ],
+        [
+          139998,
+          140000
+        ],
+        [
+          140002,
+          140008
+        ],
+        [
+          140062,
+          140073
+        ],
+        [
+          140126,
+          140137
+        ],
+        [
+          140190,
+          140192
+        ],
+        [
+          140194,
+          140201
+        ],
+        [
+          140255,
+          140256
+        ],
+        [
+          140258,
+          140265
+        ],
+        [
+          140319,
+          140330
+        ],
+        [
+          140383,
+          140393
+        ],
+        [
+          140447,
+          140457
+        ],
+        [
+          140511,
+          140521
+        ],
+        [
+          140575,
+          140584
+        ],
+        [
+          140639,
+          140648
+        ],
+        [
+          140703,
+          140713
+        ],
+        [
+          140768,
+          140777
+        ],
+        [
+          140832,
+          140840
+        ],
+        [
+          140895,
+          140904
+        ],
+        [
+          140958,
+          140967
+        ],
+        [
+          141020,
+          141031
+        ],
+        [
+          141085,
+          141095
+        ],
+        [
+          141151,
+          141158
+        ],
+        [
+          141215,
+          141222
+        ],
+        [
+          141280,
+          141286
+        ],
+        [
+          141344,
+          141349
+        ],
+        [
+          141409,
+          141410
+        ],
+        [
+          141473,
+          141474
+        ],
+        [
+          143901,
+          143901
+        ],
+        [
+          143966,
+          143966
+        ],
+        [
+          144038,
+          144040
+        ],
+        [
+          144101,
+          144104
+        ],
+        [
+          144164,
+          144169
+        ],
+        [
+          144228,
+          144233
+        ],
+        [
+          144292,
+          144297
+        ],
+        [
+          144354,
+          144361
+        ],
+        [
+          144415,
+          144426
+        ],
+        [
+          144479,
+          144489
+        ],
+        [
+          144543,
+          144553
+        ],
+        [
+          144607,
+          144617
+        ],
+        [
+          144672,
+          144681
+        ],
+        [
+          144735,
+          144744
+        ],
+        [
+          144799,
+          144809
+        ],
+        [
+          144863,
+          144874
+        ],
+        [
+          144926,
+          144937
+        ],
+        [
+          144990,
+          145000
+        ],
+        [
+          145054,
+          145063
+        ],
+        [
+          145116,
+          145127
+        ],
+        [
+          145182,
+          145191
+        ],
+        [
+          145247,
+          145255
+        ],
+        [
+          145311,
+          145319
+        ],
+        [
+          145376,
+          145383
+        ],
+        [
+          145443,
+          145445
+        ],
+        [
+          148136,
+          148136
+        ],
+        [
+          148198,
+          148200
+        ],
+        [
+          148260,
+          148265
+        ],
+        [
+          148324,
+          148330
+        ],
+        [
+          148387,
+          148394
+        ],
+        [
+          148450,
+          148457
+        ],
+        [
+          148509,
+          148522
+        ],
+        [
+          148575,
+          148585
+        ],
+        [
+          148639,
+          148649
+        ],
+        [
+          148703,
+          148713
+        ],
+        [
+          148769,
+          148777
+        ],
+        [
+          148831,
+          148840
+        ],
+        [
+          148894,
+          148906
+        ],
+        [
+          148959,
+          148971
+        ],
+        [
+          149022,
+          149034
+        ],
+        [
+          149086,
+          149097
+        ],
+        [
+          149150,
+          149159
+        ],
+        [
+          149212,
+          149223
+        ],
+        [
+          149279,
+          149286
+        ],
+        [
+          149343,
+          149350
+        ],
+        [
+          149407,
+          149415
+        ],
+        [
+          149472,
+          149474
+        ],
+        [
+          149476,
+          149480
+        ],
+        [
+          149539,
+          149541
+        ],
+        [
+          149603,
+          149604
+        ],
+        [
+          152295,
+          152296
+        ],
+        [
+          152358,
+          152362
+        ],
+        [
+          152421,
+          152426
+        ],
+        [
+          152485,
+          152490
+        ],
+        [
+          152547,
+          152554
+        ],
+        [
+          152604,
+          152605
+        ],
+        [
+          152608,
+          152618
+        ],
+        [
+          152671,
+          152681
+        ],
+        [
+          152735,
+          152745
+        ],
+        [
+          152800,
+          152809
+        ],
+        [
+          152865,
+          152872
+        ],
+        [
+          152929,
+          152936
+        ],
+        [
+          152991,
+          153002
+        ],
+        [
+          153054,
+          153067
+        ],
+        [
+          153118,
+          153130
+        ],
+        [
+          153182,
+          153193
+        ],
+        [
+          153246,
+          153255
+        ],
+        [
+          153310,
+          153318
+        ],
+        [
+          153375,
+          153382
+        ],
+        [
+          153439,
+          153446
+        ],
+        [
+          153503,
+          153510
+        ],
+        [
+          153569,
+          153570
+        ],
+        [
+          153573,
+          153575
+        ],
+        [
+          153636,
+          153637
+        ],
+        [
+          153700,
+          153701
+        ],
+        [
+          156392,
+          156392
+        ],
+        [
+          156454,
+          156458
+        ],
+        [
+          156517,
+          156522
+        ],
+        [
+          156581,
+          156586
+        ],
+        [
+          156644,
+          156650
+        ],
+        [
+          156705,
+          156714
+        ],
+        [
+          156769,
+          156777
+        ],
+        [
+          156831,
+          156841
+        ],
+        [
+          156897,
+          156905
+        ],
+        [
+          156962,
+          156968
+        ],
+        [
+          157025,
+          157032
+        ],
+        [
+          157088,
+          157098
+        ],
+        [
+          157151,
+          157163
+        ],
+        [
+          157214,
+          157225
+        ],
+        [
+          157278,
+          157289
+        ],
+        [
+          157342,
+          157351
+        ],
+        [
+          157407,
+          157414
+        ],
+        [
+          157471,
+          157477
+        ],
+        [
+          157535,
+          157539
+        ],
+        [
+          157601,
+          157602
+        ],
+        [
+          157669,
+          157670
+        ],
+        [
+          157733,
+          157733
+        ],
+        [
+          157797,
+          157797
+        ],
+        [
+          160551,
+          160554
+        ],
+        [
+          160614,
+          160618
+        ],
+        [
+          160677,
+          160682
+        ],
+        [
+          160741,
+          160746
+        ],
+        [
+          160802,
+          160802
+        ],
+        [
+          160804,
+          160810
+        ],
+        [
+          160865,
+          160873
+        ],
+        [
+          160927,
+          160937
+        ],
+        [
+          160995,
+          161001
+        ],
+        [
+          161059,
+          161064
+        ],
+        [
+          161122,
+          161128
+        ],
+        [
+          161184,
+          161195
+        ],
+        [
+          161248,
+          161259
+        ],
+        [
+          161311,
+          161321
+        ],
+        [
+          161375,
+          161385
+        ],
+        [
+          161440,
+          161447
+        ],
+        [
+          161504,
+          161510
+        ],
+        [
+          161568,
+          161573
+        ],
+        [
+          161634,
+          161634
+        ],
+        [
+          161829,
+          161829
+        ],
+        [
+          161893,
+          161893
+        ],
+        [
+          164710,
+          164715
+        ],
+        [
+          164774,
+          164778
+        ],
+        [
+          164837,
+          164842
+        ],
+        [
+          164898,
+          164905
+        ],
+        [
+          164961,
+          164969
+        ],
+        [
+          165023,
+          165033
+        ],
+        [
+          165091,
+          165097
+        ],
+        [
+          165155,
+          165161
+        ],
+        [
+          165217,
+          165224
+        ],
+        [
+          165280,
+          165290
+        ],
+        [
+          165344,
+          165355
+        ],
+        [
+          165408,
+          165418
+        ],
+        [
+          165472,
+          165481
+        ],
+        [
+          165536,
+          165545
+        ],
+        [
+          165601,
+          165606
+        ],
+        [
+          165666,
+          165667
+        ],
+        [
+          165669,
+          165669
+        ],
+        [
+          168808,
+          168811
+        ],
+        [
+          168871,
+          168874
+        ],
+        [
+          168935,
+          168938
+        ],
+        [
+          168996,
+          169001
+        ],
+        [
+          169058,
+          169065
+        ],
+        [
+          169119,
+          169129
+        ],
+        [
+          169189,
+          169193
+        ],
+        [
+          169253,
+          169257
+        ],
+        [
+          169312,
+          169320
+        ],
+        [
+          169376,
+          169386
+        ],
+        [
+          169440,
+          169451
+        ],
+        [
+          169505,
+          169514
+        ],
+        [
+          169569,
+          169578
+        ],
+        [
+          169632,
+          169641
+        ],
+        [
+          169699,
+          169705
+        ],
+        [
+          169766,
+          169766
+        ],
+        [
+          172904,
+          172906
+        ],
+        [
+          172969,
+          172970
+        ],
+        [
+          173031,
+          173034
+        ],
+        [
+          173093,
+          173097
+        ],
+        [
+          173156,
+          173161
+        ],
+        [
+          173217,
+          173225
+        ],
+        [
+          173286,
+          173289
+        ],
+        [
+          173350,
+          173353
+        ],
+        [
+          173409,
+          173410
+        ],
+        [
+          173414,
+          173416
+        ],
+        [
+          173472,
+          173482
+        ],
+        [
+          173538,
+          173547
+        ],
+        [
+          173603,
+          173610
+        ],
+        [
+          173667,
+          173674
+        ],
+        [
+          173729,
+          173737
+        ],
+        [
+          173794,
+          173801
+        ],
+        [
+          173862,
+          173863
+        ],
+        [
+          177190,
+          177193
+        ],
+        [
+          177253,
+          177257
+        ],
+        [
+          177316,
+          177321
+        ],
+        [
+          177383,
+          177384
+        ],
+        [
+          177447,
+          177448
+        ],
+        [
+          177510,
+          177512
+        ],
+        [
+          177571,
+          177572
+        ],
+        [
+          177574,
+          177577
+        ],
+        [
+          177637,
+          177643
+        ],
+        [
+          177702,
+          177707
+        ],
+        [
+          177766,
+          177770
+        ],
+        [
+          177826,
+          177834
+        ],
+        [
+          177890,
+          177897
+        ],
+        [
+          177958,
+          177961
+        ],
+        [
+          181351,
+          181352
+        ],
+        [
+          181414,
+          181416
+        ],
+        [
+          181479,
+          181480
+        ],
+        [
+          181543,
+          181544
+        ],
+        [
+          181606,
+          181608
+        ],
+        [
+          181670,
+          181672
+        ],
+        [
+          181734,
+          181738
+        ],
+        [
+          181799,
+          181803
+        ],
+        [
+          181864,
+          181866
+        ],
+        [
+          181923,
+          181930
+        ],
+        [
+          181987,
+          181993
+        ],
+        [
+          182054,
+          182057
+        ],
+        [
+          182119,
+          182120
+        ],
+        [
+          185702,
+          185703
+        ],
+        [
+          185899,
+          185899
+        ],
+        [
+          185960,
+          185962
+        ],
+        [
+          186019,
+          186026
+        ],
+        [
+          186084,
+          186089
+        ],
+        [
+          186150,
+          186153
+        ],
+        [
+          186215,
+          186215
+        ],
+        [
+          190056,
+          190058
+        ],
+        [
+          190116,
+          190122
+        ],
+        [
+          190180,
+          190185
+        ],
+        [
+          190245,
+          190249
+        ],
+        [
+          190311,
+          190312
+        ],
+        [
+          194151,
+          194153
+        ],
+        [
+          194213,
+          194218
+        ],
+        [
+          194277,
+          194281
+        ],
+        [
+          194341,
+          194345
+        ],
+        [
+          194406,
+          194408
+        ],
+        [
+          198310,
+          198313
+        ],
+        [
+          198374,
+          198377
+        ],
+        [
+          198438,
+          198441
+        ],
+        [
+          198503,
+          198504
+        ],
+        [
+          202472,
+          202472
+        ],
+        [
+          202536,
+          202536
+        ]
+      ],
+      "decodedMembershipCounts": {
+        "ridgeOnly": 0,
+        "nonRidgeOnly": 2565,
+        "overlap": 468,
+        "union": 3033
+      },
+      "channelMax": {
+        "color": [
+          0.7975107431411743,
+          0.5561932921409607,
+          0.788580060005188
+        ],
+        "opacity": 0.02198747731745243,
+        "radius": [
+          0.2366189956665039,
+          0.2366189956665039
+        ],
+        "ridgeEmission": 0.040086448192596436,
+        "ridgeExtinction": 0.040086448192596436,
+        "nonRidgeEmission": 0.04397495463490486,
+        "nonRidgeExtinction": 0.04397495463490486
+      },
+      "descriptorFrameMetrics": {
+        "authority": "gpu-flow-kernel-descriptor-plus-compacted-candidate-readback-v0",
+        "finiteFrameCount": 3033,
+        "tangentLengthMin": 0.9999998443976197,
+        "tangentLengthMax": 1.0000001438941841,
+        "tangentNormalCrossLengthMin": 0.23629675547974696,
+        "tangentNormalCrossLengthMax": 1.0000001992756469
+      },
+      "projectionMetrics": {
+        "authority": "cpu-view-projection-of-gpu-compacted-candidate-centers-v0",
+        "positiveClipWCount": 3033,
+        "centerInFrustumCount": 3009,
+        "candidateCount": 3033
+      },
+      "unionReceipt": {
+        "requestedMode": "kernel_moment_full_flame_union",
+        "effectiveMode": "kernel_moment_full_flame_union",
+        "selectorAuthorityRequested": "explicit-source-field-operator-v0",
+        "selectorAuthorityEffective": "explicit-source-field-operator-v0",
+        "selectorRecipeSha256": "541836e6c45ef014ab0b8be23ebd8dce9898900a7639a0c4e21f38336daef8f9",
+        "compositionIdentity": "separate-ridge-nonridge-shared-total-extinction-v0",
+        "ridgeLayerIdentity": "authored-ridge-support-coefficient-layer-v0",
+        "nonRidgeLayerIdentity": "authored-nonridge-support-coefficient-layer-v0",
+        "compositionLaw": "sigma_total=sigma_ridge+sigma_nonridge",
+        "gradientGain": 0.65,
+        "counts": {
+          "ridgeOnly": 0,
+          "nonRidgeOnly": 2565,
+          "overlap": 468,
+          "union": 3033
+        },
+        "zeroGradientAdmissionCount": 0,
+        "stableNativeCellIdSource": "boundary-splat-candidate-native-cell-membership-v0:nativeCellIndex",
+        "fallbackReason": null,
+        "backend": "WebGPU:apple"
+      }
+    },
+    "renderElapsedMs": 12.699999999254942,
+    "auditElapsedMs": 8.800000000745058
+  },
+  "zeroGradientFalsifier": {
+    "receipt": {
+      "ok": true,
+      "sampleAuthority": "render-only-frozen-sim-state",
+      "imageAuthority": "cdp-canvas-clip-capture-after-render-only-frozen-sim-state",
+      "controlOverrides": {
+        "boundarySplatMode": "kernel_moment_full_flame_union",
+        "reactionBoundaryGradient": 0,
+        "flowKernelStrength": 1,
+        "flowKernelRadius": 0.03,
+        "flowKernelCoherence": 1,
+        "boundarySplatRadianceGain": 2,
+        "boundarySplatOpacityGain": 2,
+        "selectiveHeadLiveRenderComposition": "splat-only-v0"
+      },
+      "boundarySplatCompositionRequestedRaw": "splat-only-v0",
+      "boundarySplatCompositionRequested": "splat-only-v0",
+      "boundarySplatCompositionEffective": "splat-only-v0",
+      "compositionAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+      "raymarchFireAuthority": 0,
+      "raymarchEncoded": false,
+      "splatEncoded": true,
+      "raymarchApplied": false,
+      "splatApplied": true,
+      "residualApplied": false,
+      "residualSourcePassEncodeMs": null,
+      "residualPassEncodeMs": null,
+      "featureCapture": null,
+      "featureCaptureSourcePassApplied": false,
+      "sameStateCaptureId": "live-union-f137-s137",
+      "baseFrameCount": 137,
+      "baseSimStepCount": 137,
+      "frameCount": 137,
+      "simStepCount": 137,
+      "sampleNowMs": 7000,
+      "requestedRenderScale": 1,
+      "renderScale": 1,
+      "renderPixelRatio": 1,
+      "displayWidth": 672,
+      "displayHeight": 960,
+      "renderWidth": 672,
+      "renderHeight": 960,
+      "volumeReconstructionStyle": "splat-only-v0",
+      "canvasCssRect": {
+        "x": 380,
+        "y": 0,
+        "width": 672,
+        "height": 960
+      },
+      "devicePixelRatio": 1,
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "prototypeIdentity": "kaminos-volume-prototype-v0",
+      "backend": "WebGPU:apple",
+      "boundarySidecarIdentity": "baked-boundary-sidecar-v0",
+      "boundarySidecarAuthority": "band-limited-support-coverage-ridge-proximity-footprint-v1",
+      "boundarySidecarSource": "baked",
+      "boundarySidecarOverrideReceipt": null,
+      "boundarySplatRendererIdentity": "live-ridge-nonridge-union-kernel-moment-covariance-splats-v0",
+      "boundarySplatAttributeModelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "boundarySplatRadius": 1,
+      "boundarySplatSharpness": 3.4,
+      "boundarySplatSourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+      "boundarySplatInstanceCount": 468,
+      "boundarySplatCandidateCount": 468,
+      "boundarySplatOverflowCount": 0,
+      "boundarySplatRidgeOnlyCount": 468,
+      "boundarySplatNonRidgeOnlyCount": 0,
+      "boundarySplatOverlapCount": 0,
+      "boundarySplatUnionCount": 468,
+      "boundarySplatZeroGradientAdmissionCount": 0,
+      "boundarySplatUnionReceipt": {
+        "requestedMode": "kernel_moment_full_flame_union",
+        "effectiveMode": "kernel_moment_full_flame_union",
+        "selectorAuthorityRequested": "explicit-source-field-operator-v0",
+        "selectorAuthorityEffective": "explicit-source-field-operator-v0",
+        "selectorRecipeSha256": "541836e6c45ef014ab0b8be23ebd8dce9898900a7639a0c4e21f38336daef8f9",
+        "compositionIdentity": "separate-ridge-nonridge-shared-total-extinction-v0",
+        "ridgeLayerIdentity": "authored-ridge-support-coefficient-layer-v0",
+        "nonRidgeLayerIdentity": "authored-nonridge-support-coefficient-layer-v0",
+        "compositionLaw": "sigma_total=sigma_ridge+sigma_nonridge",
+        "gradientGain": 0,
+        "counts": {
+          "ridgeOnly": 468,
+          "nonRidgeOnly": 0,
+          "overlap": 0,
+          "union": 468
+        },
+        "zeroGradientAdmissionCount": 0,
+        "stableNativeCellIdSource": "boundary-splat-candidate-native-cell-membership-v0:nativeCellIndex",
+        "fallbackReason": null,
+        "backend": "WebGPU:apple"
+      },
+      "boundarySplatCapacity": 131072,
+      "boundarySplatInitialOverflowCount": 0,
+      "boundarySplatCapacityRetryCount": 0,
+      "boundarySplatFallbackReason": null,
+      "boundarySplatMode": "kernel_moment_full_flame_union",
+      "flowKernelIdentity": "flow-tangent-positive-symmetric-trilinear-v0",
+      "flowKernelRequested": {
+        "strength": 1,
+        "radiusWorld": 0.03,
+        "coherence": 1
+      },
+      "flowKernelEffective": {
+        "strength": 1,
+        "radiusWorld": 0.029999999329447746,
+        "coherence": 1
+      },
+      "flowKernelCandidateAdmissionAuthority": "structural-splat-candidates-v0",
+      "flowKernelDescriptorCaptureRequested": false,
+      "flowKernelDescriptorCaptureEffective": false,
+      "flowKernelDescriptorCapture": null
+    },
+    "audit": {
+      "ok": true,
+      "candidateCount": 468,
+      "instanceCount": 468,
+      "overflowCount": 0,
+      "initialDraw": {
+        "instanceCount": 468,
+        "candidateCount": 468,
+        "overflowCount": 0,
+        "ridgeOnlyCount": 468,
+        "nonRidgeOnlyCount": 0,
+        "overlapCount": 0,
+        "unionCount": 468,
+        "zeroGradientAdmissionCount": 0,
+        "authority": "gpu-indirect-post-submit-witness-readback",
+        "capacityBeforeRetry": 131072
+      },
+      "capacityRetryCount": 0,
+      "capacityAfterRetry": 131072,
+      "candidatePayloadSha256": "2f97830c27224312230d8d2bcef3840b25f0624d62b1394baf52b4848247375b",
+      "attributePayloadSha256": "a8f36376b9527899b8b2588df9d44b082ddd6b30eb63ce7d78b8dd321990db50",
+      "stateWitnessAuthority": "live-frame-step-plus-canonical-compacted-candidate-payload-sha256-v0",
+      "stateWitnessSha256": "4e04518ed32d189c1c30d91a92c327a03b4d18159f3068ffebd9a32b133e7b70",
+      "controlAuthority": "effective-runtime-controls-canonical-json-sha256-v0",
+      "controlSha256": "7dd175dddb28a4c12e29b5a1c6a2c920c1104d4c9a574f6af860f972efa1f43f",
+      "stableNativeCellIdAuthority": "gpu-compacted-native-grid-linear-index-v0",
+      "stableNativeCellIdSha256": "412c5fbaf99ef7065aaebe56d93aa4506b8e78b459d67d5ca5180257a96d19ed",
+      "stableNativeCellIdCount": 468,
+      "stableNativeCellIdRanges": [
+        [
+          119266,
+          119266
+        ],
+        [
+          119330,
+          119330
+        ],
+        [
+          119391,
+          119393
+        ],
+        [
+          119454,
+          119457
+        ],
+        [
+          119518,
+          119521
+        ],
+        [
+          119583,
+          119585
+        ],
+        [
+          119648,
+          119648
+        ],
+        [
+          123103,
+          123104
+        ],
+        [
+          123166,
+          123169
+        ],
+        [
+          123230,
+          123233
+        ],
+        [
+          123294,
+          123298
+        ],
+        [
+          123358,
+          123364
+        ],
+        [
+          123422,
+          123428
+        ],
+        [
+          123486,
+          123491
+        ],
+        [
+          123550,
+          123554
+        ],
+        [
+          123614,
+          123620
+        ],
+        [
+          123678,
+          123685
+        ],
+        [
+          123742,
+          123748
+        ],
+        [
+          123806,
+          123811
+        ],
+        [
+          123871,
+          123875
+        ],
+        [
+          123935,
+          123938
+        ],
+        [
+          123998,
+          124005
+        ],
+        [
+          124063,
+          124070
+        ],
+        [
+          124128,
+          124134
+        ],
+        [
+          124194,
+          124198
+        ],
+        [
+          124259,
+          124261
+        ],
+        [
+          127135,
+          127135
+        ],
+        [
+          127198,
+          127200
+        ],
+        [
+          127262,
+          127265
+        ],
+        [
+          127325,
+          127326
+        ],
+        [
+          127328,
+          127329
+        ],
+        [
+          127390,
+          127390
+        ],
+        [
+          127392,
+          127394
+        ],
+        [
+          127454,
+          127454
+        ],
+        [
+          127457,
+          127459
+        ],
+        [
+          127518,
+          127519
+        ],
+        [
+          127521,
+          127524
+        ],
+        [
+          127583,
+          127583
+        ],
+        [
+          127585,
+          127588
+        ],
+        [
+          127646,
+          127646
+        ],
+        [
+          127650,
+          127651
+        ],
+        [
+          127710,
+          127710
+        ],
+        [
+          127715,
+          127716
+        ],
+        [
+          127774,
+          127775
+        ],
+        [
+          127780,
+          127781
+        ],
+        [
+          127838,
+          127839
+        ],
+        [
+          127843,
+          127845
+        ],
+        [
+          127903,
+          127904
+        ],
+        [
+          127907,
+          127909
+        ],
+        [
+          127967,
+          127973
+        ],
+        [
+          128030,
+          128037
+        ],
+        [
+          128094,
+          128096
+        ],
+        [
+          128099,
+          128102
+        ],
+        [
+          128160,
+          128162
+        ],
+        [
+          128164,
+          128166
+        ],
+        [
+          128225,
+          128230
+        ],
+        [
+          128290,
+          128294
+        ],
+        [
+          128355,
+          128357
+        ],
+        [
+          131231,
+          131231
+        ],
+        [
+          131294,
+          131296
+        ],
+        [
+          131358,
+          131361
+        ],
+        [
+          131421,
+          131425
+        ],
+        [
+          131485,
+          131489
+        ],
+        [
+          131549,
+          131553
+        ],
+        [
+          131614,
+          131614
+        ],
+        [
+          131616,
+          131617
+        ],
+        [
+          131678,
+          131684
+        ],
+        [
+          131742,
+          131748
+        ],
+        [
+          131806,
+          131813
+        ],
+        [
+          131870,
+          131877
+        ],
+        [
+          131934,
+          131934
+        ],
+        [
+          131936,
+          131938
+        ],
+        [
+          131940,
+          131942
+        ],
+        [
+          131998,
+          132002
+        ],
+        [
+          132004,
+          132006
+        ],
+        [
+          132062,
+          132070
+        ],
+        [
+          132126,
+          132134
+        ],
+        [
+          132192,
+          132198
+        ],
+        [
+          132257,
+          132262
+        ],
+        [
+          132322,
+          132326
+        ],
+        [
+          132387,
+          132388
+        ],
+        [
+          132390,
+          132390
+        ],
+        [
+          132451,
+          132454
+        ],
+        [
+          135391,
+          135392
+        ],
+        [
+          135454,
+          135457
+        ],
+        [
+          135517,
+          135521
+        ],
+        [
+          135581,
+          135584
+        ],
+        [
+          135645,
+          135648
+        ],
+        [
+          135709,
+          135712
+        ],
+        [
+          135774,
+          135776
+        ],
+        [
+          135838,
+          135844
+        ],
+        [
+          135902,
+          135909
+        ],
+        [
+          135966,
+          135972
+        ],
+        [
+          135974,
+          135974
+        ],
+        [
+          136030,
+          136036
+        ],
+        [
+          136038,
+          136038
+        ],
+        [
+          136094,
+          136095
+        ],
+        [
+          136098,
+          136102
+        ],
+        [
+          136159,
+          136160
+        ],
+        [
+          136163,
+          136166
+        ],
+        [
+          136223,
+          136224
+        ],
+        [
+          136227,
+          136230
+        ],
+        [
+          136288,
+          136288
+        ],
+        [
+          136291,
+          136294
+        ],
+        [
+          136356,
+          136358
+        ],
+        [
+          136420,
+          136422
+        ],
+        [
+          136484,
+          136485
+        ],
+        [
+          136548,
+          136548
+        ],
+        [
+          139616,
+          139616
+        ],
+        [
+          139678,
+          139680
+        ],
+        [
+          139742,
+          139742
+        ],
+        [
+          140002,
+          140004
+        ],
+        [
+          140066,
+          140069
+        ],
+        [
+          140130,
+          140134
+        ],
+        [
+          140195,
+          140198
+        ],
+        [
+          140260,
+          140262
+        ],
+        [
+          140323,
+          140325
+        ],
+        [
+          140387,
+          140390
+        ],
+        [
+          140451,
+          140453
+        ],
+        [
+          140516,
+          140517
+        ],
+        [
+          144229,
+          144229
+        ],
+        [
+          144292,
+          144293
+        ],
+        [
+          144356,
+          144356
+        ],
+        [
+          144419,
+          144420
+        ],
+        [
+          144484,
+          144485
+        ],
+        [
+          144548,
+          144548
+        ],
+        [
+          148644,
+          148644
+        ]
+      ],
+      "decodedMembershipCounts": {
+        "ridgeOnly": 468,
+        "nonRidgeOnly": 0,
+        "overlap": 0,
+        "union": 468
+      },
+      "channelMax": {
+        "color": [
+          0.7975107431411743,
+          0.5561932921409607,
+          0.745826005935669
+        ],
+        "opacity": 0.020331766456365585,
+        "radius": [
+          0.2292138934135437,
+          0.2292138934135437
+        ],
+        "ridgeEmission": 0.040086448192596436,
+        "ridgeExtinction": 0.040086448192596436,
+        "nonRidgeEmission": 0.031644683331251144,
+        "nonRidgeExtinction": 0.031644683331251144
+      },
+      "descriptorFrameMetrics": {
+        "authority": "gpu-flow-kernel-descriptor-plus-compacted-candidate-readback-v0",
+        "finiteFrameCount": 468,
+        "tangentLengthMin": 0.9999998738889335,
+        "tangentLengthMax": 1.0000001438941841,
+        "tangentNormalCrossLengthMin": 0.35865415179698407,
+        "tangentNormalCrossLengthMax": 1.0000001992756469
+      },
+      "projectionMetrics": {
+        "authority": "cpu-view-projection-of-gpu-compacted-candidate-centers-v0",
+        "positiveClipWCount": 468,
+        "centerInFrustumCount": 460,
+        "candidateCount": 468
+      },
+      "unionReceipt": {
+        "requestedMode": "kernel_moment_full_flame_union",
+        "effectiveMode": "kernel_moment_full_flame_union",
+        "selectorAuthorityRequested": "explicit-source-field-operator-v0",
+        "selectorAuthorityEffective": "explicit-source-field-operator-v0",
+        "selectorRecipeSha256": "541836e6c45ef014ab0b8be23ebd8dce9898900a7639a0c4e21f38336daef8f9",
+        "compositionIdentity": "separate-ridge-nonridge-shared-total-extinction-v0",
+        "ridgeLayerIdentity": "authored-ridge-support-coefficient-layer-v0",
+        "nonRidgeLayerIdentity": "authored-nonridge-support-coefficient-layer-v0",
+        "compositionLaw": "sigma_total=sigma_ridge+sigma_nonridge",
+        "gradientGain": 0,
+        "counts": {
+          "ridgeOnly": 468,
+          "nonRidgeOnly": 0,
+          "overlap": 0,
+          "union": 468
+        },
+        "zeroGradientAdmissionCount": 0,
+        "stableNativeCellIdSource": "boundary-splat-candidate-native-cell-membership-v0:nativeCellIndex",
+        "fallbackReason": null,
+        "backend": "WebGPU:apple"
+      }
+    },
+    "renderElapsedMs": 3.5,
+    "auditElapsedMs": 2.399999998509884
+  },
+  "restored": {
+    "receipt": {
+      "ok": true,
+      "sampleAuthority": "render-only-frozen-sim-state",
+      "imageAuthority": "cdp-canvas-clip-capture-after-render-only-frozen-sim-state",
+      "controlOverrides": {
+        "boundarySplatMode": "kernel_moment_full_flame_union",
+        "reactionBoundaryGradient": 0.65,
+        "flowKernelStrength": 1,
+        "flowKernelRadius": 0.03,
+        "flowKernelCoherence": 1,
+        "boundarySplatRadianceGain": 2,
+        "boundarySplatOpacityGain": 2,
+        "selectiveHeadLiveRenderComposition": "splat-only-v0"
+      },
+      "boundarySplatCompositionRequestedRaw": "splat-only-v0",
+      "boundarySplatCompositionRequested": "splat-only-v0",
+      "boundarySplatCompositionEffective": "splat-only-v0",
+      "compositionAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+      "raymarchFireAuthority": 0,
+      "raymarchEncoded": false,
+      "splatEncoded": true,
+      "raymarchApplied": false,
+      "splatApplied": true,
+      "residualApplied": false,
+      "residualSourcePassEncodeMs": null,
+      "residualPassEncodeMs": null,
+      "featureCapture": null,
+      "featureCaptureSourcePassApplied": false,
+      "sameStateCaptureId": "live-union-f137-s137",
+      "baseFrameCount": 137,
+      "baseSimStepCount": 137,
+      "frameCount": 137,
+      "simStepCount": 137,
+      "sampleNowMs": 7000,
+      "requestedRenderScale": 1,
+      "renderScale": 1,
+      "renderPixelRatio": 1,
+      "displayWidth": 672,
+      "displayHeight": 960,
+      "renderWidth": 672,
+      "renderHeight": 960,
+      "volumeReconstructionStyle": "splat-only-v0",
+      "canvasCssRect": {
+        "x": 380,
+        "y": 0,
+        "width": 672,
+        "height": 960
+      },
+      "devicePixelRatio": 1,
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "prototypeIdentity": "kaminos-volume-prototype-v0",
+      "backend": "WebGPU:apple",
+      "boundarySidecarIdentity": "baked-boundary-sidecar-v0",
+      "boundarySidecarAuthority": "band-limited-support-coverage-ridge-proximity-footprint-v1",
+      "boundarySidecarSource": "baked",
+      "boundarySidecarOverrideReceipt": null,
+      "boundarySplatRendererIdentity": "live-ridge-nonridge-union-kernel-moment-covariance-splats-v0",
+      "boundarySplatAttributeModelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "boundarySplatRadius": 1,
+      "boundarySplatSharpness": 3.4,
+      "boundarySplatSourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+      "boundarySplatInstanceCount": 3033,
+      "boundarySplatCandidateCount": 3033,
+      "boundarySplatOverflowCount": 0,
+      "boundarySplatRidgeOnlyCount": 0,
+      "boundarySplatNonRidgeOnlyCount": 2565,
+      "boundarySplatOverlapCount": 468,
+      "boundarySplatUnionCount": 3033,
+      "boundarySplatZeroGradientAdmissionCount": 0,
+      "boundarySplatUnionReceipt": {
+        "requestedMode": "kernel_moment_full_flame_union",
+        "effectiveMode": "kernel_moment_full_flame_union",
+        "selectorAuthorityRequested": "explicit-source-field-operator-v0",
+        "selectorAuthorityEffective": "explicit-source-field-operator-v0",
+        "selectorRecipeSha256": "541836e6c45ef014ab0b8be23ebd8dce9898900a7639a0c4e21f38336daef8f9",
+        "compositionIdentity": "separate-ridge-nonridge-shared-total-extinction-v0",
+        "ridgeLayerIdentity": "authored-ridge-support-coefficient-layer-v0",
+        "nonRidgeLayerIdentity": "authored-nonridge-support-coefficient-layer-v0",
+        "compositionLaw": "sigma_total=sigma_ridge+sigma_nonridge",
+        "gradientGain": 0.65,
+        "counts": {
+          "ridgeOnly": 0,
+          "nonRidgeOnly": 2565,
+          "overlap": 468,
+          "union": 3033
+        },
+        "zeroGradientAdmissionCount": 0,
+        "stableNativeCellIdSource": "boundary-splat-candidate-native-cell-membership-v0:nativeCellIndex",
+        "fallbackReason": null,
+        "backend": "WebGPU:apple"
+      },
+      "boundarySplatCapacity": 131072,
+      "boundarySplatInitialOverflowCount": 0,
+      "boundarySplatCapacityRetryCount": 0,
+      "boundarySplatFallbackReason": null,
+      "boundarySplatMode": "kernel_moment_full_flame_union",
+      "flowKernelIdentity": "flow-tangent-positive-symmetric-trilinear-v0",
+      "flowKernelRequested": {
+        "strength": 1,
+        "radiusWorld": 0.03,
+        "coherence": 1
+      },
+      "flowKernelEffective": {
+        "strength": 1,
+        "radiusWorld": 0.029999999329447746,
+        "coherence": 1
+      },
+      "flowKernelCandidateAdmissionAuthority": "structural-splat-candidates-v0",
+      "flowKernelDescriptorCaptureRequested": false,
+      "flowKernelDescriptorCaptureEffective": false,
+      "flowKernelDescriptorCapture": null
+    },
+    "audit": {
+      "ok": true,
+      "candidateCount": 3033,
+      "instanceCount": 3033,
+      "overflowCount": 0,
+      "initialDraw": {
+        "instanceCount": 3033,
+        "candidateCount": 3033,
+        "overflowCount": 0,
+        "ridgeOnlyCount": 0,
+        "nonRidgeOnlyCount": 2565,
+        "overlapCount": 468,
+        "unionCount": 3033,
+        "zeroGradientAdmissionCount": 0,
+        "authority": "gpu-indirect-post-submit-witness-readback",
+        "capacityBeforeRetry": 131072
+      },
+      "capacityRetryCount": 0,
+      "capacityAfterRetry": 131072,
+      "candidatePayloadSha256": "100c5a832385b0116a745cebfe8ba6f0fa0af3c27834eb53a03c4b3bee144aa5",
+      "attributePayloadSha256": "ae11207df70b0f05ab318028f2a78d5d8e348115b9d1f8d5bc68f83b171bf140",
+      "stateWitnessAuthority": "live-frame-step-plus-canonical-compacted-candidate-payload-sha256-v0",
+      "stateWitnessSha256": "02b112cdbde41267b4487233bcd7bdc4118ac70ec35adf91fefe23909341918d",
+      "controlAuthority": "effective-runtime-controls-canonical-json-sha256-v0",
+      "controlSha256": "b0de82c6a4896d8325df870470749bdbf6e146d11974c370a0d3793852773049",
+      "stableNativeCellIdAuthority": "gpu-compacted-native-grid-linear-index-v0",
+      "stableNativeCellIdSha256": "b94126d0c2e6442d1b219f0e6996dd5bc25ca132be9d8c5eff9715b565b8517a",
+      "stableNativeCellIdCount": 3033,
+      "stableNativeCellIdRanges": [
+        [
+          107937,
+          107937
+        ],
+        [
+          108001,
+          108002
+        ],
+        [
+          108066,
+          108067
+        ],
+        [
+          108132,
+          108132
+        ],
+        [
+          111010,
+          111010
+        ],
+        [
+          111074,
+          111074
+        ],
+        [
+          111905,
+          111905
+        ],
+        [
+          111968,
+          111969
+        ],
+        [
+          112032,
+          112033
+        ],
+        [
+          112096,
+          112101
+        ],
+        [
+          112161,
+          112166
+        ],
+        [
+          112226,
+          112230
+        ],
+        [
+          112291,
+          112294
+        ],
+        [
+          112355,
+          112357
+        ],
+        [
+          112420,
+          112420
+        ],
+        [
+          113248,
+          113248
+        ],
+        [
+          114977,
+          114977
+        ],
+        [
+          115041,
+          115041
+        ],
+        [
+          115105,
+          115107
+        ],
+        [
+          115169,
+          115172
+        ],
+        [
+          115233,
+          115234
+        ],
+        [
+          115294,
+          115294
+        ],
+        [
+          115297,
+          115298
+        ],
+        [
+          115358,
+          115358
+        ],
+        [
+          115422,
+          115422
+        ],
+        [
+          115552,
+          115553
+        ],
+        [
+          115871,
+          115871
+        ],
+        [
+          115934,
+          115936
+        ],
+        [
+          115998,
+          116001
+        ],
+        [
+          116063,
+          116065
+        ],
+        [
+          116127,
+          116129
+        ],
+        [
+          116192,
+          116195
+        ],
+        [
+          116257,
+          116261
+        ],
+        [
+          116322,
+          116325
+        ],
+        [
+          116386,
+          116390
+        ],
+        [
+          116451,
+          116454
+        ],
+        [
+          116516,
+          116517
+        ],
+        [
+          117152,
+          117152
+        ],
+        [
+          117216,
+          117216
+        ],
+        [
+          117280,
+          117280
+        ],
+        [
+          117344,
+          117344
+        ],
+        [
+          119071,
+          119073
+        ],
+        [
+          119135,
+          119137
+        ],
+        [
+          119199,
+          119202
+        ],
+        [
+          119263,
+          119269
+        ],
+        [
+          119327,
+          119330
+        ],
+        [
+          119390,
+          119394
+        ],
+        [
+          119453,
+          119458
+        ],
+        [
+          119517,
+          119522
+        ],
+        [
+          119582,
+          119587
+        ],
+        [
+          119646,
+          119651
+        ],
+        [
+          119710,
+          119717
+        ],
+        [
+          119775,
+          119781
+        ],
+        [
+          119844,
+          119845
+        ],
+        [
+          119906,
+          119909
+        ],
+        [
+          119967,
+          119967
+        ],
+        [
+          119970,
+          119974
+        ],
+        [
+          120030,
+          120038
+        ],
+        [
+          120094,
+          120102
+        ],
+        [
+          120159,
+          120165
+        ],
+        [
+          120223,
+          120229
+        ],
+        [
+          120287,
+          120293
+        ],
+        [
+          120353,
+          120357
+        ],
+        [
+          120418,
+          120421
+        ],
+        [
+          120482,
+          120486
+        ],
+        [
+          120546,
+          120550
+        ],
+        [
+          120610,
+          120613
+        ],
+        [
+          120674,
+          120674
+        ],
+        [
+          120801,
+          120801
+        ],
+        [
+          120865,
+          120865
+        ],
+        [
+          121058,
+          121058
+        ],
+        [
+          121184,
+          121184
+        ],
+        [
+          121247,
+          121248
+        ],
+        [
+          121311,
+          121312
+        ],
+        [
+          121375,
+          121376
+        ],
+        [
+          123039,
+          123039
+        ],
+        [
+          123102,
+          123105
+        ],
+        [
+          123166,
+          123169
+        ],
+        [
+          123226,
+          123228
+        ],
+        [
+          123230,
+          123233
+        ],
+        [
+          123294,
+          123298
+        ],
+        [
+          123358,
+          123366
+        ],
+        [
+          123422,
+          123428
+        ],
+        [
+          123485,
+          123492
+        ],
+        [
+          123549,
+          123555
+        ],
+        [
+          123613,
+          123621
+        ],
+        [
+          123677,
+          123686
+        ],
+        [
+          123741,
+          123750
+        ],
+        [
+          123806,
+          123815
+        ],
+        [
+          123870,
+          123879
+        ],
+        [
+          123934,
+          123943
+        ],
+        [
+          123998,
+          124006
+        ],
+        [
+          124062,
+          124071
+        ],
+        [
+          124126,
+          124135
+        ],
+        [
+          124190,
+          124199
+        ],
+        [
+          124255,
+          124263
+        ],
+        [
+          124319,
+          124327
+        ],
+        [
+          124383,
+          124391
+        ],
+        [
+          124448,
+          124455
+        ],
+        [
+          124513,
+          124519
+        ],
+        [
+          124577,
+          124583
+        ],
+        [
+          124641,
+          124647
+        ],
+        [
+          124705,
+          124709
+        ],
+        [
+          124769,
+          124773
+        ],
+        [
+          124833,
+          124833
+        ],
+        [
+          124897,
+          124897
+        ],
+        [
+          124961,
+          124961
+        ],
+        [
+          125025,
+          125025
+        ],
+        [
+          125089,
+          125090
+        ],
+        [
+          125152,
+          125154
+        ],
+        [
+          125215,
+          125216
+        ],
+        [
+          125279,
+          125280
+        ],
+        [
+          125343,
+          125344
+        ],
+        [
+          125407,
+          125408
+        ],
+        [
+          125472,
+          125472
+        ],
+        [
+          127134,
+          127136
+        ],
+        [
+          127197,
+          127201
+        ],
+        [
+          127261,
+          127265
+        ],
+        [
+          127322,
+          127330
+        ],
+        [
+          127389,
+          127394
+        ],
+        [
+          127453,
+          127462
+        ],
+        [
+          127517,
+          127525
+        ],
+        [
+          127581,
+          127589
+        ],
+        [
+          127645,
+          127654
+        ],
+        [
+          127709,
+          127718
+        ],
+        [
+          127773,
+          127784
+        ],
+        [
+          127837,
+          127848
+        ],
+        [
+          127901,
+          127912
+        ],
+        [
+          127965,
+          127976
+        ],
+        [
+          128029,
+          128040
+        ],
+        [
+          128093,
+          128103
+        ],
+        [
+          128158,
+          128168
+        ],
+        [
+          128223,
+          128231
+        ],
+        [
+          128287,
+          128295
+        ],
+        [
+          128351,
+          128359
+        ],
+        [
+          128415,
+          128423
+        ],
+        [
+          128479,
+          128487
+        ],
+        [
+          128544,
+          128552
+        ],
+        [
+          128608,
+          128615
+        ],
+        [
+          128672,
+          128679
+        ],
+        [
+          128737,
+          128743
+        ],
+        [
+          128801,
+          128805
+        ],
+        [
+          128807,
+          128807
+        ],
+        [
+          128863,
+          128869
+        ],
+        [
+          128928,
+          128929
+        ],
+        [
+          128992,
+          128993
+        ],
+        [
+          129057,
+          129057
+        ],
+        [
+          129120,
+          129121
+        ],
+        [
+          129184,
+          129187
+        ],
+        [
+          129247,
+          129250
+        ],
+        [
+          129311,
+          129312
+        ],
+        [
+          129375,
+          129376
+        ],
+        [
+          129439,
+          129440
+        ],
+        [
+          129504,
+          129504
+        ],
+        [
+          131230,
+          131232
+        ],
+        [
+          131293,
+          131297
+        ],
+        [
+          131357,
+          131361
+        ],
+        [
+          131418,
+          131426
+        ],
+        [
+          131485,
+          131490
+        ],
+        [
+          131549,
+          131554
+        ],
+        [
+          131613,
+          131618
+        ],
+        [
+          131677,
+          131685
+        ],
+        [
+          131741,
+          131750
+        ],
+        [
+          131805,
+          131815
+        ],
+        [
+          131869,
+          131880
+        ],
+        [
+          131933,
+          131944
+        ],
+        [
+          131997,
+          132008
+        ],
+        [
+          132061,
+          132072
+        ],
+        [
+          132125,
+          132137
+        ],
+        [
+          132190,
+          132199
+        ],
+        [
+          132254,
+          132264
+        ],
+        [
+          132319,
+          132327
+        ],
+        [
+          132382,
+          132391
+        ],
+        [
+          132447,
+          132455
+        ],
+        [
+          132511,
+          132519
+        ],
+        [
+          132575,
+          132584
+        ],
+        [
+          132640,
+          132647
+        ],
+        [
+          132704,
+          132711
+        ],
+        [
+          132768,
+          132775
+        ],
+        [
+          132832,
+          132839
+        ],
+        [
+          132893,
+          132903
+        ],
+        [
+          132959,
+          132965
+        ],
+        [
+          133024,
+          133028
+        ],
+        [
+          133088,
+          133089
+        ],
+        [
+          133152,
+          133154
+        ],
+        [
+          133216,
+          133218
+        ],
+        [
+          133279,
+          133282
+        ],
+        [
+          133343,
+          133346
+        ],
+        [
+          133408,
+          133409
+        ],
+        [
+          133472,
+          133472
+        ],
+        [
+          133536,
+          133536
+        ],
+        [
+          135327,
+          135328
+        ],
+        [
+          135390,
+          135393
+        ],
+        [
+          135453,
+          135458
+        ],
+        [
+          135515,
+          135522
+        ],
+        [
+          135581,
+          135585
+        ],
+        [
+          135645,
+          135649
+        ],
+        [
+          135709,
+          135713
+        ],
+        [
+          135773,
+          135777
+        ],
+        [
+          135781,
+          135782
+        ],
+        [
+          135837,
+          135847
+        ],
+        [
+          135901,
+          135912
+        ],
+        [
+          135965,
+          135976
+        ],
+        [
+          136029,
+          136040
+        ],
+        [
+          136093,
+          136104
+        ],
+        [
+          136158,
+          136169
+        ],
+        [
+          136222,
+          136233
+        ],
+        [
+          136286,
+          136297
+        ],
+        [
+          136351,
+          136360
+        ],
+        [
+          136415,
+          136424
+        ],
+        [
+          136478,
+          136488
+        ],
+        [
+          136543,
+          136551
+        ],
+        [
+          136607,
+          136615
+        ],
+        [
+          136671,
+          136680
+        ],
+        [
+          136736,
+          136744
+        ],
+        [
+          136800,
+          136807
+        ],
+        [
+          136864,
+          136871
+        ],
+        [
+          136924,
+          136935
+        ],
+        [
+          136989,
+          136999
+        ],
+        [
+          137055,
+          137062
+        ],
+        [
+          137119,
+          137125
+        ],
+        [
+          137184,
+          137187
+        ],
+        [
+          137248,
+          137252
+        ],
+        [
+          137312,
+          137314
+        ],
+        [
+          137375,
+          137378
+        ],
+        [
+          137440,
+          137442
+        ],
+        [
+          137504,
+          137506
+        ],
+        [
+          137568,
+          137569
+        ],
+        [
+          139487,
+          139488
+        ],
+        [
+          139550,
+          139552
+        ],
+        [
+          139611,
+          139616
+        ],
+        [
+          139676,
+          139680
+        ],
+        [
+          139740,
+          139744
+        ],
+        [
+          139805,
+          139808
+        ],
+        [
+          139869,
+          139872
+        ],
+        [
+          139878,
+          139878
+        ],
+        [
+          139934,
+          139936
+        ],
+        [
+          139938,
+          139944
+        ],
+        [
+          139998,
+          140000
+        ],
+        [
+          140002,
+          140008
+        ],
+        [
+          140062,
+          140073
+        ],
+        [
+          140126,
+          140137
+        ],
+        [
+          140190,
+          140192
+        ],
+        [
+          140194,
+          140201
+        ],
+        [
+          140255,
+          140256
+        ],
+        [
+          140258,
+          140265
+        ],
+        [
+          140319,
+          140330
+        ],
+        [
+          140383,
+          140393
+        ],
+        [
+          140447,
+          140457
+        ],
+        [
+          140511,
+          140521
+        ],
+        [
+          140575,
+          140584
+        ],
+        [
+          140639,
+          140648
+        ],
+        [
+          140703,
+          140713
+        ],
+        [
+          140768,
+          140777
+        ],
+        [
+          140832,
+          140840
+        ],
+        [
+          140895,
+          140904
+        ],
+        [
+          140958,
+          140967
+        ],
+        [
+          141020,
+          141031
+        ],
+        [
+          141085,
+          141095
+        ],
+        [
+          141151,
+          141158
+        ],
+        [
+          141215,
+          141222
+        ],
+        [
+          141280,
+          141286
+        ],
+        [
+          141344,
+          141349
+        ],
+        [
+          141409,
+          141410
+        ],
+        [
+          141473,
+          141474
+        ],
+        [
+          143901,
+          143901
+        ],
+        [
+          143966,
+          143966
+        ],
+        [
+          144038,
+          144040
+        ],
+        [
+          144101,
+          144104
+        ],
+        [
+          144164,
+          144169
+        ],
+        [
+          144228,
+          144233
+        ],
+        [
+          144292,
+          144297
+        ],
+        [
+          144354,
+          144361
+        ],
+        [
+          144415,
+          144426
+        ],
+        [
+          144479,
+          144489
+        ],
+        [
+          144543,
+          144553
+        ],
+        [
+          144607,
+          144617
+        ],
+        [
+          144672,
+          144681
+        ],
+        [
+          144735,
+          144744
+        ],
+        [
+          144799,
+          144809
+        ],
+        [
+          144863,
+          144874
+        ],
+        [
+          144926,
+          144937
+        ],
+        [
+          144990,
+          145000
+        ],
+        [
+          145054,
+          145063
+        ],
+        [
+          145116,
+          145127
+        ],
+        [
+          145182,
+          145191
+        ],
+        [
+          145247,
+          145255
+        ],
+        [
+          145311,
+          145319
+        ],
+        [
+          145376,
+          145383
+        ],
+        [
+          145443,
+          145445
+        ],
+        [
+          148136,
+          148136
+        ],
+        [
+          148198,
+          148200
+        ],
+        [
+          148260,
+          148265
+        ],
+        [
+          148324,
+          148330
+        ],
+        [
+          148387,
+          148394
+        ],
+        [
+          148450,
+          148457
+        ],
+        [
+          148509,
+          148522
+        ],
+        [
+          148575,
+          148585
+        ],
+        [
+          148639,
+          148649
+        ],
+        [
+          148703,
+          148713
+        ],
+        [
+          148769,
+          148777
+        ],
+        [
+          148831,
+          148840
+        ],
+        [
+          148894,
+          148906
+        ],
+        [
+          148959,
+          148971
+        ],
+        [
+          149022,
+          149034
+        ],
+        [
+          149086,
+          149097
+        ],
+        [
+          149150,
+          149159
+        ],
+        [
+          149212,
+          149223
+        ],
+        [
+          149279,
+          149286
+        ],
+        [
+          149343,
+          149350
+        ],
+        [
+          149407,
+          149415
+        ],
+        [
+          149472,
+          149474
+        ],
+        [
+          149476,
+          149480
+        ],
+        [
+          149539,
+          149541
+        ],
+        [
+          149603,
+          149604
+        ],
+        [
+          152295,
+          152296
+        ],
+        [
+          152358,
+          152362
+        ],
+        [
+          152421,
+          152426
+        ],
+        [
+          152485,
+          152490
+        ],
+        [
+          152547,
+          152554
+        ],
+        [
+          152604,
+          152605
+        ],
+        [
+          152608,
+          152618
+        ],
+        [
+          152671,
+          152681
+        ],
+        [
+          152735,
+          152745
+        ],
+        [
+          152800,
+          152809
+        ],
+        [
+          152865,
+          152872
+        ],
+        [
+          152929,
+          152936
+        ],
+        [
+          152991,
+          153002
+        ],
+        [
+          153054,
+          153067
+        ],
+        [
+          153118,
+          153130
+        ],
+        [
+          153182,
+          153193
+        ],
+        [
+          153246,
+          153255
+        ],
+        [
+          153310,
+          153318
+        ],
+        [
+          153375,
+          153382
+        ],
+        [
+          153439,
+          153446
+        ],
+        [
+          153503,
+          153510
+        ],
+        [
+          153569,
+          153570
+        ],
+        [
+          153573,
+          153575
+        ],
+        [
+          153636,
+          153637
+        ],
+        [
+          153700,
+          153701
+        ],
+        [
+          156392,
+          156392
+        ],
+        [
+          156454,
+          156458
+        ],
+        [
+          156517,
+          156522
+        ],
+        [
+          156581,
+          156586
+        ],
+        [
+          156644,
+          156650
+        ],
+        [
+          156705,
+          156714
+        ],
+        [
+          156769,
+          156777
+        ],
+        [
+          156831,
+          156841
+        ],
+        [
+          156897,
+          156905
+        ],
+        [
+          156962,
+          156968
+        ],
+        [
+          157025,
+          157032
+        ],
+        [
+          157088,
+          157098
+        ],
+        [
+          157151,
+          157163
+        ],
+        [
+          157214,
+          157225
+        ],
+        [
+          157278,
+          157289
+        ],
+        [
+          157342,
+          157351
+        ],
+        [
+          157407,
+          157414
+        ],
+        [
+          157471,
+          157477
+        ],
+        [
+          157535,
+          157539
+        ],
+        [
+          157601,
+          157602
+        ],
+        [
+          157669,
+          157670
+        ],
+        [
+          157733,
+          157733
+        ],
+        [
+          157797,
+          157797
+        ],
+        [
+          160551,
+          160554
+        ],
+        [
+          160614,
+          160618
+        ],
+        [
+          160677,
+          160682
+        ],
+        [
+          160741,
+          160746
+        ],
+        [
+          160802,
+          160802
+        ],
+        [
+          160804,
+          160810
+        ],
+        [
+          160865,
+          160873
+        ],
+        [
+          160927,
+          160937
+        ],
+        [
+          160995,
+          161001
+        ],
+        [
+          161059,
+          161064
+        ],
+        [
+          161122,
+          161128
+        ],
+        [
+          161184,
+          161195
+        ],
+        [
+          161248,
+          161259
+        ],
+        [
+          161311,
+          161321
+        ],
+        [
+          161375,
+          161385
+        ],
+        [
+          161440,
+          161447
+        ],
+        [
+          161504,
+          161510
+        ],
+        [
+          161568,
+          161573
+        ],
+        [
+          161634,
+          161634
+        ],
+        [
+          161829,
+          161829
+        ],
+        [
+          161893,
+          161893
+        ],
+        [
+          164710,
+          164715
+        ],
+        [
+          164774,
+          164778
+        ],
+        [
+          164837,
+          164842
+        ],
+        [
+          164898,
+          164905
+        ],
+        [
+          164961,
+          164969
+        ],
+        [
+          165023,
+          165033
+        ],
+        [
+          165091,
+          165097
+        ],
+        [
+          165155,
+          165161
+        ],
+        [
+          165217,
+          165224
+        ],
+        [
+          165280,
+          165290
+        ],
+        [
+          165344,
+          165355
+        ],
+        [
+          165408,
+          165418
+        ],
+        [
+          165472,
+          165481
+        ],
+        [
+          165536,
+          165545
+        ],
+        [
+          165601,
+          165606
+        ],
+        [
+          165666,
+          165667
+        ],
+        [
+          165669,
+          165669
+        ],
+        [
+          168808,
+          168811
+        ],
+        [
+          168871,
+          168874
+        ],
+        [
+          168935,
+          168938
+        ],
+        [
+          168996,
+          169001
+        ],
+        [
+          169058,
+          169065
+        ],
+        [
+          169119,
+          169129
+        ],
+        [
+          169189,
+          169193
+        ],
+        [
+          169253,
+          169257
+        ],
+        [
+          169312,
+          169320
+        ],
+        [
+          169376,
+          169386
+        ],
+        [
+          169440,
+          169451
+        ],
+        [
+          169505,
+          169514
+        ],
+        [
+          169569,
+          169578
+        ],
+        [
+          169632,
+          169641
+        ],
+        [
+          169699,
+          169705
+        ],
+        [
+          169766,
+          169766
+        ],
+        [
+          172904,
+          172906
+        ],
+        [
+          172969,
+          172970
+        ],
+        [
+          173031,
+          173034
+        ],
+        [
+          173093,
+          173097
+        ],
+        [
+          173156,
+          173161
+        ],
+        [
+          173217,
+          173225
+        ],
+        [
+          173286,
+          173289
+        ],
+        [
+          173350,
+          173353
+        ],
+        [
+          173409,
+          173410
+        ],
+        [
+          173414,
+          173416
+        ],
+        [
+          173472,
+          173482
+        ],
+        [
+          173538,
+          173547
+        ],
+        [
+          173603,
+          173610
+        ],
+        [
+          173667,
+          173674
+        ],
+        [
+          173729,
+          173737
+        ],
+        [
+          173794,
+          173801
+        ],
+        [
+          173862,
+          173863
+        ],
+        [
+          177190,
+          177193
+        ],
+        [
+          177253,
+          177257
+        ],
+        [
+          177316,
+          177321
+        ],
+        [
+          177383,
+          177384
+        ],
+        [
+          177447,
+          177448
+        ],
+        [
+          177510,
+          177512
+        ],
+        [
+          177571,
+          177572
+        ],
+        [
+          177574,
+          177577
+        ],
+        [
+          177637,
+          177643
+        ],
+        [
+          177702,
+          177707
+        ],
+        [
+          177766,
+          177770
+        ],
+        [
+          177826,
+          177834
+        ],
+        [
+          177890,
+          177897
+        ],
+        [
+          177958,
+          177961
+        ],
+        [
+          181351,
+          181352
+        ],
+        [
+          181414,
+          181416
+        ],
+        [
+          181479,
+          181480
+        ],
+        [
+          181543,
+          181544
+        ],
+        [
+          181606,
+          181608
+        ],
+        [
+          181670,
+          181672
+        ],
+        [
+          181734,
+          181738
+        ],
+        [
+          181799,
+          181803
+        ],
+        [
+          181864,
+          181866
+        ],
+        [
+          181923,
+          181930
+        ],
+        [
+          181987,
+          181993
+        ],
+        [
+          182054,
+          182057
+        ],
+        [
+          182119,
+          182120
+        ],
+        [
+          185702,
+          185703
+        ],
+        [
+          185899,
+          185899
+        ],
+        [
+          185960,
+          185962
+        ],
+        [
+          186019,
+          186026
+        ],
+        [
+          186084,
+          186089
+        ],
+        [
+          186150,
+          186153
+        ],
+        [
+          186215,
+          186215
+        ],
+        [
+          190056,
+          190058
+        ],
+        [
+          190116,
+          190122
+        ],
+        [
+          190180,
+          190185
+        ],
+        [
+          190245,
+          190249
+        ],
+        [
+          190311,
+          190312
+        ],
+        [
+          194151,
+          194153
+        ],
+        [
+          194213,
+          194218
+        ],
+        [
+          194277,
+          194281
+        ],
+        [
+          194341,
+          194345
+        ],
+        [
+          194406,
+          194408
+        ],
+        [
+          198310,
+          198313
+        ],
+        [
+          198374,
+          198377
+        ],
+        [
+          198438,
+          198441
+        ],
+        [
+          198503,
+          198504
+        ],
+        [
+          202472,
+          202472
+        ],
+        [
+          202536,
+          202536
+        ]
+      ],
+      "decodedMembershipCounts": {
+        "ridgeOnly": 0,
+        "nonRidgeOnly": 2565,
+        "overlap": 468,
+        "union": 3033
+      },
+      "channelMax": {
+        "color": [
+          0.7975107431411743,
+          0.5561932921409607,
+          0.788580060005188
+        ],
+        "opacity": 0.02198747731745243,
+        "radius": [
+          0.2366189956665039,
+          0.2366189956665039
+        ],
+        "ridgeEmission": 0.040086448192596436,
+        "ridgeExtinction": 0.040086448192596436,
+        "nonRidgeEmission": 0.04397495463490486,
+        "nonRidgeExtinction": 0.04397495463490486
+      },
+      "descriptorFrameMetrics": {
+        "authority": "gpu-flow-kernel-descriptor-plus-compacted-candidate-readback-v0",
+        "finiteFrameCount": 3033,
+        "tangentLengthMin": 0.9999998443976197,
+        "tangentLengthMax": 1.0000001438941841,
+        "tangentNormalCrossLengthMin": 0.23629675547974696,
+        "tangentNormalCrossLengthMax": 1.0000001992756469
+      },
+      "projectionMetrics": {
+        "authority": "cpu-view-projection-of-gpu-compacted-candidate-centers-v0",
+        "positiveClipWCount": 3033,
+        "centerInFrustumCount": 3009,
+        "candidateCount": 3033
+      },
+      "unionReceipt": {
+        "requestedMode": "kernel_moment_full_flame_union",
+        "effectiveMode": "kernel_moment_full_flame_union",
+        "selectorAuthorityRequested": "explicit-source-field-operator-v0",
+        "selectorAuthorityEffective": "explicit-source-field-operator-v0",
+        "selectorRecipeSha256": "541836e6c45ef014ab0b8be23ebd8dce9898900a7639a0c4e21f38336daef8f9",
+        "compositionIdentity": "separate-ridge-nonridge-shared-total-extinction-v0",
+        "ridgeLayerIdentity": "authored-ridge-support-coefficient-layer-v0",
+        "nonRidgeLayerIdentity": "authored-nonridge-support-coefficient-layer-v0",
+        "compositionLaw": "sigma_total=sigma_ridge+sigma_nonridge",
+        "gradientGain": 0.65,
+        "counts": {
+          "ridgeOnly": 0,
+          "nonRidgeOnly": 2565,
+          "overlap": 468,
+          "union": 3033
+        },
+        "zeroGradientAdmissionCount": 0,
+        "stableNativeCellIdSource": "boundary-splat-candidate-native-cell-membership-v0:nativeCellIndex",
+        "fallbackReason": null,
+        "backend": "WebGPU:apple"
+      }
+    },
+    "renderElapsedMs": 3.199999999254942,
+    "auditElapsedMs": 5.300000000745058
+  },
+  "pixels": {
+    "visibleScreenshot": {
+      "width": 672,
+      "height": 960,
+      "pixelCount": 645120,
+      "litPixels": 55305,
+      "litPixelRatio": 0.08572823660714286,
+      "meanLuma": 9.559398527111638,
+      "maxLuma": 254.99999999999997,
+      "nonblank": true
+    },
+    "offscreenReadback": {
+      "width": 672,
+      "height": 960,
+      "litPixels": 0,
+      "pixelCount": 645120,
+      "meanLuma": 0,
+      "nonblank": false
+    },
+    "offscreenReadbackMismatch": true,
+    "authority": "operator-visible-cdp-canvas-screenshot-pixels-v0"
+  },
+  "performance": {
+    "mainRenderElapsedMs": 12.699999999254942,
+    "mainAuditElapsedMs": 8.800000000745058,
+    "zeroGradientRenderElapsedMs": 3.5,
+    "restoredRenderElapsedMs": 3.199999999254942,
+    "gpuProfile": null
+  },
+  "boundarySplatOverflowCount": 0,
+  "boundarySplatFallbackReason": null,
+  "browserEvents": [
+    {
+      "method": "Runtime.consoleAPICalled",
+      "params": {
+        "type": "log",
+        "args": [
+          {
+            "type": "string",
+            "value": "WebGPU renderer initialized, backend:"
+          },
+          {
+            "type": "string",
+            "value": "WebGPUBackend"
+          }
+        ],
+        "executionContextId": 2,
+        "timestamp": 1784265686076.247,
+        "stackTrace": {
+          "callFrames": [
+            {
+              "functionName": "initScene",
+              "scriptId": "6",
+              "url": "http://127.0.0.1:18781/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_resolution=64&volume_boundary_sidecar_source=baked&volume_boundary_sidecar_view=off&volume_boundary_splat_mode=off&volume_render_scale=1&volume_steps=88",
+              "lineNumber": 8609,
+              "columnNumber": 10
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "screenshot": {
+    "path": "artifacts/live-ridge-nonridge-union-0717-v1/full-flame-live-ridge-nonridge-union.png",
+    "byteLength": 87554,
+    "sha256": "ba21b56a46a9ab27a922f6d9ae6784255615b4074cea08f72271ee189aadb33b"
+  },
+  "lastTrustworthyEvidence": "main, zero-gradient, and restored same-state GPU readbacks all satisfied"
+}
