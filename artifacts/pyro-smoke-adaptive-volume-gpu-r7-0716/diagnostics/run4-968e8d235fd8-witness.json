@@ -1,0 +1,276 @@
+{
+  "schema": "kaminos.smoke-adaptive-volume-gpu-witness.v0",
+  "status": "invalid-for-optimization-claim",
+  "createdAt": "2026-07-17T01:30:20.409Z",
+  "requestedRoute": "http://127.0.0.1:19137/smoke-adaptive-volume-gpu-falsifier.html?git_commit=7b8e24a16640dca9874e7c6da86f9868d76a3d9e&git_branch=cc%2Fpyro-tall-articulated-smoke-0716&git_status_short=",
+  "effectiveRoute": "isolated-adaptive-volume-webgpu-v0",
+  "backend": "WebGPU:apple",
+  "timestampStatus": "available",
+  "failurePhase": null,
+  "primaryOutputWritten": true,
+  "reportPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-gpu-r7-0716-run4/witness-report.json",
+  "browserReportPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-gpu-r7-0716-run4/browser-report.json",
+  "screenshotPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-gpu-r7-0716-run4/context.png",
+  "serverPort": 19137,
+  "debugPort": 49413,
+  "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "userDataDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-gpu-r7-0716-run4/chrome-profile",
+  "windowSize": "1600,1100",
+  "reuseBrowser": true,
+  "browserCount": 1,
+  "runTimeoutMs": null,
+  "gitCommit": "7b8e24a16640dca9874e7c6da86f9868d76a3d9e",
+  "gitBranch": "cc/pyro-tall-articulated-smoke-0716",
+  "gitStatusShort": "",
+  "sourceFileSha256s": {
+    "module": "sha256:54a68cb7ba15815153b808559b14f059dcb07a4594b386493aca78183581b464",
+    "browser": "sha256:ca0959bbda2f18187a7b36755cbf106d3a500dcb82146d82343fee8a6e7822e9",
+    "witness": "sha256:1b21888780a20e972a85cbc23f5358e80b18424879e6521c1f28137089d984e1",
+    "html": "sha256:efe267faad00d8ff0c9ae9f06791c93f33eb40e1b93b1d9a73d2d70fd4b230af"
+  },
+  "consoleEvents": [],
+  "optimizationClaimAllowed": false,
+  "browserReportSha256": "sha256:4201415777421af9267a014877062b48317329d230565ffd39b7d7e7741f6338",
+  "screenshotSha256": "sha256:4a99f843679734cfb985e77f83aef6d659d769cd3a7c36a8a563e15e7add5d09",
+  "optimizationClaimRejectionReasons": [
+    "allocation-incomplete",
+    "stale-selection",
+    "false-closure:staleSelection"
+  ],
+  "browserReport": {
+    "schema": "kaminos.smoke-adaptive-volume-gpu-falsifier.v0",
+    "identity": "adaptive-smoke-volume-three-arm-gpu-falsifier-v0",
+    "status": "invalid-for-optimization-claim",
+    "requested": {
+      "route": "http://127.0.0.1:19137/smoke-adaptive-volume-gpu-falsifier.html?git_commit=7b8e24a16640dca9874e7c6da86f9868d76a3d9e&git_branch=cc%2Fpyro-tall-articulated-smoke-0716&git_status_short=",
+      "sourceSidecar": "./artifacts/pyro-smoke-extinction-residual-oracle-r2-full-covariance-0716/source-step45/smoke-extinction-support-sidecar.f32",
+      "selectionArtifact": "./artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/native/b4-e0980000/selected-brick-indices.sbrk",
+      "selectedBrickCount": 614,
+      "warmupSamples": 3,
+      "steadySamples": 12,
+      "buildWarmupSamples": 1,
+      "buildSteadySamples": 4,
+      "hiddenBrickCapApplied": false
+    },
+    "effective": {
+      "route": "isolated-adaptive-volume-webgpu-v0",
+      "backend": "WebGPU:apple",
+      "adapterInfo": {},
+      "navigatorPlatform": "MacIntel",
+      "timestampFeature": "timestamp-query",
+      "timestampStatus": "available",
+      "sourceGrid": 160,
+      "coarseGrid": 40,
+      "blockSize": 4,
+      "width": 320,
+      "height": 228,
+      "samplesPerCell": 1,
+      "extinctionCoefficient": 0.731,
+      "selectionPolicy": "gpu-f32-residual-energy-bitonic-top-614-v0",
+      "sortStageCount": 16230
+    },
+    "source": {
+      "matchedReport": "./artifacts/pyro-smoke-matched-optics-r5-0716/native/matched-optics-report.json",
+      "matchedReportSha256": "sha256:34cd9544b823289054558eae09247353772599fe21add665623ac8163cec9382",
+      "fitReport": "./artifacts/pyro-smoke-extinction-residual-oracle-r2-full-covariance-0716/source-step45/coarse-plus-residual.fit-report.json",
+      "fitReportSha256": "sha256:071389905e419a2ae82e372ad2174e9b8529a657b93901ffd729b10866c2449b",
+      "sourceSidecar": "./artifacts/pyro-smoke-extinction-residual-oracle-r2-full-covariance-0716/source-step45/smoke-extinction-support-sidecar.f32",
+      "sourceSidecarSha256": "sha256:564efca0905957a8a44592309b7ce1618b14cfc486e658d92c6cd0f323b26b5a",
+      "selectionArtifact": "./artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/native/b4-e0980000/selected-brick-indices.sbrk",
+      "selectionArtifactSha256": "sha256:4bbc3105534b61a92e41e45fa2b2d52f3178a191cba95424dfb41df74ceaf8ec",
+      "referenceDepth": "./artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/native/dense-reference/optical-depth.f32",
+      "referenceDepthSha256": "sha256:16002db6417d46601fe513a87954b1dc58197a4536f2a17902fe732e6b40551f"
+    },
+    "runtime": {
+      "gitCommit": "7b8e24a16640dca9874e7c6da86f9868d76a3d9e",
+      "gitBranch": "cc/pyro-tall-articulated-smoke-0716",
+      "gitStatusShort": "",
+      "sourceFileSha256s": {
+        "module": "sha256:54a68cb7ba15815153b808559b14f059dcb07a4594b386493aca78183581b464",
+        "browser": "sha256:ca0959bbda2f18187a7b36755cbf106d3a500dcb82146d82343fee8a6e7822e9",
+        "witness": "sha256:1b21888780a20e972a85cbc23f5358e80b18424879e6521c1f28137089d984e1",
+        "html": "sha256:efe267faad00d8ff0c9ae9f06791c93f33eb40e1b93b1d9a73d2d70fd4b230af"
+      }
+    },
+    "arms": {
+      "dense": {
+        "outputComplete": true,
+        "gpuMs": 0.720896,
+        "profile": {
+          "samples": [
+            0.65536,
+            0.65536,
+            0.65536,
+            0.65536,
+            0.720896,
+            0.720896,
+            0.720896,
+            0.720896,
+            0.720896,
+            0.720896,
+            0.720896,
+            0.98304
+          ],
+          "count": 12,
+          "minimum": 0.65536,
+          "median": 0.720896,
+          "mean": 0.7208959999999999,
+          "maximum": 0.98304
+        },
+        "denseBindingCount": 1
+      },
+      "compactPrebuilt": {
+        "outputComplete": true,
+        "gpuMs": 0.196608,
+        "profile": {
+          "samples": [
+            0.131072,
+            0.131072,
+            0.131072,
+            0.196608,
+            0.196608,
+            0.196608,
+            0.196608,
+            0.196608,
+            0.196608,
+            0.196608,
+            0.196608,
+            0.196608
+          ],
+          "count": 12,
+          "minimum": 0.131072,
+          "median": 0.196608,
+          "mean": 0.18022399999999997,
+          "maximum": 0.196608
+        },
+        "denseBindingCount": 0
+      },
+      "buildCompactRender": {
+        "outputComplete": true,
+        "buildGpuMs": 56.819712,
+        "renderGpuMs": 0.131072,
+        "totalGpuMs": 56.950784,
+        "buildOnlyProfile": {
+          "samples": [
+            56.426496,
+            56.557568,
+            56.623104,
+            57.475072
+          ],
+          "count": 4,
+          "minimum": 56.426496,
+          "median": 56.623104,
+          "mean": 56.77056,
+          "maximum": 57.475072
+        },
+        "combinedProfile": {
+          "build": {
+            "samples": [
+              56.426496,
+              56.68864,
+              56.819712,
+              58.261504
+            ],
+            "count": 4,
+            "minimum": 56.426496,
+            "median": 56.819712,
+            "mean": 57.049088000000005,
+            "maximum": 58.261504
+          },
+          "render": {
+            "samples": [
+              0.065536,
+              0.065536,
+              0.131072,
+              0.131072
+            ],
+            "count": 4,
+            "minimum": 0.065536,
+            "median": 0.131072,
+            "mean": 0.098304,
+            "maximum": 0.131072
+          },
+          "total": {
+            "samples": [
+              56.557568,
+              56.754176,
+              56.950784,
+              58.32704
+            ],
+            "count": 4,
+            "minimum": 56.557568,
+            "median": 56.950784,
+            "mean": 57.147391999999996,
+            "maximum": 58.32704
+          }
+        },
+        "denseBindingCountDuringBuild": 1,
+        "denseBindingCountDuringRender": 0
+      }
+    },
+    "compactProduct": {
+      "identity": "compact-parent-mean-halo-atlas-v0",
+      "selectedBrickCount": 614,
+      "gpuSelectedBrickCount": 614,
+      "selectionMismatchCount": 614,
+      "actualRetainedResidualEnergyFraction": 0,
+      "haloEdge": 6,
+      "allocationBytes": {
+        "coarse": 256000,
+        "indirection": 256000,
+        "fineAtlas": 530496,
+        "selectionSort": 512000,
+        "sortParameters": 4154880,
+        "params": 80,
+        "productResident": 1042576,
+        "buildScratch": 4666880,
+        "totalBuildAndProduct": 5709456
+      },
+      "allocationComplete": true,
+      "hiddenDenseAllocationBytes": 0,
+      "productResidentRatioToDenseScalar": 0.0636337890625,
+      "buildAndProductRatioToDenseScalar": 0.3484775390625
+    },
+    "denseDenial": {
+      "method": "destroy-dense-source-before-compact-rerender-v0",
+      "action": "dense source destroyed before compact rerender",
+      "preDenialOutputSha256": "sha256:9402abe4ac4189afeefbadd442cb10de8c07417d2408c1758d225e1eddf0c42d",
+      "postDenialOutputSha256": "sha256:9402abe4ac4189afeefbadd442cb10de8c07417d2408c1758d225e1eddf0c42d",
+      "maximumAbsoluteOutputDelta": 0,
+      "passed": true
+    },
+    "validation": {
+      "complete": true,
+      "denseAgainstCommittedReference": {
+        "meanSquaredError": 1.71055035567251e-15,
+        "maximumAbsoluteError": 7.562339305877686e-7
+      },
+      "compactPrebuiltAgainstDense": {
+        "meanSquaredError": 4.172998052497664e-9,
+        "maximumAbsoluteError": 0.0009397938847541809
+      },
+      "buildCompactAgainstDense": {
+        "meanSquaredError": 2.2755321208291516e-7,
+        "maximumAbsoluteError": 0.00667872279882431
+      },
+      "compactPrebuiltMaximumAbsoluteError": 0.0009397938847541809,
+      "buildCompactMaximumAbsoluteError": 0.00667872279882431
+    },
+    "falseClosureChecks": {
+      "fallbackRoute": false,
+      "missingTimestampSupport": false,
+      "hiddenDenseBinding": false,
+      "hiddenDenseAllocation": false,
+      "incompleteOutput": false,
+      "staleSelection": true,
+      "hiddenCap": false
+    },
+    "claimBoundary": "Static isolated single-channel Apple WebGPU compute evidence. Source scalar formation from the live 16-channel fluid buffer and the production compositor are not timed. GPU build includes parent means, residual scoring, complete 65536-record bitonic sorting, top-K selection application, indirection, and padded fine-atlas packing. Dense denial destroys the source buffer before compact rerender.",
+    "optimizationClaimAllowed": false,
+    "optimizationClaimRejectionReasons": [
+      "allocation-incomplete",
+      "stale-selection",
+      "false-closure:staleSelection"
+    ]
+  }
+}
