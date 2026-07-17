@@ -21,6 +21,14 @@ assert.match(source, /persist_capture_comparator/, 'oracle makes source comparat
 assert.match(source, /calibrationBoundaryHit/, 'oracle reports whether the fitted scalar remains search-boundary limited');
 assert.match(source, /calibrationExpansionDiagnostic/, 'oracle diagnoses an unusually large calibration flow without capping it');
 assert.match(source, /sampleCap/, 'oracle audits hidden row caps');
+assert.match(
+  source,
+  /flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0/,
+  'oracle names the no-blur projected ellipse treatment',
+);
+assert.match(source, /def ellipse_pixel_samples\(/, 'oracle exposes projected ellipse quadrature explicitly');
+assert.match(source, /--path-scale/, 'oracle can freeze optical density across footprint arms');
+assert.doesNotMatch(source, /ImageFilter|gaussian_filter|GaussianBlur/, 'footprint arm must not use post-process blur');
 
 const python = process.env.KAMINOS_MLX_PYTHON || '/private/tmp/kaminos-mlx-residual-venv/bin/python';
 const selfTest = spawnSync(python, [script.pathname, '--self-test'], { encoding: 'utf8' });
