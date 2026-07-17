@@ -1657,6 +1657,9 @@ export function evaluateFingerFluidTruthTrajectory(scene, trajectory) {
     ) {
       throw new Error(`Finger fluid truth checkpoint ${index} contains invalid density evidence`);
     }
+    if (!Number.isFinite(snapshot.totalKineticEnergy) || snapshot.totalKineticEnergy < 0) {
+      throw new Error(`Finger fluid truth checkpoint ${index} contains invalid kinetic energy evidence`);
+    }
     const required = [
       snapshot.particleCount,
       snapshot.finiteParticleCount,
