@@ -6,6 +6,7 @@ import {
   ADAPTIVE_VOLUME_SCALE_LAW_SCHEMA,
   DENSE_DENIAL_METHOD,
   FULL_SELECTION_AGAINST_DENSE_MAXIMUM_ABSOLUTE_ERROR,
+  adaptiveVolumeTopLevelStatus,
   bitonicSortRecordCount,
   buildBitonicSortStages,
   buildCompactSmokeProduct,
@@ -67,6 +68,7 @@ function applyReportDisposition(report) {
     report.productionSurvivalEvidenceAllowed = survivalDisposition.productionSurvivalEvidenceAllowed;
     report.productionSurvivalRejectionReasons = survivalDisposition.reasons;
   }
+  report.status = adaptiveVolumeTopLevelStatus(report);
   return disposition;
 }
 

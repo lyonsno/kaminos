@@ -7,6 +7,7 @@ import {
   ADAPTIVE_VOLUME_GPU_ERROR_LIMITS,
   ADAPTIVE_VOLUME_PRODUCTION_SURVIVAL_SCHEMA,
   ADAPTIVE_VOLUME_SCALE_LAW_SCHEMA,
+  adaptiveVolumeTopLevelStatus,
   bitonicSortRecordCount,
   buildBitonicSortStages,
   buildCompactSmokeProduct,
@@ -147,6 +148,17 @@ assert.equal(validateAdaptiveVolumeGpuReport(validAdapterReport).optimizationCla
 
 function scaleWorkload(width, height, denseMedian, compactMedian) {
   const pixelCount = width * height;
+  const constantStats = (value, count) => {
+    const samples = Array.from({ length: count }, () => value);
+    return {
+      samples,
+      count,
+      minimum: value,
+      median: value,
+      mean: samples.reduce((total, sample) => total + sample, 0) / count,
+      maximum: value,
+    };
+  };
   const pairedSamples = Array.from({ length: 7 }, (_, index) => ({
     order: index % 2 === 0 ? 'dense-compact' : 'compact-dense',
     denseAggregateGpuMs: denseMedian,
@@ -163,15 +175,15 @@ function scaleWorkload(width, height, denseMedian, compactMedian) {
     timingProtocol: 'paired-alternating-submit-v0',
     submissionCountPerPair: 2,
     pairedSamples,
-    pairedRatio: { median: compactMedian / denseMedian },
+    pairedRatio: constantStats(compactMedian / denseMedian, 7),
     pairedRatioByOrder: {
-      denseCompact: { median: compactMedian / denseMedian },
-      compactDense: { median: compactMedian / denseMedian },
+      denseCompact: constantStats(compactMedian / denseMedian, 4),
+      compactDense: constantStats(compactMedian / denseMedian, 3),
     },
     compactOverDenseRatio: compactMedian / denseMedian,
     profiles: {
-      dense: { aggregate: { median: denseMedian }, perDispatch: { median: denseMedian / 8 } },
-      compact: { aggregate: { median: compactMedian }, perDispatch: { median: compactMedian / 8 } },
+      dense: { aggregate: constantStats(denseMedian, 7), perDispatch: constantStats(denseMedian / 8, 7), dispatchRepeats: 8 },
+      compact: { aggregate: constantStats(compactMedian, 7), perDispatch: constantStats(compactMedian / 8, 7), dispatchRepeats: 8 },
     },
     comparison: {
       sampleCount: pixelCount,
@@ -303,7 +315,22 @@ validProductionSurvivalReport.productionSurvival = {
   },
   claimBoundary: 'Production-shaped common-work survival evidence with a source-bound field proxy; not exact live-compositor timing.',
 };
-assert.equal(validateAdaptiveVolumeProductionSurvivalReport(validProductionSurvivalReport).productionSurvivalEvidenceAllowed, true);
+assert.deepEqual(validateAdaptiveVolumeProductionSurvivalReport(validProductionSurvivalReport), {
+  productionSurvivalEvidenceAllowed: true,
+  reasons: [],
+});
+assert.equal(adaptiveVolumeTopLevelStatus({ optimizationClaimAllowed: true }), 'passed');
+assert.equal(adaptiveVolumeTopLevelStatus({ optimizationClaimAllowed: false }), 'invalid-for-optimization-claim');
+assert.equal(adaptiveVolumeTopLevelStatus({
+  optimizationClaimAllowed: true,
+  productionSurvival: {},
+  productionSurvivalEvidenceAllowed: true,
+}), 'passed');
+assert.equal(adaptiveVolumeTopLevelStatus({
+  optimizationClaimAllowed: true,
+  productionSurvival: {},
+  productionSurvivalEvidenceAllowed: false,
+}), 'invalid-for-production-survival-claim');
 
 for (const mutate of [
   report => { report.productionSurvival.effective.sourceAuthority = 'live-fields'; },
@@ -329,6 +356,33 @@ for (const mutate of [
     validateAdaptiveVolumeProductionSurvivalReport(report).productionSurvivalEvidenceAllowed,
     false,
     'production-survival evidence must fail loud when source, mechanisms, work, output, or update cost is counterfeit',
+  );
+}
+
+for (const mutate of [
+  report => { report.productionSurvival.effective.workload.pairedSamples[0].order = 'compact-dense'; },
+  report => { report.productionSurvival.effective.workload.pairedSamples[0].compactOverDenseRatio += 0.1; },
+  report => { report.productionSurvival.effective.workload.pairedSamples[0].denseAggregateGpuMs += 1; },
+  report => { report.productionSurvival.effective.workload.pairedSamples[0].compactAggregateGpuMs += 1; },
+  report => { report.productionSurvival.effective.workload.profiles.dense.aggregate.median += 1; },
+  report => { report.productionSurvival.effective.workload.profiles.compact.aggregate.median += 1; },
+  report => { report.productionSurvival.effective.workload.profiles.dense.perDispatch.median += 1; },
+  report => { report.productionSurvival.effective.workload.profiles.compact.perDispatch.median += 1; },
+  report => { report.productionSurvival.effective.workload.pairedRatio.median += 1; },
+  report => { report.productionSurvival.effective.workload.pairedRatioByOrder.denseCompact.median += 1; },
+  report => { report.productionSurvival.effective.workload.pairedRatioByOrder.compactDense.median += 1; },
+  report => { report.productionSurvival.effective.workload.compactOverDenseRatio += 1; },
+  report => {
+    report.productionSurvival.updateCost.prebuiltCompactGpuMs += 1;
+    report.productionSurvival.updateCost.rebuildAndRenderGpuMs += 1;
+  },
+]) {
+  const report = structuredClone(validProductionSurvivalReport);
+  mutate(report);
+  assert.equal(
+    validateAdaptiveVolumeProductionSurvivalReport(report).productionSurvivalEvidenceAllowed,
+    false,
+    'production-survival evidence must recompute every load-bearing paired timing and update-cost summary',
   );
 }
 
@@ -584,6 +638,7 @@ assert.match(browser, /Production comparator:/, 'R9 screenshot status must name 
 assert.match(browser, /compact\/dense/, 'R9 screenshot status must expose the production compact/dense timing ratio');
 assert.match(browser, /function renderFinalStatus/, 'browser and host disposition paths must share one authority-aware final status renderer');
 assert.match(browser, /applyHostGpuIdentity[\s\S]*renderFinalStatus\(state\.report/, 'host GPU identity injection must preserve the production verdict in the visible status');
+assert.match(browser, /adaptiveVolumeTopLevelStatus/, 'production captures must derive their global status from the production verdict');
 const moduleSource = readFileSync(new URL('../smoke-adaptive-volume-gpu-falsifier.mjs', import.meta.url), 'utf8');
 assert.match(moduleSource, /kaminos\.smoke-adaptive-volume-scale-law\.v0/, 'R8 scale evidence needs its own nested schema');
 assert.match(browser, /productionAttribution/, 'R8 must bind its production comparison boundary to exact source evidence');

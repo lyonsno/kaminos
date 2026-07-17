@@ -11,6 +11,13 @@ export const ADAPTIVE_VOLUME_GPU_ERROR_LIMITS = Object.freeze({
 });
 export const FULL_SELECTION_AGAINST_DENSE_MAXIMUM_ABSOLUTE_ERROR = 1e-5;
 
+export function adaptiveVolumeTopLevelStatus(report) {
+  if (report?.productionSurvival) {
+    return report.productionSurvivalEvidenceAllowed === true ? 'passed' : 'invalid-for-production-survival-claim';
+  }
+  return report?.optimizationClaimAllowed === true ? 'passed' : 'invalid-for-optimization-claim';
+}
+
 function isSha256Digest(value) {
   return typeof value === 'string' && /^sha256:[0-9a-f]{64}$/i.test(value);
 }
@@ -144,6 +151,30 @@ function finitePositive(value) {
 
 function finiteNonNegative(value) {
   return Number.isFinite(Number(value)) && Number(value) >= 0;
+}
+
+function timingStats(values) {
+  const samples = values.map(Number).sort((left, right) => left - right);
+  if (samples.length === 0 || samples.some(value => !finitePositive(value))) return null;
+  const sum = samples.reduce((total, value) => total + value, 0);
+  return {
+    samples,
+    count: samples.length,
+    minimum: samples[0],
+    median: samples[Math.floor(samples.length / 2)],
+    mean: sum / samples.length,
+    maximum: samples.at(-1),
+  };
+}
+
+function timingStatsMatch(actual, expected) {
+  if (!expected || !actual || !Array.isArray(actual.samples) || actual.samples.length !== expected.samples.length) return false;
+  if (actual.samples.some((value, index) => Number(value) !== expected.samples[index])) return false;
+  return Number(actual.count) === expected.count
+    && Number(actual.minimum) === expected.minimum
+    && Number(actual.median) === expected.median
+    && Number(actual.mean) === expected.mean
+    && Number(actual.maximum) === expected.maximum;
 }
 
 function hasPositiveIdentityToken(value, token) {
@@ -412,7 +443,40 @@ export function validateAdaptiveVolumeProductionSurvivalReport(report) {
     }
   }
   if (workload?.timingProtocol !== 'paired-alternating-submit-v0' || Number(workload?.submissionCountPerPair) !== 2) reasons.push('production-survival-timing-protocol-invalid');
-  if (!Array.isArray(workload?.pairedSamples) || workload.pairedSamples.length !== Number(requested?.steadySamples)) reasons.push('production-survival-paired-samples-incomplete');
+  const pairedSamples = workload?.pairedSamples;
+  const dispatchRepeats = Number(requested?.dispatchRepeats);
+  if (!Array.isArray(pairedSamples) || pairedSamples.length !== Number(requested?.steadySamples)) {
+    reasons.push('production-survival-paired-samples-incomplete');
+  } else {
+    let pairedTimingInvalid = false;
+    for (const [sampleIndex, sample] of pairedSamples.entries()) {
+      const expectedOrder = sampleIndex % 2 === 0 ? 'dense-compact' : 'compact-dense';
+      const denseGpuMs = Number(sample?.denseAggregateGpuMs);
+      const compactGpuMs = Number(sample?.compactAggregateGpuMs);
+      if (sample?.order !== expectedOrder
+        || !finitePositive(denseGpuMs)
+        || !finitePositive(compactGpuMs)
+        || Number(sample?.compactOverDenseRatio) !== compactGpuMs / denseGpuMs) pairedTimingInvalid = true;
+    }
+    if (pairedTimingInvalid) reasons.push('production-survival-paired-timing-invalid');
+    const denseStats = timingStats(pairedSamples.map(sample => sample?.denseAggregateGpuMs));
+    const compactStats = timingStats(pairedSamples.map(sample => sample?.compactAggregateGpuMs));
+    const ratioStats = timingStats(pairedSamples.map(sample => sample?.compactOverDenseRatio));
+    const denseCompactRatioStats = timingStats(pairedSamples.filter(sample => sample?.order === 'dense-compact').map(sample => sample?.compactOverDenseRatio));
+    const compactDenseRatioStats = timingStats(pairedSamples.filter(sample => sample?.order === 'compact-dense').map(sample => sample?.compactOverDenseRatio));
+    if (!timingStatsMatch(workload?.profiles?.dense?.aggregate, denseStats)
+      || !timingStatsMatch(workload?.profiles?.compact?.aggregate, compactStats)
+      || !timingStatsMatch(workload?.profiles?.dense?.perDispatch, timingStats(denseStats?.samples.map(value => value / dispatchRepeats) || []))
+      || !timingStatsMatch(workload?.profiles?.compact?.perDispatch, timingStats(compactStats?.samples.map(value => value / dispatchRepeats) || []))
+      || Number(workload?.profiles?.dense?.dispatchRepeats) !== dispatchRepeats
+      || Number(workload?.profiles?.compact?.dispatchRepeats) !== dispatchRepeats
+      || !timingStatsMatch(workload?.pairedRatio, ratioStats)
+      || !timingStatsMatch(workload?.pairedRatioByOrder?.denseCompact, denseCompactRatioStats)
+      || !timingStatsMatch(workload?.pairedRatioByOrder?.compactDense, compactDenseRatioStats)
+      || Number(workload?.compactOverDenseRatio) !== ratioStats?.median) {
+      reasons.push('production-survival-paired-summary-mismatch');
+    }
+  }
   for (const arm of ['dense', 'compact']) {
     if (!finitePositive(workload?.profiles?.[arm]?.aggregate?.median)
       || !finitePositive(workload?.profiles?.[arm]?.perDispatch?.median)) reasons.push(`production-survival-${arm}-timing-invalid`);
@@ -430,7 +494,8 @@ export function validateAdaptiveVolumeProductionSurvivalReport(report) {
     || !finitePositive(updateCost?.buildGpuMs)
     || !finitePositive(updateCost?.prebuiltCompactGpuMs)
     || !finitePositive(updateCost?.rebuildAndRenderGpuMs)
-    || Math.abs(Number(updateCost?.rebuildAndRenderGpuMs) - Number(updateCost?.buildGpuMs) - Number(updateCost?.prebuiltCompactGpuMs)) > 1e-9) {
+    || Math.abs(Number(updateCost?.rebuildAndRenderGpuMs) - Number(updateCost?.buildGpuMs) - Number(updateCost?.prebuiltCompactGpuMs)) > 1e-9
+    || Number(updateCost?.prebuiltCompactGpuMs) !== Number(workload?.profiles?.compact?.perDispatch?.median)) {
     reasons.push('production-survival-update-cost-hidden');
   }
   for (const [name, value] of Object.entries(survival?.falseClosureChecks || {})) {
