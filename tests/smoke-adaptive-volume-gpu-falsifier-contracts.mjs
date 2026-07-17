@@ -5,11 +5,13 @@ import { readFileSync } from 'node:fs';
 
 import {
   ADAPTIVE_VOLUME_GPU_ERROR_LIMITS,
+  ADAPTIVE_VOLUME_PRODUCTION_SURVIVAL_SCHEMA,
   ADAPTIVE_VOLUME_SCALE_LAW_SCHEMA,
   bitonicSortRecordCount,
   buildBitonicSortStages,
   buildCompactSmokeProduct,
   validateAdaptiveVolumeGpuReport,
+  validateAdaptiveVolumeProductionSurvivalReport,
   validateAdaptiveVolumeScaleLawReport,
 } from '../smoke-adaptive-volume-gpu-falsifier.mjs';
 
@@ -229,6 +231,79 @@ validRetinaScaleReport.scaleLaw.requested.displayResolution = {
 validRetinaScaleReport.scaleLaw.effective.workloads.push(scaleWorkload(3456, 2234, 48, 39));
 assert.equal(validateAdaptiveVolumeScaleLawReport(validRetinaScaleReport).scaleLawEvidenceAllowed, true);
 
+const validProductionSurvivalReport = structuredClone(validRetinaScaleReport);
+validProductionSurvivalReport.productionSurvival = {
+  schema: ADAPTIVE_VOLUME_PRODUCTION_SURVIVAL_SCHEMA,
+  status: 'passed',
+  requested: {
+    width: 3456,
+    height: 2234,
+    pixelCount: 7_720_704,
+    dispatchRepeats: 8,
+    steadySamples: 7,
+    hiddenWorkloadCapApplied: false,
+  },
+  effective: {
+    sourceAuthority: 'exact-step45-sidecar-production-field-proxy-v0',
+    sourceSha256: SHA_C,
+    productionVolumeSha256: SHA_E,
+    differingMechanism: 'smoke-extinction-scalar-lookup-only-v0',
+    matchedMechanisms: [
+      'majorant-grid',
+      'occupancy-skip',
+      'adaptive-rays',
+      'early-transmittance',
+      'five-live-field-samples',
+    ],
+    workload: {
+      ...scaleWorkload(3456, 2234, 48, 44),
+      productionStepCount: 640_000_000,
+      majorantSkipCount: 120_000_000,
+      earlyTerminationCount: 500_000,
+      fieldSampleCount: 3_200_000_000,
+    },
+  },
+  updateCost: {
+    authority: 'same-run-gpu-hierarchy-selection-pack-timestamps-v0',
+    buildGpuMs: 1.2,
+    prebuiltCompactGpuMs: 5.5,
+    rebuildAndRenderGpuMs: 6.7,
+    separatelyCharged: true,
+  },
+  falseClosureChecks: {
+    sourceProxyUnlabeled: false,
+    productionSourceMismatch: false,
+    mechanismMismatch: false,
+    scalarLookupOnlyViolation: false,
+    outputError: false,
+    workloadIncomplete: false,
+    updateCostHidden: false,
+  },
+  claimBoundary: 'Production-shaped common-work survival evidence with a source-bound field proxy; not exact live-compositor timing.',
+};
+assert.equal(validateAdaptiveVolumeProductionSurvivalReport(validProductionSurvivalReport).productionSurvivalEvidenceAllowed, true);
+
+for (const mutate of [
+  report => { report.productionSurvival.effective.sourceAuthority = 'live-fields'; },
+  report => { report.productionSurvival.effective.sourceSha256 = SHA_B; },
+  report => { report.productionSurvival.effective.productionVolumeSha256 = SHA_D; },
+  report => { report.productionSurvival.effective.matchedMechanisms.pop(); },
+  report => { report.productionSurvival.effective.differingMechanism = 'lookup-and-step-schedule'; },
+  report => { report.productionSurvival.effective.workload.productionStepCount = 0; },
+  report => { report.productionSurvival.effective.workload.fieldSampleCount = 1; },
+  report => { report.productionSurvival.effective.workload.comparison.maximumAbsoluteError = 1; },
+  report => { report.productionSurvival.updateCost.separatelyCharged = false; },
+  report => { report.productionSurvival.falseClosureChecks.mechanismMismatch = true; },
+]) {
+  const report = structuredClone(validProductionSurvivalReport);
+  mutate(report);
+  assert.equal(
+    validateAdaptiveVolumeProductionSurvivalReport(report).productionSurvivalEvidenceAllowed,
+    false,
+    'production-survival evidence must fail loud when source, mechanisms, work, output, or update cost is counterfeit',
+  );
+}
+
 for (const mutate of [
   report => { report.scaleLaw.effective.workloads.at(-1).width = 3455; },
   report => { report.scaleLaw.requested.displayResolution.authority = 'browser-css-pixels'; },
@@ -423,10 +498,31 @@ assert.match(browser, /aboveErrorLimitCount/, 'R8b must report how many pixels v
 assert.match(browser, /renderScaleLawSummary/, 'R8b screenshot must expose role-labeled scale timing and error rows');
 assert.match(browser, /3456[^\n]+2234/, 'R9 must include the built-in Liquid Retina XDR device-pixel workload');
 assert.match(browser, /workload_dimensions/, 'R9 must accept explicit workload dimensions instead of assuming one aspect-ratio scale');
-assert.match(browser, /maxStorageBufferBindingSize[^\n]+largestRayBufferBytes/, 'R9 must request enough storage binding capacity for the uncapped Retina ray buffer');
-assert.equal((browser.match(/@compute @workgroup_size\(8, 8\)/g) || []).length, 2, 'dense and compact Retina kernels must use bounded 2D pixel workgroups');
+assert.match(browser, /maxStorageBufferBindingSize[^\n]+largestStorageBufferBytes/, 'R9 must request enough storage binding capacity for Retina rays, fields, and output counters');
+assert.ok((browser.match(/@compute @workgroup_size\(8, 8\)/g) || []).length >= 3, 'dense, compact, and production-shaped Retina kernels must use bounded 2D pixel workgroups');
 assert.match(browser, /dispatchWorkgroups\(Math\.ceil\(width \/ 8\), Math\.ceil\(height \/ 8\)\)/, 'Retina dispatch must stay within the per-dimension WebGPU workgroup limit');
 assert.doesNotMatch(browser, /dispatchWorkgroups\(Math\.ceil\(pixelCount \/ 64\)\)/, 'Retina evidence must not use an overflowing linear dispatch');
+assert.match(browser, /productionSurvival/, 'R9 must emit a separately validated production-shaped survival arm');
+assert.match(browser, /exact-step45-sidecar-production-field-proxy-v0/, 'R9 must label the retained sidecar as a field proxy rather than live state');
+assert.match(browser, /smoke-extinction-scalar-lookup-only-v0/, 'R9 arms may differ only at the tested scalar lookup');
+for (const productionMechanism of [
+  /sampleWorldMajorant/,
+  /occupancySkipStepScale/,
+  /adaptiveRayStepScale/,
+  /raymarchEarlyTermination/,
+  /sampleWorldVelocity/,
+  /sampleWorldMaterial/,
+  /sampleWorldFireLayer/,
+  /sampleWorldMicrodetail/,
+  /sampleWorldFrontField/,
+]) {
+  assert.match(browser, productionMechanism, `R9 production-shaped comparator lost ${productionMechanism}`);
+}
+assert.match(browser, /productionStepCount/, 'R9 must record actual production-shaped steps');
+assert.match(browser, /fieldSampleCount/, 'R9 must record the five-sample common field workload');
+assert.match(browser, /majorantSkipCount/, 'R9 must expose majorant skip activity');
+assert.match(browser, /earlyTerminationCount/, 'R9 must expose early termination activity');
+assert.match(browser, /separatelyCharged:\s*true/, 'R9 must keep compact update cost visible beside the prebuilt traversal');
 const html = readFileSync(new URL('../smoke-adaptive-volume-gpu-falsifier.html', import.meta.url), 'utf8');
 assert.match(html, /id="scale-law-summary"/, 'R8b screenshot needs a bounded scale-law context surface');
 const moduleSource = readFileSync(new URL('../smoke-adaptive-volume-gpu-falsifier.mjs', import.meta.url), 'utf8');

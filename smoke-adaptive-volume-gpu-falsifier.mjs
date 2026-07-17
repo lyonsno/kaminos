@@ -1,6 +1,7 @@
 export const ADAPTIVE_VOLUME_GPU_REPORT_SCHEMA = 'kaminos.smoke-adaptive-volume-gpu-falsifier.v0';
 export const ADAPTIVE_VOLUME_GPU_ROUTE = 'isolated-adaptive-volume-webgpu-v0';
 export const ADAPTIVE_VOLUME_SCALE_LAW_SCHEMA = 'kaminos.smoke-adaptive-volume-scale-law.v0';
+export const ADAPTIVE_VOLUME_PRODUCTION_SURVIVAL_SCHEMA = 'kaminos.smoke-adaptive-volume-production-survival.v0';
 export const COMPACT_SMOKE_PRODUCT_IDENTITY = 'compact-parent-mean-halo-atlas-v0';
 export const DENSE_DENIAL_METHOD = 'destroy-dense-source-before-compact-rerender-v0';
 export const ADAPTIVE_VOLUME_GPU_ERROR_LIMITS = Object.freeze({
@@ -360,4 +361,63 @@ export function validateAdaptiveVolumeScaleLawReport(report) {
     if (value) reasons.push(`scale-law-false-closure:${name}`);
   }
   return { scaleLawEvidenceAllowed: reasons.length === 0, reasons };
+}
+
+export function validateAdaptiveVolumeProductionSurvivalReport(report) {
+  const reasons = [];
+  const survival = report?.productionSurvival;
+  if (survival?.schema !== ADAPTIVE_VOLUME_PRODUCTION_SURVIVAL_SCHEMA) reasons.push('production-survival-schema-mismatch');
+  if (survival?.status !== 'passed') reasons.push('production-survival-not-passed');
+  const requested = survival?.requested;
+  if (Number(requested?.width) !== 3456
+    || Number(requested?.height) !== 2234
+    || Number(requested?.pixelCount) !== 3456 * 2234) reasons.push('production-survival-workload-mismatch');
+  if (!Number.isInteger(Number(requested?.dispatchRepeats)) || Number(requested.dispatchRepeats) <= 0) reasons.push('production-survival-dispatch-invalid');
+  if (!Number.isInteger(Number(requested?.steadySamples)) || Number(requested.steadySamples) < 3) reasons.push('production-survival-samples-incomplete');
+  if (requested?.hiddenWorkloadCapApplied !== false) reasons.push('production-survival-hidden-cap');
+
+  const effective = survival?.effective;
+  if (effective?.sourceAuthority !== 'exact-step45-sidecar-production-field-proxy-v0') reasons.push('production-survival-source-authority-mismatch');
+  if (!isSha256Digest(effective?.sourceSha256) || effective?.sourceSha256 !== report?.source?.sourceSidecarSha256) reasons.push('production-survival-source-mismatch');
+  if (!isSha256Digest(effective?.productionVolumeSha256)
+    || effective?.productionVolumeSha256 !== report?.runtime?.sourceFileSha256s?.productionVolume) reasons.push('production-survival-production-source-mismatch');
+  if (effective?.differingMechanism !== 'smoke-extinction-scalar-lookup-only-v0') reasons.push('production-survival-arm-difference-invalid');
+  for (const mechanism of ['majorant-grid', 'occupancy-skip', 'adaptive-rays', 'early-transmittance', 'five-live-field-samples']) {
+    if (!effective?.matchedMechanisms?.includes(mechanism)) reasons.push(`production-survival-mechanism-missing:${mechanism}`);
+  }
+
+  const workload = effective?.workload;
+  const pixelCount = Number(requested?.pixelCount);
+  if (Number(workload?.width) !== 3456 || Number(workload?.height) !== 2234 || Number(workload?.pixelCount) !== pixelCount) reasons.push('production-survival-effective-workload-mismatch');
+  if (!Number.isInteger(Number(workload?.intersectingRayCount)) || Number(workload.intersectingRayCount) <= 0) reasons.push('production-survival-rays-empty');
+  if (!Number.isInteger(Number(workload?.productionStepCount)) || Number(workload.productionStepCount) <= 0) reasons.push('production-survival-step-count-empty');
+  if (Number(workload?.fieldSampleCount) !== Number(workload?.productionStepCount) * 5) reasons.push('production-survival-field-sample-count-invalid');
+  if (!Number.isInteger(Number(workload?.majorantSkipCount)) || Number(workload.majorantSkipCount) < 0) reasons.push('production-survival-majorant-skip-invalid');
+  if (!Number.isInteger(Number(workload?.earlyTerminationCount)) || Number(workload.earlyTerminationCount) < 0) reasons.push('production-survival-early-termination-invalid');
+  if (workload?.timingProtocol !== 'paired-alternating-submit-v0' || Number(workload?.submissionCountPerPair) !== 2) reasons.push('production-survival-timing-protocol-invalid');
+  if (!Array.isArray(workload?.pairedSamples) || workload.pairedSamples.length !== Number(requested?.steadySamples)) reasons.push('production-survival-paired-samples-incomplete');
+  for (const arm of ['dense', 'compact']) {
+    if (!finitePositive(workload?.profiles?.[arm]?.aggregate?.median)
+      || !finitePositive(workload?.profiles?.[arm]?.perDispatch?.median)) reasons.push(`production-survival-${arm}-timing-invalid`);
+  }
+  const comparison = workload?.comparison;
+  if (Number(comparison?.sampleCount) !== pixelCount
+    || !finiteNonNegative(comparison?.maximumAbsoluteError)
+    || Number(comparison?.maximumAbsoluteError) > ADAPTIVE_VOLUME_GPU_ERROR_LIMITS.compactPrebuiltAgainstDenseMaximumAbsoluteError
+    || Number(comparison?.errorLimit) !== ADAPTIVE_VOLUME_GPU_ERROR_LIMITS.compactPrebuiltAgainstDenseMaximumAbsoluteError
+    || Number(comparison?.aboveErrorLimitCount) !== 0) reasons.push('production-survival-output-error');
+
+  const updateCost = survival?.updateCost;
+  if (updateCost?.authority !== 'same-run-gpu-hierarchy-selection-pack-timestamps-v0') reasons.push('production-survival-update-authority-mismatch');
+  if (updateCost?.separatelyCharged !== true
+    || !finitePositive(updateCost?.buildGpuMs)
+    || !finitePositive(updateCost?.prebuiltCompactGpuMs)
+    || !finitePositive(updateCost?.rebuildAndRenderGpuMs)
+    || Math.abs(Number(updateCost?.rebuildAndRenderGpuMs) - Number(updateCost?.buildGpuMs) - Number(updateCost?.prebuiltCompactGpuMs)) > 1e-9) {
+    reasons.push('production-survival-update-cost-hidden');
+  }
+  for (const [name, value] of Object.entries(survival?.falseClosureChecks || {})) {
+    if (value) reasons.push(`production-survival-false-closure:${name}`);
+  }
+  return { productionSurvivalEvidenceAllowed: reasons.length === 0, reasons };
 }

@@ -2,6 +2,7 @@ import {
   ADAPTIVE_VOLUME_GPU_ERROR_LIMITS,
   ADAPTIVE_VOLUME_GPU_REPORT_SCHEMA,
   ADAPTIVE_VOLUME_GPU_ROUTE,
+  ADAPTIVE_VOLUME_PRODUCTION_SURVIVAL_SCHEMA,
   ADAPTIVE_VOLUME_SCALE_LAW_SCHEMA,
   DENSE_DENIAL_METHOD,
   FULL_SELECTION_AGAINST_DENSE_MAXIMUM_ABSOLUTE_ERROR,
@@ -10,6 +11,7 @@ import {
   buildCompactSmokeProduct,
   parseSelectedBrickArtifact,
   validateAdaptiveVolumeGpuReport,
+  validateAdaptiveVolumeProductionSurvivalReport,
   validateAdaptiveVolumeScaleLawReport,
 } from './smoke-adaptive-volume-gpu-falsifier.mjs';
 
@@ -34,6 +36,10 @@ const DEFAULTS = Object.freeze({
   scaleWarmupSamples: 1,
   scaleSteadySamples: 7,
   minimumAggregateGpuMs: 2,
+  productionSurvival: false,
+  productionDispatchRepeats: 1,
+  productionWarmupSamples: 1,
+  productionSteadySamples: 5,
 });
 
 const state = { phase: 'initializing', message: 'Initializing', report: null, error: null };
@@ -54,6 +60,11 @@ function applyReportDisposition(report) {
     const scaleDisposition = validateAdaptiveVolumeScaleLawReport(report);
     report.scaleLawEvidenceAllowed = scaleDisposition.scaleLawEvidenceAllowed;
     report.scaleLawRejectionReasons = scaleDisposition.reasons;
+  }
+  if (report.productionSurvival) {
+    const survivalDisposition = validateAdaptiveVolumeProductionSurvivalReport(report);
+    report.productionSurvivalEvidenceAllowed = survivalDisposition.productionSurvivalEvidenceAllowed;
+    report.productionSurvivalRejectionReasons = survivalDisposition.reasons;
   }
   return disposition;
 }
@@ -113,9 +124,16 @@ function queryConfig() {
     scaleWarmupSamples: integer('scale_warmup_samples', DEFAULTS.scaleWarmupSamples),
     scaleSteadySamples: integer('scale_steady_samples', DEFAULTS.scaleSteadySamples),
     minimumAggregateGpuMs: positiveNumber('minimum_aggregate_gpu_ms', DEFAULTS.minimumAggregateGpuMs),
+    productionSurvival: (params.get('production_survival') || String(DEFAULTS.productionSurvival)) === 'true',
+    productionDispatchRepeats: integer('production_dispatch_repeats', DEFAULTS.productionDispatchRepeats),
+    productionWarmupSamples: integer('production_warmup_samples', DEFAULTS.productionWarmupSamples),
+    productionSteadySamples: integer('production_steady_samples', DEFAULTS.productionSteadySamples),
   };
   if (config.scaleDispatchRepeats <= 1) throw new Error('scale_dispatch_repeats must be greater than one');
   if (config.scaleWarmupSamples <= 0 || config.scaleSteadySamples <= 0) throw new Error('scale timing sample counts must be positive');
+  if (config.productionDispatchRepeats <= 0 || config.productionWarmupSamples <= 0 || config.productionSteadySamples < 3) {
+    throw new Error('production survival timing requires positive dispatch/warmup counts and at least three steady samples');
+  }
   return config;
 }
 
@@ -239,6 +257,51 @@ function createParams({ grid, blockSize, selectedCount, width, height, samplesPe
   view.setFloat32(28, extinctionCoefficient, true);
   [...minimum, 0, ...maximum, 0, ...cameraPosition, 0].forEach((value, index) => view.setFloat32(32 + index * 4, value, true));
   return new Uint8Array(bytes);
+}
+
+function buildProductionFieldProxy(sidecar, grid, blockSize) {
+  const cellCount = grid ** 3;
+  const slots = new Float32Array(cellCount * 16);
+  const front = new Float32Array(cellCount);
+  for (let index = 0; index < cellCount; index += 1) {
+    const physical = sidecar[index * 4];
+    const coverage = sidecar[index * 4 + 1];
+    const ridge = sidecar[index * 4 + 2];
+    const residual = sidecar[index * 4 + 3];
+    const offset = index * 16;
+    slots.set([ridge * 0.20, coverage * 0.10, residual * 0.20, physical], offset);
+    slots.set([physical, coverage, ridge, residual], offset + 4);
+    slots.set([ridge, residual, coverage, physical * 0.20], offset + 8);
+    slots.set([coverage, ridge, residual, physical], offset + 12);
+    front[index] = coverage;
+  }
+  const coarseGrid = grid / blockSize;
+  const majorant = new Float32Array(coarseGrid ** 3 * 4);
+  for (let bz = 0; bz < coarseGrid; bz += 1) {
+    for (let by = 0; by < coarseGrid; by += 1) {
+      for (let bx = 0; bx < coarseGrid; bx += 1) {
+        const coarseIndex = bx + by * coarseGrid + bz * coarseGrid ** 2;
+        for (let z = 0; z < blockSize; z += 1) {
+          for (let y = 0; y < blockSize; y += 1) {
+            for (let x = 0; x < blockSize; x += 1) {
+              const cell = bx * blockSize + x
+                + (by * blockSize + y) * grid
+                + (bz * blockSize + z) * grid ** 2;
+              const physical = sidecar[cell * 4];
+              const coverage = sidecar[cell * 4 + 1];
+              const ridge = sidecar[cell * 4 + 2];
+              const residual = sidecar[cell * 4 + 3];
+              majorant[coarseIndex * 4] = Math.max(majorant[coarseIndex * 4], physical);
+              majorant[coarseIndex * 4 + 1] = Math.max(majorant[coarseIndex * 4 + 1], ridge + residual);
+              majorant[coarseIndex * 4 + 2] = Math.max(majorant[coarseIndex * 4 + 2], physical + ridge * 0.34);
+              majorant[coarseIndex * 4 + 3] = Math.max(majorant[coarseIndex * 4 + 3], physical * 0.50 + coverage * 0.30 + ridge * 0.44 + residual * 0.20);
+            }
+          }
+        }
+      }
+    }
+  }
+  return { slots, front, majorant, coarseGrid };
 }
 
 const COMMON_WGSL = String.raw`
@@ -365,6 +428,209 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   output[pixel] = depth;
 }
 `;
+
+const PRODUCTION_MECHANISMS_WGSL = String.raw`
+fn readProxySlot(c: vec3<i32>, slot: u32) -> vec4<f32> {
+  let cell = vec3<u32>(clamp(c, vec3<i32>(0), vec3<i32>(i32(productionP.grid) - 1)));
+  return fieldProxy[cellIndex(cell, productionP.grid) * 4u + slot];
+}
+fn sampleFluidSlot(point: vec3<f32>, slot: u32) -> vec4<f32> {
+  let coordinate = (point - productionP.minimum.xyz) / (productionP.maximum.xyz - productionP.minimum.xyz) * f32(productionP.grid) - vec3<f32>(0.5);
+  let base = vec3<i32>(floor(coordinate));
+  let fraction = coordinate - vec3<f32>(base);
+  let c000 = readProxySlot(base + vec3<i32>(0, 0, 0), slot);
+  let c100 = readProxySlot(base + vec3<i32>(1, 0, 0), slot);
+  let c010 = readProxySlot(base + vec3<i32>(0, 1, 0), slot);
+  let c110 = readProxySlot(base + vec3<i32>(1, 1, 0), slot);
+  let c001 = readProxySlot(base + vec3<i32>(0, 0, 1), slot);
+  let c101 = readProxySlot(base + vec3<i32>(1, 0, 1), slot);
+  let c011 = readProxySlot(base + vec3<i32>(0, 1, 1), slot);
+  let c111 = readProxySlot(base + vec3<i32>(1, 1, 1), slot);
+  return mix(mix(mix(c000, c100, fraction.x), mix(c010, c110, fraction.x), fraction.y), mix(mix(c001, c101, fraction.x), mix(c011, c111, fraction.x), fraction.y), fraction.z);
+}
+fn sampleWorldVelocity(point: vec3<f32>) -> vec4<f32> { return sampleFluidSlot(point, 0u); }
+fn sampleWorldMaterial(point: vec3<f32>) -> vec4<f32> { return sampleFluidSlot(point, 1u); }
+fn sampleWorldFireLayer(point: vec3<f32>) -> vec4<f32> { return sampleFluidSlot(point, 2u); }
+fn sampleWorldMicrodetail(point: vec3<f32>) -> vec4<f32> { return sampleFluidSlot(point, 3u); }
+fn sampleFrontCell(c: vec3<i32>) -> f32 {
+  let cell = vec3<u32>(clamp(c, vec3<i32>(0), vec3<i32>(i32(productionP.grid) - 1)));
+  return frontProxy[cellIndex(cell, productionP.grid)];
+}
+fn sampleWorldFrontField(point: vec3<f32>) -> f32 {
+  let coordinate = (point - productionP.minimum.xyz) / (productionP.maximum.xyz - productionP.minimum.xyz) * f32(productionP.grid) - vec3<f32>(0.5);
+  let base = vec3<i32>(floor(coordinate));
+  let f = coordinate - vec3<f32>(base);
+  let x00 = mix(sampleFrontCell(base), sampleFrontCell(base + vec3<i32>(1, 0, 0)), f.x);
+  let x10 = mix(sampleFrontCell(base + vec3<i32>(0, 1, 0)), sampleFrontCell(base + vec3<i32>(1, 1, 0)), f.x);
+  let x01 = mix(sampleFrontCell(base + vec3<i32>(0, 0, 1)), sampleFrontCell(base + vec3<i32>(1, 0, 1)), f.x);
+  let x11 = mix(sampleFrontCell(base + vec3<i32>(0, 1, 1)), sampleFrontCell(base + vec3<i32>(1, 1, 1)), f.x);
+  return mix(mix(x00, x10, f.y), mix(x01, x11, f.y), f.z);
+}
+fn majorantIndex(c: vec3<u32>) -> u32 { return c.x + c.y * productionP.coarseGrid + c.z * productionP.coarseGrid * productionP.coarseGrid; }
+fn sampleMajorantCell(c: vec3<i32>) -> vec4<f32> {
+  let cell = vec3<u32>(clamp(c, vec3<i32>(0), vec3<i32>(i32(productionP.coarseGrid) - 1)));
+  return majorantProxy[majorantIndex(cell)];
+}
+fn majorantCoordinate(point: vec3<f32>) -> vec3<f32> {
+  return clamp((point - productionP.minimum.xyz) / (productionP.maximum.xyz - productionP.minimum.xyz) * f32(productionP.coarseGrid), vec3<f32>(0.0), vec3<f32>(f32(productionP.coarseGrid) - 0.001));
+}
+fn sampleWorldMajorant(point: vec3<f32>) -> vec4<f32> { return sampleMajorantCell(vec3<i32>(floor(majorantCoordinate(point)))); }
+fn sampleWorldMajorantLinear(point: vec3<f32>) -> vec4<f32> {
+  let q = clamp((point - productionP.minimum.xyz) / (productionP.maximum.xyz - productionP.minimum.xyz) * (f32(productionP.coarseGrid) - 1.0), vec3<f32>(0.0), vec3<f32>(f32(productionP.coarseGrid) - 1.001));
+  let base = vec3<i32>(floor(q));
+  let f = fract(q);
+  let x00 = mix(sampleMajorantCell(base), sampleMajorantCell(base + vec3<i32>(1, 0, 0)), f.x);
+  let x10 = mix(sampleMajorantCell(base + vec3<i32>(0, 1, 0)), sampleMajorantCell(base + vec3<i32>(1, 1, 0)), f.x);
+  let x01 = mix(sampleMajorantCell(base + vec3<i32>(0, 0, 1)), sampleMajorantCell(base + vec3<i32>(1, 0, 1)), f.x);
+  let x11 = mix(sampleMajorantCell(base + vec3<i32>(0, 1, 1)), sampleMajorantCell(base + vec3<i32>(1, 1, 1)), f.x);
+  return mix(mix(x00, x10, f.y), mix(x01, x11, f.y), f.z);
+}
+fn sampleWorldMajorantDilated(point: vec3<f32>) -> vec4<f32> {
+  let c = vec3<i32>(floor(majorantCoordinate(point)));
+  var m = sampleMajorantCell(c);
+  m = max(m, sampleMajorantCell(c + vec3<i32>(1, 0, 0)));
+  m = max(m, sampleMajorantCell(c + vec3<i32>(-1, 0, 0)));
+  m = max(m, sampleMajorantCell(c + vec3<i32>(0, 1, 0)));
+  m = max(m, sampleMajorantCell(c + vec3<i32>(0, -1, 0)));
+  m = max(m, sampleMajorantCell(c + vec3<i32>(0, 0, 1)));
+  return max(m, sampleMajorantCell(c + vec3<i32>(0, 0, -1)));
+}
+fn majorantGradientSignal(point: vec3<f32>) -> f32 {
+  let c = vec3<i32>(floor(majorantCoordinate(point)));
+  return clamp(abs(sampleMajorantCell(c + vec3<i32>(1, 0, 0)).w - sampleMajorantCell(c + vec3<i32>(-1, 0, 0)).w)
+    + abs(sampleMajorantCell(c + vec3<i32>(0, 1, 0)).w - sampleMajorantCell(c + vec3<i32>(0, -1, 0)).w)
+    + abs(sampleMajorantCell(c + vec3<i32>(0, 0, 1)).w - sampleMajorantCell(c + vec3<i32>(0, 0, -1)).w), 0.0, 1.5);
+}
+fn majorantCellExitDistance(point: vec3<f32>, direction: vec3<f32>) -> f32 {
+  let q = majorantCoordinate(point);
+  let dqdt = direction / (productionP.maximum.xyz - productionP.minimum.xyz) * f32(productionP.coarseGrid);
+  var best = 1e6;
+  for (var axis = 0u; axis < 3u; axis++) {
+    if (abs(dqdt[axis]) > 0.0001) {
+      let boundary = select(floor(q[axis]), floor(q[axis]) + 1.0, dqdt[axis] > 0.0);
+      let t = (boundary - q[axis]) / dqdt[axis];
+      if (t > 0.0001) { best = min(best, t); }
+    }
+  }
+  return best;
+}
+fn adaptiveRayStepScale(interest: f32, adaptiveRays: f32) -> f32 {
+  return mix(1.0, mix(2.65, 0.68, smoothstep(0.035, 0.92, interest)), clamp(adaptiveRays, 0.0, 1.0));
+}
+fn occupancySkipStepScale(occupancy: f32, occupancySkipStrength: f32, adaptiveRays: f32) -> f32 {
+  let emptySpan = 1.0 - smoothstep(0.012, 0.135, occupancy);
+  return clamp(1.0 + emptySpan * clamp(occupancySkipStrength, 0.0, 1.0) * mix(1.45, 3.20, clamp(adaptiveRays, 0.0, 1.0)), 1.0, 4.60);
+}
+fn raymarchEarlyTermination(transmittance: f32) -> bool { return transmittance < 0.012; }
+@compute @workgroup_size(8, 8)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (gid.x >= productionP.width || gid.y >= productionP.height) { return; }
+  let pixel = gid.x + gid.y * productionP.width;
+  let ray = productionRays[pixel];
+  if (ray.endPad.x <= ray.directionStart.w) { productionOutput[pixel] = vec4<f32>(0.0); return; }
+  let baseStep = min(min(productionP.maximum.x - productionP.minimum.x, productionP.maximum.y - productionP.minimum.y), productionP.maximum.z - productionP.minimum.z) / f32(productionP.grid) / productionP.samplesPerCell;
+  var distance = ray.directionStart.w;
+  var depth = 0.0;
+  var transmittance = 1.0;
+  var productionStepCount = 0u;
+  var majorantSkipCount = 0u;
+  var earlyTerminationCount = 0u;
+  for (var iteration = 0u; iteration < 192u; iteration++) {
+    if (distance >= ray.endPad.x) { break; }
+    if (raymarchEarlyTermination(transmittance)) { earlyTerminationCount = 1u; break; }
+    let point = productionP.cameraPosition.xyz + ray.directionStart.xyz * distance;
+    let majorantNearest = sampleWorldMajorant(point);
+    let majorantLinear = sampleWorldMajorantLinear(point);
+    let majorantDilated = sampleWorldMajorantDilated(point);
+    let majorant = mix(majorantNearest, mix(majorantLinear, majorantDilated, 0.70), 0.72);
+    let majorantEdge = majorantGradientSignal(point);
+    let guardedImportance = max(majorant.w, majorantDilated.w * 0.70 * 0.80);
+    let majorantEmpty = 1.0 - smoothstep(0.004, 0.090, guardedImportance + majorantEdge * 0.80 * 0.24);
+    let majorantSkipGate = majorantEmpty * 0.70 * (1.0 - smoothstep(0.012, 0.16, majorantEdge * 0.80));
+    if (majorantSkipGate > 0.42) {
+      distance += min(majorantCellExitDistance(point, ray.directionStart.xyz) + baseStep * 0.20, baseStep * (1.0 + majorantSkipGate * 6.0));
+      majorantSkipCount += 1u;
+      continue;
+    }
+    let velocityDensity = sampleWorldVelocity(point);
+    let material = sampleWorldMaterial(point);
+    let fireLayer = sampleWorldFireLayer(point);
+    let microLayer = sampleWorldMicrodetail(point);
+    let frontTopology = sampleWorldFrontField(point);
+    productionStepCount += 1u;
+    let velMag = length(velocityDensity.xyz);
+    let rawExtinction = max(0.0, material.x * 0.74 + microLayer.x * 0.42 + microLayer.y * 0.34 + material.w * 0.12);
+    let microTexture = clamp(microLayer.x * 1.55 + microLayer.y * 2.45 + microLayer.z * 1.30 + microLayer.w * 0.55, 0.0, 2.4);
+    let temperature = fireLayer.x + fireLayer.z * 0.4 + frontTopology * 0.1;
+    let occupancy = clamp(velocityDensity.w * 0.44 + material.x * 0.38 + rawExtinction * 0.28 + temperature * 0.24 + fireLayer.x * 0.28 + material.y * 0.16 + microTexture * 0.20 + velMag * 0.32, 0.0, 1.8);
+    let emptySpanScale = occupancySkipStepScale(occupancy, 0.35, 0.65);
+    if (emptySpanScale > 1.08) { distance += min(baseStep * emptySpanScale, ray.endPad.x - distance); continue; }
+    let interest = clamp(velocityDensity.w * 0.22 + material.x * 0.16 + material.y * 0.10 + temperature * 0.40 + fireLayer.x * 0.36 + fireLayer.z * 0.22 + microTexture * 0.22 + velMag * 0.46 + microLayer.z * 0.30 + microLayer.y * 0.42, 0.0, 1.6);
+    let localStep = min(baseStep * adaptiveRayStepScale(interest, 0.65), ray.endPad.x - distance);
+    let testedExtinction = sampleSmokeExtinction(point) * productionP.extinction;
+    depth += testedExtinction * localStep;
+    transmittance *= exp(-testedExtinction * localStep);
+    distance += localStep;
+  }
+  productionOutput[pixel] = vec4<f32>(depth, f32(productionStepCount), f32(majorantSkipCount), f32(earlyTerminationCount));
+}
+`;
+
+const PRODUCTION_DENSE_WGSL = COMMON_WGSL + String.raw`
+@group(0) @binding(0) var<storage, read> denseSmoke: array<f32>;
+@group(0) @binding(1) var<storage, read> fieldProxy: array<vec4<f32>>;
+@group(0) @binding(2) var<storage, read> frontProxy: array<f32>;
+@group(0) @binding(3) var<storage, read> majorantProxy: array<vec4<f32>>;
+@group(0) @binding(4) var<storage, read> productionRays: array<Ray>;
+@group(0) @binding(5) var<uniform> productionP: Params;
+@group(0) @binding(6) var<storage, read_write> productionOutput: array<vec4<f32>>;
+fn sampleSmokeExtinction(point: vec3<f32>) -> f32 {
+  let coordinate = (point - productionP.minimum.xyz) / (productionP.maximum.xyz - productionP.minimum.xyz) * f32(productionP.grid) - vec3<f32>(0.5);
+  let base = vec3<i32>(floor(coordinate));
+  let f = coordinate - vec3<f32>(base);
+  var sampled = 0.0;
+  for (var z = 0; z <= 1; z++) { for (var y = 0; y <= 1; y++) { for (var x = 0; x <= 1; x++) {
+    let c = vec3<u32>(clamp(base + vec3<i32>(x, y, z), vec3<i32>(0), vec3<i32>(i32(productionP.grid) - 1)));
+    let w = select(1.0 - f.x, f.x, x == 1) * select(1.0 - f.y, f.y, y == 1) * select(1.0 - f.z, f.z, z == 1);
+    sampled += denseSmoke[cellIndex(c, productionP.grid)] * w;
+  }}}
+  return max(0.0, sampled);
+}
+` + PRODUCTION_MECHANISMS_WGSL;
+
+const PRODUCTION_SPARSE_WGSL = COMMON_WGSL + String.raw`
+@group(0) @binding(0) var<storage, read> compactCoarse: array<f32>;
+@group(0) @binding(1) var<storage, read> compactIndirect: array<i32>;
+@group(0) @binding(2) var<storage, read> compactAtlas: array<f32>;
+@group(0) @binding(3) var<storage, read> fieldProxy: array<vec4<f32>>;
+@group(0) @binding(4) var<storage, read> frontProxy: array<f32>;
+@group(0) @binding(5) var<storage, read> majorantProxy: array<vec4<f32>>;
+@group(0) @binding(6) var<storage, read> productionRays: array<Ray>;
+@group(0) @binding(7) var<uniform> productionP: Params;
+@group(0) @binding(8) var<storage, read_write> productionOutput: array<vec4<f32>>;
+fn compactBrickIndex(c: vec3<u32>) -> u32 { return c.x + c.y * productionP.coarseGrid + c.z * productionP.coarseGrid * productionP.coarseGrid; }
+fn sampleSmokeExtinction(point: vec3<f32>) -> f32 {
+  let cell = pointCell(point, productionP);
+  let brick = cell / productionP.blockSize;
+  let index = compactBrickIndex(brick);
+  let slot = compactIndirect[index];
+  if (slot < 0) { return max(0.0, compactCoarse[index]); }
+  let edge = productionP.blockSize + 2u;
+  let coordinate = (point - productionP.minimum.xyz) / (productionP.maximum.xyz - productionP.minimum.xyz) * f32(productionP.grid) - vec3<f32>(0.5);
+  let base = vec3<i32>(floor(coordinate));
+  let f = coordinate - vec3<f32>(base);
+  let brickOrigin = vec3<i32>(brick * productionP.blockSize);
+  var sampled = 0.0;
+  for (var z = 0; z <= 1; z++) { for (var y = 0; y <= 1; y++) { for (var x = 0; x <= 1; x++) {
+    let globalCell = clamp(base + vec3<i32>(x, y, z), vec3<i32>(0), vec3<i32>(i32(productionP.grid) - 1));
+    let local = vec3<u32>(clamp(globalCell - brickOrigin + vec3<i32>(1), vec3<i32>(0), vec3<i32>(i32(edge) - 1)));
+    let atlasIndex = u32(slot) * edge * edge * edge + cellIndex(local, edge);
+    let w = select(1.0 - f.x, f.x, x == 1) * select(1.0 - f.y, f.y, y == 1) * select(1.0 - f.z, f.z, z == 1);
+    sampled += compactAtlas[atlasIndex] * w;
+  }}}
+  return max(0.0, sampled);
+}
+` + PRODUCTION_MECHANISMS_WGSL;
 
 const BUILD_WGSL = COMMON_WGSL + String.raw`
 struct Pair { score: f32, index: u32 };
@@ -722,6 +988,141 @@ async function profileScaleLawWorkloads(device, {
   return workloads;
 }
 
+function unpackProductionOutput(values) {
+  const pixelCount = values.length / 4;
+  const depth = new Float32Array(pixelCount);
+  let productionStepCount = 0;
+  let majorantSkipCount = 0;
+  let earlyTerminationCount = 0;
+  for (let pixel = 0; pixel < pixelCount; pixel += 1) {
+    depth[pixel] = values[pixel * 4];
+    productionStepCount += values[pixel * 4 + 1];
+    majorantSkipCount += values[pixel * 4 + 2];
+    earlyTerminationCount += values[pixel * 4 + 3];
+  }
+  return {
+    depth,
+    productionStepCount,
+    fieldSampleCount: productionStepCount * 5,
+    majorantSkipCount,
+    earlyTerminationCount,
+  };
+}
+
+async function profileProductionSurvival(device, {
+  config,
+  camera,
+  minimum,
+  maximum,
+  grid,
+  blockSize,
+  selectedCount,
+  samplesPerCell,
+  extinctionCoefficient,
+  denseAllocation,
+  prebuiltCoarseAllocation,
+  prebuiltIndirectAllocation,
+  prebuiltAtlasAllocation,
+  productionProxy,
+  storageCopy,
+}) {
+  const width = 3456;
+  const height = 2234;
+  const pixelCount = width * height;
+  const rays = buildRays(camera, width, height, minimum, maximum);
+  const rayWorkload = summarizeRayWorkload(rays, grid, samplesPerCell, minimum, maximum);
+  const raysAllocation = makeBuffer(device, 'production survival Retina rays', rays.byteLength, GPUBufferUsage.STORAGE, rays);
+  const paramsData = createParams({
+    grid, blockSize, selectedCount, width, height, samplesPerCell, extinctionCoefficient,
+    minimum, maximum, cameraPosition: camera.position,
+  });
+  const paramsAllocation = makeBuffer(device, 'production survival params', paramsData.byteLength, GPUBufferUsage.UNIFORM, paramsData);
+  const fieldsAllocation = makeBuffer(device, 'step45 source-bound production field proxy', productionProxy.slots.byteLength, GPUBufferUsage.STORAGE, productionProxy.slots);
+  const frontAllocation = makeBuffer(device, 'step45 source-bound front proxy', productionProxy.front.byteLength, GPUBufferUsage.STORAGE, productionProxy.front);
+  const majorantAllocation = makeBuffer(device, 'step45 source-bound majorant proxy', productionProxy.majorant.byteLength, GPUBufferUsage.STORAGE, productionProxy.majorant);
+  const denseOutputAllocation = makeBuffer(device, 'production survival dense output and counters', pixelCount * 16, storageCopy);
+  const compactOutputAllocation = makeBuffer(device, 'production survival compact output and counters', pixelCount * 16, storageCopy);
+  const densePipeline = createComputePipeline(device, PRODUCTION_DENSE_WGSL, 'main', 'production-shaped dense scalar comparator');
+  const compactPipeline = createComputePipeline(device, PRODUCTION_SPARSE_WGSL, 'main', 'production-shaped compact scalar comparator');
+  const denseBindGroup = device.createBindGroup({ layout: densePipeline.getBindGroupLayout(0), entries: [
+    { binding: 0, resource: { buffer: denseAllocation.buffer } },
+    { binding: 1, resource: { buffer: fieldsAllocation.buffer } },
+    { binding: 2, resource: { buffer: frontAllocation.buffer } },
+    { binding: 3, resource: { buffer: majorantAllocation.buffer } },
+    { binding: 4, resource: { buffer: raysAllocation.buffer } },
+    { binding: 5, resource: { buffer: paramsAllocation.buffer } },
+    { binding: 6, resource: { buffer: denseOutputAllocation.buffer } },
+  ] });
+  const compactBindGroup = device.createBindGroup({ layout: compactPipeline.getBindGroupLayout(0), entries: [
+    { binding: 0, resource: { buffer: prebuiltCoarseAllocation.buffer } },
+    { binding: 1, resource: { buffer: prebuiltIndirectAllocation.buffer } },
+    { binding: 2, resource: { buffer: prebuiltAtlasAllocation.buffer } },
+    { binding: 3, resource: { buffer: fieldsAllocation.buffer } },
+    { binding: 4, resource: { buffer: frontAllocation.buffer } },
+    { binding: 5, resource: { buffer: majorantAllocation.buffer } },
+    { binding: 6, resource: { buffer: raysAllocation.buffer } },
+    { binding: 7, resource: { buffer: paramsAllocation.buffer } },
+    { binding: 8, resource: { buffer: compactOutputAllocation.buffer } },
+  ] });
+  const arms = {
+    dense: { pipeline: densePipeline, bindGroup: denseBindGroup },
+    compact: { pipeline: compactPipeline, bindGroup: compactBindGroup },
+  };
+  const pairedProfile = await profilePairedRepeatedPasses(device, {
+    warmups: config.productionWarmupSamples,
+    samples: config.productionSteadySamples,
+    dispatchRepeats: config.productionDispatchRepeats,
+    encodeArm(encoder, querySet, arm, beginningOfPassWriteIndex, endOfPassWriteIndex) {
+      const pass = encoder.beginComputePass({ timestampWrites: { querySet, beginningOfPassWriteIndex, endOfPassWriteIndex } });
+      pass.setPipeline(arms[arm].pipeline);
+      pass.setBindGroup(0, arms[arm].bindGroup);
+      for (let repeat = 0; repeat < config.productionDispatchRepeats; repeat += 1) {
+        pass.dispatchWorkgroups(Math.ceil(width / 8), Math.ceil(height / 8));
+      }
+      pass.end();
+    },
+  });
+  const denseRaw = new Float32Array(await readBuffer(device, denseOutputAllocation.buffer, pixelCount * 16));
+  const compactRaw = new Float32Array(await readBuffer(device, compactOutputAllocation.buffer, pixelCount * 16));
+  const dense = unpackProductionOutput(denseRaw);
+  const compact = unpackProductionOutput(compactRaw);
+  const comparison = compare(dense.depth, compact.depth, {
+    width,
+    errorLimit: ADAPTIVE_VOLUME_GPU_ERROR_LIMITS.compactPrebuiltAgainstDenseMaximumAbsoluteError,
+  });
+  for (const allocation of [
+    raysAllocation, paramsAllocation, fieldsAllocation, frontAllocation, majorantAllocation,
+    denseOutputAllocation, compactOutputAllocation,
+  ]) allocation.buffer.destroy();
+  return {
+    width,
+    height,
+    pixelCount,
+    ...rayWorkload,
+    dispatchRepeats: config.productionDispatchRepeats,
+    timingProtocol: pairedProfile.timingProtocol,
+    submissionCountPerPair: pairedProfile.submissionCountPerPair,
+    pairedSamples: pairedProfile.pairedSamples,
+    pairedRatio: pairedProfile.pairedRatio,
+    pairedRatioByOrder: pairedProfile.pairedRatioByOrder,
+    profiles: { dense: pairedProfile.dense, compact: pairedProfile.compact },
+    compactOverDenseRatio: pairedProfile.pairedRatio.median,
+    productionStepCount: dense.productionStepCount,
+    fieldSampleCount: dense.fieldSampleCount,
+    majorantSkipCount: dense.majorantSkipCount,
+    earlyTerminationCount: dense.earlyTerminationCount,
+    armWork: { dense, compact },
+    comparison,
+    outputsComplete: dense.depth.length === pixelCount && compact.depth.length === pixelCount,
+    proxyAllocationBytes: {
+      fourSlotFluid: productionProxy.slots.byteLength,
+      front: productionProxy.front.byteLength,
+      majorant: productionProxy.majorant.byteLength,
+      total: productionProxy.slots.byteLength + productionProxy.front.byteLength + productionProxy.majorant.byteLength,
+    },
+  };
+}
+
 function compare(left, right, { width = null, errorLimit = null } = {}) {
   if (left.length !== right.length) throw new Error('output comparison shape mismatch');
   let mse = 0;
@@ -847,6 +1248,7 @@ async function run() {
   const selected = parseSelectedBrickArtifact(selectionBytes);
   const blockSize = 4;
   const product = buildCompactSmokeProduct({ source, grid, blockSize, selectedBrickIndices: selected });
+  const productionProxy = config.productionSurvival ? buildProductionFieldProxy(sidecar, grid, blockSize) : null;
   const reference = new Float32Array(referenceBytes.buffer, referenceBytes.byteOffset, referenceBytes.byteLength / 4);
   if (reference.length !== width * height) throw new Error('reference depth shape mismatch');
   const camera = fit.teacher.camera;
@@ -864,12 +1266,16 @@ async function run() {
   const workloadDimensions = resolveWorkloadDimensions(config, width, height);
   const largestRayBufferBytes = Math.max(...workloadDimensions.map(row => row.width * row.height * 8 * Float32Array.BYTES_PER_ELEMENT));
   const largestOutputBufferBytes = Math.max(...workloadDimensions.map(row => row.width * row.height * Float32Array.BYTES_PER_ELEMENT));
-  const largestRequiredBufferBytes = Math.max(source.byteLength, largestRayBufferBytes, largestOutputBufferBytes);
-  if (adapter.limits.maxStorageBufferBindingSize < largestRayBufferBytes) throw new Error('Retina ray buffer exceeds maxStorageBufferBindingSize');
+  const productionOutputBufferBytes = config.productionSurvival ? 3456 * 2234 * 4 * Float32Array.BYTES_PER_ELEMENT : 0;
+  const productionFieldBufferBytes = productionProxy?.slots.byteLength ?? 0;
+  const largestStorageBufferBytes = Math.max(largestRayBufferBytes, largestOutputBufferBytes, productionOutputBufferBytes, productionFieldBufferBytes);
+  const largestRequiredBufferBytes = Math.max(source.byteLength, largestStorageBufferBytes);
+  if (adapter.limits.maxStorageBufferBindingSize < largestStorageBufferBytes) throw new Error('Retina production workload exceeds maxStorageBufferBindingSize');
   if (adapter.limits.maxBufferSize < largestRequiredBufferBytes) throw new Error('Retina workload exceeds maxBufferSize');
   const requiredLimits = {};
-  requiredLimits.maxStorageBufferBindingSize = largestRayBufferBytes;
+  requiredLimits.maxStorageBufferBindingSize = largestStorageBufferBytes;
   requiredLimits.maxBufferSize = largestRequiredBufferBytes;
+  if (config.productionSurvival) requiredLimits.maxStorageBuffersPerShaderStage = 8;
   const device = await adapter.requestDevice({ requiredFeatures: ['timestamp-query'], requiredLimits });
   const adapterInfo = adapter.info ? { ...adapter.info } : {};
   const adapterText = JSON.stringify(adapterInfo).toLowerCase();
@@ -1023,6 +1429,29 @@ async function run() {
     sparsePipeline,
     storageCopy,
   });
+
+  let productionSurvivalWorkload = null;
+  if (config.productionSurvival) {
+    failurePhase = 'production-survival-profiling';
+    setStatus('Profiling matched production-shaped field work at full Retina resolution');
+    productionSurvivalWorkload = await profileProductionSurvival(device, {
+      config,
+      camera,
+      minimum,
+      maximum,
+      grid,
+      blockSize,
+      selectedCount: selected.length,
+      samplesPerCell: matched.effective.samplesPerCell,
+      extinctionCoefficient: matched.effective.extinctionCoefficient,
+      denseAllocation,
+      prebuiltCoarseAllocation,
+      prebuiltIndirectAllocation,
+      prebuiltAtlasAllocation,
+      productionProxy,
+      storageCopy,
+    });
+  }
 
   failurePhase = 'selection-validation';
   const pairData = new DataView(await readBuffer(device, pairAllocation.buffer, pairBytes));
@@ -1248,6 +1677,49 @@ async function run() {
       },
       claimBoundary: 'Amplified static single-channel traversal scaling only. Production source inspection is exact but unmeasured; no production bottleneck, total-frame speedup, temporal cadence, or integration claim is authorized.',
     },
+    productionSurvival: productionSurvivalWorkload ? {
+      schema: ADAPTIVE_VOLUME_PRODUCTION_SURVIVAL_SCHEMA,
+      status: productionSurvivalWorkload.comparison.maximumAbsoluteError <= ADAPTIVE_VOLUME_GPU_ERROR_LIMITS.compactPrebuiltAgainstDenseMaximumAbsoluteError
+        ? 'passed'
+        : 'invalid-for-production-survival-claim',
+      requested: {
+        width: 3456,
+        height: 2234,
+        pixelCount: 3456 * 2234,
+        dispatchRepeats: config.productionDispatchRepeats,
+        warmupSamples: config.productionWarmupSamples,
+        steadySamples: config.productionSteadySamples,
+        hiddenWorkloadCapApplied: false,
+      },
+      effective: {
+        sourceAuthority: 'exact-step45-sidecar-production-field-proxy-v0',
+        sourceSha256: await sha256(sidecarBytes),
+        productionVolumeSha256: await sha256(productionVolumeBytes),
+        differingMechanism: 'smoke-extinction-scalar-lookup-only-v0',
+        matchedMechanisms: ['majorant-grid', 'occupancy-skip', 'adaptive-rays', 'early-transmittance', 'five-live-field-samples'],
+        workload: productionSurvivalWorkload,
+      },
+      updateCost: {
+        authority: 'same-run-gpu-hierarchy-selection-pack-timestamps-v0',
+        buildGpuMs: buildRenderProfile.build.median,
+        prebuiltCompactGpuMs: productionSurvivalWorkload.profiles.compact.perDispatch.median,
+        rebuildAndRenderGpuMs: buildRenderProfile.build.median + productionSurvivalWorkload.profiles.compact.perDispatch.median,
+        separatelyCharged: true,
+      },
+      falseClosureChecks: {
+        sourceProxyUnlabeled: false,
+        productionSourceMismatch: false,
+        mechanismMismatch: false,
+        scalarLookupOnlyViolation: false,
+        outputError: productionSurvivalWorkload.comparison.maximumAbsoluteError > ADAPTIVE_VOLUME_GPU_ERROR_LIMITS.compactPrebuiltAgainstDenseMaximumAbsoluteError,
+        workloadIncomplete: !productionSurvivalWorkload.outputsComplete
+          || !(productionSurvivalWorkload.intersectingRayCount > 0)
+          || !(productionSurvivalWorkload.productionStepCount > 0)
+          || productionSurvivalWorkload.fieldSampleCount !== productionSurvivalWorkload.productionStepCount * 5,
+        updateCostHidden: false,
+      },
+      claimBoundary: 'Production-shaped common-work survival evidence using the exact accepted step45 sidecar as an explicitly synthetic four-slot fluid/front proxy. The shader ports production majorant, occupancy, adaptive-step, early-termination, and five-field-sample mechanisms, while dense and compact differ only at the smoke-extinction scalar lookup. This is not an exact live 16-channel state, separate-front-buffer, production compositor, total-frame, temporal, or integration timing claim.',
+    } : null,
     falseClosureChecks,
     claimBoundary: 'Static isolated single-channel Apple WebGPU compute evidence. Source scalar formation from the live 16-channel fluid buffer and the production compositor are not timed. GPU build includes parent means, residual scoring, complete 65536-record bitonic sorting, top-K selection application, indirection, and padded fine-atlas packing. Dense denial destroys the source buffer before compact rerender.',
   };
