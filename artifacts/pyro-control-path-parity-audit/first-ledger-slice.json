@@ -1,0 +1,3163 @@
+{
+  "schema": "kaminos.pyro-control-path-parity-ledger.v0",
+  "requestedScope": "first-executable-vertical-slice",
+  "generatedAt": "2026-07-17T16:51:05.147Z",
+  "source": {
+    "indexHtml": {
+      "path": "index.html",
+      "sha256": "10d396cc17e5bdeed5915dc07990b769cd1fdf468e6a53239264700f7e962ed7",
+      "byteLength": 968937
+    },
+    "volumeCore": {
+      "path": "volume-core.js",
+      "sha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9",
+      "byteLength": 665173
+    },
+    "selectiveHeadLiveRuntime": {
+      "path": "selective-head-live-runtime.mjs",
+      "sha256": "5eac65583fe8392a9c9de950f4a44102ee082d844eb93db06bbf063eab982d5c",
+      "byteLength": 14680
+    },
+    "boundarySplatFeatureCapture": {
+      "path": "boundary-splat-feature-capture.mjs",
+      "sha256": "89eab9a9dc0d9df207d4d96d802a5746ae18bf0a709316509cfbbe67d46a83fa",
+      "byteLength": 3479
+    }
+  },
+  "requestedIdentity": {
+    "route": "native-3d-compute-fluid-raymarch-v0",
+    "audit": "pyro-control-path-parity-auditor-first-slice-v0"
+  },
+  "effectiveIdentity": {
+    "enumeration": "dom-route-hydration-and-runtime-source-hash-v0",
+    "perturbationFixture": "deterministic-frozen-state-downstream-delta-v0"
+  },
+  "fallback": null,
+  "postLoadMutation": null,
+  "enumeration": {
+    "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+    "source": "index.html DOM controls + route hydration + volume-core runtime consumers",
+    "uncapped": true,
+    "count": 206,
+    "priorityCount": 90,
+    "routeHydratedCount": 120,
+    "syncListenerCount": 14,
+    "classifications": {
+      "unresolved": 92,
+      "raymarch-only-unimplemented": 103,
+      "source-shared": 5,
+      "intentional-route-specific": 4,
+      "parity-coupled": 2
+    },
+    "nextUncappedEnumerationCount": 206
+  },
+  "controls": [
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-boundary-sidecar-blur",
+      "uiId": "volume-boundary-sidecar-blur",
+      "routeKey": "volume_boundary_sidecar_blur",
+      "controlName": "boundarySidecarBlur",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.45",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.02"
+      },
+      "owningStage": "analytical-support",
+      "ownerStage": "analytical-support",
+      "downstreamStages": [
+        "analytical-support",
+        "geometry",
+        "raymarch",
+        "source-fields",
+        "splat-admission"
+      ],
+      "classificationHint": "source-shared",
+      "source": {
+        "indexHtmlLine": 1176,
+        "listenedBySyncControls": false,
+        "routeHydrated": false
+      },
+      "sourceFieldHash": "c84828f3123c5179148d1e608a4a5eb9b2ef649965e12bff0bf7d8e48fd455c7"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-boundary-sidecar-ridge",
+      "uiId": "volume-boundary-sidecar-ridge",
+      "routeKey": "volume_boundary_sidecar_ridge",
+      "controlName": "boundarySidecarRidge",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "1.00",
+      "range": {
+        "min": 0,
+        "max": 2,
+        "step": "0.02"
+      },
+      "owningStage": "analytical-support",
+      "ownerStage": "analytical-support",
+      "downstreamStages": [
+        "analytical-support",
+        "geometry",
+        "raymarch",
+        "source-fields",
+        "splat-admission"
+      ],
+      "classificationHint": "source-shared",
+      "source": {
+        "indexHtmlLine": 1186,
+        "listenedBySyncControls": false,
+        "routeHydrated": false
+      },
+      "sourceFieldHash": "09d2ba90322e2d49e3f8b69ebdcff3fed7700e9f731c00b3632beb707fae4b00"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-boundary-sidecar-source",
+      "uiId": "volume-boundary-sidecar-source",
+      "routeKey": "volume_boundary_sidecar_source",
+      "controlName": "boundarySidecarSource",
+      "tagName": "select",
+      "inputType": "select",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": null,
+      "range": {
+        "min": null,
+        "max": null,
+        "step": null
+      },
+      "owningStage": "analytical-support",
+      "ownerStage": "analytical-support",
+      "downstreamStages": [
+        "analytical-support",
+        "geometry",
+        "raymarch",
+        "source-fields",
+        "splat-admission"
+      ],
+      "classificationHint": "source-shared",
+      "source": {
+        "indexHtmlLine": 1133,
+        "listenedBySyncControls": true,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "75ad3711b2fe822ba0fb45a2037326f05593c6cba0cac1a85f44464f021b4c58"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-boundary-sidecar-view",
+      "uiId": "volume-boundary-sidecar-view",
+      "routeKey": "volume_boundary_sidecar_view",
+      "controlName": "boundarySidecarView",
+      "tagName": "select",
+      "inputType": "select",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": null,
+      "range": {
+        "min": null,
+        "max": null,
+        "step": null
+      },
+      "owningStage": "presentation-debug",
+      "ownerStage": "presentation-debug",
+      "downstreamStages": [
+        "presentation",
+        "raymarch"
+      ],
+      "classificationHint": "intentional-route-specific",
+      "source": {
+        "indexHtmlLine": 1143,
+        "listenedBySyncControls": true,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "6df502c6533e35e49562fb5d85deda0e58d2a2a95f7edd2621ccb8476a1295a9"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-boundary-sidecar-width",
+      "uiId": "volume-boundary-sidecar-width",
+      "routeKey": "volume_boundary_sidecar_width",
+      "controlName": "boundarySidecarWidth",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.75",
+      "range": {
+        "min": 0,
+        "max": 2,
+        "step": "0.02"
+      },
+      "owningStage": "analytical-support",
+      "ownerStage": "analytical-support",
+      "downstreamStages": [
+        "analytical-support",
+        "geometry",
+        "raymarch",
+        "source-fields",
+        "splat-admission"
+      ],
+      "classificationHint": "source-shared",
+      "source": {
+        "indexHtmlLine": 1181,
+        "listenedBySyncControls": false,
+        "routeHydrated": false
+      },
+      "sourceFieldHash": "379ad88eef4dfa4e48a08ee432f739956e7af398f1bfd4d4ea883760b0528483"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-boundary-splat-mode",
+      "uiId": "volume-boundary-splat-mode",
+      "routeKey": "volume_boundary_splat_mode",
+      "controlName": "boundarySplatMode",
+      "tagName": "select",
+      "inputType": "select",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": null,
+      "range": {
+        "min": null,
+        "max": null,
+        "step": null
+      },
+      "owningStage": "splat-admission-and-attribute-route",
+      "ownerStage": "splat-admission-and-attribute-route",
+      "downstreamStages": [
+        "analytical-support",
+        "coefficient",
+        "learned-attributes",
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields",
+        "splat-admission"
+      ],
+      "classificationHint": "source-shared",
+      "source": {
+        "indexHtmlLine": 1155,
+        "listenedBySyncControls": true,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "d33a17fc1958f59932f9da9a31ba73b3557f0ae8b2b8b6719e37650d991e4a1a"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-boundary-splat-radius",
+      "uiId": "volume-boundary-splat-radius",
+      "routeKey": "volume_boundary_splat_radius",
+      "controlName": "boundarySplatRadius",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "1.00",
+      "range": {
+        "min": 0.35,
+        "max": 1.5,
+        "step": "0.01"
+      },
+      "owningStage": "splat-geometry",
+      "ownerStage": "splat-geometry",
+      "downstreamStages": [
+        "analytical-support",
+        "geometry",
+        "presentation",
+        "raymarch",
+        "source-fields",
+        "splat-admission"
+      ],
+      "classificationHint": "parity-coupled",
+      "source": {
+        "indexHtmlLine": 1164,
+        "listenedBySyncControls": false,
+        "routeHydrated": false
+      },
+      "sourceFieldHash": "8eaa6919e324c6f96f28466110c514b9dbbaa0466b9438b5ece9c983f86c7af9"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-boundary-splat-sharpness",
+      "uiId": "volume-boundary-splat-sharpness",
+      "routeKey": "volume_boundary_splat_sharpness",
+      "controlName": "boundarySplatSharpness",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "3.4",
+      "range": {
+        "min": 1,
+        "max": 12,
+        "step": "0.1"
+      },
+      "owningStage": "splat-geometry",
+      "ownerStage": "splat-geometry",
+      "downstreamStages": [
+        "analytical-support",
+        "geometry",
+        "presentation",
+        "raymarch",
+        "source-fields",
+        "splat-admission"
+      ],
+      "classificationHint": "parity-coupled",
+      "source": {
+        "indexHtmlLine": 1169,
+        "listenedBySyncControls": false,
+        "routeHydrated": false
+      },
+      "sourceFieldHash": "eb3b1de889a215c95b802069f8f69f2b7501e3ced7348dddc6722d5756a54593"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-fire",
+      "uiId": "volume-fire",
+      "routeKey": "volume_fire",
+      "controlName": "fire",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "1.4",
+      "range": {
+        "min": 0,
+        "max": 3.5,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1357,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "2eeb41e259197730ad8ce49fbf6093f738569ca12f05c28e5cb090daadbeb45b"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-fire-licks",
+      "uiId": "volume-fire-licks",
+      "routeKey": "volume_fire_licks",
+      "controlName": "fireLicks",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "1.65",
+      "range": {
+        "min": 0,
+        "max": 5,
+        "step": "0.05"
+      },
+      "owningStage": "nonlinear-source-field",
+      "ownerStage": "nonlinear-source-field",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1397,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "a056a31e1646ab46c114c47218319915ba789bb6e7452d27c779f17e32fd59a2"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-fire-render-mode",
+      "uiId": "volume-fire-render-mode",
+      "routeKey": "volume_fire_render_mode",
+      "controlName": "fireRenderMode",
+      "tagName": "select",
+      "inputType": "select",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": null,
+      "range": {
+        "min": null,
+        "max": null,
+        "step": null
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1582,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "9d2eb4152f414f89d6ac688fba28e4449c9a1a75bc25d9b865af1c9e7b28c028"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-fire-scale",
+      "uiId": "volume-fire-scale",
+      "routeKey": "volume_fire_scale",
+      "controlName": "fireScale",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.86",
+      "range": {
+        "min": 0.35,
+        "max": 1.3,
+        "step": "0.01"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1412,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "aade65450671a4deb8c3500aecd1628264667b3144f5f60fe24708819ce90dcb"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-glow",
+      "uiId": "volume-glow",
+      "routeKey": "volume_glow",
+      "controlName": "glow",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "1.15",
+      "range": {
+        "min": 0,
+        "max": 2.5,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1372,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "263696c2538fc796ce102016ab2429f5ebddd25434811aff2635634fa612ffec"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-bite-after",
+      "uiId": "volume-pyro-bite-after",
+      "routeKey": "volume_pyro_bite_after",
+      "controlName": "pyroBiteAfter",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1784,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "91f25175b76c439bf98f0433daae1cafd352baeb8c00eae1089a9c7ec8e6adb7"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-bite-after-cut",
+      "uiId": "volume-pyro-bite-after-cut",
+      "routeKey": "volume_pyro_bite_after_cut",
+      "controlName": "pyroBiteAfterCut",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.50",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1790,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "f1dbb7cc0ddd83853b9cb5b2e5964d57cd2f5eb5080476945bfcab18feac5626"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-bite-border",
+      "uiId": "volume-pyro-bite-border",
+      "routeKey": "volume_pyro_bite_border",
+      "controlName": "pyroBiteBorder",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.45",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1730,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "322562269f0522dda3f33b4f8a0f8d8b305df4e8a1118d08f771e02cd1a1f8de"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-bite-chroma",
+      "uiId": "volume-pyro-bite-chroma",
+      "routeKey": "volume_pyro_bite_chroma",
+      "controlName": "pyroBiteChroma",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.55",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1842,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "8e29e58a31b0d2680e13a75e18cc73c6e7a59f44d0dffa89be8a8bd373344b90"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-bite-core",
+      "uiId": "volume-pyro-bite-core",
+      "routeKey": "volume_pyro_bite_core",
+      "controlName": "pyroBiteCore",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1760,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "31b60ecc8fcaf05fe1490fa7dd979937d908db9c5ddffe9ae17981cc118d2050"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-bite-core-cut",
+      "uiId": "volume-pyro-bite-core-cut",
+      "routeKey": "volume_pyro_bite_core_cut",
+      "controlName": "pyroBiteCoreCut",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.45",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1766,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "0e91a377358ad53b3ba523cb3f84cc1e768b79779b8cc96d57d768b013a7d7cb"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-bite-ember-color",
+      "uiId": "volume-pyro-bite-ember-color",
+      "routeKey": "volume_pyro_bite_ember_color",
+      "controlName": "pyroBiteEmberColor",
+      "tagName": "input",
+      "inputType": "color",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "#e65a1a",
+      "range": {
+        "min": null,
+        "max": null,
+        "step": null
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1854,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "7495b1774dd658c473aee3e25d3c6125b0a742dada024da4bc370abec4978712"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-bite-fire-lock",
+      "uiId": "volume-pyro-bite-fire-lock",
+      "routeKey": "volume_pyro_bite_fire_lock",
+      "controlName": "pyroBiteFireLock",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.75",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1754,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "d66fe54b9da7bae36b5d1c1942fce9ee6b84f8476799be8133890289b918ec03"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-bite-heat",
+      "uiId": "volume-pyro-bite-heat",
+      "routeKey": "volume_pyro_bite_heat",
+      "controlName": "pyroBiteHeat",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.65",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1836,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "23ab8b121b9143b75f57fd4d5639df2a5f81a96383468ab99af60bd8947c93af"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-bite-height",
+      "uiId": "volume-pyro-bite-height",
+      "routeKey": "volume_pyro_bite_height",
+      "controlName": "pyroBiteHeight",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.35",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1748,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "009c0b9f528b3ccfbe450bb388d522a0b8aceb4bf9e2812ad2e03ab2d7506828"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-bite-hot-color",
+      "uiId": "volume-pyro-bite-hot-color",
+      "routeKey": "volume_pyro_bite_hot_color",
+      "controlName": "pyroBiteHotColor",
+      "tagName": "input",
+      "inputType": "color",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "#fff4b8",
+      "range": {
+        "min": null,
+        "max": null,
+        "step": null
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1860,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "4c05f0544cef573d91808f0bc2153b33d7321f194873d109bb4235c5809c0b2d"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-bite-luma",
+      "uiId": "volume-pyro-bite-luma",
+      "routeKey": "volume_pyro_bite_luma",
+      "controlName": "pyroBiteLuma",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "1",
+      "range": {
+        "min": 0,
+        "max": 3,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1848,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "f5d720d9abfe73009f12c872599e58f604de5d2d1cc23854e7a311434a100a93"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-bite-rim",
+      "uiId": "volume-pyro-bite-rim",
+      "routeKey": "volume_pyro_bite_rim",
+      "controlName": "pyroBiteRim",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1772,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "8f1758c2138d81d911dd8c21119bb86a3935a0b7b723320781fd31ddc6b11646"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-bite-rim-cut",
+      "uiId": "volume-pyro-bite-rim-cut",
+      "routeKey": "volume_pyro_bite_rim_cut",
+      "controlName": "pyroBiteRimCut",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.55",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1778,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "c132d64932ec2325ef98c8e976bbe952a5aa2e0a0b02ce405a24d3c8b417c69f"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-bite-teeth",
+      "uiId": "volume-pyro-bite-teeth",
+      "routeKey": "volume_pyro_bite_teeth",
+      "controlName": "pyroBiteTeeth",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.55",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1736,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "9779ce509daa2d3d1396eb5b3ffb18cf2746701a25ac7b872a403226d3c828f7"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-bite-wake",
+      "uiId": "volume-pyro-bite-wake",
+      "routeKey": "volume_pyro_bite_wake",
+      "controlName": "pyroBiteWake",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.25",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1742,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "8e59f707a82d18a729bb918b0b89fb291317f2852e8e49762e8c9e88e5128553"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-carrier-view",
+      "uiId": "volume-pyro-carrier-view",
+      "routeKey": "volume_pyro_carrier_view",
+      "controlName": "pyroCarrierView",
+      "tagName": "select",
+      "inputType": "select",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": null,
+      "range": {
+        "min": null,
+        "max": null,
+        "step": null
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "intentional-route-specific",
+      "source": {
+        "indexHtmlLine": 2074,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "a267a406d19835b332ea191588dcd1377b9f433aa075ff0f44b9b42eb0b552a4"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-compare",
+      "uiId": "volume-pyro-compare",
+      "routeKey": "volume_pyro_compare",
+      "controlName": "pyroCompare",
+      "tagName": "select",
+      "inputType": "select",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": null,
+      "range": {
+        "min": null,
+        "max": null,
+        "step": null
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1029,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "74bdbd7bb11a1dcbda0293c9bf2eca57f8482ff8296157d7b3396134f2f25afc"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-detail",
+      "uiId": "volume-pyro-detail",
+      "routeKey": "volume_pyro_detail",
+      "controlName": "pyroDetail",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "1"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1707,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "cafdb30e9873add7d7f54cad0b382901b451112b36aa606ad9ed0d8c97c6e740"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-diagnostic-paint",
+      "uiId": "volume-pyro-diagnostic-paint",
+      "routeKey": "volume_pyro_diagnostic_paint",
+      "controlName": "pyroDiagnosticPaint",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 2068,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "2ab691683cc45ce563e1a05e2353d07c668cd2586980fd5df358c20d6d4016b8"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-edge-bite",
+      "uiId": "volume-pyro-edge-bite",
+      "routeKey": "volume_pyro_edge_bite",
+      "controlName": "pyroEdgeBite",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.35",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1724,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "8b853565039b2c2c97767d46691e5700bb7918fbfb268980ea936872474cf7da"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-fire-mode",
+      "uiId": "volume-pyro-fire-mode",
+      "routeKey": "volume_pyro_fire_mode",
+      "controlName": "pyroFireMode",
+      "tagName": "select",
+      "inputType": "select",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": null,
+      "range": {
+        "min": null,
+        "max": null,
+        "step": null
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1796,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "bac79c5173206c399a7fb940b1e368763064b436468513b206444c85fd6143f2"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-flame-core-color",
+      "uiId": "volume-pyro-flame-core-color",
+      "routeKey": "volume_pyro_flame_core_color",
+      "controlName": "pyroFlameCoreColor",
+      "tagName": "input",
+      "inputType": "color",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "#fff4b8",
+      "range": {
+        "min": null,
+        "max": null,
+        "step": null
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1824,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "68cf5ed863ed3d748b905a69100ef970164cd58b81ebc7f90af6d6053f493719"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-flame-edge-color",
+      "uiId": "volume-pyro-flame-edge-color",
+      "routeKey": "volume_pyro_flame_edge_color",
+      "controlName": "pyroFlameEdgeColor",
+      "tagName": "input",
+      "inputType": "color",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "#ff8a24",
+      "range": {
+        "min": null,
+        "max": null,
+        "step": null
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1830,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "113c6183a19b3a5d1984f36d80056487b6237dc4d7958d5e4f107ee7bc601564"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-flame-luma",
+      "uiId": "volume-pyro-flame-luma",
+      "routeKey": "volume_pyro_flame_luma",
+      "controlName": "pyroFlameLuma",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "1",
+      "range": {
+        "min": 0,
+        "max": 3,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1818,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "e07fb1638cc1e1292e51d43be34f5106ee0a65b8c8a03b1d114c82cc161c531e"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-flame-paint",
+      "uiId": "volume-pyro-flame-paint",
+      "routeKey": "volume_pyro_flame_paint",
+      "controlName": "pyroFlamePaint",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0",
+      "range": {
+        "min": 0,
+        "max": 3,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1806,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "9e09df7b51de931149ff97194e1f9ac87197f5467e826c875abc6b5f8a02a581"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-flow-bite",
+      "uiId": "volume-pyro-flow-bite",
+      "routeKey": "volume_pyro_flow_bite",
+      "controlName": "pyroFlowBite",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0",
+      "range": {
+        "min": 0,
+        "max": 3,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 2008,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "f84ffdbe29ed7591c2f4532f9176d17d946dc1ee069bd2cade44d7d2693f11c3"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-flow-border",
+      "uiId": "volume-pyro-flow-border",
+      "routeKey": "volume_pyro_flow_border",
+      "controlName": "pyroFlowBorder",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.55",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 2014,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "c34f147838202b1275397f7273fa93e4e6a2bc92fa202e9681ac18b0321cb5a3"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-flow-cool-color",
+      "uiId": "volume-pyro-flow-cool-color",
+      "routeKey": "volume_pyro_flow_cool_color",
+      "controlName": "pyroFlowCoolColor",
+      "tagName": "input",
+      "inputType": "color",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "#2aa7b8",
+      "range": {
+        "min": null,
+        "max": null,
+        "step": null
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 2056,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "2893820b7ef99c6b8b75b26fd141a742c2157edd8403701aa5a8799c6ffaa4d7"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-flow-fire-lock",
+      "uiId": "volume-pyro-flow-fire-lock",
+      "routeKey": "volume_pyro_flow_fire_lock",
+      "controlName": "pyroFlowFireLock",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.55",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 2032,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "09d0d6d834b06d4e6d1b34c06803a9d188b333a5942e2e86b6af72f6bb034b75"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-flow-hot-color",
+      "uiId": "volume-pyro-flow-hot-color",
+      "routeKey": "volume_pyro_flow_hot_color",
+      "controlName": "pyroFlowHotColor",
+      "tagName": "input",
+      "inputType": "color",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "#ff7a36",
+      "range": {
+        "min": null,
+        "max": null,
+        "step": null
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 2062,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "937f6983b29d2266b3e4ec8091a179fbf65c0856e60caa8887a4657795889e02"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-flow-luma",
+      "uiId": "volume-pyro-flow-luma",
+      "routeKey": "volume_pyro_flow_luma",
+      "controlName": "pyroFlowLuma",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "1",
+      "range": {
+        "min": 0,
+        "max": 3,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 2038,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "54a3d44483541ffb84d104ae45a5b10d2ecc0a89f663343b559d9a007e4cceae"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-flow-radiance",
+      "uiId": "volume-pyro-flow-radiance",
+      "routeKey": "volume_pyro_flow_radiance",
+      "controlName": "pyroFlowRadiance",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0",
+      "range": {
+        "min": 0,
+        "max": 4,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 2044,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "147b86e1c8a65402c0ecc072b9de1f729c86f8df500e4de9b5befce26077810f"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-flow-rise",
+      "uiId": "volume-pyro-flow-rise",
+      "routeKey": "volume_pyro_flow_rise",
+      "controlName": "pyroFlowRise",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.50",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 2026,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "386934c72fda9eea5eb6148fbd193f758f0018bc22938e08b032968a1cac8b52"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-flow-spikes",
+      "uiId": "volume-pyro-flow-spikes",
+      "routeKey": "volume_pyro_flow_spikes",
+      "controlName": "pyroFlowSpikes",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.35",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 2050,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "3745c9e99d60a84aea23b6a615c17212e3486a899ac1dc6d6b4cde65b0afb7a8"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-flow-teeth",
+      "uiId": "volume-pyro-flow-teeth",
+      "routeKey": "volume_pyro_flow_teeth",
+      "controlName": "pyroFlowTeeth",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.55",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 2020,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "f9125ee1693e9e9e848c18aeb128e0546ec740878c9c954b978a5e8168cfe06e"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-fold-border",
+      "uiId": "volume-pyro-fold-border",
+      "routeKey": "volume_pyro_fold_border",
+      "controlName": "pyroFoldBorder",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.35",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1872,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "1b6306c3fc2b0d8eef84ee75c6bdda06b147cc59647728d8399dc4408f895c40"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-fold-wake",
+      "uiId": "volume-pyro-fold-wake",
+      "routeKey": "volume_pyro_fold_wake",
+      "controlName": "pyroFoldWake",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.35",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1878,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "567459bf305ba5186ab230fa7c5f2dd37cd4205786c6744d9e01fc0afc99cb48"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-interface-focus",
+      "uiId": "volume-pyro-interface-focus",
+      "routeKey": "volume_pyro_interface_focus",
+      "controlName": "pyroInterfaceFocus",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.75",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1718,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "3d39cf43e97dd3aa9c21dd001868c84122acbc236aaf0844ae61f2ddaf6519ce"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-material-gain",
+      "uiId": "volume-pyro-material-gain",
+      "routeKey": "volume_pyro_material_gain",
+      "controlName": "pyroMaterialGain",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0",
+      "range": {
+        "min": 0,
+        "max": 1.5,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1712,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "83f2e511ce5d20f9c8d3fa09ae2adbb9a7894c1394c9ef892174ce8b6f44e3e9"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-overdrive",
+      "uiId": "volume-pyro-overdrive",
+      "routeKey": "volume_pyro_overdrive",
+      "controlName": "pyroOverdrive",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "1",
+      "range": {
+        "min": 1,
+        "max": 8,
+        "step": "0.25"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 2089,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "7bec64c6360a05fe79cb045b868a56e02b100facfa1c7aa0c39d185b93753639"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-radiance",
+      "uiId": "volume-pyro-radiance",
+      "routeKey": "volume_pyro_radiance",
+      "controlName": "pyroRadiance",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0",
+      "range": {
+        "min": 0,
+        "max": 10,
+        "step": "0.05"
+      },
+      "owningStage": "fire-optics",
+      "ownerStage": "fire-optics",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1914,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "9fcebec36b43f2254807b20e1a0f7efd70dc5a6ac2d3eb7f5a88dd8830f34974"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-radiance-border",
+      "uiId": "volume-pyro-radiance-border",
+      "routeKey": "volume_pyro_radiance_border",
+      "controlName": "pyroRadianceBorder",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.55",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "fire-optics",
+      "ownerStage": "fire-optics",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1984,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "a5471f6e17203bb477dfcd5d3f1d4ae5088f079ae5ac3d680ff77a5b036c7361"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-radiance-chroma",
+      "uiId": "volume-pyro-radiance-chroma",
+      "routeKey": "volume_pyro_radiance_chroma",
+      "controlName": "pyroRadianceChroma",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.55",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "fire-optics",
+      "ownerStage": "fire-optics",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1944,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "6b7e493671d5e41dbaa20cd148de45bf5529cfa9ff0666f42c4400db6b6dd433"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-radiance-cool-color",
+      "uiId": "volume-pyro-radiance-cool-color",
+      "routeKey": "volume_pyro_radiance_cool_color",
+      "controlName": "pyroRadianceCoolColor",
+      "tagName": "input",
+      "inputType": "color",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "#7aa8b8",
+      "range": {
+        "min": null,
+        "max": null,
+        "step": null
+      },
+      "owningStage": "fire-optics",
+      "ownerStage": "fire-optics",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1956,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "410bcbbab902fc4f86eb7a81c6bb07ec56f02b19060ba4b2eb0400056e49476c"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-radiance-fire-lock",
+      "uiId": "volume-pyro-radiance-fire-lock",
+      "routeKey": "volume_pyro_radiance_fire_lock",
+      "controlName": "pyroRadianceFireLock",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.65",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "fire-optics",
+      "ownerStage": "fire-optics",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 2002,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "dd7dac4a9352c5eb82290436b6c1d22df50dea644870b296da8f32f3eb9702f7"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-radiance-gate",
+      "uiId": "volume-pyro-radiance-gate",
+      "routeKey": "volume_pyro_radiance_gate",
+      "controlName": "pyroRadianceGate",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.62",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "fire-optics",
+      "ownerStage": "fire-optics",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1920,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "5992f3ca8687cebdd65d4194858dd2ea83a126d62c206b3b25bacc36f00d4402"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-radiance-height",
+      "uiId": "volume-pyro-radiance-height",
+      "routeKey": "volume_pyro_radiance_height",
+      "controlName": "pyroRadianceHeight",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.45",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "fire-optics",
+      "ownerStage": "fire-optics",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1978,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "4f63896dbd4e4461bb27ba85db5407b3b717ca050830fe8df50843673cedac8e"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-radiance-hue",
+      "uiId": "volume-pyro-radiance-hue",
+      "routeKey": "volume_pyro_radiance_hue",
+      "controlName": "pyroRadianceHue",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.50",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "fire-optics",
+      "ownerStage": "fire-optics",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1938,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "c990648d9f65b12ff08ebbe2681e0cc5e7aa52a3bf73246753baf4e251bfcdd0"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-radiance-luma",
+      "uiId": "volume-pyro-radiance-luma",
+      "routeKey": "volume_pyro_radiance_luma",
+      "controlName": "pyroRadianceLuma",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "1",
+      "range": {
+        "min": 0,
+        "max": 3,
+        "step": "0.05"
+      },
+      "owningStage": "fire-optics",
+      "ownerStage": "fire-optics",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1950,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "dcc3e1525bfc0b1fb6e3c81268f5f677617e83eea3596064c495e907791e2d21"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-radiance-rise",
+      "uiId": "volume-pyro-radiance-rise",
+      "routeKey": "volume_pyro_radiance_rise",
+      "controlName": "pyroRadianceRise",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.45",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "fire-optics",
+      "ownerStage": "fire-optics",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1996,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "e918ebdb2edcd1b2db52f2d919b99858a05cd498ac4b7ce87656e7bfe2b0826d"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-radiance-source",
+      "uiId": "volume-pyro-radiance-source",
+      "routeKey": "volume_pyro_radiance_source",
+      "controlName": "pyroRadianceSource",
+      "tagName": "select",
+      "inputType": "select",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": null,
+      "range": {
+        "min": null,
+        "max": null,
+        "step": null
+      },
+      "owningStage": "fire-optics",
+      "ownerStage": "fire-optics",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1968,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "aab058a6b9ca5b3dbe55f144b2ed9886df2f7e3c793d71da3f5ba0362c7a328f"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-radiance-spill",
+      "uiId": "volume-pyro-radiance-spill",
+      "routeKey": "volume_pyro_radiance_spill",
+      "controlName": "pyroRadianceSpill",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.30",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "fire-optics",
+      "ownerStage": "fire-optics",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1926,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "4afe1886b07c0e1fc5a3d44ebd3a21349fcc5d38fda19e6d99fd918acca0fcd9"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-radiance-teeth",
+      "uiId": "volume-pyro-radiance-teeth",
+      "routeKey": "volume_pyro_radiance_teeth",
+      "controlName": "pyroRadianceTeeth",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.45",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "fire-optics",
+      "ownerStage": "fire-optics",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1990,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "40d0012b0b4a44a8db0c943e37aa32daaf0059cd9993c2a25e3507d2d0f411ad"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-radiance-warm-color",
+      "uiId": "volume-pyro-radiance-warm-color",
+      "routeKey": "volume_pyro_radiance_warm_color",
+      "controlName": "pyroRadianceWarmColor",
+      "tagName": "input",
+      "inputType": "color",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "#d18438",
+      "range": {
+        "min": null,
+        "max": null,
+        "step": null
+      },
+      "owningStage": "fire-optics",
+      "ownerStage": "fire-optics",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1962,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "429a6d82bfa71593b3a6eaee33affba9d42784554fb93ae823ff638f6618b55e"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-radiance-warmth",
+      "uiId": "volume-pyro-radiance-warmth",
+      "routeKey": "volume_pyro_radiance_warmth",
+      "controlName": "pyroRadianceWarmth",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.45",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "fire-optics",
+      "ownerStage": "fire-optics",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1932,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "c9a4bb5d50cbeaa860f0d5c4550bffd8e0c95ebdfd2e35c1f257cf688c5a2645"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-smoke-fold",
+      "uiId": "volume-pyro-smoke-fold",
+      "routeKey": "volume_pyro_smoke_fold",
+      "controlName": "pyroSmokeFold",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.25",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1866,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "dd35e642c7e4d087c061412a69c9fc07cd1bc6a588c0151c1774e30c65b9ed41"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-stock-mix",
+      "uiId": "volume-pyro-stock-mix",
+      "routeKey": "volume_pyro_stock_mix",
+      "controlName": "pyroStockMix",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "1",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1812,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "057f9b49c383fb8bf16c69d362dc1b8e87309f08309e5422dd806b40bee87160"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-wake-ember-color",
+      "uiId": "volume-pyro-wake-ember-color",
+      "routeKey": "volume_pyro_wake_ember_color",
+      "controlName": "pyroWakeEmberColor",
+      "tagName": "input",
+      "inputType": "color",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "#b06a2a",
+      "range": {
+        "min": null,
+        "max": null,
+        "step": null
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1908,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "830afadd83aee82b61fc734c78dc31514f069c995193509dc7a5b8a1067d6405"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-wake-lift",
+      "uiId": "volume-pyro-wake-lift",
+      "routeKey": "volume_pyro_wake_lift",
+      "controlName": "pyroWakeLift",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.45",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1884,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "88d3cf73f8b93ff18bf89097f6b869df755ffc379fce2909489a19b12d8c17a7"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-wake-luma",
+      "uiId": "volume-pyro-wake-luma",
+      "routeKey": "volume_pyro_wake_luma",
+      "controlName": "pyroWakeLuma",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "1",
+      "range": {
+        "min": 0,
+        "max": 3,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1896,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "8c3477291e5816956f5fc91106f5f2997557261efd3a3b69a185b5e905eced56"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-wake-shadow-color",
+      "uiId": "volume-pyro-wake-shadow-color",
+      "routeKey": "volume_pyro_wake_shadow_color",
+      "controlName": "pyroWakeShadowColor",
+      "tagName": "input",
+      "inputType": "color",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "#384c50",
+      "range": {
+        "min": null,
+        "max": null,
+        "step": null
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1902,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "bf0e69a582525c31053f488cfbaee0316bc8d3cb04145ee37ad462f0ba245969"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-pyro-wake-warmth",
+      "uiId": "volume-pyro-wake-warmth",
+      "routeKey": "volume_pyro_wake_warmth",
+      "controlName": "pyroWakeWarmth",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.35",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1890,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "92c0353adfbe77c2d5389c6e2ad26077f059044c5cd4613a8b51283179920d6f"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-radiance",
+      "uiId": "volume-radiance",
+      "routeKey": "volume_radiance",
+      "controlName": "radiance",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "1.65",
+      "range": {
+        "min": 0,
+        "max": 3,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1362,
+        "listenedBySyncControls": false,
+        "routeHydrated": true
+      },
+      "sourceFieldHash": "976cab1159f38b1baf483702e4449a96bca5b4dea616dc896bec9009cca0bcce"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-reaction-boundary-core-reject",
+      "uiId": "volume-reaction-boundary-core-reject",
+      "routeKey": "volume_reaction_boundary_core_reject",
+      "controlName": "reactionBoundaryCoreReject",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.92",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.01"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1096,
+        "listenedBySyncControls": false,
+        "routeHydrated": false
+      },
+      "sourceFieldHash": "2697e326cc997afc6d73a46826d0a1442c2be44e33531e5b24502da9549d1580"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-reaction-boundary-cut",
+      "uiId": "volume-reaction-boundary-cut",
+      "routeKey": "volume_reaction_boundary_cut",
+      "controlName": "reactionBoundaryCut",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.30",
+      "range": {
+        "min": 0,
+        "max": 0.55,
+        "step": "0.005"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1086,
+        "listenedBySyncControls": false,
+        "routeHydrated": false
+      },
+      "sourceFieldHash": "965fca54e66ff98c8c0ce2efc2a04ffba1991d873cbd5fb812c583ee4e9f4020"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-reaction-boundary-fire-erosion",
+      "uiId": "volume-reaction-boundary-fire-erosion",
+      "routeKey": "volume_reaction_boundary_fire_erosion",
+      "controlName": "reactionBoundaryFireErosion",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.55",
+      "range": {
+        "min": 0,
+        "max": 1,
+        "step": "0.01"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1206,
+        "listenedBySyncControls": false,
+        "routeHydrated": false
+      },
+      "sourceFieldHash": "d76bf1fd47886f07d47afd53eb2a54722ef52f692c30b0e3138fd1688569a492"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-reaction-boundary-fire-ridge",
+      "uiId": "volume-reaction-boundary-fire-ridge",
+      "routeKey": "volume_reaction_boundary_fire_ridge",
+      "controlName": "reactionBoundaryFireRidge",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "1.76",
+      "range": {
+        "min": 0,
+        "max": 2,
+        "step": "0.02"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1191,
+        "listenedBySyncControls": false,
+        "routeHydrated": false
+      },
+      "sourceFieldHash": "5676b48117c8e407279260995df1952001d4328a116c889d56123d5cdf841802"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-reaction-boundary-fire-ridge-cut",
+      "uiId": "volume-reaction-boundary-fire-ridge-cut",
+      "routeKey": "volume_reaction_boundary_fire_ridge_cut",
+      "controlName": "reactionBoundaryFireRidgeCut",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.040",
+      "range": {
+        "min": 0,
+        "max": 0.55,
+        "step": "0.005"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1196,
+        "listenedBySyncControls": false,
+        "routeHydrated": false
+      },
+      "sourceFieldHash": "69ffc1b6dc6b037b9f9bae57d6b31d8a0877873e50e49d38de777b6e1b563bce"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-reaction-boundary-fire-tip",
+      "uiId": "volume-reaction-boundary-fire-tip",
+      "routeKey": "volume_reaction_boundary_fire_tip",
+      "controlName": "reactionBoundaryFireTip",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "1.80",
+      "range": {
+        "min": 0,
+        "max": 2,
+        "step": "0.02"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "optics",
+        "presentation",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1201,
+        "listenedBySyncControls": false,
+        "routeHydrated": false
+      },
+      "sourceFieldHash": "86b9d2bcc9c9dbffd87cdcec4d69e66841be969071f40b1190079b93d52f4e78"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-reaction-boundary-gradient",
+      "uiId": "volume-reaction-boundary-gradient",
+      "routeKey": "volume_reaction_boundary_gradient",
+      "controlName": "reactionBoundaryGradient",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "2.60",
+      "range": {
+        "min": 0,
+        "max": 4,
+        "step": "0.05"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1061,
+        "listenedBySyncControls": false,
+        "routeHydrated": false
+      },
+      "sourceFieldHash": "531f474e13c93e4a585a500274ed696f32381bb84828085fc7c4fc6857d92b6c"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-reaction-boundary-softness",
+      "uiId": "volume-reaction-boundary-softness",
+      "routeKey": "volume_reaction_boundary_softness",
+      "controlName": "reactionBoundarySoftness",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.08",
+      "range": {
+        "min": 0.005,
+        "max": 0.45,
+        "step": "0.005"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1091,
+        "listenedBySyncControls": false,
+        "routeHydrated": false
+      },
+      "sourceFieldHash": "d976b39527a594c37a2d942dfcd014947320995e955d1d271010851cbe45b054"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-reaction-boundary-support-front",
+      "uiId": "volume-reaction-boundary-support-front",
+      "routeKey": "volume_reaction_boundary_support_front",
+      "controlName": "reactionBoundarySupportFront",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "1.60",
+      "range": {
+        "min": 0,
+        "max": 2,
+        "step": "0.02"
+      },
+      "owningStage": "nonlinear-source-field",
+      "ownerStage": "nonlinear-source-field",
+      "downstreamStages": [
+        "analytical-support",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1076,
+        "listenedBySyncControls": false,
+        "routeHydrated": false
+      },
+      "sourceFieldHash": "70f75d8c860b75f742b5f5174a853eebcb5a64bdb0ab0331d87fe638c66cbcda"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-reaction-boundary-support-interface",
+      "uiId": "volume-reaction-boundary-support-interface",
+      "routeKey": "volume_reaction_boundary_support_interface",
+      "controlName": "reactionBoundarySupportInterface",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "1.46",
+      "range": {
+        "min": 0,
+        "max": 2,
+        "step": "0.02"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1081,
+        "listenedBySyncControls": false,
+        "routeHydrated": false
+      },
+      "sourceFieldHash": "dc4908b64af8572ec86206fc9df469cc48dec3d0af3b36a11e3b99c748bee6eb"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-reaction-boundary-support-reaction",
+      "uiId": "volume-reaction-boundary-support-reaction",
+      "routeKey": "volume_reaction_boundary_support_reaction",
+      "controlName": "reactionBoundarySupportReaction",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.26",
+      "range": {
+        "min": 0,
+        "max": 2,
+        "step": "0.02"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1071,
+        "listenedBySyncControls": false,
+        "routeHydrated": false
+      },
+      "sourceFieldHash": "d44f5c5d5c1e4f6cf5ae2142b6a20cc5f7deb78746e36a3513d31652e1b243e7"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-reaction-boundary-support-thermal",
+      "uiId": "volume-reaction-boundary-support-thermal",
+      "routeKey": "volume_reaction_boundary_support_thermal",
+      "controlName": "reactionBoundarySupportThermal",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.10",
+      "range": {
+        "min": 0,
+        "max": 2,
+        "step": "0.02"
+      },
+      "owningStage": "raymarch",
+      "ownerStage": "raymarch",
+      "downstreamStages": [
+        "analytical-support",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1066,
+        "listenedBySyncControls": false,
+        "routeHydrated": false
+      },
+      "sourceFieldHash": "b081c8b0e64542b59659e0c2c89161cda655c828433bceca6b1c6a1a1a85b740"
+    },
+    {
+      "schema": "kaminos.pyro-control-path-control-enumeration.v0",
+      "id": "volume-reaction-boundary-topology",
+      "uiId": "volume-reaction-boundary-topology",
+      "routeKey": "volume_reaction_boundary_topology",
+      "controlName": "reactionBoundaryTopology",
+      "tagName": "input",
+      "inputType": "range",
+      "requestedValue": null,
+      "effectiveValue": null,
+      "default": "0.90",
+      "range": {
+        "min": 0,
+        "max": 2.5,
+        "step": "0.02"
+      },
+      "owningStage": "nonlinear-source-field",
+      "ownerStage": "nonlinear-source-field",
+      "downstreamStages": [
+        "analytical-support",
+        "raymarch",
+        "source-fields"
+      ],
+      "classificationHint": "raymarch-only-unimplemented",
+      "source": {
+        "indexHtmlLine": 1101,
+        "listenedBySyncControls": false,
+        "routeHydrated": false
+      },
+      "sourceFieldHash": "86acfe321c8b344f90b5364fa8064c522e84a77a761df64f48a3f423fd4e5269"
+    }
+  ],
+  "perturbations": [
+    {
+      "id": "positive-boundary-splat-radius-geometry",
+      "control": "volume_boundary_splat_radius",
+      "classification": "parity-coupled",
+      "requested": {
+        "routeKey": "volume_boundary_splat_radius",
+        "baseline": 1,
+        "treatment": 1.45,
+        "effectiveEqualsRequested": true
+      },
+      "requestedIdentity": "route-query-volume_boundary_splat_radius",
+      "effectiveIdentity": "normalizeBoundarySplatRadius->BoundarySplatCamera.controls.x",
+      "fallback": null,
+      "postLoadMutation": null,
+      "sourceFieldHash": "8eaa6919e324c6f96f28466110c514b9dbbaa0466b9438b5ece9c983f86c7af9",
+      "baselines": [
+        {
+          "id": "lawful-current-baseline-a",
+          "sourceFieldHash": "e84a3dd93d984d99cc75a4e5a869996201537045988ac239ea3ca3b63c4e89e9"
+        },
+        {
+          "id": "lawful-current-baseline-b",
+          "sourceFieldHash": "ca3b5214a9da389f261283b9286de705c39f5b0bb16f7448e4075c2a469e8bdb"
+        }
+      ],
+      "appliedPasses": {
+        "raymarchApplied": false,
+        "splatApplied": true,
+        "passIdentity": "boundary-splat-radius-geometry-fixture-v0"
+      },
+      "counts": {
+        "candidateBefore": 1434,
+        "candidateLayers": 1
+      },
+      "deltas": {
+        "sourceFields": {
+          "changed": false,
+          "hashesDiffer": false
+        },
+        "splatAdmission": {
+          "candidateCount": 0,
+          "layerCount": 0
+        },
+        "coefficient": {
+          "colorOpacityMeanAbs": 0
+        },
+        "geometry": {
+          "radiusMeanAbs": 0.013274437499999998,
+          "positionMeanAbs": 0
+        },
+        "optics": {
+          "opacityMeanAbs": 0
+        },
+        "presentation": {
+          "lumaMeanAbs": 0.5044286249999999
+        },
+        "pixel": {
+          "meanAbs": 0.5044286249999999,
+          "maxAbs": 0.5512612499999998
+        }
+      },
+      "evidence": {
+        "downstreamStage": "splat geometry and presentation",
+        "assertion": "radius perturbation changes BoundarySplatCamera.controls.x-derived footprint while preserving candidate admission"
+      }
+    },
+    {
+      "id": "intentional-smoke-hybrid-raymarch-fire-authority",
+      "control": "volume_boundary_sidecar_view",
+      "classification": "intentional-route-specific",
+      "requested": {
+        "routeKey": "composition",
+        "baseline": "full-raymarch-under-splats-diagnostic-v0",
+        "treatment": "smoke-raymarch-under-splats-v0",
+        "effectiveEqualsRequested": true
+      },
+      "requestedIdentity": "selectiveHeadLiveRenderCompositionRequest",
+      "effectiveIdentity": "SELECTIVE_HEAD_LIVE_RENDER_COMPOSITIONS.smoke-raymarch-under-splats-v0",
+      "fallback": null,
+      "postLoadMutation": null,
+      "sourceFieldHash": "6df502c6533e35e49562fb5d85deda0e58d2a2a95f7edd2621ccb8476a1295a9",
+      "baselines": [
+        {
+          "id": "lawful-current-baseline-a",
+          "sourceFieldHash": "e84a3dd93d984d99cc75a4e5a869996201537045988ac239ea3ca3b63c4e89e9"
+        },
+        {
+          "id": "lawful-current-baseline-b",
+          "sourceFieldHash": "ca3b5214a9da389f261283b9286de705c39f5b0bb16f7448e4075c2a469e8bdb"
+        }
+      ],
+      "appliedPasses": {
+        "raymarchApplied": true,
+        "splatApplied": true,
+        "passIdentity": "selective-head-live-render-pass-receipt-v0"
+      },
+      "deltas": {
+        "sourceFields": {
+          "changed": false,
+          "hashesDiffer": false
+        },
+        "splatAdmission": {
+          "candidateCount": 0,
+          "layerCount": 0
+        },
+        "coefficient": {
+          "colorOpacityMeanAbs": 0
+        },
+        "geometry": {
+          "radiusMeanAbs": 0,
+          "positionMeanAbs": 0
+        },
+        "optics": {
+          "opacityMeanAbs": 0
+        },
+        "raymarch": {
+          "fireAuthority": 1,
+          "presentationMeanAbs": 2.0475000000000003
+        },
+        "presentation": {
+          "lumaMeanAbs": 2.0475000000000003
+        },
+        "pixel": {
+          "meanAbs": 2.0475000000000003,
+          "maxAbs": 2.275
+        }
+      },
+      "evidence": {
+        "downstreamStage": "raymarch composition authority",
+        "assertion": "smoke hybrid intentionally suppresses raymarch fire authority while preserving splat fire authority"
+      }
+    },
+    {
+      "id": "negative-requested-effective-dead-parameter-fixture",
+      "control": "volume_pyro_diagnostic_paint",
+      "classification": "normalized-no-op",
+      "catches": "requested-effective-match-with-zero-downstream-delta",
+      "requested": {
+        "routeKey": "fixture_dead_requested_effective_match",
+        "baseline": 0.25,
+        "treatment": 0.85,
+        "effectiveEqualsRequested": true
+      },
+      "requestedIdentity": "fixture-requested-effective-match-v0",
+      "effectiveIdentity": "fixture-effective-route-receipt-v0",
+      "fallback": null,
+      "postLoadMutation": null,
+      "sourceFieldHash": "2ab691683cc45ce563e1a05e2353d07c668cd2586980fd5df358c20d6d4016b8",
+      "baselines": [
+        {
+          "id": "lawful-current-baseline-a",
+          "sourceFieldHash": "e84a3dd93d984d99cc75a4e5a869996201537045988ac239ea3ca3b63c4e89e9"
+        },
+        {
+          "id": "lawful-current-baseline-b",
+          "sourceFieldHash": "ca3b5214a9da389f261283b9286de705c39f5b0bb16f7448e4075c2a469e8bdb"
+        }
+      ],
+      "appliedPasses": {
+        "raymarchApplied": true,
+        "splatApplied": true,
+        "passIdentity": "negative-falsifier-no-downstream-delta-v0"
+      },
+      "falsifier": {
+        "tripped": true,
+        "reason": "requested and effective values match, but source, admission, coefficient, geometry, optics, presentation, and pixels are unchanged"
+      },
+      "deltas": {
+        "sourceFields": {
+          "changed": false,
+          "hashesDiffer": false
+        },
+        "splatAdmission": {
+          "candidateCount": 0,
+          "layerCount": 0
+        },
+        "coefficient": {
+          "colorOpacityMeanAbs": 0
+        },
+        "geometry": {
+          "radiusMeanAbs": 0,
+          "positionMeanAbs": 0
+        },
+        "optics": {
+          "opacityMeanAbs": 0
+        },
+        "presentation": {
+          "lumaMeanAbs": 0
+        },
+        "pixel": {
+          "meanAbs": 0,
+          "maxAbs": 0
+        }
+      }
+    }
+  ],
+  "nextSlice": {
+    "target": "broaden from representative fixtures to every enumerated priority control and replace current fixtures with browser GPU frozen-state captures where route cost is acceptable",
+    "operatorAuthoredProductionBasin": "not-yet-available",
+    "currentBaselineLawful": "current committed source-derived deterministic fixture"
+  }
+}
