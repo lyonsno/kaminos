@@ -1,0 +1,989 @@
+{
+  "schema": "kaminos.lirm-silhouette-morphology-basin-atlas.v0.basins",
+  "basins": [
+    {
+      "basinIndex": 0,
+      "medoidShapeId": "sha256:d1131a9d9f576e45bed48742b3d7685a04bb6fb76ee19d94a44d8b334a6f5e28",
+      "medoidMaskHash": "sha256:e85c329682c9ff985ddd1f3c42888cfffd9dd7f8a89a9ab7569cfffafd040dc8",
+      "medoidCorpus": "pokeapi-corpus",
+      "clusterSize": 21,
+      "providerCounts": {
+        "pokeapi-corpus": 13,
+        "digiapi-corpus": 8
+      },
+      "maximumMemberDistance": 2.43989,
+      "meanMemberDistance": 0.939401,
+      "metrics": {
+        "occupancy": 0.636414,
+        "bboxAspect": 1.008696,
+        "principalAspect": 1.014516,
+        "elongation": 1.015735,
+        "compactness": 0.613883,
+        "centroidY": 0.500878,
+        "symmetryXorX": 0.009888,
+        "symmetryXorY": 0.005493,
+        "topMassFraction": 0.194783,
+        "bottomMassFraction": 0.196701,
+        "supportWidthFraction": 0.634783,
+        "radialVariation": 0.005458,
+        "radialPeakCount": 0.0,
+        "bboxFillFraction": 0.781634,
+        "largestComponentFraction": 1.0
+      },
+      "topology": {
+        "foregroundComponents": 1,
+        "largestComponentFraction": 1.0,
+        "holes": 0
+      },
+      "atlasEligibility": {
+        "eligible": true,
+        "reasons": [],
+        "bboxFillFraction": 0.7816341829085457,
+        "largestComponentFraction": 1.0
+      }
+    },
+    {
+      "basinIndex": 1,
+      "medoidShapeId": "sha256:7af294b3c0e49e26506b1503dd84eeffd077ef7c9327052311195da7f02dcd3e",
+      "medoidMaskHash": "sha256:8be8c659c3beedcc7d48a5cebb05ad911dbf10b3cb303f4bb5dc8a2e1adcbaa2",
+      "medoidCorpus": "pokeapi-corpus",
+      "clusterSize": 11,
+      "providerCounts": {
+        "pokeapi-corpus": 8,
+        "digiapi-corpus": 3
+      },
+      "maximumMemberDistance": 1.369614,
+      "meanMemberDistance": 0.981871,
+      "metrics": {
+        "occupancy": 0.126404,
+        "bboxAspect": 2.109091,
+        "principalAspect": 2.564048,
+        "elongation": 4.102732,
+        "compactness": 0.054347,
+        "centroidY": 0.501158,
+        "symmetryXorX": 0.197144,
+        "symmetryXorY": 0.176147,
+        "topMassFraction": 0.248189,
+        "bottomMassFraction": 0.225978,
+        "supportWidthFraction": 0.763636,
+        "radialVariation": 0.376147,
+        "radialPeakCount": 2.0,
+        "bboxFillFraction": 0.324608,
+        "largestComponentFraction": 0.999517
+      },
+      "topology": {
+        "foregroundComponents": 2,
+        "largestComponentFraction": 0.9995171414775471,
+        "holes": 3
+      },
+      "atlasEligibility": {
+        "eligible": true,
+        "reasons": [],
+        "bboxFillFraction": 0.32460815047021946,
+        "largestComponentFraction": 0.9995171414775471
+      }
+    },
+    {
+      "basinIndex": 2,
+      "medoidShapeId": "sha256:27952edc7e9e186017fa377cd7de16ce9a6046f6d33286ba4365b907f27698f8",
+      "medoidMaskHash": "sha256:bbc035be36be4268152364d87a0fe0ee7e72d909a78c3d4cc4028eea390a2a88",
+      "medoidCorpus": "digiapi-corpus",
+      "clusterSize": 109,
+      "providerCounts": {
+        "pokeapi-corpus": 55,
+        "digiapi-corpus": 54
+      },
+      "maximumMemberDistance": 1.269049,
+      "meanMemberDistance": 1.049238,
+      "metrics": {
+        "occupancy": 0.265137,
+        "bboxAspect": 0.474138,
+        "principalAspect": 0.409633,
+        "elongation": 2.452182,
+        "compactness": 0.247118,
+        "centroidY": 0.541931,
+        "symmetryXorX": 0.077637,
+        "symmetryXorY": 0.160645,
+        "topMassFraction": 0.063996,
+        "bottomMassFraction": 0.324816,
+        "supportWidthFraction": 0.991379,
+        "radialVariation": 0.251099,
+        "radialPeakCount": 2.0,
+        "bboxFillFraction": 0.680878,
+        "largestComponentFraction": 0.988029
+      },
+      "topology": {
+        "foregroundComponents": 4,
+        "largestComponentFraction": 0.9880294659300184,
+        "holes": 0
+      },
+      "atlasEligibility": {
+        "eligible": true,
+        "reasons": [],
+        "bboxFillFraction": 0.6808777429467084,
+        "largestComponentFraction": 0.9880294659300184
+      }
+    },
+    {
+      "basinIndex": 3,
+      "medoidShapeId": "sha256:c94a0f196267fff7bb21dedd7f1c754155cb8f628902b62978a7758eeb3bf922",
+      "medoidMaskHash": "sha256:7b87c76fddd4de8fd68b21a96b595db499437498d3121fecc81e4728f97c7127",
+      "medoidCorpus": "pokeapi-corpus",
+      "clusterSize": 317,
+      "providerCounts": {
+        "pokeapi-corpus": 121,
+        "digiapi-corpus": 196
+      },
+      "maximumMemberDistance": 1.319712,
+      "meanMemberDistance": 1.101229,
+      "metrics": {
+        "occupancy": 0.382324,
+        "bboxAspect": 1.115385,
+        "principalAspect": 1.259609,
+        "elongation": 1.274298,
+        "compactness": 0.112092,
+        "centroidY": 0.449196,
+        "symmetryXorX": 0.239258,
+        "symmetryXorY": 0.305176,
+        "topMassFraction": 0.318966,
+        "bottomMassFraction": 0.187101,
+        "supportWidthFraction": 0.615385,
+        "radialVariation": 0.225893,
+        "radialPeakCount": 4.0,
+        "bboxFillFraction": 0.519231,
+        "largestComponentFraction": 1.0
+      },
+      "topology": {
+        "foregroundComponents": 1,
+        "largestComponentFraction": 1.0,
+        "holes": 3
+      },
+      "atlasEligibility": {
+        "eligible": true,
+        "reasons": [],
+        "bboxFillFraction": 0.5192307692307693,
+        "largestComponentFraction": 1.0
+      }
+    },
+    {
+      "basinIndex": 4,
+      "medoidShapeId": "sha256:3ba2c9c3140ae01e1f85168fcf7c542c30127ecb98ffd21a6b26c4d1b6d697de",
+      "medoidMaskHash": "sha256:b25a82ac1247e1e63cf4aa1effa221196ce5f145d4840ce13e214ca79b2482e8",
+      "medoidCorpus": "digiapi-corpus",
+      "clusterSize": 14,
+      "providerCounts": {
+        "pokeapi-corpus": 7,
+        "digiapi-corpus": 7
+      },
+      "maximumMemberDistance": 1.281841,
+      "meanMemberDistance": 1.01648,
+      "metrics": {
+        "occupancy": 0.233643,
+        "bboxAspect": 1.208333,
+        "principalAspect": 1.274223,
+        "elongation": 1.522752,
+        "compactness": 0.013049,
+        "centroidY": 0.657583,
+        "symmetryXorX": 0.274414,
+        "symmetryXorY": 0.296387,
+        "topMassFraction": 0.051985,
+        "bottomMassFraction": 0.463166,
+        "supportWidthFraction": 0.96875,
+        "radialVariation": 0.16641,
+        "radialPeakCount": 3.0,
+        "bboxFillFraction": 0.34375,
+        "largestComponentFraction": 0.813741
+      },
+      "topology": {
+        "foregroundComponents": 152,
+        "largestComponentFraction": 0.8137408568443051,
+        "holes": 23
+      },
+      "atlasEligibility": {
+        "eligible": true,
+        "reasons": [],
+        "bboxFillFraction": 0.34375,
+        "largestComponentFraction": 0.8137408568443051
+      }
+    },
+    {
+      "basinIndex": 5,
+      "medoidShapeId": "sha256:dd998ccd9ba33dcd48810e51a2369839016cf0a65ab27e907b56a95cadf6ea86",
+      "medoidMaskHash": "sha256:2ade7b531ea2ea46c8bf0f186664eb2068373364de4897bf329b06f022f2cc2b",
+      "medoidCorpus": "pokeapi-corpus",
+      "clusterSize": 12,
+      "providerCounts": {
+        "pokeapi-corpus": 6,
+        "digiapi-corpus": 6
+      },
+      "maximumMemberDistance": 1.267518,
+      "meanMemberDistance": 1.042932,
+      "metrics": {
+        "occupancy": 0.107544,
+        "bboxAspect": 0.810345,
+        "principalAspect": 0.678251,
+        "elongation": 1.483917,
+        "compactness": 0.049621,
+        "centroidY": 0.462122,
+        "symmetryXorX": 0.086914,
+        "symmetryXorY": 0.190918,
+        "topMassFraction": 0.102724,
+        "bottomMassFraction": 0.066969,
+        "supportWidthFraction": 0.043103,
+        "radialVariation": 0.278616,
+        "radialPeakCount": 3.0,
+        "bboxFillFraction": 0.161592,
+        "largestComponentFraction": 0.999432
+      },
+      "topology": {
+        "foregroundComponents": 2,
+        "largestComponentFraction": 0.9994324631101021,
+        "holes": 4
+      },
+      "atlasEligibility": {
+        "eligible": true,
+        "reasons": [],
+        "bboxFillFraction": 0.1615920763022744,
+        "largestComponentFraction": 0.9994324631101021
+      }
+    },
+    {
+      "basinIndex": 6,
+      "medoidShapeId": "sha256:29a5d76c99e0410f46a70f911012b468c781b979cb6fe90629eebf4a1ca4836c",
+      "medoidMaskHash": "sha256:e04b9bf1062983763383e6e05691a3c170973a4051aeff887512985e5b1212b2",
+      "medoidCorpus": "digiapi-corpus",
+      "clusterSize": 236,
+      "providerCounts": {
+        "pokeapi-corpus": 127,
+        "digiapi-corpus": 109
+      },
+      "maximumMemberDistance": 1.310596,
+      "meanMemberDistance": 1.038289,
+      "metrics": {
+        "occupancy": 0.464233,
+        "bboxAspect": 1.09434,
+        "principalAspect": 0.923785,
+        "elongation": 1.083849,
+        "compactness": 0.274576,
+        "centroidY": 0.598778,
+        "symmetryXorX": 0.043701,
+        "symmetryXorY": 0.335449,
+        "topMassFraction": 0.039574,
+        "bottomMassFraction": 0.290034,
+        "supportWidthFraction": 0.830189,
+        "radialVariation": 0.084237,
+        "radialPeakCount": 1.0,
+        "bboxFillFraction": 0.618575,
+        "largestComponentFraction": 0.999869
+      },
+      "topology": {
+        "foregroundComponents": 2,
+        "largestComponentFraction": 0.9998685248488036,
+        "holes": 0
+      },
+      "atlasEligibility": {
+        "eligible": true,
+        "reasons": [],
+        "bboxFillFraction": 0.6185751463890696,
+        "largestComponentFraction": 0.9998685248488036
+      }
+    },
+    {
+      "basinIndex": 7,
+      "medoidShapeId": "sha256:439b192be0452032e83a35a591a49735963ca5e76f5a25bd97ce60bebac4b25d",
+      "medoidMaskHash": "sha256:7b96ba4e59fa5b7ca552449bdae0421e7f7f0d9f3e52c783939d64111cab67de",
+      "medoidCorpus": "pokeapi-corpus",
+      "clusterSize": 8,
+      "providerCounts": {
+        "pokeapi-corpus": 5,
+        "digiapi-corpus": 3
+      },
+      "maximumMemberDistance": 1.298927,
+      "meanMemberDistance": 1.059227,
+      "metrics": {
+        "occupancy": 0.251587,
+        "bboxAspect": 0.948276,
+        "principalAspect": 0.639325,
+        "elongation": 2.214129,
+        "compactness": 0.07519,
+        "centroidY": 0.39989,
+        "symmetryXorX": 0.314941,
+        "symmetryXorY": 0.273193,
+        "topMassFraction": 0.236536,
+        "bottomMassFraction": 0.024017,
+        "supportWidthFraction": 0.275862,
+        "radialVariation": 0.281138,
+        "radialPeakCount": 2.0,
+        "bboxFillFraction": 0.323041,
+        "largestComponentFraction": 1.0
+      },
+      "topology": {
+        "foregroundComponents": 1,
+        "largestComponentFraction": 1.0,
+        "holes": 0
+      },
+      "atlasEligibility": {
+        "eligible": true,
+        "reasons": [],
+        "bboxFillFraction": 0.3230407523510972,
+        "largestComponentFraction": 1.0
+      }
+    },
+    {
+      "basinIndex": 8,
+      "medoidShapeId": "sha256:10fc368d438afbfa68180ffd1cf44b3585e1d5e86d82c0c60b1c7ea07f702ac6",
+      "medoidMaskHash": "sha256:aad6a8bc593f065449085756a350a9e0775181d3b16fd66f36959158bf1286e6",
+      "medoidCorpus": "digiapi-corpus",
+      "clusterSize": 134,
+      "providerCounts": {
+        "pokeapi-corpus": 55,
+        "digiapi-corpus": 79
+      },
+      "maximumMemberDistance": 1.332399,
+      "meanMemberDistance": 1.14314,
+      "metrics": {
+        "occupancy": 0.26532,
+        "bboxAspect": 0.887931,
+        "principalAspect": 0.977028,
+        "elongation": 1.078962,
+        "compactness": 0.044176,
+        "centroidY": 0.48737,
+        "symmetryXorX": 0.330688,
+        "symmetryXorY": 0.236938,
+        "topMassFraction": 0.201518,
+        "bottomMassFraction": 0.117552,
+        "supportWidthFraction": 0.517241,
+        "radialVariation": 0.2147,
+        "radialPeakCount": 5.0,
+        "bboxFillFraction": 0.363827,
+        "largestComponentFraction": 0.99816
+      },
+      "topology": {
+        "foregroundComponents": 9,
+        "largestComponentFraction": 0.9981596503335634,
+        "holes": 2
+      },
+      "atlasEligibility": {
+        "eligible": true,
+        "reasons": [],
+        "bboxFillFraction": 0.36382658185470373,
+        "largestComponentFraction": 0.9981596503335634
+      }
+    },
+    {
+      "basinIndex": 9,
+      "medoidShapeId": "sha256:ab17cc9ce9b70cb1833e3816e19bed28083d08fe52eae6f585592ce9d882eda0",
+      "medoidMaskHash": "sha256:1ff4a74197fb2600332f75d4139040922a53cfcc24c755927dfa18fcf7ca7139",
+      "medoidCorpus": "pokeapi-corpus",
+      "clusterSize": 35,
+      "providerCounts": {
+        "pokeapi-corpus": 17,
+        "digiapi-corpus": 18
+      },
+      "maximumMemberDistance": 1.326949,
+      "meanMemberDistance": 1.108734,
+      "metrics": {
+        "occupancy": 0.304993,
+        "bboxAspect": 0.905172,
+        "principalAspect": 0.923082,
+        "elongation": 1.250345,
+        "compactness": 0.131131,
+        "centroidY": 0.461499,
+        "symmetryXorX": 0.37854,
+        "symmetryXorY": 0.208862,
+        "topMassFraction": 0.204523,
+        "bottomMassFraction": 0.148889,
+        "supportWidthFraction": 0.310345,
+        "radialVariation": 0.21903,
+        "radialPeakCount": 2.0,
+        "bboxFillFraction": 0.410263,
+        "largestComponentFraction": 1.0
+      },
+      "topology": {
+        "foregroundComponents": 1,
+        "largestComponentFraction": 1.0,
+        "holes": 1
+      },
+      "atlasEligibility": {
+        "eligible": true,
+        "reasons": [],
+        "bboxFillFraction": 0.41026272577996714,
+        "largestComponentFraction": 1.0
+      }
+    },
+    {
+      "basinIndex": 10,
+      "medoidShapeId": "sha256:a3b315c846a34c1cc3a5dd0a8f1252bf7bfcd4a87a1ffa17d524ff3945ac38bd",
+      "medoidMaskHash": "sha256:b3e857b40081aa37bac098fc73682a9f2d39b7f30a441b5c3871e3eaf18c5b93",
+      "medoidCorpus": "pokeapi-corpus",
+      "clusterSize": 18,
+      "providerCounts": {
+        "pokeapi-corpus": 9,
+        "digiapi-corpus": 9
+      },
+      "maximumMemberDistance": 1.268655,
+      "meanMemberDistance": 1.081375,
+      "metrics": {
+        "occupancy": 0.44989,
+        "bboxAspect": 0.827586,
+        "principalAspect": 0.644439,
+        "elongation": 1.56181,
+        "compactness": 0.215243,
+        "centroidY": 0.486338,
+        "symmetryXorX": 0.193726,
+        "symmetryXorY": 0.156616,
+        "topMassFraction": 0.186271,
+        "bottomMassFraction": 0.161986,
+        "supportWidthFraction": 0.956897,
+        "radialVariation": 0.177089,
+        "radialPeakCount": 4.0,
+        "bboxFillFraction": 0.661907,
+        "largestComponentFraction": 1.0
+      },
+      "topology": {
+        "foregroundComponents": 1,
+        "largestComponentFraction": 1.0,
+        "holes": 1
+      },
+      "atlasEligibility": {
+        "eligible": true,
+        "reasons": [],
+        "bboxFillFraction": 0.6619073275862069,
+        "largestComponentFraction": 1.0
+      }
+    },
+    {
+      "basinIndex": 11,
+      "medoidShapeId": "sha256:561249dcabd3ae1a03d2ea747ae16faa5ddbd00fb188acb006fa1d0fdb5a2fc7",
+      "medoidMaskHash": "sha256:3e2bc2544139b46cd7795a8b05e9fbc79a2ddfe84aa39d434601bcc4b14ee0ce",
+      "medoidCorpus": "pokeapi-corpus",
+      "clusterSize": 93,
+      "providerCounts": {
+        "pokeapi-corpus": 60,
+        "digiapi-corpus": 33
+      },
+      "maximumMemberDistance": 1.298036,
+      "meanMemberDistance": 1.108838,
+      "metrics": {
+        "occupancy": 0.328003,
+        "bboxAspect": 0.887931,
+        "principalAspect": 0.887431,
+        "elongation": 1.832428,
+        "compactness": 0.121347,
+        "centroidY": 0.542616,
+        "symmetryXorX": 0.356201,
+        "symmetryXorY": 0.331787,
+        "topMassFraction": 0.175475,
+        "bottomMassFraction": 0.291961,
+        "supportWidthFraction": 1.0,
+        "radialVariation": 0.262515,
+        "radialPeakCount": 3.0,
+        "bboxFillFraction": 0.449782,
+        "largestComponentFraction": 1.0
+      },
+      "topology": {
+        "foregroundComponents": 1,
+        "largestComponentFraction": 1.0,
+        "holes": 4
+      },
+      "atlasEligibility": {
+        "eligible": true,
+        "reasons": [],
+        "bboxFillFraction": 0.44978239035821893,
+        "largestComponentFraction": 1.0
+      }
+    },
+    {
+      "basinIndex": 12,
+      "medoidShapeId": "sha256:67de52414171c03b89d51585c00e7fdb0434bd2e77ba47f878c9c2ae02bfb141",
+      "medoidMaskHash": "sha256:9dcf4eda7f77671aaeb859c96ebc5440c43239d20a507b80e650121b061a4821",
+      "medoidCorpus": "digiapi-corpus",
+      "clusterSize": 111,
+      "providerCounts": {
+        "pokeapi-corpus": 36,
+        "digiapi-corpus": 75
+      },
+      "maximumMemberDistance": 1.286609,
+      "meanMemberDistance": 1.08336,
+      "metrics": {
+        "occupancy": 0.207764,
+        "bboxAspect": 0.775862,
+        "principalAspect": 0.681733,
+        "elongation": 1.532565,
+        "compactness": 0.029607,
+        "centroidY": 0.482885,
+        "symmetryXorX": 0.130127,
+        "symmetryXorY": 0.269531,
+        "topMassFraction": 0.168038,
+        "bottomMassFraction": 0.107814,
+        "supportWidthFraction": 0.387931,
+        "radialVariation": 0.305307,
+        "radialPeakCount": 3.0,
+        "bboxFillFraction": 0.326054,
+        "largestComponentFraction": 0.986193
+      },
+      "topology": {
+        "foregroundComponents": 30,
+        "largestComponentFraction": 0.986192714453584,
+        "holes": 10
+      },
+      "atlasEligibility": {
+        "eligible": true,
+        "reasons": [],
+        "bboxFillFraction": 0.3260536398467433,
+        "largestComponentFraction": 0.986192714453584
+      }
+    },
+    {
+      "basinIndex": 13,
+      "medoidShapeId": "sha256:17222ee95029989db8a02b1418bf3435b1d2504cf3ba725f847d59a0bc834236",
+      "medoidMaskHash": "sha256:6f08976d011dabf23941981cc620b7342686f2844091727792eef73de15b3f3e",
+      "medoidCorpus": "digiapi-corpus",
+      "clusterSize": 13,
+      "providerCounts": {
+        "pokeapi-corpus": 4,
+        "digiapi-corpus": 9
+      },
+      "maximumMemberDistance": 1.318341,
+      "meanMemberDistance": 1.083244,
+      "metrics": {
+        "occupancy": 0.248474,
+        "bboxAspect": 0.982759,
+        "principalAspect": 1.153206,
+        "elongation": 1.35887,
+        "compactness": 0.048221,
+        "centroidY": 0.444424,
+        "symmetryXorX": 0.186157,
+        "symmetryXorY": 0.363159,
+        "topMassFraction": 0.264309,
+        "bottomMassFraction": 0.161385,
+        "supportWidthFraction": 1.0,
+        "radialVariation": 0.236354,
+        "radialPeakCount": 2.0,
+        "bboxFillFraction": 0.307849,
+        "largestComponentFraction": 0.991403
+      },
+      "topology": {
+        "foregroundComponents": 8,
+        "largestComponentFraction": 0.9914026037828544,
+        "holes": 1
+      },
+      "atlasEligibility": {
+        "eligible": true,
+        "reasons": [],
+        "bboxFillFraction": 0.30784936479128855,
+        "largestComponentFraction": 0.9914026037828544
+      }
+    },
+    {
+      "basinIndex": 14,
+      "medoidShapeId": "sha256:11633f8ce4621844e5656fe2b4b470bb7f49816bb484372594f818602842be28",
+      "medoidMaskHash": "sha256:08c0e1d7ed1ac49f919d99571bc21bfdd7c9879b0fc37d6b883c399da8dd8c4a",
+      "medoidCorpus": "pokeapi-corpus",
+      "clusterSize": 59,
+      "providerCounts": {
+        "pokeapi-corpus": 38,
+        "digiapi-corpus": 21
+      },
+      "maximumMemberDistance": 1.259083,
+      "meanMemberDistance": 1.052458,
+      "metrics": {
+        "occupancy": 0.494751,
+        "bboxAspect": 0.922414,
+        "principalAspect": 0.930814,
+        "elongation": 1.14179,
+        "compactness": 0.41405,
+        "centroidY": 0.508292,
+        "symmetryXorX": 0.337402,
+        "symmetryXorY": 0.095459,
+        "topMassFraction": 0.162966,
+        "bottomMassFraction": 0.196891,
+        "supportWidthFraction": 0.568966,
+        "radialVariation": 0.100324,
+        "radialPeakCount": 3.0,
+        "bboxFillFraction": 0.653078,
+        "largestComponentFraction": 1.0
+      },
+      "topology": {
+        "foregroundComponents": 1,
+        "largestComponentFraction": 1.0,
+        "holes": 0
+      },
+      "atlasEligibility": {
+        "eligible": true,
+        "reasons": [],
+        "bboxFillFraction": 0.6530776667740896,
+        "largestComponentFraction": 1.0
+      }
+    },
+    {
+      "basinIndex": 15,
+      "medoidShapeId": "sha256:c666d443376617273e62d3ddda1fc3e2d0bb71c102572bde2fee84c9eda518f2",
+      "medoidMaskHash": "sha256:b7edb67fed0c3512bd1101eaf8272c5adf4c75c53db1561b30cba7ecde45f618",
+      "medoidCorpus": "digiapi-corpus",
+      "clusterSize": 549,
+      "providerCounts": {
+        "pokeapi-corpus": 199,
+        "digiapi-corpus": 350
+      },
+      "maximumMemberDistance": 1.357734,
+      "meanMemberDistance": 0.994213,
+      "metrics": {
+        "occupancy": 0.289062,
+        "bboxAspect": 1.731343,
+        "principalAspect": 2.015801,
+        "elongation": 2.015835,
+        "compactness": 0.148062,
+        "centroidY": 0.551761,
+        "symmetryXorX": 0.040771,
+        "symmetryXorY": 0.155762,
+        "topMassFraction": 0.168074,
+        "bottomMassFraction": 0.28315,
+        "supportWidthFraction": 0.970149,
+        "radialVariation": 0.226181,
+        "radialPeakCount": 2.0,
+        "bboxFillFraction": 0.609367,
+        "largestComponentFraction": 0.998733
+      },
+      "topology": {
+        "foregroundComponents": 5,
+        "largestComponentFraction": 0.9987331081081081,
+        "holes": 0
+      },
+      "atlasEligibility": {
+        "eligible": true,
+        "reasons": [],
+        "bboxFillFraction": 0.6093669583118888,
+        "largestComponentFraction": 0.9987331081081081
+      }
+    },
+    {
+      "basinIndex": 16,
+      "medoidShapeId": "sha256:29e1903169627d5b7580ff10eafa5125eb7f61a42e77e60d867f5e9c77b4fdd9",
+      "medoidMaskHash": "sha256:8648be81cda81271ab2b399af10db4d287bbf63d89c8e686edb6f81f9be6ee64",
+      "medoidCorpus": "pokeapi-corpus",
+      "clusterSize": 19,
+      "providerCounts": {
+        "pokeapi-corpus": 14,
+        "digiapi-corpus": 5
+      },
+      "maximumMemberDistance": 1.223731,
+      "meanMemberDistance": 1.014148,
+      "metrics": {
+        "occupancy": 0.120728,
+        "bboxAspect": 0.353448,
+        "principalAspect": 0.315344,
+        "elongation": 3.357645,
+        "compactness": 0.139576,
+        "centroidY": 0.474925,
+        "symmetryXorX": 0.100098,
+        "symmetryXorY": 0.152588,
+        "topMassFraction": 0.278059,
+        "bottomMassFraction": 0.128413,
+        "supportWidthFraction": 0.301724,
+        "radialVariation": 0.243946,
+        "radialPeakCount": 2.0,
+        "bboxFillFraction": 0.415896,
+        "largestComponentFraction": 0.999494
+      },
+      "topology": {
+        "foregroundComponents": 2,
+        "largestComponentFraction": 0.9994944388270981,
+        "holes": 0
+      },
+      "atlasEligibility": {
+        "eligible": true,
+        "reasons": [],
+        "bboxFillFraction": 0.41589571068124476,
+        "largestComponentFraction": 0.9994944388270981
+      }
+    },
+    {
+      "basinIndex": 17,
+      "medoidShapeId": "sha256:d24ff23fd05c84c86924f94ab098563e9da3ece784f9bc6e45e680b6855c9479",
+      "medoidMaskHash": "sha256:7e792993f20c839b920215d7beaa9a2d27d45ef35347c855de4bda05bb809180",
+      "medoidCorpus": "digiapi-corpus",
+      "clusterSize": 43,
+      "providerCounts": {
+        "pokeapi-corpus": 25,
+        "digiapi-corpus": 18
+      },
+      "maximumMemberDistance": 1.281992,
+      "meanMemberDistance": 1.085397,
+      "metrics": {
+        "occupancy": 0.514587,
+        "bboxAspect": 1.054545,
+        "principalAspect": 0.921797,
+        "elongation": 1.571405,
+        "compactness": 0.496369,
+        "centroidY": 0.455073,
+        "symmetryXorX": 0.250854,
+        "symmetryXorY": 0.350952,
+        "topMassFraction": 0.223935,
+        "bottomMassFraction": 0.109477,
+        "supportWidthFraction": 0.354545,
+        "radialVariation": 0.130172,
+        "radialPeakCount": 1.0,
+        "bboxFillFraction": 0.660737,
+        "largestComponentFraction": 1.0
+      },
+      "topology": {
+        "foregroundComponents": 1,
+        "largestComponentFraction": 1.0,
+        "holes": 0
+      },
+      "atlasEligibility": {
+        "eligible": true,
+        "reasons": [],
+        "bboxFillFraction": 0.6607366771159875,
+        "largestComponentFraction": 1.0
+      }
+    },
+    {
+      "basinIndex": 18,
+      "medoidShapeId": "sha256:d257ad76c99e8cee01e8313f6f6a691a5cc14dcc09c5c98aeacbe3e38064cf50",
+      "medoidMaskHash": "sha256:a721aa61d48dfe23c6f3361d70c831ab7f563b4e78a3ac52544e1d918145b722",
+      "medoidCorpus": "digiapi-corpus",
+      "clusterSize": 39,
+      "providerCounts": {
+        "pokeapi-corpus": 17,
+        "digiapi-corpus": 22
+      },
+      "maximumMemberDistance": 1.336067,
+      "meanMemberDistance": 1.093263,
+      "metrics": {
+        "occupancy": 0.224792,
+        "bboxAspect": 1.195876,
+        "principalAspect": 1.456249,
+        "elongation": 1.457212,
+        "compactness": 0.095542,
+        "centroidY": 0.385004,
+        "symmetryXorX": 0.048218,
+        "symmetryXorY": 0.240601,
+        "topMassFraction": 0.415151,
+        "bottomMassFraction": 0.13956,
+        "supportWidthFraction": 0.195876,
+        "radialVariation": 0.273293,
+        "radialPeakCount": 3.0,
+        "bboxFillFraction": 0.32732,
+        "largestComponentFraction": 1.0
+      },
+      "topology": {
+        "foregroundComponents": 1,
+        "largestComponentFraction": 1.0,
+        "holes": 0
+      },
+      "atlasEligibility": {
+        "eligible": true,
+        "reasons": [],
+        "bboxFillFraction": 0.327319587628866,
+        "largestComponentFraction": 1.0
+      }
+    },
+    {
+      "basinIndex": 19,
+      "medoidShapeId": "sha256:5f0b29384834925d14bbb55b355d47962ab7395f8f69a08df440c31e40906cc2",
+      "medoidMaskHash": "sha256:96e84c695ed0c67c4223ba4c844f19edbc7671c68e1b4d3d4df89dd2dfb0d79b",
+      "medoidCorpus": "digiapi-corpus",
+      "clusterSize": 88,
+      "providerCounts": {
+        "pokeapi-corpus": 33,
+        "digiapi-corpus": 55
+      },
+      "maximumMemberDistance": 1.367478,
+      "meanMemberDistance": 1.106831,
+      "metrics": {
+        "occupancy": 0.148682,
+        "bboxAspect": 1.633803,
+        "principalAspect": 1.187354,
+        "elongation": 2.030215,
+        "compactness": 0.059712,
+        "centroidY": 0.591864,
+        "symmetryXorX": 0.164062,
+        "symmetryXorY": 0.224121,
+        "topMassFraction": 0.058292,
+        "bottomMassFraction": 0.191708,
+        "supportWidthFraction": 0.239437,
+        "radialVariation": 0.185528,
+        "radialPeakCount": 2.0,
+        "bboxFillFraction": 0.295775,
+        "largestComponentFraction": 0.997947
+      },
+      "topology": {
+        "foregroundComponents": 5,
+        "largestComponentFraction": 0.9979474548440066,
+        "holes": 6
+      },
+      "atlasEligibility": {
+        "eligible": true,
+        "reasons": [],
+        "bboxFillFraction": 0.29577464788732394,
+        "largestComponentFraction": 0.9979474548440066
+      }
+    },
+    {
+      "basinIndex": 20,
+      "medoidShapeId": "sha256:1dbf832352113313d6f445a60ed78b0c3599ed1365b61b334b23261c8593e722",
+      "medoidMaskHash": "sha256:e7bd3d4d1c848cfc193df7edab399197ad163fbd358377ed0ab75a7e383d046f",
+      "medoidCorpus": "pokeapi-corpus",
+      "clusterSize": 346,
+      "providerCounts": {
+        "pokeapi-corpus": 116,
+        "digiapi-corpus": 230
+      },
+      "maximumMemberDistance": 1.320682,
+      "meanMemberDistance": 1.1406,
+      "metrics": {
+        "occupancy": 0.333191,
+        "bboxAspect": 1.09434,
+        "principalAspect": 0.862531,
+        "elongation": 1.235494,
+        "compactness": 0.047639,
+        "centroidY": 0.526626,
+        "symmetryXorX": 0.183472,
+        "symmetryXorY": 0.313599,
+        "topMassFraction": 0.128778,
+        "bottomMassFraction": 0.149661,
+        "supportWidthFraction": 0.367925,
+        "radialVariation": 0.218711,
+        "radialPeakCount": 3.0,
+        "bboxFillFraction": 0.443966,
+        "largestComponentFraction": 0.998901
+      },
+      "topology": {
+        "foregroundComponents": 6,
+        "largestComponentFraction": 0.9989008976002931,
+        "holes": 32
+      },
+      "atlasEligibility": {
+        "eligible": true,
+        "reasons": [],
+        "bboxFillFraction": 0.44396551724137934,
+        "largestComponentFraction": 0.9989008976002931
+      }
+    },
+    {
+      "basinIndex": 21,
+      "medoidShapeId": "sha256:c40ccad752f326c70dad90f8b6ae0d8488645616ff3b0cd33ead94a3e4858eb4",
+      "medoidMaskHash": "sha256:878a03a33082d2159d8c972b3e36b979c2264709a0aa465e3d55af68d6a7190e",
+      "medoidCorpus": "digiapi-corpus",
+      "clusterSize": 73,
+      "providerCounts": {
+        "pokeapi-corpus": 31,
+        "digiapi-corpus": 42
+      },
+      "maximumMemberDistance": 1.22661,
+      "meanMemberDistance": 1.049419,
+      "metrics": {
+        "occupancy": 0.570984,
+        "bboxAspect": 1.148515,
+        "principalAspect": 0.978398,
+        "elongation": 1.024279,
+        "compactness": 0.11803,
+        "centroidY": 0.509537,
+        "symmetryXorX": 0.085571,
+        "symmetryXorY": 0.059937,
+        "topMassFraction": 0.185462,
+        "bottomMassFraction": 0.210369,
+        "supportWidthFraction": 0.930693,
+        "radialVariation": 0.106397,
+        "radialPeakCount": 4.0,
+        "bboxFillFraction": 0.798481,
+        "largestComponentFraction": 0.994014
+      },
+      "topology": {
+        "foregroundComponents": 47,
+        "largestComponentFraction": 0.9940138963121325,
+        "holes": 12
+      },
+      "atlasEligibility": {
+        "eligible": true,
+        "reasons": [],
+        "bboxFillFraction": 0.7984807101399796,
+        "largestComponentFraction": 0.9940138963121325
+      }
+    },
+    {
+      "basinIndex": 22,
+      "medoidShapeId": "sha256:e440ded118d042fdf7d492d7253bd481bb917df9d3a75355709ff662bbd2c4a1",
+      "medoidMaskHash": "sha256:f9d1ce583ef9a017a6b7652ee432b33e2432e572858d95653ec8a28903756416",
+      "medoidCorpus": "pokeapi-corpus",
+      "clusterSize": 61,
+      "providerCounts": {
+        "pokeapi-corpus": 23,
+        "digiapi-corpus": 38
+      },
+      "maximumMemberDistance": 1.379882,
+      "meanMemberDistance": 1.109964,
+      "metrics": {
+        "occupancy": 0.325745,
+        "bboxAspect": 0.922414,
+        "principalAspect": 1.010065,
+        "elongation": 1.023605,
+        "compactness": 0.117345,
+        "centroidY": 0.407839,
+        "symmetryXorX": 0.040649,
+        "symmetryXorY": 0.396606,
+        "topMassFraction": 0.291924,
+        "bottomMassFraction": 0.144463,
+        "supportWidthFraction": 0.37931,
+        "radialVariation": 0.23311,
+        "radialPeakCount": 3.0,
+        "bboxFillFraction": 0.429987,
+        "largestComponentFraction": 1.0
+      },
+      "topology": {
+        "foregroundComponents": 1,
+        "largestComponentFraction": 1.0,
+        "holes": 9
+      },
+      "atlasEligibility": {
+        "eligible": true,
+        "reasons": [],
+        "bboxFillFraction": 0.42998710924911376,
+        "largestComponentFraction": 1.0
+      }
+    },
+    {
+      "basinIndex": 23,
+      "medoidShapeId": "sha256:2229140744b0bde59961e16fdd3d6c1162987427c6b99004327952326fa5ebfd",
+      "medoidMaskHash": "sha256:ff64a0d822bc25d7ee0082cd3974d99bae1d8475640308a9b105159e515850b4",
+      "medoidCorpus": "pokeapi-corpus",
+      "clusterSize": 8,
+      "providerCounts": {
+        "pokeapi-corpus": 6,
+        "digiapi-corpus": 2
+      },
+      "maximumMemberDistance": 1.191305,
+      "meanMemberDistance": 0.907923,
+      "metrics": {
+        "occupancy": 0.127258,
+        "bboxAspect": 0.698276,
+        "principalAspect": 0.661396,
+        "elongation": 4.251216,
+        "compactness": 0.098405,
+        "centroidY": 0.513284,
+        "symmetryXorX": 0.202271,
+        "symmetryXorY": 0.172729,
+        "topMassFraction": 0.1506,
+        "bottomMassFraction": 0.235492,
+        "supportWidthFraction": 0.198276,
+        "radialVariation": 0.289287,
+        "radialPeakCount": 3.0,
+        "bboxFillFraction": 0.221903,
+        "largestComponentFraction": 1.0
+      },
+      "topology": {
+        "foregroundComponents": 1,
+        "largestComponentFraction": 1.0,
+        "holes": 0
+      },
+      "atlasEligibility": {
+        "eligible": true,
+        "reasons": [],
+        "bboxFillFraction": 0.2219029374201788,
+        "largestComponentFraction": 1.0
+      }
+    }
+  ]
+}

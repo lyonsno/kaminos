@@ -1,0 +1,161 @@
+{
+  "schema": "kaminos.lirm-silhouette-morphology-basin-atlas.v0",
+  "status": "complete",
+  "phase": "witness_written",
+  "lastTrustworthyEvidence": "contact_sheet_raster_written",
+  "routeIdentity": {
+    "requestedRoute": "kaminos/lirm-speciation-armature/morphology-basin-atlas-v0",
+    "effectiveRoute": "numpy-mirror-invariant-morphology-maximin-v0"
+  },
+  "requestedConfig": {
+    "corpusDirs": [
+      "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-corpus-recovery-20260714/pokeapi-corpus",
+      "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-corpus-recovery-20260714/digiapi-corpus"
+    ],
+    "basins": 24,
+    "columns": 6
+  },
+  "falseClosureGuards": {
+    "sourceIdentityUsedInDescriptor": false,
+    "sourceAppearanceUsedInDescriptor": false,
+    "allTrainingIndexesConsumed": true,
+    "descriptorValuesFinite": true,
+    "uniqueShapeIds": true,
+    "atlasEligibilityAssayed": true,
+    "medoidsAllEligible": true,
+    "contactSheetRasterWritten": true
+  },
+  "effectiveConfig": {
+    "basins": 24,
+    "columns": 6,
+    "descriptorCount": 71,
+    "descriptorNames": [
+      "occupancy",
+      "bboxAspectLog",
+      "principalAspectLog",
+      "elongationLog",
+      "compactness",
+      "centroidY",
+      "symmetryXorX",
+      "symmetryXorY",
+      "topMassFraction",
+      "bottomMassFraction",
+      "supportWidthFraction",
+      "radialVariation",
+      "radialPeakFraction",
+      "foregroundComponentsLog",
+      "holesLog",
+      "rowProfile00",
+      "rowProfile01",
+      "rowProfile02",
+      "rowProfile03",
+      "rowProfile04",
+      "rowProfile05",
+      "rowProfile06",
+      "rowProfile07",
+      "rowProfile08",
+      "rowProfile09",
+      "rowProfile10",
+      "rowProfile11",
+      "rowProfile12",
+      "rowProfile13",
+      "rowProfile14",
+      "rowProfile15",
+      "columnProfile00",
+      "columnProfile01",
+      "columnProfile02",
+      "columnProfile03",
+      "columnProfile04",
+      "columnProfile05",
+      "columnProfile06",
+      "columnProfile07",
+      "columnProfile08",
+      "columnProfile09",
+      "columnProfile10",
+      "columnProfile11",
+      "columnProfile12",
+      "columnProfile13",
+      "columnProfile14",
+      "columnProfile15",
+      "radialProfile00",
+      "radialProfile01",
+      "radialProfile02",
+      "radialProfile03",
+      "radialProfile04",
+      "radialProfile05",
+      "radialProfile06",
+      "radialProfile07",
+      "radialProfile08",
+      "radialProfile09",
+      "radialProfile10",
+      "radialProfile11",
+      "radialProfile12",
+      "radialProfile13",
+      "radialProfile14",
+      "radialProfile15",
+      "radialProfile16",
+      "radialProfile17",
+      "radialProfile18",
+      "radialProfile19",
+      "radialProfile20",
+      "radialProfile21",
+      "radialProfile22",
+      "radialProfile23"
+    ]
+  },
+  "sourceCorpora": [
+    {
+      "corpusIndex": 0,
+      "label": "pokeapi-corpus",
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-corpus-recovery-20260714/pokeapi-corpus",
+      "receiptHash": "sha256:0580ef453db4743e62da7b624eb9c26e4538bae3fa03ee6cc2d3de15fb514b73",
+      "trainingIndexHash": "sha256:50fe68a8a9c6753d02f30f02cc6438e1af94bda31b2af0f3b66f9a90933d291a",
+      "acceptedSourceCount": 1025,
+      "failedSourceCount": 0,
+      "effectiveRoute": "kaminos/lirm-speciation-armature/silhouette-archetype-corpus-v0"
+    },
+    {
+      "corpusIndex": 1,
+      "label": "digiapi-corpus",
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-corpus-recovery-20260714/digiapi-corpus",
+      "receiptHash": "sha256:a1069a39fd69de69e185947eb5f053759adf16b5186fc66cc21619f6dc2d7cd9",
+      "trainingIndexHash": "sha256:394386c9c99e978b50bac5bcd30e7d15a6fd31ddc21b8606a6f2fb5006aeece3",
+      "acceptedSourceCount": 1396,
+      "failedSourceCount": 92,
+      "effectiveRoute": "kaminos/lirm-speciation-armature/silhouette-archetype-corpus-v0"
+    }
+  ],
+  "uniqueShapeCount": 2417,
+  "deduplicatedShapeCount": 4,
+  "eligibleMedoidCandidateCount": 2402,
+  "excludedMedoidCandidateCount": 15,
+  "exclusionReasonCounts": {
+    "filled_bounding_box": 2,
+    "fragmented_foreground": 13
+  },
+  "basinCount": 24,
+  "coverage": {
+    "meanDistanceToMedoid": 1.068793,
+    "medianDistanceToMedoid": 1.096922,
+    "maximumDistanceToMedoid": 2.43989,
+    "eligibleMeanDistanceToMedoid": 1.06775,
+    "eligibleMedianDistanceToMedoid": 1.096809,
+    "eligibleMaximumDistanceToMedoid": 1.369614,
+    "minimumIntermedoidDistance": 1.398651
+  },
+  "artifacts": {
+    "basins": {
+      "path": "basins.json",
+      "sha256": "sha256:41413a40a0b3ddefe9931b91e165874bafbce73321dbe5d228bc46bfeef1e140"
+    },
+    "assignments": {
+      "path": "assignments.jsonl",
+      "sha256": "sha256:a22efd1e8b9b4d0c21699ac5ee20e77cc158be5a1a7aec9a3fb7c7fe4e8b2295"
+    },
+    "contactSheet": {
+      "path": "contact-sheet.png",
+      "sha256": "sha256:42d21c2c37ca084ae01d0268c446474330497a4f7ee4865c65c800ef0478653c",
+      "bytes": 210321
+    }
+  }
+}
