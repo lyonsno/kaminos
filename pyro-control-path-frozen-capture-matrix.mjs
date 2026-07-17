@@ -104,14 +104,25 @@ async function resolveSourceEvidence(evidence, repoRoot) {
   const bytes = await readFile(path);
   const source = bytes.toString('utf8');
   const marker = String(evidence.marker || '');
-  const offset = source.indexOf(marker);
+  const markerOffsets = marker ? findAllOffsets(source, marker) : [];
+  const offset = markerOffsets[0] ?? -1;
   if (!marker || offset < 0) throw new Error(`source evidence marker is missing from ${evidence.path}: ${marker}`);
+  if (markerOffsets.length !== 1) {
+    throw new Error(`source evidence marker is not unique in ${evidence.path}: ${markerOffsets.length} occurrences of ${marker}`);
+  }
   let scope = marker;
+  let scopeEnd = null;
   if (evidence.scopeEnd) {
-    const endMarker = String(evidence.scopeEnd);
-    const endOffset = source.indexOf(endMarker, offset + marker.length);
-    if (endOffset < 0) throw new Error(`source evidence scope end is missing from ${evidence.path}: ${endMarker}`);
-    scope = source.slice(offset, endOffset + endMarker.length);
+    scopeEnd = String(evidence.scopeEnd);
+    const endOffset = source.indexOf(scopeEnd, offset + marker.length);
+    if (endOffset < 0) throw new Error(`source evidence scope end is missing from ${evidence.path}: ${scopeEnd}`);
+    scope = source.slice(offset, endOffset + scopeEnd.length);
+  }
+  const requiredMarkers = (evidence.required || []).map(String);
+  for (const requiredMarker of requiredMarkers) {
+    if (!scope.includes(requiredMarker)) {
+      throw new Error(`source evidence scope in ${evidence.path} is missing required marker: ${requiredMarker}`);
+    }
   }
   const excludedMarkers = (evidence.absent || []).map(String);
   for (const excluded of excludedMarkers) {
@@ -126,10 +137,27 @@ async function resolveSourceEvidence(evidence, repoRoot) {
     line: source.slice(0, offset).split('\n').length,
     marker,
     markerSha256: sha256(Buffer.from(marker)),
+    scopeEnd,
     scopeSha256: sha256(Buffer.from(scope)),
+    requiredMarkers: requiredMarkers.map(requiredMarker => ({
+      marker: requiredMarker,
+      markerSha256: sha256(Buffer.from(requiredMarker)),
+    })),
     excludedMarkers,
     fileSha256: sha256(bytes),
   };
+}
+
+function findAllOffsets(source, marker) {
+  const offsets = [];
+  let offset = 0;
+  while (offset <= source.length - marker.length) {
+    const found = source.indexOf(marker, offset);
+    if (found < 0) break;
+    offsets.push(found);
+    offset = found + marker.length;
+  }
+  return offsets;
 }
 
 async function readJsonArtifact(path) {

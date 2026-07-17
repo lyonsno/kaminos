@@ -1,6 +1,6 @@
 {
   "schema": "kaminos.pyro-control-path.browser-gpu-frozen-capture-matrix.v0",
-  "generatedAt": "2026-07-17T19:15:02.526Z",
+  "generatedAt": "2026-07-17T19:27:28.483Z",
   "enumerationCount": 206,
   "auditedControlCount": 6,
   "rows": [
@@ -85,7 +85,9 @@
           "line": 166,
           "marker": "volume_reaction_boundary_support_front: boundary.supportFront ?? controls.reactionBoundarySupportFront ?? null",
           "markerSha256": "4b8f141b8d855c51d21a4e2899d9c3483a132db6995f26c6e24d6cce43743956",
+          "scopeEnd": null,
           "scopeSha256": "4b8f141b8d855c51d21a4e2899d9c3483a132db6995f26c6e24d6cce43743956",
+          "requiredMarkers": [],
           "excludedMarkers": [],
           "fileSha256": "158e6976d64b85139cb9a1f6878c25220c33c5010543cd68194444414abf9048"
         },
@@ -93,10 +95,25 @@
           "identity": "exact-source-marker-evidence-v0",
           "stage": "splat-sidecar-support-input",
           "path": "volume-core.js",
-          "line": 2493,
-          "marker": "clamp(u.topology_shell_carriers.z, 0.0, 2.0)",
-          "markerSha256": "41a55334487f21d86bfc87c3af30041227cd3405e5828cccaddd855b90f927e0",
-          "scopeSha256": "41a55334487f21d86bfc87c3af30041227cd3405e5828cccaddd855b90f927e0",
+          "line": 2485,
+          "marker": "fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>)",
+          "markerSha256": "3bb60b9d816f8f483d104521ba44f9507fbd8ab28340d67ad8d696fde956775a",
+          "scopeEnd": "let center = boundarySupportAtCell(c, supportWeights);",
+          "scopeSha256": "d50528696358bc8ae8d45de9c320949e4a3f64519c581b6f93c6c1f6a85dfb11",
+          "requiredMarkers": [
+            {
+              "marker": "let supportWeights = vec4<f32>(",
+              "markerSha256": "a523a5e1de81fe889dc0905839f1be7e73e3ccee1941141ece0ed78224ef6421"
+            },
+            {
+              "marker": "clamp(u.topology_shell_carriers.z, 0.0, 2.0)",
+              "markerSha256": "41a55334487f21d86bfc87c3af30041227cd3405e5828cccaddd855b90f927e0"
+            },
+            {
+              "marker": "let center = boundarySupportAtCell(c, supportWeights);",
+              "markerSha256": "073273b18d2fc1904a56fdd2192a2983901450f3cfccb265c963202a9546a8f2"
+            }
+          ],
           "excludedMarkers": [],
           "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
         },
@@ -107,7 +124,9 @@
           "line": 5102,
           "marker": "let sidecar = boundarySidecar[cellIndex];",
           "markerSha256": "1811d9e7f8ce96a89129462a3f61324de53eb118e4e4f0248551b3aa4af7aac9",
+          "scopeEnd": null,
           "scopeSha256": "1811d9e7f8ce96a89129462a3f61324de53eb118e4e4f0248551b3aa4af7aac9",
+          "requiredMarkers": [],
           "excludedMarkers": [],
           "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
         }
@@ -242,7 +261,9 @@
           "line": 171,
           "marker": "volume_reaction_boundary_topology: boundary.topologyGain ?? controls.reactionBoundaryTopology ?? null",
           "markerSha256": "ebc27e9fa00b7e33812ef8b06dcc7acb77a80ecf94af5ecc818ab5d37c7c6cf3",
+          "scopeEnd": null,
           "scopeSha256": "ebc27e9fa00b7e33812ef8b06dcc7acb77a80ecf94af5ecc818ab5d37c7c6cf3",
+          "requiredMarkers": [],
           "excludedMarkers": [],
           "fileSha256": "158e6976d64b85139cb9a1f6878c25220c33c5010543cd68194444414abf9048"
         },
@@ -253,7 +274,9 @@
           "line": 7949,
           "marker": "uniforms[285] = boundaryInspectActive ? boundaryUniforms.topologyGain",
           "markerSha256": "378af206c110a6ffcdaec984d025cc460c4fe7d845c8f87daaeee67a2aeec0f9",
+          "scopeEnd": null,
           "scopeSha256": "378af206c110a6ffcdaec984d025cc460c4fe7d845c8f87daaeee67a2aeec0f9",
+          "requiredMarkers": [],
           "excludedMarkers": [],
           "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
         },
@@ -264,7 +287,9 @@
           "line": 2485,
           "marker": "fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>)",
           "markerSha256": "3bb60b9d816f8f483d104521ba44f9507fbd8ab28340d67ad8d696fde956775a",
+          "scopeEnd": "boundarySidecarDst[index3(gid)] = vec4<f32>(",
           "scopeSha256": "309f1ee42dc22f52b22ea5af72b5a8bf0a2c689bb4095b5b017f25bdc8441b5b",
+          "requiredMarkers": [],
           "excludedMarkers": [
             "u.topology_shell_shape",
             "boundaryUniforms.topologyGain"
@@ -405,7 +430,9 @@
           "line": 172,
           "marker": "volume_reaction_boundary_fire_ridge: controls.reactionBoundaryFireControls?.ridgeGain ?? controls.reactionBoundaryFireRidge ?? null",
           "markerSha256": "934c8e29068196b5419119cd6f036b9d809d5b667a5420a116359ff5c5302ec4",
+          "scopeEnd": null,
           "scopeSha256": "934c8e29068196b5419119cd6f036b9d809d5b667a5420a116359ff5c5302ec4",
+          "requiredMarkers": [],
           "excludedMarkers": [],
           "fileSha256": "158e6976d64b85139cb9a1f6878c25220c33c5010543cd68194444414abf9048"
         },
@@ -416,7 +443,9 @@
           "line": 2509,
           "marker": "let ridgeGain = clamp(u.boundary_fire_structure.x, 0.0, 2.0)",
           "markerSha256": "c2c612c81bfcbf936020a99b4271fb216e4ca5b8030ac0b5c8a87cae9211bd44",
+          "scopeEnd": null,
           "scopeSha256": "c2c612c81bfcbf936020a99b4271fb216e4ca5b8030ac0b5c8a87cae9211bd44",
+          "requiredMarkers": [],
           "excludedMarkers": [],
           "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
         },
@@ -427,7 +456,9 @@
           "line": 5107,
           "marker": "let structuralSignal = sidecar.z * smoothstep(0.055, 0.32, sidecar.y)",
           "markerSha256": "14fa6c01225d42471bdf7573695bb49d0491ab4632de05e23123ed713a86af0e",
+          "scopeEnd": null,
           "scopeSha256": "14fa6c01225d42471bdf7573695bb49d0491ab4632de05e23123ed713a86af0e",
+          "requiredMarkers": [],
           "excludedMarkers": [],
           "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
         },
@@ -438,7 +469,9 @@
           "line": 5123,
           "marker": "let attributeFeatures = boundarySplatAttributeFeatures(sidecar, material, fire, micro);",
           "markerSha256": "25ca0723e8ed3ce06dc7dd3bc4d2fec5facd7ad67742cc5f19e8557e5f57cfdc",
+          "scopeEnd": null,
           "scopeSha256": "25ca0723e8ed3ce06dc7dd3bc4d2fec5facd7ad67742cc5f19e8557e5f57cfdc",
+          "requiredMarkers": [],
           "excludedMarkers": [],
           "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
         }
@@ -575,7 +608,9 @@
           "line": 174,
           "marker": "volume_reaction_boundary_fire_tip: controls.reactionBoundaryFireControls?.tipBreakup ?? controls.reactionBoundaryFireTip ?? null",
           "markerSha256": "be193b213553e578746c90487c62922e72160e3e858f1f391f222bc2bf1818e8",
+          "scopeEnd": null,
           "scopeSha256": "be193b213553e578746c90487c62922e72160e3e858f1f391f222bc2bf1818e8",
+          "requiredMarkers": [],
           "excludedMarkers": [],
           "fileSha256": "158e6976d64b85139cb9a1f6878c25220c33c5010543cd68194444414abf9048"
         },
@@ -586,7 +621,9 @@
           "line": 7962,
           "marker": "uniforms[298] = boundaryFireUniforms.tipBreakup;",
           "markerSha256": "4559d48770a63523e06a0f10247d8d4067bc84952b929976674645b7f76318f1",
+          "scopeEnd": null,
           "scopeSha256": "4559d48770a63523e06a0f10247d8d4067bc84952b929976674645b7f76318f1",
+          "requiredMarkers": [],
           "excludedMarkers": [],
           "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
         },
@@ -597,7 +634,9 @@
           "line": 2485,
           "marker": "fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>)",
           "markerSha256": "3bb60b9d816f8f483d104521ba44f9507fbd8ab28340d67ad8d696fde956775a",
+          "scopeEnd": "boundarySidecarDst[index3(gid)] = vec4<f32>(",
           "scopeSha256": "309f1ee42dc22f52b22ea5af72b5a8bf0a2c689bb4095b5b017f25bdc8441b5b",
+          "requiredMarkers": [],
           "excludedMarkers": [
             "u.boundary_fire_structure.z",
             "boundaryFireUniforms.tipBreakup"
@@ -740,7 +779,9 @@
           "line": 182,
           "marker": "volume_boundary_splat_radius: controls.boundarySplatRadius ?? null",
           "markerSha256": "c785b270b669af62eab6d21e8cd347f71ff513a2470631f8a58b5f3cbf57dd57",
+          "scopeEnd": null,
           "scopeSha256": "c785b270b669af62eab6d21e8cd347f71ff513a2470631f8a58b5f3cbf57dd57",
+          "requiredMarkers": [],
           "excludedMarkers": [],
           "fileSha256": "158e6976d64b85139cb9a1f6878c25220c33c5010543cd68194444414abf9048"
         },
@@ -748,10 +789,25 @@
           "identity": "exact-source-marker-evidence-v0",
           "stage": "splat-camera-uniform",
           "path": "volume-core.js",
-          "line": 5383,
-          "marker": "normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius)",
-          "markerSha256": "912b866f869161717ac10f13590853c0970948b3625cb9da3af0341212e216d9",
-          "scopeSha256": "912b866f869161717ac10f13590853c0970948b3625cb9da3af0341212e216d9",
+          "line": 7668,
+          "marker": "if (boundarySplatCameraBuffer) {",
+          "markerSha256": "b2c7783e5f202fffc010049ad05704956e712e0e004f2b9765c4e76c6157d967",
+          "scopeEnd": "device.queue.writeBuffer(boundarySplatCameraBuffer, 0, splatCamera);",
+          "scopeSha256": "08c5a5607608ff8433a7b2bd96b3f5f9fb919f0ee8117576e0978cbd4ff18741",
+          "requiredMarkers": [
+            {
+              "marker": "splatCamera.set([normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius), boundarySplatLearnedAttributesRequested() ? 1 : 0, state.boundarySplatFeatureCaptureEffective ? 1 : 0, normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness)], 24);",
+              "markerSha256": "0ebb09486f5367b792bdf2192da9c87e4aec8b4bc95bd01d7d5542829c84525a"
+            },
+            {
+              "marker": "normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius)",
+              "markerSha256": "912b866f869161717ac10f13590853c0970948b3625cb9da3af0341212e216d9"
+            },
+            {
+              "marker": "device.queue.writeBuffer(boundarySplatCameraBuffer, 0, splatCamera);",
+              "markerSha256": "39122f9c8e8f1935ba96bef94bcff4ac9b2d03e7c7afaf941c43baa2d4c55b1c"
+            }
+          ],
           "excludedMarkers": [],
           "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
         },
@@ -762,7 +818,9 @@
           "line": 5159,
           "marker": "splat.shape.x * boundarySplatCamera.controls.x",
           "markerSha256": "3ac44042f4c6285343c5193f7ffef03d87848d81abb8fe59047369a7da4168d4",
+          "scopeEnd": null,
           "scopeSha256": "3ac44042f4c6285343c5193f7ffef03d87848d81abb8fe59047369a7da4168d4",
+          "requiredMarkers": [],
           "excludedMarkers": [],
           "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
         },
@@ -773,7 +831,9 @@
           "line": 1015,
           "marker": "const WGSL = /* wgsl */`",
           "markerSha256": "a12ba6730f8df316bd0cfdeab4a2d7638fea49bf64f5789b1a88ab2d14e751e8",
+          "scopeEnd": "const BOUNDARY_SPLAT_WGSL = `",
           "scopeSha256": "10357563cebee2650f294d2c51918f93f7cb3a96631e13556a7b50fa40b02260",
+          "requiredMarkers": [],
           "excludedMarkers": [
             "boundarySplatCamera.controls.x"
           ],
@@ -913,7 +973,9 @@
           "line": 183,
           "marker": "volume_boundary_splat_sharpness: controls.boundarySplatSharpness ?? null",
           "markerSha256": "8ccdd618a6713bd2e5a8aff7c6082da7ee9cf788e31ac9c8fecb0df509289412",
+          "scopeEnd": null,
           "scopeSha256": "8ccdd618a6713bd2e5a8aff7c6082da7ee9cf788e31ac9c8fecb0df509289412",
+          "requiredMarkers": [],
           "excludedMarkers": [],
           "fileSha256": "158e6976d64b85139cb9a1f6878c25220c33c5010543cd68194444414abf9048"
         },
@@ -921,10 +983,25 @@
           "identity": "exact-source-marker-evidence-v0",
           "stage": "splat-camera-uniform",
           "path": "volume-core.js",
-          "line": 5384,
-          "marker": "normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness)",
-          "markerSha256": "214208a23ea33a7fd2a47d6a1d12e55c84f1235c0937fb702ae8823ed4ed21f3",
-          "scopeSha256": "214208a23ea33a7fd2a47d6a1d12e55c84f1235c0937fb702ae8823ed4ed21f3",
+          "line": 7668,
+          "marker": "if (boundarySplatCameraBuffer) {",
+          "markerSha256": "b2c7783e5f202fffc010049ad05704956e712e0e004f2b9765c4e76c6157d967",
+          "scopeEnd": "device.queue.writeBuffer(boundarySplatCameraBuffer, 0, splatCamera);",
+          "scopeSha256": "08c5a5607608ff8433a7b2bd96b3f5f9fb919f0ee8117576e0978cbd4ff18741",
+          "requiredMarkers": [
+            {
+              "marker": "splatCamera.set([normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius), boundarySplatLearnedAttributesRequested() ? 1 : 0, state.boundarySplatFeatureCaptureEffective ? 1 : 0, normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness)], 24);",
+              "markerSha256": "0ebb09486f5367b792bdf2192da9c87e4aec8b4bc95bd01d7d5542829c84525a"
+            },
+            {
+              "marker": "normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness)",
+              "markerSha256": "214208a23ea33a7fd2a47d6a1d12e55c84f1235c0937fb702ae8823ed4ed21f3"
+            },
+            {
+              "marker": "device.queue.writeBuffer(boundarySplatCameraBuffer, 0, splatCamera);",
+              "markerSha256": "39122f9c8e8f1935ba96bef94bcff4ac9b2d03e7c7afaf941c43baa2d4c55b1c"
+            }
+          ],
           "excludedMarkers": [],
           "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
         },
@@ -935,7 +1012,9 @@
           "line": 5173,
           "marker": "let kernelSharpness = clamp(boundarySplatCamera.controls.w, 1.0, 12.0);",
           "markerSha256": "4b32020698187ee86a4f7b4da31373c9d51451250a8e3d938cb268d6585ad24d",
+          "scopeEnd": null,
           "scopeSha256": "4b32020698187ee86a4f7b4da31373c9d51451250a8e3d938cb268d6585ad24d",
+          "requiredMarkers": [],
           "excludedMarkers": [],
           "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
         },
@@ -946,7 +1025,9 @@
           "line": 1015,
           "marker": "const WGSL = /* wgsl */`",
           "markerSha256": "a12ba6730f8df316bd0cfdeab4a2d7638fea49bf64f5789b1a88ab2d14e751e8",
+          "scopeEnd": "const BOUNDARY_SPLAT_WGSL = `",
           "scopeSha256": "10357563cebee2650f294d2c51918f93f7cb3a96631e13556a7b50fa40b02260",
+          "requiredMarkers": [],
           "excludedMarkers": [
             "boundarySplatCamera.controls.w"
           ],

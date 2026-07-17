@@ -18,7 +18,13 @@
         {
           "stage": "splat-sidecar-support-input",
           "path": "volume-core.js",
-          "marker": "clamp(u.topology_shell_carriers.z, 0.0, 2.0)"
+          "marker": "fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>)",
+          "scopeEnd": "let center = boundarySupportAtCell(c, supportWeights);",
+          "required": [
+            "let supportWeights = vec4<f32>(",
+            "clamp(u.topology_shell_carriers.z, 0.0, 2.0)",
+            "let center = boundarySupportAtCell(c, supportWeights);"
+          ]
         },
         {
           "stage": "splat-admission-and-learned-attributes",
@@ -129,7 +135,13 @@
         {
           "stage": "splat-camera-uniform",
           "path": "volume-core.js",
-          "marker": "normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius)"
+          "marker": "if (boundarySplatCameraBuffer) {",
+          "scopeEnd": "device.queue.writeBuffer(boundarySplatCameraBuffer, 0, splatCamera);",
+          "required": [
+            "splatCamera.set([normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius), boundarySplatLearnedAttributesRequested() ? 1 : 0, state.boundarySplatFeatureCaptureEffective ? 1 : 0, normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness)], 24);",
+            "normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius)",
+            "device.queue.writeBuffer(boundarySplatCameraBuffer, 0, splatCamera);"
+          ]
         },
         {
           "stage": "splat-vertex-geometry",
@@ -162,7 +174,13 @@
         {
           "stage": "splat-camera-uniform",
           "path": "volume-core.js",
-          "marker": "normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness)"
+          "marker": "if (boundarySplatCameraBuffer) {",
+          "scopeEnd": "device.queue.writeBuffer(boundarySplatCameraBuffer, 0, splatCamera);",
+          "required": [
+            "splatCamera.set([normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius), boundarySplatLearnedAttributesRequested() ? 1 : 0, state.boundarySplatFeatureCaptureEffective ? 1 : 0, normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness)], 24);",
+            "normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness)",
+            "device.queue.writeBuffer(boundarySplatCameraBuffer, 0, splatCamera);"
+          ]
         },
         {
           "stage": "splat-fragment-optics",
