@@ -1025,8 +1025,12 @@ const $=id=>document.getElementById(id); function render(){{const i=+$('camera')
 for(const id of ['camera','left','right','blend']) $(id).addEventListener('input',render);$('prev').onclick=()=>{{$('camera').value=Math.max(0,+$('camera').value-1);render()}};$('next').onclick=()=>{{$('camera').value=Math.min(20,+$('camera').value+1);render()}};render();</script></body></html>"""
 
 
-def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
+def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = None) -> dict[str, Any]:
+    if phase_state is None:
+        phase_state = {"value": "manifest-validation"}
+    phase_state["value"] = "footprint-control-validation"
     footprint_controls = resolve_footprint_controls(args)
+    phase_state["value"] = "manifest-validation"
     manifest_path = Path(args.manifest).resolve()
     capture_path = Path(args.capture_report).resolve()
     manifest = load_json(manifest_path, "training manifest")
@@ -1042,6 +1046,7 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
     require(required.issubset(paths), f"rendering requires row artifacts: {sorted(required - set(paths))}")
     if args.footprint_mode in {"higher-order", "compound", "selective-split"}:
         require(args.path_scale is not None, f"{args.footprint_mode} mode requires explicit --path-scale from the frozen bilinear baseline")
+    phase_state["value"] = "capture-validation"
     capture_report = load_json(capture_path, "capture report")
     cameras = validate_capture_report(capture_report, state_step)
     capture_config = capture_report.get("captureConfig") or {}
@@ -1054,6 +1059,7 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
         descriptor_hashes.get("frontSha256") == capture_config.get("expectedAnchorFrontSha256"),
         "coefficient descriptor front hash does not match the frozen orbit anchor",
     )
+    phase_state["value"] = "row-artifact-load"
     count = int(state["rows"]["count"])
     features = np.memmap(paths["features"], dtype="<f4", mode="r", shape=(count, 24))
     admission = np.memmap(paths["admission"], dtype="<f4", mode="r", shape=(count, 2))
@@ -1066,6 +1072,7 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
 
     out_dir = Path(args.out_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
+    phase_state["value"] = "calibration-raster"
     calibration_camera = cameras[10]
     calibration_footprint_mode = "bilinear" if args.footprint_mode == "selective-split" else args.footprint_mode
     calibration_footprint_controls = (
@@ -1077,6 +1084,7 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
     )
     target_capture = find_capture(capture_report, 10, "sharedTransmittanceContributionSum", 160)
     target = image_rgb(Path(target_capture["imagePath"]))
+    phase_state["value"] = "calibration-fit"
     if args.path_scale is None:
         calibration_identity = CALIBRATION_IDENTITY
         calibration_fit = fit_optical_path_scale(calibration_planes, target)
@@ -1099,6 +1107,7 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
     split_receipt: dict[str, Any] | None = None
     attribution_camera_set: set[int] = set()
     if args.footprint_mode == "selective-split":
+        phase_state["value"] = "selective-split-attribution"
         attribution_cameras = list(footprint_controls["splitAttributionCameras"])
         attribution_camera_set = set(attribution_cameras)
         score_sum = np.zeros(count, dtype=np.float64)
@@ -1130,6 +1139,7 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
             descriptors, requested_split_mask, float(footprint_controls["splitOffsetWorld"]),
         )
         require(np.any(split_mask), "selective-split attribution selected zero lawful candidates")
+        phase_state["value"] = "selective-split-artifact-write"
         importance_path = out_dir / "split-importance.f32"
         selected_index_path = out_dir / "split-native-cell-indices.u32"
         mean_score.astype("<f4", copy=False).tofile(importance_path)
@@ -1160,6 +1170,7 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
                 "sha256": sha256_file(selected_index_path),
             },
         }
+        phase_state["value"] = "selective-split-calibration-raster"
         calibration_planes, calibration_raster = rasterize_coefficients(
             descriptors[:, 0:3], descriptors[:, 20:23], features, coefficients, calibration_camera,
             args.depth_bins, args.footprint_mode, footprint_controls, split_mask, split_world_offsets,
@@ -1169,6 +1180,7 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
     metrics_rows = []
     for camera in cameras:
         index = int(camera["cameraIndex"])
+        phase_state["value"] = f"camera-{index:02d}-raster"
         planes, raster_receipt = (calibration_planes, calibration_raster) if index == 10 else rasterize_coefficients(
             descriptors[:, 0:3], descriptors[:, 20:23], features, coefficients, camera,
             args.depth_bins, args.footprint_mode, footprint_controls, split_mask, split_world_offsets,
@@ -1198,6 +1210,7 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
             "nonRidgeContribution": f"{prefix}-nonridge-contribution.png",
             "residual": f"{prefix}-expanded-residual.png",
         }
+        phase_state["value"] = f"camera-{index:02d}-artifact-write"
         current = persist_capture_comparator(Path(current_capture["imagePath"]), out_dir / names["current"])
         complete = persist_capture_comparator(Path(complete_capture["imagePath"]), out_dir / names["target"])
         persist_capture_comparator(Path(support_capture["imagePath"]), out_dir / names["supportTarget"])
@@ -1227,6 +1240,7 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
                 **names,
             },
         })
+    phase_state["value"] = "report-assembly"
     held = [row for row in metrics_rows if row["split"] == "heldOut"]
     report = {
         "schema": REPORT_SCHEMA,
@@ -1527,25 +1541,25 @@ def main() -> int:
         "stateStep": args.state_step,
         "depthBins": args.depth_bins,
     }
-    phase = "footprint-control-validation"
+    phase_state = {"value": "footprint-control-validation"}
     started = time.time()
     try:
         resolve_footprint_controls(args)
-        phase = "manifest-validation"
-        result = run_oracle(args)
-        phase = "report-write"
+        phase_state["value"] = "manifest-validation"
+        result = run_oracle(args, phase_state)
+        phase_state["value"] = "report-write"
         report = {"schema": REPORT_SCHEMA, "startedAtUnix": started, "finishedAtUnix": time.time(), **result}
         report_path.write_text(json.dumps(report, indent=2) + "\n")
         print(json.dumps({"status": report["status"], "report": str(report_path), "artifacts": report.get("artifacts")}, indent=2))
         return 0
     except Exception as exc:
         failure = {
-            "schema": REPORT_SCHEMA, "status": "failed", "failurePhase": phase,
+            "schema": REPORT_SCHEMA, "status": "failed", "failurePhase": phase_state["value"],
             "error": str(exc), "startedAtUnix": started, "finishedAtUnix": time.time(),
             "requested": requested, "traceback": traceback.format_exc(),
         }
         report_path.write_text(json.dumps(failure, indent=2) + "\n")
-        print(f"coefficient render oracle failed during {phase}: {exc}", file=sys.stderr)
+        print(f"coefficient render oracle failed during {phase_state['value']}: {exc}", file=sys.stderr)
         return 1
 
 
