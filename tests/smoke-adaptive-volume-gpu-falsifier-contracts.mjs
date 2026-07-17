@@ -13,6 +13,12 @@ import {
   validateAdaptiveVolumeScaleLawReport,
 } from '../smoke-adaptive-volume-gpu-falsifier.mjs';
 
+const SHA_A = `sha256:${'a'.repeat(64)}`;
+const SHA_B = `sha256:${'b'.repeat(64)}`;
+const SHA_C = `sha256:${'c'.repeat(64)}`;
+const SHA_D = `sha256:${'d'.repeat(64)}`;
+const SHA_E = `sha256:${'e'.repeat(64)}`;
+
 assert.equal(bitonicSortRecordCount(64_000), 65_536);
 assert.equal(bitonicSortRecordCount(65_536), 65_536);
 const sortStages = buildBitonicSortStages(65_536);
@@ -80,15 +86,15 @@ const validReport = {
     gitBranch: 'cc/test',
     gitStatusShort: '',
     sourceFileSha256s: {
-      module: 'sha256:a', browser: 'sha256:b', witness: 'sha256:c', html: 'sha256:d',
+      module: SHA_A, browser: SHA_B, witness: SHA_C, html: SHA_D, productionVolume: SHA_E,
     },
   },
   source: {
-    matchedReportSha256: 'sha256:a',
-    fitReportSha256: 'sha256:b',
-    sourceSidecarSha256: 'sha256:c',
-    selectionArtifactSha256: 'sha256:d',
-    referenceDepthSha256: 'sha256:e',
+    matchedReportSha256: SHA_A,
+    fitReportSha256: SHA_B,
+    sourceSidecarSha256: SHA_C,
+    selectionArtifactSha256: SHA_D,
+    referenceDepthSha256: SHA_E,
   },
   arms: {
     dense: { outputComplete: true, gpuMs: 2 },
@@ -105,8 +111,8 @@ const validReport = {
   },
   denseDenial: {
     method: 'destroy-dense-source-before-compact-rerender-v0',
-    preDenialOutputSha256: 'sha256:a',
-    postDenialOutputSha256: 'sha256:a',
+    preDenialOutputSha256: SHA_A,
+    postDenialOutputSha256: SHA_A,
     maximumAbsoluteOutputDelta: 0,
     passed: true,
   },
@@ -200,7 +206,7 @@ validScaleReport.scaleLaw = {
   },
   productionAttribution: {
     authority: 'static-production-shader-source-inspection-v0',
-    sourceSha256: 'sha256:abc',
+    sourceSha256: SHA_E,
     measuredProductionBottleneck: false,
     observedMechanisms: ['majorant-grid', 'occupancy-skip', 'adaptive-rays', 'early-transmittance', 'five-live-field-samples'],
   },
@@ -211,6 +217,22 @@ validScaleReport.scaleLaw = {
   },
 };
 assert.equal(validateAdaptiveVolumeScaleLawReport(validScaleReport).scaleLawEvidenceAllowed, true);
+
+const truncatedSourceDigest = structuredClone(validScaleReport);
+truncatedSourceDigest.source.matchedReportSha256 = 'sha256:a';
+assert.equal(
+  validateAdaptiveVolumeGpuReport(truncatedSourceDigest).optimizationClaimAllowed,
+  false,
+  'source identity must require a complete SHA-256 digest',
+);
+
+const mismatchedProductionSource = structuredClone(validScaleReport);
+mismatchedProductionSource.scaleLaw.productionAttribution.sourceSha256 = SHA_D;
+assert.equal(
+  validateAdaptiveVolumeScaleLawReport(mismatchedProductionSource).scaleLawEvidenceAllowed,
+  false,
+  'production attribution must bind to the exact runtime production-volume source',
+);
 
 const invalidFullSelectionParity = structuredClone(validScaleReport);
 invalidFullSelectionParity.compactProduct.selectedBrickCount = invalidFullSelectionParity.effective.physicalBrickCount;
@@ -253,11 +275,12 @@ for (const mutate of [
   report => { report.effective.timestampStatus = 'unsupported'; },
   report => { report.arms.compactPrebuilt.denseBindingCount = 1; },
   report => { report.compactProduct.hiddenDenseAllocationBytes = 64; },
-  report => { report.denseDenial.postDenialOutputSha256 = 'sha256:b'; },
+  report => { report.denseDenial.postDenialOutputSha256 = SHA_B; },
   report => { report.validation.complete = false; },
   report => { report.requested.hiddenBrickCapApplied = true; },
   report => { delete report.source.referenceDepthSha256; },
   report => { delete report.runtime.sourceFileSha256s.browser; },
+  report => { delete report.runtime.sourceFileSha256s.productionVolume; },
   report => { report.compactProduct.sortOrderViolationCount = 1; },
   report => { report.effective.backendIdentitySource = 'platform-fallback-untrusted'; },
   report => { delete report.effective.cdpGpuInfo; },

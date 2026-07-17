@@ -2,7 +2,7 @@
 
 Question: Can a truthful R40 parent field plus sparse R160 residual bricks beat dense R160 scalar traversal at larger ray workloads without violating the fixed `0.001` maximum optical-depth error gate?
 
-Result: Yes on this isolated static single-channel route. The smallest measured passing arm retains `99.9001%` residual energy with 1,326 of 64,000 bricks. It is neutral at 320x228, 14.4% faster at 640x456, and 17.1% faster at 1280x912. Maximum error is `0.000900801` at the largest workload, with zero violating rays. This is a positive scale-law result, not a production-compositor or total-frame result.
+Result: Yes on this isolated static single-channel route. The smallest measured passing arm retains `99.9001%` residual energy with 1,326 of 64,000 bricks. Its paired compact/dense median ratio is neutral at 320x228, 13.7% faster at 640x456, and 17.1% faster at 1280x912. Maximum error is `0.000900801` at the largest workload, with zero violating rays. This is a positive scale-law result, not a production-compositor or total-frame result.
 
 ## Positive Arm: 99.9%
 
@@ -22,6 +22,8 @@ Result: Yes on this isolated static single-channel route. The smallest measured 
 | 320x228 | `0.147456 ms` | `0.147456 ms` | `1.0000` | `0.000318237` | `0.000209540` | 0 |
 | 640x456 | `0.512000 ms` | `0.438272 ms` | `0.8629` | `0.000289276` | `0.000193715` | 0 |
 | 1280x912 | `1.937408 ms` | `1.605632 ms` | `0.8295` | `0.000900801` | `0.000198946` | 0 |
+
+The dense and compact time columns are independent medians of the paired arm samples. Speedup wording uses the median of each pair's compact/dense ratio, which is the protocol's direct paired statistic.
 
 Command:
 

@@ -10,6 +10,10 @@ export const ADAPTIVE_VOLUME_GPU_ERROR_LIMITS = Object.freeze({
 });
 export const FULL_SELECTION_AGAINST_DENSE_MAXIMUM_ABSOLUTE_ERROR = 1e-5;
 
+function isSha256Digest(value) {
+  return typeof value === 'string' && /^sha256:[0-9a-f]{64}$/i.test(value);
+}
+
 function positiveInteger(value, label) {
   const number = Number(value);
   if (!Number.isInteger(number) || number <= 0) throw new Error(`${label} must be a positive integer`);
@@ -169,7 +173,6 @@ function hasAppleCdpEvidence(cdpGpuInfo) {
 
 export function validateAdaptiveVolumeGpuReport(report) {
   const reasons = [];
-  const isSha256 = value => typeof value === 'string' && /^sha256:[0-9a-f]+$/i.test(value);
   if (report?.schema !== ADAPTIVE_VOLUME_GPU_REPORT_SCHEMA) reasons.push('schema-mismatch');
   if (report?.status !== 'passed') reasons.push('report-not-passed');
   if (report?.effective?.route !== ADAPTIVE_VOLUME_GPU_ROUTE) reasons.push('effective-route-mismatch');
@@ -185,13 +188,13 @@ export function validateAdaptiveVolumeGpuReport(report) {
   if (report?.effective?.timestampFeature !== 'timestamp-query' || report?.effective?.timestampStatus !== 'available') reasons.push('timestamp-authority-missing');
   if (report?.requested?.hiddenBrickCapApplied !== false) reasons.push('hidden-cap');
   for (const key of ['matchedReportSha256', 'fitReportSha256', 'sourceSidecarSha256', 'selectionArtifactSha256', 'referenceDepthSha256']) {
-    if (!isSha256(report?.source?.[key])) reasons.push(`source-identity-missing:${key}`);
+    if (!isSha256Digest(report?.source?.[key])) reasons.push(`source-identity-missing:${key}`);
   }
   if (!/^[0-9a-f]{40}$/i.test(report?.runtime?.gitCommit || '') || typeof report?.runtime?.gitBranch !== 'string' || !report.runtime.gitBranch) {
     reasons.push('git-identity-missing');
   }
-  for (const key of ['module', 'browser', 'witness', 'html']) {
-    if (!isSha256(report?.runtime?.sourceFileSha256s?.[key])) reasons.push(`source-file-identity-missing:${key}`);
+  for (const key of ['module', 'browser', 'witness', 'html', 'productionVolume']) {
+    if (!isSha256Digest(report?.runtime?.sourceFileSha256s?.[key])) reasons.push(`source-file-identity-missing:${key}`);
   }
   if (!finitePositive(report?.arms?.dense?.gpuMs) || report?.arms?.dense?.outputComplete !== true) reasons.push('dense-arm-incomplete');
   if (!finitePositive(report?.arms?.compactPrebuilt?.gpuMs) || report?.arms?.compactPrebuilt?.outputComplete !== true) reasons.push('compact-prebuilt-arm-incomplete');
@@ -331,7 +334,8 @@ export function validateAdaptiveVolumeScaleLawReport(report) {
   const attribution = scaleLaw?.productionAttribution;
   if (attribution?.authority !== 'static-production-shader-source-inspection-v0') reasons.push('production-attribution-authority-missing');
   if (attribution?.measuredProductionBottleneck !== false) reasons.push('production-attribution-overclaim');
-  if (typeof attribution?.sourceSha256 !== 'string' || !/^sha256:[0-9a-f]+$/i.test(attribution.sourceSha256)) reasons.push('production-attribution-source-missing');
+  if (!isSha256Digest(attribution?.sourceSha256)) reasons.push('production-attribution-source-missing');
+  if (attribution?.sourceSha256 !== report?.runtime?.sourceFileSha256s?.productionVolume) reasons.push('production-attribution-source-mismatch');
   for (const mechanism of ['majorant-grid', 'occupancy-skip', 'adaptive-rays', 'early-transmittance', 'five-live-field-samples']) {
     if (!attribution?.observedMechanisms?.includes(mechanism)) reasons.push(`production-attribution-mechanism-missing:${mechanism}`);
   }
