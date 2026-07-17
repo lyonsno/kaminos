@@ -367,6 +367,8 @@ assert.match(browser, /pairedRatioByOrder/, 'R8c must expose residual execution-
 assert.match(browser, /var globalStep = 0u/, 'sparse traversal must preserve the dense global fine-step lattice');
 assert.doesNotMatch(browser, /var fineDistance = distance/, 'sparse traversal must not restart quadrature at brick boundaries');
 assert.match(browser, /pointCell\(samplePoint, p\)/, 'fine/coarse support must be selected at the globally aligned segment midpoint');
+assert.doesNotMatch(browser, /for \(var run = 0u;/, 'coarse bricks must not spend one shader iteration per skipped fine segment');
+assert.match(browser, /ceil\(midpointExitDistance \/ fineStep\)/, 'coarse jumps must preserve the global midpoint lattice analytically');
 assert.match(browser, /absoluteErrorQuantiles/, 'R8b must distinguish a broad reconstruction failure from an extreme-value tail');
 assert.match(browser, /aboveErrorLimitCount/, 'R8b must report how many pixels violate the immutable max-error gate');
 assert.match(browser, /renderScaleLawSummary/, 'R8b screenshot must expose role-labeled scale timing and error rows');

@@ -338,21 +338,13 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
       distance += segment;
       globalStep += 1u;
     } else {
-      var runDistance = distance;
-      var runLength = 0.0;
-      for (var run = 0u; run < 64u; run++) {
-        if (runDistance >= ray.endPad.x || globalStep >= 1024u) { break; }
-        let runSegment = min(fineStep, ray.endPad.x - runDistance);
-        let runSamplePoint = p.cameraPosition.xyz + ray.directionStart.xyz * (runDistance + runSegment * 0.5);
-        let runCell = pointCell(runSamplePoint, p);
-        let runIndex = brickIndex(runCell / p.blockSize);
-        if (runIndex != index) { break; }
-        runLength += runSegment;
-        runDistance += runSegment;
-        globalStep += 1u;
-      }
+      let midpointExitDistance = brickExitDistance(samplePoint, ray.directionStart.xyz, brick);
+      let alignedRunSteps = max(1u, u32(ceil(midpointExitDistance / fineStep)));
+      let runSteps = min(alignedRunSteps, 1024u - globalStep);
+      let runLength = min(ray.endPad.x - distance, f32(runSteps) * fineStep);
       depth += coarse[index] * runLength * p.extinction;
-      distance = runDistance;
+      distance += runLength;
+      globalStep += runSteps;
     }
   }
   output[pixel] = depth;
