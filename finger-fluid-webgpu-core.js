@@ -17,6 +17,7 @@ export const KAMINOS_FINGER_FLUID_GPU_RENDERER_ROUTE = 'webgpu-particle-sphere-r
 export const KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE = 'wgsl-pbf-linked-cell-fluid-v0';
 export const KAMINOS_FINGER_FLUID_RENDER_SHADER_ROUTE = 'wgsl-fluid-particle-sphere-v0';
 export const KAMINOS_FINGER_FLUID_STABILITY_CONTRACT = 'bounded-pbf-energy-v0';
+export const KAMINOS_FINGER_FLUID_TRUTH_GAUNTLET_CONTRACT = 'kaminos-fluid-truth-gauntlet-v0';
 
 const PARTICLE_FLOATS = 16;
 const PARTICLE_BYTES = PARTICLE_FLOATS * 4;
@@ -61,6 +62,7 @@ const INVALID_NEIGHBOR_ID = 0xffffffff;
 let nextLiquidFireContactAllocationGeneration = 1;
 
 export const KAMINOS_FINGER_FLUID_COLOR_MODES = Object.freeze(['phase', 'particle_id', 'speed', 'density', 'surface', 'neighbor_retention', 'chemistry']);
+export const KAMINOS_FINGER_FLUID_TRUTH_SCENES = Object.freeze(['multi_regime_playground', 'deep_pool_rest', 'dam_break']);
 
 export function resolveFingerFluidColorMode(value = 'phase') {
   const mode = String(value || 'phase');
@@ -68,6 +70,14 @@ export function resolveFingerFluidColorMode(value = 'phase') {
     throw new RangeError(`Unsupported finger fluid color mode: ${mode}`);
   }
   return mode;
+}
+
+export function resolveFingerFluidTruthScene(value = 'multi_regime_playground') {
+  const scene = String(value || 'multi_regime_playground');
+  if (!KAMINOS_FINGER_FLUID_TRUTH_SCENES.includes(scene)) {
+    throw new RangeError(`Unsupported finger fluid truth scene: ${scene}`);
+  }
+  return scene;
 }
 
 export function resolveFingerFluidParticleShiftStrength(value = 0) {
@@ -1435,7 +1445,7 @@ function playgroundZoneDiagnostics(values, restStateValues, topologyValues, part
   };
 }
 
-function createInitialParticles(particleCount) {
+function createMultiRegimePlaygroundParticles(particleCount) {
   const data = new Float32Array(particleCount * PARTICLE_FLOATS);
   const spacing = 0.055;
   const zoneSeeds = [
@@ -1478,6 +1488,221 @@ function createInitialParticles(particleCount) {
   return data;
 }
 
+function createPackedTruthSceneParticles(particleCount, {
+  center,
+  horizontalAspect = [1, 1],
+  velocity = [0, 0, 0],
+  phase = 0.5,
+  spacing = 0.055,
+} = {}) {
+  const data = new Float32Array(particleCount * PARTICLE_FLOATS);
+  const root = Math.cbrt(particleCount);
+  const xCount = Math.max(2, Math.ceil(root * horizontalAspect[0]));
+  const zCount = Math.max(2, Math.ceil(root * horizontalAspect[1]));
+  for (let index = 0; index < particleCount; index += 1) {
+    const xIndex = index % xCount;
+    const zIndex = Math.floor(index / xCount) % zCount;
+    const yIndex = Math.floor(index / (xCount * zCount));
+    const jitter = ((index * 1664525 + 1013904223) >>> 8) / 0x00ffffff - 0.5;
+    const x = center[0] + (xIndex - (xCount - 1) * 0.5) * spacing + jitter * 0.0025;
+    const z = center[1] + (zIndex - (zCount - 1) * 0.5) * spacing + Math.cos(index * 0.19) * 0.0015;
+    const y = sampleFingerFluidPlaygroundHeight(x, z) + 0.055 + yIndex * spacing + Math.sin(index * 0.37) * 0.0015;
+    const offset = index * PARTICLE_FLOATS;
+    data[offset + 0] = x;
+    data[offset + 1] = y;
+    data[offset + 2] = z;
+    data[offset + 3] = 1;
+    data[offset + 4] = x;
+    data[offset + 5] = y;
+    data[offset + 6] = z;
+    data[offset + 7] = 0;
+    data[offset + 8] = velocity[0];
+    data[offset + 9] = velocity[1];
+    data[offset + 10] = velocity[2];
+    data[offset + 11] = phase;
+  }
+  return data;
+}
+
+export function createFingerFluidTruthSceneParticles(particleCount, scene = 'multi_regime_playground') {
+  const safeParticleCount = Math.max(1, Math.floor(finite(particleCount, DEFAULT_PARTICLE_COUNT)));
+  const effectiveScene = resolveFingerFluidTruthScene(scene);
+  if (effectiveScene === 'multi_regime_playground') return createMultiRegimePlaygroundParticles(safeParticleCount);
+  if (effectiveScene === 'deep_pool_rest') {
+    return createPackedTruthSceneParticles(safeParticleCount, {
+      center: [-1.25, 0.58],
+      horizontalAspect: [1.1, 1.1],
+      phase: 0.66,
+    });
+  }
+  return createPackedTruthSceneParticles(safeParticleCount, {
+    center: [-0.25, -1.72],
+    horizontalAspect: [1, 0.78],
+    phase: 0.45,
+  });
+}
+
+export function measureFingerFluidTruthSnapshot(particleData, particleCount, {
+  scene = 'multi_regime_playground',
+  restDensity = 24.3,
+  sourceRecirculationCount = 0,
+} = {}) {
+  const effectiveScene = resolveFingerFluidTruthScene(scene);
+  const count = Math.max(0, Math.min(Math.floor(finite(particleCount, 0)), Math.floor((particleData?.length || 0) / PARTICLE_FLOATS)));
+  const occupancies = new Uint32Array(GRID_CELL_COUNT);
+  const densityErrors = [];
+  const centerOfMass = [0, 0, 0];
+  let finiteParticleCount = 0;
+  let retainedParticleCount = 0;
+  let totalKineticEnergy = 0;
+  let densitySum = 0;
+  let maxDensity = 0;
+  for (let index = 0; index < count; index += 1) {
+    const offset = index * PARTICLE_FLOATS;
+    const position = [particleData[offset], particleData[offset + 1], particleData[offset + 2]];
+    const velocity = [particleData[offset + 8], particleData[offset + 9], particleData[offset + 10]];
+    const density = particleData[offset + 15];
+    if (![...position, ...velocity, density].every(Number.isFinite)) continue;
+    finiteParticleCount += 1;
+    centerOfMass[0] += position[0];
+    centerOfMass[1] += position[1];
+    centerOfMass[2] += position[2];
+    totalKineticEnergy += 0.5 * (velocity[0] ** 2 + velocity[1] ** 2 + velocity[2] ** 2);
+    densitySum += density;
+    maxDensity = Math.max(maxDensity, density);
+    densityErrors.push(Math.abs(density - restDensity) / Math.max(0.001, restDensity));
+    const inBounds = position.every((value, axis) => value >= BOUNDS_MIN[axis] && value <= BOUNDS_MAX[axis]);
+    if (!inBounds) continue;
+    retainedParticleCount += 1;
+    const coord = position.map((value, axis) => {
+      const normalized = clamp((value - BOUNDS_MIN[axis]) / (BOUNDS_MAX[axis] - BOUNDS_MIN[axis]), 0, 0.999999);
+      return Math.floor(normalized * GRID_DIMS[axis]);
+    });
+    const cellIndex = coord[0] + GRID_DIMS[0] * (coord[1] + GRID_DIMS[1] * coord[2]);
+    occupancies[cellIndex] += 1;
+  }
+  const occupied = Array.from(occupancies).filter(value => value > 0).sort((a, b) => a - b);
+  const sortedDensityErrors = densityErrors.sort((a, b) => a - b);
+  const percentile = (values, fraction) => values.length ? values[Math.min(values.length - 1, Math.floor((values.length - 1) * fraction))] : 0;
+  const cellSize = BOUNDS_MAX.map((value, axis) => (value - BOUNDS_MIN[axis]) / GRID_DIMS[axis]);
+  const cellVolume = cellSize[0] * cellSize[1] * cellSize[2];
+  return {
+    schema: 'kaminos.finger-fluid-truth-snapshot.v0',
+    contract: KAMINOS_FINGER_FLUID_TRUTH_GAUNTLET_CONTRACT,
+    scene: effectiveScene,
+    populationMode: effectiveScene === 'multi_regime_playground' ? 'finite_source_recirculation' : 'closed_particle_population',
+    particleCount: count,
+    finiteParticleCount,
+    retainedParticleCount,
+    retainedParticleRatio: Number((retainedParticleCount / Math.max(1, count)).toFixed(6)),
+    sourceRecirculationCount,
+    centerOfMass: centerOfMass.map(value => Number((value / Math.max(1, finiteParticleCount)).toFixed(5))),
+    totalKineticEnergy: Number(totalKineticEnergy.toFixed(6)),
+    averageKineticEnergy: Number((totalKineticEnergy / Math.max(1, finiteParticleCount)).toFixed(6)),
+    averageDensity: Number((densitySum / Math.max(1, finiteParticleCount)).toFixed(5)),
+    maxDensity: Number(maxDensity.toFixed(5)),
+    relativeDensityErrorMean: Number((sortedDensityErrors.reduce((sum, value) => sum + value, 0) / Math.max(1, sortedDensityErrors.length)).toFixed(6)),
+    relativeDensityErrorP95: Number(percentile(sortedDensityErrors, 0.95).toFixed(6)),
+    occupiedCellCount: occupied.length,
+    occupiedVolumeProxy: Number((occupied.length * cellVolume).toFixed(6)),
+    maximumCellOccupancy: occupied.at(-1) || 0,
+    p95CellOccupancy: percentile(occupied, 0.95),
+    gridDimensions: [...GRID_DIMS],
+  };
+}
+
+export function evaluateFingerFluidTruthTrajectory(scene, trajectory) {
+  const effectiveScene = resolveFingerFluidTruthScene(scene);
+  if (!Array.isArray(trajectory) || trajectory.length < 2) {
+    throw new Error(`Finger fluid truth trajectory requires at least two checkpoints: ${trajectory?.length || 0}`);
+  }
+  const elapsedTimes = trajectory.map(checkpoint => checkpoint?.elapsedMs);
+  if (!elapsedTimes.every(Number.isFinite) || elapsedTimes.some((value, index) => index > 0 && value <= elapsedTimes[index - 1])) {
+    throw new Error(`Finger fluid truth trajectory requires finite strictly increasing checkpoint times: ${JSON.stringify(elapsedTimes)}`);
+  }
+  const elapsedHorizonMs = elapsedTimes.at(-1) - elapsedTimes[0];
+  if (effectiveScene === 'deep_pool_rest' && elapsedHorizonMs < 5000) {
+    throw new Error(`Deep-pool trajectory requires at least 5000ms after its first checkpoint: ${elapsedHorizonMs}`);
+  }
+  if (effectiveScene === 'dam_break') {
+    if (trajectory.length < 3) throw new Error(`Dam-break trajectory requires at least three checkpoints: ${trajectory.length}`);
+    if (elapsedHorizonMs < 7000) {
+      throw new Error(`Dam-break trajectory requires at least 7000ms after its first checkpoint: ${elapsedHorizonMs}`);
+    }
+  }
+  const snapshots = trajectory.map((checkpoint, index) => {
+    const snapshot = checkpoint?.fluidTruthSnapshot;
+    if (!snapshot) throw new Error(`Finger fluid truth checkpoint ${index} is missing its snapshot`);
+    const required = [
+      snapshot.particleCount,
+      snapshot.finiteParticleCount,
+      snapshot.retainedParticleRatio,
+      snapshot.sourceRecirculationCount,
+      snapshot.totalKineticEnergy,
+      snapshot.occupiedVolumeProxy,
+      ...(snapshot.centerOfMass || []),
+    ];
+    if (required.length !== 9 || !required.every(Number.isFinite)) {
+      throw new Error(`Finger fluid truth checkpoint ${index} contains non-finite or partial state`);
+    }
+    if (
+      snapshot.particleCount <= 0
+      || snapshot.finiteParticleCount !== snapshot.particleCount
+      || snapshot.retainedParticleRatio < 0.999999
+    ) {
+      throw new Error(`Finger fluid truth checkpoint ${index} lost its particle population`);
+    }
+    if (effectiveScene !== 'multi_regime_playground' && snapshot.sourceRecirculationCount !== 0) {
+      throw new Error(`Finger fluid truth checkpoint ${index} recirculated a closed population`);
+    }
+    return snapshot;
+  });
+  const initial = snapshots[0];
+  const final = snapshots.at(-1);
+  const energyRetentionRatio = final.totalKineticEnergy / Math.max(1e-6, initial.totalKineticEnergy);
+  const minimumSupportRatio = Math.min(...snapshots.map(snapshot => snapshot.occupiedVolumeProxy))
+    / Math.max(1e-6, initial.occupiedVolumeProxy);
+  const peakSupportExpansionRatio = Math.max(...snapshots.map(snapshot => snapshot.occupiedVolumeProxy))
+    / Math.max(1e-6, initial.occupiedVolumeProxy);
+  const downstreamDisplacement = final.centerOfMass[2] - initial.centerOfMass[2];
+  const verticalCollapse = initial.centerOfMass[1] - final.centerOfMass[1];
+  const receipt = {
+    contract: 'kaminos-fluid-truth-trajectory-v0',
+    scene: effectiveScene,
+    checkpointCount: snapshots.length,
+    elapsedHorizonMs: Number(elapsedHorizonMs.toFixed(1)),
+    energyRetentionRatio: Number(energyRetentionRatio.toFixed(6)),
+    minimumSupportRatio: Number(minimumSupportRatio.toFixed(6)),
+    peakSupportExpansionRatio: Number(peakSupportExpansionRatio.toFixed(6)),
+    downstreamDisplacement: Number(downstreamDisplacement.toFixed(6)),
+    verticalCollapse: Number(verticalCollapse.toFixed(6)),
+    accepted: true,
+  };
+  if (effectiveScene === 'deep_pool_rest') {
+    if (energyRetentionRatio > 0.35) {
+      throw new Error(`Deep-pool trajectory failed to dissipate: energy retention ${receipt.energyRetentionRatio}`);
+    }
+    if (minimumSupportRatio < 0.7) {
+      throw new Error(`Deep-pool trajectory collapsed support volume: minimum ratio ${receipt.minimumSupportRatio}`);
+    }
+  }
+  if (effectiveScene === 'dam_break') {
+    if (downstreamDisplacement < 1.2) {
+      throw new Error(`Dam-break trajectory failed to travel downstream: displacement ${receipt.downstreamDisplacement}`);
+    }
+    if (verticalCollapse < 0.8) {
+      throw new Error(`Dam-break trajectory failed to collapse vertically: collapse ${receipt.verticalCollapse}`);
+    }
+    if (energyRetentionRatio > 0.1) {
+      throw new Error(`Dam-break trajectory failed to settle: energy retention ${receipt.energyRetentionRatio}`);
+    }
+    if (peakSupportExpansionRatio < 1.08) {
+      throw new Error(`Dam-break trajectory failed to expand transient support: peak ratio ${receipt.peakSupportExpansionRatio}`);
+    }
+  }
+  return receipt;
+}
+
 function createInitialMaterialTracers(particleData, particleCount) {
   const data = new Float32Array(particleCount * MATERIAL_TRACER_FLOATS);
   for (let index = 0; index < particleCount; index += 1) {
@@ -1506,6 +1731,7 @@ export async function createWebGPUFingerFluidSolver({
   particleCount = DEFAULT_PARTICLE_COUNT,
   densityIterations = 3,
   substeps = 1,
+  truthScene = 'multi_regime_playground',
   colorMode = 'phase',
   particleShiftStrength = 0,
   chemistryDiffusion = 0,
@@ -1528,13 +1754,14 @@ export async function createWebGPUFingerFluidSolver({
   const safeParticleCount = Math.max(1024, Math.floor(finite(particleCount, DEFAULT_PARTICLE_COUNT)));
   const safeDensityIterations = Math.max(1, Math.floor(finite(densityIterations, 3)));
   const safeSubsteps = Math.max(1, Math.floor(finite(substeps, 1)));
+  const safeTruthScene = resolveFingerFluidTruthScene(truthScene);
   const safeColorMode = resolveFingerFluidColorMode(colorMode);
   const safeParticleShiftStrength = resolveFingerFluidParticleShiftStrength(particleShiftStrength);
   const safeChemistryDiffusion = resolveFingerFluidChemistryDiffusion(chemistryDiffusion);
   const liquidFireContactAllocationGeneration = nextLiquidFireContactAllocationGeneration;
   nextLiquidFireContactAllocationGeneration = (nextLiquidFireContactAllocationGeneration % 0x00fffffe) + 1;
   const liquidFireContactEpoch = 1;
-  const particleData = createInitialParticles(safeParticleCount);
+  const particleData = createFingerFluidTruthSceneParticles(safeParticleCount, safeTruthScene);
   const materialTracerData = createInitialMaterialTracers(particleData, safeParticleCount);
   const initialChemistryMass = materialTracerData.reduce((sum, value, index) => sum + (index % MATERIAL_TRACER_FLOATS === 0 ? value : 0), 0);
   const particleBuffer = device.createBuffer({
@@ -2130,6 +2357,11 @@ export async function createWebGPUFingerFluidSolver({
         const sampleIndex = Math.floor(index * (activeInterfaceCount - 1) / Math.max(1, sampleRecordCount - 1));
         sampleRecords.push(readInterfaceRecord(sampleIndex));
       }
+      const fluidTruthSnapshot = measureFingerFluidTruthSnapshot(values, safeParticleCount, {
+        scene: safeTruthScene,
+        restDensity: 24.3,
+        sourceRecirculationCount: interfaceCounters[2],
+      });
       diagnostics = {
         readbackMode: 'explicit_sparse_gpu_diagnostics_v0',
         stepCount: diagnosticsStepCount,
@@ -2185,6 +2417,7 @@ export async function createWebGPUFingerFluidSolver({
         supportedTransportParticleCount,
         supportedTransportParticleRatio: Number((supportedTransportParticleCount / safeParticleCount).toFixed(4)),
         averageSupportedTangentialSpeed: Number((supportedTangentialSpeedSum / Math.max(1, supportedTransportParticleCount)).toFixed(4)),
+        fluidTruthSnapshot,
         playgroundZoneDiagnostics: playgroundZoneDiagnostics(values, restStateValues, topologyValues, safeParticleCount),
         sourceRecirculationCount: interfaceCounters[2],
         interfaceCarrier: {
@@ -2261,6 +2494,8 @@ export async function createWebGPUFingerFluidSolver({
       topologyContract: KAMINOS_FINGER_FLUID_TOPOLOGY_CONTRACT,
       particleShiftContract: KAMINOS_FINGER_FLUID_PARTICLE_SHIFT_CONTRACT,
       chemistryContract: KAMINOS_FINGER_FLUID_CHEMISTRY_CONTRACT,
+      truthGauntletContract: KAMINOS_FINGER_FLUID_TRUTH_GAUNTLET_CONTRACT,
+      truthScene: safeTruthScene,
       colorMode: safeColorMode,
       particleShiftStrength: safeParticleShiftStrength,
       chemistryDiffusion: safeChemistryDiffusion,
@@ -2314,7 +2549,10 @@ export async function createWebGPUFingerFluidSolver({
         complete: false,
       },
       playgroundZoneDiagnostics: diagnostics?.playgroundZoneDiagnostics || null,
-      sourceRecirculationMode: 'material_tagged_finite_particle_loop_v0',
+      fluidTruthSnapshot: diagnostics?.fluidTruthSnapshot || null,
+      sourceRecirculationMode: safeTruthScene === 'multi_regime_playground'
+        ? 'material_tagged_finite_particle_loop_v0'
+        : 'closed_particle_population_no_source_recirculation_v0',
       sourceRecirculationCount: diagnostics?.sourceRecirculationCount || 0,
       stabilityContract: KAMINOS_FINGER_FLUID_STABILITY_CONTRACT,
       renderRoute: KAMINOS_FINGER_FLUID_GPU_RENDERER_ROUTE,

@@ -2695,6 +2695,7 @@ import {
 import {
   createWebGPUFingerFluidSolver,
   resolveFingerFluidColorMode,
+  resolveFingerFluidTruthScene,
   resolveFingerFluidParticleShiftStrength,
   resolveFingerFluidChemistryDiffusion,
 } from './finger-fluid-webgpu-core.js';
@@ -2833,11 +2834,14 @@ let fingerFluidPyroCompositionActivatedAtMs = null;
 let fingerFluidPyroCompositionSourceTrajectoryEnabled = true;
 
 function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.location.search)) {
+  const requestedTruthScene = params.get('finger_fluid_truth_scene') || 'multi_regime_playground';
   const requestedColorMode = params.get('finger_fluid_color_mode') || 'phase';
   const requestedParticleShiftStrength = Number(params.get('finger_fluid_particle_shift') ?? 0);
   const requestedChemistryDiffusion = Number(params.get('finger_fluid_chemistry_diffusion') ?? 0);
   return {
     schema: 'kaminos.finger-fluid-bench.route-config.v0',
+    requestedTruthScene,
+    effectiveTruthScene: resolveFingerFluidTruthScene(requestedTruthScene),
     requestedColorMode,
     effectiveColorMode: resolveFingerFluidColorMode(requestedColorMode),
     requestedParticleShiftStrength,
@@ -9827,6 +9831,7 @@ function updateFingerFluidBenchReadout() {
     KAMINOS_FINGER_FLUID_BENCH_ROUTE,
     state.source?.sourceTruthAuthority || 'synthetic source',
     `${state.solver?.particleCount || 0} particles`,
+    state.config?.effectiveTruthScene || 'multi_regime_playground',
     `${state.solver?.densityIterationCount || 0} density iterations`,
     `${state.playgroundZoneDiagnostics?.occupiedZoneCount || 0}/6 regimes`,
     `${state.interfaceCarrier?.activeCount || 0} interface records`,
@@ -10079,6 +10084,8 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
   advanceFingerFluidPyroCompositionSource(volumePrototype.debugState().simStepCount);
   gpuState.requestedColorMode = fingerFluidBenchConfig.requestedColorMode;
   gpuState.effectiveColorMode = gpuState.colorMode;
+  gpuState.requestedTruthScene = fingerFluidBenchConfig.requestedTruthScene;
+  gpuState.effectiveTruthScene = gpuState.truthScene;
   gpuState.requestedParticleShiftStrength = fingerFluidBenchConfig.requestedParticleShiftStrength;
   gpuState.effectiveParticleShiftStrength = gpuState.particleShiftStrength;
   gpuState.requestedChemistryDiffusion = fingerFluidBenchConfig.requestedChemistryDiffusion;
@@ -10157,6 +10164,7 @@ async function startFingerFluidBench() {
       particleCount: 24576,
       densityIterations: 3,
       substeps: 1,
+      truthScene: fingerFluidBenchConfig.effectiveTruthScene,
       colorMode: fingerFluidBenchConfig.effectiveColorMode,
       particleShiftStrength: fingerFluidBenchConfig.effectiveParticleShiftStrength,
       chemistryDiffusion: fingerFluidBenchConfig.effectiveChemistryDiffusion,
