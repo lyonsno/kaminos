@@ -62,12 +62,23 @@ def main() -> int:
     parser.add_argument("--probe-manifest", required=True)
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--support-threshold", type=float, default=0.98)
+    parser.add_argument(
+        "--channels",
+        default="fuel,fireLick,visibleFireCarrier,frontTopology",
+        help="comma-separated residual heads to package; supportProbability is always included",
+    )
     parser.add_argument("--expected-low-grid", type=int)
     parser.add_argument("--expected-high-grid", type=int)
     parser.add_argument("--model-identity")
     parser.add_argument("--training-basin-identity")
     parser.add_argument("--training-source-capture-sha256")
     args = parser.parse_args()
+    residual_channels = [channel.strip() for channel in args.channels.split(",") if channel.strip()]
+    supported_residual_channels = set(CHANNELS[1:])
+    require(bool(residual_channels), "at least one residual head must be packaged")
+    require(len(set(residual_channels)) == len(residual_channels), "packaged residual heads must be unique")
+    require(set(residual_channels) <= supported_residual_channels, "unsupported residual head requested")
+    packaged_channels = ["supportProbability", *residual_channels]
     probe_path = Path(args.probe_manifest).expanduser().resolve()
     out_dir = Path(args.out_dir).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -110,7 +121,7 @@ def main() -> int:
             packed.append(values)
             outputs.append({"channel": name, "offset": offset, "floatCount": int(values.size), "kind": "normalization"})
             offset += int(values.size)
-        for channel in CHANNELS:
+        for channel in packaged_channels:
             source = classifier if channel == "supportProbability" else heads
             arrays = model_arrays(source, HEAD_KEYS[channel])
             layer_offsets: dict[str, int] = {}
@@ -166,11 +177,16 @@ def main() -> int:
         "composition": {
             "supportThreshold": float(args.support_threshold),
             "supportThresholdAuthority": "operator-selected-motion-witness-v0",
-            "fuel": "sparse-hard-support-gated-residual-v0",
-            "fireLick": "sparse-hard-support-gated-residual-v0",
-            "visibleFireCarrier": "sparse-hard-support-gated-residual-v0",
-            "frontTopology": "dense-ungated-residual-v0",
+            **{
+                channel: (
+                    "dense-ungated-residual-v0"
+                    if channel == "frontTopology"
+                    else "sparse-hard-support-gated-residual-v0"
+                )
+                for channel in residual_channels
+            },
         },
+        "packagedResidualChannels": residual_channels,
         "outputs": [output for output in outputs if output["kind"] != "normalization"],
         "normalization": {output["channel"]: output for output in outputs if output["kind"] == "normalization"},
         "packed": {

@@ -19,7 +19,8 @@ IDENTITY = "native-low-zero-shot-selective-composition-v0"
 INPUT_AUTHORITY = "native-low-simulator-state-no-synthetic-downsample-v0"
 COMPOSITION_AUTHORITY = "frozen-exact-basin-heads-applied-to-native-low-state-v0"
 CROSS_GRID_COMPOSITION_AUTHORITY = "frozen-trained-grid-heads-applied-to-explicit-cross-grid-native-state-v0"
-SAMPLING_IDENTITY = "normalized-nearest-cell-low-to-output-grid-v0"
+NEAREST_MATERIALIZATION = "normalized-nearest-cell-low-to-output-grid-v0"
+TRILINEAR_MATERIALIZATION = "normalized-trilinear-low-to-output-grid-v0"
 FLUID_CHANNELS = [
     "velocityX", "velocityY", "velocityZ", "densityCarrier",
     "smokeDensity", "heat", "fuel", "detail",
@@ -49,6 +50,13 @@ def parse_args() -> argparse.Namespace:
         / "selective-head-live" / "exact-basin-160-to-128-v0" / "manifest.json"
     ))
     parser.add_argument("--batch-cells", type=int, default=32768)
+    parser.add_argument("--channels", default="fuel,visibleFireCarrier,fireLick,frontTopology")
+    parser.add_argument("--residual-scale", type=float, default=1.0)
+    parser.add_argument(
+        "--materialization-mode",
+        choices=[NEAREST_MATERIALIZATION, TRILINEAR_MATERIALIZATION],
+        default=NEAREST_MATERIALIZATION,
+    )
     parser.add_argument(
         "--allow-cross-grid-native-input",
         action="store_true",
@@ -138,6 +146,58 @@ def packed_head(values: np.ndarray, descriptor: dict[str, Any], feature_count: i
     }
 
 
+def materialize_low_values(
+    probe: Any,
+    low_fluid: np.ndarray,
+    low_front: np.ndarray,
+    indexes: np.ndarray,
+    low_grid: int,
+    high_grid: int,
+    mode: str,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    if mode == NEAREST_MATERIALIZATION:
+        return probe.low_values_for_high_cells(low_fluid, low_front, indexes, low_grid, high_grid)
+
+    x = indexes % high_grid
+    y = (indexes // high_grid) % high_grid
+    z = indexes // (high_grid * high_grid)
+
+    def axis_coordinates(coordinates: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        q = (coordinates.astype(np.float64) + 0.5) * low_grid / high_grid - 0.5
+        q = np.clip(q, 0.0, float(low_grid - 1))
+        lower = np.floor(q).astype(np.int64)
+        upper = np.minimum(low_grid - 1, lower + 1)
+        return lower, upper, (q - lower).astype(np.float32)
+
+    x0, x1, fx = axis_coordinates(x)
+    y0, y1, fy = axis_coordinates(y)
+    z0, z1, fz = axis_coordinates(z)
+
+    def flat(ix: np.ndarray, iy: np.ndarray, iz: np.ndarray) -> np.ndarray:
+        return ix + iy * low_grid + iz * low_grid * low_grid
+
+    corners = [
+        flat(x0, y0, z0), flat(x1, y0, z0), flat(x0, y1, z0), flat(x1, y1, z0),
+        flat(x0, y0, z1), flat(x1, y0, z1), flat(x0, y1, z1), flat(x1, y1, z1),
+    ]
+
+    def interpolate(source: np.ndarray) -> np.ndarray:
+        values = [np.asarray(source[corner], dtype=np.float32) for corner in corners]
+        expand = (slice(None),) + (None,) * (values[0].ndim - 1)
+        fxv, fyv, fzv = fx[expand], fy[expand], fz[expand]
+        x00 = values[0] * (1.0 - fxv) + values[1] * fxv
+        x10 = values[2] * (1.0 - fxv) + values[3] * fxv
+        x01 = values[4] * (1.0 - fxv) + values[5] * fxv
+        x11 = values[6] * (1.0 - fxv) + values[7] * fxv
+        y0v = x00 * (1.0 - fyv) + x10 * fyv
+        y1v = x01 * (1.0 - fyv) + x11 * fyv
+        return (y0v * (1.0 - fzv) + y1v * fzv).astype(np.float32, copy=False)
+
+    fluid_values = interpolate(low_fluid)
+    front_values = interpolate(low_front)
+    return np.concatenate([fluid_values, front_values[:, None]], axis=1), x, y, z
+
+
 def fail_manifest(path: Path, phase: str, error: Exception, evidence: dict[str, Any]) -> None:
     if isinstance(error, ApplicationFailure):
         phase = error.phase
@@ -165,6 +225,15 @@ def main() -> int:
         model_manifest_path = Path(args.model_manifest).resolve()
         native = json.loads(native_path.read_text())
         model = json.loads(model_manifest_path.read_text())
+        supported_channels = {"fuel", "visibleFireCarrier", "fireLick", "frontTopology"}
+        deployed_channels = [channel.strip() for channel in args.channels.split(",") if channel.strip()]
+        if not deployed_channels or len(set(deployed_channels)) != len(deployed_channels):
+            raise ApplicationFailure(phase, "deployed channels must be a non-empty unique list")
+        unknown_channels = sorted(set(deployed_channels) - supported_channels)
+        if unknown_channels:
+            raise ApplicationFailure(phase, f"unsupported deployed channels: {unknown_channels}")
+        if not np.isfinite(args.residual_scale) or args.residual_scale < 0.0:
+            raise ApplicationFailure(phase, "residual scale must be finite and non-negative")
         if native.get("schema") != "kaminos.volume.full-grid-field-export.v0" or native.get("status") != "captured":
             raise ApplicationFailure(phase, "native manifest is not a captured full-grid export")
         if native.get("failurePhase") is not None or native.get("completeFieldCoverage") is not True:
@@ -176,7 +245,7 @@ def main() -> int:
             raise ApplicationFailure(phase, "native/model grid relationship mismatch", {
                 "nativeGrid": low_grid, "modelLowGrid": trained_low_grid, "modelHighGrid": high_grid,
             })
-        expected_model_identity = model_identity(high_grid, trained_low_grid)
+        expected_model_identity = str(model.get("identity") or "")
         if low_grid < 2 or low_grid > high_grid:
             raise ApplicationFailure(phase, "native grid is outside the normalized sampling domain", {
                 "nativeGrid": low_grid, "outputGrid": high_grid,
@@ -206,12 +275,12 @@ def main() -> int:
             [low_grid, low_grid, low_grid, 1], ["frontTopology"],
         )
         if (
-            model.get("identity") != expected_model_identity
+            model.get("schema") != "kaminos.volume.selective-head-live-model.v0"
+            or not expected_model_identity
             or model.get("status") != "captured"
             or model.get("failurePhase") is not None
         ):
-            raise ApplicationFailure("model-validation", "frozen model identity/status mismatch", {
-                "expectedIdentity": expected_model_identity,
+            raise ApplicationFailure("model-validation", "frozen model schema/identity/status mismatch", {
                 "actualIdentity": model.get("identity"),
             })
         packed_descriptor = model.get("packed") or {}
@@ -236,6 +305,11 @@ def main() -> int:
             normalization["featureStd"]["offset"] + normalization["featureStd"]["floatCount"]
         ]
         output_descriptors = {item["channel"]: item for item in model["outputs"]}
+        missing_deployed_heads = sorted(set(deployed_channels) - set(output_descriptors))
+        if missing_deployed_heads:
+            raise ApplicationFailure("model-validation", f"model omitted deployed heads: {missing_deployed_heads}")
+        if "supportProbability" not in output_descriptors:
+            raise ApplicationFailure("model-validation", "model omitted supportProbability classifier")
         heads = {channel: packed_head(values, descriptor, feature_count, hidden) for channel, descriptor in output_descriptors.items()}
         evidence = {
             "nativeManifestPath": str(native_path),
@@ -265,7 +339,9 @@ def main() -> int:
         for start in range(0, high_cells, batch_cells):
             end = min(high_cells, start + batch_cells)
             indexes = np.arange(start, end, dtype=np.int64)
-            low_values, x, y, z = probe.low_values_for_high_cells(low_fluid, low_front, indexes, low_grid, high_grid)
+            low_values, x, y, z = materialize_low_values(
+                probe, low_fluid, low_front, indexes, low_grid, high_grid, args.materialization_mode,
+            )
             features = probe.build_features(low_values, x, y, z, high_grid)
             features = ((features - feature_mean) / feature_std).astype(np.float32, copy=False)
             probability = probe.predict_mlp(features, heads["supportProbability"], binary=True)
@@ -276,10 +352,20 @@ def main() -> int:
             mask_out[start:end] = hard_mask.astype(np.uint8)
             positive_count += int(np.count_nonzero(hard_mask))
             for channel in ("fuel", "visibleFireCarrier", "fireLick"):
+                if channel not in deployed_channels:
+                    continue
                 channel_index = FLUID_CHANNELS.index(channel)
                 residual = probe.predict_mlp(features, heads[channel], binary=False)
-                fluid_out[start:end, channel_index] = low_values[:, channel_index] + residual * hard_mask.astype(np.float32)
-            front_out[start:end] = low_values[:, 16] + probe.predict_mlp(features, heads["frontTopology"], binary=False)
+                fluid_out[start:end, channel_index] = (
+                    low_values[:, channel_index]
+                    + residual * hard_mask.astype(np.float32) * np.float32(args.residual_scale)
+                )
+            if "frontTopology" in deployed_channels:
+                front_out[start:end] = (
+                    low_values[:, 16]
+                    + probe.predict_mlp(features, heads["frontTopology"], binary=False)
+                    * np.float32(args.residual_scale)
+                )
         for output in (fluid_out, front_out, probability_out, mask_out):
             output.flush()
         del fluid_out, front_out, probability_out, mask_out
@@ -331,7 +417,7 @@ def main() -> int:
                 "outputGrid": high_grid,
                 "crossGridApplication": cross_grid_application,
                 "crossGridCallerAdmission": bool(args.allow_cross_grid_native_input),
-                "samplingIdentity": SAMPLING_IDENTITY,
+                "samplingIdentity": args.materialization_mode,
                 "applicationInput": "native low simulator field only",
                 "syntheticDownsampleApplied": False,
                 "trainingInputSyntheticDownsample": model.get("source", {}).get("trainingInputSyntheticDownsample"),
@@ -350,11 +436,17 @@ def main() -> int:
                     mask_path, [high_grid, high_grid, high_grid, 1], ["acceptedSplatHardMask"], "uint8"
                 ),
             },
+            "deployment": {
+                "channels": deployed_channels,
+                "residualScale": float(args.residual_scale),
+                "supportClassifierUse": "diagnostic-and-sparse-carrier-gating-only-v0",
+                "frontTopologySupportGated": False,
+            },
             "channelPolicies": {
-                "fuel": "sparse-hard-support-gated-residual-v0",
-                "visibleFireCarrier": "sparse-hard-support-gated-residual-v0",
-                "fireLick": "sparse-hard-support-gated-residual-v0",
-                "frontTopology": "dense-ungated-residual-v0",
+                "fuel": "sparse-hard-support-gated-residual-v0" if "fuel" in deployed_channels else "deterministic-materialization-only-v0",
+                "visibleFireCarrier": "sparse-hard-support-gated-residual-v0" if "visibleFireCarrier" in deployed_channels else "deterministic-materialization-only-v0",
+                "fireLick": "sparse-hard-support-gated-residual-v0" if "fireLick" in deployed_channels else "deterministic-materialization-only-v0",
+                "frontTopology": "dense-ungated-residual-v0" if "frontTopology" in deployed_channels else "deterministic-materialization-only-v0",
             },
             "receiver": {
                 "grid": high_grid,

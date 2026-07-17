@@ -66,6 +66,41 @@ assert.match(manifest.frames[0].commands.compose, /volume-native-low-selective-c
 assert.match(manifest.frames[0].commands.render, /volume-native-low-selective-witness\.mjs/);
 assert.doesNotMatch(JSON.stringify(manifest.frames), /truthHigh|synthetic-downsample|phase-aligned-pair/);
 
+const source96CapturePath = join(fixtureRoot, 'native-96-capture.json');
+writeFileSync(source96CapturePath, `${JSON.stringify({
+  ...sourceCapture,
+  controls: { volume_resolution: 96 },
+  replayRoute: sourceCapture.replayRoute.replace('volume_resolution=128', 'volume_resolution=96'),
+}, null, 2)}\n`);
+const currentBasin = run([
+  '--source-capture', source96CapturePath,
+  '--model-manifest', join(root, 'models/selective-head-live/latest-happy-bowl-160-to-96-step96-v0/manifest.json'),
+  '--expected-native-grid', '96',
+  '--channels', 'frontTopology',
+  '--residual-scale', '1',
+  '--materialization-mode', 'normalized-trilinear-low-to-output-grid-v0',
+  '--render-composition', 'raymarch-only-v0',
+  '--include-materialized-control',
+], 'current-basin-96');
+assert.equal(currentBasin.result.status, 0, currentBasin.result.stderr || currentBasin.result.stdout);
+const currentManifest = JSON.parse(readFileSync(join(currentBasin.outDir, 'producer-manifest.json'), 'utf8'));
+assert.equal(currentManifest.nativeGrid, 96);
+assert.equal(currentManifest.predictedGrid, 160);
+assert.equal(currentManifest.renderCompositionRequested, 'raymarch-only-v0');
+assert.deepEqual(currentManifest.deployment.channels, ['frontTopology']);
+assert.equal(currentManifest.deployment.residualScale, 1);
+assert.equal(currentManifest.deployment.materializationMode, 'normalized-trilinear-low-to-output-grid-v0');
+assert.deepEqual(currentManifest.roles, [
+  'nativeLowControl',
+  'deterministicMaterializedControl',
+  'nativeLowSelectivePredicted',
+]);
+assert.match(currentManifest.frames[0].commands.compose, /--channels frontTopology/);
+assert.match(currentManifest.frames[0].commands.compose, /--materialization-mode normalized-trilinear-low-to-output-grid-v0/);
+assert.match(currentManifest.frames[0].commands.render, /--render-composition raymarch-only-v0/);
+assert.match(currentManifest.frames[0].commands.composeMaterializedControl, /--residual-scale 0/);
+assert.match(currentManifest.frames[0].commands.renderMaterializedControl, /--render-composition raymarch-only-v0/);
+
 const source = readFileSync(producer, 'utf8');
 const nativeWitnessSource = readFileSync(join(root, 'volume-native-low-selective-witness.mjs'), 'utf8');
 const exporterSource = readFileSync(join(root, 'volume-full-grid-field-export.mjs'), 'utf8');

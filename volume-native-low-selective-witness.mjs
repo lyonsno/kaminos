@@ -49,6 +49,10 @@ const targetOrigin = String(args.get('--target-origin') || 'http://127.0.0.1:185
 const viewportSize = String(args.get('--viewport-size') || '1200,1000');
 const renderCanvasSize = String(args.get('--render-canvas-size') || '1000,1000');
 const chunkFloats = String(args.get('--chunk-floats') || '262144');
+const renderComposition = String(args.get('--render-composition') || 'splat-only-v0');
+if (!['splat-only-v0', 'raymarch-only-v0'].includes(renderComposition)) {
+  throw new Error(`unsupported --render-composition: ${renderComposition}`);
+}
 const renderWarmupCount = 2;
 const browserCommon = [];
 if (args.has('--debug-port')) browserCommon.push('--debug-port', String(args.get('--debug-port')));
@@ -89,11 +93,13 @@ function run(command, argv, label) {
 function validateRender(render, label, expectedGrid, sameNativeStateIdentity) {
   if (render.status !== 'captured' || render.failurePhase !== null) throw new Error(`${label} render failed`);
   if (render.initialFieldImport?.effective?.grid !== expectedGrid) throw new Error(`${label} imported grid mismatch`);
-  if (render.importedRender?.boundarySplatCompositionRequested !== 'splat-only-v0'
-    || render.importedRender?.boundarySplatCompositionEffective !== 'splat-only-v0'
-    || render.importedRender?.raymarchApplied !== false
-    || render.importedRender?.splatApplied !== true) {
-    throw new Error(`${label} did not apply the requested splat-only renderer`);
+  const expectedRaymarch = renderComposition === 'raymarch-only-v0';
+  const expectedSplat = renderComposition === 'splat-only-v0';
+  if (render.importedRender?.boundarySplatCompositionRequested !== renderComposition
+    || render.importedRender?.boundarySplatCompositionEffective !== renderComposition
+    || render.importedRender?.raymarchApplied !== expectedRaymarch
+    || render.importedRender?.splatApplied !== expectedSplat) {
+    throw new Error(`${label} did not apply the requested ${renderComposition} renderer`);
   }
   if (render.importedRender?.backend !== 'WebGPU:apple') throw new Error(`${label} used an unsupported backend`);
   if (!Array.isArray(render.renderWarmups) || render.renderWarmups.length !== renderWarmupCount) {
@@ -149,8 +155,8 @@ function htmlPage(control, treatment, sameNativeStateIdentity, relationship) {
 <title>Native-low zero-shot selective transfer</title>
 <style>
 :root{color-scheme:dark;font-family:Inter,system-ui,sans-serif;background:#080a0b;color:#eef3f4}*{box-sizing:border-box}body{margin:0;background:#080a0b}header{padding:14px 18px;border-bottom:1px solid #2c3639;background:#101416}h1{font-size:18px;margin:0 0 5px}p{margin:0;color:#aebbc0;font-size:12px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px;background:#2c3639}.panel{min-width:0;background:#050607}.label{padding:10px 12px;background:#111719;border-bottom:1px solid #263034}.label strong{display:block;font-size:15px}.label span{display:block;color:#9eacb1;font-size:11px;margin-top:3px}img{display:block;width:100%;height:auto;background:#000;image-rendering:auto}@media(max-width:900px){.grid{grid-template-columns:1fr}}
-</style></head><body><header><h1>Native ${nativeGrid} control vs frozen-head reconstruction</h1><p>Same native simulator state ${sameNativeStateIdentity.slice(0, 16)}... | splat-only on both | no high truth or synthetic downsample at application time</p></header>
-<main class="grid"><section class="panel"><div class="label"><strong>Native-low control</strong><span>Untouched native ${nativeGrid}³ simulator state, held render</span></div><img src="${imageName(control.image.path)}" alt="Native low control"></section>
+</style></head><body><header><h1>Native ${nativeGrid} control vs frozen-head reconstruction</h1><p>Same native simulator state ${sameNativeStateIdentity.slice(0, 16)}... | ${renderComposition} on both | no high truth or synthetic downsample at application time</p></header>
+<main class="grid"><section class="panel"><div class="label"><strong>Native-low control</strong><span>Untouched native ${nativeGrid}³ simulator state, held ${renderComposition} render</span></div><img src="${imageName(control.image.path)}" alt="Native low control"></section>
 <section class="panel"><div class="label"><strong>Native-low selective predicted</strong><span>Frozen model trained on ${trainedLowGrid}³ input applied zero-shot to the same native ${nativeGrid}³ state, rendered at ${outputGrid}³</span></div><img src="${imageName(treatment.image.path)}" alt="Native low selective predicted"></section></main></body></html>`;
 }
 
@@ -229,7 +235,7 @@ try {
     '--initial-field-manifest', initialManifest,
     '--advance-imported-steps', '0',
     '--render-only',
-    '--render-composition', 'splat-only-v0',
+    '--render-composition', renderComposition,
     '--viewport-size', viewportSize,
     '--viewport-device-scale-factor', '2',
     '--render-canvas-size', renderCanvasSize,
@@ -270,10 +276,10 @@ try {
     sameNativeStateIdentity,
     relationship: predicted.manifest.relationship,
     renderer: {
-      requested: 'splat-only-v0',
+      requested: renderComposition,
       controlEffective: control.effectiveComposition,
       treatmentEffective: treatment.effectiveComposition,
-      raymarchExcludedFromDiscriminant: true,
+      raymarchExcludedFromDiscriminant: renderComposition === 'splat-only-v0',
     },
     roles: { nativeLowControl: control, nativeLowSelectivePredicted: treatment },
     nativeLowTrainedPackageRoute: TRAINED_PACKAGE_ROUTE_MARKERS.nativeLowTrainedPackageRoute,
