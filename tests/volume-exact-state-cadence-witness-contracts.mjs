@@ -7,8 +7,19 @@ const witnessUrl = new URL('../volume-exact-state-cadence-witness.mjs', import.m
 assert.ok(existsSync(fileURLToPath(witnessUrl)), 'exact-state cadence browser witness exists');
 const source = readFileSync(witnessUrl, 'utf8');
 
-assert.match(source, /existingPersistentBrowserSeat/, 'witness consumes one existing persistent browser instead of launching another');
-assert.doesNotMatch(source, /spawn\(|execFile\([^)]*(?:Google Chrome|Chromium)/, 'witness cannot hide a replacement browser launch');
+assert.match(source, /launchOwnedServer/, 'witness launches the HTTP server it will use instead of inheriting a stale manual server');
+assert.match(source, /launchOwnedBrowser/, 'witness launches exactly one harness-owned browser');
+assert.match(source, /--headless=new/, 'owned browser cannot require operator window timing');
+assert.match(source, /--enable-unsafe-webgpu/, 'owned browser explicitly enables the WebGPU route under test');
+assert.match(source, /--user-data-dir=/, 'owned browser uses the requested isolated profile');
+assert.match(source, /--disable-background-timer-throttling/, 'owned browser preserves dynamic witness cadence while headless');
+assert.match(source, /server-port-already-in-use/, 'witness refuses a stale or foreign server on the requested port');
+assert.match(source, /browser-debug-port-already-in-use/, 'witness refuses to inherit a stale CDP endpoint');
+assert.match(source, /requested-server-origin-mismatch/, 'witness binds the exact requested route to its owned server origin');
+assert.match(source, /owned-headless-browser/, 'report identifies the effective browser as harness-owned and headless');
+assert.match(source, /terminateOwnedProcess/, 'witness tears down its owned browser and server');
+assert.doesNotMatch(source, /existingPersistentBrowserSeat|connected-existing/, 'witness cannot silently reuse an operator or stale browser seat');
+assert.doesNotMatch(source, /Page\.bringToFront/, 'witness cannot depend on operator-visible foreground focus');
 assert.match(source, /requestedRouteAgrees/, 'requested and effective page routes are compared canonically');
 assert.match(source, /volume_exact_state_cadence/, 'witness requires an explicit cadence request');
 assert.match(source, /exactStateCadenceRequested/, 'witness records requested cadence telemetry');
@@ -29,6 +40,13 @@ assert.match(source, /lastFrameEnergy/, 'blank-frame diagnosis preserves rendere
 assert.match(source, /volumeReconstructionStyle/, 'blank-frame diagnosis preserves effective reconstruction identity');
 assert.match(source, /timing:\s*state\?\.timing/, 'witness preserves measured frame and queue timing rather than inferring cost from cadence settings');
 assert.match(source, /canvasPixel/, 'witness samples rendered pixels instead of trusting telemetry alone');
+assert.match(source, /sampleFrame\(\{\s*advanceSim:\s*false,\s*includeRgba:\s*true,\s*boundarySplatComposition:\s*'splat-only-v0'\s*\}\)/, 'pixels come from explicit learned-splat GPU texture readback without an added simulator step');
+assert.match(source, /gpu-texture-readback-no-simulator-advance-v0/, 'pixel receipt labels direct GPU readback authority');
+assert.doesNotMatch(source, /Page\.captureScreenshot/, 'witness cannot launder Chrome black WebGPU surface capture into evidence');
+assert.doesNotMatch(source, /failurePhase = 'initial-canvas'/, 'invasive GPU readback cannot run before cadence measurement');
+assert.match(source, /failurePhase = 'sequence-validation'[\s\S]*validateSequence\(rows\)[\s\S]*validateEffectiveState\(finalState,[^)]*\)[\s\S]*failurePhase = 'final-canvas'[\s\S]*captureCanvas\('final'\)/, 'cadence sequence and final route authority are sealed before invasive GPU readback');
+assert.match(source, /sample\?\.simAdvanced !== false[\s\S]*sample\?\.sampleAuthority !== 'render-only-exact-state-cadence-presentation-readback'/, 'witness verifies renderer-owned no-sim and exact cadence presentation authority instead of trusting its request');
+assert.match(source, /sample\?\.exactStateCadenceReadbackApplied !== true[\s\S]*exactStateCadenceReadbackReceipt/, 'witness rejects a readback that bypasses the cadence presentation buffers');
 assert.match(source, /blank-or-partial-cadence-canvas/, 'blank output fails loud');
 assert.match(
   source,
@@ -37,6 +55,17 @@ assert.match(
 );
 assert.match(source, /writeReport\([\s\S]*catch/, 'witness preserves a report across primary-output failure');
 assert.match(source, /failurePhase/, 'failure report names the phase that failed');
+
+const cleanupCaptureSource = source.match(/async function captureCleanupOutcome\([\s\S]*?\n\}/)?.[0] || '';
+assert.ok(cleanupCaptureSource, 'witness owns a cleanup failure capture helper');
+const captureCleanupOutcome = new Function(`${cleanupCaptureSource}; return captureCleanupOutcome;`)();
+const cleanupFailure = await captureCleanupOutcome('browser', async () => {
+  throw new Error('cleanup-boom');
+});
+assert.equal(cleanupFailure.ok, false, 'cleanup errors become report data instead of suppressing the terminal report');
+assert.equal(cleanupFailure.label, 'browser');
+assert.match(cleanupFailure.error, /cleanup-boom/);
+assert.match(source, /finally \{[\s\S]*captureCleanupOutcome[\s\S]*processCleanup[\s\S]*writeReport\(finalReport\)/, 'terminal report is written after best-effort cleanup accounting');
 
 const validateEffectiveStateSource = source.slice(
   source.indexOf('function validateEffectiveState'),

@@ -18,6 +18,7 @@ assert.match(core, /async function pumpExactStateCadenceProducer/, 'producer has
 assert.match(core, /setTimeout\(pumpExactStateCadenceProducer/, 'producer scheduling is decoupled from requestAnimationFrame');
 assert.match(core, /planProduction\([\s\S]*encodeSim\(encoder[\s\S]*encodeProductionArchive/, 'one authoritative simulator step is archived into the reserved cadence slot');
 assert.match(core, /device\.queue\.submit\(\[encoder\.finish\(\)\]\)[\s\S]*await exactStateCadenceRuntime\.completeProduction/, 'archive authority becomes completed only after submitted GPU work finishes');
+assert.match(core, /production\.reason === 'producer-would-overwrite-unpresented-state'[\s\S]*exactStateCadenceProducerBackpressureCount[\s\S]*exactStateCadenceProducerBackpressureReceipt[\s\S]*exactStateCadenceEffective = residentCount >= requiredResidentCount \? 'active' : 'warming'[\s\S]*exactStateCadenceFallbackReason = null/, 'a full truthful ring backpressures production without becoming a fallback or overwriting the last completed producer receipt');
 assert.match(core, /function encodeExactStateCadencePresentation[\s\S]*selectPresentation[\s\S]*encodePresentation/, 'RAF presentation selects and interpolates only completed adjacent states');
 assert.match(core, /exactStateCadenceEffective[\s\S]*encodeExactStateCadencePresentation[\s\S]*else[\s\S]*encodeSim\(encoder\)/, 'effective cadence presentation replaces the RAF simulation step rather than duplicating it');
 assert.match(core, /function resetExactStateCadenceForControlChange[\s\S]*controlGeneration[\s\S]*source-controls-changed/, 'source-control changes invalidate the ring with an explicit generation reset');
@@ -45,6 +46,8 @@ assert.match(core, /exactStateCadenceRequested/, 'debug state preserves requeste
 assert.match(core, /exactStateCadenceEffective/, 'debug state distinguishes requested from effective cadence mode');
 assert.match(core, /exactStateCadenceFallbackReason/, 'debug state fails loud when cadence cannot apply');
 assert.match(core, /exactStateCadenceProducerReceipt/, 'debug state exposes the latest producer completion receipt');
+assert.match(core, /exactStateCadenceProducerBackpressureCount/, 'debug state exposes bounded producer backpressure frequency');
+assert.match(core, /exactStateCadenceProducerBackpressureReceipt/, 'debug state exposes the latest truthful no-overwrite refusal');
 assert.match(core, /exactStateCadencePresentationReceipt/, 'debug state exposes source steps, slots, alpha, and lead for presentation');
 assert.match(core, /exactStateCadenceAddedSimulationPasses:\s*0/, 'cadence telemetry states that it adds no simulator beyond the one authority');
 

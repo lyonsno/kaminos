@@ -1,8 +1,10 @@
 #!/usr/bin/env node
-import { execFileSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { createConnection } from 'node:net';
 import { dirname, resolve } from 'node:path';
+import { deflateSync } from 'node:zlib';
 
 import { measureBoundarySplatTemporalFrame } from './boundary-splat-temporal-collapse.mjs';
 import { BOUNDARY_SPLAT_ATTRIBUTE_MODEL_IDENTITY } from './models/boundary-splat-attribute/live-support-h64-v0/boundary-splat-attribute-model.generated.js';
@@ -14,12 +16,18 @@ const ONE_SIMULATOR_AUTHORITY = 'single-authoritative-simulator-completed-state-
 const PHASE_SOURCE = 'completed-exact-state-continuation-history';
 const BOUNDARY_SPLAT_LEARNED_RENDERER_IDENTITY = 'live-boundary-sidecar-learned-attribute-splats-v0';
 const BOUNDARY_SPLAT_LEARNED_ATTRIBUTE_MODEL_IDENTITY = BOUNDARY_SPLAT_ATTRIBUTE_MODEL_IDENTITY;
+const OWNED_SERVER_IDENTITY = 'exact-state-cadence-owned-http-server-v0';
+const OWNED_BROWSER_IDENTITY = 'exact-state-cadence-owned-headless-browser-v0';
+const DEFAULT_CHROME_PATH = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
 const args = parseArgs(process.argv.slice(2));
 const requestedRoute = String(args.get('--url') || '');
 const outDir = resolve(String(args.get('--out-dir') || '/tmp/kaminos-exact-state-cadence-witness'));
 const reportPath = resolve(String(args.get('--report') || `${outDir}/exact-state-cadence-report.json`));
 const port = Number(args.get('--chrome-port') || 19431);
+const serverPort = Number(args.get('--server-port') || 18971);
+const serverRoot = resolve(String(args.get('--server-root') || process.cwd()));
+const chromeExecutable = resolve(String(args.get('--chrome') || DEFAULT_CHROME_PATH));
 const requestedBrowserProfilePath = resolve(String(args.get('--browser-profile') || `${outDir}/chrome-profile`));
 const settleMs = Number(args.get('--settle-ms') ?? 3000);
 const sampleCount = Number(args.get('--samples') ?? 24);
@@ -28,9 +36,14 @@ const runStartedAt = new Date().toISOString();
 
 let ws = null;
 let browser = null;
+let browserProcess = null;
+let browserProfileOwned = false;
+let server = null;
+let serverProcess = null;
 let browserPageId = null;
 let browserPageUrl = null;
 let failurePhase = 'startup';
+let finalReport = null;
 const lastTrustworthyEvidence = {};
 
 mkdirSync(outDir, { recursive: true });
@@ -45,8 +58,18 @@ writeReport({
 try {
   validateInputs();
 
+  failurePhase = 'server-seat';
+  if (await portIsOpen(serverPort)) throw new Error(`server-port-already-in-use:${serverPort}`);
+
+  failurePhase = 'server-launch';
+  server = await launchOwnedServer();
+  lastTrustworthyEvidence.server = server;
+
   failurePhase = 'browser-seat';
-  browser = await existingPersistentBrowserSeat();
+  if (await portIsOpen(port)) throw new Error(`browser-debug-port-already-in-use:${port}`);
+
+  failurePhase = 'browser-launch';
+  browser = await launchOwnedBrowser();
   lastTrustworthyEvidence.browser = browser;
 
   failurePhase = 'connect-browser';
@@ -60,12 +83,11 @@ try {
 
   failurePhase = 'route-load';
   await wsRequest('Page.navigate', { url: requestedRoute });
-  await wsRequest('Page.bringToFront');
   await waitForPrototype();
   await delay(settleMs);
   await hideHud();
   const visibilityState = await evaluate('document.visibilityState');
-  if (visibilityState !== 'visible') throw new Error(`cadence-page-not-visible:${visibilityState}`);
+  if (visibilityState !== 'visible') throw new Error(`owned-headless-page-not-visible:${visibilityState}`);
 
   failurePhase = 'route-authority';
   const effectivePageUrl = await evaluate('location.href');
@@ -77,10 +99,6 @@ try {
   validateEffectiveState(initialState, effectivePageUrl);
   lastTrustworthyEvidence.initialState = compactState(initialState);
   lastTrustworthyEvidence.effectivePageUrl = effectivePageUrl;
-
-  failurePhase = 'initial-canvas';
-  const initialCanvas = await captureCanvas('initial');
-  lastTrustworthyEvidence.initialCanvas = initialCanvas.receipt;
 
   failurePhase = 'cadence-sampling';
   const rows = [];
@@ -99,15 +117,16 @@ try {
   const sequence = validateSequence(rows);
   lastTrustworthyEvidence.sequence = sequence;
 
-  failurePhase = 'final-canvas';
-  const finalCanvas = await captureCanvas('final');
   const finalState = await debugState();
   validateEffectiveState(finalState, effectivePageUrl);
   const sameBrowserTargetPreserved = await targetIsReachable(browserPageId);
   if (!sameBrowserTargetPreserved) throw new Error('browser-target-unreachable-after-cadence-witness');
 
+  failurePhase = 'final-canvas';
+  const finalCanvas = await captureCanvas('final');
+
   failurePhase = 'complete';
-  writeReport({
+  finalReport = {
     schema: SCHEMA,
     status: 'passed',
     claimBoundary: 'one-live-simulator-bounded-completed-state-history-adjacent-interpolation-no-learned-prediction',
@@ -116,6 +135,7 @@ try {
     requestedRoute,
     effectivePageUrl,
     requestedEffectiveRouteAgreement: true,
+    server,
     browser,
     browserPageId,
     browserPageUrl: effectivePageUrl,
@@ -125,15 +145,14 @@ try {
     sequence,
     rows,
     canvasPixelEvidence: {
-      initial: initialCanvas.receipt,
       final: finalCanvas.receipt,
-      distinctImageHashes: new Set([initialCanvas.receipt.sha256, finalCanvas.receipt.sha256]).size,
+      captureCount: 1,
+      temporalAuthority: 'cadence-sequence-telemetry-precedes-invasive-final-gpu-readback',
     },
     lastTrustworthyEvidence,
-  });
-  console.log(`exact-state cadence witness passed: ${reportPath}`);
+  };
 } catch (error) {
-  const failure = {
+  finalReport = {
     schema: SCHEMA,
     status: 'failed',
     failurePhase,
@@ -142,25 +161,85 @@ try {
     runStartedAt,
     failedAt: new Date().toISOString(),
     requestedRoute,
+    server,
     browser,
     browserPageId,
     browserPageUrl,
     lastTrustworthyEvidence,
   };
-  writeReport(failure);
-  console.error(failure.error);
+  console.error(finalReport.error);
   process.exitCode = 1;
 } finally {
-  ws?.close();
+  const websocketCleanup = await captureCleanupOutcome('browser-websocket', async () => {
+    if (!ws) return { closed: false, reason: 'not-opened' };
+    ws.close();
+    return { closed: true };
+  });
+  const browserCleanup = await captureCleanupOutcome('browser', () =>
+    terminateOwnedProcess(browserProcess, 'browser'),
+  );
+  const serverCleanup = await captureCleanupOutcome('server', () =>
+    terminateOwnedProcess(serverProcess, 'server'),
+  );
+  const browserProfileCleanup = await captureCleanupOutcome('browser-profile', async () => {
+    if (!browserProfileOwned) {
+      return { removed: false, reason: 'not-owned', path: requestedBrowserProfilePath };
+    }
+    if (!existsSync(requestedBrowserProfilePath)) {
+      return { removed: false, reason: 'already-absent', path: requestedBrowserProfilePath };
+    }
+    rmSync(requestedBrowserProfilePath, { recursive: true, force: true });
+    return { removed: true, path: requestedBrowserProfilePath };
+  });
+  finalReport ||= {
+    schema: SCHEMA,
+    status: 'failed',
+    failurePhase: 'report-finalization',
+    failureClass: 'report-finalization',
+    error: 'witness completed without a final report',
+    runStartedAt,
+    requestedRoute,
+    lastTrustworthyEvidence,
+  };
+  finalReport.processCleanup = {
+    websocket: websocketCleanup,
+    browser: browserCleanup,
+    server: serverCleanup,
+    browserProfile: browserProfileCleanup,
+  };
+  const cleanupFailures = Object.values(finalReport.processCleanup).filter(
+    outcome => outcome.ok === false,
+  );
+  if (cleanupFailures.length > 0) {
+    finalReport.status = 'failed';
+    finalReport.failurePhase = 'cleanup';
+    finalReport.failureClass = 'cleanup-failed';
+    finalReport.error = cleanupFailures
+      .map(outcome => `${outcome.label}: ${outcome.error}`)
+      .join('\n');
+    process.exitCode = 1;
+  }
+  finalReport.reportWrittenAt = new Date().toISOString();
+  writeReport(finalReport);
+  if (finalReport.status === 'passed') console.log(`exact-state cadence witness passed: ${reportPath}`);
 }
 
 function validateInputs() {
   if (!requestedRoute) throw new Error('missing --url');
-  const params = new URL(requestedRoute).searchParams;
+  const route = new URL(requestedRoute);
+  const params = route.searchParams;
+  const expectedServerOrigin = `http://127.0.0.1:${serverPort}`;
+  if (route.origin !== expectedServerOrigin) {
+    throw new Error(`requested-server-origin-mismatch:${JSON.stringify({ requested: route.origin, expected: expectedServerOrigin })}`);
+  }
   if (!['1', 'true', 'yes', 'on'].includes(String(params.get('volume_exact_state_cadence')).toLowerCase())) {
     throw new Error('cadence-request-missing-from-route');
   }
   requirePositiveInteger(port, '--chrome-port');
+  requirePositiveInteger(serverPort, '--server-port');
+  if (port === serverPort) throw new Error('browser-and-server-ports-must-differ');
+  if (!existsSync(serverRoot) || !statSync(serverRoot).isDirectory()) throw new Error(`server-root-not-found:${serverRoot}`);
+  if (!existsSync(chromeExecutable)) throw new Error(`chrome-executable-not-found:${chromeExecutable}`);
   requireNonnegativeNumber(settleMs, '--settle-ms');
   requirePositiveInteger(sampleCount, '--samples');
   requirePositiveNumber(sampleIntervalMs, '--sample-interval-ms');
@@ -254,6 +333,8 @@ function compactState(state) {
     simCostLedger: state?.simCostLedger ? { ...state.simCostLedger } : null,
     controlGeneration: Number(state?.exactStateCadenceControlGeneration),
     producerReceipt,
+    producerBackpressureCount: Number(state?.exactStateCadenceProducerBackpressureCount || 0),
+    producerBackpressureReceipt: state?.exactStateCadenceProducerBackpressureReceipt || null,
     presentationReceipt,
     residentCount: Number(state?.exactStateCadence?.residentCount),
     oldestSourceStep: Number(state?.exactStateCadence?.oldestSourceStep),
@@ -344,24 +425,24 @@ function validateSequence(rows) {
 }
 
 async function captureCanvas(label) {
-  const canvasRect = await evaluate(`(() => {
-    const canvas = document.getElementById('kaminos-volume-canvas');
-    if (!canvas?.classList.contains('active')) return null;
-    const rect = canvas.getBoundingClientRect();
-    return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
-  })()`);
-  if (!canvasRect || canvasRect.width < 100 || canvasRect.height < 100) {
-    throw new Error(`blank-or-partial-cadence-canvas:${JSON.stringify(canvasRect)}`);
+  const sample = await evaluate(
+    "window.__kaminosVolumePrototype.sampleFrame({ advanceSim: false, includeRgba: true, boundarySplatComposition: 'splat-only-v0' })",
+    true,
+  );
+  const image = sample?.image;
+  if (
+    sample?.ok !== true
+    || !Number.isInteger(image?.width)
+    || !Number.isInteger(image?.height)
+    || image.width < 16
+    || image.height < 16
+    || !Array.isArray(image?.rgba)
+    || image.rgba.length !== image.width * image.height * 4
+  ) {
+    throw new Error(`gpu-texture-readback-unavailable:${JSON.stringify(compactReadbackSample(sample))}`);
   }
-  const clip = {
-    x: Math.max(0, Math.floor(canvasRect.x)),
-    y: Math.max(0, Math.floor(canvasRect.y)),
-    width: Math.max(1, Math.floor(canvasRect.width)),
-    height: Math.max(1, Math.floor(canvasRect.height)),
-    scale: 1,
-  };
-  const screenshot = await wsRequest('Page.captureScreenshot', { format: 'png', fromSurface: true, clip });
-  const bytes = Buffer.from(screenshot.data, 'base64');
+  validateReadbackSample(sample);
+  const bytes = encodeRgbaPng(image.width, image.height, image.rgba);
   const metrics = measureBoundarySplatTemporalFrame(bytes);
   const path = resolve(outDir, `exact-state-cadence-${label}.png`);
   writeFileSync(path, bytes);
@@ -369,9 +450,9 @@ async function captureCanvas(label) {
     path,
     sha256: createHash('sha256').update(bytes).digest('hex'),
     bytes: bytes.length,
-    clip,
+    readback: compactReadbackSample(sample),
     metrics,
-    authority: 'cdp-live-exact-state-cadence-canvas-pixels-v0',
+    authority: 'gpu-texture-readback-no-simulator-advance-v0',
   };
   lastTrustworthyEvidence[`${label}CanvasAttempt`] = receipt;
   if (metrics.litPixels <= 200 || metrics.litWidthRatio <= 0 || metrics.litHeightRatio <= 0) {
@@ -380,6 +461,87 @@ async function captureCanvas(label) {
   return {
     bytes,
     receipt,
+  };
+}
+
+function validateReadbackSample(sample) {
+  const mismatches = [];
+  if (sample?.simAdvanced !== false) mismatches.push(['simAdvanced', false, sample?.simAdvanced]);
+  if (sample?.sampleAuthority !== 'render-only-exact-state-cadence-presentation-readback') {
+    mismatches.push(['sampleAuthority', 'render-only-exact-state-cadence-presentation-readback', sample?.sampleAuthority]);
+  }
+  if (sample?.exactStateCadenceReadbackApplied !== true) {
+    mismatches.push(['exactStateCadenceReadbackApplied', true, sample?.exactStateCadenceReadbackApplied]);
+  }
+  const exactStateCadenceReadbackReceipt = sample?.exactStateCadenceReadbackReceipt;
+  if (exactStateCadenceReadbackReceipt?.status !== 'encoded-not-submitted') {
+    mismatches.push(['exactStateCadenceReadbackReceipt.status', 'encoded-not-submitted', exactStateCadenceReadbackReceipt?.status]);
+  }
+  if (exactStateCadenceReadbackReceipt?.oneSimulatorAuthority !== ONE_SIMULATOR_AUTHORITY) {
+    mismatches.push(['exactStateCadenceReadbackReceipt.oneSimulatorAuthority', ONE_SIMULATOR_AUTHORITY, exactStateCadenceReadbackReceipt?.oneSimulatorAuthority]);
+  }
+  if (exactStateCadenceReadbackReceipt?.phaseSource !== PHASE_SOURCE) {
+    mismatches.push(['exactStateCadenceReadbackReceipt.phaseSource', PHASE_SOURCE, exactStateCadenceReadbackReceipt?.phaseSource]);
+  }
+  if (
+    !Number.isFinite(exactStateCadenceReadbackReceipt?.fromSourceStep)
+    || !Number.isFinite(exactStateCadenceReadbackReceipt?.toSourceStep)
+    || exactStateCadenceReadbackReceipt.toSourceStep - exactStateCadenceReadbackReceipt.fromSourceStep !== 1
+  ) {
+    mismatches.push(['exactStateCadenceReadbackReceipt.sourceSteps', 'adjacent', exactStateCadenceReadbackReceipt]);
+  }
+  if (sample?.boundarySplatMode !== 'learned') mismatches.push(['boundarySplatMode', 'learned', sample?.boundarySplatMode]);
+  if (sample?.boundarySplatRendererIdentity !== BOUNDARY_SPLAT_LEARNED_RENDERER_IDENTITY) {
+    mismatches.push(['boundarySplatRendererIdentity', BOUNDARY_SPLAT_LEARNED_RENDERER_IDENTITY, sample?.boundarySplatRendererIdentity]);
+  }
+  if (sample?.boundarySplatAttributeModelIdentity !== BOUNDARY_SPLAT_LEARNED_ATTRIBUTE_MODEL_IDENTITY) {
+    mismatches.push(['boundarySplatAttributeModelIdentity', BOUNDARY_SPLAT_LEARNED_ATTRIBUTE_MODEL_IDENTITY, sample?.boundarySplatAttributeModelIdentity]);
+  }
+  if (!(Number(sample?.boundarySplatCandidateCount) > 0)) mismatches.push(['boundarySplatCandidateCount', '>0', sample?.boundarySplatCandidateCount]);
+  if (!(Number(sample?.boundarySplatInstanceCount) > 0)) mismatches.push(['boundarySplatInstanceCount', '>0', sample?.boundarySplatInstanceCount]);
+  if (Number(sample?.boundarySplatOverflowCount || 0) !== 0) mismatches.push(['boundarySplatOverflowCount', 0, sample?.boundarySplatOverflowCount]);
+  if (Number(sample?.boundarySplatCopyBytesThisFrame || 0) !== 0) mismatches.push(['boundarySplatCopyBytesThisFrame', 0, sample?.boundarySplatCopyBytesThisFrame]);
+  if (sample?.boundarySplatFallbackReason != null) mismatches.push(['boundarySplatFallbackReason', null, sample?.boundarySplatFallbackReason]);
+  if (sample?.boundarySplatReadbackCompositionEffective !== 'splat-only-v0') {
+    mismatches.push(['boundarySplatReadbackCompositionEffective', 'splat-only-v0', sample?.boundarySplatReadbackCompositionEffective]);
+  }
+  if (sample?.boundarySplatReadbackPassReceipt?.splatApplied !== true || sample?.boundarySplatReadbackPassReceipt?.raymarchApplied !== false) {
+    mismatches.push(['boundarySplatReadbackPassReceipt', 'splatApplied=true,raymarchApplied=false', sample?.boundarySplatReadbackPassReceipt]);
+  }
+  if (mismatches.length) throw new Error(`gpu-texture-readback-authority-mismatch:${JSON.stringify(mismatches)}`);
+}
+
+function compactReadbackSample(sample) {
+  return {
+    ok: sample?.ok === true,
+    reason: sample?.reason || null,
+    sampleAuthority: sample?.sampleAuthority || null,
+    simAdvanced: sample?.simAdvanced ?? null,
+    baseFrameCount: Number(sample?.baseFrameCount),
+    baseSimStepCount: Number(sample?.baseSimStepCount),
+    exactStateCadenceReadbackRequested: sample?.exactStateCadenceReadbackRequested ?? null,
+    exactStateCadenceReadbackApplied: sample?.exactStateCadenceReadbackApplied ?? null,
+    exactStateCadenceReadbackReceipt: sample?.exactStateCadenceReadbackReceipt || null,
+    width: Number(sample?.width || sample?.image?.width || 0),
+    height: Number(sample?.height || sample?.image?.height || 0),
+    renderScale: Number(sample?.renderScale),
+    frameCount: Number(sample?.frameCount),
+    simStepCount: Number(sample?.simStepCount),
+    meanLuma: Number(sample?.meanLuma),
+    litPixels: Number(sample?.litPixels),
+    fireLikePixels: Number(sample?.fireLikePixels),
+    emissiveLikePixels: Number(sample?.emissiveLikePixels),
+    boundarySplatMode: sample?.boundarySplatMode || null,
+    boundarySplatRendererIdentity: sample?.boundarySplatRendererIdentity || null,
+    boundarySplatAttributeModelIdentity: sample?.boundarySplatAttributeModelIdentity || null,
+    boundarySplatCandidateCount: Number(sample?.boundarySplatCandidateCount || 0),
+    boundarySplatInstanceCount: Number(sample?.boundarySplatInstanceCount || 0),
+    boundarySplatOverflowCount: Number(sample?.boundarySplatOverflowCount || 0),
+    boundarySplatCopyBytesThisFrame: Number(sample?.boundarySplatCopyBytesThisFrame || 0),
+    boundarySplatFallbackReason: sample?.boundarySplatFallbackReason || null,
+    boundarySplatReadbackCompositionEffective: sample?.boundarySplatReadbackCompositionEffective || null,
+    boundarySplatReadbackPassReceipt: sample?.boundarySplatReadbackPassReceipt || null,
+    advanceSimRequested: false,
   };
 }
 
@@ -440,46 +602,195 @@ async function waitForActiveCadence() {
   throw new Error('exact-state-cadence-telemetry-did-not-settle');
 }
 
-async function existingPersistentBrowserSeat() {
-  const processIdentity = discoverBrowserProcessIdentity(port);
-  if (resolve(processIdentity.browserProfilePath) !== requestedBrowserProfilePath) {
-    throw new Error(`browser-profile-mismatch:${JSON.stringify({
-      requestedBrowserProfilePath,
-      effectiveBrowserProfilePath: resolve(processIdentity.browserProfilePath),
-    })}`);
-  }
-  const version = await cdpFetch('/json/version');
+async function launchOwnedServer() {
+  const stdoutPath = resolve(outDir, 'owned-server.stdout.log');
+  const stderrPath = resolve(outDir, 'owned-server.stderr.log');
+  const stdoutFd = openSync(stdoutPath, 'w');
+  const stderrFd = openSync(stderrPath, 'w');
+  const child = spawn('/usr/bin/python3', [
+    '-m',
+    'http.server',
+    String(serverPort),
+    '--bind',
+    '127.0.0.1',
+    '--directory',
+    serverRoot,
+  ], {
+    cwd: serverRoot,
+    stdio: ['ignore', stdoutFd, stderrFd],
+  });
+  child.__launchError = null;
+  child.once('error', error => { child.__launchError = error; });
+  serverProcess = child;
+  closeSync(stdoutFd);
+  closeSync(stderrFd);
+  await waitForPort(child, serverPort, 'owned-server-did-not-bind');
   return {
-    ...processIdentity,
-    requestedBrowserProfilePath,
-    requestedProfileAgreement: true,
-    browserVersion: version.Browser || null,
-    protocolVersion: version['Protocol-Version'] || null,
-    continuityBoundary: 'existing-persistent-browser-only-no-launch',
+    identity: OWNED_SERVER_IDENTITY,
+    ownership: 'launched-and-terminated-by-witness',
+    processId: child.pid,
+    executable: '/usr/bin/python3',
+    serverRoot,
+    serverPort,
+    effectiveOrigin: `http://127.0.0.1:${serverPort}`,
+    stdoutPath,
+    stderrPath,
   };
 }
 
-function discoverBrowserProcessIdentity(chromePort) {
-  const rows = execFileSync('/bin/ps', ['-axo', 'pid=,ppid=,command='], { encoding: 'utf8' }).split('\n');
-  const marker = `--remote-debugging-port=${chromePort}`;
-  const parent = rows
-    .map(row => row.match(/^\s*(\d+)\s+(\d+)\s+(.+)$/))
-    .filter(Boolean)
-    .map(match => ({ pid: Number(match[1]), ppid: Number(match[2]), command: match[3] }))
-    .find(process => process.command.includes(marker)
-      && process.command.includes('Google Chrome')
-      && !process.command.includes('--type='));
-  if (!parent) throw new Error(`browser-process-not-found-for-cdp-port:${chromePort}`);
-  const profileMatch = parent.command.match(/--user-data-dir=(?:"([^"]+)"|'([^']+)'|(\S+))/);
-  const browserProfilePath = profileMatch?.[1] || profileMatch?.[2] || profileMatch?.[3] || null;
-  if (!browserProfilePath) throw new Error(`browser-profile-not-found-for-process:${parent.pid}`);
+async function launchOwnedBrowser() {
+  if (existsSync(requestedBrowserProfilePath)) {
+    throw new Error(`browser-profile-already-exists:${requestedBrowserProfilePath}`);
+  }
+  mkdirSync(requestedBrowserProfilePath, { recursive: true });
+  browserProfileOwned = true;
+  const stdoutPath = resolve(outDir, 'owned-browser.stdout.log');
+  const stderrPath = resolve(outDir, 'owned-browser.stderr.log');
+  const stdoutFd = openSync(stdoutPath, 'w');
+  const stderrFd = openSync(stderrPath, 'w');
+  const launchArgs = [
+    '--headless=new',
+    '--enable-unsafe-webgpu',
+    '--disable-background-timer-throttling',
+    '--disable-renderer-backgrounding',
+    '--disable-backgrounding-occluded-windows',
+    '--disable-default-apps',
+    '--disable-component-update',
+    '--no-first-run',
+    '--no-default-browser-check',
+    '--window-size=1440,900',
+    `--remote-debugging-port=${port}`,
+    `--user-data-dir=${requestedBrowserProfilePath}`,
+    'about:blank',
+  ];
+  const child = spawn(chromeExecutable, launchArgs, {
+    stdio: ['ignore', stdoutFd, stderrFd],
+  });
+  child.__launchError = null;
+  child.once('error', error => { child.__launchError = error; });
+  browserProcess = child;
+  closeSync(stdoutFd);
+  closeSync(stderrFd);
+  await waitForPort(child, port, 'owned-browser-did-not-open-cdp');
+  const version = await waitForCdpVersion(child);
   return {
-    browserProcessId: parent.pid,
-    browserParentProcessId: parent.ppid,
-    browserProfilePath,
-    chromePort,
-    authority: 'effective-os-process-command-line',
+    identity: OWNED_BROWSER_IDENTITY,
+    ownership: 'launched-and-terminated-by-witness',
+    processId: child.pid,
+    executable: chromeExecutable,
+    chromePort: port,
+    browserProfilePath: requestedBrowserProfilePath,
+    browserVersion: version.Browser || null,
+    protocolVersion: version['Protocol-Version'] || null,
+    launchArgs,
+    stdoutPath,
+    stderrPath,
   };
+}
+
+async function waitForCdpVersion(child) {
+  let lastError = null;
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (child.__launchError) throw new Error(`owned-browser-did-not-open-cdp:launch-error:${child.__launchError.message}`);
+    if (child.exitCode !== null) throw new Error(`owned-browser-did-not-open-cdp:process-exited:${child.exitCode}`);
+    try {
+      return await cdpFetch('/json/version');
+    } catch (error) {
+      lastError = error;
+    }
+    await delay(50);
+  }
+  throw new Error(`owned-browser-did-not-open-cdp:${lastError?.message || 'timeout'}`);
+}
+
+async function waitForPort(child, expectedPort, failureName) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (child.__launchError) throw new Error(`${failureName}:launch-error:${child.__launchError.message}`);
+    if (child.exitCode !== null) throw new Error(`${failureName}:process-exited:${child.exitCode}`);
+    if (await portIsOpen(expectedPort)) return;
+    await delay(50);
+  }
+  throw new Error(`${failureName}:timeout:${expectedPort}`);
+}
+
+function portIsOpen(expectedPort) {
+  return new Promise(resolveOpen => {
+    const socket = createConnection({ host: '127.0.0.1', port: expectedPort });
+    let settled = false;
+    const finish = value => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      resolveOpen(value);
+    };
+    socket.setTimeout(250);
+    socket.once('connect', () => finish(true));
+    socket.once('timeout', () => finish(false));
+    socket.once('error', () => finish(false));
+  });
+}
+
+async function captureCleanupOutcome(label, operation) {
+  try {
+    const receipt = await operation();
+    return { ok: true, ...(receipt || {}), label };
+  } catch (error) {
+    return {
+      ok: false,
+      label,
+      error: error?.stack || error?.message || String(error),
+    };
+  }
+}
+
+async function terminateOwnedProcess(child, label) {
+  if (!child) return { label, ownedProcessStarted: false, terminated: true, signal: null };
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return {
+      label,
+      ownedProcessStarted: true,
+      processId: child.pid,
+      terminated: true,
+      exitCode: child.exitCode,
+      signal: child.signalCode,
+    };
+  }
+  child.kill('SIGTERM');
+  if (await waitForProcessExit(child, 3000)) {
+    return {
+      label,
+      ownedProcessStarted: true,
+      processId: child.pid,
+      terminated: true,
+      exitCode: child.exitCode,
+      signal: child.signalCode || 'SIGTERM',
+    };
+  }
+  child.kill('SIGKILL');
+  const terminated = await waitForProcessExit(child, 3000);
+  return {
+    label,
+    ownedProcessStarted: true,
+    processId: child.pid,
+    terminated,
+    exitCode: child.exitCode,
+    signal: child.signalCode || 'SIGKILL',
+  };
+}
+
+function waitForProcessExit(child, timeoutMs) {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true);
+  return new Promise(resolveExit => {
+    const timeout = setTimeout(() => {
+      child.removeListener('exit', onExit);
+      resolveExit(false);
+    }, timeoutMs);
+    const onExit = () => {
+      clearTimeout(timeout);
+      resolveExit(true);
+    };
+    child.once('exit', onExit);
+  });
 }
 
 async function cdpFetch(path) {
@@ -490,9 +801,8 @@ async function cdpFetch(path) {
 
 async function findPage() {
   const pages = await cdpFetch('/json/list');
-  const page = pages.find(target => target.type === 'page' && target.url.includes('kaminos_volume_smoke=1'))
-    || pages.find(target => target.type === 'page');
-  if (!page?.webSocketDebuggerUrl) throw new Error('existing Chrome has no targetable page');
+  const page = pages.find(target => target.type === 'page');
+  if (!page?.webSocketDebuggerUrl) throw new Error('owned Chrome has no targetable page');
   return page;
 }
 
@@ -569,8 +879,14 @@ function canonicalRouteEntries(url) {
 function classifyFailure(error, phase) {
   const message = error?.message || String(error);
   for (const name of [
-    'browser-process-not-found',
-    'browser-profile-mismatch',
+    'server-port-already-in-use',
+    'browser-debug-port-already-in-use',
+    'requested-server-origin-mismatch',
+    'server-root-not-found',
+    'chrome-executable-not-found',
+    'browser-profile-already-exists',
+    'owned-server-did-not-bind',
+    'owned-browser-did-not-open-cdp',
     'requested-effective-route-mismatch',
     'stale-default-or-fallback-cadence-config',
     'cadence-runtime-refused',
@@ -584,11 +900,56 @@ function classifyFailure(error, phase) {
     'producer-remains-raf-locked',
     'presentation-source-regressed',
     'blank-or-partial-cadence-canvas',
+    'gpu-texture-readback-unavailable',
+    'gpu-texture-readback-authority-mismatch',
     'browser-target-unreachable-after-cadence-witness',
   ]) {
     if (message.includes(name)) return name;
   }
   return phase;
+}
+
+function encodeRgbaPng(width, height, rgba) {
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  const stride = width * 4;
+  const raw = Buffer.alloc((stride + 1) * height);
+  const rgbaBytes = Buffer.from(rgba);
+  for (let y = 0; y < height; y += 1) {
+    const row = y * (stride + 1);
+    raw[row] = 0;
+    rgbaBytes.copy(raw, row + 1, y * stride, (y + 1) * stride);
+  }
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', ihdr),
+    pngChunk('IDAT', deflateSync(raw)),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+function pngChunk(type, data) {
+  const typeBuffer = Buffer.from(type, 'ascii');
+  const chunk = Buffer.alloc(12 + data.length);
+  chunk.writeUInt32BE(data.length, 0);
+  typeBuffer.copy(chunk, 4);
+  data.copy(chunk, 8);
+  chunk.writeUInt32BE(crc32(Buffer.concat([typeBuffer, data])), 8 + data.length);
+  return chunk;
+}
+
+function crc32(buffer) {
+  let crc = 0xffffffff;
+  for (const byte of buffer) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0;
 }
 
 function writeReport(report) {
