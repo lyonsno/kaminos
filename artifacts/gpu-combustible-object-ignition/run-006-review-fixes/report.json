@@ -1,0 +1,96 @@
+{
+  "schema": "kaminos.gpu-combustible-object-ignition-witness-report.v0",
+  "requestedUrl": "http://127.0.0.1:8097/gpu-combustible-object-ignition.html",
+  "effectiveUrl": "http://127.0.0.1:8097/gpu-combustible-object-ignition.html",
+  "requestedRoute": "kaminos.gpu-combustible-object-ignition.v0",
+  "effectiveRoute": "kaminos.gpu-combustible-object-ignition.v0",
+  "authority": null,
+  "phase": "freezing-terminal-state",
+  "browserVersion": {
+    "Browser": "Chrome/150.0.7871.128",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/150.0.0.0 Safari/537.36",
+    "V8-Version": "15.0.1240245",
+    "WebKit-Version": "537.36 (@81891e5ca708047763816c778216799ef14c66cb)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:19477/devtools/browser/9d02c334-5f05-4721-a9d7-95b747aaaba6"
+  },
+  "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "debugPort": 19477,
+  "requestedViewport": {
+    "width": 1468,
+    "height": 960
+  },
+  "ignitionFrames": 180,
+  "finalFrames": 100,
+  "userDataDir": "/tmp/kaminos-gpu-object-ignition-19477-53454",
+  "screenshots": {
+    "initial": {
+      "path": "/private/tmp/kaminos-sinter-gpu-object-ignition-0717/artifacts/gpu-combustible-object-ignition/run-006-review-fixes/final.initial.png",
+      "bytes": 124365
+    },
+    "ignition": {
+      "path": "/private/tmp/kaminos-sinter-gpu-object-ignition-0717/artifacts/gpu-combustible-object-ignition/run-006-review-fixes/final.ignition.png",
+      "bytes": 129123
+    },
+    "final": null
+  },
+  "stderrTail": "\nDevTools listening on ws://127.0.0.1:19477/devtools/browser/9d02c334-5f05-4721-a9d7-95b747aaaba6\nTrying to load the allocator multiple times. This is *not* supported.\n[53522:6986969:0717/193315.397232:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[53522:6986969:0717/193315.397366:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[53522:6986969:0717/193315.397384:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n",
+  "browserEvents": [],
+  "initialState": {
+    "schema": "kaminos.gpu-combustible-object-ignition-browser.v0",
+    "requestedRoute": "kaminos.gpu-combustible-object-ignition.v0",
+    "effectiveRoute": "kaminos.gpu-combustible-object-ignition.v0",
+    "authority": "same-device-pyro-material-emission-mechanics-v0",
+    "loopSchema": "kaminos.gpu-combustible-object-loop.v0",
+    "status": "running",
+    "failurePhase": null,
+    "error": null,
+    "fallback": null,
+    "frameCount": 18,
+    "simStepCount": 18,
+    "backend": "WebGPU:apple",
+    "volumeRoute": "native-3d-compute-fluid-raymarch-v0",
+    "gpuLoop": {
+      "schema": "kaminos.gpu-combustible-object-loop.v0",
+      "authority": "same-device-pyro-material-emission-mechanics-v0",
+      "status": "active",
+      "dispatchCount": 14,
+      "presentationCount": 14,
+      "hostCausalFeedbackCount": 0,
+      "runtimeReadbackCount": 0,
+      "sourceFrameHash": 1196447055
+    },
+    "terminalReceipt": null
+  },
+  "ignitionState": {
+    "schema": "kaminos.gpu-combustible-object-ignition-browser.v0",
+    "requestedRoute": "kaminos.gpu-combustible-object-ignition.v0",
+    "effectiveRoute": "kaminos.gpu-combustible-object-ignition.v0",
+    "authority": "same-device-pyro-material-emission-mechanics-v0",
+    "loopSchema": "kaminos.gpu-combustible-object-loop.v0",
+    "status": "running",
+    "failurePhase": null,
+    "error": null,
+    "fallback": null,
+    "frameCount": 215,
+    "simStepCount": 215,
+    "backend": "WebGPU:apple",
+    "volumeRoute": "native-3d-compute-fluid-raymarch-v0",
+    "gpuLoop": {
+      "schema": "kaminos.gpu-combustible-object-loop.v0",
+      "authority": "same-device-pyro-material-emission-mechanics-v0",
+      "status": "active",
+      "dispatchCount": 211,
+      "presentationCount": 211,
+      "hostCausalFeedbackCount": 0,
+      "runtimeReadbackCount": 0,
+      "sourceFrameHash": 1196447055
+    },
+    "terminalReceipt": null
+  },
+  "finalState": null,
+  "terminalReceipt": null,
+  "pixelChecks": null,
+  "status": "failed",
+  "error": "Error: Error: GPU combustible verdict incomplete: 0x143\n    at validateGpuCombustibleObjectTerminalReceipt (http://127.0.0.1:8097/gpu-combustible-object-loop.mjs:468:11)\n    at Object.readTerminalReceipt (http://127.0.0.1:8097/gpu-combustible-object-loop.mjs:783:12)\n    at async Object.readGpuCombustibleObjectTerminalReceipt (http://127.0.0.1:8097/volume-core.js:13377:23)\n    at async http://127.0.0.1:8097/gpu-combustible-object-ignition.html:216:27\n    at evaluate (file:///private/tmp/kaminos-sinter-gpu-object-ignition-0717/gpu-combustible-object-ignition-witness.mjs:146:11)\n    at async file:///private/tmp/kaminos-sinter-gpu-object-ignition-0717/gpu-combustible-object-ignition-witness.mjs:238:21"
+}

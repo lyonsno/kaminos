@@ -185,6 +185,21 @@ const validated = volume.validateCombustibleObjectSourceDescriptor(sourceFrame, 
 });
 assert.equal(validated, sourceFrame);
 assert.throws(
+  () => volume.validateCombustibleObjectSourceDescriptor({ ...sourceFrame, records: undefined }, { device: sharedDevice }),
+  /packed record accounting mismatch/,
+  'ordinary CPU-authored descriptors still require concrete packed-record accounting',
+);
+const gpuAuthoredDynamicFrame = {
+  ...sourceFrame,
+  records: undefined,
+  gpuAuthoredDynamic: true,
+};
+assert.equal(
+  volume.validateCombustibleObjectSourceDescriptor(gpuAuthoredDynamicFrame, { device: sharedDevice }),
+  gpuAuthoredDynamicFrame,
+  'an explicitly GPU-authored dynamic source may publish buffer authority without a stale CPU record mirror',
+);
+assert.throws(
   () => volume.validateCombustibleObjectSourceDescriptor(sourceFrame, { device: { queue: sharedDevice.queue } }),
   /same GPUDevice/,
   'cross-device proxy buffers fail closed',

@@ -22,8 +22,8 @@ const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json
 const port = positiveInteger(args.get('--debug-port'), 9472);
 const width = positiveInteger(args.get('--width'), 1468);
 const height = positiveInteger(args.get('--height'), 960);
-const ignitionFrames = positiveInteger(args.get('--ignition-frames'), 180);
-const finalFrames = positiveInteger(args.get('--final-frames'), 100);
+const ignitionFrames = positiveInteger(args.get('--ignition-frames'), 145);
+const finalFrames = positiveInteger(args.get('--final-frames'), 135);
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-gpu-object-ignition-${port}-${process.pid}`;
 const headless = process.env.KAMINOS_WITNESS_HEADLESS !== '0';
@@ -241,6 +241,9 @@ try {
   assert.equal(terminalReceipt.status, 'frozen-terminal-readback');
   assert.equal(terminalReceipt.hostCausalFeedbackCount, 0);
   assert.equal(terminalReceipt.runtimeReadbackCount, 1);
+  assert.equal(terminalReceipt.terminalMapAsyncCount, 1);
+  assert.equal(terminalReceipt.terminalMappedBufferCount, 1);
+  assert.equal(terminalReceipt.terminalCopiedSourceBufferCount, 4);
   assert.equal(terminalReceipt.eventLog.overflow, 0);
   assert.equal(terminalReceipt.sourceHeader.overflowCount, 0);
   const targetMaterial = terminalReceipt.materials.find(material => material.objectId === 2);
@@ -255,6 +258,13 @@ try {
     'ignition capture did not land between target ignition and support loss',
   );
   assert.ok(targetMaterial.emittedHeat > 0 && targetMaterial.remainingFuel < 0.56, 'target did not become a new GPU fire source');
+  assert.equal(terminalReceipt.receiverAudit.auditObjectId, targetMaterial.objectId);
+  assert.equal(terminalReceipt.receiverAudit.rejectedRecords, 0);
+  assert.ok(terminalReceipt.receiverAudit.acceptedRecords > 0, 'target source was not accepted by the Pyro receiver');
+  assert.ok(
+    terminalReceipt.receiverAudit.injectedHeat > 0 && terminalReceipt.receiverAudit.injectedFuel > 0,
+    'accepted target source did not inject heat and fuel into Pyro',
+  );
   assert.ok(targetMaterial.angleRad > 0.2 && targetMaterial.verticalDrop > 0.2, 'target GPU mechanics did not rotate and fall');
   assert.equal(controlMaterial.phase, 0);
   assert.equal(controlMaterial.emittedHeat, 0);
@@ -268,6 +278,12 @@ try {
   writeReport({ status: 'ok' });
   process.stdout.write(`${reportPath}\n`);
 } catch (error) {
+  if (ws && !finalState) {
+    try {
+      finalState = await evaluate('window.kaminosGpuCombustibleObjectDebugState()');
+      terminalReceipt ||= finalState?.gpuLoop?.lastTerminalReceipt || null;
+    } catch {}
+  }
   writeReport({ status: 'failed', error: error?.stack || error?.message || String(error) });
   process.stderr.write(`${error?.stack || error}\n`);
   process.exitCode = 1;

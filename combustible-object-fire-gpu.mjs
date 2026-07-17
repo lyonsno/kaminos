@@ -5,8 +5,9 @@ export const COMBUSTIBLE_OBJECT_SOURCE_RECORD_BYTES = 128;
 export const COMBUSTIBLE_OBJECT_SOURCE_RECORD_FLOATS = 32;
 export const COMBUSTIBLE_OBJECT_FIRE_ROUTE = 'same-device-combustible-object-source-to-native-pyro-v0';
 export const COMBUSTIBLE_OBJECT_FIRE_FIXED_POINT_SCALE = 65536;
+export const COMBUSTIBLE_OBJECT_FIRE_CONSUMER_STATS_BYTES = 36 * Uint32Array.BYTES_PER_ELEMENT;
 
-const CONSUMER_STATS_WORDS = 20;
+const CONSUMER_STATS_WORDS = COMBUSTIBLE_OBJECT_FIRE_CONSUMER_STATS_BYTES / Uint32Array.BYTES_PER_ELEMENT;
 const CONSUMER_PARAMS_BYTES = 112;
 const ACCUMULATION_WORDS = 5;
 
@@ -25,6 +26,52 @@ function finiteVector(value, length, label) {
 
 function fixedPoint(value) {
   return Math.max(0, Math.min(0xffffffff, Math.round((Number(value) || 0) * COMBUSTIBLE_OBJECT_FIRE_FIXED_POINT_SCALE))) >>> 0;
+}
+
+export function decodeCombustibleObjectFireConsumerStats(bytes) {
+  const words = bytes instanceof Uint32Array ? bytes : new Uint32Array(bytes);
+  if (words.length < CONSUMER_STATS_WORDS) {
+    throw new Error(`Combustible object receiver stats require ${CONSUMER_STATS_WORDS} words`);
+  }
+  const statusNames = ['idle', 'applied', 'invalid-source-header', 'stale-source-tick', 'scattering', 'fresh-no-contact'];
+  return {
+    schema: 'kaminos.pyro-combustible-object-source-consumer-receipt.v0',
+    routeIdentity: COMBUSTIBLE_OBJECT_FIRE_ROUTE,
+    status: statusNames[words[1]] || `unknown-${words[1]}`,
+    lastConsumedTick: words[0],
+    acceptedRecords: words[2],
+    rejectedRecords: words[3],
+    touchedCells: words[4],
+    injectedHeat: words[5] / COMBUSTIBLE_OBJECT_FIRE_FIXED_POINT_SCALE,
+    injectedFuel: words[6] / COMBUSTIBLE_OBJECT_FIRE_FIXED_POINT_SCALE,
+    injectedSoot: words[7] / COMBUSTIBLE_OBJECT_FIRE_FIXED_POINT_SCALE,
+    injectedSmoke: words[8] / COMBUSTIBLE_OBJECT_FIRE_FIXED_POINT_SCALE,
+    sourceGeneration: words[9],
+    topologyEpoch: words[10],
+    sourceFrameHash: words[11],
+    sourceCount: words[12],
+    packedCount: words[13],
+    overflowCount: words[14],
+    acceptedCell: words[2] > 0 ? [words[15], words[16], words[17]] : null,
+    materialStep: words[18],
+    auditedAcceptedRecords: words[19],
+    audit: {
+      auditObjectId: words[20],
+      acceptedRecords: words[21],
+      rejectedRecords: words[22],
+      targetOnlyDispatches: words[23],
+      injectedHeat: words[24] / COMBUSTIBLE_OBJECT_FIRE_FIXED_POINT_SCALE,
+      injectedFuel: words[25] / COMBUSTIBLE_OBJECT_FIRE_FIXED_POINT_SCALE,
+      injectedSoot: words[26] / COMBUSTIBLE_OBJECT_FIRE_FIXED_POINT_SCALE,
+      injectedSmoke: words[27] / COMBUSTIBLE_OBJECT_FIRE_FIXED_POINT_SCALE,
+      firstAcceptedStep: words[28],
+      lastAcceptedStep: words[29],
+      acceptedCell: words[21] > 0 ? [words[30], words[31], words[32]] : null,
+      sourceGeneration: words[33],
+      topologyEpoch: words[34],
+      sourceFrameHash: words[35],
+    },
+  };
 }
 
 function multiplyMatrix4(a, b) {
@@ -235,7 +282,23 @@ struct ConsumerStats {
   acceptedCellY: atomic<u32>,
   acceptedCellZ: atomic<u32>,
   materialStep: atomic<u32>,
-  reserved: atomic<u32>,
+  auditedAcceptedRecords: atomic<u32>,
+  auditObjectId: atomic<u32>,
+  auditAcceptedRecords: atomic<u32>,
+  auditRejectedRecords: atomic<u32>,
+  auditTargetOnlyDispatches: atomic<u32>,
+  auditInjectedHeat: atomic<u32>,
+  auditInjectedFuel: atomic<u32>,
+  auditInjectedSoot: atomic<u32>,
+  auditInjectedSmoke: atomic<u32>,
+  auditFirstAcceptedStep: atomic<u32>,
+  auditLastAcceptedStep: atomic<u32>,
+  auditAcceptedCellX: atomic<u32>,
+  auditAcceptedCellY: atomic<u32>,
+  auditAcceptedCellZ: atomic<u32>,
+  auditSourceGeneration: atomic<u32>,
+  auditTopologyEpoch: atomic<u32>,
+  auditSourceFrameHash: atomic<u32>,
 };
 
 struct ConsumerParams {
@@ -294,6 +357,7 @@ fn clearStats() {
   atomicStore(&stats.acceptedCellY, 0u);
   atomicStore(&stats.acceptedCellZ, 0u);
   atomicStore(&stats.materialStep, sourceHeader[18]);
+  atomicStore(&stats.auditedAcceptedRecords, 0u);
 }
 
 @compute @workgroup_size(64)
@@ -311,15 +375,19 @@ fn scatter(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (sourceIndex == 0u) { atomicStore(&stats.status, 4u); }
   if (sourceIndex >= sourceHeader[9]) { return; }
   let record = sourceRecords[sourceIndex];
+  let sourceObjectId = u32(record.sourceGenerationEpochTick.w + 0.5);
+  let audited = params.expectedIdentity.w != 0u && sourceObjectId == params.expectedIdentity.w;
   if (u32(record.sourceGenerationEpochTick.x + 0.5) != params.expectedIdentity.x
     || u32(record.sourceGenerationEpochTick.y + 0.5) != params.expectedIdentity.y
     || u32(record.sourceGenerationEpochTick.z + 0.5) != writeTick) {
     atomicAdd(&stats.rejectedRecords, 1u);
+    if (audited) { atomicAdd(&stats.auditRejectedRecords, 1u); }
     return;
   }
   let receiver = params.objectToReceiver * vec4<f32>(record.localPositionRadius.xyz, 1.0);
   if (any(receiver.xyz < vec3<f32>(0.0)) || any(receiver.xyz > vec3<f32>(1.0))) {
     atomicAdd(&stats.rejectedRecords, 1u);
+    if (audited) { atomicAdd(&stats.auditRejectedRecords, 1u); }
     return;
   }
   let cell = min(vec3<u32>(receiver.xyz * f32(GRID)), vec3<u32>(GRID - 1u));
@@ -354,6 +422,7 @@ fn scatter(@builtin(global_invocation_id) gid: vec3<u32>) {
   }
   if (!(weightSum > 0.0)) {
     atomicAdd(&stats.rejectedRecords, 1u);
+    if (audited) { atomicAdd(&stats.auditRejectedRecords, 1u); }
     return;
   }
   for (var z = lower.z; z <= upper.z; z += 1u) {
@@ -380,6 +449,19 @@ fn scatter(@builtin(global_invocation_id) gid: vec3<u32>) {
     atomicStore(&stats.acceptedCellX, cell.x);
     atomicStore(&stats.acceptedCellY, cell.y);
     atomicStore(&stats.acceptedCellZ, cell.z);
+  }
+  if (audited) {
+    atomicAdd(&stats.auditedAcceptedRecords, 1u);
+    if (atomicAdd(&stats.auditAcceptedRecords, 1u) == 0u) {
+      atomicStore(&stats.auditFirstAcceptedStep, sourceHeader[18]);
+      atomicStore(&stats.auditAcceptedCellX, cell.x);
+      atomicStore(&stats.auditAcceptedCellY, cell.y);
+      atomicStore(&stats.auditAcceptedCellZ, cell.z);
+    }
+    atomicStore(&stats.auditLastAcceptedStep, sourceHeader[18]);
+    atomicStore(&stats.auditSourceGeneration, sourceHeader[2]);
+    atomicStore(&stats.auditTopologyEpoch, sourceHeader[3]);
+    atomicStore(&stats.auditSourceFrameHash, sourceHeader[7]);
   }
 }
 
@@ -425,13 +507,24 @@ fn apply(@builtin(global_invocation_id) gid: vec3<u32>) {
       atomicAdd(&stats.injectedSmoke, fixedPoint(appliedSmoke));
     }
   }
-  if (cellIndex == 0u) {
-    atomicStore(&stats.lastConsumedTick, sourceHeader[4]);
-    if (atomicLoad(&stats.acceptedRecords) > 0u) {
-      atomicStore(&stats.status, 1u);
-    } else {
-      atomicStore(&stats.status, 5u);
-    }
+}
+
+@compute @workgroup_size(1)
+fn finalizeApply() {
+  atomicStore(&stats.lastConsumedTick, sourceHeader[4]);
+  let accepted = atomicLoad(&stats.acceptedRecords);
+  let auditedAccepted = atomicLoad(&stats.auditedAcceptedRecords);
+  if (accepted > 0u) {
+    atomicStore(&stats.status, 1u);
+  } else {
+    atomicStore(&stats.status, 5u);
+  }
+  if (accepted > 0u && auditedAccepted == accepted) {
+    atomicAdd(&stats.auditTargetOnlyDispatches, 1u);
+    atomicAdd(&stats.auditInjectedHeat, atomicLoad(&stats.injectedHeat));
+    atomicAdd(&stats.auditInjectedFuel, atomicLoad(&stats.injectedFuel));
+    atomicAdd(&stats.auditInjectedSoot, atomicLoad(&stats.injectedSoot));
+    atomicAdd(&stats.auditInjectedSmoke, atomicLoad(&stats.injectedSmoke));
   }
 }
 `;
@@ -464,10 +557,11 @@ export async function createCombustibleObjectFireReceiver({
     ],
   });
   const pipelineLayout = device.createPipelineLayout({ label: 'kaminos combustible object fire receiver pipeline', bindGroupLayouts: [bindGroupLayout] });
-  const [clearPipeline, scatterPipeline, applyPipeline] = await Promise.all([
+  const [clearPipeline, scatterPipeline, applyPipeline, finalizePipeline] = await Promise.all([
     device.createComputePipelineAsync({ label: 'kaminos combustible object clear stats', layout: pipelineLayout, compute: { module: shader, entryPoint: 'clearStats' } }),
     device.createComputePipelineAsync({ label: 'kaminos combustible object scatter', layout: pipelineLayout, compute: { module: shader, entryPoint: 'scatter' } }),
     device.createComputePipelineAsync({ label: 'kaminos combustible object apply', layout: pipelineLayout, compute: { module: shader, entryPoint: 'apply' } }),
+    device.createComputePipelineAsync({ label: 'kaminos combustible object finalize apply', layout: pipelineLayout, compute: { module: shader, entryPoint: 'finalizeApply' } }),
   ]);
   const accumulationBuffer = device.createBuffer({
     label: `kaminos combustible object accumulation ${grid}^3`,
@@ -517,11 +611,12 @@ export async function createCombustibleObjectFireReceiver({
     const params = new ArrayBuffer(CONSUMER_PARAMS_BYTES);
     const paramsU32 = new Uint32Array(params);
     const paramsF32 = new Float32Array(params);
+    const auditObjectId = nonnegativeInteger(nextDescriptor.auditObjectId ?? 0, 'Combustible object receiver audit object id');
     paramsU32.set([
       nextDescriptor.allocationGeneration >>> 0,
       nextDescriptor.topologyEpoch >>> 0,
       nextDescriptor.sourceFrameHash >>> 0,
-      0,
+      auditObjectId >>> 0,
     ], 0);
     paramsF32.set(objectToReceiver, 4);
     paramsF32.set(fieldTransfer, 20);
@@ -532,6 +627,9 @@ export async function createCombustibleObjectFireReceiver({
       nextDescriptor.emittedHeat,
     ], 24);
     device.queue.writeBuffer(paramsBuffer, 0, params);
+    const auditWords = new Uint32Array(CONSUMER_STATS_WORDS - 20);
+    auditWords[0] = auditObjectId;
+    device.queue.writeBuffer(statsBuffer, 20 * Uint32Array.BYTES_PER_ELEMENT, auditWords);
     if (descriptor?.headerBuffer !== nextDescriptor.headerBuffer || descriptor?.recordsBuffer !== nextDescriptor.recordsBuffer) {
       bindGroups = new Map();
     }
@@ -575,6 +673,8 @@ export async function createCombustibleObjectFireReceiver({
     pass.dispatchWorkgroups(Math.max(1, Math.ceil(descriptor.capacity / 64)));
     pass.setPipeline(applyPipeline);
     pass.dispatchWorkgroups(Math.ceil((grid * grid * grid) / 64));
+    pass.setPipeline(finalizePipeline);
+    pass.dispatchWorkgroups(1);
     pass.end();
     dispatchCount += 1;
     lastScheduledIdentity = scheduledIdentity;
@@ -592,27 +692,8 @@ export async function createCombustibleObjectFireReceiver({
       await readbackBuffer.mapAsync(GPUMapMode.READ);
       const words = new Uint32Array(readbackBuffer.getMappedRange().slice(0));
       readbackBuffer.unmap();
-      const statusNames = ['idle', 'applied', 'invalid-source-header', 'stale-source-tick', 'scattering', 'fresh-no-contact'];
       lastReceipt = {
-        schema: 'kaminos.pyro-combustible-object-source-consumer-receipt.v0',
-        routeIdentity: COMBUSTIBLE_OBJECT_FIRE_ROUTE,
-        status: statusNames[words[1]] || `unknown-${words[1]}`,
-        lastConsumedTick: words[0],
-        acceptedRecords: words[2],
-        rejectedRecords: words[3],
-        touchedCells: words[4],
-        injectedHeat: words[5] / COMBUSTIBLE_OBJECT_FIRE_FIXED_POINT_SCALE,
-        injectedFuel: words[6] / COMBUSTIBLE_OBJECT_FIRE_FIXED_POINT_SCALE,
-        injectedSoot: words[7] / COMBUSTIBLE_OBJECT_FIRE_FIXED_POINT_SCALE,
-        injectedSmoke: words[8] / COMBUSTIBLE_OBJECT_FIRE_FIXED_POINT_SCALE,
-        sourceGeneration: words[9],
-        topologyEpoch: words[10],
-        sourceFrameHash: words[11],
-        sourceCount: words[12],
-        packedCount: words[13],
-        overflowCount: words[14],
-        acceptedCell: words[2] > 0 ? [words[15], words[16], words[17]] : null,
-        materialStep: words[18],
+        ...decodeCombustibleObjectFireConsumerStats(words),
         sameDevice: descriptor.device === device && descriptor.queue === device.queue,
         transformIdentity: transform.id,
         fieldTransfer: [...transfer],
@@ -657,6 +738,16 @@ export async function createCombustibleObjectFireReceiver({
     setSource,
     encode,
     readReceipt,
+    terminalStatsDescriptor() {
+      if (!descriptor || destroyed) throw new Error('Combustible object receiver terminal stats are unavailable');
+      return {
+        schema: 'kaminos.pyro-combustible-object-source-consumer-stats-buffer.v0',
+        routeIdentity: COMBUSTIBLE_OBJECT_FIRE_ROUTE,
+        buffer: statsBuffer,
+        bytes: COMBUSTIBLE_OBJECT_FIRE_CONSUMER_STATS_BYTES,
+        auditObjectId: descriptor.auditObjectId ?? 0,
+      };
+    },
     debug,
     clearSource() {
       descriptor = null;

@@ -8,6 +8,7 @@ import { validateGpuCombustibleObjectPixelSequence } from '../gpu-combustible-ob
 
 const volumeSource = await readFile(new URL('../volume-core.js', import.meta.url), 'utf8');
 const runtimeSource = await readFile(new URL('../gpu-combustible-object-loop.mjs', import.meta.url), 'utf8');
+const receiverSource = await readFile(new URL('../combustible-object-fire-gpu.mjs', import.meta.url), 'utf8');
 
 assert.equal(
   volume.GPU_COMBUSTIBLE_OBJECT_LOOP_SCHEMA,
@@ -50,13 +51,20 @@ assert.ok(
 );
 assert.match(volumeSource, /gpuCombustibleObjectLoop\.encodePresentation\(encoder, currentTexture\.createView\(\)\)/);
 const liveEncodeStart = runtimeSource.indexOf('function encode(encoder, fluidBuffer)');
-const terminalReadStart = runtimeSource.indexOf('async function readBuffer(buffer, size, label)');
+const terminalReadStart = runtimeSource.indexOf('async function readTerminalReceipt(receiverStatsDescriptor)');
 assert.ok(liveEncodeStart >= 0 && terminalReadStart > liveEncodeStart);
 assert.doesNotMatch(
   runtimeSource.slice(liveEncodeStart, terminalReadStart),
   /mapAsync|MAP_READ/,
   'the live GPU material/emission/presentation loop never maps state to the host',
 );
+assert.doesNotMatch(
+  runtimeSource,
+  /Promise\.all\(\[\s*readBuffer\(materialBuffer[\s\S]*readBuffer\(eventBuffer[\s\S]*readBuffer\(sourceHeaderBuffer/,
+  'terminal evidence is copied into one staging buffer rather than mapped from three hidden buffers',
+);
+assert.match(receiverSource, /terminalStatsDescriptor\s*\(/, 'the receiver exposes its GPU stats buffer for combined terminal evidence');
+assert.match(runtimeSource, /receiverAudit/, 'the terminal receipt carries target-specific receiver acceptance evidence');
 
 const pageUrl = new URL('../gpu-combustible-object-ignition.html', import.meta.url);
 const witnessUrl = new URL('../gpu-combustible-object-ignition-witness.mjs', import.meta.url);
@@ -79,6 +87,8 @@ assert.match(witnessSource, /hostCausalFeedbackCount/);
 assert.match(witnessSource, /target.*firstExposureStep|firstExposureStep.*target/s);
 assert.match(witnessSource, /supportLossStep/);
 assert.match(witnessSource, /impactStep/);
+assert.match(witnessSource, /receiverAudit\.auditObjectId/);
+assert.match(witnessSource, /receiverAudit\.injectedHeat/);
 assert.match(
   witnessSource,
   /validateGpuCombustibleObjectPixelSequence/,
@@ -88,6 +98,45 @@ assert.match(
   witnessSource,
   /ignitionState\.simStepCount[\s\S]*targetMaterial\.ignitionStep[\s\S]*targetMaterial\.supportLossStep/,
   'terminal event evidence proves the ignition capture occurred after ignition and before support loss',
+);
+
+const recordedReport = JSON.parse(await readFile(
+  new URL('../artifacts/gpu-combustible-object-ignition/run-003/report.json', import.meta.url),
+  'utf8',
+));
+assert.throws(
+  () => volume.validateGpuCombustibleObjectTerminalReceipt(recordedReport.terminalReceipt),
+  /receiver|map|terminal/i,
+  'pre-fix evidence without literal map accounting and target receiver acceptance cannot close the revised contract',
+);
+const revisedReceipt = structuredClone(recordedReport.terminalReceipt);
+const recordedTarget = revisedReceipt.materials.find(material => material.objectId === 2);
+revisedReceipt.terminalMapAsyncCount = 1;
+revisedReceipt.terminalMappedBufferCount = 1;
+revisedReceipt.terminalCopiedSourceBufferCount = 4;
+revisedReceipt.receiverAudit = {
+  routeIdentity: 'same-device-combustible-object-source-to-native-pyro-v0',
+  status: 'applied',
+  lastConsumedTick: revisedReceipt.sourceHeader.writeTick,
+  auditObjectId: 2,
+  acceptedRecords: 12,
+  rejectedRecords: 0,
+  targetOnlyDispatches: 8,
+  injectedHeat: 1.25,
+  injectedFuel: 0.75,
+  injectedSoot: 0.25,
+  injectedSmoke: 0.5,
+  firstAcceptedStep: recordedTarget.ignitionStep,
+  lastAcceptedStep: revisedReceipt.sourceHeader.writeTick,
+  acceptedCell: [14, 12, 16],
+  sourceGeneration: 1,
+  topologyEpoch: 0,
+  sourceFrameHash: revisedReceipt.sourceHeader.sourceFrameHash,
+};
+assert.equal(
+  volume.validateGpuCombustibleObjectTerminalReceipt(revisedReceipt),
+  revisedReceipt,
+  'literal one-map evidence plus target-specific receiver acceptance closes the terminal contract',
 );
 
 function pngChunk(type, data) {

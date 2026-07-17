@@ -1,0 +1,40 @@
+{
+  "schema": "kaminos.gpu-combustible-object-ignition-witness-report.v0",
+  "requestedUrl": "http://127.0.0.1:8097/gpu-combustible-object-ignition.html",
+  "effectiveUrl": null,
+  "requestedRoute": "kaminos.gpu-combustible-object-ignition.v0",
+  "effectiveRoute": null,
+  "authority": null,
+  "phase": "waiting-for-initial",
+  "browserVersion": {
+    "Browser": "Chrome/150.0.7871.128",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/150.0.0.0 Safari/537.36",
+    "V8-Version": "15.0.1240245",
+    "WebKit-Version": "537.36 (@81891e5ca708047763816c778216799ef14c66cb)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:19488/devtools/browser/f4c5facd-a7c5-48be-b61f-6a73ac521b0e"
+  },
+  "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "debugPort": 19488,
+  "requestedViewport": {
+    "width": 1468,
+    "height": 960
+  },
+  "ignitionFrames": 145,
+  "finalFrames": 135,
+  "userDataDir": "/tmp/kaminos-gpu-object-ignition-19488-21327",
+  "screenshots": {
+    "initial": null,
+    "ignition": null,
+    "final": null
+  },
+  "stderrTail": "\nDevTools listening on ws://127.0.0.1:19488/devtools/browser/f4c5facd-a7c5-48be-b61f-6a73ac521b0e\n",
+  "browserEvents": [],
+  "initialState": null,
+  "ignitionState": null,
+  "finalState": null,
+  "terminalReceipt": null,
+  "pixelChecks": null,
+  "status": "failed",
+  "error": "Error: Runtime.evaluate: Execution context was destroyed.\n    at WebSocket.onMessage (file:///private/tmp/kaminos-sinter-gpu-object-ignition-0717/gpu-combustible-object-ignition-witness.mjs:132:40)\n    at [nodejs.internal.kHybridDispatch] (node:internal/event_target:843:20)\n    at WebSocket.dispatchEvent (node:internal/event_target:776:26)\n    at fireEvent (node:internal/deps/undici/undici:14147:14)\n    at #onMessage (node:internal/deps/undici/undici:15425:9)\n    at Object.onMessage (node:internal/deps/undici/undici:15138:76)\n    at websocketMessageReceived (node:internal/deps/undici/undici:14151:15)\n    at node:internal/deps/undici/undici:14857:19\n    at node:internal/deps/undici/undici:14671:11\n    at afterWrite (node:internal/streams/writable:708:5)"
+}

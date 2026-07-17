@@ -13374,7 +13374,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       if (state.active) throw new Error('GPU combustible terminal readback requires the render loop to be inactive');
       gpuCombustibleObjectLoop.freeze();
       if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
-      const receipt = await gpuCombustibleObjectLoop.readTerminalReceipt();
+      const receipt = await gpuCombustibleObjectLoop.readTerminalReceipt(
+        combustibleObjectSourceReceiver?.terminalStatsDescriptor(),
+      );
       state.gpuCombustibleObjectLoop = gpuCombustibleObjectLoop.debugState();
       return receipt;
     },

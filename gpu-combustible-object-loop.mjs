@@ -1,9 +1,11 @@
 import {
-  COMBUSTIBLE_OBJECT_FIRE_FIXED_POINT_SCALE,
+  COMBUSTIBLE_OBJECT_FIRE_CONSUMER_STATS_BYTES,
+  COMBUSTIBLE_OBJECT_FIRE_ROUTE,
   COMBUSTIBLE_OBJECT_SOURCE_HEADER_BYTES,
   COMBUSTIBLE_OBJECT_SOURCE_MAGIC,
   COMBUSTIBLE_OBJECT_SOURCE_RECORD_BYTES,
   COMBUSTIBLE_OBJECT_SOURCE_VERSION,
+  decodeCombustibleObjectFireConsumerStats,
 } from './combustible-object-fire-gpu.mjs';
 
 export const GPU_COMBUSTIBLE_OBJECT_LOOP_SCHEMA = 'kaminos.gpu-combustible-object-loop.v0';
@@ -16,6 +18,12 @@ const EVENT_CAPACITY = 64;
 const EVENT_HEADER_BYTES = 16;
 const EVENT_RECORD_BYTES = 32;
 const EVENT_BUFFER_BYTES = EVENT_HEADER_BYTES + EVENT_CAPACITY * EVENT_RECORD_BYTES;
+const MATERIAL_BUFFER_BYTES = MATERIAL_COUNT * MATERIAL_RECORD_BYTES;
+const TERMINAL_MATERIAL_OFFSET = 0;
+const TERMINAL_EVENT_OFFSET = TERMINAL_MATERIAL_OFFSET + MATERIAL_BUFFER_BYTES;
+const TERMINAL_SOURCE_HEADER_OFFSET = TERMINAL_EVENT_OFFSET + EVENT_BUFFER_BYTES;
+const TERMINAL_RECEIVER_STATS_OFFSET = TERMINAL_SOURCE_HEADER_OFFSET + COMBUSTIBLE_OBJECT_SOURCE_HEADER_BYTES;
+const TERMINAL_READBACK_BYTES = TERMINAL_RECEIVER_STATS_OFFSET + COMBUSTIBLE_OBJECT_FIRE_CONSUMER_STATS_BYTES;
 const PARAMS_BYTES = 64;
 const SOURCE_FRAME_HASH = 0x4750554f;
 const REQUIRED_VERDICT_BITS = 0x1ff;
@@ -53,7 +61,7 @@ function makeInitialMaterials() {
       id: OBJECT_TARGET,
       phase: 0,
       flags: 0,
-      probe: [0.46, 0.47, 0.50, 0.065],
+      probe: [0.41, 0.44, 0.50, 0.065],
       thermal: [0.08, 1.0, 0.0, 1.0],
       screen: [-0.06, -0.18, 0.31, 0.050],
       color: [0.72, 0.39, 0.15, 1.0],
@@ -451,7 +459,10 @@ export function validateGpuCombustibleObjectTerminalReceipt(receipt) {
   if (receipt.authority !== GPU_COMBUSTIBLE_OBJECT_LOOP_AUTHORITY) throw new Error('GPU combustible terminal authority mismatch');
   if (receipt.status !== 'frozen-terminal-readback') throw new Error('GPU combustible receipt is not terminal and frozen');
   if (receipt.hostCausalFeedbackCount !== 0) throw new Error('GPU combustible loop contains host causal feedback');
-  if (receipt.runtimeReadbackCount !== 1) throw new Error('GPU combustible loop must have exactly one terminal readback');
+  if (receipt.runtimeReadbackCount !== 1 || receipt.terminalMapAsyncCount !== 1 || receipt.terminalMappedBufferCount !== 1) {
+    throw new Error('GPU combustible loop must use exactly one terminal map');
+  }
+  if (receipt.terminalCopiedSourceBufferCount !== 4) throw new Error('GPU combustible terminal source-buffer accounting mismatch');
   if (receipt.eventLog?.overflow !== 0 || receipt.sourceHeader?.overflowCount !== 0) throw new Error('GPU combustible loop overflowed');
   if ((receipt.eventLog.verdictBits & REQUIRED_VERDICT_BITS) !== REQUIRED_VERDICT_BITS) {
     throw new Error(`GPU combustible verdict incomplete: 0x${receipt.eventLog.verdictBits.toString(16)}`);
@@ -470,6 +481,27 @@ export function validateGpuCombustibleObjectTerminalReceipt(receipt) {
   }
   if (control.phase !== 0 || control.ignitionStep !== 0 || control.emittedHeat !== 0 || control.supportCapacity !== 1) {
     throw new Error('GPU matched control changed combustion or support state');
+  }
+  const receiverAudit = receipt.receiverAudit;
+  if (receiverAudit?.routeIdentity !== COMBUSTIBLE_OBJECT_FIRE_ROUTE ||
+    !['applied', 'fresh-no-contact'].includes(receiverAudit.status)) {
+    throw new Error('GPU target receiver application evidence is missing');
+  }
+  if (receiverAudit.auditObjectId !== OBJECT_TARGET) throw new Error('GPU receiver audited the wrong source object');
+  if (!(receiverAudit.acceptedRecords > 0) || receiverAudit.rejectedRecords !== 0 || !(receiverAudit.targetOnlyDispatches > 0)) {
+    throw new Error('GPU target source was not accepted cleanly by the receiver');
+  }
+  if (!(receiverAudit.injectedHeat > 0) || !(receiverAudit.injectedFuel > 0)) {
+    throw new Error('GPU target source did not inject heat and fuel into Pyro');
+  }
+  if (receiverAudit.firstAcceptedStep < target.ignitionStep || receiverAudit.lastAcceptedStep < receiverAudit.firstAcceptedStep) {
+    throw new Error('GPU target receiver acceptance did not follow ignition');
+  }
+  if (receiverAudit.lastConsumedTick !== receipt.sourceHeader.writeTick ||
+    receiverAudit.sourceGeneration !== receipt.sourceHeader.allocationGeneration ||
+    receiverAudit.topologyEpoch !== receipt.sourceHeader.topologyEpoch ||
+    receiverAudit.sourceFrameHash !== receipt.sourceHeader.sourceFrameHash) {
+    throw new Error('GPU target receiver identity or freshness evidence mismatch');
   }
   const targetKinds = receipt.eventLog.events.filter(event => event.objectId === OBJECT_TARGET).map(event => event.kind);
   for (const kind of [EVENT_TARGET_EXPOSED, EVENT_TARGET_IGNITED, EVENT_TARGET_EMITTED, EVENT_TARGET_SUPPORT_LOST, EVENT_TARGET_IMPACTED]) {
@@ -581,6 +613,7 @@ export async function createGpuCombustibleObjectLoop({ device, gridSize, format 
   let dispatchCount = 0;
   let presentationCount = 0;
   let runtimeReadbackCount = 0;
+  let lastTerminalReceipt = null;
   let frozen = false;
   let destroyed = false;
 
@@ -663,33 +696,56 @@ export async function createGpuCombustibleObjectLoop({ device, gridSize, format 
       emittedHeat: 0,
       accountingResidual: 0,
       gpuAuthoredDynamic: true,
+      auditObjectId: OBJECT_TARGET,
     };
   }
 
-  async function readBuffer(buffer, size, label) {
-    const readback = device.createBuffer({ label, size, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
-    const encoder = device.createCommandEncoder({ label: `${label} copy` });
-    encoder.copyBufferToBuffer(buffer, 0, readback, 0, size);
-    device.queue.submit([encoder.finish()]);
-    await readback.mapAsync(GPUMapMode.READ);
-    const copy = readback.getMappedRange().slice(0);
-    readback.unmap();
-    readback.destroy();
-    return copy;
-  }
-
-  async function readTerminalReceipt() {
+  async function readTerminalReceipt(receiverStatsDescriptor) {
     if (!frozen) throw new Error('GPU combustible terminal readback requires a frozen runtime');
     if (runtimeReadbackCount !== 0) throw new Error('GPU combustible terminal receipt was already read');
+    if (receiverStatsDescriptor?.schema !== 'kaminos.pyro-combustible-object-source-consumer-stats-buffer.v0' ||
+      receiverStatsDescriptor.routeIdentity !== COMBUSTIBLE_OBJECT_FIRE_ROUTE ||
+      receiverStatsDescriptor.bytes !== COMBUSTIBLE_OBJECT_FIRE_CONSUMER_STATS_BYTES ||
+      receiverStatsDescriptor.auditObjectId !== OBJECT_TARGET ||
+      !receiverStatsDescriptor.buffer) {
+      throw new Error('GPU combustible receiver terminal stats descriptor mismatch');
+    }
+    const readback = device.createBuffer({
+      label: 'kaminos GPU combustible combined terminal readback',
+      size: TERMINAL_READBACK_BYTES,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const encoder = device.createCommandEncoder({ label: 'kaminos GPU combustible combined terminal copy' });
+    encoder.copyBufferToBuffer(materialBuffer, 0, readback, TERMINAL_MATERIAL_OFFSET, MATERIAL_BUFFER_BYTES);
+    encoder.copyBufferToBuffer(eventBuffer, 0, readback, TERMINAL_EVENT_OFFSET, EVENT_BUFFER_BYTES);
+    encoder.copyBufferToBuffer(
+      sourceHeaderBuffer,
+      0,
+      readback,
+      TERMINAL_SOURCE_HEADER_OFFSET,
+      COMBUSTIBLE_OBJECT_SOURCE_HEADER_BYTES,
+    );
+    encoder.copyBufferToBuffer(
+      receiverStatsDescriptor.buffer,
+      0,
+      readback,
+      TERMINAL_RECEIVER_STATS_OFFSET,
+      COMBUSTIBLE_OBJECT_FIRE_CONSUMER_STATS_BYTES,
+    );
+    device.queue.submit([encoder.finish()]);
     runtimeReadbackCount += 1;
-    const [materialBytes, eventBytes, headerBytes] = await Promise.all([
-      readBuffer(materialBuffer, MATERIAL_COUNT * MATERIAL_RECORD_BYTES, 'kaminos GPU combustible terminal materials'),
-      readBuffer(eventBuffer, EVENT_BUFFER_BYTES, 'kaminos GPU combustible terminal events'),
-      readBuffer(sourceHeaderBuffer, COMBUSTIBLE_OBJECT_SOURCE_HEADER_BYTES, 'kaminos GPU combustible terminal source header'),
-    ]);
-    const materialView = new DataView(materialBytes);
-    const eventLog = decodeEvents(new DataView(eventBytes));
-    const header = new DataView(headerBytes);
+    await readback.mapAsync(GPUMapMode.READ);
+    const combined = readback.getMappedRange().slice(0);
+    readback.unmap();
+    readback.destroy();
+    const materialView = new DataView(combined, TERMINAL_MATERIAL_OFFSET, MATERIAL_BUFFER_BYTES);
+    const eventLog = decodeEvents(new DataView(combined, TERMINAL_EVENT_OFFSET, EVENT_BUFFER_BYTES));
+    const header = new DataView(combined, TERMINAL_SOURCE_HEADER_OFFSET, COMBUSTIBLE_OBJECT_SOURCE_HEADER_BYTES);
+    const receiverStats = decodeCombustibleObjectFireConsumerStats(new Uint32Array(
+      combined,
+      TERMINAL_RECEIVER_STATS_OFFSET,
+      COMBUSTIBLE_OBJECT_FIRE_CONSUMER_STATS_BYTES / Uint32Array.BYTES_PER_ELEMENT,
+    ));
     const receipt = {
       schema: GPU_COMBUSTIBLE_OBJECT_TERMINAL_SCHEMA,
       authority: GPU_COMBUSTIBLE_OBJECT_LOOP_AUTHORITY,
@@ -697,6 +753,9 @@ export async function createGpuCombustibleObjectLoop({ device, gridSize, format 
       routeIdentity: GPU_COMBUSTIBLE_OBJECT_LOOP_SCHEMA,
       hostCausalFeedbackCount: 0,
       runtimeReadbackCount,
+      terminalMapAsyncCount: 1,
+      terminalMappedBufferCount: 1,
+      terminalCopiedSourceBufferCount: 4,
       dispatchCount,
       presentationCount,
       gridSize: grid,
@@ -716,7 +775,14 @@ export async function createGpuCombustibleObjectLoop({ device, gridSize, format 
         rejectedCount: header.getUint32(40, true),
         overflowCount: header.getUint32(44, true),
       },
+      receiverAudit: {
+        routeIdentity: receiverStats.routeIdentity,
+        status: receiverStats.status,
+        lastConsumedTick: receiverStats.lastConsumedTick,
+        ...receiverStats.audit,
+      },
     };
+    lastTerminalReceipt = receipt;
     return validateGpuCombustibleObjectTerminalReceipt(receipt);
   }
 
@@ -738,6 +804,7 @@ export async function createGpuCombustibleObjectLoop({ device, gridSize, format 
         presentationCount,
         hostCausalFeedbackCount: 0,
         runtimeReadbackCount,
+        lastTerminalReceipt,
         sourceFrameHash: SOURCE_FRAME_HASH,
       };
     },
