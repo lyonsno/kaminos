@@ -20,6 +20,22 @@ assert.match(core, /planProduction\([\s\S]*encodeSim\(encoder[\s\S]*encodeProduc
 assert.match(core, /device\.queue\.submit\(\[encoder\.finish\(\)\]\)[\s\S]*await exactStateCadenceRuntime\.completeProduction/, 'archive authority becomes completed only after submitted GPU work finishes');
 assert.match(core, /production\.reason === 'producer-would-overwrite-unpresented-state'[\s\S]*exactStateCadenceProducerBackpressureCount[\s\S]*exactStateCadenceProducerBackpressureReceipt[\s\S]*exactStateCadenceEffective = residentCount >= requiredResidentCount \? 'active' : 'warming'[\s\S]*exactStateCadenceFallbackReason = null/, 'a full truthful ring backpressures production without becoming a fallback or overwriting the last completed producer receipt');
 assert.match(core, /function encodeExactStateCadencePresentation[\s\S]*selectPresentation[\s\S]*encodePresentation/, 'RAF presentation selects and interpolates only completed adjacent states');
+assert.match(
+  core,
+  /selection\.reason === 'presentation-lead-underflow'[\s\S]*lastSubmittedPresentationReceipt[\s\S]*status === 'submitted-visible'[\s\S]*exactStateCadencePresentationHoldCount[\s\S]*return true/,
+  'lead underflow keeps the last valid presentation buffers applied instead of exposing the newer simulator head',
+);
+assert.match(
+  core,
+  /device\.queue\.submit\(\[encoder\.finish\(\)\]\);[\s\S]*markExactStateCadencePresentationSubmitted/,
+  'visible presentation authority is published only after the command buffer is submitted',
+);
+assert.match(
+  core,
+  /exactStateCadencePresentationDisposition\s*=\s*'held-lead-underflow'/,
+  'live telemetry distinguishes a truthful held presentation from interpolated motion and fallback',
+);
+assert.match(core, /if \(!encoded\.ok\)[\s\S]*exactStateCadencePresentationDisposition\s*=\s*'unavailable'/, 'interpolation encode failure cannot retain a stale visible disposition');
 assert.match(core, /exactStateCadenceEffective[\s\S]*encodeExactStateCadencePresentation[\s\S]*else[\s\S]*encodeSim\(encoder\)/, 'effective cadence presentation replaces the RAF simulation step rather than duplicating it');
 assert.match(core, /function resetExactStateCadenceForControlChange[\s\S]*controlGeneration[\s\S]*source-controls-changed/, 'source-control changes invalidate the ring with an explicit generation reset');
 const cadenceSourceSignature = core.slice(
@@ -49,6 +65,8 @@ assert.match(core, /exactStateCadenceProducerReceipt/, 'debug state exposes the 
 assert.match(core, /exactStateCadenceProducerBackpressureCount/, 'debug state exposes bounded producer backpressure frequency');
 assert.match(core, /exactStateCadenceProducerBackpressureReceipt/, 'debug state exposes the latest truthful no-overwrite refusal');
 assert.match(core, /exactStateCadencePresentationReceipt/, 'debug state exposes source steps, slots, alpha, and lead for presentation');
+assert.match(core, /exactStateCadencePresentationHoldReceipt/, 'debug state exposes the attempted underflow and exact held presentation identity');
+assert.match(core, /exactStateCadenceSubmittedPresentationReceipt/, 'debug state exposes the last presentation proven submitted to the GPU');
 assert.match(core, /exactStateCadenceAddedSimulationPasses:\s*0/, 'cadence telemetry states that it adds no simulator beyond the one authority');
 
 for (const parameter of [

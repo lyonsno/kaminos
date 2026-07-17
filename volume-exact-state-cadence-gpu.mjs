@@ -135,6 +135,7 @@ export function createExactStateCadenceGpuRuntime(options = {}) {
   let lastArchiveReceipt = null;
   let lastCompletionReceipt = null;
   let lastPresentationReceipt = null;
+  let lastSubmittedPresentationReceipt = null;
 
   function bindGroupFor(fromSlot, toSlot) {
     const key = `${fromSlot}:${toSlot}`;
@@ -251,8 +252,41 @@ export function createExactStateCadenceGpuRuntime(options = {}) {
     return { ok: true, receipt: { ...lastPresentationReceipt } };
   }
 
+  function markPresentationSubmitted(presentationReceipt, submittedAtMs) {
+    if (destroyed) return invalidRuntime('exact-state-cadence-runtime-destroyed', allocation);
+    const submittedAt = Number(submittedAtMs);
+    if (
+      presentationReceipt?.status !== 'encoded-not-submitted'
+      || lastPresentationReceipt?.status !== 'encoded-not-submitted'
+      || presentationReceipt.identity !== lastPresentationReceipt.identity
+      || presentationReceipt.controlGeneration !== lastPresentationReceipt.controlGeneration
+      || presentationReceipt.fromSourceStep !== lastPresentationReceipt.fromSourceStep
+      || presentationReceipt.toSourceStep !== lastPresentationReceipt.toSourceStep
+      || presentationReceipt.fromSlot !== lastPresentationReceipt.fromSlot
+      || presentationReceipt.toSlot !== lastPresentationReceipt.toSlot
+      || presentationReceipt.sourcePosition !== lastPresentationReceipt.sourcePosition
+      || !Number.isFinite(submittedAt)
+    ) {
+      return invalidRuntime('exact-state-presentation-submission-receipt-mismatch', allocation);
+    }
+    lastSubmittedPresentationReceipt = {
+      ...lastPresentationReceipt,
+      status: 'submitted-visible',
+      encodedStatus: lastPresentationReceipt.status,
+      submittedAtMs: submittedAt,
+    };
+    return { ok: true, receipt: { ...lastSubmittedPresentationReceipt } };
+  }
+
   function reset(options = {}) {
-    return resetExactStateCadenceRing(ring, options);
+    const result = resetExactStateCadenceRing(ring, options);
+    if (result.ok) {
+      lastArchiveReceipt = null;
+      lastCompletionReceipt = null;
+      lastPresentationReceipt = null;
+      lastSubmittedPresentationReceipt = null;
+    }
+    return result;
   }
 
   function debugState() {
@@ -272,10 +306,13 @@ export function createExactStateCadenceGpuRuntime(options = {}) {
       lastPresentedAlpha: ring.lastPresentedAlpha,
       refusedCompletionCount: ring.refusedCompletionCount,
       refusedPresentationCount: ring.refusedPresentationCount,
-      lastRefusal: ring.lastRefusal,
-      lastArchiveReceipt,
-      lastCompletionReceipt,
-      lastPresentationReceipt,
+      lastRefusal: ring.lastRefusal ? { ...ring.lastRefusal } : null,
+      lastArchiveReceipt: lastArchiveReceipt ? { ...lastArchiveReceipt } : null,
+      lastCompletionReceipt: lastCompletionReceipt ? { ...lastCompletionReceipt } : null,
+      lastPresentationReceipt: lastPresentationReceipt ? { ...lastPresentationReceipt } : null,
+      lastSubmittedPresentationReceipt: lastSubmittedPresentationReceipt
+        ? { ...lastSubmittedPresentationReceipt }
+        : null,
     };
   }
 
@@ -305,6 +342,7 @@ export function createExactStateCadenceGpuRuntime(options = {}) {
     completeProduction,
     selectPresentation,
     encodePresentation,
+    markPresentationSubmitted,
     reset,
     debugState,
     destroy,

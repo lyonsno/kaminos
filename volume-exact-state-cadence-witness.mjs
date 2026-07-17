@@ -32,6 +32,17 @@ const requestedBrowserProfilePath = resolve(String(args.get('--browser-profile')
 const settleMs = Number(args.get('--settle-ms') ?? 3000);
 const sampleCount = Number(args.get('--samples') ?? 24);
 const sampleIntervalMs = Number(args.get('--sample-interval-ms') ?? 50);
+const requireHeldPresentation = ['1', 'true', 'yes', 'on'].includes(
+  String(args.get('--require-held-presentation') || '').toLowerCase(),
+);
+const forceUnderflowMs = Number(args.get('--force-underflow-ms') ?? 0);
+const requestedWitnessConfig = {
+  requireHeldPresentation,
+  forceUnderflowMs,
+  sampleCount,
+  sampleIntervalMs,
+  settleMs,
+};
 const runStartedAt = new Date().toISOString();
 
 let ws = null;
@@ -53,6 +64,7 @@ writeReport({
   failurePhase,
   runStartedAt,
   requestedRoute,
+  requestedWitnessConfig,
 });
 
 try {
@@ -102,7 +114,12 @@ try {
 
   failurePhase = 'cadence-sampling';
   const rows = [];
-  for (let index = 0; index < sampleCount; index += 1) {
+  if (forceUnderflowMs > 0) {
+    const forcedHold = await forcePresentationUnderflow(effectivePageUrl);
+    lastTrustworthyEvidence.forcedUnderflow = forcedHold.evidence;
+    if (forcedHold.row) rows.push({ index: 0, sampledAt: new Date().toISOString(), ...forcedHold.row });
+  }
+  for (let index = rows.length; index < sampleCount; index += 1) {
     const state = await debugState();
     validateEffectiveState(state, effectivePageUrl);
     const row = compactState(state);
@@ -135,13 +152,17 @@ try {
     requestedRoute,
     effectivePageUrl,
     requestedEffectiveRouteAgreement: true,
+    requestedWitnessConfig,
     server,
     browser,
     browserPageId,
     browserPageUrl: effectivePageUrl,
     sameBrowserTargetPreserved,
     route: compactState(finalState),
-    requestedConfig: requestedConfigFromUrl(effectivePageUrl),
+    requestedConfig: {
+      ...requestedConfigFromUrl(effectivePageUrl),
+      witness: requestedWitnessConfig,
+    },
     sequence,
     rows,
     canvasPixelEvidence: {
@@ -161,6 +182,7 @@ try {
     runStartedAt,
     failedAt: new Date().toISOString(),
     requestedRoute,
+    requestedWitnessConfig,
     server,
     browser,
     browserPageId,
@@ -243,6 +265,7 @@ function validateInputs() {
   requireNonnegativeNumber(settleMs, '--settle-ms');
   requirePositiveInteger(sampleCount, '--samples');
   requirePositiveNumber(sampleIntervalMs, '--sample-interval-ms');
+  requireNonnegativeNumber(forceUnderflowMs, '--force-underflow-ms');
 }
 
 function requestedConfigFromUrl(url) {
@@ -336,6 +359,10 @@ function compactState(state) {
     producerBackpressureCount: Number(state?.exactStateCadenceProducerBackpressureCount || 0),
     producerBackpressureReceipt: state?.exactStateCadenceProducerBackpressureReceipt || null,
     presentationReceipt,
+    submittedPresentationReceipt: state?.exactStateCadenceSubmittedPresentationReceipt || null,
+    presentationDisposition: state?.exactStateCadencePresentationDisposition || null,
+    presentationHoldCount: Number(state?.exactStateCadencePresentationHoldCount || 0),
+    presentationHoldReceipt: state?.exactStateCadencePresentationHoldReceipt || null,
     residentCount: Number(state?.exactStateCadence?.residentCount),
     oldestSourceStep: Number(state?.exactStateCadence?.oldestSourceStep),
     newestSourceStep: Number(state?.exactStateCadence?.newestSourceStep),
@@ -354,19 +381,55 @@ function compactState(state) {
 function validateCadenceRow(row, index) {
   const producerReceipt = row.producerReceipt;
   const presentationReceipt = row.presentationReceipt;
+  const submittedPresentationReceipt = row.submittedPresentationReceipt;
   const fromSourceStep = Number(presentationReceipt?.fromSourceStep);
   const toSourceStep = Number(presentationReceipt?.toSourceStep);
+  const submittedReceiptFields = [
+    'identity',
+    'controlGeneration',
+    'fromSourceStep',
+    'toSourceStep',
+    'fromSlot',
+    'toSlot',
+    'sourcePosition',
+    'submittedAtMs',
+  ];
+  const matchesSubmittedPresentation = candidate => (
+    candidate?.status === 'submitted-visible'
+    && candidate?.encodedStatus === 'encoded-not-submitted'
+    && Number.isFinite(Number(candidate?.submittedAtMs))
+    && submittedReceiptFields.every(field => candidate[field] === presentationReceipt?.[field])
+  );
   if (producerReceipt?.status !== 'completed') {
     throw new Error(`producer-receipt-not-completed:${index}:${JSON.stringify(producerReceipt)}`);
   }
-  if (presentationReceipt?.status !== 'encoded-not-submitted') {
-    throw new Error(`presentation-receipt-not-encoded:${index}:${JSON.stringify(presentationReceipt)}`);
+  if (presentationReceipt?.status !== 'submitted-visible') {
+    throw new Error(`presentation-receipt-not-submitted-visible:${index}:${JSON.stringify(presentationReceipt)}`);
+  }
+  if (!matchesSubmittedPresentation(submittedPresentationReceipt)) {
+    throw new Error(`submitted-presentation-authority-mismatch:${index}:${JSON.stringify(row)}`);
   }
   if (toSourceStep - fromSourceStep !== 1) {
     throw new Error(`nonadjacent-presentation-bracket:${index}:${JSON.stringify(presentationReceipt)}`);
   }
   if (Number(presentationReceipt.controlGeneration) !== row.controlGeneration) {
     throw new Error(`cross-generation-presentation:${index}:${JSON.stringify(row)}`);
+  }
+  if (row.presentationDisposition === 'held-lead-underflow') {
+    const hold = row.presentationHoldReceipt;
+    if (
+      hold?.status !== 'held-last-valid-presentation'
+      || Number(hold.visibleSourcePosition) !== Number(presentationReceipt.sourcePosition)
+      || Number(hold.visibleFromSourceStep) !== fromSourceStep
+      || Number(hold.visibleToSourceStep) !== toSourceStep
+      || Number(hold.attemptedSourcePosition) < Number(hold.visibleSourcePosition)
+      || Number(hold.producerHeadSourceStep) < toSourceStep
+      || !matchesSubmittedPresentation(hold.heldPresentationReceipt)
+    ) {
+      throw new Error(`cadence-held-presentation-mismatch:${index}:${JSON.stringify(row)}`);
+    }
+  } else if (row.presentationDisposition !== 'interpolated') {
+    throw new Error(`cadence-presentation-disposition-unknown:${index}:${JSON.stringify(row)}`);
   }
   if (row.exactStateCadenceEffective !== 'active' || row.exactStateCadenceFallbackReason != null) {
     throw new Error(`cadence-row-not-effective:${index}:${JSON.stringify(row)}`);
@@ -393,6 +456,12 @@ function validateSequence(rows) {
     const previous = rows[index];
     return row.frameCount - previous.frameCount !== row.simStepCount - previous.simStepCount;
   }).length;
+  const heldPresentationCount = rows.filter(
+    row => row.presentationDisposition === 'held-lead-underflow',
+  ).length;
+  if (requireHeldPresentation && heldPresentationCount < 1) {
+    throw new Error('required-held-presentation-not-observed');
+  }
   if (frameDelta <= 0 || simStepDelta <= 0 || producerSourceDelta <= 0 || presentationPositionDelta <= 0) {
     throw new Error(`cadence-sequence-did-not-progress:${JSON.stringify({ frameDelta, simStepDelta, producerSourceDelta, presentationPositionDelta })}`);
   }
@@ -418,6 +487,7 @@ function validateSequence(rows) {
     distinctAlpha,
     distinctBrackets,
     unequalAdjacentCadenceDeltas,
+    heldPresentationCount,
     producerRafLocked: false,
     adjacentCompletedStateInterpolation: true,
     oneSimulatorAuthority: true,
@@ -473,9 +543,13 @@ function validateReadbackSample(sample) {
   if (sample?.exactStateCadenceReadbackApplied !== true) {
     mismatches.push(['exactStateCadenceReadbackApplied', true, sample?.exactStateCadenceReadbackApplied]);
   }
+  const exactStateCadenceReadbackDisposition = sample?.exactStateCadenceReadbackDisposition;
+  if (!['interpolated', 'held-lead-underflow'].includes(exactStateCadenceReadbackDisposition)) {
+    mismatches.push(['exactStateCadenceReadbackDisposition', 'interpolated|held-lead-underflow', exactStateCadenceReadbackDisposition]);
+  }
   const exactStateCadenceReadbackReceipt = sample?.exactStateCadenceReadbackReceipt;
-  if (exactStateCadenceReadbackReceipt?.status !== 'encoded-not-submitted') {
-    mismatches.push(['exactStateCadenceReadbackReceipt.status', 'encoded-not-submitted', exactStateCadenceReadbackReceipt?.status]);
+  if (exactStateCadenceReadbackReceipt?.status !== 'submitted-visible') {
+    mismatches.push(['exactStateCadenceReadbackReceipt.status', 'submitted-visible', exactStateCadenceReadbackReceipt?.status]);
   }
   if (exactStateCadenceReadbackReceipt?.oneSimulatorAuthority !== ONE_SIMULATOR_AUTHORITY) {
     mismatches.push(['exactStateCadenceReadbackReceipt.oneSimulatorAuthority', ONE_SIMULATOR_AUTHORITY, exactStateCadenceReadbackReceipt?.oneSimulatorAuthority]);
@@ -489,6 +563,16 @@ function validateReadbackSample(sample) {
     || exactStateCadenceReadbackReceipt.toSourceStep - exactStateCadenceReadbackReceipt.fromSourceStep !== 1
   ) {
     mismatches.push(['exactStateCadenceReadbackReceipt.sourceSteps', 'adjacent', exactStateCadenceReadbackReceipt]);
+  }
+  if (exactStateCadenceReadbackDisposition === 'held-lead-underflow') {
+    const hold = sample?.exactStateCadenceReadbackHoldReceipt;
+    if (
+      hold?.status !== 'held-last-valid-presentation'
+      || hold.heldPresentationReceipt?.status !== 'submitted-visible'
+      || Number(hold.visibleSourcePosition) !== Number(exactStateCadenceReadbackReceipt?.sourcePosition)
+    ) {
+      mismatches.push(['exactStateCadenceReadbackHoldReceipt', 'submitted-visible held source matches readback', hold]);
+    }
   }
   if (sample?.boundarySplatMode !== 'learned') mismatches.push(['boundarySplatMode', 'learned', sample?.boundarySplatMode]);
   if (sample?.boundarySplatRendererIdentity !== BOUNDARY_SPLAT_LEARNED_RENDERER_IDENTITY) {
@@ -522,6 +606,8 @@ function compactReadbackSample(sample) {
     exactStateCadenceReadbackRequested: sample?.exactStateCadenceReadbackRequested ?? null,
     exactStateCadenceReadbackApplied: sample?.exactStateCadenceReadbackApplied ?? null,
     exactStateCadenceReadbackReceipt: sample?.exactStateCadenceReadbackReceipt || null,
+    exactStateCadenceReadbackDisposition: sample?.exactStateCadenceReadbackDisposition || null,
+    exactStateCadenceReadbackHoldReceipt: sample?.exactStateCadenceReadbackHoldReceipt || null,
     width: Number(sample?.width || sample?.image?.width || 0),
     height: Number(sample?.height || sample?.image?.height || 0),
     renderScale: Number(sample?.renderScale),
@@ -584,6 +670,42 @@ async function collectPageDiagnostic(state = null) {
   }));
 }
 
+async function forcePresentationUnderflow(effectivePageUrl) {
+  const before = compactState(await debugState());
+  await wsRequest('Page.setWebLifecycleState', { state: 'frozen' });
+  await delay(forceUnderflowMs);
+  await wsRequest('Page.setWebLifecycleState', { state: 'active' });
+  let last = null;
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    const state = await debugState();
+    validateEffectiveState(state, effectivePageUrl);
+    last = compactState(state);
+    if (last.presentationDisposition === 'held-lead-underflow') {
+      validateCadenceRow(last, 0);
+      return {
+        row: last,
+        evidence: {
+          status: 'held-observed',
+          freezeDurationMs: forceUnderflowMs,
+          pollAttempt: attempt,
+          before,
+          held: last,
+        },
+      };
+    }
+    await delay(5);
+  }
+  return {
+    row: null,
+    evidence: {
+      status: 'hold-not-observed',
+      freezeDurationMs: forceUnderflowMs,
+      before,
+      last,
+    },
+  };
+}
+
 async function waitForActiveCadence() {
   for (let attempt = 0; attempt < 240; attempt += 1) {
     const state = await debugState();
@@ -592,7 +714,7 @@ async function waitForActiveCadence() {
       && state?.exactStateCadenceEffective === 'active'
       && state?.exactStateCadenceFallbackReason == null
       && state?.exactStateCadenceProducerReceipt?.status === 'completed'
-      && state?.exactStateCadencePresentationReceipt?.status === 'encoded-not-submitted'
+      && state?.exactStateCadencePresentationReceipt?.status === 'submitted-visible'
     ) return state;
     if (state?.exactStateCadenceEffective === 'refused') {
       throw new Error(`cadence-runtime-refused:${state?.exactStateCadenceFallbackReason}`);
@@ -892,13 +1014,15 @@ function classifyFailure(error, phase) {
     'cadence-runtime-refused',
     'volume-runtime-initialization-error',
     'producer-receipt-not-completed',
-    'presentation-receipt-not-encoded',
+    'presentation-receipt-not-submitted-visible',
+    'submitted-presentation-authority-mismatch',
     'nonadjacent-presentation-bracket',
     'cross-generation-presentation',
     'cadence-row-hidden-work-or-fallback',
     'cadence-interpolation-not-observed',
     'producer-remains-raf-locked',
     'presentation-source-regressed',
+    'required-held-presentation-not-observed',
     'blank-or-partial-cadence-canvas',
     'gpu-texture-readback-unavailable',
     'gpu-texture-readback-authority-mismatch',

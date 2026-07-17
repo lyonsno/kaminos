@@ -30,8 +30,20 @@ assert.match(source, /completed-exact-state-continuation-history/, 'witness labe
 assert.match(source, /exactStateCadenceAddedSimulationPasses/, 'witness rejects a hidden second simulator');
 assert.match(source, /producerReceipt/, 'witness records completed producer receipts');
 assert.match(source, /presentationReceipt/, 'witness records presentation brackets and alpha');
+assert.match(source, /presentationDisposition/, 'witness records whether a visible frame interpolated or truthfully held its last presentation');
+assert.match(source, /presentationHoldReceipt/, 'witness preserves the held source and attempted underflow instead of hiding contention');
+assert.match(source, /--require-held-presentation/, 'witness can make the repaired underflow path a required acceptance predicate');
+assert.match(source, /--force-underflow-ms/, 'witness can autonomously create lifecycle pressure instead of depending on operator timing');
+assert.match(source, /Page\.setWebLifecycleState[\s\S]*frozen[\s\S]*active/, 'forced underflow pressure freezes and resumes its owned page');
 assert.match(source, /toSourceStep\s*-\s*fromSourceStep/, 'witness checks adjacent completed states');
 assert.match(source, /distinctAlpha/, 'witness requires interpolation movement rather than held copies');
+assert.match(source, /presentation-source-regressed/, 'witness rejects a visible presentation source clock that moves backward');
+assert.match(source, /required-held-presentation-not-observed/, 'required underflow evidence fails loud when the hold branch never occurs');
+assert.match(
+  source,
+  /held-lead-underflow[\s\S]*visibleSourcePosition[\s\S]*presentationReceipt\.sourcePosition/,
+  'a held underflow row proves the rendered source stayed on the last valid cadence presentation',
+);
 assert.match(source, /frameDelta[\s\S]*simStepDelta/, 'witness measures producer cadence independently of RAF cadence');
 assert.match(source, /boundarySplatCandidateCount/, 'blank-frame diagnosis preserves the live candidate count');
 assert.match(source, /boundarySplatInstanceCount/, 'blank-frame diagnosis preserves the live instance count');
@@ -47,6 +59,7 @@ assert.doesNotMatch(source, /failurePhase = 'initial-canvas'/, 'invasive GPU rea
 assert.match(source, /failurePhase = 'sequence-validation'[\s\S]*validateSequence\(rows\)[\s\S]*validateEffectiveState\(finalState,[^)]*\)[\s\S]*failurePhase = 'final-canvas'[\s\S]*captureCanvas\('final'\)/, 'cadence sequence and final route authority are sealed before invasive GPU readback');
 assert.match(source, /sample\?\.simAdvanced !== false[\s\S]*sample\?\.sampleAuthority !== 'render-only-exact-state-cadence-presentation-readback'/, 'witness verifies renderer-owned no-sim and exact cadence presentation authority instead of trusting its request');
 assert.match(source, /sample\?\.exactStateCadenceReadbackApplied !== true[\s\S]*exactStateCadenceReadbackReceipt/, 'witness rejects a readback that bypasses the cadence presentation buffers');
+assert.match(source, /exactStateCadenceReadbackDisposition/, 'final GPU readback distinguishes freshly interpolated from held submitted-visible presentation data');
 assert.match(source, /blank-or-partial-cadence-canvas/, 'blank output fails loud');
 assert.match(
   source,
@@ -66,6 +79,62 @@ assert.equal(cleanupFailure.ok, false, 'cleanup errors become report data instea
 assert.equal(cleanupFailure.label, 'browser');
 assert.match(cleanupFailure.error, /cleanup-boom/);
 assert.match(source, /finally \{[\s\S]*captureCleanupOutcome[\s\S]*processCleanup[\s\S]*writeReport\(finalReport\)/, 'terminal report is written after best-effort cleanup accounting');
+
+const validateCadenceRowSource = source.slice(
+  source.indexOf('function validateCadenceRow'),
+  source.indexOf('function validateSequence'),
+);
+const validateCadenceRow = new Function(
+  'ONE_SIMULATOR_AUTHORITY',
+  'PHASE_SOURCE',
+  `${validateCadenceRowSource}; return validateCadenceRow;`,
+)(
+  'single-authoritative-simulator-completed-state-history-v0',
+  'completed-exact-state-continuation-history',
+);
+const currentSubmittedReceipt = {
+  identity: 'kaminos.volume.exact-state-cadence-gpu.v0',
+  status: 'submitted-visible',
+  encodedStatus: 'encoded-not-submitted',
+  controlGeneration: 2,
+  fromSourceStep: 10,
+  toSourceStep: 11,
+  fromSlot: 1,
+  toSlot: 2,
+  sourcePosition: 10.5,
+  submittedAtMs: 1234,
+};
+const validCadenceRow = {
+  producerReceipt: { status: 'completed' },
+  presentationReceipt: { ...currentSubmittedReceipt },
+  submittedPresentationReceipt: { ...currentSubmittedReceipt },
+  presentationDisposition: 'interpolated',
+  controlGeneration: 2,
+  exactStateCadenceEffective: 'active',
+  exactStateCadenceFallbackReason: null,
+  authority: 'single-authoritative-simulator-completed-state-history-v0',
+  phaseSource: 'completed-exact-state-continuation-history',
+  exactStateCadenceAddedSimulationPasses: 0,
+  overflowCount: 0,
+  candidateCopyBytes: 0,
+  splatFallbackReason: null,
+};
+assert.doesNotThrow(() => validateCadenceRow(validCadenceRow, 0));
+assert.throws(
+  () => validateCadenceRow({
+    ...validCadenceRow,
+    submittedPresentationReceipt: {
+      ...currentSubmittedReceipt,
+      controlGeneration: 1,
+      fromSourceStep: 8,
+      toSourceStep: 9,
+      fromSlot: 3,
+      toSlot: 0,
+    },
+  }, 1),
+  /submitted-presentation-authority-mismatch/,
+  'matching source position cannot let a stale generation and bracket impersonate submitted presentation authority',
+);
 
 const validateEffectiveStateSource = source.slice(
   source.indexOf('function validateEffectiveState'),

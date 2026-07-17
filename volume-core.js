@@ -6776,6 +6776,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     exactStateCadenceProducerBackpressureCount: 0,
     exactStateCadenceProducerBackpressureReceipt: null,
     exactStateCadencePresentationReceipt: null,
+    exactStateCadenceSubmittedPresentationReceipt: null,
+    exactStateCadencePresentationDisposition: 'uninitialized',
+    exactStateCadencePresentationHoldCount: 0,
+    exactStateCadencePresentationHoldReceipt: null,
     exactStateCadenceAllocation: null,
     exactStateCadenceAddedSimulationPasses: 0,
     exactStateCadenceProducerIntervalMs: normalizeExactStateCadencePositiveMs(controlsSnapshot.exactStateCadenceProducerIntervalMs, 20),
@@ -8279,6 +8283,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.exactStateCadenceProducerBackpressureCount = 0;
     state.exactStateCadenceProducerBackpressureReceipt = null;
     state.exactStateCadencePresentationReceipt = null;
+    state.exactStateCadenceSubmittedPresentationReceipt = null;
+    state.exactStateCadencePresentationDisposition = 'uninitialized';
+    state.exactStateCadencePresentationHoldCount = 0;
+    state.exactStateCadencePresentationHoldReceipt = null;
     if (!normalizeExactStateCadenceRequested(controlsSnapshot.exactStateCadenceRequested)) {
       state.exactStateCadenceEffective = 'off';
       state.exactStateCadenceFallbackReason = null;
@@ -8294,6 +8302,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.exactStateCadencePresentationStepMs = normalizeExactStateCadencePositiveMs(controlsSnapshot.exactStateCadencePresentationStepMs, 40);
     state.exactStateCadenceProducerBackpressureCount = 0;
     state.exactStateCadenceProducerBackpressureReceipt = null;
+    state.exactStateCadenceSubmittedPresentationReceipt = null;
+    state.exactStateCadencePresentationDisposition = 'warming';
+    state.exactStateCadencePresentationHoldCount = 0;
+    state.exactStateCadencePresentationHoldReceipt = null;
     if (!requested) return false;
     const routeRefusal = exactStateCadenceRouteRefusal();
     if (routeRefusal) {
@@ -10855,6 +10867,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.exactStateCadenceProducerBackpressureCount = 0;
     state.exactStateCadenceProducerBackpressureReceipt = null;
     state.exactStateCadencePresentationReceipt = null;
+    state.exactStateCadenceSubmittedPresentationReceipt = null;
+    state.exactStateCadencePresentationDisposition = 'warming';
+    state.exactStateCadencePresentationHoldCount = 0;
+    state.exactStateCadencePresentationHoldReceipt = null;
     state.exactStateCadenceResetReason = reason;
     scheduleExactStateCadenceProducer(0);
     return reset.ok === true;
@@ -10957,11 +10973,38 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const selection = exactStateCadenceRuntime.selectPresentation({ nowMs });
     state.exactStateCadencePresentationReceipt = selection.receipt || null;
     if (!selection.ok) {
+      if (selection.reason === 'presentation-lead-underflow') {
+        const lastSubmittedPresentationReceipt = exactStateCadenceRuntime.debugState()?.lastSubmittedPresentationReceipt || null;
+        if (lastSubmittedPresentationReceipt?.status === 'submitted-visible') {
+          state.exactStateCadencePresentationHoldCount += 1;
+          state.exactStateCadencePresentationHoldReceipt = {
+            identity: EXACT_STATE_CADENCE_GPU_IDENTITY,
+            status: 'held-last-valid-presentation',
+            reason: selection.reason,
+            heldAtMs: nowMs,
+            holdCount: state.exactStateCadencePresentationHoldCount,
+            visibleSourcePosition: lastSubmittedPresentationReceipt.sourcePosition,
+            visibleFromSourceStep: lastSubmittedPresentationReceipt.fromSourceStep,
+            visibleToSourceStep: lastSubmittedPresentationReceipt.toSourceStep,
+            producerHeadSourceStep: selection.receipt?.newestSourceStep ?? null,
+            attemptedSourcePosition: selection.receipt?.sourcePosition ?? null,
+            heldPresentationReceipt: { ...lastSubmittedPresentationReceipt },
+            underflowSelectionReceipt: selection.receipt || null,
+          };
+          state.exactStateCadencePresentationReceipt = { ...lastSubmittedPresentationReceipt };
+          state.exactStateCadenceSubmittedPresentationReceipt = { ...lastSubmittedPresentationReceipt };
+          state.exactStateCadencePresentationDisposition = 'held-lead-underflow';
+          state.exactStateCadenceEffective = 'active';
+          state.exactStateCadenceFallbackReason = null;
+          return true;
+        }
+      }
       if (selection.reason === 'presentation-history-warmup-incomplete') {
         state.exactStateCadenceEffective = 'warming';
       } else {
         state.exactStateCadenceEffective = 'stalled';
       }
+      state.exactStateCadencePresentationDisposition = 'unavailable';
       state.exactStateCadenceFallbackReason = selection.reason;
       return false;
     }
@@ -10969,12 +11012,33 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.exactStateCadencePresentationReceipt = encoded.receipt || selection.receipt;
     if (!encoded.ok) {
       state.exactStateCadenceEffective = 'stalled';
+      state.exactStateCadencePresentationDisposition = 'unavailable';
       state.exactStateCadenceFallbackReason = encoded.reason;
       return false;
     }
+    state.exactStateCadencePresentationDisposition = 'interpolated';
     state.exactStateCadenceEffective = 'active';
     state.exactStateCadenceFallbackReason = null;
     return true;
+  }
+
+  function markExactStateCadencePresentationSubmitted(
+    submittedAtMs,
+    presentationReceipt = state.exactStateCadencePresentationReceipt,
+  ) {
+    const submitted = exactStateCadenceRuntime?.markPresentationSubmitted(
+      presentationReceipt,
+      submittedAtMs,
+    );
+    if (!submitted?.ok) {
+      state.exactStateCadencePresentationDisposition = 'unavailable';
+      state.exactStateCadenceEffective = 'stalled';
+      state.exactStateCadenceFallbackReason = submitted?.reason || 'exact-state-presentation-submission-unavailable';
+      throw new Error(state.exactStateCadenceFallbackReason);
+    }
+    state.exactStateCadencePresentationReceipt = { ...submitted.receipt };
+    state.exactStateCadenceSubmittedPresentationReceipt = { ...submitted.receipt };
+    return submitted.receipt;
   }
 
   function encodePressureProjection(encoder) {
@@ -13422,6 +13486,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       encodeHistoryCopy(encoder, currentTexture);
       encodeBoundarySplatTelemetry(encoder);
       device.queue.submit([encoder.finish()]);
+      if (
+        exactStateCadencePresentationApplied
+        && state.exactStateCadencePresentationDisposition === 'interpolated'
+      ) {
+        markExactStateCadencePresentationSubmitted(performance.now());
+      }
       if (boundarySplatTelemetryCopyPending) void resolveBoundarySplatTelemetry();
       commitPreviousViewProjection();
       state.frameCount += 1;
@@ -15488,6 +15558,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     let sampleSelectiveHeadLiveFields = null;
     let exactStateCadenceReadbackApplied = false;
     let exactStateCadenceReadbackReceipt = null;
+    let exactStateCadenceReadbackDisposition = null;
+    let exactStateCadenceReadbackHoldReceipt = null;
     if (advanceSim && !sampleLookFreeze) {
       encodeSim(encoder);
       encodeSelectiveHeadLiveFields(encoder);
@@ -15505,6 +15577,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         exactStateCadenceReadbackReceipt = state.exactStateCadencePresentationReceipt
           ? { ...state.exactStateCadencePresentationReceipt }
           : null;
+        exactStateCadenceReadbackDisposition = state.exactStateCadencePresentationDisposition;
+        exactStateCadenceReadbackHoldReceipt = exactStateCadenceReadbackDisposition === 'held-lead-underflow'
+          && state.exactStateCadencePresentationHoldReceipt
+          ? { ...state.exactStateCadencePresentationHoldReceipt }
+          : null;
         if (!exactStateCadenceReadbackApplied) {
           buffer.destroy();
           const validationError = await device.popErrorScope();
@@ -15515,6 +15592,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             exactStateCadenceReadbackRequested,
             exactStateCadenceReadbackApplied,
             exactStateCadenceReadbackReceipt,
+            exactStateCadenceReadbackDisposition,
+            exactStateCadenceReadbackHoldReceipt,
             exactStateCadenceFallbackReason: state.exactStateCadenceFallbackReason,
           };
         }
@@ -15626,6 +15705,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       { width: state.width, height: state.height, depthOrArrayLayers: 1 }
     );
     device.queue.submit([encoder.finish()]);
+    if (
+      exactStateCadenceReadbackApplied
+      && exactStateCadenceReadbackDisposition === 'interpolated'
+    ) {
+      exactStateCadenceReadbackReceipt = {
+        ...markExactStateCadencePresentationSubmitted(
+          performance.now(),
+          exactStateCadenceReadbackReceipt,
+        ),
+      };
+    }
     if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
     const validationError = await device.popErrorScope();
     if (validationError) {
@@ -16169,6 +16259,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       exactStateCadenceReadbackRequested,
       exactStateCadenceReadbackApplied,
       exactStateCadenceReadbackReceipt,
+      exactStateCadenceReadbackDisposition,
+      exactStateCadenceReadbackHoldReceipt,
       sameStateCaptureId,
       baseFrameCount,
       baseSimStepCount,

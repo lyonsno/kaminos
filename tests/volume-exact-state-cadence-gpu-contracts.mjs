@@ -82,5 +82,28 @@ const encoded = fakeRuntime.encodePresentation(fakeEncoder, selected.receipt);
 assert.equal(encoded.ok, true);
 assert.equal(encoded.receipt.status, 'encoded-not-submitted', 'presentation telemetry cannot claim selection alone is encoded');
 assert.equal(encoded.receipt.selectionStatus, 'selected');
+assert.equal(fakeRuntime.debugState().lastSubmittedPresentationReceipt, null, 'encoding alone cannot become visible presentation authority');
+const mismatchedSubmission = fakeRuntime.markPresentationSubmitted({
+  ...encoded.receipt,
+  sourcePosition: encoded.receipt.sourcePosition + 1,
+}, 1000);
+assert.equal(mismatchedSubmission.ok, false, 'an arbitrary encoded receipt cannot impersonate the command buffer just encoded');
+assert.equal(mismatchedSubmission.reason, 'exact-state-presentation-submission-receipt-mismatch');
+const submitted = fakeRuntime.markPresentationSubmitted(encoded.receipt, 1001);
+assert.equal(submitted.ok, true);
+assert.equal(submitted.receipt.status, 'submitted-visible');
+assert.equal(submitted.receipt.encodedStatus, 'encoded-not-submitted');
+assert.equal(submitted.receipt.sourcePosition, encoded.receipt.sourcePosition);
+assert.deepEqual(fakeRuntime.debugState().lastSubmittedPresentationReceipt, submitted.receipt);
+const debugSnapshot = fakeRuntime.debugState();
+debugSnapshot.lastSubmittedPresentationReceipt.sourcePosition += 100;
+assert.equal(
+  fakeRuntime.debugState().lastSubmittedPresentationReceipt.sourcePosition,
+  submitted.receipt.sourcePosition,
+  'mutating debug telemetry cannot forge the private submitted presentation authority',
+);
+fakeRuntime.reset({ controlGeneration: 2, reason: 'test-reset' });
+assert.equal(fakeRuntime.debugState().lastPresentationReceipt, null, 'reset clears stale encoded presentation identity');
+assert.equal(fakeRuntime.debugState().lastSubmittedPresentationReceipt, null, 'reset clears stale visible presentation identity');
 
 console.log('exact-state cadence GPU contracts passed');
