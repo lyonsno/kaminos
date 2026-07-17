@@ -152,9 +152,24 @@ function wsRequest(socket, method, params = {}, timeoutMs = 0) {
   const id = socket._nextId = (socket._nextId || 0) + 1;
   socket.send(JSON.stringify({ id, method, params }));
   return new Promise((resolveRequest, rejectRequest) => {
-    const timer = timeoutMs > 0 ? setTimeout(() => {
+    let settled = false;
+    let timer = null;
+    function cleanup() {
+      if (timer) clearTimeout(timer);
       socket.removeEventListener('message', onMessage);
-      rejectRequest(new Error(`${method}: CDP request timed out`));
+      socket.removeEventListener('close', onClose);
+      socket.removeEventListener('error', onError);
+    }
+    function rejectOnce(error) {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      rejectRequest(error);
+    }
+    function onClose() { rejectOnce(new Error(`${method}: CDP target closed before response`)); }
+    function onError() { rejectOnce(new Error(`${method}: CDP target socket failed before response`)); }
+    timer = timeoutMs > 0 ? setTimeout(() => {
+      rejectOnce(new Error(`${method}: CDP request timed out`));
     }, timeoutMs) : null;
     const onMessage = event => {
       const message = JSON.parse(String(event.data));
@@ -171,12 +186,15 @@ function wsRequest(socket, method, params = {}, timeoutMs = 0) {
         });
       }
       if (message.id !== id) return;
-      if (timer) clearTimeout(timer);
-      socket.removeEventListener('message', onMessage);
+      if (settled) return;
+      settled = true;
+      cleanup();
       if (message.error) rejectRequest(new Error(`${method}: ${message.error.message}`));
       else resolveRequest(message.result);
     };
     socket.addEventListener('message', onMessage);
+    socket.addEventListener('close', onClose, { once: true });
+    socket.addEventListener('error', onError, { once: true });
   });
 }
 
