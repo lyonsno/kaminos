@@ -82,6 +82,63 @@ assert.match(selfTest.stdout, /compound optical mass contracts passed/);
 assert.match(selfTest.stdout, /selective split contracts passed/);
 assert.match(selfTest.stdout, /deposition raster smoke contracts passed/);
 
+const massAuthorityProbe = spawnSync(python, ['-c', String.raw`
+import importlib.util
+import json
+import numpy as np
+import sys
+
+spec = importlib.util.spec_from_file_location("coefficient_oracle", sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+identity = np.eye(4, dtype=np.float64).reshape(-1, order="F").tolist()
+camera = {
+    "cameraIndex": 0,
+    "width": 16,
+    "height": 16,
+    "cameraPose": {"matrixWorldInverse": identity, "projectionMatrix": identity},
+}
+_, receipt = module.rasterize_coefficients(
+    np.asarray([[0.98, 0.0, -0.5]], dtype=np.float32),
+    np.asarray([[0.0, 1.0, 0.0]], dtype=np.float32),
+    np.zeros((1, len(module.FEATURE_ORDER)), dtype=np.float32),
+    np.ones((1, 8), dtype=np.float32),
+    camera,
+    4,
+    "bilinear",
+    module.bilinear_footprint_controls(),
+)
+mass = receipt["coefficientMass"]
+assert mass["nominalKernelMassConserved"] is True
+assert mass["inViewportMassConserved"] is False
+assert mass["viewportMassEvidenceAuthority"] == "non-decision-bearing-clipped-framing-v0"
+assert all(0.0 < value < 1.0 for value in mass["viewportRetentionFraction"])
+summary = module.summarize_coefficient_mass([mass])
+assert summary["allNominalKernelMassConserved"] is True
+assert summary["clippedCameraCount"] == 1
+assert summary["viewportMassEvidenceAuthority"] == "non-decision-bearing-clipped-framing-v0"
+assert summary["imageMetricAuthority"] == "decision-bearing-exact-frozen-viewport-v0"
+try:
+    module.coefficient_mass_receipt(
+        np.ones(8, dtype=np.float64),
+        np.full(8, 0.9, dtype=np.float64),
+        np.full(8, 0.8, dtype=np.float64),
+    )
+except ValueError as exc:
+    assert "nominal kernel changed coefficient mass" in str(exc)
+else:
+    raise AssertionError("nominal kernel mass defect did not fail loud")
+print(json.dumps(mass, sort_keys=True))
+`, script.pathname], { encoding: 'utf8' });
+assert.equal(
+  massAuthorityProbe.status,
+  0,
+  massAuthorityProbe.stderr || massAuthorityProbe.stdout || 'mass authority probe failed',
+);
+const clippedMass = JSON.parse(massAuthorityProbe.stdout);
+assert.equal(clippedMass.clippingDetected, true);
+assert.equal(clippedMass.centerVisibleRows, 1);
+
 const root = await mkdtemp(join(tmpdir(), 'kaminos-coefficient-render-contract-'));
 const reportPath = join(root, 'failure-report.json');
 const invalidManifestPath = join(root, 'invalid.json');

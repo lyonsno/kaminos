@@ -570,6 +570,100 @@ def bilinear_footprint_controls() -> dict[str, Any]:
     }
 
 
+def coefficient_mass_receipt(
+    expected_mass: np.ndarray,
+    nominal_kernel_mass: np.ndarray,
+    in_viewport_mass: np.ndarray,
+    center_visible_rows: int | None = None,
+) -> dict[str, Any]:
+    expected_mass = np.asarray(expected_mass, dtype=np.float64)
+    nominal_kernel_mass = np.asarray(nominal_kernel_mass, dtype=np.float64)
+    in_viewport_mass = np.asarray(in_viewport_mass, dtype=np.float64)
+    require(expected_mass.shape == (8,), "expected coefficient mass must contain eight channels")
+    require(nominal_kernel_mass.shape == expected_mass.shape, "nominal kernel coefficient mass shape drifted")
+    require(in_viewport_mass.shape == expected_mass.shape, "in-viewport coefficient mass shape drifted")
+    require(
+        bool(np.all(np.isfinite(expected_mass)))
+        and bool(np.all(np.isfinite(nominal_kernel_mass)))
+        and bool(np.all(np.isfinite(in_viewport_mass))),
+        "coefficient mass accounting contains nonfinite values",
+    )
+    tolerance = 2e-4 + np.abs(expected_mass) * 5e-5
+    nominal_delta = nominal_kernel_mass - expected_mass
+    nominal_conserved = np.abs(nominal_delta) <= tolerance
+    require(
+        bool(np.all(nominal_conserved)),
+        "nominal kernel changed coefficient mass: "
+        + canonical_json({
+            "expected": expected_mass.tolist(),
+            "nominalKernel": nominal_kernel_mass.tolist(),
+            "delta": nominal_delta.tolist(),
+            "tolerance": tolerance.tolist(),
+            "failedChannels": np.flatnonzero(~nominal_conserved).tolist(),
+        }),
+    )
+    viewport_delta = in_viewport_mass - expected_mass
+    in_viewport_conserved = np.abs(viewport_delta) <= tolerance
+    retention = np.ones_like(expected_mass)
+    np.divide(
+        in_viewport_mass,
+        expected_mass,
+        out=retention,
+        where=np.abs(expected_mass) > tolerance,
+    )
+    clipping_detected = not bool(np.all(in_viewport_conserved))
+    receipt = {
+        "identity": "nominal-kernel-mass-with-explicit-viewport-retention-v1",
+        "expectedCenterVisible": expected_mass.tolist(),
+        "nominalKernel": nominal_kernel_mass.tolist(),
+        "nominalKernelDelta": nominal_delta.tolist(),
+        "nominalKernelMassConserved": True,
+        "inViewportDeposited": in_viewport_mass.tolist(),
+        "inViewportDelta": viewport_delta.tolist(),
+        "inViewportMassConserved": not clipping_detected,
+        "viewportRetentionFraction": retention.tolist(),
+        "clippingDetected": clipping_detected,
+        "viewportMassEvidenceAuthority": (
+            "non-decision-bearing-clipped-framing-v0"
+            if clipping_detected
+            else "decision-bearing-unclipped-framing-v0"
+        ),
+        "tolerance": tolerance.tolist(),
+    }
+    if center_visible_rows is not None:
+        receipt["centerVisibleRows"] = int(center_visible_rows)
+    return receipt
+
+
+def summarize_coefficient_mass(receipts: list[dict[str, Any]]) -> dict[str, Any]:
+    require(receipts, "coefficient mass summary requires at least one camera receipt")
+    require(
+        all(receipt.get("nominalKernelMassConserved") is True for receipt in receipts),
+        "camera receipt set contains non-conserved nominal kernel mass",
+    )
+    retention = np.asarray(
+        [receipt.get("viewportRetentionFraction") for receipt in receipts], dtype=np.float64,
+    )
+    require(retention.shape == (len(receipts), 8), "camera viewport retention ledger shape drifted")
+    require(bool(np.all(np.isfinite(retention))), "camera viewport retention ledger contains nonfinite values")
+    clipped_count = sum(bool(receipt.get("clippingDetected")) for receipt in receipts)
+    return {
+        "identity": "all-camera-nominal-mass-and-frozen-viewport-retention-summary-v1",
+        "cameraCount": len(receipts),
+        "clippedCameraCount": clipped_count,
+        "allNominalKernelMassConserved": True,
+        "minimumViewportRetentionByChannel": np.min(retention, axis=0).tolist(),
+        "meanViewportRetentionByChannel": np.mean(retention, axis=0).tolist(),
+        "viewportMassEvidenceAuthority": (
+            "non-decision-bearing-clipped-framing-v0"
+            if clipped_count > 0
+            else "decision-bearing-unclipped-framing-v0"
+        ),
+        "imageMetricAuthority": "decision-bearing-exact-frozen-viewport-v0",
+        "imageMetricInterpretation": "includes-boundary-clipping-of-frozen-framing-v0",
+    }
+
+
 def rasterize_coefficients(
     positions: np.ndarray,
     tangents: np.ndarray,
@@ -689,12 +783,18 @@ def rasterize_coefficients(
     effective_projected_rows = int(np.count_nonzero(valid & tangent_valid))
     require(effective_projected_rows > 0, f"camera {camera['cameraIndex']} retained zero effective projected rows")
     projected_fragments = 0
+    nominal_projected_fragments = 0
+    nominal_candidate_weight = np.zeros(positions.shape[0], dtype=np.float64)
     if footprint_mode != "selective-split":
         pixel_samples = (
             (sx, sy, sample_weight, depth_index)
             for sx, sy, sample_weight in pixel_samples
         )
     for sx, sy, sample_weight, sample_depth_index in pixel_samples:
+        nominal_selected = valid & tangent_valid & (sample_weight > 0.0)
+        nominal_rows = np.flatnonzero(nominal_selected)
+        nominal_projected_fragments += int(nominal_rows.size)
+        nominal_candidate_weight[nominal_rows] += sample_weight[nominal_rows].astype(np.float64, copy=False)
         selected = valid & tangent_valid & (sample_weight > 0.0) & (sx >= 0) & (sx < width) & (sy >= 0) & (sy < height)
         rows = np.flatnonzero(selected)
         projected_fragments += int(rows.size)
@@ -702,20 +802,15 @@ def rasterize_coefficients(
         for channel in range(8):
             planes[..., channel] += scatter_channel(flat, coefficients[rows, channel] * sample_weight[rows], raster_size).reshape(depth_bins, height, width)
     expected_mass = np.sum(coefficients[center_projected_mask], axis=0, dtype=np.float64)
-    deposited_mass = np.sum(planes, axis=(0, 1, 2), dtype=np.float64)
-    mass_delta = deposited_mass - expected_mass
-    mass_tolerance = 2e-4 + np.abs(expected_mass) * 5e-5
-    mass_conserved = np.abs(mass_delta) <= mass_tolerance
-    require(
-        bool(np.all(mass_conserved)),
-        "viewport clipping changed deposited coefficient mass: "
-        + canonical_json({
-            "expected": expected_mass.tolist(),
-            "deposited": deposited_mass.tolist(),
-            "delta": mass_delta.tolist(),
-            "tolerance": mass_tolerance.tolist(),
-            "failedChannels": np.flatnonzero(~mass_conserved).tolist(),
-        }),
+    nominal_kernel_mass = np.einsum(
+        "ij,i->j", coefficients, nominal_candidate_weight, dtype=np.float64,
+    )
+    in_viewport_mass = np.sum(planes, axis=(0, 1, 2), dtype=np.float64)
+    mass_receipt = coefficient_mass_receipt(
+        expected_mass,
+        nominal_kernel_mass,
+        in_viewport_mass,
+        int(np.count_nonzero(center_projected_mask)),
     )
     return planes, {
         "admittedRows": int(positions.shape[0]),
@@ -730,17 +825,10 @@ def rasterize_coefficients(
         "nominalQuadratureWeightSum": 1.0,
         "nominalQuadratureSamples": nominal_quadrature_samples,
         "nominalPixelDepositsPerCandidate": nominal_pixel_deposits,
+        "nominalProjectedFragments": nominal_projected_fragments,
         "projectedFragments": projected_fragments,
         "projectedFragmentsPerProjectedRow": float(projected_fragments / effective_projected_rows),
-        "coefficientMass": {
-            "identity": "center-visible-candidate-mass-equals-in-viewport-deposited-mass-v0",
-            "expected": expected_mass.tolist(),
-            "deposited": deposited_mass.tolist(),
-            "delta": mass_delta.tolist(),
-            "tolerance": mass_tolerance.tolist(),
-            "conserved": True,
-            "centerVisibleRows": int(np.count_nonzero(center_projected_mask)),
-        },
+        "coefficientMass": mass_receipt,
         "postProcessBlur": False,
         "footprintControls": footprint_controls,
         "effectiveSkirtMix": {
@@ -1268,6 +1356,9 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
         })
     phase_state["value"] = "report-assembly"
     held = [row for row in metrics_rows if row["split"] == "heldOut"]
+    mass_accounting = summarize_coefficient_mass([
+        row["raster"]["coefficientMass"] for row in metrics_rows
+    ])
     report = {
         "schema": REPORT_SCHEMA,
         "status": "complete",
@@ -1320,6 +1411,7 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
             "bracketUpper": calibration_fit["bracketUpper"],
         },
         "selectiveSplit": split_receipt,
+        "massAccounting": mass_accounting,
         "metrics": {
             "cameras": metrics_rows,
             "heldOutMean": {
@@ -1521,20 +1613,19 @@ def self_test() -> None:
     occupied_depth_bins = np.flatnonzero(depth_mass > 1e-6)
     require(np.array_equal(occupied_depth_bins, [1, 4, 6]), f"selective children did not use their own projected depth bins: {occupied_depth_bins.tolist()}")
     require(np.allclose(depth_mass[occupied_depth_bins], [0.25, 0.5, 0.25], atol=1e-6), "selective child depth planes received the wrong coefficient mass")
-    edge_failure = None
-    try:
-        rasterize_coefficients(
-            np.asarray([[0.98, 0.0, -0.5]], dtype=np.float32),
-            np.asarray([[0.0, 1.0, 0.0]], dtype=np.float32),
-            np.zeros((1, len(FEATURE_ORDER)), dtype=np.float32),
-            np.ones((1, 8), dtype=np.float32),
-            raster_camera, 4, "selective-split", selective_controls,
-            np.asarray([True], dtype=np.bool_),
-            np.asarray([[0.2, 0.0, 0.0]], dtype=np.float32),
-        )
-    except ValueError as exc:
-        edge_failure = str(exc)
-    require(edge_failure is not None and "viewport clipping changed deposited coefficient mass" in edge_failure, "selective edge clipping did not fail loud on coefficient-mass loss")
+    _, edge_receipt = rasterize_coefficients(
+        np.asarray([[0.98, 0.0, -0.5]], dtype=np.float32),
+        np.asarray([[0.0, 1.0, 0.0]], dtype=np.float32),
+        np.zeros((1, len(FEATURE_ORDER)), dtype=np.float32),
+        np.ones((1, 8), dtype=np.float32),
+        raster_camera, 4, "selective-split", selective_controls,
+        np.asarray([True], dtype=np.bool_),
+        np.asarray([[0.2, 0.0, 0.0]], dtype=np.float32),
+    )
+    edge_mass = edge_receipt["coefficientMass"]
+    require(edge_mass["nominalKernelMassConserved"], "selective edge fixture changed nominal kernel mass")
+    require(not edge_mass["inViewportMassConserved"], "selective edge fixture did not diagnose viewport clipping")
+    require(edge_mass["viewportMassEvidenceAuthority"] == "non-decision-bearing-clipped-framing-v0", "selective edge clipping retained coefficient-mass authority")
     print("deposition raster smoke contracts passed")
     metric_target = np.zeros((10, 10, 3), dtype=np.uint8)
     metric_target[4:6, 4:6] = 255
