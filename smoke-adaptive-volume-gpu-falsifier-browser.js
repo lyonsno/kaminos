@@ -4,6 +4,7 @@ import {
   ADAPTIVE_VOLUME_GPU_ROUTE,
   ADAPTIVE_VOLUME_SCALE_LAW_SCHEMA,
   DENSE_DENIAL_METHOD,
+  FULL_SELECTION_AGAINST_DENSE_MAXIMUM_ABSOLUTE_ERROR,
   bitonicSortRecordCount,
   buildBitonicSortStages,
   buildCompactSmokeProduct,
@@ -323,29 +324,36 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let fineStep = min(min((p.maximum.x - p.minimum.x), (p.maximum.y - p.minimum.y)), (p.maximum.z - p.minimum.z)) / f32(p.grid) / p.samplesPerCell;
   var distance = ray.directionStart.w;
   var depth = 0.0;
-  for (var crossing = 0u; crossing < 512u; crossing++) {
-    if (distance >= ray.endPad.x) { break; }
-    let probeDistance = min(ray.endPad.x, distance + 1e-6);
-    let point = p.cameraPosition.xyz + ray.directionStart.xyz * probeDistance;
-    let cell = pointCell(point, p);
+  var globalStep = 0u;
+  loop {
+    if (distance >= ray.endPad.x || globalStep >= 1024u) { break; }
+    let segment = min(fineStep, ray.endPad.x - distance);
+    let samplePoint = p.cameraPosition.xyz + ray.directionStart.xyz * (distance + segment * 0.5);
+    let cell = pointCell(samplePoint, p);
     let brick = cell / p.blockSize;
     let index = brickIndex(brick);
-    let exitDelta = brickExitDistance(point, ray.directionStart.xyz, brick);
-    let segmentEnd = min(ray.endPad.x, probeDistance + exitDelta);
     let slot = indirection[index];
-    if (slot < 0) {
-      depth += coarse[index] * max(0.0, segmentEnd - distance) * p.extinction;
+    if (slot >= 0) {
+      depth += sampleAtlas(samplePoint, brick, u32(slot)) * segment * p.extinction;
+      distance += segment;
+      globalStep += 1u;
     } else {
-      var fineDistance = distance;
-      for (var fine = 0u; fine < 64u; fine++) {
-        if (fineDistance >= segmentEnd) { break; }
-        let segment = min(fineStep, segmentEnd - fineDistance);
-        let samplePoint = p.cameraPosition.xyz + ray.directionStart.xyz * (fineDistance + segment * 0.5);
-        depth += sampleAtlas(samplePoint, brick, u32(slot)) * segment * p.extinction;
-        fineDistance += segment;
+      var runDistance = distance;
+      var runLength = 0.0;
+      for (var run = 0u; run < 64u; run++) {
+        if (runDistance >= ray.endPad.x || globalStep >= 1024u) { break; }
+        let runSegment = min(fineStep, ray.endPad.x - runDistance);
+        let runSamplePoint = p.cameraPosition.xyz + ray.directionStart.xyz * (runDistance + runSegment * 0.5);
+        let runCell = pointCell(runSamplePoint, p);
+        let runIndex = brickIndex(runCell / p.blockSize);
+        if (runIndex != index) { break; }
+        runLength += runSegment;
+        runDistance += runSegment;
+        globalStep += 1u;
       }
+      depth += coarse[index] * runLength * p.extinction;
+      distance = runDistance;
     }
-    distance = max(segmentEnd, distance + 1e-6);
   }
   output[pixel] = depth;
 }
@@ -1200,6 +1208,9 @@ async function run() {
         )),
         outputIncomplete: scaleLawWorkloads.some(row => !row.outputsComplete),
         outputError: scaleLawWorkloads.some(row => row.comparison.maximumAbsoluteError > ADAPTIVE_VOLUME_GPU_ERROR_LIMITS.compactPrebuiltAgainstDenseMaximumAbsoluteError),
+        fullSelectionParity: selected.length === brickCount && scaleLawWorkloads.some(
+          row => row.comparison.maximumAbsoluteError > FULL_SELECTION_AGAINST_DENSE_MAXIMUM_ABSOLUTE_ERROR,
+        ),
         productionAttributionOverclaim: productionAttribution.measuredProductionBottleneck !== false,
       },
       claimBoundary: 'Amplified static single-channel traversal scaling only. Production source inspection is exact but unmeasured; no production bottleneck, total-frame speedup, temporal cadence, or integration claim is authorized.',

@@ -72,6 +72,7 @@ const validReport = {
     },
     sourceGrid: 4,
     coarseGrid: 2,
+    physicalBrickCount: 8,
     blockSize: 2,
   },
   runtime: {
@@ -210,6 +211,19 @@ validScaleReport.scaleLaw = {
   },
 };
 assert.equal(validateAdaptiveVolumeScaleLawReport(validScaleReport).scaleLawEvidenceAllowed, true);
+
+const invalidFullSelectionParity = structuredClone(validScaleReport);
+invalidFullSelectionParity.compactProduct.selectedBrickCount = invalidFullSelectionParity.effective.physicalBrickCount;
+for (const workload of invalidFullSelectionParity.scaleLaw.effective.workloads) {
+  workload.comparison.maximumAbsoluteError = 0.0001;
+  workload.comparison.maximumPair = { left: 0.1, right: 0.1001 };
+  workload.comparison.absoluteErrorQuantiles = { p99: 0.00001, p999: 0.00005, p9999: 0.00009 };
+}
+assert.equal(
+  validateAdaptiveVolumeScaleLawReport(invalidFullSelectionParity).scaleLawEvidenceAllowed,
+  false,
+  'a full brick atlas must reproduce globally aligned dense integration more tightly than an adaptive approximation',
+);
 
 for (const mutate of [
   report => { report.scaleLaw.effective.workloads.pop(); },
@@ -350,6 +364,9 @@ assert.match(
   'R8c must measure each arm in its own timestamped submission',
 );
 assert.match(browser, /pairedRatioByOrder/, 'R8c must expose residual execution-order bias instead of averaging it away');
+assert.match(browser, /var globalStep = 0u/, 'sparse traversal must preserve the dense global fine-step lattice');
+assert.doesNotMatch(browser, /var fineDistance = distance/, 'sparse traversal must not restart quadrature at brick boundaries');
+assert.match(browser, /pointCell\(samplePoint, p\)/, 'fine/coarse support must be selected at the globally aligned segment midpoint');
 assert.match(browser, /absoluteErrorQuantiles/, 'R8b must distinguish a broad reconstruction failure from an extreme-value tail');
 assert.match(browser, /aboveErrorLimitCount/, 'R8b must report how many pixels violate the immutable max-error gate');
 assert.match(browser, /renderScaleLawSummary/, 'R8b screenshot must expose role-labeled scale timing and error rows');

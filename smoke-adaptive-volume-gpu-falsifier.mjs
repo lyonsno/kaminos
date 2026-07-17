@@ -8,6 +8,7 @@ export const ADAPTIVE_VOLUME_GPU_ERROR_LIMITS = Object.freeze({
   compactPrebuiltAgainstDenseMaximumAbsoluteError: 1e-3,
   buildCompactAgainstDenseMaximumAbsoluteError: 1e-3,
 });
+export const FULL_SELECTION_AGAINST_DENSE_MAXIMUM_ABSOLUTE_ERROR = 1e-5;
 
 function positiveInteger(value, label) {
   const number = Number(value);
@@ -321,6 +322,11 @@ export function validateAdaptiveVolumeScaleLawReport(report) {
         reasons.push(`${prefix}:error-exceedance-invalid`);
       }
     }
+  }
+  if (Number(report?.compactProduct?.selectedBrickCount) === Number(report?.effective?.physicalBrickCount)
+    && Array.isArray(workloads)
+    && workloads.some(workload => Number(workload?.comparison?.maximumAbsoluteError) > FULL_SELECTION_AGAINST_DENSE_MAXIMUM_ABSOLUTE_ERROR)) {
+    reasons.push('full-selection-parity-error');
   }
   const attribution = scaleLaw?.productionAttribution;
   if (attribution?.authority !== 'static-production-shader-source-inspection-v0') reasons.push('production-attribution-authority-missing');
