@@ -1,6 +1,6 @@
 {
   "schema": "kaminos.pyro-control-path.browser-gpu-frozen-capture-comparison.v0",
-  "generatedAt": "2026-07-17T17:31:51.255Z",
+  "generatedAt": "2026-07-17T18:00:31.077Z",
   "control": "volume_reaction_boundary_support_front",
   "classification": "browser-gpu-frozen-capture-positive",
   "requested": {
@@ -8,6 +8,8 @@
     "treatment": "1.6",
     "baselineUrlValue": "0.4",
     "treatmentUrlValue": "1.6",
+    "baselineEffectiveValue": 0.4,
+    "treatmentEffectiveValue": 1.6,
     "effectiveEqualsRequested": true
   },
   "identity": {
@@ -19,7 +21,31 @@
     "sameStateAuthority": "same-state-selective-render-composition-v0",
     "baselineSimStep": 96,
     "treatmentSimStep": 96,
-    "sourceStateComparable": true
+    "sourceStateComparable": true,
+    "sourceStateIdentity": {
+      "identity": "selective-head-live-frozen-source-state-v0",
+      "routeIdentity": "exact-basin-selective-head-live-v0",
+      "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0",
+      "sameStateAuthority": "same-state-selective-render-composition-v0",
+      "warmupAuthority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+      "warmupTarget": 96,
+      "capturePaused": true,
+      "simStepCount": 96,
+      "backend": "WebGPU:apple",
+      "warmupReceipt": {
+        "ok": true,
+        "authority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+        "completedSteps": 96,
+        "grid": 160,
+        "fluidUrl": "http://127.0.0.1:18537/fluid.f32",
+        "frontUrl": "http://127.0.0.1:18537/front.f32",
+        "fluidSha256": "d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1",
+        "frontSha256": "1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8",
+        "fluidByteLength": 262144000,
+        "frontByteLength": 16384000,
+        "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0"
+      }
+    }
   },
   "fallback": null,
   "postLoadMutation": null,
@@ -29,7 +55,7 @@
   },
   "deltas": {
     "screenshotHashChangedCount": 3,
-    "screenshotByteLengthMeanAbs": 38639.333333333336,
+    "screenshotByteLengthMeanAbs": 16284.666666666666,
     "boundarySplatGpuProfile": {
       "candidateCopyBytesMeanAbs": 0
     }
@@ -46,14 +72,22 @@
         "simStepCount": 96,
         "beforeSimStepCount": 96,
         "frameCount": 97,
-        "renderElapsedMs": 30.012374999991152,
+        "renderElapsedMs": 31.4876660000009,
         "boundarySplatGpuProfile": null,
         "screenshot": {
           "path": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-support-front/baseline-paused/01-splat-only-v0.png",
-          "byteLength": 1522102,
-          "sha256": "20a24e7ee0d9b34b35f412a02212d3d8727a05e4f5576dda96642b2d1bf73493"
+          "byteLength": 1280729,
+          "sha256": "bfb2c35c55cfd5b971e5eceb138c8c0dc32912bc373d5e30de8d0f4fbae3f684",
+          "captureScope": "canvas-only",
+          "clip": {
+            "x": 380,
+            "y": 0,
+            "width": 1240,
+            "height": 760,
+            "scale": 1
+          }
         },
-        "sha256": "20a24e7ee0d9b34b35f412a02212d3d8727a05e4f5576dda96642b2d1bf73493"
+        "sha256": "bfb2c35c55cfd5b971e5eceb138c8c0dc32912bc373d5e30de8d0f4fbae3f684"
       },
       "treatment": {
         "requestedComposition": "splat-only-v0",
@@ -64,14 +98,22 @@
         "simStepCount": 96,
         "beforeSimStepCount": 96,
         "frameCount": 97,
-        "renderElapsedMs": 28.060207999980776,
+        "renderElapsedMs": 15.555208000005223,
         "boundarySplatGpuProfile": null,
         "screenshot": {
           "path": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-support-front/treatment-paused/01-splat-only-v0.png",
-          "byteLength": 1572272,
-          "sha256": "09dcf9f39bf9eb6e552fb78b192d60cb301f34be09c2f525e5fb0b6e068b1409"
+          "byteLength": 1318230,
+          "sha256": "130f9f442058f282b91c11334b1eb9549bfed01428af7065228bac9edc831c45",
+          "captureScope": "canvas-only",
+          "clip": {
+            "x": 380,
+            "y": 0,
+            "width": 1240,
+            "height": 760,
+            "scale": 1
+          }
         },
-        "sha256": "09dcf9f39bf9eb6e552fb78b192d60cb301f34be09c2f525e5fb0b6e068b1409"
+        "sha256": "130f9f442058f282b91c11334b1eb9549bfed01428af7065228bac9edc831c45"
       },
       "passReceipt": {
         "baseline": {
@@ -103,7 +145,7 @@
       },
       "deltas": {
         "screenshotHashChanged": true,
-        "screenshotByteLengthAbs": 50170,
+        "screenshotByteLengthAbs": 37501,
         "candidateCopyBytesAbs": 0
       }
     },
@@ -118,14 +160,22 @@
         "simStepCount": 96,
         "beforeSimStepCount": 96,
         "frameCount": 98,
-        "renderElapsedMs": 51.168791000003694,
+        "renderElapsedMs": 17.43370799999684,
         "boundarySplatGpuProfile": null,
         "screenshot": {
           "path": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-support-front/baseline-paused/02-smoke-raymarch-under-splats-v0.png",
-          "byteLength": 1681526,
-          "sha256": "fd50af19b2d3deaccc795fcaa04ade60bc6bd599abdf186808e6de84eef416a9"
+          "byteLength": 1585174,
+          "sha256": "a12474d530c782a2adebc4457200b2bfe8da9be15daafa99820e6437caf85afa",
+          "captureScope": "canvas-only",
+          "clip": {
+            "x": 380,
+            "y": 0,
+            "width": 1240,
+            "height": 760,
+            "scale": 1
+          }
         },
-        "sha256": "fd50af19b2d3deaccc795fcaa04ade60bc6bd599abdf186808e6de84eef416a9"
+        "sha256": "a12474d530c782a2adebc4457200b2bfe8da9be15daafa99820e6437caf85afa"
       },
       "treatment": {
         "requestedComposition": "smoke-raymarch-under-splats-v0",
@@ -136,14 +186,22 @@
         "simStepCount": 96,
         "beforeSimStepCount": 96,
         "frameCount": 98,
-        "renderElapsedMs": 25.084499999997206,
+        "renderElapsedMs": 12.371000000013737,
         "boundarySplatGpuProfile": null,
         "screenshot": {
           "path": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-support-front/treatment-paused/02-smoke-raymarch-under-splats-v0.png",
-          "byteLength": 1713567,
-          "sha256": "eb2045fc8d972f6930112559d6782d0f70b8ac06c52289812315d6888d1ea2ef"
+          "byteLength": 1588610,
+          "sha256": "9076895c850da7ef75d68e46467183651338f7504d929e1bf668ed39f7df0b0f",
+          "captureScope": "canvas-only",
+          "clip": {
+            "x": 380,
+            "y": 0,
+            "width": 1240,
+            "height": 760,
+            "scale": 1
+          }
         },
-        "sha256": "eb2045fc8d972f6930112559d6782d0f70b8ac06c52289812315d6888d1ea2ef"
+        "sha256": "9076895c850da7ef75d68e46467183651338f7504d929e1bf668ed39f7df0b0f"
       },
       "passReceipt": {
         "baseline": {
@@ -175,7 +233,7 @@
       },
       "deltas": {
         "screenshotHashChanged": true,
-        "screenshotByteLengthAbs": 32041,
+        "screenshotByteLengthAbs": 3436,
         "candidateCopyBytesAbs": 0
       }
     },
@@ -190,14 +248,22 @@
         "simStepCount": 96,
         "beforeSimStepCount": 96,
         "frameCount": 99,
-        "renderElapsedMs": 45.59899999998743,
+        "renderElapsedMs": 14.764999999984866,
         "boundarySplatGpuProfile": null,
         "screenshot": {
           "path": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-support-front/baseline-paused/03-full-raymarch-under-splats-diagnostic-v0.png",
-          "byteLength": 1681407,
-          "sha256": "2c9532bfe5bc30d774504a80a73e98c19783ab84b227976dd3a7328f2b8ce26f"
+          "byteLength": 1584352,
+          "sha256": "95ddea6c0a54b1cbb7b8bca4b1b3c71763f7723d737b74531c4423a3d12808e2",
+          "captureScope": "canvas-only",
+          "clip": {
+            "x": 380,
+            "y": 0,
+            "width": 1240,
+            "height": 760,
+            "scale": 1
+          }
         },
-        "sha256": "2c9532bfe5bc30d774504a80a73e98c19783ab84b227976dd3a7328f2b8ce26f"
+        "sha256": "95ddea6c0a54b1cbb7b8bca4b1b3c71763f7723d737b74531c4423a3d12808e2"
       },
       "treatment": {
         "requestedComposition": "full-raymarch-under-splats-diagnostic-v0",
@@ -208,14 +274,22 @@
         "simStepCount": 96,
         "beforeSimStepCount": 96,
         "frameCount": 99,
-        "renderElapsedMs": 14.278125000011642,
+        "renderElapsedMs": 13.59070800000336,
         "boundarySplatGpuProfile": null,
         "screenshot": {
           "path": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-support-front/treatment-paused/03-full-raymarch-under-splats-diagnostic-v0.png",
-          "byteLength": 1715114,
-          "sha256": "5b290d3ffa927f1e33bf9195764031879aea2b3ec75024746e7202ac96dcdfb5"
+          "byteLength": 1592269,
+          "sha256": "8ec3d944d5728de24bdd547a622e52492441bde88bb6add9b102add9eab6f91f",
+          "captureScope": "canvas-only",
+          "clip": {
+            "x": 380,
+            "y": 0,
+            "width": 1240,
+            "height": 760,
+            "scale": 1
+          }
         },
-        "sha256": "5b290d3ffa927f1e33bf9195764031879aea2b3ec75024746e7202ac96dcdfb5"
+        "sha256": "8ec3d944d5728de24bdd547a622e52492441bde88bb6add9b102add9eab6f91f"
       },
       "passReceipt": {
         "baseline": {
@@ -247,7 +321,7 @@
       },
       "deltas": {
         "screenshotHashChanged": true,
-        "screenshotByteLengthAbs": 33707,
+        "screenshotByteLengthAbs": 7917,
         "candidateCopyBytesAbs": 0
       }
     }

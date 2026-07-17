@@ -45,8 +45,12 @@ export function buildFrozenCaptureComparison({
   if (!control) throw new Error('frozen capture comparison requires a control');
   const baselineControlValue = reportControlValue(baselineReport, control, 'baseline');
   const treatmentControlValue = reportControlValue(treatmentReport, control, 'treatment');
+  const baselineEffectiveValue = reportEffectiveControlValue(baselineReport, control, 'baseline');
+  const treatmentEffectiveValue = reportEffectiveControlValue(treatmentReport, control, 'treatment');
   const effectiveEqualsRequested = baselineControlValue === String(requestedBaseline)
     && treatmentControlValue === String(requestedTreatment);
+  const effectiveControlsMatchRequested = controlValuesEqual(baselineEffectiveValue, requestedBaseline)
+    && controlValuesEqual(treatmentEffectiveValue, requestedTreatment);
   const baselineByComposition = capturesByComposition(baselineReport);
   const treatmentByComposition = capturesByComposition(treatmentReport);
   const captures = REQUIRED_COMPOSITIONS.map(composition => {
@@ -76,13 +80,15 @@ export function buildFrozenCaptureComparison({
   const hasDownstreamDelta = screenshotHashChangedCount > 0
     || screenshotByteLengthMeanAbs > 0
     || candidateCopyBytesMeanAbs > 0;
-  const sourceStateComparable = Number(baselineReport.sameStateSimStep) === Number(treatmentReport.sameStateSimStep);
+  const sourceStateComparable = sourceStatesComparable(baselineReport, treatmentReport);
   const passReceipts = captures.flatMap(item => [item.passReceipt.baseline, item.passReceipt.treatment]);
   const appliedPasses = {
     splatApplied: passReceipts.some(receipt => receipt?.splatApplied === true),
     raymarchApplied: passReceipts.some(receipt => receipt?.raymarchApplied === true),
   };
-  const classification = !sourceStateComparable
+  const classification = !effectiveEqualsRequested || !effectiveControlsMatchRequested
+    ? 'browser-gpu-frozen-capture-requested-effective-mismatch'
+    : !sourceStateComparable
     ? 'browser-gpu-frozen-capture-source-step-drift'
     : hasDownstreamDelta
       ? 'browser-gpu-frozen-capture-positive'
@@ -97,7 +103,9 @@ export function buildFrozenCaptureComparison({
       treatment: requestedTreatment,
       baselineUrlValue: baselineControlValue,
       treatmentUrlValue: treatmentControlValue,
-      effectiveEqualsRequested,
+      baselineEffectiveValue,
+      treatmentEffectiveValue,
+      effectiveEqualsRequested: effectiveEqualsRequested && effectiveControlsMatchRequested,
     },
     identity: {
       witnessSchema: baselineReport.schema,
@@ -109,9 +117,10 @@ export function buildFrozenCaptureComparison({
       baselineSimStep: baselineReport.sameStateSimStep,
       treatmentSimStep: treatmentReport.sameStateSimStep,
       sourceStateComparable,
+      sourceStateIdentity: baselineReport.sourceStateIdentity,
     },
-    fallback: null,
-    postLoadMutation: null,
+    fallback: fallbackReceipt(baselineReport, treatmentReport),
+    postLoadMutation: postLoadMutationReceipt(baselineReport, treatmentReport),
     appliedPasses,
     deltas: {
       screenshotHashChangedCount,
@@ -122,7 +131,13 @@ export function buildFrozenCaptureComparison({
     },
     captures,
   };
-  if (!sourceStateComparable) {
+  if (!effectiveEqualsRequested || !effectiveControlsMatchRequested) {
+    comparison.catches = 'browser-gpu-frozen-capture-requested-effective-mismatch';
+    comparison.falsifier = {
+      tripped: true,
+      reason: 'captured witness URL values or effective basin controls do not match the requested baseline/treatment perturbation',
+    };
+  } else if (!sourceStateComparable) {
     comparison.catches = 'browser-gpu-frozen-capture-source-step-drift';
     comparison.falsifier = {
       tripped: true,
@@ -145,6 +160,11 @@ function assertCapturedReport(report, label) {
   if (report.failurePhase != null) throw new Error(`${label} report carries failure phase: ${report.failurePhase}`);
   if (report.effectiveRoute !== EXPECTED_ROUTE) throw new Error(`${label} report has wrong effective route: ${report.effectiveRoute}`);
   if (report.sameStateAuthority !== EXPECTED_SAME_STATE_AUTHORITY) throw new Error(`${label} report has wrong same-state authority: ${report.sameStateAuthority}`);
+  if (Number.isFinite(Number(report.sameStateSimStep)) !== true) throw new Error(`${label} report sameStateSimStep is missing`);
+  if (report.sourceStateIdentity?.identity !== 'selective-head-live-frozen-source-state-v0') throw new Error(`${label} report source state identity is missing`);
+  if (report.sourceStateIdentity?.capturePaused !== true) throw new Error(`${label} report did not capture from a paused source state`);
+  if (report.sourceStateIdentity?.warmupReceipt?.authority !== 'checksum-bound-exact-basin-step96-field-anchor-v0') throw new Error(`${label} report warmup receipt is missing checksum-bound authority`);
+  if (report.effectiveControls?.identity !== 'selective-head-live-effective-basin-controls-v0') throw new Error(`${label} report effective controls are missing`);
   if (!Array.isArray(report.captures)) throw new Error(`${label} report captures are missing`);
   for (const composition of REQUIRED_COMPOSITIONS) {
     requiredCapture(capturesByComposition(report), composition, label);
@@ -172,6 +192,8 @@ function requiredCapture(captures, composition, label) {
   if (!capture) throw new Error(`${label} report missing ${composition} capture`);
   if (capture.effectiveComposition !== composition) throw new Error(`${label} ${composition} effective composition drifted`);
   if (!capture.screenshot?.sha256) throw new Error(`${label} ${composition} screenshot hash is missing`);
+  if (capture.screenshot?.captureScope !== 'canvas-only') throw new Error(`${label} ${composition} screenshot is not canvas-only`);
+  if (!capture.screenshot?.clip) throw new Error(`${label} ${composition} screenshot clip is missing`);
   if (!capture.passReceipt) throw new Error(`${label} ${composition} pass receipt is missing`);
   return capture;
 }
@@ -195,6 +217,46 @@ function captureEvidence(capture) {
 
 function mean(values) {
   return values.reduce((sum, value) => sum + Number(value || 0), 0) / Math.max(1, values.length);
+}
+
+function reportEffectiveControlValue(report, control, label) {
+  const value = report.effectiveControls?.[control];
+  if (value == null) throw new Error(`${label} report effective controls are missing ${control}`);
+  return value;
+}
+
+function controlValuesEqual(actual, expected) {
+  const actualNumber = Number(actual);
+  const expectedNumber = Number(expected);
+  if (Number.isFinite(actualNumber) && Number.isFinite(expectedNumber)) {
+    return Math.abs(actualNumber - expectedNumber) <= 1e-6;
+  }
+  return String(actual) === String(expected);
+}
+
+function sourceStatesComparable(baselineReport, treatmentReport) {
+  if (Number(baselineReport.sameStateSimStep) !== Number(treatmentReport.sameStateSimStep)) return false;
+  return stableJson(baselineReport.sourceStateIdentity) === stableJson(treatmentReport.sourceStateIdentity);
+}
+
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function fallbackReceipt(baselineReport, treatmentReport) {
+  const baseline = baselineReport.fallback || null;
+  const treatment = treatmentReport.fallback || null;
+  return baseline || treatment ? { baseline, treatment } : null;
+}
+
+function postLoadMutationReceipt(baselineReport, treatmentReport) {
+  const baseline = baselineReport.postLoadMutation || null;
+  const treatment = treatmentReport.postLoadMutation || null;
+  return baseline || treatment ? { baseline, treatment } : null;
 }
 
 function parseArgs(argv) {

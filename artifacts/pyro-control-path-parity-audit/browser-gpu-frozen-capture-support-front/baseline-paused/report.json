@@ -8,6 +8,57 @@
   "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0",
   "sameStateAuthority": "same-state-selective-render-composition-v0",
   "sameStateSimStep": 96,
+  "effectiveControls": {
+    "identity": "selective-head-live-effective-basin-controls-v0",
+    "volume_reaction_boundary_gradient": 2.85,
+    "volume_reaction_boundary_support_thermal": 1.76,
+    "volume_reaction_boundary_support_reaction": 2,
+    "volume_reaction_boundary_support_front": 0.4,
+    "volume_reaction_boundary_support_interface": 0,
+    "volume_reaction_boundary_cut": 0.55,
+    "volume_reaction_boundary_softness": 0.45,
+    "volume_reaction_boundary_core_reject": 0.92,
+    "volume_reaction_boundary_topology": 2.5,
+    "volume_reaction_boundary_fire_ridge": 2,
+    "volume_reaction_boundary_fire_ridge_cut": 0.36,
+    "volume_reaction_boundary_fire_tip": 1.16,
+    "volume_reaction_boundary_fire_erosion": 0.2,
+    "volume_boundary_sidecar_source": "baked",
+    "volume_boundary_sidecar_view": "off",
+    "volume_boundary_sidecar_blur": 0,
+    "volume_boundary_sidecar_width": 0,
+    "volume_boundary_sidecar_ridge": 0.46,
+    "volume_boundary_splat_mode": "learned",
+    "volume_boundary_splat_radius": 1,
+    "volume_boundary_splat_sharpness": 3.4,
+    "volume_boundary_splat_feature_capture": false
+  },
+  "sourceStateIdentity": {
+    "identity": "selective-head-live-frozen-source-state-v0",
+    "routeIdentity": "exact-basin-selective-head-live-v0",
+    "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0",
+    "sameStateAuthority": "same-state-selective-render-composition-v0",
+    "warmupAuthority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+    "warmupTarget": 96,
+    "capturePaused": true,
+    "simStepCount": 96,
+    "backend": "WebGPU:apple",
+    "warmupReceipt": {
+      "ok": true,
+      "authority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+      "completedSteps": 96,
+      "grid": 160,
+      "fluidUrl": "http://127.0.0.1:18537/fluid.f32",
+      "frontUrl": "http://127.0.0.1:18537/front.f32",
+      "fluidSha256": "d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1",
+      "frontSha256": "1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8",
+      "fluidByteLength": 262144000,
+      "frontByteLength": 16384000,
+      "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0"
+    }
+  },
+  "fallback": null,
+  "postLoadMutation": null,
   "compositions": [
     "splat-only-v0",
     "smoke-raymarch-under-splats-v0",
@@ -37,16 +88,16 @@
       "simStepCount": 96,
       "beforeSimStepCount": 96,
       "frameCount": 97,
-      "renderElapsedMs": 30.012374999991152,
-      "screenshotElapsedMs": 1356.9752920000174,
+      "renderElapsedMs": 31.4876660000009,
+      "screenshotElapsedMs": 615.5879999999888,
       "timing": {
         "timingEvidenceSource": "raf-and-queue-proxy",
         "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
-        "rafFps": 119.04761904762098,
-        "frameDeltaMs": 8.300000000000182,
-        "frameP95Ms": 8.399999999999864,
-        "cpuFrameMs": 0.5,
-        "cpuFrameP95Ms": 3,
+        "rafFps": 0,
+        "frameDeltaMs": 0,
+        "frameP95Ms": 0,
+        "cpuFrameMs": 0,
+        "cpuFrameP95Ms": 0,
         "queueDoneMs": null,
         "queueDoneP95Ms": null,
         "queueProbePending": false,
@@ -56,8 +107,16 @@
       "boundarySplatGpuProfile": null,
       "screenshot": {
         "path": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-support-front/baseline-paused/01-splat-only-v0.png",
-        "byteLength": 1522102,
-        "sha256": "20a24e7ee0d9b34b35f412a02212d3d8727a05e4f5576dda96642b2d1bf73493"
+        "byteLength": 1280729,
+        "sha256": "bfb2c35c55cfd5b971e5eceb138c8c0dc32912bc373d5e30de8d0f4fbae3f684",
+        "captureScope": "canvas-only",
+        "clip": {
+          "x": 380,
+          "y": 0,
+          "width": 1240,
+          "height": 760,
+          "scale": 1
+        }
       }
     },
     {
@@ -83,16 +142,16 @@
       "simStepCount": 96,
       "beforeSimStepCount": 96,
       "frameCount": 98,
-      "renderElapsedMs": 51.168791000003694,
-      "screenshotElapsedMs": 2270.8733750000247,
+      "renderElapsedMs": 17.43370799999684,
+      "screenshotElapsedMs": 975.341167000006,
       "timing": {
         "timingEvidenceSource": "raf-and-queue-proxy",
         "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
-        "rafFps": 119.04761904762098,
-        "frameDeltaMs": 8.300000000000182,
-        "frameP95Ms": 8.399999999999864,
-        "cpuFrameMs": 0.5,
-        "cpuFrameP95Ms": 3,
+        "rafFps": 0,
+        "frameDeltaMs": 0,
+        "frameP95Ms": 0,
+        "cpuFrameMs": 0,
+        "cpuFrameP95Ms": 0,
         "queueDoneMs": null,
         "queueDoneP95Ms": null,
         "queueProbePending": false,
@@ -102,8 +161,16 @@
       "boundarySplatGpuProfile": null,
       "screenshot": {
         "path": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-support-front/baseline-paused/02-smoke-raymarch-under-splats-v0.png",
-        "byteLength": 1681526,
-        "sha256": "fd50af19b2d3deaccc795fcaa04ade60bc6bd599abdf186808e6de84eef416a9"
+        "byteLength": 1585174,
+        "sha256": "a12474d530c782a2adebc4457200b2bfe8da9be15daafa99820e6437caf85afa",
+        "captureScope": "canvas-only",
+        "clip": {
+          "x": 380,
+          "y": 0,
+          "width": 1240,
+          "height": 760,
+          "scale": 1
+        }
       }
     },
     {
@@ -129,16 +196,16 @@
       "simStepCount": 96,
       "beforeSimStepCount": 96,
       "frameCount": 99,
-      "renderElapsedMs": 45.59899999998743,
-      "screenshotElapsedMs": 2298.6798750000016,
+      "renderElapsedMs": 14.764999999984866,
+      "screenshotElapsedMs": 986.6091670000169,
       "timing": {
         "timingEvidenceSource": "raf-and-queue-proxy",
         "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
-        "rafFps": 119.04761904762098,
-        "frameDeltaMs": 8.300000000000182,
-        "frameP95Ms": 8.399999999999864,
-        "cpuFrameMs": 0.5,
-        "cpuFrameP95Ms": 3,
+        "rafFps": 0,
+        "frameDeltaMs": 0,
+        "frameP95Ms": 0,
+        "cpuFrameMs": 0,
+        "cpuFrameP95Ms": 0,
         "queueDoneMs": null,
         "queueDoneP95Ms": null,
         "queueProbePending": false,
@@ -148,8 +215,16 @@
       "boundarySplatGpuProfile": null,
       "screenshot": {
         "path": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-support-front/baseline-paused/03-full-raymarch-under-splats-diagnostic-v0.png",
-        "byteLength": 1681407,
-        "sha256": "2c9532bfe5bc30d774504a80a73e98c19783ab84b227976dd3a7328f2b8ce26f"
+        "byteLength": 1584352,
+        "sha256": "95ddea6c0a54b1cbb7b8bca4b1b3c71763f7723d737b74531c4423a3d12808e2",
+        "captureScope": "canvas-only",
+        "clip": {
+          "x": 380,
+          "y": 0,
+          "width": 1240,
+          "height": 760,
+          "scale": 1
+        }
       }
     }
   ]

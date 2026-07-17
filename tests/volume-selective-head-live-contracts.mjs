@@ -113,6 +113,10 @@ assert.match(page, /volume_reaction_boundary_support_front/, 'page can forward s
 assert.match(page, /basinQuery\.set\(key, value\)/, 'page forwards selected outer URL params into the inner basin query');
 assert.match(page, /capture_paused/, 'page exposes a capture-paused start route for exact frozen-state comparison');
 assert.match(page, /setSelectiveHeadLiveCapturePaused\(true\)/, 'page can pause the live route before activating the render loop');
+assert.match(page, /effectiveBasinControls/, 'page exposes effective inner-basin control receipts for audit comparisons');
+assert.match(page, /selective-head-live-effective-basin-controls-v0/, 'page names effective control receipt authority');
+assert.match(page, /sourceStateIdentity/, 'page exposes a frozen source-state identity receipt');
+assert.match(page, /canvasClip/, 'page exposes canvas-only screenshot geometry for visual witnesses');
 
 const witness = readFileSync(witnessPath, 'utf8');
 assert.match(witness, /kaminos\.volume\.selective-head-live-witness\.v0/);
@@ -167,6 +171,10 @@ assert.match(compositionWitness, /smoke-raymarch-under-splats-v0/);
 assert.match(compositionWitness, /full-raymarch-under-splats-diagnostic-v0/);
 assert.match(compositionWitness, /selectiveHeadLivePassReceipt/);
 assert.match(compositionWitness, /renderElapsedMs/);
+assert.match(compositionWitness, /captureScope:\s*'canvas-only'/, 'composition witness records canvas-only screenshot scope');
+assert.match(compositionWitness, /toolbar'\)\.style\.display='none'/, 'composition witness hides outer route chrome before screenshot capture');
+assert.match(compositionWitness, /effectiveControls:\s*pausedState\.effectiveBasinControls/, 'composition witness records effective control receipts');
+assert.match(compositionWitness, /sourceStateIdentity:\s*pausedState\.sourceStateIdentity/, 'composition witness records frozen source-state receipts');
 assert.match(compositionWitness, /isInspectablePageTarget/);
 assert.ok(compositionWitness.includes('chrome-extension://'));
 assert.ok(compositionWitness.includes("lastTrustworthyEvidence = { phase: 'route-settle', state };"));

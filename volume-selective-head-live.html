@@ -154,6 +154,37 @@
       return basin.contentWindow?.__kaminosVolumePrototype || null;
     }
 
+    function effectiveBasinControls(state) {
+      const controls = state?.controls || {};
+      const boundary = controls.reactionBoundaryControls || {};
+      const sidecar = controls.boundarySidecarControls || {};
+      return {
+        identity: 'selective-head-live-effective-basin-controls-v0',
+        volume_reaction_boundary_gradient: boundary.gradientGain ?? controls.reactionBoundaryGradient ?? null,
+        volume_reaction_boundary_support_thermal: boundary.supportThermal ?? controls.reactionBoundarySupportThermal ?? null,
+        volume_reaction_boundary_support_reaction: boundary.supportReaction ?? controls.reactionBoundarySupportReaction ?? null,
+        volume_reaction_boundary_support_front: boundary.supportFront ?? controls.reactionBoundarySupportFront ?? null,
+        volume_reaction_boundary_support_interface: boundary.supportInterface ?? controls.reactionBoundarySupportInterface ?? null,
+        volume_reaction_boundary_cut: boundary.cut ?? controls.reactionBoundaryCut ?? null,
+        volume_reaction_boundary_softness: boundary.softness ?? controls.reactionBoundarySoftness ?? null,
+        volume_reaction_boundary_core_reject: boundary.coreReject ?? controls.reactionBoundaryCoreReject ?? null,
+        volume_reaction_boundary_topology: boundary.topologyGain ?? controls.reactionBoundaryTopology ?? null,
+        volume_reaction_boundary_fire_ridge: controls.reactionBoundaryFireControls?.ridgeGain ?? controls.reactionBoundaryFireRidge ?? null,
+        volume_reaction_boundary_fire_ridge_cut: controls.reactionBoundaryFireControls?.ridgeCut ?? controls.reactionBoundaryFireRidgeCut ?? null,
+        volume_reaction_boundary_fire_tip: controls.reactionBoundaryFireControls?.tipBreakup ?? controls.reactionBoundaryFireTip ?? null,
+        volume_reaction_boundary_fire_erosion: controls.reactionBoundaryFireControls?.topologyErosion ?? controls.reactionBoundaryFireErosion ?? null,
+        volume_boundary_sidecar_source: controls.boundarySidecarSource ?? null,
+        volume_boundary_sidecar_view: sidecar.view ?? controls.boundarySidecarView ?? null,
+        volume_boundary_sidecar_blur: sidecar.blur ?? controls.boundarySidecarBlur ?? null,
+        volume_boundary_sidecar_width: sidecar.stepWidth ?? controls.boundarySidecarWidth ?? null,
+        volume_boundary_sidecar_ridge: sidecar.ridgeGain ?? controls.boundarySidecarRidge ?? null,
+        volume_boundary_splat_mode: controls.boundarySplatMode ?? null,
+        volume_boundary_splat_radius: controls.boundarySplatRadius ?? null,
+        volume_boundary_splat_sharpness: controls.boundarySplatSharpness ?? null,
+        volume_boundary_splat_feature_capture: controls.boundarySplatFeatureCapture ?? null,
+      };
+    }
+
     function setRole(role) {
       if (!roles.includes(role)) return;
       requestedRole = role;
@@ -196,6 +227,19 @@
         modelIdentity: state?.selectiveHeadLiveModelIdentity || null,
         featureAuthority: state?.selectiveHeadLiveFeatureAuthority || null,
         pairAuthority: state?.selectiveHeadLivePairAuthority || null,
+        effectiveBasinControls: effectiveBasinControls(state),
+        sourceStateIdentity: {
+          identity: 'selective-head-live-frozen-source-state-v0',
+          routeIdentity: ROUTE_IDENTITY,
+          modelIdentity: state?.selectiveHeadLiveModelIdentity || null,
+          sameStateAuthority: 'same-state-selective-render-composition-v0',
+          warmupAuthority: WARMUP_AUTHORITY,
+          warmupTarget,
+          capturePaused: state?.selectiveHeadLiveCapturePaused || false,
+          simStepCount: state?.simStepCount || 0,
+          backend: state?.backend || null,
+          warmupReceipt,
+        },
         backend: state?.backend || null,
         simGrid: state?.simGrid || null,
         frameCount: state?.frameCount || 0,
@@ -245,6 +289,20 @@
       return prototype()?.setSelectiveHeadLiveCapturePaused?.(paused) || null;
     }
 
+    function canvasClip() {
+      const frameRect = basin.getBoundingClientRect();
+      const canvas = prototype()?.canvasElement?.() || basin.contentDocument?.querySelector('canvas');
+      const canvasRect = canvas?.getBoundingClientRect?.();
+      if (!canvasRect) return null;
+      return {
+        x: frameRect.left + canvasRect.left,
+        y: frameRect.top + canvasRect.top,
+        width: canvasRect.width,
+        height: canvasRect.height,
+        scale: 1,
+      };
+    }
+
     async function stepCaptureFrame() {
       return prototype()?.stepSelectiveHeadLiveCaptureFrame?.() || null;
     }
@@ -277,7 +335,7 @@
       ].filter(Boolean).join(' | ');
       requestAnimationFrame(loop);
     };
-    window.__kaminosSelectiveHeadLive = { routeIdentity: ROUTE_IDENTITY, debugState, setRole, setComposition, captureFrame, setCapturePaused, stepCaptureFrame };
+    window.__kaminosSelectiveHeadLive = { routeIdentity: ROUTE_IDENTITY, debugState, setRole, setComposition, captureFrame, setCapturePaused, canvasClip, stepCaptureFrame };
     loop();
     initializeWarmup().catch(error => { warmupError = error?.message || String(error); });
   </script>

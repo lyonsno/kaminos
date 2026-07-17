@@ -107,8 +107,12 @@ try {
   assert.equal(state?.status, 'running', 'route did not settle');
   assert.equal(state?.warmupComplete, true, 'warmup did not complete');
   assert.equal(state?.modelIdentity, MODEL, 'wrong model identity');
-  await evaluate('window.__kaminosSelectiveHeadLive.setCapturePaused(true)');
+  await evaluate("document.getElementById('toolbar').style.display='none'; window.__kaminosSelectiveHeadLive.setCapturePaused(true)");
   const pausedState = await evaluate('window.__kaminosSelectiveHeadLive.debugState()');
+  assert.equal(pausedState.capturePaused, true, 'route did not enter capture-paused state');
+  assert.equal(pausedState.sourceStateIdentity?.capturePaused, true, 'source state identity is not paused');
+  assert.equal(pausedState.sourceStateIdentity?.warmupReceipt?.authority, 'checksum-bound-exact-basin-step96-field-anchor-v0', 'source state warmup receipt is missing');
+  assert.equal(pausedState.effectiveBasinControls?.identity, 'selective-head-live-effective-basin-controls-v0', 'effective basin controls receipt is missing');
   const sameStateSimStep = Number(pausedState.simStepCount);
   const captures = [];
 
@@ -130,7 +134,13 @@ try {
     }
     const screenshotPath = join(outDir, `${String(index + 1).padStart(2, '0')}-${composition}.png`);
     const shotStart = performance.now();
-    const screenshot = await socket.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+    const clip = await evaluate('window.__kaminosSelectiveHeadLive.canvasClip()');
+    assert.ok(clip?.width > 32 && clip?.height > 32, `${composition} canvas clip is missing`);
+    const screenshot = await socket.call('Page.captureScreenshot', {
+      format: 'png',
+      captureBeyondViewport: false,
+      clip,
+    });
     const screenshotElapsedMs = performance.now() - shotStart;
     const screenshotBytes = Buffer.from(screenshot.data, 'base64');
     assert.ok(screenshotBytes.length > 1000, `${composition} screenshot was blank or missing`);
@@ -151,7 +161,11 @@ try {
       screenshotElapsedMs,
       timing: afterState.timing || null,
       boundarySplatGpuProfile: afterState.boundarySplatGpuProfile || null,
-      screenshot: artifact(screenshotPath),
+      screenshot: {
+        ...artifact(screenshotPath),
+        captureScope: 'canvas-only',
+        clip,
+      },
     });
   }
   lastTrustworthyEvidence = { sameStateSimStep, captures };
@@ -165,6 +179,10 @@ try {
     modelIdentity: MODEL,
     sameStateAuthority: 'same-state-selective-render-composition-v0',
     sameStateSimStep,
+    effectiveControls: pausedState.effectiveBasinControls,
+    sourceStateIdentity: pausedState.sourceStateIdentity,
+    fallback: null,
+    postLoadMutation: null,
     compositions: COMPOSITIONS,
     captures,
   };
