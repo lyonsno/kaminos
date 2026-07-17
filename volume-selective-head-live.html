@@ -27,7 +27,7 @@
     button:disabled { cursor: not-allowed; opacity: .36; }
     select:disabled { cursor: not-allowed; opacity: .42; }
     #status { margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #9eafb4; font: 9px/1.35 "SF Mono", Menlo, monospace; }
-    #status.bad { color: #ff9d8d; }
+    #status.bad { color: #ff9d8d; white-space: normal; overflow-wrap: anywhere; user-select: text; text-overflow: clip; overflow: visible; }
     @media (max-width: 780px) {
       #toolbar { width: calc(100vw - 16px); }
       #title span { display: none; }
@@ -439,6 +439,9 @@
 
     function setPresentation(presentation) {
       if (!presentations.includes(presentation)) return null;
+      if (presentation === 'intrinsic' && requestedAppearanceAssay !== 'off') {
+        setAppearanceAssay('off');
+      }
       requestedPresentation = presentation;
       for (const button of presentationButtons) button.setAttribute('aria-pressed', String(button.dataset.presentation === presentation));
       syncCompositionControlAvailability(presentation);
@@ -472,6 +475,9 @@
 
     function setAppearanceAssay(mode) {
       if (!appearanceAssayModes.includes(mode)) return null;
+      if (mode !== 'off' && requestedPresentation !== 'beauty') {
+        setPresentation('beauty');
+      }
       requestedAppearanceAssay = mode;
       appearanceAssaySelect.value = mode;
       for (const button of appearanceAssayButtons) {

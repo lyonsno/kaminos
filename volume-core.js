@@ -78,6 +78,64 @@ const BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES = BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS
 const NONRIDGE_OPTICAL_ROW_STRIDE_BYTES = NONRIDGE_OPTICAL_ROW_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
 const NONRIDGE_SOURCE_BASIS_ROW_STRIDE_BYTES = SOURCE_BASIS_GPU_ROW_FLOATS * Float32Array.BYTES_PER_ELEMENT;
 const FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES = FLOW_KERNEL_DESCRIPTOR_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
+
+export function boundarySplatCapacityLimitReceipt({
+  capacity,
+  descriptorRowsRequested = false,
+  featureCaptureRequested = false,
+  limits = {},
+} = {}) {
+  const normalizedCapacity = Math.max(1, Math.floor(Number(capacity) || 1));
+  const requiredCandidateBytes = normalizedCapacity * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES;
+  const requiredDescriptorBytes = (descriptorRowsRequested ? normalizedCapacity : 1) * FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES;
+  const requiredFeatureBytes = (featureCaptureRequested ? normalizedCapacity : 1) * BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES;
+  const requiredStorageBufferBytes = Math.max(requiredCandidateBytes, requiredDescriptorBytes, requiredFeatureBytes);
+  const maxBufferSize = Math.max(0, Number(limits.maxBufferSize) || 0);
+  const maxStorageBufferBindingSize = Math.max(0, Number(limits.maxStorageBufferBindingSize) || 0);
+  const supported = requiredStorageBufferBytes <= maxBufferSize
+    && requiredStorageBufferBytes <= maxStorageBufferBindingSize;
+  return {
+    identity: 'boundary-splat-capacity-device-limit-admission-v0',
+    capacity: normalizedCapacity,
+    descriptorRowsRequested: Boolean(descriptorRowsRequested),
+    featureCaptureRequested: Boolean(featureCaptureRequested),
+    requiredCandidateBytes,
+    requiredDescriptorBytes,
+    requiredFeatureBytes,
+    requiredStorageBufferBytes,
+    limits: { maxBufferSize, maxStorageBufferBindingSize },
+    supported,
+    failureReason: supported
+      ? null
+      : `boundary-splat-capacity-exceeds-device-limits:required=${requiredStorageBufferBytes}:maxBufferSize=${maxBufferSize}:maxStorageBufferBindingSize=${maxStorageBufferBindingSize}`,
+  };
+}
+
+export function boundarySplatFallbackRaymarchFireSuppression({
+  requestedRaymarchFireAuthority = 1,
+  splatRequested = false,
+  splatAvailable = true,
+} = {}) {
+  if (splatRequested && !splatAvailable) return 0;
+  return 1 - Math.max(0, Math.min(1, Number(requestedRaymarchFireAuthority) || 0));
+}
+
+export function boundarySplatTelemetryReceiptApplies({
+  receiptGeneration,
+  currentGeneration,
+} = {}) {
+  return Number.isInteger(receiptGeneration)
+    && Number.isInteger(currentGeneration)
+    && receiptGeneration === currentGeneration;
+}
+
+export function boundarySplatTelemetryControlSignature(controls = {}) {
+  return Object.keys(controls)
+    .sort()
+    .map(key => `${key}:${JSON.stringify(controls[key])}`)
+    .join('|');
+}
+
 const TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY = 'truth-oracle-scalar-activity-receiver-v0';
 const TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY = 'truth-high-diagnostic-activity-projected-to-receiver-grid-v0';
 const PROCEDURAL_ACTIVITY_CUE_AUTHORITY = 'procedural-receiver-activity-proxy-no-truth-v0';
@@ -6573,6 +6631,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatCapacity: boundarySplatCapacity,
     boundarySplatCapacityGrowthCount: 0,
     boundarySplatCapacityGrowth: null,
+    boundarySplatCapacityLimitReceipt: null,
     boundarySplatCandidateCount: null,
     boundarySplatOverflowCount: null,
     boundarySplatRidgeOnlyCount: null,
@@ -6956,9 +7015,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let flowKernelDescriptorBuffer = null;
   let flowKernelDescriptorBufferCapacity = 0;
   let flowKernelDescriptorExportSession = null;
+  let boundarySplatCapacityAdmissionFailureReason = null;
   let boundarySplatDescriptorSource = null;
   let boundarySplatTelemetryCopyPending = false;
   let boundarySplatTelemetryMapPending = false;
+  let boundarySplatControlGeneration = 0;
+  let boundarySplatTelemetryCopyGeneration = 0;
   let fluidBuffers = [];
   let frontBuffers = [];
   let pressureBuffers = [];
@@ -8041,11 +8103,47 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const rowsRequested = flowKernelDescriptorRowsRequested();
     state.flowKernelDescriptorCaptureRequested = captureRequested;
     if (!rowsRequested) {
+      if (flowKernelDescriptorBuffer && flowKernelDescriptorBufferCapacity !== 1) {
+        const previousDescriptorBuffer = flowKernelDescriptorBuffer;
+        flowKernelDescriptorBufferCapacity = 1;
+        flowKernelDescriptorBuffer = device.createBuffer({
+          label: `kaminos ${FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY} dummy`,
+          size: FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+        });
+        rebuildBoundarySplatBindGroups();
+        previousDescriptorBuffer?.destroy();
+      }
+      const previousAdmissionFailureReason = boundarySplatCapacityAdmissionFailureReason;
+      const limitReceipt = boundarySplatCapacityLimitReceipt({
+        capacity: boundarySplatCapacity,
+        descriptorRowsRequested: false,
+        featureCaptureRequested: boundarySplatFeatureCaptureRequested(),
+        limits: device?.limits,
+      });
+      state.boundarySplatCapacityLimitReceipt = limitReceipt;
+      boundarySplatCapacityAdmissionFailureReason = limitReceipt.failureReason;
+      if (limitReceipt.supported && state.boundarySplatFallbackReason === previousAdmissionFailureReason) {
+        state.boundarySplatFallbackReason = null;
+      }
       state.flowKernelDescriptorCaptureEffective = false;
       return;
     }
     if (flowKernelDescriptorBuffer && flowKernelDescriptorBufferCapacity === boundarySplatCapacity) {
       state.flowKernelDescriptorCaptureEffective = captureRequested;
+      return;
+    }
+    const limitReceipt = boundarySplatCapacityLimitReceipt({
+      capacity: boundarySplatCapacity,
+      descriptorRowsRequested: rowsRequested,
+      featureCaptureRequested: boundarySplatFeatureCaptureRequested(),
+      limits: device?.limits,
+    });
+    state.boundarySplatCapacityLimitReceipt = limitReceipt;
+    if (!limitReceipt.supported) {
+      boundarySplatCapacityAdmissionFailureReason = limitReceipt.failureReason;
+      state.boundarySplatFallbackReason = boundarySplatCapacityAdmissionFailureReason;
+      state.flowKernelDescriptorCaptureEffective = false;
       return;
     }
     const previousDescriptorBuffer = flowKernelDescriptorBuffer;
@@ -8057,12 +8155,35 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     rebuildBoundarySplatBindGroups();
     previousDescriptorBuffer?.destroy();
+    boundarySplatCapacityAdmissionFailureReason = null;
     state.flowKernelDescriptorCaptureEffective = captureRequested;
   }
 
   function growBoundarySplatCapacity(candidateCount) {
     const nextCapacity = nextBoundarySplatCapacity(boundarySplatCapacity, candidateCount, gridSize);
     if (nextCapacity <= boundarySplatCapacity) return false;
+    const limitReceipt = boundarySplatCapacityLimitReceipt({
+      capacity: nextCapacity,
+      descriptorRowsRequested: flowKernelDescriptorRowsRequested(),
+      featureCaptureRequested: boundarySplatFeatureCaptureRequested(),
+      limits: device?.limits,
+    });
+    state.boundarySplatCapacityLimitReceipt = limitReceipt;
+    if (!limitReceipt.supported) {
+      boundarySplatCapacityAdmissionFailureReason = limitReceipt.failureReason;
+      state.boundarySplatFallbackReason = boundarySplatCapacityAdmissionFailureReason;
+      state.boundarySplatCapacityGrowth = {
+        identity: 'boundary-splat-capacity-growth-v0',
+        status: 'rejected',
+        from: boundarySplatCapacity,
+        to: nextCapacity,
+        observedCandidateCount: candidateCount,
+        physicalGridCellLimit: gridCellCount(gridSize),
+        reason: boundarySplatCapacityAdmissionFailureReason,
+        limitReceipt,
+      };
+      return false;
+    }
     const previousCapacity = boundarySplatCapacity;
     const previousSplatBuffer = boundarySplatBuffer;
     const previousFeatureBuffer = boundarySplatFeatureBuffer;
@@ -8092,6 +8213,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     previousSplatBuffer?.destroy();
     previousFeatureBuffer?.destroy();
     previousDescriptorBuffer?.destroy();
+    boundarySplatCapacityAdmissionFailureReason = null;
     state.boundarySplatCapacity = nextCapacity;
     state.boundarySplatCapacityGrowthCount += 1;
     state.boundarySplatCapacityGrowth = {
@@ -8114,8 +8236,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     majorantGridSize = normalizeMajorantGridSize(nextMajorantGridSize);
     destroyFluidState();
     boundarySplatCapacity = Math.min(BOUNDARY_SPLAT_INITIAL_CAPACITY, gridCellCount(gridSize));
+    boundarySplatCapacityAdmissionFailureReason = null;
     state.boundarySplatCapacity = boundarySplatCapacity;
     state.boundarySplatCapacityGrowth = null;
+    state.boundarySplatCapacityLimitReceipt = null;
     destroyMajorantState();
     ensureMajorantBuffer();
     ensureBoundarySidecarBuffer();
@@ -8416,10 +8540,27 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
     if (!adapter) throw new Error('WebGPU adapter unavailable');
-    const maxRequestedFluidBufferBytes = fluidBufferBytes(Math.max(...SUPPORTED_GRID_SIZES));
+    const maxRequestedGridSize = Math.max(...SUPPORTED_GRID_SIZES);
+    const maxRequestedCellCapacity = gridCellCount(maxRequestedGridSize);
+    const maxRequestedFluidBufferBytes = fluidBufferBytes(maxRequestedGridSize);
+    const maxRequestedFlowKernelDescriptorBytes = maxRequestedCellCapacity * FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES;
+    const maxRequestedBoundarySplatBytes = maxRequestedCellCapacity * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES;
+    const maxRequestedBoundaryFeatureBytes = maxRequestedCellCapacity * BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES;
+    const maxRequestedStorageBufferBytes = Math.max(
+      maxRequestedFluidBufferBytes,
+      maxRequestedFlowKernelDescriptorBytes,
+      maxRequestedBoundarySplatBytes,
+      maxRequestedBoundaryFeatureBytes,
+    );
     const requiredLimits = {};
-    if ((adapter.limits?.maxStorageBufferBindingSize ?? 0) >= maxRequestedFluidBufferBytes) {
-      requiredLimits.maxStorageBufferBindingSize = maxRequestedFluidBufferBytes;
+    const maxSupportedStorageBufferBytes = Math.min(
+      adapter.limits?.maxBufferSize ?? 0,
+      adapter.limits?.maxStorageBufferBindingSize ?? 0,
+    );
+    if (maxSupportedStorageBufferBytes > 0) {
+      const requestedStorageBufferBytes = Math.min(maxSupportedStorageBufferBytes, maxRequestedStorageBufferBytes);
+      requiredLimits.maxBufferSize = requestedStorageBufferBytes;
+      requiredLimits.maxStorageBufferBindingSize = requestedStorageBufferBytes;
     }
     if ((adapter.limits?.maxStorageBuffersPerShaderStage ?? 0) >= 9) {
       requiredLimits.maxStorageBuffersPerShaderStage = 9;
@@ -8984,6 +9125,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function appearanceDecompositionActive() {
     return appearanceDecompositionModeEffective !== 'off';
+  }
+
+  function effectiveSelectiveHeadRaymarchFireSuppression() {
+    if (volumePresentationModeEffective === 'intrinsic' || appearanceDecompositionActive()) return 0;
+    const definition = selectiveHeadLiveRenderCompositionRequest(
+      controlsSnapshot.selectiveHeadLiveRenderComposition,
+    ).definition;
+    return boundarySplatFallbackRaymarchFireSuppression({
+      requestedRaymarchFireAuthority: definition.raymarchFireAuthority,
+      splatRequested: definition.splat,
+      splatAvailable: boundarySplatRequested()
+        && !boundarySplatCapacityAdmissionFailureReason
+        && !state.boundarySplatFallbackReason,
+    });
   }
 
   function appearanceDecompositionUniformMode() {
@@ -9730,7 +9885,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[313] = 0;
     uniforms[314] = 0;
     uniforms[315] = 0;
-    uniforms[316] = 1 - selectiveCompositionDefinition.raymarchFireAuthority;
+    uniforms[316] = effectiveSelectiveHeadRaymarchFireSuppression();
     uniforms[317] = selectiveCompositionDefinition.raymarch ? 1 : 0;
     uniforms[318] = selectiveCompositionDefinition.splat ? 1 : 0;
     uniforms[319] = 0;
@@ -10558,7 +10713,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
     boundarySplatDescriptorSource = hooks.descriptorSource || (hooks.computeBindGroup ? null : defaultDescriptorSource);
     if (!boundarySplatRequested()) {
-      state.boundarySplatFallbackReason = null;
+      if (normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode) === 'off') {
+        boundarySplatCapacityAdmissionFailureReason = null;
+        state.boundarySplatFallbackReason = null;
+      }
+      state.boundarySplatUnionReceipt = boundarySplatUnionReceipt();
+      return false;
+    }
+    if (boundarySplatCapacityAdmissionFailureReason) {
+      state.boundarySplatFallbackReason = boundarySplatCapacityAdmissionFailureReason;
       state.boundarySplatUnionReceipt = boundarySplatUnionReceipt();
       return false;
     }
@@ -10642,6 +10805,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     ) return;
     encoder.copyBufferToBuffer(boundarySplatDrawBuffer, 0, boundarySplatReadbackBuffer, 0, BOUNDARY_SPLAT_DRAW_STATE_BYTES);
     boundarySplatTelemetryCopyPending = true;
+    boundarySplatTelemetryCopyGeneration = boundarySplatControlGeneration;
   }
 
   function timestampQueriesAvailable() {
@@ -10804,8 +10968,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (!boundarySplatTelemetryCopyPending || boundarySplatTelemetryMapPending || !boundarySplatReadbackBuffer) return;
     boundarySplatTelemetryCopyPending = false;
     boundarySplatTelemetryMapPending = true;
+    const telemetryGeneration = boundarySplatTelemetryCopyGeneration;
     try {
       await boundarySplatReadbackBuffer.mapAsync(GPUMapMode.READ);
+      if (!boundarySplatTelemetryReceiptApplies({
+        receiptGeneration: telemetryGeneration,
+        currentGeneration: boundarySplatControlGeneration,
+      })) {
+        boundarySplatReadbackBuffer.unmap();
+        return;
+      }
       const drawState = new Uint32Array(boundarySplatReadbackBuffer.getMappedRange());
       state.boundarySplatInstanceCount = drawState[1];
       const candidateCount = drawState[4];
@@ -10827,9 +10999,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       boundarySplatReadbackBuffer.unmap();
       if (overflowCount > 0) growBoundarySplatCapacity(candidateCount);
     } catch (error) {
-      state.boundarySplatCandidateCount = null;
-      state.boundarySplatOverflowCount = null;
-      state.boundarySplatFallbackReason = `count-readback-failed:${error?.message || String(error)}`;
+      if (boundarySplatTelemetryReceiptApplies({
+        receiptGeneration: telemetryGeneration,
+        currentGeneration: boundarySplatControlGeneration,
+      })) {
+        state.boundarySplatCandidateCount = null;
+        state.boundarySplatOverflowCount = null;
+        state.boundarySplatFallbackReason = `count-readback-failed:${error?.message || String(error)}`;
+      }
     } finally {
       boundarySplatTelemetryMapPending = false;
     }
@@ -14854,6 +15031,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         flowKernelDescriptorCapture: state.flowKernelDescriptorCapture,
         boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
         boundarySplatCapacity: state.boundarySplatCapacity,
+        boundarySplatCapacityLimitReceipt: state.boundarySplatCapacityLimitReceipt,
         boundarySplatInstanceCount: state.boundarySplatInstanceCount,
         boundarySplatCandidateCount: state.boundarySplatCandidateCount,
         boundarySplatOverflowCount: state.boundarySplatOverflowCount,
@@ -15245,6 +15423,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
       boundarySidecarOverrideReceipt: state.boundarySidecarOverrideReceipt,
       boundarySplatCapacity: state.boundarySplatCapacity,
+      boundarySplatCapacityLimitReceipt: state.boundarySplatCapacityLimitReceipt,
       boundarySplatInstanceCount: boundarySplatSample?.instanceCount ?? state.boundarySplatInstanceCount,
       boundarySplatCandidateCount: boundarySplatSample?.candidateCount ?? state.boundarySplatCandidateCount,
       boundarySplatOverflowCount: boundarySplatSample?.overflowCount ?? state.boundarySplatOverflowCount,
@@ -16285,9 +16464,32 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     setControls(next) {
       const previousGrid = gridSize;
       const previousMajorantGrid = majorantGridSize;
+      const previousBoundarySplatTelemetryControlSignature = boundarySplatTelemetryControlSignature(controlsSnapshot);
       const previousControlSignature = lastTemporalControlSignature || temporalControlSignature(controlsSnapshot);
       const previousCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
       controlsSnapshot = applyRuntimeQualityControls({ ...controlsSnapshot, ...next });
+      const nextBoundarySplatTelemetryControlSignature = boundarySplatTelemetryControlSignature(controlsSnapshot);
+      if (previousBoundarySplatTelemetryControlSignature !== nextBoundarySplatTelemetryControlSignature) {
+        boundarySplatControlGeneration += 1;
+        state.boundarySplatCandidateCount = null;
+        state.boundarySplatOverflowCount = null;
+        if (device) {
+          const previousAdmissionFailureReason = boundarySplatCapacityAdmissionFailureReason;
+          const retryReceipt = boundarySplatCapacityLimitReceipt({
+            capacity: boundarySplatCapacity,
+            descriptorRowsRequested: flowKernelDescriptorRowsRequested(),
+            featureCaptureRequested: boundarySplatFeatureCaptureRequested(),
+            limits: device.limits,
+          });
+          state.boundarySplatCapacityLimitReceipt = retryReceipt;
+          boundarySplatCapacityAdmissionFailureReason = retryReceipt.failureReason;
+          if (!retryReceipt.supported) {
+            state.boundarySplatFallbackReason = retryReceipt.failureReason;
+          } else if (state.boundarySplatFallbackReason === previousAdmissionFailureReason) {
+            state.boundarySplatFallbackReason = null;
+          }
+        }
+      }
       const nextControlSignature = temporalControlSignature(controlsSnapshot);
       const nextCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
       if (previousControlSignature !== nextControlSignature) {
