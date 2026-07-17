@@ -200,6 +200,44 @@ const DEFAULT_MAJORANT_GRID_SIZE = 48;
 const SUPPORTED_MAJORANT_GRID_SIZES = [24, 32, 48];
 const MAX_EXTERNAL_EMITTERS = 32;
 const EXTERNAL_EMITTER_COMPONENTS = 20;
+
+export function canonicalizeBoundarySplatAuditRows(values, instanceCount, strideFloats) {
+  if (!(values instanceof Float32Array)) throw new TypeError('boundary splat audit values must be Float32Array');
+  if (!Number.isInteger(instanceCount) || instanceCount < 0) throw new RangeError('boundary splat audit instance count is invalid');
+  if (!Number.isInteger(strideFloats) || strideFloats < 5) throw new RangeError('boundary splat audit stride is invalid');
+  if (values.length < instanceCount * strideFloats) throw new RangeError('boundary splat audit payload is partial');
+  const order = Array.from({ length: instanceCount }, (_, index) => index);
+  const valueBits = new Uint32Array(values.buffer, values.byteOffset, values.length);
+  for (let index = 0; index < instanceCount * strideFloats; index += 1) {
+    if (!Number.isFinite(values[index])) throw new Error(`boundary splat audit payload contains non-finite value at ${index}`);
+  }
+  order.sort((leftIndex, rightIndex) => {
+    const leftOffset = leftIndex * strideFloats;
+    const rightOffset = rightIndex * strideFloats;
+    for (let channel = 0; channel < strideFloats; channel += 1) {
+      const leftValue = values[leftOffset + channel];
+      const rightValue = values[rightOffset + channel];
+      if (leftValue < rightValue) return -1;
+      if (leftValue > rightValue) return 1;
+      const leftBits = valueBits[leftOffset + channel];
+      const rightBits = valueBits[rightOffset + channel];
+      if (leftBits !== rightBits) return leftBits < rightBits ? -1 : 1;
+    }
+    return 0;
+  });
+  const positionSupport = new Float32Array(instanceCount * 4);
+  const attributes = new Float32Array(instanceCount * (strideFloats - 4));
+  for (let canonicalIndex = 0; canonicalIndex < order.length; canonicalIndex += 1) {
+    const sourceOffset = order[canonicalIndex] * strideFloats;
+    positionSupport.set(values.subarray(sourceOffset, sourceOffset + 4), canonicalIndex * 4);
+    attributes.set(
+      values.subarray(sourceOffset + 4, sourceOffset + strideFloats),
+      canonicalIndex * (strideFloats - 4),
+    );
+  }
+  return { positionSupport, attributes };
+}
+
 const CANONICAL_SOURCE_MODE_VALUES = {
   current: 0,
   passive_bottom: 1,

@@ -5,6 +5,7 @@ const core = await readFile(new URL('../volume-core.js', import.meta.url), 'utf8
 const page = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const witness = await readFile(new URL('../volume-witness.mjs', import.meta.url), 'utf8');
 const featureCapture = await import('../boundary-splat-feature-capture.mjs');
+const { canonicalizeBoundarySplatAuditRows } = await import('../volume-core.js');
 const modelArtifact = JSON.parse(await readFile(new URL('../models/boundary-splat-attribute/analytic-teacher-h64-v0/model-artifact.json', import.meta.url), 'utf8'));
 
 assert.match(core, /BOUNDARY_SPLAT_RENDERER_IDENTITY\s*=\s*'live-boundary-sidecar-analytic-splats-v0'/, 'splat renderer route identity is explicit');
@@ -25,6 +26,12 @@ assert.match(core, /boundarySplatCompactPipeline/, 'renderer owns a GPU splat co
 assert.match(core, /boundarySplatFinalizePipeline/, 'renderer caps the indirect instance count after compaction');
 assert.match(core, /boundarySplatRenderPipeline/, 'renderer owns a GPU splat raster pipeline');
 assert.match(core, /boundarySplatReadbackPipeline/, 'witness owns a same-route RGBA8 splat readback pipeline');
+const canonicalRowA = [0.5, -0.5, 0.25, 0.8, ...Array.from({ length: 20 }, (_, index) => index + 1)];
+const canonicalRowB = [-0.5, 0.5, -0.25, 0.6, ...Array.from({ length: 20 }, (_, index) => index + 21)];
+const canonicalForward = canonicalizeBoundarySplatAuditRows(Float32Array.from([...canonicalRowA, ...canonicalRowB]), 2, 24);
+const canonicalPermuted = canonicalizeBoundarySplatAuditRows(Float32Array.from([...canonicalRowB, ...canonicalRowA]), 2, 24);
+assert.deepEqual(canonicalForward.positionSupport, canonicalPermuted.positionSupport, 'candidate identity ignores GPU atomic append permutation');
+assert.deepEqual(canonicalForward.attributes, canonicalPermuted.attributes, 'effective live-union attributes remain paired with canonical candidate rows');
 assert.match(core, /atomicAdd\(&boundarySplatDraw\.candidateCount/, 'compaction counts live sidecar candidates on GPU');
 assert.match(core, /min\(atomicLoad\(&boundarySplatDraw\.candidateCount\),\s*boundarySplatDraw\.capacity\)/, 'indirect instance count is clamped to the runtime buffer capacity');
 assert.doesNotMatch(core, /const BOUNDARY_SPLAT_CAPACITY:\s*u32/, 'the shader must not compile a fixed first-N spatial truncation capacity');
