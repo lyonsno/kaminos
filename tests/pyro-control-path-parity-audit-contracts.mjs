@@ -20,7 +20,13 @@ for (const stage of ['geometry', 'presentation', 'splat-admission']) {
   assert.ok(radius.downstreamStages.includes(stage), `splat radius reaches ${stage}`);
 }
 assert.equal(radius.ownerStage, 'splat-geometry');
+assert.equal(radius.source.routeHydrated, true, 'splat radius is hydrated through the dynamic extractor field table');
+assert.equal(radius.source.listenedBySyncControls, true, 'splat radius is listened through the dynamic extractor field table');
 assert.match(radius.sourceFieldHash, /^[a-f0-9]{64}$/);
+
+const sidecarBlur = byRouteKey.get('volume_boundary_sidecar_blur');
+assert.equal(sidecarBlur.source.routeHydrated, true, 'sidecar blur is hydrated through the dynamic extractor field table');
+assert.equal(sidecarBlur.source.listenedBySyncControls, true, 'sidecar blur is listened through the dynamic extractor field table');
 
 const sidecarView = byRouteKey.get('volume_boundary_sidecar_view');
 assert.ok(sidecarView.downstreamStages.includes('presentation'), 'sidecar view is explicitly classified as a presentation/debug route');
@@ -43,6 +49,13 @@ assert.equal(positive.requested.effectiveEqualsRequested, true);
 assert.ok(positive.deltas.geometry.radiusMeanAbs > 0, 'positive fixture records geometry delta');
 assert.ok(positive.deltas.pixel.meanAbs > 0, 'positive fixture records pixel delta');
 assert.ok(positive.appliedPasses.splatApplied, 'positive fixture proves splat pass application');
+assert.equal(positive.runtimeEvidence.sourceBound, true, 'positive fixture is source-bound to production runtime evidence');
+assert.equal(positive.runtimeEvidence.bindingComplete, true, 'positive fixture fails if production source binding disappears');
+assert.deepEqual(positive.runtimeEvidence.missing, []);
+for (const key of ['uiField', 'routeHydration', 'syncListener', 'readControls', 'stateNormalization', 'gpuUniformWrite', 'vertexFootprint', 'fragmentKernel']) {
+  assert.ok(positive.runtimeEvidence[key]?.line > 0, `positive fixture records ${key} source line`);
+  assert.match(positive.runtimeEvidence[key].excerptHash, /^[a-f0-9]{64}$/);
+}
 assert.match(positive.sourceFieldHash, /^[a-f0-9]{64}$/);
 
 const intentional = ledger.perturbations.find(item => item.id === 'intentional-smoke-hybrid-raymarch-fire-authority');

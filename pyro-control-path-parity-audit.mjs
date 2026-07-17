@@ -137,6 +137,28 @@ function extractDomControls(indexHtml) {
   return controls;
 }
 
+function extractReactionFrontExtractorFields(indexHtml) {
+  const fields = [];
+  const tableMatch = indexHtml.match(/const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = \[([\s\S]*?)\];/);
+  if (!tableMatch) return fields;
+  const tableStart = tableMatch.index ?? 0;
+  const fieldPattern = /\{\s*key:\s*'([^']+)',\s*id:\s*'([^']+)',\s*param:\s*'([^']+)',\s*min:\s*([^,]+),\s*max:\s*([^,]+),\s*decimals:\s*([^}\s]+)\s*\}/g;
+  let match;
+  while ((match = fieldPattern.exec(tableMatch[1]))) {
+    const decimals = Number(match[6]);
+    fields.push({
+      key: match[1],
+      id: match[2],
+      param: match[3],
+      min: match[4],
+      max: match[5],
+      step: Number.isFinite(decimals) ? String(1 / (10 ** decimals)) : null,
+      sourceLine: lineForOffset(indexHtml, tableStart + match.index),
+    });
+  }
+  return fields;
+}
+
 function extractListenerIds(indexHtml) {
   const ids = new Set();
   const listMatch = indexHtml.match(/for \(const id of \[([\s\S]*?)\]\) \{\s*document\.getElementById\(id\)\.addEventListener\('input', syncControls\)/);
@@ -148,13 +170,20 @@ function extractListenerIds(indexHtml) {
   for (const idMatch of indexHtml.matchAll(/document\.getElementById\('([^']+)'\)\?\.addEventListener\('(?:input|change)', syncControls\)/g)) {
     ids.add(idMatch[1]);
   }
+  for (const field of extractReactionFrontExtractorFields(indexHtml)) {
+    ids.add(field.id);
+  }
   return ids;
 }
 
 function extractRouteKeys(indexHtml) {
-  return new Set([...indexHtml.matchAll(/params\.(?:get|has)\('([^']+)'\)/g)]
+  const routeKeys = new Set([...indexHtml.matchAll(/params\.(?:get|has)\('([^']+)'\)/g)]
     .map(match => match[1])
     .filter(key => key.startsWith('volume_')));
+  for (const field of extractReactionFrontExtractorFields(indexHtml)) {
+    routeKeys.add(field.param);
+  }
+  return routeKeys;
 }
 
 function extractSnippet(text, needles, radius = 220) {
@@ -287,10 +316,23 @@ function buildControlRecord(domControl, listenerIds, routeKeys, sources) {
 export async function enumeratePyroControlSchema({ root = ROOT } = {}) {
   const sources = await readSources(root);
   const domControls = extractDomControls(sources.indexHtml.text);
+  const routedFieldControls = extractReactionFrontExtractorFields(sources.indexHtml.text);
   const listenerIds = extractListenerIds(sources.indexHtml.text);
   const routeKeys = extractRouteKeys(sources.indexHtml.text);
   const byId = new Map();
   for (const control of domControls) byId.set(control.id, control);
+  for (const field of routedFieldControls) {
+    if (!byId.has(field.id)) byId.set(field.id, {
+      id: field.id,
+      tagName: 'input',
+      type: 'range',
+      min: field.min,
+      max: field.max,
+      step: field.step,
+      defaultValue: null,
+      sourceLine: field.sourceLine,
+    });
+  }
   for (const id of listenerIds) {
     if (!byId.has(id)) byId.set(id, {
       id,
@@ -376,6 +418,63 @@ function diffMetric(before, after, key) {
   return Math.abs(Number(after[key] || 0) - Number(before[key] || 0));
 }
 
+function lineEvidence(text, pattern) {
+  const match = typeof pattern === 'string' ? text.match(new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))) : text.match(pattern);
+  if (!match) return null;
+  return {
+    line: lineForOffset(text, match.index ?? 0),
+    excerptHash: sha256(match[0]),
+  };
+}
+
+function buildBoundarySplatRadiusRuntimeEvidence(sources) {
+  const evidence = {
+    sourceBound: true,
+    uiField: lineEvidence(
+      sources.indexHtml.text,
+      /\{\s*key:\s*'boundarySplatRadius',\s*id:\s*'volume-boundary-splat-radius',\s*param:\s*'volume_boundary_splat_radius'[^}]+\}/,
+    ),
+    routeHydration: lineEvidence(
+      sources.indexHtml.text,
+      /document\.getElementById\(field\.id\)\.value = clampVolumeControlValue\(routeValue, field\)\.toFixed\(field\.decimals\);/,
+    ),
+    syncListener: lineEvidence(
+      sources.indexHtml.text,
+      /document\.getElementById\(field\.id\)\?\.addEventListener\('input', syncControls\);/,
+    ),
+    readControls: lineEvidence(
+      sources.indexHtml.text,
+      /boundarySplatRadius: parseFloat\(document\.getElementById\('volume-boundary-splat-radius'\)\.value\),/,
+    ),
+    stateNormalization: lineEvidence(
+      sources.volumeCore.text,
+      /boundarySplatRadius: normalizeBoundarySplatRadius\(controlsSnapshot\.boundarySplatRadius\),/,
+    ),
+    gpuUniformWrite: lineEvidence(
+      sources.volumeCore.text,
+      /splatCamera\.set\(\[normalizeBoundarySplatRadius\(controlsSnapshot\.boundarySplatRadius\), boundarySplatLearnedAttributesRequested\(\) \? 1 : 0, state\.boundarySplatFeatureCaptureEffective \? 1 : 0, normalizeBoundarySplatSharpness\(controlsSnapshot\.boundarySplatSharpness\)\], 24\);/,
+    ),
+    vertexFootprint: lineEvidence(
+      sources.volumeCore.text,
+      /corner\.x \* splat\.shape\.x \* boundarySplatCamera\.controls\.x/,
+    ),
+    fragmentKernel: lineEvidence(
+      sources.volumeCore.text,
+      /let footprintRadius = clamp\(boundarySplatCamera\.controls\.x, 0\.35, 1\.5\);/,
+    ),
+  };
+  const missing = Object.entries(evidence)
+    .filter(([key, value]) => key !== 'sourceBound' && !value)
+    .map(([key]) => key);
+  return {
+    ...evidence,
+    bindingComplete: missing.length === 0,
+    missing,
+    bindingHash: sha256(JSON.stringify(evidence)),
+    route: 'volume_boundary_splat_radius->controlsSnapshot.boundarySplatRadius->BoundarySplatCamera.controls.x->splat vertex/fragment footprint',
+  };
+}
+
 function makeBaselines() {
   return [
     {
@@ -406,8 +505,12 @@ function averageDelta(baselines, run) {
   return { mean, max, raw: deltas };
 }
 
-function buildPositiveRadiusPerturbation(control) {
+function buildPositiveRadiusPerturbation(control, sources) {
   const baselines = makeBaselines();
+  const runtimeEvidence = buildBoundarySplatRadiusRuntimeEvidence(sources);
+  if (!runtimeEvidence.bindingComplete) {
+    throw new Error(`boundary splat radius runtime binding incomplete: ${runtimeEvidence.missing.join(', ')}`);
+  }
   const requested = { routeKey: 'volume_boundary_splat_radius', baseline: 1, treatment: 1.45, effectiveEqualsRequested: true };
   const aggregate = averageDelta(baselines, baseline => {
     const before = simulateSplatAdmission(baseline, { boundarySplatRadius: requested.baseline });
@@ -433,8 +536,9 @@ function buildPositiveRadiusPerturbation(control) {
     appliedPasses: {
       raymarchApplied: false,
       splatApplied: true,
-      passIdentity: 'boundary-splat-radius-geometry-fixture-v0',
+      passIdentity: 'boundary-splat-radius-runtime-source-bound-geometry-fixture-v1',
     },
+    runtimeEvidence,
     counts: {
       candidateBefore: aggregate.raw[0].candidateCount === 0 ? simulateSplatAdmission(baselines[0], { boundarySplatRadius: 1 }).candidateCount : null,
       candidateLayers: 1,
@@ -450,7 +554,7 @@ function buildPositiveRadiusPerturbation(control) {
     },
     evidence: {
       downstreamStage: 'splat geometry and presentation',
-      assertion: 'radius perturbation changes BoundarySplatCamera.controls.x-derived footprint while preserving candidate admission',
+      assertion: 'radius perturbation fixture is gated by the real source chain into BoundarySplatCamera.controls.x and fails if that production binding disappears',
     },
   };
 }
@@ -588,7 +692,7 @@ export async function buildFirstPyroControlPathLedgerSlice({ root = ROOT } = {})
     },
     controls: priorityControls,
     perturbations: [
-      buildPositiveRadiusPerturbation(byRouteKey.get('volume_boundary_splat_radius')),
+      buildPositiveRadiusPerturbation(byRouteKey.get('volume_boundary_splat_radius'), sources),
       buildIntentionalCompositionPerturbation(byRouteKey.get('volume_boundary_sidecar_view')),
       buildNegativeDeadParameterFixture(byRouteKey.get('volume_pyro_diagnostic_paint')),
     ],

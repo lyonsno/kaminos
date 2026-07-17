@@ -1,7 +1,7 @@
 {
   "schema": "kaminos.pyro-control-path-parity-ledger.v0",
   "requestedScope": "first-executable-vertical-slice",
-  "generatedAt": "2026-07-17T16:51:05.147Z",
+  "generatedAt": "2026-07-17T16:58:56.711Z",
   "source": {
     "indexHtml": {
       "path": "index.html",
@@ -40,8 +40,8 @@
     "uncapped": true,
     "count": 206,
     "priorityCount": 90,
-    "routeHydratedCount": 120,
-    "syncListenerCount": 14,
+    "routeHydratedCount": 169,
+    "syncListenerCount": 63,
     "classifications": {
       "unresolved": 92,
       "raymarch-only-unimplemented": 103,
@@ -80,8 +80,8 @@
       "classificationHint": "source-shared",
       "source": {
         "indexHtmlLine": 1176,
-        "listenedBySyncControls": false,
-        "routeHydrated": false
+        "listenedBySyncControls": true,
+        "routeHydrated": true
       },
       "sourceFieldHash": "c84828f3123c5179148d1e608a4a5eb9b2ef649965e12bff0bf7d8e48fd455c7"
     },
@@ -113,8 +113,8 @@
       "classificationHint": "source-shared",
       "source": {
         "indexHtmlLine": 1186,
-        "listenedBySyncControls": false,
-        "routeHydrated": false
+        "listenedBySyncControls": true,
+        "routeHydrated": true
       },
       "sourceFieldHash": "09d2ba90322e2d49e3f8b69ebdcff3fed7700e9f731c00b3632beb707fae4b00"
     },
@@ -209,8 +209,8 @@
       "classificationHint": "source-shared",
       "source": {
         "indexHtmlLine": 1181,
-        "listenedBySyncControls": false,
-        "routeHydrated": false
+        "listenedBySyncControls": true,
+        "routeHydrated": true
       },
       "sourceFieldHash": "379ad88eef4dfa4e48a08ee432f739956e7af398f1bfd4d4ea883760b0528483"
     },
@@ -279,8 +279,8 @@
       "classificationHint": "parity-coupled",
       "source": {
         "indexHtmlLine": 1164,
-        "listenedBySyncControls": false,
-        "routeHydrated": false
+        "listenedBySyncControls": true,
+        "routeHydrated": true
       },
       "sourceFieldHash": "8eaa6919e324c6f96f28466110c514b9dbbaa0466b9438b5ece9c983f86c7af9"
     },
@@ -313,8 +313,8 @@
       "classificationHint": "parity-coupled",
       "source": {
         "indexHtmlLine": 1169,
-        "listenedBySyncControls": false,
-        "routeHydrated": false
+        "listenedBySyncControls": true,
+        "routeHydrated": true
       },
       "sourceFieldHash": "eb3b1de889a215c95b802069f8f69f2b7501e3ced7348dddc6722d5756a54593"
     },
@@ -2572,8 +2572,8 @@
       "classificationHint": "raymarch-only-unimplemented",
       "source": {
         "indexHtmlLine": 1096,
-        "listenedBySyncControls": false,
-        "routeHydrated": false
+        "listenedBySyncControls": true,
+        "routeHydrated": true
       },
       "sourceFieldHash": "2697e326cc997afc6d73a46826d0a1442c2be44e33531e5b24502da9549d1580"
     },
@@ -2603,8 +2603,8 @@
       "classificationHint": "raymarch-only-unimplemented",
       "source": {
         "indexHtmlLine": 1086,
-        "listenedBySyncControls": false,
-        "routeHydrated": false
+        "listenedBySyncControls": true,
+        "routeHydrated": true
       },
       "sourceFieldHash": "965fca54e66ff98c8c0ce2efc2a04ffba1991d873cbd5fb812c583ee4e9f4020"
     },
@@ -2636,8 +2636,8 @@
       "classificationHint": "raymarch-only-unimplemented",
       "source": {
         "indexHtmlLine": 1206,
-        "listenedBySyncControls": false,
-        "routeHydrated": false
+        "listenedBySyncControls": true,
+        "routeHydrated": true
       },
       "sourceFieldHash": "d76bf1fd47886f07d47afd53eb2a54722ef52f692c30b0e3138fd1688569a492"
     },
@@ -2669,8 +2669,8 @@
       "classificationHint": "raymarch-only-unimplemented",
       "source": {
         "indexHtmlLine": 1191,
-        "listenedBySyncControls": false,
-        "routeHydrated": false
+        "listenedBySyncControls": true,
+        "routeHydrated": true
       },
       "sourceFieldHash": "5676b48117c8e407279260995df1952001d4328a116c889d56123d5cdf841802"
     },
@@ -2702,8 +2702,8 @@
       "classificationHint": "raymarch-only-unimplemented",
       "source": {
         "indexHtmlLine": 1196,
-        "listenedBySyncControls": false,
-        "routeHydrated": false
+        "listenedBySyncControls": true,
+        "routeHydrated": true
       },
       "sourceFieldHash": "69ffc1b6dc6b037b9f9bae57d6b31d8a0877873e50e49d38de777b6e1b563bce"
     },
@@ -2735,8 +2735,8 @@
       "classificationHint": "raymarch-only-unimplemented",
       "source": {
         "indexHtmlLine": 1201,
-        "listenedBySyncControls": false,
-        "routeHydrated": false
+        "listenedBySyncControls": true,
+        "routeHydrated": true
       },
       "sourceFieldHash": "86b9d2bcc9c9dbffd87cdcec4d69e66841be969071f40b1190079b93d52f4e78"
     },
@@ -2766,8 +2766,8 @@
       "classificationHint": "raymarch-only-unimplemented",
       "source": {
         "indexHtmlLine": 1061,
-        "listenedBySyncControls": false,
-        "routeHydrated": false
+        "listenedBySyncControls": true,
+        "routeHydrated": true
       },
       "sourceFieldHash": "531f474e13c93e4a585a500274ed696f32381bb84828085fc7c4fc6857d92b6c"
     },
@@ -2797,8 +2797,8 @@
       "classificationHint": "raymarch-only-unimplemented",
       "source": {
         "indexHtmlLine": 1091,
-        "listenedBySyncControls": false,
-        "routeHydrated": false
+        "listenedBySyncControls": true,
+        "routeHydrated": true
       },
       "sourceFieldHash": "d976b39527a594c37a2d942dfcd014947320995e955d1d271010851cbe45b054"
     },
@@ -2828,8 +2828,8 @@
       "classificationHint": "raymarch-only-unimplemented",
       "source": {
         "indexHtmlLine": 1076,
-        "listenedBySyncControls": false,
-        "routeHydrated": false
+        "listenedBySyncControls": true,
+        "routeHydrated": true
       },
       "sourceFieldHash": "70f75d8c860b75f742b5f5174a853eebcb5a64bdb0ab0331d87fe638c66cbcda"
     },
@@ -2859,8 +2859,8 @@
       "classificationHint": "raymarch-only-unimplemented",
       "source": {
         "indexHtmlLine": 1081,
-        "listenedBySyncControls": false,
-        "routeHydrated": false
+        "listenedBySyncControls": true,
+        "routeHydrated": true
       },
       "sourceFieldHash": "dc4908b64af8572ec86206fc9df469cc48dec3d0af3b36a11e3b99c748bee6eb"
     },
@@ -2890,8 +2890,8 @@
       "classificationHint": "raymarch-only-unimplemented",
       "source": {
         "indexHtmlLine": 1071,
-        "listenedBySyncControls": false,
-        "routeHydrated": false
+        "listenedBySyncControls": true,
+        "routeHydrated": true
       },
       "sourceFieldHash": "d44f5c5d5c1e4f6cf5ae2142b6a20cc5f7deb78746e36a3513d31652e1b243e7"
     },
@@ -2921,8 +2921,8 @@
       "classificationHint": "raymarch-only-unimplemented",
       "source": {
         "indexHtmlLine": 1066,
-        "listenedBySyncControls": false,
-        "routeHydrated": false
+        "listenedBySyncControls": true,
+        "routeHydrated": true
       },
       "sourceFieldHash": "b081c8b0e64542b59659e0c2c89161cda655c828433bceca6b1c6a1a1a85b740"
     },
@@ -2952,8 +2952,8 @@
       "classificationHint": "raymarch-only-unimplemented",
       "source": {
         "indexHtmlLine": 1101,
-        "listenedBySyncControls": false,
-        "routeHydrated": false
+        "listenedBySyncControls": true,
+        "routeHydrated": true
       },
       "sourceFieldHash": "86acfe321c8b344f90b5364fa8064c522e84a77a761df64f48a3f423fd4e5269"
     }
@@ -2987,7 +2987,46 @@
       "appliedPasses": {
         "raymarchApplied": false,
         "splatApplied": true,
-        "passIdentity": "boundary-splat-radius-geometry-fixture-v0"
+        "passIdentity": "boundary-splat-radius-runtime-source-bound-geometry-fixture-v1"
+      },
+      "runtimeEvidence": {
+        "sourceBound": true,
+        "uiField": {
+          "line": 11802,
+          "excerptHash": "09b4cf34000c016891bd294b82b5f54777fe253fc0ce1816a488ff908ec9a205"
+        },
+        "routeHydration": {
+          "line": 17609,
+          "excerptHash": "1619dd62aa36ffcc661a6b566fdbba1604e8a66ead31e83f168deb73c4ae2579"
+        },
+        "syncListener": {
+          "line": 17679,
+          "excerptHash": "31c5feb9b450429684f8cbb09cf3e65942a176de2501120beab807f61669dbeb"
+        },
+        "readControls": {
+          "line": 16450,
+          "excerptHash": "9d13e8a129f8a95a6c150b981923a62687586cedc99dba39e2597b799fa50f90"
+        },
+        "stateNormalization": {
+          "line": 5383,
+          "excerptHash": "fed4601bad986ca54591bd074e091924c196726a98213d1f413ab96f41338374"
+        },
+        "gpuUniformWrite": {
+          "line": 7674,
+          "excerptHash": "0ebb09486f5367b792bdf2192da9c87e4aec8b4bc95bd01d7d5542829c84525a"
+        },
+        "vertexFootprint": {
+          "line": 5159,
+          "excerptHash": "7fa24c3076ca3450b86fde344f3b7c73ced3918f8feb892bd1f0847f7c0e6870"
+        },
+        "fragmentKernel": {
+          "line": 5172,
+          "excerptHash": "9b57a596b7cf7e2fb2eada42d0b1ba901e6a6f19520a4d4e720c1b097e8888e8"
+        },
+        "bindingComplete": true,
+        "missing": [],
+        "bindingHash": "68439f0178082bf720a7dcc972a98997cb6922ef1a84c65607fa59ab99a75e19",
+        "route": "volume_boundary_splat_radius->controlsSnapshot.boundarySplatRadius->BoundarySplatCamera.controls.x->splat vertex/fragment footprint"
       },
       "counts": {
         "candidateBefore": 1434,
@@ -3022,7 +3061,7 @@
       },
       "evidence": {
         "downstreamStage": "splat geometry and presentation",
-        "assertion": "radius perturbation changes BoundarySplatCamera.controls.x-derived footprint while preserving candidate admission"
+        "assertion": "radius perturbation fixture is gated by the real source chain into BoundarySplatCamera.controls.x and fails if that production binding disappears"
       }
     },
     {
