@@ -362,7 +362,7 @@ fn initializeIndirection(@builtin(global_invocation_id) gid: vec3<u32>) {
 fn scatterSelection(@builtin(global_invocation_id) gid: vec3<u32>) {
   let slot = gid.x;
   if (slot >= selectP.selectedCount) { return; }
-  let pairIndex = slot;
+  let pairIndex = arrayLength(&selectedPairs) - 1u - slot;
   indirect[selectedPairs[pairIndex].index] = i32(slot);
 }
 @group(3) @binding(0) var<storage, read> packSource: array<f32>;
@@ -378,7 +378,7 @@ fn packFineAtlas(@builtin(global_invocation_id) gid: vec3<u32>) {
   let slot = linear / cellsPerSlot;
   let localIndex = linear % cellsPerSlot;
   let local = vec3<u32>(localIndex % edge, (localIndex / edge) % edge, localIndex / (edge * edge));
-  let pairIndex = slot;
+  let pairIndex = arrayLength(&packPairs) - 1u - slot;
   let brickIndex = packPairs[pairIndex].index;
   let brick = vec3<u32>(brickIndex % packP.coarseGrid, (brickIndex / packP.coarseGrid) % packP.coarseGrid, brickIndex / (packP.coarseGrid * packP.coarseGrid));
   let sourceCell = vec3<u32>(clamp(vec3<i32>(brick * packP.blockSize + local) - vec3<i32>(1), vec3<i32>(0), vec3<i32>(i32(packP.grid) - 1)));
@@ -657,16 +657,16 @@ async function run() {
   let totalResidualEnergy = 0;
   let selectedResidualEnergy = 0;
   let sortOrderViolationCount = 0;
-  let previousScore = Infinity;
-  let previousIndex = 0;
+  let previousScore = -Infinity;
+  let previousIndex = Infinity;
   for (let index = 0; index < sortRecordCount; index += 1) {
     const score = pairData.getFloat32(index * 8, true);
     const brickIndex = pairData.getUint32(index * 8 + 4, true);
-    if (score > previousScore || (score === previousScore && brickIndex < previousIndex)) sortOrderViolationCount += 1;
+    if (score < previousScore || (score === previousScore && brickIndex > previousIndex)) sortOrderViolationCount += 1;
     previousScore = score;
     previousIndex = brickIndex;
     if (brickIndex < brickCount) totalResidualEnergy += score;
-    if (index < selected.length) {
+    if (index >= sortRecordCount - selected.length) {
       selectedResidualEnergy += score;
       gpuSelected.push(brickIndex);
     }
@@ -749,7 +749,7 @@ async function run() {
       height,
       samplesPerCell: matched.effective.samplesPerCell,
       extinctionCoefficient: matched.effective.extinctionCoefficient,
-      selectionPolicy: `gpu-f32-residual-energy-bitonic-descending-prefix-top-${selected.length}-v1`,
+      selectionPolicy: `gpu-f32-residual-energy-bitonic-ascending-suffix-top-${selected.length}-v2`,
       sortStageCount: sortStages.length,
     },
     source: {
