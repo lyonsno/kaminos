@@ -1,0 +1,1005 @@
+{
+  "schema": "kaminos.smoke-adaptive-volume-gpu-witness.v0",
+  "status": "valid-scale-law-evidence",
+  "createdAt": "2026-07-17T19:13:28.218Z",
+  "requestedRoute": "http://127.0.0.1:19137/smoke-adaptive-volume-gpu-falsifier.html?selection=.%2Fartifacts%2Fpyro-smoke-adaptive-residual-bricks-r6-0716%2Fnative%2Fb4-e1000000%2Fselected-brick-indices.sbrk&git_commit=fb3e3fe5809e37263448ab728365c66394e77b62&git_branch=cc%2Fpyro-tall-articulated-smoke-0716&git_status_short=",
+  "effectiveRoute": "isolated-adaptive-volume-webgpu-v0",
+  "backend": "WebGPU:apple",
+  "timestampStatus": "available",
+  "failurePhase": null,
+  "primaryOutputWritten": true,
+  "reportPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-scale-law-r8e-e100-0717-run1/witness-report.json",
+  "browserReportWritten": true,
+  "browserReportPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-scale-law-r8e-e100-0717-run1/browser-report.json",
+  "browserReportSha256": "sha256:9c3ec096e03af581f1319b9e47a106c3999569e748da24ebeab7a21653bb162a",
+  "screenshotWritten": true,
+  "screenshotPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-scale-law-r8e-e100-0717-run1/context.png",
+  "screenshotSha256": "sha256:3b5e4cc14094141d943951b1196174a0e98132af7346a62f828d7fd4d3a0d7df",
+  "serverPort": 19137,
+  "debugPort": 49413,
+  "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "userDataDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-adaptive-smoke-volume-scale-law-r8e-e100-0717-run1/chrome-profile",
+  "windowSize": "1600,1100",
+  "reuseBrowser": true,
+  "browserCount": 1,
+  "runTimeoutMs": null,
+  "gitCommit": "fb3e3fe5809e37263448ab728365c66394e77b62",
+  "gitBranch": "cc/pyro-tall-articulated-smoke-0716",
+  "gitStatusShort": "",
+  "sourceFileSha256s": {
+    "module": "sha256:5036c5f19a660cf42f5fa6b099daa74d4c5eb1b21ea1ec0c42345e3cd326ce84",
+    "browser": "sha256:3e74729518af3b860d91ae21de8c686303dfc85b18bdc1ddfb30df35e7930802",
+    "witness": "sha256:fa0f314aab76e804cb2b68b7397cf6f8b8193d12c3b4fe419c3e944e2123d350",
+    "html": "sha256:d2a5103f26b3e904492c8001540695a2b7807b4439e7cbf5066b495977de6234",
+    "productionVolume": "sha256:c9f131ac88cc03fc11d0c35bf1429bb0c7057de9ec227badd87cc0daf2d52a3b"
+  },
+  "cdpGpuIdentity": {
+    "source": "cdp-system-info",
+    "appleDeviceObserved": true,
+    "devices": [
+      {
+        "vendorId": 4203,
+        "deviceId": 0,
+        "vendorString": "Google Inc. (Apple)",
+        "deviceString": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Max, Version 15.6 (Build 24G84))",
+        "driverVendor": "Apple",
+        "driverVersion": "15.6"
+      }
+    ]
+  },
+  "consoleEvents": [],
+  "optimizationClaimAllowed": true,
+  "scaleLawEvidenceAllowed": true,
+  "browserReport": {
+    "schema": "kaminos.smoke-adaptive-volume-gpu-falsifier.v0",
+    "identity": "adaptive-smoke-volume-three-arm-gpu-falsifier-v0",
+    "status": "passed",
+    "requested": {
+      "route": "http://127.0.0.1:19137/smoke-adaptive-volume-gpu-falsifier.html?selection=.%2Fartifacts%2Fpyro-smoke-adaptive-residual-bricks-r6-0716%2Fnative%2Fb4-e1000000%2Fselected-brick-indices.sbrk&git_commit=fb3e3fe5809e37263448ab728365c66394e77b62&git_branch=cc%2Fpyro-tall-articulated-smoke-0716&git_status_short=",
+      "sourceSidecar": "./artifacts/pyro-smoke-extinction-residual-oracle-r2-full-covariance-0716/source-step45/smoke-extinction-support-sidecar.f32",
+      "selectionArtifact": "./artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/native/b4-e1000000/selected-brick-indices.sbrk",
+      "selectedBrickCount": 64000,
+      "warmupSamples": 3,
+      "steadySamples": 12,
+      "buildWarmupSamples": 1,
+      "buildSteadySamples": 4,
+      "hiddenBrickCapApplied": false
+    },
+    "effective": {
+      "route": "isolated-adaptive-volume-webgpu-v0",
+      "backend": "WebGPU:apple",
+      "backendIdentitySource": "cdp-system-info",
+      "adapterInfo": {},
+      "navigatorPlatform": "MacIntel",
+      "platformAppleHint": true,
+      "timestampFeature": "timestamp-query",
+      "timestampStatus": "available",
+      "sourceGrid": 160,
+      "coarseGrid": 40,
+      "physicalBrickCount": 64000,
+      "sortRecordCount": 65536,
+      "blockSize": 4,
+      "width": 320,
+      "height": 228,
+      "samplesPerCell": 1,
+      "extinctionCoefficient": 0.731,
+      "selectionPolicy": "gpu-f32-residual-energy-bitonic-ascending-suffix-top-64000-v2",
+      "sortStageCount": 136,
+      "cdpGpuInfo": {
+        "source": "cdp-system-info",
+        "appleDeviceObserved": true,
+        "devices": [
+          {
+            "vendorId": 4203,
+            "deviceId": 0,
+            "vendorString": "Google Inc. (Apple)",
+            "deviceString": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Max, Version 15.6 (Build 24G84))",
+            "driverVendor": "Apple",
+            "driverVersion": "15.6"
+          }
+        ]
+      }
+    },
+    "source": {
+      "matchedReport": "./artifacts/pyro-smoke-matched-optics-r5-0716/native/matched-optics-report.json",
+      "matchedReportSha256": "sha256:34cd9544b823289054558eae09247353772599fe21add665623ac8163cec9382",
+      "fitReport": "./artifacts/pyro-smoke-extinction-residual-oracle-r2-full-covariance-0716/source-step45/coarse-plus-residual.fit-report.json",
+      "fitReportSha256": "sha256:071389905e419a2ae82e372ad2174e9b8529a657b93901ffd729b10866c2449b",
+      "sourceSidecar": "./artifacts/pyro-smoke-extinction-residual-oracle-r2-full-covariance-0716/source-step45/smoke-extinction-support-sidecar.f32",
+      "sourceSidecarSha256": "sha256:564efca0905957a8a44592309b7ce1618b14cfc486e658d92c6cd0f323b26b5a",
+      "selectionArtifact": "./artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/native/b4-e1000000/selected-brick-indices.sbrk",
+      "selectionArtifactSha256": "sha256:d25730d3265cbe15c71db75a4bc9fc40269919885e8e0efe3bdda541676c3417",
+      "referenceDepth": "./artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/native/dense-reference/optical-depth.f32",
+      "referenceDepthSha256": "sha256:16002db6417d46601fe513a87954b1dc58197a4536f2a17902fe732e6b40551f"
+    },
+    "runtime": {
+      "gitCommit": "fb3e3fe5809e37263448ab728365c66394e77b62",
+      "gitBranch": "cc/pyro-tall-articulated-smoke-0716",
+      "gitStatusShort": "",
+      "sourceFileSha256s": {
+        "module": "sha256:5036c5f19a660cf42f5fa6b099daa74d4c5eb1b21ea1ec0c42345e3cd326ce84",
+        "browser": "sha256:3e74729518af3b860d91ae21de8c686303dfc85b18bdc1ddfb30df35e7930802",
+        "witness": "sha256:fa0f314aab76e804cb2b68b7397cf6f8b8193d12c3b4fe419c3e944e2123d350",
+        "html": "sha256:d2a5103f26b3e904492c8001540695a2b7807b4439e7cbf5066b495977de6234",
+        "productionVolume": "sha256:c9f131ac88cc03fc11d0c35bf1429bb0c7057de9ec227badd87cc0daf2d52a3b"
+      }
+    },
+    "arms": {
+      "dense": {
+        "outputComplete": true,
+        "gpuMs": 0.720896,
+        "profile": {
+          "samples": [
+            0.65536,
+            0.65536,
+            0.65536,
+            0.65536,
+            0.720896,
+            0.720896,
+            0.720896,
+            0.720896,
+            0.720896,
+            0.720896,
+            0.720896,
+            0.720896
+          ],
+          "count": 12,
+          "minimum": 0.65536,
+          "median": 0.720896,
+          "mean": 0.6990506666666666,
+          "maximum": 0.720896
+        },
+        "denseBindingCount": 1
+      },
+      "compactPrebuilt": {
+        "outputComplete": true,
+        "gpuMs": 0.393216,
+        "profile": {
+          "samples": [
+            0.393216,
+            0.393216,
+            0.393216,
+            0.393216,
+            0.393216,
+            0.393216,
+            0.393216,
+            0.393216,
+            0.393216,
+            0.393216,
+            0.393216,
+            1.6384
+          ],
+          "count": 12,
+          "minimum": 0.393216,
+          "median": 0.393216,
+          "mean": 0.4969813333333333,
+          "maximum": 1.6384
+        },
+        "denseBindingCount": 0
+      },
+      "buildCompactRender": {
+        "outputComplete": true,
+        "buildGpuMs": 1.376256,
+        "renderGpuMs": 0.458752,
+        "totalGpuMs": 1.835008,
+        "buildOnlyProfile": {
+          "samples": [
+            1.376256,
+            1.376256,
+            1.376256,
+            1.376256
+          ],
+          "count": 4,
+          "minimum": 1.376256,
+          "median": 1.376256,
+          "mean": 1.376256,
+          "maximum": 1.376256
+        },
+        "combinedProfile": {
+          "build": {
+            "samples": [
+              1.376256,
+              1.376256,
+              1.376256,
+              1.376256
+            ],
+            "count": 4,
+            "minimum": 1.376256,
+            "median": 1.376256,
+            "mean": 1.376256,
+            "maximum": 1.376256
+          },
+          "render": {
+            "samples": [
+              0.393216,
+              0.393216,
+              0.458752,
+              0.458752
+            ],
+            "count": 4,
+            "minimum": 0.393216,
+            "median": 0.458752,
+            "mean": 0.42598400000000003,
+            "maximum": 0.458752
+          },
+          "total": {
+            "samples": [
+              1.769472,
+              1.769472,
+              1.835008,
+              1.835008
+            ],
+            "count": 4,
+            "minimum": 1.769472,
+            "median": 1.835008,
+            "mean": 1.80224,
+            "maximum": 1.835008
+          }
+        },
+        "denseBindingCountDuringBuild": 1,
+        "denseBindingCountDuringRender": 0
+      }
+    },
+    "compactProduct": {
+      "identity": "compact-parent-mean-halo-atlas-v0",
+      "selectedBrickCount": 64000,
+      "gpuSelectedBrickCount": 64000,
+      "selectionMismatchCount": 0,
+      "sortOrderViolationCount": 0,
+      "actualRetainedResidualEnergyFraction": 1,
+      "sortEndpointScores": {
+        "first": -1,
+        "last": 0.7494366765022278
+      },
+      "haloEdge": 6,
+      "allocationBytes": {
+        "coarse": 256000,
+        "indirection": 256000,
+        "fineAtlas": 55296000,
+        "selectionSort": 524288,
+        "sortParameters": 34816,
+        "params": 80,
+        "productResident": 55808080,
+        "buildScratch": 559104,
+        "totalBuildAndProduct": 56367184,
+        "total": 56367184
+      },
+      "allocationComplete": true,
+      "hiddenDenseAllocationBytes": 0,
+      "productResidentRatioToDenseScalar": 3.4062548828125,
+      "buildAndProductRatioToDenseScalar": 3.4403798828125
+    },
+    "denseDenial": {
+      "method": "destroy-dense-source-before-compact-rerender-v0",
+      "action": "dense source destroyed before compact rerender",
+      "preDenialOutputSha256": "sha256:47825fcebc36894affb1a4bcc25d18a9055e3c74900fe7745d2c1366c0795c17",
+      "postDenialOutputSha256": "sha256:47825fcebc36894affb1a4bcc25d18a9055e3c74900fe7745d2c1366c0795c17",
+      "maximumAbsoluteOutputDelta": 0,
+      "passed": true
+    },
+    "validation": {
+      "complete": true,
+      "thresholds": {
+        "denseAgainstCommittedReferenceMaximumAbsoluteError": 0.00001,
+        "compactPrebuiltAgainstDenseMaximumAbsoluteError": 0.001,
+        "buildCompactAgainstDenseMaximumAbsoluteError": 0.001
+      },
+      "denseAgainstCommittedReference": {
+        "sampleCount": 72960,
+        "meanSquaredError": 1.71055035567251e-15,
+        "meanAbsoluteError": 9.84321886709982e-9,
+        "maximumAbsoluteError": 7.562339305877686e-7,
+        "maximumAbsoluteErrorIndex": 44962,
+        "maximumAbsoluteErrorPixel": null,
+        "maximumPair": {
+          "left": 0.05090785771608353,
+          "right": 0.05090710148215294
+        },
+        "absoluteErrorQuantiles": {
+          "p99": 2.2118911147117615e-7,
+          "p999": 4.284083843231201e-7,
+          "p9999": 6.631016731262207e-7
+        },
+        "errorLimit": null,
+        "aboveErrorLimitCount": 0,
+        "aboveErrorLimitFraction": 0
+      },
+      "compactPrebuiltAgainstDense": {
+        "sampleCount": 72960,
+        "meanSquaredError": 1.7151580723035366e-19,
+        "meanAbsoluteError": 6.973481490526259e-11,
+        "maximumAbsoluteError": 7.450580596923828e-9,
+        "maximumAbsoluteErrorIndex": 36642,
+        "maximumAbsoluteErrorPixel": null,
+        "maximumPair": {
+          "left": 0.032561495900154114,
+          "right": 0.03256148844957352
+        },
+        "absoluteErrorQuantiles": {
+          "p99": 1.862645149230957e-9,
+          "p999": 3.725290298461914e-9,
+          "p9999": 7.450580596923828e-9
+        },
+        "errorLimit": null,
+        "aboveErrorLimitCount": 0,
+        "aboveErrorLimitFraction": 0
+      },
+      "buildCompactAgainstDense": {
+        "sampleCount": 72960,
+        "meanSquaredError": 1.7151580723035366e-19,
+        "meanAbsoluteError": 6.973481490526259e-11,
+        "maximumAbsoluteError": 7.450580596923828e-9,
+        "maximumAbsoluteErrorIndex": 36642,
+        "maximumAbsoluteErrorPixel": null,
+        "maximumPair": {
+          "left": 0.032561495900154114,
+          "right": 0.03256148844957352
+        },
+        "absoluteErrorQuantiles": {
+          "p99": 1.862645149230957e-9,
+          "p999": 3.725290298461914e-9,
+          "p9999": 7.450580596923828e-9
+        },
+        "errorLimit": null,
+        "aboveErrorLimitCount": 0,
+        "aboveErrorLimitFraction": 0
+      },
+      "compactPrebuiltMaximumAbsoluteError": 7.450580596923828e-9,
+      "buildCompactMaximumAbsoluteError": 7.450580596923828e-9
+    },
+    "scaleLaw": {
+      "schema": "kaminos.smoke-adaptive-volume-scale-law.v0",
+      "status": "passed",
+      "requested": {
+        "scaleFactors": [
+          1,
+          2,
+          4
+        ],
+        "dispatchRepeats": 16,
+        "warmupSamples": 1,
+        "steadySamples": 7,
+        "minimumAggregateGpuMs": 2,
+        "hiddenWorkloadCapApplied": false
+      },
+      "effective": {
+        "workloads": [
+          {
+            "scaleFactor": 1,
+            "width": 320,
+            "height": 228,
+            "pixelCount": 72960,
+            "intersectingRayCount": 72960,
+            "denseStepCount": 12061034,
+            "maximumDenseStepsPerRay": 208,
+            "stepWorld": 0.0125,
+            "dispatchRepeats": 16,
+            "timingProtocol": "paired-alternating-submit-v0",
+            "submissionCountPerPair": 2,
+            "pairedSamples": [
+              {
+                "order": "dense-compact",
+                "denseAggregateGpuMs": 2.359296,
+                "compactAggregateGpuMs": 6.291456,
+                "compactOverDenseRatio": 2.6666666666666665
+              },
+              {
+                "order": "compact-dense",
+                "denseAggregateGpuMs": 2.424832,
+                "compactAggregateGpuMs": 6.356992,
+                "compactOverDenseRatio": 2.621621621621622
+              },
+              {
+                "order": "dense-compact",
+                "denseAggregateGpuMs": 2.424832,
+                "compactAggregateGpuMs": 6.291456,
+                "compactOverDenseRatio": 2.5945945945945947
+              },
+              {
+                "order": "compact-dense",
+                "denseAggregateGpuMs": 2.424832,
+                "compactAggregateGpuMs": 6.291456,
+                "compactOverDenseRatio": 2.5945945945945947
+              },
+              {
+                "order": "dense-compact",
+                "denseAggregateGpuMs": 2.424832,
+                "compactAggregateGpuMs": 6.291456,
+                "compactOverDenseRatio": 2.5945945945945947
+              },
+              {
+                "order": "compact-dense",
+                "denseAggregateGpuMs": 2.359296,
+                "compactAggregateGpuMs": 6.291456,
+                "compactOverDenseRatio": 2.6666666666666665
+              },
+              {
+                "order": "dense-compact",
+                "denseAggregateGpuMs": 2.359296,
+                "compactAggregateGpuMs": 6.5536,
+                "compactOverDenseRatio": 2.7777777777777777
+              }
+            ],
+            "pairedRatio": {
+              "samples": [
+                2.5945945945945947,
+                2.5945945945945947,
+                2.5945945945945947,
+                2.621621621621622,
+                2.6666666666666665,
+                2.6666666666666665,
+                2.7777777777777777
+              ],
+              "count": 7,
+              "minimum": 2.5945945945945947,
+              "median": 2.621621621621622,
+              "mean": 2.6452166452166455,
+              "maximum": 2.7777777777777777
+            },
+            "pairedRatioByOrder": {
+              "denseCompact": {
+                "samples": [
+                  2.5945945945945947,
+                  2.5945945945945947,
+                  2.6666666666666665,
+                  2.7777777777777777
+                ],
+                "count": 4,
+                "minimum": 2.5945945945945947,
+                "median": 2.6666666666666665,
+                "mean": 2.658408408408408,
+                "maximum": 2.7777777777777777
+              },
+              "compactDense": {
+                "samples": [
+                  2.5945945945945947,
+                  2.621621621621622,
+                  2.6666666666666665
+                ],
+                "count": 3,
+                "minimum": 2.5945945945945947,
+                "median": 2.621621621621622,
+                "mean": 2.627627627627628,
+                "maximum": 2.6666666666666665
+              }
+            },
+            "profiles": {
+              "dense": {
+                "aggregate": {
+                  "samples": [
+                    2.359296,
+                    2.359296,
+                    2.359296,
+                    2.424832,
+                    2.424832,
+                    2.424832,
+                    2.424832
+                  ],
+                  "count": 7,
+                  "minimum": 2.359296,
+                  "median": 2.424832,
+                  "mean": 2.3967451428571427,
+                  "maximum": 2.424832
+                },
+                "perDispatch": {
+                  "samples": [
+                    0.147456,
+                    0.147456,
+                    0.147456,
+                    0.151552,
+                    0.151552,
+                    0.151552,
+                    0.151552
+                  ],
+                  "count": 7,
+                  "minimum": 0.147456,
+                  "median": 0.151552,
+                  "mean": 0.14979657142857142,
+                  "maximum": 0.151552
+                },
+                "dispatchRepeats": 16
+              },
+              "compact": {
+                "aggregate": {
+                  "samples": [
+                    6.291456,
+                    6.291456,
+                    6.291456,
+                    6.291456,
+                    6.291456,
+                    6.356992,
+                    6.5536
+                  ],
+                  "count": 7,
+                  "minimum": 6.291456,
+                  "median": 6.291456,
+                  "mean": 6.338267428571429,
+                  "maximum": 6.5536
+                },
+                "perDispatch": {
+                  "samples": [
+                    0.393216,
+                    0.393216,
+                    0.393216,
+                    0.393216,
+                    0.393216,
+                    0.397312,
+                    0.4096
+                  ],
+                  "count": 7,
+                  "minimum": 0.393216,
+                  "median": 0.393216,
+                  "mean": 0.3961417142857143,
+                  "maximum": 0.4096
+                },
+                "dispatchRepeats": 16
+              }
+            },
+            "compactOverDenseRatio": 2.621621621621622,
+            "comparison": {
+              "sampleCount": 72960,
+              "meanSquaredError": 1.7151580723035366e-19,
+              "meanAbsoluteError": 6.973481490526259e-11,
+              "maximumAbsoluteError": 7.450580596923828e-9,
+              "maximumAbsoluteErrorIndex": 36642,
+              "maximumAbsoluteErrorPixel": {
+                "x": 162,
+                "y": 114
+              },
+              "maximumPair": {
+                "left": 0.032561495900154114,
+                "right": 0.03256148844957352
+              },
+              "absoluteErrorQuantiles": {
+                "p99": 1.862645149230957e-9,
+                "p999": 3.725290298461914e-9,
+                "p9999": 7.450580596923828e-9
+              },
+              "errorLimit": 0.001,
+              "aboveErrorLimitCount": 0,
+              "aboveErrorLimitFraction": 0
+            },
+            "outputsComplete": true
+          },
+          {
+            "scaleFactor": 2,
+            "width": 640,
+            "height": 456,
+            "pixelCount": 291840,
+            "intersectingRayCount": 291840,
+            "denseStepCount": 48244233,
+            "maximumDenseStepsPerRay": 208,
+            "stepWorld": 0.0125,
+            "dispatchRepeats": 16,
+            "timingProtocol": "paired-alternating-submit-v0",
+            "submissionCountPerPair": 2,
+            "pairedSamples": [
+              {
+                "order": "dense-compact",
+                "denseAggregateGpuMs": 8.257536,
+                "compactAggregateGpuMs": 22.020096,
+                "compactOverDenseRatio": 2.6666666666666665
+              },
+              {
+                "order": "compact-dense",
+                "denseAggregateGpuMs": 8.192,
+                "compactAggregateGpuMs": 22.020096,
+                "compactOverDenseRatio": 2.6879999999999997
+              },
+              {
+                "order": "dense-compact",
+                "denseAggregateGpuMs": 8.192,
+                "compactAggregateGpuMs": 22.020096,
+                "compactOverDenseRatio": 2.6879999999999997
+              },
+              {
+                "order": "compact-dense",
+                "denseAggregateGpuMs": 8.192,
+                "compactAggregateGpuMs": 22.413312,
+                "compactOverDenseRatio": 2.736
+              },
+              {
+                "order": "dense-compact",
+                "denseAggregateGpuMs": 8.192,
+                "compactAggregateGpuMs": 22.020096,
+                "compactOverDenseRatio": 2.6879999999999997
+              },
+              {
+                "order": "compact-dense",
+                "denseAggregateGpuMs": 8.192,
+                "compactAggregateGpuMs": 22.020096,
+                "compactOverDenseRatio": 2.6879999999999997
+              },
+              {
+                "order": "dense-compact",
+                "denseAggregateGpuMs": 8.192,
+                "compactAggregateGpuMs": 22.28224,
+                "compactOverDenseRatio": 2.72
+              }
+            ],
+            "pairedRatio": {
+              "samples": [
+                2.6666666666666665,
+                2.6879999999999997,
+                2.6879999999999997,
+                2.6879999999999997,
+                2.6879999999999997,
+                2.72,
+                2.736
+              ],
+              "count": 7,
+              "minimum": 2.6666666666666665,
+              "median": 2.6879999999999997,
+              "mean": 2.696380952380952,
+              "maximum": 2.736
+            },
+            "pairedRatioByOrder": {
+              "denseCompact": {
+                "samples": [
+                  2.6666666666666665,
+                  2.6879999999999997,
+                  2.6879999999999997,
+                  2.72
+                ],
+                "count": 4,
+                "minimum": 2.6666666666666665,
+                "median": 2.6879999999999997,
+                "mean": 2.6906666666666665,
+                "maximum": 2.72
+              },
+              "compactDense": {
+                "samples": [
+                  2.6879999999999997,
+                  2.6879999999999997,
+                  2.736
+                ],
+                "count": 3,
+                "minimum": 2.6879999999999997,
+                "median": 2.6879999999999997,
+                "mean": 2.704,
+                "maximum": 2.736
+              }
+            },
+            "profiles": {
+              "dense": {
+                "aggregate": {
+                  "samples": [
+                    8.192,
+                    8.192,
+                    8.192,
+                    8.192,
+                    8.192,
+                    8.192,
+                    8.257536
+                  ],
+                  "count": 7,
+                  "minimum": 8.192,
+                  "median": 8.192,
+                  "mean": 8.201362285714286,
+                  "maximum": 8.257536
+                },
+                "perDispatch": {
+                  "samples": [
+                    0.512,
+                    0.512,
+                    0.512,
+                    0.512,
+                    0.512,
+                    0.512,
+                    0.516096
+                  ],
+                  "count": 7,
+                  "minimum": 0.512,
+                  "median": 0.512,
+                  "mean": 0.5125851428571429,
+                  "maximum": 0.516096
+                },
+                "dispatchRepeats": 16
+              },
+              "compact": {
+                "aggregate": {
+                  "samples": [
+                    22.020096,
+                    22.020096,
+                    22.020096,
+                    22.020096,
+                    22.020096,
+                    22.28224,
+                    22.413312
+                  ],
+                  "count": 7,
+                  "minimum": 22.020096,
+                  "median": 22.020096,
+                  "mean": 22.113718857142857,
+                  "maximum": 22.413312
+                },
+                "perDispatch": {
+                  "samples": [
+                    1.376256,
+                    1.376256,
+                    1.376256,
+                    1.376256,
+                    1.376256,
+                    1.39264,
+                    1.400832
+                  ],
+                  "count": 7,
+                  "minimum": 1.376256,
+                  "median": 1.376256,
+                  "mean": 1.3821074285714285,
+                  "maximum": 1.400832
+                },
+                "dispatchRepeats": 16
+              }
+            },
+            "compactOverDenseRatio": 2.6879999999999997,
+            "comparison": {
+              "sampleCount": 291840,
+              "meanSquaredError": 1.710552320148453e-19,
+              "meanAbsoluteError": 7.011959167456407e-11,
+              "maximumAbsoluteError": 1.4901161193847656e-8,
+              "maximumAbsoluteErrorIndex": 185893,
+              "maximumAbsoluteErrorPixel": {
+                "x": 293,
+                "y": 290
+              },
+              "maximumPair": {
+                "left": 0.044338446110486984,
+                "right": 0.04433843120932579
+              },
+              "absoluteErrorQuantiles": {
+                "p99": 1.862645149230957e-9,
+                "p999": 3.725290298461914e-9,
+                "p9999": 7.450580596923828e-9
+              },
+              "errorLimit": 0.001,
+              "aboveErrorLimitCount": 0,
+              "aboveErrorLimitFraction": 0
+            },
+            "outputsComplete": true
+          },
+          {
+            "scaleFactor": 4,
+            "width": 1280,
+            "height": 912,
+            "pixelCount": 1167360,
+            "intersectingRayCount": 1167360,
+            "denseStepCount": 192976809,
+            "maximumDenseStepsPerRay": 208,
+            "stepWorld": 0.0125,
+            "dispatchRepeats": 16,
+            "timingProtocol": "paired-alternating-submit-v0",
+            "submissionCountPerPair": 2,
+            "pairedSamples": [
+              {
+                "order": "dense-compact",
+                "denseAggregateGpuMs": 31.391744,
+                "compactAggregateGpuMs": 84.803584,
+                "compactOverDenseRatio": 2.701461377870564
+              },
+              {
+                "order": "compact-dense",
+                "denseAggregateGpuMs": 31.588352,
+                "compactAggregateGpuMs": 84.410368,
+                "compactOverDenseRatio": 2.6721991701244816
+              },
+              {
+                "order": "dense-compact",
+                "denseAggregateGpuMs": 31.1296,
+                "compactAggregateGpuMs": 84.934656,
+                "compactOverDenseRatio": 2.728421052631579
+              },
+              {
+                "order": "compact-dense",
+                "denseAggregateGpuMs": 31.1296,
+                "compactAggregateGpuMs": 84.803584,
+                "compactOverDenseRatio": 2.7242105263157894
+              },
+              {
+                "order": "dense-compact",
+                "denseAggregateGpuMs": 31.1296,
+                "compactAggregateGpuMs": 84.672512,
+                "compactOverDenseRatio": 2.7199999999999998
+              },
+              {
+                "order": "compact-dense",
+                "denseAggregateGpuMs": 31.064064,
+                "compactAggregateGpuMs": 84.738048,
+                "compactOverDenseRatio": 2.727848101265823
+              },
+              {
+                "order": "dense-compact",
+                "denseAggregateGpuMs": 31.719424,
+                "compactAggregateGpuMs": 84.344832,
+                "compactOverDenseRatio": 2.659090909090909
+              }
+            ],
+            "pairedRatio": {
+              "samples": [
+                2.659090909090909,
+                2.6721991701244816,
+                2.701461377870564,
+                2.7199999999999998,
+                2.7242105263157894,
+                2.727848101265823,
+                2.728421052631579
+              ],
+              "count": 7,
+              "minimum": 2.659090909090909,
+              "median": 2.7199999999999998,
+              "mean": 2.7047473053284494,
+              "maximum": 2.728421052631579
+            },
+            "pairedRatioByOrder": {
+              "denseCompact": {
+                "samples": [
+                  2.659090909090909,
+                  2.701461377870564,
+                  2.7199999999999998,
+                  2.728421052631579
+                ],
+                "count": 4,
+                "minimum": 2.659090909090909,
+                "median": 2.7199999999999998,
+                "mean": 2.702243334898263,
+                "maximum": 2.728421052631579
+              },
+              "compactDense": {
+                "samples": [
+                  2.6721991701244816,
+                  2.7242105263157894,
+                  2.727848101265823
+                ],
+                "count": 3,
+                "minimum": 2.6721991701244816,
+                "median": 2.7242105263157894,
+                "mean": 2.708085932568698,
+                "maximum": 2.727848101265823
+              }
+            },
+            "profiles": {
+              "dense": {
+                "aggregate": {
+                  "samples": [
+                    31.064064,
+                    31.1296,
+                    31.1296,
+                    31.1296,
+                    31.391744,
+                    31.588352,
+                    31.719424
+                  ],
+                  "count": 7,
+                  "minimum": 31.064064,
+                  "median": 31.1296,
+                  "mean": 31.307483428571427,
+                  "maximum": 31.719424
+                },
+                "perDispatch": {
+                  "samples": [
+                    1.941504,
+                    1.9456,
+                    1.9456,
+                    1.9456,
+                    1.961984,
+                    1.974272,
+                    1.982464
+                  ],
+                  "count": 7,
+                  "minimum": 1.941504,
+                  "median": 1.9456,
+                  "mean": 1.9567177142857142,
+                  "maximum": 1.982464
+                },
+                "dispatchRepeats": 16
+              },
+              "compact": {
+                "aggregate": {
+                  "samples": [
+                    84.344832,
+                    84.410368,
+                    84.672512,
+                    84.738048,
+                    84.803584,
+                    84.803584,
+                    84.934656
+                  ],
+                  "count": 7,
+                  "minimum": 84.344832,
+                  "median": 84.738048,
+                  "mean": 84.672512,
+                  "maximum": 84.934656
+                },
+                "perDispatch": {
+                  "samples": [
+                    5.271552,
+                    5.275648,
+                    5.292032,
+                    5.296128,
+                    5.300224,
+                    5.300224,
+                    5.308416
+                  ],
+                  "count": 7,
+                  "minimum": 5.271552,
+                  "median": 5.296128,
+                  "mean": 5.292032,
+                  "maximum": 5.308416
+                },
+                "dispatchRepeats": 16
+              }
+            },
+            "compactOverDenseRatio": 2.7199999999999998,
+            "comparison": {
+              "sampleCount": 1167360,
+              "meanSquaredError": 1.7303577342214412e-19,
+              "meanAbsoluteError": 7.013164015302443e-11,
+              "maximumAbsoluteError": 1.1175870895385742e-8,
+              "maximumAbsoluteErrorIndex": 617580,
+              "maximumAbsoluteErrorPixel": {
+                "x": 620,
+                "y": 482
+              },
+              "maximumPair": {
+                "left": 0.040406882762908936,
+                "right": 0.04040689393877983
+              },
+              "absoluteErrorQuantiles": {
+                "p99": 1.862645149230957e-9,
+                "p999": 3.725290298461914e-9,
+                "p9999": 7.450580596923828e-9
+              },
+              "errorLimit": 0.001,
+              "aboveErrorLimitCount": 0,
+              "aboveErrorLimitFraction": 0
+            },
+            "outputsComplete": true
+          }
+        ],
+        "firstMeasuredCrossover": null
+      },
+      "productionAttribution": {
+        "authority": "static-production-shader-source-inspection-v0",
+        "sourcePath": "./volume-core.js",
+        "measuredProductionBottleneck": false,
+        "observedMechanisms": [
+          "majorant-grid",
+          "occupancy-skip",
+          "adaptive-rays",
+          "early-transmittance",
+          "five-live-field-samples"
+        ],
+        "claimBoundary": "Static source inspection identifies production work that R8 omits; it does not measure which production stage dominates.",
+        "sourceSha256": "sha256:c9f131ac88cc03fc11d0c35bf1429bb0c7057de9ec227badd87cc0daf2d52a3b"
+      },
+      "falseClosureChecks": {
+        "workloadSurfaceIncomplete": false,
+        "timingAmplificationMissing": false,
+        "unpairedTiming": false,
+        "aggregateBelowDeclaredFloor": false,
+        "workloadIdentityIncomplete": false,
+        "outputIncomplete": false,
+        "outputError": false,
+        "fullSelectionParity": false,
+        "productionAttributionOverclaim": false
+      },
+      "claimBoundary": "Amplified static single-channel traversal scaling only. Production source inspection is exact but unmeasured; no production bottleneck, total-frame speedup, temporal cadence, or integration claim is authorized."
+    },
+    "falseClosureChecks": {
+      "fallbackRoute": false,
+      "missingTimestampSupport": false,
+      "hiddenDenseBinding": false,
+      "hiddenDenseAllocation": false,
+      "incompleteOutput": false,
+      "staleSelection": false,
+      "sortOrderInvalid": false,
+      "hiddenCap": false
+    },
+    "claimBoundary": "Static isolated single-channel Apple WebGPU compute evidence. Source scalar formation from the live 16-channel fluid buffer and the production compositor are not timed. GPU build includes parent means, residual scoring, complete 65536-record bitonic sorting, top-K selection application, indirection, and padded fine-atlas packing. Dense denial destroys the source buffer before compact rerender.",
+    "optimizationClaimAllowed": true,
+    "optimizationClaimRejectionReasons": [],
+    "scaleLawEvidenceAllowed": true,
+    "scaleLawRejectionReasons": []
+  },
+  "optimizationClaimRejectionReasons": []
+}
