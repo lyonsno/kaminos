@@ -1008,28 +1008,13 @@ def count_trainable_parameters(model: Any) -> int:
     return sum(int(np.asarray(value).size) for _, value in tree_flatten(model.parameters()))
 
 
-def train_arm(
+def build_arm_model(
     arm: str,
-    states: list[dict[str, Any]],
-    descriptor_indices: list[int],
-    epochs: int,
-    batch_size: int,
-    learning_rate: float,
-    seed: int,
-    output_path: Path,
-    descriptor_pairing: str,
-    descriptor_group: str,
-) -> tuple[Any, dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
+    feature_count: int,
+    descriptor_count: int,
+) -> Any:
     import mlx.core as mx
     import mlx.nn as nn
-    import mlx.optimizers as optim
-    import numpy as np
-    from mlx.utils import tree_flatten
-
-    feature_count = states[0]["features"].shape[1]
-    active_descriptor_indices = None if arm == "baseline" else descriptor_indices
-    print(json.dumps({"phase": "arm-start", "arm": arm}), flush=True)
-    normalization = streaming_normalization(states, batch_size, active_descriptor_indices)
 
     class BaselineModel(nn.Module):
         def __init__(self) -> None:
@@ -1045,7 +1030,7 @@ def train_arm(
         def __init__(self) -> None:
             super().__init__()
             self.shared_feature_gate = mx.zeros((feature_count,))
-            self.input_layer = nn.Linear(feature_count + len(descriptor_indices), 204)
+            self.input_layer = nn.Linear(feature_count + descriptor_count, 204)
             self.output_layer = nn.Linear(204, len(COEFFICIENT_ORDER))
 
         def __call__(self, values: Any) -> Any:
@@ -1057,11 +1042,41 @@ def train_arm(
             return mx.logaddexp(logits, mx.zeros_like(logits))
 
     require(arm in {"baseline", "treatment"}, f"unknown training arm {arm}")
-    mx.random.seed(seed)
+    require(feature_count == 24, f"shared feature count must remain 24, received {feature_count}")
+    require(descriptor_count == len(DEFAULT_DESCRIPTOR_CHANNELS), f"descriptor count must remain {len(DEFAULT_DESCRIPTOR_CHANNELS)}")
     model = BaselineModel() if arm == "baseline" else TreatmentModel()
-    mx.eval(model.parameters())
     parameter_count = count_trainable_parameters(model)
     require(parameter_count == TRAINABLE_PARAMETER_COUNT, f"{arm} trainable parameter count {parameter_count} differs from {TRAINABLE_PARAMETER_COUNT}")
+    return model
+
+
+def train_arm(
+    arm: str,
+    states: list[dict[str, Any]],
+    descriptor_indices: list[int],
+    epochs: int,
+    batch_size: int,
+    learning_rate: float,
+    seed: int,
+    output_path: Path,
+    descriptor_pairing: str,
+    descriptor_group: str,
+) -> tuple[Any, dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
+    import mlx.core as mx
+    import mlx.optimizers as optim
+    import numpy as np
+    from mlx.utils import tree_flatten
+
+    feature_count = states[0]["features"].shape[1]
+    active_descriptor_indices = None if arm == "baseline" else descriptor_indices
+    print(json.dumps({"phase": "arm-start", "arm": arm}), flush=True)
+    normalization = streaming_normalization(states, batch_size, active_descriptor_indices)
+
+    require(arm in {"baseline", "treatment"}, f"unknown training arm {arm}")
+    mx.random.seed(seed)
+    model = build_arm_model(arm, feature_count, len(descriptor_indices))
+    mx.eval(model.parameters())
+    parameter_count = count_trainable_parameters(model)
     optimizer = optim.AdamW(learning_rate=learning_rate, weight_decay=1e-5)
     feature_mean = mx.array(normalization["featureMean"])
     feature_std = mx.array(normalization["featureStd"])
