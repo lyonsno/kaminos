@@ -593,6 +593,30 @@ if (mlxPython) {
   assert.ok(Number.isFinite(trainingReport.comparison.heldNormalizedMseRelativeChange));
   assert.ok(existsSync(trainingReport.arms.baseline.modelArtifact.path));
   assert.ok(existsSync(trainingReport.arms.treatment.modelArtifact.path));
+
+  const pairingControlOutDir = join(outDir, 'training-pairing-control');
+  const pairingControlReportPath = join(pairingControlOutDir, 'training-report.json');
+  const pairingControlRun = spawnSync(mlxPython, [
+    scriptUrl.pathname,
+    '--input', inputPath,
+    '--report', pairingControlReportPath,
+    '--train',
+    '--out-dir', pairingControlOutDir,
+    '--epochs', '2',
+    '--batch-size', '4',
+    '--learning-rate', '0.002',
+    '--seed', '7162026',
+    '--descriptor-pairing', 'all-permuted',
+  ], { encoding: 'utf8' });
+  assert.equal(pairingControlRun.status, 0, pairingControlRun.stderr || pairingControlRun.stdout);
+  const pairingControlReport = JSON.parse(await readFile(pairingControlReportPath, 'utf8'));
+  assert.equal(pairingControlReport.settings.descriptorPairing.mode, 'all-permuted');
+  assert.equal(pairingControlReport.settings.descriptorPairing.identity, 'statewise-long-cycle-descriptor-pairing-control-v0');
+  assert.equal(pairingControlReport.settings.descriptorPairing.distributionPreserved, true);
+  assert.equal(pairingControlReport.settings.descriptorPairing.identityPairCount, 0);
+  assert.equal(pairingControlReport.settings.descriptorPairing.permutedDescriptorChannels.length, 7);
+  assert.equal(pairingControlReport.arms.treatment.architecture.identity, 'treatment-gated24-plus-31x204x8-8192-v0');
+  assert.equal(pairingControlReport.arms.treatment.architecture.trainableParameters, 8192);
 }
 
 const mutationManifest = structuredClone(manifest);

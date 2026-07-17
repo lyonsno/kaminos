@@ -66,6 +66,8 @@ DESCRIPTOR_SOURCE_HASH_KEYS = {
 BASELINE_ARCHITECTURE_IDENTITY = "baseline-24x248x8-8192-v0"
 TREATMENT_ARCHITECTURE_IDENTITY = "treatment-gated24-plus-31x204x8-8192-v0"
 TRAINABLE_PARAMETER_COUNT = 8192
+DESCRIPTOR_PAIRING_CONTROL_IDENTITY = "statewise-long-cycle-descriptor-pairing-control-v0"
+DESCRIPTOR_PAIRING_MODES = {"paired", "all-permuted"}
 DEFAULT_DESCRIPTOR_CHANNELS = [
     "flow.coherence",
     "flow.curlMagnitude",
@@ -821,12 +823,70 @@ def selected_descriptor_indices(validated: dict[str, Any]) -> list[int]:
     return [producer_indices[name] for name in treatment_order]
 
 
+def descriptor_pairing_shift(state_id: str, count: int, seed: int) -> int:
+    require(count > 1, f"state {state_id} must contain at least two rows for descriptor pairing destruction")
+    digest = hashlib.sha256(f"{DESCRIPTOR_PAIRING_CONTROL_IDENTITY}:{seed}:{state_id}:{count}".encode("utf-8")).digest()
+    jitter_span = max(1, count // 4)
+    jitter = int.from_bytes(digest[:8], "little") % jitter_span - jitter_span // 2
+    candidate = max(1, min(count - 1, count // 2 + jitter))
+    for distance in range(count):
+        for shift in (candidate - distance, candidate + distance):
+            if 1 <= shift < count and math.gcd(shift, count) == 1:
+                return shift
+    raise ValueError(f"state {state_id} has no lawful long-cycle descriptor shift")
+
+
+def descriptor_pairing_receipt(
+    states: list[dict[str, Any]],
+    mode: str,
+    seed: int,
+) -> dict[str, Any]:
+    require(mode in DESCRIPTOR_PAIRING_MODES, f"unknown descriptor pairing mode {mode}")
+    if mode == "paired":
+        return {
+            "identity": "caller-ordered-descriptor-row-pairing-v0",
+            "mode": mode,
+            "distributionPreserved": True,
+            "identityPairCount": sum(state["count"] for state in states),
+            "permutedDescriptorChannels": [],
+            "states": [
+                {"id": state["id"], "rowCount": state["count"], "cyclicShift": 0}
+                for state in states
+            ],
+        }
+    state_receipts = []
+    for state in states:
+        shift = descriptor_pairing_shift(state["id"], state["count"], seed)
+        state_receipts.append(
+            {
+                "id": state["id"],
+                "rowCount": state["count"],
+                "cyclicShift": shift,
+                "cycleLength": state["count"],
+                "minimumCyclicDistance": min(shift, state["count"] - shift),
+            }
+        )
+    return {
+        "identity": DESCRIPTOR_PAIRING_CONTROL_IDENTITY,
+        "mode": mode,
+        "seed": seed,
+        "scope": "within-whole-simulator-state-v0",
+        "mapping": "bijective-cyclic-shift-with-no-fixed-points-v0",
+        "distributionPreserved": True,
+        "identityPairCount": 0,
+        "permutedDescriptorChannels": list(DEFAULT_DESCRIPTOR_CHANNELS),
+        "states": state_receipts,
+    }
+
+
 def iter_state_batches(
     states: list[dict[str, Any]],
     split_role: str,
     batch_size: int,
     descriptor_indices: list[int] | None,
     block_order: list[tuple[int, int]] | None = None,
+    descriptor_pairing: str = "paired",
+    descriptor_pairing_seed: int = 0,
 ) -> Any:
     import numpy as np
 
@@ -846,7 +906,13 @@ def iter_state_batches(
         if descriptor_indices is None:
             features = base_features
         else:
-            descriptor_features = np.asarray(state["descriptors"][start:stop, descriptor_indices], dtype=np.float32)
+            if descriptor_pairing == "paired":
+                descriptor_features = np.asarray(state["descriptors"][start:stop, descriptor_indices], dtype=np.float32)
+            else:
+                require(descriptor_pairing == "all-permuted", f"unknown descriptor pairing mode {descriptor_pairing}")
+                shift = descriptor_pairing_shift(state["id"], state["count"], descriptor_pairing_seed)
+                row_indices = (np.arange(start, stop, dtype=np.int64) + shift) % state["count"]
+                descriptor_features = np.asarray(state["descriptors"][row_indices][:, descriptor_indices], dtype=np.float32)
             features = np.concatenate((base_features, descriptor_features), axis=1)
         targets = np.asarray(state["targets"][start:stop], dtype=np.float32)
         yield features, targets
@@ -917,6 +983,7 @@ def train_arm(
     learning_rate: float,
     seed: int,
     output_path: Path,
+    descriptor_pairing: str,
 ) -> tuple[Any, dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
     import mlx.core as mx
     import mlx.nn as nn
@@ -979,7 +1046,15 @@ def train_arm(
         epoch_rows = 0
         epoch_batches = 0
         order = training_block_order(states, batch_size, seed, epoch)
-        for features, targets in iter_state_batches(states, "train", batch_size, active_descriptor_indices, order):
+        for features, targets in iter_state_batches(
+            states,
+            "train",
+            batch_size,
+            active_descriptor_indices,
+            order,
+            descriptor_pairing if arm == "treatment" else "paired",
+            seed,
+        ):
             loss, gradients = loss_and_grad(model, mx.array(features), mx.array(targets))
             optimizer.update(model, gradients)
             mx.eval(model.parameters(), optimizer.state, loss)
@@ -1035,6 +1110,8 @@ def evaluate_arm(
     split_role: str,
     batch_size: int,
     descriptor_indices: list[int] | None,
+    descriptor_pairing: str = "paired",
+    descriptor_pairing_seed: int = 0,
 ) -> dict[str, Any]:
     import mlx.core as mx
     import numpy as np
@@ -1046,7 +1123,14 @@ def evaluate_arm(
     normalized_squared_sum = 0.0
     normalized_absolute_sum = 0.0
     row_count = 0
-    for features, targets in iter_state_batches(states, split_role, batch_size, descriptor_indices):
+    for features, targets in iter_state_batches(
+        states,
+        split_role,
+        batch_size,
+        descriptor_indices,
+        descriptor_pairing=descriptor_pairing,
+        descriptor_pairing_seed=descriptor_pairing_seed,
+    ):
         normalized_features = (features - normalization["featureMean"]) / normalization["featureStd"]
         normalized_predictions = np.asarray(model(mx.array(normalized_features)), dtype=np.float32)
         predictions = normalized_predictions * normalization["targetScale"]
@@ -1090,6 +1174,7 @@ def train_comparison(
     batch_size: int,
     learning_rate: float,
     seed: int,
+    descriptor_pairing: str,
 ) -> dict[str, Any]:
     import mlx.core as mx
 
@@ -1107,13 +1192,33 @@ def train_comparison(
             learning_rate,
             seed,
             output_dir / f"{arm}-model.safetensors",
+            descriptor_pairing,
         )
         active_descriptor_indices = None if arm == "baseline" else descriptor_indices
+        active_descriptor_pairing = descriptor_pairing if arm == "treatment" else "paired"
         arms[arm] = {
             **receipt,
             "trace": trace,
-            "train": evaluate_arm(model, normalization, states, "train", batch_size, active_descriptor_indices),
-            "heldState": evaluate_arm(model, normalization, states, "heldOut", batch_size, active_descriptor_indices),
+            "train": evaluate_arm(
+                model,
+                normalization,
+                states,
+                "train",
+                batch_size,
+                active_descriptor_indices,
+                active_descriptor_pairing,
+                seed,
+            ),
+            "heldState": evaluate_arm(
+                model,
+                normalization,
+                states,
+                "heldOut",
+                batch_size,
+                active_descriptor_indices,
+                active_descriptor_pairing,
+                seed,
+            ),
         }
     baseline_mse = arms["baseline"]["heldState"]["normalizedMse"]
     treatment_mse = arms["treatment"]["heldState"]["normalizedMse"]
@@ -1132,6 +1237,7 @@ def train_comparison(
             "weightDecay": 1e-5,
             "rowPolicy": "every-retained-row-every-epoch-no-sampling-cap-v0",
             "blockOrder": "same-seed-same-contiguous-block-permutation-per-arm-v0",
+            "descriptorPairing": descriptor_pairing_receipt(states, descriptor_pairing, seed),
         },
         "arms": arms,
         "comparison": {
@@ -1154,6 +1260,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=8192)
     parser.add_argument("--learning-rate", type=float, default=0.002)
     parser.add_argument("--seed", type=int, default=7162026)
+    parser.add_argument("--descriptor-pairing", choices=sorted(DESCRIPTOR_PAIRING_MODES), default="paired")
     parser.add_argument("--revalidation-marker", type=Path)
     parser.add_argument("--revalidation-delay-ms", type=float, default=0.0)
     return parser.parse_args()
@@ -1196,6 +1303,7 @@ def main() -> int:
                 args.batch_size,
                 args.learning_rate,
                 args.seed,
+                args.descriptor_pairing,
             )
         phase = "completion-revalidation"
         if args.revalidation_marker is not None:
