@@ -3,6 +3,8 @@ export const KAMINOS_FINGER_FLUID_BENCH_ROUTE = 'kaminos/finger-fluid-bench';
 export const BIG_PAPA_FLUID_SOURCE_SCHEMA = 'big-papa.finger-fluid.synthetic-source.v0';
 export const KAMINOS_FINGER_FLUID_SOLVER_IDENTITY = 'webgpu-pbf-linked-cell-fluid-v0';
 export const KAMINOS_FINGER_FLUID_RENDERER_IDENTITY = 'webgpu-particle-sphere-renderer-v0';
+export const KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_IDENTITY = 'webgpu-screen-space-liquid-surface-v0';
+export const KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_IDENTITY = 'webgpu-particle-sphere-debug-renderer-v0';
 export const KAMINOS_FINGER_FLUID_PLAYGROUND_IDENTITY = 'wgsl-shared-multi-regime-toy-playground-v0';
 export const KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_IDENTITY = 'kaminos.liquid-interface-carrier.v0';
 export const KAMINOS_FINGER_FLUID_REST_STATE_IDENTITY = 'wgsl-support-aware-persistent-rest-state-v0';
@@ -14,6 +16,7 @@ export const KAMINOS_FINGER_FLUID_CHEMISTRY_IDENTITY = 'wgsl-passive-material-tr
 export const KAMINOS_FINGER_FLUID_DOWGRADES = [
   'kaminos_native_synthetic_fluid_not_lerms_source_truth',
   'particle_render_not_final_surface_reconstruction',
+  'screen_space_surface_first_slice_not_final_surface_reconstruction',
 ];
 
 function finite(value, fallback = 0) {
@@ -87,13 +90,20 @@ export function createFingerFluidBenchState(options = {}) {
       frameTimeMsEstimate: finite(options.frameTimeMsEstimate, 26.5),
     },
     renderer: {
-      identity: KAMINOS_FINGER_FLUID_RENDERER_IDENTITY,
+      identity: options.rendererIdentity || KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_IDENTITY,
       backend: options.renderBackend || 'loading',
-      surface: 'direct_webgpu_particle_sphere_billboards_in_kaminos_viewport',
+      requestedMode: options.requestedRendererMode || 'screen_space_surface',
+      effectiveMode: options.effectiveRendererMode || options.requestedRendererMode || 'screen_space_surface',
+      requestedRenderer: options.requestedRenderer || KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_IDENTITY,
+      effectiveRenderer: options.effectiveRenderer || options.rendererIdentity || KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_IDENTITY,
+      fallbackReason: options.rendererFallbackReason || null,
+      surface: options.rendererSurface || 'screen_space_particle_depth_optical_thickness_smooth_normals_fresnel_absorption',
       obstacleContract: options.obstacleContract || 'shared-solver-render-obstacle-v0',
       playgroundContract: options.playgroundContract || KAMINOS_FINGER_FLUID_PLAYGROUND_IDENTITY,
       supportGeometryCount: nonNegativeInteger(options.supportGeometryCount, 0),
       directRenderFrameCount: nonNegativeInteger(options.directRenderFrameCount, 0),
+      sphereDebugRenderFrameCount: nonNegativeInteger(options.sphereDebugRenderFrameCount, 0),
+      screenSpaceSurfaceRenderFrameCount: nonNegativeInteger(options.screenSpaceSurfaceRenderFrameCount, 0),
       finalFingerJuiceRenderer: false,
       colorMode: options.colorMode || 'phase',
     },

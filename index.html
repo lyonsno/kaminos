@@ -2696,6 +2696,7 @@ import {
   createWebGPUFingerFluidSolver,
   resolveFingerFluidColorMode,
   resolveFingerFluidTruthScene,
+  resolveFingerFluidRendererMode,
   resolveFingerFluidParticleShiftStrength,
   resolveFingerFluidChemistryDiffusion,
 } from './finger-fluid-webgpu-core.js';
@@ -2836,6 +2837,7 @@ let fingerFluidPyroCompositionSourceTrajectoryEnabled = true;
 function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.location.search)) {
   const requestedTruthScene = params.get('finger_fluid_truth_scene') || 'multi_regime_playground';
   const requestedColorMode = params.get('finger_fluid_color_mode') || 'phase';
+  const requestedRendererMode = params.get('finger_fluid_renderer') || 'screen_space_surface';
   const requestedParticleShiftStrength = Number(params.get('finger_fluid_particle_shift') ?? 0);
   const requestedChemistryDiffusion = Number(params.get('finger_fluid_chemistry_diffusion') ?? 0);
   return {
@@ -2844,6 +2846,9 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     effectiveTruthScene: resolveFingerFluidTruthScene(requestedTruthScene),
     requestedColorMode,
     effectiveColorMode: resolveFingerFluidColorMode(requestedColorMode),
+    requestedRendererMode,
+    effectiveRendererMode: resolveFingerFluidRendererMode(requestedRendererMode),
+    sphereDebugRoute: 'finger_fluid_renderer=sphere_debug',
     requestedParticleShiftStrength,
     effectiveParticleShiftStrength: resolveFingerFluidParticleShiftStrength(requestedParticleShiftStrength),
     requestedChemistryDiffusion,
@@ -9814,7 +9819,9 @@ function updateFingerFluidBenchReadout() {
   sourceEl.textContent = state.source?.schema || BIG_PAPA_FLUID_SOURCE_SCHEMA;
   document.getElementById('finger-fluid-bench-status').textContent = state.status || 'pending';
   document.getElementById('finger-fluid-bench-solver').textContent = state.solver?.backend === 'webgpu_compute' ? 'WebGPU PBF 3D' : (state.solver?.backend || 'pending');
-  document.getElementById('finger-fluid-bench-renderer').textContent = state.renderer?.backend === 'webgpu_direct_render' ? 'GPU spheres + toy course' : (state.renderer?.backend || 'pending');
+  document.getElementById('finger-fluid-bench-renderer').textContent = state.renderer?.backend === 'webgpu_direct_render'
+    ? (state.renderer?.effectiveMode === 'sphere_debug' ? 'GPU sphere debug + toy course' : 'screen-space liquid surface')
+    : (state.renderer?.backend || 'pending');
   document.getElementById('finger-fluid-bench-active').textContent = (state.visual?.activeRatio ?? 0).toFixed(2);
   document.getElementById('finger-fluid-bench-basin').textContent = (state.visual?.basinFillRatio ?? 0).toFixed(2);
   document.getElementById('finger-fluid-bench-frame-ms').textContent = `${(state.solver?.frameTimeMsEstimate ?? 0).toFixed(1)} ms`;
@@ -10057,6 +10064,56 @@ async function requestFingerFluidBenchDiagnostics() {
   };
 }
 
+function renderFingerFluidBenchCurrentStateForWitness(rendererMode) {
+  if (!fingerFluidBenchSolver?.available) throw new Error('Finger Fluid solver unavailable for same-state renderer witness');
+  const effectiveRendererMode = resolveFingerFluidRendererMode(rendererMode);
+  const canvas = document.getElementById('finger-fluid-bench-canvas');
+  if (!canvas) throw new Error('Finger Fluid canvas missing for same-state renderer witness');
+  if (fingerFluidBenchAnimationFrame) cancelAnimationFrame(fingerFluidBenchAnimationFrame);
+  fingerFluidBenchAnimationFrame = null;
+  fingerFluidBenchRunning = false;
+  fingerFluidBenchSolver.render({
+    width: canvas.clientWidth,
+    height: canvas.clientHeight,
+    pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5),
+    rendererMode: effectiveRendererMode,
+    ...fingerFluidBenchCamera,
+  });
+  const runtime = fingerFluidBenchSolver.getDebugState();
+  if (fingerFluidBenchState?.renderer) {
+    fingerFluidBenchState.renderer.requestedMode = effectiveRendererMode;
+    fingerFluidBenchState.renderer.effectiveMode = runtime.effectiveRendererMode;
+    fingerFluidBenchState.renderer.requestedRenderer = runtime.requestedRenderer;
+    fingerFluidBenchState.renderer.effectiveRenderer = runtime.effectiveRenderer;
+    fingerFluidBenchState.renderer.fallbackReason = runtime.fallbackReason;
+    fingerFluidBenchState.renderer.identity = runtime.effectiveRenderer;
+    fingerFluidBenchState.renderer.sphereDebugRenderFrameCount = runtime.sphereDebugRenderFrameCount;
+    fingerFluidBenchState.renderer.screenSpaceSurfaceRenderFrameCount = runtime.screenSpaceSurfaceRenderFrameCount;
+  }
+  fingerFluidBenchState.runtime = runtime;
+  updateFingerFluidBenchReadout();
+  return {
+    schema: 'kaminos.finger-fluid.same-state-renderer-witness.v0',
+    requestedRendererMode: effectiveRendererMode,
+    effectiveRendererMode: runtime.effectiveRendererMode,
+    requestedRenderer: runtime.requestedRenderer,
+    effectiveRenderer: runtime.effectiveRenderer,
+    fallbackReason: runtime.fallbackReason,
+    stepCount: runtime.stepCount,
+    directRenderFrameCount: runtime.directRenderFrameCount,
+    sphereDebugRenderFrameCount: runtime.sphereDebugRenderFrameCount,
+    screenSpaceSurfaceRenderFrameCount: runtime.screenSpaceSurfaceRenderFrameCount,
+    screenSpaceSurfaceEvidence: runtime.screenSpaceSurfaceEvidence,
+  };
+}
+
+function resumeFingerFluidBenchAfterWitness() {
+  if (!fingerFluidBenchSolver?.available || fingerFluidBenchAnimationFrame) return;
+  fingerFluidBenchRunning = true;
+  drawFingerFluidBenchFrame.lastNow = performance.now() - 16.7;
+  fingerFluidBenchAnimationFrame = requestAnimationFrame(drawFingerFluidBenchFrame);
+}
+
 function drawFingerFluidBenchFrame(now = performance.now()) {
   const canvas = document.getElementById('finger-fluid-bench-canvas');
   const panel = document.getElementById('finger-fluid-bench-operator-panel');
@@ -10078,6 +10135,7 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
     width: canvas.clientWidth,
     height: canvas.clientHeight,
     pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5),
+    rendererMode: fingerFluidBenchConfig.effectiveRendererMode,
     ...fingerFluidBenchCamera,
   });
   const gpuState = fingerFluidBenchSolver.getDebugState();
@@ -10086,6 +10144,7 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
   gpuState.effectiveColorMode = gpuState.colorMode;
   gpuState.requestedTruthScene = fingerFluidBenchConfig.requestedTruthScene;
   gpuState.effectiveTruthScene = gpuState.truthScene;
+  gpuState.requestedRendererMode = fingerFluidBenchConfig.requestedRendererMode;
   gpuState.requestedParticleShiftStrength = fingerFluidBenchConfig.requestedParticleShiftStrength;
   gpuState.effectiveParticleShiftStrength = gpuState.particleShiftStrength;
   gpuState.requestedChemistryDiffusion = fingerFluidBenchConfig.requestedChemistryDiffusion;
@@ -10100,6 +10159,15 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
     frameTimeMsEstimate: gpuState.lastFrameCpuMs || fingerFluidBenchLastFrameMs,
     solverBackend: gpuState.solver_backend,
     renderBackend: gpuState.render_backend,
+    rendererIdentity: gpuState.effectiveRenderer,
+    requestedRendererMode: gpuState.requestedRendererMode,
+    effectiveRendererMode: gpuState.effectiveRendererMode,
+    requestedRenderer: gpuState.requestedRenderer,
+    effectiveRenderer: gpuState.effectiveRenderer,
+    rendererFallbackReason: gpuState.fallbackReason,
+    rendererSurface: gpuState.effectiveRendererMode === 'sphere_debug'
+      ? 'direct_webgpu_particle_sphere_billboards_debug_in_kaminos_viewport'
+      : 'screen_space_particle_depth_optical_thickness_smooth_normals_fresnel_absorption',
     particleCount: gpuState.particleCount,
     gridDimensions: gpuState.gridDimensions,
     neighborGridContract: gpuState.neighborGridContract,
@@ -10129,6 +10197,8 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
     surfaceCohesionPassCount: gpuState.surfaceCohesionPassCount,
     interfaceCompactionPassCount: gpuState.interfaceCompactionPassCount,
     directRenderFrameCount: gpuState.directRenderFrameCount,
+    sphereDebugRenderFrameCount: gpuState.sphereDebugRenderFrameCount,
+    screenSpaceSurfaceRenderFrameCount: gpuState.screenSpaceSurfaceRenderFrameCount,
     supportGeometryCount: gpuState.playground?.supportGeometryCount,
     playground: gpuState.playground,
     playgroundZoneDiagnostics: gpuState.playgroundZoneDiagnostics,
@@ -10166,6 +10236,7 @@ async function startFingerFluidBench() {
       substeps: 1,
       truthScene: fingerFluidBenchConfig.effectiveTruthScene,
       colorMode: fingerFluidBenchConfig.effectiveColorMode,
+      rendererMode: fingerFluidBenchConfig.effectiveRendererMode,
       particleShiftStrength: fingerFluidBenchConfig.effectiveParticleShiftStrength,
       chemistryDiffusion: fingerFluidBenchConfig.effectiveChemistryDiffusion,
       transparentBackground: fingerFluidPyroCompositionRequested(),
@@ -10208,6 +10279,8 @@ function initKaminosFingerFluidBenchRoute() {
   window.kaminosFingerFluidBenchDebugState = kaminosFingerFluidBenchDebugState;
   window.__kaminosFingerFluidBenchDebugState = kaminosFingerFluidBenchDebugState;
   window.kaminosFingerFluidBenchRequestDiagnostics = requestFingerFluidBenchDiagnostics;
+  window.kaminosFingerFluidBenchRenderCurrentStateForWitness = renderFingerFluidBenchCurrentStateForWitness;
+  window.kaminosFingerFluidBenchResumeAfterWitness = resumeFingerFluidBenchAfterWitness;
   window.kaminosFingerFluidPyroCompositionDebugState = () => ({
     ...fingerFluidPyroCompositionState,
     volume: volumePrototype?.debugState?.() || null,
