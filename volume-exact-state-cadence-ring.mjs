@@ -106,6 +106,8 @@ export function createExactStateCadenceRing(options = {}) {
     newestSourceStep: null,
     presentationClockStartMs: null,
     presentationClockStartSourceStep: null,
+    presentationSourcePosition: null,
+    presentationFrozenUnderflowCount: 0,
     lastPresentationNowMs: null,
     lastPresentedFromSourceStep: null,
     lastPresentedToSourceStep: null,
@@ -135,25 +137,24 @@ function slotForSourceStep(ring, sourceStep) {
   return ring.slots.find(slot => slot?.sourceStep === sourceStep) || null;
 }
 
-export function recordCompletedExactState(ring, completion = {}) {
-  const sourceStep = nonNegativeInteger(completion.sourceStep, -1);
-  const controlGeneration = nonNegativeInteger(completion.controlGeneration, -1);
-  const completedAtMs = Number(completion.completedAtMs);
+export function planExactStateProduction(ring, request = {}) {
+  const sourceStep = nonNegativeInteger(request.sourceStep, -1);
+  const controlGeneration = nonNegativeInteger(request.controlGeneration, -1);
   if (controlGeneration !== ring.controlGeneration) {
-    return rememberRefusal(ring, refusal('completed-state-control-generation-mismatch', {
+    return refusal('completed-state-control-generation-mismatch', {
       expectedControlGeneration: ring.controlGeneration,
       receivedControlGeneration: controlGeneration,
       sourceStep,
-    }), 'completion');
+    });
   }
-  if (sourceStep < 0 || !Number.isFinite(completedAtMs)) {
-    return rememberRefusal(ring, refusal('completed-state-metadata-invalid', { sourceStep, completedAtMs }), 'completion');
+  if (sourceStep < 0) {
+    return refusal('completed-state-metadata-invalid', { sourceStep });
   }
   if (ring.newestSourceStep !== null && sourceStep !== ring.newestSourceStep + 1) {
-    return rememberRefusal(ring, refusal('completed-state-source-step-nonconsecutive', {
+    return refusal('completed-state-source-step-nonconsecutive', {
       newestSourceStep: ring.newestSourceStep,
       receivedSourceStep: sourceStep,
-    }), 'completion');
+    });
   }
 
   let slot = ring.slots.findIndex(value => value === null);
@@ -163,17 +164,51 @@ export function recordCompletedExactState(ring, completion = {}) {
     const safeToEvict = ring.lastPresentedFromSourceStep !== null
       && oldestSourceStep < ring.lastPresentedFromSourceStep;
     if (!safeToEvict) {
-      return rememberRefusal(ring, refusal('producer-would-overwrite-unpresented-state', {
+      return refusal('producer-would-overwrite-unpresented-state', {
         sourceStep,
         oldestSourceStep,
         newestSourceStep: ring.newestSourceStep,
         lastPresentedFromSourceStep: ring.lastPresentedFromSourceStep,
         capacity: ring.capacity,
-      }), 'completion');
+      });
     }
     slot = ring.slots.findIndex(value => value?.sourceStep === oldestSourceStep);
     evictedSourceStep = oldestSourceStep;
-    ring.residentSourceSteps = ring.residentSourceSteps.filter(value => value !== oldestSourceStep);
+  }
+  return {
+    ok: true,
+    receipt: {
+      identity: EXACT_STATE_CADENCE_RING_IDENTITY,
+      status: 'planned',
+      slot,
+      sourceStep,
+      controlGeneration,
+      evictedSourceStep,
+      writeSequence: ring.writeSequence,
+    },
+  };
+}
+
+export function recordCompletedExactState(ring, completion = {}) {
+  const sourceStep = nonNegativeInteger(completion.sourceStep, -1);
+  const controlGeneration = nonNegativeInteger(completion.controlGeneration, -1);
+  const completedAtMs = Number(completion.completedAtMs);
+  if (!Number.isFinite(completedAtMs)) {
+    return rememberRefusal(ring, refusal('completed-state-metadata-invalid', { sourceStep, completedAtMs }), 'completion');
+  }
+  const plan = planExactStateProduction(ring, { sourceStep, controlGeneration });
+  if (!plan.ok) return rememberRefusal(ring, plan, 'completion');
+  const slot = plan.receipt.slot;
+  const evictedSourceStep = plan.receipt.evictedSourceStep;
+  if (completion.plannedSlot !== undefined && Number(completion.plannedSlot) !== slot) {
+    return rememberRefusal(ring, refusal('completed-state-slot-plan-mismatch', {
+      sourceStep,
+      plannedSlot: Number(completion.plannedSlot),
+      effectiveSlot: slot,
+    }), 'completion');
+  }
+  if (evictedSourceStep !== null) {
+    ring.residentSourceSteps = ring.residentSourceSteps.filter(value => value !== evictedSourceStep);
   }
 
   const writeSequence = ring.writeSequence;
@@ -229,20 +264,26 @@ export function selectExactStatePresentation(ring, options = {}) {
   if (ring.presentationClockStartMs === null) {
     ring.presentationClockStartMs = nowMs;
     ring.presentationClockStartSourceStep = ring.newestSourceStep - ring.presentationDelaySteps;
+    ring.presentationSourcePosition = ring.presentationClockStartSourceStep;
   }
 
-  const sourcePosition = ring.presentationClockStartSourceStep
-    + (nowMs - ring.presentationClockStartMs) / ring.stepDurationMs;
+  const sourcePosition = ring.lastPresentationNowMs === null
+    ? ring.presentationSourcePosition
+    : ring.presentationSourcePosition + (nowMs - ring.lastPresentationNowMs) / ring.stepDurationMs;
   const fromSourceStep = Math.floor(sourcePosition + Number.EPSILON);
   const toSourceStep = fromSourceStep + 1;
   const alpha = Math.max(0, Math.min(1, sourcePosition - fromSourceStep));
   if (toSourceStep > ring.newestSourceStep) {
+    ring.lastPresentationNowMs = nowMs;
+    ring.presentationFrozenUnderflowCount += 1;
     return rememberRefusal(ring, refusal('presentation-lead-underflow', {
       nowMs,
       sourcePosition,
       requestedFromSourceStep: fromSourceStep,
       requestedToSourceStep: toSourceStep,
       newestSourceStep: ring.newestSourceStep,
+      frozenSourcePosition: ring.presentationSourcePosition,
+      presentationClockDisposition: 'frozen-no-skip',
     }), 'presentation');
   }
   if (fromSourceStep < ring.oldestSourceStep) {
@@ -270,6 +311,7 @@ export function selectExactStatePresentation(ring, options = {}) {
   }
 
   ring.lastPresentationNowMs = nowMs;
+  ring.presentationSourcePosition = sourcePosition;
   ring.lastPresentedFromSourceStep = fromSourceStep;
   ring.lastPresentedToSourceStep = toSourceStep;
   ring.lastPresentedAlpha = alpha;
@@ -312,6 +354,8 @@ export function resetExactStateCadenceRing(ring, options = {}) {
   ring.newestSourceStep = null;
   ring.presentationClockStartMs = null;
   ring.presentationClockStartSourceStep = null;
+  ring.presentationSourcePosition = null;
+  ring.presentationFrozenUnderflowCount = 0;
   ring.lastPresentationNowMs = null;
   ring.lastPresentedFromSourceStep = null;
   ring.lastPresentedToSourceStep = null;

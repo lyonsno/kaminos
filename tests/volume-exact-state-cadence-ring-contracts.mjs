@@ -10,12 +10,14 @@ const {
   EXACT_STATE_CADENCE_RING_IDENTITY,
   createExactStateCadenceRing,
   exactStateCadenceAllocationPlan,
+  planExactStateProduction,
   recordCompletedExactState,
   resetExactStateCadenceRing,
   selectExactStatePresentation,
 } = await import(moduleUrl.href);
 
 assert.equal(EXACT_STATE_CADENCE_RING_IDENTITY, 'kaminos.volume.exact-state-cadence-ring.v0');
+assert.equal(typeof planExactStateProduction, 'function', 'cadence ring exposes a non-mutating GPU slot reservation plan');
 
 const allocation = exactStateCadenceAllocationPlan({
   requestedDepth: 4,
@@ -66,11 +68,21 @@ const ring = createExactStateCadenceRing({
 assert.equal(ring.identity, EXACT_STATE_CADENCE_RING_IDENTITY);
 assert.equal(ring.oneSimulatorAuthority, 'single-authoritative-simulator-completed-state-history-v0');
 
+const firstProduction = planExactStateProduction(ring, {
+  sourceStep: 10,
+  controlGeneration: 7,
+});
+assert.equal(firstProduction.ok, true);
+assert.equal(firstProduction.receipt.slot, 0);
+assert.equal(firstProduction.receipt.evictedSourceStep, null);
+
 for (let sourceStep = 10; sourceStep <= 13; sourceStep += 1) {
+  const production = planExactStateProduction(ring, { sourceStep, controlGeneration: 7 });
   const completion = recordCompletedExactState(ring, {
     sourceStep,
     completedAtMs: 1000 + (sourceStep - 10) * 20,
     controlGeneration: 7,
+    plannedSlot: production.receipt.slot,
   });
   assert.equal(completion.ok, true);
   assert.equal(completion.receipt.slot, (sourceStep - 10) % 4);
@@ -98,6 +110,7 @@ const appendAfterConsumption = recordCompletedExactState(ring, {
   sourceStep: 14,
   completedAtMs: 1100,
   controlGeneration: 7,
+  plannedSlot: planExactStateProduction(ring, { sourceStep: 14, controlGeneration: 7 }).receipt.slot,
 });
 assert.equal(appendAfterConsumption.ok, true, 'producer can evict only a state consumed by presentation');
 assert.equal(appendAfterConsumption.receipt.evictedSourceStep, 10);
@@ -142,6 +155,16 @@ const underflow = selectExactStatePresentation(underflowRing, { nowMs: 5080 });
 assert.equal(underflow.ok, false);
 assert.equal(underflow.reason, 'presentation-lead-underflow');
 assert.equal(underflow.receipt.requestedToSourceStep, 24);
+assert.equal(recordCompletedExactState(underflowRing, {
+  sourceStep: 24,
+  completedAtMs: 5085,
+  controlGeneration: 1,
+}).ok, true);
+const recoveredWithoutSkip = selectExactStatePresentation(underflowRing, { nowMs: 5100 });
+assert.equal(recoveredWithoutSkip.ok, true);
+assert.equal(recoveredWithoutSkip.receipt.fromSourceStep, 21, 'underflow freezes the last consumed source position');
+assert.equal(recoveredWithoutSkip.receipt.toSourceStep, 22);
+assert.equal(recoveredWithoutSkip.receipt.alpha, 0.5, 'presentation resumes from the frozen position without wall-clock catch-up');
 
 const reset = resetExactStateCadenceRing(ring, {
   controlGeneration: 8,
