@@ -29,11 +29,24 @@ assert.match(
 assert.match(source, /def ellipse_pixel_samples\(/, 'oracle exposes projected ellipse quadrature explicitly');
 assert.match(source, /--path-scale/, 'oracle can freeze optical density across footprint arms');
 assert.doesNotMatch(source, /ImageFilter|gaussian_filter|GaussianBlur/, 'footprint arm must not use post-process blur');
+assert.match(
+  source,
+  /flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0/,
+  'oracle names the operator-approved thin-core plus conditioned-skirt treatment',
+);
+assert.match(source, /def core_skirt_pixel_samples\(/, 'oracle exposes core/skirt quadrature explicitly');
+assert.match(source, /--skirt-mix/, 'core/skirt mode requires an explicit global skirt mixture');
+assert.match(source, /--skirt-minor-scale/, 'core/skirt mode requires an explicit normal-axis scale');
+assert.match(source, /--skirt-ridge-rejection/, 'core/skirt mode requires explicit Ridge conditioning');
+assert.match(source, /targetTopTailLumaUnderfit/, 'oracle reports missing target-aligned peak buildup');
+assert.match(source, /targetHighGradientUnderfit/, 'oracle reports missing target-aligned structural energy');
 
 const python = process.env.KAMINOS_MLX_PYTHON || '/private/tmp/kaminos-mlx-residual-venv/bin/python';
 const selfTest = spawnSync(python, [script.pathname, '--self-test'], { encoding: 'utf8' });
 assert.equal(selfTest.status, 0, selfTest.stderr || selfTest.stdout);
 assert.match(selfTest.stdout, /coefficient render oracle self-test passed/);
+assert.match(selfTest.stdout, /core-skirt endpoint contracts passed/);
+assert.match(selfTest.stdout, /target-aligned metric contracts passed/);
 
 const root = await mkdtemp(join(tmpdir(), 'kaminos-coefficient-render-contract-'));
 const reportPath = join(root, 'failure-report.json');
@@ -110,5 +123,25 @@ const duplicate = spawnSync(python, [
 ], { encoding: 'utf8' });
 assert.notEqual(duplicate.status, 0, 'duplicate native-cell indices must fail');
 assert.match(JSON.parse(await readFile(duplicateReport, 'utf8')).error, /duplicate/i);
+
+const missingControlsReport = join(root, 'missing-core-skirt-controls-report.json');
+const missingControls = spawnSync(python, [
+  script.pathname,
+  '--manifest', invalidManifestPath,
+  '--capture-report', invalidManifestPath,
+  '--out-dir', join(root, 'missing-controls-out'),
+  '--report', missingControlsReport,
+  '--footprint-mode', 'core-skirt',
+], { encoding: 'utf8' });
+assert.notEqual(missingControls.status, 0, 'core-skirt without explicit controls must fail');
+const missingControlsFailure = JSON.parse(await readFile(missingControlsReport, 'utf8'));
+assert.equal(missingControlsFailure.failurePhase, 'footprint-control-validation');
+assert.equal(missingControlsFailure.requested.footprintMode, 'core-skirt');
+assert.deepEqual(missingControlsFailure.requested.footprintControls, {
+  skirtMix: null,
+  skirtMinorScale: null,
+  skirtRidgeRejection: null,
+});
+assert.match(missingControlsFailure.error, /requires explicit/i);
 
 console.log('volume layer coefficient render oracle contracts passed');

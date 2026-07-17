@@ -36,8 +36,19 @@ FROZEN_CALIBRATION_IDENTITY = "caller-frozen-global-optical-path-v0"
 ORDER_APPROXIMATION = "camera-depth-96-bin-one-running-transmittance-v0"
 FOOTPRINT_MODES = {
     "nearest": "checksum-bound-flow-tangent-five-tap-projected-kernel-v0",
+    "bilinear": "flow-tangent-five-tap-bilinear-v0",
     "ellipse": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+    "core-skirt": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
 }
+FEATURE_ORDER = [
+    "sidecar.support", "sidecar.coverage", "sidecar.ridge", "sidecar.footprint",
+    "material.density", "material.heat", "material.fuel", "material.detail",
+    "fire.energy", "fire.temperature", "fire.emission", "fire.detail",
+    "micro.x", "micro.y", "micro.z", "micro.w", "front.topology",
+    "velocity.x", "velocity.y", "velocity.z", "support.reaction",
+    "support.interface", "flow.curlMagnitude", "flow.divergence",
+]
+RIDGE_FEATURE_INDEX = FEATURE_ORDER.index("sidecar.ridge")
 COEFFICIENT_ORDER = [
     "ridge.emission.r", "ridge.emission.g", "ridge.emission.b", "ridge.extinction",
     "nonRidge.emission.r", "nonRidge.emission.g", "nonRidge.emission.b", "nonRidge.extinction",
@@ -143,6 +154,8 @@ def validate_manifest(
     require(int(indices.max(initial=0)) < int((state.get("replay") or {}).get("grid", 160)) ** 3, "native-cell index exceeds source grid")
     ordered = np.sort(np.asarray(indices))
     require(not np.any(ordered[1:] == ordered[:-1]), "duplicate native-cell indices are forbidden")
+    feature_view = manifest.get("featureView") or {}
+    require(feature_view.get("order") == FEATURE_ORDER, "feature order drifted")
 
     required_rows = {"nativeCellIndices": index_path}
     if rows.get("features") is not None:
@@ -251,22 +264,45 @@ def bilinear_pixel_samples(
     ]
 
 
-def ellipse_pixel_samples(
+def tangent_pixel_samples(
+    pixel_x: np.ndarray,
+    pixel_y: np.ndarray,
+    tangent_x: np.ndarray,
+    tangent_y: np.ndarray,
+    major_px: np.ndarray,
+):
+    tangent_offsets = (-1.0, -0.5, 0.0, 0.5, 1.0)
+    tangent_weights = (0.075, 0.225, 0.4, 0.225, 0.075)
+    for tangent_offset, tangent_weight in zip(tangent_offsets, tangent_weights):
+        sample_x = pixel_x + tangent_x * major_px * tangent_offset
+        sample_y = pixel_y + tangent_y * major_px * tangent_offset
+        for x, y, pixel_weight in bilinear_pixel_samples(sample_x, sample_y):
+            yield x, y, pixel_weight * tangent_weight
+
+
+def core_skirt_pixel_samples(
     pixel_x: np.ndarray,
     pixel_y: np.ndarray,
     tangent_x: np.ndarray,
     tangent_y: np.ndarray,
     major_px: np.ndarray,
     minor_px: np.ndarray,
+    skirt_mix: np.ndarray,
 ):
+    require(skirt_mix.shape == pixel_x.shape, "skirt mix shape must match candidate rows")
+    require(np.all(np.isfinite(skirt_mix)), "skirt mix contains nonfinite values")
+    require(float(np.min(skirt_mix)) >= 0.0 and float(np.max(skirt_mix)) <= 1.0, "effective skirt mix must remain in [0, 1]")
     tangent_offsets = (-1.0, -0.5, 0.0, 0.5, 1.0)
     tangent_weights = (0.075, 0.225, 0.4, 0.225, 0.075)
-    normal_offsets = (-1.0, 0.0, 1.0)
-    normal_weights = (0.125, 0.75, 0.125)
     normal_x = -tangent_y
     normal_y = tangent_x
+    normal_samples = (
+        (-1.0, skirt_mix * 0.125),
+        (0.0, 1.0 - skirt_mix * 0.25),
+        (1.0, skirt_mix * 0.125),
+    )
     for tangent_offset, tangent_weight in zip(tangent_offsets, tangent_weights):
-        for normal_offset, normal_weight in zip(normal_offsets, normal_weights):
+        for normal_offset, normal_weight in normal_samples:
             sample_x = (
                 pixel_x
                 + tangent_x * major_px * tangent_offset
@@ -282,6 +318,59 @@ def ellipse_pixel_samples(
                 yield x, y, pixel_weight * quadrature_weight
 
 
+def ellipse_pixel_samples(
+    pixel_x: np.ndarray,
+    pixel_y: np.ndarray,
+    tangent_x: np.ndarray,
+    tangent_y: np.ndarray,
+    major_px: np.ndarray,
+    minor_px: np.ndarray,
+):
+    yield from core_skirt_pixel_samples(
+        pixel_x, pixel_y, tangent_x, tangent_y, major_px, minor_px,
+        np.ones_like(pixel_x, dtype=np.float32),
+    )
+
+
+def conditioned_skirt_mix(features: np.ndarray, global_mix: float, ridge_rejection: float) -> np.ndarray:
+    ridge = np.clip(features[:, RIDGE_FEATURE_INDEX], 0.0, 1.0)
+    return (global_mix * (1.0 - ridge_rejection * ridge)).astype(np.float32)
+
+
+def resolve_footprint_controls(args: argparse.Namespace) -> dict[str, Any]:
+    requested = {
+        "skirtMix": args.skirt_mix,
+        "skirtMinorScale": args.skirt_minor_scale,
+        "skirtRidgeRejection": args.skirt_ridge_rejection,
+    }
+    provided = [value is not None for value in requested.values()]
+    if args.footprint_mode == "core-skirt":
+        require(all(provided), "core-skirt mode requires explicit --skirt-mix, --skirt-minor-scale, and --skirt-ridge-rejection")
+        require(math.isfinite(args.skirt_mix) and 0.0 <= args.skirt_mix <= 1.0, "--skirt-mix must be finite and in [0, 1]")
+        require(math.isfinite(args.skirt_minor_scale) and args.skirt_minor_scale > 0.0, "--skirt-minor-scale must be finite and positive")
+        require(math.isfinite(args.skirt_ridge_rejection) and 0.0 <= args.skirt_ridge_rejection <= 1.0, "--skirt-ridge-rejection must be finite and in [0, 1]")
+        return {
+            **requested,
+            "conditioningFeature": FEATURE_ORDER[RIDGE_FEATURE_INDEX],
+            "controlsExplicit": True,
+        }
+    require(not any(provided), "skirt controls are only lawful with --footprint-mode core-skirt")
+    if args.footprint_mode == "ellipse":
+        return {
+            "skirtMix": 1.0, "skirtMinorScale": 1.0, "skirtRidgeRejection": 0.0,
+            "conditioningFeature": None, "controlsExplicit": False,
+        }
+    if args.footprint_mode == "bilinear":
+        return {
+            "skirtMix": 0.0, "skirtMinorScale": 1.0, "skirtRidgeRejection": 0.0,
+            "conditioningFeature": None, "controlsExplicit": False,
+        }
+    return {
+        "skirtMix": None, "skirtMinorScale": None, "skirtRidgeRejection": None,
+        "conditioningFeature": None, "controlsExplicit": False,
+    }
+
+
 def rasterize_coefficients(
     positions: np.ndarray,
     tangents: np.ndarray,
@@ -290,6 +379,7 @@ def rasterize_coefficients(
     camera: dict[str, Any],
     depth_bins: int,
     footprint_mode: str,
+    footprint_controls: dict[str, Any],
 ) -> tuple[np.ndarray, dict[str, Any]]:
     width, height = int(camera["width"]), int(camera["height"])
     pose = camera["cameraPose"]
@@ -318,7 +408,8 @@ def rasterize_coefficients(
     base_radius = (2.0 / 160.0) * (0.60 + features[:, 3] * 2.65 + features[:, 2] * 0.48)
     pixel_world_scale = np.maximum(length / 0.03, 1.0)
     major_px = np.clip(np.sqrt(base_radius * base_radius + 0.5 * 0.03 * 0.03) * pixel_world_scale, 0.75, 5.0)
-    minor_px = np.clip(base_radius * pixel_world_scale, 0.5, 4.0)
+    minor_scale = float(footprint_controls["skirtMinorScale"] or 1.0)
+    minor_px = np.clip(base_radius * pixel_world_scale * minor_scale, 0.5, 4.0)
     offsets = (-1.0, -0.5, 0.0, 0.5, 1.0)
     offset_weights = (0.075, 0.225, 0.4, 0.225, 0.075)
     raster_size = depth_bins * height * width
@@ -332,9 +423,18 @@ def rasterize_coefficients(
             )
             for offset, footprint_weight in zip(offsets, offset_weights)
         )
-    else:
-        require(footprint_mode == "ellipse", f"unknown footprint mode {footprint_mode}")
+    elif footprint_mode == "bilinear":
+        pixel_samples = tangent_pixel_samples(pixel_x, pixel_y, tx, ty, major_px)
+    elif footprint_mode == "ellipse":
         pixel_samples = ellipse_pixel_samples(pixel_x, pixel_y, tx, ty, major_px, minor_px)
+    else:
+        require(footprint_mode == "core-skirt", f"unknown footprint mode {footprint_mode}")
+        skirt_mix = conditioned_skirt_mix(
+            features,
+            float(footprint_controls["skirtMix"]),
+            float(footprint_controls["skirtRidgeRejection"]),
+        )
+        pixel_samples = core_skirt_pixel_samples(pixel_x, pixel_y, tx, ty, major_px, minor_px, skirt_mix)
     for sx, sy, sample_weight in pixel_samples:
         selected = valid & tangent_valid & (sample_weight > 0.0) & (sx >= 0) & (sx < width) & (sy >= 0) & (sy < height)
         rows = np.flatnonzero(selected)
@@ -353,6 +453,13 @@ def rasterize_coefficients(
         "orientation": footprint_identity(footprint_mode),
         "nominalQuadratureWeightSum": 1.0,
         "postProcessBlur": False,
+        "footprintControls": footprint_controls,
+        "effectiveSkirtMix": None if footprint_mode == "nearest" else {
+            "minimum": float(np.min(skirt_mix)) if footprint_mode == "core-skirt" else float(footprint_controls["skirtMix"]),
+            "mean": float(np.mean(skirt_mix)) if footprint_mode == "core-skirt" else float(footprint_controls["skirtMix"]),
+            "maximum": float(np.max(skirt_mix)) if footprint_mode == "core-skirt" else float(footprint_controls["skirtMix"]),
+        },
+        "minorPixelClamp": [0.5, 4.0],
     }
 
 
@@ -391,10 +498,34 @@ def image_metrics(candidate: np.ndarray, target: np.ndarray) -> dict[str, float]
     delta = a - b
     luma_a = a @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
     luma_b = b @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+
+    gradient_a = np.zeros_like(luma_a)
+    gradient_b = np.zeros_like(luma_b)
+    gradient_a[:, :-1] += np.square(np.diff(luma_a, axis=1))
+    gradient_a[:-1, :] += np.square(np.diff(luma_a, axis=0))
+    gradient_b[:, :-1] += np.square(np.diff(luma_b, axis=1))
+    gradient_b[:-1, :] += np.square(np.diff(luma_b, axis=0))
+    np.sqrt(gradient_a, out=gradient_a)
+    np.sqrt(gradient_b, out=gradient_b)
+
+    top_tail_threshold = float(np.percentile(luma_b, 99.0))
+    top_tail_mask = luma_b >= top_tail_threshold
+    high_gradient_threshold = float(np.percentile(gradient_b, 90.0))
+    high_gradient_mask = (gradient_b >= high_gradient_threshold) & (gradient_b > 0.0)
+
+    top_tail_underfit = np.maximum(luma_b[top_tail_mask] - luma_a[top_tail_mask], 0.0)
+    high_gradient_underfit = np.maximum(
+        gradient_b[high_gradient_mask] - gradient_a[high_gradient_mask], 0.0,
+    )
     return {
         "mae": float(np.mean(np.abs(delta))),
         "mse": float(np.mean(delta * delta)),
         "lumaMae": float(np.mean(np.abs(luma_a - luma_b))),
+        "gradientMae": float(np.mean(np.abs(gradient_a - gradient_b))),
+        "targetTopTailLumaUnderfit": float(np.mean(top_tail_underfit)),
+        "targetTopTailLumaThreshold": top_tail_threshold,
+        "targetHighGradientUnderfit": float(np.mean(high_gradient_underfit)) if high_gradient_underfit.size else 0.0,
+        "targetHighGradientThreshold": high_gradient_threshold,
         "meanLuma": float(np.mean(luma_a)),
         "targetMeanLuma": float(np.mean(luma_b)),
     }
@@ -504,6 +635,7 @@ for(const id of ['camera','left','right','blend']) $(id).addEventListener('input
 
 
 def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
+    footprint_controls = resolve_footprint_controls(args)
     manifest_path = Path(args.manifest).resolve()
     capture_path = Path(args.capture_report).resolve()
     manifest = load_json(manifest_path, "training manifest")
@@ -513,6 +645,7 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
         return {
             "status": "validated", "stateId": state.get("id"), "stateStep": state_step,
             "rowCount": int((state.get("rows") or {}).get("count")), "descriptor": descriptor_receipt,
+            "footprintMode": footprint_identity(args.footprint_mode), "footprintControls": footprint_controls,
         }
     required = {"features", "admission", "coefficients", "kernelDescriptors"}
     require(required.issubset(paths), f"rendering requires row artifacts: {sorted(required - set(paths))}")
@@ -543,7 +676,7 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
     calibration_camera = cameras[10]
     calibration_planes, calibration_raster = rasterize_coefficients(
         descriptors[:, 0:3], descriptors[:, 20:23], features, coefficients, calibration_camera,
-        args.depth_bins, args.footprint_mode,
+        args.depth_bins, args.footprint_mode, footprint_controls,
     )
     target_capture = find_capture(capture_report, 10, "sharedTransmittanceContributionSum", 160)
     target = image_rgb(Path(target_capture["imagePath"]))
@@ -570,7 +703,7 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
         index = int(camera["cameraIndex"])
         planes, raster_receipt = (calibration_planes, calibration_raster) if index == 10 else rasterize_coefficients(
             descriptors[:, 0:3], descriptors[:, 20:23], features, coefficients, camera,
-            args.depth_bins, args.footprint_mode,
+            args.depth_bins, args.footprint_mode, footprint_controls,
         )
         expanded_linear, ridge_linear, nonridge_linear, trans = compose_planes(planes, path_scale, "total")
         ridge_total_planes = planes.copy()
@@ -632,6 +765,11 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
             "manifest": str(manifest_path), "captureReport": str(capture_path), "stateStep": state_step,
             "sampleCap": None, "depthBins": args.depth_bins, "footprintMode": args.footprint_mode,
             "pathScale": args.path_scale,
+            "footprintControls": {
+                "skirtMix": args.skirt_mix,
+                "skirtMinorScale": args.skirt_minor_scale,
+                "skirtRidgeRejection": args.skirt_ridge_rejection,
+            },
         },
         "effective": {
             "stateId": state.get("id"), "stateStep": state_step, "rowCount": count,
@@ -639,6 +777,7 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
             "sharedTransmittanceIdentity": SHARED_TRANSMITTANCE, "kernelGeometry": KERNEL_GEOMETRY,
             "orderApproximation": ORDER_APPROXIMATION, "sampleCap": None, "droppedRowCount": 0,
             "footprintMode": footprint_identity(args.footprint_mode), "pathScale": path_scale,
+            "footprintControls": footprint_controls,
             "independentlyRenderedToneMappedImageAdditivity": False,
         },
         "descriptorReceipt": descriptor_receipt,
@@ -707,6 +846,55 @@ def self_test() -> None:
     ))
     require(abs(sum(float(weight[0]) for _, _, weight in samples) - 1.0) < 1e-6, "ellipse quadrature does not conserve integrated energy")
     require(len(samples) == 60, "ellipse quadrature sample count drifted")
+    pixel_x = np.asarray([2.25], dtype=np.float32)
+    pixel_y = np.asarray([3.5], dtype=np.float32)
+    tangent_x = np.asarray([1.0], dtype=np.float32)
+    tangent_y = np.asarray([0.0], dtype=np.float32)
+    major_px = np.asarray([2.0], dtype=np.float32)
+    minor_px = np.asarray([1.0], dtype=np.float32)
+
+    def aggregate(sample_rows: list[tuple[np.ndarray, np.ndarray, np.ndarray]]) -> dict[tuple[int, int], float]:
+        totals: dict[tuple[int, int], float] = {}
+        for sx, sy, weight in sample_rows:
+            key = (int(sx[0]), int(sy[0]))
+            totals[key] = totals.get(key, 0.0) + float(weight[0])
+        return {key: value for key, value in totals.items() if abs(value) > 1e-9}
+
+    bilinear = aggregate(list(tangent_pixel_samples(pixel_x, pixel_y, tangent_x, tangent_y, major_px)))
+    zero_skirt = aggregate(list(core_skirt_pixel_samples(
+        pixel_x, pixel_y, tangent_x, tangent_y, major_px, minor_px,
+        np.asarray([0.0], dtype=np.float32),
+    )))
+    full_skirt = aggregate(list(core_skirt_pixel_samples(
+        pixel_x, pixel_y, tangent_x, tangent_y, major_px, minor_px,
+        np.asarray([1.0], dtype=np.float32),
+    )))
+    ellipse = aggregate(samples)
+    require(bilinear.keys() == zero_skirt.keys(), "zero skirt does not preserve bilinear support")
+    require(all(abs(bilinear[key] - zero_skirt[key]) < 1e-6 for key in bilinear), "zero skirt does not equal bilinear weights")
+    require(full_skirt.keys() == ellipse.keys(), "full skirt does not preserve ellipse support")
+    require(all(abs(full_skirt[key] - ellipse[key]) < 1e-6 for key in ellipse), "full skirt does not equal ellipse weights")
+    feature_fixture = np.zeros((2, len(FEATURE_ORDER)), dtype=np.float32)
+    feature_fixture[:, RIDGE_FEATURE_INDEX] = [0.0, 1.0]
+    conditioned = conditioned_skirt_mix(feature_fixture, 0.8, 0.5)
+    require(np.allclose(conditioned, [0.8, 0.4]), "Ridge conditioning drifted")
+    for candidate_index in range(2):
+        candidate_samples = list(core_skirt_pixel_samples(
+            np.asarray([2.25], dtype=np.float32), np.asarray([3.5], dtype=np.float32),
+            tangent_x, tangent_y, major_px, minor_px,
+            np.asarray([conditioned[candidate_index]], dtype=np.float32),
+        ))
+        require(abs(sum(float(weight[0]) for _, _, weight in candidate_samples) - 1.0) < 1e-6, "conditioned skirt does not conserve candidate mass")
+    print("core-skirt endpoint contracts passed")
+    metric_target = np.zeros((10, 10, 3), dtype=np.uint8)
+    metric_target[4:6, 4:6] = 255
+    exact_metrics = image_metrics(metric_target, metric_target)
+    missing_metrics = image_metrics(np.zeros_like(metric_target), metric_target)
+    require(exact_metrics["targetTopTailLumaUnderfit"] == 0.0, "exact target has peak underfit")
+    require(exact_metrics["targetHighGradientUnderfit"] == 0.0, "exact target has gradient underfit")
+    require(missing_metrics["targetTopTailLumaUnderfit"] > 0.0, "missing peak was not diagnosed")
+    require(missing_metrics["targetHighGradientUnderfit"] > 0.0, "missing target structure was not diagnosed")
+    print("target-aligned metric contracts passed")
     print("coefficient render oracle self-test passed")
 
 
@@ -720,6 +908,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--depth-bins", type=int, default=96)
     parser.add_argument("--footprint-mode", choices=sorted(FOOTPRINT_MODES), default="nearest")
     parser.add_argument("--path-scale", type=float)
+    parser.add_argument("--skirt-mix", type=float)
+    parser.add_argument("--skirt-minor-scale", type=float)
+    parser.add_argument("--skirt-ridge-rejection", type=float)
     parser.add_argument("--validate-only", action="store_true")
     parser.add_argument("--skip-hash-verification", action="store_true")
     parser.add_argument("--self-test", action="store_true")
@@ -735,9 +926,22 @@ def main() -> int:
         raise ValueError("--manifest, --capture-report, --out-dir, and --report are required")
     report_path = Path(args.report).resolve()
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    phase = "manifest-validation"
+    requested = {
+        "footprintMode": args.footprint_mode,
+        "footprintControls": {
+            "skirtMix": args.skirt_mix,
+            "skirtMinorScale": args.skirt_minor_scale,
+            "skirtRidgeRejection": args.skirt_ridge_rejection,
+        },
+        "pathScale": args.path_scale,
+        "stateStep": args.state_step,
+        "depthBins": args.depth_bins,
+    }
+    phase = "footprint-control-validation"
     started = time.time()
     try:
+        resolve_footprint_controls(args)
+        phase = "manifest-validation"
         result = run_oracle(args)
         phase = "report-write"
         report = {"schema": REPORT_SCHEMA, "startedAtUnix": started, "finishedAtUnix": time.time(), **result}
@@ -748,7 +952,7 @@ def main() -> int:
         failure = {
             "schema": REPORT_SCHEMA, "status": "failed", "failurePhase": phase,
             "error": str(exc), "startedAtUnix": started, "finishedAtUnix": time.time(),
-            "traceback": traceback.format_exc(),
+            "requested": requested, "traceback": traceback.format_exc(),
         }
         report_path.write_text(json.dumps(failure, indent=2) + "\n")
         print(f"coefficient render oracle failed during {phase}: {exc}", file=sys.stderr)
