@@ -12,6 +12,8 @@ function capture(composition, overrides = {}) {
     requestedComposition: composition,
     effectiveComposition: composition,
     compositionAuthority: 'selective-head-live-render-composition-authority-v0',
+    beforeSimStepCount: overrides.beforeSimStepCount ?? 96,
+    simStepCount: overrides.simStepCount ?? 96,
     passReceipt: {
       raymarchApplied: composition !== 'splat-only-v0',
       splatApplied: true,
@@ -163,6 +165,31 @@ assert.equal(drift.classification, 'browser-gpu-frozen-capture-source-step-drift
 assert.equal(drift.catches, 'browser-gpu-frozen-capture-source-step-drift');
 assert.equal(drift.falsifier.tripped, true);
 assert.equal(drift.identity.sourceStateComparable, false);
+
+const captureDrift = buildFrozenCaptureComparison({
+  control: 'volume_reaction_boundary_support_front',
+  requestedBaseline: 0.4,
+  requestedTreatment: 1.6,
+  baselineReport: report(baselineUrl),
+  treatmentReport: {
+    ...report(treatmentUrl, {
+      effectiveSupportFront: 1.6,
+      splatOnly: { sha256: 'g'.repeat(64), byteLength: 36000, candidateCopyBytes: 8192 },
+    }),
+    captures: report(treatmentUrl, {
+      effectiveSupportFront: 1.6,
+      splatOnly: { sha256: 'g'.repeat(64), byteLength: 36000, candidateCopyBytes: 8192 },
+    }).captures.map((item, index) => index === 0 ? {
+      ...item,
+      beforeSimStepCount: 95,
+      simStepCount: 95,
+    } : item),
+  },
+});
+
+assert.equal(captureDrift.classification, 'browser-gpu-frozen-capture-source-step-drift');
+assert.equal(captureDrift.identity.captureSourceComparable, false);
+assert.equal(captureDrift.falsifier.tripped, true);
 
 assert.throws(() => buildFrozenCaptureComparison({
   control: 'volume_reaction_boundary_support_front',

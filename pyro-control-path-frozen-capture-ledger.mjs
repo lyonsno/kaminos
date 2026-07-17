@@ -80,7 +80,9 @@ export function buildFrozenCaptureComparison({
   const hasDownstreamDelta = screenshotHashChangedCount > 0
     || screenshotByteLengthMeanAbs > 0
     || candidateCopyBytesMeanAbs > 0;
-  const sourceStateComparable = sourceStatesComparable(baselineReport, treatmentReport);
+  const reportSourceComparable = sourceStatesComparable(baselineReport, treatmentReport);
+  const captureSourceComparable = captures.every(item => captureSourceStepComparable(item, baselineReport, treatmentReport));
+  const sourceStateComparable = reportSourceComparable && captureSourceComparable;
   const passReceipts = captures.flatMap(item => [item.passReceipt.baseline, item.passReceipt.treatment]);
   const appliedPasses = {
     splatApplied: passReceipts.some(receipt => receipt?.splatApplied === true),
@@ -117,6 +119,8 @@ export function buildFrozenCaptureComparison({
       baselineSimStep: baselineReport.sameStateSimStep,
       treatmentSimStep: treatmentReport.sameStateSimStep,
       sourceStateComparable,
+      reportSourceComparable,
+      captureSourceComparable,
       sourceStateIdentity: baselineReport.sourceStateIdentity,
     },
     fallback: fallbackReceipt(baselineReport, treatmentReport),
@@ -237,6 +241,17 @@ function controlValuesEqual(actual, expected) {
 function sourceStatesComparable(baselineReport, treatmentReport) {
   if (Number(baselineReport.sameStateSimStep) !== Number(treatmentReport.sameStateSimStep)) return false;
   return stableJson(baselineReport.sourceStateIdentity) === stableJson(treatmentReport.sourceStateIdentity);
+}
+
+function captureSourceStepComparable(item, baselineReport, treatmentReport) {
+  const baselineStep = Number(baselineReport.sameStateSimStep);
+  const treatmentStep = Number(treatmentReport.sameStateSimStep);
+  return Number(item.baseline.beforeSimStepCount) === baselineStep
+    && Number(item.baseline.simStepCount) === baselineStep
+    && Number(item.treatment.beforeSimStepCount) === treatmentStep
+    && Number(item.treatment.simStepCount) === treatmentStep
+    && Number(item.baseline.beforeSimStepCount) === Number(item.treatment.beforeSimStepCount)
+    && Number(item.baseline.simStepCount) === Number(item.treatment.simStepCount);
 }
 
 function stableJson(value) {

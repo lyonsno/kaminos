@@ -1,6 +1,6 @@
 {
   "schema": "kaminos.pyro-control-path.browser-gpu-frozen-capture-comparison.v0",
-  "generatedAt": "2026-07-17T18:00:31.077Z",
+  "generatedAt": "2026-07-17T18:07:23.963Z",
   "control": "volume_reaction_boundary_support_front",
   "classification": "browser-gpu-frozen-capture-positive",
   "requested": {
@@ -22,6 +22,8 @@
     "baselineSimStep": 96,
     "treatmentSimStep": 96,
     "sourceStateComparable": true,
+    "reportSourceComparable": true,
+    "captureSourceComparable": true,
     "sourceStateIdentity": {
       "identity": "selective-head-live-frozen-source-state-v0",
       "routeIdentity": "exact-basin-selective-head-live-v0",
