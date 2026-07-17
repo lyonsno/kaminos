@@ -100,6 +100,12 @@ assert.match(core, /nonRidgeSourceBasisControlsActive = true;[\s\S]*try \{[\s\S]
 assert.match(core, /sourceBasisControlApplicationVerification[\s\S]*catch \(error\)[\s\S]*nonridge-source-basis-capture-uniform-update-failed/, 'capture-time uniform revalidation converts thrown updates into a cleanup-bearing failed receipt');
 assert.match(core, /prior-nonridge-source-basis-session-not-released[\s\S]*heldSession:[\s\S]*nonRidgeSourceBasisPublicSession/, 'duplicate begin preserves the held captured session for read and release');
 assert.match(core, /releaseDebugNonRidgeSourceBasisCapture[\s\S]*clearNonRidgeSourceBasisControlAuthority/, 'capture release restores ordinary presentation-owned uniform authority');
+assert.match(core, /struct NonRidgeOpticalCaptureHeader[\s\S]*startCell:\s*u32/, 'capture header carries the global starting cell for exact bounded dispatches');
+assert.match(core, /fullGridCapture[\s\S]*cellIndex >= nonRidgeOpticalCaptureHeader\.startCell[\s\S]*cellIndex - nonRidgeOpticalCaptureHeader\.startCell/, 'chunked full-grid writes preserve contiguous global cell identity while indexing the bounded target buffer locally');
+assert.match(core, /maxStorageBufferBindingSize[\s\S]*maxChunkRows[\s\S]*Math\.floor\([\s\S]*NONRIDGE_SOURCE_BASIS_ROW_STRIDE_BYTES/, 'source-basis begin derives a device-binding-safe chunk capacity without reducing full-grid row authority');
+assert.doesNotMatch(core, /full-grid-row-bytes-exceed-device-binding-limit/, 'full-grid source-basis capture no longer rejects grids whose aggregate rows exceed one storage binding');
+assert.match(core, /async function readDebugNonRidgeSourceBasisCaptureChunk[\s\S]*startCell[\s\S]*runNonRidgeOpticalCapturePass\([\s\S]*mode:\s*3[\s\S]*readNonRidgeOpticalCaptureRows/, 'each requested source-basis chunk is materialized from the frozen GPU state on demand');
+assert.match(core, /runNonRidgeOpticalCapturePass\(\{ mode, capacity, startCell = 0[\s\S]*new Uint32Array\(\[0, capacity, mode, 0, startCell/, 'the full-grid pass transmits bounded global cell range metadata to the shader');
 
 assert.match(witness, /kaminos\.volume\.nonridge-source-setting-captures\.v0/, 'witness writes the exact capture-manifest schema');
 assert.match(witness, /integration-positive-nonridge-randomized-source-captures-v0/, 'witness names Integration capture authority');

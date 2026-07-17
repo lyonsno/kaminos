@@ -1224,6 +1224,10 @@ struct NonRidgeOpticalCaptureHeader {
   capacity: u32,
   mode: u32,
   overflowCount: atomic<u32>,
+  startCell: u32,
+  reserved0: u32,
+  reserved1: u32,
+  reserved2: u32,
 };
 
 struct NonRidgeOpticalCaptureRow {
@@ -5274,9 +5278,12 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
         max(nonRidgeEmissionCoefficient.b, nonRidgeExtinctionCoefficient)
       );
       let nonRidgeMembership = (1.0 - ridgeOwnershipWeight) * step(0.000001, nonRidgeOpticalSignal);
-      if (cellIndex < nonRidgeOpticalCaptureHeader.capacity) {
+      if (
+        cellIndex >= nonRidgeOpticalCaptureHeader.startCell
+        && cellIndex < nonRidgeOpticalCaptureHeader.startCell + nonRidgeOpticalCaptureHeader.capacity
+      ) {
         writeNonRidgeSourceBasisCaptureRow(
-          cellIndex,
+          cellIndex - nonRidgeOpticalCaptureHeader.startCell,
           directFlameCandidateSidecar,
           material,
           fireLayer,
@@ -5288,8 +5295,6 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
           vec4<f32>(ridgeOwnedEmissionCoefficient, ridgeOwnedExtinctionCoefficient),
         );
         atomicAdd(&nonRidgeOpticalCaptureHeader.rowCount, 1u);
-      } else {
-        atomicAdd(&nonRidgeOpticalCaptureHeader.overflowCount, 1u);
       }
     } else if (nonRidgeOpticalCaptureHeader.mode > 0u && nonRidgeOpticalCaptureSignal > 0.000001) {
       let captureRowIndex = atomicAdd(&nonRidgeOpticalCaptureHeader.rowCount, 1u);
@@ -6908,10 +6913,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (!nonRidgeOpticalCaptureHeaderBuffer) {
       nonRidgeOpticalCaptureHeaderBuffer = device.createBuffer({
         label: `kaminos ${NONRIDGE_OPTICAL_CAPTURE_IDENTITY} header`,
-        size: 16,
+        size: 32,
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
       });
-      device.queue.writeBuffer(nonRidgeOpticalCaptureHeaderBuffer, 0, new Uint32Array(4));
+      device.queue.writeBuffer(nonRidgeOpticalCaptureHeaderBuffer, 0, new Uint32Array(8));
     }
     if (!nonRidgeOpticalCaptureRowBuffer) {
       nonRidgeOpticalCaptureRowBuffer = device.createBuffer({
@@ -11795,7 +11800,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   async function readNonRidgeOpticalCaptureHeader(readback, encoder, label) {
-    encoder.copyBufferToBuffer(nonRidgeOpticalCaptureHeaderBuffer, 0, readback, 0, 16);
+    encoder.copyBufferToBuffer(nonRidgeOpticalCaptureHeaderBuffer, 0, readback, 0, 32);
     device.queue.submit([encoder.finish()]);
     await readback.mapAsync(GPUMapMode.READ);
     const header = new Uint32Array(readback.getMappedRange().slice(0));
@@ -11806,6 +11811,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       capacity: header[1],
       mode: header[2],
       overflowCount: header[3],
+      startCell: header[4],
     };
   }
 
@@ -11814,11 +11820,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     rebuildSelectiveHeadLiveBindGroups();
   }
 
-  async function runNonRidgeOpticalCapturePass({ mode, capacity, captureTimeMs, label }) {
+  async function runNonRidgeOpticalCapturePass({ mode, capacity, startCell = 0, captureTimeMs, label }) {
     device.queue.writeBuffer(
       nonRidgeOpticalCaptureHeaderBuffer,
       0,
-      new Uint32Array([0, capacity, mode, 0]),
+      new Uint32Array([0, capacity, mode, 0, startCell, 0, 0, 0]),
     );
     updateUniforms(captureTimeMs);
     let fullGridDispatchTexture = null;
@@ -11833,7 +11839,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     const readback = device.createBuffer({
       label: `kaminos ${NONRIDGE_OPTICAL_CAPTURE_IDENTITY} ${label} header readback`,
-      size: 16,
+      size: 32,
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
     });
     device.pushErrorScope('validation');
@@ -12222,8 +12228,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       rowCount: session.rowCount || 0,
       observedRowCount: session.observedRowCount || 0,
       overflowCount: session.overflowCount || 0,
+      materializedRowCount: session.materializedRowCount || 0,
       strideFloats: SOURCE_BASIS_GPU_ROW_FLOATS,
       byteLength: session.byteLength || 0,
+      maxChunkRows: session.maxChunkRows || 0,
       gridShape: session.gridShape || null,
       gridOrigin: session.gridOrigin || null,
       gridSpacing: session.gridSpacing || null,
@@ -12298,7 +12306,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (state.active && !selectiveHeadLiveCapturePaused) {
       return failed('freeze-authority', 'nonridge-source-basis-capture-requires-frozen-renderer');
     }
-    if (nonRidgeSourceBasisCaptureSession?.values instanceof Float32Array) {
+    if (nonRidgeSourceBasisCaptureSession?.status === 'prepared') {
       return {
         ok: false,
         schema: NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY,
@@ -12321,50 +12329,25 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const rowCount = gridCellCount(gridSize);
     const byteLength = rowCount * NONRIDGE_SOURCE_BASIS_ROW_STRIDE_BYTES;
     const maxBindingBytes = Number(device.limits?.maxStorageBufferBindingSize || 0);
-    if (byteLength > maxBindingBytes) {
-      return failed('exact-full-grid-allocation', `full-grid-row-bytes-exceed-device-binding-limit:${byteLength}>${maxBindingBytes}`, {
-        rowCount,
-        byteLength,
+    const maxChunkRows = Math.floor(maxBindingBytes / NONRIDGE_SOURCE_BASIS_ROW_STRIDE_BYTES);
+    if (maxChunkRows < 1) {
+      return failed('binding-capacity', 'source-basis-row-exceeds-device-binding-limit', {
+        rowStrideBytes: NONRIDGE_SOURCE_BASIS_ROW_STRIDE_BYTES,
         maxStorageBufferBindingSize: maxBindingBytes,
       });
     }
-    const priorAppearanceMode = appearanceDecompositionModeRequestedRaw;
-    let exactRowsBuffer = null;
-    let idleRowsBuffer = null;
     try {
-      setAppearanceDecompositionMode('non-ridge-emission');
       ensureNonRidgeOpticalCaptureBuffers();
-      idleRowsBuffer = nonRidgeOpticalCaptureRowBuffer;
-      exactRowsBuffer = device.createBuffer({
-        label: `kaminos ${NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY} exact full-grid ${rowCount}`,
-        size: byteLength,
-        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
-      });
-      nonRidgeOpticalCaptureRowBuffer = exactRowsBuffer;
-      rebuildNonRidgeOpticalCaptureBindGroups();
-      const writePass = await runNonRidgeOpticalCapturePass({
-        mode: 3,
-        capacity: rowCount,
-        captureTimeMs,
-        controlApplicationReceipt,
-        label: 'exact-full-grid-source-basis-write',
-      });
-      if (writePass.rowCount !== rowCount || writePass.overflowCount !== 0) {
-        return failed('write-pass-verification', 'nonridge-source-basis-full-grid-count-drift-or-overflow', {
-          expectedRowCount: rowCount,
-          writePass,
-        });
-      }
-      const values = await readNonRidgeOpticalCaptureRows(byteLength);
       nonRidgeSourceBasisCaptureSession = {
-        status: 'captured',
+        status: 'prepared',
         sessionId: `nonridge-source-basis-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
         createdAtMs: performance.now(),
         rowCount,
-        observedRowCount: writePass.rowCount,
-        overflowCount: writePass.overflowCount,
+        observedRowCount: rowCount,
+        materializedRowCount: 0,
+        overflowCount: 0,
         byteLength,
-        values,
+        maxChunkRows,
         gridShape: [gridSize, gridSize, gridSize],
         gridOrigin: [-1, -1, -1],
         gridSpacing: [2 / gridSize, 2 / gridSize, 2 / gridSize],
@@ -12377,11 +12360,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           boundarySidecar: boundarySidecarDebug(),
         },
         rendererPassReceipt: {
-          identity: 'frozen-full-grid-nonridge-source-basis-coefficient-pass-v0',
-          fullGridEncoded: true,
-          fullGridApplied: true,
+          identity: 'frozen-full-grid-demand-chunked-nonridge-source-basis-coefficient-pass-v0',
+          fullGridEncoded: false,
+          fullGridApplied: false,
+          materialization: 'sequential-binding-safe-exact-cell-intervals-v0',
           expectedRows: rowCount,
-          observedRows: writePass.rowCount,
+          observedRows: 0,
           raymarchEncoded: false,
           raymarchApplied: false,
           splatsEncoded: false,
@@ -12399,44 +12383,89 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return { ok: true, ...nonRidgeSourceBasisPublicSession(nonRidgeSourceBasisCaptureSession) };
     } catch (error) {
       return failed('capture', error?.message || String(error));
-    } finally {
-      setAppearanceDecompositionMode(priorAppearanceMode);
-      if (exactRowsBuffer) {
-        nonRidgeOpticalCaptureRowBuffer = idleRowsBuffer;
-        exactRowsBuffer.destroy();
-        rebuildNonRidgeOpticalCaptureBindGroups();
-      }
-      if (nonRidgeOpticalCaptureHeaderBuffer) {
-        device.queue.writeBuffer(nonRidgeOpticalCaptureHeaderBuffer, 0, new Uint32Array(4));
-      }
     }
   }
 
-  function readDebugNonRidgeSourceBasisCaptureChunk(options = {}) {
+  async function readDebugNonRidgeSourceBasisCaptureChunk(options = {}) {
     const session = nonRidgeSourceBasisCaptureSession;
-    if (!session || session.status !== 'captured' || !(session.values instanceof Float32Array)) {
+    if (!session || session.status !== 'prepared') {
       return { ok: false, schema: NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY, status: 'failed', failurePhase: 'chunk-read', reason: 'no-active-nonridge-source-basis-session' };
     }
     const requestedSessionId = String(options.sessionId || '');
     if (requestedSessionId && requestedSessionId !== session.sessionId) {
       return { ok: false, schema: NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY, status: 'failed', failurePhase: 'chunk-read', reason: 'session-id-mismatch', sessionId: session.sessionId, requestedSessionId };
     }
-    const startFloat = Math.max(0, Math.min(session.values.length, Math.floor(Number(options.startFloat) || 0)));
-    const requestedFloatCount = Math.floor(Number(options.floatCount) || Math.min(262144, session.values.length - startFloat));
-    const floatCount = Math.max(0, Math.min(session.values.length - startFloat, requestedFloatCount));
-    return {
-      ok: true,
-      schema: NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY,
-      identity: 'frozen-full-grid-nonridge-source-basis-rows-v0',
-      sessionId: session.sessionId,
-      dtype: 'float32',
-      startFloat,
-      floatCount,
-      byteOffset: startFloat * Float32Array.BYTES_PER_ELEMENT,
-      byteLength: floatCount * Float32Array.BYTES_PER_ELEMENT,
-      isFinal: startFloat + floatCount >= session.values.length,
-      base64: encodeFloat32ChunkBase64(session.values, startFloat, floatCount),
-    };
+    const totalFloats = session.rowCount * SOURCE_BASIS_GPU_ROW_FLOATS;
+    const startFloat = Math.floor(Number(options.startFloat) || 0);
+    const requestedFloatCount = Math.floor(Number(options.floatCount) || Math.min(262144, totalFloats - startFloat));
+    if (startFloat < 0 || startFloat > totalFloats || startFloat % SOURCE_BASIS_GPU_ROW_FLOATS !== 0) {
+      return { ok: false, schema: NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY, status: 'failed', failurePhase: 'chunk-read', reason: 'invalid-row-aligned-start-float', startFloat };
+    }
+    if (requestedFloatCount <= 0 || requestedFloatCount % SOURCE_BASIS_GPU_ROW_FLOATS !== 0) {
+      return { ok: false, schema: NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY, status: 'failed', failurePhase: 'chunk-read', reason: 'invalid-row-aligned-float-count', requestedFloatCount };
+    }
+    const startCell = startFloat / SOURCE_BASIS_GPU_ROW_FLOATS;
+    const rowCount = Math.min(requestedFloatCount / SOURCE_BASIS_GPU_ROW_FLOATS, session.rowCount - startCell);
+    if (startCell !== session.materializedRowCount) {
+      return { ok: false, schema: NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY, status: 'failed', failurePhase: 'chunk-read', reason: 'non-sequential-global-cell-range', expectedStartCell: session.materializedRowCount, startCell };
+    }
+    if (rowCount > session.maxChunkRows) {
+      return { ok: false, schema: NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY, status: 'failed', failurePhase: 'chunk-read', reason: 'requested-chunk-exceeds-device-binding-limit', rowCount, maxChunkRows: session.maxChunkRows };
+    }
+    const floatCount = rowCount * SOURCE_BASIS_GPU_ROW_FLOATS;
+    const byteLength = floatCount * Float32Array.BYTES_PER_ELEMENT;
+    const priorAppearanceMode = appearanceDecompositionModeRequestedRaw;
+    const idleRowsBuffer = nonRidgeOpticalCaptureRowBuffer;
+    let exactRowsBuffer = null;
+    try {
+      setAppearanceDecompositionMode('non-ridge-emission');
+      exactRowsBuffer = device.createBuffer({
+        label: `kaminos ${NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY} cells ${startCell}-${startCell + rowCount}`,
+        size: byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+      });
+      nonRidgeOpticalCaptureRowBuffer = exactRowsBuffer;
+      rebuildNonRidgeOpticalCaptureBindGroups();
+      const writePass = await runNonRidgeOpticalCapturePass({
+        mode: 3,
+        capacity: rowCount,
+        startCell,
+        captureTimeMs: session.captureTimeMs,
+        label: `exact-source-basis-cells-${startCell}-${startCell + rowCount}`,
+      });
+      if (writePass.rowCount !== rowCount || writePass.overflowCount !== 0 || writePass.startCell !== startCell) {
+        return { ok: false, schema: NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY, status: 'failed', failurePhase: 'chunk-read', reason: 'chunk-write-count-range-drift', expectedRowCount: rowCount, writePass };
+      }
+      const values = await readNonRidgeOpticalCaptureRows(byteLength);
+      session.materializedRowCount += rowCount;
+      session.rendererPassReceipt.observedRows = session.materializedRowCount;
+      session.rendererPassReceipt.fullGridEncoded = session.materializedRowCount === session.rowCount;
+      session.rendererPassReceipt.fullGridApplied = session.materializedRowCount === session.rowCount;
+      return {
+        ok: true,
+        schema: NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY,
+        identity: 'frozen-full-grid-nonridge-source-basis-rows-v0',
+        sessionId: session.sessionId,
+        dtype: 'float32',
+        startCell,
+        rowCount,
+        startFloat,
+        floatCount,
+        byteOffset: startFloat * Float32Array.BYTES_PER_ELEMENT,
+        byteLength,
+        isFinal: session.materializedRowCount === session.rowCount,
+        base64: encodeFloat32ChunkBase64(values, 0, values.length),
+        rendererPassReceipt: writePass,
+      };
+    } catch (error) {
+      return { ok: false, schema: NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY, status: 'failed', failurePhase: 'chunk-read', reason: error?.message || String(error), startCell, rowCount };
+    } finally {
+      setAppearanceDecompositionMode(priorAppearanceMode);
+      nonRidgeOpticalCaptureRowBuffer = idleRowsBuffer;
+      exactRowsBuffer?.destroy();
+      rebuildNonRidgeOpticalCaptureBindGroups();
+      if (nonRidgeOpticalCaptureHeaderBuffer) device.queue.writeBuffer(nonRidgeOpticalCaptureHeaderBuffer, 0, new Uint32Array(8));
+    }
   }
 
   function releaseDebugNonRidgeSourceBasisCapture(options = {}) {
@@ -12444,6 +12473,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const requestedSessionId = String(options.sessionId || '');
     if (!session || (requestedSessionId && requestedSessionId !== session.sessionId)) {
       return { ok: false, schema: NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY, status: 'failed', failurePhase: 'release', reason: session ? 'session-id-mismatch' : 'no-active-nonridge-source-basis-session' };
+    }
+    if (session.status === 'prepared' && session.materializedRowCount !== session.rowCount) {
+      return { ok: false, schema: NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY, status: 'failed', failurePhase: 'release', reason: 'full-grid-session-not-fully-materialized', materializedRowCount: session.materializedRowCount, rowCount: session.rowCount };
     }
     const released = { ...nonRidgeSourceBasisPublicSession(session), status: 'released' };
     nonRidgeSourceBasisCaptureSession = null;
