@@ -51,6 +51,11 @@ assert.match(
   /nativeCellMembership = vec4<f32>\([\s\S]*f32\(cellIndex\)[\s\S]*ridgeAdmitted[\s\S]*nonRidgeAdmitted[\s\S]*nonRidgeScore/,
   'live union candidates must carry stable native-cell ids and explicit membership without imported-field custody',
 );
+assert.match(
+  core,
+  /function syncFlowKernelDescriptorCaptureBuffer\(\) \{\s*const captureRequested = flowKernelDescriptorCaptureRequested\(\);\s*const rowsRequested = flowKernelDescriptorRowsRequested\(\);/,
+  'union-mode footprint audits allocate descriptor rows even when explicit descriptor export is off',
+);
 assert.match(core, /BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES = 96/, 'candidate ABI must reserve the live identity row');
 assert.match(core, /BOUNDARY_SPLAT_DRAW_STATE_BYTES = 80/, 'draw-state ABI must include every union telemetry atomic and WGSL tail padding');
 for (const token of ['stableNativeCellIdSha256', 'stateWitnessSha256', 'controlSha256', 'decodedMembershipCounts']) {

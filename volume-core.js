@@ -8060,15 +8060,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function syncFlowKernelDescriptorCaptureBuffer() {
-    const requested = flowKernelDescriptorCaptureRequested();
-    state.flowKernelDescriptorCaptureRequested = requested;
-    if (!requested) {
+    const captureRequested = flowKernelDescriptorCaptureRequested();
+    const rowsRequested = flowKernelDescriptorRowsRequested();
+    state.flowKernelDescriptorCaptureRequested = captureRequested;
+    if (!rowsRequested) {
       state.flowKernelDescriptorCaptureEffective = false;
       return;
     }
     const requiredCapacity = Math.max(boundarySplatCapacity, state.flowKernelDescriptorIndexCount || 0);
     resizeFlowKernelDescriptorBuffer(requiredCapacity, 'runtime capacity');
-    state.flowKernelDescriptorCaptureEffective = flowKernelDescriptorBufferCapacity >= requiredCapacity;
+    state.flowKernelDescriptorCaptureEffective = captureRequested && flowKernelDescriptorBufferCapacity >= requiredCapacity;
   }
 
   function growBoundarySplatCapacity(candidateCount) {
@@ -8080,6 +8081,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const previousDescriptorBuffer = flowKernelDescriptorBuffer;
     const featureCaptureRequested = boundarySplatFeatureCaptureRequested();
     const descriptorCaptureRequested = flowKernelDescriptorCaptureRequested();
+    const descriptorRowsRequested = flowKernelDescriptorRowsRequested();
     boundarySplatCapacity = nextCapacity;
     boundarySplatBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} candidates capacity ${nextCapacity}`,
@@ -8092,11 +8094,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       size: boundarySplatFeatureBufferCapacity * BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
     });
-    flowKernelDescriptorBufferCapacity = descriptorCaptureRequested
+    flowKernelDescriptorBufferCapacity = descriptorRowsRequested
       ? Math.max(nextCapacity, state.flowKernelDescriptorIndexCount || 0)
       : 1;
     flowKernelDescriptorBuffer = device.createBuffer({
-      label: `kaminos ${FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY} ${descriptorCaptureRequested ? `capacity ${nextCapacity}` : 'dummy'}`,
+      label: `kaminos ${FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY} ${descriptorRowsRequested ? `capacity ${nextCapacity}` : 'dummy'}`,
       size: flowKernelDescriptorBufferCapacity * FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
     });

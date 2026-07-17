@@ -198,11 +198,10 @@ try {
   failurePhase = 'camera-and-canvas-contract';
   const presentation = await evaluate(socket, `(async () => {
     const basin = document.querySelector('#basin');
-    if (basin) Object.assign(basin.style, { position: 'fixed', inset: '0', width: '100vw', height: '100vh', zIndex: '2147483646', border: '0' });
+    if (!basin) throw new Error('operator-visible-basin-iframe-missing');
     const basinWindow = basin?.contentWindow || window;
     const canvas = basinWindow.document.querySelector('canvas');
     if (!canvas) throw new Error('operator-visible-canvas-missing');
-    Object.assign(canvas.style, { position: 'fixed', inset: '0', zIndex: '2147483647', display: 'block' });
     const setPose = basinWindow.kaminosSetCameraDebugPose || window.kaminosSetCameraDebugPose;
     if (typeof setPose !== 'function') throw new Error('camera-debug-pose-api-missing');
     const camera = setPose(${JSON.stringify(FRONT_LEFT_CAMERA)});
@@ -212,7 +211,7 @@ try {
     prototype.setVolumePresentationMode?.('beauty');
     await prototype.setActive(false);
     const state = prototype.debugState();
-    return { camera, canvas: canvas.getBoundingClientRect().toJSON(), state: {
+    return { camera, frame: basin.getBoundingClientRect().toJSON(), canvas: canvas.getBoundingClientRect().toJSON(), state: {
       active: state.active,
       frameCount: state.frameCount,
       simStepCount: state.simStepCount,
@@ -259,6 +258,7 @@ try {
     sameStateCaptureId,
     sourceFrameCount: sourceState.frameCount,
     sourceSimStepCount: sourceState.simStepCount,
+    pageFrameRect: presentation.frame,
   };
 
   failurePhase = 'analytical-exact';
@@ -311,13 +311,21 @@ try {
     if (condition.metrics.nonblank !== true) throw new Error(`blank-capture:${condition.label}`);
   }
   for (const condition of [analytical, learnedBaseline, learnedFlow]) {
-    assert.equal(condition.render.boundarySplatMode, UNION_MODE, `${condition.label} union mode drifted`);
+    assert.equal(condition.render.controlOverrides.boundarySplatMode, UNION_MODE, `${condition.label} union mode drifted`);
     assert.equal(condition.render.boundarySplatRendererIdentity, UNION_RENDERER, `${condition.label} renderer drifted`);
     assert.equal(condition.render.boundarySplatOverflowCount, 0, `${condition.label} overflowed`);
     assert.equal(condition.populationAudit.stableNativeCellIdSha256, expectedSource.admissionIndexSha256, `${condition.label} stable native-cell population drifted`);
+    assert.equal(condition.populationAudit.unionReceipt?.effectiveMode, UNION_MODE, `${condition.label} union receipt drifted`);
   }
   assert.equal(learnedBaseline.overlay.effectiveOverlayIdentity, baselineOverlayManifest.identity, 'baseline overlay did not become effective');
   assert.equal(learnedFlow.overlay.effectiveOverlayIdentity, flowOverlayManifest.identity, 'flow overlay did not become effective');
+
+  failurePhase = 'gpu-validation';
+  const browserEvents = socket.browserEvents.map(summarizeBrowserEvent);
+  const gpuValidationErrors = browserEvents.filter(event => /GPUValidationError|Invalid CommandBuffer|does not fit in \[Buffer/.test(
+    `${event.text || ''} ${(event.args || []).join(' ')}`,
+  ));
+  if (gpuValidationErrors.length > 0) throw new Error(`gpu-validation-error:${JSON.stringify(gpuValidationErrors)}`);
 
   failurePhase = 'report';
   const report = {
@@ -343,7 +351,7 @@ try {
       flow: { manifest: artifact(flowOverlayManifestPath), identity: flowOverlayManifest.identity },
     },
     conditions,
-    browserEvents: socket.browserEvents.map(summarizeBrowserEvent),
+    browserEvents,
     lastTrustworthyEvidence: 'all four operator-visible same-state captures passed source, population, route, and nonblank gates',
   };
   writeReport(report);
@@ -428,11 +436,20 @@ async function captureCondition({ label, captureContext, overlay, raymarch = fal
 
   const rect = render.canvasCssRect;
   assert.ok(rect?.width >= 64 && rect?.height >= 64, `${label} canvas clip is missing`);
+  const frameRect = captureContext.pageFrameRect;
+  assert.ok(frameRect?.width >= rect.width && frameRect?.height >= rect.height, `${label} basin iframe clip is missing`);
+  const captureClip = {
+    x: frameRect.left + rect.x,
+    y: frameRect.top + rect.y,
+    width: rect.width,
+    height: rect.height,
+    scale: 1,
+  };
   const shot = await socket.call('Page.captureScreenshot', {
     format: 'png',
     fromSurface: true,
     captureBeyondViewport: true,
-    clip: { x: rect.x, y: rect.y, width: rect.width, height: rect.height, scale: 1 },
+    clip: captureClip,
   });
   const imagePath = join(outDir, `${label}.png`);
   const imageBytes = Buffer.from(shot.data, 'base64');
@@ -446,6 +463,12 @@ async function captureCondition({ label, captureContext, overlay, raymarch = fal
     overlay: overlayReceipt,
     populationAudit,
     metrics,
+    capture: {
+      authority: 'top-level-page-clip-from-iframe-plus-child-canvas-rect-v0',
+      frameRect,
+      childCanvasRect: rect,
+      pageClip: captureClip,
+    },
     image: artifact(imagePath),
   };
 }

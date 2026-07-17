@@ -38,6 +38,11 @@ assert.match(witness, /source-hash-audit-mismatch/, 'witness rejects imported or
 assert.match(witness, /population-audit/, 'witness rejects partial, overflowed, missing, or stale live union populations');
 assert.match(witness, /blank-capture/, 'witness rejects blank operator-visible output');
 assert.match(witness, /same-state-drift/, 'witness rejects simulation movement between matched conditions');
+assert.match(witness, /document\.querySelector\('#basin'\)/, 'witness resolves the child renderer iframe on the top-level page');
+assert.match(witness, /frameRect\.left \+ rect\.x/, 'screenshot clipping includes the iframe page offset instead of capturing parent-shell UI');
+assert.match(witness, /top-level-page-clip-from-iframe-plus-child-canvas-rect-v0/, 'report names the effective cross-frame screenshot authority');
+assert.match(witness, /condition\.render\.controlOverrides\.boundarySplatMode/, 'union-mode assertion reads a field actually returned by the frozen renderer');
+assert.match(witness, /gpu-validation-error/, 'witness rejects WebGPU validation errors instead of presenting black captures');
 assert.match(
   witness,
   /catch \(error\) \{\s*last = \{ error: error\?\.message \|\| String\(error\) \};\s*await delay\(250\);\s*continue;\s*\}\s*if \(last\?\.error\) throw new Error\(`volume runtime reported error:/,
