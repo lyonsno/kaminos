@@ -44,6 +44,16 @@ assert.match(webgpuCoreSource, /SCREEN_SPACE_SURFACE_SHADER/, 'screen-space rend
 assert.match(webgpuCoreSource, /kaminos-finger-fluid-surface-accumulation/, 'screen-space renderer allocates particle depth plus optical thickness accumulation');
 assert.match(webgpuCoreSource, /screenSpaceSurfaceAccumulationPipeline/, 'renderer has a particle depth/thickness accumulation pipeline');
 assert.match(webgpuCoreSource, /screenSpaceSurfaceCompositePipeline/, 'renderer has a fullscreen smoothing/normal/shading pipeline');
+assert.match(
+  webgpuCoreSource,
+  /fn fs_composite\([^)]*@builtin\(position\) fragmentPosition:[^)]*\)[\s\S]*let pixel = vec2<i32>\(fragmentPosition\.xy\)/,
+  'screen-space composite addresses the accumulation texture in fragment framebuffer coordinates without a clip-space Y reflection',
+);
+assert.match(webgpuCoreSource, /@builtin\(frag_depth\) depth: f32/, 'screen-space composite emits reconstructed liquid depth');
+assert.match(webgpuCoreSource, /return vec4<f32>\(opticalThickness, input\.tracer \* opticalThickness, depthWeight, surfaceViewDepth\)/, 'surface accumulation keeps additive optical channels separate from nearest-front depth');
+assert.match(webgpuCoreSource, /format:\s*'rgba16float',[\s\S]*color:\s*\{[^}]*operation:\s*'add'[^}]*\},\s*alpha:\s*\{[^}]*operation:\s*'min'/, 'surface accumulation uses nearest-front depth instead of an overlap-weighted average that can fall behind support');
+assert.match(webgpuCoreSource, /screenSpaceSurfaceCompositePipeline[\s\S]*depthStencil:\s*\{\s*format:\s*'depth24plus',\s*depthWriteEnabled:\s*true,\s*depthCompare:\s*'less'/, 'screen-space surface depth-tests against support geometry');
+assert.match(webgpuCoreSource, /compositePass[\s\S]*depthStencilAttachment:\s*\{[\s\S]*view:\s*depthTexture\.createView\(\)[\s\S]*depthLoadOp:\s*'load'/, 'surface composite loads the support underlay depth instead of painting through it');
 assert.match(webgpuCoreSource, /edgePreservingDepth/, 'screen-space shader performs edge-preserving depth smoothing');
 assert.match(webgpuCoreSource, /reconstructSurfaceNormal/, 'screen-space shader reconstructs normals from smoothed particle depth');
 assert.match(webgpuCoreSource, /fresnel/, 'screen-space shader exposes Fresnel/specular water shading');
@@ -338,6 +348,10 @@ assert.match(benchWitnessSource, /finger_fluid_renderer/, 'bench witness records
 assert.match(benchWitnessSource, /screen_space_surface/, 'bench witness can target the reconstructed surface route');
 assert.match(benchWitnessSource, /sphere_debug/, 'bench witness preserves same-state sphere debug comparison');
 assert.match(benchWitnessSource, /sameStateRendererComparison/, 'bench witness captures same solver state renderer A/B evidence');
+assert.match(benchWitnessSource, /surfaceRegistrationViews/, 'bench witness captures the reconstructed surface against sphere debug from multiple camera angles');
+assert.match(benchWitnessSource, /normalizedCentroidDistance/, 'multi-angle registration rejects a reconstructed surface that is displaced from the particle projection');
+assert.match(benchWitnessSource, /minimumBoundsOverlap/, 'multi-angle registration rejects a reflected surface even when both renderer outputs are nonblank');
+assert.match(benchWitnessSource, /finger-fluid-bench-overlay[\s\S]*visibility = 'hidden'/, 'registration masks exclude the diagnostic HUD instead of accepting its fixed cyan bounds as fluid');
 assert.match(benchWitnessSource, /screenSpaceSurfaceEvidence/, 'bench witness records reconstructed-surface visual evidence');
 assert.match(benchWitnessSource, /renderer disagreement/, 'bench witness rejects requested/effective renderer disagreement');
 assert.match(benchWitnessSource, /blank reconstructed-surface output/, 'bench witness rejects blank screen-space surface captures');
@@ -346,6 +360,7 @@ assert.match(benchWitnessSource, /route-specific renderer counters/, 'bench witn
 assert.match(benchWitnessSource, /invalidRendererWitness/, 'bench witness records invalid renderer route rejection');
 assert.match(benchWitnessSource, /stale painted fallback evidence/, 'bench witness rejects invalid-route canvas residue');
 assert.match(benchWitnessSource, /pre-output failure/, 'bench witness reports failures before primary output without pretending success');
+assert.match(indexSource, /kaminosFingerFluidBenchSetCameraForWitness/, 'bench exposes a bounded camera setter for frozen-state multi-angle registration evidence');
 assert.ok(
   benchWitnessSource.indexOf("phase = 'measure_canvas'") < benchWitnessSource.indexOf("phase = 'cadence_probe'"),
   'visual evidence is preserved before a later cadence failure',

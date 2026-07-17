@@ -18,6 +18,7 @@ const preContactOut = resolve(args.get('--pre-contact-out') || out.replace(/\.pn
 const midContactOut = resolve(args.get('--mid-contact-out') || out.replace(/\.png$/i, '.mid-contact.png'));
 const postContactOut = resolve(args.get('--post-contact-out') || out.replace(/\.png$/i, '.post-contact.png'));
 const recoveryOut = resolve(args.get('--recovery-out') || out.replace(/\.png$/i, '.pilot-recovery.png'));
+const surfaceRegistrationDir = resolve(args.get('--surface-registration-dir') || out.replace(/\.png$/i, '.surface-registration'));
 const port = Number(args.get('--debug-port') || 9493);
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-finger-fluid-bench-profile-${port}-${process.pid}`;
@@ -39,6 +40,7 @@ let lastDebugState = null;
 let canvasActivity = null;
 let screenSpaceSurfaceEvidence = null;
 let sameStateRendererComparison = null;
+let surfaceRegistrationViews = null;
 let rendererResizeWitness = null;
 let invalidRendererWitness = null;
 let cadenceProbe = null;
@@ -111,6 +113,7 @@ function writeReport(report = {}) {
     sphereDebugOut,
     screenSpaceSurfaceEvidence,
     sameStateRendererComparison,
+    surfaceRegistrationViews,
     rendererResizeWitness,
     invalidRendererWitness,
     resizedSurfaceOut,
@@ -242,6 +245,70 @@ function measureCapturedPng(path, label) {
     highlightRatio: Number((highlightPixels / Math.max(1, pixelCount)).toFixed(5)),
     darkRatio: Number((darkPixels / Math.max(1, pixelCount)).toFixed(5)),
     measurement: 'captured_webgpu_canvas_ffmpeg_rgb24_v0',
+  };
+}
+
+function measureFluidProjection(path, label) {
+  const probe = spawnSync('ffprobe', [
+    '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'json', path,
+  ], { encoding: 'utf8' });
+  const stream = probe.status === 0 ? JSON.parse(probe.stdout || '{}')?.streams?.[0] : null;
+  const width = Number(stream?.width);
+  const height = Number(stream?.height);
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
+    throw new Error(`ffprobe ${label} dimensions failed: ${probe.stderr || probe.status}`);
+  }
+  const decoded = spawnSync('ffmpeg', ['-v', 'error', '-i', path, '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], {
+    encoding: null,
+    maxBuffer: 128 * 1024 * 1024,
+  });
+  if (decoded.status !== 0 || decoded.stdout?.length !== width * height * 3) {
+    throw new Error(`ffmpeg ${label} fluid projection decode failed: ${decoded.stderr?.toString() || decoded.status}`);
+  }
+  let count = 0;
+  let sumX = 0;
+  let sumY = 0;
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+  for (let pixel = 0; pixel < width * height; pixel += 1) {
+    const offset = pixel * 3;
+    const r = decoded.stdout[offset];
+    const g = decoded.stdout[offset + 1];
+    const b = decoded.stdout[offset + 2];
+    if (b < 58 || b < r * 1.28 || b < g * 0.92 || g < r * 1.02) continue;
+    const x = pixel % width;
+    const y = Math.floor(pixel / width);
+    count += 1;
+    sumX += x;
+    sumY += y;
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  }
+  if (count < 1000) throw new Error(`${label} fluid projection mask is too sparse: ${count}`);
+  return {
+    label,
+    path,
+    width,
+    height,
+    pixelCount: count,
+    centroid: { x: sumX / count / width, y: sumY / count / height },
+    bounds: { minX: minX / width, minY: minY / height, maxX: maxX / width, maxY: maxY / height },
+    measurement: 'captured_blue_fluid_projection_ffmpeg_rgb24_v0',
+  };
+}
+
+function compareFluidProjections(sphere, surface) {
+  const intersectionWidth = Math.max(0, Math.min(sphere.bounds.maxX, surface.bounds.maxX) - Math.max(sphere.bounds.minX, surface.bounds.minX));
+  const intersectionHeight = Math.max(0, Math.min(sphere.bounds.maxY, surface.bounds.maxY) - Math.max(sphere.bounds.minY, surface.bounds.minY));
+  const sphereArea = (sphere.bounds.maxX - sphere.bounds.minX) * (sphere.bounds.maxY - sphere.bounds.minY);
+  const surfaceArea = (surface.bounds.maxX - surface.bounds.minX) * (surface.bounds.maxY - surface.bounds.minY);
+  return {
+    normalizedCentroidDistance: Math.hypot(surface.centroid.x - sphere.centroid.x, surface.centroid.y - sphere.centroid.y),
+    minimumBoundsOverlap: intersectionWidth * intersectionHeight / Math.max(1e-6, Math.min(sphereArea, surfaceArea)),
   };
 }
 
@@ -1103,7 +1170,7 @@ async function main() {
       } : null;
     })()`);
     if (!rendererCountersBefore) throw new Error('missing pre-comparison renderer counters');
-    const renderSameState = async (mode, path, captureRect = canvasRect) => {
+    const renderSameState = async (mode, path, captureRect = canvasRect, minimumActiveRatio = 0.08) => {
       const receipt = await evaluate(ws, `(() => {
         const render = window.kaminosFingerFluidBenchRenderCurrentStateForWitness;
         if (typeof render !== 'function') throw new Error('pre-output failure: missing same-state renderer witness hook');
@@ -1120,10 +1187,10 @@ async function main() {
       mkdirSync(dirname(path), { recursive: true });
       writeFileSync(path, Buffer.from(shot.data, 'base64'));
       const activity = measureCapturedPng(path, mode);
-      if (mode === 'screen_space_surface' && activity.activeRatio < 0.08) {
+      if (mode === 'screen_space_surface' && activity.activeRatio < minimumActiveRatio) {
         throw new Error(`blank reconstructed-surface output rejected: ${JSON.stringify(activity)}`);
       }
-      if (mode === 'sphere_debug' && activity.activeRatio < 0.08) {
+      if (mode === 'sphere_debug' && activity.activeRatio < minimumActiveRatio) {
         throw new Error(`blank sphere-debug output rejected: ${JSON.stringify(activity)}`);
       }
       return { receipt, activity };
@@ -1213,6 +1280,55 @@ async function main() {
       resizedSurface,
       restoredReceipt,
     };
+
+    phase = 'multi_angle_surface_registration';
+    const originalCamera = await evaluate(ws, `window.kaminosFingerFluidCompositionCameraState?.()`);
+    if (!originalCamera) throw new Error('missing original camera state for multi-angle surface registration');
+    const registrationCameras = [
+      { id: 'operator_oblique', yaw: -0.62, pitch: 0.52, distance: 6.2, target: [0, -0.48, 0.2] },
+      { id: 'low_side', yaw: -1.35, pitch: 0.08, distance: 7.0, target: [0, -0.48, 0.2] },
+      { id: 'opposite_high', yaw: 2.15, pitch: 0.72, distance: 7.0, target: [0, -0.48, 0.2] },
+    ];
+    const registrationOverlayVisibility = await evaluate(ws, `(() => {
+      const overlay = document.getElementById('finger-fluid-bench-overlay');
+      if (!overlay) return null;
+      const previous = overlay.style.visibility;
+      overlay.style.visibility = 'hidden';
+      return previous;
+    })()`);
+    mkdirSync(surfaceRegistrationDir, { recursive: true });
+    surfaceRegistrationViews = [];
+    for (const camera of registrationCameras) {
+      const effectiveCamera = await evaluate(ws, `window.kaminosFingerFluidBenchSetCameraForWitness?.(${JSON.stringify(camera)})`);
+      if (!effectiveCamera) throw new Error(`camera setter unavailable for registration view ${camera.id}`);
+      const spherePath = resolve(surfaceRegistrationDir, `${camera.id}.sphere-debug.png`);
+      const surfacePath = resolve(surfaceRegistrationDir, `${camera.id}.screen-space-surface.png`);
+      const sphereRender = await renderSameState('sphere_debug', spherePath, canvasRect, 0.005);
+      const surfaceRender = await renderSameState('screen_space_surface', surfacePath, canvasRect, 0.005);
+      if (sphereRender.receipt.stepCount !== surfaceRender.receipt.stepCount) {
+        throw new Error(`registration view ${camera.id} advanced the simulation between renderers`);
+      }
+      const sphereProjection = measureFluidProjection(spherePath, `${camera.id}:sphere_debug`);
+      const surfaceProjection = measureFluidProjection(surfacePath, `${camera.id}:screen_space_surface`);
+      const comparison = compareFluidProjections(sphereProjection, surfaceProjection);
+      if (comparison.normalizedCentroidDistance > 0.12 || comparison.minimumBoundsOverlap < 0.35) {
+        throw new Error(`surface registration mismatch at ${camera.id}: ${JSON.stringify(comparison)}`);
+      }
+      surfaceRegistrationViews.push({
+        camera: effectiveCamera,
+        stepCount: surfaceRender.receipt.stepCount,
+        sphereProjection,
+        surfaceProjection,
+        ...comparison,
+      });
+    }
+    await evaluate(ws, `(() => {
+      const overlay = document.getElementById('finger-fluid-bench-overlay');
+      if (overlay) overlay.style.visibility = ${JSON.stringify(registrationOverlayVisibility || '')};
+      return true;
+    })()`);
+    await evaluate(ws, `window.kaminosFingerFluidBenchSetCameraForWitness?.(${JSON.stringify(originalCamera)})`);
+    await evaluate(ws, `window.kaminosFingerFluidBenchRenderCurrentStateForWitness?.('screen_space_surface')`);
     await evaluate(ws, `(() => { window.kaminosFingerFluidBenchResumeAfterWitness?.(); return true; })()`);
 
     phase = 'capture_screenshot';

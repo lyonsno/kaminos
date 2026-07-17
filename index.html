@@ -9884,6 +9884,22 @@ function fingerFluidCompositionCameraState() {
   };
 }
 
+function setFingerFluidBenchCameraForWitness(nextCamera = {}) {
+  const yaw = Number(nextCamera.yaw);
+  const pitch = Number(nextCamera.pitch);
+  const distance = Number(nextCamera.distance);
+  const target = Array.isArray(nextCamera.target) ? nextCamera.target.slice(0, 3).map(Number) : [];
+  if (![yaw, pitch, distance, ...target].every(Number.isFinite) || target.length !== 3) {
+    throw new Error('Finger Fluid witness camera requires finite yaw, pitch, distance, and three-component target');
+  }
+  if (pitch < -0.2 || pitch > 1.25 || distance < 4 || distance > 14) {
+    throw new RangeError('Finger Fluid witness camera exceeds the operator orbit bounds');
+  }
+  fingerFluidBenchCamera = { yaw, pitch, distance, target };
+  syncFingerFluidCompositionCamera();
+  return fingerFluidCompositionCameraState();
+}
+
 function setFingerFluidPyroCompositionPilotEnabled(enabled) {
   const receipt = volumePrototype.setLiquidFireSourcePilotEnabled(enabled === true);
   fingerFluidPyroCompositionState.sourcePilotEnabled = receipt.enabled;
@@ -10281,6 +10297,7 @@ function initKaminosFingerFluidBenchRoute() {
   window.kaminosFingerFluidBenchRequestDiagnostics = requestFingerFluidBenchDiagnostics;
   window.kaminosFingerFluidBenchRenderCurrentStateForWitness = renderFingerFluidBenchCurrentStateForWitness;
   window.kaminosFingerFluidBenchResumeAfterWitness = resumeFingerFluidBenchAfterWitness;
+  window.kaminosFingerFluidBenchSetCameraForWitness = setFingerFluidBenchCameraForWitness;
   window.kaminosFingerFluidPyroCompositionDebugState = () => ({
     ...fingerFluidPyroCompositionState,
     volume: volumePrototype?.debugState?.() || null,
