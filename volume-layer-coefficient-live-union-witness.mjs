@@ -628,11 +628,13 @@ async function waitForRuntime(cdp, timeout) {
           ),
         } : null;
       })()`);
-      if (last?.error) throw new Error(last.error);
-      if (last?.active && last.requiredApis && String(last.backend).startsWith('WebGPU') && last.frameCount > 3) return last;
     } catch (error) {
       last = { error: error?.message || String(error) };
+      await delay(250);
+      continue;
     }
+    if (last?.error) throw new Error(`volume runtime reported error: ${last.error}`);
+    if (last?.active && last.requiredApis && String(last.backend).startsWith('WebGPU') && last.frameCount > 3) return last;
     await delay(250);
   }
   throw new Error(`volume runtime did not become active: ${JSON.stringify(last)}`);

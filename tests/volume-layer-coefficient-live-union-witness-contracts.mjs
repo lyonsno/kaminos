@@ -38,6 +38,11 @@ assert.match(witness, /source-hash-audit-mismatch/, 'witness rejects imported or
 assert.match(witness, /population-audit/, 'witness rejects partial, overflowed, missing, or stale live union populations');
 assert.match(witness, /blank-capture/, 'witness rejects blank operator-visible output');
 assert.match(witness, /same-state-drift/, 'witness rejects simulation movement between matched conditions');
+assert.match(
+  witness,
+  /catch \(error\) \{\s*last = \{ error: error\?\.message \|\| String\(error\) \};\s*await delay\(250\);\s*continue;\s*\}\s*if \(last\?\.error\) throw new Error\(`volume runtime reported error:/,
+  'authoritative runtime errors escape admission polling immediately instead of burning the full timeout',
+);
 assert.match(witness, /catch \(error\)[\s\S]*writeReport\(\{[\s\S]*status: 'failed'/, 'failure before primary output still writes a durable phase-local report');
 
 console.log('volume layer coefficient live union witness contracts passed');
