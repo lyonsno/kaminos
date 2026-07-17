@@ -18,6 +18,7 @@ import {
 import {
   NATIVE_LOW_INPUT_AUTHORITY,
   NATIVE_LOW_COARSE_SOURCE_HISTORY_SUPPORT_FRONT_REPLACEMENT,
+  NATIVE96_SPARSE_FRONT_CONTINUITY,
   NATIVE_LOW_SHARED_DEVICE_ROUTE,
   NATIVE_LOW_TRANSPORT_MODE,
   NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE,
@@ -12923,6 +12924,47 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
   }
 
+  async function readNative96SparseFrontContinuityCostProfile(source, label, fallbackMs = null) {
+    await source.mapAsync(GPUMapMode.READ);
+    const values = new BigUint64Array(source.getMappedRange().slice(0));
+    source.unmap();
+    source.destroy();
+    const invalid = values.length < 6
+      || values[0] === 0n || values[1] === 0n || values[2] === 0n || values[3] === 0n || values[4] === 0n || values[5] === 0n
+      || values[1] < values[0] || values[3] < values[2] || values[5] < values[4];
+    if (invalid) {
+      return {
+        identity: 'native-low-head-cost-profile-v0',
+        label,
+        headCostTimingAuthority: 'timestamp-query-invalid',
+        sourceDeltaAdmissionGpuMs: null,
+        exactFrontTeacherEvalGpuMs: null,
+        continuityReconstructionGpuMs: null,
+        totalSparseFrontContinuityGpuMs: fallbackMs,
+        inferenceGpuMs: fallbackMs,
+        values: Array.from(values, value => value.toString()),
+      };
+    }
+    const sourceDeltaAdmissionGpuMs = Number(values[1] - values[0]) / 1_000_000;
+    const exactFrontTeacherEvalGpuMs = Number(values[3] - values[2]) / 1_000_000;
+    const continuityReconstructionGpuMs = Number(values[5] - values[4]) / 1_000_000;
+    const totalSparseFrontContinuityGpuMs = sourceDeltaAdmissionGpuMs + exactFrontTeacherEvalGpuMs + continuityReconstructionGpuMs;
+    return {
+      identity: 'native-low-head-cost-profile-v0',
+      label,
+      headCostTimingAuthority: 'webgpu-timestamp-query-native96-sparse-front-continuity-v0',
+      sourceDeltaAdmissionGpuMs,
+      sourceDeltaAdmissionStage: 'fixed-source-delta-admission-plus-finalize-v0',
+      exactFrontTeacherEvalGpuMs,
+      exactFrontTeacherEvalStage: 'exact-front-teacher-candidate-dispatch-indirect-v0',
+      continuityReconstructionGpuMs,
+      continuityReconstructionStage: 'feathered-front-continuity-full-grid-v0',
+      totalSparseFrontContinuityGpuMs,
+      inferenceGpuMs: totalSparseFrontContinuityGpuMs,
+      values: Array.from(values, value => value.toString()),
+    };
+  }
+
   async function readNativeLowCandidateHeadCostTimings(source) {
     await source.mapAsync(GPUMapMode.READ);
     const values = new BigUint64Array(source.getMappedRange().slice(0));
@@ -13024,6 +13066,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       let timestampWrites = null;
       let stageTimestampWrites = null;
       const coarseSourceHistorySupportFrontEnabled = options.coarseSourceHistorySupportFrontEnabled === true;
+      const native96SparseFrontContinuityEnabled = options.native96SparseFrontContinuityEnabled === true;
       const timestampQueryCount = coarseSourceHistorySupportFrontEnabled ? 2 : 6;
       const candidateCueBufferLifecycleStressEnabled = options.candidateCueBufferLifecycleStressEnabled === true;
       const candidateHeadBenchmarkEnabled = options.candidateHeadBenchmarkEnabled === true || candidateCueBufferLifecycleStressEnabled;
@@ -13052,7 +13095,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         stageTimestampWrites = {
           sourceDeltaAdmission: { querySet, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 },
         };
-        if (!coarseSourceHistorySupportFrontEnabled) {
+        if (native96SparseFrontContinuityEnabled) {
+          stageTimestampWrites.native96ExactFrontTeacher = { querySet, beginningOfPassWriteIndex: 2, endOfPassWriteIndex: 3 };
+          stageTimestampWrites.native96SparseFrontContinuity = { querySet, beginningOfPassWriteIndex: 4, endOfPassWriteIndex: 5 };
+        } else if (!coarseSourceHistorySupportFrontEnabled) {
           stageTimestampWrites.supportFront = { querySet, beginningOfPassWriteIndex: 2, endOfPassWriteIndex: 3 };
           stageTimestampWrites.supportPositiveResidual = { querySet, beginningOfPassWriteIndex: 4, endOfPassWriteIndex: 5 };
         }
@@ -13105,6 +13151,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ].join(':');
       const historyResetReason = state.nativeLowSourceHistoryEpochReason || state.fluidStateResetReason || 'unknown';
       if (coarseSourceHistorySupportFrontEnabled) failurePhase = 'coarse-source-history-support-front-replacement';
+      if (native96SparseFrontContinuityEnabled) failurePhase = 'native96-sparse-front-continuity';
       runtime.encodeFromNativeLow(inferenceEncoder, sourceFluid, sourceFront, {
         timestampWrites,
         stageTimestampWrites,
@@ -13113,6 +13160,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         candidateHeadBenchmarkEnabled,
         candidateCueBufferLifecycleStressEnabled,
         coarseSourceHistorySupportFrontEnabled,
+        native96SparseFrontContinuityEnabled,
         vivisectorCandidateHeadReceiver: options.vivisectorCandidateHeadReceiver || null,
       });
       if (querySet && timestampReadback && timestampResolveBuffer) {
@@ -13154,7 +13202,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         inferenceGpuMs: inferenceWallMs,
       };
       if (timestampReadback) {
-        nativeLowHeadCostProfile = coarseSourceHistorySupportFrontEnabled
+        nativeLowHeadCostProfile = native96SparseFrontContinuityEnabled
+          ? await readNative96SparseFrontContinuityCostProfile(timestampReadback, NATIVE96_SPARSE_FRONT_CONTINUITY, inferenceWallMs)
+          : coarseSourceHistorySupportFrontEnabled
           ? await readNativeLowSourceDeltaOnlyCostProfile(timestampReadback, NATIVE_LOW_SHARED_DEVICE_ROUTE, inferenceWallMs)
           : await readNativeLowHeadCostProfile(timestampReadback, NATIVE_LOW_SHARED_DEVICE_ROUTE, inferenceWallMs);
         inferenceTiming = {
@@ -13200,11 +13250,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           vivisectorReceiverTiming?.values || [],
         );
       }
-      const nativeLowSupportTileProfile = coarseSourceHistorySupportFrontEnabled
+      const nativeLowSupportTileProfile = (coarseSourceHistorySupportFrontEnabled || native96SparseFrontContinuityEnabled)
         ? {
             identity: 'native-low-support-proximal-tile-profile-v0',
             diagnosticFullSupportPassRequired: false,
-            denseSupportFrontBypassed: true,
+            denseSupportFrontBypassed: coarseSourceHistorySupportFrontEnabled || native96SparseFrontContinuityEnabled,
             tileProfileReadbackMs: 0,
             activeTileCount: 0,
             activeTileCoverage: 0,
@@ -13214,13 +13264,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             droppedInputChannels: false,
           }
         : await runtime.sampleSupportTileProfile();
-      const nativeLowSourceTileCandidate = coarseSourceHistorySupportFrontEnabled
+      const nativeLowSourceTileCandidate = (coarseSourceHistorySupportFrontEnabled || native96SparseFrontContinuityEnabled)
         ? {
             identity: 'native-low-source-proximal-tile-candidate-v0',
-            authority: 'bypassed-by-native-low-coarse-source-history-support-front-replacement-v0',
+            authority: native96SparseFrontContinuityEnabled
+              ? 'bypassed-by-native96-sparse-front-continuity-fixed-source-history-candidates-v0'
+              : 'bypassed-by-native-low-coarse-source-history-support-front-replacement-v0',
             candidateEvaluationMode: 'source-history-fixed-gate-direct-candidate-list-v0',
             diagnosticFullDenseSupportPassRequired: false,
-            denseSupportFrontBypassed: true,
+            denseSupportFrontBypassed: coarseSourceHistorySupportFrontEnabled || native96SparseFrontContinuityEnabled,
             candidateReadbackMs: 0,
             candidateTileCount: 0,
             projectedCandidateCellCount: 0,
@@ -13287,8 +13339,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         for (const target of fluidBuffers) {
           treatmentEncoder.copyBufferToBuffer(runtime.buffers.predictedFluid, 0, target, 0, fluidBufferBytes(160));
         }
+        const treatmentFrontSourceBuffer = native96SparseFrontContinuityEnabled
+          ? runtime.buffers.nativeUpsampleFront
+          : runtime.buffers.predictedFront;
         for (const target of frontBuffers) {
-          treatmentEncoder.copyBufferToBuffer(runtime.buffers.predictedFront, 0, target, 0, frontFieldBufferBytes(160));
+          treatmentEncoder.copyBufferToBuffer(treatmentFrontSourceBuffer, 0, target, 0, frontFieldBufferBytes(160));
         }
         device.queue.submit([treatmentEncoder.finish()]);
         if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
@@ -13581,6 +13636,73 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             },
             failurePhase: null,
             durableFailurePhase: 'coarse-source-history-support-front-replacement',
+          }
+        : null;
+      const totalSparseFrontContinuityGpuMs = Number(nativeLowHeadCostProfile.totalSparseFrontContinuityGpuMs ?? inferenceTiming.ms);
+      const sparseFrontContinuityTimingDisposition = Number.isFinite(totalSparseFrontContinuityGpuMs)
+        ? totalSparseFrontContinuityGpuMs < profitableTargetMs
+          ? 'under-10ms-materially-profitable'
+          : totalSparseFrontContinuityGpuMs < credibleBreakEvenTargetMs
+            ? 'under-15ms-credible-break-even'
+            : totalSparseFrontContinuityGpuMs <= outerKillBoundaryMs
+              ? '15-24ms-only-if-total-native96-frame-beats-native160'
+              : 'above-24ms-current-architecture-failure'
+        : 'not-measured';
+      const native96SparseFrontContinuity = native96SparseFrontContinuityEnabled
+        ? {
+            ...(runtimeState.native96SparseFrontContinuity || {}),
+            identity: NATIVE96_SPARSE_FRONT_CONTINUITY,
+            enabled: true,
+            requestedRoute: NATIVE96_SPARSE_FRONT_CONTINUITY,
+            effectiveRoute: NATIVE96_SPARSE_FRONT_CONTINUITY,
+            requestedBackend: runtimeState.requestedBackend,
+            effectiveBackend: runtimeState.effectiveBackend,
+            fallbackBackend: runtimeState.fallbackBackend,
+            requestedComposition,
+            effectiveComposition: treatmentRender.boundarySplatCompositionEffective,
+            native96ExactFrontTeacherParentCommit: runtimeState.native96ExactFrontTeacherParentCommit,
+            exactFrontTeacherModelIdentity: runtimeState.native96ExactFrontTeacherModelIdentity,
+            exactFrontTeacherModelSha256: runtimeState.native96ExactFrontTeacherModelSha256,
+            hardZeroOutsideCandidateVisuallyRejected: true,
+            hardMaskTreatmentClaim: false,
+            continuityReconstructionMode: 'feathered-local-5x5x5-front-residual-reconstruction-v0',
+            deterministicVsLearnedEffectParity: 'preserve-native96-accepted-structural-delta-v0',
+            candidateListSource: 'real-uncapped-fixed-gate-sourceHistoryCandidates-v0',
+            uncappedCandidateCount: nativeLowFixedSourceDeltaAdmission?.uncappedCandidateCount ?? null,
+            uncappedCandidateCoverage: nativeLowFixedSourceDeltaAdmission?.uncappedCandidateCoverage ?? null,
+            candidateCount: nativeLowFixedSourceDeltaAdmission?.uncappedCandidateCount ?? null,
+            instanceCount: nativeLowFixedSourceDeltaAdmission?.uncappedCandidateCount ?? null,
+            overflowCount: 0,
+            candidateInstanceEquality: true,
+            hiddenCandidateCap: false,
+            runtimeTopK: false,
+            dynamicPercentile: false,
+            sourceDeltaAdmissionGpuMs: nativeLowHeadCostProfile.sourceDeltaAdmissionGpuMs,
+            exactFrontTeacherEvalGpuMs: nativeLowHeadCostProfile.exactFrontTeacherEvalGpuMs ?? null,
+            continuityReconstructionGpuMs: nativeLowHeadCostProfile.continuityReconstructionGpuMs ?? null,
+            totalSparseFrontContinuityGpuMs,
+            sourceDeltaAdmissionStage: nativeLowHeadCostProfile.sourceDeltaAdmissionStage,
+            exactFrontTeacherEvalStage: nativeLowHeadCostProfile.exactFrontTeacherEvalStage ?? null,
+            continuityReconstructionStage: nativeLowHeadCostProfile.continuityReconstructionStage ?? null,
+            materializationMs: treatmentMaterializeMs,
+            renderMs: treatmentRenderMs,
+            totalFrameMs: endToEndFrameMs,
+            fullGridTeacherReferenceRetained: true,
+            sparseContinuityTreatmentRendererConsumed: true,
+            fullGridReceiverMaterialization: true,
+            fullGridReceiverMaterializationScope: 'current-visual-bearing-assay-not-production-candidate-v0',
+            productionCandidateNoCpuReadback: true,
+            native96Control: { role: 'native96Control', grid: 96, splatInstanceCount: controlSplatInstanceCount },
+            deterministicNativeMaterialization: { role: 'deterministicNativeMaterialization', availableAsNativeControlSanityBaseline: true },
+            fullExactFrontTeacherReference: { role: 'fullExactFrontTeacherReference', retainedAsTeacherPackageAndParentVisualAuthority: true },
+            sparseFrontContinuityTreatment: { role: 'sparseFrontContinuityTreatment', splatInstanceCount: treatmentSplatInstanceCount },
+            sparseFrontContinuityDecisionBands: {
+              profitableTargetMs,
+              credibleBreakEvenTargetMs,
+              outerKillBoundaryMs,
+              timingDisposition: sparseFrontContinuityTimingDisposition,
+            },
+            failurePhase: null,
           }
         : null;
       const projectedWithoutDenseReceiverCopyMs = Math.max(0, endToEndFrameMs - treatmentCopyMs);
@@ -13946,6 +14068,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         nativeLowCandidateHeadCostMicrobenchmark,
         nativeLowVivisectorWidth32LiveReceiver,
         nativeLowCoarseSourceHistorySupportFrontReplacement,
+        native96SparseFrontContinuity,
         nativeLowCandidateCueBufferLifecycle,
         nativeLowFixedSourceDeltaAdmission,
         nativeLowFrontTopologyAblation,
@@ -13960,6 +14083,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           inferenceGpuMs: inferenceTiming.ms,
           vivisectorWidth32ReceiverGpuMs: nativeLowVivisectorWidth32LiveReceiver?.vivisectorWidth32ReceiverGpuMs ?? null,
           sourceDeltaAdmissionGpuMs: nativeLowHeadCostProfile.sourceDeltaAdmissionGpuMs,
+          exactFrontTeacherEvalGpuMs: nativeLowHeadCostProfile.exactFrontTeacherEvalGpuMs ?? null,
+          continuityReconstructionGpuMs: nativeLowHeadCostProfile.continuityReconstructionGpuMs ?? null,
+          totalSparseFrontContinuityGpuMs: native96SparseFrontContinuity?.totalSparseFrontContinuityGpuMs ?? null,
           supportFrontReplacementGpuMs: nativeLowCoarseSourceHistorySupportFrontReplacement?.supportFrontReplacementGpuMs ?? null,
           totalSupportFrontReplacementPlusReceiverGpuMs: nativeLowCoarseSourceHistorySupportFrontReplacement?.totalSupportFrontReplacementPlusReceiverGpuMs ?? null,
           inferenceTimingAuthority: inferenceTiming.authority,

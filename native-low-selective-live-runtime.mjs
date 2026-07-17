@@ -7,6 +7,10 @@ import {
   SELECTIVE_HEAD_LIVE_MODEL_URL as SELECTIVE_HEAD_LIVE_MODEL_URL_160_TO_96,
 } from './models/selective-head-live/exact-basin-160-to-96-v0/model.generated.js';
 import {
+  SELECTIVE_HEAD_LIVE_MODEL as NATIVE96_EXACT_FRONT_TEACHER_MODEL,
+  SELECTIVE_HEAD_LIVE_MODEL_URL as NATIVE96_EXACT_FRONT_TEACHER_MODEL_URL,
+} from './models/selective-head-live/latest-happy-bowl-front-only-160-to-96-step96-v0/model.generated.js';
+import {
   VIVISECTOR_WIDTH32_RECEIVER_EVAL_EMBEDDING,
   VIVISECTOR_WIDTH32_RECEIVER_EVAL_WGSL,
 } from './models/native-low-vivisector-candidate-head-128-160-v0/weights.generated.js';
@@ -27,7 +31,8 @@ export const NATIVE_LOW_CANDIDATE_HEAD_COST_MICROBENCHMARK = 'native-low-candida
 export const NATIVE_LOW_VIVISECTOR_WIDTH32_LIVE_RECEIVER = 'native-low-vivisector-width32-live-receiver-v0';
 export const NATIVE_LOW_RESIDENT_CUE_BUFFER_LIFECYCLE_STRESS = 'native-low-resident-cue-buffer-lifecycle-stress-v0';
 export const NATIVE_LOW_COARSE_SOURCE_HISTORY_SUPPORT_FRONT_REPLACEMENT = 'native-low-coarse-source-history-support-front-replacement-v0';
-export const NATIVE_LOW_RUNTIME_BUILD_IDENTITY = 'native-low-coarse-source-history-support-front-replacement-v1';
+export const NATIVE96_SPARSE_FRONT_CONTINUITY = 'native96-sparse-front-continuity-v0';
+export const NATIVE_LOW_RUNTIME_BUILD_IDENTITY = 'native96-sparse-front-continuity-v1';
 export const NATIVE_LOW_TRAINED_PACKAGE_ROUTE_REGISTRY_IDENTITY = 'native-low-trained-package-route-registry-v0';
 export const NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE = 'native-low-transfer-160-to-128-zero-shot-v0';
 export const NATIVE_LOW_TRANSFER_160_TO_96_DEPLOYMENT_GRID_ROUTE = 'native-low-transfer-160-to-96-deployment-grid-v0';
@@ -90,6 +95,9 @@ const CANDIDATE_HEAD_OUTPUT_COUNT = 8;
 const CANDIDATE_CUE_RECORD_STRIDE_BYTES = 32;
 const CANDIDATE_CUE_LIFECYCLE_STATS_BYTES = 8 * Uint32Array.BYTES_PER_ELEMENT;
 const CANDIDATE_CUE_LIFECYCLE_PARAMS_BYTES = 4 * Uint32Array.BYTES_PER_ELEMENT;
+const NATIVE96_EXACT_FRONT_TEACHER_PARENT_COMMIT = 'cf15a42d847cb727d5aad4fc4ef212cf6f40c5ce';
+const NATIVE96_EXACT_FRONT_TEACHER_MODEL_SHA256 = '2eb3d311d8964d21ba471bba973b38ac1f32ee25b0a73926a6ee7b43ca78e95b';
+const NATIVE96_EXACT_FRONT_TEACHER_SOURCE_PACKED_SHA256 = '97e25caa711395f26e8b39f22c506e38e772bfc1a12cf518d5e048511d2bee08';
 const VIVISECTOR_WIDTH32_WEIGHT_FLOAT_COUNT = 1944;
 const VIVISECTOR_WIDTH32_WEIGHT_BYTES = VIVISECTOR_WIDTH32_WEIGHT_FLOAT_COUNT * Float32Array.BYTES_PER_ELEMENT;
 const VIVISECTOR_FEATURE_MEAN_OFFSET = 0;
@@ -544,6 +552,170 @@ fn benchmarkCandidateHead(@builtin(global_invocation_id) gid: vec3<u32>) {
 `;
 }
 
+const NATIVE96_SPARSE_FRONT_CONTINUITY_WGSL = `
+const LOW_GRID: u32 = ${LOW_GRID}u;
+const HIGH_GRID: u32 = ${HIGH_GRID}u;
+const SLOTS_PER_CELL: u32 = ${SLOTS_PER_CELL}u;
+const FEATURE_COUNT: u32 = ${FEATURE_COUNT}u;
+const HIDDEN_WIDTH: u32 = ${HIDDEN_WIDTH}u;
+const RESIDUAL_WORKGROUP_SIZE: u32 = ${RESIDUAL_WORKGROUP_SIZE}u;
+const FRONT_W1_OFFSET: u32 = 370u;
+const FRONT_B1_OFFSET: u32 = 9250u;
+const FRONT_W2_OFFSET: u32 = 9298u;
+const FRONT_B2_OFFSET: u32 = 9346u;
+const FRONT_TARGET_MEAN_OFFSET: u32 = 9347u;
+const FRONT_TARGET_STD_OFFSET: u32 = 9348u;
+
+@group(0) @binding(0) var<storage, read> lowFluid: array<vec4<f32>>;
+@group(0) @binding(1) var<storage, read> lowFront: array<f32>;
+@group(0) @binding(2) var<storage, read> sourceHistoryCandidates: array<u32>;
+@group(0) @binding(3) var<storage, read> sourceHistoryDispatchArgs: array<u32>;
+@group(0) @binding(4) var<storage, read> exactFrontTeacherModel: array<f32>;
+@group(0) @binding(5) var<storage, read_write> predictedFluid: array<vec4<f32>>;
+@group(0) @binding(6) var<storage, read_write> sparseFrontResidual: array<f32>;
+@group(0) @binding(7) var<storage, read_write> sparseFrontContinuityFront: array<f32>;
+
+struct FeatureBundle {
+  features: array<f32, ${FEATURE_COUNT}>,
+  frontValue: f32,
+};
+
+fn index3(cell: vec3<u32>, grid: u32) -> u32 {
+  return cell.x + cell.y * grid + cell.z * grid * grid;
+}
+
+fn standardize(raw: f32, featureIndex: u32) -> f32 {
+  return (raw - exactFrontTeacherModel[featureIndex]) / exactFrontTeacherModel[${NATIVE96_EXACT_FRONT_TEACHER_MODEL.normalization.featureStd.offset}u + featureIndex];
+}
+
+fn inferFrontTeacher(features: array<f32, ${FEATURE_COUNT}>) -> f32 {
+  var hidden: array<f32, ${HIDDEN_WIDTH}>;
+  for (var hiddenIndex = 0u; hiddenIndex < HIDDEN_WIDTH; hiddenIndex += 1u) {
+    var value = exactFrontTeacherModel[FRONT_B1_OFFSET + hiddenIndex];
+    for (var featureIndex = 0u; featureIndex < FEATURE_COUNT; featureIndex += 1u) {
+      value += features[featureIndex] * exactFrontTeacherModel[FRONT_W1_OFFSET + featureIndex * HIDDEN_WIDTH + hiddenIndex];
+    }
+    hidden[hiddenIndex] = tanh(value);
+  }
+  var result = exactFrontTeacherModel[FRONT_B2_OFFSET];
+  for (var hiddenIndex = 0u; hiddenIndex < HIDDEN_WIDTH; hiddenIndex += 1u) {
+    result += hidden[hiddenIndex] * exactFrontTeacherModel[FRONT_W2_OFFSET + hiddenIndex];
+  }
+  return result * exactFrontTeacherModel[FRONT_TARGET_STD_OFFSET] + exactFrontTeacherModel[FRONT_TARGET_MEAN_OFFSET];
+}
+
+fn makeFeatureBundle(gid: vec3<u32>) -> FeatureBundle {
+  let lowCell = min(vec3<u32>(LOW_GRID - 1u), vec3<u32>(floor(vec3<f32>(gid) * f32(LOW_GRID) / f32(HIGH_GRID))));
+  let lowIndex = index3(lowCell, LOW_GRID);
+  var lowValues: array<f32, 17>;
+  for (var slot = 0u; slot < SLOTS_PER_CELL; slot += 1u) {
+    let value = lowFluid[lowIndex * SLOTS_PER_CELL + slot];
+    lowValues[slot * 4u + 0u] = value.x;
+    lowValues[slot * 4u + 1u] = value.y;
+    lowValues[slot * 4u + 2u] = value.z;
+    lowValues[slot * 4u + 3u] = value.w;
+  }
+  lowValues[16] = lowFront[lowIndex];
+  var features: array<f32, ${FEATURE_COUNT}>;
+  for (var i = 0u; i < 17u; i += 1u) {
+    features[i] = standardize(lowValues[i], i);
+    features[17u + i] = standardize(lowValues[i] * lowValues[i], 17u + i);
+  }
+  let normalized = vec3<f32>(gid) / f32(HIGH_GRID - 1u) * 2.0 - vec3<f32>(1.0);
+  let radial = length(normalized.xz);
+  let positionFeatures = array<f32, 5>(normalized.x, normalized.y, normalized.z, radial, normalized.y * radial);
+  for (var i = 0u; i < 5u; i += 1u) {
+    features[34u + i] = standardize(positionFeatures[i], 34u + i);
+  }
+  var featureIndex = 39u;
+  for (var frequencyIndex = 0u; frequencyIndex < 3u; frequencyIndex += 1u) {
+    let frequency = select(select(1.0, 2.0, frequencyIndex == 1u), 4.0, frequencyIndex == 2u);
+    for (var axis = 0u; axis < 3u; axis += 1u) {
+      let phase = 3.141592653589793 * frequency * normalized[axis];
+      features[featureIndex] = standardize(sin(phase), featureIndex);
+      featureIndex += 1u;
+      features[featureIndex] = standardize(cos(phase), featureIndex);
+      featureIndex += 1u;
+    }
+  }
+  for (var cyIndex = 0u; cyIndex < 8u; cyIndex += 1u) {
+    let cy = -0.95 + f32(cyIndex) * (1.8 / 7.0);
+    for (var czIndex = 0u; czIndex < 4u; czIndex += 1u) {
+      let cz = -0.75 + f32(czIndex) * 0.5;
+      for (var cxIndex = 0u; cxIndex < 4u; cxIndex += 1u) {
+        let cx = -0.75 + f32(cxIndex) * 0.5;
+        let delta = normalized - vec3<f32>(cx, cy, cz);
+        let rbf = exp(-dot(delta, delta) / (2.0 * 0.30 * 0.30));
+        features[featureIndex] = standardize(rbf, featureIndex);
+        featureIndex += 1u;
+      }
+    }
+  }
+  return FeatureBundle(features, lowValues[16]);
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn initializeNative96SparseFrontContinuity(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (any(gid >= vec3<u32>(HIGH_GRID))) { return; }
+  let highIndex = index3(gid, HIGH_GRID);
+  let lowCell = min(vec3<u32>(LOW_GRID - 1u), vec3<u32>(floor(vec3<f32>(gid) * f32(LOW_GRID) / f32(HIGH_GRID))));
+  let lowIndex = index3(lowCell, LOW_GRID);
+  for (var slot = 0u; slot < SLOTS_PER_CELL; slot += 1u) {
+    predictedFluid[highIndex * SLOTS_PER_CELL + slot] = lowFluid[lowIndex * SLOTS_PER_CELL + slot];
+  }
+  sparseFrontResidual[highIndex] = 0.0;
+  sparseFrontContinuityFront[highIndex] = lowFront[lowIndex];
+}
+
+@compute @workgroup_size(${RESIDUAL_WORKGROUP_SIZE})
+fn evalNative96ExactFrontTeacherCandidates(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let compactIndex = gid.x;
+  let candidateCount = sourceHistoryDispatchArgs[3];
+  if (compactIndex >= candidateCount) { return; }
+  let highIndex = sourceHistoryCandidates[compactIndex];
+  let z = highIndex / (HIGH_GRID * HIGH_GRID);
+  let y = (highIndex - z * HIGH_GRID * HIGH_GRID) / HIGH_GRID;
+  let x = highIndex - z * HIGH_GRID * HIGH_GRID - y * HIGH_GRID;
+  let highCell = vec3<u32>(x, y, z);
+  let bundle = makeFeatureBundle(highCell);
+  sparseFrontResidual[highIndex] = inferFrontTeacher(bundle.features);
+}
+
+fn clampedIndex(ix: i32, iy: i32, iz: i32) -> u32 {
+  let x = u32(clamp(ix, 0, i32(HIGH_GRID) - 1));
+  let y = u32(clamp(iy, 0, i32(HIGH_GRID) - 1));
+  let z = u32(clamp(iz, 0, i32(HIGH_GRID) - 1));
+  return index3(vec3<u32>(x, y, z), HIGH_GRID);
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn featherNative96SparseFrontContinuity(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (any(gid >= vec3<u32>(HIGH_GRID))) { return; }
+  let highIndex = index3(gid, HIGH_GRID);
+  let baseFront = sparseFrontContinuityFront[highIndex];
+  var weightedResidual = 0.0;
+  var weightSum = 0.0;
+  let c = vec3<i32>(i32(gid.x), i32(gid.y), i32(gid.z));
+  for (var dz = -2; dz <= 2; dz += 1) {
+    for (var dy = -2; dy <= 2; dy += 1) {
+      for (var dx = -2; dx <= 2; dx += 1) {
+        let dist2 = f32(dx * dx + dy * dy + dz * dz);
+        let neighbor = clampedIndex(c.x + dx, c.y + dy, c.z + dz);
+        let residual = sparseFrontResidual[neighbor];
+        let present = step(0.000001, abs(residual));
+        let weight = exp(-dist2 / 5.50) * present;
+        weightedResidual += residual * weight;
+        weightSum += weight;
+      }
+    }
+  }
+  let ownResidual = sparseFrontResidual[highIndex];
+  let reconstructedResidual = select(weightedResidual / max(weightSum, 0.000001), ownResidual, abs(ownResidual) > 0.000001);
+  let featherConfidence = smoothstep(0.0, 0.18, weightSum);
+  sparseFrontContinuityFront[highIndex] = max(0.0, baseFront + reconstructedResidual * featherConfidence);
+}
+`;
+
 const VIVISECTOR_WIDTH32_RECEIVER_WGSL = `
 const LOW_GRID: u32 = ${LOW_GRID}u;
 const HIGH_GRID: u32 = ${HIGH_GRID}u;
@@ -709,6 +881,16 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
   if (modelBytes.byteLength !== selectedModel.packed.byteLength || modelSha256 !== selectedModel.packed.sha256) {
     throw new Error(`modelChecksumMismatch:${modelSha256}`);
   }
+  const exactFrontTeacherResponse = await fetch(NATIVE96_EXACT_FRONT_TEACHER_MODEL_URL, { cache: 'no-store' });
+  if (!exactFrontTeacherResponse.ok) throw new Error(`native96ExactFrontTeacherFetchFailed:${exactFrontTeacherResponse.status}`);
+  const exactFrontTeacherBytes = await exactFrontTeacherResponse.arrayBuffer();
+  const exactFrontTeacherSha256 = await sha256Hex(exactFrontTeacherBytes);
+  if (
+    exactFrontTeacherBytes.byteLength !== NATIVE96_EXACT_FRONT_TEACHER_MODEL.packed.byteLength
+    || exactFrontTeacherSha256 !== NATIVE96_EXACT_FRONT_TEACHER_MODEL_SHA256
+  ) {
+    throw new Error(`native96ExactFrontTeacherChecksumMismatch:${exactFrontTeacherSha256}`);
+  }
   const lowCells = lowGrid ** 3;
   const highCells = HIGH_GRID ** 3;
   const lowFluidBytes = lowCells * SLOTS_PER_CELL * 4 * Float32Array.BYTES_PER_ELEMENT;
@@ -740,6 +922,12 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
   );
   const model = makeBuffer(`native-low shared-device model ${selectedModel.identity}`, modelBytes.byteLength, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST);
   device.queue.writeBuffer(model, 0, modelBytes);
+  const native96ExactFrontTeacherModel = makeBuffer(
+    `native-low shared-device exact native96 front teacher ${NATIVE96_EXACT_FRONT_TEACHER_MODEL.identity}`,
+    exactFrontTeacherBytes.byteLength,
+    GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  );
+  device.queue.writeBuffer(native96ExactFrontTeacherModel, 0, exactFrontTeacherBytes);
   const shader = device.createShaderModule({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} WGSL`, code: specializeLowGridWgsl(WGSL, lowGrid) });
   const compilation = await shader.getCompilationInfo();
   const errors = compilation.messages.filter(message => message.type === 'error');
@@ -922,6 +1110,42 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
     }),
     compute: { module: candidateCueLifecycleShader, entryPoint: 'clearAndCheckCandidateCueLifecycle' },
   });
+  const native96SparseFrontContinuityShader = device.createShaderModule({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native96 sparse-front continuity WGSL`,
+    code: specializeLowGridWgsl(NATIVE96_SPARSE_FRONT_CONTINUITY_WGSL, lowGrid),
+  });
+  const native96SparseFrontContinuityLayout = device.createBindGroupLayout({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native96 sparse-front continuity layout`,
+    entries: [
+      { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 5, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      { binding: 7, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+    ],
+  });
+  const native96SparseFrontContinuityPipelineLayout = device.createPipelineLayout({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native96 sparse-front continuity pipeline layout`,
+    bindGroupLayouts: [native96SparseFrontContinuityLayout],
+  });
+  const native96SparseFrontInitializePipeline = device.createComputePipeline({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native96 sparse-front initialize`,
+    layout: native96SparseFrontContinuityPipelineLayout,
+    compute: { module: native96SparseFrontContinuityShader, entryPoint: 'initializeNative96SparseFrontContinuity' },
+  });
+  const native96ExactFrontTeacherCandidatePipeline = device.createComputePipeline({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native96 exact front teacher candidates`,
+    layout: native96SparseFrontContinuityPipelineLayout,
+    compute: { module: native96SparseFrontContinuityShader, entryPoint: 'evalNative96ExactFrontTeacherCandidates' },
+  });
+  const native96SparseFrontFeatherPipeline = device.createComputePipeline({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native96 sparse-front feather`,
+    layout: native96SparseFrontContinuityPipelineLayout,
+    compute: { module: native96SparseFrontContinuityShader, entryPoint: 'featherNative96SparseFrontContinuity' },
+  });
   let encodedFrameCount = 0;
   let lastHistoryEpochIdentity = null;
   let lastSourceHistoryEpochReceipt = {
@@ -987,6 +1211,15 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
     productionPathCpuReadback: false,
     syntheticBenchmarkWeights: false,
     syntheticBenchmarkAuthorityRejected: true,
+    learnedVisualClaim: false,
+    failurePhase: null,
+  };
+  let lastNative96SparseFrontContinuity = {
+    identity: NATIVE96_SPARSE_FRONT_CONTINUITY,
+    enabled: false,
+    hardZeroOutsideCandidateVisuallyRejected: true,
+    hardMaskTreatmentClaim: false,
+    continuityReconstructionMode: 'feathered-local-5x5x5-front-residual-reconstruction-v0',
     learnedVisualClaim: false,
     failurePhase: null,
   };
@@ -1360,6 +1593,9 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
     fallbackBackend: null,
     modelIdentity: selectedModel.identity,
     modelSha256,
+    native96ExactFrontTeacherModelIdentity: NATIVE96_EXACT_FRONT_TEACHER_MODEL.identity,
+    native96ExactFrontTeacherModelSha256: exactFrontTeacherSha256,
+    native96ExactFrontTeacherParentCommit: NATIVE96_EXACT_FRONT_TEACHER_PARENT_COMMIT,
     featureAuthority: NATIVE_LOW_FEATURE_AUTHORITY,
     inputAuthority: NATIVE_LOW_INPUT_AUTHORITY,
     effectiveFeatureCount: selectedModel.features.featureCount,
@@ -1536,6 +1772,79 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
         };
       }
       coarseSourceHistorySupportFrontActive = options.coarseSourceHistorySupportFrontEnabled === true;
+      const native96SparseFrontContinuityActive = options.native96SparseFrontContinuityEnabled === true;
+      if (native96SparseFrontContinuityActive) {
+        const continuityBindGroup = device.createBindGroup({
+          label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native96 sparse-front continuity bind group`,
+          layout: native96SparseFrontContinuityLayout,
+          entries: [
+            { binding: 0, resource: { buffer: sourceFluid } },
+            { binding: 1, resource: { buffer: sourceFront } },
+            { binding: 2, resource: { buffer: sourceHistoryCandidates } },
+            { binding: 3, resource: { buffer: sourceHistoryDispatchArgs } },
+            { binding: 4, resource: { buffer: native96ExactFrontTeacherModel } },
+            { binding: 5, resource: { buffer: predictedFluid } },
+            { binding: 6, resource: { buffer: predictedFront } },
+            { binding: 7, resource: { buffer: nativeUpsampleFront } },
+          ],
+        });
+        const teacherTimestampWrites = options.stageTimestampWrites?.native96ExactFrontTeacher || null;
+        const continuityTimestampWrites = options.stageTimestampWrites?.native96SparseFrontContinuity || null;
+        const initializePass = encoder.beginComputePass({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native96 sparse-front initialize` });
+        initializePass.setPipeline(native96SparseFrontInitializePipeline);
+        initializePass.setBindGroup(0, continuityBindGroup);
+        initializePass.dispatchWorkgroups(Math.ceil(HIGH_GRID / 4), Math.ceil(HIGH_GRID / 4), Math.ceil(HIGH_GRID / 4));
+        initializePass.end();
+        const teacherPass = encoder.beginComputePass({
+          label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native96 exact front teacher candidates`,
+          ...(teacherTimestampWrites ? { timestampWrites: teacherTimestampWrites } : {}),
+        });
+        teacherPass.setPipeline(native96ExactFrontTeacherCandidatePipeline);
+        teacherPass.setBindGroup(0, continuityBindGroup);
+        teacherPass.dispatchWorkgroupsIndirect(sourceHistoryDispatchArgs, 0);
+        teacherPass.end();
+        const featherPass = encoder.beginComputePass({
+          label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native96 sparse-front feather continuity`,
+          ...(continuityTimestampWrites ? { timestampWrites: continuityTimestampWrites } : {}),
+        });
+        featherPass.setPipeline(native96SparseFrontFeatherPipeline);
+        featherPass.setBindGroup(0, continuityBindGroup);
+        featherPass.dispatchWorkgroups(Math.ceil(HIGH_GRID / 4), Math.ceil(HIGH_GRID / 4), Math.ceil(HIGH_GRID / 4));
+        featherPass.end();
+        lastNative96SparseFrontContinuity = {
+          identity: NATIVE96_SPARSE_FRONT_CONTINUITY,
+          enabled: true,
+          authority: 'exact-front-teacher-over-uncapped-source-history-candidates-plus-feathered-continuity-v0',
+          native96ExactFrontTeacherParentCommit: NATIVE96_EXACT_FRONT_TEACHER_PARENT_COMMIT,
+          exactFrontTeacherModelIdentity: NATIVE96_EXACT_FRONT_TEACHER_MODEL.identity,
+          exactFrontTeacherModelSha256: exactFrontTeacherSha256,
+          exactFrontTeacherSourcePackedSha256: NATIVE96_EXACT_FRONT_TEACHER_SOURCE_PACKED_SHA256,
+          exactFrontTeacherByteLength: NATIVE96_EXACT_FRONT_TEACHER_MODEL.packed.byteLength,
+          fullFeatureAuthority: NATIVE_LOW_FEATURE_AUTHORITY,
+          effectiveFeatureCount: NATIVE96_EXACT_FRONT_TEACHER_MODEL.features.featureCount,
+          teacherHiddenWidth: NATIVE96_EXACT_FRONT_TEACHER_MODEL.architecture.hiddenWidth,
+          candidateListSource: 'real-uncapped-fixed-gate-sourceHistoryCandidates-v0',
+          dispatchIdentity: 'dispatchWorkgroupsIndirect-sourceHistoryDispatchArgs-v0',
+          hardZeroOutsideCandidateVisuallyRejected: true,
+          hardMaskTreatmentClaim: false,
+          continuityReconstructionMode: 'feathered-local-5x5x5-front-residual-reconstruction-v0',
+          deterministicVsLearnedEffectParity: 'preserve-native96-accepted-structural-delta-v0',
+          hiddenCandidateCap: false,
+          runtimeTopK: false,
+          dynamicPercentile: false,
+          fullGridTeacherReferenceRetained: true,
+          sparseContinuityTreatmentRendererConsumed: true,
+          native96Control: 'native96Control',
+          deterministicNativeMaterialization: 'deterministicNativeMaterialization',
+          fullExactFrontTeacherReference: 'fullExactFrontTeacherReference',
+          sparseFrontContinuityTreatment: 'sparseFrontContinuityTreatment',
+          visualClaim: 'requires-inspection-native96-sparse-front-continuity-v0',
+          failurePhase: null,
+        };
+        encodedFrameCount += 1;
+        lastHistoryEpochIdentity = currentHistoryEpochIdentity;
+        return;
+      }
       if (coarseSourceHistorySupportFrontActive) {
         lastCoarseSourceHistorySupportFrontReplacement = {
           identity: NATIVE_LOW_COARSE_SOURCE_HISTORY_SUPPORT_FRONT_REPLACEMENT,
@@ -1710,6 +2019,24 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
           historyEpochValidForAdmission: lastSourceHistoryEpochReceipt.historyEpochValidForAdmission === true,
           sourceHistoryResetReason: lastSourceHistoryEpochReceipt.sourceHistoryResetReason,
           staleCueHistoryRejected: lastSourceHistoryEpochReceipt.historyEpochValidForAdmission === true,
+          nativeLowInferenceWorkProfile: lastStats.nativeLowInferenceWorkProfile,
+        };
+      }
+      if (lastNative96SparseFrontContinuity.enabled) {
+        lastNative96SparseFrontContinuity = {
+          ...lastNative96SparseFrontContinuity,
+          candidateCount: uncappedCandidateCount,
+          instanceCount: uncappedCandidateCount,
+          overflowCount: 0,
+          candidateInstanceEquality: true,
+          uncappedCandidateCount,
+          uncappedCandidateCoverage,
+          sourceHistoryDispatchWorkgroups,
+          sourceHistoryDispatchThreadCount: sourceHistoryDispatchWorkgroups * RESIDUAL_WORKGROUP_SIZE,
+          sourceHistoryAvailable,
+          historyEpochValidForAdmission: lastSourceHistoryEpochReceipt.historyEpochValidForAdmission === true,
+          sourceHistoryResetReason: lastSourceHistoryEpochReceipt.sourceHistoryResetReason,
+          mohelWarning: lastSourceHistoryAdmission.mohelWarning,
           nativeLowInferenceWorkProfile: lastStats.nativeLowInferenceWorkProfile,
         };
       }
@@ -1994,6 +2321,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
         nativeLowCandidateHeadCostMicrobenchmark: lastCandidateHeadBenchmark,
         nativeLowVivisectorWidth32LiveReceiver: lastVivisectorWidth32Receiver,
         nativeLowCoarseSourceHistorySupportFrontReplacement: lastCoarseSourceHistorySupportFrontReplacement,
+        native96SparseFrontContinuity: lastNative96SparseFrontContinuity,
         nativeLowCandidateCueBufferLifecycle: lastCandidateCueBufferLifecycle,
         ...lastStats,
       };
@@ -2014,6 +2342,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
       vivisectorWidth32WeightsBuffer?.destroy?.();
       stats.destroy();
       model.destroy();
+      native96ExactFrontTeacherModel.destroy();
     },
   };
 }

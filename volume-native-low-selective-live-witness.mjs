@@ -12,7 +12,7 @@ const ROUTE = 'native-low-live-browser-webgpu-inference-v0';
 const MODEL = 'exact-basin-selective-carrier-heads-160-to-128-v0';
 const MODEL_SHA256 = 'dc1886384f87c4e51015f6ffd5ac8c0a48ac6f32b6f02a238ac5e3c3bd883dc9';
 const TRANSPORT_MODE = 'shared-device-gpu-buffers-no-readback-import-v0';
-const REQUIRED_RUNTIME_BUILD_IDENTITY = 'native-low-coarse-source-history-support-front-replacement-v1';
+const REQUIRED_RUNTIME_BUILD_IDENTITY = 'native96-sparse-front-continuity-v1';
 const WITNESS_CONTRACT_MARKERS = Object.freeze({
   transportMode: 'shared-device-gpu-buffers-no-readback-import-v0',
   requestedCalibration: 'native-low-learned-splat-calibration-v0',
@@ -49,6 +49,7 @@ const fixedGateDiscontinuityAssayRequested = new URL(url).searchParams.get('fixe
 const candidateHeadBenchmarkRequested = new URL(url).searchParams.get('candidate_head_benchmark') === '1';
 const cueBufferLifecycleStressRequested = new URL(url).searchParams.get('cue_buffer_lifecycle_stress') === '1';
 const coarseSourceHistorySupportFrontRequested = new URL(url).searchParams.get('coarse_source_history_support_front') === '1';
+const sparseFrontContinuityRequested = new URL(url).searchParams.get('sparse_front_continuity') === '1';
 const vivisectorCandidateHeadTrainedRouteRequested = Boolean(new URL(url).searchParams.get('vivisector_candidate_head_package'))
   || new URL(url).searchParams.get('candidate_head_trained_route') === 'vivisector-width32';
 const out = resolve(String(args.get('--out') || '/tmp/kaminos-native-low-selective-live.png'));
@@ -155,7 +156,16 @@ try {
       throw new Error(state?.lastTrustworthyEvidence?.error || state?.failurePhase || 'native-low live route failed');
     }
     const replacement = state?.nativeLowCoarseSourceHistorySupportFrontReplacement;
-    const workProfileReady = coarseSourceHistorySupportFrontRequested
+    const sparseFront = state?.native96SparseFrontContinuity;
+    const workProfileReady = sparseFrontContinuityRequested
+      ? sparseFront?.identity === 'native96-sparse-front-continuity-v0'
+        && sparseFront?.hardZeroOutsideCandidateVisuallyRejected === true
+        && sparseFront?.hardMaskTreatmentClaim === false
+        && sparseFront?.hiddenCandidateCap === false
+        && Number(sparseFront?.uncappedCandidateCount) >= 0
+        && Number(sparseFront?.totalSparseFrontContinuityGpuMs) >= 0
+        && sparseFront?.sparseContinuityTreatmentRendererConsumed === true
+      : coarseSourceHistorySupportFrontRequested
       ? replacement?.denseSupportFrontBypassed === true
         && state?.nativeLowInferenceWorkProfile?.supportFrontReplacementActive === true
         && state?.nativeLowInferenceWorkProfile?.supportCompactionIdentity === 'native-low-coarse-source-history-support-front-replacement-v0'
@@ -163,7 +173,14 @@ try {
       : state?.nativeLowInferenceWorkProfile?.supportClassifierCoverage === 'full-grid-160^3'
         && state?.nativeLowInferenceWorkProfile?.supportCompactionIdentity === 'native-low-support-positive-residual-dispatch-v0'
         && state?.nativeLowInferenceWorkProfile?.residualDispatchMode === 'support-positive-indirect-dispatch-args-v0';
-    const headProfileReady = coarseSourceHistorySupportFrontRequested
+    const headProfileReady = sparseFrontContinuityRequested
+      ? state?.headCostTimingAuthority === 'webgpu-timestamp-query-native96-sparse-front-continuity-v0'
+        && state?.nativeLowHeadCostProfile?.values?.length === 6
+        && Number(state?.nativeLowHeadCostProfile?.sourceDeltaAdmissionGpuMs) >= 0
+        && Number(state?.nativeLowHeadCostProfile?.exactFrontTeacherEvalGpuMs) >= 0
+        && Number(state?.nativeLowHeadCostProfile?.continuityReconstructionGpuMs) >= 0
+        && Number(sparseFront?.totalSparseFrontContinuityGpuMs) >= 0
+      : coarseSourceHistorySupportFrontRequested
       ? state?.headCostTimingAuthority === 'webgpu-timestamp-query-source-delta-only-v0'
         && state?.nativeLowHeadCostProfile?.values?.length === 2
         && Number(state?.nativeLowHeadCostProfile?.sourceDeltaAdmissionGpuMs) >= 0
@@ -207,16 +224,18 @@ try {
       && Number(state?.nativeLowMaterializationProfile?.treatmentRebuildMs) >= 0
       && Number(state?.nativeLowMaterializationProfile?.restoreCopyMs) >= 0
       && workProfileReady
-      && state?.nativeLowInferenceWorkProfile?.supportCompactionActive === true
-      && state?.nativeLowInferenceWorkProfile?.residualDispatchArgsFinalized === true
-      && state?.nativeLowInferenceWorkProfile?.residualDispatchIndirect === true
-      && state?.nativeLowInferenceWorkProfile?.residualDispatchFullGridEarlyReturn === false
-      && state?.nativeLowInferenceWorkProfile?.hiddenSupportCap === false
-      && Number(state?.nativeLowInferenceWorkProfile?.modelEvaluatedCellCount) >= 0
-      && Number(state?.nativeLowInferenceWorkProfile?.residualHeadEvaluatedCount) >= 0
-      && Number(state?.nativeLowInferenceWorkProfile?.supportCompactedCount) >= 0
-      && Number(state?.nativeLowInferenceWorkProfile?.residualDispatchWorkgroups) >= 1
-      && Number(state?.nativeLowInferenceWorkProfile?.residualDispatchThreadCount) >= Number(state?.nativeLowInferenceWorkProfile?.supportCompactedCount)
+      && (sparseFrontContinuityRequested || (
+        state?.nativeLowInferenceWorkProfile?.supportCompactionActive === true
+        && state?.nativeLowInferenceWorkProfile?.residualDispatchArgsFinalized === true
+        && state?.nativeLowInferenceWorkProfile?.residualDispatchIndirect === true
+        && state?.nativeLowInferenceWorkProfile?.residualDispatchFullGridEarlyReturn === false
+        && state?.nativeLowInferenceWorkProfile?.hiddenSupportCap === false
+        && Number(state?.nativeLowInferenceWorkProfile?.modelEvaluatedCellCount) >= 0
+        && Number(state?.nativeLowInferenceWorkProfile?.residualHeadEvaluatedCount) >= 0
+        && Number(state?.nativeLowInferenceWorkProfile?.supportCompactedCount) >= 0
+        && Number(state?.nativeLowInferenceWorkProfile?.residualDispatchWorkgroups) >= 1
+        && Number(state?.nativeLowInferenceWorkProfile?.residualDispatchThreadCount) >= Number(state?.nativeLowInferenceWorkProfile?.supportCompactedCount)
+      ))
       && state?.nativeLowHeadCostProfile?.identity === 'native-low-head-cost-profile-v0'
       && headProfileReady
       && diagnosticProfilesReady
@@ -318,24 +337,26 @@ try {
       'dispatchWorkgroupsIndirect-sourceHistoryDispatchArgs-v0',
       'wrong replacement residual dispatch mode',
     );
-  } else {
+  } else if (!sparseFrontContinuityRequested) {
     assert.equal(state?.nativeLowInferenceWorkProfile?.supportClassifierCoverage, 'full-grid-160^3', 'support classifier coverage is not full grid');
     assert.equal(state?.nativeLowInferenceWorkProfile?.supportCompactionIdentity, 'native-low-support-positive-residual-dispatch-v0', 'wrong support compaction identity');
     assert.equal(state?.nativeLowInferenceWorkProfile?.residualDispatchMode, 'support-positive-indirect-dispatch-args-v0', 'wrong residual dispatch mode');
   }
-  assert.equal(state?.nativeLowInferenceWorkProfile?.supportCompactionActive, true, 'support compaction was not active');
-  assert.equal(state?.nativeLowInferenceWorkProfile?.residualDispatchArgsFinalized, true, 'residual dispatch args were not finalized');
-  assert.equal(state?.nativeLowInferenceWorkProfile?.residualDispatchIndirect, true, 'residual dispatch did not use indirect args');
-  assert.equal(state?.nativeLowInferenceWorkProfile?.residualDispatchFullGridEarlyReturn, false, 'residual dispatch still used full-grid early return');
-  assert.equal(state?.nativeLowInferenceWorkProfile?.hiddenSupportCap, false, 'hidden support cap used in inference profile');
-  assert.ok(Number(state?.nativeLowInferenceWorkProfile?.modelEvaluatedCellCount) >= 0, 'modelEvaluatedCellCount missing');
-  assert.ok(Number(state?.nativeLowInferenceWorkProfile?.residualHeadEvaluatedCount) >= 0, 'residualHeadEvaluatedCount missing');
-  assert.ok(Number(state?.nativeLowInferenceWorkProfile?.supportCompactedCount) >= 0, 'supportCompactedCount missing');
-  assert.ok(Number(state?.nativeLowInferenceWorkProfile?.residualDispatchWorkgroups) >= 1, 'residualDispatchWorkgroups missing');
-  assert.ok(
-    Number(state?.nativeLowInferenceWorkProfile?.residualDispatchThreadCount) >= Number(state?.nativeLowInferenceWorkProfile?.supportCompactedCount),
-    'residual dispatch thread count does not cover compacted support',
-  );
+  if (!sparseFrontContinuityRequested) {
+    assert.equal(state?.nativeLowInferenceWorkProfile?.supportCompactionActive, true, 'support compaction was not active');
+    assert.equal(state?.nativeLowInferenceWorkProfile?.residualDispatchArgsFinalized, true, 'residual dispatch args were not finalized');
+    assert.equal(state?.nativeLowInferenceWorkProfile?.residualDispatchIndirect, true, 'residual dispatch did not use indirect args');
+    assert.equal(state?.nativeLowInferenceWorkProfile?.residualDispatchFullGridEarlyReturn, false, 'residual dispatch still used full-grid early return');
+    assert.equal(state?.nativeLowInferenceWorkProfile?.hiddenSupportCap, false, 'hidden support cap used in inference profile');
+    assert.ok(Number(state?.nativeLowInferenceWorkProfile?.modelEvaluatedCellCount) >= 0, 'modelEvaluatedCellCount missing');
+    assert.ok(Number(state?.nativeLowInferenceWorkProfile?.residualHeadEvaluatedCount) >= 0, 'residualHeadEvaluatedCount missing');
+    assert.ok(Number(state?.nativeLowInferenceWorkProfile?.supportCompactedCount) >= 0, 'supportCompactedCount missing');
+    assert.ok(Number(state?.nativeLowInferenceWorkProfile?.residualDispatchWorkgroups) >= 1, 'residualDispatchWorkgroups missing');
+    assert.ok(
+      Number(state?.nativeLowInferenceWorkProfile?.residualDispatchThreadCount) >= Number(state?.nativeLowInferenceWorkProfile?.supportCompactedCount),
+      'residual dispatch thread count does not cover compacted support',
+    );
+  }
   assert.equal(state?.nativeLowHeadCostProfile?.identity, 'native-low-head-cost-profile-v0', 'head cost profile missing');
   if (coarseSourceHistorySupportFrontRequested) {
     const replacement = state?.nativeLowCoarseSourceHistorySupportFrontReplacement;
@@ -360,6 +381,21 @@ try {
     assert.equal(Number(replacement?.supportFrontReplacementDecisionBands?.credibleBreakEvenTargetMs), 15, 'replacement credible target missing');
     assert.equal(Number(replacement?.supportFrontReplacementDecisionBands?.outerKillBoundaryMs), 24, 'replacement kill boundary missing');
     assert.equal(state?.nativeLowMaterializationProfile?.fullGridReceiverMaterialization, false, 'replacement materialization profile allowed full-grid receiver');
+  } else if (sparseFrontContinuityRequested) {
+    const sparseFront = state?.native96SparseFrontContinuity;
+    assert.equal(state?.headCostTimingAuthority, 'webgpu-timestamp-query-native96-sparse-front-continuity-v0', 'wrong sparse-front timing authority');
+    assert.equal(sparseFront?.identity, 'native96-sparse-front-continuity-v0', 'sparse-front continuity receipt missing');
+    assert.equal(sparseFront?.hardZeroOutsideCandidateVisuallyRejected, true, 'sparse-front route did not preserve hard-mask rejection');
+    assert.equal(sparseFront?.hardMaskTreatmentClaim, false, 'sparse-front route revived a hard-mask claim');
+    assert.equal(sparseFront?.sparseContinuityTreatmentRendererConsumed, true, 'sparse-front treatment was not renderer-consumed');
+    assert.equal(sparseFront?.hiddenCandidateCap, false, 'sparse-front route hid a candidate cap');
+    assert.ok(Number(sparseFront?.uncappedCandidateCount) >= 0, 'sparse-front uncapped candidate count missing');
+    assert.ok(Number(sparseFront?.exactFrontTeacherEvalGpuMs) >= 0, 'sparse-front teacher timing missing');
+    assert.ok(Number(sparseFront?.continuityReconstructionGpuMs) >= 0, 'sparse-front continuity timing missing');
+    assert.ok(Number(sparseFront?.totalSparseFrontContinuityGpuMs) >= 0, 'sparse-front total timing missing');
+    assert.equal(Number(sparseFront?.sparseFrontContinuityDecisionBands?.profitableTargetMs), 10, 'sparse-front profitable target missing');
+    assert.equal(Number(sparseFront?.sparseFrontContinuityDecisionBands?.credibleBreakEvenTargetMs), 15, 'sparse-front credible target missing');
+    assert.equal(Number(sparseFront?.sparseFrontContinuityDecisionBands?.outerKillBoundaryMs), 24, 'sparse-front kill boundary missing');
   } else {
     assert.equal(state?.headCostTimingAuthority, 'webgpu-timestamp-query-stage-split-v0', 'wrong head cost timing authority');
   }
@@ -379,15 +415,23 @@ try {
     assert.equal(receiver?.fidelityClaim, false, 'Vivisector package receiver must not claim fidelity');
   }
   assert.ok(Number(state?.nativeLowHeadCostProfile?.sourceDeltaAdmissionGpuMs) >= 0, 'sourceDeltaAdmissionGpuMs missing');
-  if (coarseSourceHistorySupportFrontRequested) {
+  if (sparseFrontContinuityRequested) {
+    assert.equal(state?.nativeLowHeadCostProfile?.values?.length, 6, 'sparse-front head cost profile did not record six timestamp values');
+    assert.ok(
+      Number(state?.nativeLowHeadCostProfile?.inferenceGpuMs) === Number(state?.nativeLowHeadCostProfile?.totalSparseFrontContinuityGpuMs),
+      'sparse-front inferenceGpuMs is not the exact sparse-front total',
+    );
+  } else if (coarseSourceHistorySupportFrontRequested) {
     assert.equal(state?.nativeLowHeadCostProfile?.values?.length, 2, 'replacement head cost profile did not record two timestamp values');
     assert.ok(nativeLowSourceDeltaOnlySumMatches(state?.nativeLowHeadCostProfile), 'replacement inferenceGpuMs is not the exact source-delta-only sum');
   } else {
     assert.equal(state?.nativeLowHeadCostProfile?.values?.length, 6, 'head cost profile did not record six timestamp values');
     assert.ok(nativeLowInferenceSumMatches(state?.nativeLowHeadCostProfile), 'inferenceGpuMs is not the exact sum of source-delta/support-front/residual stages');
   }
-  assert.ok(Number(state?.nativeLowHeadCostProfile?.supportFrontGpuMs) >= 0, 'supportFrontGpuMs missing');
-  assert.ok(Number(state?.nativeLowHeadCostProfile?.supportPositiveResidualGpuMs) >= 0, 'supportPositiveResidualGpuMs missing');
+  if (!sparseFrontContinuityRequested) {
+    assert.ok(Number(state?.nativeLowHeadCostProfile?.supportFrontGpuMs) >= 0, 'supportFrontGpuMs missing');
+    assert.ok(Number(state?.nativeLowHeadCostProfile?.supportPositiveResidualGpuMs) >= 0, 'supportPositiveResidualGpuMs missing');
+  }
   assert.equal(state?.nativeLowSupportTileProfile?.identity, 'native-low-support-proximal-tile-profile-v0', 'support-proximal tile profile missing');
   assert.ok(Number(state?.nativeLowSupportTileProfile?.activeTileCount) >= 0, 'activeTileCount missing');
   assert.ok(Number(state?.nativeLowSupportTileProfile?.projectedSupportFrontCellCount) >= 0, 'projectedSupportFrontCellCount missing');
@@ -608,6 +652,7 @@ try {
     nativeLowFixedSourceDeltaAdmission: endState.nativeLowFixedSourceDeltaAdmission,
     nativeLowCandidateHeadCostMicrobenchmark: endState.nativeLowCandidateHeadCostMicrobenchmark,
     nativeLowCoarseSourceHistorySupportFrontReplacement: endState.nativeLowCoarseSourceHistorySupportFrontReplacement,
+    native96SparseFrontContinuity: endState.native96SparseFrontContinuity,
     nativeLowResidentCueBufferLifecycleStress: endState.nativeLowResidentCueBufferLifecycleStress,
     nativeLowCandidateCueBufferLifecycle: endState.nativeLowCandidateCueBufferLifecycle,
     nativeLowVivisectorCandidateHeadPackageReceiver: endState.nativeLowVivisectorCandidateHeadPackageReceiver,
@@ -616,6 +661,7 @@ try {
     candidateHeadBenchmarkRequested,
     cueBufferLifecycleStressRequested,
     coarseSourceHistorySupportFrontRequested,
+    sparseFrontContinuityRequested,
     vivisectorCandidateHeadTrainedRouteRequested,
     nativeLowFrontTopologyAblation: endState.nativeLowFrontTopologyAblation,
     fullFrozenTreatmentReference: endState.fullFrozenTreatmentReference,
