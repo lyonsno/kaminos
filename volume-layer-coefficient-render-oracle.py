@@ -34,7 +34,6 @@ COEFFICIENT_BOUNDARY = "per-sample-pre-tone-map-emission-extinction-v0"
 SHARED_TRANSMITTANCE = "ridge-plus-non-ridge-extinction-one-running-transmittance-v0"
 KERNEL_GEOMETRY = "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0"
 CALIBRATION_IDENTITY = "camera-10-only-global-optical-path-fit-v0"
-ORDER_APPROXIMATION = "camera-depth-96-bin-one-running-transmittance-v0"
 COEFFICIENT_ORDER = [
     "ridge.emission.r", "ridge.emission.g", "ridge.emission.b", "ridge.extinction",
     "nonRidge.emission.r", "nonRidge.emission.g", "nonRidge.emission.b", "nonRidge.extinction",
@@ -47,6 +46,10 @@ REQUIRED_MODES = {
 
 def canonical_json(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+
+
+def order_approximation_identity(depth_bins: int) -> str:
+    return f"camera-depth-{depth_bins}-bin-one-running-transmittance-v0"
 
 
 def sha256_file(path: Path, chunk_size: int = 8 * 1024 * 1024) -> str:
@@ -337,7 +340,7 @@ def rasterize_coefficients(
         "nearDepth": near,
         "farDepth": far,
         "depthBins": depth_bins,
-        "orderApproximation": ORDER_APPROXIMATION,
+        "orderApproximation": order_approximation_identity(depth_bins),
         "kernelGeometry": KERNEL_GEOMETRY,
         "orientation": "checksum-bound-flow-tangent-five-tap-projected-kernel-v0",
     }
@@ -631,7 +634,7 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
             "stateId": state.get("id"), "stateStep": state_step, "rowCount": count,
             "candidateAdmissionAuthority": ADMISSION_AUTHORITY, "coefficientBoundary": COEFFICIENT_BOUNDARY,
             "sharedTransmittanceIdentity": SHARED_TRANSMITTANCE, "kernelGeometry": KERNEL_GEOMETRY,
-            "orderApproximation": ORDER_APPROXIMATION, "sampleCap": None, "droppedRowCount": 0,
+            "orderApproximation": order_approximation_identity(args.depth_bins), "sampleCap": None, "droppedRowCount": 0,
             "independentlyRenderedToneMappedImageAdditivity": False,
             "coefficientSourceAuthority": PREDICTION_AUTHORITY if prediction_overlay_receipt else "exact-local-layer-emission-extinction-v0",
         },
@@ -666,7 +669,7 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
             "truthful": True,
             "notExactFullCovariance": True,
             "notExactPerSplatOrder": True,
-            "orderApproximation": ORDER_APPROXIMATION,
+            "orderApproximation": order_approximation_identity(args.depth_bins),
             "orientationApproximation": "five-tap-quantized-projected-flow-tangent-v0",
             "interpretation": "coefficient/extinction transplant assay; not a shipping-renderer parity claim",
         },
