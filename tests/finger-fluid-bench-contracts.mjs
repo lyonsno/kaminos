@@ -409,15 +409,22 @@ assert.equal(syntheticTruthSnapshot.retainedParticleRatio, 1);
 assert.equal(syntheticTruthSnapshot.totalKineticEnergy, 0.5);
 assert.equal(syntheticTruthSnapshot.occupiedCellCount, 1);
 assert.ok(syntheticTruthSnapshot.relativeDensityErrorMean > 0 && syntheticTruthSnapshot.relativeDensityErrorMean < 0.1);
-const truthCheckpoint = (elapsedMs, overrides = {}) => ({
+const truthCheckpoint = (elapsedMs, overrides = {}, scene = 'deep_pool_rest') => ({
   elapsedMs,
   fluidTruthSnapshot: {
+    schema: 'kaminos.finger-fluid-truth-snapshot.v0',
+    contract: 'kaminos-fluid-truth-gauntlet-v0',
+    scene,
     particleCount: 100,
     finiteParticleCount: 100,
+    retainedParticleCount: 100,
     retainedParticleRatio: 1,
     sourceRecirculationCount: 0,
     centerOfMass: [0, 0, 0],
     totalKineticEnergy: 100,
+    relativeDensityErrorMean: 0.02,
+    relativeDensityErrorP95: 0.05,
+    occupiedCellCount: 32,
     occupiedVolumeProxy: 5,
     ...overrides,
   },
@@ -437,22 +444,55 @@ assert.throws(() => webgpuMod.evaluateFingerFluidTruthTrajectory('deep_pool_rest
   truthCheckpoint(500),
   truthCheckpoint(1000, { totalKineticEnergy: 20 }),
 ]), /requires at least 5000ms/);
+assert.throws(() => webgpuMod.evaluateFingerFluidTruthTrajectory('deep_pool_rest', [
+  truthCheckpoint(500, { schema: 'malformed.snapshot.v0' }),
+  truthCheckpoint(7000, { totalKineticEnergy: 20 }),
+]), /snapshot schema/);
+assert.throws(() => webgpuMod.evaluateFingerFluidTruthTrajectory('deep_pool_rest', [
+  truthCheckpoint(500, { contract: 'wrong-truth-contract-v0' }),
+  truthCheckpoint(7000, { totalKineticEnergy: 20 }),
+]), /snapshot contract/);
+assert.throws(() => webgpuMod.evaluateFingerFluidTruthTrajectory('deep_pool_rest', [
+  truthCheckpoint(500, {}, 'dam_break'),
+  truthCheckpoint(7000, { totalKineticEnergy: 20 }),
+]), /snapshot scene/);
+assert.throws(() => webgpuMod.evaluateFingerFluidTruthTrajectory('deep_pool_rest', [
+  truthCheckpoint(500, { relativeDensityErrorMean: Number.NaN }),
+  truthCheckpoint(7000, { totalKineticEnergy: 20 }),
+]), /density evidence/);
+assert.throws(() => webgpuMod.evaluateFingerFluidTruthTrajectory('deep_pool_rest', [
+  truthCheckpoint(500, { occupiedCellCount: 1, occupiedVolumeProxy: 0.009 }),
+  truthCheckpoint(7000, { totalKineticEnergy: 20, occupiedCellCount: 1, occupiedVolumeProxy: 0.009 }),
+]), /occupied support/);
+assert.throws(() => webgpuMod.evaluateFingerFluidTruthTrajectory('deep_pool_rest', [
+  truthCheckpoint(500, { occupiedVolumeProxy: 0.000001 }),
+  truthCheckpoint(7000, { totalKineticEnergy: 20, occupiedVolumeProxy: 0.000001 }),
+]), /absolute support/);
+assert.throws(() => webgpuMod.evaluateFingerFluidTruthTrajectory('deep_pool_rest', [
+  truthCheckpoint(500),
+  truthCheckpoint(7000, {
+    particleCount: 99,
+    finiteParticleCount: 99,
+    retainedParticleCount: 99,
+    totalKineticEnergy: 20,
+  }),
+]), /particle identity/);
 const damBreakTrajectory = webgpuMod.evaluateFingerFluidTruthTrajectory('dam_break', [
-  truthCheckpoint(250, { centerOfMass: [0, 0.35, -1.7], totalKineticEnergy: 100, occupiedVolumeProxy: 5 }),
-  truthCheckpoint(1500, { centerOfMass: [0, -0.4, -0.5], totalKineticEnergy: 70, occupiedVolumeProxy: 5.8 }),
-  truthCheckpoint(9000, { centerOfMass: [0, -0.9, 0.4], totalKineticEnergy: 4, occupiedVolumeProxy: 5.2 }),
+  truthCheckpoint(250, { centerOfMass: [0, 0.35, -1.7], totalKineticEnergy: 100, occupiedVolumeProxy: 5 }, 'dam_break'),
+  truthCheckpoint(1500, { centerOfMass: [0, -0.4, -0.5], totalKineticEnergy: 70, occupiedVolumeProxy: 5.8 }, 'dam_break'),
+  truthCheckpoint(9000, { centerOfMass: [0, -0.9, 0.4], totalKineticEnergy: 4, occupiedVolumeProxy: 5.2 }, 'dam_break'),
 ]);
 assert.equal(damBreakTrajectory.accepted, true);
 assert.equal(damBreakTrajectory.downstreamDisplacement, 2.1);
 assert.equal(damBreakTrajectory.verticalCollapse, 1.25);
 assert.throws(() => webgpuMod.evaluateFingerFluidTruthTrajectory('dam_break', [
-  truthCheckpoint(250, { centerOfMass: [0, 0.35, -1.7] }),
-  truthCheckpoint(1500, { centerOfMass: [0, -0.4, -1.6], totalKineticEnergy: 70, occupiedVolumeProxy: 5.8 }),
-  truthCheckpoint(9000, { centerOfMass: [0, -0.9, -1.5], totalKineticEnergy: 4 }),
+  truthCheckpoint(250, { centerOfMass: [0, 0.35, -1.7] }, 'dam_break'),
+  truthCheckpoint(1500, { centerOfMass: [0, -0.4, -1.6], totalKineticEnergy: 70, occupiedVolumeProxy: 5.8 }, 'dam_break'),
+  truthCheckpoint(9000, { centerOfMass: [0, -0.9, -1.5], totalKineticEnergy: 4 }, 'dam_break'),
 ]), /failed to travel downstream/);
 assert.throws(() => webgpuMod.evaluateFingerFluidTruthTrajectory('dam_break', [
-  truthCheckpoint(250, { centerOfMass: [0, 0.35, -1.7] }),
-  truthCheckpoint(9000, { centerOfMass: [0, -0.9, 0.4], totalKineticEnergy: 4, occupiedVolumeProxy: 5.8 }),
+  truthCheckpoint(250, { centerOfMass: [0, 0.35, -1.7] }, 'dam_break'),
+  truthCheckpoint(9000, { centerOfMass: [0, -0.9, 0.4], totalKineticEnergy: 4, occupiedVolumeProxy: 5.8 }, 'dam_break'),
 ]), /requires at least three checkpoints/);
 assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_SUPPORT_TRANSPORT_CONTRACT, 'wgsl-support-tangential-transport-v0');
 assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_TOPOLOGY_CONTRACT, 'wgsl-four-neighbor-topology-retention-v0');
