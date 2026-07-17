@@ -5993,6 +5993,16 @@ fn applyBoundarySplatAttributeHook(
   return result;
 }
 
+fn boundarySplatKernelIntegral(kernelSharpness: f32) -> f32 {
+  let sharpness = max(kernelSharpness, 1e-4);
+  return 3.141592653589793 * (1.0 - exp(-sharpness)) / sharpness;
+}
+
+fn boundarySplatEnergyCompensation(footprintRadius: f32, kernelSharpness: f32) -> f32 {
+  let energyRatio = (max(kernelSharpness, 1e-4) / 3.4) / max(footprintRadius * footprintRadius, 0.1225);
+  return clamp(sqrt(energyRatio), 0.5, 2.5);
+}
+
 @compute @workgroup_size(4, 4, 4)
 fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (any(gid >= vec3<u32>(GRID))) { return; }

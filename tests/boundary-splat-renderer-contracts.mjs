@@ -37,6 +37,12 @@ assert.match(core, /applyBoundarySplatAttributeHook[\s\S]*baseMajorRadius\s*=\s*
 assert.match(core, /corner\.x \* splat\.shape\.x \* boundarySplatCamera\.controls\.x[\s\S]*corner\.y \* splat\.shape\.y \* boundarySplatCamera\.controls\.x/, 'live radius control scales learned and analytic splat footprints in the raster vertex stage');
 assert.match(core, /let kernelSharpness = clamp\(boundarySplatCamera\.controls\.w,[\s\S]*let gaussian = exp\(-radius2 \* kernelSharpness\)/, 'live sharpness control changes the Gaussian kernel instead of applying a screen-space post-filter');
 assert.match(core, /let footprintRadius = clamp\(boundarySplatCamera\.controls\.x,[\s\S]*let energyRatio = \(kernelSharpness \/ 3\.4\) \/ max\(footprintRadius \* footprintRadius,[\s\S]*let energyCompensation = clamp\(sqrt\(energyRatio\),[\s\S]*in\.colorOpacity\.a \* gaussian \* energyCompensation/, 'radius and kernel ablations preserve approximate integrated splat opacity without overdriving dense alpha-over overlap');
+assert.match(core, /fn boundarySplatKernelIntegral\(kernelSharpness: f32\) -> f32/, 'compaction WGSL defines the Gaussian kernel integral used by coefficient normalization');
+assert.match(core, /fn boundarySplatEnergyCompensation\(footprintRadius: f32, kernelSharpness: f32\) -> f32/, 'compaction WGSL defines the same bounded footprint energy compensation used by raster');
+assert.ok(
+  core.indexOf('fn boundarySplatKernelIntegral') < core.indexOf('let kernelIntegral = boundarySplatKernelIntegral'),
+  'compaction WGSL declares kernel normalization helpers before their call sites',
+);
 assert.match(core, /splatCamera\.set\(\[normalizeBoundarySplatRadius\(controlsSnapshot\.boundarySplatRadius\),[\s\S]*normalizeBoundarySplatSharpness\(controlsSnapshot\.boundarySplatSharpness\)\]/, 'each frame publishes normalized radius and sharpness controls to WGSL');
 assert.match(core, /copyBufferToBuffer\(boundarySplatDrawBuffer,\s*0,\s*boundarySplatIndirectBuffer,\s*0,\s*16\)/, 'storage draw state is copied into a separate indirect-only buffer');
 assert.match(core, /boundarySplatComputeBindGroups/, 'splat compute uses separate bind groups from raster');
