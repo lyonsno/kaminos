@@ -39,6 +39,16 @@ export function parseSelectedBrickArtifact(bytes) {
   return indices;
 }
 
+export function buildBitonicSortStages(count) {
+  const size = positiveInteger(count, 'count');
+  if ((size & (size - 1)) !== 0) throw new Error('bitonic sort count must be a power of two');
+  const stages = [];
+  for (let k = 2; k <= size; k *= 2) {
+    for (let j = k / 2; j >= 1; j /= 2) stages.push([j, k, size, 0]);
+  }
+  return stages;
+}
+
 export function buildCompactSmokeProduct({ source, grid, blockSize, selectedBrickIndices } = {}) {
   const size = positiveInteger(grid, 'grid');
   const block = positiveInteger(blockSize, 'blockSize');
@@ -143,6 +153,7 @@ export function validateAdaptiveVolumeGpuReport(report) {
   if (report?.compactProduct?.hiddenDenseAllocationBytes !== 0) reasons.push('hidden-dense-allocation');
   if (report?.compactProduct?.allocationComplete !== true || !finitePositive(report?.compactProduct?.allocationBytes?.total)) reasons.push('allocation-incomplete');
   if (report?.compactProduct?.selectionMismatchCount !== 0) reasons.push('stale-selection');
+  if (report?.compactProduct?.sortOrderViolationCount !== 0) reasons.push('sort-order-invalid');
   if (report?.denseDenial?.method !== DENSE_DENIAL_METHOD
     || report?.denseDenial?.passed !== true
     || report?.denseDenial?.preDenialOutputSha256 !== report?.denseDenial?.postDenialOutputSha256

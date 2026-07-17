@@ -4,9 +4,16 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import {
+  buildBitonicSortStages,
   buildCompactSmokeProduct,
   validateAdaptiveVolumeGpuReport,
 } from '../smoke-adaptive-volume-gpu-falsifier.mjs';
+
+const sortStages = buildBitonicSortStages(65_536);
+assert.equal(sortStages.length, 136, '65536-record bitonic sort requires sum(1..16) stages');
+assert.deepEqual(sortStages[0], [1, 2, 65_536, 0]);
+assert.deepEqual(sortStages.at(-1), [1, 65_536, 65_536, 0]);
+assert.equal(sortStages.some(([j]) => !Number.isInteger(j) || j <= 0), false);
 
 const grid = 4;
 const blockSize = 2;
@@ -74,6 +81,7 @@ const validReport = {
   compactProduct: {
     selectedBrickCount: 2,
     selectionMismatchCount: 0,
+    sortOrderViolationCount: 0,
     allocationBytes: product.allocationBytes,
     allocationComplete: true,
     hiddenDenseAllocationBytes: 0,
@@ -112,6 +120,7 @@ for (const mutate of [
   report => { report.requested.hiddenBrickCapApplied = true; },
   report => { delete report.source.referenceDepthSha256; },
   report => { delete report.runtime.sourceFileSha256s.browser; },
+  report => { report.compactProduct.sortOrderViolationCount = 1; },
 ]) {
   const report = structuredClone(validReport);
   mutate(report);
@@ -133,6 +142,10 @@ assert.doesNotMatch(
 assert.match(browser, /destroy\(\)[\s\S]*dense/i, 'browser falsifier must destroy dense state before compact rerender');
 assert.match(browser, /denseBindingCountDuringRender:\s*0/);
 assert.match(browser, /allocationComplete/);
+assert.match(browser, /buildBitonicSortStages\(brickCount\)/);
+assert.match(browser, /let pairIndex = slot;/, 'descending sort must select its highest-energy prefix');
+assert.match(browser, /sortOrderViolationCount/);
+assert.match(browser, /allocationBytes\.total = allocationBytes\.totalBuildAndProduct/);
 assert.match(browser, /const initializeBindGroup\s*=/, 'entry-point-specific auto layouts require an initialize bind group');
 assert.match(browser, /const scatterBindGroup\s*=/, 'entry-point-specific auto layouts require a scatter bind group');
 assert.match(browser, /setPipeline\(initializePipeline\);[^\n]*setBindGroup\(2, initializeBindGroup\)/);

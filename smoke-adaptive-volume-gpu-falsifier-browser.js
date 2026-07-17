@@ -2,6 +2,7 @@ import {
   ADAPTIVE_VOLUME_GPU_REPORT_SCHEMA,
   ADAPTIVE_VOLUME_GPU_ROUTE,
   DENSE_DENIAL_METHOD,
+  buildBitonicSortStages,
   buildCompactSmokeProduct,
   parseSelectedBrickArtifact,
   validateAdaptiveVolumeGpuReport,
@@ -359,7 +360,7 @@ fn initializeIndirection(@builtin(global_invocation_id) gid: vec3<u32>) {
 fn scatterSelection(@builtin(global_invocation_id) gid: vec3<u32>) {
   let slot = gid.x;
   if (slot >= selectP.selectedCount) { return; }
-  let pairIndex = selectP.coarseGrid * selectP.coarseGrid * selectP.coarseGrid - 1u - slot;
+  let pairIndex = slot;
   indirect[selectedPairs[pairIndex].index] = i32(slot);
 }
 @group(3) @binding(0) var<storage, read> packSource: array<f32>;
@@ -375,7 +376,7 @@ fn packFineAtlas(@builtin(global_invocation_id) gid: vec3<u32>) {
   let slot = linear / cellsPerSlot;
   let localIndex = linear % cellsPerSlot;
   let local = vec3<u32>(localIndex % edge, (localIndex / edge) % edge, localIndex / (edge * edge));
-  let pairIndex = packP.coarseGrid * packP.coarseGrid * packP.coarseGrid - 1u - slot;
+  let pairIndex = slot;
   let brickIndex = packPairs[pairIndex].index;
   let brick = vec3<u32>(brickIndex % packP.coarseGrid, (brickIndex / packP.coarseGrid) % packP.coarseGrid, brickIndex / (packP.coarseGrid * packP.coarseGrid));
   let sourceCell = vec3<u32>(clamp(vec3<i32>(brick * packP.blockSize + local) - vec3<i32>(1), vec3<i32>(0), vec3<i32>(i32(packP.grid) - 1)));
@@ -572,8 +573,7 @@ async function run() {
     { binding: 0, resource: { buffer: denseAllocation.buffer } }, { binding: 1, resource: { buffer: builtCoarseAllocation.buffer } },
     { binding: 2, resource: { buffer: pairAllocation.buffer } }, { binding: 3, resource: { buffer: paramsAllocation.buffer } },
   ] });
-  const sortStages = [];
-  for (let k = 2; k <= brickCount; k *= 2) for (let j = k / 2; j > 0; j /= 2) sortStages.push([j, k, brickCount, 0]);
+  const sortStages = buildBitonicSortStages(brickCount);
   const sortParamBytes = new Uint8Array(sortStages.length * 256);
   const sortParamView = new DataView(sortParamBytes.buffer);
   sortStages.forEach((values, stage) => values.forEach((value, index) => sortParamView.setUint32(stage * 256 + index * 4, value, true)));
@@ -653,12 +653,19 @@ async function run() {
   const gpuSelected = [];
   let totalResidualEnergy = 0;
   let selectedResidualEnergy = 0;
+  let sortOrderViolationCount = 0;
+  let previousScore = Infinity;
+  let previousIndex = 0;
   for (let index = 0; index < brickCount; index += 1) {
     const score = pairData.getFloat32(index * 8, true);
+    const brickIndex = pairData.getUint32(index * 8 + 4, true);
+    if (score > previousScore || (score === previousScore && brickIndex < previousIndex)) sortOrderViolationCount += 1;
+    previousScore = score;
+    previousIndex = brickIndex;
     totalResidualEnergy += score;
-    if (index >= brickCount - selected.length) {
+    if (index < selected.length) {
       selectedResidualEnergy += score;
-      gpuSelected.push(pairData.getUint32(index * 8 + 4, true));
+      gpuSelected.push(brickIndex);
     }
   }
   gpuSelected.sort((a, b) => a - b);
@@ -697,6 +704,7 @@ async function run() {
   allocationBytes.productResident = allocationBytes.coarse + allocationBytes.indirection + allocationBytes.fineAtlas + allocationBytes.params;
   allocationBytes.buildScratch = allocationBytes.selectionSort + allocationBytes.sortParameters;
   allocationBytes.totalBuildAndProduct = allocationBytes.productResident + allocationBytes.buildScratch;
+  allocationBytes.total = allocationBytes.totalBuildAndProduct;
   const falseClosureChecks = {
     fallbackRoute: backend !== 'WebGPU:apple',
     missingTimestampSupport: !device.features.has('timestamp-query'),
@@ -704,6 +712,7 @@ async function run() {
     hiddenDenseAllocation: false,
     incompleteOutput: [denseOutput, prebuiltAfterDenial, builtAfterDenial].some(values => values.length !== width * height || Array.from(values).some(value => !Number.isFinite(value))),
     staleSelection: selectionMismatchCount !== 0,
+    sortOrderInvalid: sortOrderViolationCount !== 0,
     hiddenCap: false,
   };
   const report = {
@@ -735,7 +744,7 @@ async function run() {
       height,
       samplesPerCell: matched.effective.samplesPerCell,
       extinctionCoefficient: matched.effective.extinctionCoefficient,
-      selectionPolicy: `gpu-f32-residual-energy-bitonic-top-${selected.length}-v0`,
+      selectionPolicy: `gpu-f32-residual-energy-bitonic-descending-prefix-top-${selected.length}-v1`,
       sortStageCount: sortStages.length,
     },
     source: {
@@ -780,7 +789,12 @@ async function run() {
       selectedBrickCount: selected.length,
       gpuSelectedBrickCount: gpuSelected.length,
       selectionMismatchCount,
+      sortOrderViolationCount,
       actualRetainedResidualEnergyFraction: selectedResidualEnergy / totalResidualEnergy,
+      sortEndpointScores: {
+        first: pairData.getFloat32(0, true),
+        last: pairData.getFloat32((brickCount - 1) * 8, true),
+      },
       haloEdge: product.haloEdge,
       allocationBytes,
       allocationComplete: true,
