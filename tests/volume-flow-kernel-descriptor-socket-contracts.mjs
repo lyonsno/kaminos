@@ -18,6 +18,12 @@ const selectiveBindGroupSource = core.slice(selectiveBindGroupStart, selectiveBi
 const descriptorCaptureStart = core.indexOf('async function sampleBoundarySplatKernelDescriptorCapture(instanceCount');
 const descriptorCaptureEnd = core.indexOf('function readFlowKernelDescriptorCaptureChunk', descriptorCaptureStart);
 const descriptorCaptureSource = core.slice(descriptorCaptureStart, descriptorCaptureEnd);
+const ensureGpuStart = core.indexOf('async function ensureGpu()');
+const ensureGpuEnd = core.indexOf('function updateVolumeCanvasSize()', ensureGpuStart);
+const ensureGpuSource = core.slice(ensureGpuStart, ensureGpuEnd);
+const descriptorIndexFinishStart = core.indexOf('async function finishFlowKernelDescriptorIndexUpload(payload = {})');
+const descriptorIndexFinishEnd = core.indexOf('function beginDebugFullFieldImport(payload = {})', descriptorIndexFinishStart);
+const descriptorIndexFinishSource = core.slice(descriptorIndexFinishStart, descriptorIndexFinishEnd);
 const descriptorDrainStart = exporter.indexOf('async function drainFlowKernelDescriptorCapture');
 const descriptorDrainEnd = exporter.indexOf('function resolveInitialFieldManifest()', descriptorDrainStart);
 const descriptorDrainSource = exporter.slice(descriptorDrainStart, descriptorDrainEnd);
@@ -107,6 +113,21 @@ assert.match(core, /flowKernelDescriptorCaptureEffective/, 'runtime reports effe
 assert.match(core, /sampleBoundarySplatKernelDescriptorCapture/, 'runtime reads the candidate-local descriptor socket');
 assert.match(core, /readFlowKernelDescriptorCaptureChunk/, 'runtime exposes session-bound chunk reads instead of one giant CDP payload');
 assert.match(core, /releaseFlowKernelDescriptorCapture/, 'runtime releases retained descriptor snapshots explicitly');
+assert.match(
+  ensureGpuSource,
+  /requiredLimits\.maxBufferSize\s*=\s*adapter\.limits\.maxBufferSize/,
+  'offline exact descriptor capture requests the adapter-advertised buffer ceiling instead of inheriting the WebGPU default',
+);
+assert.match(
+  ensureGpuSource,
+  /requiredLimits\.maxStorageBufferBindingSize\s*=\s*adapter\.limits\.maxStorageBufferBindingSize/,
+  'offline exact descriptor capture can bind every admitted descriptor when the adapter advertises sufficient storage capacity',
+);
+assert.match(
+  descriptorIndexFinishSource,
+  /descriptorByteLength[\s\S]*maxBufferSize[\s\S]*maxStorageBufferBindingSize[\s\S]*descriptor-capacity-exceeds-device-limit/,
+  'external index admission fails before WebGPU allocation when the exact descriptor population exceeds physical device limits',
+);
 assert.ok(selectiveBindGroupStart >= 0 && selectiveBindGroupEnd > selectiveBindGroupStart, 'selective-head bind-group constructor is inspectable');
 assert.match(selectiveBindGroupSource, /splat:[\s\S]*binding:\s*7[^\n]*majorantBuffer/, 'selective-head splat route binds the shared conservative majorant ABI');
 assert.match(selectiveBindGroupSource, /splat:[\s\S]*binding:\s*8[^\n]*flowKernelDescriptorBuffer/, 'selective-head splat route binds the shared descriptor-output ABI');

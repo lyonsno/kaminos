@@ -8096,7 +8096,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const maxRequestedFluidBufferBytes = fluidBufferBytes(Math.max(...SUPPORTED_GRID_SIZES));
     const requiredLimits = {};
     if ((adapter.limits?.maxStorageBufferBindingSize ?? 0) >= maxRequestedFluidBufferBytes) {
-      requiredLimits.maxStorageBufferBindingSize = maxRequestedFluidBufferBytes;
+      requiredLimits.maxStorageBufferBindingSize = adapter.limits.maxStorageBufferBindingSize;
+    }
+    if ((adapter.limits?.maxBufferSize ?? 0) >= maxRequestedFluidBufferBytes) {
+      requiredLimits.maxBufferSize = adapter.limits.maxBufferSize;
     }
     if ((adapter.limits?.maxStorageBuffersPerShaderStage ?? 0) >= 9) {
       requiredLimits.maxStorageBuffersPerShaderStage = 9;
@@ -11342,6 +11345,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const packed = new Uint32Array(upload.count + 1);
     packed[0] = upload.count;
     packed.set(indices, 1);
+    const descriptorByteLength = upload.count * FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES;
+    const maxBufferSize = Number(device.limits?.maxBufferSize || 0);
+    const maxStorageBufferBindingSize = Number(device.limits?.maxStorageBufferBindingSize || 0);
+    if (descriptorByteLength > maxBufferSize || descriptorByteLength > maxStorageBufferBindingSize) {
+      flowKernelDescriptorIndexUpload = null;
+      return flowKernelDescriptorIndexFailure('descriptor-capacity', 'descriptor-capacity-exceeds-device-limit', {
+        count: upload.count,
+        descriptorByteLength,
+        maxBufferSize,
+        maxStorageBufferBindingSize,
+      });
+    }
     const previousIndexBuffer = flowKernelDescriptorIndexBuffer;
     flowKernelDescriptorIndexBufferCapacity = packed.length;
     flowKernelDescriptorIndexBuffer = device.createBuffer({
