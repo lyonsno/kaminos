@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import { createHash, randomInt } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import {
@@ -19,6 +19,11 @@ const NON_RIDGE_TARGET = 'nonnegative-non-ridge-flame-emission-coefficient-v0';
 const ANALYTIC_SPLAT_RENDERER = 'live-boundary-sidecar-analytic-splats-v0';
 const FULL_FLAME_TARGET = 'smoke-off-complete-flame-local-emission-extinction-v0';
 const KERNEL_MOMENT_AUTHORITY = 'base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0';
+const IMPORTED_FIELD_AUTHORITY = 'imported-field-checksum-anchor-v0';
+const LIVE_REPLAY_INITIALIZATION_AUTHORITY = 'checksum-addressed-live-replay-resume-v0';
+const LIVE_REPLAY_APPLICATION = 'exact-field-live-replay-application-v0';
+const FIELD_LAYOUT_IDENTITY = 'x-fastest-zyx-c-interleaved-v0';
+const IMPORT_CHUNK_FLOATS = 262144;
 const args = parseArgs(process.argv.slice(2));
 const requestedUrl = required('--url');
 const outDir = resolve(String(args.get('--out-dir') || '/tmp/kaminos-raymarch-filament-orbit'));
@@ -37,6 +42,9 @@ const expectedWarmupAuthority = args.get('--expected-warmup-authority') ? String
 const expectedWarmupTarget = optionalInteger('--expected-warmup-target');
 const expectedAnchorFluidSha256 = optionalSha256('--expected-anchor-fluid-sha256');
 const expectedAnchorFrontSha256 = optionalSha256('--expected-anchor-front-sha256');
+const initialFieldManifestPath = args.get('--initial-field-manifest')
+  ? resolve(String(args.get('--initial-field-manifest')))
+  : null;
 const timeoutMs = Number(args.get('--timeout-ms') || 240000);
 const settleMs = Number(args.get('--settle-ms') || 1800);
 const debugPort = Number(args.get('--debug-port') || randomInt(42000, 62000));
@@ -49,6 +57,8 @@ let browser = null;
 let socket = null;
 let failurePhase = 'argument-validation';
 let lastTrustworthyEvidence = {};
+let initialField = null;
+let importedFieldReceipt = null;
 
 mkdirSync(outDir, { recursive: true });
 mkdirSync(dirname(reportPath), { recursive: true });
@@ -115,11 +125,25 @@ class CdpSocket {
 try {
   if (args.errors.length) throw new Error(args.errors.join('; '));
   if (!requestedUrl) throw new Error('missing --url');
+  initialField = initialFieldManifestPath ? resolveImportedFieldManifest(initialFieldManifestPath) : null;
   const route = new URL(requestedUrl);
   const requestedPresetId = route.searchParams.get('settings_preset');
-  const replayBridgeRequested = requestedPresetId === null;
+  const importedFieldRequested = initialField !== null;
+  const replayBridgeRequested = requestedPresetId === null && !importedFieldRequested;
   assert.equal(route.pathname, '/volume-selective-head-live.html', 'requested route must use the selective-head live wrapper');
-  if (replayBridgeRequested) {
+  if (importedFieldRequested) {
+    assert.equal(expectedWarmupAuthority, IMPORTED_FIELD_AUTHORITY, 'imported field must name its distinct replay authority');
+    assert.ok(expectedWarmupTarget !== null && expectedWarmupTarget > 0, 'imported field must request a positive exact state step');
+    assert.equal(expectedFrameCount, expectedWarmupTarget, 'imported field frame authority must equal its state step');
+    assert.equal(expectedSimStepCount, expectedWarmupTarget, 'imported field simulation authority must equal its state step');
+    assert.ok(expectedControlsHash, 'imported field must request an exact controls hash');
+    assert.equal(initialField.fluid.sha256, expectedAnchorFluidSha256, 'imported fluidSha256 disagrees with expectedAnchorFluidSha256');
+    assert.equal(initialField.front.sha256, expectedAnchorFrontSha256, 'imported frontSha256 disagrees with expectedAnchorFrontSha256');
+    assert.equal(route.searchParams.get('warmup_steps'), '0', 'imported-field route must begin fresh before explicit import');
+    assert.equal(route.searchParams.get('freeze_after_warmup'), null, 'imported-field route cannot also request warmup freeze');
+    assert.equal(route.searchParams.get('anchor_base'), null, 'imported-field route cannot silently request another anchor');
+    assert.equal(route.searchParams.get('settings_preset_authority'), null, 'imported field cannot impersonate shared-preset visual admission');
+  } else if (replayBridgeRequested) {
     assert.ok(expectedWarmupAuthority, 'checksum-anchor bridge must request an exact warmup authority');
     assert.ok(expectedWarmupTarget !== null && expectedWarmupTarget > 0, 'checksum-anchor bridge must request a positive exact warmup target');
     assert.ok(expectedAnchorFluidSha256 && expectedAnchorFrontSha256, 'checksum-anchor bridge must request both exact field hashes');
@@ -190,7 +214,7 @@ try {
     assert.equal(admitted.postWarmupFreezeReceipt?.simStepCount, expectedWarmupTarget, 'effective post-warmup freeze simulation step disagrees');
     assert.equal(admitted.configuredRole, 'truthHigh', 'frozen renderer role configuration disagrees');
     assert.equal(admitted.configuredComposition, 'raymarch-only-v0', 'frozen renderer composition configuration disagrees');
-  } else {
+  } else if (!importedFieldRequested) {
     assert.equal(admitted.sourceSettingsPresetId, PRESET_ID, 'stale/default preset replaced requested preset');
     assert.equal(admitted.sourceSettingsPresetAuthority, PRESET_AUTHORITY, 'effective preset authority disagreement');
     assert.equal(admitted.effectiveRole, 'truthHigh', 'effective role disagreement');
@@ -200,6 +224,15 @@ try {
   assert.match(admitted.backend || '', /^WebGPU/, 'effective backend substituted away from WebGPU');
   await delay(settleMs);
 
+  if (importedFieldRequested) {
+    failurePhase = 'begin-imported-field';
+    importedFieldReceipt = await importExactField(socket, initialField, expectedWarmupTarget);
+    assert.equal(importedFieldReceipt.effective.fluidSha256, expectedAnchorFluidSha256, 'effective imported fluid hash disagrees');
+    assert.equal(importedFieldReceipt.effective.frontSha256, expectedAnchorFrontSha256, 'effective imported front hash disagrees');
+    assert.equal(importedFieldReceipt.effective.receiverInitialSimStepCount, expectedWarmupTarget, 'effective imported state step disagrees');
+    lastTrustworthyEvidence.importedFieldReceipt = importedFieldReceipt;
+  }
+
   failurePhase = 'same-state-initialization';
   const initialization = await evaluate(socket, runtimeInitializationSource({
     orbitAngles,
@@ -207,6 +240,9 @@ try {
     flowKernelStrength,
     flowKernelRadius,
     flowKernelCoherence,
+    fullFieldImportSessionId: importedFieldReceipt?.effective?.sessionId || null,
+    importedFieldReceipt,
+    importedFieldStateStep: expectedWarmupTarget,
   }));
   lastTrustworthyEvidence.initialization = initialization.summary;
   assert.equal(initialization.summary.wrapperRoute, WRAPPER_ROUTE, 'requested/effective route disagreement after pause');
@@ -311,16 +347,18 @@ try {
 
   const report = {
     schema: SCHEMA,
-    status: 'completed',
+    status: 'complete',
     runStartedAt,
     runCompletedAt: new Date().toISOString(),
     requestedUrl,
     requestedRoute: '/volume-selective-head-live.html',
     effectiveWrapperRoute: initialization.summary.wrapperRoute,
     effectiveRendererRoute: initialization.summary.effectiveRoute,
-    sourceRouteAuthority: replayBridgeRequested
-      ? 'checksum-anchor-bridge-explicit-controls-hash-v0'
-      : 'shared-volume-settings-preset-v2',
+    sourceRouteAuthority: importedFieldRequested
+      ? 'checksum-addressed-full-field-import-explicit-controls-hash-v0'
+      : replayBridgeRequested
+        ? 'checksum-anchor-bridge-explicit-controls-hash-v0'
+        : 'shared-volume-settings-preset-v2',
     sourceSettingsPreset: initialization.summary.sourceSettingsPreset,
     replayAuthority: initialization.summary.replayAuthority,
     sourceAuthority: initialization.summary.sourceAuthority,
@@ -352,6 +390,13 @@ try {
       expectedWarmupTarget,
       expectedAnchorFluidSha256,
       expectedAnchorFrontSha256,
+      initialFieldManifestPath,
+      initialFieldManifestSha256: initialField?.manifestSha256 || null,
+    },
+    importedFieldReceipt,
+    transportContract: {
+      sharedTransmittanceAuthority: 'ridge-plus-non-ridge-extinction-one-running-transmittance-v0',
+      independentlyRenderedToneMappedImageAdditivity: false,
     },
     frozenState: initialization.summary.frozenState,
     finalState,
@@ -707,6 +752,39 @@ function runtimeInitializationSource(config) {
       const smokeReceipt = prototype.setRaymarchSmokePresentationMode('off');
       const before = prototype.debugState();
       const wrapperBefore = operator.debugState();
+      const wrapperReplayAuthority = {
+        replayAuthority: {
+          warmupAuthority: wrapperBefore.warmupAuthority,
+          warmupTarget: wrapperBefore.warmupTarget,
+          warmupComplete: wrapperBefore.warmupComplete,
+          warmupStarted: wrapperBefore.warmupStarted,
+          warmupReceipt: wrapperBefore.warmupReceipt,
+          freezeAfterWarmupRequested: wrapperBefore.freezeAfterWarmupRequested,
+          postWarmupFreezeReceipt: wrapperBefore.postWarmupFreezeReceipt,
+        },
+      };
+      const importedReplayAuthority = ${config.importedFieldReceipt ? JSON.stringify({
+        warmupAuthority: IMPORTED_FIELD_AUTHORITY,
+        warmupTarget: config.importedFieldStateStep,
+        warmupComplete: true,
+        warmupStarted: true,
+        warmupReceipt: {
+          ok: true,
+          authority: IMPORTED_FIELD_AUTHORITY,
+          completedSteps: config.importedFieldStateStep,
+          grid: config.importedFieldReceipt.effective.grid,
+          fluidSha256: config.importedFieldReceipt.effective.fluidSha256,
+          frontSha256: config.importedFieldReceipt.effective.frontSha256,
+          fullFieldImportSessionId: config.importedFieldReceipt.effective.sessionId,
+        },
+        freezeAfterWarmupRequested: true,
+        postWarmupFreezeReceipt: {
+          paused: true,
+          frameCount: config.importedFieldStateStep,
+          simStepCount: config.importedFieldStateStep,
+          authority: 'checksum-addressed-full-field-import-pause-v0',
+        },
+      }) : 'null'};
       const originalCamera = basinWindow.kaminosCameraDebugState();
       const baseFrameCount = before.frameCount;
       const baseSimStepCount = before.simStepCount;
@@ -820,6 +898,7 @@ function runtimeInitializationSource(config) {
           sameStateCaptureId,
           baseFrameCount,
           baseSimStepCount,
+          fullFieldImportSessionId: ${JSON.stringify(config.fullFieldImportSessionId)},
         });
         if (!sample.ok || !sample.image?.rgba?.length) throw new Error('missing, partial, or blank capture: ' + request.key);
         const rgba = Uint8Array.from(sample.image.rgba);
@@ -1117,15 +1196,7 @@ function runtimeInitializationSource(config) {
           effectiveRoute: before.effectiveRoute,
           backend: before.backend,
           sourceSettingsPreset,
-          replayAuthority: {
-            warmupAuthority: wrapperBefore.warmupAuthority,
-            warmupTarget: wrapperBefore.warmupTarget,
-            warmupComplete: wrapperBefore.warmupComplete,
-            warmupStarted: wrapperBefore.warmupStarted,
-            warmupReceipt: wrapperBefore.warmupReceipt,
-            freezeAfterWarmupRequested: wrapperBefore.freezeAfterWarmupRequested,
-            postWarmupFreezeReceipt: wrapperBefore.postWarmupFreezeReceipt,
-          },
+          replayAuthority: importedReplayAuthority || wrapperReplayAuthority.replayAuthority,
           sourceAuthority: {
             fullFlameTarget: 'smoke-off-complete-flame-local-emission-extinction-v0',
             stateDerivedSupport: '${SUPPORT_AUTHORITY}',
@@ -1148,7 +1219,7 @@ function runtimeInitializationSource(config) {
 }
 
 function rejectFalseClosure(report) {
-  if (report.status !== 'completed') throw new Error('partial report cannot close Wave One');
+  if (report.status !== 'complete') throw new Error('partial report cannot close Wave One');
   if (report.effectiveWrapperRoute !== WRAPPER_ROUTE || report.effectiveRendererRoute !== RENDERER_ROUTE) {
     throw new Error('requested/effective route disagreement');
   }
@@ -1200,6 +1271,116 @@ function rejectFalseClosure(report) {
   }
 }
 
+function sha256(value) {
+  return createHash('sha256').update(value).digest('hex');
+}
+
+function resolveImportedFieldManifest(path) {
+  const raw = readFileSync(path, 'utf8');
+  const manifest = JSON.parse(raw);
+  if (manifest.schema !== 'kaminos.volume.full-grid-field-export.v0'
+    || manifest.status !== 'captured'
+    || manifest.failurePhase !== null) {
+    throw new Error(`unsupported imported field manifest: ${manifest.schema || '(missing)'}/${manifest.status || '(missing)'}`);
+  }
+  assert.equal(manifest.identity, 'full-grid-fluid-front-boundary-sidecars-v0', 'imported field export identity drifted');
+  assert.equal(manifest.completeFieldCoverage, true, 'imported field is partial');
+  assert.equal(manifest.effectiveRoute, RENDERER_ROUTE, 'imported field renderer route drifted');
+  assert.match(manifest.backend || '', /^WebGPU/, 'imported field backend is not WebGPU');
+  const grid = Number(manifest.grid);
+  assert.ok(Number.isInteger(grid) && grid > 0, 'imported field grid is invalid');
+  const fluidChannels = [
+    'velocityX', 'velocityY', 'velocityZ', 'densityCarrier', 'smokeDensity', 'heat', 'fuel', 'detail',
+    'flame', 'ember', 'visibleFireCarrier', 'combustionFront', 'microdetail', 'interfaceShred', 'fireLick', 'emberFleck',
+  ];
+  const validateArtifact = (artifact, label, shape, channelOrder) => {
+    assert.deepEqual(artifact?.shape, shape, `${label} shape mismatch`);
+    assert.deepEqual(artifact?.channelOrder, channelOrder, `${label} channel order mismatch`);
+    const artifactPath = resolve(String(artifact?.path || ''));
+    const byteLength = Number(artifact?.byteLength ?? artifact?.bytes);
+    assert.equal(statSync(artifactPath).size, byteLength, `${label} byte length mismatch`);
+    const actualSha256 = sha256(readFileSync(artifactPath));
+    assert.equal(actualSha256, artifact.sha256, `${label} SHA-256 mismatch`);
+    return { ...artifact, path: artifactPath, byteLength, sha256: actualSha256 };
+  };
+  return {
+    manifest,
+    manifestPath: path,
+    manifestSha256: sha256(raw),
+    grid,
+    fluid: validateArtifact(manifest.sidecars?.fluid, 'imported fluid', [grid, grid, grid, 16], fluidChannels),
+    front: validateArtifact(manifest.sidecars?.front, 'imported front', [grid, grid, grid, 1], ['frontTopology']),
+  };
+}
+
+async function uploadImportedArtifact(cdp, sessionId, kind, artifact) {
+  const bytes = readFileSync(artifact.path);
+  const chunkBytes = IMPORT_CHUNK_FLOATS * Float32Array.BYTES_PER_ELEMENT;
+  let byteOffset = 0;
+  let chunkCount = 0;
+  while (byteOffset < bytes.byteLength) {
+    const chunk = bytes.subarray(byteOffset, Math.min(bytes.byteLength, byteOffset + chunkBytes));
+    const receipt = await evaluate(cdp, `(() => {
+      const basinWindow = document.querySelector('#basin')?.contentWindow || window;
+      return basinWindow.__kaminosVolumePrototype.writeDebugFullFieldImportChunk(${JSON.stringify({
+        sessionId,
+        kind,
+        byteOffset,
+        base64: chunk.toString('base64'),
+      })});
+    })()`);
+    if (receipt?.ok !== true || receipt.kind !== kind || Number(receipt.byteOffset) !== byteOffset) {
+      throw new Error(`bad imported ${kind} chunk at ${byteOffset}: ${JSON.stringify(receipt)}`);
+    }
+    byteOffset += chunk.byteLength;
+    chunkCount += 1;
+  }
+  return { kind, byteLength: bytes.byteLength, sha256: artifact.sha256, chunkCount, chunkFloats: IMPORT_CHUNK_FLOATS };
+}
+
+async function importExactField(cdp, field, stateStep) {
+  const begin = await evaluate(cdp, `(() => {
+    const basinWindow = document.querySelector('#basin')?.contentWindow || window;
+    return basinWindow.__kaminosVolumePrototype.beginDebugFullFieldImport(${JSON.stringify({
+      grid: field.grid,
+      initializationAuthority: LIVE_REPLAY_INITIALIZATION_AUTHORITY,
+      filterIdentity: LIVE_REPLAY_APPLICATION,
+      layoutIdentity: FIELD_LAYOUT_IDENTITY,
+      sourceManifestPath: field.manifestPath,
+      sourceManifestSha256: field.manifestSha256,
+      source: {
+        identity: 'exact-coefficient-capture-field-anchor-v0',
+        authority: IMPORTED_FIELD_AUTHORITY,
+      },
+      receiverInitialSimStepCount: stateStep,
+      fluid: field.fluid,
+      front: field.front,
+    })});
+  })()`);
+  if (begin?.ok !== true) throw new Error(`imported field did not begin cleanly: ${JSON.stringify(begin)}`);
+  const fluid = await uploadImportedArtifact(cdp, begin.sessionId, 'fluid', field.fluid);
+  const front = await uploadImportedArtifact(cdp, begin.sessionId, 'front', field.front);
+  const finish = await evaluate(cdp, `(async () => {
+    const basinWindow = document.querySelector('#basin')?.contentWindow || window;
+    return basinWindow.__kaminosVolumePrototype.finishDebugFullFieldImport(${JSON.stringify({ sessionId: begin.sessionId })});
+  })()`);
+  if (finish?.ok !== true || finish.status !== 'applied') {
+    throw new Error(`imported field did not apply cleanly: ${JSON.stringify(finish)}`);
+  }
+  return {
+    identity: 'checksum-addressed-full-field-import-receipt-v0',
+    requested: {
+      manifestPath: field.manifestPath,
+      manifestSha256: field.manifestSha256,
+      stateStep,
+      initializationAuthority: LIVE_REPLAY_INITIALIZATION_AUTHORITY,
+      filterIdentity: LIVE_REPLAY_APPLICATION,
+    },
+    uploads: { fluid, front },
+    effective: finish,
+  };
+}
+
 function parseArgs(argv) {
   const known = new Set([
     '--url',
@@ -1218,6 +1399,7 @@ function parseArgs(argv) {
     '--expected-warmup-target',
     '--expected-anchor-fluid-sha256',
     '--expected-anchor-front-sha256',
+    '--initial-field-manifest',
     '--timeout-ms',
     '--settle-ms',
     '--debug-port',

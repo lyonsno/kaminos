@@ -13051,7 +13051,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   async function sampleFrame(options = {}) {
-    if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
+    const fullFieldImportSessionId = String(options.fullFieldImportSessionId || '');
+    const importedFieldCustody = Boolean(
+      fullFieldImportSessionId
+      && state.fullFieldImportReceipt?.status === 'applied'
+      && state.fullFieldImportReceipt?.renderLoopPaused === true
+      && fullFieldImportSessionId === state.fullFieldImportReceipt.sessionId
+    );
+    if ((!state.active && !importedFieldCustody) || !device) return { ok: false, reason: 'inactive', ...state };
     const advanceSim = options.advanceSim !== false;
     const sampleNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
     const includeRgba = options.includeRgba === true;
