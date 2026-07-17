@@ -80,7 +80,9 @@ DEFAULT_DESCRIPTOR_CHANNELS = [
 ]
 DESCRIPTOR_GROUPS = {
     "all": list(DEFAULT_DESCRIPTOR_CHANNELS),
+    "curl-activity-only": [DEFAULT_DESCRIPTOR_CHANNELS[3]],
     "flow-only": list(DEFAULT_DESCRIPTOR_CHANNELS[:4]),
+    "flow-without-curl-activity": list(DEFAULT_DESCRIPTOR_CHANNELS[:3]),
     "majorant-only": list(DEFAULT_DESCRIPTOR_CHANNELS[4:]),
 }
 
