@@ -33,6 +33,7 @@ const REPLAY_CONTROLS_SHA256 = 'ba122038332747804203b4d03c6a5e9bf7b1e5969ec5d1f5
 const IMPORTED_ROUTE_AUTHORITY = 'checksum-addressed-full-field-import-explicit-controls-hash-v0';
 const IMPORTED_REPLAY_AUTHORITY = 'imported-field-checksum-anchor-v0';
 const IMPORTED_FREEZE_AUTHORITY = 'checksum-addressed-full-field-import-pause-v0';
+const IMPORTED_RECEIPT_IDENTITY = 'checksum-addressed-full-field-import-receipt-v0';
 const IMPORTED_INITIALIZATION_AUTHORITY = 'checksum-addressed-live-replay-resume-v0';
 const IMPORTED_APPLICATION_IDENTITY = 'exact-field-live-replay-application-v0';
 const IMPORTED_FLUID_SHA256 = 'fecde19cccf7859e592a7ef546c46b7c222ef01ade4c5ec1ab4fb8682bf8fa2f';
@@ -99,7 +100,8 @@ export function hasExactImportedFieldSourceIdentity(report) {
   const replay = report.replayAuthority || {};
   const receipt = replay.warmupReceipt || {};
   const freeze = replay.postWarmupFreezeReceipt || {};
-  const imported = report.importedFieldReceipt?.effective || {};
+  const importedReceipt = report.importedFieldReceipt || {};
+  const imported = importedReceipt.effective || {};
   return report.sourceSettingsPreset?.presetId == null
     && report.sourceSettingsPreset?.authority == null
     && report.sourceRouteAuthority === IMPORTED_ROUTE_AUTHORITY
@@ -117,6 +119,7 @@ export function hasExactImportedFieldSourceIdentity(report) {
     && freeze.frameCount === 96
     && freeze.simStepCount === 96
     && freeze.authority === IMPORTED_FREEZE_AUTHORITY
+    && importedReceipt.identity === IMPORTED_RECEIPT_IDENTITY
     && imported.status === 'applied'
     && imported.initializationAuthority === IMPORTED_INITIALIZATION_AUTHORITY
     && imported.filterIdentity === IMPORTED_APPLICATION_IDENTITY

@@ -68,6 +68,13 @@ assert.equal(holdout.hasExactImportedFieldSourceIdentity({
   ...importedSource,
   importedFieldReceipt: {
     ...importedSource.importedFieldReceipt,
+    identity: 'lookalike-import-receipt-v0',
+  },
+}), false, 'an imported field receipt with a mismatched envelope identity is rejected');
+assert.equal(holdout.hasExactImportedFieldSourceIdentity({
+  ...importedSource,
+  importedFieldReceipt: {
+    ...importedSource.importedFieldReceipt,
     effective: { ...importedSource.importedFieldReceipt.effective, frontSha256: '0'.repeat(64) },
   },
 }), false, 'an imported field receipt with a mismatched effective hash is rejected');
