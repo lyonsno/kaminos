@@ -42,8 +42,8 @@ assert.match(
 );
 assert.match(
   compactor,
-  /admissionSidecar\s*=\s*boundarySidecar\[cellIndex\][\s\S]*structuralSignal[\s\S]*structuralSignal < 0\.11[\s\S]*atomicAdd\(&boundarySplatDraw\.candidateCount/,
-  'the baked support sidecar must retain candidate admission authority',
+  /admissionSidecar\s*=\s*boundarySidecar\[cellIndex\][\s\S]*ridgeAdmitted = structuralSignal >= 0\.11[\s\S]*nonRidgeAdmitted = unionEnabled[\s\S]*atomicAdd\(&boundarySplatDraw\.candidateCount/,
+  'the baked support sidecar must retain Ridge authority while Non-Ridge admission remains union-mode gated',
 );
 assert.match(
   compactor,

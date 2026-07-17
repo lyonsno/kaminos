@@ -45,7 +45,7 @@ assert.match(
 );
 
 const compactor = core.match(/fn compactBoundarySplats[\s\S]*?(?=\n@compute @workgroup_size\(1\)\nfn finalizeBoundarySplats)/)?.[0] || '';
-assert.match(compactor, /structuralSignal < 0\.11[\s\S]*atomicAdd\(&boundarySplatDraw\.candidateCount/, 'candidate support remains the structural compactor gate');
+assert.match(compactor, /ridgeAdmitted = structuralSignal >= 0\.11[\s\S]*nonRidgeAdmitted = unionEnabled[\s\S]*if \(!ridgeAdmitted && !nonRidgeAdmitted\)[\s\S]*atomicAdd\(&boundarySplatDraw\.candidateCount/, 'structural support remains the kernel-moment gate unless the separately identified union mode is requested');
 assert.match(compactor, /let flowFrame = boundarySplatFlowFrame\(world\)/, 'the treatment consumes the producer-owned tangent frame');
 assert.match(compactor, /kernelMomentVariance\s*=\s*0\.5 \* reconstructionStrength \* flowFrame\.tangentRadius\.w \* flowFrame\.tangentRadius\.w/, 'the major-axis increment is the producer second moment');
 assert.match(compactor, /kernelMajorRadius\s*=\s*sqrt\(baseMajorRadius \* baseMajorRadius \+ kernelMomentVariance\)/, 'covariance composes additively with the base footprint');
