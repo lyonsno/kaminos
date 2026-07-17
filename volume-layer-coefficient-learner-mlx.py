@@ -1093,6 +1093,7 @@ def train_comparison(
 ) -> dict[str, Any]:
     import mlx.core as mx
 
+    print(json.dumps({"phase": "training-route", "backend": "mlx", "device": str(mx.default_device())}), flush=True)
     states = training_states(manifest, manifest_path, validated)
     descriptor_indices = selected_descriptor_indices(validated)
     arms: dict[str, Any] = {}
