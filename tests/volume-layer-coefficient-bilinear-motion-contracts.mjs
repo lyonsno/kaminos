@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 const witnessUrl = new URL('../volume-layer-coefficient-bilinear-motion-witness.mjs', import.meta.url);
 const rendererUrl = new URL('../volume-layer-coefficient-bilinear-motion-render.py', import.meta.url);
 const captureUrl = new URL('../volume-layer-coefficient-corpus-witness.mjs', import.meta.url);
+const exactCaptureUrl = new URL('../volume-exact-target-capture.mjs', import.meta.url);
 const coreUrl = new URL('../volume-core.js', import.meta.url);
 
 const core = readFileSync(coreUrl, 'utf8');
@@ -20,6 +21,7 @@ assert.ok(existsSync(rendererUrl), 'exact bilinear temporal renderer must exist'
 const witness = readFileSync(witnessUrl, 'utf8');
 const renderer = readFileSync(rendererUrl, 'utf8');
 const capture = readFileSync(captureUrl, 'utf8');
+const exactCapture = readFileSync(exactCaptureUrl, 'utf8');
 
 assert.match(witness, /kaminos\.volume\.layer-coefficient-bilinear-motion-witness\.v0/, 'witness publishes a stable schema');
 assert.match(witness, /volume-layer-coefficient-corpus-witness\.mjs/, 'wrapper invokes the reviewed single-browser capture engine');
@@ -32,9 +34,20 @@ assert.match(witness, /renderReport\.status !== 'complete'/, 'wrapper rejects st
 assert.match(capture, /single-browser-multi-state-exact-bilinear-motion-v0/, 'one browser owns the complete exact sequence');
 assert.match(capture, /adjacent-exact-state-one-trajectory-v0/, 'all motion states share one deterministic replay origin and physical clock');
 assert.match(capture, /sampleDeterministicReplayFrame/, 'each sequence member is a deterministic simulator state');
+const captureStateStart = capture.indexOf('async function captureState');
+const captureStateEnd = capture.indexOf('async function captureMotionTarget', captureStateStart);
+const captureState = capture.slice(captureStateStart, captureStateEnd);
+assert.match(captureState, /setSelectiveHeadLiveCapturePaused\(true\)/, 'exact state capture pauses the renderer loop before reading the frozen state');
+assert.doesNotMatch(captureState, /setActive\(false\)/, 'a frozen state remains active so render-only readback APIs stay available');
+assert.match(capture, /captureExactTargetFrame\.toString\(\)/, 'browser execution uses the executable exact-target helper');
+assert.match(exactCapture, /let sample = null;[\s\S]*try\s*\{[\s\S]*sample = await prototype\.sampleFrame/, 'successful target capture preserves the sample receipt beyond restoration');
 assert.match(capture, /shared-transmittance-contribution-sum/, 'target capture pins the exact shared-transmittance contribution target');
-assert.match(capture, /setRaymarchSmokePresentationMode\(['"]off['"]\)/, 'target capture excludes smoke presentation');
-assert.match(capture, /sampleFrame\(\{[\s\S]*advanceSim:\s*false[\s\S]*includeRgba:\s*true/, 'target capture reads exact pixels without advancing the simulator');
+assert.match(exactCapture, /setRaymarchSmokePresentationMode\(['"]off['"]\)/, 'target capture excludes smoke presentation');
+assert.match(exactCapture, /sampleFrame\(\{[\s\S]*advanceSim:\s*false[\s\S]*includeRgba:\s*true/, 'target capture reads exact pixels without advancing the simulator');
+assert.ok(exactCapture.includes("'exact-target-sample-failed:' + (sample?.reason || 'unknown')"), 'target capture distinguishes an unavailable readback from a genuinely blank image');
+assert.match(exactCapture, /exact-target-rgba-missing/, 'target capture rejects missing pixel payloads');
+assert.match(exactCapture, /exact-target-blank-image/, 'target capture rejects genuinely blank pixel payloads');
+assert.match(exactCapture, /finally\s*\{[\s\S]*setAppearanceDecompositionMode\(priorAppearanceMode\)[\s\S]*setRaymarchSmokePresentationMode\(priorSmokeMode\)[\s\S]*raySteps:\s*priorRaySteps/, 'target capture restores transient renderer controls even when readback fails');
 assert.match(capture, /fixed-held-camera-across-consecutive-states-v0/, 'camera authority is fixed across the sequence');
 assert.match(capture, /readFlowKernelDescriptorCaptureProjectionChunk/, 'witness drains only the compact descriptor geometry required by the renderer');
 assert.match(capture, /\[0,\s*1,\s*2,\s*3,\s*20,\s*21,\s*22,\s*23\]/, 'descriptor projection pins position, native identity, tangent, and coherence columns');

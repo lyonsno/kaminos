@@ -31,6 +31,7 @@ import {
   FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY,
   FLOW_KERNEL_DESCRIPTOR_STRIDE_FLOATS,
 } from './flow-kernel-descriptor-socket.mjs';
+import { captureExactTargetFrame } from './volume-exact-target-capture.mjs';
 
 const WITNESS_IDENTITY = 'single-browser-multi-state-layer-coefficient-capture-v0';
 const TRAINING_SCHEMA = 'kaminos.volume.layer-coefficient-training-manifest.v0';
@@ -336,10 +337,10 @@ async function captureState({ stateId, splitRole, steps, stateIndex, fixedCamera
   const frozen = await evaluate(socket, `(() => {
     const prototype = ${VOLUME_PROTOTYPE_EXPRESSION};
     prototype.setSelectiveHeadLiveCapturePaused(true);
-    prototype.setActive(false);
     const state = prototype.debugState();
     return {
       active: state.active,
+      capturePaused: state.selectiveHeadLiveCapturePaused,
       frameCount: state.frameCount,
       simStepCount: state.simStepCount,
       grid: state.simGrid,
@@ -351,7 +352,8 @@ async function captureState({ stateId, splitRole, steps, stateIndex, fixedCamera
       backend: state.backend,
     };
   })()`);
-  assert.equal(frozen.active, false, `${stateId} renderer did not freeze`);
+  assert.equal(frozen.active, true, `${stateId} renderer became unavailable while freezing`);
+  assert.equal(frozen.capturePaused, true, `${stateId} renderer loop did not pause`);
   const effectiveControls = causalControlsFromRuntime(frozen.controls);
   const controlIdentity = `sha256:${sha256(Buffer.from(canonicalJson(effectiveControls)))}`;
 
@@ -483,66 +485,17 @@ async function captureMotionTarget({ stateId, fixedCameraPose, frozen, exactStat
   const capture = await evaluate(socket, `(async () => {
     const basinWindow = document.querySelector('#basin')?.contentWindow || window;
     const prototype = ${VOLUME_PROTOTYPE_EXPRESSION};
-    const before = prototype.debugState();
-    const priorRaySteps = before.controls?.raySteps;
-    const priorAppearanceMode = before.appearanceDecompositionModeRequestedRaw ?? before.appearanceDecompositionModeRequested ?? 'off';
-    const priorSmokeMode = before.raymarchSmokePresentationModeRequestedRaw ?? before.raymarchSmokePresentationModeRequested ?? 'on';
-    basinWindow.kaminosSetCameraDebugPose(${JSON.stringify(fixedCameraPose)});
-    prototype.setControls({ raySteps: ${targetRaySteps} });
-    const appearance = prototype.setAppearanceDecompositionMode('${MOTION_TARGET_MODE}');
-    const smoke = prototype.setRaymarchSmokePresentationMode('off');
-    const sample = await prototype.sampleFrame({
-      advanceSim: false,
-      includeRgba: true,
-      now: ${Number(exactStateTimeMs)},
-      sameStateCaptureId: ${JSON.stringify(stateId)},
+    return (${captureExactTargetFrame.toString()})({
+      prototype,
+      basinWindow,
+      fixedCameraPose: ${JSON.stringify(fixedCameraPose)},
+      targetRaySteps: ${targetRaySteps},
+      targetMode: '${MOTION_TARGET_MODE}',
+      stateId: ${JSON.stringify(stateId)},
+      exactStateTimeMs: ${Number(exactStateTimeMs)},
       baseFrameCount: ${Number(frozen.frameCount)},
       baseSimStepCount: ${Number(frozen.simStepCount)},
     });
-    if (!sample?.ok || !sample.image?.rgba?.length) throw new Error('missing-partial-or-blank-exact-target');
-    const rgba = Uint8Array.from(sample.image.rgba);
-    let litPixels = 0;
-    for (let index = 0; index < rgba.length; index += 4) {
-      if (0.2126 * rgba[index] + 0.7152 * rgba[index + 1] + 0.0722 * rgba[index + 2] > 8) litPixels += 1;
-    }
-    if (litPixels <= 64) throw new Error('missing-partial-or-blank-exact-target');
-    const hash = await crypto.subtle.digest('SHA-256', rgba);
-    const targetPixelSha256 = [...new Uint8Array(hash)].map(byte => byte.toString(16).padStart(2, '0')).join('');
-    const canvas = document.createElement('canvas');
-    canvas.width = sample.image.width;
-    canvas.height = sample.image.height;
-    canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(rgba), canvas.width, canvas.height), 0, 0);
-    const pngDataUrl = canvas.toDataURL('image/png');
-    const appearanceRestore = prototype.setAppearanceDecompositionMode(priorAppearanceMode);
-    const smokeRestore = prototype.setRaymarchSmokePresentationMode(priorSmokeMode);
-    prototype.setControls({ raySteps: priorRaySteps });
-    const after = prototype.debugState();
-    return {
-      stateId: ${JSON.stringify(stateId)},
-      frameCount: sample.frameCount,
-      simStepCount: sample.simStepCount,
-      width: sample.image.width,
-      height: sample.image.height,
-      litPixels,
-      targetPixelSha256,
-      pngDataUrl,
-      cameraPose: basinWindow.kaminosCameraDebugState(),
-      appearance,
-      smoke,
-      restoration: {
-        priorRaySteps,
-        effectiveRaySteps: after.controls?.raySteps ?? null,
-        priorAppearanceMode,
-        effectiveAppearanceMode: after.appearanceDecompositionModeRequestedRaw ?? after.appearanceDecompositionModeRequested ?? null,
-        priorSmokeMode,
-        effectiveSmokeMode: after.raymarchSmokePresentationModeRequestedRaw ?? after.raymarchSmokePresentationModeRequested ?? null,
-        appearanceRestore,
-        smokeRestore,
-      },
-      effectiveRoute: sample.effectiveRoute,
-      backend: sample.backend,
-      effectiveRaySteps: sample.volumePresentationReceipt?.effectiveRayQuality?.raySteps ?? sample.controls?.raySteps ?? null,
-    };
   })()`);
   assert.equal(capture.frameCount, frozen.frameCount, `${stateId} exact target frame advanced`);
   assert.equal(capture.simStepCount, frozen.simStepCount, `${stateId} exact target simulation advanced`);
