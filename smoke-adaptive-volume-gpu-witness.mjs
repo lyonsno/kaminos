@@ -6,7 +6,10 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
-import { validateAdaptiveVolumeGpuReport } from './smoke-adaptive-volume-gpu-falsifier.mjs';
+import {
+  validateAdaptiveVolumeGpuReport,
+  validateAdaptiveVolumeScaleLawReport,
+} from './smoke-adaptive-volume-gpu-falsifier.mjs';
 
 const args = new Map();
 for (let index = 2; index < process.argv.length; index += 1) {
@@ -103,6 +106,7 @@ function writeReport(extra = {}) {
     cdpGpuIdentity,
     consoleEvents,
     optimizationClaimAllowed: browserReport?.optimizationClaimAllowed === true,
+    scaleLawEvidenceAllowed: browserReport?.scaleLawEvidenceAllowed === true,
     ...extra,
   };
   writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
@@ -260,6 +264,10 @@ async function main() {
     if (validation.optimizationClaimAllowed !== browserReport.optimizationClaimAllowed) {
       throw new Error(`browser/host report validation disagreement: ${validation.reasons.join(',')}`);
     }
+    const scaleLawValidation = validateAdaptiveVolumeScaleLawReport(browserReport);
+    if (scaleLawValidation.scaleLawEvidenceAllowed !== browserReport.scaleLawEvidenceAllowed) {
+      throw new Error(`browser/host scale-law validation disagreement: ${scaleLawValidation.reasons.join(',')}`);
+    }
 
     failurePhase = 'primary-output';
     const screenshot = await wsRequest(socket, 'Page.captureScreenshot', { format: 'png', captureBeyondViewport: true }, 60000);
@@ -270,7 +278,7 @@ async function main() {
     primaryOutputWritten = true;
     failurePhase = null;
     const report = writeReport({
-      status: browserReport.optimizationClaimAllowed ? 'valid-optimization-evidence' : 'invalid-for-optimization-claim',
+      status: browserReport.scaleLawEvidenceAllowed ? 'valid-scale-law-evidence' : 'invalid-for-scale-law-claim',
       browserReportSha256: sha256(readFileSync(browserReportPath)),
       screenshotSha256: sha256(pngBytes),
       optimizationClaimRejectionReasons: browserReport.optimizationClaimRejectionReasons,

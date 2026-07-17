@@ -1,5 +1,6 @@
 export const ADAPTIVE_VOLUME_GPU_REPORT_SCHEMA = 'kaminos.smoke-adaptive-volume-gpu-falsifier.v0';
 export const ADAPTIVE_VOLUME_GPU_ROUTE = 'isolated-adaptive-volume-webgpu-v0';
+export const ADAPTIVE_VOLUME_SCALE_LAW_SCHEMA = 'kaminos.smoke-adaptive-volume-scale-law.v0';
 export const COMPACT_SMOKE_PRODUCT_IDENTITY = 'compact-parent-mean-halo-atlas-v0';
 export const DENSE_DENIAL_METHOD = 'destroy-dense-source-before-compact-rerender-v0';
 export const ADAPTIVE_VOLUME_GPU_ERROR_LIMITS = Object.freeze({
@@ -222,4 +223,58 @@ export function validateAdaptiveVolumeGpuReport(report) {
     if (value) reasons.push(`false-closure:${name}`);
   }
   return { optimizationClaimAllowed: reasons.length === 0, reasons };
+}
+
+export function validateAdaptiveVolumeScaleLawReport(report) {
+  const reasons = [];
+  const base = validateAdaptiveVolumeGpuReport(report);
+  if (!base.optimizationClaimAllowed) reasons.push(...base.reasons.map(reason => `base:${reason}`));
+  const scaleLaw = report?.scaleLaw;
+  if (scaleLaw?.schema !== ADAPTIVE_VOLUME_SCALE_LAW_SCHEMA) reasons.push('scale-law-schema-mismatch');
+  if (scaleLaw?.status !== 'passed') reasons.push('scale-law-not-passed');
+  if (scaleLaw?.requested?.hiddenWorkloadCapApplied !== false) reasons.push('scale-law-hidden-workload-cap');
+  const dispatchRepeats = Number(scaleLaw?.requested?.dispatchRepeats);
+  const minimumAggregateGpuMs = Number(scaleLaw?.requested?.minimumAggregateGpuMs);
+  if (!Number.isInteger(dispatchRepeats) || dispatchRepeats <= 1) reasons.push('scale-law-timing-amplification-missing');
+  if (!finitePositive(minimumAggregateGpuMs)) reasons.push('scale-law-aggregate-floor-missing');
+  const workloads = scaleLaw?.effective?.workloads;
+  if (!Array.isArray(workloads) || workloads.length < 3) {
+    reasons.push('scale-law-workload-surface-incomplete');
+  } else {
+    let previousPixels = 0;
+    for (const [index, workload] of workloads.entries()) {
+      const prefix = `scale-law-workload-${index}`;
+      const width = Number(workload?.width);
+      const height = Number(workload?.height);
+      const pixelCount = Number(workload?.pixelCount);
+      const intersectingRayCount = Number(workload?.intersectingRayCount);
+      const denseStepCount = Number(workload?.denseStepCount);
+      if (!Number.isInteger(width) || width <= 0 || !Number.isInteger(height) || height <= 0 || pixelCount !== width * height) reasons.push(`${prefix}:shape-invalid`);
+      if (!(pixelCount > previousPixels)) reasons.push(`${prefix}:pixel-scale-not-increasing`);
+      previousPixels = pixelCount;
+      if (!Number.isInteger(intersectingRayCount) || intersectingRayCount <= 0 || intersectingRayCount > pixelCount) reasons.push(`${prefix}:ray-coverage-invalid`);
+      if (!Number.isInteger(denseStepCount) || denseStepCount < intersectingRayCount) reasons.push(`${prefix}:dense-step-count-invalid`);
+      if (Number(workload?.dispatchRepeats) !== dispatchRepeats) reasons.push(`${prefix}:dispatch-repeat-mismatch`);
+      for (const arm of ['dense', 'compact']) {
+        const profile = workload?.profiles?.[arm];
+        if (!finitePositive(profile?.aggregate?.median) || profile.aggregate.median < minimumAggregateGpuMs) reasons.push(`${prefix}:${arm}-aggregate-below-floor`);
+        if (!finitePositive(profile?.perDispatch?.median)) reasons.push(`${prefix}:${arm}-per-dispatch-invalid`);
+      }
+      if (!finiteNonNegative(workload?.comparison?.maximumAbsoluteError)
+        || Number(workload.comparison.maximumAbsoluteError) > ADAPTIVE_VOLUME_GPU_ERROR_LIMITS.compactPrebuiltAgainstDenseMaximumAbsoluteError) {
+        reasons.push(`${prefix}:output-error`);
+      }
+    }
+  }
+  const attribution = scaleLaw?.productionAttribution;
+  if (attribution?.authority !== 'static-production-shader-source-inspection-v0') reasons.push('production-attribution-authority-missing');
+  if (attribution?.measuredProductionBottleneck !== false) reasons.push('production-attribution-overclaim');
+  if (typeof attribution?.sourceSha256 !== 'string' || !/^sha256:[0-9a-f]+$/i.test(attribution.sourceSha256)) reasons.push('production-attribution-source-missing');
+  for (const mechanism of ['majorant-grid', 'occupancy-skip', 'adaptive-rays', 'early-transmittance', 'five-live-field-samples']) {
+    if (!attribution?.observedMechanisms?.includes(mechanism)) reasons.push(`production-attribution-mechanism-missing:${mechanism}`);
+  }
+  for (const [name, value] of Object.entries(scaleLaw?.falseClosureChecks || {})) {
+    if (value) reasons.push(`scale-law-false-closure:${name}`);
+  }
+  return { scaleLawEvidenceAllowed: reasons.length === 0, reasons };
 }

@@ -5,10 +5,12 @@ import { readFileSync } from 'node:fs';
 
 import {
   ADAPTIVE_VOLUME_GPU_ERROR_LIMITS,
+  ADAPTIVE_VOLUME_SCALE_LAW_SCHEMA,
   bitonicSortRecordCount,
   buildBitonicSortStages,
   buildCompactSmokeProduct,
   validateAdaptiveVolumeGpuReport,
+  validateAdaptiveVolumeScaleLawReport,
 } from '../smoke-adaptive-volume-gpu-falsifier.mjs';
 
 assert.equal(bitonicSortRecordCount(64_000), 65_536);
@@ -134,6 +136,69 @@ validAdapterReport.effective.adapterInfo = { vendor: 'Apple', architecture: 'App
 delete validAdapterReport.effective.cdpGpuInfo;
 assert.equal(validateAdaptiveVolumeGpuReport(validAdapterReport).optimizationClaimAllowed, true);
 
+function scaleWorkload(width, height, denseMedian, compactMedian) {
+  const pixelCount = width * height;
+  return {
+    width,
+    height,
+    pixelCount,
+    intersectingRayCount: Math.floor(pixelCount * 0.8),
+    denseStepCount: Math.floor(pixelCount * 0.8) * 160,
+    dispatchRepeats: 8,
+    profiles: {
+      dense: { aggregate: { median: denseMedian }, perDispatch: { median: denseMedian / 8 } },
+      compact: { aggregate: { median: compactMedian }, perDispatch: { median: compactMedian / 8 } },
+    },
+    comparison: { maximumAbsoluteError: 0.0009 },
+  };
+}
+
+const validScaleReport = structuredClone(validReport);
+validScaleReport.scaleLaw = {
+  schema: ADAPTIVE_VOLUME_SCALE_LAW_SCHEMA,
+  status: 'passed',
+  requested: {
+    dispatchRepeats: 8,
+    minimumAggregateGpuMs: 2,
+    hiddenWorkloadCapApplied: false,
+  },
+  effective: {
+    workloads: [
+      scaleWorkload(100, 80, 2.4, 2.8),
+      scaleWorkload(200, 160, 4.8, 4.5),
+      scaleWorkload(400, 320, 12, 9),
+    ],
+  },
+  productionAttribution: {
+    authority: 'static-production-shader-source-inspection-v0',
+    sourceSha256: 'sha256:abc',
+    measuredProductionBottleneck: false,
+    observedMechanisms: ['majorant-grid', 'occupancy-skip', 'adaptive-rays', 'early-transmittance', 'five-live-field-samples'],
+  },
+  falseClosureChecks: {
+    workloadSurfaceIncomplete: false,
+    aggregateBelowDeclaredFloor: false,
+    outputError: false,
+  },
+};
+assert.equal(validateAdaptiveVolumeScaleLawReport(validScaleReport).scaleLawEvidenceAllowed, true);
+
+for (const mutate of [
+  report => { report.scaleLaw.effective.workloads.pop(); },
+  report => { report.scaleLaw.requested.dispatchRepeats = 1; },
+  report => { report.scaleLaw.effective.workloads[0].profiles.dense.aggregate.median = 0.5; },
+  report => { report.scaleLaw.effective.workloads[0].intersectingRayCount = 0; },
+  report => { report.scaleLaw.effective.workloads[1].denseStepCount = 1; },
+  report => { report.scaleLaw.effective.workloads[2].comparison.maximumAbsoluteError = 1; },
+  report => { report.scaleLaw.productionAttribution.measuredProductionBottleneck = true; },
+  report => { report.scaleLaw.productionAttribution.observedMechanisms.pop(); },
+  report => { report.scaleLaw.falseClosureChecks.outputError = true; },
+]) {
+  const report = structuredClone(validScaleReport);
+  mutate(report);
+  assert.equal(validateAdaptiveVolumeScaleLawReport(report).scaleLawEvidenceAllowed, false);
+}
+
 for (const mutate of [
   report => { report.effective.backend = 'WebGPU:unknown'; },
   report => { report.effective.timestampStatus = 'unsupported'; },
@@ -226,5 +291,34 @@ assert.match(witness, /sourceFileSha256s/);
 assert.match(witness, /SystemInfo\.getInfo/);
 assert.match(witness, /applyHostGpuIdentity/);
 assert.match(browser, /matchedReportSha256[\s\S]*fitReportSha256[\s\S]*sourceSidecarSha256[\s\S]*selectionArtifactSha256[\s\S]*referenceDepthSha256/);
+
+assert.match(
+  browser,
+  /profileScaleLawWorkloads/,
+  'R8 must profile a named multi-workload scale surface rather than reuse the timer-floor R7 scalar',
+);
+assert.match(browser, /dispatchRepeats/, 'R8 must record effective timing amplification per workload');
+assert.match(browser, /minimumAggregateGpuMs/, 'R8 must reject aggregate timings that remain at the timestamp floor');
+assert.match(browser, /intersectingRayCount/, 'R8 must identify actual ray coverage for every workload');
+assert.match(browser, /denseStepCount/, 'R8 must identify the dense scalar work represented by every workload');
+const moduleSource = readFileSync(new URL('../smoke-adaptive-volume-gpu-falsifier.mjs', import.meta.url), 'utf8');
+assert.match(moduleSource, /kaminos\.smoke-adaptive-volume-scale-law\.v0/, 'R8 scale evidence needs its own nested schema');
+assert.match(browser, /productionAttribution/, 'R8 must bind its production comparison boundary to exact source evidence');
+assert.match(browser, /measuredProductionBottleneck:\s*false/, 'static shader inspection must not impersonate measured production attribution');
+
+const volumeCore = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+for (const productionMechanism of [
+  /sampleWorldMajorant/,
+  /occupancySkipStepScale/,
+  /adaptiveRayStepScale/,
+  /raymarchEarlyTermination/,
+  /sampleWorldVelocity/,
+  /sampleWorldMaterial/,
+  /sampleWorldFireLayer/,
+  /sampleWorldMicrodetail/,
+  /sampleWorldFrontField/,
+]) {
+  assert.match(volumeCore, productionMechanism, `production shader attribution lost ${productionMechanism}`);
+}
 
 console.log('smoke adaptive volume GPU falsifier contracts passed');

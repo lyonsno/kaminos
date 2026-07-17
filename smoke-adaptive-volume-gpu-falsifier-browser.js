@@ -2,12 +2,14 @@ import {
   ADAPTIVE_VOLUME_GPU_ERROR_LIMITS,
   ADAPTIVE_VOLUME_GPU_REPORT_SCHEMA,
   ADAPTIVE_VOLUME_GPU_ROUTE,
+  ADAPTIVE_VOLUME_SCALE_LAW_SCHEMA,
   DENSE_DENIAL_METHOD,
   bitonicSortRecordCount,
   buildBitonicSortStages,
   buildCompactSmokeProduct,
   parseSelectedBrickArtifact,
   validateAdaptiveVolumeGpuReport,
+  validateAdaptiveVolumeScaleLawReport,
 } from './smoke-adaptive-volume-gpu-falsifier.mjs';
 
 const DEFAULTS = Object.freeze({
@@ -20,10 +22,16 @@ const DEFAULTS = Object.freeze({
   browserSource: './smoke-adaptive-volume-gpu-falsifier-browser.js',
   witnessSource: './smoke-adaptive-volume-gpu-witness.mjs',
   htmlSource: './smoke-adaptive-volume-gpu-falsifier.html',
+  productionVolumeSource: './volume-core.js',
   warmupSamples: 3,
   steadySamples: 12,
   buildWarmupSamples: 1,
   buildSteadySamples: 4,
+  scaleFactors: [1, 2, 4],
+  scaleDispatchRepeats: 16,
+  scaleWarmupSamples: 1,
+  scaleSteadySamples: 7,
+  minimumAggregateGpuMs: 2,
 });
 
 const state = { phase: 'initializing', message: 'Initializing', report: null, error: null };
@@ -40,6 +48,11 @@ function applyReportDisposition(report) {
   report.optimizationClaimAllowed = disposition.optimizationClaimAllowed;
   report.optimizationClaimRejectionReasons = disposition.reasons;
   report.status = disposition.optimizationClaimAllowed ? 'passed' : 'invalid-for-optimization-claim';
+  if (report.scaleLaw) {
+    const scaleDisposition = validateAdaptiveVolumeScaleLawReport(report);
+    report.scaleLawEvidenceAllowed = scaleDisposition.scaleLawEvidenceAllowed;
+    report.scaleLawRejectionReasons = scaleDisposition.reasons;
+  }
   return disposition;
 }
 
@@ -51,7 +64,22 @@ function queryConfig() {
     if (!Number.isInteger(value) || value < 0) throw new Error(`${key} must be a non-negative integer`);
     return value;
   };
-  return {
+  const positiveNumber = (key, fallback) => {
+    if (!params.has(key)) return fallback;
+    const value = Number(params.get(key));
+    if (!(value > 0) || !Number.isFinite(value)) throw new Error(`${key} must be positive and finite`);
+    return value;
+  };
+  const scaleFactors = (params.get('scale_factors') || DEFAULTS.scaleFactors.join(','))
+    .split(',')
+    .map(value => Number(value));
+  if (scaleFactors.length < 3 || scaleFactors.some(value => !(value > 0) || !Number.isFinite(value))) {
+    throw new Error('scale_factors must contain at least three positive finite values');
+  }
+  for (let index = 1; index < scaleFactors.length; index += 1) {
+    if (!(scaleFactors[index] > scaleFactors[index - 1])) throw new Error('scale_factors must be strictly increasing');
+  }
+  const config = {
     matchedReport: params.get('matched_report') || DEFAULTS.matchedReport,
     fitReport: params.get('fit_report') || DEFAULTS.fitReport,
     sourceSidecar: params.get('source_sidecar') || DEFAULTS.sourceSidecar,
@@ -64,7 +92,15 @@ function queryConfig() {
     steadySamples: integer('steady_samples', DEFAULTS.steadySamples),
     buildWarmupSamples: integer('build_warmup_samples', DEFAULTS.buildWarmupSamples),
     buildSteadySamples: integer('build_steady_samples', DEFAULTS.buildSteadySamples),
+    scaleFactors,
+    scaleDispatchRepeats: integer('scale_dispatch_repeats', DEFAULTS.scaleDispatchRepeats),
+    scaleWarmupSamples: integer('scale_warmup_samples', DEFAULTS.scaleWarmupSamples),
+    scaleSteadySamples: integer('scale_steady_samples', DEFAULTS.scaleSteadySamples),
+    minimumAggregateGpuMs: positiveNumber('minimum_aggregate_gpu_ms', DEFAULTS.minimumAggregateGpuMs),
   };
+  if (config.scaleDispatchRepeats <= 1) throw new Error('scale_dispatch_repeats must be greater than one');
+  if (config.scaleWarmupSamples <= 0 || config.scaleSteadySamples <= 0) throw new Error('scale timing sample counts must be positive');
+  return config;
 }
 
 async function fetchJson(url, label) {
@@ -456,6 +492,141 @@ async function profilePass(device, { warmups, samples, encode }) {
   return stats(times);
 }
 
+async function profileRepeatedPass(device, { warmups, samples, dispatchRepeats, encode }) {
+  const aggregate = await profilePass(device, { warmups, samples, encode });
+  const perDispatch = stats(aggregate.samples.map(value => value / dispatchRepeats));
+  return { aggregate, perDispatch, dispatchRepeats };
+}
+
+function summarizeRayWorkload(rays, grid, samplesPerCell, minimum, maximum) {
+  const stepWorld = Math.min(...minimum.map((value, axis) => maximum[axis] - value)) / grid / samplesPerCell;
+  let intersectingRayCount = 0;
+  let denseStepCount = 0;
+  let maximumDenseStepsPerRay = 0;
+  for (let offset = 0; offset < rays.length; offset += 8) {
+    const start = rays[offset + 3];
+    const end = rays[offset + 4];
+    if (!(end > start)) continue;
+    const steps = Math.ceil((end - start) / stepWorld - 1e-7);
+    intersectingRayCount += 1;
+    denseStepCount += steps;
+    maximumDenseStepsPerRay = Math.max(maximumDenseStepsPerRay, steps);
+  }
+  return { intersectingRayCount, denseStepCount, maximumDenseStepsPerRay, stepWorld };
+}
+
+function inspectProductionVolumeSource(bytes) {
+  const source = new TextDecoder().decode(bytes);
+  const required = new Map([
+    ['majorant-grid', ['sampleWorldMajorant', 'sampleWorldMajorantLinear', 'sampleWorldMajorantDilated']],
+    ['occupancy-skip', ['occupancySkipStepScale']],
+    ['adaptive-rays', ['adaptiveRayStepScale']],
+    ['early-transmittance', ['raymarchEarlyTermination']],
+    ['five-live-field-samples', ['sampleWorldVelocity', 'sampleWorldMaterial', 'sampleWorldFireLayer', 'sampleWorldMicrodetail', 'sampleWorldFrontField']],
+  ]);
+  for (const [mechanism, tokens] of required) {
+    for (const token of tokens) if (!source.includes(token)) throw new Error(`production attribution missing ${mechanism}:${token}`);
+  }
+  return {
+    authority: 'static-production-shader-source-inspection-v0',
+    sourcePath: DEFAULTS.productionVolumeSource,
+    measuredProductionBottleneck: false,
+    observedMechanisms: [...required.keys()],
+    claimBoundary: 'Static source inspection identifies production work that R8 omits; it does not measure which production stage dominates.',
+  };
+}
+
+async function profileScaleLawWorkloads(device, {
+  config,
+  baseWidth,
+  baseHeight,
+  camera,
+  minimum,
+  maximum,
+  grid,
+  blockSize,
+  selectedCount,
+  samplesPerCell,
+  extinctionCoefficient,
+  denseAllocation,
+  prebuiltCoarseAllocation,
+  prebuiltIndirectAllocation,
+  prebuiltAtlasAllocation,
+  densePipeline,
+  sparsePipeline,
+  storageCopy,
+}) {
+  const workloads = [];
+  for (const scaleFactor of config.scaleFactors) {
+    const width = Math.max(1, Math.round(baseWidth * scaleFactor));
+    const height = Math.max(1, Math.round(baseHeight * scaleFactor));
+    const pixelCount = width * height;
+    const rays = buildRays(camera, width, height, minimum, maximum);
+    const workload = summarizeRayWorkload(rays, grid, samplesPerCell, minimum, maximum);
+    const raysAllocation = makeBuffer(device, `R8 rays ${width}x${height}`, rays.byteLength, GPUBufferUsage.STORAGE, rays);
+    const paramsData = createParams({
+      grid, blockSize, selectedCount, width, height, samplesPerCell, extinctionCoefficient,
+      minimum, maximum, cameraPosition: camera.position,
+    });
+    const paramsAllocation = makeBuffer(device, `R8 params ${width}x${height}`, paramsData.byteLength, GPUBufferUsage.UNIFORM, paramsData);
+    const denseOutputAllocation = makeBuffer(device, `R8 dense output ${width}x${height}`, pixelCount * 4, storageCopy);
+    const compactOutputAllocation = makeBuffer(device, `R8 compact output ${width}x${height}`, pixelCount * 4, storageCopy);
+    const denseBindGroup = device.createBindGroup({ layout: densePipeline.getBindGroupLayout(0), entries: [
+      { binding: 0, resource: { buffer: denseAllocation.buffer } },
+      { binding: 1, resource: { buffer: raysAllocation.buffer } },
+      { binding: 2, resource: { buffer: paramsAllocation.buffer } },
+      { binding: 3, resource: { buffer: denseOutputAllocation.buffer } },
+    ] });
+    const compactBindGroup = device.createBindGroup({ layout: sparsePipeline.getBindGroupLayout(0), entries: [
+      { binding: 0, resource: { buffer: prebuiltCoarseAllocation.buffer } },
+      { binding: 1, resource: { buffer: prebuiltIndirectAllocation.buffer } },
+      { binding: 2, resource: { buffer: prebuiltAtlasAllocation.buffer } },
+      { binding: 3, resource: { buffer: raysAllocation.buffer } },
+      { binding: 4, resource: { buffer: paramsAllocation.buffer } },
+      { binding: 5, resource: { buffer: compactOutputAllocation.buffer } },
+    ] });
+    const encodeRepeated = (pipeline, bindGroup) => (encoder, querySet) => {
+      const pass = encoder.beginComputePass({ timestampWrites: { querySet, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 } });
+      pass.setPipeline(pipeline);
+      pass.setBindGroup(0, bindGroup);
+      for (let repeat = 0; repeat < config.scaleDispatchRepeats; repeat += 1) pass.dispatchWorkgroups(Math.ceil(pixelCount / 64));
+      pass.end();
+    };
+    const denseProfile = await profileRepeatedPass(device, {
+      warmups: config.scaleWarmupSamples,
+      samples: config.scaleSteadySamples,
+      dispatchRepeats: config.scaleDispatchRepeats,
+      encode: encodeRepeated(densePipeline, denseBindGroup),
+    });
+    const compactProfile = await profileRepeatedPass(device, {
+      warmups: config.scaleWarmupSamples,
+      samples: config.scaleSteadySamples,
+      dispatchRepeats: config.scaleDispatchRepeats,
+      encode: encodeRepeated(sparsePipeline, compactBindGroup),
+    });
+    const denseOutput = new Float32Array(await readBuffer(device, denseOutputAllocation.buffer, pixelCount * 4));
+    const compactOutput = new Float32Array(await readBuffer(device, compactOutputAllocation.buffer, pixelCount * 4));
+    const comparison = compare(denseOutput, compactOutput);
+    workloads.push({
+      scaleFactor,
+      width,
+      height,
+      pixelCount,
+      ...workload,
+      dispatchRepeats: config.scaleDispatchRepeats,
+      profiles: { dense: denseProfile, compact: compactProfile },
+      compactOverDenseRatio: compactProfile.perDispatch.median / denseProfile.perDispatch.median,
+      comparison,
+      outputsComplete: denseOutput.length === pixelCount && compactOutput.length === pixelCount,
+    });
+    raysAllocation.buffer.destroy();
+    paramsAllocation.buffer.destroy();
+    denseOutputAllocation.buffer.destroy();
+    compactOutputAllocation.buffer.destroy();
+  }
+  return workloads;
+}
+
 function compare(left, right) {
   if (left.length !== right.length) throw new Error('output comparison shape mismatch');
   let mse = 0;
@@ -492,7 +663,7 @@ async function run() {
   const requestedRoute = location.href;
   let failurePhase = 'source-load';
   setStatus('Loading exact static source, camera, reference, and persisted selection');
-  const [matchedBytes, fitBytes, sidecarBytes, selectionBytes, referenceBytes, moduleBytes, browserBytes, witnessBytes, htmlBytes] = await Promise.all([
+  const [matchedBytes, fitBytes, sidecarBytes, selectionBytes, referenceBytes, moduleBytes, browserBytes, witnessBytes, htmlBytes, productionVolumeBytes] = await Promise.all([
     fetchBytes(config.matchedReport, 'matched report'),
     fetchBytes(config.fitReport, 'fit report'),
     fetchBytes(config.sourceSidecar, 'source sidecar'),
@@ -502,6 +673,7 @@ async function run() {
     fetchBytes(DEFAULTS.browserSource, 'browser source'),
     fetchBytes(DEFAULTS.witnessSource, 'witness source'),
     fetchBytes(DEFAULTS.htmlSource, 'HTML source'),
+    fetchBytes(DEFAULTS.productionVolumeSource, 'production volume source'),
   ]);
   const matched = JSON.parse(new TextDecoder().decode(matchedBytes));
   const fit = JSON.parse(new TextDecoder().decode(fitBytes));
@@ -521,6 +693,7 @@ async function run() {
   const minimum = fit.teacher.worldSpace.bounds.minimum;
   const maximum = fit.teacher.worldSpace.bounds.maximum;
   const rays = buildRays(camera, width, height, minimum, maximum);
+  const productionAttribution = inspectProductionVolumeSource(productionVolumeBytes);
 
   failurePhase = 'device';
   setStatus('Requesting effective Apple WebGPU device with timestamp-query');
@@ -661,6 +834,29 @@ async function run() {
     total: stats(buildRenderSamples.map(row => row.total)),
   };
 
+  failurePhase = 'scale-law-profiling';
+  setStatus('Profiling amplified dense and compact scale-law workloads');
+  const scaleLawWorkloads = await profileScaleLawWorkloads(device, {
+    config,
+    baseWidth: width,
+    baseHeight: height,
+    camera,
+    minimum,
+    maximum,
+    grid,
+    blockSize,
+    selectedCount: selected.length,
+    samplesPerCell: matched.effective.samplesPerCell,
+    extinctionCoefficient: matched.effective.extinctionCoefficient,
+    denseAllocation,
+    prebuiltCoarseAllocation,
+    prebuiltIndirectAllocation,
+    prebuiltAtlasAllocation,
+    densePipeline,
+    sparsePipeline,
+    storageCopy,
+  });
+
   failurePhase = 'selection-validation';
   const pairData = new DataView(await readBuffer(device, pairAllocation.buffer, pairBytes));
   const gpuSelected = [];
@@ -785,6 +981,7 @@ async function run() {
         browser: await sha256(browserBytes),
         witness: await sha256(witnessBytes),
         html: await sha256(htmlBytes),
+        productionVolume: await sha256(productionVolumeBytes),
       },
     },
     arms: {
@@ -835,6 +1032,42 @@ async function run() {
       buildCompactAgainstDense: builtComparison,
       compactPrebuiltMaximumAbsoluteError: prebuiltComparison.maximumAbsoluteError,
       buildCompactMaximumAbsoluteError: builtComparison.maximumAbsoluteError,
+    },
+    scaleLaw: {
+      schema: ADAPTIVE_VOLUME_SCALE_LAW_SCHEMA,
+      status: 'passed',
+      requested: {
+        scaleFactors: config.scaleFactors,
+        dispatchRepeats: config.scaleDispatchRepeats,
+        warmupSamples: config.scaleWarmupSamples,
+        steadySamples: config.scaleSteadySamples,
+        minimumAggregateGpuMs: config.minimumAggregateGpuMs,
+        hiddenWorkloadCapApplied: false,
+      },
+      effective: {
+        workloads: scaleLawWorkloads,
+        firstMeasuredCrossover: scaleLawWorkloads.find(row => row.compactOverDenseRatio < 1)?.scaleFactor ?? null,
+      },
+      productionAttribution: {
+        ...productionAttribution,
+        sourceSha256: await sha256(productionVolumeBytes),
+      },
+      falseClosureChecks: {
+        workloadSurfaceIncomplete: scaleLawWorkloads.length < 3,
+        timingAmplificationMissing: config.scaleDispatchRepeats <= 1,
+        aggregateBelowDeclaredFloor: scaleLawWorkloads.some(row => (
+          row.profiles.dense.aggregate.median < config.minimumAggregateGpuMs
+          || row.profiles.compact.aggregate.median < config.minimumAggregateGpuMs
+        )),
+        workloadIdentityIncomplete: scaleLawWorkloads.some(row => (
+          !(row.intersectingRayCount > 0)
+          || !(row.denseStepCount >= row.intersectingRayCount)
+        )),
+        outputIncomplete: scaleLawWorkloads.some(row => !row.outputsComplete),
+        outputError: scaleLawWorkloads.some(row => row.comparison.maximumAbsoluteError > ADAPTIVE_VOLUME_GPU_ERROR_LIMITS.compactPrebuiltAgainstDenseMaximumAbsoluteError),
+        productionAttributionOverclaim: productionAttribution.measuredProductionBottleneck !== false,
+      },
+      claimBoundary: 'Amplified static single-channel traversal scaling only. Production source inspection is exact but unmeasured; no production bottleneck, total-frame speedup, temporal cadence, or integration claim is authorized.',
     },
     falseClosureChecks,
     claimBoundary: 'Static isolated single-channel Apple WebGPU compute evidence. Source scalar formation from the live 16-channel fluid buffer and the production compositor are not timed. GPU build includes parent means, residual scoring, complete 65536-record bitonic sorting, top-K selection application, indirection, and padded fine-atlas packing. Dense denial destroys the source buffer before compact rerender.',
