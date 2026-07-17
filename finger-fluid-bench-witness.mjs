@@ -10,6 +10,8 @@ const url = args.get('--url') || 'http://127.0.0.1:8100/index.html?kaminos_finge
 const out = resolve(args.get('--out') || '/tmp/kaminos-finger-fluid-bench.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const canvasOut = resolve(args.get('--canvas-out') || out.replace(/\.png$/i, '.canvas.png'));
+const screenSpaceSurfaceOut = resolve(args.get('--screen-space-surface-out') || out.replace(/\.png$/i, '.screen-space-surface.png'));
+const sphereDebugOut = resolve(args.get('--sphere-debug-out') || out.replace(/\.png$/i, '.sphere-debug.png'));
 const preContactOut = resolve(args.get('--pre-contact-out') || out.replace(/\.png$/i, '.pre-contact.png'));
 const midContactOut = resolve(args.get('--mid-contact-out') || out.replace(/\.png$/i, '.mid-contact.png'));
 const postContactOut = resolve(args.get('--post-contact-out') || out.replace(/\.png$/i, '.post-contact.png'));
@@ -33,6 +35,8 @@ let browserVersion = null;
 let primaryOutputWritten = false;
 let lastDebugState = null;
 let canvasActivity = null;
+let screenSpaceSurfaceEvidence = null;
+let sameStateRendererComparison = null;
 let cadenceProbe = null;
 let automaticDiagnosticsRequestCount = null;
 let explicitDiagnosticsReceipt = null;
@@ -99,6 +103,10 @@ function writeReport(report = {}) {
     recoveryWitness,
     recoveryComposedSample,
     canvasOut,
+    screenSpaceSurfaceOut,
+    sphereDebugOut,
+    screenSpaceSurfaceEvidence,
+    sameStateRendererComparison,
     preContactOut,
     midContactOut,
     postContactOut,
@@ -194,6 +202,39 @@ async function evaluate(ws, expression) {
     throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text || 'Runtime.evaluate failed');
   }
   return result.result.value;
+}
+
+function measureCapturedPng(path, label) {
+  const decoded = spawnSync('ffmpeg', ['-v', 'error', '-i', path, '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], {
+    encoding: null,
+    maxBuffer: 128 * 1024 * 1024,
+  });
+  if (decoded.status !== 0 || !decoded.stdout?.length) throw new Error(`ffmpeg ${label} decode failed: ${decoded.stderr?.toString() || decoded.status}`);
+  let activePixels = 0;
+  let highlightPixels = 0;
+  let darkPixels = 0;
+  for (let i = 0; i < decoded.stdout.length; i += 3) {
+    const r = decoded.stdout[i];
+    const g = decoded.stdout[i + 1];
+    const b = decoded.stdout[i + 2];
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    if (max > 66 && max - min > 18) activePixels += 1;
+    if (max > 148 && b >= g * 0.82) highlightPixels += 1;
+    if (max < 14) darkPixels += 1;
+  }
+  const pixelCount = Math.floor(decoded.stdout.length / 3);
+  return {
+    label,
+    path,
+    pixelCount,
+    activePixels,
+    activeRatio: Number((activePixels / Math.max(1, pixelCount)).toFixed(5)),
+    highlightPixels,
+    highlightRatio: Number((highlightPixels / Math.max(1, pixelCount)).toFixed(5)),
+    darkRatio: Number((darkPixels / Math.max(1, pixelCount)).toFixed(5)),
+    measurement: 'captured_webgpu_canvas_ffmpeg_rgb24_v0',
+  };
 }
 
 async function main() {
@@ -793,12 +834,21 @@ async function main() {
     if (lastDebugState.runtime?.chemistryContract !== 'wgsl-passive-material-tracer-diffusion-v0') throw new Error(`passive tracer contract mismatch: ${lastDebugState.runtime?.chemistryContract}`);
     const requestedRoute = new URL(url);
     const requestedColorMode = requestedRoute.searchParams.get('finger_fluid_color_mode') || 'phase';
+    const requestedRendererMode = requestedRoute.searchParams.get('finger_fluid_renderer') || 'screen_space_surface';
     const requestedParticleShiftStrength = Number(requestedRoute.searchParams.get('finger_fluid_particle_shift') ?? 0);
     const requestedChemistryDiffusion = Number(requestedRoute.searchParams.get('finger_fluid_chemistry_diffusion') ?? 0);
     const effectiveColorMode = lastDebugState.runtime?.effectiveColorMode;
+    const effectiveRendererMode = lastDebugState.runtime?.effectiveRendererMode;
     const effectiveParticleShiftStrength = lastDebugState.runtime?.effectiveParticleShiftStrength;
     const effectiveChemistryDiffusion = lastDebugState.runtime?.effectiveChemistryDiffusion;
     if (requestedColorMode !== effectiveColorMode) throw new Error(`silent color-mode fallback rejected: ${JSON.stringify({ requestedColorMode, effectiveColorMode })}`);
+    if (requestedRendererMode !== effectiveRendererMode) throw new Error(`renderer disagreement rejected: ${JSON.stringify({ requestedRendererMode, effectiveRendererMode, fallbackReason: lastDebugState.runtime?.fallbackReason })}`);
+    if (lastDebugState.runtime?.fallbackReason) throw new Error(`renderer fallback rejected: ${lastDebugState.runtime.fallbackReason}`);
+    if (effectiveRendererMode === 'screen_space_surface') {
+      screenSpaceSurfaceEvidence = lastDebugState.runtime?.screenSpaceSurfaceEvidence || null;
+      if (screenSpaceSurfaceEvidence?.route !== 'webgpu-screen-space-liquid-surface-v0') throw new Error(`screen-space route evidence mismatch: ${JSON.stringify(screenSpaceSurfaceEvidence)}`);
+      if (screenSpaceSurfaceEvidence?.accumulationPassCount < 1 || screenSpaceSurfaceEvidence?.compositePassCount < 1) throw new Error(`screen-space pass evidence missing: ${JSON.stringify(screenSpaceSurfaceEvidence)}`);
+    }
     if (requestedParticleShiftStrength !== effectiveParticleShiftStrength) throw new Error(`silent particle-shift fallback rejected: ${JSON.stringify({ requestedParticleShiftStrength, effectiveParticleShiftStrength })}`);
     if (requestedChemistryDiffusion !== effectiveChemistryDiffusion) throw new Error(`silent chemistry-diffusion fallback rejected: ${JSON.stringify({ requestedChemistryDiffusion, effectiveChemistryDiffusion })}`);
     if (effectiveParticleShiftStrength === 0 && lastDebugState.runtime?.particleShiftPassCount !== 0) throw new Error(`zero-strength route dispatched hidden particle shifting: ${lastDebugState.runtime?.particleShiftPassCount}`);
@@ -1033,6 +1083,48 @@ async function main() {
     };
     if (canvasActivity.activeRatio < 0.09) throw new Error(`native GPU fluid bench too sparse: ${JSON.stringify(canvasActivity)}`);
     if (canvasActivity.supportPixelRatio < 0.025) throw new Error(`shared playground support is not materially visible: ${JSON.stringify(canvasActivity)}`);
+
+    phase = 'same_state_renderer_comparison';
+    const renderSameState = async (mode, path) => {
+      const receipt = await evaluate(ws, `(() => {
+        const render = window.kaminosFingerFluidBenchRenderCurrentStateForWitness;
+        if (typeof render !== 'function') throw new Error('pre-output failure: missing same-state renderer witness hook');
+        return render(${JSON.stringify(mode)});
+      })()`);
+      if (receipt.requestedRendererMode !== mode || receipt.effectiveRendererMode !== mode || receipt.fallbackReason) {
+        throw new Error(`renderer disagreement during same-state comparison: ${JSON.stringify(receipt)}`);
+      }
+      const shot = await wsRequest(ws, 'Page.captureScreenshot', {
+        format: 'png',
+        captureBeyondViewport: false,
+        clip: { ...canvasRect, scale: 1 },
+      });
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, Buffer.from(shot.data, 'base64'));
+      const activity = measureCapturedPng(path, mode);
+      if (mode === 'screen_space_surface' && activity.activeRatio < 0.08) {
+        throw new Error(`blank reconstructed-surface output rejected: ${JSON.stringify(activity)}`);
+      }
+      if (mode === 'sphere_debug' && activity.activeRatio < 0.08) {
+        throw new Error(`blank sphere-debug output rejected: ${JSON.stringify(activity)}`);
+      }
+      return { receipt, activity };
+    };
+    const sphereDebug = await renderSameState('sphere_debug', sphereDebugOut);
+    const screenSpaceSurface = await renderSameState('screen_space_surface', screenSpaceSurfaceOut);
+    sameStateRendererComparison = {
+      schema: 'kaminos.finger-fluid.same-state-renderer-comparison.v0',
+      stepCount: screenSpaceSurface.receipt.stepCount,
+      sameSimulationState: sphereDebug.receipt.stepCount === screenSpaceSurface.receipt.stepCount,
+      sphereDebug,
+      screenSpaceSurface,
+      visibleDelta: {
+        activeRatioDelta: Number((screenSpaceSurface.activity.activeRatio - sphereDebug.activity.activeRatio).toFixed(5)),
+        highlightRatioDelta: Number((screenSpaceSurface.activity.highlightRatio - sphereDebug.activity.highlightRatio).toFixed(5)),
+      },
+    };
+    if (!sameStateRendererComparison.sameSimulationState) throw new Error(`same-state renderer comparison stepped the simulation: ${JSON.stringify(sameStateRendererComparison)}`);
+    await evaluate(ws, `(() => { window.kaminosFingerFluidBenchResumeAfterWitness?.(); return true; })()`);
 
     phase = 'capture_screenshot';
     const screenshot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });

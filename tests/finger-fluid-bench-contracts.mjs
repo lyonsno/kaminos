@@ -32,6 +32,19 @@ assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_DENSITY_CONTRACT\s*=\s*'wgs
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_VORTICITY_CONTRACT\s*=\s*'wgsl-neighbor-vorticity-confinement-v0'/, 'neighbor-derived vorticity contract is explicit');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_OBSTACLE_CONTRACT\s*=\s*'shared-solver-render-obstacle-v0'/, 'solver and renderer share an obstacle contract');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_GPU_RENDERER_ROUTE\s*=\s*'webgpu-particle-sphere-renderer-v0'/, 'direct GPU renderer route is explicit');
+assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE\s*=\s*'webgpu-screen-space-liquid-surface-v0'/, 'screen-space liquid renderer route is explicit');
+assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE\s*=\s*'webgpu-particle-sphere-debug-renderer-v0'/, 'particle sphere renderer survives as an explicit debug route');
+assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_RENDERER_MODES\s*=\s*Object\.freeze\(\['screen_space_surface', 'sphere_debug'\]\)/, 'fluid renderer modes are explicit and screen-space is primary');
+assert.match(webgpuCoreSource, /resolveFingerFluidRendererMode/, 'renderer mode resolution is testable and fails loud');
+assert.match(webgpuCoreSource, /requestedRendererMode[\s\S]*effectiveRendererMode[\s\S]*fallbackReason/, 'runtime state distinguishes requested/effective renderer identity and fallback');
+assert.match(webgpuCoreSource, /SCREEN_SPACE_SURFACE_SHADER/, 'screen-space renderer owns a separate shading pass');
+assert.match(webgpuCoreSource, /kaminos-finger-fluid-surface-accumulation/, 'screen-space renderer allocates particle depth plus optical thickness accumulation');
+assert.match(webgpuCoreSource, /screenSpaceSurfaceAccumulationPipeline/, 'renderer has a particle depth/thickness accumulation pipeline');
+assert.match(webgpuCoreSource, /screenSpaceSurfaceCompositePipeline/, 'renderer has a fullscreen smoothing/normal/shading pipeline');
+assert.match(webgpuCoreSource, /edgePreservingDepth/, 'screen-space shader performs edge-preserving depth smoothing');
+assert.match(webgpuCoreSource, /reconstructSurfaceNormal/, 'screen-space shader reconstructs normals from smoothed particle depth');
+assert.match(webgpuCoreSource, /fresnel/, 'screen-space shader exposes Fresnel/specular water shading');
+assert.match(webgpuCoreSource, /absorption/, 'screen-space shader exposes optical-thickness absorption');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_STABILITY_CONTRACT\s*=\s*'bounded-pbf-energy-v0'/, 'bounded-energy stability contract is explicit');
 assert.match(webgpuCoreSource, /MAX_FLUID_SPEED\s*=\s*3\.2/, 'fluid speed ceiling is explicit and source-owned');
 assert.match(webgpuCoreSource, /restDensity:\s*24\.3/, 'calibrated packed-state rest density is exposed');
@@ -208,6 +221,10 @@ assert.match(indexSource, /window\.kaminosFingerFluidBenchRequestDiagnostics = r
 assert.doesNotMatch(indexSource, /now - fingerFluidBenchDiagnosticsRequestedAt > 1800/, 'ordinary operator frames must not schedule periodic full-population readback');
 assert.match(indexSource, /createWebGPUFingerFluidSolver/, 'native bench constructs the real WebGPU fluid solver');
 assert.match(indexSource, /finger_fluid_color_mode/, 'native route accepts an explicit diagnostic color mode');
+assert.match(indexSource, /finger_fluid_renderer/, 'native route accepts an explicit renderer mode');
+assert.match(indexSource, /requestedRendererMode/, 'native debug state preserves requested renderer identity');
+assert.match(indexSource, /effectiveRendererMode/, 'native debug state preserves effective renderer identity');
+assert.match(indexSource, /finger_fluid_renderer=sphere_debug/, 'native route preserves the current sphere renderer as explicit debug mode');
 assert.match(indexSource, /finger_fluid_particle_shift/, 'native route accepts an explicit particle-shift strength');
 assert.match(indexSource, /requestedColorMode/, 'native debug state preserves requested color-mode identity');
 assert.match(indexSource, /particleShiftStrength/, 'native debug state preserves effective particle-shift strength');
@@ -308,6 +325,14 @@ assert.match(benchWitnessSource, /--device-scale-factor/, 'bench witness can rep
 assert.match(benchWitnessSource, /deviceScaleFactor/, 'bench witness records and applies its effective device scale factor');
 assert.match(benchWitnessSource, /cadenceWindowMs:\s*cadenceMs/, 'bench witness records its effective cadence window');
 assert.match(benchWitnessSource, /fallback/, 'bench witness explicitly rejects fallback closure');
+assert.match(benchWitnessSource, /finger_fluid_renderer/, 'bench witness records requested renderer mode');
+assert.match(benchWitnessSource, /screen_space_surface/, 'bench witness can target the reconstructed surface route');
+assert.match(benchWitnessSource, /sphere_debug/, 'bench witness preserves same-state sphere debug comparison');
+assert.match(benchWitnessSource, /sameStateRendererComparison/, 'bench witness captures same solver state renderer A/B evidence');
+assert.match(benchWitnessSource, /screenSpaceSurfaceEvidence/, 'bench witness records reconstructed-surface visual evidence');
+assert.match(benchWitnessSource, /renderer disagreement/, 'bench witness rejects requested/effective renderer disagreement');
+assert.match(benchWitnessSource, /blank reconstructed-surface output/, 'bench witness rejects blank screen-space surface captures');
+assert.match(benchWitnessSource, /pre-output failure/, 'bench witness reports failures before primary output without pretending success');
 assert.ok(
   benchWitnessSource.indexOf("phase = 'measure_canvas'") < benchWitnessSource.indexOf("phase = 'cadence_probe'"),
   'visual evidence is preserved before a later cadence failure',
@@ -340,7 +365,8 @@ assert.equal(state.solver.restStateContract, 'wgsl-support-aware-persistent-rest
 assert.equal(state.solver.supportTransportContract, 'wgsl-support-tangential-transport-v0');
 assert.equal(state.solver.topologyContract, 'wgsl-four-neighbor-topology-retention-v0');
 assert.equal(state.solver.particleShiftContract, 'wgsl-opt-in-support-tangential-particle-shift-v0');
-assert.equal(state.renderer.identity, 'webgpu-particle-sphere-renderer-v0');
+assert.equal(state.renderer.identity, 'webgpu-screen-space-liquid-surface-v0');
+assert.equal(state.renderer.effectiveMode, 'screen_space_surface');
 assert.equal(state.renderer.obstacleContract, 'shared-solver-render-obstacle-v0');
 assert.equal(state.solver.playgroundContract, 'wgsl-shared-multi-regime-toy-playground-v0');
 assert.equal(state.solver.interfaceCarrierSchema, 'kaminos.liquid-interface-carrier.v0');
@@ -359,6 +385,11 @@ assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_SUPPORT_TRANSPORT_CONTRACT, 'wgsl-su
 assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_TOPOLOGY_CONTRACT, 'wgsl-four-neighbor-topology-retention-v0');
 assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_PARTICLE_SHIFT_CONTRACT, 'wgsl-opt-in-support-tangential-particle-shift-v0');
 assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_CHEMISTRY_CONTRACT, 'wgsl-passive-material-tracer-diffusion-v0');
+assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE, 'webgpu-screen-space-liquid-surface-v0');
+assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE, 'webgpu-particle-sphere-debug-renderer-v0');
+assert.equal(webgpuMod.resolveFingerFluidRendererMode('screen_space_surface'), 'screen_space_surface');
+assert.equal(webgpuMod.resolveFingerFluidRendererMode('sphere_debug'), 'sphere_debug');
+assert.throws(() => webgpuMod.resolveFingerFluidRendererMode('fallback'), /Unsupported finger fluid renderer mode/);
 assert.equal(webgpuMod.KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_SCHEMA, 'kaminos.liquid-fire-contact-descriptor.v1');
 assert.equal(webgpuMod.KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_PACKING, 'gpu-sparse-liquid-fire-contact-source-vec4x8-v1');
 assert.equal(typeof webgpuMod.validateLiquidFireContactDescriptorHeader, 'function');
