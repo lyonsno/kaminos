@@ -559,7 +559,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let pixel = gid.x + globalY * productionP.width;
   let direction = productionRayDirection(gid.x, globalY);
   let hit = intersectProductionBounds(direction);
-  if (hit.y <= hit.x) { productionOutput[pixel] = vec2<f32>(0.0); return; }
+  if (hit.y <= hit.x) { productionOutput[pixel] = vec4<f32>(0.0); return; }
   let baseStep = min(min(productionP.maximum.x - productionP.minimum.x, productionP.maximum.y - productionP.minimum.y), productionP.maximum.z - productionP.minimum.z) / f32(productionP.grid) / productionP.samplesPerCell;
   var distance = hit.x;
   var depth = 0.0;
@@ -567,6 +567,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   var productionStepCount = 0u;
   var majorantSkipCount = 0u;
   var earlyTerminationCount = 0u;
+  var scalarLookupCount = 0u;
+  var scalarSampleSum = 0.0;
   for (var iteration = 0u; iteration < 192u; iteration++) {
     if (distance >= hit.y) { break; }
     if (raymarchEarlyTermination(transmittance)) { earlyTerminationCount = 1u; break; }
@@ -600,12 +602,14 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let interest = clamp(velocityDensity.w * 0.22 + material.x * 0.16 + material.y * 0.10 + temperature * 0.40 + fireLayer.x * 0.36 + fireLayer.z * 0.22 + microTexture * 0.22 + velMag * 0.46 + microLayer.z * 0.30 + microLayer.y * 0.42, 0.0, 1.6);
     let localStep = min(baseStep * adaptiveRayStepScale(interest, 0.65), hit.y - distance);
     let testedExtinction = sampleSmokeExtinction(point) * productionP.extinction;
+    scalarLookupCount += 1u;
+    scalarSampleSum += testedExtinction;
     depth += testedExtinction * localStep;
     transmittance *= exp(-testedExtinction * localStep);
     distance += localStep;
   }
   let packedWork = productionStepCount + majorantSkipCount * 256u + earlyTerminationCount * 65536u + 131072u;
-  productionOutput[pixel] = vec2<f32>(depth, f32(packedWork));
+  productionOutput[pixel] = vec4<f32>(depth, f32(packedWork), f32(scalarLookupCount), scalarSampleSum);
 }
 `;
 
@@ -616,7 +620,7 @@ const PRODUCTION_DENSE_WGSL = COMMON_WGSL + PRODUCTION_TILE_WGSL + String.raw`
 @group(0) @binding(3) var<storage, read> majorantProxy: array<vec4<f32>>;
 @group(0) @binding(4) var<uniform> cameraP: ProductionCamera;
 @group(0) @binding(5) var<uniform> productionP: Params;
-@group(0) @binding(6) var<storage, read_write> productionOutput: array<vec2<f32>>;
+@group(0) @binding(6) var<storage, read_write> productionOutput: array<vec4<f32>>;
 @group(0) @binding(7) var<uniform> tileP: ProductionTile;
 fn sampleSmokeExtinction(point: vec3<f32>) -> f32 {
   let coordinate = (point - productionP.minimum.xyz) / (productionP.maximum.xyz - productionP.minimum.xyz) * f32(productionP.grid) - vec3<f32>(0.5);
@@ -641,7 +645,7 @@ const PRODUCTION_SPARSE_WGSL = COMMON_WGSL + PRODUCTION_TILE_WGSL + String.raw`
 @group(0) @binding(5) var<storage, read> majorantProxy: array<vec4<f32>>;
 @group(0) @binding(6) var<uniform> cameraP: ProductionCamera;
 @group(0) @binding(7) var<uniform> productionP: Params;
-@group(0) @binding(8) var<storage, read_write> productionOutput: array<vec2<f32>>;
+@group(0) @binding(8) var<storage, read_write> productionOutput: array<vec4<f32>>;
 @group(0) @binding(9) var<uniform> tileP: ProductionTile;
 fn compactBrickIndex(c: vec3<u32>) -> u32 { return c.x + c.y * productionP.coarseGrid + c.z * productionP.coarseGrid * productionP.coarseGrid; }
 fn sampleSmokeExtinction(point: vec3<f32>) -> f32 {
@@ -1030,19 +1034,25 @@ async function profileScaleLawWorkloads(device, {
 }
 
 function unpackProductionOutput(values) {
-  const pixelCount = values.length / 2;
+  const pixelCount = values.length / 4;
   const depth = new Float32Array(pixelCount);
   let productionStepCount = 0;
   let majorantSkipCount = 0;
   let earlyTerminationCount = 0;
   let intersectingRayCount = 0;
+  let scalarLookupCount = 0;
+  let scalarSampleSum = 0;
+  let nonzeroDepthCount = 0;
   for (let pixel = 0; pixel < pixelCount; pixel += 1) {
-    depth[pixel] = values[pixel * 2];
-    const packed = Math.round(values[pixel * 2 + 1]);
+    depth[pixel] = values[pixel * 4];
+    nonzeroDepthCount += depth[pixel] > 0 ? 1 : 0;
+    const packed = Math.round(values[pixel * 4 + 1]);
     productionStepCount += packed % 256;
     majorantSkipCount += Math.floor(packed / 256) % 256;
     earlyTerminationCount += Math.floor(packed / 65536) % 2;
     intersectingRayCount += Math.floor(packed / 131072) % 2;
+    scalarLookupCount += Math.round(values[pixel * 4 + 2]);
+    scalarSampleSum += values[pixel * 4 + 3];
   }
   return {
     depth,
@@ -1051,6 +1061,9 @@ function unpackProductionOutput(values) {
     majorantSkipCount,
     earlyTerminationCount,
     intersectingRayCount,
+    scalarLookupCount,
+    scalarSampleSum,
+    nonzeroDepthCount,
   };
 }
 
@@ -1084,8 +1097,8 @@ async function profileProductionSurvival(device, {
   const fieldsAllocation = makeBuffer(device, 'step45 sidecar-backed production field proxy', productionProxy.slots.byteLength, GPUBufferUsage.STORAGE, productionProxy.slots);
   const frontAllocation = makeBuffer(device, 'step45 source-bound front proxy', productionProxy.front.byteLength, GPUBufferUsage.STORAGE, productionProxy.front);
   const majorantAllocation = makeBuffer(device, 'step45 source-bound majorant proxy', productionProxy.majorant.byteLength, GPUBufferUsage.STORAGE, productionProxy.majorant);
-  const denseOutputAllocation = makeBuffer(device, 'production survival dense packed output', pixelCount * 8, storageCopy);
-  const compactOutputAllocation = makeBuffer(device, 'production survival compact packed output', pixelCount * 8, storageCopy);
+  const denseOutputAllocation = makeBuffer(device, 'production survival dense packed output', pixelCount * 16, storageCopy);
+  const compactOutputAllocation = makeBuffer(device, 'production survival compact packed output', pixelCount * 16, storageCopy);
   const tileCount = Math.ceil(height / config.productionTileRows);
   const tileParamsData = new Uint8Array(tileCount * 256);
   const tileParamsView = new DataView(tileParamsData.buffer);
@@ -1150,8 +1163,8 @@ async function profileProductionSurvival(device, {
       pass.end();
     },
   });
-  const denseRaw = new Float32Array(await readBuffer(device, denseOutputAllocation.buffer, pixelCount * 8));
-  const compactRaw = new Float32Array(await readBuffer(device, compactOutputAllocation.buffer, pixelCount * 8));
+  const denseRaw = new Float32Array(await readBuffer(device, denseOutputAllocation.buffer, pixelCount * 16));
+  const compactRaw = new Float32Array(await readBuffer(device, compactOutputAllocation.buffer, pixelCount * 16));
   const dense = unpackProductionOutput(denseRaw);
   const compact = unpackProductionOutput(compactRaw);
   const comparison = compare(dense.depth, compact.depth, {
@@ -1164,6 +1177,7 @@ async function profileProductionSurvival(device, {
     majorantSkipCount: value.majorantSkipCount,
     earlyTerminationCount: value.earlyTerminationCount,
     intersectingRayCount: value.intersectingRayCount,
+    scalarLookupCount: value.scalarLookupCount,
   });
   for (const allocation of [
     paramsAllocation, cameraAllocation, fieldsAllocation, frontAllocation, majorantAllocation, tileParamsAllocation,
@@ -1189,6 +1203,9 @@ async function profileProductionSurvival(device, {
     fieldSampleCount: dense.fieldSampleCount,
     majorantSkipCount: dense.majorantSkipCount,
     earlyTerminationCount: dense.earlyTerminationCount,
+    scalarLookupCount: dense.scalarLookupCount,
+    scalarSampleSum: dense.scalarSampleSum,
+    nonzeroDepthCount: dense.nonzeroDepthCount,
     armWork: { dense: workSummary(dense), compact: workSummary(compact) },
     comparison,
     outputsComplete: dense.depth.length === pixelCount && compact.depth.length === pixelCount,
@@ -1297,6 +1314,50 @@ function renderScaleLawSummary(scaleLaw) {
   node.append(heading, context, table);
 }
 
+function renderProductionSurvivalSummary(productionSurvival) {
+  const node = document.getElementById('production-survival-summary');
+  node.replaceChildren();
+  const heading = document.createElement('h2');
+  heading.textContent = 'R9 Production-Shaped Survival';
+  if (!productionSurvival) {
+    const context = document.createElement('p');
+    context.textContent = 'Production-shaped comparator not requested for this capture.';
+    node.append(heading, context);
+    return;
+  }
+  const workload = productionSurvival.effective.workload;
+  const context = document.createElement('p');
+  context.textContent = 'Full 3456x2234 device-pixel frame. Exact step45 sidecar is an explicitly synthetic production-field proxy; majorant, occupancy, adaptive stepping, early termination, and five field reads are shared. Dense and compact roles differ only at smoke-extinction lookup.';
+  const table = document.createElement('table');
+  const labels = ['Role', 'GPU ms', 'C/D ratio', 'Tested lookups', 'Nonzero pixels', 'Scalar sum', 'Max error'];
+  const header = document.createElement('tr');
+  for (const label of labels) {
+    const cell = document.createElement('th');
+    cell.textContent = label;
+    header.append(cell);
+  }
+  const row = document.createElement('tr');
+  for (const value of [
+    'Reference dense / predicted compact',
+    `${workload.profiles.dense.perDispatch.median.toFixed(3)} / ${workload.profiles.compact.perDispatch.median.toFixed(3)}`,
+    workload.compactOverDenseRatio.toFixed(3),
+    workload.scalarLookupCount.toLocaleString(),
+    workload.nonzeroDepthCount.toLocaleString(),
+    workload.scalarSampleSum.toExponential(3),
+    workload.comparison.maximumAbsoluteError.toExponential(2),
+  ]) {
+    const cell = document.createElement('td');
+    cell.textContent = value;
+    row.append(cell);
+  }
+  const head = document.createElement('thead');
+  head.append(header);
+  const body = document.createElement('tbody');
+  body.append(row);
+  table.append(head, body);
+  node.append(heading, context, table);
+}
+
 async function run() {
   const config = queryConfig();
   const requestedRoute = location.href;
@@ -1344,7 +1405,7 @@ async function run() {
   const workloadDimensions = resolveWorkloadDimensions(config, width, height);
   const largestRayBufferBytes = Math.max(...workloadDimensions.map(row => row.width * row.height * 8 * Float32Array.BYTES_PER_ELEMENT));
   const largestOutputBufferBytes = Math.max(...workloadDimensions.map(row => row.width * row.height * Float32Array.BYTES_PER_ELEMENT));
-  const productionOutputBufferBytes = config.productionSurvival ? 3456 * 2234 * 2 * Float32Array.BYTES_PER_ELEMENT : 0;
+  const productionOutputBufferBytes = config.productionSurvival ? 3456 * 2234 * 4 * Float32Array.BYTES_PER_ELEMENT : 0;
   const productionFieldBufferBytes = productionProxy?.slots.byteLength ?? 0;
   const largestStorageBufferBytes = Math.max(largestRayBufferBytes, largestOutputBufferBytes, productionOutputBufferBytes, productionFieldBufferBytes);
   const largestRequiredBufferBytes = Math.max(source.byteLength, largestStorageBufferBytes);
@@ -1758,6 +1819,9 @@ async function run() {
     productionSurvival: productionSurvivalWorkload ? {
       schema: ADAPTIVE_VOLUME_PRODUCTION_SURVIVAL_SCHEMA,
       status: productionSurvivalWorkload.comparison.maximumAbsoluteError <= ADAPTIVE_VOLUME_GPU_ERROR_LIMITS.compactPrebuiltAgainstDenseMaximumAbsoluteError
+        && productionSurvivalWorkload.scalarLookupCount > 0
+        && productionSurvivalWorkload.scalarSampleSum > 0
+        && productionSurvivalWorkload.nonzeroDepthCount > 0
         ? 'passed'
         : 'invalid-for-production-survival-claim',
       requested: {
@@ -1795,7 +1859,14 @@ async function run() {
         workloadIncomplete: !productionSurvivalWorkload.outputsComplete
           || !(productionSurvivalWorkload.intersectingRayCount > 0)
           || !(productionSurvivalWorkload.productionStepCount > 0)
+          || !(productionSurvivalWorkload.scalarLookupCount > 0)
+          || !(productionSurvivalWorkload.scalarSampleSum > 0)
+          || !(productionSurvivalWorkload.nonzeroDepthCount > 0)
           || productionSurvivalWorkload.fieldSampleCount !== productionSurvivalWorkload.productionStepCount * 5,
+        scalarLookupBypassed: !(productionSurvivalWorkload.scalarLookupCount > 0),
+        scalarSupportEmpty: !(productionSurvivalWorkload.scalarSampleSum > 0),
+        renderedSupportEmpty: !(productionSurvivalWorkload.nonzeroDepthCount > 0),
+        armWorkMismatch: JSON.stringify(productionSurvivalWorkload.armWork.dense) !== JSON.stringify(productionSurvivalWorkload.armWork.compact),
         updateCostHidden: false,
       },
       claimBoundary: 'Production-shaped common-work survival evidence using the exact accepted step45 sidecar as an explicitly synthetic four-slot fluid/front proxy. The shader ports production majorant, occupancy, adaptive-step, early-termination, and five-field-sample mechanisms, while dense and compact differ only at the smoke-extinction scalar lookup. This is not an exact live 16-channel state, separate-front-buffer, production compositor, total-frame, temporal, or integration timing claim.',
@@ -1812,6 +1883,7 @@ async function run() {
   setLabel('prebuilt-label', `${prebuiltProfile.median.toFixed(3)} ms median; dense denied; max error ${prebuiltComparison.maximumAbsoluteError.toExponential(2)}`);
   setLabel('built-label', `${buildRenderProfile.total.median.toFixed(3)} ms build+render; max error ${builtComparison.maximumAbsoluteError.toExponential(2)}`);
   renderScaleLawSummary(report.scaleLaw);
+  renderProductionSurvivalSummary(report.productionSurvival);
   setStatus(report.optimizationClaimAllowed ? 'Timestamp-backed compact independence gate passed' : `Optimization claim rejected: ${disposition.reasons.join(', ')}`);
   reportNode.textContent = JSON.stringify(report, null, 2);
   state.report = report;

@@ -8,6 +8,7 @@ import { dirname, resolve } from 'node:path';
 
 import {
   validateAdaptiveVolumeGpuReport,
+  validateAdaptiveVolumeProductionSurvivalReport,
   validateAdaptiveVolumeScaleLawReport,
 } from './smoke-adaptive-volume-gpu-falsifier.mjs';
 
@@ -113,6 +114,8 @@ function writeReport(extra = {}) {
     consoleEvents,
     optimizationClaimAllowed: browserReport?.optimizationClaimAllowed === true,
     scaleLawEvidenceAllowed: browserReport?.scaleLawEvidenceAllowed === true,
+    productionSurvivalEvidenceAllowed: browserReport?.productionSurvivalEvidenceAllowed === true,
+    productionSurvivalRejectionReasons: browserReport?.productionSurvivalRejectionReasons || [],
     browserReport: browserReportWritten ? browserReport : null,
     ...extra,
   };
@@ -297,6 +300,11 @@ async function main() {
     if (scaleLawValidation.scaleLawEvidenceAllowed !== browserReport.scaleLawEvidenceAllowed) {
       throw new Error(`browser/host scale-law validation disagreement: ${scaleLawValidation.reasons.join(',')}`);
     }
+    const productionSurvivalValidation = validateAdaptiveVolumeProductionSurvivalReport(browserReport);
+    if (productionSurvivalValidation.productionSurvivalEvidenceAllowed !== browserReport.productionSurvivalEvidenceAllowed
+      || JSON.stringify(productionSurvivalValidation.reasons) !== JSON.stringify(browserReport.productionSurvivalRejectionReasons)) {
+      throw new Error(`browser/host production-survival validation disagreement: ${productionSurvivalValidation.reasons.join(',')}`);
+    }
 
     failurePhase = 'browser-report-output';
     writeFileSync(browserReportPath, `${JSON.stringify(browserReport, null, 2)}\n`);
@@ -312,7 +320,9 @@ async function main() {
     primaryOutputWritten = true;
     failurePhase = null;
     const report = writeReport({
-      status: browserReport.scaleLawEvidenceAllowed ? 'valid-scale-law-evidence' : 'invalid-for-scale-law-claim',
+      status: browserReport.productionSurvival
+        ? (browserReport.productionSurvivalEvidenceAllowed ? 'valid-production-survival-evidence' : 'invalid-for-production-survival-claim')
+        : (browserReport.scaleLawEvidenceAllowed ? 'valid-scale-law-evidence' : 'invalid-for-scale-law-claim'),
       optimizationClaimRejectionReasons: browserReport.optimizationClaimRejectionReasons,
     });
     socket.close();

@@ -260,10 +260,29 @@ validProductionSurvivalReport.productionSurvival = {
     workload: {
       ...scaleWorkload(3456, 2234, 48, 44),
       productionStepCount: 640_000_000,
+      scalarLookupCount: 80_000_000,
+      scalarSampleSum: 12_500_000,
+      nonzeroDepthCount: 2_400_000,
       dispatchedPixelCount: 7_720_704,
       majorantSkipCount: 120_000_000,
       earlyTerminationCount: 500_000,
       fieldSampleCount: 3_200_000_000,
+      armWork: {
+        dense: {
+          productionStepCount: 640_000_000,
+          scalarLookupCount: 80_000_000,
+          majorantSkipCount: 120_000_000,
+          earlyTerminationCount: 500_000,
+          intersectingRayCount: 6_176_563,
+        },
+        compact: {
+          productionStepCount: 640_000_000,
+          scalarLookupCount: 80_000_000,
+          majorantSkipCount: 120_000_000,
+          earlyTerminationCount: 500_000,
+          intersectingRayCount: 6_176_563,
+        },
+      },
     },
   },
   updateCost: {
@@ -294,6 +313,9 @@ for (const mutate of [
   report => { report.productionSurvival.effective.matchedMechanisms.pop(); },
   report => { report.productionSurvival.effective.differingMechanism = 'lookup-and-step-schedule'; },
   report => { report.productionSurvival.effective.workload.productionStepCount = 0; },
+  report => { report.productionSurvival.effective.workload.scalarLookupCount = 0; },
+  report => { report.productionSurvival.effective.workload.scalarSampleSum = 0; },
+  report => { report.productionSurvival.effective.workload.nonzeroDepthCount = 0; },
   report => { report.productionSurvival.requested.tileRows = 0; },
   report => { report.productionSurvival.effective.workload.dispatchedPixelCount -= 3456; },
   report => { report.productionSurvival.effective.workload.fieldSampleCount = 1; },
@@ -470,6 +492,9 @@ assert.match(witness, /gitCommit[\s\S]*gitBranch[\s\S]*gitStatusShort/);
 assert.match(witness, /sourceFileSha256s/);
 assert.match(witness, /SystemInfo\.getInfo/);
 assert.match(witness, /applyHostGpuIdentity/);
+assert.match(witness, /validateAdaptiveVolumeProductionSurvivalReport/, 'R9 witness must independently validate production survival on the host');
+assert.match(witness, /productionSurvivalEvidenceAllowed/, 'R9 witness must promote the production verdict to its top-level record');
+assert.match(witness, /productionSurvivalRejectionReasons/, 'R9 witness must preserve production rejection reasons beside the verdict');
 assert.doesNotMatch(witness, /function wsRequest\([^)]*timeoutMs\s*=\s*30000/, 'uncapped browser runs must not inherit a hidden per-CDP timeout');
 assert.match(witness, /timeoutMs\s*>\s*0\s*\?\s*setTimeout/, 'explicit CDP timeouts must remain caller-owned and opt-in');
 assert.match(witness, /addEventListener\('close'/, 'whole-renderer loss must be observed by pending CDP requests');
@@ -523,7 +548,7 @@ assert.doesNotMatch(browser, /production survival Retina rays/, 'R9 production s
 assert.doesNotMatch(browser, /var<storage, read> productionRays/, 'R9 production survival rays must be generated from camera matrices in shader');
 assert.match(browser, /inverseViewProjection/, 'R9 procedural rays must bind the exact inverse view-projection matrix');
 assert.match(browser, /intersectProductionBounds/, 'R9 procedural rays must preserve exact volume intersection accounting');
-assert.match(browser, /pixelCount \* 8/, 'R9 production depth and work counters must use the packed two-float output contract');
+assert.match(browser, /pixelCount \* 16/, 'R9 production output must retain depth, packed common work, tested scalar count, and sampled scalar sum');
 assert.match(browser, /smoke-extinction-scalar-lookup-only-v0/, 'R9 arms may differ only at the tested scalar lookup');
 for (const productionMechanism of [
   /sampleWorldMajorant/,
@@ -539,6 +564,9 @@ for (const productionMechanism of [
   assert.match(browser, productionMechanism, `R9 production-shaped comparator lost ${productionMechanism}`);
 }
 assert.match(browser, /productionStepCount/, 'R9 must record actual production-shaped steps');
+assert.match(browser, /scalarLookupCount/, 'R9 must record post-occupancy execution of the arm-defining scalar lookup');
+assert.match(browser, /scalarSampleSum/, 'R9 must prove the tested scalar lookup reached nonzero smoke support');
+assert.match(browser, /nonzeroDepthCount/, 'R9 must reject visually empty output even when common production work executed');
 assert.match(browser, /production_tile_rows/, 'R9 must accept bounded dispatch granularity without reducing the workload');
 assert.match(browser, /dispatchedPixelCount/, 'R9 must prove that row tiling still covers the complete framebuffer');
 assert.match(browser, /tileBindGroups/, 'R9 must submit separate bounded row grids rather than one watchdog-sized dispatch');
@@ -548,6 +576,8 @@ assert.match(browser, /earlyTerminationCount/, 'R9 must expose early termination
 assert.match(browser, /separatelyCharged:\s*true/, 'R9 must keep compact update cost visible beside the prebuilt traversal');
 const html = readFileSync(new URL('../smoke-adaptive-volume-gpu-falsifier.html', import.meta.url), 'utf8');
 assert.match(html, /id="scale-law-summary"/, 'R8b screenshot needs a bounded scale-law context surface');
+assert.match(html, /id="production-survival-summary"/, 'R9 screenshot must anchor production timing to source, mechanism, support, and role labels');
+assert.match(browser, /renderProductionSurvivalSummary/, 'R9 screenshot must expose the production comparator context instead of only scale-law rows');
 const moduleSource = readFileSync(new URL('../smoke-adaptive-volume-gpu-falsifier.mjs', import.meta.url), 'utf8');
 assert.match(moduleSource, /kaminos\.smoke-adaptive-volume-scale-law\.v0/, 'R8 scale evidence needs its own nested schema');
 assert.match(browser, /productionAttribution/, 'R8 must bind its production comparison boundary to exact source evidence');

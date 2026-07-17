@@ -393,10 +393,24 @@ export function validateAdaptiveVolumeProductionSurvivalReport(report) {
   if (Number(workload?.width) !== 3456 || Number(workload?.height) !== 2234 || Number(workload?.pixelCount) !== pixelCount) reasons.push('production-survival-effective-workload-mismatch');
   if (!Number.isInteger(Number(workload?.intersectingRayCount)) || Number(workload.intersectingRayCount) <= 0) reasons.push('production-survival-rays-empty');
   if (!Number.isInteger(Number(workload?.productionStepCount)) || Number(workload.productionStepCount) <= 0) reasons.push('production-survival-step-count-empty');
+  if (!Number.isInteger(Number(workload?.scalarLookupCount)) || Number(workload.scalarLookupCount) <= 0) reasons.push('production-survival-scalar-lookup-empty');
+  if (!finitePositive(workload?.scalarSampleSum)) reasons.push('production-survival-scalar-support-empty');
+  if (!Number.isInteger(Number(workload?.nonzeroDepthCount)) || Number(workload.nonzeroDepthCount) <= 0) reasons.push('production-survival-rendered-support-empty');
+  if (Number(workload?.scalarLookupCount) > Number(workload?.productionStepCount)) reasons.push('production-survival-scalar-lookup-count-invalid');
   if (Number(workload?.dispatchedPixelCount) !== pixelCount) reasons.push('production-survival-dispatch-coverage-incomplete');
   if (Number(workload?.fieldSampleCount) !== Number(workload?.productionStepCount) * 5) reasons.push('production-survival-field-sample-count-invalid');
   if (!Number.isInteger(Number(workload?.majorantSkipCount)) || Number(workload.majorantSkipCount) < 0) reasons.push('production-survival-majorant-skip-invalid');
   if (!Number.isInteger(Number(workload?.earlyTerminationCount)) || Number(workload.earlyTerminationCount) < 0) reasons.push('production-survival-early-termination-invalid');
+  for (const arm of ['dense', 'compact']) {
+    const work = workload?.armWork?.[arm];
+    if (Number(work?.productionStepCount) !== Number(workload?.productionStepCount)
+      || Number(work?.scalarLookupCount) !== Number(workload?.scalarLookupCount)
+      || Number(work?.majorantSkipCount) !== Number(workload?.majorantSkipCount)
+      || Number(work?.earlyTerminationCount) !== Number(workload?.earlyTerminationCount)
+      || Number(work?.intersectingRayCount) !== Number(workload?.intersectingRayCount)) {
+      reasons.push(`production-survival-${arm}-work-mismatch`);
+    }
+  }
   if (workload?.timingProtocol !== 'paired-alternating-submit-v0' || Number(workload?.submissionCountPerPair) !== 2) reasons.push('production-survival-timing-protocol-invalid');
   if (!Array.isArray(workload?.pairedSamples) || workload.pairedSamples.length !== Number(requested?.steadySamples)) reasons.push('production-survival-paired-samples-incomplete');
   for (const arm of ['dense', 'compact']) {
