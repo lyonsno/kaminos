@@ -59,6 +59,15 @@ const validReport = {
     timestampFeature: 'timestamp-query',
     timestampStatus: 'available',
     backendIdentitySource: 'cdp-system-info',
+    cdpGpuInfo: {
+      source: 'cdp-system-info',
+      appleDeviceObserved: true,
+      devices: [{
+        vendorString: 'Google Inc. (Apple)',
+        deviceString: 'ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Max)',
+        driverVendor: 'Apple',
+      }],
+    },
     sourceGrid: 4,
     coarseGrid: 2,
     blockSize: 2,
@@ -119,6 +128,12 @@ const validReport = {
 };
 assert.equal(validateAdaptiveVolumeGpuReport(validReport).optimizationClaimAllowed, true);
 
+const validAdapterReport = structuredClone(validReport);
+validAdapterReport.effective.backendIdentitySource = 'adapter-info';
+validAdapterReport.effective.adapterInfo = { vendor: 'Apple', architecture: 'Apple M4 Max' };
+delete validAdapterReport.effective.cdpGpuInfo;
+assert.equal(validateAdaptiveVolumeGpuReport(validAdapterReport).optimizationClaimAllowed, true);
+
 for (const mutate of [
   report => { report.effective.backend = 'WebGPU:unknown'; },
   report => { report.effective.timestampStatus = 'unsupported'; },
@@ -131,6 +146,15 @@ for (const mutate of [
   report => { delete report.runtime.sourceFileSha256s.browser; },
   report => { report.compactProduct.sortOrderViolationCount = 1; },
   report => { report.effective.backendIdentitySource = 'platform-fallback-untrusted'; },
+  report => { delete report.effective.cdpGpuInfo; },
+  report => { report.effective.cdpGpuInfo.appleDeviceObserved = false; },
+  report => { report.effective.cdpGpuInfo.devices = []; },
+  report => { report.effective.cdpGpuInfo.devices = [null]; },
+  report => {
+    report.effective.backendIdentitySource = 'adapter-info';
+    report.effective.adapterInfo = { vendor: 'Unknown', architecture: 'Unknown' };
+    delete report.effective.cdpGpuInfo;
+  },
   report => { report.validation.denseAgainstCommittedReference.maximumAbsoluteError = 1; },
   report => { report.validation.compactPrebuiltAgainstDense.maximumAbsoluteError = 1; },
   report => { report.validation.buildCompactAgainstDense.maximumAbsoluteError = 1; },

@@ -139,6 +139,30 @@ function finiteNonNegative(value) {
   return Number.isFinite(Number(value)) && Number(value) >= 0;
 }
 
+function identityEvidenceText(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return '';
+  try {
+    return JSON.stringify(value).toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function hasAppleAdapterEvidence(adapterInfo) {
+  return identityEvidenceText(adapterInfo).includes('apple');
+}
+
+function hasAppleCdpEvidence(cdpGpuInfo) {
+  if (cdpGpuInfo?.source !== 'cdp-system-info'
+    || cdpGpuInfo?.appleDeviceObserved !== true
+    || !Array.isArray(cdpGpuInfo?.devices)
+    || cdpGpuInfo.devices.length === 0) return false;
+  return cdpGpuInfo.devices.some(device => {
+    const text = identityEvidenceText(device);
+    return text.includes('apple') && text.includes('metal');
+  });
+}
+
 export function validateAdaptiveVolumeGpuReport(report) {
   const reasons = [];
   const isSha256 = value => typeof value === 'string' && /^sha256:[0-9a-f]+$/i.test(value);
@@ -146,7 +170,14 @@ export function validateAdaptiveVolumeGpuReport(report) {
   if (report?.status !== 'passed') reasons.push('report-not-passed');
   if (report?.effective?.route !== ADAPTIVE_VOLUME_GPU_ROUTE) reasons.push('effective-route-mismatch');
   if (report?.effective?.backend !== 'WebGPU:apple') reasons.push('effective-backend-mismatch');
-  if (!['adapter-info', 'cdp-system-info'].includes(report?.effective?.backendIdentitySource)) reasons.push('backend-identity-authority-missing');
+  const backendIdentitySource = report?.effective?.backendIdentitySource;
+  if (!['adapter-info', 'cdp-system-info'].includes(backendIdentitySource)) {
+    reasons.push('backend-identity-authority-missing');
+  } else if (backendIdentitySource === 'adapter-info' && !hasAppleAdapterEvidence(report?.effective?.adapterInfo)) {
+    reasons.push('backend-identity-evidence-invalid:adapter-info');
+  } else if (backendIdentitySource === 'cdp-system-info' && !hasAppleCdpEvidence(report?.effective?.cdpGpuInfo)) {
+    reasons.push('backend-identity-evidence-invalid:cdp-system-info');
+  }
   if (report?.effective?.timestampFeature !== 'timestamp-query' || report?.effective?.timestampStatus !== 'available') reasons.push('timestamp-authority-missing');
   if (report?.requested?.hiddenBrickCapApplied !== false) reasons.push('hidden-cap');
   for (const key of ['matchedReportSha256', 'fitReportSha256', 'sourceSidecarSha256', 'selectionArtifactSha256', 'referenceDepthSha256']) {
