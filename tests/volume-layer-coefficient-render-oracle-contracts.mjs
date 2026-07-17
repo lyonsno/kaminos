@@ -29,6 +29,9 @@ assert.match(source, /--coefficient-overlay/, 'oracle exposes an explicit learne
 assert.match(source, /coefficient_source_label/, 'gallery labels the validated exact or learned coefficient source');
 assert.match(source, /def order_approximation_identity\(depth_bins: int\)/, 'order authority derives from the effective depth-bin count');
 assert.doesNotMatch(source, /ORDER_APPROXIMATION\s*=\s*["']camera-depth-96-bin/, 'oracle does not mislabel non-96-bin runs with a hardcoded authority');
+assert.match(source, /def bilinear_pixel_samples\(/, 'oracle exposes an area-conserving subpixel accumulation primitive');
+assert.match(source, /--footprint-mode/, 'oracle exposes the footprint accumulation arm explicitly');
+assert.match(source, /flow-tangent-five-tap-bilinear-v0/, 'oracle pins the bilinear treatment identity');
 
 const python = process.env.KAMINOS_MLX_PYTHON || '/private/tmp/kaminos-mlx-residual-venv/bin/python';
 const selfTest = spawnSync(python, [script.pathname, '--self-test'], { encoding: 'utf8' });

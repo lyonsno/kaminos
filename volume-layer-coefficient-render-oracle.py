@@ -34,6 +34,10 @@ COEFFICIENT_BOUNDARY = "per-sample-pre-tone-map-emission-extinction-v0"
 SHARED_TRANSMITTANCE = "ridge-plus-non-ridge-extinction-one-running-transmittance-v0"
 KERNEL_GEOMETRY = "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0"
 CALIBRATION_IDENTITY = "camera-10-only-global-optical-path-fit-v0"
+FOOTPRINT_MODES = {
+    "nearest": "flow-tangent-five-tap-nearest-v0",
+    "bilinear": "flow-tangent-five-tap-bilinear-v0",
+}
 COEFFICIENT_ORDER = [
     "ridge.emission.r", "ridge.emission.g", "ridge.emission.b", "ridge.extinction",
     "nonRidge.emission.r", "nonRidge.emission.g", "nonRidge.emission.b", "nonRidge.extinction",
@@ -50,6 +54,11 @@ def canonical_json(value: Any) -> str:
 
 def order_approximation_identity(depth_bins: int) -> str:
     return f"camera-depth-{depth_bins}-bin-one-running-transmittance-v0"
+
+
+def footprint_identity(mode: str) -> str:
+    require(mode in FOOTPRINT_MODES, f"unknown footprint mode {mode}")
+    return FOOTPRINT_MODES[mode]
 
 
 def sha256_file(path: Path, chunk_size: int = 8 * 1024 * 1024) -> str:
@@ -287,6 +296,21 @@ def scatter_channel(flat_indices: np.ndarray, weights: np.ndarray, size: int) ->
     return np.bincount(flat_indices, weights=weights.astype(np.float64, copy=False), minlength=size).astype(np.float32)
 
 
+def bilinear_pixel_samples(
+    x: np.ndarray, y: np.ndarray
+) -> list[tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    x0 = np.floor(x).astype(np.int32)
+    y0 = np.floor(y).astype(np.int32)
+    fx = (x - x0).astype(np.float32)
+    fy = (y - y0).astype(np.float32)
+    return [
+        (x0, y0, (1.0 - fx) * (1.0 - fy)),
+        (x0 + 1, y0, fx * (1.0 - fy)),
+        (x0, y0 + 1, (1.0 - fx) * fy),
+        (x0 + 1, y0 + 1, fx * fy),
+    ]
+
+
 def rasterize_coefficients(
     positions: np.ndarray,
     tangents: np.ndarray,
@@ -294,12 +318,15 @@ def rasterize_coefficients(
     coefficients: np.ndarray,
     camera: dict[str, Any],
     depth_bins: int,
+    footprint_mode: str,
 ) -> tuple[np.ndarray, dict[str, Any]]:
     width, height = int(camera["width"]), int(camera["height"])
     pose = camera["cameraPose"]
     ndc, depth, valid = project(positions, pose["matrixWorldInverse"], pose["projectionMatrix"])
-    x = ((ndc[:, 0] * 0.5 + 0.5) * width).astype(np.int32)
-    y = ((1.0 - (ndc[:, 1] * 0.5 + 0.5)) * height).astype(np.int32)
+    pixel_x = (ndc[:, 0] * 0.5 + 0.5) * width
+    pixel_y = (1.0 - (ndc[:, 1] * 0.5 + 0.5)) * height
+    x = pixel_x.astype(np.int32)
+    y = pixel_y.astype(np.int32)
     valid &= (x >= 0) & (x < width) & (y >= 0) & (y < height) & np.isfinite(depth)
     valid_indices = np.flatnonzero(valid)
     require(valid_indices.size > 0, f"camera {camera['cameraIndex']} projected zero admitted rows")
@@ -325,15 +352,25 @@ def rasterize_coefficients(
     raster_size = depth_bins * height * width
     planes = np.zeros((depth_bins, height, width, 8), dtype=np.float32)
     for offset, footprint_weight in zip(offsets, offset_weights):
-        ox = np.rint(tx * major_px * offset).astype(np.int32)
-        oy = np.rint(ty * major_px * offset).astype(np.int32)
-        sx = x + ox
-        sy = y + oy
-        selected = valid & tangent_valid & (sx >= 0) & (sx < width) & (sy >= 0) & (sy < height)
-        rows = np.flatnonzero(selected)
-        flat = ((depth_index[rows] * height + sy[rows]) * width + sx[rows]).astype(np.int64)
-        for channel in range(8):
-            planes[..., channel] += scatter_channel(flat, coefficients[rows, channel] * footprint_weight, raster_size).reshape(depth_bins, height, width)
+        if footprint_mode == "nearest":
+            pixel_samples = [(
+                x + np.rint(tx * major_px * offset).astype(np.int32),
+                y + np.rint(ty * major_px * offset).astype(np.int32),
+                np.ones_like(pixel_x, dtype=np.float32),
+            )]
+        else:
+            require(footprint_mode == "bilinear", f"unknown footprint mode {footprint_mode}")
+            pixel_samples = bilinear_pixel_samples(
+                pixel_x + tx * major_px * offset,
+                pixel_y + ty * major_px * offset,
+            )
+        for sx, sy, sample_weight in pixel_samples:
+            selected = valid & tangent_valid & (sample_weight > 0.0) & (sx >= 0) & (sx < width) & (sy >= 0) & (sy < height)
+            rows = np.flatnonzero(selected)
+            flat = ((depth_index[rows] * height + sy[rows]) * width + sx[rows]).astype(np.int64)
+            weighted = footprint_weight * sample_weight[rows]
+            for channel in range(8):
+                planes[..., channel] += scatter_channel(flat, coefficients[rows, channel] * weighted, raster_size).reshape(depth_bins, height, width)
     return planes, {
         "admittedRows": int(positions.shape[0]),
         "projectedRows": int(valid_indices.size),
@@ -342,7 +379,8 @@ def rasterize_coefficients(
         "depthBins": depth_bins,
         "orderApproximation": order_approximation_identity(depth_bins),
         "kernelGeometry": KERNEL_GEOMETRY,
-        "orientation": "checksum-bound-flow-tangent-five-tap-projected-kernel-v0",
+        "footprintMode": footprint_identity(footprint_mode),
+        "orientation": footprint_identity(footprint_mode),
     }
 
 
@@ -554,7 +592,8 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
     out_dir.mkdir(parents=True, exist_ok=True)
     calibration_camera = cameras[10]
     calibration_planes, calibration_raster = rasterize_coefficients(
-        descriptors[:, 0:3], descriptors[:, 20:23], features, coefficients, calibration_camera, args.depth_bins
+        descriptors[:, 0:3], descriptors[:, 20:23], features, coefficients, calibration_camera, args.depth_bins,
+        args.footprint_mode,
     )
     target_capture = find_capture(capture_report, 10, "sharedTransmittanceContributionSum", 160)
     target = image_rgb(Path(target_capture["imagePath"]))
@@ -567,7 +606,8 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
     for camera in cameras:
         index = int(camera["cameraIndex"])
         planes, raster_receipt = (calibration_planes, calibration_raster) if index == 10 else rasterize_coefficients(
-            descriptors[:, 0:3], descriptors[:, 20:23], features, coefficients, camera, args.depth_bins
+            descriptors[:, 0:3], descriptors[:, 20:23], features, coefficients, camera, args.depth_bins,
+            args.footprint_mode,
         )
         expanded_linear, ridge_linear, nonridge_linear, trans = compose_planes(planes, path_scale, "total")
         ridge_total_planes = planes.copy()
@@ -628,12 +668,13 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
         "requested": {
             "manifest": str(manifest_path), "captureReport": str(capture_path), "stateStep": state_step,
             "coefficientOverlay": str(Path(args.coefficient_overlay).resolve()) if args.coefficient_overlay else None,
-            "sampleCap": None, "depthBins": args.depth_bins,
+            "sampleCap": None, "depthBins": args.depth_bins, "footprintMode": args.footprint_mode,
         },
         "effective": {
             "stateId": state.get("id"), "stateStep": state_step, "rowCount": count,
             "candidateAdmissionAuthority": ADMISSION_AUTHORITY, "coefficientBoundary": COEFFICIENT_BOUNDARY,
             "sharedTransmittanceIdentity": SHARED_TRANSMITTANCE, "kernelGeometry": KERNEL_GEOMETRY,
+            "footprintMode": footprint_identity(args.footprint_mode),
             "orderApproximation": order_approximation_identity(args.depth_bins), "sampleCap": None, "droppedRowCount": 0,
             "independentlyRenderedToneMappedImageAdditivity": False,
             "coefficientSourceAuthority": PREDICTION_AUTHORITY if prediction_overlay_receipt else "exact-local-layer-emission-extinction-v0",
@@ -670,7 +711,7 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
             "notExactFullCovariance": True,
             "notExactPerSplatOrder": True,
             "orderApproximation": order_approximation_identity(args.depth_bins),
-            "orientationApproximation": "five-tap-quantized-projected-flow-tangent-v0",
+            "orientationApproximation": footprint_identity(args.footprint_mode),
             "interpretation": "coefficient/extinction transplant assay; not a shipping-renderer parity claim",
         },
     }
@@ -699,6 +740,9 @@ def self_test() -> None:
     high_scale_fit = fit_optical_path_scale(high_scale_planes, high_scale_target)
     require(high_scale_fit["pathScale"] > 2.7, "self-test calibration retained the old upper cap")
     require(high_scale_fit["calibrationBoundaryHit"] is False, "self-test calibration remained boundary-limited")
+    samples = bilinear_pixel_samples(np.asarray([2.25], dtype=np.float32), np.asarray([3.5], dtype=np.float32))
+    require(abs(sum(float(weight[0]) for _, _, weight in samples) - 1.0) < 1e-6, "self-test bilinear weights do not conserve area")
+    require({(int(x[0]), int(y[0])) for x, y, _ in samples} == {(2, 3), (3, 3), (2, 4), (3, 4)}, "self-test bilinear support drifted")
     print("coefficient render oracle self-test passed")
 
 
@@ -711,6 +755,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--report")
     parser.add_argument("--state-step", type=int, default=96)
     parser.add_argument("--depth-bins", type=int, default=96)
+    parser.add_argument("--footprint-mode", choices=sorted(FOOTPRINT_MODES), default="nearest")
     parser.add_argument("--validate-only", action="store_true")
     parser.add_argument("--skip-hash-verification", action="store_true")
     parser.add_argument("--self-test", action="store_true")
