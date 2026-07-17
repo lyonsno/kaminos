@@ -582,6 +582,8 @@ assert.match(html, /<header[\s\S]*id="production-survival-summary"[\s\S]*<main>/
 assert.match(browser, /renderProductionSurvivalSummary/, 'R9 screenshot must expose the production comparator context instead of only scale-law rows');
 assert.match(browser, /Production comparator:/, 'R9 screenshot status must name the production result instead of implying isolated optimization success');
 assert.match(browser, /compact\/dense/, 'R9 screenshot status must expose the production compact/dense timing ratio');
+assert.match(browser, /function renderFinalStatus/, 'browser and host disposition paths must share one authority-aware final status renderer');
+assert.match(browser, /applyHostGpuIdentity[\s\S]*renderFinalStatus\(state\.report/, 'host GPU identity injection must preserve the production verdict in the visible status');
 const moduleSource = readFileSync(new URL('../smoke-adaptive-volume-gpu-falsifier.mjs', import.meta.url), 'utf8');
 assert.match(moduleSource, /kaminos\.smoke-adaptive-volume-scale-law\.v0/, 'R8 scale evidence needs its own nested schema');
 assert.match(browser, /productionAttribution/, 'R8 must bind its production comparison boundary to exact source evidence');

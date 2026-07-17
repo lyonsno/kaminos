@@ -70,6 +70,16 @@ function applyReportDisposition(report) {
   return disposition;
 }
 
+function renderFinalStatus(report) {
+  if (report.productionSurvival) {
+    setStatus(`Production comparator: ${report.productionSurvivalEvidenceAllowed ? 'support-proven evidence passed' : `rejected (${report.productionSurvivalRejectionReasons.join(', ')})`}; compact/dense ${report.productionSurvival.effective.workload.compactOverDenseRatio.toFixed(3)}x at 3456x2234`);
+    return;
+  }
+  setStatus(report.optimizationClaimAllowed
+    ? 'Timestamp-backed compact independence gate passed'
+    : `Optimization claim rejected: ${report.optimizationClaimRejectionReasons.join(', ')}`);
+}
+
 function queryConfig() {
   const params = new URLSearchParams(location.search);
   const integer = (key, fallback) => {
@@ -1874,7 +1884,7 @@ async function run() {
     falseClosureChecks,
     claimBoundary: 'Static isolated single-channel Apple WebGPU compute evidence. Source scalar formation from the live 16-channel fluid buffer and the production compositor are not timed. GPU build includes parent means, residual scoring, complete 65536-record bitonic sorting, top-K selection application, indirection, and padded fine-atlas packing. Dense denial destroys the source buffer before compact rerender.',
   };
-  const disposition = applyReportDisposition(report);
+  applyReportDisposition(report);
 
   drawDepth('dense', denseOutput, width, height);
   drawDepth('prebuilt', prebuiltAfterDenial, width, height);
@@ -1884,11 +1894,7 @@ async function run() {
   setLabel('built-label', `${buildRenderProfile.total.median.toFixed(3)} ms build+render; max error ${builtComparison.maximumAbsoluteError.toExponential(2)}`);
   renderScaleLawSummary(report.scaleLaw);
   renderProductionSurvivalSummary(report.productionSurvival);
-  if (report.productionSurvival) {
-    setStatus(`Production comparator: ${report.productionSurvivalEvidenceAllowed ? 'support-proven evidence passed' : `rejected (${report.productionSurvivalRejectionReasons.join(', ')})`}; compact/dense ${report.productionSurvival.effective.workload.compactOverDenseRatio.toFixed(3)}x at 3456x2234`);
-  } else {
-    setStatus(report.optimizationClaimAllowed ? 'Timestamp-backed compact independence gate passed' : `Optimization claim rejected: ${disposition.reasons.join(', ')}`);
-  }
+  renderFinalStatus(report);
   reportNode.textContent = JSON.stringify(report, null, 2);
   state.report = report;
   state.phase = 'complete';
@@ -1908,8 +1914,8 @@ window.__kaminosAdaptiveVolumeGpuFalsifier = {
     state.report.status = 'passed';
     state.report.falseClosureChecks.fallbackRoute = false;
     if (identity.appleDeviceObserved !== true) state.report.falseClosureChecks.fallbackRoute = true;
-    const disposition = applyReportDisposition(state.report);
-    setStatus(state.report.optimizationClaimAllowed ? 'Timestamp-backed compact independence gate passed' : `Optimization claim rejected: ${disposition.reasons.join(', ')}`);
+    applyReportDisposition(state.report);
+    renderFinalStatus(state.report);
     reportNode.textContent = JSON.stringify(state.report, null, 2);
     return structuredClone(state.report);
   },
