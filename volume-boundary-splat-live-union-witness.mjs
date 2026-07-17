@@ -80,7 +80,7 @@ try {
       tiger: {
         jobType: TIGER_JOB_TYPE,
         script: TIGER_WITNESS,
-        knownGoodLocalRunnerChecked: 'yes:/private/tmp/kaminos-kaminos-tiger-exact-appearance-candidates-0716/volume-layer-coefficient-live-union-witness.mjs',
+        knownGoodLocalRunnerChecked: 'yes:operator-local Tiger exact imported-state runner',
         effectiveEnvDeviceBackendPreserved: 'Greenroom job kaminos_layer_coefficient_live_union_witness; backend WebGPU:apple; exact field import; no lookup miss/extra/overflow accepted',
       },
       sampleBoundarySplatLiveUnionOccupancyMissingIsNotBlocker: true,
