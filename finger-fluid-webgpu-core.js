@@ -1349,7 +1349,6 @@ struct AccumVertexOutput {
   @location(2) surface: f32,
   @location(3) speed: f32,
   @location(4) tracer: f32,
-  @location(5) surfaceRadius: f32,
 }
 
 @vertex
@@ -1372,7 +1371,6 @@ fn vs_accumulate(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_inde
   output.surface = surface;
   output.speed = length(particle.velocity.xyz);
   output.tracer = materialTracers[instanceIndex].concentrationDeltaRecipeSource.x;
-  output.surfaceRadius = radius;
   return output;
 }
 
@@ -1386,8 +1384,7 @@ fn fs_accumulate(input: AccumVertexOutput) -> @location(0) vec4<f32> {
   let thickness = edge * surfaceWeight * (0.35 + cap * 1.85);
   let opticalThickness = thickness * (0.55 + 0.45 * smoothstep(0.0, ${MAX_FLUID_SPEED}, input.speed));
   let depthWeight = edge * surfaceWeight;
-  let surfaceViewDepth = max(0.001, input.viewDepth - cap * input.surfaceRadius);
-  return vec4<f32>(opticalThickness, input.tracer * opticalThickness, depthWeight, surfaceViewDepth);
+  return vec4<f32>(input.viewDepth * depthWeight, depthWeight, opticalThickness, input.tracer * opticalThickness);
 }
 
 struct FullscreenVertexOutput {
@@ -1415,13 +1412,13 @@ fn readAccum(pixel: vec2<i32>) -> vec4<f32> {
 }
 
 fn weightedDepth(sampleValue: vec4<f32>) -> f32 {
-  return sampleValue.w;
+  return sampleValue.x / max(sampleValue.y, 0.0001);
 }
 
 fn edgePreservingDepth(pixel: vec2<i32>, centerAccum: vec4<f32>) -> f32 {
   let centerDepth = weightedDepth(centerAccum);
-  var depthSum = centerDepth * centerAccum.z * 2.0;
-  var weightSum = centerAccum.z * 2.0;
+  var depthSum = centerDepth * centerAccum.y * 2.0;
+  var weightSum = centerAccum.y * 2.0;
   for (var y = -1; y <= 1; y = y + 1) {
     for (var x = -1; x <= 1; x = x + 1) {
       if (x == 0 && y == 0) { continue; }
@@ -1429,7 +1426,7 @@ fn edgePreservingDepth(pixel: vec2<i32>, centerAccum: vec4<f32>) -> f32 {
       let sampleDepth = weightedDepth(sampleValue);
       let continuity = exp(-abs(sampleDepth - centerDepth) * 11.0);
       let spatial = select(0.74, 1.0, abs(x) + abs(y) == 1);
-      let weight = sampleValue.z * continuity * spatial;
+      let weight = sampleValue.y * continuity * spatial;
       depthSum = depthSum + sampleDepth * weight;
       weightSum = weightSum + weight;
     }
@@ -1446,22 +1443,11 @@ fn reconstructSurfaceNormal(pixel: vec2<i32>, centerDepth: f32) -> vec3<f32> {
   return normalize(vec3<f32>(-gradient.x * 7.2, gradient.y * 7.2, 1.0 + centerDepth * 0.015));
 }
 
-struct CompositeOutput {
-  @location(0) color: vec4<f32>,
-  @builtin(frag_depth) depth: f32,
-}
-
-fn viewDepthToNdc(viewDepth: f32) -> f32 {
-  let near = 0.08;
-  let far = 30.0;
-  return far / (far - near) - (near * far) / ((far - near) * max(viewDepth, near));
-}
-
 @fragment
-fn fs_composite(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOutput {
+fn fs_composite(@builtin(position) fragmentPosition: vec4<f32>) -> @location(0) vec4<f32> {
   let pixel = vec2<i32>(fragmentPosition.xy);
   let centerAccum = readAccum(pixel);
-  if (centerAccum.z < 0.018 || centerAccum.x < 0.012) { discard; }
+  if (centerAccum.y < 0.018 || centerAccum.z < 0.012) { discard; }
   let depth = edgePreservingDepth(pixel, centerAccum);
   let normal = reconstructSurfaceNormal(pixel, depth);
   let viewDir = vec3<f32>(0.0, 0.0, 1.0);
@@ -1471,8 +1457,8 @@ fn fs_composite(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOutp
   let fresnel = pow(1.0 - ndv, 5.0) * 0.82 + 0.04;
   let diffuse = max(dot(normal, light), 0.0);
   let specular = pow(max(dot(normal, halfVector), 0.0), 92.0) * (0.62 + fresnel);
-  let thickness = centerAccum.x;
-  let tracer = centerAccum.y / max(thickness, 0.0001);
+  let thickness = centerAccum.z;
+  let tracer = centerAccum.w / max(thickness, 0.0001);
   let absorption = exp(-vec3<f32>(0.42, 0.18, 0.06) * thickness * 0.10);
   let shallow = vec3<f32>(0.34, 0.96, 1.08);
   let deep = vec3<f32>(0.05, 0.36, 0.72);
@@ -1480,10 +1466,7 @@ fn fs_composite(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOutp
   let body = mix(shallow, deep, smoothstep(1.2, 8.0, thickness)) * absorption;
   let color = body * (0.54 + diffuse * 0.84) + mineral * 0.08 + vec3<f32>(0.78, 0.98, 1.0) * fresnel * 0.52 + vec3<f32>(1.0) * specular * 1.25;
   let alpha = clamp(0.34 + thickness * 0.070 + fresnel * 0.22, 0.34, 0.88);
-  var output: CompositeOutput;
-  output.color = vec4<f32>(color, alpha);
-  output.depth = clamp(viewDepthToNdc(depth), 0.0, 1.0);
-  return output;
+  return vec4<f32>(color, alpha);
 }
 `;
 
@@ -2290,7 +2273,7 @@ export async function createWebGPUFingerFluidSolver({
           format: 'rgba16float',
           blend: {
             color: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
-            alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'min' },
+            alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
           },
         }],
       },
@@ -2312,7 +2295,6 @@ export async function createWebGPUFingerFluidSolver({
         }],
       },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
-      depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
     });
   } catch (error) {
     return createUnavailableSolver(`WebGPU render pipeline validation failed: ${error.message || String(error)}`);
@@ -2596,7 +2578,7 @@ export async function createWebGPUFingerFluidSolver({
         label: `${KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE}:particle-depth-optical-thickness`,
         colorAttachments: [{
           view: screenSpaceSurfaceAccumulationTexture.createView(),
-          clearValue: { r: 0, g: 0, b: 0, a: 30 },
+          clearValue: { r: 0, g: 0, b: 0, a: 0 },
           loadOp: 'clear',
           storeOp: 'store',
         }],
@@ -2614,11 +2596,6 @@ export async function createWebGPUFingerFluidSolver({
           loadOp: 'load',
           storeOp: 'store',
         }],
-        depthStencilAttachment: {
-          view: depthTexture.createView(),
-          depthLoadOp: 'load',
-          depthStoreOp: 'store',
-        },
       });
       compositePass.setPipeline(screenSpaceSurfaceCompositePipeline);
       compositePass.setBindGroup(0, screenSpaceSurfaceCompositeBindGroup);

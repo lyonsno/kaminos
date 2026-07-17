@@ -49,11 +49,6 @@ assert.match(
   /fn fs_composite\([^)]*@builtin\(position\) fragmentPosition:[^)]*\)[\s\S]*let pixel = vec2<i32>\(fragmentPosition\.xy\)/,
   'screen-space composite addresses the accumulation texture in fragment framebuffer coordinates without a clip-space Y reflection',
 );
-assert.match(webgpuCoreSource, /@builtin\(frag_depth\) depth: f32/, 'screen-space composite emits reconstructed liquid depth');
-assert.match(webgpuCoreSource, /return vec4<f32>\(opticalThickness, input\.tracer \* opticalThickness, depthWeight, surfaceViewDepth\)/, 'surface accumulation keeps additive optical channels separate from nearest-front depth');
-assert.match(webgpuCoreSource, /format:\s*'rgba16float',[\s\S]*color:\s*\{[^}]*operation:\s*'add'[^}]*\},\s*alpha:\s*\{[^}]*operation:\s*'min'/, 'surface accumulation uses nearest-front depth instead of an overlap-weighted average that can fall behind support');
-assert.match(webgpuCoreSource, /screenSpaceSurfaceCompositePipeline[\s\S]*depthStencil:\s*\{\s*format:\s*'depth24plus',\s*depthWriteEnabled:\s*true,\s*depthCompare:\s*'less'/, 'screen-space surface depth-tests against support geometry');
-assert.match(webgpuCoreSource, /compositePass[\s\S]*depthStencilAttachment:\s*\{[\s\S]*view:\s*depthTexture\.createView\(\)[\s\S]*depthLoadOp:\s*'load'/, 'surface composite loads the support underlay depth instead of painting through it');
 assert.match(webgpuCoreSource, /edgePreservingDepth/, 'screen-space shader performs edge-preserving depth smoothing');
 assert.match(webgpuCoreSource, /reconstructSurfaceNormal/, 'screen-space shader reconstructs normals from smoothed particle depth');
 assert.match(webgpuCoreSource, /fresnel/, 'screen-space shader exposes Fresnel/specular water shading');
