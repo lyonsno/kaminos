@@ -300,8 +300,10 @@ try {
     selectorRecipeSha256: main.audit.unionReceipt.selectorRecipeSha256,
     source: {
       commit: gitValue(['rev-parse', 'HEAD']),
-      branch: gitValue(['branch', '--show-current']),
-      worktree: process.cwd(),
+      branch: null,
+      branchAuthority: 'private-source-control-coordination-ref',
+      worktree: null,
+      worktreeAuthority: 'private-source-control-coordination-ref',
     },
     backend: evidence.backend,
     effectiveRoute: evidence.effectiveRoute,
@@ -465,7 +467,7 @@ function delay(ms) {
 function artifact(path) {
   const bytes = readFileSync(path);
   return {
-    path,
+    path: relative(process.cwd(), path),
     byteLength: bytes.byteLength,
     sha256: createHash('sha256').update(bytes).digest('hex'),
   };
