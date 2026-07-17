@@ -167,6 +167,13 @@
       createLayeredStructuralGpuTearRequestGate,
       runLayeredStructuralSympatheticTearWebGpu,
     } from './structural-material-3d-webgpu-tear.js';
+    import {
+      DEFAULT_STRUCTURAL_MATERIAL_NATIVE_HAPTIC_URL,
+      buildLayeredStructuralHapticImpulse,
+      createLatestStructuralInteractionScheduler,
+      detectStructuralHapticCapabilities,
+      dispatchStructuralHapticImpulse,
+    } from './structural-material-3d-live-drag.js';
 
     const stage = document.querySelector('#stage');
     const readout = document.querySelector('#readout');
@@ -174,6 +181,10 @@
     const gpuStatus = document.querySelector('#gpu-status');
     const gesture = document.querySelector('#gesture');
     const CAMERA_CONTROL_AUTHORITY = 'operator-camera-controls-v0';
+    const hapticCompanionParameter = new URL(window.location.href).searchParams.get('hapticCompanion');
+    const nativeHapticCompanionUrl = hapticCompanionParameter === 'off'
+      ? null
+      : hapticCompanionParameter || DEFAULT_STRUCTURAL_MATERIAL_NATIVE_HAPTIC_URL;
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0a0d10);
@@ -248,7 +259,16 @@
     let gpuTearDiscardedCount = 0;
     let gpuHotSidecar = null;
     let gpuHotSidecarPromise = null;
+    let hapticImpulseCount = 0;
+    let hapticDispatchCount = 0;
+    let hapticDispatchErrorCount = 0;
+    let latestHapticImpulse = null;
+    let latestHapticDispatchReceipt = null;
+    const hapticCapabilities = detectStructuralHapticCapabilities(undefined, { nativeCompanionUrl: nativeHapticCompanionUrl });
     const gpuTearRequestGate = createLayeredStructuralGpuTearRequestGate();
+    const liveDragScheduler = createLatestStructuralInteractionScheduler({
+      execute: interaction => requestGpuSympatheticTear(material, interaction),
+    });
 
     function worldPoint(node) {
       return new THREE.Vector3(
@@ -437,7 +457,39 @@
           depthBias,
         });
         lastPoint = forceEnvelope.point;
+        return forceEnvelope;
       });
+    }
+
+    function consumeLiveDragPromise(promise, failurePhase) {
+      void promise.catch(error => {
+        gpuTearReceipt = buildLayeredStructuralHotSympatheticTearFailureReceipt(
+          error,
+          failurePhase,
+        );
+        updateReadout();
+      });
+    }
+
+    function routeStructuralHaptics(previousState, nextState, receipt, interaction) {
+      const impulse = buildLayeredStructuralHapticImpulse(previousState, nextState, receipt, interaction);
+      if (!impulse) return;
+      hapticImpulseCount += 1;
+      latestHapticImpulse = impulse;
+      void dispatchStructuralHapticImpulse(impulse, { nativeCompanionUrl: nativeHapticCompanionUrl })
+        .then(dispatchReceipt => {
+          hapticDispatchCount += 1;
+          latestHapticDispatchReceipt = dispatchReceipt;
+        })
+        .catch(error => {
+          hapticDispatchErrorCount += 1;
+          latestHapticDispatchReceipt = {
+            status: 'failed',
+            failurePhase: 'causal-haptic-dispatch',
+            error: error instanceof Error ? error.message : String(error),
+            impulse,
+          };
+        });
     }
 
     function requestGpuSympatheticTear(sourceState, interaction, { applyToWorld = true } = {}) {
@@ -476,9 +528,12 @@
         }
         gpuTearReceipt = receipt;
         if (applyToWorld && receipt.status === 'passed') {
+          let nextMaterial;
           runStructuralMutation('gpu-sympathetic-tear', () => {
-            material = buildLayeredStructuralGpuTearMaterial(effectiveSourceState, receipt, interaction);
+            nextMaterial = buildLayeredStructuralGpuTearMaterial(effectiveSourceState, receipt, interaction);
+            material = nextMaterial;
           });
+          routeStructuralHaptics(effectiveSourceState, nextMaterial, receipt, interaction);
           gpuTearAppliedCount += 1;
           gpuTearPreviousAppliedReceipt = gpuTearLatestAppliedReceipt;
           gpuTearLatestAppliedReceipt = receipt;
@@ -547,26 +602,36 @@
     });
     renderer.domElement.addEventListener('pointermove', (event) => {
       if (event.pointerId !== materialPointerId) return;
-      applyDrag(eventPoint(event));
+      const interaction = applyDrag(eventPoint(event));
+      consumeLiveDragPromise(
+        liveDragScheduler.offer(interaction),
+        'live-drag-pointer-move',
+      );
     });
     renderer.domElement.addEventListener('pointerup', (event) => {
       if (event.pointerId !== materialPointerId) return;
       applyDrag(eventPoint(event));
       const releasedForce = forceEnvelope;
-      const sourceState = material;
       materialPointerId = null;
       if (renderer.domElement.hasPointerCapture(event.pointerId)) {
         renderer.domElement.releasePointerCapture(event.pointerId);
       }
-      void requestGpuSympatheticTear(sourceState, releasedForce);
+      consumeLiveDragPromise(
+        liveDragScheduler.flush(releasedForce),
+        'live-drag-pointer-release',
+      );
     });
     renderer.domElement.addEventListener('pointercancel', (event) => {
       if (event.pointerId !== materialPointerId) return;
       materialPointerId = null;
       dragStart = null;
+      liveDragScheduler.invalidate();
+      gpuTearRequestGate.invalidate();
+      synchronizeHotSidecar(material);
     });
     document.querySelector('#reset').addEventListener('click', () => {
       runStructuralMutation('reset', () => {
+        liveDragScheduler.invalidate();
         gpuTearRequestGate.invalidate();
         material = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true });
         dragStart = null;
@@ -588,9 +653,13 @@
           radius: 0.26,
         };
       });
-      void requestGpuSympatheticTear(material, forceEnvelope);
+      consumeLiveDragPromise(
+        liveDragScheduler.flush(forceEnvelope),
+        'live-drag-shear-command',
+      );
     });
     document.querySelector('#bind').addEventListener('click', () => {
+      liveDragScheduler.invalidate();
       gpuTearRequestGate.invalidate();
       runStructuralMutation('bind', () => {
         const summary = summarizeLayeredStructuralState(material);
@@ -623,6 +692,20 @@
       gpuTearRecentAppliedReceipts: [gpuTearPreviousAppliedReceipt, gpuTearLatestAppliedReceipt]
         .filter(Boolean),
       gpuTearDiscardedCount,
+      liveDrag: {
+        pointerActive: materialPointerId !== null,
+        pointerId: materialPointerId,
+        scheduler: liveDragScheduler.snapshot(),
+      },
+      haptics: {
+        nativeCompanionUrl: nativeHapticCompanionUrl,
+        capabilities: hapticCapabilities,
+        impulseCount: hapticImpulseCount,
+        dispatchCount: hapticDispatchCount,
+        dispatchErrorCount: hapticDispatchErrorCount,
+        latestImpulse: latestHapticImpulse,
+        latestDispatchReceipt: latestHapticDispatchReceipt,
+      },
       sympatheticTear: material.sympatheticTear || null,
       visibleTear: visibleTearState(),
     });

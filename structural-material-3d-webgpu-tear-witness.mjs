@@ -18,6 +18,7 @@ function usage() {
     '  --screenshot <capture.png>',
     '  [--debug-port 9223] [--width 1280] [--height 820]',
     '  [--device-scale-factor 1] [--load-timeout-ms 30000]',
+    '  [--require-native-haptics true|false]',
   ].join('\n');
 }
 
@@ -40,6 +41,14 @@ function parseArgs(argv) {
     if (!Number.isFinite(value) || value <= 0) throw new Error(`--${name} must be a positive number`);
     return value;
   };
+  const boolean = (name, fallback) => {
+    if (!values.has(name)) return fallback;
+    const value = values.get(name);
+    if (value !== 'true' && value !== 'false') {
+      throw new Error(`--${name} must be true or false; received ${JSON.stringify(value)}`);
+    }
+    return value === 'true';
+  };
   return {
     help: false,
     url: values.get('url'),
@@ -50,6 +59,7 @@ function parseArgs(argv) {
     height: number('height', 820),
     deviceScaleFactor: number('device-scale-factor', 1),
     loadTimeoutMs: number('load-timeout-ms', 30000),
+    requireNativeHaptics: boolean('require-native-haptics', false),
   };
 }
 
@@ -178,6 +188,35 @@ let config;
 try {
   config = parseArgs(process.argv.slice(2));
 } catch (error) {
+  const rawArguments = process.argv.slice(2);
+  const outputIndex = rawArguments.indexOf('--out');
+  const requestedOutput = outputIndex >= 0 && rawArguments[outputIndex + 1]
+    ? resolve(rawArguments[outputIndex + 1])
+    : null;
+  if (requestedOutput) {
+    const failureReport = {
+      schema: SCHEMA,
+      status: 'failed',
+      failurePhase: 'configuration',
+      requestedPageRoute: STRUCTURAL_MATERIAL_3D_ROUTE,
+      effectivePageRoute: null,
+      requestedRoute: STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_ROUTE,
+      effectiveRoute: null,
+      requestedBackend: 'webgpu',
+      effectiveBackend: null,
+      cpuFallbackUsed: null,
+      requestedConfig: { arguments: rawArguments, reportPath: requestedOutput },
+      effectiveConfig: null,
+      lastTrustworthyEvidence: null,
+      error: {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      },
+    };
+    mkdirSync(dirname(requestedOutput), { recursive: true });
+    writeFileSync(requestedOutput, `${JSON.stringify(failureReport, null, 2)}\n`);
+  }
   console.error(`${error.message}\n\n${usage()}`);
   process.exit(2);
 }
@@ -204,6 +243,7 @@ const report = {
     height: config.height,
     deviceScaleFactor: config.deviceScaleFactor,
     loadTimeoutMs: config.loadTimeoutMs,
+    requireNativeHaptics: config.requireNativeHaptics,
     reportPath: config.out,
     screenshotPath: config.screenshot,
   },
@@ -245,6 +285,7 @@ try {
     reportPath: config.out,
     screenshotPath: config.screenshot,
     browserTarget: 'first-page-target',
+    requireNativeHaptics: config.requireNativeHaptics,
   };
 
   report.failurePhase = 'page-load';
@@ -291,16 +332,65 @@ try {
     buttons: 1,
     clickCount: 1,
   });
-  await send('Input.dispatchMouseEvent', {
-    type: 'mouseMoved',
-    ...dragEnd,
-    button: 'left',
-    buttons: 1,
-  });
+  const denseDragSamples = [0.66, 0.78, 0.92].map(fraction => ({
+    x: stageRect.left + stageRect.width * fraction,
+    y: dragEnd.y,
+  }));
+  await evaluate(`(() => {
+    const canvas = document.querySelector('#stage canvas');
+    const pointerId = window.__structuralMaterial3dWitness().liveDrag.pointerId;
+    const samples = ${JSON.stringify(denseDragSamples)};
+    if (!Number.isInteger(pointerId)) throw new Error('active material pointer id missing');
+    for (const sample of samples) {
+      canvas.dispatchEvent(new PointerEvent('pointermove', {
+        pointerId,
+        isPrimary: true,
+        bubbles: true,
+        buttons: 1,
+        clientX: sample.x,
+        clientY: sample.y,
+      }));
+    }
+  })()`);
   const dragged = await evaluate('window.__structuralMaterial3dWitness()');
   report.checks.effigyDragProducedForce = dragged.forceEnvelope?.dragLength > 0.3 &&
     dragged.forceEnvelope?.magnitude > 1;
   assertCheck(report.checks.effigyDragProducedForce, 'effigy drag did not produce a structural force envelope');
+
+  const preReleaseDeadline = Date.now() + config.loadTimeoutMs;
+  let preRelease = dragged;
+  while (Date.now() < preReleaseDeadline) {
+    preRelease = await evaluate('window.__structuralMaterial3dWitness()');
+    if (preRelease.gpuSympatheticTear?.status === 'passed' && preRelease.visibleTear?.components?.length > 1) break;
+    await new Promise(resolveWait => setTimeout(resolveWait, 20));
+  }
+  report.checks.preReleaseStructuralMutation = preRelease.gpuSympatheticTear?.status === 'passed' &&
+    preRelease.summary?.brokenBondCount > 0 &&
+    preRelease.visibleTear?.components?.length > 1 &&
+    preRelease.liveDrag?.pointerActive === true;
+  report.checks.latestEnvelopeCoalescing = preRelease.liveDrag?.scheduler?.maxConcurrentExecutionCount === 1 &&
+    preRelease.liveDrag?.scheduler?.offeredCount === denseDragSamples.length &&
+    preRelease.liveDrag?.scheduler?.coalescedCount >= 1 &&
+    preRelease.liveDrag?.scheduler?.pendingInteractionId === null;
+  report.preRelease = {
+    summary: preRelease.summary,
+    gpuSympatheticTear: preRelease.gpuSympatheticTear,
+    visibleTear: preRelease.visibleTear,
+    liveDrag: preRelease.liveDrag,
+    haptics: preRelease.haptics,
+  };
+  report.lastTrustworthyEvidence = {
+    phase: 'held-pointer-state',
+    preRelease: report.preRelease,
+  };
+  assertCheck(
+    report.checks.preReleaseStructuralMutation,
+    'effigy did not visibly mutate while the primary pointer remained held',
+  );
+  assertCheck(
+    report.checks.latestEnvelopeCoalescing,
+    'dense pointer movement did not exercise one-in-flight latest-envelope coalescing',
+  );
 
   report.failurePhase = 'unnotched-control';
   const unnotched = await evaluate(
@@ -332,7 +422,13 @@ try {
   while (Date.now() < tearDeadline) {
     const completed = await evaluate(`(() => {
       const witness = window.__structuralMaterial3dWitness();
-      return witness.gpuSympatheticTear?.status === 'passed' && witness.visibleTear !== null;
+      const scheduler = witness.liveDrag?.scheduler;
+      return witness.gpuSympatheticTear?.status === 'passed' &&
+        witness.visibleTear !== null &&
+        witness.liveDrag?.pointerActive === false &&
+        scheduler?.finalCompletedCount >= 1 &&
+        scheduler?.pointerExecutionActive === false &&
+        scheduler?.pendingInteractionId === null;
     })()`);
     if (completed) break;
     await new Promise(resolveWait => setTimeout(resolveWait, 50));
@@ -345,6 +441,10 @@ try {
   report.effectiveBackend = notched.effectiveBackend;
   report.cpuFallbackUsed = notched.cpuFallbackUsed;
   report.visibleTear = pageAfter.visibleTear;
+  report.checks.releaseFlushedFinalEnvelope = pageAfter.liveDrag?.pointerActive === false &&
+    pageAfter.liveDrag?.scheduler?.finalCompletedCount >= 1 &&
+    pageAfter.liveDrag?.scheduler?.pendingInteractionId === null;
+  assertCheck(report.checks.releaseFlushedFinalEnvelope, 'pointer release did not flush the final force envelope');
   const cameraAfter = await evaluate('window.__structuralMaterial3dCameraWitness().state');
 
   report.checks.gpuStatusPassed = notched.status === 'passed';
@@ -358,11 +458,13 @@ try {
   report.checks.oneDevice = notched.lifecycle?.deviceRequestCount === 1;
   report.checks.twoPipelines = notched.lifecycle?.pipelineCreateCount === 2;
   report.checks.persistentBuffers = notched.lifecycle?.bufferAllocationCount === 9;
-  report.checks.compactReadback = notched.lifecycle?.compactReadbackCount === 1 &&
+  const liveExecutionCount = pageAfter.liveDrag?.scheduler?.completedCount;
+  report.checks.compactReadback = Number.isInteger(liveExecutionCount) && liveExecutionCount >= 2 &&
+    notched.lifecycle?.compactReadbackCount === liveExecutionCount &&
     notched.lifecycle?.compactReadbackBufferCount === 2 &&
     notched.lifecycle?.fullValidationReadbackCount === 0;
   report.checks.topologyDispatchCount = notched.lifecycle?.topologyDispatchCount ===
-    notched.gpuStructuralState?.componentLabels?.length;
+    notched.gpuStructuralState?.componentLabels?.length * liveExecutionCount;
   report.checks.warmTimingNamed = Number.isFinite(notched.timingsMs?.warmTotal);
   report.checks.hotResidency = notched.lifecycle?.disposed === false &&
     notched.lifecycle?.bufferDestroyCount === 0 &&
@@ -408,6 +510,30 @@ try {
     persisted.summary.brokenBondCount === pageAfter.summary.brokenBondCount;
   assertCheck(report.checks.releasePreservedSeparation, 'release did not preserve the GPU-authored separation');
 
+  report.failurePhase = 'causal-haptics';
+  const hapticDeadline = Date.now() + config.loadTimeoutMs;
+  let hapticWitness = persisted;
+  while (config.requireNativeHaptics && Date.now() < hapticDeadline) {
+    hapticWitness = await evaluate('window.__structuralMaterial3dWitness()');
+    if (hapticWitness.haptics?.dispatchCount >= hapticWitness.haptics?.impulseCount) break;
+    await new Promise(resolveWait => setTimeout(resolveWait, 20));
+  }
+  report.haptics = hapticWitness.haptics;
+  const nativeHapticsAccepted = hapticWitness.haptics?.impulseCount > 0
+    && hapticWitness.haptics?.latestDispatchReceipt?.macTrackpad?.status === 'passed'
+    && hapticWitness.haptics?.latestDispatchReceipt?.macTrackpad?.effectiveRoute ===
+      'kaminos.structural-material.native-trackpad-haptics.v0'
+    && hapticWitness.haptics?.latestDispatchReceipt?.macTrackpad?.receipt?.cause ===
+      'accepted-gpu-connectivity-delta'
+    && hapticWitness.haptics?.latestDispatchReceipt?.macTrackpad?.tactileOutputVerified === false
+    && hapticWitness.haptics?.latestDispatchReceipt?.macTrackpad?.receipt?.tactileOutputVerified === false
+    && typeof hapticWitness.haptics?.latestDispatchReceipt?.macTrackpad?.receipt?.tactileOutputQualification === 'string';
+  report.checks.nativeHapticCompanionRequirementSatisfied = !config.requireNativeHaptics || nativeHapticsAccepted;
+  assertCheck(
+    report.checks.nativeHapticCompanionRequirementSatisfied,
+    'configured native haptic companion did not accept a causal connectivity impulse',
+  );
+
   report.failurePhase = 'visual-evidence';
   report.pixelProbe = await evaluate('window.__structuralMaterial3dPixelProbe()', true);
   assertCheck(report.pixelProbe?.ok && report.pixelProbe.nonDarkPixels > 0, 'visual pixel probe is blank');
@@ -427,8 +553,23 @@ try {
   assertCheck(report.checks.noHorizontalOverflow, 'GPU tear route has horizontal overflow');
 
   report.failurePhase = 'reset';
+  const denseFingerprint = {
+    finalBondLiveness: notched.gpuStructuralState.finalBondLiveness,
+    componentLabels: notched.gpuStructuralState.componentLabels,
+    brokenBondCount: pageAfter.summary.brokenBondCount,
+    componentCount: pageAfter.summary.componentCount,
+  };
+  const reinitializeCountBeforeReset = pageAfter.gpuHotSidecar?.lifecycle?.reinitializeCount || 0;
   await evaluate("document.querySelector('#reset').click()");
-  const reset = await evaluate('window.__structuralMaterial3dWitness()');
+  const resetDeadline = Date.now() + config.loadTimeoutMs;
+  let reset = await evaluate('window.__structuralMaterial3dWitness()');
+  while (Date.now() < resetDeadline) {
+    reset = await evaluate('window.__structuralMaterial3dWitness()');
+    if (reset.summary.brokenBondCount === 0 &&
+        reset.summary.componentCount === 1 &&
+        reset.gpuHotSidecar?.lifecycle?.reinitializeCount > reinitializeCountBeforeReset) break;
+    await new Promise(resolveWait => setTimeout(resolveWait, 20));
+  }
   const cameraReset = await evaluate('window.__structuralMaterial3dCameraWitness().state');
   report.checks.resetRestoredTopology = reset.summary.brokenBondCount === 0 &&
     reset.summary.componentCount === 1 &&
@@ -436,6 +577,58 @@ try {
   report.checks.resetPreservedCamera = JSON.stringify(cameraAfter) === JSON.stringify(cameraReset);
   assertCheck(report.checks.resetRestoredTopology, 'reset did not restore pristine topology');
   assertCheck(report.checks.resetPreservedCamera, 'reset changed operator camera state');
+
+  report.failurePhase = 'sampling-invariance';
+  const finalCompletedBeforeCoarse = reset.liveDrag?.scheduler?.finalCompletedCount || 0;
+  await send('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    ...dragStart,
+    button: 'left',
+    buttons: 1,
+    clickCount: 1,
+  });
+  await send('Input.dispatchMouseEvent', {
+    type: 'mouseMoved',
+    ...dragEnd,
+    button: 'left',
+    buttons: 1,
+  });
+  await send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    ...dragEnd,
+    button: 'left',
+    buttons: 0,
+    clickCount: 1,
+  });
+  const coarseDeadline = Date.now() + config.loadTimeoutMs;
+  let coarse = reset;
+  while (Date.now() < coarseDeadline) {
+    coarse = await evaluate('window.__structuralMaterial3dWitness()');
+    if (coarse.liveDrag?.scheduler?.finalCompletedCount > finalCompletedBeforeCoarse &&
+        coarse.liveDrag?.scheduler?.pointerExecutionActive === false &&
+        coarse.liveDrag?.scheduler?.pendingInteractionId === null) break;
+    await new Promise(resolveWait => setTimeout(resolveWait, 20));
+  }
+  const coarseFingerprint = {
+    finalBondLiveness: coarse.gpuSympatheticTear?.gpuStructuralState?.finalBondLiveness,
+    componentLabels: coarse.gpuSympatheticTear?.gpuStructuralState?.componentLabels,
+    brokenBondCount: coarse.summary?.brokenBondCount,
+    componentCount: coarse.summary?.componentCount,
+  };
+  report.sampling = {
+    denseMoveCount: denseDragSamples.length,
+    coarseMoveCount: 1,
+    denseScheduler: pageAfter.liveDrag.scheduler,
+    coarseScheduler: coarse.liveDrag.scheduler,
+    denseFingerprint,
+    coarseFingerprint,
+  };
+  report.checks.samplingInvariant = JSON.stringify(denseFingerprint) === JSON.stringify(coarseFingerprint);
+  report.checks.samplingPreservedCamera = JSON.stringify(cameraAfter) === JSON.stringify(
+    await evaluate('window.__structuralMaterial3dCameraWitness().state'),
+  );
+  assertCheck(report.checks.samplingInvariant, 'dense and coarse pointer sampling produced different structural state');
+  assertCheck(report.checks.samplingPreservedCamera, 'sampling-invariance interaction changed operator camera state');
 
   report.runtimeErrors = cdp.runtimeErrors.slice();
   report.checks.noRuntimeErrors = report.runtimeErrors.length === 0;

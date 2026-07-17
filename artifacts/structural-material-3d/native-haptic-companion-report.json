@@ -1,0 +1,134 @@
+{
+  "schema": "kaminos.structural-material.native-haptic-witness.v0",
+  "status": "passed",
+  "requestedRoute": "kaminos.structural-material.native-trackpad-haptics.v0",
+  "effectiveRoute": "kaminos.structural-material.native-trackpad-haptics.v0",
+  "failurePhase": null,
+  "configuration": {
+    "port": 8397,
+    "allowedOrigin": "http://127.0.0.1:8395",
+    "dryRun": true
+  },
+  "checks": {
+    "unsafeBindRejected": true,
+    "capabilityIdentity": true,
+    "wrongOriginRejected": true,
+    "nonCausalRejected": true,
+    "forgedSourceRouteRejected": true,
+    "malformedRejected": true,
+    "validDryRunAccepted": true,
+    "corsExact": true
+  },
+  "compile": {
+    "code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "unsafeBind": {
+    "code": 2,
+    "stdout": "",
+    "stderr": "{\"effectiveRoute\":null,\"error\":\"host must be a numeric loopback address\",\"failurePhase\":\"configuration-or-listener-initialization\",\"requestedRoute\":\"kaminos.structural-material.native-trackpad-haptics.v0\",\"schema\":\"kaminos.structural-material.native-haptic-listener.v0\",\"status\":\"failed\"}\n"
+  },
+  "startup": {
+    "allowedOrigin": "http://127.0.0.1:8395",
+    "dryRun": true,
+    "effectiveRoute": "kaminos.structural-material.native-trackpad-haptics.v0",
+    "host": "127.0.0.1",
+    "port": 8397,
+    "requestedRoute": "kaminos.structural-material.native-trackpad-haptics.v0",
+    "schema": "kaminos.structural-material.native-haptic-listener.v0",
+    "status": "listening"
+  },
+  "capabilities": {
+    "statusCode": 200,
+    "accessControlAllowOrigin": null,
+    "body": {
+      "actuator": "AppKit.NSHapticFeedbackManager.defaultPerformer",
+      "allowedOrigin": "http://127.0.0.1:8395",
+      "dryRun": true,
+      "effectiveRoute": "kaminos.structural-material.native-trackpad-haptics.v0",
+      "host": "127.0.0.1",
+      "loopbackOnly": true,
+      "port": 8397,
+      "requestedRoute": "kaminos.structural-material.native-trackpad-haptics.v0",
+      "schema": "kaminos.structural-material.native-haptic-capabilities.v0",
+      "status": "passed",
+      "structuralAuthority": false
+    }
+  },
+  "wrongOrigin": {
+    "statusCode": 403,
+    "accessControlAllowOrigin": null,
+    "body": {
+      "effectiveRoute": "kaminos.structural-material.native-trackpad-haptics.v0",
+      "error": "origin is not allowed",
+      "failurePhase": "origin-validation",
+      "performed": false,
+      "requestedRoute": "kaminos.structural-material.native-trackpad-haptics.v0",
+      "schema": "kaminos.structural-material.native-haptic-receipt.v0",
+      "status": "failed",
+      "tactileOutputVerified": false
+    }
+  },
+  "nonCausal": {
+    "statusCode": 422,
+    "accessControlAllowOrigin": "http://127.0.0.1:8395",
+    "body": {
+      "effectiveRoute": "kaminos.structural-material.native-trackpad-haptics.v0",
+      "error": "impulse lacks accepted GPU connectivity cause",
+      "failurePhase": "impulse-validation",
+      "performed": false,
+      "requestedRoute": "kaminos.structural-material.native-trackpad-haptics.v0",
+      "schema": "kaminos.structural-material.native-haptic-receipt.v0",
+      "status": "failed",
+      "tactileOutputVerified": false
+    }
+  },
+  "forgedSourceRoute": {
+    "statusCode": 422,
+    "accessControlAllowOrigin": "http://127.0.0.1:8395",
+    "body": {
+      "effectiveRoute": "kaminos.structural-material.native-trackpad-haptics.v0",
+      "error": "impulse source is not the WebGPU tear route",
+      "failurePhase": "impulse-validation",
+      "performed": false,
+      "requestedRoute": "kaminos.structural-material.native-trackpad-haptics.v0",
+      "schema": "kaminos.structural-material.native-haptic-receipt.v0",
+      "status": "failed",
+      "tactileOutputVerified": false
+    }
+  },
+  "malformed": {
+    "statusCode": 400,
+    "accessControlAllowOrigin": "http://127.0.0.1:8395",
+    "body": {
+      "effectiveRoute": "kaminos.structural-material.native-trackpad-haptics.v0",
+      "error": "The data couldn’t be read because it isn’t in the correct format.",
+      "failurePhase": "impulse-decode",
+      "performed": false,
+      "requestedRoute": "kaminos.structural-material.native-trackpad-haptics.v0",
+      "schema": "kaminos.structural-material.native-haptic-receipt.v0",
+      "status": "failed",
+      "tactileOutputVerified": false
+    }
+  },
+  "valid": {
+    "statusCode": 200,
+    "accessControlAllowOrigin": "http://127.0.0.1:8395",
+    "body": {
+      "cause": "accepted-gpu-connectivity-delta",
+      "dryRun": true,
+      "effectiveRoute": "kaminos.structural-material.native-trackpad-haptics.v0",
+      "eventEpoch": 9,
+      "pattern": "separation",
+      "performed": false,
+      "requestedRoute": "kaminos.structural-material.native-trackpad-haptics.v0",
+      "schema": "kaminos.structural-material.native-haptic-receipt.v0",
+      "sourceRoute": "kaminos.structural-material.webgpu-sympathetic-tear.v0",
+      "status": "passed",
+      "tactileOutputQualification": "AppKit perform() has no physical-output acknowledgement; macOS may suppress feedback",
+      "tactileOutputVerified": false
+    }
+  },
+  "listenerStderr": ""
+}
