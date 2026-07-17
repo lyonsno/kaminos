@@ -49,6 +49,11 @@ export function buildBitonicSortStages(count) {
   return stages;
 }
 
+export function bitonicSortRecordCount(count) {
+  const size = positiveInteger(count, 'count');
+  return 2 ** Math.ceil(Math.log2(size));
+}
+
 export function buildCompactSmokeProduct({ source, grid, blockSize, selectedBrickIndices } = {}) {
   const size = positiveInteger(grid, 'grid');
   const block = positiveInteger(blockSize, 'blockSize');

@@ -4,11 +4,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import {
+  bitonicSortRecordCount,
   buildBitonicSortStages,
   buildCompactSmokeProduct,
   validateAdaptiveVolumeGpuReport,
 } from '../smoke-adaptive-volume-gpu-falsifier.mjs';
 
+assert.equal(bitonicSortRecordCount(64_000), 65_536);
+assert.equal(bitonicSortRecordCount(65_536), 65_536);
 const sortStages = buildBitonicSortStages(65_536);
 assert.equal(sortStages.length, 136, '65536-record bitonic sort requires sum(1..16) stages');
 assert.deepEqual(sortStages[0], [1, 2, 65_536, 0]);
@@ -142,7 +145,10 @@ assert.doesNotMatch(
 assert.match(browser, /destroy\(\)[\s\S]*dense/i, 'browser falsifier must destroy dense state before compact rerender');
 assert.match(browser, /denseBindingCountDuringRender:\s*0/);
 assert.match(browser, /allocationComplete/);
-assert.match(browser, /buildBitonicSortStages\(brickCount\)/);
+assert.match(browser, /buildBitonicSortStages\(sortRecordCount\)/);
+assert.match(browser, /const sortRecordCount = bitonicSortRecordCount\(brickCount\)/);
+assert.match(browser, /Pair\(-1\.0, brickIndex\)/, 'padding records must be explicit low-score sentinels');
+assert.match(browser, /brickIndex >= brickCount/, 'GPU hierarchy must separate padded records from physical bricks');
 assert.match(browser, /let pairIndex = slot;/, 'descending sort must select its highest-energy prefix');
 assert.match(browser, /sortOrderViolationCount/);
 assert.match(browser, /allocationBytes\.total = allocationBytes\.totalBuildAndProduct/);

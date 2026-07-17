@@ -2,6 +2,7 @@ import {
   ADAPTIVE_VOLUME_GPU_REPORT_SCHEMA,
   ADAPTIVE_VOLUME_GPU_ROUTE,
   DENSE_DENIAL_METHOD,
+  bitonicSortRecordCount,
   buildBitonicSortStages,
   buildCompactSmokeProduct,
   parseSelectedBrickArtifact,
@@ -316,7 +317,8 @@ struct SortParams { j: u32, k: u32, count: u32, pad: u32 };
 fn hierarchy(@builtin(global_invocation_id) gid: vec3<u32>) {
   let brickIndex = gid.x;
   let brickCount = p.coarseGrid * p.coarseGrid * p.coarseGrid;
-  if (brickIndex >= brickCount) { return; }
+  if (brickIndex >= arrayLength(&pairs)) { return; }
+  if (brickIndex >= brickCount) { pairs[brickIndex] = Pair(-1.0, brickIndex); return; }
   let brick = vec3<u32>(brickIndex % p.coarseGrid, (brickIndex / p.coarseGrid) % p.coarseGrid, brickIndex / (p.coarseGrid * p.coarseGrid));
   var sum = 0.0;
   for (var z = 0u; z < 4u; z++) { for (var y = 0u; y < 4u; y++) { for (var x = 0u; x < 4u; x++) {
@@ -544,7 +546,8 @@ async function run() {
   const prebuiltIndirectAllocation = makeBuffer(device, 'prebuilt indirection', product.indirection.byteLength, GPUBufferUsage.STORAGE, product.indirection);
   const prebuiltAtlasAllocation = makeBuffer(device, 'prebuilt atlas', product.atlasValues.byteLength, GPUBufferUsage.STORAGE, product.atlasValues);
   const brickCount = product.brickCount;
-  const pairBytes = brickCount * 8;
+  const sortRecordCount = bitonicSortRecordCount(brickCount);
+  const pairBytes = sortRecordCount * 8;
   const builtCoarseAllocation = makeBuffer(device, 'GPU built coarse', brickCount * 4, storageCopy);
   const pairAllocation = makeBuffer(device, 'GPU residual sort pairs', pairBytes, storageCopy);
   const builtIndirectAllocation = makeBuffer(device, 'GPU built indirection', brickCount * 4, storageCopy);
@@ -573,7 +576,7 @@ async function run() {
     { binding: 0, resource: { buffer: denseAllocation.buffer } }, { binding: 1, resource: { buffer: builtCoarseAllocation.buffer } },
     { binding: 2, resource: { buffer: pairAllocation.buffer } }, { binding: 3, resource: { buffer: paramsAllocation.buffer } },
   ] });
-  const sortStages = buildBitonicSortStages(brickCount);
+  const sortStages = buildBitonicSortStages(sortRecordCount);
   const sortParamBytes = new Uint8Array(sortStages.length * 256);
   const sortParamView = new DataView(sortParamBytes.buffer);
   sortStages.forEach((values, stage) => values.forEach((value, index) => sortParamView.setUint32(stage * 256 + index * 4, value, true)));
@@ -612,7 +615,7 @@ async function run() {
   };
   const encodeBuild = (encoder, querySet, includeRender) => {
     let pass = encoder.beginComputePass({ timestampWrites: { querySet, beginningOfPassWriteIndex: 0 } });
-    pass.setPipeline(hierarchyPipeline); pass.setBindGroup(0, hierarchyBindGroup); pass.dispatchWorkgroups(Math.ceil(brickCount / 64)); pass.end();
+    pass.setPipeline(hierarchyPipeline); pass.setBindGroup(0, hierarchyBindGroup); pass.dispatchWorkgroups(Math.ceil(sortRecordCount / 64)); pass.end();
     for (let stage = 0; stage < sortStages.length; stage += 1) {
       pass = encoder.beginComputePass();
       pass.setPipeline(dynamicSortPipeline); pass.setBindGroup(1, sortBindGroup, [stage * 256]); pass.dispatchWorkgroups(Math.ceil(brickCount / 256)); pass.end();
@@ -656,13 +659,13 @@ async function run() {
   let sortOrderViolationCount = 0;
   let previousScore = Infinity;
   let previousIndex = 0;
-  for (let index = 0; index < brickCount; index += 1) {
+  for (let index = 0; index < sortRecordCount; index += 1) {
     const score = pairData.getFloat32(index * 8, true);
     const brickIndex = pairData.getUint32(index * 8 + 4, true);
     if (score > previousScore || (score === previousScore && brickIndex < previousIndex)) sortOrderViolationCount += 1;
     previousScore = score;
     previousIndex = brickIndex;
-    totalResidualEnergy += score;
+    if (brickIndex < brickCount) totalResidualEnergy += score;
     if (index < selected.length) {
       selectedResidualEnergy += score;
       gpuSelected.push(brickIndex);
@@ -739,6 +742,8 @@ async function run() {
       timestampStatus: device.features.has('timestamp-query') ? 'available' : 'unsupported',
       sourceGrid: grid,
       coarseGrid: product.coarseGrid,
+      physicalBrickCount: brickCount,
+      sortRecordCount,
       blockSize,
       width,
       height,
@@ -793,7 +798,7 @@ async function run() {
       actualRetainedResidualEnergyFraction: selectedResidualEnergy / totalResidualEnergy,
       sortEndpointScores: {
         first: pairData.getFloat32(0, true),
-        last: pairData.getFloat32((brickCount - 1) * 8, true),
+        last: pairData.getFloat32((sortRecordCount - 1) * 8, true),
       },
       haloEdge: product.haloEdge,
       allocationBytes,
