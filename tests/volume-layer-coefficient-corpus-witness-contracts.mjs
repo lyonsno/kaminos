@@ -11,6 +11,16 @@ const witness = await readFile(witnessUrl, 'utf8');
 
 assert.match(witness, /single-browser-multi-state-layer-coefficient-capture-v0/, 'witness owns one browser across every simulator state');
 assert.match(witness, /sampleDeterministicReplayFrame/, 'witness captures separated simulator states rather than relabeling control variants');
+assert.match(
+  witness,
+  /const VOLUME_PROTOTYPE_EXPRESSION = [`'"]\(window\.__kaminosVolumePrototype \|\| document\.querySelector\('#basin'\)\?\.contentWindow\?\.__kaminosVolumePrototype\)[`'"]/,
+  'witness resolves the admitted simulator from either a direct route or the selective-head wrapper iframe',
+);
+assert.doesNotMatch(
+  witness,
+  /evaluate\(socket, `window\.__kaminosVolumePrototype/,
+  'post-admission browser calls must not silently target only the wrapper window',
+);
 assert.match(witness, /whole-simulator-state-holdout-v0/, 'witness emits a whole-state train and holdout split');
 assert.match(witness, /beginDebugNonRidgeSourceBasisCapture/, 'witness captures exact local Ridge and Non-Ridge source coefficients');
 assert.match(witness, /selectAnalyticalLayerRows/, 'witness applies the reviewed analytical Ridge-or-Non-Ridge selector');

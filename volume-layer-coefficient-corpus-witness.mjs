@@ -50,6 +50,7 @@ const DESCRIPTOR_TREATMENT_ORDER = Object.freeze([
   'majorant.extinction',
 ]);
 const DEFAULT_APPEARANCE_CORPUS = '/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-positive-full-flame-appearance-r11-streamed/appearance-corpus.json';
+const VOLUME_PROTOTYPE_EXPRESSION = `(window.__kaminosVolumePrototype || document.querySelector('#basin')?.contentWindow?.__kaminosVolumePrototype)`;
 
 const args = parseArgs(process.argv.slice(2));
 const requestedUrl = args.get('--url') && args.get('--url') !== true ? String(args.get('--url')) : null;
@@ -296,7 +297,7 @@ try {
 
 async function captureState({ stateId, splitRole, steps, stateIndex }) {
   failurePhase = `${stateId}:deterministic-replay`;
-  const replay = await evaluate(socket, `window.__kaminosVolumePrototype.sampleDeterministicReplayFrame(${JSON.stringify({
+  const replay = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.sampleDeterministicReplayFrame(${JSON.stringify({
     steps,
     timeStepMs: 1000 / 60,
     startTimeMs: 1000 + stateIndex * 10000,
@@ -308,7 +309,7 @@ async function captureState({ stateId, splitRole, steps, stateIndex }) {
 
   failurePhase = `${stateId}:freeze`;
   const frozen = await evaluate(socket, `(() => {
-    const prototype = window.__kaminosVolumePrototype;
+    const prototype = ${VOLUME_PROTOTYPE_EXPRESSION};
     prototype.setSelectiveHeadLiveCapturePaused(true);
     prototype.setActive(false);
     const state = prototype.debugState();
@@ -330,11 +331,11 @@ async function captureState({ stateId, splitRole, steps, stateIndex }) {
   const controlIdentity = `sha256:${sha256(Buffer.from(canonicalJson(effectiveControls)))}`;
 
   failurePhase = `${stateId}:causal-controls`;
-  const controlApplication = await evaluate(socket, `window.__kaminosVolumePrototype.applyDebugNonRidgeCausalControls(${JSON.stringify(effectiveControls)})`);
+  const controlApplication = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.applyDebugNonRidgeCausalControls(${JSON.stringify(effectiveControls)})`);
   assert.equal(controlApplication?.ok, true, `${stateId} causal controls were substituted: ${JSON.stringify(controlApplication)}`);
 
   failurePhase = `${stateId}:source-basis-begin`;
-  const sourceBasis = await evaluate(socket, `window.__kaminosVolumePrototype.beginDebugNonRidgeSourceBasisCapture(${JSON.stringify({
+  const sourceBasis = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.beginDebugNonRidgeSourceBasisCapture(${JSON.stringify({
     captureTimeMs: frozen.captureTimeMs,
   })})`);
   assert.equal(sourceBasis?.ok, true, `${stateId} source-basis capture failed: ${JSON.stringify(sourceBasis)}`);
@@ -343,20 +344,20 @@ async function captureState({ stateId, splitRole, steps, stateIndex }) {
 
   const rows = await drainAnalyticalRows({ stateId, sourceBasis, effectiveControls });
   failurePhase = `${stateId}:source-basis-release`;
-  const sourceRelease = await evaluate(socket, `window.__kaminosVolumePrototype.releaseDebugNonRidgeSourceBasisCapture(${JSON.stringify({
+  const sourceRelease = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.releaseDebugNonRidgeSourceBasisCapture(${JSON.stringify({
     sessionId: sourceBasis.sessionId,
   })})`);
   assert.equal(sourceRelease?.ok, true, `${stateId} source-basis release failed`);
 
   failurePhase = `${stateId}:full-field-export-begin`;
-  const fullField = await evaluate(socket, 'window.__kaminosVolumePrototype.beginDebugFullFieldExport({})');
+  const fullField = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.beginDebugFullFieldExport({})`);
   assert.equal(fullField?.ok, true, `${stateId} full-field export failed: ${JSON.stringify(fullField)}`);
   assert.equal(fullField.completeFieldCoverage, true, `${stateId} full-field export is partial`);
   assert.equal(fullField.grid, runtimeIdentity.grid, `${stateId} full-field grid drifted`);
   const sourceFieldManifest = await drainFullField({ stateId, fullField });
 
   failurePhase = `${stateId}:full-field-import-begin`;
-  const importBegin = await evaluate(socket, `window.__kaminosVolumePrototype.beginDebugFullFieldImport(${JSON.stringify({
+  const importBegin = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.beginDebugFullFieldImport(${JSON.stringify({
     grid: sourceFieldManifest.grid,
     initializationAuthority: LIVE_REPLAY_AUTHORITY,
     filterIdentity: LIVE_REPLAY_FILTER,
@@ -372,7 +373,7 @@ async function captureState({ stateId, splitRole, steps, stateIndex }) {
   await uploadField(importBegin.sessionId, 'fluid', sourceFieldManifest.sidecars.fluid);
   await uploadField(importBegin.sessionId, 'front', sourceFieldManifest.sidecars.front);
   failurePhase = `${stateId}:full-field-import-finish`;
-  const importFinish = await evaluate(socket, `window.__kaminosVolumePrototype.finishDebugFullFieldImport(${JSON.stringify({
+  const importFinish = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.finishDebugFullFieldImport(${JSON.stringify({
     sessionId: importBegin.sessionId,
   })})`);
   assert.equal(importFinish?.ok, true, `${stateId} full-field import failed: ${JSON.stringify(importFinish)}`);
@@ -384,7 +385,7 @@ async function captureState({ stateId, splitRole, steps, stateIndex }) {
   const indexReceipt = await uploadDescriptorIndices(rows.nativeCellIndices, runtimeIdentity.grid);
 
   failurePhase = `${stateId}:descriptor-render`;
-  const descriptorRender = await evaluate(socket, `window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
+  const descriptorRender = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.renderFrozenScaleToCanvas(${JSON.stringify({
     fullFieldImportSessionId: importFinish.sessionId,
     renderScale: 1,
     boundarySplatComposition: 'splat-only-v0',
@@ -410,7 +411,7 @@ async function captureState({ stateId, splitRole, steps, stateIndex }) {
   });
 
   failurePhase = `${stateId}:live-resume`;
-  const resume = await evaluate(socket, `window.__kaminosVolumePrototype.resumeDebugImportedFieldLive(${JSON.stringify({
+  const resume = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.resumeDebugImportedFieldLive(${JSON.stringify({
     sessionId: importFinish.sessionId,
   })})`);
   assert.equal(resume?.ok, true, `${stateId} imported field did not resume: ${JSON.stringify(resume)}`);
@@ -458,7 +459,7 @@ async function drainAnalyticalRows({ stateId, sourceBasis, effectiveControls }) 
       chunkRows * SOURCE_BASIS_GPU_ROW_FLOATS,
       sourceBasis.rowCount * SOURCE_BASIS_GPU_ROW_FLOATS - startFloat,
     );
-    const chunk = await evaluate(socket, `window.__kaminosVolumePrototype.readDebugNonRidgeSourceBasisCaptureChunk(${JSON.stringify({
+    const chunk = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.readDebugNonRidgeSourceBasisCaptureChunk(${JSON.stringify({
       sessionId: sourceBasis.sessionId,
       startFloat,
       floatCount: requestedFloatCount,
@@ -511,7 +512,7 @@ async function drainFullField({ stateId, fullField }) {
     });
     for (let startFloat = 0; startFloat < descriptor.floatCount; startFloat += chunkFloats) {
       const floatCount = Math.min(chunkFloats, descriptor.floatCount - startFloat);
-      const chunk = await evaluate(socket, `window.__kaminosVolumePrototype.readDebugFullFieldExportChunk(${JSON.stringify({
+      const chunk = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.readDebugFullFieldExportChunk(${JSON.stringify({
         sessionId: fullField.sessionId,
         kind,
         startFloat,
@@ -531,7 +532,7 @@ async function drainFullField({ stateId, fullField }) {
     });
     assert.equal(sidecars[kind].bytes, descriptor.byteLength, `${stateId} ${kind} artifact is partial`);
   }
-  const release = await evaluate(socket, `window.__kaminosVolumePrototype.releaseDebugFullFieldExport(${JSON.stringify({
+  const release = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.releaseDebugFullFieldExport(${JSON.stringify({
     sessionId: fullField.sessionId,
   })})`);
   assert.equal(release?.ok, true, `${stateId} full-field export release failed`);
@@ -577,7 +578,7 @@ async function uploadField(sessionId, kind, artifact) {
   let byteOffset = 0;
   while (byteOffset < bytes.byteLength) {
     const chunk = bytes.subarray(byteOffset, Math.min(bytes.byteLength, byteOffset + chunkBytes));
-    const receipt = await evaluate(socket, `window.__kaminosVolumePrototype.writeDebugFullFieldImportChunk(${JSON.stringify({
+    const receipt = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.writeDebugFullFieldImportChunk(${JSON.stringify({
       sessionId,
       kind,
       byteOffset,
@@ -591,7 +592,7 @@ async function uploadField(sessionId, kind, artifact) {
 
 async function uploadDescriptorIndices(artifact, grid) {
   const bytes = readFileSync(artifact.path);
-  const begin = await evaluate(socket, `window.__kaminosVolumePrototype.beginFlowKernelDescriptorIndexUpload(${JSON.stringify({
+  const begin = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.beginFlowKernelDescriptorIndexUpload(${JSON.stringify({
     grid,
     count: artifact.shape[0],
     byteLength: bytes.byteLength,
@@ -604,7 +605,7 @@ async function uploadDescriptorIndices(artifact, grid) {
   const chunkBytes = chunkFloats * Uint32Array.BYTES_PER_ELEMENT;
   while (byteOffset < bytes.byteLength) {
     const chunk = bytes.subarray(byteOffset, Math.min(bytes.byteLength, byteOffset + chunkBytes));
-    const receipt = await evaluate(socket, `window.__kaminosVolumePrototype.writeFlowKernelDescriptorIndexUploadChunk(${JSON.stringify({
+    const receipt = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.writeFlowKernelDescriptorIndexUploadChunk(${JSON.stringify({
       sessionId: begin.sessionId,
       byteOffset,
       base64: chunk.toString('base64'),
@@ -613,7 +614,7 @@ async function uploadDescriptorIndices(artifact, grid) {
     assert.equal(receipt.byteOffset, byteOffset, 'descriptor index chunk offset drifted');
     byteOffset += chunk.byteLength;
   }
-  const finish = await evaluate(socket, `window.__kaminosVolumePrototype.finishFlowKernelDescriptorIndexUpload(${JSON.stringify({
+  const finish = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.finishFlowKernelDescriptorIndexUpload(${JSON.stringify({
     sessionId: begin.sessionId,
   })})`);
   assert.equal(finish?.ok, true, `descriptor index upload failed: ${JSON.stringify(finish)}`);
@@ -642,7 +643,7 @@ async function drainDescriptorCapture({ stateId, capture, rows, sourceFieldManif
   });
   for (let startFloat = 0; startFloat < session.floatCount; startFloat += chunkFloats) {
     const floatCount = Math.min(chunkFloats, session.floatCount - startFloat);
-    const chunk = await evaluate(socket, `window.__kaminosVolumePrototype.readFlowKernelDescriptorCaptureChunk(${JSON.stringify({
+    const chunk = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.readFlowKernelDescriptorCaptureChunk(${JSON.stringify({
       sessionId: session.sessionId,
       startFloat,
       floatCount,
@@ -676,7 +677,7 @@ async function drainDescriptorCapture({ stateId, capture, rows, sourceFieldManif
     admissionArtifactSha256: rows.admission.sha256,
   });
   assert.equal(artifact.sha256, capture.descriptorSha256, `${stateId} descriptor checksum drifted`);
-  const release = await evaluate(socket, `window.__kaminosVolumePrototype.releaseFlowKernelDescriptorCapture(${JSON.stringify({
+  const release = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.releaseFlowKernelDescriptorCapture(${JSON.stringify({
     sessionId: session.sessionId,
   })})`);
   assert.equal(release?.ok, true, `${stateId} descriptor export release failed`);
@@ -915,8 +916,7 @@ async function waitForRuntime(cdp, timeout) {
   let last = null;
   while (performance.now() - started < timeout) {
     last = await evaluate(cdp, `(() => {
-      const basinWindow = document.querySelector('#basin')?.contentWindow || window;
-      const prototype = window.__kaminosVolumePrototype || basinWindow.__kaminosVolumePrototype;
+      const prototype = ${VOLUME_PROTOTYPE_EXPRESSION};
       const state = prototype?.debugState?.();
       return {
         active: state?.active === true,
