@@ -14,7 +14,6 @@ import argparse
 import hashlib
 import json
 import math
-import os
 import sys
 import time
 import traceback
@@ -330,6 +329,54 @@ def image_metrics(candidate: np.ndarray, target: np.ndarray) -> dict[str, float]
     }
 
 
+def fit_optical_path_scale(planes: np.ndarray, target: np.ndarray) -> dict[str, Any]:
+    trials: list[dict[str, float]] = []
+    seen: set[float] = set()
+
+    def evaluate(scales: np.ndarray | list[float]) -> None:
+        for scalar_value in scales:
+            scalar = float(scalar_value)
+            key = round(scalar, 15)
+            if key in seen:
+                continue
+            seen.add(key)
+            linear, _, _, _ = compose_planes(planes, scalar, "total")
+            trials.append({"pathScale": scalar, **image_metrics(tone_map(linear), target)})
+
+    evaluate([0.0])
+    upper = 2.0
+    evaluate(np.geomspace(0.0005, upper, 41))
+    expansion_count = 0
+    while min(trials, key=lambda row: row["mae"])["pathScale"] >= upper * (1.0 - 1e-12):
+        previous_upper = upper
+        upper *= 2.0
+        expansion_count += 1
+        evaluate(np.geomspace(previous_upper * (1.0 + 1e-8), upper, 17))
+
+    ordered = sorted(trials, key=lambda row: row["pathScale"])
+    best = min(ordered, key=lambda row: row["mae"])
+    best_index = ordered.index(best)
+    calibration_boundary_hit = best_index == len(ordered) - 1
+    require(not calibration_boundary_hit, "optical path calibration remained upper-bound limited")
+    left = ordered[max(0, best_index - 1)]["pathScale"]
+    right = ordered[min(len(ordered) - 1, best_index + 1)]["pathScale"]
+    for _ in range(2):
+        evaluate(np.linspace(left, right, 33))
+        ordered = sorted(trials, key=lambda row: row["pathScale"])
+        best = min(ordered, key=lambda row: row["mae"])
+        best_index = ordered.index(best)
+        left = ordered[max(0, best_index - 1)]["pathScale"]
+        right = ordered[min(len(ordered) - 1, best_index + 1)]["pathScale"]
+    return {
+        "pathScale": float(best["pathScale"]),
+        "trials": trials,
+        "calibrationBoundaryHit": calibration_boundary_hit,
+        "calibrationExpansionCount": expansion_count,
+        "calibrationExpansionDiagnostic": expansion_count >= 4,
+        "bracketUpper": upper,
+    }
+
+
 def find_capture(report: dict[str, Any], camera_index: int, mode: str, ray_steps: int | None = None) -> dict[str, Any]:
     matches = [item for item in report["captures"] if item.get("cameraIndex") == camera_index and item.get("mode") == mode]
     if ray_steps is not None:
@@ -342,6 +389,12 @@ def write_png(path: Path, pixels: np.ndarray) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     Image.fromarray(pixels, mode="RGB").save(path)
     require(path.is_file() and path.stat().st_size > 100, f"blank output image: {path}")
+
+
+def persist_capture_comparator(source: Path, destination: Path) -> np.ndarray:
+    pixels = image_rgb(source)
+    write_png(destination, pixels)
+    return pixels
 
 
 def residual_heatmap(candidate: np.ndarray, target: np.ndarray) -> np.ndarray:
@@ -358,22 +411,22 @@ def gallery_html(camera_rows: list[dict[str, Any]], report_name: str) -> str:
 <html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">
 <title>Layer Coefficient Oracle</title><style>
 :root{{--bg:#111315;--panel:#1a1d20;--line:#353a3f;--text:#f1f3f4;--muted:#aab0b5;--accent:#ffb029}}
-*{{box-sizing:border-box}} body{{margin:0;background:var(--bg);color:var(--text);font:14px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:0}}
+*{{box-sizing:border-box}} body{{margin:0;overflow-x:hidden;background:var(--bg);color:var(--text);font:14px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:0}}
 header{{display:flex;align-items:center;gap:18px;padding:12px 16px;border-bottom:1px solid var(--line);background:#15181a;position:sticky;top:0;z-index:2;flex-wrap:wrap}}
-h1{{font-size:15px;margin:0}} .controls{{display:flex;gap:12px;align-items:center;flex:1;flex-wrap:wrap}} label{{color:var(--muted)}} select,input{{accent-color:var(--accent)}}
+h1{{font-size:15px;margin:0;flex:0 0 auto}} .controls{{display:flex;gap:12px;align-items:center;flex:1;min-width:0;flex-wrap:wrap}} label{{color:var(--muted);display:flex;align-items:center;gap:6px;min-width:0}} select,input{{accent-color:var(--accent);min-width:0}}
 button{{width:34px;height:30px;border:1px solid var(--line);background:#202428;color:var(--text);font-size:18px;cursor:pointer}} button:hover{{border-color:var(--accent)}}
-main{{padding:14px;display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:14px}} .viewer{{min-width:0}} .stage{{position:relative;display:inline-block;max-width:100%;background:#050607;border:1px solid var(--line)}}
-.stage img{{display:block;width:min(100%,942px);height:auto;image-rendering:auto}} #overlay{{position:absolute;inset:0;clip-path:inset(0 50% 0 0)}}
-.divider{{position:absolute;top:0;bottom:0;width:1px;background:#fff;left:50%;pointer-events:none}} .labels{{display:flex;justify-content:space-between;color:var(--muted);margin-top:6px}}
-aside{{border-left:1px solid var(--line);padding-left:14px}} aside h2{{font-size:13px;margin:0 0 8px}} dl{{display:grid;grid-template-columns:1fr auto;gap:5px 10px;margin:0}} dt{{color:var(--muted)}} dd{{margin:0;text-align:right}} .status{{color:var(--accent)}}
-@media(max-width:760px){{main{{grid-template-columns:1fr}} aside{{border-left:0;border-top:1px solid var(--line);padding:12px 0 0}} header{{gap:10px}}}}
+main{{padding:14px;display:grid;grid-template-columns:minmax(0,1fr) minmax(240px,290px);gap:14px}} .viewer{{width:100%;min-width:0;overflow:hidden;display:flex;flex-direction:column;align-items:center}} .stage{{position:relative;display:block;width:min(100%,calc((100vh - 125px) * 1.216));aspect-ratio:1.216;background:#050607;border:1px solid var(--line)}}
+.stage img{{display:block;width:100%;height:100%;object-fit:contain;image-rendering:auto}} #overlay{{position:absolute;inset:0;clip-path:inset(0 50% 0 0)}}
+.divider{{position:absolute;top:0;bottom:0;width:1px;background:#fff;left:50%;pointer-events:none}} .labels{{display:flex;justify-content:space-between;color:var(--muted);margin-top:6px;width:min(100%,calc((100vh - 125px) * 1.216));max-width:100%}} .labels span:last-child{{text-align:right}}
+aside{{min-width:0;border-left:1px solid var(--line);padding-left:14px}} aside h2{{font-size:13px;margin:0 0 8px}} dl{{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,auto);gap:5px 10px;margin:0}} dt{{color:var(--muted)}} dd{{margin:0;text-align:right;overflow-wrap:anywhere}} .status{{color:var(--accent)}}
+@media(max-width:760px){{header{{position:static;display:block;padding:12px 16px}} h1{{display:block;width:100%;margin-bottom:10px;white-space:normal}} .controls{{display:flex;width:100%;min-width:0;gap:8px 10px;overflow:hidden}} #prev{{order:1}} .controls label:has(#camera){{order:2;flex:1 1 200px}} #next{{order:3}} #cameraLabel{{order:4;flex:1 0 100%;text-align:center}} .controls label:has(#left){{order:5}} .controls label:has(#right){{order:6}} .controls label:has(#blend){{order:7}} .controls label:has(#left),.controls label:has(#right),.controls label:has(#blend){{flex:1 0 100%;width:100%;overflow:hidden}} select,#blend{{width:0;min-width:0;flex:1}} main{{grid-template-columns:minmax(0,1fr);padding:14px}} aside{{border-left:0;border-top:1px solid var(--line);padding:12px 0 0}}}}
 </style></head><body><header><h1>Coefficient / extinction oracle</h1><div class=\"controls\">
 <button id=\"prev\" title=\"Previous camera\">&#8592;</button><label>Camera <input id=\"camera\" type=\"range\" min=\"0\" max=\"20\" value=\"10\"></label><span id=\"cameraLabel\">10</span><button id=\"next\" title=\"Next camera\">&#8594;</button>
 <label>Left <select id=\"left\"><option value=\"current\">Current learned</option><option value=\"ridgeRidge\">Exact Ridge, Ridge extinction</option><option value=\"ridgeTotal\">Exact Ridge, total extinction</option><option value=\"expanded\">Expanded shared transport</option><option value=\"target\">Complete target</option><option value=\"supportTarget\">Support target</option><option value=\"ridgeContribution\">Ridge contribution</option><option value=\"nonRidgeContribution\">Non-Ridge contribution</option><option value=\"residual\">Residual heatmap</option></select></label>
 <label>Right <select id=\"right\"><option value=\"target\">Complete target</option><option value=\"expanded\">Expanded shared transport</option><option value=\"current\">Current learned</option><option value=\"supportTarget\">Support target</option></select></label>
 <label>Blend <input id=\"blend\" type=\"range\" min=\"0\" max=\"100\" value=\"50\"></label></div></header>
 <main><section class=\"viewer\"><div class=\"stage\"><img id=\"base\" alt=\"left comparison\"><img id=\"overlay\" alt=\"right comparison\"><div class=\"divider\"></div></div><div class=\"labels\"><span id=\"leftLabel\"></span><span id=\"rightLabel\"></span></div></section>
-<aside><h2>Frozen evidence</h2><dl><dt>Status</dt><dd class=\"status\">live artifacts</dd><dt>Fit camera</dt><dd>10 only</dd><dt>Held views</dt><dd>20</dd><dt>Transport</dt><dd>one shared T</dd><dt>Rows</dt><dd id=\"rows\"></dd><dt>Path scalar</dt><dd id=\"scale\"></dd><dt>Expanded MAE</dt><dd id=\"mae\"></dd><dt>Current MAE</dt><dd id=\"currentMae\"></dd><dt>Report</dt><dd><a href=\"{report_name}\" style=\"color:var(--accent)\">JSON</a></dd></dl></aside></main>
+<aside><h2>Frozen evidence</h2><dl><dt>Status</dt><dd class=\"status\">checksum-bound</dd><dt>Fit camera</dt><dd>10 only</dd><dt>Held views</dt><dd>20</dd><dt>Transport</dt><dd>one shared T</dd><dt>Rows</dt><dd id=\"rows\"></dd><dt>Path scalar</dt><dd id=\"scale\"></dd><dt>Expanded MAE</dt><dd id=\"mae\"></dd><dt>Current MAE</dt><dd id=\"currentMae\"></dd><dt>Report</dt><dd><a href=\"{report_name}\" style=\"color:var(--accent)\">JSON</a></dd></dl></aside></main>
 <script>const rows={data}; const labels={{current:'Current learned',ridgeRidge:'Exact Ridge / Ridge X',ridgeTotal:'Exact Ridge / total X',expanded:'Expanded shared transport',target:'Complete target',supportTarget:'Support-aligned target',ridgeContribution:'Ridge contribution',nonRidgeContribution:'Non-Ridge contribution',residual:'Residual'}};
 const $=id=>document.getElementById(id); function render(){{const i=+$('camera').value,r=rows[i],l=$('left').value,q=$('right').value,b=+$('blend').value;$('cameraLabel').textContent=`${{i}} / ${{r.angle.toFixed(3)}} rad`;$('base').src=r.images[l];$('overlay').src=r.images[q];$('overlay').style.clipPath=`inset(0 ${{100-b}}% 0 0)`;document.querySelector('.divider').style.left=`${{b}}%`;$('leftLabel').textContent=labels[l];$('rightLabel').textContent=labels[q];$('rows').textContent=r.rows.toLocaleString();$('scale').textContent=r.pathScale.toFixed(6);$('mae').textContent=r.metrics.expanded.mae.toFixed(5);$('currentMae').textContent=r.metrics.current.mae.toFixed(5)}}
 for(const id of ['camera','left','right','blend']) $(id).addEventListener('input',render);$('prev').onclick=()=>{{$('camera').value=Math.max(0,+$('camera').value-1);render()}};$('next').onclick=()=>{{$('camera').value=Math.min(20,+$('camera').value+1);render()}};render();</script></body></html>"""
@@ -422,21 +475,9 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
     )
     target_capture = find_capture(capture_report, 10, "sharedTransmittanceContributionSum", 160)
     target = image_rgb(Path(target_capture["imagePath"]))
-    candidates = np.geomspace(0.0005, 2.0, 41)
-    calibration_trials = []
-    for scalar in candidates:
-        linear, _, _, _ = compose_planes(calibration_planes, float(scalar), "total")
-        metrics = image_metrics(tone_map(linear), target)
-        calibration_trials.append({"pathScale": float(scalar), **metrics})
-    best = min(calibration_trials, key=lambda row: row["mae"])
-    coarse = float(best["pathScale"])
-    refinements = np.linspace(coarse / 1.35, coarse * 1.35, 25)
-    for scalar in refinements:
-        linear, _, _, _ = compose_planes(calibration_planes, float(scalar), "total")
-        metrics = image_metrics(tone_map(linear), target)
-        calibration_trials.append({"pathScale": float(scalar), **metrics})
-    best = min(calibration_trials, key=lambda row: row["mae"])
-    path_scale = float(best["pathScale"])
+    calibration_fit = fit_optical_path_scale(calibration_planes, target)
+    calibration_trials = calibration_fit["trials"]
+    path_scale = float(calibration_fit["pathScale"])
 
     camera_rows = []
     metrics_rows = []
@@ -458,10 +499,11 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
         current_capture = find_capture(capture_report, index, "kernelMomentCovariance", 160)
         complete_capture = find_capture(capture_report, index, "sharedTransmittanceContributionSum", 160)
         support_capture = find_capture(capture_report, index, "stateDerivedSupport", 160)
-        current = image_rgb(Path(current_capture["imagePath"]))
-        complete = image_rgb(Path(complete_capture["imagePath"]))
         prefix = f"camera-{index:02d}"
         names = {
+            "current": f"{prefix}-current-kernel-moment.png",
+            "target": f"{prefix}-shared-transport-target.png",
+            "supportTarget": f"{prefix}-structural-support-target.png",
             "ridgeRidge": f"{prefix}-exact-ridge-ridge-extinction.png",
             "ridgeTotal": f"{prefix}-exact-ridge-total-extinction.png",
             "expanded": f"{prefix}-expanded-shared-transport.png",
@@ -469,6 +511,9 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
             "nonRidgeContribution": f"{prefix}-nonridge-contribution.png",
             "residual": f"{prefix}-expanded-residual.png",
         }
+        current = persist_capture_comparator(Path(current_capture["imagePath"]), out_dir / names["current"])
+        complete = persist_capture_comparator(Path(complete_capture["imagePath"]), out_dir / names["target"])
+        persist_capture_comparator(Path(support_capture["imagePath"]), out_dir / names["supportTarget"])
         write_png(out_dir / names["ridgeRidge"], ridge_ridge)
         write_png(out_dir / names["ridgeTotal"], ridge_total)
         write_png(out_dir / names["expanded"], expanded)
@@ -489,9 +534,6 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
             "index": index, "angle": float(camera["cameraAngle"]), "rows": count,
             "pathScale": path_scale, "metrics": {"expanded": expanded_metrics, "current": current_metrics},
             "images": {
-                "current": os.path.relpath(current_capture["imagePath"], out_dir),
-                "target": os.path.relpath(complete_capture["imagePath"], out_dir),
-                "supportTarget": os.path.relpath(support_capture["imagePath"], out_dir),
                 **names,
             },
         })
@@ -522,6 +564,10 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
         "calibration": {
             "identity": CALIBRATION_IDENTITY, "cameraIndex": 10, "pathScale": path_scale,
             "objective": "native-rgb-mae-to-shared-transmittance-target-v0", "trials": calibration_trials,
+            "calibrationBoundaryHit": calibration_fit["calibrationBoundaryHit"],
+            "calibrationExpansionCount": calibration_fit["calibrationExpansionCount"],
+            "calibrationExpansionDiagnostic": calibration_fit["calibrationExpansionDiagnostic"],
+            "bracketUpper": calibration_fit["bracketUpper"],
         },
         "metrics": {
             "cameras": metrics_rows,
@@ -557,6 +603,12 @@ def self_test() -> None:
     require(abs(float(nonridge[0, 0, 0]) - 0.25) < 1e-6, "self-test shared extinction drifted")
     require(abs(float(combined[0, 0, 0]) - 1.25) < 1e-6, "self-test shared sum drifted")
     require(abs(float(trans[0, 0]) - 0.25) < 1e-6, "self-test transmittance drifted")
+    high_scale_planes = np.zeros((2, 4, 4, 8), dtype=np.float32)
+    high_scale_planes[0, :, :, 0:3] = 0.05
+    high_scale_target = tone_map(compose_planes(high_scale_planes, 8.0, "total")[0])
+    high_scale_fit = fit_optical_path_scale(high_scale_planes, high_scale_target)
+    require(high_scale_fit["pathScale"] > 2.7, "self-test calibration retained the old upper cap")
+    require(high_scale_fit["calibrationBoundaryHit"] is False, "self-test calibration remained boundary-limited")
     print("coefficient render oracle self-test passed")
 
 

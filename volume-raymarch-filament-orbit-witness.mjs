@@ -481,6 +481,8 @@ try {
     sourceSettingsPreset: initialization.summary.sourceSettingsPreset,
     sourceRouteAuthority: report.sourceRouteAuthority,
     replayAuthority: initialization.summary.replayAuthority,
+    importedFieldReceipt,
+    transportContract: report.transportContract,
     frozenState: {
       sameStateCaptureId: initialization.summary.frozenState.sameStateCaptureId,
       frameCount: initialization.summary.frozenState.baseFrameCount,

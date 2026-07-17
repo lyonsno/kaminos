@@ -30,6 +30,13 @@ const REPLAY_FREEZE_AUTHORITY = 'witness-owned-presented-frame-pause-release-v0'
 const REPLAY_FLUID_SHA256 = 'd58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1';
 const REPLAY_FRONT_SHA256 = '1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8';
 const REPLAY_CONTROLS_SHA256 = 'ba122038332747804203b4d03c6a5e9bf7b1e5969ec5d1f5ef995d3b5adff5b9';
+const IMPORTED_ROUTE_AUTHORITY = 'checksum-addressed-full-field-import-explicit-controls-hash-v0';
+const IMPORTED_REPLAY_AUTHORITY = 'imported-field-checksum-anchor-v0';
+const IMPORTED_FREEZE_AUTHORITY = 'checksum-addressed-full-field-import-pause-v0';
+const IMPORTED_INITIALIZATION_AUTHORITY = 'checksum-addressed-live-replay-resume-v0';
+const IMPORTED_APPLICATION_IDENTITY = 'exact-field-live-replay-application-v0';
+const IMPORTED_FLUID_SHA256 = 'fecde19cccf7859e592a7ef546c46b7c222ef01ade4c5ec1ab4fb8682bf8fa2f';
+const IMPORTED_FRONT_SHA256 = 'fb299905a89392bf46f15d6b30f22873dd0e695daac78d9804ce5013a081be40';
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -83,6 +90,43 @@ function hasExactReplaySourceIdentity(report) {
     && freeze.frameCount === 96
     && freeze.simStepCount === 96
     && freeze.authority === REPLAY_FREEZE_AUTHORITY
+    && report.frozenState?.frameCount === 96
+    && report.frozenState?.simStepCount === 96
+    && report.frozenState?.controlsHash === REPLAY_CONTROLS_SHA256;
+}
+
+export function hasExactImportedFieldSourceIdentity(report) {
+  const replay = report.replayAuthority || {};
+  const receipt = replay.warmupReceipt || {};
+  const freeze = replay.postWarmupFreezeReceipt || {};
+  const imported = report.importedFieldReceipt?.effective || {};
+  return report.sourceSettingsPreset?.presetId == null
+    && report.sourceSettingsPreset?.authority == null
+    && report.sourceRouteAuthority === IMPORTED_ROUTE_AUTHORITY
+    && replay.warmupAuthority === IMPORTED_REPLAY_AUTHORITY
+    && replay.warmupTarget === 96
+    && replay.warmupComplete === true
+    && receipt.ok === true
+    && receipt.authority === IMPORTED_REPLAY_AUTHORITY
+    && receipt.completedSteps === 96
+    && receipt.grid === 160
+    && receipt.fluidSha256 === IMPORTED_FLUID_SHA256
+    && receipt.frontSha256 === IMPORTED_FRONT_SHA256
+    && replay.freezeAfterWarmupRequested === true
+    && freeze.paused === true
+    && freeze.frameCount === 96
+    && freeze.simStepCount === 96
+    && freeze.authority === IMPORTED_FREEZE_AUTHORITY
+    && imported.status === 'applied'
+    && imported.initializationAuthority === IMPORTED_INITIALIZATION_AUTHORITY
+    && imported.filterIdentity === IMPORTED_APPLICATION_IDENTITY
+    && imported.layoutIdentity === 'x-fastest-zyx-c-interleaved-v0'
+    && imported.receiverInitialSimStepCount === 96
+    && imported.fluidSha256 === receipt.fluidSha256
+    && imported.frontSha256 === receipt.frontSha256
+    && imported.renderLoopPaused === true
+    && imported.effectiveRoute === 'native-3d-compute-fluid-raymarch-v0'
+    && imported.backend === 'WebGPU:apple'
     && report.frozenState?.frameCount === 96
     && report.frozenState?.simStepCount === 96
     && report.frozenState?.controlsHash === REPLAY_CONTROLS_SHA256;
@@ -144,7 +188,9 @@ export async function validateCameraHoldoutReport(report, options = {}) {
   if (report.fallbackReason != null) throw new Error(`renderer fallback: ${report.fallbackReason}`);
   const hasSharedPresetSource = report.sourceSettingsPreset?.presetId === PRESET_ID
     && report.sourceSettingsPreset?.authority === 'shared-volume-settings-preset-v2';
-  if (!hasSharedPresetSource && !hasExactReplaySourceIdentity(report)) {
+  if (!hasSharedPresetSource
+    && !hasExactReplaySourceIdentity(report)
+    && !hasExactImportedFieldSourceIdentity(report)) {
     throw new Error('stale/default preset or incomplete replay source identity replaced the requested source');
   }
   if (!report.frozenState?.sameStateCaptureId

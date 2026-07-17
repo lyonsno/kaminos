@@ -17,6 +17,9 @@ assert.match(source, /ridge-plus-non-ridge-extinction-one-running-transmittance-
 assert.match(source, /base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0/, 'oracle pins kernel-moment geometry');
 assert.match(source, /camera-10-only-global-optical-path-fit-v0/, 'oracle pins one calibration camera');
 assert.match(source, /independentlyRenderedToneMappedImageAdditivity/, 'oracle rejects independent image addition');
+assert.match(source, /persist_capture_comparator/, 'oracle makes source comparator images local to the served gallery');
+assert.match(source, /calibrationBoundaryHit/, 'oracle reports whether the fitted scalar remains search-boundary limited');
+assert.match(source, /calibrationExpansionDiagnostic/, 'oracle diagnoses an unusually large calibration flow without capping it');
 assert.match(source, /sampleCap/, 'oracle audits hidden row caps');
 
 const python = process.env.KAMINOS_MLX_PYTHON || '/private/tmp/kaminos-mlx-residual-venv/bin/python';
