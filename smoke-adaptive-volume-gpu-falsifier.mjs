@@ -139,17 +139,19 @@ function finiteNonNegative(value) {
   return Number.isFinite(Number(value)) && Number(value) >= 0;
 }
 
-function identityEvidenceText(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return '';
-  try {
-    return JSON.stringify(value).toLowerCase();
-  } catch {
-    return '';
-  }
+function hasPositiveIdentityToken(value, token) {
+  if (typeof value !== 'string') return false;
+  const text = value.trim().toLowerCase();
+  const identityToken = token.toLowerCase();
+  if (!new RegExp(`\\b${identityToken}\\b`).test(text)) return false;
+  return !new RegExp(`\\b(?:not|no|non|without)\\b(?:\\s+\\w+){0,2}\\s+${identityToken}\\b`).test(text)
+    && !new RegExp(`\\bnon[-_]${identityToken}\\b`).test(text);
 }
 
 function hasAppleAdapterEvidence(adapterInfo) {
-  return identityEvidenceText(adapterInfo).includes('apple');
+  if (!adapterInfo || typeof adapterInfo !== 'object' || Array.isArray(adapterInfo)) return false;
+  return ['vendor', 'architecture', 'device', 'description']
+    .some(field => hasPositiveIdentityToken(adapterInfo[field], 'apple'));
 }
 
 function hasAppleCdpEvidence(cdpGpuInfo) {
@@ -157,10 +159,10 @@ function hasAppleCdpEvidence(cdpGpuInfo) {
     || cdpGpuInfo?.appleDeviceObserved !== true
     || !Array.isArray(cdpGpuInfo?.devices)
     || cdpGpuInfo.devices.length === 0) return false;
-  return cdpGpuInfo.devices.some(device => {
-    const text = identityEvidenceText(device);
-    return text.includes('apple') && text.includes('metal');
-  });
+  return cdpGpuInfo.devices.some(device => device && typeof device === 'object' && !Array.isArray(device)
+    && [device.vendorString, device.driverVendor].some(value => hasPositiveIdentityToken(value, 'apple'))
+    && hasPositiveIdentityToken(device.deviceString, 'apple')
+    && hasPositiveIdentityToken(device.deviceString, 'metal'));
 }
 
 export function validateAdaptiveVolumeGpuReport(report) {

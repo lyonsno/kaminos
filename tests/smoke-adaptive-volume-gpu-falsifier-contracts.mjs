@@ -150,9 +150,21 @@ for (const mutate of [
   report => { report.effective.cdpGpuInfo.appleDeviceObserved = false; },
   report => { report.effective.cdpGpuInfo.devices = []; },
   report => { report.effective.cdpGpuInfo.devices = [null]; },
+  report => { report.effective.cdpGpuInfo.devices = [{ apple: false, metal: false }]; },
+  report => { report.effective.cdpGpuInfo.devices = [{ deviceString: 'not Apple not Metal' }]; },
   report => {
     report.effective.backendIdentitySource = 'adapter-info';
     report.effective.adapterInfo = { vendor: 'Unknown', architecture: 'Unknown' };
+    delete report.effective.cdpGpuInfo;
+  },
+  report => {
+    report.effective.backendIdentitySource = 'adapter-info';
+    report.effective.adapterInfo = { apple: false };
+    delete report.effective.cdpGpuInfo;
+  },
+  report => {
+    report.effective.backendIdentitySource = 'adapter-info';
+    report.effective.adapterInfo = { vendor: 'Not Apple' };
     delete report.effective.cdpGpuInfo;
   },
   report => { report.validation.denseAgainstCommittedReference.maximumAbsoluteError = 1; },
