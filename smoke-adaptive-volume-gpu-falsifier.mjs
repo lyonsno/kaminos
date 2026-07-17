@@ -257,7 +257,7 @@ export function validateAdaptiveVolumeScaleLawReport(report) {
       if (!Number.isInteger(intersectingRayCount) || intersectingRayCount <= 0 || intersectingRayCount > pixelCount) reasons.push(`${prefix}:ray-coverage-invalid`);
       if (!Number.isInteger(denseStepCount) || denseStepCount < intersectingRayCount) reasons.push(`${prefix}:dense-step-count-invalid`);
       if (Number(workload?.dispatchRepeats) !== dispatchRepeats) reasons.push(`${prefix}:dispatch-repeat-mismatch`);
-      if (workload?.timingProtocol !== 'paired-alternating-order-v0') reasons.push(`${prefix}:timing-protocol-invalid`);
+      if (workload?.timingProtocol !== 'paired-alternating-submit-v0' || Number(workload?.submissionCountPerPair) !== 2) reasons.push(`${prefix}:timing-protocol-invalid`);
       const pairedSamples = workload?.pairedSamples;
       if (!Array.isArray(pairedSamples) || pairedSamples.length !== steadySamples) {
         reasons.push(`${prefix}:paired-samples-incomplete`);
@@ -273,11 +273,15 @@ export function validateAdaptiveVolumeScaleLawReport(report) {
         const denseMedian = median(pairedSamples.map(sample => Number(sample.denseAggregateGpuMs)));
         const compactMedian = median(pairedSamples.map(sample => Number(sample.compactAggregateGpuMs)));
         const ratioMedian = median(pairedSamples.map(sample => Number(sample.compactOverDenseRatio)));
+        const denseCompactRatioMedian = median(pairedSamples.filter(sample => sample.order === 'dense-compact').map(sample => Number(sample.compactOverDenseRatio)));
+        const compactDenseRatioMedian = median(pairedSamples.filter(sample => sample.order === 'compact-dense').map(sample => Number(sample.compactOverDenseRatio)));
         if (Number(workload?.profiles?.dense?.aggregate?.median) !== denseMedian
           || Number(workload?.profiles?.compact?.aggregate?.median) !== compactMedian
           || Number(workload?.profiles?.dense?.perDispatch?.median) !== denseMedian / dispatchRepeats
           || Number(workload?.profiles?.compact?.perDispatch?.median) !== compactMedian / dispatchRepeats
           || Number(workload?.pairedRatio?.median) !== ratioMedian
+          || Number(workload?.pairedRatioByOrder?.denseCompact?.median) !== denseCompactRatioMedian
+          || Number(workload?.pairedRatioByOrder?.compactDense?.median) !== compactDenseRatioMedian
           || Number(workload?.compactOverDenseRatio) !== ratioMedian) reasons.push(`${prefix}:paired-summary-mismatch`);
       }
       for (const arm of ['dense', 'compact']) {

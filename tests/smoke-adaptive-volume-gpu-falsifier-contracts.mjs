@@ -151,9 +151,14 @@ function scaleWorkload(width, height, denseMedian, compactMedian) {
     intersectingRayCount: Math.floor(pixelCount * 0.8),
     denseStepCount: Math.floor(pixelCount * 0.8) * 160,
     dispatchRepeats: 8,
-    timingProtocol: 'paired-alternating-order-v0',
+    timingProtocol: 'paired-alternating-submit-v0',
+    submissionCountPerPair: 2,
     pairedSamples,
     pairedRatio: { median: compactMedian / denseMedian },
+    pairedRatioByOrder: {
+      denseCompact: { median: compactMedian / denseMedian },
+      compactDense: { median: compactMedian / denseMedian },
+    },
     compactOverDenseRatio: compactMedian / denseMedian,
     profiles: {
       dense: { aggregate: { median: denseMedian }, perDispatch: { median: denseMedian / 8 } },
@@ -211,7 +216,9 @@ for (const mutate of [
   report => { report.scaleLaw.requested.dispatchRepeats = 1; },
   report => { report.scaleLaw.effective.workloads[0].profiles.dense.aggregate.median = 0.5; },
   report => { report.scaleLaw.effective.workloads[0].timingProtocol = 'dense-then-compact'; },
+  report => { report.scaleLaw.effective.workloads[0].submissionCountPerPair = 1; },
   report => { report.scaleLaw.effective.workloads[0].pairedSamples[1].order = 'dense-compact'; },
+  report => { delete report.scaleLaw.effective.workloads[0].pairedRatioByOrder; },
   report => { report.scaleLaw.effective.workloads[0].profiles.dense.aggregate.median = 9; },
   report => { report.scaleLaw.effective.workloads[0].compactOverDenseRatio = 9; },
   report => { report.scaleLaw.effective.workloads[0].intersectingRayCount = 0; },
@@ -335,13 +342,14 @@ assert.match(browser, /dispatchRepeats/, 'R8 must record effective timing amplif
 assert.match(browser, /minimumAggregateGpuMs/, 'R8 must reject aggregate timings that remain at the timestamp floor');
 assert.match(browser, /intersectingRayCount/, 'R8 must identify actual ray coverage for every workload');
 assert.match(browser, /denseStepCount/, 'R8 must identify the dense scalar work represented by every workload');
-assert.match(browser, /paired-alternating-order-v0/, 'R8b must pair dense and compact samples with alternating execution order');
+assert.match(browser, /paired-alternating-submit-v0/, 'R8c must pair dense and compact samples as alternating separate submissions');
 assert.match(browser, /pairedSamples/, 'R8b must preserve raw paired timing evidence');
 assert.match(
   browser,
-  /resolveTimestamps\(device,[\s\S]*?,\s*4,\s*\[\[0,\s*1\],\s*\[2,\s*3\]\]\)/,
-  'paired pass timestamps must validate each begin/end duration without assuming cross-pass timestamp ordering',
+  /const measureArm[\s\S]*resolveTimestamps\(device,[\s\S]*?,\s*2\)/,
+  'R8c must measure each arm in its own timestamped submission',
 );
+assert.match(browser, /pairedRatioByOrder/, 'R8c must expose residual execution-order bias instead of averaging it away');
 assert.match(browser, /absoluteErrorQuantiles/, 'R8b must distinguish a broad reconstruction failure from an extreme-value tail');
 assert.match(browser, /aboveErrorLimitCount/, 'R8b must report how many pixels violate the immutable max-error gate');
 assert.match(browser, /renderScaleLawSummary/, 'R8b screenshot must expose role-labeled scale timing and error rows');

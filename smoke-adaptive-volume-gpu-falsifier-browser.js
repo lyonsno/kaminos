@@ -510,22 +510,24 @@ async function profilePairedRepeatedPasses(device, {
   dispatchRepeats,
   encodeArm,
 }) {
+  const measureArm = async arm => {
+    const timestamps = await resolveTimestamps(device, (encoder, querySet) => {
+      encodeArm(encoder, querySet, arm, 0, 1);
+    }, 2);
+    return Number(timestamps[1] - timestamps[0]) / 1_000_000;
+  };
   const runPair = async index => {
     const denseFirst = index % 2 === 0;
     const order = denseFirst ? 'dense-compact' : 'compact-dense';
-    const timestamps = await resolveTimestamps(device, (encoder, querySet) => {
-      if (denseFirst) {
-        encodeArm(encoder, querySet, 'dense', 0, 1);
-        encodeArm(encoder, querySet, 'compact', 2, 3);
-      } else {
-        encodeArm(encoder, querySet, 'compact', 0, 1);
-        encodeArm(encoder, querySet, 'dense', 2, 3);
-      }
-    }, 4, [[0, 1], [2, 3]]);
-    const firstGpuMs = Number(timestamps[1] - timestamps[0]) / 1_000_000;
-    const secondGpuMs = Number(timestamps[3] - timestamps[2]) / 1_000_000;
-    const denseAggregateGpuMs = denseFirst ? firstGpuMs : secondGpuMs;
-    const compactAggregateGpuMs = denseFirst ? secondGpuMs : firstGpuMs;
+    let denseAggregateGpuMs;
+    let compactAggregateGpuMs;
+    if (denseFirst) {
+      denseAggregateGpuMs = await measureArm('dense');
+      compactAggregateGpuMs = await measureArm('compact');
+    } else {
+      compactAggregateGpuMs = await measureArm('compact');
+      denseAggregateGpuMs = await measureArm('dense');
+    }
     return {
       order,
       denseAggregateGpuMs,
@@ -545,9 +547,14 @@ async function profilePairedRepeatedPasses(device, {
     };
   };
   return {
-    timingProtocol: 'paired-alternating-order-v0',
+    timingProtocol: 'paired-alternating-submit-v0',
+    submissionCountPerPair: 2,
     pairedSamples,
     pairedRatio: stats(pairedSamples.map(row => row.compactOverDenseRatio)),
+    pairedRatioByOrder: {
+      denseCompact: stats(pairedSamples.filter(row => row.order === 'dense-compact').map(row => row.compactOverDenseRatio)),
+      compactDense: stats(pairedSamples.filter(row => row.order === 'compact-dense').map(row => row.compactOverDenseRatio)),
+    },
     dense: profile('dense'),
     compact: profile('compact'),
   };
@@ -672,8 +679,10 @@ async function profileScaleLawWorkloads(device, {
       ...workload,
       dispatchRepeats: config.scaleDispatchRepeats,
       timingProtocol: pairedProfile.timingProtocol,
+      submissionCountPerPair: pairedProfile.submissionCountPerPair,
       pairedSamples: pairedProfile.pairedSamples,
       pairedRatio: pairedProfile.pairedRatio,
+      pairedRatioByOrder: pairedProfile.pairedRatioByOrder,
       profiles: { dense: pairedProfile.dense, compact: pairedProfile.compact },
       compactOverDenseRatio: pairedProfile.pairedRatio.median,
       comparison,
@@ -748,9 +757,9 @@ function renderScaleLawSummary(scaleLaw) {
   const node = document.getElementById('scale-law-summary');
   node.replaceChildren();
   const heading = document.createElement('h2');
-  heading.textContent = 'R8b Paired Scale Law';
+  heading.textContent = 'R8c Paired Scale Law';
   const context = document.createElement('p');
-  context.textContent = 'Isolated single-channel traversal. Each row alternates dense/compact order; the 0.001 maximum-error gate remains binding.';
+  context.textContent = 'Isolated single-channel traversal. Each arm gets a separate timestamped submission; pair order alternates and the 0.001 maximum-error gate remains binding.';
   const table = document.createElement('table');
   const header = document.createElement('tr');
   for (const label of ['Workload', 'Dense ms', 'Compact ms', 'C/D ratio', 'p99.99 error', 'Max error', '> gate']) {
@@ -1180,7 +1189,7 @@ async function run() {
       falseClosureChecks: {
         workloadSurfaceIncomplete: scaleLawWorkloads.length < 3,
         timingAmplificationMissing: config.scaleDispatchRepeats <= 1,
-        unpairedTiming: scaleLawWorkloads.some(row => row.timingProtocol !== 'paired-alternating-order-v0'),
+        unpairedTiming: scaleLawWorkloads.some(row => row.timingProtocol !== 'paired-alternating-submit-v0' || row.submissionCountPerPair !== 2),
         aggregateBelowDeclaredFloor: scaleLawWorkloads.some(row => (
           row.profiles.dense.aggregate.median < config.minimumAggregateGpuMs
           || row.profiles.compact.aggregate.median < config.minimumAggregateGpuMs
