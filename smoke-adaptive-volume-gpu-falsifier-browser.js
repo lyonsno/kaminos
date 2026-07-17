@@ -1884,7 +1884,11 @@ async function run() {
   setLabel('built-label', `${buildRenderProfile.total.median.toFixed(3)} ms build+render; max error ${builtComparison.maximumAbsoluteError.toExponential(2)}`);
   renderScaleLawSummary(report.scaleLaw);
   renderProductionSurvivalSummary(report.productionSurvival);
-  setStatus(report.optimizationClaimAllowed ? 'Timestamp-backed compact independence gate passed' : `Optimization claim rejected: ${disposition.reasons.join(', ')}`);
+  if (report.productionSurvival) {
+    setStatus(`Production comparator: ${report.productionSurvivalEvidenceAllowed ? 'support-proven evidence passed' : `rejected (${report.productionSurvivalRejectionReasons.join(', ')})`}; compact/dense ${report.productionSurvival.effective.workload.compactOverDenseRatio.toFixed(3)}x at 3456x2234`);
+  } else {
+    setStatus(report.optimizationClaimAllowed ? 'Timestamp-backed compact independence gate passed' : `Optimization claim rejected: ${disposition.reasons.join(', ')}`);
+  }
   reportNode.textContent = JSON.stringify(report, null, 2);
   state.report = report;
   state.phase = 'complete';

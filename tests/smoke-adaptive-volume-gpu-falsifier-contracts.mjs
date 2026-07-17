@@ -578,6 +578,8 @@ const html = readFileSync(new URL('../smoke-adaptive-volume-gpu-falsifier.html',
 assert.match(html, /id="scale-law-summary"/, 'R8b screenshot needs a bounded scale-law context surface');
 assert.match(html, /id="production-survival-summary"/, 'R9 screenshot must anchor production timing to source, mechanism, support, and role labels');
 assert.match(browser, /renderProductionSurvivalSummary/, 'R9 screenshot must expose the production comparator context instead of only scale-law rows');
+assert.match(browser, /Production comparator:/, 'R9 screenshot status must name the production result instead of implying isolated optimization success');
+assert.match(browser, /compact\/dense/, 'R9 screenshot status must expose the production compact/dense timing ratio');
 const moduleSource = readFileSync(new URL('../smoke-adaptive-volume-gpu-falsifier.mjs', import.meta.url), 'utf8');
 assert.match(moduleSource, /kaminos\.smoke-adaptive-volume-scale-law\.v0/, 'R8 scale evidence needs its own nested schema');
 assert.match(browser, /productionAttribution/, 'R8 must bind its production comparison boundary to exact source evidence');
