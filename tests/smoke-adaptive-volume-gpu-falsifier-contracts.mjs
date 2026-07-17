@@ -463,6 +463,8 @@ assert.match(witness, /gitCommit[\s\S]*gitBranch[\s\S]*gitStatusShort/);
 assert.match(witness, /sourceFileSha256s/);
 assert.match(witness, /SystemInfo\.getInfo/);
 assert.match(witness, /applyHostGpuIdentity/);
+assert.doesNotMatch(witness, /function wsRequest\([^)]*timeoutMs\s*=\s*30000/, 'uncapped browser runs must not inherit a hidden per-CDP timeout');
+assert.match(witness, /timeoutMs\s*>\s*0\s*\?\s*setTimeout/, 'explicit CDP timeouts must remain caller-owned and opt-in');
 assert.match(
   witness,
   /writeFileSync\(browserReportPath[\s\S]*Page\.captureScreenshot/,

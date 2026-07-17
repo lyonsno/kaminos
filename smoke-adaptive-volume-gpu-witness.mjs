@@ -148,14 +148,14 @@ function waitForWebSocketOpen(socket) {
   });
 }
 
-function wsRequest(socket, method, params = {}, timeoutMs = 30000) {
+function wsRequest(socket, method, params = {}, timeoutMs = 0) {
   const id = socket._nextId = (socket._nextId || 0) + 1;
   socket.send(JSON.stringify({ id, method, params }));
   return new Promise((resolveRequest, rejectRequest) => {
-    const timer = setTimeout(() => {
+    const timer = timeoutMs > 0 ? setTimeout(() => {
       socket.removeEventListener('message', onMessage);
       rejectRequest(new Error(`${method}: CDP request timed out`));
-    }, timeoutMs);
+    }, timeoutMs) : null;
     const onMessage = event => {
       const message = JSON.parse(String(event.data));
       if (message.method === 'Runtime.consoleAPICalled') {
@@ -171,7 +171,7 @@ function wsRequest(socket, method, params = {}, timeoutMs = 30000) {
         });
       }
       if (message.id !== id) return;
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
       socket.removeEventListener('message', onMessage);
       if (message.error) rejectRequest(new Error(`${method}: ${message.error.message}`));
       else resolveRequest(message.result);
