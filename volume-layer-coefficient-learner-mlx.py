@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
-"""Validate the lawful post-admission layer-coefficient training contract.
-
-This airlock intentionally performs no MLX training. It blocks model spend until
-analytical Ridge-or-Non-Ridge admission and exact local coefficient tensors exist.
-"""
+"""Validate and train the lawful post-admission layer-coefficient comparison."""
 
 from __future__ import annotations
 
 import argparse
+import gc
 import hashlib
 import json
 import math
@@ -25,6 +22,7 @@ from typing import Any
 MANIFEST_SCHEMA = "kaminos.volume.layer-coefficient-training-manifest.v0"
 RESULT_SCHEMA = "kaminos.volume.layer-coefficient-contract-report.v0"
 FAILURE_SCHEMA = "kaminos.volume.layer-coefficient-contract-failure.v0"
+TRAINING_RESULT_SCHEMA = "kaminos.volume.layer-coefficient-training-result.v0"
 TRAINING_AUTHORITY = "analytical-ridge-or-nonridge-admission-plus-exact-local-coefficients-v0"
 ADMISSION_AUTHORITY = "analytical-not-learned-membership-v0"
 COEFFICIENT_BOUNDARY = "per-sample-pre-tone-map-emission-extinction-v0"
@@ -65,6 +63,18 @@ DESCRIPTOR_SOURCE_HASH_KEYS = {
     "boundarySidecarSha256",
     "majorantSha256",
 }
+BASELINE_ARCHITECTURE_IDENTITY = "baseline-24x248x8-8192-v0"
+TREATMENT_ARCHITECTURE_IDENTITY = "treatment-gated24-plus-31x204x8-8192-v0"
+TRAINABLE_PARAMETER_COUNT = 8192
+DEFAULT_DESCRIPTOR_CHANNELS = [
+    "flow.coherence",
+    "flow.curlMagnitude",
+    "flow.divergence",
+    "flow.curlActivity",
+    "validity.conservativeMajorant",
+    "majorant.fire",
+    "majorant.extinction",
+]
 
 
 def require(condition: bool, message: str) -> None:
@@ -754,11 +764,395 @@ def validate_manifest(
     }
 
 
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while chunk := handle.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def training_states(
+    manifest: dict[str, Any],
+    manifest_path: Path,
+    validated: dict[str, Any],
+) -> list[dict[str, Any]]:
+    import numpy as np
+
+    feature_count = validated["featureView"]["channelCount"]
+    descriptor_stride = validated["descriptorComparison"]["producer"]["strideFloats"]
+    states = []
+    for state in manifest["states"]:
+        rows = state["rows"]
+        count = rows["count"]
+        states.append(
+            {
+                "id": state["id"],
+                "splitRole": state["splitRole"],
+                "count": count,
+                "features": np.memmap(
+                    resolve_artifact_path(manifest_path, rows["features"]["path"]),
+                    dtype="<f4",
+                    mode="r",
+                    shape=(count, feature_count),
+                ),
+                "descriptors": np.memmap(
+                    resolve_artifact_path(manifest_path, rows["kernelDescriptors"]["path"]),
+                    dtype="<f4",
+                    mode="r",
+                    shape=(count, descriptor_stride),
+                ),
+                "targets": np.memmap(
+                    resolve_artifact_path(manifest_path, rows["coefficients"]["path"]),
+                    dtype="<f4",
+                    mode="r",
+                    shape=(count, len(COEFFICIENT_ORDER)),
+                ),
+            }
+        )
+    return states
+
+
+def selected_descriptor_indices(validated: dict[str, Any]) -> list[int]:
+    treatment_order = validated["descriptorComparison"]["treatment"]["order"]
+    require(treatment_order == DEFAULT_DESCRIPTOR_CHANNELS, f"treatment descriptor order must equal {DEFAULT_DESCRIPTOR_CHANNELS}")
+    producer_order = validated["descriptorComparison"]["producer"]["descriptorOrder"]
+    producer_indices = {name: index for index, name in enumerate(producer_order)}
+    return [producer_indices[name] for name in treatment_order]
+
+
+def iter_state_batches(
+    states: list[dict[str, Any]],
+    split_role: str,
+    batch_size: int,
+    descriptor_indices: list[int] | None,
+    block_order: list[tuple[int, int]] | None = None,
+) -> Any:
+    import numpy as np
+
+    selected_states = [state for state in states if state["splitRole"] == split_role]
+    blocks = [
+        (state_index, start)
+        for state_index, state in enumerate(selected_states)
+        for start in range(0, state["count"], batch_size)
+    ]
+    if block_order is not None:
+        require(set(block_order) == set(blocks) and len(block_order) == len(blocks), "training block order does not cover the split exactly once")
+        blocks = block_order
+    for state_index, start in blocks:
+        state = selected_states[state_index]
+        stop = min(start + batch_size, state["count"])
+        base_features = np.asarray(state["features"][start:stop], dtype=np.float32)
+        if descriptor_indices is None:
+            features = base_features
+        else:
+            descriptor_features = np.asarray(state["descriptors"][start:stop, descriptor_indices], dtype=np.float32)
+            features = np.concatenate((base_features, descriptor_features), axis=1)
+        targets = np.asarray(state["targets"][start:stop], dtype=np.float32)
+        yield features, targets
+
+
+def training_block_order(
+    states: list[dict[str, Any]],
+    batch_size: int,
+    seed: int,
+    epoch: int,
+) -> list[tuple[int, int]]:
+    import numpy as np
+
+    train_states = [state for state in states if state["splitRole"] == "train"]
+    blocks = [
+        (state_index, start)
+        for state_index, state in enumerate(train_states)
+        for start in range(0, state["count"], batch_size)
+    ]
+    permutation = np.random.default_rng(seed + epoch).permutation(len(blocks))
+    return [blocks[int(index)] for index in permutation]
+
+
+def streaming_normalization(
+    states: list[dict[str, Any]],
+    batch_size: int,
+    descriptor_indices: list[int] | None,
+) -> dict[str, Any]:
+    import numpy as np
+
+    input_count = states[0]["features"].shape[1] + (0 if descriptor_indices is None else len(descriptor_indices))
+    feature_sum = np.zeros(input_count, dtype=np.float64)
+    feature_square_sum = np.zeros(input_count, dtype=np.float64)
+    target_square_sum = np.zeros(len(COEFFICIENT_ORDER), dtype=np.float64)
+    row_count = 0
+    for features, targets in iter_state_batches(states, "train", batch_size, descriptor_indices):
+        feature_sum += np.sum(features, axis=0, dtype=np.float64)
+        feature_square_sum += np.sum(np.square(features, dtype=np.float64), axis=0, dtype=np.float64)
+        target_square_sum += np.sum(np.square(targets, dtype=np.float64), axis=0, dtype=np.float64)
+        row_count += features.shape[0]
+    require(row_count > 0, "training split contains no rows")
+    feature_mean = feature_sum / row_count
+    feature_variance = np.maximum(feature_square_sum / row_count - np.square(feature_mean), 1e-12)
+    feature_std = np.sqrt(feature_variance)
+    target_scale = np.maximum(np.sqrt(target_square_sum / row_count), 1e-6)
+    require(input_count == feature_mean.shape[0], "normalization input count changed")
+    return {
+        "featureMean": feature_mean.astype(np.float32),
+        "featureStd": feature_std.astype(np.float32),
+        "targetScale": target_scale.astype(np.float32),
+        "rowCount": row_count,
+    }
+
+
+def count_trainable_parameters(model: Any) -> int:
+    import numpy as np
+    from mlx.utils import tree_flatten
+
+    return sum(int(np.asarray(value).size) for _, value in tree_flatten(model.parameters()))
+
+
+def train_arm(
+    arm: str,
+    states: list[dict[str, Any]],
+    descriptor_indices: list[int],
+    epochs: int,
+    batch_size: int,
+    learning_rate: float,
+    seed: int,
+    output_path: Path,
+) -> tuple[Any, dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
+    import mlx.core as mx
+    import mlx.nn as nn
+    import mlx.optimizers as optim
+    from mlx.utils import tree_flatten
+
+    feature_count = states[0]["features"].shape[1]
+    active_descriptor_indices = None if arm == "baseline" else descriptor_indices
+    print(json.dumps({"phase": "arm-start", "arm": arm}), flush=True)
+    normalization = streaming_normalization(states, batch_size, active_descriptor_indices)
+
+    class BaselineModel(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.input_layer = nn.Linear(feature_count, 248)
+            self.output_layer = nn.Linear(248, len(COEFFICIENT_ORDER))
+
+        def __call__(self, values: Any) -> Any:
+            logits = self.output_layer(nn.silu(self.input_layer(values)))
+            return mx.logaddexp(logits, mx.zeros_like(logits))
+
+    class TreatmentModel(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.shared_feature_gate = mx.zeros((feature_count,))
+            self.input_layer = nn.Linear(feature_count + len(descriptor_indices), 204)
+            self.output_layer = nn.Linear(204, len(COEFFICIENT_ORDER))
+
+        def __call__(self, values: Any) -> Any:
+            shared = values[:, :feature_count]
+            descriptors = values[:, feature_count:]
+            gated_shared = shared * (1.0 + 0.25 * mx.tanh(self.shared_feature_gate))
+            combined = mx.concatenate((gated_shared, descriptors), axis=1)
+            logits = self.output_layer(nn.silu(self.input_layer(combined)))
+            return mx.logaddexp(logits, mx.zeros_like(logits))
+
+    require(arm in {"baseline", "treatment"}, f"unknown training arm {arm}")
+    mx.random.seed(seed)
+    model = BaselineModel() if arm == "baseline" else TreatmentModel()
+    mx.eval(model.parameters())
+    parameter_count = count_trainable_parameters(model)
+    require(parameter_count == TRAINABLE_PARAMETER_COUNT, f"{arm} trainable parameter count {parameter_count} differs from {TRAINABLE_PARAMETER_COUNT}")
+    optimizer = optim.AdamW(learning_rate=learning_rate, weight_decay=1e-5)
+    feature_mean = mx.array(normalization["featureMean"])
+    feature_std = mx.array(normalization["featureStd"])
+    target_scale = mx.array(normalization["targetScale"])
+
+    def loss_fn(active_model: Any, raw_features: Any, raw_targets: Any) -> Any:
+        normalized_features = (raw_features - feature_mean) / feature_std
+        normalized_targets = raw_targets / target_scale
+        predictions = active_model(normalized_features)
+        return mx.mean(mx.square(predictions - normalized_targets))
+
+    loss_and_grad = nn.value_and_grad(model, loss_fn)
+    trace: list[dict[str, Any]] = []
+    rows_seen = 0
+    batches_seen = 0
+    for epoch in range(epochs):
+        epoch_loss = 0.0
+        epoch_rows = 0
+        epoch_batches = 0
+        order = training_block_order(states, batch_size, seed, epoch)
+        for features, targets in iter_state_batches(states, "train", batch_size, active_descriptor_indices, order):
+            loss, gradients = loss_and_grad(model, mx.array(features), mx.array(targets))
+            optimizer.update(model, gradients)
+            mx.eval(model.parameters(), optimizer.state, loss)
+            epoch_loss += float(loss.item())
+            epoch_rows += features.shape[0]
+            epoch_batches += 1
+        require(epoch_rows == normalization["rowCount"], f"{arm} epoch did not consume every retained training row")
+        rows_seen += epoch_rows
+        batches_seen += epoch_batches
+        trace.append(
+            {
+                "epoch": epoch + 1,
+                "meanBatchLoss": epoch_loss / max(epoch_batches, 1),
+                "rows": epoch_rows,
+                "batches": epoch_batches,
+            }
+        )
+        print(json.dumps({"phase": "epoch-complete", "arm": arm, **trace[-1]}), flush=True)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    mx.save_safetensors(str(output_path), dict(tree_flatten(model.parameters())))
+    model_artifact = {
+        "path": str(output_path),
+        "bytes": output_path.stat().st_size,
+        "sha256": sha256_file(output_path),
+        "format": "mlx-safetensors-v0",
+    }
+    normalization_receipt = {
+        "identity": "train-state-streaming-zscore-plus-target-rms-v0",
+        "featureMean": normalization["featureMean"].tolist(),
+        "featureStd": normalization["featureStd"].tolist(),
+        "targetScale": normalization["targetScale"].tolist(),
+        "rowCount": normalization["rowCount"],
+        "epochs": epochs,
+        "rowsSeen": rows_seen,
+        "batchesSeen": batches_seen,
+    }
+    architecture = {
+        "identity": BASELINE_ARCHITECTURE_IDENTITY if arm == "baseline" else TREATMENT_ARCHITECTURE_IDENTITY,
+        "trainableParameters": parameter_count,
+        "outputTransform": OUTPUT_TRANSFORM,
+        "sharedFeatureCount": feature_count,
+        "descriptorFeatureCount": 0 if arm == "baseline" else len(descriptor_indices),
+        "sharedFeatureGate": "none" if arm == "baseline" else "24-trainable-useful-multiplicative-gates-v0",
+    }
+    return model, normalization, trace, {"architecture": architecture, "normalization": normalization_receipt, "modelArtifact": model_artifact}
+
+
+def evaluate_arm(
+    model: Any,
+    normalization: dict[str, Any],
+    states: list[dict[str, Any]],
+    split_role: str,
+    batch_size: int,
+    descriptor_indices: list[int] | None,
+) -> dict[str, Any]:
+    import mlx.core as mx
+    import numpy as np
+
+    squared = np.zeros(len(COEFFICIENT_ORDER), dtype=np.float64)
+    absolute = np.zeros(len(COEFFICIENT_ORDER), dtype=np.float64)
+    target_sum = np.zeros(len(COEFFICIENT_ORDER), dtype=np.float64)
+    prediction_sum = np.zeros(len(COEFFICIENT_ORDER), dtype=np.float64)
+    normalized_squared_sum = 0.0
+    normalized_absolute_sum = 0.0
+    row_count = 0
+    for features, targets in iter_state_batches(states, split_role, batch_size, descriptor_indices):
+        normalized_features = (features - normalization["featureMean"]) / normalization["featureStd"]
+        normalized_predictions = np.asarray(model(mx.array(normalized_features)), dtype=np.float32)
+        predictions = normalized_predictions * normalization["targetScale"]
+        difference = predictions - targets
+        normalized_difference = difference / normalization["targetScale"]
+        squared += np.sum(np.square(difference, dtype=np.float64), axis=0)
+        absolute += np.sum(np.abs(difference), axis=0, dtype=np.float64)
+        target_sum += np.sum(targets, axis=0, dtype=np.float64)
+        prediction_sum += np.sum(predictions, axis=0, dtype=np.float64)
+        normalized_squared_sum += float(np.sum(np.square(normalized_difference, dtype=np.float64)))
+        normalized_absolute_sum += float(np.sum(np.abs(normalized_difference), dtype=np.float64))
+        row_count += features.shape[0]
+    require(row_count > 0, f"{split_role} evaluation contains no rows")
+    channel_count = len(COEFFICIENT_ORDER)
+    channel_metrics = []
+    for index, name in enumerate(COEFFICIENT_ORDER):
+        channel_metrics.append(
+            {
+                "name": name,
+                "mse": float(squared[index] / row_count),
+                "mae": float(absolute[index] / row_count),
+                "targetSum": float(target_sum[index]),
+                "predictionSum": float(prediction_sum[index]),
+                "energyRecoveryFraction": float(prediction_sum[index] / target_sum[index]) if target_sum[index] > 1e-12 else None,
+            }
+        )
+    return {
+        "rowCount": row_count,
+        "normalizedMse": normalized_squared_sum / (row_count * channel_count),
+        "normalizedMae": normalized_absolute_sum / (row_count * channel_count),
+        "channels": channel_metrics,
+    }
+
+
+def train_comparison(
+    manifest: dict[str, Any],
+    manifest_path: Path,
+    validated: dict[str, Any],
+    output_dir: Path,
+    epochs: int,
+    batch_size: int,
+    learning_rate: float,
+    seed: int,
+) -> dict[str, Any]:
+    import mlx.core as mx
+
+    states = training_states(manifest, manifest_path, validated)
+    descriptor_indices = selected_descriptor_indices(validated)
+    arms: dict[str, Any] = {}
+    for arm in ("baseline", "treatment"):
+        model, normalization, trace, receipt = train_arm(
+            arm,
+            states,
+            descriptor_indices,
+            epochs,
+            batch_size,
+            learning_rate,
+            seed,
+            output_dir / f"{arm}-model.safetensors",
+        )
+        active_descriptor_indices = None if arm == "baseline" else descriptor_indices
+        arms[arm] = {
+            **receipt,
+            "trace": trace,
+            "train": evaluate_arm(model, normalization, states, "train", batch_size, active_descriptor_indices),
+            "heldState": evaluate_arm(model, normalization, states, "heldOut", batch_size, active_descriptor_indices),
+        }
+    baseline_mse = arms["baseline"]["heldState"]["normalizedMse"]
+    treatment_mse = arms["treatment"]["heldState"]["normalizedMse"]
+    require(math.isfinite(baseline_mse) and math.isfinite(treatment_mse), "held-state normalized MSE is non-finite")
+    return {
+        "backend": "mlx",
+        "device": str(mx.default_device()),
+        "splitIdentity": SPLIT_IDENTITY,
+        "descriptorComparisonIdentity": DESCRIPTOR_COMPARISON_IDENTITY,
+        "descriptorChannels": validated["descriptorComparison"]["treatment"]["order"],
+        "settings": {
+            "epochs": epochs,
+            "batchSize": batch_size,
+            "learningRate": learning_rate,
+            "seed": seed,
+            "weightDecay": 1e-5,
+            "rowPolicy": "every-retained-row-every-epoch-no-sampling-cap-v0",
+            "blockOrder": "same-seed-same-contiguous-block-permutation-per-arm-v0",
+        },
+        "arms": arms,
+        "comparison": {
+            "heldNormalizedMseDelta": baseline_mse - treatment_mse,
+            "heldNormalizedMseDeltaSign": "positive-means-treatment-better",
+            "heldNormalizedMseRelativeChange": (treatment_mse - baseline_mse) / baseline_mse if baseline_mse > 0 else None,
+            "heldNormalizedMseRelativeChangeSign": "negative-means-treatment-better",
+        },
+    }
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", required=True, type=Path)
     parser.add_argument("--report", required=True, type=Path)
     parser.add_argument("--probe-only", action="store_true")
+    parser.add_argument("--train", action="store_true")
+    parser.add_argument("--out-dir", type=Path)
+    parser.add_argument("--epochs", type=int, default=6)
+    parser.add_argument("--batch-size", type=int, default=8192)
+    parser.add_argument("--learning-rate", type=float, default=0.002)
+    parser.add_argument("--seed", type=int, default=7162026)
     parser.add_argument("--revalidation-marker", type=Path)
     parser.add_argument("--revalidation-delay-ms", type=float, default=0.0)
     return parser.parse_args()
@@ -771,6 +1165,7 @@ def main() -> int:
     report_path = args.report.expanduser().resolve()
     phase = "input-manifest-read"
     last_trustworthy: dict[str, Any] = {"validatedArtifactCount": 0}
+    training_started = False
     try:
         input_bytes = input_path.read_bytes()
         require(input_bytes, "training manifest is blank")
@@ -778,9 +1173,29 @@ def main() -> int:
         last_trustworthy["inputManifestSha256"] = input_sha
         manifest = json.loads(input_bytes)
         phase = "validate-training-authority"
-        require(args.probe_only, "training is held; invoke --probe-only until exact authored support and coefficient truth lands")
+        require(args.probe_only != args.train, "select exactly one of --probe-only or --train")
         require(args.revalidation_delay_ms >= 0, "revalidation delay must be nonnegative")
+        require(args.epochs > 0, "epochs must be positive")
+        require(args.batch_size > 0, "batch size must be positive")
+        require(math.isfinite(args.learning_rate) and args.learning_rate > 0, "learning rate must be finite and positive")
+        if args.train:
+            require(args.out_dir is not None, "--out-dir is required with --train")
         validated = validate_manifest(manifest, input_path, last_trustworthy)
+        if args.train:
+            phase = "mlx-training"
+            training_started = True
+            gc.collect()
+            output_dir = args.out_dir.expanduser().resolve()
+            training_result = train_comparison(
+                manifest,
+                input_path,
+                validated,
+                output_dir,
+                args.epochs,
+                args.batch_size,
+                args.learning_rate,
+                args.seed,
+            )
         phase = "completion-revalidation"
         if args.revalidation_marker is not None:
             atomic_json(
@@ -789,7 +1204,7 @@ def main() -> int:
                     "schema": "kaminos.volume.layer-coefficient-revalidation-marker.v0",
                     "status": "initial-validation-complete",
                     "manifestSha256": input_sha,
-                    "trainingStarted": False,
+                    "trainingStarted": training_started,
                 },
             )
         if args.revalidation_delay_ms > 0:
@@ -801,11 +1216,41 @@ def main() -> int:
         require(completion_validated == validated, "training evidence identities changed during completion revalidation")
         require(completion_evidence.get("sourceAppearanceCorpusValidated") is True, "source appearance corpus was not revalidated at completion")
         phase = "report-finalization"
+        if args.train:
+            report = {
+                "schema": TRAINING_RESULT_SCHEMA,
+                "status": "trained",
+                "failurePhase": None,
+                "trainingStarted": True,
+                "source": {"manifestPath": str(input_path), "manifestSha256": input_sha, "manifestIdentity": validated["identity"]},
+                "sourceAppearanceCorpus": validated["sourceAppearanceCorpus"],
+                "route": validated["route"],
+                "cohort": validated["cohort"],
+                "featureView": validated["featureView"],
+                "admission": validated["admission"],
+                "coefficientTargets": validated["coefficientTargets"],
+                "footprint": validated["footprint"],
+                "transportEvaluation": validated["transportEvaluation"],
+                "splits": validated["splits"],
+                "completionRevalidation": {
+                    "validatedArtifactCount": completion_evidence["validatedArtifactCount"],
+                    "sourceAppearanceCorpusRevalidated": completion_evidence["sourceAppearanceCorpusValidated"],
+                    "sourceAppearanceCameraCount": completion_evidence["sourceAppearanceCameraCount"],
+                },
+                "lastTrustworthyEvidence": last_trustworthy,
+                "startedAt": started_at,
+                "finishedAt": time.time(),
+                **training_result,
+            }
+            report["elapsedSeconds"] = report["finishedAt"] - started_at
+            atomic_json(report_path, report)
+            print(json.dumps({"status": report["status"], "report": str(report_path), "comparison": report["comparison"]}))
+            return 0
         report = {
             "schema": RESULT_SCHEMA,
             "status": "contract-valid",
             "failurePhase": None,
-            "trainingStarted": False,
+            "trainingStarted": training_started,
             "backend": "not-loaded-probe-only",
             "source": {"manifestPath": str(input_path), "manifestSha256": input_sha, "manifestIdentity": validated["identity"]},
             "sourceAppearanceCorpus": validated["sourceAppearanceCorpus"],
@@ -848,7 +1293,7 @@ def main() -> int:
             "status": "blocked",
             "failurePhase": phase,
             "reason": str(error),
-            "trainingStarted": False,
+            "trainingStarted": training_started,
             "lastTrustworthyEvidence": last_trustworthy,
             "startedAt": started_at,
             "finishedAt": time.time(),

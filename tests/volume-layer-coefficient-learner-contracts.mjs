@@ -28,6 +28,11 @@ assert.doesNotMatch(script, /checksum-bound-analytical-admission-row-index-v0/, 
 assert.match(script, /kernel-moment-analytical-geometry-v0/, 'learner keeps kernel-moment geometry analytical and separately gated');
 assert.match(script, /failurePhase[\s\S]*lastTrustworthyEvidence/, 'learner writes phase-local failure evidence');
 assert.match(script, /--probe-only/, 'learner exposes a no-training contract probe');
+assert.match(script, /--train/, 'learner exposes an explicit training mode after the contract probe');
+assert.match(script, /baseline-24x248x8-8192-v0/, 'baseline architecture is pinned to exactly 8192 trainable parameters');
+assert.match(script, /treatment-gated24-plus-31x204x8-8192-v0/, 'descriptor architecture is pinned to exactly 8192 trainable parameters');
+assert.match(script, /whole-simulator-state-holdout-v0/, 'training preserves whole-state holdout authority');
+assert.match(script, /softplus-nonnegative-output-v0/, 'training preserves nonnegative coefficient output semantics');
 
 const { BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER } = await import(
   new URL('../boundary-splat-feature-capture.mjs', import.meta.url)
@@ -117,6 +122,10 @@ const fluidChannelOrder = [
 const featureOrder = [
   'sidecar.support', 'sidecar.coverage', 'sidecar.ridge', 'sidecar.footprint',
   'material.density', 'material.heat', 'material.fuel', 'material.detail',
+  'fire.energy', 'fire.temperature', 'fire.emission', 'fire.detail',
+  'micro.x', 'micro.y', 'micro.z', 'micro.w',
+  'front.topology', 'velocity.x', 'velocity.y', 'velocity.z',
+  'support.reaction', 'support.interface', 'flow.curlMagnitude', 'flow.divergence',
 ];
 const admissionOrder = ['admission.ridge', 'admission.nonRidge'];
 const coefficientOrder = [
@@ -551,6 +560,40 @@ assert.equal(report.assays.heldState.generalizationAuthority, 'held-simulator-st
 assert.equal(report.lastTrustworthyEvidence.validatedArtifactCount, 22);
 assert.equal(report.completionRevalidation.validatedArtifactCount, 22);
 assert.equal(report.completionRevalidation.sourceAppearanceCorpusRevalidated, true);
+
+const mlxPython = process.env.KAMINOS_MLX_PYTHON;
+if (mlxPython) {
+  const trainingOutDir = join(outDir, 'training');
+  const trainingReportPath = join(trainingOutDir, 'training-report.json');
+  const trainingRun = spawnSync(mlxPython, [
+    scriptUrl.pathname,
+    '--input', inputPath,
+    '--report', trainingReportPath,
+    '--train',
+    '--out-dir', trainingOutDir,
+    '--epochs', '2',
+    '--batch-size', '4',
+    '--learning-rate', '0.002',
+    '--seed', '7162026',
+  ], { encoding: 'utf8' });
+  assert.equal(trainingRun.status, 0, trainingRun.stderr || trainingRun.stdout);
+  const trainingReport = JSON.parse(await readFile(trainingReportPath, 'utf8'));
+  assert.equal(trainingReport.status, 'trained');
+  assert.equal(trainingReport.backend, 'mlx');
+  assert.equal(trainingReport.splitIdentity, 'whole-simulator-state-holdout-v0');
+  assert.equal(trainingReport.arms.baseline.architecture.identity, 'baseline-24x248x8-8192-v0');
+  assert.equal(trainingReport.arms.treatment.architecture.identity, 'treatment-gated24-plus-31x204x8-8192-v0');
+  assert.equal(trainingReport.arms.baseline.architecture.trainableParameters, 8192);
+  assert.equal(trainingReport.arms.treatment.architecture.trainableParameters, 8192);
+  assert.equal(trainingReport.arms.baseline.train.rowCount, 4);
+  assert.equal(trainingReport.arms.baseline.heldState.rowCount, 4);
+  assert.equal(trainingReport.arms.treatment.train.rowCount, 4);
+  assert.equal(trainingReport.arms.treatment.heldState.rowCount, 4);
+  assert.ok(Number.isFinite(trainingReport.comparison.heldNormalizedMseDelta));
+  assert.ok(Number.isFinite(trainingReport.comparison.heldNormalizedMseRelativeChange));
+  assert.ok(existsSync(trainingReport.arms.baseline.modelArtifact.path));
+  assert.ok(existsSync(trainingReport.arms.treatment.modelArtifact.path));
+}
 
 const mutationManifest = structuredClone(manifest);
 const mutationFeaturePath = join(inputDir, 'completion-race-features.f32');
