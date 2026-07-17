@@ -624,7 +624,6 @@ async function run() {
     if (includeRender) {
       pass = encoder.beginComputePass({ timestampWrites: { querySet, beginningOfPassWriteIndex: 1, endOfPassWriteIndex: 2 } });
       pass.setPipeline(sparsePipeline); pass.setBindGroup(0, builtBindGroup); pass.dispatchWorkgroups(Math.ceil(width * height / 64)); pass.end();
-      const marker = encoder.beginComputePass({ timestampWrites: { querySet, endOfPassWriteIndex: 3 } }); marker.end();
     }
   };
 
@@ -633,14 +632,14 @@ async function run() {
   const denseProfile = await profilePass(device, { warmups: config.warmupSamples, samples: config.steadySamples, encode: (encoder, queries) => encodeRender(encoder, queries, densePipeline, denseBindGroup) });
   const prebuiltProfile = await profilePass(device, { warmups: config.warmupSamples, samples: config.steadySamples, encode: (encoder, queries) => encodeRender(encoder, queries, sparsePipeline, prebuiltBindGroup) });
   const buildProfile = await profilePass(device, { warmups: config.buildWarmupSamples, samples: config.buildSteadySamples, encode: (encoder, queries) => encodeBuild(encoder, queries, false) });
-  for (let index = 0; index < config.buildWarmupSamples; index += 1) await resolveTimestamps(device, (encoder, queries) => encodeBuild(encoder, queries, true), 4);
+  for (let index = 0; index < config.buildWarmupSamples; index += 1) await resolveTimestamps(device, (encoder, queries) => encodeBuild(encoder, queries, true), 3);
   const buildRenderSamples = [];
   for (let index = 0; index < config.buildSteadySamples; index += 1) {
-    const timestamps = await resolveTimestamps(device, (encoder, queries) => encodeBuild(encoder, queries, true), 4);
+    const timestamps = await resolveTimestamps(device, (encoder, queries) => encodeBuild(encoder, queries, true), 3);
     buildRenderSamples.push({
       build: Number(timestamps[1] - timestamps[0]) / 1_000_000,
       render: Number(timestamps[2] - timestamps[1]) / 1_000_000,
-      total: Number(timestamps[3] - timestamps[0]) / 1_000_000,
+      total: Number(timestamps[2] - timestamps[0]) / 1_000_000,
     });
   }
   const buildRenderProfile = {

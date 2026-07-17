@@ -122,6 +122,9 @@ const browser = readFileSync(new URL('../smoke-adaptive-volume-gpu-falsifier-bro
 assert.match(browser, /timestamp-query/);
 assert.match(browser, /timestampWrites/);
 assert.doesNotMatch(browser, /encoder\.writeTimestamp/);
+assert.doesNotMatch(browser, /const marker = encoder\.beginComputePass/, 'combined timing must not depend on an empty marker pass');
+assert.match(browser, /encodeBuild\(encoder, queries, true\), 3\)/, 'combined build/render timing uses three populated query slots');
+assert.match(browser, /total:\s*Number\(timestamps\[2\]\s*-\s*timestamps\[0\]\)\s*\/\s*1_000_000/);
 assert.doesNotMatch(
   browser,
   /function setStatus\([^)]*\)\s*\{[^}]*state\.phase\s*=/s,
