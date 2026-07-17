@@ -98,6 +98,60 @@ export function resolveFingerFluidRendererMode(value = 'screen_space_surface') {
   return mode;
 }
 
+export function validateFingerFluidTruthRendererState(requestedMode, runtime) {
+  const expectedMode = resolveFingerFluidRendererMode(requestedMode);
+  if (!runtime || typeof runtime !== 'object') {
+    throw new Error('Finger fluid truth renderer state is missing');
+  }
+  const expectedRenderer = expectedMode === 'sphere_debug'
+    ? KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE
+    : KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE;
+  if (runtime.requestedRendererMode !== expectedMode || runtime.effectiveRendererMode !== expectedMode) {
+    throw new Error(`Finger fluid truth renderer mode disagreement: ${JSON.stringify({
+      expectedMode,
+      requestedRendererMode: runtime.requestedRendererMode,
+      effectiveRendererMode: runtime.effectiveRendererMode,
+    })}`);
+  }
+  if (runtime.requestedRenderer !== expectedRenderer || runtime.effectiveRenderer !== expectedRenderer) {
+    throw new Error(`Finger fluid truth renderer identity disagreement: ${JSON.stringify({
+      expectedRenderer,
+      requestedRenderer: runtime.requestedRenderer,
+      effectiveRenderer: runtime.effectiveRenderer,
+    })}`);
+  }
+  if (runtime.fallbackReason) {
+    throw new Error(`Finger fluid truth renderer fallback is not accepted: ${runtime.fallbackReason}`);
+  }
+
+  let screenSpaceSurfaceEvidence = null;
+  if (expectedMode === 'screen_space_surface') {
+    const evidence = runtime.screenSpaceSurfaceEvidence;
+    if (
+      evidence?.route !== KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE
+      || evidence?.shaderRoute !== KAMINOS_FINGER_FLUID_SCREEN_SPACE_SHADER_ROUTE
+      || !Number.isInteger(evidence?.accumulationPassCount)
+      || evidence.accumulationPassCount <= 0
+      || !Number.isInteger(evidence?.compositePassCount)
+      || evidence.compositePassCount <= 0
+    ) {
+      throw new Error(`Finger fluid truth screen-space renderer evidence is missing or partial: ${JSON.stringify(evidence)}`);
+    }
+    screenSpaceSurfaceEvidence = {
+      ...evidence,
+    };
+  }
+
+  return {
+    requestedRendererMode: runtime.requestedRendererMode,
+    effectiveRendererMode: runtime.effectiveRendererMode,
+    requestedRenderer: runtime.requestedRenderer,
+    effectiveRenderer: runtime.effectiveRenderer,
+    fallbackReason: runtime.fallbackReason || null,
+    screenSpaceSurfaceEvidence,
+  };
+}
+
 export function resolveFingerFluidParticleShiftStrength(value = 0) {
   const strength = Number(value);
   if (!Number.isFinite(strength) || strength < 0 || strength > 1) {

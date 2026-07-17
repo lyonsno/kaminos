@@ -542,6 +542,61 @@ assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE, 'webgpu
 assert.equal(webgpuMod.resolveFingerFluidRendererMode('screen_space_surface'), 'screen_space_surface');
 assert.equal(webgpuMod.resolveFingerFluidRendererMode('sphere_debug'), 'sphere_debug');
 assert.throws(() => webgpuMod.resolveFingerFluidRendererMode('fallback'), /Unsupported finger fluid renderer mode/);
+assert.equal(typeof webgpuMod.validateFingerFluidTruthRendererState, 'function');
+const screenSpaceRendererRuntime = {
+  requestedRendererMode: 'screen_space_surface',
+  effectiveRendererMode: 'screen_space_surface',
+  requestedRenderer: webgpuMod.KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE,
+  effectiveRenderer: webgpuMod.KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE,
+  fallbackReason: null,
+  screenSpaceSurfaceEvidence: {
+    route: webgpuMod.KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE,
+    shaderRoute: webgpuMod.KAMINOS_FINGER_FLUID_SCREEN_SPACE_SHADER_ROUTE,
+    accumulationPassCount: 7,
+    compositePassCount: 7,
+  },
+};
+assert.deepEqual(
+  webgpuMod.validateFingerFluidTruthRendererState('screen_space_surface', screenSpaceRendererRuntime),
+  {
+    requestedRendererMode: 'screen_space_surface',
+    effectiveRendererMode: 'screen_space_surface',
+    requestedRenderer: webgpuMod.KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE,
+    effectiveRenderer: webgpuMod.KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE,
+    fallbackReason: null,
+    screenSpaceSurfaceEvidence: screenSpaceRendererRuntime.screenSpaceSurfaceEvidence,
+  },
+);
+assert.deepEqual(
+  webgpuMod.validateFingerFluidTruthRendererState('sphere_debug', {
+    requestedRendererMode: 'sphere_debug',
+    effectiveRendererMode: 'sphere_debug',
+    requestedRenderer: webgpuMod.KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE,
+    effectiveRenderer: webgpuMod.KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE,
+    fallbackReason: null,
+  }).effectiveRenderer,
+  webgpuMod.KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE,
+);
+assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('screen_space_surface', {
+  ...screenSpaceRendererRuntime,
+  effectiveRendererMode: 'sphere_debug',
+  effectiveRenderer: webgpuMod.KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE,
+}), /renderer mode disagreement/);
+assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('screen_space_surface', {
+  ...screenSpaceRendererRuntime,
+  effectiveRenderer: webgpuMod.KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE,
+}), /renderer identity disagreement/);
+assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('screen_space_surface', {
+  ...screenSpaceRendererRuntime,
+  fallbackReason: 'surface pipeline unavailable',
+}), /renderer fallback/);
+assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('screen_space_surface', {
+  ...screenSpaceRendererRuntime,
+  screenSpaceSurfaceEvidence: {
+    ...screenSpaceRendererRuntime.screenSpaceSurfaceEvidence,
+    accumulationPassCount: 0,
+  },
+}), /screen-space renderer evidence/);
 assert.equal(webgpuMod.KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_SCHEMA, 'kaminos.liquid-fire-contact-descriptor.v1');
 assert.equal(webgpuMod.KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_PACKING, 'gpu-sparse-liquid-fire-contact-source-vec4x8-v1');
 assert.equal(typeof webgpuMod.validateLiquidFireContactDescriptorHeader, 'function');

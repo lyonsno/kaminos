@@ -2,7 +2,10 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { evaluateFingerFluidTruthTrajectory } from './finger-fluid-webgpu-core.js';
+import {
+  evaluateFingerFluidTruthTrajectory,
+  validateFingerFluidTruthRendererState,
+} from './finger-fluid-webgpu-core.js';
 
 const args = new Map();
 for (let index = 2; index < process.argv.length; index += 2) args.set(process.argv[index], process.argv[index + 1]);
@@ -10,6 +13,7 @@ for (let index = 2; index < process.argv.length; index += 2) args.set(process.ar
 const requestedUrl = args.get('--url') || 'http://127.0.0.1:8100/index.html?kaminos_finger_fluid_bench=1&finger_fluid_truth_scene=multi_regime_playground';
 const requestedUrlObject = new URL(requestedUrl);
 const requestedTruthScene = requestedUrlObject.searchParams.get('finger_fluid_truth_scene') || 'multi_regime_playground';
+const requestedRendererMode = requestedUrlObject.searchParams.get('finger_fluid_renderer') || 'screen_space_surface';
 const checkpointOffsetsMs = String(args.get('--checkpoints-ms') || '500,2500,7000')
   .split(',')
   .map(value => Number(value.trim()));
@@ -27,6 +31,9 @@ let phase = 'validate_config';
 let primary_output_written = false;
 let effectiveUrl = null;
 let effectiveTruthScene = null;
+let effectiveRendererMode = null;
+let initialRendererAuthority = null;
+let lastRendererAuthority = null;
 let lastDebugState = null;
 let browserVersion = null;
 let stderr = '';
@@ -47,6 +54,9 @@ function writeReport(extra = {}) {
     effectiveUrl,
     requestedTruthScene,
     effectiveTruthScene,
+    requestedRendererMode,
+    effectiveRendererMode,
+    initialRendererAuthority,
     checkpointOffsetsMs,
     viewport: { width: viewportWidth, height: viewportHeight, deviceScaleFactor },
     debugPort,
@@ -220,6 +230,24 @@ async function requestCheckpoint(socket, checkpointIndex, elapsedMs) {
   if (effectiveTruthScene !== globalThis.effectiveTruthScene) {
     throw new Error(`truth scene changed during trajectory: ${JSON.stringify({ expected: globalThis.effectiveTruthScene, effectiveTruthScene })}`);
   }
+  const rendererAuthority = validateFingerFluidTruthRendererState(requestedRendererMode, state.runtime);
+  if (rendererAuthority.effectiveRendererMode !== effectiveRendererMode) {
+    throw new Error(`truth renderer changed during trajectory: ${JSON.stringify({
+      expected: effectiveRendererMode,
+      effectiveRendererMode: rendererAuthority.effectiveRendererMode,
+    })}`);
+  }
+  if (rendererAuthority.screenSpaceSurfaceEvidence && lastRendererAuthority?.screenSpaceSurfaceEvidence) {
+    const previousEvidence = lastRendererAuthority.screenSpaceSurfaceEvidence;
+    const currentEvidence = rendererAuthority.screenSpaceSurfaceEvidence;
+    if (
+      currentEvidence.accumulationPassCount <= previousEvidence.accumulationPassCount
+      || currentEvidence.compositePassCount <= previousEvidence.compositePassCount
+    ) {
+      throw new Error(`truth screen-space renderer passes did not advance: ${JSON.stringify({ previousEvidence, currentEvidence })}`);
+    }
+  }
+  lastRendererAuthority = rendererAuthority;
   const fluidTruthSnapshot = state.runtime?.fluidTruthSnapshot;
   if (fluidTruthSnapshot?.schema !== 'kaminos.finger-fluid-truth-snapshot.v0') {
     throw new Error(`fluid truth snapshot is missing: ${JSON.stringify(fluidTruthSnapshot)}`);
@@ -267,6 +295,7 @@ async function requestCheckpoint(socket, checkpointIndex, elapsedMs) {
     diagnosticsRequestCount: state.runtime.diagnosticsRequestCount,
     diagnosticsCompletionCount: state.runtime.diagnosticsCompletionCount,
     stepCount: state.runtime.stepCount,
+    rendererAuthority,
     fluidTruthSnapshot,
     visual,
     outputPath,
@@ -335,6 +364,9 @@ async function main() {
     if (lastDebugState.runtime?.solverRoute !== 'webgpu-pbf-linked-cell-fluid-v0' || lastDebugState.runtime?.solver_backend !== 'webgpu_compute') {
       throw new Error(`truth witness reached a fallback solver: ${JSON.stringify(lastDebugState.runtime)}`);
     }
+    initialRendererAuthority = validateFingerFluidTruthRendererState(requestedRendererMode, lastDebugState.runtime);
+    effectiveRendererMode = initialRendererAuthority.effectiveRendererMode;
+    lastRendererAuthority = initialRendererAuthority;
     if (lastDebugState.runtime?.truthGauntletContract !== 'kaminos-fluid-truth-gauntlet-v0') {
       throw new Error(`truth gauntlet contract mismatch: ${lastDebugState.runtime?.truthGauntletContract}`);
     }
