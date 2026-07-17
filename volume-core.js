@@ -5744,6 +5744,22 @@ fn boundarySplatCellIndex(cell: vec3<u32>) -> u32 {
   return cell.x + cell.y * GRID + cell.z * GRID * GRID;
 }
 
+fn boundarySplatSupportAt(cell: vec3<i32>) -> f32 {
+  let bounded = clamp(cell, vec3<i32>(0), vec3<i32>(i32(GRID) - 1));
+  return boundarySidecar[boundarySplatCellIndex(vec3<u32>(bounded))].x;
+}
+
+fn boundarySplatSupportGradient(cell: vec3<u32>) -> vec3<f32> {
+  let c = vec3<i32>(cell);
+  let gradient = vec3<f32>(
+    boundarySplatSupportAt(c + vec3<i32>(1, 0, 0)) - boundarySplatSupportAt(c - vec3<i32>(1, 0, 0)),
+    boundarySplatSupportAt(c + vec3<i32>(0, 1, 0)) - boundarySplatSupportAt(c - vec3<i32>(0, 1, 0)),
+    boundarySplatSupportAt(c + vec3<i32>(0, 0, 1)) - boundarySplatSupportAt(c - vec3<i32>(0, 0, 1)),
+  );
+  if (dot(gradient, gradient) < 1e-8) { return vec3<f32>(0.0, 1.0, 0.0); }
+  return normalize(gradient);
+}
+
 fn boundarySplatClampCell(cell: vec3<i32>) -> vec3<u32> {
   return vec3<u32>(clamp(cell, vec3<i32>(0), vec3<i32>(i32(GRID) - 1)));
 }

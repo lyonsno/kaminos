@@ -39,9 +39,15 @@ assert.match(core, /let kernelSharpness = clamp\(boundarySplatCamera\.controls\.
 assert.match(core, /let footprintRadius = clamp\(boundarySplatCamera\.controls\.x,[\s\S]*let energyRatio = \(kernelSharpness \/ 3\.4\) \/ max\(footprintRadius \* footprintRadius,[\s\S]*let energyCompensation = clamp\(sqrt\(energyRatio\),[\s\S]*in\.colorOpacity\.a \* gaussian \* energyCompensation/, 'radius and kernel ablations preserve approximate integrated splat opacity without overdriving dense alpha-over overlap');
 assert.match(core, /fn boundarySplatKernelIntegral\(kernelSharpness: f32\) -> f32/, 'compaction WGSL defines the Gaussian kernel integral used by coefficient normalization');
 assert.match(core, /fn boundarySplatEnergyCompensation\(footprintRadius: f32, kernelSharpness: f32\) -> f32/, 'compaction WGSL defines the same bounded footprint energy compensation used by raster');
+assert.match(core, /fn boundarySplatSupportAt\(cell: vec3<i32>\) -> f32/, 'compaction WGSL defines bounded support reads used to orient anisotropic splats');
+assert.match(core, /fn boundarySplatSupportGradient\(cell: vec3<u32>\) -> vec3<f32>/, 'compaction WGSL defines the sidecar support gradient used as the live splat normal');
 assert.ok(
   core.indexOf('fn boundarySplatKernelIntegral') < core.indexOf('let kernelIntegral = boundarySplatKernelIntegral'),
   'compaction WGSL declares kernel normalization helpers before their call sites',
+);
+assert.ok(
+  core.indexOf('fn boundarySplatSupportGradient') < core.indexOf('let worldNormal = boundarySplatSupportGradient'),
+  'compaction WGSL declares support-gradient helpers before their call sites',
 );
 assert.match(core, /splatCamera\.set\(\[normalizeBoundarySplatRadius\(controlsSnapshot\.boundarySplatRadius\),[\s\S]*normalizeBoundarySplatSharpness\(controlsSnapshot\.boundarySplatSharpness\)\]/, 'each frame publishes normalized radius and sharpness controls to WGSL');
 assert.match(core, /copyBufferToBuffer\(boundarySplatDrawBuffer,\s*0,\s*boundarySplatIndirectBuffer,\s*0,\s*16\)/, 'storage draw state is copied into a separate indirect-only buffer');
