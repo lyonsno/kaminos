@@ -206,7 +206,9 @@ function hasAppleCdpEvidence(cdpGpuInfo) {
 export function validateAdaptiveVolumeGpuReport(report) {
   const reasons = [];
   if (report?.schema !== ADAPTIVE_VOLUME_GPU_REPORT_SCHEMA) reasons.push('schema-mismatch');
-  if (report?.status !== 'passed') reasons.push('report-not-passed');
+  const isolatedStatusValid = report?.status === 'passed'
+    || (report?.productionSurvival && report.status === 'invalid-for-production-survival-claim');
+  if (!isolatedStatusValid) reasons.push('report-not-passed');
   if (report?.effective?.route !== ADAPTIVE_VOLUME_GPU_ROUTE) reasons.push('effective-route-mismatch');
   if (report?.effective?.backend !== 'WebGPU:apple') reasons.push('effective-backend-mismatch');
   const backendIdentitySource = report?.effective?.backendIdentitySource;

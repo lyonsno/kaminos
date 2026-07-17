@@ -331,6 +331,18 @@ assert.equal(adaptiveVolumeTopLevelStatus({
   productionSurvival: {},
   productionSurvivalEvidenceAllowed: false,
 }), 'invalid-for-production-survival-claim');
+const productionInvalidWithValidOptimization = structuredClone(validProductionSurvivalReport);
+productionInvalidWithValidOptimization.productionSurvival.falseClosureChecks.outputError = true;
+productionInvalidWithValidOptimization.productionSurvival.effective.workload.comparison.maximumAbsoluteError = 0.002;
+const productionInvalidDisposition = validateAdaptiveVolumeProductionSurvivalReport(productionInvalidWithValidOptimization);
+productionInvalidWithValidOptimization.productionSurvivalEvidenceAllowed = productionInvalidDisposition.productionSurvivalEvidenceAllowed;
+productionInvalidWithValidOptimization.productionSurvivalRejectionReasons = productionInvalidDisposition.reasons;
+productionInvalidWithValidOptimization.status = adaptiveVolumeTopLevelStatus(productionInvalidWithValidOptimization);
+assert.equal(
+  validateAdaptiveVolumeGpuReport(productionInvalidWithValidOptimization).optimizationClaimAllowed,
+  true,
+  'a truthful global production rejection must preserve a separately valid isolated optimization subclaim',
+);
 
 for (const mutate of [
   report => { report.productionSurvival.effective.sourceAuthority = 'live-fields'; },
@@ -547,6 +559,7 @@ assert.match(witness, /sourceFileSha256s/);
 assert.match(witness, /SystemInfo\.getInfo/);
 assert.match(witness, /applyHostGpuIdentity/);
 assert.match(witness, /validateAdaptiveVolumeProductionSurvivalReport/, 'R9 witness must independently validate production survival on the host');
+assert.match(witness, /adaptiveVolumeTopLevelStatus/, 'R9 witness must independently recompute the global production-aware status on the host');
 assert.match(witness, /productionSurvivalEvidenceAllowed/, 'R9 witness must promote the production verdict to its top-level record');
 assert.match(witness, /productionSurvivalRejectionReasons/, 'R9 witness must preserve production rejection reasons beside the verdict');
 assert.doesNotMatch(witness, /function wsRequest\([^)]*timeoutMs\s*=\s*30000/, 'uncapped browser runs must not inherit a hidden per-CDP timeout');

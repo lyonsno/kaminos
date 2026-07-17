@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 import {
+  adaptiveVolumeTopLevelStatus,
   validateAdaptiveVolumeGpuReport,
   validateAdaptiveVolumeProductionSurvivalReport,
   validateAdaptiveVolumeScaleLawReport,
@@ -304,6 +305,10 @@ async function main() {
     if (productionSurvivalValidation.productionSurvivalEvidenceAllowed !== browserReport.productionSurvivalEvidenceAllowed
       || JSON.stringify(productionSurvivalValidation.reasons) !== JSON.stringify(browserReport.productionSurvivalRejectionReasons)) {
       throw new Error(`browser/host production-survival validation disagreement: ${productionSurvivalValidation.reasons.join(',')}`);
+    }
+    const expectedTopLevelStatus = adaptiveVolumeTopLevelStatus(browserReport);
+    if (browserReport.status !== expectedTopLevelStatus) {
+      throw new Error(`browser/host top-level status disagreement: expected ${expectedTopLevelStatus}, observed ${browserReport.status}`);
     }
 
     failurePhase = 'browser-report-output';
