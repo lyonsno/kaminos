@@ -331,6 +331,11 @@ assert.match(browser, /intersectingRayCount/, 'R8 must identify actual ray cover
 assert.match(browser, /denseStepCount/, 'R8 must identify the dense scalar work represented by every workload');
 assert.match(browser, /paired-alternating-order-v0/, 'R8b must pair dense and compact samples with alternating execution order');
 assert.match(browser, /pairedSamples/, 'R8b must preserve raw paired timing evidence');
+assert.match(
+  browser,
+  /resolveTimestamps\(device,[\s\S]*?,\s*4,\s*\[\[0,\s*1\],\s*\[2,\s*3\]\]\)/,
+  'paired pass timestamps must validate each begin/end duration without assuming cross-pass timestamp ordering',
+);
 assert.match(browser, /absoluteErrorQuantiles/, 'R8b must distinguish a broad reconstruction failure from an extreme-value tail');
 assert.match(browser, /aboveErrorLimitCount/, 'R8b must report how many pixels violate the immutable max-error gate');
 const moduleSource = readFileSync(new URL('../smoke-adaptive-volume-gpu-falsifier.mjs', import.meta.url), 'utf8');

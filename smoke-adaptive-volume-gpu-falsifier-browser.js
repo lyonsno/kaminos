@@ -447,7 +447,7 @@ async function readBuffer(device, source, bytes) {
   return copy;
 }
 
-async function resolveTimestamps(device, encode, queryCount) {
+async function resolveTimestamps(device, encode, queryCount, monotonicGroups = [Array.from({ length: queryCount }, (_, index) => index)]) {
   const querySet = device.createQuerySet({ type: 'timestamp', count: queryCount });
   const resolve = device.createBuffer({ size: queryCount * 8, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
   const readback = device.createBuffer({ size: queryCount * 8, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
@@ -464,7 +464,13 @@ async function resolveTimestamps(device, encode, queryCount) {
     const validation = await device.popErrorScope();
     if (validation) throw validation;
     if (Array.from(values).some(value => value === 0n)) throw new Error(`timestamp-query-incomplete:${Array.from(values).join(',')}`);
-    for (let index = 1; index < values.length; index += 1) if (values[index] < values[index - 1]) throw new Error('timestamp-query-nonmonotonic');
+    for (const group of monotonicGroups) {
+      for (let index = 1; index < group.length; index += 1) {
+        if (values[group[index]] < values[group[index - 1]]) {
+          throw new Error(`timestamp-query-nonmonotonic:${group.join(',')}:${Array.from(values).join(',')}`);
+        }
+      }
+    }
     return values;
   } catch (error) {
     try { await device.popErrorScope(); } catch {}
@@ -515,7 +521,7 @@ async function profilePairedRepeatedPasses(device, {
         encodeArm(encoder, querySet, 'compact', 0, 1);
         encodeArm(encoder, querySet, 'dense', 2, 3);
       }
-    }, 4);
+    }, 4, [[0, 1], [2, 3]]);
     const firstGpuMs = Number(timestamps[1] - timestamps[0]) / 1_000_000;
     const secondGpuMs = Number(timestamps[3] - timestamps[2]) / 1_000_000;
     const denseAggregateGpuMs = denseFirst ? firstGpuMs : secondGpuMs;
