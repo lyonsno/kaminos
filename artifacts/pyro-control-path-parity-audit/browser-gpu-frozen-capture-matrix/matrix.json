@@ -1,0 +1,1050 @@
+{
+  "schema": "kaminos.pyro-control-path.browser-gpu-frozen-capture-matrix.v0",
+  "generatedAt": "2026-07-17T19:15:02.526Z",
+  "enumerationCount": 206,
+  "auditedControlCount": 6,
+  "rows": [
+    {
+      "control": "volume_reaction_boundary_support_front",
+      "family": "nonlinear-support-front",
+      "claimedStage": "splat-presentation",
+      "routeSemantics": "parity-coupled",
+      "classification": "proved-claimed-stage-coupling",
+      "comparisonClassification": "browser-gpu-frozen-capture-positive",
+      "staticClassificationDisposition": "falsified-static-raymarch-only-hint",
+      "requested": {
+        "baseline": "0.4",
+        "treatment": "1.6",
+        "baselineUrlValue": "0.4",
+        "treatmentUrlValue": "1.6",
+        "baselineEffectiveValue": 0.4,
+        "treatmentEffectiveValue": 1.6,
+        "effectiveEqualsRequested": true
+      },
+      "identity": {
+        "witnessSchema": "kaminos.volume.selective-head-composition-witness.v0",
+        "baselineUrl": "http://127.0.0.1:8099/volume-selective-head-live.html?volume_reaction_boundary_support_front=0.4&volume_boundary_splat_mode=learned&warmup_steps=96&capture_paused=1&anchor_base=http://127.0.0.1:18537",
+        "treatmentUrl": "http://127.0.0.1:8099/volume-selective-head-live.html?volume_reaction_boundary_support_front=1.6&volume_boundary_splat_mode=learned&warmup_steps=96&capture_paused=1&anchor_base=http://127.0.0.1:18537",
+        "effectiveRoute": "exact-basin-selective-head-live-v0",
+        "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0",
+        "sameStateAuthority": "same-state-selective-render-composition-v0",
+        "baselineSimStep": 96,
+        "treatmentSimStep": 96,
+        "sourceStateComparable": true,
+        "reportSourceComparable": true,
+        "captureSourceComparable": true,
+        "sourceStateIdentity": {
+          "identity": "selective-head-live-frozen-source-state-v0",
+          "routeIdentity": "exact-basin-selective-head-live-v0",
+          "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0",
+          "sameStateAuthority": "same-state-selective-render-composition-v0",
+          "warmupAuthority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+          "warmupTarget": 96,
+          "capturePaused": true,
+          "simStepCount": 96,
+          "backend": "WebGPU:apple",
+          "warmupReceipt": {
+            "ok": true,
+            "authority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+            "completedSteps": 96,
+            "grid": 160,
+            "fluidUrl": "http://127.0.0.1:18537/fluid.f32",
+            "frontUrl": "http://127.0.0.1:18537/front.f32",
+            "fluidSha256": "d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1",
+            "frontSha256": "1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8",
+            "fluidByteLength": 262144000,
+            "frontByteLength": 16384000,
+            "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0"
+          }
+        }
+      },
+      "fallback": null,
+      "postLoadMutation": null,
+      "appliedPasses": {
+        "splatApplied": true,
+        "raymarchApplied": true
+      },
+      "sourceFieldHashes": [
+        {
+          "identity": "enumerated-ui-source-field-v0",
+          "sha256": "70f75d8c860b75f742b5f5174a853eebcb5a64bdb0ab0331d87fe638c66cbcda",
+          "line": 1076,
+          "routeHydrated": true,
+          "listenedBySyncControls": true
+        },
+        {
+          "identity": "frozen-capture-comparison-artifact-v0",
+          "sha256": "f9f07686a02342bf943afe61746cccd3c02f951a4a319a5726f6b42ea0a5b65b"
+        }
+      ],
+      "sourceEvidence": [
+        {
+          "identity": "exact-source-marker-evidence-v0",
+          "stage": "effective-control-receipt",
+          "path": "volume-selective-head-live.html",
+          "line": 166,
+          "marker": "volume_reaction_boundary_support_front: boundary.supportFront ?? controls.reactionBoundarySupportFront ?? null",
+          "markerSha256": "4b8f141b8d855c51d21a4e2899d9c3483a132db6995f26c6e24d6cce43743956",
+          "scopeSha256": "4b8f141b8d855c51d21a4e2899d9c3483a132db6995f26c6e24d6cce43743956",
+          "excludedMarkers": [],
+          "fileSha256": "158e6976d64b85139cb9a1f6878c25220c33c5010543cd68194444414abf9048"
+        },
+        {
+          "identity": "exact-source-marker-evidence-v0",
+          "stage": "splat-sidecar-support-input",
+          "path": "volume-core.js",
+          "line": 2493,
+          "marker": "clamp(u.topology_shell_carriers.z, 0.0, 2.0)",
+          "markerSha256": "41a55334487f21d86bfc87c3af30041227cd3405e5828cccaddd855b90f927e0",
+          "scopeSha256": "41a55334487f21d86bfc87c3af30041227cd3405e5828cccaddd855b90f927e0",
+          "excludedMarkers": [],
+          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+        },
+        {
+          "identity": "exact-source-marker-evidence-v0",
+          "stage": "splat-admission-and-learned-attributes",
+          "path": "volume-core.js",
+          "line": 5102,
+          "marker": "let sidecar = boundarySidecar[cellIndex];",
+          "markerSha256": "1811d9e7f8ce96a89129462a3f61324de53eb118e4e4f0248551b3aa4af7aac9",
+          "scopeSha256": "1811d9e7f8ce96a89129462a3f61324de53eb118e4e4f0248551b3aa4af7aac9",
+          "excludedMarkers": [],
+          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+        }
+      ],
+      "staticEnumeration": {
+        "owningStage": "nonlinear-source-field",
+        "downstreamStages": [
+          "analytical-support",
+          "raymarch",
+          "source-fields"
+        ],
+        "classificationHint": "raymarch-only-unimplemented",
+        "uiId": "volume-reaction-boundary-support-front",
+        "controlName": "reactionBoundarySupportFront",
+        "range": {
+          "min": 0,
+          "max": 2,
+          "step": "0.02"
+        }
+      },
+      "comparisonArtifact": {
+        "path": "artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-support-front/comparison.json",
+        "sha256": "f9f07686a02342bf943afe61746cccd3c02f951a4a319a5726f6b42ea0a5b65b"
+      },
+      "changedCompositions": [
+        "splat-only-v0",
+        "smoke-raymarch-under-splats-v0",
+        "full-raymarch-under-splats-diagnostic-v0"
+      ],
+      "stageEvidence": {
+        "splatPresentation": true,
+        "smokeHybridPresentation": true,
+        "fullRaymarchDiagnosticPresentation": true,
+        "splatAdmissionOrGeometryReadback": false
+      },
+      "deltas": {
+        "screenshotHashChangedCount": 3,
+        "screenshotByteLengthMeanAbs": 16284.666666666666,
+        "boundarySplatGpuProfile": {
+          "candidateCopyBytesMeanAbs": 0
+        },
+        "pixel": {
+          "identity": "canvas-png-rgb24-pixel-delta-summary-v0",
+          "decoder": "ffmpeg-rgb24:ffmpeg",
+          "materialDeltaThreshold": "at-least-one-channel-differs-by-more-than-one-8-bit-level",
+          "materialChangedCompositionCount": 3,
+          "changedPixelRatioMean": 0.4435199136955292,
+          "meanAbsoluteChannelDeltaMean": 8.306154233870968,
+          "rootMeanSquareChannelDeltaMean": 18.948769055687944,
+          "nonblackPixelCountDeltaMean": 0
+        }
+      }
+    },
+    {
+      "control": "volume_reaction_boundary_topology",
+      "family": "nonlinear-topology",
+      "claimedStage": "splat-presentation",
+      "routeSemantics": "uncoupled-unimplemented",
+      "classification": "negative-claimed-stage-uncoupled-with-route-specific-delta",
+      "comparisonClassification": "browser-gpu-frozen-capture-positive",
+      "staticClassificationDisposition": "confirmed-static-raymarch-only-hint",
+      "requested": {
+        "baseline": "0",
+        "treatment": "2.5",
+        "baselineUrlValue": "0",
+        "treatmentUrlValue": "2.5",
+        "baselineEffectiveValue": 0,
+        "treatmentEffectiveValue": 2.5,
+        "effectiveEqualsRequested": true
+      },
+      "identity": {
+        "witnessSchema": "kaminos.volume.selective-head-composition-witness.v0",
+        "baselineUrl": "http://127.0.0.1:8099/volume-selective-head-live.html?volume_reaction_boundary_topology=0&volume_boundary_splat_mode=learned&warmup_steps=96&capture_paused=1&anchor_base=http://127.0.0.1:18537",
+        "treatmentUrl": "http://127.0.0.1:8099/volume-selective-head-live.html?volume_reaction_boundary_topology=2.5&volume_boundary_splat_mode=learned&warmup_steps=96&capture_paused=1&anchor_base=http://127.0.0.1:18537",
+        "effectiveRoute": "exact-basin-selective-head-live-v0",
+        "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0",
+        "sameStateAuthority": "same-state-selective-render-composition-v0",
+        "baselineSimStep": 96,
+        "treatmentSimStep": 96,
+        "sourceStateComparable": true,
+        "reportSourceComparable": true,
+        "captureSourceComparable": true,
+        "sourceStateIdentity": {
+          "identity": "selective-head-live-frozen-source-state-v0",
+          "routeIdentity": "exact-basin-selective-head-live-v0",
+          "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0",
+          "sameStateAuthority": "same-state-selective-render-composition-v0",
+          "warmupAuthority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+          "warmupTarget": 96,
+          "capturePaused": true,
+          "simStepCount": 96,
+          "backend": "WebGPU:apple",
+          "warmupReceipt": {
+            "ok": true,
+            "authority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+            "completedSteps": 96,
+            "grid": 160,
+            "fluidUrl": "http://127.0.0.1:18537/fluid.f32",
+            "frontUrl": "http://127.0.0.1:18537/front.f32",
+            "fluidSha256": "d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1",
+            "frontSha256": "1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8",
+            "fluidByteLength": 262144000,
+            "frontByteLength": 16384000,
+            "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0"
+          }
+        }
+      },
+      "fallback": null,
+      "postLoadMutation": null,
+      "appliedPasses": {
+        "splatApplied": true,
+        "raymarchApplied": true
+      },
+      "sourceFieldHashes": [
+        {
+          "identity": "enumerated-ui-source-field-v0",
+          "sha256": "86acfe321c8b344f90b5364fa8064c522e84a77a761df64f48a3f423fd4e5269",
+          "line": 1101,
+          "routeHydrated": true,
+          "listenedBySyncControls": true
+        },
+        {
+          "identity": "frozen-capture-comparison-artifact-v0",
+          "sha256": "bce221ac72ac6b7f853de9f4bf0c1dcb4821e9959258c4477d588e04c5cef27d"
+        }
+      ],
+      "sourceEvidence": [
+        {
+          "identity": "exact-source-marker-evidence-v0",
+          "stage": "effective-control-receipt",
+          "path": "volume-selective-head-live.html",
+          "line": 171,
+          "marker": "volume_reaction_boundary_topology: boundary.topologyGain ?? controls.reactionBoundaryTopology ?? null",
+          "markerSha256": "ebc27e9fa00b7e33812ef8b06dcc7acb77a80ecf94af5ecc818ab5d37c7c6cf3",
+          "scopeSha256": "ebc27e9fa00b7e33812ef8b06dcc7acb77a80ecf94af5ecc818ab5d37c7c6cf3",
+          "excludedMarkers": [],
+          "fileSha256": "158e6976d64b85139cb9a1f6878c25220c33c5010543cd68194444414abf9048"
+        },
+        {
+          "identity": "exact-source-marker-evidence-v0",
+          "stage": "raymarch-uniform",
+          "path": "volume-core.js",
+          "line": 7949,
+          "marker": "uniforms[285] = boundaryInspectActive ? boundaryUniforms.topologyGain",
+          "markerSha256": "378af206c110a6ffcdaec984d025cc460c4fe7d845c8f87daaeee67a2aeec0f9",
+          "scopeSha256": "378af206c110a6ffcdaec984d025cc460c4fe7d845c8f87daaeee67a2aeec0f9",
+          "excludedMarkers": [],
+          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+        },
+        {
+          "identity": "exact-source-marker-evidence-v0",
+          "stage": "splat-sidecar-exclusion",
+          "path": "volume-core.js",
+          "line": 2485,
+          "marker": "fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>)",
+          "markerSha256": "3bb60b9d816f8f483d104521ba44f9507fbd8ab28340d67ad8d696fde956775a",
+          "scopeSha256": "309f1ee42dc22f52b22ea5af72b5a8bf0a2c689bb4095b5b017f25bdc8441b5b",
+          "excludedMarkers": [
+            "u.topology_shell_shape",
+            "boundaryUniforms.topologyGain"
+          ],
+          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+        }
+      ],
+      "staticEnumeration": {
+        "owningStage": "nonlinear-source-field",
+        "downstreamStages": [
+          "analytical-support",
+          "raymarch",
+          "source-fields"
+        ],
+        "classificationHint": "raymarch-only-unimplemented",
+        "uiId": "volume-reaction-boundary-topology",
+        "controlName": "reactionBoundaryTopology",
+        "range": {
+          "min": 0,
+          "max": 2.5,
+          "step": "0.02"
+        }
+      },
+      "comparisonArtifact": {
+        "path": "artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-topology/comparison.json",
+        "sha256": "bce221ac72ac6b7f853de9f4bf0c1dcb4821e9959258c4477d588e04c5cef27d"
+      },
+      "changedCompositions": [
+        "smoke-raymarch-under-splats-v0",
+        "full-raymarch-under-splats-diagnostic-v0"
+      ],
+      "stageEvidence": {
+        "splatPresentation": false,
+        "smokeHybridPresentation": true,
+        "fullRaymarchDiagnosticPresentation": true,
+        "splatAdmissionOrGeometryReadback": false
+      },
+      "deltas": {
+        "screenshotHashChangedCount": 3,
+        "screenshotByteLengthMeanAbs": 26239.666666666668,
+        "boundarySplatGpuProfile": {
+          "candidateCopyBytesMeanAbs": 0
+        },
+        "pixel": {
+          "identity": "canvas-png-rgb24-pixel-delta-summary-v0",
+          "decoder": "ffmpeg-rgb24:ffmpeg",
+          "materialDeltaThreshold": "at-least-one-channel-differs-by-more-than-one-8-bit-level",
+          "materialChangedCompositionCount": 2,
+          "changedPixelRatioMean": 0.36404021646859075,
+          "meanAbsoluteChannelDeltaMean": 10.100139036266741,
+          "rootMeanSquareChannelDeltaMean": 22.51495430471698,
+          "nonblackPixelCountDeltaMean": 0
+        }
+      },
+      "falsifier": {
+        "tripped": true,
+        "reason": "observed deltas do not reach claimed stage splat-presentation"
+      }
+    },
+    {
+      "control": "volume_reaction_boundary_fire_ridge",
+      "family": "fire-appearance-structure",
+      "claimedStage": "splat-presentation",
+      "routeSemantics": "parity-coupled",
+      "classification": "proved-claimed-stage-coupling",
+      "comparisonClassification": "browser-gpu-frozen-capture-positive",
+      "staticClassificationDisposition": "falsified-static-raymarch-only-hint",
+      "requested": {
+        "baseline": "0",
+        "treatment": "2",
+        "baselineUrlValue": "0",
+        "treatmentUrlValue": "2",
+        "baselineEffectiveValue": 0,
+        "treatmentEffectiveValue": 2,
+        "effectiveEqualsRequested": true
+      },
+      "identity": {
+        "witnessSchema": "kaminos.volume.selective-head-composition-witness.v0",
+        "baselineUrl": "http://127.0.0.1:8099/volume-selective-head-live.html?volume_reaction_boundary_fire_ridge=0&volume_reaction_boundary_fire_tip=0&volume_boundary_splat_mode=learned&warmup_steps=96&capture_paused=1&anchor_base=http://127.0.0.1:18537",
+        "treatmentUrl": "http://127.0.0.1:8099/volume-selective-head-live.html?volume_reaction_boundary_fire_ridge=2&volume_reaction_boundary_fire_tip=0&volume_boundary_splat_mode=learned&warmup_steps=96&capture_paused=1&anchor_base=http://127.0.0.1:18537",
+        "effectiveRoute": "exact-basin-selective-head-live-v0",
+        "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0",
+        "sameStateAuthority": "same-state-selective-render-composition-v0",
+        "baselineSimStep": 96,
+        "treatmentSimStep": 96,
+        "sourceStateComparable": true,
+        "reportSourceComparable": true,
+        "captureSourceComparable": true,
+        "sourceStateIdentity": {
+          "identity": "selective-head-live-frozen-source-state-v0",
+          "routeIdentity": "exact-basin-selective-head-live-v0",
+          "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0",
+          "sameStateAuthority": "same-state-selective-render-composition-v0",
+          "warmupAuthority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+          "warmupTarget": 96,
+          "capturePaused": true,
+          "simStepCount": 96,
+          "backend": "WebGPU:apple",
+          "warmupReceipt": {
+            "ok": true,
+            "authority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+            "completedSteps": 96,
+            "grid": 160,
+            "fluidUrl": "http://127.0.0.1:18537/fluid.f32",
+            "frontUrl": "http://127.0.0.1:18537/front.f32",
+            "fluidSha256": "d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1",
+            "frontSha256": "1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8",
+            "fluidByteLength": 262144000,
+            "frontByteLength": 16384000,
+            "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0"
+          }
+        }
+      },
+      "fallback": null,
+      "postLoadMutation": null,
+      "appliedPasses": {
+        "splatApplied": true,
+        "raymarchApplied": true
+      },
+      "sourceFieldHashes": [
+        {
+          "identity": "enumerated-ui-source-field-v0",
+          "sha256": "5676b48117c8e407279260995df1952001d4328a116c889d56123d5cdf841802",
+          "line": 1191,
+          "routeHydrated": true,
+          "listenedBySyncControls": true
+        },
+        {
+          "identity": "frozen-capture-comparison-artifact-v0",
+          "sha256": "a94f2bcb26b365b8909c2d7c786388ae2c4537fa8c7df7101795eebbba3c1502"
+        }
+      ],
+      "sourceEvidence": [
+        {
+          "identity": "exact-source-marker-evidence-v0",
+          "stage": "effective-control-receipt",
+          "path": "volume-selective-head-live.html",
+          "line": 172,
+          "marker": "volume_reaction_boundary_fire_ridge: controls.reactionBoundaryFireControls?.ridgeGain ?? controls.reactionBoundaryFireRidge ?? null",
+          "markerSha256": "934c8e29068196b5419119cd6f036b9d809d5b667a5420a116359ff5c5302ec4",
+          "scopeSha256": "934c8e29068196b5419119cd6f036b9d809d5b667a5420a116359ff5c5302ec4",
+          "excludedMarkers": [],
+          "fileSha256": "158e6976d64b85139cb9a1f6878c25220c33c5010543cd68194444414abf9048"
+        },
+        {
+          "identity": "exact-source-marker-evidence-v0",
+          "stage": "splat-sidecar-ridge-input",
+          "path": "volume-core.js",
+          "line": 2509,
+          "marker": "let ridgeGain = clamp(u.boundary_fire_structure.x, 0.0, 2.0)",
+          "markerSha256": "c2c612c81bfcbf936020a99b4271fb216e4ca5b8030ac0b5c8a87cae9211bd44",
+          "scopeSha256": "c2c612c81bfcbf936020a99b4271fb216e4ca5b8030ac0b5c8a87cae9211bd44",
+          "excludedMarkers": [],
+          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+        },
+        {
+          "identity": "exact-source-marker-evidence-v0",
+          "stage": "splat-admission",
+          "path": "volume-core.js",
+          "line": 5107,
+          "marker": "let structuralSignal = sidecar.z * smoothstep(0.055, 0.32, sidecar.y)",
+          "markerSha256": "14fa6c01225d42471bdf7573695bb49d0491ab4632de05e23123ed713a86af0e",
+          "scopeSha256": "14fa6c01225d42471bdf7573695bb49d0491ab4632de05e23123ed713a86af0e",
+          "excludedMarkers": [],
+          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+        },
+        {
+          "identity": "exact-source-marker-evidence-v0",
+          "stage": "learned-splat-attributes",
+          "path": "volume-core.js",
+          "line": 5123,
+          "marker": "let attributeFeatures = boundarySplatAttributeFeatures(sidecar, material, fire, micro);",
+          "markerSha256": "25ca0723e8ed3ce06dc7dd3bc4d2fec5facd7ad67742cc5f19e8557e5f57cfdc",
+          "scopeSha256": "25ca0723e8ed3ce06dc7dd3bc4d2fec5facd7ad67742cc5f19e8557e5f57cfdc",
+          "excludedMarkers": [],
+          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+        }
+      ],
+      "staticEnumeration": {
+        "owningStage": "raymarch",
+        "downstreamStages": [
+          "analytical-support",
+          "optics",
+          "presentation",
+          "raymarch",
+          "source-fields"
+        ],
+        "classificationHint": "raymarch-only-unimplemented",
+        "uiId": "volume-reaction-boundary-fire-ridge",
+        "controlName": "reactionBoundaryFireRidge",
+        "range": {
+          "min": 0,
+          "max": 2,
+          "step": "0.02"
+        }
+      },
+      "comparisonArtifact": {
+        "path": "artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-fire/ridge-comparison.json",
+        "sha256": "a94f2bcb26b365b8909c2d7c786388ae2c4537fa8c7df7101795eebbba3c1502"
+      },
+      "changedCompositions": [
+        "splat-only-v0",
+        "smoke-raymarch-under-splats-v0",
+        "full-raymarch-under-splats-diagnostic-v0"
+      ],
+      "stageEvidence": {
+        "splatPresentation": true,
+        "smokeHybridPresentation": true,
+        "fullRaymarchDiagnosticPresentation": true,
+        "splatAdmissionOrGeometryReadback": false
+      },
+      "deltas": {
+        "screenshotHashChangedCount": 3,
+        "screenshotByteLengthMeanAbs": 501642,
+        "boundarySplatGpuProfile": {
+          "candidateCopyBytesMeanAbs": 0
+        },
+        "pixel": {
+          "identity": "canvas-png-rgb24-pixel-delta-summary-v0",
+          "decoder": "ffmpeg-rgb24:ffmpeg",
+          "materialDeltaThreshold": "at-least-one-channel-differs-by-more-than-one-8-bit-level",
+          "materialChangedCompositionCount": 3,
+          "changedPixelRatioMean": 0.3080562040181098,
+          "meanAbsoluteChannelDeltaMean": 25.192240703405016,
+          "rootMeanSquareChannelDeltaMean": 56.00451812699449,
+          "nonblackPixelCountDeltaMean": 0
+        }
+      }
+    },
+    {
+      "control": "volume_reaction_boundary_fire_tip",
+      "family": "fire-appearance-tip",
+      "claimedStage": "splat-presentation",
+      "routeSemantics": "uncoupled-unimplemented",
+      "classification": "negative-claimed-stage-uncoupled-with-route-specific-delta",
+      "comparisonClassification": "browser-gpu-frozen-capture-positive",
+      "staticClassificationDisposition": "confirmed-static-raymarch-only-hint",
+      "requested": {
+        "baseline": "0",
+        "treatment": "2",
+        "baselineUrlValue": "0",
+        "treatmentUrlValue": "2",
+        "baselineEffectiveValue": 0,
+        "treatmentEffectiveValue": 2,
+        "effectiveEqualsRequested": true
+      },
+      "identity": {
+        "witnessSchema": "kaminos.volume.selective-head-composition-witness.v0",
+        "baselineUrl": "http://127.0.0.1:8099/volume-selective-head-live.html?volume_reaction_boundary_fire_ridge=0&volume_reaction_boundary_fire_tip=0&volume_boundary_splat_mode=learned&warmup_steps=96&capture_paused=1&anchor_base=http://127.0.0.1:18537",
+        "treatmentUrl": "http://127.0.0.1:8099/volume-selective-head-live.html?volume_reaction_boundary_fire_ridge=0&volume_reaction_boundary_fire_tip=2&volume_boundary_splat_mode=learned&warmup_steps=96&capture_paused=1&anchor_base=http://127.0.0.1:18537",
+        "effectiveRoute": "exact-basin-selective-head-live-v0",
+        "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0",
+        "sameStateAuthority": "same-state-selective-render-composition-v0",
+        "baselineSimStep": 96,
+        "treatmentSimStep": 96,
+        "sourceStateComparable": true,
+        "reportSourceComparable": true,
+        "captureSourceComparable": true,
+        "sourceStateIdentity": {
+          "identity": "selective-head-live-frozen-source-state-v0",
+          "routeIdentity": "exact-basin-selective-head-live-v0",
+          "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0",
+          "sameStateAuthority": "same-state-selective-render-composition-v0",
+          "warmupAuthority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+          "warmupTarget": 96,
+          "capturePaused": true,
+          "simStepCount": 96,
+          "backend": "WebGPU:apple",
+          "warmupReceipt": {
+            "ok": true,
+            "authority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+            "completedSteps": 96,
+            "grid": 160,
+            "fluidUrl": "http://127.0.0.1:18537/fluid.f32",
+            "frontUrl": "http://127.0.0.1:18537/front.f32",
+            "fluidSha256": "d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1",
+            "frontSha256": "1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8",
+            "fluidByteLength": 262144000,
+            "frontByteLength": 16384000,
+            "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0"
+          }
+        }
+      },
+      "fallback": null,
+      "postLoadMutation": null,
+      "appliedPasses": {
+        "splatApplied": true,
+        "raymarchApplied": true
+      },
+      "sourceFieldHashes": [
+        {
+          "identity": "enumerated-ui-source-field-v0",
+          "sha256": "86b9d2bcc9c9dbffd87cdcec4d69e66841be969071f40b1190079b93d52f4e78",
+          "line": 1201,
+          "routeHydrated": true,
+          "listenedBySyncControls": true
+        },
+        {
+          "identity": "frozen-capture-comparison-artifact-v0",
+          "sha256": "14cf0fa80aaa97d0cf226a2bbb49e434f923701933255282f5380667bc06721d"
+        }
+      ],
+      "sourceEvidence": [
+        {
+          "identity": "exact-source-marker-evidence-v0",
+          "stage": "effective-control-receipt",
+          "path": "volume-selective-head-live.html",
+          "line": 174,
+          "marker": "volume_reaction_boundary_fire_tip: controls.reactionBoundaryFireControls?.tipBreakup ?? controls.reactionBoundaryFireTip ?? null",
+          "markerSha256": "be193b213553e578746c90487c62922e72160e3e858f1f391f222bc2bf1818e8",
+          "scopeSha256": "be193b213553e578746c90487c62922e72160e3e858f1f391f222bc2bf1818e8",
+          "excludedMarkers": [],
+          "fileSha256": "158e6976d64b85139cb9a1f6878c25220c33c5010543cd68194444414abf9048"
+        },
+        {
+          "identity": "exact-source-marker-evidence-v0",
+          "stage": "raymarch-uniform",
+          "path": "volume-core.js",
+          "line": 7962,
+          "marker": "uniforms[298] = boundaryFireUniforms.tipBreakup;",
+          "markerSha256": "4559d48770a63523e06a0f10247d8d4067bc84952b929976674645b7f76318f1",
+          "scopeSha256": "4559d48770a63523e06a0f10247d8d4067bc84952b929976674645b7f76318f1",
+          "excludedMarkers": [],
+          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+        },
+        {
+          "identity": "exact-source-marker-evidence-v0",
+          "stage": "splat-sidecar-exclusion",
+          "path": "volume-core.js",
+          "line": 2485,
+          "marker": "fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>)",
+          "markerSha256": "3bb60b9d816f8f483d104521ba44f9507fbd8ab28340d67ad8d696fde956775a",
+          "scopeSha256": "309f1ee42dc22f52b22ea5af72b5a8bf0a2c689bb4095b5b017f25bdc8441b5b",
+          "excludedMarkers": [
+            "u.boundary_fire_structure.z",
+            "boundaryFireUniforms.tipBreakup"
+          ],
+          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+        }
+      ],
+      "staticEnumeration": {
+        "owningStage": "raymarch",
+        "downstreamStages": [
+          "analytical-support",
+          "optics",
+          "presentation",
+          "raymarch",
+          "source-fields"
+        ],
+        "classificationHint": "raymarch-only-unimplemented",
+        "uiId": "volume-reaction-boundary-fire-tip",
+        "controlName": "reactionBoundaryFireTip",
+        "range": {
+          "min": 0,
+          "max": 2,
+          "step": "0.02"
+        }
+      },
+      "comparisonArtifact": {
+        "path": "artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-fire/tip-comparison.json",
+        "sha256": "14cf0fa80aaa97d0cf226a2bbb49e434f923701933255282f5380667bc06721d"
+      },
+      "changedCompositions": [
+        "smoke-raymarch-under-splats-v0",
+        "full-raymarch-under-splats-diagnostic-v0"
+      ],
+      "stageEvidence": {
+        "splatPresentation": false,
+        "smokeHybridPresentation": true,
+        "fullRaymarchDiagnosticPresentation": true,
+        "splatAdmissionOrGeometryReadback": false
+      },
+      "deltas": {
+        "screenshotHashChangedCount": 2,
+        "screenshotByteLengthMeanAbs": 216022,
+        "boundarySplatGpuProfile": {
+          "candidateCopyBytesMeanAbs": 0
+        },
+        "pixel": {
+          "identity": "canvas-png-rgb24-pixel-delta-summary-v0",
+          "decoder": "ffmpeg-rgb24:ffmpeg",
+          "materialDeltaThreshold": "at-least-one-channel-differs-by-more-than-one-8-bit-level",
+          "materialChangedCompositionCount": 2,
+          "changedPixelRatioMean": 0.4285748266836446,
+          "meanAbsoluteChannelDeltaMean": 16.8730452685814,
+          "rootMeanSquareChannelDeltaMean": 26.399845270985008,
+          "nonblackPixelCountDeltaMean": 0
+        }
+      },
+      "falsifier": {
+        "tripped": true,
+        "reason": "observed deltas do not reach claimed stage splat-presentation"
+      }
+    },
+    {
+      "control": "volume_boundary_splat_radius",
+      "family": "splat-geometry",
+      "claimedStage": "splat-presentation",
+      "routeSemantics": "intentional-route-specific",
+      "classification": "proved-claimed-stage-coupling",
+      "comparisonClassification": "browser-gpu-frozen-capture-positive",
+      "staticClassificationDisposition": "falsified-static-raymarch-downstream-claim",
+      "requested": {
+        "baseline": "0.35",
+        "treatment": "1.5",
+        "baselineUrlValue": "0.35",
+        "treatmentUrlValue": "1.5",
+        "baselineEffectiveValue": 0.35,
+        "treatmentEffectiveValue": 1.5,
+        "effectiveEqualsRequested": true
+      },
+      "identity": {
+        "witnessSchema": "kaminos.volume.selective-head-composition-witness.v0",
+        "baselineUrl": "http://127.0.0.1:8099/volume-selective-head-live.html?volume_boundary_splat_radius=0.35&volume_boundary_splat_sharpness=1&volume_boundary_splat_mode=learned&warmup_steps=96&capture_paused=1&anchor_base=http://127.0.0.1:18537",
+        "treatmentUrl": "http://127.0.0.1:8099/volume-selective-head-live.html?volume_boundary_splat_radius=1.5&volume_boundary_splat_sharpness=1&volume_boundary_splat_mode=learned&warmup_steps=96&capture_paused=1&anchor_base=http://127.0.0.1:18537",
+        "effectiveRoute": "exact-basin-selective-head-live-v0",
+        "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0",
+        "sameStateAuthority": "same-state-selective-render-composition-v0",
+        "baselineSimStep": 96,
+        "treatmentSimStep": 96,
+        "sourceStateComparable": true,
+        "reportSourceComparable": true,
+        "captureSourceComparable": true,
+        "sourceStateIdentity": {
+          "identity": "selective-head-live-frozen-source-state-v0",
+          "routeIdentity": "exact-basin-selective-head-live-v0",
+          "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0",
+          "sameStateAuthority": "same-state-selective-render-composition-v0",
+          "warmupAuthority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+          "warmupTarget": 96,
+          "capturePaused": true,
+          "simStepCount": 96,
+          "backend": "WebGPU:apple",
+          "warmupReceipt": {
+            "ok": true,
+            "authority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+            "completedSteps": 96,
+            "grid": 160,
+            "fluidUrl": "http://127.0.0.1:18537/fluid.f32",
+            "frontUrl": "http://127.0.0.1:18537/front.f32",
+            "fluidSha256": "d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1",
+            "frontSha256": "1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8",
+            "fluidByteLength": 262144000,
+            "frontByteLength": 16384000,
+            "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0"
+          }
+        }
+      },
+      "fallback": null,
+      "postLoadMutation": null,
+      "appliedPasses": {
+        "splatApplied": true,
+        "raymarchApplied": true
+      },
+      "sourceFieldHashes": [
+        {
+          "identity": "enumerated-ui-source-field-v0",
+          "sha256": "8eaa6919e324c6f96f28466110c514b9dbbaa0466b9438b5ece9c983f86c7af9",
+          "line": 1164,
+          "routeHydrated": true,
+          "listenedBySyncControls": true
+        },
+        {
+          "identity": "frozen-capture-comparison-artifact-v0",
+          "sha256": "a5857ecf4ecca58052af6480be410d7237a58ade4ca7a226d34bdaaf893b0678"
+        }
+      ],
+      "sourceEvidence": [
+        {
+          "identity": "exact-source-marker-evidence-v0",
+          "stage": "effective-control-receipt",
+          "path": "volume-selective-head-live.html",
+          "line": 182,
+          "marker": "volume_boundary_splat_radius: controls.boundarySplatRadius ?? null",
+          "markerSha256": "c785b270b669af62eab6d21e8cd347f71ff513a2470631f8a58b5f3cbf57dd57",
+          "scopeSha256": "c785b270b669af62eab6d21e8cd347f71ff513a2470631f8a58b5f3cbf57dd57",
+          "excludedMarkers": [],
+          "fileSha256": "158e6976d64b85139cb9a1f6878c25220c33c5010543cd68194444414abf9048"
+        },
+        {
+          "identity": "exact-source-marker-evidence-v0",
+          "stage": "splat-camera-uniform",
+          "path": "volume-core.js",
+          "line": 5383,
+          "marker": "normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius)",
+          "markerSha256": "912b866f869161717ac10f13590853c0970948b3625cb9da3af0341212e216d9",
+          "scopeSha256": "912b866f869161717ac10f13590853c0970948b3625cb9da3af0341212e216d9",
+          "excludedMarkers": [],
+          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+        },
+        {
+          "identity": "exact-source-marker-evidence-v0",
+          "stage": "splat-vertex-geometry",
+          "path": "volume-core.js",
+          "line": 5159,
+          "marker": "splat.shape.x * boundarySplatCamera.controls.x",
+          "markerSha256": "3ac44042f4c6285343c5193f7ffef03d87848d81abb8fe59047369a7da4168d4",
+          "scopeSha256": "3ac44042f4c6285343c5193f7ffef03d87848d81abb8fe59047369a7da4168d4",
+          "excludedMarkers": [],
+          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+        },
+        {
+          "identity": "exact-source-marker-evidence-v0",
+          "stage": "raymarch-route-exclusion",
+          "path": "volume-core.js",
+          "line": 1015,
+          "marker": "const WGSL = /* wgsl */`",
+          "markerSha256": "a12ba6730f8df316bd0cfdeab4a2d7638fea49bf64f5789b1a88ab2d14e751e8",
+          "scopeSha256": "10357563cebee2650f294d2c51918f93f7cb3a96631e13556a7b50fa40b02260",
+          "excludedMarkers": [
+            "boundarySplatCamera.controls.x"
+          ],
+          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+        }
+      ],
+      "staticEnumeration": {
+        "owningStage": "splat-geometry",
+        "downstreamStages": [
+          "analytical-support",
+          "geometry",
+          "presentation",
+          "raymarch",
+          "source-fields",
+          "splat-admission"
+        ],
+        "classificationHint": "parity-coupled",
+        "uiId": "volume-boundary-splat-radius",
+        "controlName": "boundarySplatRadius",
+        "range": {
+          "min": 0.35,
+          "max": 1.5,
+          "step": "0.01"
+        }
+      },
+      "comparisonArtifact": {
+        "path": "artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-splat-geometry/radius-comparison.json",
+        "sha256": "a5857ecf4ecca58052af6480be410d7237a58ade4ca7a226d34bdaaf893b0678"
+      },
+      "changedCompositions": [
+        "splat-only-v0",
+        "smoke-raymarch-under-splats-v0",
+        "full-raymarch-under-splats-diagnostic-v0"
+      ],
+      "stageEvidence": {
+        "splatPresentation": true,
+        "smokeHybridPresentation": true,
+        "fullRaymarchDiagnosticPresentation": true,
+        "splatAdmissionOrGeometryReadback": false
+      },
+      "deltas": {
+        "screenshotHashChangedCount": 3,
+        "screenshotByteLengthMeanAbs": 723168,
+        "boundarySplatGpuProfile": {
+          "candidateCopyBytesMeanAbs": 0
+        },
+        "pixel": {
+          "identity": "canvas-png-rgb24-pixel-delta-summary-v0",
+          "decoder": "ffmpeg-rgb24:ffmpeg",
+          "materialDeltaThreshold": "at-least-one-channel-differs-by-more-than-one-8-bit-level",
+          "materialChangedCompositionCount": 3,
+          "changedPixelRatioMean": 0.33175173316355405,
+          "meanAbsoluteChannelDeltaMean": 17.391779410724393,
+          "rootMeanSquareChannelDeltaMean": 41.88865690818745,
+          "nonblackPixelCountDeltaMean": 0
+        }
+      }
+    },
+    {
+      "control": "volume_boundary_splat_sharpness",
+      "family": "splat-optics",
+      "claimedStage": "splat-presentation",
+      "routeSemantics": "intentional-route-specific",
+      "classification": "proved-claimed-stage-coupling",
+      "comparisonClassification": "browser-gpu-frozen-capture-positive",
+      "staticClassificationDisposition": "falsified-static-raymarch-downstream-claim",
+      "requested": {
+        "baseline": "1",
+        "treatment": "12",
+        "baselineUrlValue": "1",
+        "treatmentUrlValue": "12",
+        "baselineEffectiveValue": 1,
+        "treatmentEffectiveValue": 12,
+        "effectiveEqualsRequested": true
+      },
+      "identity": {
+        "witnessSchema": "kaminos.volume.selective-head-composition-witness.v0",
+        "baselineUrl": "http://127.0.0.1:8099/volume-selective-head-live.html?volume_boundary_splat_radius=0.35&volume_boundary_splat_sharpness=1&volume_boundary_splat_mode=learned&warmup_steps=96&capture_paused=1&anchor_base=http://127.0.0.1:18537",
+        "treatmentUrl": "http://127.0.0.1:8099/volume-selective-head-live.html?volume_boundary_splat_radius=0.35&volume_boundary_splat_sharpness=12&volume_boundary_splat_mode=learned&warmup_steps=96&capture_paused=1&anchor_base=http://127.0.0.1:18537",
+        "effectiveRoute": "exact-basin-selective-head-live-v0",
+        "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0",
+        "sameStateAuthority": "same-state-selective-render-composition-v0",
+        "baselineSimStep": 96,
+        "treatmentSimStep": 96,
+        "sourceStateComparable": true,
+        "reportSourceComparable": true,
+        "captureSourceComparable": true,
+        "sourceStateIdentity": {
+          "identity": "selective-head-live-frozen-source-state-v0",
+          "routeIdentity": "exact-basin-selective-head-live-v0",
+          "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0",
+          "sameStateAuthority": "same-state-selective-render-composition-v0",
+          "warmupAuthority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+          "warmupTarget": 96,
+          "capturePaused": true,
+          "simStepCount": 96,
+          "backend": "WebGPU:apple",
+          "warmupReceipt": {
+            "ok": true,
+            "authority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+            "completedSteps": 96,
+            "grid": 160,
+            "fluidUrl": "http://127.0.0.1:18537/fluid.f32",
+            "frontUrl": "http://127.0.0.1:18537/front.f32",
+            "fluidSha256": "d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1",
+            "frontSha256": "1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8",
+            "fluidByteLength": 262144000,
+            "frontByteLength": 16384000,
+            "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0"
+          }
+        }
+      },
+      "fallback": null,
+      "postLoadMutation": null,
+      "appliedPasses": {
+        "splatApplied": true,
+        "raymarchApplied": true
+      },
+      "sourceFieldHashes": [
+        {
+          "identity": "enumerated-ui-source-field-v0",
+          "sha256": "eb3b1de889a215c95b802069f8f69f2b7501e3ced7348dddc6722d5756a54593",
+          "line": 1169,
+          "routeHydrated": true,
+          "listenedBySyncControls": true
+        },
+        {
+          "identity": "frozen-capture-comparison-artifact-v0",
+          "sha256": "117221ced184f01c0b740de4b8a8aa4ebe5adb6da2607e307a7505820e277af7"
+        }
+      ],
+      "sourceEvidence": [
+        {
+          "identity": "exact-source-marker-evidence-v0",
+          "stage": "effective-control-receipt",
+          "path": "volume-selective-head-live.html",
+          "line": 183,
+          "marker": "volume_boundary_splat_sharpness: controls.boundarySplatSharpness ?? null",
+          "markerSha256": "8ccdd618a6713bd2e5a8aff7c6082da7ee9cf788e31ac9c8fecb0df509289412",
+          "scopeSha256": "8ccdd618a6713bd2e5a8aff7c6082da7ee9cf788e31ac9c8fecb0df509289412",
+          "excludedMarkers": [],
+          "fileSha256": "158e6976d64b85139cb9a1f6878c25220c33c5010543cd68194444414abf9048"
+        },
+        {
+          "identity": "exact-source-marker-evidence-v0",
+          "stage": "splat-camera-uniform",
+          "path": "volume-core.js",
+          "line": 5384,
+          "marker": "normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness)",
+          "markerSha256": "214208a23ea33a7fd2a47d6a1d12e55c84f1235c0937fb702ae8823ed4ed21f3",
+          "scopeSha256": "214208a23ea33a7fd2a47d6a1d12e55c84f1235c0937fb702ae8823ed4ed21f3",
+          "excludedMarkers": [],
+          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+        },
+        {
+          "identity": "exact-source-marker-evidence-v0",
+          "stage": "splat-fragment-optics",
+          "path": "volume-core.js",
+          "line": 5173,
+          "marker": "let kernelSharpness = clamp(boundarySplatCamera.controls.w, 1.0, 12.0);",
+          "markerSha256": "4b32020698187ee86a4f7b4da31373c9d51451250a8e3d938cb268d6585ad24d",
+          "scopeSha256": "4b32020698187ee86a4f7b4da31373c9d51451250a8e3d938cb268d6585ad24d",
+          "excludedMarkers": [],
+          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+        },
+        {
+          "identity": "exact-source-marker-evidence-v0",
+          "stage": "raymarch-route-exclusion",
+          "path": "volume-core.js",
+          "line": 1015,
+          "marker": "const WGSL = /* wgsl */`",
+          "markerSha256": "a12ba6730f8df316bd0cfdeab4a2d7638fea49bf64f5789b1a88ab2d14e751e8",
+          "scopeSha256": "10357563cebee2650f294d2c51918f93f7cb3a96631e13556a7b50fa40b02260",
+          "excludedMarkers": [
+            "boundarySplatCamera.controls.w"
+          ],
+          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+        }
+      ],
+      "staticEnumeration": {
+        "owningStage": "splat-geometry",
+        "downstreamStages": [
+          "analytical-support",
+          "geometry",
+          "presentation",
+          "raymarch",
+          "source-fields",
+          "splat-admission"
+        ],
+        "classificationHint": "parity-coupled",
+        "uiId": "volume-boundary-splat-sharpness",
+        "controlName": "boundarySplatSharpness",
+        "range": {
+          "min": 1,
+          "max": 12,
+          "step": "0.1"
+        }
+      },
+      "comparisonArtifact": {
+        "path": "artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-splat-geometry/sharpness-comparison.json",
+        "sha256": "117221ced184f01c0b740de4b8a8aa4ebe5adb6da2607e307a7505820e277af7"
+      },
+      "changedCompositions": [
+        "splat-only-v0",
+        "smoke-raymarch-under-splats-v0",
+        "full-raymarch-under-splats-diagnostic-v0"
+      ],
+      "stageEvidence": {
+        "splatPresentation": true,
+        "smokeHybridPresentation": true,
+        "fullRaymarchDiagnosticPresentation": true,
+        "splatAdmissionOrGeometryReadback": false
+      },
+      "deltas": {
+        "screenshotHashChangedCount": 3,
+        "screenshotByteLengthMeanAbs": 214823.33333333334,
+        "boundarySplatGpuProfile": {
+          "candidateCopyBytesMeanAbs": 0
+        },
+        "pixel": {
+          "identity": "canvas-png-rgb24-pixel-delta-summary-v0",
+          "decoder": "ffmpeg-rgb24:ffmpeg",
+          "materialDeltaThreshold": "at-least-one-channel-differs-by-more-than-one-8-bit-level",
+          "materialChangedCompositionCount": 3,
+          "changedPixelRatioMean": 0.277277606819468,
+          "meanAbsoluteChannelDeltaMean": 9.079333203640822,
+          "rootMeanSquareChannelDeltaMean": 24.395606260025474,
+          "nonblackPixelCountDeltaMean": 0
+        }
+      }
+    }
+  ],
+  "summary": {
+    "provedClaimedStageCouplingCount": 4,
+    "intentionalRouteSpecificCount": 0,
+    "provedIntentionalRouteSpecificControlCount": 2,
+    "negativeClaimedStageCouplingCount": 2,
+    "claimedStageUncoupledCount": 0,
+    "preclassificationFalsifierCount": 0,
+    "falsifiedStaticClassificationHintCount": 2,
+    "falsifiedStaticRaymarchDownstreamCount": 2
+  },
+  "generation": {
+    "identity": "manifest-driven-frozen-capture-matrix-generation-v0",
+    "enumerationLedger": "artifacts/pyro-control-path-parity-audit/first-ledger-slice.json",
+    "enumerationLedgerSha256": "bf1e76b1ef75604bb11670c8f6a59650adbc918129e565f88adc56f6e1e1eb84",
+    "uncapped": true
+  },
+  "noiseControl": {
+    "path": "artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-topology/baseline-repeat-comparison.json",
+    "sha256": "90a953c4b000444f4d3a62e40a1392eb5ba72ddfc4fc18c9d4a04a2686ac469a",
+    "classification": "browser-gpu-frozen-capture-no-delta",
+    "control": "volume_reaction_boundary_topology",
+    "requested": {
+      "baseline": "0",
+      "treatment": "0",
+      "baselineUrlValue": "0",
+      "treatmentUrlValue": "0",
+      "baselineEffectiveValue": 0,
+      "treatmentEffectiveValue": 0,
+      "effectiveEqualsRequested": true
+    },
+    "pixelDelta": {
+      "identity": "canvas-png-rgb24-pixel-delta-summary-v0",
+      "decoder": "ffmpeg-rgb24:ffmpeg",
+      "materialDeltaThreshold": "at-least-one-channel-differs-by-more-than-one-8-bit-level",
+      "materialChangedCompositionCount": 0,
+      "changedPixelRatioMean": 0.000011583899264289756,
+      "meanAbsoluteChannelDeltaMean": 0.0000038612997547632524,
+      "rootMeanSquareChannelDeltaMean": 0.0017757054289241798,
+      "nonblackPixelCountDeltaMean": 0
+    }
+  }
+}

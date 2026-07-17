@@ -2,8 +2,11 @@
 import assert from 'node:assert/strict';
 import {
   buildFrozenCaptureComparison,
+  buildFrozenCaptureMatrix,
   buildFrozenCaptureWitnessUrl,
+  computeRgbPixelDelta,
   PYRO_CONTROL_PATH_FROZEN_CAPTURE_SCHEMA,
+  PYRO_CONTROL_PATH_FROZEN_CAPTURE_MATRIX_SCHEMA,
 } from '../pyro-control-path-frozen-capture-ledger.mjs';
 
 function capture(composition, overrides = {}) {
@@ -48,6 +51,12 @@ function report(url, overrides = {}) {
     effectiveControls: {
       identity: 'selective-head-live-effective-basin-controls-v0',
       volume_reaction_boundary_support_front: overrides.effectiveSupportFront ?? 0.4,
+      ...(overrides.effectiveTopology == null ? {} : {
+        volume_reaction_boundary_topology: overrides.effectiveTopology,
+      }),
+      ...(overrides.effectiveFireTip == null ? {} : {
+        volume_reaction_boundary_fire_tip: overrides.effectiveFireTip,
+      }),
       volume_boundary_splat_mode: 'learned',
     },
     sourceStateIdentity: {
@@ -228,5 +237,128 @@ assert.throws(() => buildFrozenCaptureComparison({
   },
   treatmentReport: report(treatmentUrl, { effectiveSupportFront: 1.6 }),
 }), /baseline .* screenshot is not canvas-only/);
+
+const topologyBaselineUrl = buildFrozenCaptureWitnessUrl('http://127.0.0.1:8099/volume-selective-head-live.html', {
+  volume_boundary_splat_mode: 'learned',
+  volume_reaction_boundary_topology: 0,
+});
+const topologyTreatmentUrl = buildFrozenCaptureWitnessUrl('http://127.0.0.1:8099/volume-selective-head-live.html', {
+  volume_boundary_splat_mode: 'learned',
+  volume_reaction_boundary_topology: 2.5,
+});
+const topologyComparison = buildFrozenCaptureComparison({
+  control: 'volume_reaction_boundary_topology',
+  requestedBaseline: 0,
+  requestedTreatment: 2.5,
+  baselineReport: report(topologyBaselineUrl, { effectiveTopology: 0 }),
+  treatmentReport: report(topologyTreatmentUrl, {
+    effectiveTopology: 2.5,
+    splatOnly: { sha256: '1'.repeat(64), byteLength: 35000 },
+    smokeHybrid: { sha256: '2'.repeat(64), byteLength: 36000 },
+    fullHybrid: { sha256: '3'.repeat(64), byteLength: 37000 },
+  }),
+});
+const diagnosticOnlyComparison = buildFrozenCaptureComparison({
+  control: 'volume_reaction_boundary_fire_tip',
+  requestedBaseline: 0,
+  requestedTreatment: 2,
+  baselineReport: report(buildFrozenCaptureWitnessUrl('http://127.0.0.1:8099/volume-selective-head-live.html', {
+    volume_boundary_splat_mode: 'learned',
+    volume_reaction_boundary_fire_tip: 0,
+  }), { effectiveFireTip: 0 }),
+  treatmentReport: report(buildFrozenCaptureWitnessUrl('http://127.0.0.1:8099/volume-selective-head-live.html', {
+    volume_boundary_splat_mode: 'learned',
+    volume_reaction_boundary_fire_tip: 2,
+  }), {
+    effectiveFireTip: 2,
+    fullHybrid: { sha256: '4'.repeat(64), byteLength: 38000 },
+  }),
+});
+
+const matrix = buildFrozenCaptureMatrix({
+  enumerationCount: 206,
+  rows: [
+    {
+      family: 'nonlinear-topology',
+      claimedStage: 'splat-presentation',
+      routeSemantics: 'intentional-route-specific',
+      staticEnumeration: { classificationHint: 'raymarch-only-unimplemented' },
+      comparison: topologyComparison,
+    },
+    {
+      family: 'fire-appearance',
+      claimedStage: 'splat-presentation',
+      routeSemantics: 'intentional-route-specific',
+      staticEnumeration: { classificationHint: 'parity-coupled', downstreamStages: ['raymarch', 'presentation'] },
+      comparison: diagnosticOnlyComparison,
+    },
+  ],
+});
+
+assert.equal(matrix.schema, PYRO_CONTROL_PATH_FROZEN_CAPTURE_MATRIX_SCHEMA);
+assert.equal(matrix.enumerationCount, 206);
+assert.equal(matrix.auditedControlCount, 2);
+assert.equal(matrix.rows[0].classification, 'proved-claimed-stage-coupling');
+assert.deepEqual(matrix.rows[0].changedCompositions, [
+  'splat-only-v0',
+  'smoke-raymarch-under-splats-v0',
+  'full-raymarch-under-splats-diagnostic-v0',
+]);
+assert.equal(matrix.rows[0].stageEvidence.splatPresentation, true);
+assert.equal(matrix.rows[0].staticClassificationDisposition, 'falsified-static-raymarch-only-hint');
+assert.equal(matrix.rows[1].classification, 'intentional-route-specific-presentation-only');
+assert.equal(matrix.rows[1].routeSemantics, 'intentional-route-specific');
+assert.equal(matrix.rows[1].staticClassificationDisposition, 'falsified-static-raymarch-downstream-claim');
+assert.equal(matrix.rows[1].stageEvidence.splatPresentation, false);
+assert.equal(matrix.rows[1].stageEvidence.fullRaymarchDiagnosticPresentation, true);
+assert.equal(matrix.rows[1].falsifier.tripped, true);
+assert.equal(matrix.summary.provedClaimedStageCouplingCount, 1);
+assert.equal(matrix.summary.intentionalRouteSpecificCount, 1);
+assert.equal(matrix.summary.provedIntentionalRouteSpecificControlCount, 1);
+
+const uncoupledMatrix = buildFrozenCaptureMatrix({
+  enumerationCount: 206,
+  rows: [{
+    family: 'fire-appearance',
+    claimedStage: 'splat-presentation',
+    routeSemantics: 'uncoupled-unimplemented',
+    comparison: diagnosticOnlyComparison,
+  }],
+});
+assert.equal(uncoupledMatrix.rows[0].classification, 'negative-claimed-stage-uncoupled-with-route-specific-delta');
+assert.equal(uncoupledMatrix.summary.negativeClaimedStageCouplingCount, 1);
+
+assert.throws(() => buildFrozenCaptureMatrix({
+  enumerationCount: 206,
+  rows: [
+    { family: 'a', claimedStage: 'splat-presentation', comparison: topologyComparison },
+    { family: 'b', claimedStage: 'splat-presentation', comparison: topologyComparison },
+  ],
+}), /duplicate control/);
+
+const pixelDelta = computeRgbPixelDelta(
+  Uint8Array.from([0, 0, 0, 100, 50, 0]),
+  Uint8Array.from([0, 0, 0, 110, 30, 0]),
+  { width: 2, height: 1 },
+);
+assert.equal(pixelDelta.pixelCount, 2);
+assert.equal(pixelDelta.changedPixelCount, 1);
+assert.equal(pixelDelta.changedPixelRatio, 0.5);
+assert.equal(pixelDelta.materialChangedPixelCount, 1);
+assert.equal(pixelDelta.materialChangedPixelRatio, 0.5);
+assert.equal(pixelDelta.meanAbsoluteChannelDelta, 5);
+assert.equal(pixelDelta.maxAbsoluteChannelDelta, 20);
+assert.ok(Math.abs(pixelDelta.rootMeanSquareChannelDelta - Math.sqrt(500 / 6)) < 1e-12);
+assert.equal(pixelDelta.baselineNonblackPixelCount, 1);
+assert.equal(pixelDelta.treatmentNonblackPixelCount, 1);
+
+const oneLsbNoise = computeRgbPixelDelta(
+  Uint8Array.from([10, 20, 30]),
+  Uint8Array.from([11, 19, 31]),
+  { width: 1, height: 1 },
+);
+assert.equal(oneLsbNoise.changedPixelCount, 1);
+assert.equal(oneLsbNoise.materialChangedPixelCount, 0);
+assert.equal(oneLsbNoise.materialChangedPixelRatio, 0);
 
 console.log('pyro control-path frozen capture contracts passed');

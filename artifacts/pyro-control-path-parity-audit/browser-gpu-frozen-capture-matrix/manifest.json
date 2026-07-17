@@ -1,0 +1,184 @@
+{
+  "schema": "kaminos.pyro-control-path.frozen-capture-matrix-manifest.v0",
+  "enumerationLedger": "artifacts/pyro-control-path-parity-audit/first-ledger-slice.json",
+  "noiseControlComparison": "artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-topology/baseline-repeat-comparison.json",
+  "rows": [
+    {
+      "control": "volume_reaction_boundary_support_front",
+      "family": "nonlinear-support-front",
+      "claimedStage": "splat-presentation",
+      "routeSemantics": "parity-coupled",
+      "comparison": "artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-support-front/comparison.json",
+      "sourceEvidence": [
+        {
+          "stage": "effective-control-receipt",
+          "path": "volume-selective-head-live.html",
+          "marker": "volume_reaction_boundary_support_front: boundary.supportFront ?? controls.reactionBoundarySupportFront ?? null"
+        },
+        {
+          "stage": "splat-sidecar-support-input",
+          "path": "volume-core.js",
+          "marker": "clamp(u.topology_shell_carriers.z, 0.0, 2.0)"
+        },
+        {
+          "stage": "splat-admission-and-learned-attributes",
+          "path": "volume-core.js",
+          "marker": "let sidecar = boundarySidecar[cellIndex];"
+        }
+      ]
+    },
+    {
+      "control": "volume_reaction_boundary_topology",
+      "family": "nonlinear-topology",
+      "claimedStage": "splat-presentation",
+      "routeSemantics": "uncoupled-unimplemented",
+      "comparison": "artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-topology/comparison.json",
+      "sourceEvidence": [
+        {
+          "stage": "effective-control-receipt",
+          "path": "volume-selective-head-live.html",
+          "marker": "volume_reaction_boundary_topology: boundary.topologyGain ?? controls.reactionBoundaryTopology ?? null"
+        },
+        {
+          "stage": "raymarch-uniform",
+          "path": "volume-core.js",
+          "marker": "uniforms[285] = boundaryInspectActive ? boundaryUniforms.topologyGain"
+        },
+        {
+          "stage": "splat-sidecar-exclusion",
+          "path": "volume-core.js",
+          "marker": "fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>)",
+          "scopeEnd": "boundarySidecarDst[index3(gid)] = vec4<f32>(",
+          "absent": [
+            "u.topology_shell_shape",
+            "boundaryUniforms.topologyGain"
+          ]
+        }
+      ]
+    },
+    {
+      "control": "volume_reaction_boundary_fire_ridge",
+      "family": "fire-appearance-structure",
+      "claimedStage": "splat-presentation",
+      "routeSemantics": "parity-coupled",
+      "comparison": "artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-fire/ridge-comparison.json",
+      "sourceEvidence": [
+        {
+          "stage": "effective-control-receipt",
+          "path": "volume-selective-head-live.html",
+          "marker": "volume_reaction_boundary_fire_ridge: controls.reactionBoundaryFireControls?.ridgeGain ?? controls.reactionBoundaryFireRidge ?? null"
+        },
+        {
+          "stage": "splat-sidecar-ridge-input",
+          "path": "volume-core.js",
+          "marker": "let ridgeGain = clamp(u.boundary_fire_structure.x, 0.0, 2.0)"
+        },
+        {
+          "stage": "splat-admission",
+          "path": "volume-core.js",
+          "marker": "let structuralSignal = sidecar.z * smoothstep(0.055, 0.32, sidecar.y)"
+        },
+        {
+          "stage": "learned-splat-attributes",
+          "path": "volume-core.js",
+          "marker": "let attributeFeatures = boundarySplatAttributeFeatures(sidecar, material, fire, micro);"
+        }
+      ]
+    },
+    {
+      "control": "volume_reaction_boundary_fire_tip",
+      "family": "fire-appearance-tip",
+      "claimedStage": "splat-presentation",
+      "routeSemantics": "uncoupled-unimplemented",
+      "comparison": "artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-fire/tip-comparison.json",
+      "sourceEvidence": [
+        {
+          "stage": "effective-control-receipt",
+          "path": "volume-selective-head-live.html",
+          "marker": "volume_reaction_boundary_fire_tip: controls.reactionBoundaryFireControls?.tipBreakup ?? controls.reactionBoundaryFireTip ?? null"
+        },
+        {
+          "stage": "raymarch-uniform",
+          "path": "volume-core.js",
+          "marker": "uniforms[298] = boundaryFireUniforms.tipBreakup;"
+        },
+        {
+          "stage": "splat-sidecar-exclusion",
+          "path": "volume-core.js",
+          "marker": "fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>)",
+          "scopeEnd": "boundarySidecarDst[index3(gid)] = vec4<f32>(",
+          "absent": [
+            "u.boundary_fire_structure.z",
+            "boundaryFireUniforms.tipBreakup"
+          ]
+        }
+      ]
+    },
+    {
+      "control": "volume_boundary_splat_radius",
+      "family": "splat-geometry",
+      "claimedStage": "splat-presentation",
+      "routeSemantics": "intentional-route-specific",
+      "comparison": "artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-splat-geometry/radius-comparison.json",
+      "sourceEvidence": [
+        {
+          "stage": "effective-control-receipt",
+          "path": "volume-selective-head-live.html",
+          "marker": "volume_boundary_splat_radius: controls.boundarySplatRadius ?? null"
+        },
+        {
+          "stage": "splat-camera-uniform",
+          "path": "volume-core.js",
+          "marker": "normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius)"
+        },
+        {
+          "stage": "splat-vertex-geometry",
+          "path": "volume-core.js",
+          "marker": "splat.shape.x * boundarySplatCamera.controls.x"
+        },
+        {
+          "stage": "raymarch-route-exclusion",
+          "path": "volume-core.js",
+          "marker": "const WGSL = /* wgsl */`",
+          "scopeEnd": "const BOUNDARY_SPLAT_WGSL = `",
+          "absent": [
+            "boundarySplatCamera.controls.x"
+          ]
+        }
+      ]
+    },
+    {
+      "control": "volume_boundary_splat_sharpness",
+      "family": "splat-optics",
+      "claimedStage": "splat-presentation",
+      "routeSemantics": "intentional-route-specific",
+      "comparison": "artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-splat-geometry/sharpness-comparison.json",
+      "sourceEvidence": [
+        {
+          "stage": "effective-control-receipt",
+          "path": "volume-selective-head-live.html",
+          "marker": "volume_boundary_splat_sharpness: controls.boundarySplatSharpness ?? null"
+        },
+        {
+          "stage": "splat-camera-uniform",
+          "path": "volume-core.js",
+          "marker": "normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness)"
+        },
+        {
+          "stage": "splat-fragment-optics",
+          "path": "volume-core.js",
+          "marker": "let kernelSharpness = clamp(boundarySplatCamera.controls.w, 1.0, 12.0);"
+        },
+        {
+          "stage": "raymarch-route-exclusion",
+          "path": "volume-core.js",
+          "marker": "const WGSL = /* wgsl */`",
+          "scopeEnd": "const BOUNDARY_SPLAT_WGSL = `",
+          "absent": [
+            "boundarySplatCamera.controls.w"
+          ]
+        }
+      ]
+    }
+  ]
+}

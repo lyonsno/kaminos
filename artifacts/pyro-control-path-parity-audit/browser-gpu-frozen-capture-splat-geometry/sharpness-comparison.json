@@ -1,21 +1,21 @@
 {
   "schema": "kaminos.pyro-control-path.browser-gpu-frozen-capture-comparison.v0",
-  "generatedAt": "2026-07-17T19:03:05.625Z",
-  "control": "volume_reaction_boundary_support_front",
+  "generatedAt": "2026-07-17T19:12:48.682Z",
+  "control": "volume_boundary_splat_sharpness",
   "classification": "browser-gpu-frozen-capture-positive",
   "requested": {
-    "baseline": "0.4",
-    "treatment": "1.6",
-    "baselineUrlValue": "0.4",
-    "treatmentUrlValue": "1.6",
-    "baselineEffectiveValue": 0.4,
-    "treatmentEffectiveValue": 1.6,
+    "baseline": "1",
+    "treatment": "12",
+    "baselineUrlValue": "1",
+    "treatmentUrlValue": "12",
+    "baselineEffectiveValue": 1,
+    "treatmentEffectiveValue": 12,
     "effectiveEqualsRequested": true
   },
   "identity": {
     "witnessSchema": "kaminos.volume.selective-head-composition-witness.v0",
-    "baselineUrl": "http://127.0.0.1:8099/volume-selective-head-live.html?volume_reaction_boundary_support_front=0.4&volume_boundary_splat_mode=learned&warmup_steps=96&capture_paused=1&anchor_base=http://127.0.0.1:18537",
-    "treatmentUrl": "http://127.0.0.1:8099/volume-selective-head-live.html?volume_reaction_boundary_support_front=1.6&volume_boundary_splat_mode=learned&warmup_steps=96&capture_paused=1&anchor_base=http://127.0.0.1:18537",
+    "baselineUrl": "http://127.0.0.1:8099/volume-selective-head-live.html?volume_boundary_splat_radius=0.35&volume_boundary_splat_sharpness=1&volume_boundary_splat_mode=learned&warmup_steps=96&capture_paused=1&anchor_base=http://127.0.0.1:18537",
+    "treatmentUrl": "http://127.0.0.1:8099/volume-selective-head-live.html?volume_boundary_splat_radius=0.35&volume_boundary_splat_sharpness=12&volume_boundary_splat_mode=learned&warmup_steps=96&capture_paused=1&anchor_base=http://127.0.0.1:18537",
     "effectiveRoute": "exact-basin-selective-head-live-v0",
     "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0",
     "sameStateAuthority": "same-state-selective-render-composition-v0",
@@ -57,7 +57,7 @@
   },
   "deltas": {
     "screenshotHashChangedCount": 3,
-    "screenshotByteLengthMeanAbs": 16284.666666666666,
+    "screenshotByteLengthMeanAbs": 214823.33333333334,
     "boundarySplatGpuProfile": {
       "candidateCopyBytesMeanAbs": 0
     },
@@ -66,9 +66,9 @@
       "decoder": "ffmpeg-rgb24:ffmpeg",
       "materialDeltaThreshold": "at-least-one-channel-differs-by-more-than-one-8-bit-level",
       "materialChangedCompositionCount": 3,
-      "changedPixelRatioMean": 0.4435199136955292,
-      "meanAbsoluteChannelDeltaMean": 8.306154233870968,
-      "rootMeanSquareChannelDeltaMean": 18.948769055687944,
+      "changedPixelRatioMean": 0.277277606819468,
+      "meanAbsoluteChannelDeltaMean": 9.079333203640822,
+      "rootMeanSquareChannelDeltaMean": 24.395606260025474,
       "nonblackPixelCountDeltaMean": 0
     }
   },
@@ -84,12 +84,12 @@
         "simStepCount": 96,
         "beforeSimStepCount": 96,
         "frameCount": 97,
-        "renderElapsedMs": 31.4876660000009,
+        "renderElapsedMs": 40.099958000006154,
         "boundarySplatGpuProfile": null,
         "screenshot": {
-          "path": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-support-front/baseline-paused/01-splat-only-v0.png",
-          "byteLength": 1280729,
-          "sha256": "bfb2c35c55cfd5b971e5eceb138c8c0dc32912bc373d5e30de8d0f4fbae3f684",
+          "path": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-splat-geometry/shared-baseline-paused/01-splat-only-v0.png",
+          "byteLength": 1515987,
+          "sha256": "d0b0312977e6725d32f94b4fca83bde9ab776b0a691be6de75ef7e4c2aa2ab3e",
           "captureScope": "canvas-only",
           "clip": {
             "x": 380,
@@ -99,7 +99,7 @@
             "scale": 1
           }
         },
-        "sha256": "bfb2c35c55cfd5b971e5eceb138c8c0dc32912bc373d5e30de8d0f4fbae3f684"
+        "sha256": "d0b0312977e6725d32f94b4fca83bde9ab776b0a691be6de75ef7e4c2aa2ab3e"
       },
       "treatment": {
         "requestedComposition": "splat-only-v0",
@@ -110,12 +110,12 @@
         "simStepCount": 96,
         "beforeSimStepCount": 96,
         "frameCount": 97,
-        "renderElapsedMs": 15.555208000005223,
+        "renderElapsedMs": 16.460874999989755,
         "boundarySplatGpuProfile": null,
         "screenshot": {
-          "path": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-support-front/treatment-paused/01-splat-only-v0.png",
-          "byteLength": 1318230,
-          "sha256": "130f9f442058f282b91c11334b1eb9549bfed01428af7065228bac9edc831c45",
+          "path": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-splat-geometry/sharpness-treatment-paused/01-splat-only-v0.png",
+          "byteLength": 1211025,
+          "sha256": "0a9ae93d3166f1c85e17f9637f91e7639743be6359774836ee8e2442e3abebcc",
           "captureScope": "canvas-only",
           "clip": {
             "x": 380,
@@ -125,7 +125,7 @@
             "scale": 1
           }
         },
-        "sha256": "130f9f442058f282b91c11334b1eb9549bfed01428af7065228bac9edc831c45"
+        "sha256": "0a9ae93d3166f1c85e17f9637f91e7639743be6359774836ee8e2442e3abebcc"
       },
       "passReceipt": {
         "baseline": {
@@ -157,21 +157,21 @@
       },
       "deltas": {
         "screenshotHashChanged": true,
-        "screenshotByteLengthAbs": 37501,
+        "screenshotByteLengthAbs": 304962,
         "candidateCopyBytesAbs": 0,
         "pixel": {
           "identity": "canvas-png-rgb24-pixel-delta-v0",
           "width": 2480,
           "height": 1520,
           "pixelCount": 3769600,
-          "changedPixelCount": 1175974,
-          "changedPixelRatio": 0.31196254244482174,
+          "changedPixelCount": 1047110,
+          "changedPixelRatio": 0.2777774830220713,
           "materialDeltaThreshold": "at-least-one-channel-differs-by-more-than-one-8-bit-level",
-          "materialChangedPixelCount": 1088592,
-          "materialChangedPixelRatio": 0.28878183361629883,
-          "meanAbsoluteChannelDelta": 5.790633488964346,
-          "rootMeanSquareChannelDelta": 16.293014442070184,
-          "maxAbsoluteChannelDelta": 174,
+          "materialChangedPixelCount": 1009863,
+          "materialChangedPixelRatio": 0.267896593803056,
+          "meanAbsoluteChannelDelta": 16.03320935908319,
+          "rootMeanSquareChannelDelta": 41.08212737545346,
+          "maxAbsoluteChannelDelta": 241,
           "baselineNonblackPixelCount": 3769600,
           "treatmentNonblackPixelCount": 3769600,
           "nonblackPixelCountDelta": 0
@@ -189,12 +189,12 @@
         "simStepCount": 96,
         "beforeSimStepCount": 96,
         "frameCount": 98,
-        "renderElapsedMs": 17.43370799999684,
+        "renderElapsedMs": 14.058749999996508,
         "boundarySplatGpuProfile": null,
         "screenshot": {
-          "path": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-support-front/baseline-paused/02-smoke-raymarch-under-splats-v0.png",
-          "byteLength": 1585174,
-          "sha256": "a12474d530c782a2adebc4457200b2bfe8da9be15daafa99820e6437caf85afa",
+          "path": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-splat-geometry/shared-baseline-paused/02-smoke-raymarch-under-splats-v0.png",
+          "byteLength": 1992056,
+          "sha256": "1bc0e58df0b53ee685a0f2c41bb1e916d19e93af710b48b53fc1e2437feb366d",
           "captureScope": "canvas-only",
           "clip": {
             "x": 380,
@@ -204,7 +204,7 @@
             "scale": 1
           }
         },
-        "sha256": "a12474d530c782a2adebc4457200b2bfe8da9be15daafa99820e6437caf85afa"
+        "sha256": "1bc0e58df0b53ee685a0f2c41bb1e916d19e93af710b48b53fc1e2437feb366d"
       },
       "treatment": {
         "requestedComposition": "smoke-raymarch-under-splats-v0",
@@ -215,12 +215,12 @@
         "simStepCount": 96,
         "beforeSimStepCount": 96,
         "frameCount": 98,
-        "renderElapsedMs": 12.371000000013737,
+        "renderElapsedMs": 12.19679200000246,
         "boundarySplatGpuProfile": null,
         "screenshot": {
-          "path": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-support-front/treatment-paused/02-smoke-raymarch-under-splats-v0.png",
-          "byteLength": 1588610,
-          "sha256": "9076895c850da7ef75d68e46467183651338f7504d929e1bf668ed39f7df0b0f",
+          "path": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-splat-geometry/sharpness-treatment-paused/02-smoke-raymarch-under-splats-v0.png",
+          "byteLength": 2156340,
+          "sha256": "deb659dacff7331e22a251970d6fec9e4317603160839d1d4042db3949db1ac8",
           "captureScope": "canvas-only",
           "clip": {
             "x": 380,
@@ -230,7 +230,7 @@
             "scale": 1
           }
         },
-        "sha256": "9076895c850da7ef75d68e46467183651338f7504d929e1bf668ed39f7df0b0f"
+        "sha256": "deb659dacff7331e22a251970d6fec9e4317603160839d1d4042db3949db1ac8"
       },
       "passReceipt": {
         "baseline": {
@@ -262,21 +262,21 @@
       },
       "deltas": {
         "screenshotHashChanged": true,
-        "screenshotByteLengthAbs": 3436,
+        "screenshotByteLengthAbs": 164284,
         "candidateCopyBytesAbs": 0,
         "pixel": {
           "identity": "canvas-png-rgb24-pixel-delta-v0",
           "width": 2480,
           "height": 1520,
           "pixelCount": 3769600,
-          "changedPixelCount": 1916393,
-          "changedPixelRatio": 0.5083809953310696,
+          "changedPixelCount": 1044343,
+          "changedPixelRatio": 0.2770434528862479,
           "materialDeltaThreshold": "at-least-one-channel-differs-by-more-than-one-8-bit-level",
-          "materialChangedPixelCount": 1850719,
-          "materialChangedPixelRatio": 0.4909589876910017,
-          "meanAbsoluteChannelDelta": 9.59785308786078,
-          "rootMeanSquareChannelDelta": 20.35431327382572,
-          "maxAbsoluteChannelDelta": 95,
+          "materialChangedPixelCount": 1006846,
+          "materialChangedPixelRatio": 0.2670962436332767,
+          "meanAbsoluteChannelDelta": 5.621856253537069,
+          "rootMeanSquareChannelDelta": 16.096936332588758,
+          "maxAbsoluteChannelDelta": 136,
           "baselineNonblackPixelCount": 3769600,
           "treatmentNonblackPixelCount": 3769600,
           "nonblackPixelCountDelta": 0
@@ -294,12 +294,12 @@
         "simStepCount": 96,
         "beforeSimStepCount": 96,
         "frameCount": 99,
-        "renderElapsedMs": 14.764999999984866,
+        "renderElapsedMs": 15.688750000001164,
         "boundarySplatGpuProfile": null,
         "screenshot": {
-          "path": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-support-front/baseline-paused/03-full-raymarch-under-splats-diagnostic-v0.png",
-          "byteLength": 1584352,
-          "sha256": "95ddea6c0a54b1cbb7b8bca4b1b3c71763f7723d737b74531c4423a3d12808e2",
+          "path": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-splat-geometry/shared-baseline-paused/03-full-raymarch-under-splats-diagnostic-v0.png",
+          "byteLength": 1995280,
+          "sha256": "7229625303157f49464cb39d0ce2d662e0a90b7c18d21c1e5af69f212e1f52d5",
           "captureScope": "canvas-only",
           "clip": {
             "x": 380,
@@ -309,7 +309,7 @@
             "scale": 1
           }
         },
-        "sha256": "95ddea6c0a54b1cbb7b8bca4b1b3c71763f7723d737b74531c4423a3d12808e2"
+        "sha256": "7229625303157f49464cb39d0ce2d662e0a90b7c18d21c1e5af69f212e1f52d5"
       },
       "treatment": {
         "requestedComposition": "full-raymarch-under-splats-diagnostic-v0",
@@ -320,12 +320,12 @@
         "simStepCount": 96,
         "beforeSimStepCount": 96,
         "frameCount": 99,
-        "renderElapsedMs": 13.59070800000336,
+        "renderElapsedMs": 12.086458000005223,
         "boundarySplatGpuProfile": null,
         "screenshot": {
-          "path": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-support-front/treatment-paused/03-full-raymarch-under-splats-diagnostic-v0.png",
-          "byteLength": 1592269,
-          "sha256": "8ec3d944d5728de24bdd547a622e52492441bde88bb6add9b102add9eab6f91f",
+          "path": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-splat-geometry/sharpness-treatment-paused/03-full-raymarch-under-splats-diagnostic-v0.png",
+          "byteLength": 2170504,
+          "sha256": "f80a50c799bf4bb3e11012f3108df340fec8ea9e004f87ce6cdf709eeb5a8568",
           "captureScope": "canvas-only",
           "clip": {
             "x": 380,
@@ -335,7 +335,7 @@
             "scale": 1
           }
         },
-        "sha256": "8ec3d944d5728de24bdd547a622e52492441bde88bb6add9b102add9eab6f91f"
+        "sha256": "f80a50c799bf4bb3e11012f3108df340fec8ea9e004f87ce6cdf709eeb5a8568"
       },
       "passReceipt": {
         "baseline": {
@@ -367,21 +367,21 @@
       },
       "deltas": {
         "screenshotHashChanged": true,
-        "screenshotByteLengthAbs": 7917,
+        "screenshotByteLengthAbs": 175224,
         "candidateCopyBytesAbs": 0,
         "pixel": {
           "identity": "canvas-png-rgb24-pixel-delta-v0",
           "width": 2480,
           "height": 1520,
           "pixelCount": 3769600,
-          "changedPixelCount": 1923311,
-          "changedPixelRatio": 0.5102162033106961,
+          "changedPixelCount": 1044224,
+          "changedPixelRatio": 0.2770118845500849,
           "materialDeltaThreshold": "at-least-one-channel-differs-by-more-than-one-8-bit-level",
-          "materialChangedPixelCount": 1856838,
-          "materialChangedPixelRatio": 0.4925822368421053,
-          "meanAbsoluteChannelDelta": 9.529976124787776,
-          "rootMeanSquareChannelDelta": 20.198979451167922,
-          "maxAbsoluteChannelDelta": 101,
+          "materialChangedPixelCount": 1006718,
+          "materialChangedPixelRatio": 0.26706228777589136,
+          "meanAbsoluteChannelDelta": 5.582933998302207,
+          "rootMeanSquareChannelDelta": 16.007755072034197,
+          "maxAbsoluteChannelDelta": 134,
           "baselineNonblackPixelCount": 3769600,
           "treatmentNonblackPixelCount": 3769600,
           "nonblackPixelCountDelta": 0

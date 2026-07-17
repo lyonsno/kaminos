@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const PYRO_CONTROL_PATH_FROZEN_CAPTURE_SCHEMA = 'kaminos.pyro-control-path.browser-gpu-frozen-capture-comparison.v0';
+export const PYRO_CONTROL_PATH_FROZEN_CAPTURE_MATRIX_SCHEMA = 'kaminos.pyro-control-path.browser-gpu-frozen-capture-matrix.v0';
 
 const REQUIRED_COMPOSITIONS = Object.freeze([
   'splat-only-v0',
@@ -31,6 +34,261 @@ export async function loadFrozenCaptureReport(path) {
 export async function writeFrozenCaptureComparison(path, comparison) {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${JSON.stringify(comparison, null, 2)}\n`);
+}
+
+export function buildFrozenCaptureMatrix({ enumerationCount, rows }) {
+  if (!Number.isInteger(Number(enumerationCount)) || Number(enumerationCount) < 1) {
+    throw new Error('frozen capture matrix requires a positive uncapped enumeration count');
+  }
+  if (!Array.isArray(rows) || rows.length === 0) {
+    throw new Error('frozen capture matrix requires at least one row');
+  }
+  const seenControls = new Set();
+  const classifiedRows = rows.map((row, index) => {
+    const comparison = row?.comparison;
+    if (comparison?.schema !== PYRO_CONTROL_PATH_FROZEN_CAPTURE_SCHEMA) {
+      throw new Error(`frozen capture matrix row ${index} has wrong comparison schema`);
+    }
+    if (seenControls.has(comparison.control)) {
+      throw new Error(`frozen capture matrix has duplicate control ${comparison.control}`);
+    }
+    seenControls.add(comparison.control);
+    const changedCompositions = comparison.captures
+      .filter(captureHasMaterialDelta)
+      .map(capture => capture.composition);
+    const stageEvidence = {
+      splatPresentation: changedCompositions.includes('splat-only-v0'),
+      smokeHybridPresentation: changedCompositions.includes('smoke-raymarch-under-splats-v0'),
+      fullRaymarchDiagnosticPresentation: changedCompositions.includes('full-raymarch-under-splats-diagnostic-v0'),
+      splatAdmissionOrGeometryReadback: comparison.deltas.boundarySplatGpuProfile.candidateCopyBytesMeanAbs > 0,
+    };
+    const claimedStageProved = stageClaimProved(row.claimedStage, stageEvidence);
+    const hasRouteSpecificEvidence = changedCompositions.length > 0;
+    const classification = comparison.classification !== 'browser-gpu-frozen-capture-positive'
+      ? 'falsified-before-stage-classification'
+      : claimedStageProved
+        ? 'proved-claimed-stage-coupling'
+        : hasRouteSpecificEvidence
+          ? row.routeSemantics === 'intentional-route-specific'
+            ? 'intentional-route-specific-presentation-only'
+            : 'negative-claimed-stage-uncoupled-with-route-specific-delta'
+          : 'claimed-stage-uncoupled';
+    const classified = {
+      control: comparison.control,
+      family: row.family || 'unclassified',
+      claimedStage: row.claimedStage || 'unspecified',
+      routeSemantics: row.routeSemantics || 'unclassified',
+      classification,
+      comparisonClassification: comparison.classification,
+      staticClassificationDisposition: staticClassificationDisposition(row.staticEnumeration, classification, row.routeSemantics),
+      requested: comparison.requested,
+      identity: comparison.identity,
+      fallback: comparison.fallback,
+      postLoadMutation: comparison.postLoadMutation,
+      appliedPasses: comparison.appliedPasses,
+      sourceFieldHashes: row.sourceFieldHashes || [],
+      sourceEvidence: row.sourceEvidence || [],
+      staticEnumeration: row.staticEnumeration || null,
+      comparisonArtifact: row.comparisonArtifact || null,
+      changedCompositions,
+      stageEvidence,
+      deltas: comparison.deltas,
+    };
+    if (!claimedStageProved) {
+      classified.falsifier = {
+        tripped: true,
+        reason: comparison.classification !== 'browser-gpu-frozen-capture-positive'
+          ? `comparison stopped at ${comparison.classification}`
+          : hasRouteSpecificEvidence
+            ? `observed deltas do not reach claimed stage ${classified.claimedStage}`
+            : `no downstream delta reaches claimed stage ${classified.claimedStage}`,
+      };
+    }
+    return classified;
+  });
+  return {
+    schema: PYRO_CONTROL_PATH_FROZEN_CAPTURE_MATRIX_SCHEMA,
+    generatedAt: new Date().toISOString(),
+    enumerationCount: Number(enumerationCount),
+    auditedControlCount: classifiedRows.length,
+    rows: classifiedRows,
+    summary: {
+      provedClaimedStageCouplingCount: classifiedRows.filter(row => row.classification === 'proved-claimed-stage-coupling').length,
+      intentionalRouteSpecificCount: classifiedRows.filter(row => row.classification === 'intentional-route-specific-presentation-only').length,
+      provedIntentionalRouteSpecificControlCount: classifiedRows.filter(row => row.classification === 'proved-claimed-stage-coupling' && row.routeSemantics === 'intentional-route-specific').length,
+      negativeClaimedStageCouplingCount: classifiedRows.filter(row => row.classification === 'negative-claimed-stage-uncoupled-with-route-specific-delta').length,
+      claimedStageUncoupledCount: classifiedRows.filter(row => row.classification === 'claimed-stage-uncoupled').length,
+      preclassificationFalsifierCount: classifiedRows.filter(row => row.classification === 'falsified-before-stage-classification').length,
+      falsifiedStaticClassificationHintCount: classifiedRows.filter(row => row.staticClassificationDisposition === 'falsified-static-raymarch-only-hint').length,
+      falsifiedStaticRaymarchDownstreamCount: classifiedRows.filter(row => row.staticClassificationDisposition === 'falsified-static-raymarch-downstream-claim').length,
+    },
+  };
+}
+
+function staticClassificationDisposition(staticEnumeration, classification, routeSemantics) {
+  if (!staticEnumeration?.classificationHint) return 'no-static-classification-hint';
+  if (routeSemantics === 'intentional-route-specific' && staticEnumeration.downstreamStages?.includes('raymarch')) {
+    return 'falsified-static-raymarch-downstream-claim';
+  }
+  if (staticEnumeration.classificationHint === 'raymarch-only-unimplemented') {
+    return classification === 'proved-claimed-stage-coupling'
+      ? 'falsified-static-raymarch-only-hint'
+      : 'confirmed-static-raymarch-only-hint';
+  }
+  return 'static-classification-hint-not-adjudicated';
+}
+
+export function computeRgbPixelDelta(baselinePixels, treatmentPixels, { width, height }) {
+  if (!(baselinePixels instanceof Uint8Array) || !(treatmentPixels instanceof Uint8Array)) {
+    throw new Error('RGB pixel delta requires Uint8Array inputs');
+  }
+  if (baselinePixels.byteLength !== treatmentPixels.byteLength) {
+    throw new Error('RGB pixel delta inputs have different byte lengths');
+  }
+  const pixelCount = Number(width) * Number(height);
+  if (!Number.isInteger(pixelCount) || pixelCount < 1 || baselinePixels.byteLength !== pixelCount * 3) {
+    throw new Error('RGB pixel delta dimensions do not match rgb24 byte length');
+  }
+  let changedPixelCount = 0;
+  let materialChangedPixelCount = 0;
+  let absoluteChannelDeltaSum = 0;
+  let squaredChannelDeltaSum = 0;
+  let maxAbsoluteChannelDelta = 0;
+  let baselineNonblackPixelCount = 0;
+  let treatmentNonblackPixelCount = 0;
+  for (let offset = 0; offset < baselinePixels.byteLength; offset += 3) {
+    let changed = false;
+    let materialChanged = false;
+    let baselineNonblack = false;
+    let treatmentNonblack = false;
+    for (let channel = 0; channel < 3; channel += 1) {
+      const baseline = baselinePixels[offset + channel];
+      const treatment = treatmentPixels[offset + channel];
+      const delta = Math.abs(treatment - baseline);
+      changed ||= delta !== 0;
+      materialChanged ||= delta > 1;
+      baselineNonblack ||= baseline !== 0;
+      treatmentNonblack ||= treatment !== 0;
+      absoluteChannelDeltaSum += delta;
+      squaredChannelDeltaSum += delta * delta;
+      maxAbsoluteChannelDelta = Math.max(maxAbsoluteChannelDelta, delta);
+    }
+    changedPixelCount += changed ? 1 : 0;
+    materialChangedPixelCount += materialChanged ? 1 : 0;
+    baselineNonblackPixelCount += baselineNonblack ? 1 : 0;
+    treatmentNonblackPixelCount += treatmentNonblack ? 1 : 0;
+  }
+  const channelCount = baselinePixels.byteLength;
+  return {
+    identity: 'canvas-png-rgb24-pixel-delta-v0',
+    width: Number(width),
+    height: Number(height),
+    pixelCount,
+    changedPixelCount,
+    changedPixelRatio: changedPixelCount / pixelCount,
+    materialDeltaThreshold: 'at-least-one-channel-differs-by-more-than-one-8-bit-level',
+    materialChangedPixelCount,
+    materialChangedPixelRatio: materialChangedPixelCount / pixelCount,
+    meanAbsoluteChannelDelta: absoluteChannelDeltaSum / channelCount,
+    rootMeanSquareChannelDelta: Math.sqrt(squaredChannelDeltaSum / channelCount),
+    maxAbsoluteChannelDelta,
+    baselineNonblackPixelCount,
+    treatmentNonblackPixelCount,
+    nonblackPixelCountDelta: treatmentNonblackPixelCount - baselineNonblackPixelCount,
+  };
+}
+
+function captureHasMaterialDelta(capture) {
+  if (capture.deltas.pixel) {
+    return Number(capture.deltas.pixel.materialChangedPixelCount) > 0
+      || Number(capture.deltas.candidateCopyBytesAbs) > 0;
+  }
+  return capture.deltas.screenshotHashChanged
+    || Number(capture.deltas.screenshotByteLengthAbs) > 0
+    || Number(capture.deltas.candidateCopyBytesAbs) > 0;
+}
+
+export function hydrateFrozenCapturePixelDeltas(comparison, { ffmpegPath = 'ffmpeg' } = {}) {
+  if (comparison?.schema !== PYRO_CONTROL_PATH_FROZEN_CAPTURE_SCHEMA) {
+    throw new Error('pixel delta hydration requires a frozen capture comparison');
+  }
+  const captures = comparison.captures.map(capture => {
+    const baseline = decodePngRgb24(capture.baseline.screenshot.path, ffmpegPath);
+    const treatment = decodePngRgb24(capture.treatment.screenshot.path, ffmpegPath);
+    if (baseline.width !== treatment.width || baseline.height !== treatment.height) {
+      throw new Error(`${capture.composition} baseline/treatment screenshot dimensions differ`);
+    }
+    return {
+      ...capture,
+      deltas: {
+        ...capture.deltas,
+        pixel: computeRgbPixelDelta(baseline.pixels, treatment.pixels, baseline),
+      },
+    };
+  });
+  const pixelDeltas = captures.map(capture => capture.deltas.pixel);
+  const materialChangedCompositionCount = captures.filter(captureHasMaterialDelta).length;
+  const classification = comparison.classification === 'browser-gpu-frozen-capture-requested-effective-mismatch'
+    || comparison.classification === 'browser-gpu-frozen-capture-source-step-drift'
+    ? comparison.classification
+    : materialChangedCompositionCount > 0
+      ? 'browser-gpu-frozen-capture-positive'
+      : 'browser-gpu-frozen-capture-no-delta';
+  const hydrated = {
+    ...comparison,
+    classification,
+    deltas: {
+      ...comparison.deltas,
+      pixel: {
+        identity: 'canvas-png-rgb24-pixel-delta-summary-v0',
+        decoder: `ffmpeg-rgb24:${ffmpegPath}`,
+        materialDeltaThreshold: 'at-least-one-channel-differs-by-more-than-one-8-bit-level',
+        materialChangedCompositionCount,
+        changedPixelRatioMean: mean(pixelDeltas.map(delta => delta.changedPixelRatio)),
+        meanAbsoluteChannelDeltaMean: mean(pixelDeltas.map(delta => delta.meanAbsoluteChannelDelta)),
+        rootMeanSquareChannelDeltaMean: mean(pixelDeltas.map(delta => delta.rootMeanSquareChannelDelta)),
+        nonblackPixelCountDeltaMean: mean(pixelDeltas.map(delta => delta.nonblackPixelCountDelta)),
+      },
+    },
+    captures,
+  };
+  if (classification === 'browser-gpu-frozen-capture-no-delta') {
+    hydrated.catches = 'requested-effective-match-with-zero-material-browser-gpu-frozen-capture-delta';
+    hydrated.falsifier = {
+      tripped: true,
+      reason: 'requested/effective controls and frozen source identity match, but decoded canvas pixels contain only exact matches or one-level quantization noise',
+    };
+  }
+  return hydrated;
+}
+
+function decodePngRgb24(path, ffmpegPath) {
+  const encoded = readFileSync(path);
+  if (encoded.byteLength < 24 || encoded.toString('ascii', 1, 4) !== 'PNG') {
+    throw new Error(`screenshot is not a PNG: ${path}`);
+  }
+  const width = encoded.readUInt32BE(16);
+  const height = encoded.readUInt32BE(20);
+  const decoded = spawnSync(ffmpegPath, [
+    '-v', 'error', '-i', path, '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1',
+  ], { encoding: null, maxBuffer: 128 * 1024 * 1024 });
+  if (decoded.error) throw new Error(`PNG decoder failed for ${path}: ${decoded.error.message}`);
+  if (decoded.status !== 0) {
+    throw new Error(`PNG decoder failed for ${path}: ${String(decoded.stderr || '').trim()}`);
+  }
+  const pixels = new Uint8Array(decoded.stdout.buffer, decoded.stdout.byteOffset, decoded.stdout.byteLength);
+  if (pixels.byteLength !== width * height * 3) {
+    throw new Error(`PNG decoder returned ${pixels.byteLength} bytes for ${width}x${height} rgb24 image ${path}`);
+  }
+  return { width, height, pixels };
+}
+
+function stageClaimProved(claimedStage, stageEvidence) {
+  if (claimedStage === 'splat-presentation') return stageEvidence.splatPresentation;
+  if (claimedStage === 'smoke-hybrid-presentation') return stageEvidence.smokeHybridPresentation;
+  if (claimedStage === 'full-raymarch-diagnostic-presentation') return stageEvidence.fullRaymarchDiagnosticPresentation;
+  if (claimedStage === 'splat-admission-or-geometry-readback') return stageEvidence.splatAdmissionOrGeometryReadback;
+  return false;
 }
 
 export function buildFrozenCaptureComparison({
@@ -297,13 +555,13 @@ async function main() {
   const baselineReportPath = requiredArg(args, '--baseline-report');
   const treatmentReportPath = requiredArg(args, '--treatment-report');
   const outPath = resolve(requiredArg(args, '--out'));
-  const comparison = buildFrozenCaptureComparison({
+  const comparison = hydrateFrozenCapturePixelDeltas(buildFrozenCaptureComparison({
     control: requiredArg(args, '--control'),
     requestedBaseline: requiredArg(args, '--requested-baseline'),
     requestedTreatment: requiredArg(args, '--requested-treatment'),
     baselineReport: await loadFrozenCaptureReport(baselineReportPath),
     treatmentReport: await loadFrozenCaptureReport(treatmentReportPath),
-  });
+  }));
   await writeFrozenCaptureComparison(outPath, comparison);
   console.log(JSON.stringify({
     schema: 'kaminos.pyro-control-path.frozen-capture-cli.v0',
