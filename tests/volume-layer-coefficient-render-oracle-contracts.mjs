@@ -50,6 +50,17 @@ assert.equal(report.status, 'failed');
 assert.equal(report.failurePhase, 'manifest-validation');
 assert.match(report.error, /schema/i);
 
+const validateOnlyReportPath = join(root, 'validate-only-failure-report.json');
+const validateOnly = spawnSync(python, [
+  script.pathname,
+  '--manifest', invalidManifestPath,
+  '--report', validateOnlyReportPath,
+  '--validate-only',
+], { encoding: 'utf8' });
+assert.notEqual(validateOnly.status, 0, 'invalid validate-only manifest must fail');
+assert.ok(existsSync(validateOnlyReportPath), 'validate-only failure must emit a durable report without render-only arguments');
+assert.match(JSON.parse(await readFile(validateOnlyReportPath, 'utf8')).error, /schema/i);
+
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }

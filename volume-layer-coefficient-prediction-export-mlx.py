@@ -44,7 +44,10 @@ def atomic_json(path: Path, value: dict[str, Any]) -> None:
 
 
 def canonical_identity(value: dict[str, Any]) -> str:
-    payload = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    identity_payload = dict(value)
+    identity_payload.pop("identity", None)
+    identity_payload.pop("elapsedSeconds", None)
+    payload = json.dumps(identity_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return f"sha256:{hashlib.sha256(payload).hexdigest()}"
 
 
@@ -206,6 +209,10 @@ def run_self_test() -> dict[str, Any]:
         "model": {"sha256": expected_overlay["modelSha256"]},
         "state": {"sourceHashes": expected_overlay["sourceHashes"]},
     }
+    overlay_identity = canonical_identity(overlay)
+    overlay["elapsedSeconds"] = 1.0
+    require(canonical_identity(overlay) == overlay_identity, "volatile elapsed time changed overlay identity")
+    overlay["identity"] = overlay_identity
     validate_overlay_contract(overlay, expected_overlay)
     rejected = []
     mutations = {

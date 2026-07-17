@@ -190,6 +190,7 @@ def validate_prediction_overlay(
     claimed_identity = overlay.get("identity")
     identity_payload = dict(overlay)
     identity_payload.pop("identity", None)
+    identity_payload.pop("elapsedSeconds", None)
     actual_identity = f"sha256:{hashlib.sha256(canonical_json(identity_payload).encode('utf-8')).hexdigest()}"
     require(claimed_identity == actual_identity, "prediction overlay identity drifted")
 
@@ -491,7 +492,6 @@ for(const id of ['camera','left','right','blend']) $(id).addEventListener('input
 
 def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
     manifest_path = Path(args.manifest).resolve()
-    capture_path = Path(args.capture_report).resolve()
     manifest = load_json(manifest_path, "training manifest")
     state, paths, descriptor_receipt = validate_manifest(manifest, manifest_path, args.state_step, not args.skip_hash_verification)
     state_step = int((state.get("replay") or {}).get("completedSteps"))
@@ -516,6 +516,7 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
         }
     required = {"features", "admission", "coefficients", "kernelDescriptors"}
     require(required.issubset(paths), f"rendering requires row artifacts: {sorted(required - set(paths))}")
+    capture_path = Path(args.capture_report).resolve()
     capture_report = load_json(capture_path, "capture report")
     cameras = validate_capture_report(capture_report, state_step)
     capture_config = capture_report.get("captureConfig") or {}
@@ -706,8 +707,10 @@ def main() -> int:
     if args.self_test:
         self_test()
         return 0
-    if not all([args.manifest, args.capture_report, args.out_dir, args.report]):
-        raise ValueError("--manifest, --capture-report, --out-dir, and --report are required")
+    if not all([args.manifest, args.report]):
+        raise ValueError("--manifest and --report are required")
+    if not args.validate_only and not all([args.capture_report, args.out_dir]):
+        raise ValueError("--capture-report and --out-dir are required for rendering")
     report_path = Path(args.report).resolve()
     report_path.parent.mkdir(parents=True, exist_ok=True)
     phase = "manifest-validation"
