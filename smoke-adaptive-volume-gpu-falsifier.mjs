@@ -382,6 +382,7 @@ export function validateAdaptiveVolumeProductionSurvivalReport(report) {
   if (!isSha256Digest(effective?.sourceSha256) || effective?.sourceSha256 !== report?.source?.sourceSidecarSha256) reasons.push('production-survival-source-mismatch');
   if (!isSha256Digest(effective?.productionVolumeSha256)
     || effective?.productionVolumeSha256 !== report?.runtime?.sourceFileSha256s?.productionVolume) reasons.push('production-survival-production-source-mismatch');
+  if (effective?.fieldProxyExpansionApplied !== false) reasons.push('production-survival-field-proxy-expansion');
   if (effective?.differingMechanism !== 'smoke-extinction-scalar-lookup-only-v0') reasons.push('production-survival-arm-difference-invalid');
   for (const mechanism of ['majorant-grid', 'occupancy-skip', 'adaptive-rays', 'early-transmittance', 'five-live-field-samples']) {
     if (!effective?.matchedMechanisms?.includes(mechanism)) reasons.push(`production-survival-mechanism-missing:${mechanism}`);

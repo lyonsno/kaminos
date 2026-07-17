@@ -185,6 +185,10 @@ function wsRequest(socket, method, params = {}, timeoutMs = 0) {
           text: message.params.exceptionDetails?.exception?.description || message.params.exceptionDetails?.text || 'Runtime exception',
         });
       }
+      if (['Inspector.targetCrashed', 'Target.targetCrashed', 'Inspector.detached'].includes(message.method)) {
+        rejectOnce(new Error(`${method}: CDP target crashed or detached before response: ${message.method}`));
+        return;
+      }
       if (message.id !== id) return;
       if (settled) return;
       settled = true;

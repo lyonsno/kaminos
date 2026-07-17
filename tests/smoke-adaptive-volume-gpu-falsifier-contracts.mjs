@@ -248,6 +248,7 @@ validProductionSurvivalReport.productionSurvival = {
     sourceAuthority: 'exact-step45-sidecar-production-field-proxy-v0',
     sourceSha256: SHA_C,
     productionVolumeSha256: SHA_E,
+    fieldProxyExpansionApplied: false,
     differingMechanism: 'smoke-extinction-scalar-lookup-only-v0',
     matchedMechanisms: [
       'majorant-grid',
@@ -289,6 +290,7 @@ for (const mutate of [
   report => { report.productionSurvival.effective.sourceAuthority = 'live-fields'; },
   report => { report.productionSurvival.effective.sourceSha256 = SHA_B; },
   report => { report.productionSurvival.effective.productionVolumeSha256 = SHA_D; },
+  report => { report.productionSurvival.effective.fieldProxyExpansionApplied = true; },
   report => { report.productionSurvival.effective.matchedMechanisms.pop(); },
   report => { report.productionSurvival.effective.differingMechanism = 'lookup-and-step-schedule'; },
   report => { report.productionSurvival.effective.workload.productionStepCount = 0; },
@@ -472,6 +474,7 @@ assert.doesNotMatch(witness, /function wsRequest\([^)]*timeoutMs\s*=\s*30000/, '
 assert.match(witness, /timeoutMs\s*>\s*0\s*\?\s*setTimeout/, 'explicit CDP timeouts must remain caller-owned and opt-in');
 assert.match(witness, /addEventListener\('close'/, 'whole-renderer loss must be observed by pending CDP requests');
 assert.match(witness, /CDP target closed before response/, 'whole-renderer loss must reject the pending CDP request');
+assert.match(witness, /Inspector\.targetCrashed|Target\.targetCrashed/, 'renderer crashes must reject even when Chrome leaves the CDP socket open');
 assert.match(witness, /removeEventListener\('close'/, 'settled CDP requests must release target-close listeners');
 assert.match(
   witness,
@@ -514,6 +517,8 @@ assert.match(browser, /dispatchWorkgroups\(Math\.ceil\(width \/ 8\), Math\.ceil\
 assert.doesNotMatch(browser, /dispatchWorkgroups\(Math\.ceil\(pixelCount \/ 64\)\)/, 'Retina evidence must not use an overflowing linear dispatch');
 assert.match(browser, /productionSurvival/, 'R9 must emit a separately validated production-shaped survival arm');
 assert.match(browser, /exact-step45-sidecar-production-field-proxy-v0/, 'R9 must label the retained sidecar as a field proxy rather than live state');
+assert.doesNotMatch(browser, /new Float32Array\(cellCount \* 16\)/, 'R9 must not explode the source sidecar into a four-slot host allocation');
+assert.match(browser, /fieldProxyExpansionApplied:\s*false/, 'R9 must report that its field workload does not hide a host-side four-slot expansion');
 assert.match(browser, /smoke-extinction-scalar-lookup-only-v0/, 'R9 arms may differ only at the tested scalar lookup');
 for (const productionMechanism of [
   /sampleWorldMajorant/,

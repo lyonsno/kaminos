@@ -264,18 +264,9 @@ function createParams({ grid, blockSize, selectedCount, width, height, samplesPe
 
 function buildProductionFieldProxy(sidecar, grid, blockSize) {
   const cellCount = grid ** 3;
-  const slots = new Float32Array(cellCount * 16);
   const front = new Float32Array(cellCount);
   for (let index = 0; index < cellCount; index += 1) {
-    const physical = sidecar[index * 4];
     const coverage = sidecar[index * 4 + 1];
-    const ridge = sidecar[index * 4 + 2];
-    const residual = sidecar[index * 4 + 3];
-    const offset = index * 16;
-    slots.set([ridge * 0.20, coverage * 0.10, residual * 0.20, physical], offset);
-    slots.set([physical, coverage, ridge, residual], offset + 4);
-    slots.set([ridge, residual, coverage, physical * 0.20], offset + 8);
-    slots.set([coverage, ridge, residual, physical], offset + 12);
     front[index] = coverage;
   }
   const coarseGrid = grid / blockSize;
@@ -304,7 +295,7 @@ function buildProductionFieldProxy(sidecar, grid, blockSize) {
       }
     }
   }
-  return { slots, front, majorant, coarseGrid };
+  return { slots: sidecar, front, majorant, coarseGrid };
 }
 
 const COMMON_WGSL = String.raw`
@@ -438,8 +429,16 @@ struct ProductionTile { rowOffset: u32, rowCount: u32, pad0: u32, pad1: u32 };
 
 const PRODUCTION_MECHANISMS_WGSL = String.raw`
 fn readProxySlot(c: vec3<i32>, slot: u32) -> vec4<f32> {
-  let cell = vec3<u32>(clamp(c, vec3<i32>(0), vec3<i32>(i32(productionP.grid) - 1)));
-  return fieldProxy[cellIndex(cell, productionP.grid) * 4u + slot];
+  var shifted = c;
+  if (slot == 1u) { shifted.x += 1; }
+  if (slot == 2u) { shifted.y += 1; }
+  if (slot == 3u) { shifted.z += 1; }
+  let cell = vec3<u32>(clamp(shifted, vec3<i32>(0), vec3<i32>(i32(productionP.grid) - 1)));
+  let raw = fieldProxy[cellIndex(cell, productionP.grid)];
+  if (slot == 0u) { return vec4<f32>(raw.z * 0.20, raw.y * 0.10, raw.w * 0.20, raw.x); }
+  if (slot == 1u) { return raw; }
+  if (slot == 2u) { return vec4<f32>(raw.z, raw.w, raw.y, raw.x * 0.20); }
+  return vec4<f32>(raw.y, raw.z, raw.w, raw.x);
 }
 fn sampleFluidSlot(point: vec3<f32>, slot: u32) -> vec4<f32> {
   let coordinate = (point - productionP.minimum.xyz) / (productionP.maximum.xyz - productionP.minimum.xyz) * f32(productionP.grid) - vec3<f32>(0.5);
@@ -1054,7 +1053,7 @@ async function profileProductionSurvival(device, {
     minimum, maximum, cameraPosition: camera.position,
   });
   const paramsAllocation = makeBuffer(device, 'production survival params', paramsData.byteLength, GPUBufferUsage.UNIFORM, paramsData);
-  const fieldsAllocation = makeBuffer(device, 'step45 source-bound production field proxy', productionProxy.slots.byteLength, GPUBufferUsage.STORAGE, productionProxy.slots);
+  const fieldsAllocation = makeBuffer(device, 'step45 sidecar-backed production field proxy', productionProxy.slots.byteLength, GPUBufferUsage.STORAGE, productionProxy.slots);
   const frontAllocation = makeBuffer(device, 'step45 source-bound front proxy', productionProxy.front.byteLength, GPUBufferUsage.STORAGE, productionProxy.front);
   const majorantAllocation = makeBuffer(device, 'step45 source-bound majorant proxy', productionProxy.majorant.byteLength, GPUBufferUsage.STORAGE, productionProxy.majorant);
   const denseOutputAllocation = makeBuffer(device, 'production survival dense output and counters', pixelCount * 16, storageCopy);
@@ -1159,7 +1158,7 @@ async function profileProductionSurvival(device, {
     comparison,
     outputsComplete: dense.depth.length === pixelCount && compact.depth.length === pixelCount,
     proxyAllocationBytes: {
-      fourSlotFluid: productionProxy.slots.byteLength,
+      sidecarBackedFields: productionProxy.slots.byteLength,
       front: productionProxy.front.byteLength,
       majorant: productionProxy.majorant.byteLength,
       total: productionProxy.slots.byteLength + productionProxy.front.byteLength + productionProxy.majorant.byteLength,
@@ -1740,6 +1739,7 @@ async function run() {
         sourceAuthority: 'exact-step45-sidecar-production-field-proxy-v0',
         sourceSha256: await sha256(sidecarBytes),
         productionVolumeSha256: await sha256(productionVolumeBytes),
+        fieldProxyExpansionApplied: false,
         differingMechanism: 'smoke-extinction-scalar-lookup-only-v0',
         matchedMechanisms: ['majorant-grid', 'occupancy-skip', 'adaptive-rays', 'early-transmittance', 'five-live-field-samples'],
         workload: productionSurvivalWorkload,
