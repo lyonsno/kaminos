@@ -463,8 +463,16 @@ def residual_heatmap(candidate: np.ndarray, target: np.ndarray) -> np.ndarray:
     return np.rint(np.stack([red, green, blue], axis=2) * 255.0).astype(np.uint8)
 
 
-def gallery_html(camera_rows: list[dict[str, Any]], report_name: str) -> str:
+def coefficient_source_label(prediction_overlay_receipt: dict[str, Any] | None) -> str:
+    if prediction_overlay_receipt is None:
+        return "Exact analytical coefficients"
+    arm = str(prediction_overlay_receipt.get("modelArm", "unknown")).capitalize()
+    return f"Learned {arm} coefficients"
+
+
+def gallery_html(camera_rows: list[dict[str, Any]], report_name: str, source_label: str) -> str:
     data = json.dumps(camera_rows, separators=(",", ":"))
+    source_label_json = json.dumps(source_label)
     return f"""<!doctype html>
 <html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">
 <title>Layer Coefficient Oracle</title><style>
@@ -480,12 +488,12 @@ aside{{min-width:0;border-left:1px solid var(--line);padding-left:14px}} aside h
 @media(max-width:760px){{header{{position:static;display:block;padding:12px 16px}} h1{{display:block;width:100%;margin-bottom:10px;white-space:normal}} .controls{{display:flex;width:100%;min-width:0;gap:8px 10px;overflow:hidden}} #prev{{order:1}} .controls label:has(#camera){{order:2;flex:1 1 200px}} #next{{order:3}} #cameraLabel{{order:4;flex:1 0 100%;text-align:center}} .controls label:has(#left){{order:5}} .controls label:has(#right){{order:6}} .controls label:has(#blend){{order:7}} .controls label:has(#left),.controls label:has(#right),.controls label:has(#blend){{flex:1 0 100%;width:100%;overflow:hidden}} select,#blend{{width:0;min-width:0;flex:1}} main{{grid-template-columns:minmax(0,1fr);padding:14px}} aside{{border-left:0;border-top:1px solid var(--line);padding:12px 0 0}}}}
 </style></head><body><header><h1>Coefficient / extinction oracle</h1><div class=\"controls\">
 <button id=\"prev\" title=\"Previous camera\">&#8592;</button><label>Camera <input id=\"camera\" type=\"range\" min=\"0\" max=\"20\" value=\"10\"></label><span id=\"cameraLabel\">10</span><button id=\"next\" title=\"Next camera\">&#8594;</button>
-<label>Left <select id=\"left\"><option value=\"current\">Current learned</option><option value=\"ridgeRidge\">Exact Ridge, Ridge extinction</option><option value=\"ridgeTotal\">Exact Ridge, total extinction</option><option value=\"expanded\">Expanded shared transport</option><option value=\"target\">Complete target</option><option value=\"supportTarget\">Support target</option><option value=\"ridgeContribution\">Ridge contribution</option><option value=\"nonRidgeContribution\">Non-Ridge contribution</option><option value=\"residual\">Residual heatmap</option></select></label>
-<label>Right <select id=\"right\"><option value=\"target\">Complete target</option><option value=\"expanded\">Expanded shared transport</option><option value=\"current\">Current learned</option><option value=\"supportTarget\">Support target</option></select></label>
+<label>Left <select id=\"left\"><option value=\"current\">{source_label}</option><option value=\"ridgeRidge\">Exact Ridge, Ridge extinction</option><option value=\"ridgeTotal\">Exact Ridge, total extinction</option><option value=\"expanded\">Expanded shared transport</option><option value=\"target\">Complete target</option><option value=\"supportTarget\">Support target</option><option value=\"ridgeContribution\">Ridge contribution</option><option value=\"nonRidgeContribution\">Non-Ridge contribution</option><option value=\"residual\">Residual heatmap</option></select></label>
+<label>Right <select id=\"right\"><option value=\"target\">Complete target</option><option value=\"expanded\">Expanded shared transport</option><option value=\"current\">{source_label}</option><option value=\"supportTarget\">Support target</option></select></label>
 <label>Blend <input id=\"blend\" type=\"range\" min=\"0\" max=\"100\" value=\"50\"></label></div></header>
 <main><section class=\"viewer\"><div class=\"stage\"><img id=\"base\" alt=\"left comparison\"><img id=\"overlay\" alt=\"right comparison\"><div class=\"divider\"></div></div><div class=\"labels\"><span id=\"leftLabel\"></span><span id=\"rightLabel\"></span></div></section>
 <aside><h2>Frozen evidence</h2><dl><dt>Status</dt><dd class=\"status\">checksum-bound</dd><dt>Fit camera</dt><dd>10 only</dd><dt>Held views</dt><dd>20</dd><dt>Transport</dt><dd>one shared T</dd><dt>Rows</dt><dd id=\"rows\"></dd><dt>Path scalar</dt><dd id=\"scale\"></dd><dt>Expanded MAE</dt><dd id=\"mae\"></dd><dt>Current MAE</dt><dd id=\"currentMae\"></dd><dt>Report</dt><dd><a href=\"{report_name}\" style=\"color:var(--accent)\">JSON</a></dd></dl></aside></main>
-<script>const rows={data}; const labels={{current:'Current learned',ridgeRidge:'Exact Ridge / Ridge X',ridgeTotal:'Exact Ridge / total X',expanded:'Expanded shared transport',target:'Complete target',supportTarget:'Support-aligned target',ridgeContribution:'Ridge contribution',nonRidgeContribution:'Non-Ridge contribution',residual:'Residual'}};
+<script>const rows={data}; const labels={{current:{source_label_json},ridgeRidge:'Exact Ridge / Ridge X',ridgeTotal:'Exact Ridge / total X',expanded:'Expanded shared transport',target:'Complete target',supportTarget:'Support-aligned target',ridgeContribution:'Ridge contribution',nonRidgeContribution:'Non-Ridge contribution',residual:'Residual'}};
 const $=id=>document.getElementById(id); function render(){{const i=+$('camera').value,r=rows[i],l=$('left').value,q=$('right').value,b=+$('blend').value;$('cameraLabel').textContent=`${{i}} / ${{r.angle.toFixed(3)}} rad`;$('base').src=r.images[l];$('overlay').src=r.images[q];$('overlay').style.clipPath=`inset(0 ${{100-b}}% 0 0)`;document.querySelector('.divider').style.left=`${{b}}%`;$('leftLabel').textContent=labels[l];$('rightLabel').textContent=labels[q];$('rows').textContent=r.rows.toLocaleString();$('scale').textContent=r.pathScale.toFixed(6);$('mae').textContent=r.metrics.expanded.mae.toFixed(5);$('currentMae').textContent=r.metrics.current.mae.toFixed(5)}}
 for(const id of ['camera','left','right','blend']) $(id).addEventListener('input',render);$('prev').onclick=()=>{{$('camera').value=Math.max(0,+$('camera').value-1);render()}};$('next').onclick=()=>{{$('camera').value=Math.min(20,+$('camera').value+1);render()}};render();</script></body></html>"""
 
@@ -663,7 +671,11 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
             "interpretation": "coefficient/extinction transplant assay; not a shipping-renderer parity claim",
         },
     }
-    (out_dir / "index.html").write_text(gallery_html(camera_rows, Path(args.report).name))
+    (out_dir / "index.html").write_text(gallery_html(
+        camera_rows,
+        Path(args.report).name,
+        coefficient_source_label(prediction_overlay_receipt),
+    ))
     return report
 
 

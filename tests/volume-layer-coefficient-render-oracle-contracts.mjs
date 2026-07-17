@@ -26,6 +26,7 @@ assert.match(source, /learned-post-admission-coefficient-prediction-v0/, 'oracle
 assert.match(source, /admissionIndexSha256/, 'oracle binds learned rows to exact native-cell admission order');
 assert.match(source, /coefficientArtifact/, 'oracle consumes learned coefficients from an explicit artifact descriptor');
 assert.match(source, /--coefficient-overlay/, 'oracle exposes an explicit learned-overlay input instead of mutating exact truth');
+assert.match(source, /coefficient_source_label/, 'gallery labels the validated exact or learned coefficient source');
 
 const python = process.env.KAMINOS_MLX_PYTHON || '/private/tmp/kaminos-mlx-residual-venv/bin/python';
 const selfTest = spawnSync(python, [script.pathname, '--self-test'], { encoding: 'utf8' });
