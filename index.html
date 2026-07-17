@@ -1161,6 +1161,11 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
           <option value="off">raymarch</option>
           <option value="analytic">analytic splats</option>
           <option value="learned">learned attributes</option>
+          <option value="analytic_conserved">analytic conserved</option>
+          <option value="learned_conserved">learned conserved</option>
+          <option value="world_covariance">world covariance</option>
+          <option value="kernel_moment_covariance">kernel moment covariance</option>
+          <option value="kernel_moment_full_flame_union">kernel moment full flame union</option>
         </select>
         <span class="slider-val" id="volume-boundary-splat-mode-val">raymarch</span>
       </div>
@@ -11792,7 +11797,16 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
 const REACTION_FRONT_LIVE_VIEW_VALUES = new Set(['off', 'shell', 'thermal', 'reaction', 'front', 'edge', 'core', 'curl', 'divergence', 'boundary', 'boundary_fire']);
 const BOUNDARY_SIDECAR_SOURCE_VALUES = new Set(['live', 'baked', 'mix', 'override']);
 const BOUNDARY_SIDECAR_VIEW_VALUES = new Set(['off', 'support', 'coverage', 'ridge', 'proximity', 'footprint']);
-const BOUNDARY_SPLAT_MODE_VALUES = new Set(['off', 'analytic', 'learned']);
+const BOUNDARY_SPLAT_MODE_VALUES = new Set([
+  'off',
+  'analytic',
+  'learned',
+  'analytic_conserved',
+  'learned_conserved',
+  'world_covariance',
+  'kernel_moment_covariance',
+  'kernel_moment_full_flame_union',
+]);
 
 function normalizeReactionFrontLiveView(value) {
   const mode = String(value || 'off').toLowerCase().replace(/-/g, '_');
@@ -12229,9 +12243,19 @@ function syncReactionFrontExtractorLabels(controlsSnapshot) {
   const boundarySplatModeLabel = document.getElementById('volume-boundary-splat-mode-val');
   if (boundarySplatModeLabel) boundarySplatModeLabel.textContent = boundarySplatMode === 'learned'
     ? 'learned attributes'
-    : boundarySplatMode === 'analytic'
-      ? 'analytic splats'
-      : 'raymarch';
+    : boundarySplatMode === 'kernel_moment_full_flame_union'
+      ? 'full flame union'
+    : boundarySplatMode === 'kernel_moment_covariance'
+      ? 'kernel moment covariance'
+    : boundarySplatMode === 'world_covariance'
+      ? 'world covariance'
+      : boundarySplatMode === 'learned_conserved'
+        ? 'learned conserved'
+        : boundarySplatMode === 'analytic_conserved'
+          ? 'analytic conserved'
+            : boundarySplatMode === 'analytic'
+              ? 'analytic splats'
+              : 'raymarch';
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     const label = document.getElementById(`${field.id}-val`);
     const value = controlsSnapshot[field.key];
