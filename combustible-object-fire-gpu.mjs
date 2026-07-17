@@ -511,6 +511,7 @@ fn apply(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 @compute @workgroup_size(1)
 fn finalizeApply() {
+  if (atomicLoad(&stats.status) != 4u) { return; }
   atomicStore(&stats.lastConsumedTick, sourceHeader[4]);
   let accepted = atomicLoad(&stats.acceptedRecords);
   let auditedAccepted = atomicLoad(&stats.auditedAcceptedRecords);

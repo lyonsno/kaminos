@@ -1,0 +1,804 @@
+{
+  "schema": "kaminos.gpu-combustible-object-ignition-witness-report.v0",
+  "requestedUrl": "http://127.0.0.1:8097/gpu-combustible-object-ignition.html",
+  "effectiveUrl": "http://127.0.0.1:8097/gpu-combustible-object-ignition.html",
+  "requestedRoute": "kaminos.gpu-combustible-object-ignition.v0",
+  "effectiveRoute": "kaminos.gpu-combustible-object-ignition.v0",
+  "authority": "same-device-pyro-material-emission-mechanics-v0",
+  "phase": "completed",
+  "browserVersion": {
+    "Browser": "Chrome/150.0.7871.128",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/150.0.0.0 Safari/537.36",
+    "V8-Version": "15.0.1240245",
+    "WebKit-Version": "537.36 (@81891e5ca708047763816c778216799ef14c66cb)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9514/devtools/browser/6436dbce-3243-46d7-a467-fc50af0ac0a6"
+  },
+  "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "debugPort": 9514,
+  "requestedViewport": {
+    "width": 1468,
+    "height": 960
+  },
+  "ignitionFrames": 145,
+  "finalFrames": 135,
+  "userDataDir": "/tmp/kaminos-gpu-object-ignition-9514-35453",
+  "screenshots": {
+    "initial": {
+      "path": "/private/tmp/kaminos-sinter-gpu-object-ignition-0717/artifacts/gpu-combustible-object-ignition/run-014-finalizer-desktop/final.initial.png",
+      "bytes": 122604
+    },
+    "ignition": {
+      "path": "/private/tmp/kaminos-sinter-gpu-object-ignition-0717/artifacts/gpu-combustible-object-ignition/run-014-finalizer-desktop/final.ignition.png",
+      "bytes": 172691
+    },
+    "final": {
+      "path": "/private/tmp/kaminos-sinter-gpu-object-ignition-0717/artifacts/gpu-combustible-object-ignition/run-014-finalizer-desktop/final.png",
+      "bytes": 164347
+    }
+  },
+  "stderrTail": "\nDevTools listening on ws://127.0.0.1:9514/devtools/browser/6436dbce-3243-46d7-a467-fc50af0ac0a6\nTrying to load the allocator multiple times. This is *not* supported.\n[35464:7238705:0717/195238.658972:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[35464:7238705:0717/195238.664521:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[35464:7238705:0717/195238.690537:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n",
+  "browserEvents": [],
+  "initialState": {
+    "schema": "kaminos.gpu-combustible-object-ignition-browser.v0",
+    "requestedRoute": "kaminos.gpu-combustible-object-ignition.v0",
+    "effectiveRoute": "kaminos.gpu-combustible-object-ignition.v0",
+    "authority": "same-device-pyro-material-emission-mechanics-v0",
+    "loopSchema": "kaminos.gpu-combustible-object-loop.v0",
+    "status": "running",
+    "failurePhase": null,
+    "error": null,
+    "fallback": null,
+    "frameCount": 17,
+    "simStepCount": 17,
+    "backend": "WebGPU:apple",
+    "volumeRoute": "native-3d-compute-fluid-raymarch-v0",
+    "gpuLoop": {
+      "schema": "kaminos.gpu-combustible-object-loop.v0",
+      "authority": "same-device-pyro-material-emission-mechanics-v0",
+      "status": "active",
+      "dispatchCount": 12,
+      "presentationCount": 12,
+      "hostCausalFeedbackCount": 0,
+      "runtimeReadbackCount": 0,
+      "lastTerminalReceipt": null,
+      "sourceFrameHash": 1196447055
+    },
+    "terminalReceipt": null
+  },
+  "ignitionState": {
+    "schema": "kaminos.gpu-combustible-object-ignition-browser.v0",
+    "requestedRoute": "kaminos.gpu-combustible-object-ignition.v0",
+    "effectiveRoute": "kaminos.gpu-combustible-object-ignition.v0",
+    "authority": "same-device-pyro-material-emission-mechanics-v0",
+    "loopSchema": "kaminos.gpu-combustible-object-loop.v0",
+    "status": "running",
+    "failurePhase": null,
+    "error": null,
+    "fallback": null,
+    "frameCount": 176,
+    "simStepCount": 176,
+    "backend": "WebGPU:apple",
+    "volumeRoute": "native-3d-compute-fluid-raymarch-v0",
+    "gpuLoop": {
+      "schema": "kaminos.gpu-combustible-object-loop.v0",
+      "authority": "same-device-pyro-material-emission-mechanics-v0",
+      "status": "active",
+      "dispatchCount": 171,
+      "presentationCount": 171,
+      "hostCausalFeedbackCount": 0,
+      "runtimeReadbackCount": 0,
+      "lastTerminalReceipt": null,
+      "sourceFrameHash": 1196447055
+    },
+    "terminalReceipt": null
+  },
+  "finalState": {
+    "schema": "kaminos.gpu-combustible-object-ignition-browser.v0",
+    "requestedRoute": "kaminos.gpu-combustible-object-ignition.v0",
+    "effectiveRoute": "kaminos.gpu-combustible-object-ignition.v0",
+    "authority": "same-device-pyro-material-emission-mechanics-v0",
+    "loopSchema": "kaminos.gpu-combustible-object-loop.v0",
+    "status": "terminal",
+    "failurePhase": null,
+    "error": null,
+    "fallback": null,
+    "frameCount": 324,
+    "simStepCount": 324,
+    "backend": "WebGPU:apple",
+    "volumeRoute": "native-3d-compute-fluid-raymarch-v0",
+    "gpuLoop": {
+      "schema": "kaminos.gpu-combustible-object-loop.v0",
+      "authority": "same-device-pyro-material-emission-mechanics-v0",
+      "status": "frozen",
+      "dispatchCount": 319,
+      "presentationCount": 319,
+      "hostCausalFeedbackCount": 0,
+      "runtimeReadbackCount": 1,
+      "lastTerminalReceipt": {
+        "schema": "kaminos.gpu-combustible-object-terminal-receipt.v0",
+        "authority": "same-device-pyro-material-emission-mechanics-v0",
+        "status": "frozen-terminal-readback",
+        "routeIdentity": "kaminos.gpu-combustible-object-loop.v0",
+        "hostCausalFeedbackCount": 0,
+        "runtimeReadbackCount": 1,
+        "terminalMapAsyncCount": 1,
+        "terminalMappedBufferCount": 1,
+        "terminalCopiedSourceBufferCount": 4,
+        "dispatchCount": 319,
+        "presentationCount": 319,
+        "gridSize": 32,
+        "materials": [
+          {
+            "objectId": 1,
+            "generation": 1,
+            "phase": 1,
+            "flags": 2,
+            "probe": [
+              0.3700000047683716,
+              0.41999998688697815,
+              0.5,
+              0.054999999701976776
+            ],
+            "temperature": 1,
+            "remainingFuel": 0,
+            "charMass": 1,
+            "supportCapacity": 1,
+            "exposure": 0.22267961502075195,
+            "emittedHeat": 4.659302711486816,
+            "emittedFuel": 2.3380026817321777,
+            "emittedSoot": 0.6680006384849548,
+            "angleRad": 0,
+            "angularVelocity": 0,
+            "verticalDrop": 0,
+            "verticalVelocity": 0,
+            "ignitionStep": 0,
+            "supportLossStep": 0,
+            "impactStep": 0,
+            "firstExposureStep": 0
+          },
+          {
+            "objectId": 2,
+            "generation": 1,
+            "phase": 3,
+            "flags": 0,
+            "probe": [
+              0.4099999964237213,
+              0.4399999976158142,
+              0.5,
+              0.06499999761581421
+            ],
+            "temperature": 0.3404254615306854,
+            "remainingFuel": 0,
+            "charMass": 1,
+            "supportCapacity": 0,
+            "exposure": 0.08134401589632034,
+            "emittedHeat": 2.676621198654175,
+            "emittedFuel": 2.3380026817321777,
+            "emittedSoot": 0.6680006384849548,
+            "angleRad": 0.5440000295639038,
+            "angularVelocity": 0.06400000303983688,
+            "verticalDrop": 0.3399999439716339,
+            "verticalVelocity": 0.03999999910593033,
+            "ignitionStep": 120,
+            "supportLossStep": 193,
+            "impactStep": 208,
+            "firstExposureStep": 12
+          },
+          {
+            "objectId": 3,
+            "generation": 1,
+            "phase": 0,
+            "flags": 1,
+            "probe": [
+              0.8199999928474426,
+              0.7599999904632568,
+              0.5,
+              0.05000000074505806
+            ],
+            "temperature": 0.08007160574197769,
+            "remainingFuel": 1,
+            "charMass": 0,
+            "supportCapacity": 1,
+            "exposure": 0,
+            "emittedHeat": 0,
+            "emittedFuel": 0,
+            "emittedSoot": 0,
+            "angleRad": 0,
+            "angularVelocity": 0,
+            "verticalDrop": 0,
+            "verticalVelocity": 0,
+            "ignitionStep": 0,
+            "supportLossStep": 0,
+            "impactStep": 0,
+            "firstExposureStep": 0
+          }
+        ],
+        "eventLog": {
+          "count": 6,
+          "overflow": 0,
+          "verdictBits": 511,
+          "sourceStep": 319,
+          "events": [
+            {
+              "kind": 1,
+              "objectId": 1,
+              "sourceStep": 1,
+              "sequence": 0,
+              "value": 1,
+              "phase": 1,
+              "sourceGeneration": 1
+            },
+            {
+              "kind": 2,
+              "objectId": 2,
+              "sourceStep": 12,
+              "sequence": 1,
+              "value": 0.01634190045297146,
+              "phase": 0,
+              "sourceGeneration": 1
+            },
+            {
+              "kind": 3,
+              "objectId": 2,
+              "sourceStep": 120,
+              "sequence": 2,
+              "value": 0.3404254615306854,
+              "phase": 1,
+              "sourceGeneration": 1
+            },
+            {
+              "kind": 4,
+              "objectId": 2,
+              "sourceStep": 120,
+              "sequence": 3,
+              "value": 0.3404254615306854,
+              "phase": 1,
+              "sourceGeneration": 1
+            },
+            {
+              "kind": 5,
+              "objectId": 2,
+              "sourceStep": 193,
+              "sequence": 4,
+              "value": 0.5560013055801392,
+              "phase": 2,
+              "sourceGeneration": 1
+            },
+            {
+              "kind": 6,
+              "objectId": 2,
+              "sourceStep": 208,
+              "sequence": 5,
+              "value": 0.3399999439716339,
+              "phase": 3,
+              "sourceGeneration": 1
+            }
+          ]
+        },
+        "sourceHeader": {
+          "magic": 1262702402,
+          "version": 0,
+          "allocationGeneration": 1,
+          "topologyEpoch": 0,
+          "writeTick": 319,
+          "complete": 1,
+          "ready": 1,
+          "sourceFrameHash": 1196447055,
+          "sourceCount": 0,
+          "packedCount": 0,
+          "rejectedCount": 0,
+          "overflowCount": 0
+        },
+        "receiverAudit": {
+          "routeIdentity": "same-device-combustible-object-source-to-native-pyro-v0",
+          "status": "fresh-no-contact",
+          "lastConsumedTick": 319,
+          "auditObjectId": 2,
+          "acceptedRecords": 167,
+          "rejectedRecords": 0,
+          "targetOnlyDispatches": 119,
+          "injectedHeat": 183.10330200195312,
+          "injectedFuel": 213.25259399414062,
+          "injectedSoot": 62.88142395019531,
+          "injectedSmoke": 84.5528564453125,
+          "firstAcceptedStep": 120,
+          "lastAcceptedStep": 286,
+          "acceptedCell": [
+            13,
+            14,
+            16
+          ],
+          "sourceGeneration": 1,
+          "topologyEpoch": 0,
+          "sourceFrameHash": 1196447055
+        }
+      },
+      "sourceFrameHash": 1196447055
+    },
+    "terminalReceipt": {
+      "schema": "kaminos.gpu-combustible-object-terminal-receipt.v0",
+      "authority": "same-device-pyro-material-emission-mechanics-v0",
+      "status": "frozen-terminal-readback",
+      "routeIdentity": "kaminos.gpu-combustible-object-loop.v0",
+      "hostCausalFeedbackCount": 0,
+      "runtimeReadbackCount": 1,
+      "terminalMapAsyncCount": 1,
+      "terminalMappedBufferCount": 1,
+      "terminalCopiedSourceBufferCount": 4,
+      "dispatchCount": 319,
+      "presentationCount": 319,
+      "gridSize": 32,
+      "materials": [
+        {
+          "objectId": 1,
+          "generation": 1,
+          "phase": 1,
+          "flags": 2,
+          "probe": [
+            0.3700000047683716,
+            0.41999998688697815,
+            0.5,
+            0.054999999701976776
+          ],
+          "temperature": 1,
+          "remainingFuel": 0,
+          "charMass": 1,
+          "supportCapacity": 1,
+          "exposure": 0.22267961502075195,
+          "emittedHeat": 4.659302711486816,
+          "emittedFuel": 2.3380026817321777,
+          "emittedSoot": 0.6680006384849548,
+          "angleRad": 0,
+          "angularVelocity": 0,
+          "verticalDrop": 0,
+          "verticalVelocity": 0,
+          "ignitionStep": 0,
+          "supportLossStep": 0,
+          "impactStep": 0,
+          "firstExposureStep": 0
+        },
+        {
+          "objectId": 2,
+          "generation": 1,
+          "phase": 3,
+          "flags": 0,
+          "probe": [
+            0.4099999964237213,
+            0.4399999976158142,
+            0.5,
+            0.06499999761581421
+          ],
+          "temperature": 0.3404254615306854,
+          "remainingFuel": 0,
+          "charMass": 1,
+          "supportCapacity": 0,
+          "exposure": 0.08134401589632034,
+          "emittedHeat": 2.676621198654175,
+          "emittedFuel": 2.3380026817321777,
+          "emittedSoot": 0.6680006384849548,
+          "angleRad": 0.5440000295639038,
+          "angularVelocity": 0.06400000303983688,
+          "verticalDrop": 0.3399999439716339,
+          "verticalVelocity": 0.03999999910593033,
+          "ignitionStep": 120,
+          "supportLossStep": 193,
+          "impactStep": 208,
+          "firstExposureStep": 12
+        },
+        {
+          "objectId": 3,
+          "generation": 1,
+          "phase": 0,
+          "flags": 1,
+          "probe": [
+            0.8199999928474426,
+            0.7599999904632568,
+            0.5,
+            0.05000000074505806
+          ],
+          "temperature": 0.08007160574197769,
+          "remainingFuel": 1,
+          "charMass": 0,
+          "supportCapacity": 1,
+          "exposure": 0,
+          "emittedHeat": 0,
+          "emittedFuel": 0,
+          "emittedSoot": 0,
+          "angleRad": 0,
+          "angularVelocity": 0,
+          "verticalDrop": 0,
+          "verticalVelocity": 0,
+          "ignitionStep": 0,
+          "supportLossStep": 0,
+          "impactStep": 0,
+          "firstExposureStep": 0
+        }
+      ],
+      "eventLog": {
+        "count": 6,
+        "overflow": 0,
+        "verdictBits": 511,
+        "sourceStep": 319,
+        "events": [
+          {
+            "kind": 1,
+            "objectId": 1,
+            "sourceStep": 1,
+            "sequence": 0,
+            "value": 1,
+            "phase": 1,
+            "sourceGeneration": 1
+          },
+          {
+            "kind": 2,
+            "objectId": 2,
+            "sourceStep": 12,
+            "sequence": 1,
+            "value": 0.01634190045297146,
+            "phase": 0,
+            "sourceGeneration": 1
+          },
+          {
+            "kind": 3,
+            "objectId": 2,
+            "sourceStep": 120,
+            "sequence": 2,
+            "value": 0.3404254615306854,
+            "phase": 1,
+            "sourceGeneration": 1
+          },
+          {
+            "kind": 4,
+            "objectId": 2,
+            "sourceStep": 120,
+            "sequence": 3,
+            "value": 0.3404254615306854,
+            "phase": 1,
+            "sourceGeneration": 1
+          },
+          {
+            "kind": 5,
+            "objectId": 2,
+            "sourceStep": 193,
+            "sequence": 4,
+            "value": 0.5560013055801392,
+            "phase": 2,
+            "sourceGeneration": 1
+          },
+          {
+            "kind": 6,
+            "objectId": 2,
+            "sourceStep": 208,
+            "sequence": 5,
+            "value": 0.3399999439716339,
+            "phase": 3,
+            "sourceGeneration": 1
+          }
+        ]
+      },
+      "sourceHeader": {
+        "magic": 1262702402,
+        "version": 0,
+        "allocationGeneration": 1,
+        "topologyEpoch": 0,
+        "writeTick": 319,
+        "complete": 1,
+        "ready": 1,
+        "sourceFrameHash": 1196447055,
+        "sourceCount": 0,
+        "packedCount": 0,
+        "rejectedCount": 0,
+        "overflowCount": 0
+      },
+      "receiverAudit": {
+        "routeIdentity": "same-device-combustible-object-source-to-native-pyro-v0",
+        "status": "fresh-no-contact",
+        "lastConsumedTick": 319,
+        "auditObjectId": 2,
+        "acceptedRecords": 167,
+        "rejectedRecords": 0,
+        "targetOnlyDispatches": 119,
+        "injectedHeat": 183.10330200195312,
+        "injectedFuel": 213.25259399414062,
+        "injectedSoot": 62.88142395019531,
+        "injectedSmoke": 84.5528564453125,
+        "firstAcceptedStep": 120,
+        "lastAcceptedStep": 286,
+        "acceptedCell": [
+          13,
+          14,
+          16
+        ],
+        "sourceGeneration": 1,
+        "topologyEpoch": 0,
+        "sourceFrameHash": 1196447055
+      }
+    }
+  },
+  "terminalReceipt": {
+    "schema": "kaminos.gpu-combustible-object-terminal-receipt.v0",
+    "authority": "same-device-pyro-material-emission-mechanics-v0",
+    "status": "frozen-terminal-readback",
+    "routeIdentity": "kaminos.gpu-combustible-object-loop.v0",
+    "hostCausalFeedbackCount": 0,
+    "runtimeReadbackCount": 1,
+    "terminalMapAsyncCount": 1,
+    "terminalMappedBufferCount": 1,
+    "terminalCopiedSourceBufferCount": 4,
+    "dispatchCount": 319,
+    "presentationCount": 319,
+    "gridSize": 32,
+    "materials": [
+      {
+        "objectId": 1,
+        "generation": 1,
+        "phase": 1,
+        "flags": 2,
+        "probe": [
+          0.3700000047683716,
+          0.41999998688697815,
+          0.5,
+          0.054999999701976776
+        ],
+        "temperature": 1,
+        "remainingFuel": 0,
+        "charMass": 1,
+        "supportCapacity": 1,
+        "exposure": 0.22267961502075195,
+        "emittedHeat": 4.659302711486816,
+        "emittedFuel": 2.3380026817321777,
+        "emittedSoot": 0.6680006384849548,
+        "angleRad": 0,
+        "angularVelocity": 0,
+        "verticalDrop": 0,
+        "verticalVelocity": 0,
+        "ignitionStep": 0,
+        "supportLossStep": 0,
+        "impactStep": 0,
+        "firstExposureStep": 0
+      },
+      {
+        "objectId": 2,
+        "generation": 1,
+        "phase": 3,
+        "flags": 0,
+        "probe": [
+          0.4099999964237213,
+          0.4399999976158142,
+          0.5,
+          0.06499999761581421
+        ],
+        "temperature": 0.3404254615306854,
+        "remainingFuel": 0,
+        "charMass": 1,
+        "supportCapacity": 0,
+        "exposure": 0.08134401589632034,
+        "emittedHeat": 2.676621198654175,
+        "emittedFuel": 2.3380026817321777,
+        "emittedSoot": 0.6680006384849548,
+        "angleRad": 0.5440000295639038,
+        "angularVelocity": 0.06400000303983688,
+        "verticalDrop": 0.3399999439716339,
+        "verticalVelocity": 0.03999999910593033,
+        "ignitionStep": 120,
+        "supportLossStep": 193,
+        "impactStep": 208,
+        "firstExposureStep": 12
+      },
+      {
+        "objectId": 3,
+        "generation": 1,
+        "phase": 0,
+        "flags": 1,
+        "probe": [
+          0.8199999928474426,
+          0.7599999904632568,
+          0.5,
+          0.05000000074505806
+        ],
+        "temperature": 0.08007160574197769,
+        "remainingFuel": 1,
+        "charMass": 0,
+        "supportCapacity": 1,
+        "exposure": 0,
+        "emittedHeat": 0,
+        "emittedFuel": 0,
+        "emittedSoot": 0,
+        "angleRad": 0,
+        "angularVelocity": 0,
+        "verticalDrop": 0,
+        "verticalVelocity": 0,
+        "ignitionStep": 0,
+        "supportLossStep": 0,
+        "impactStep": 0,
+        "firstExposureStep": 0
+      }
+    ],
+    "eventLog": {
+      "count": 6,
+      "overflow": 0,
+      "verdictBits": 511,
+      "sourceStep": 319,
+      "events": [
+        {
+          "kind": 1,
+          "objectId": 1,
+          "sourceStep": 1,
+          "sequence": 0,
+          "value": 1,
+          "phase": 1,
+          "sourceGeneration": 1
+        },
+        {
+          "kind": 2,
+          "objectId": 2,
+          "sourceStep": 12,
+          "sequence": 1,
+          "value": 0.01634190045297146,
+          "phase": 0,
+          "sourceGeneration": 1
+        },
+        {
+          "kind": 3,
+          "objectId": 2,
+          "sourceStep": 120,
+          "sequence": 2,
+          "value": 0.3404254615306854,
+          "phase": 1,
+          "sourceGeneration": 1
+        },
+        {
+          "kind": 4,
+          "objectId": 2,
+          "sourceStep": 120,
+          "sequence": 3,
+          "value": 0.3404254615306854,
+          "phase": 1,
+          "sourceGeneration": 1
+        },
+        {
+          "kind": 5,
+          "objectId": 2,
+          "sourceStep": 193,
+          "sequence": 4,
+          "value": 0.5560013055801392,
+          "phase": 2,
+          "sourceGeneration": 1
+        },
+        {
+          "kind": 6,
+          "objectId": 2,
+          "sourceStep": 208,
+          "sequence": 5,
+          "value": 0.3399999439716339,
+          "phase": 3,
+          "sourceGeneration": 1
+        }
+      ]
+    },
+    "sourceHeader": {
+      "magic": 1262702402,
+      "version": 0,
+      "allocationGeneration": 1,
+      "topologyEpoch": 0,
+      "writeTick": 319,
+      "complete": 1,
+      "ready": 1,
+      "sourceFrameHash": 1196447055,
+      "sourceCount": 0,
+      "packedCount": 0,
+      "rejectedCount": 0,
+      "overflowCount": 0
+    },
+    "receiverAudit": {
+      "routeIdentity": "same-device-combustible-object-source-to-native-pyro-v0",
+      "status": "fresh-no-contact",
+      "lastConsumedTick": 319,
+      "auditObjectId": 2,
+      "acceptedRecords": 167,
+      "rejectedRecords": 0,
+      "targetOnlyDispatches": 119,
+      "injectedHeat": 183.10330200195312,
+      "injectedFuel": 213.25259399414062,
+      "injectedSoot": 62.88142395019531,
+      "injectedSmoke": 84.5528564453125,
+      "firstAcceptedStep": 120,
+      "lastAcceptedStep": 286,
+      "acceptedCell": [
+        13,
+        14,
+        16
+      ],
+      "sourceGeneration": 1,
+      "topologyEpoch": 0,
+      "sourceFrameHash": 1196447055
+    }
+  },
+  "pixelChecks": {
+    "method": "decoded-gpu-object-phase-regions-v0",
+    "status": "ok",
+    "regions": {
+      "scene": [
+        0.12,
+        0.1,
+        0.9,
+        0.92
+      ],
+      "targetOrigin": [
+        0.3,
+        0.55,
+        0.64,
+        0.63
+      ],
+      "targetFall": [
+        0.28,
+        0.61,
+        0.68,
+        0.84
+      ],
+      "controlCore": [
+        0.62,
+        0.325,
+        0.84,
+        0.365
+      ]
+    },
+    "frames": {
+      "initial": {
+        "width": 2936,
+        "height": 1634,
+        "sha256": "3ce467dadb17e524d8d34963dabb436884cba4734aa53aed5413d9b4b7de42cc",
+        "quantizedColorCount": 104,
+        "visibleSceneRatio": 0.0646269762918218
+      },
+      "ignition": {
+        "width": 2936,
+        "height": 1634,
+        "sha256": "f976ef4c430aefc5ffdd734b623da889bcd5f740e17185fb4c6af4da739acbe2",
+        "quantizedColorCount": 93,
+        "visibleSceneRatio": 0.0926408203029004
+      },
+      "final": {
+        "width": 2936,
+        "height": 1634,
+        "sha256": "8517e63445e4e2e6cc54096b084531f032ead4debc62cee55a863eaee3f6e798",
+        "quantizedColorCount": 71,
+        "visibleSceneRatio": 0.0702274666195348
+      }
+    },
+    "deltas": {
+      "initialToIgnitionTarget": {
+        "pixels": 132000,
+        "changedPixels": 57157,
+        "changedRatio": 0.43300757575757576,
+        "meanRgbDifference": 35.19565151515152
+      },
+      "ignitionToFinalOrigin": {
+        "pixels": 132000,
+        "changedPixels": 76139,
+        "changedRatio": 0.5768106060606061,
+        "meanRgbDifference": 105.08216666666667
+      },
+      "ignitionToFinalFall": {
+        "pixels": 442975,
+        "changedPixels": 75326,
+        "changedRatio": 0.17004571364072466,
+        "meanRgbDifference": 11.127517354252497
+      },
+      "initialToIgnitionControl": {
+        "pixels": 42702,
+        "changedPixels": 0,
+        "changedRatio": 0,
+        "meanRgbDifference": 0.22057514870497869
+      },
+      "ignitionToFinalControl": {
+        "pixels": 42702,
+        "changedPixels": 0,
+        "changedRatio": 0,
+        "meanRgbDifference": 0.5140508641281439
+      }
+    }
+  },
+  "status": "ok"
+}

@@ -65,6 +65,14 @@ assert.doesNotMatch(
 );
 assert.match(receiverSource, /terminalStatsDescriptor\s*\(/, 'the receiver exposes its GPU stats buffer for combined terminal evidence');
 assert.match(runtimeSource, /receiverAudit/, 'the terminal receipt carries target-specific receiver acceptance evidence');
+const receiverFinalizeStart = receiverSource.indexOf('fn finalizeApply()');
+const receiverFinalizeGuard = receiverSource.indexOf('if (atomicLoad(&stats.status) != 4u) { return; }', receiverFinalizeStart);
+const receiverFinalizeConsumedTick = receiverSource.indexOf('atomicStore(&stats.lastConsumedTick', receiverFinalizeStart);
+assert.ok(receiverFinalizeStart >= 0, 'the receiver has a dedicated single-workgroup finalizer');
+assert.ok(
+  receiverFinalizeGuard > receiverFinalizeStart && receiverFinalizeGuard < receiverFinalizeConsumedTick,
+  'the WGSL finalizer preserves stale and invalid status before advancing the consumed tick',
+);
 
 const pageUrl = new URL('../gpu-combustible-object-ignition.html', import.meta.url);
 const witnessUrl = new URL('../gpu-combustible-object-ignition-witness.mjs', import.meta.url);
