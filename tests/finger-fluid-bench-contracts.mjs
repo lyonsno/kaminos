@@ -461,6 +461,10 @@ assert.throws(() => webgpuMod.evaluateFingerFluidTruthTrajectory('deep_pool_rest
   truthCheckpoint(7000, { totalKineticEnergy: 20 }),
 ]), /density evidence/);
 assert.throws(() => webgpuMod.evaluateFingerFluidTruthTrajectory('deep_pool_rest', [
+  truthCheckpoint(500),
+  truthCheckpoint(7000, { totalKineticEnergy: -20 }),
+]), /kinetic energy evidence/);
+assert.throws(() => webgpuMod.evaluateFingerFluidTruthTrajectory('deep_pool_rest', [
   truthCheckpoint(500, { occupiedCellCount: 1, occupiedVolumeProxy: 0.009 }),
   truthCheckpoint(7000, { totalKineticEnergy: 20, occupiedCellCount: 1, occupiedVolumeProxy: 0.009 }),
 ]), /occupied support/);
@@ -485,6 +489,11 @@ const damBreakTrajectory = webgpuMod.evaluateFingerFluidTruthTrajectory('dam_bre
 assert.equal(damBreakTrajectory.accepted, true);
 assert.equal(damBreakTrajectory.downstreamDisplacement, 2.1);
 assert.equal(damBreakTrajectory.verticalCollapse, 1.25);
+assert.throws(() => webgpuMod.evaluateFingerFluidTruthTrajectory('dam_break', [
+  truthCheckpoint(250, { centerOfMass: [0, 0.35, -1.7], totalKineticEnergy: 100, occupiedVolumeProxy: 5 }, 'dam_break'),
+  truthCheckpoint(1500, { centerOfMass: [0, -0.4, -0.5], totalKineticEnergy: 70, occupiedVolumeProxy: 5.8 }, 'dam_break'),
+  truthCheckpoint(9000, { centerOfMass: [0, -0.9, 0.4], totalKineticEnergy: -4, occupiedVolumeProxy: 5.2 }, 'dam_break'),
+]), /kinetic energy evidence/);
 assert.throws(() => webgpuMod.evaluateFingerFluidTruthTrajectory('dam_break', [
   truthCheckpoint(250, { centerOfMass: [0, 0.35, -1.7] }, 'dam_break'),
   truthCheckpoint(1500, { centerOfMass: [0, -0.4, -1.6], totalKineticEnergy: 70, occupiedVolumeProxy: 5.8 }, 'dam_break'),
