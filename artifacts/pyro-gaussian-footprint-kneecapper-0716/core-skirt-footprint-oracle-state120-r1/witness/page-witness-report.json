@@ -1,0 +1,70 @@
+{
+  "schema": "kaminos.volume.core-skirt-footprint-page-witness.v0",
+  "status": "complete",
+  "failurePhase": null,
+  "requestedRoute": "http://127.0.0.1:18223/artifacts/pyro-gaussian-footprint-kneecapper-0716/core-skirt-footprint-oracle-state120-r1/index.html",
+  "effectiveRoute": "http://127.0.0.1:18223/artifacts/pyro-gaussian-footprint-kneecapper-0716/core-skirt-footprint-oracle-state120-r1/index.html",
+  "browser": {
+    "executable": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "backend": "chrome-headless-cdp",
+    "fallback": null
+  },
+  "captures": [
+    {
+      "viewport": [
+        1440,
+        1050
+      ],
+      "path": "desktop-camera18-residual.png",
+      "state": {
+        "evidenceState": "verified",
+        "evidenceText": "Receipts verified",
+        "failure": "Evidence unavailable:",
+        "imageCount": 3,
+        "imagesComplete": true,
+        "horizontalOverflow": false,
+        "scrollWidth": 1425,
+        "clientWidth": 1425,
+        "scrollHeight": 1325,
+        "clientHeight": 1050
+      },
+      "selectedState": {
+        "camera": "18",
+        "left": "m075-global",
+        "right": "m075-ridge100",
+        "wipe": "55",
+        "mode": "residual",
+        "leftImage": "images/camera-18-m075-global-residual.png",
+        "rightImage": "images/camera-18-m075-ridge100-residual.png"
+      }
+    },
+    {
+      "viewport": [
+        390,
+        844
+      ],
+      "path": "mobile-camera18-residual.png",
+      "state": {
+        "evidenceState": "verified",
+        "evidenceText": "Receipts verified",
+        "failure": "Evidence unavailable:",
+        "imageCount": 3,
+        "imagesComplete": true,
+        "horizontalOverflow": false,
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "scrollHeight": 1569,
+        "clientHeight": 844
+      },
+      "selectedState": {
+        "camera": "18",
+        "left": "m075-global",
+        "right": "m075-ridge100",
+        "wipe": "55",
+        "mode": "residual",
+        "leftImage": "images/camera-18-m075-global-residual.png",
+        "rightImage": "images/camera-18-m075-ridge100-residual.png"
+      }
+    }
+  ]
+}

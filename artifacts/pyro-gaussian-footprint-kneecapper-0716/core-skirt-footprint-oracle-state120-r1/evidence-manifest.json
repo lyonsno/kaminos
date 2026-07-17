@@ -1,0 +1,132 @@
+{
+  "schema": "kaminos.volume.core-skirt-footprint-evidence.v0",
+  "status": "complete",
+  "failurePhase": null,
+  "experimentId": "core-skirt-footprint-oracle-state120-r1",
+  "sourceCommit": "9ac62cbe",
+  "route": {
+    "requested": "http://127.0.0.1:18223/artifacts/pyro-gaussian-footprint-kneecapper-0716/core-skirt-footprint-oracle-state120-r1/index.html",
+    "effective": "http://127.0.0.1:18223/artifacts/pyro-gaussian-footprint-kneecapper-0716/core-skirt-footprint-oracle-state120-r1/index.html",
+    "mount": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716",
+    "registrationState": "served-from-owning-worktree-root",
+    "httpProbe": 200
+  },
+  "frozen": {
+    "stateId": "coefficient-state-120",
+    "stateStep": 120,
+    "grid": 160,
+    "depthBins": 96,
+    "rowCount": 1899742,
+    "sampleCap": null,
+    "droppedRowCount": 0,
+    "pathScale": 4.557231148404257,
+    "candidateAdmissionAuthority": "external-native-cell-index-list-v0",
+    "coefficientBoundary": "per-sample-pre-tone-map-emission-extinction-v0",
+    "sharedTransmittanceIdentity": "ridge-plus-non-ridge-extinction-one-running-transmittance-v0",
+    "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+    "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0"
+  },
+  "cameraCount": 21,
+  "heldOutCameraCount": 20,
+  "calibrationCamera": 10,
+  "execution": {
+    "jobType": "kaminos_coefficient_core_skirt_oracle_state120",
+    "runner": "/private/tmp/kaminos-mlx-residual-venv/bin/python",
+    "backend": "numpy-cpu",
+    "environment": {
+      "PYTHONPATH": "."
+    },
+    "fallback": null,
+    "timeout": null
+  },
+  "arms": [
+    {
+      "id": "m000-global",
+      "label": "Bilinear endpoint",
+      "jobId": "c2d96f6319ac",
+      "status": "complete",
+      "cameraCount": 21,
+      "controls": { "skirtMix": 0.0, "skirtMinorScale": 1.0, "skirtRidgeRejection": 0.0 },
+      "heldOut": { "mae": 0.03441699910908937, "gradientMae": 0.016203109174966812, "targetHighGradientUnderfit": 0.021490972861647605, "targetTopTailLumaUnderfit": 0.0799010225571692 },
+      "report": "reports/m000-global.json",
+      "receipt": "receipts/m000-global.json"
+    },
+    {
+      "id": "m025-global",
+      "label": "Global skirt 0.25",
+      "jobId": "9b4150c1cff4",
+      "status": "complete",
+      "cameraCount": 21,
+      "controls": { "skirtMix": 0.25, "skirtMinorScale": 1.0, "skirtRidgeRejection": 0.0 },
+      "heldOut": { "mae": 0.03420119052752853, "gradientMae": 0.01528617343865335, "targetHighGradientUnderfit": 0.023065952677279712, "targetTopTailLumaUnderfit": 0.08076897598803043 },
+      "report": "reports/m025-global.json",
+      "receipt": "receipts/m025-global.json"
+    },
+    {
+      "id": "m050-global",
+      "label": "Global skirt 0.50",
+      "jobId": "fae4de34a392",
+      "status": "complete",
+      "cameraCount": 21,
+      "controls": { "skirtMix": 0.5, "skirtMinorScale": 1.0, "skirtRidgeRejection": 0.0 },
+      "heldOut": { "mae": 0.03407747689634562, "gradientMae": 0.01449274392798543, "targetHighGradientUnderfit": 0.024715744238346816, "targetTopTailLumaUnderfit": 0.08167341928929091 },
+      "report": "reports/m050-global.json",
+      "receipt": "receipts/m050-global.json"
+    },
+    {
+      "id": "m075-global",
+      "label": "Global skirt 0.75",
+      "jobId": "731b91dc561f",
+      "status": "complete",
+      "cameraCount": 21,
+      "controls": { "skirtMix": 0.75, "skirtMinorScale": 1.0, "skirtRidgeRejection": 0.0 },
+      "heldOut": { "mae": 0.03401640905067325, "gradientMae": 0.01382496883161366, "targetHighGradientUnderfit": 0.02641620971262455, "targetTopTailLumaUnderfit": 0.08259937828406691 },
+      "report": "reports/m075-global.json",
+      "receipt": "receipts/m075-global.json"
+    },
+    {
+      "id": "m100-global",
+      "label": "Ellipse endpoint",
+      "jobId": "b5e17566cbfe",
+      "status": "complete",
+      "cameraCount": 21,
+      "controls": { "skirtMix": 1.0, "skirtMinorScale": 1.0, "skirtRidgeRejection": 0.0 },
+      "heldOut": { "mae": 0.03400932606309652, "gradientMae": 0.013280659588053823, "targetHighGradientUnderfit": 0.028136667888611556, "targetTopTailLumaUnderfit": 0.08358142487704753 },
+      "report": "reports/m100-global.json",
+      "receipt": "receipts/m100-global.json"
+    },
+    {
+      "id": "m050-ridge100",
+      "label": "Conditioned skirt 0.50",
+      "jobId": "81fa710fd788",
+      "status": "complete",
+      "cameraCount": 21,
+      "controls": { "skirtMix": 0.5, "skirtMinorScale": 1.0, "skirtRidgeRejection": 1.0 },
+      "heldOut": { "mae": 0.0342418790794909, "gradientMae": 0.015681287739425898, "targetHighGradientUnderfit": 0.022811498679220676, "targetTopTailLumaUnderfit": 0.08007255857810378 },
+      "report": "reports/m050-ridge100.json",
+      "receipt": "receipts/m050-ridge100.json"
+    },
+    {
+      "id": "m075-ridge100",
+      "label": "Conditioned skirt 0.75",
+      "jobId": "5b6aa162a6c1",
+      "status": "complete",
+      "cameraCount": 21,
+      "controls": { "skirtMix": 0.75, "skirtMinorScale": 1.0, "skirtRidgeRejection": 1.0 },
+      "heldOut": { "mae": 0.03418057123199105, "gradientMae": 0.015475491201505065, "targetHighGradientUnderfit": 0.023471533507108688, "targetTopTailLumaUnderfit": 0.08016457809135318 },
+      "report": "reports/m075-ridge100.json",
+      "receipt": "receipts/m075-ridge100.json"
+    },
+    {
+      "id": "m075-min075-ridge100",
+      "label": "Narrow conditioned 0.75",
+      "jobId": "8a0906a915c8",
+      "status": "complete",
+      "cameraCount": 21,
+      "controls": { "skirtMix": 0.75, "skirtMinorScale": 0.75, "skirtRidgeRejection": 1.0 },
+      "heldOut": { "mae": 0.034162265434861186, "gradientMae": 0.015457724314182996, "targetHighGradientUnderfit": 0.02327394690364599, "targetTopTailLumaUnderfit": 0.0801020442508161 },
+      "report": "reports/m075-min075-ridge100.json",
+      "receipt": "receipts/m075-min075-ridge100.json"
+    }
+  ]
+}

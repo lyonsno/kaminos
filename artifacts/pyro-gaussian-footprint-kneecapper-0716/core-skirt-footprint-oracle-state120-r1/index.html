@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Core + Skirt Footprint Oracle</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090b0e;
+      --surface: #12161b;
+      --raised: #191f26;
+      --line: #323b46;
+      --text: #f5f7f9;
+      --muted: #9ca8b4;
+      --amber: #ffb14a;
+      --cyan: #65c9e8;
+      --green: #71d49a;
+      --red: #ff7373;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); }
+    body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing: 0; }
+    button, input, select { font: inherit; letter-spacing: 0; }
+    button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      min-height: 68px;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--line);
+      background: #0d1014;
+    }
+    h1 { margin: 0; font-size: 18px; font-weight: 680; }
+    .subtitle { margin-top: 3px; color: var(--muted); font-size: 12px; }
+    .status { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+    .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--amber); }
+    .status[data-state="verified"] { color: var(--green); }
+    .status[data-state="verified"]::before { background: var(--green); }
+    .status[data-state="failed"] { color: var(--red); }
+    .status[data-state="failed"]::before { background: var(--red); }
+
+    .controls {
+      display: grid;
+      grid-template-columns: minmax(190px, .9fr) minmax(180px, .8fr) minmax(180px, .8fr) auto minmax(170px, .7fr);
+      align-items: end;
+      gap: 14px;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+    label, .control-label { display: block; margin-bottom: 7px; color: var(--muted); font-size: 10px; font-weight: 680; text-transform: uppercase; }
+    .range-row { display: grid; grid-template-columns: minmax(90px, 1fr) 42px; align-items: center; gap: 10px; }
+    input[type="range"] { width: 100%; accent-color: var(--amber); }
+    output { color: var(--text); font-variant-numeric: tabular-nums; text-align: right; }
+    select { width: 100%; min-height: 34px; padding: 0 30px 0 9px; border: 1px solid var(--line); border-radius: 4px; background: var(--raised); color: var(--text); }
+    .segments { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+    .segments button { min-height: 34px; padding: 0 11px; border: 0; border-right: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
+    .segments button:last-child { border-right: 0; }
+    .segments button[aria-pressed="true"] { background: var(--raised); color: var(--text); box-shadow: inset 0 -2px var(--amber); }
+
+    .failure { display: none; margin: 16px 20px; padding: 14px; border: 1px solid var(--red); background: #251012; color: var(--red); white-space: pre-wrap; }
+    body.failed .failure { display: block; }
+    body.failed main, body.failed .controls { display: none; }
+    main { padding: 16px 20px 28px; }
+    .visuals { display: grid; grid-template-columns: minmax(0, .72fr) minmax(0, 1.28fr); gap: 12px; }
+    figure { margin: 0; min-width: 0; border: 1px solid var(--line); background: #000; }
+    figcaption { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 38px; padding: 7px 10px; border-bottom: 1px solid var(--line); background: var(--surface); font-size: 12px; font-weight: 640; }
+    .metric { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; font-weight: 480; }
+    .frame { position: relative; width: 100%; aspect-ratio: 314 / 242; overflow: hidden; background: #000; }
+    .frame img { display: block; position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+    .wipe-right { clip-path: inset(0 0 0 var(--wipe)); }
+    .wipe-line { position: absolute; z-index: 3; top: 0; bottom: 0; left: var(--wipe); width: 1px; background: rgba(255,255,255,.86); pointer-events: none; }
+    .wipe-label { position: absolute; z-index: 4; top: 8px; padding: 4px 6px; background: rgba(8,10,13,.88); font-size: 10px; pointer-events: none; }
+    .wipe-label.left { left: 8px; color: var(--cyan); }
+    .wipe-label.right { right: 8px; color: var(--amber); }
+
+    .summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 14px; border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+    .stat { min-height: 78px; padding: 12px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--surface); }
+    .stat-label { color: var(--muted); font-size: 10px; font-weight: 680; text-transform: uppercase; }
+    .stat-value { margin-top: 7px; font-size: 17px; font-weight: 680; font-variant-numeric: tabular-nums; }
+    .stat-detail { margin-top: 4px; color: var(--muted); font-size: 10px; }
+
+    .ranking { width: 100%; margin-top: 14px; border-collapse: collapse; background: var(--surface); font-size: 12px; }
+    .ranking th, .ranking td { padding: 9px 11px; border: 1px solid var(--line); text-align: right; font-variant-numeric: tabular-nums; }
+    .ranking th:first-child, .ranking td:first-child { text-align: left; }
+    .ranking th { color: var(--muted); font-size: 10px; text-transform: uppercase; }
+    .ranking tr.selected { background: var(--raised); }
+
+    @media (max-width: 1050px) {
+      .controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .visuals { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 700px) {
+      header { align-items: flex-start; padding: 12px; gap: 10px; }
+      .controls { grid-template-columns: 1fr; padding: 12px; }
+      main { padding: 12px; }
+      .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .ranking { display: block; overflow-x: auto; white-space: nowrap; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Core + Skirt Footprint Oracle</h1>
+      <div class="subtitle">State 120 | grid 160 | 1,899,742 candidates | 21-camera orbit</div>
+    </div>
+    <div id="evidenceStatus" class="status" data-state="loading">Loading receipts</div>
+  </header>
+
+  <div id="failure" class="failure" role="alert">Evidence unavailable:</div>
+
+  <section class="controls" aria-label="Comparison controls">
+    <div>
+      <label for="camera">Camera</label>
+      <div class="range-row">
+        <input id="camera" type="range" min="0" max="20" step="1" value="10">
+        <output id="cameraValue" for="camera">10</output>
+      </div>
+    </div>
+    <div>
+      <label for="leftTreatment">Left treatment</label>
+      <select id="leftTreatment"></select>
+    </div>
+    <div>
+      <label for="rightTreatment">Right treatment</label>
+      <select id="rightTreatment"></select>
+    </div>
+    <div>
+      <span class="control-label">View</span>
+      <div id="viewMode" class="segments">
+        <button type="button" data-mode="composite" aria-pressed="true">Composite</button>
+        <button type="button" data-mode="residual" aria-pressed="false">Residual</button>
+      </div>
+    </div>
+    <div>
+      <label for="wipe">Treatment wipe</label>
+      <div class="range-row">
+        <input id="wipe" type="range" min="0" max="100" step="1" value="50">
+        <output id="wipeValue" for="wipe">50%</output>
+      </div>
+    </div>
+  </section>
+
+  <main>
+    <section class="visuals" aria-label="Aligned footprint images">
+      <figure>
+        <figcaption><span>Exact raymarch target</span><span id="targetMetric" class="metric"></span></figcaption>
+        <div class="frame"><img id="targetImage" alt="Exact shared-transmittance raymarch target"></div>
+      </figure>
+      <figure>
+        <figcaption><span>Treatment comparison</span><span id="comparisonMetric" class="metric"></span></figcaption>
+        <div id="wipeFrame" class="frame" style="--wipe: 50%">
+          <img id="leftImage" alt="Left footprint treatment">
+          <img id="rightImage" class="wipe-right" alt="Right footprint treatment">
+          <span id="leftLabel" class="wipe-label left"></span>
+          <span id="rightLabel" class="wipe-label right"></span>
+          <span class="wipe-line"></span>
+        </div>
+      </figure>
+    </section>
+
+    <section class="summary" aria-label="Selected treatment metrics">
+      <div class="stat"><div class="stat-label">Left held-out MAE</div><div id="leftMae" class="stat-value"></div><div id="leftMaeDetail" class="stat-detail"></div></div>
+      <div class="stat"><div class="stat-label">Right held-out MAE</div><div id="rightMae" class="stat-value"></div><div id="rightMaeDetail" class="stat-detail"></div></div>
+      <div class="stat"><div class="stat-label">Gradient underfit</div><div id="gradientUnderfit" class="stat-value"></div><div class="stat-detail">left / right, target-aligned</div></div>
+      <div class="stat"><div class="stat-label">Bright-tail underfit</div><div id="tailUnderfit" class="stat-value"></div><div class="stat-detail">left / right, target top 1%</div></div>
+    </section>
+
+    <table class="ranking" aria-label="Held-out treatment ranking">
+      <thead><tr><th>Treatment</th><th>MAE</th><th>Gradient MAE</th><th>Gradient underfit</th><th>Bright-tail underfit</th></tr></thead>
+      <tbody id="rankingBody"></tbody>
+    </table>
+  </main>
+
+  <script>
+    const state = { manifest: null, reports: new Map(), camera: 10, left: 'm000-global', right: 'm075-ridge100', mode: 'composite', wipe: 50 };
+    const byId = id => document.getElementById(id);
+    const mean = values => values.reduce((sum, value) => sum + value, 0) / values.length;
+    const fmt = value => Number(value).toFixed(5);
+    const cameraId = () => String(state.camera).padStart(2, '0');
+    const imageUrl = (arm, residual = false) => `images/camera-${cameraId()}-${arm}${residual ? '-residual' : ''}.png`;
+    const targetUrl = () => `images/camera-${cameraId()}-target.png`;
+    const arm = id => state.manifest.arms.find(candidate => candidate.id === id);
+    const heldRows = id => state.reports.get(id).metrics.cameras.filter(row => row.split === 'heldOut').map(row => row.expanded);
+    const aggregate = id => {
+      const rows = heldRows(id);
+      return {
+        mae: mean(rows.map(row => row.mae)),
+        gradientMae: mean(rows.map(row => row.gradientMae)),
+        gradientUnderfit: mean(rows.map(row => row.targetHighGradientUnderfit)),
+        tailUnderfit: mean(rows.map(row => row.targetTopTailLumaUnderfit)),
+      };
+    };
+    const controlsLabel = candidate => `mix ${candidate.controls.skirtMix} | minor ${candidate.controls.skirtMinorScale} | ridge reject ${candidate.controls.skirtRidgeRejection}`;
+
+    function assertEvidence(manifest, reports, receipts) {
+      if (manifest.schema !== 'kaminos.volume.core-skirt-footprint-evidence.v0' || manifest.status !== 'complete' || manifest.failurePhase !== null) throw new Error('evidence manifest is incomplete');
+      if (manifest.sourceCommit !== '9ac62cbe' || manifest.cameraCount !== 21 || manifest.arms.length !== 8) throw new Error('experiment identity drifted');
+      if (manifest.frozen.rowCount !== 1899742 || manifest.frozen.sampleCap !== null || manifest.frozen.droppedRowCount !== 0) throw new Error('candidate population is capped or partial');
+      for (const candidate of manifest.arms) {
+        const report = reports.get(candidate.id);
+        const receipt = receipts.get(candidate.id);
+        if (!report || report.status !== 'complete' || report.failurePhase !== null) throw new Error(`${candidate.id} report is incomplete`);
+        if (report.effective.rowCount !== 1899742 || report.metrics.cameras.length !== 21) throw new Error(`${candidate.id} output is partial`);
+        if (!receipt || receipt.status !== 'done' || receipt.exit_code !== 0 || receipt.warnings !== null || receipt.ignored_params !== null || receipt.effective_timeout !== null) throw new Error(`${candidate.id} Greenroom receipt is incomplete`);
+      }
+    }
+
+    function renderSelectors() {
+      for (const select of [byId('leftTreatment'), byId('rightTreatment')]) {
+        select.replaceChildren(...state.manifest.arms.map(candidate => {
+          const option = document.createElement('option');
+          option.value = candidate.id;
+          option.textContent = candidate.label;
+          return option;
+        }));
+      }
+      byId('leftTreatment').value = state.left;
+      byId('rightTreatment').value = state.right;
+    }
+
+    function renderRanking() {
+      const rows = state.manifest.arms
+        .map(candidate => ({ candidate, metrics: aggregate(candidate.id) }))
+        .sort((a, b) => a.metrics.mae - b.metrics.mae);
+      byId('rankingBody').replaceChildren(...rows.map(({ candidate, metrics }) => {
+        const row = document.createElement('tr');
+        if ([state.left, state.right].includes(candidate.id)) row.className = 'selected';
+        const cells = [candidate.label, fmt(metrics.mae), fmt(metrics.gradientMae), fmt(metrics.gradientUnderfit), fmt(metrics.tailUnderfit)];
+        row.replaceChildren(...cells.map(value => { const cell = document.createElement('td'); cell.textContent = value; return cell; }));
+        return row;
+      }));
+    }
+
+    function render() {
+      if (!state.manifest) return;
+      const left = arm(state.left);
+      const right = arm(state.right);
+      const leftMetrics = aggregate(state.left);
+      const rightMetrics = aggregate(state.right);
+      const residual = state.mode === 'residual';
+      byId('targetImage').src = targetUrl();
+      byId('leftImage').src = imageUrl(state.left, residual);
+      byId('rightImage').src = imageUrl(state.right, residual);
+      byId('wipeFrame').style.setProperty('--wipe', `${state.wipe}%`);
+      byId('leftLabel').textContent = left.label;
+      byId('rightLabel').textContent = right.label;
+      byId('cameraValue').textContent = cameraId();
+      byId('wipeValue').textContent = `${state.wipe}%`;
+      const targetRow = state.reports.get(state.left).metrics.cameras.find(row => row.cameraIndex === state.camera).expanded;
+      byId('targetMetric').textContent = `mean luma ${fmt(targetRow.targetMeanLuma)}`;
+      byId('comparisonMetric').textContent = residual ? 'absolute RGB residual' : `MAE ${fmt(targetRow.mae)}`;
+      byId('leftMae').textContent = fmt(leftMetrics.mae);
+      byId('rightMae').textContent = fmt(rightMetrics.mae);
+      byId('leftMaeDetail').textContent = controlsLabel(left);
+      byId('rightMaeDetail').textContent = controlsLabel(right);
+      byId('gradientUnderfit').textContent = `${fmt(leftMetrics.gradientUnderfit)} / ${fmt(rightMetrics.gradientUnderfit)}`;
+      byId('tailUnderfit').textContent = `${fmt(leftMetrics.tailUnderfit)} / ${fmt(rightMetrics.tailUnderfit)}`;
+      renderRanking();
+    }
+
+    async function loadEvidence() {
+      try {
+        const manifestResponse = await fetch('evidence-manifest.json');
+        if (!manifestResponse.ok) throw new Error(`manifest HTTP ${manifestResponse.status}`);
+        const manifest = await manifestResponse.json();
+        const loaded = await Promise.all(manifest.arms.map(async candidate => {
+          const [reportResponse, receiptResponse] = await Promise.all([fetch(candidate.report), fetch(candidate.receipt)]);
+          if (!reportResponse.ok || !receiptResponse.ok) throw new Error(`${candidate.id} report or receipt is unavailable`);
+          return [candidate.id, await reportResponse.json(), await receiptResponse.json()];
+        }));
+        const reports = new Map(loaded.map(([id, report]) => [id, report]));
+        const receipts = new Map(loaded.map(([id, , receipt]) => [id, receipt]));
+        assertEvidence(manifest, reports, receipts);
+        state.manifest = manifest;
+        state.reports = reports;
+        renderSelectors();
+        render();
+        const status = byId('evidenceStatus');
+        status.dataset.state = 'verified';
+        status.textContent = 'Receipts verified';
+      } catch (error) {
+        document.body.classList.add('failed');
+        const status = byId('evidenceStatus');
+        status.dataset.state = 'failed';
+        status.textContent = 'Evidence failed';
+        byId('failure').textContent = `Evidence unavailable: ${error.message}`;
+      }
+    }
+
+    byId('camera').addEventListener('input', event => { state.camera = Number(event.target.value); render(); });
+    byId('wipe').addEventListener('input', event => { state.wipe = Number(event.target.value); render(); });
+    byId('leftTreatment').addEventListener('change', event => { state.left = event.target.value; render(); });
+    byId('rightTreatment').addEventListener('change', event => { state.right = event.target.value; render(); });
+    byId('viewMode').addEventListener('click', event => {
+      const button = event.target.closest('button[data-mode]');
+      if (!button) return;
+      state.mode = button.dataset.mode;
+      for (const candidate of byId('viewMode').querySelectorAll('button')) candidate.setAttribute('aria-pressed', String(candidate === button));
+      render();
+    });
+    window.addEventListener('keydown', event => {
+      if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+      state.camera = Math.max(0, Math.min(20, state.camera + (event.key === 'ArrowRight' ? 1 : -1)));
+      byId('camera').value = state.camera;
+      render();
+    });
+    loadEvidence();
+  </script>
+</body>
+</html>

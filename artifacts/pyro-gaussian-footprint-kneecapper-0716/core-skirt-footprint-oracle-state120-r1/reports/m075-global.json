@@ -1,0 +1,1866 @@
+{
+  "schema": "kaminos.volume.layer-coefficient-render-oracle.v0",
+  "startedAtUnix": 1784312337.471366,
+  "finishedAtUnix": 1784312526.262601,
+  "status": "complete",
+  "failurePhase": null,
+  "requested": {
+    "manifest": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-layer-coefficient-corpus-r4/training-manifest.json",
+    "captureReport": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-imported-coefficient-orbit-state120-r2/capture-report.json",
+    "stateStep": 120,
+    "sampleCap": null,
+    "depthBins": 96,
+    "footprintMode": "core-skirt",
+    "pathScale": 4.557231148404257,
+    "footprintControls": {
+      "skirtMix": 0.75,
+      "skirtMinorScale": 1.0,
+      "skirtRidgeRejection": 0.0
+    }
+  },
+  "effective": {
+    "stateId": "coefficient-state-120",
+    "stateStep": 120,
+    "rowCount": 1899742,
+    "candidateAdmissionAuthority": "external-native-cell-index-list-v0",
+    "coefficientBoundary": "per-sample-pre-tone-map-emission-extinction-v0",
+    "sharedTransmittanceIdentity": "ridge-plus-non-ridge-extinction-one-running-transmittance-v0",
+    "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+    "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+    "sampleCap": null,
+    "droppedRowCount": 0,
+    "footprintMode": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+    "pathScale": 4.557231148404257,
+    "footprintControls": {
+      "skirtMix": 0.75,
+      "skirtMinorScale": 1.0,
+      "skirtRidgeRejection": 0.0,
+      "conditioningFeature": "sidecar.ridge",
+      "controlsExplicit": true
+    },
+    "independentlyRenderedToneMappedImageAdditivity": false
+  },
+  "descriptorReceipt": {
+    "socketIdentity": "flow-kernel-local-descriptor-socket-v0",
+    "kernelIdentity": "flow-tangent-positive-symmetric-trilinear-v0",
+    "sourceHashes": {
+      "fluidSha256": "98d1d0650d67fcdf32f2fc7f5c353bac5355f7df01f45d1e0211c51eb02a7620",
+      "frontSha256": "27491552ce2c0294125d35658c3dd47289c91d0d068909c0c244e5167d7c7e35",
+      "boundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216",
+      "majorantSha256": "0b73c83d00b34d7fd2176f3d0709800b5b9a6617f04c736a359c3d30b2d71da1"
+    },
+    "sourceManifestSha256": "2841b79f3ae625bba8b7f36f2b5f7ae40755814b95214a2607a95b3390456483",
+    "indexSha256": "995f195f0079108fd9de2b51c3e011fb758af4c0e3a594c2d24b9dcc5306e9f9",
+    "descriptorSha256": "4cae2517538cf701ac97aad9382f4d150526de8c11e6513c3b98a82d4b5f0122",
+    "requestedControls": {
+      "strength": 0.6,
+      "radiusWorld": 0.018,
+      "coherence": 0.7
+    },
+    "effectiveControls": {
+      "strength": 0.6,
+      "radiusWorld": 0.018,
+      "coherence": 0.7
+    },
+    "runtimeReceipt": {
+      "ok": true,
+      "identity": "external-native-cell-index-list-v0",
+      "status": "applied",
+      "failurePhase": null,
+      "sessionId": "flow-kernel-index-mro8h41h-zpry2g7g",
+      "grid": 160,
+      "count": 1899742,
+      "byteLength": 7598968,
+      "indexSha256": "995f195f0079108fd9de2b51c3e011fb758af4c0e3a594c2d24b9dcc5306e9f9",
+      "duplicatePolicy": "forbidden",
+      "orderIdentity": "caller-ordered",
+      "chunkCount": 8,
+      "routeIdentity": "native-3d-compute-fluid-raymarch-v0",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "backend": "WebGPU:apple"
+    }
+  },
+  "frozenStateBinding": {
+    "sameStateCaptureId": "filament-orbit-f120-s120",
+    "controlsHash": "ba122038332747804203b4d03c6a5e9bf7b1e5969ec5d1f5ef995d3b5adff5b9",
+    "fluidSha256": "98d1d0650d67fcdf32f2fc7f5c353bac5355f7df01f45d1e0211c51eb02a7620",
+    "frontSha256": "27491552ce2c0294125d35658c3dd47289c91d0d068909c0c244e5167d7c7e35",
+    "hashMatch": true
+  },
+  "calibration": {
+    "identity": "caller-frozen-global-optical-path-v0",
+    "cameraIndex": 10,
+    "pathScale": 4.557231148404257,
+    "objective": "native-rgb-mae-to-shared-transmittance-target-v0",
+    "trials": [],
+    "calibrationBoundaryHit": false,
+    "calibrationExpansionCount": 0,
+    "calibrationExpansionDiagnostic": false,
+    "bracketUpper": null
+  },
+  "metrics": {
+    "cameras": [
+      {
+        "cameraIndex": 0,
+        "cameraAngle": -0.42,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.04075094684958458,
+          "mse": 0.004300241358578205,
+          "lumaMae": 0.04053564742207527,
+          "gradientMae": 0.013670441694557667,
+          "targetTopTailLumaUnderfit": 0.1099005863070488,
+          "targetTopTailLumaThreshold": 0.8227621912956238,
+          "targetHighGradientUnderfit": 0.027775216847658157,
+          "targetHighGradientThreshold": 0.04757088050246239,
+          "meanLuma": 0.19134648144245148,
+          "targetMeanLuma": 0.19719769060611725
+        },
+        "current": {
+          "mae": 0.0958554670214653,
+          "mse": 0.02986142411828041,
+          "lumaMae": 0.09823746234178543,
+          "gradientMae": 0.02091720513999462,
+          "targetTopTailLumaUnderfit": 0.0673912987112999,
+          "targetTopTailLumaThreshold": 0.8227621912956238,
+          "targetHighGradientUnderfit": 0.04467640817165375,
+          "targetHighGradientThreshold": 0.04757088050246239,
+          "meanLuma": 0.1096280962228775,
+          "targetMeanLuma": 0.19719769060611725
+        },
+        "ridgeRidge": {
+          "mae": 0.08339390903711319,
+          "mse": 0.020914733409881592,
+          "lumaMae": 0.0850725769996643,
+          "gradientMae": 0.020130092278122902,
+          "targetTopTailLumaUnderfit": 0.1358342170715332,
+          "targetTopTailLumaThreshold": 0.8227621912956238,
+          "targetHighGradientUnderfit": 0.03026777133345604,
+          "targetHighGradientThreshold": 0.04757088050246239,
+          "meanLuma": 0.12108484655618668,
+          "targetMeanLuma": 0.19719769060611725
+        },
+        "ridgeTotal": {
+          "mae": 0.10472597181797028,
+          "mse": 0.031218238174915314,
+          "lumaMae": 0.1093810647726059,
+          "gradientMae": 0.01901119574904442,
+          "targetTopTailLumaUnderfit": 0.32741039991378784,
+          "targetTopTailLumaThreshold": 0.8227621912956238,
+          "targetHighGradientUnderfit": 0.03246847912669182,
+          "targetHighGradientThreshold": 0.04757088050246239,
+          "meanLuma": 0.09173509478569031,
+          "targetMeanLuma": 0.19719769060611725
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1724297,
+          "nearDepth": 1.3252747058868408,
+          "farDepth": 3.341144561767578,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "orientation": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": 0.75,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": 0.0,
+            "conditioningFeature": "sidecar.ridge",
+            "controlsExplicit": true
+          },
+          "effectiveSkirtMix": {
+            "minimum": 0.75,
+            "mean": 0.75,
+            "maximum": 0.75
+          },
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6516407132148743
+      },
+      {
+        "cameraIndex": 1,
+        "cameraAngle": -0.378,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.0417170450091362,
+          "mse": 0.004444426391273737,
+          "lumaMae": 0.041603002697229385,
+          "gradientMae": 0.01382189616560936,
+          "targetTopTailLumaUnderfit": 0.11573217064142227,
+          "targetTopTailLumaThreshold": 0.8294878602027893,
+          "targetHighGradientUnderfit": 0.02879399247467518,
+          "targetHighGradientThreshold": 0.047832101583480835,
+          "meanLuma": 0.19123554229736328,
+          "targetMeanLuma": 0.19863560795783997
+        },
+        "current": {
+          "mae": 0.09714561700820923,
+          "mse": 0.030820857733488083,
+          "lumaMae": 0.09961742907762527,
+          "gradientMae": 0.021126726642251015,
+          "targetTopTailLumaUnderfit": 0.080515556037426,
+          "targetTopTailLumaThreshold": 0.8294878602027893,
+          "targetHighGradientUnderfit": 0.045630037784576416,
+          "targetHighGradientThreshold": 0.047832101583480835,
+          "meanLuma": 0.10935430973768234,
+          "targetMeanLuma": 0.19863560795783997
+        },
+        "ridgeRidge": {
+          "mae": 0.08459950238466263,
+          "mse": 0.02179316245019436,
+          "lumaMae": 0.08646854758262634,
+          "gradientMae": 0.020460374653339386,
+          "targetTopTailLumaUnderfit": 0.1432352513074875,
+          "targetTopTailLumaThreshold": 0.8294878602027893,
+          "targetHighGradientUnderfit": 0.0317872017621994,
+          "targetHighGradientThreshold": 0.047832101583480835,
+          "meanLuma": 0.1209135577082634,
+          "targetMeanLuma": 0.19863560795783997
+        },
+        "ridgeTotal": {
+          "mae": 0.10617566108703613,
+          "mse": 0.032284144312143326,
+          "lumaMae": 0.11091389507055283,
+          "gradientMae": 0.019329499453306198,
+          "targetTopTailLumaUnderfit": 0.33600762486457825,
+          "targetTopTailLumaThreshold": 0.8294878602027893,
+          "targetHighGradientUnderfit": 0.034153830260038376,
+          "targetHighGradientThreshold": 0.047832101583480835,
+          "meanLuma": 0.09175261110067368,
+          "targetMeanLuma": 0.19863560795783997
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1728698,
+          "nearDepth": 1.326470136642456,
+          "farDepth": 3.345355272293091,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "orientation": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": 0.75,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": 0.0,
+            "conditioningFeature": "sidecar.ridge",
+            "controlsExplicit": true
+          },
+          "effectiveSkirtMix": {
+            "minimum": 0.75,
+            "mean": 0.75,
+            "maximum": 0.75
+          },
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6517033576965332
+      },
+      {
+        "cameraIndex": 2,
+        "cameraAngle": -0.336,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.04234191030263901,
+          "mse": 0.004563918337225914,
+          "lumaMae": 0.04228588193655014,
+          "gradientMae": 0.013856758363544941,
+          "targetTopTailLumaUnderfit": 0.12350024282932281,
+          "targetTopTailLumaThreshold": 0.8339919447898865,
+          "targetHighGradientUnderfit": 0.028964757919311523,
+          "targetHighGradientThreshold": 0.048356905579566956,
+          "meanLuma": 0.19111938774585724,
+          "targetMeanLuma": 0.19944804906845093
+        },
+        "current": {
+          "mae": 0.09772321581840515,
+          "mse": 0.031411245465278625,
+          "lumaMae": 0.10018527507781982,
+          "gradientMae": 0.02110697515308857,
+          "targetTopTailLumaUnderfit": 0.09818761795759201,
+          "targetTopTailLumaThreshold": 0.8339919447898865,
+          "targetHighGradientUnderfit": 0.046694833785295486,
+          "targetHighGradientThreshold": 0.048356905579566956,
+          "meanLuma": 0.1091017872095108,
+          "targetMeanLuma": 0.19944804906845093
+        },
+        "ridgeRidge": {
+          "mae": 0.08546270430088043,
+          "mse": 0.022469567134976387,
+          "lumaMae": 0.0873263031244278,
+          "gradientMae": 0.02049819938838482,
+          "targetTopTailLumaUnderfit": 0.15332943201065063,
+          "targetTopTailLumaThreshold": 0.8339919447898865,
+          "targetHighGradientUnderfit": 0.0327528640627861,
+          "targetHighGradientThreshold": 0.048356905579566956,
+          "meanLuma": 0.12086662650108337,
+          "targetMeanLuma": 0.19944804906845093
+        },
+        "ridgeTotal": {
+          "mae": 0.10711769014596939,
+          "mse": 0.033027391880750656,
+          "lumaMae": 0.11189354211091995,
+          "gradientMae": 0.019418448209762573,
+          "targetTopTailLumaUnderfit": 0.3449361324310303,
+          "targetTopTailLumaThreshold": 0.8339919447898865,
+          "targetHighGradientUnderfit": 0.034866221249103546,
+          "targetHighGradientThreshold": 0.048356905579566956,
+          "meanLuma": 0.09183116257190704,
+          "targetMeanLuma": 0.19944804906845093
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1733385,
+          "nearDepth": 1.3290181159973145,
+          "farDepth": 3.3486475944519043,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "orientation": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": 0.75,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": 0.0,
+            "conditioningFeature": "sidecar.ridge",
+            "controlsExplicit": true
+          },
+          "effectiveSkirtMix": {
+            "minimum": 0.75,
+            "mean": 0.75,
+            "maximum": 0.75
+          },
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6517465114593506
+      },
+      {
+        "cameraIndex": 3,
+        "cameraAngle": -0.294,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.04251275211572647,
+          "mse": 0.004601822234690189,
+          "lumaMae": 0.04246954247355461,
+          "gradientMae": 0.013842419721186161,
+          "targetTopTailLumaUnderfit": 0.13321803510189056,
+          "targetTopTailLumaThreshold": 0.8368260860443115,
+          "targetHighGradientUnderfit": 0.028283758088946342,
+          "targetHighGradientThreshold": 0.048250384628772736,
+          "meanLuma": 0.19092325866222382,
+          "targetMeanLuma": 0.19985850155353546
+        },
+        "current": {
+          "mae": 0.09806222468614578,
+          "mse": 0.03168145939707756,
+          "lumaMae": 0.10050354897975922,
+          "gradientMae": 0.021311748772859573,
+          "targetTopTailLumaUnderfit": 0.11309181898832321,
+          "targetTopTailLumaThreshold": 0.8368260860443115,
+          "targetHighGradientUnderfit": 0.04675076901912689,
+          "targetHighGradientThreshold": 0.048250384628772736,
+          "meanLuma": 0.10886268317699432,
+          "targetMeanLuma": 0.19985850155353546
+        },
+        "ridgeRidge": {
+          "mae": 0.08592836558818817,
+          "mse": 0.022848667576909065,
+          "lumaMae": 0.08778811246156693,
+          "gradientMae": 0.020568521693348885,
+          "targetTopTailLumaUnderfit": 0.16500502824783325,
+          "targetTopTailLumaThreshold": 0.8368260860443115,
+          "targetHighGradientUnderfit": 0.03246896713972092,
+          "targetHighGradientThreshold": 0.048250384628772736,
+          "meanLuma": 0.12083269655704498,
+          "targetMeanLuma": 0.19985850155353546
+        },
+        "ridgeTotal": {
+          "mae": 0.10767284035682678,
+          "mse": 0.033407244831323624,
+          "lumaMae": 0.1124672070145607,
+          "gradientMae": 0.01949353702366352,
+          "targetTopTailLumaUnderfit": 0.3651663064956665,
+          "targetTopTailLumaThreshold": 0.8368260860443115,
+          "targetHighGradientUnderfit": 0.03459423407912254,
+          "targetHighGradientThreshold": 0.048250384628772736,
+          "meanLuma": 0.09189151227474213,
+          "targetMeanLuma": 0.19985850155353546
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1738459,
+          "nearDepth": 1.3323416709899902,
+          "farDepth": 3.3512604236602783,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "orientation": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": 0.75,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": 0.0,
+            "conditioningFeature": "sidecar.ridge",
+            "controlsExplicit": true
+          },
+          "effectiveSkirtMix": {
+            "minimum": 0.75,
+            "mean": 0.75,
+            "maximum": 0.75
+          },
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6517803072929382
+      },
+      {
+        "cameraIndex": 4,
+        "cameraAngle": -0.252,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.042202986776828766,
+          "mse": 0.0045058331452310085,
+          "lumaMae": 0.042201362550258636,
+          "gradientMae": 0.013935696333646774,
+          "targetTopTailLumaUnderfit": 0.13363125920295715,
+          "targetTopTailLumaThreshold": 0.8379490375518799,
+          "targetHighGradientUnderfit": 0.02864230051636696,
+          "targetHighGradientThreshold": 0.04845041036605835,
+          "meanLuma": 0.19065706431865692,
+          "targetMeanLuma": 0.20007972419261932
+        },
+        "current": {
+          "mae": 0.09822551906108856,
+          "mse": 0.03173857554793358,
+          "lumaMae": 0.10065393894910812,
+          "gradientMae": 0.021337367594242096,
+          "targetTopTailLumaUnderfit": 0.11361782252788544,
+          "targetTopTailLumaThreshold": 0.8379490375518799,
+          "targetHighGradientUnderfit": 0.04726352542638779,
+          "targetHighGradientThreshold": 0.04845041036605835,
+          "meanLuma": 0.10860933363437653,
+          "targetMeanLuma": 0.20007972419261932
+        },
+        "ridgeRidge": {
+          "mae": 0.08607253432273865,
+          "mse": 0.022919071838259697,
+          "lumaMae": 0.0879233330488205,
+          "gradientMae": 0.02090078592300415,
+          "targetTopTailLumaUnderfit": 0.16317467391490936,
+          "targetTopTailLumaThreshold": 0.8379490375518799,
+          "targetHighGradientUnderfit": 0.03299180790781975,
+          "targetHighGradientThreshold": 0.04845041036605835,
+          "meanLuma": 0.1208353191614151,
+          "targetMeanLuma": 0.20007972419261932
+        },
+        "ridgeTotal": {
+          "mae": 0.10803079605102539,
+          "mse": 0.033546458929777145,
+          "lumaMae": 0.11282257735729218,
+          "gradientMae": 0.019718734547495842,
+          "targetTopTailLumaUnderfit": 0.3692035377025604,
+          "targetTopTailLumaThreshold": 0.8379490375518799,
+          "targetHighGradientUnderfit": 0.0349072590470314,
+          "targetHighGradientThreshold": 0.04845041036605835,
+          "meanLuma": 0.0919109433889389,
+          "targetMeanLuma": 0.20007972419261932
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1743863,
+          "nearDepth": 1.33753502368927,
+          "farDepth": 3.354090690612793,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "orientation": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": 0.75,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": 0.0,
+            "conditioningFeature": "sidecar.ridge",
+            "controlsExplicit": true
+          },
+          "effectiveSkirtMix": {
+            "minimum": 0.75,
+            "mean": 0.75,
+            "maximum": 0.75
+          },
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6518079042434692
+      },
+      {
+        "cameraIndex": 5,
+        "cameraAngle": -0.21,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.041183628141880035,
+          "mse": 0.004224524833261967,
+          "lumaMae": 0.041153766214847565,
+          "gradientMae": 0.013896915130317211,
+          "targetTopTailLumaUnderfit": 0.12370096892118454,
+          "targetTopTailLumaThreshold": 0.8297867178916931,
+          "targetHighGradientUnderfit": 0.028497811406850815,
+          "targetHighGradientThreshold": 0.04860622435808182,
+          "meanLuma": 0.19040824472904205,
+          "targetMeanLuma": 0.20001818239688873
+        },
+        "current": {
+          "mae": 0.09803851693868637,
+          "mse": 0.03146564960479736,
+          "lumaMae": 0.1004369929432869,
+          "gradientMae": 0.021185319870710373,
+          "targetTopTailLumaUnderfit": 0.10703238844871521,
+          "targetTopTailLumaThreshold": 0.8297867178916931,
+          "targetHighGradientUnderfit": 0.04665889963507652,
+          "targetHighGradientThreshold": 0.04860622435808182,
+          "meanLuma": 0.10836129635572433,
+          "targetMeanLuma": 0.20001818239688873
+        },
+        "ridgeRidge": {
+          "mae": 0.08562766015529633,
+          "mse": 0.022562332451343536,
+          "lumaMae": 0.08738741278648376,
+          "gradientMae": 0.020509151741862297,
+          "targetTopTailLumaUnderfit": 0.14991144835948944,
+          "targetTopTailLumaThreshold": 0.8297867178916931,
+          "targetHighGradientUnderfit": 0.03208159655332565,
+          "targetHighGradientThreshold": 0.04860622435808182,
+          "meanLuma": 0.12098682671785355,
+          "targetMeanLuma": 0.20001818239688873
+        },
+        "ridgeTotal": {
+          "mae": 0.10802415013313293,
+          "mse": 0.03323402255773544,
+          "lumaMae": 0.1127723902463913,
+          "gradientMae": 0.019414257258176804,
+          "targetTopTailLumaUnderfit": 0.3544408082962036,
+          "targetTopTailLumaThreshold": 0.8297867178916931,
+          "targetHighGradientUnderfit": 0.03387965261936188,
+          "targetHighGradientThreshold": 0.04860622435808182,
+          "meanLuma": 0.09200633317232132,
+          "targetMeanLuma": 0.20001818239688873
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1749513,
+          "nearDepth": 1.342123031616211,
+          "farDepth": 3.356788396835327,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "orientation": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": 0.75,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": 0.0,
+            "conditioningFeature": "sidecar.ridge",
+            "controlsExplicit": true
+          },
+          "effectiveSkirtMix": {
+            "minimum": 0.75,
+            "mean": 0.75,
+            "maximum": 0.75
+          },
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6518186330795288
+      },
+      {
+        "cameraIndex": 6,
+        "cameraAngle": -0.168,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.03959373012185097,
+          "mse": 0.003866603597998619,
+          "lumaMae": 0.03946709632873535,
+          "gradientMae": 0.013839097693562508,
+          "targetTopTailLumaUnderfit": 0.11405964940786362,
+          "targetTopTailLumaThreshold": 0.8219122290611267,
+          "targetHighGradientUnderfit": 0.02756175771355629,
+          "targetHighGradientThreshold": 0.04874772951006889,
+          "meanLuma": 0.19012154638767242,
+          "targetMeanLuma": 0.1997811198234558
+        },
+        "current": {
+          "mae": 0.09780285507440567,
+          "mse": 0.031157290562987328,
+          "lumaMae": 0.1001974493265152,
+          "gradientMae": 0.021198416128754616,
+          "targetTopTailLumaUnderfit": 0.10855931788682938,
+          "targetTopTailLumaThreshold": 0.8219122290611267,
+          "targetHighGradientUnderfit": 0.0456346832215786,
+          "targetHighGradientThreshold": 0.04874772951006889,
+          "meanLuma": 0.10820712894201279,
+          "targetMeanLuma": 0.1997811198234558
+        },
+        "ridgeRidge": {
+          "mae": 0.08499737828969955,
+          "mse": 0.022159939631819725,
+          "lumaMae": 0.08655794709920883,
+          "gradientMae": 0.020416678860783577,
+          "targetTopTailLumaUnderfit": 0.13727183640003204,
+          "targetTopTailLumaThreshold": 0.8219122290611267,
+          "targetHighGradientUnderfit": 0.030809765681624413,
+          "targetHighGradientThreshold": 0.04874772951006889,
+          "meanLuma": 0.12109655141830444,
+          "targetMeanLuma": 0.1997811198234558
+        },
+        "ridgeTotal": {
+          "mae": 0.10770460963249207,
+          "mse": 0.03274966776371002,
+          "lumaMae": 0.11239859461784363,
+          "gradientMae": 0.019316453486680984,
+          "targetTopTailLumaUnderfit": 0.3440423607826233,
+          "targetTopTailLumaThreshold": 0.8219122290611267,
+          "targetHighGradientUnderfit": 0.032731588929891586,
+          "targetHighGradientThreshold": 0.04874772951006889,
+          "meanLuma": 0.0921129509806633,
+          "targetMeanLuma": 0.1997811198234558
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1755402,
+          "nearDepth": 1.3459011316299438,
+          "farDepth": 3.358262777328491,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "orientation": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": 0.75,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": 0.0,
+            "conditioningFeature": "sidecar.ridge",
+            "controlsExplicit": true
+          },
+          "effectiveSkirtMix": {
+            "minimum": 0.75,
+            "mean": 0.75,
+            "maximum": 0.75
+          },
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6518470644950867
+      },
+      {
+        "cameraIndex": 7,
+        "cameraAngle": -0.126,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.03756694123148918,
+          "mse": 0.0034770118072628975,
+          "lumaMae": 0.037315305322408676,
+          "gradientMae": 0.014028126373887062,
+          "targetTopTailLumaUnderfit": 0.1067592203617096,
+          "targetTopTailLumaThreshold": 0.8132509589195251,
+          "targetHighGradientUnderfit": 0.02828548662364483,
+          "targetHighGradientThreshold": 0.049024760723114014,
+          "meanLuma": 0.18981340527534485,
+          "targetMeanLuma": 0.1991971880197525
+        },
+        "current": {
+          "mae": 0.09729411453008652,
+          "mse": 0.030729465186595917,
+          "lumaMae": 0.0996098667383194,
+          "gradientMae": 0.0212696585804224,
+          "targetTopTailLumaUnderfit": 0.121065154671669,
+          "targetTopTailLumaThreshold": 0.8132509589195251,
+          "targetHighGradientUnderfit": 0.04642980918288231,
+          "targetHighGradientThreshold": 0.049024760723114014,
+          "meanLuma": 0.10793710500001907,
+          "targetMeanLuma": 0.1991971880197525
+        },
+        "ridgeRidge": {
+          "mae": 0.0844126045703888,
+          "mse": 0.021632647141814232,
+          "lumaMae": 0.08575195074081421,
+          "gradientMae": 0.020418109372258186,
+          "targetTopTailLumaUnderfit": 0.13483478128910065,
+          "targetTopTailLumaThreshold": 0.8132509589195251,
+          "targetHighGradientUnderfit": 0.03127982094883919,
+          "targetHighGradientThreshold": 0.049024760723114014,
+          "meanLuma": 0.1212233155965805,
+          "targetMeanLuma": 0.1991971880197525
+        },
+        "ridgeTotal": {
+          "mae": 0.10720941424369812,
+          "mse": 0.03204846754670143,
+          "lumaMae": 0.11174187809228897,
+          "gradientMae": 0.019365189597010612,
+          "targetTopTailLumaUnderfit": 0.3271099328994751,
+          "targetTopTailLumaThreshold": 0.8132509589195251,
+          "targetHighGradientUnderfit": 0.033043716102838516,
+          "targetHighGradientThreshold": 0.049024760723114014,
+          "meanLuma": 0.09223296493291855,
+          "targetMeanLuma": 0.1991971880197525
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1761505,
+          "nearDepth": 1.3493596315383911,
+          "farDepth": 3.358963966369629,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "orientation": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": 0.75,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": 0.0,
+            "conditioningFeature": "sidecar.ridge",
+            "controlsExplicit": true
+          },
+          "effectiveSkirtMix": {
+            "minimum": 0.75,
+            "mean": 0.75,
+            "maximum": 0.75
+          },
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6519303917884827
+      },
+      {
+        "cameraIndex": 8,
+        "cameraAngle": -0.084,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.03541489690542221,
+          "mse": 0.00310118799097836,
+          "lumaMae": 0.03499820455908775,
+          "gradientMae": 0.013782129622995853,
+          "targetTopTailLumaUnderfit": 0.09971641004085541,
+          "targetTopTailLumaThreshold": 0.8053874969482422,
+          "targetHighGradientUnderfit": 0.027407655492424965,
+          "targetHighGradientThreshold": 0.04919713735580444,
+          "meanLuma": 0.1895410567522049,
+          "targetMeanLuma": 0.19833216071128845
+        },
+        "current": {
+          "mae": 0.09715184569358826,
+          "mse": 0.030547060072422028,
+          "lumaMae": 0.09936454147100449,
+          "gradientMae": 0.021162256598472595,
+          "targetTopTailLumaUnderfit": 0.12273871153593063,
+          "targetTopTailLumaThreshold": 0.8053874969482422,
+          "targetHighGradientUnderfit": 0.04571393504738808,
+          "targetHighGradientThreshold": 0.04919713735580444,
+          "meanLuma": 0.10763349384069443,
+          "targetMeanLuma": 0.19833216071128845
+        },
+        "ridgeRidge": {
+          "mae": 0.08378957957029343,
+          "mse": 0.021230805665254593,
+          "lumaMae": 0.08491532504558563,
+          "gradientMae": 0.020101839676499367,
+          "targetTopTailLumaUnderfit": 0.1315990388393402,
+          "targetTopTailLumaThreshold": 0.8053874969482422,
+          "targetHighGradientUnderfit": 0.02967427484691143,
+          "targetHighGradientThreshold": 0.04919713735580444,
+          "meanLuma": 0.12129008024930954,
+          "targetMeanLuma": 0.19833216071128845
+        },
+        "ridgeTotal": {
+          "mae": 0.10643283277750015,
+          "mse": 0.03141108900308609,
+          "lumaMae": 0.1108144000172615,
+          "gradientMae": 0.01905675232410431,
+          "targetTopTailLumaUnderfit": 0.3159894645214081,
+          "targetTopTailLumaThreshold": 0.8053874969482422,
+          "targetHighGradientUnderfit": 0.03152861073613167,
+          "targetHighGradientThreshold": 0.04919713735580444,
+          "meanLuma": 0.09231383353471756,
+          "targetMeanLuma": 0.19833216071128845
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1767587,
+          "nearDepth": 1.3540103435516357,
+          "farDepth": 3.3585760593414307,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "orientation": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": 0.75,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": 0.0,
+            "conditioningFeature": "sidecar.ridge",
+            "controlsExplicit": true
+          },
+          "effectiveSkirtMix": {
+            "minimum": 0.75,
+            "mean": 0.75,
+            "maximum": 0.75
+          },
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6520995497703552
+      },
+      {
+        "cameraIndex": 9,
+        "cameraAngle": -0.042,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.033282775431871414,
+          "mse": 0.0027789995074272156,
+          "lumaMae": 0.032647520303726196,
+          "gradientMae": 0.013786875642836094,
+          "targetTopTailLumaUnderfit": 0.09607381373643875,
+          "targetTopTailLumaThreshold": 0.7997643947601318,
+          "targetHighGradientUnderfit": 0.027459105476737022,
+          "targetHighGradientThreshold": 0.04890713468194008,
+          "meanLuma": 0.18919944763183594,
+          "targetMeanLuma": 0.1969500482082367
+        },
+        "current": {
+          "mae": 0.09683006256818771,
+          "mse": 0.030383523553609848,
+          "lumaMae": 0.09893957525491714,
+          "gradientMae": 0.021266281604766846,
+          "targetTopTailLumaUnderfit": 0.12097274512052536,
+          "targetTopTailLumaThreshold": 0.7997643947601318,
+          "targetHighGradientUnderfit": 0.046067316085100174,
+          "targetHighGradientThreshold": 0.04890713468194008,
+          "meanLuma": 0.10720335692167282,
+          "targetMeanLuma": 0.1969500482082367
+        },
+        "ridgeRidge": {
+          "mae": 0.082974374294281,
+          "mse": 0.020788414403796196,
+          "lumaMae": 0.0837799683213234,
+          "gradientMae": 0.020113414153456688,
+          "targetTopTailLumaUnderfit": 0.1292911320924759,
+          "targetTopTailLumaThreshold": 0.7997643947601318,
+          "targetHighGradientUnderfit": 0.03010009601712227,
+          "targetHighGradientThreshold": 0.04890713468194008,
+          "meanLuma": 0.12134865671396255,
+          "targetMeanLuma": 0.1969500482082367
+        },
+        "ridgeTotal": {
+          "mae": 0.10519775748252869,
+          "mse": 0.030662916600704193,
+          "lumaMae": 0.10937082022428513,
+          "gradientMae": 0.019014516845345497,
+          "targetTopTailLumaUnderfit": 0.3011077344417572,
+          "targetTopTailLumaThreshold": 0.7997643947601318,
+          "targetHighGradientUnderfit": 0.03172725811600685,
+          "targetHighGradientThreshold": 0.04890713468194008,
+          "meanLuma": 0.09235361218452454,
+          "targetMeanLuma": 0.1969500482082367
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1773507,
+          "nearDepth": 1.3592523336410522,
+          "farDepth": 3.3575360774993896,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "orientation": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": 0.75,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": 0.0,
+            "conditioningFeature": "sidecar.ridge",
+            "controlsExplicit": true
+          },
+          "effectiveSkirtMix": {
+            "minimum": 0.75,
+            "mean": 0.75,
+            "maximum": 0.75
+          },
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6524142026901245
+      },
+      {
+        "cameraIndex": 10,
+        "cameraAngle": 0.0,
+        "split": "calibration",
+        "expanded": {
+          "mae": 0.03153691813349724,
+          "mse": 0.0025431415997445583,
+          "lumaMae": 0.030713027343153954,
+          "gradientMae": 0.013600471429526806,
+          "targetTopTailLumaUnderfit": 0.08788036555051804,
+          "targetTopTailLumaThreshold": 0.7950241565704346,
+          "targetHighGradientUnderfit": 0.027001094073057175,
+          "targetHighGradientThreshold": 0.04864761605858803,
+          "meanLuma": 0.18875159323215485,
+          "targetMeanLuma": 0.19482989609241486
+        },
+        "current": {
+          "mae": 0.09580127894878387,
+          "mse": 0.029929494485259056,
+          "lumaMae": 0.09765975922346115,
+          "gradientMae": 0.021093245595693588,
+          "targetTopTailLumaUnderfit": 0.10470913350582123,
+          "targetTopTailLumaThreshold": 0.7950241565704346,
+          "targetHighGradientUnderfit": 0.045194290578365326,
+          "targetHighGradientThreshold": 0.04864761605858803,
+          "meanLuma": 0.10683651268482208,
+          "targetMeanLuma": 0.19482989609241486
+        },
+        "ridgeRidge": {
+          "mae": 0.08171018213033676,
+          "mse": 0.02018170990049839,
+          "lumaMae": 0.08209527283906937,
+          "gradientMae": 0.019967956468462944,
+          "targetTopTailLumaUnderfit": 0.1165185198187828,
+          "targetTopTailLumaThreshold": 0.7950241565704346,
+          "targetHighGradientUnderfit": 0.02897551842033863,
+          "targetHighGradientThreshold": 0.04864761605858803,
+          "meanLuma": 0.12128771841526031,
+          "targetMeanLuma": 0.19482989609241486
+        },
+        "ridgeTotal": {
+          "mae": 0.1034267321228981,
+          "mse": 0.029717160388827324,
+          "lumaMae": 0.10736476629972458,
+          "gradientMae": 0.018951809033751488,
+          "targetTopTailLumaUnderfit": 0.28176629543304443,
+          "targetTopTailLumaThreshold": 0.7950241565704346,
+          "targetHighGradientUnderfit": 0.03068738989531994,
+          "targetHighGradientThreshold": 0.04864761605858803,
+          "meanLuma": 0.09228513389825821,
+          "targetMeanLuma": 0.19482989609241486
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1778738,
+          "nearDepth": 1.364598274230957,
+          "farDepth": 3.355426549911499,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "orientation": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": 0.75,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": 0.0,
+            "conditioningFeature": "sidecar.ridge",
+            "controlsExplicit": true
+          },
+          "effectiveSkirtMix": {
+            "minimum": 0.75,
+            "mean": 0.75,
+            "maximum": 0.75
+          },
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6528511047363281
+      },
+      {
+        "cameraIndex": 11,
+        "cameraAngle": 0.042,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.030505986884236336,
+          "mse": 0.002423441968858242,
+          "lumaMae": 0.02949245274066925,
+          "gradientMae": 0.013769200071692467,
+          "targetTopTailLumaUnderfit": 0.07911019772291183,
+          "targetTopTailLumaThreshold": 0.7890851497650146,
+          "targetHighGradientUnderfit": 0.027261031791567802,
+          "targetHighGradientThreshold": 0.04828780144453049,
+          "meanLuma": 0.1882239729166031,
+          "targetMeanLuma": 0.19223961234092712
+        },
+        "current": {
+          "mae": 0.0944206565618515,
+          "mse": 0.029210165143013,
+          "lumaMae": 0.09621366858482361,
+          "gradientMae": 0.021030696108937263,
+          "targetTopTailLumaUnderfit": 0.09116031229496002,
+          "targetTopTailLumaThreshold": 0.7890851497650146,
+          "targetHighGradientUnderfit": 0.044715676456689835,
+          "targetHighGradientThreshold": 0.04828780144453049,
+          "meanLuma": 0.1063881441950798,
+          "targetMeanLuma": 0.19223961234092712
+        },
+        "ridgeRidge": {
+          "mae": 0.08003393560647964,
+          "mse": 0.019429877400398254,
+          "lumaMae": 0.08004311472177505,
+          "gradientMae": 0.02014376036822796,
+          "targetTopTailLumaUnderfit": 0.10915149748325348,
+          "targetTopTailLumaThreshold": 0.7890851497650146,
+          "targetHighGradientUnderfit": 0.028958413749933243,
+          "targetHighGradientThreshold": 0.04828780144453049,
+          "meanLuma": 0.12113922089338303,
+          "targetMeanLuma": 0.19223961234092712
+        },
+        "ridgeTotal": {
+          "mae": 0.10123046487569809,
+          "mse": 0.02860548533499241,
+          "lumaMae": 0.10497716814279556,
+          "gradientMae": 0.019085651263594627,
+          "targetTopTailLumaUnderfit": 0.26122140884399414,
+          "targetTopTailLumaThreshold": 0.7890851497650146,
+          "targetHighGradientUnderfit": 0.030575674027204514,
+          "targetHighGradientThreshold": 0.04828780144453049,
+          "meanLuma": 0.09215161949396133,
+          "targetMeanLuma": 0.19223961234092712
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1782332,
+          "nearDepth": 1.3701984882354736,
+          "farDepth": 3.351924419403076,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "orientation": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": 0.75,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": 0.0,
+            "conditioningFeature": "sidecar.ridge",
+            "controlsExplicit": true
+          },
+          "effectiveSkirtMix": {
+            "minimum": 0.75,
+            "mean": 0.75,
+            "maximum": 0.75
+          },
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6535062193870544
+      },
+      {
+        "cameraIndex": 12,
+        "cameraAngle": 0.084,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.02970733866095543,
+          "mse": 0.0023483873810619116,
+          "lumaMae": 0.028550978749990463,
+          "gradientMae": 0.013615302741527557,
+          "targetTopTailLumaUnderfit": 0.07493886351585388,
+          "targetTopTailLumaThreshold": 0.7840760946273804,
+          "targetHighGradientUnderfit": 0.026316417381167412,
+          "targetHighGradientThreshold": 0.0477583222091198,
+          "meanLuma": 0.18769952654838562,
+          "targetMeanLuma": 0.1896449476480484
+        },
+        "current": {
+          "mae": 0.09308358281850815,
+          "mse": 0.028613194823265076,
+          "lumaMae": 0.09481552243232727,
+          "gradientMae": 0.02076355181634426,
+          "targetTopTailLumaUnderfit": 0.0937436893582344,
+          "targetTopTailLumaThreshold": 0.7840760946273804,
+          "targetHighGradientUnderfit": 0.04338322952389717,
+          "targetHighGradientThreshold": 0.0477583222091198,
+          "meanLuma": 0.10590701550245285,
+          "targetMeanLuma": 0.1896449476480484
+        },
+        "ridgeRidge": {
+          "mae": 0.0782315656542778,
+          "mse": 0.018694818019866943,
+          "lumaMae": 0.0780278891324997,
+          "gradientMae": 0.019739937037229538,
+          "targetTopTailLumaUnderfit": 0.10520847141742706,
+          "targetTopTailLumaThreshold": 0.7840760946273804,
+          "targetHighGradientUnderfit": 0.02780286781489849,
+          "targetHighGradientThreshold": 0.0477583222091198,
+          "meanLuma": 0.12100787460803986,
+          "targetMeanLuma": 0.1896449476480484
+        },
+        "ridgeTotal": {
+          "mae": 0.0989793911576271,
+          "mse": 0.027603132650256157,
+          "lumaMae": 0.10258500277996063,
+          "gradientMae": 0.018744200468063354,
+          "targetTopTailLumaUnderfit": 0.25157076120376587,
+          "targetTopTailLumaThreshold": 0.7840760946273804,
+          "targetHighGradientUnderfit": 0.029360849410295486,
+          "targetHighGradientThreshold": 0.0477583222091198,
+          "meanLuma": 0.0920179933309555,
+          "targetMeanLuma": 0.1896449476480484
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1783991,
+          "nearDepth": 1.376676321029663,
+          "farDepth": 3.3474762439727783,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "orientation": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": 0.75,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": 0.0,
+            "conditioningFeature": "sidecar.ridge",
+            "controlsExplicit": true
+          },
+          "effectiveSkirtMix": {
+            "minimum": 0.75,
+            "mean": 0.75,
+            "maximum": 0.75
+          },
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6542873382568359
+      },
+      {
+        "cameraIndex": 13,
+        "cameraAngle": 0.126,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.029096562415361404,
+          "mse": 0.0022948510013520718,
+          "lumaMae": 0.027793342247605324,
+          "gradientMae": 0.013678611256182194,
+          "targetTopTailLumaUnderfit": 0.0666409358382225,
+          "targetTopTailLumaThreshold": 0.7784352898597717,
+          "targetHighGradientUnderfit": 0.025674253702163696,
+          "targetHighGradientThreshold": 0.04708435758948326,
+          "meanLuma": 0.18710052967071533,
+          "targetMeanLuma": 0.18731717765331268
+        },
+        "current": {
+          "mae": 0.09220355749130249,
+          "mse": 0.028177132830023766,
+          "lumaMae": 0.09385353326797485,
+          "gradientMae": 0.020641494542360306,
+          "targetTopTailLumaUnderfit": 0.08684876561164856,
+          "targetTopTailLumaThreshold": 0.7784352898597717,
+          "targetHighGradientUnderfit": 0.04289242997765541,
+          "targetHighGradientThreshold": 0.04708435758948326,
+          "meanLuma": 0.1054808497428894,
+          "targetMeanLuma": 0.18731717765331268
+        },
+        "ridgeRidge": {
+          "mae": 0.0766916424036026,
+          "mse": 0.018087729811668396,
+          "lumaMae": 0.07623636722564697,
+          "gradientMae": 0.01974119246006012,
+          "targetTopTailLumaUnderfit": 0.09563428163528442,
+          "targetTopTailLumaThreshold": 0.7784352898597717,
+          "targetHighGradientUnderfit": 0.026705404743552208,
+          "targetHighGradientThreshold": 0.04708435758948326,
+          "meanLuma": 0.12078078836202621,
+          "targetMeanLuma": 0.18731717765331268
+        },
+        "ridgeTotal": {
+          "mae": 0.09701502323150635,
+          "mse": 0.026754537597298622,
+          "lumaMae": 0.10045169293880463,
+          "gradientMae": 0.01876397430896759,
+          "targetTopTailLumaUnderfit": 0.23756222426891327,
+          "targetTopTailLumaThreshold": 0.7784352898597717,
+          "targetHighGradientUnderfit": 0.028358688578009605,
+          "targetHighGradientThreshold": 0.04708435758948326,
+          "meanLuma": 0.09180887788534164,
+          "targetMeanLuma": 0.18731717765331268
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1785545,
+          "nearDepth": 1.3848398923873901,
+          "farDepth": 3.3426358699798584,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "orientation": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": 0.75,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": 0.0,
+            "conditioningFeature": "sidecar.ridge",
+            "controlsExplicit": true
+          },
+          "effectiveSkirtMix": {
+            "minimum": 0.75,
+            "mean": 0.75,
+            "maximum": 0.75
+          },
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6551048755645752
+      },
+      {
+        "cameraIndex": 14,
+        "cameraAngle": 0.168,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.028549913316965103,
+          "mse": 0.0022526513785123825,
+          "lumaMae": 0.027155525982379913,
+          "gradientMae": 0.01379530318081379,
+          "targetTopTailLumaUnderfit": 0.05712002143263817,
+          "targetTopTailLumaThreshold": 0.7702953815460205,
+          "targetHighGradientUnderfit": 0.02479477785527706,
+          "targetHighGradientThreshold": 0.046820610761642456,
+          "meanLuma": 0.18643459677696228,
+          "targetMeanLuma": 0.1851930022239685
+        },
+        "current": {
+          "mae": 0.09158104658126831,
+          "mse": 0.0278927031904459,
+          "lumaMae": 0.09316723048686981,
+          "gradientMae": 0.02064480073750019,
+          "targetTopTailLumaUnderfit": 0.08027923852205276,
+          "targetTopTailLumaThreshold": 0.7702953815460205,
+          "targetHighGradientUnderfit": 0.042603958398103714,
+          "targetHighGradientThreshold": 0.046820610761642456,
+          "meanLuma": 0.10505673289299011,
+          "targetMeanLuma": 0.1851930022239685
+        },
+        "ridgeRidge": {
+          "mae": 0.07548223435878754,
+          "mse": 0.01761135458946228,
+          "lumaMae": 0.07485486567020416,
+          "gradientMae": 0.019778985530138016,
+          "targetTopTailLumaUnderfit": 0.08421209454536438,
+          "targetTopTailLumaThreshold": 0.7702953815460205,
+          "targetHighGradientUnderfit": 0.026110971346497536,
+          "targetHighGradientThreshold": 0.046820610761642456,
+          "meanLuma": 0.12039623409509659,
+          "targetMeanLuma": 0.1851930022239685
+        },
+        "ridgeTotal": {
+          "mae": 0.0953664630651474,
+          "mse": 0.026001673191785812,
+          "lumaMae": 0.09868548810482025,
+          "gradientMae": 0.01884666085243225,
+          "targetTopTailLumaUnderfit": 0.22250661253929138,
+          "targetTopTailLumaThreshold": 0.7702953815460205,
+          "targetHighGradientUnderfit": 0.027743414044380188,
+          "targetHighGradientThreshold": 0.046820610761642456,
+          "meanLuma": 0.09152758866548538,
+          "targetMeanLuma": 0.1851930022239685
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1787072,
+          "nearDepth": 1.3939889669418335,
+          "farDepth": 3.3363590240478516,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "orientation": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": 0.75,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": 0.0,
+            "conditioningFeature": "sidecar.ridge",
+            "controlsExplicit": true
+          },
+          "effectiveSkirtMix": {
+            "minimum": 0.75,
+            "mean": 0.75,
+            "maximum": 0.75
+          },
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6559113264083862
+      },
+      {
+        "cameraIndex": 15,
+        "cameraAngle": 0.21,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.028111867606639862,
+          "mse": 0.0022216641809791327,
+          "lumaMae": 0.02664470672607422,
+          "gradientMae": 0.013866464607417583,
+          "targetTopTailLumaUnderfit": 0.04769694805145264,
+          "targetTopTailLumaThreshold": 0.7658321857452393,
+          "targetHighGradientUnderfit": 0.024305669590830803,
+          "targetHighGradientThreshold": 0.04646844416856766,
+          "meanLuma": 0.18580862879753113,
+          "targetMeanLuma": 0.18332871794700623
+        },
+        "current": {
+          "mae": 0.09098726511001587,
+          "mse": 0.027651485055685043,
+          "lumaMae": 0.09243705868721008,
+          "gradientMae": 0.020506316795945168,
+          "targetTopTailLumaUnderfit": 0.06869049370288849,
+          "targetTopTailLumaThreshold": 0.7658321857452393,
+          "targetHighGradientUnderfit": 0.0414755716919899,
+          "targetHighGradientThreshold": 0.04646844416856766,
+          "meanLuma": 0.10471782088279724,
+          "targetMeanLuma": 0.18332871794700623
+        },
+        "ridgeRidge": {
+          "mae": 0.07440662384033203,
+          "mse": 0.017216213047504425,
+          "lumaMae": 0.07364688068628311,
+          "gradientMae": 0.019750263541936874,
+          "targetTopTailLumaUnderfit": 0.07205653935670853,
+          "targetTopTailLumaThreshold": 0.7658321857452393,
+          "targetHighGradientUnderfit": 0.025794824585318565,
+          "targetHighGradientThreshold": 0.04646844416856766,
+          "meanLuma": 0.12006311863660812,
+          "targetMeanLuma": 0.18332871794700623
+        },
+        "ridgeTotal": {
+          "mae": 0.09372615069150925,
+          "mse": 0.025302724912762642,
+          "lumaMae": 0.09691816568374634,
+          "gradientMae": 0.018801869824528694,
+          "targetTopTailLumaUnderfit": 0.20892301201820374,
+          "targetTopTailLumaThreshold": 0.7658321857452393,
+          "targetHighGradientUnderfit": 0.027188170701265335,
+          "targetHighGradientThreshold": 0.04646844416856766,
+          "meanLuma": 0.09131938964128494,
+          "targetMeanLuma": 0.18332871794700623
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1788588,
+          "nearDepth": 1.40484619140625,
+          "farDepth": 3.3292295932769775,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "orientation": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": 0.75,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": 0.0,
+            "conditioningFeature": "sidecar.ridge",
+            "controlsExplicit": true
+          },
+          "effectiveSkirtMix": {
+            "minimum": 0.75,
+            "mean": 0.75,
+            "maximum": 0.75
+          },
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6567072868347168
+      },
+      {
+        "cameraIndex": 16,
+        "cameraAngle": 0.252,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.027795391157269478,
+          "mse": 0.002195994835346937,
+          "lumaMae": 0.026302285492420197,
+          "gradientMae": 0.014192978851497173,
+          "targetTopTailLumaUnderfit": 0.04146558418869972,
+          "targetTopTailLumaThreshold": 0.761063277721405,
+          "targetHighGradientUnderfit": 0.023444179445505142,
+          "targetHighGradientThreshold": 0.04572064429521561,
+          "meanLuma": 0.1851712167263031,
+          "targetMeanLuma": 0.18157169222831726
+        },
+        "current": {
+          "mae": 0.09007315337657928,
+          "mse": 0.027351737022399902,
+          "lumaMae": 0.09139220416545868,
+          "gradientMae": 0.020217500627040863,
+          "targetTopTailLumaUnderfit": 0.06522634625434875,
+          "targetTopTailLumaThreshold": 0.761063277721405,
+          "targetHighGradientUnderfit": 0.041406404227018356,
+          "targetHighGradientThreshold": 0.04572064429521561,
+          "meanLuma": 0.10444934666156769,
+          "targetMeanLuma": 0.18157169222831726
+        },
+        "ridgeRidge": {
+          "mae": 0.07346486300230026,
+          "mse": 0.016848621889948845,
+          "lumaMae": 0.07260415703058243,
+          "gradientMae": 0.020147813484072685,
+          "targetTopTailLumaUnderfit": 0.06977121531963348,
+          "targetTopTailLumaThreshold": 0.761063277721405,
+          "targetHighGradientUnderfit": 0.025408679619431496,
+          "targetHighGradientThreshold": 0.04572064429521561,
+          "meanLuma": 0.11977871507406235,
+          "targetMeanLuma": 0.18157169222831726
+        },
+        "ridgeTotal": {
+          "mae": 0.09226259589195251,
+          "mse": 0.02466690167784691,
+          "lumaMae": 0.09534470736980438,
+          "gradientMae": 0.019135847687721252,
+          "targetTopTailLumaUnderfit": 0.1960039585828781,
+          "targetTopTailLumaThreshold": 0.761063277721405,
+          "targetHighGradientUnderfit": 0.026914138346910477,
+          "targetHighGradientThreshold": 0.04572064429521561,
+          "meanLuma": 0.09109894931316376,
+          "targetMeanLuma": 0.18157169222831726
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1790094,
+          "nearDepth": 1.4174913167953491,
+          "farDepth": 3.3222262859344482,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "orientation": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": 0.75,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": 0.0,
+            "conditioningFeature": "sidecar.ridge",
+            "controlsExplicit": true
+          },
+          "effectiveSkirtMix": {
+            "minimum": 0.75,
+            "mean": 0.75,
+            "maximum": 0.75
+          },
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6574923992156982
+      },
+      {
+        "cameraIndex": 17,
+        "cameraAngle": 0.294,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.027587465941905975,
+          "mse": 0.0021776724606752396,
+          "lumaMae": 0.026036683470010757,
+          "gradientMae": 0.013989497907459736,
+          "targetTopTailLumaUnderfit": 0.03779767453670502,
+          "targetTopTailLumaThreshold": 0.7596774697303772,
+          "targetHighGradientUnderfit": 0.024303780868649483,
+          "targetHighGradientThreshold": 0.04559498652815819,
+          "meanLuma": 0.18463706970214844,
+          "targetMeanLuma": 0.18002326786518097
+        },
+        "current": {
+          "mae": 0.08911552280187607,
+          "mse": 0.026953142136335373,
+          "lumaMae": 0.09014667570590973,
+          "gradientMae": 0.020178334787487984,
+          "targetTopTailLumaUnderfit": 0.06671310216188431,
+          "targetTopTailLumaThreshold": 0.7596774697303772,
+          "targetHighGradientUnderfit": 0.04176809638738632,
+          "targetHighGradientThreshold": 0.04559498652815819,
+          "meanLuma": 0.10446161031723022,
+          "targetMeanLuma": 0.18002326786518097
+        },
+        "ridgeRidge": {
+          "mae": 0.07227001339197159,
+          "mse": 0.01633423939347267,
+          "lumaMae": 0.07118991017341614,
+          "gradientMae": 0.019791968166828156,
+          "targetTopTailLumaUnderfit": 0.0685611367225647,
+          "targetTopTailLumaThreshold": 0.7596774697303772,
+          "targetHighGradientUnderfit": 0.025976406410336494,
+          "targetHighGradientThreshold": 0.04559498652815819,
+          "meanLuma": 0.1197318434715271,
+          "targetMeanLuma": 0.18002326786518097
+        },
+        "ridgeTotal": {
+          "mae": 0.09072326123714447,
+          "mse": 0.023944467306137085,
+          "lumaMae": 0.0937456488609314,
+          "gradientMae": 0.018916230648756027,
+          "targetTopTailLumaUnderfit": 0.1952790915966034,
+          "targetTopTailLumaThreshold": 0.7596774697303772,
+          "targetHighGradientUnderfit": 0.02751796878874302,
+          "targetHighGradientThreshold": 0.04559498652815819,
+          "meanLuma": 0.09102915972471237,
+          "targetMeanLuma": 0.18002326786518097
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1791549,
+          "nearDepth": 1.4312946796417236,
+          "farDepth": 3.3147802352905273,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "orientation": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": 0.75,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": 0.0,
+            "conditioningFeature": "sidecar.ridge",
+            "controlsExplicit": true
+          },
+          "effectiveSkirtMix": {
+            "minimum": 0.75,
+            "mean": 0.75,
+            "maximum": 0.75
+          },
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6582249999046326
+      },
+      {
+        "cameraIndex": 18,
+        "cameraAngle": 0.336,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.027413340285420418,
+          "mse": 0.0021766074933111668,
+          "lumaMae": 0.025785887613892555,
+          "gradientMae": 0.013993225991725922,
+          "targetTopTailLumaUnderfit": 0.03426269814372063,
+          "targetTopTailLumaThreshold": 0.7569259405136108,
+          "targetHighGradientUnderfit": 0.023714259266853333,
+          "targetHighGradientThreshold": 0.04511463642120361,
+          "meanLuma": 0.18401594460010529,
+          "targetMeanLuma": 0.17846229672431946
+        },
+        "current": {
+          "mae": 0.08822191506624222,
+          "mse": 0.02652083896100521,
+          "lumaMae": 0.08904585242271423,
+          "gradientMae": 0.01983870007097721,
+          "targetTopTailLumaUnderfit": 0.06815308332443237,
+          "targetTopTailLumaThreshold": 0.7569259405136108,
+          "targetHighGradientUnderfit": 0.04087178409099579,
+          "targetHighGradientThreshold": 0.04511463642120361,
+          "meanLuma": 0.10441704094409943,
+          "targetMeanLuma": 0.17846229672431946
+        },
+        "ridgeRidge": {
+          "mae": 0.07114582508802414,
+          "mse": 0.015882939100265503,
+          "lumaMae": 0.0699271559715271,
+          "gradientMae": 0.020022490993142128,
+          "targetTopTailLumaUnderfit": 0.06732318550348282,
+          "targetTopTailLumaThreshold": 0.7569259405136108,
+          "targetHighGradientUnderfit": 0.025355400517582893,
+          "targetHighGradientThreshold": 0.04511463642120361,
+          "meanLuma": 0.11959054321050644,
+          "targetMeanLuma": 0.17846229672431946
+        },
+        "ridgeTotal": {
+          "mae": 0.08929901570081711,
+          "mse": 0.02328168973326683,
+          "lumaMae": 0.09228195250034332,
+          "gradientMae": 0.01910214312374592,
+          "targetTopTailLumaUnderfit": 0.1957293599843979,
+          "targetTopTailLumaThreshold": 0.7569259405136108,
+          "targetHighGradientUnderfit": 0.026856424286961555,
+          "targetHighGradientThreshold": 0.04511463642120361,
+          "meanLuma": 0.09087317436933517,
+          "targetMeanLuma": 0.17846229672431946
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1792910,
+          "nearDepth": 1.4460127353668213,
+          "farDepth": 3.3060495853424072,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "orientation": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": 0.75,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": 0.0,
+            "conditioningFeature": "sidecar.ridge",
+            "controlsExplicit": true
+          },
+          "effectiveSkirtMix": {
+            "minimum": 0.75,
+            "mean": 0.75,
+            "maximum": 0.75
+          },
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6589328050613403
+      },
+      {
+        "cameraIndex": 19,
+        "cameraAngle": 0.378,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.027438919991254807,
+          "mse": 0.002202930161729455,
+          "lumaMae": 0.025722937658429146,
+          "gradientMae": 0.013706873171031475,
+          "targetTopTailLumaUnderfit": 0.02979077585041523,
+          "targetTopTailLumaThreshold": 0.7568585276603699,
+          "targetHighGradientUnderfit": 0.023447414860129356,
+          "targetHighGradientThreshold": 0.044274959713220596,
+          "meanLuma": 0.18328389525413513,
+          "targetMeanLuma": 0.1768222153186798
+        },
+        "current": {
+          "mae": 0.08711356669664383,
+          "mse": 0.025999633595347404,
+          "lumaMae": 0.08781873434782028,
+          "gradientMae": 0.01946745254099369,
+          "targetTopTailLumaUnderfit": 0.07457837462425232,
+          "targetTopTailLumaThreshold": 0.7568585276603699,
+          "targetHighGradientUnderfit": 0.040213268250226974,
+          "targetHighGradientThreshold": 0.044274959713220596,
+          "meanLuma": 0.10446047782897949,
+          "targetMeanLuma": 0.1768222153186798
+        },
+        "ridgeRidge": {
+          "mae": 0.07003281265497208,
+          "mse": 0.015449478290975094,
+          "lumaMae": 0.06866449117660522,
+          "gradientMae": 0.019593218341469765,
+          "targetTopTailLumaUnderfit": 0.06261488050222397,
+          "targetTopTailLumaThreshold": 0.7568585276603699,
+          "targetHighGradientUnderfit": 0.025385653600096703,
+          "targetHighGradientThreshold": 0.044274959713220596,
+          "meanLuma": 0.11939752846956253,
+          "targetMeanLuma": 0.1768222153186798
+        },
+        "ridgeTotal": {
+          "mae": 0.08786863833665848,
+          "mse": 0.022633587941527367,
+          "lumaMae": 0.09079109132289886,
+          "gradientMae": 0.01876804232597351,
+          "targetTopTailLumaUnderfit": 0.1979907751083374,
+          "targetTopTailLumaThreshold": 0.7568585276603699,
+          "targetHighGradientUnderfit": 0.026937512680888176,
+          "targetHighGradientThreshold": 0.044274959713220596,
+          "meanLuma": 0.09068772941827774,
+          "targetMeanLuma": 0.1768222153186798
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1794137,
+          "nearDepth": 1.4623174667358398,
+          "farDepth": 3.296684741973877,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "orientation": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": 0.75,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": 0.0,
+            "conditioningFeature": "sidecar.ridge",
+            "controlsExplicit": true
+          },
+          "effectiveSkirtMix": {
+            "minimum": 0.75,
+            "mean": 0.75,
+            "maximum": 0.75
+          },
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6596893668174744
+      },
+      {
+        "cameraIndex": 20,
+        "cameraAngle": 0.42,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.027553781867027283,
+          "mse": 0.002234988147392869,
+          "lumaMae": 0.025787677615880966,
+          "gradientMae": 0.01343156211078167,
+          "targetTopTailLumaUnderfit": 0.026871509850025177,
+          "targetTopTailLumaThreshold": 0.7549372315406799,
+          "targetHighGradientUnderfit": 0.023390566930174828,
+          "targetHighGradientThreshold": 0.04446827247738838,
+          "meanLuma": 0.18247763812541962,
+          "targetMeanLuma": 0.1750679314136505
+        },
+        "current": {
+          "mae": 0.08596979826688766,
+          "mse": 0.025504095479846,
+          "lumaMae": 0.08660528808832169,
+          "gradientMae": 0.019352367147803307,
+          "targetTopTailLumaUnderfit": 0.08085121959447861,
+          "targetTopTailLumaThreshold": 0.7549372315406799,
+          "targetHighGradientUnderfit": 0.039883583784103394,
+          "targetHighGradientThreshold": 0.04446827247738838,
+          "meanLuma": 0.1043957993388176,
+          "targetMeanLuma": 0.1750679314136505
+        },
+        "ridgeRidge": {
+          "mae": 0.06891999393701553,
+          "mse": 0.015057232230901718,
+          "lumaMae": 0.06740379333496094,
+          "gradientMae": 0.019482256844639778,
+          "targetTopTailLumaUnderfit": 0.062112510204315186,
+          "targetTopTailLumaThreshold": 0.7549372315406799,
+          "targetHighGradientUnderfit": 0.025229452177882195,
+          "targetHighGradientThreshold": 0.04446827247738838,
+          "meanLuma": 0.11917576193809509,
+          "targetMeanLuma": 0.1750679314136505
+        },
+        "ridgeTotal": {
+          "mae": 0.08654789626598358,
+          "mse": 0.022089272737503052,
+          "lumaMae": 0.08938319981098175,
+          "gradientMae": 0.018664419651031494,
+          "targetTopTailLumaUnderfit": 0.19924324750900269,
+          "targetTopTailLumaThreshold": 0.7549372315406799,
+          "targetHighGradientUnderfit": 0.026924321427941322,
+          "targetHighGradientThreshold": 0.04446827247738838,
+          "meanLuma": 0.09039942175149918,
+          "targetMeanLuma": 0.1750679314136505
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1795207,
+          "nearDepth": 1.4768134355545044,
+          "farDepth": 3.29015851020813,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "orientation": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false,
+          "footprintControls": {
+            "skirtMix": 0.75,
+            "skirtMinorScale": 1.0,
+            "skirtRidgeRejection": 0.0,
+            "conditioningFeature": "sidecar.ridge",
+            "controlsExplicit": true
+          },
+          "effectiveSkirtMix": {
+            "minimum": 0.75,
+            "mean": 0.75,
+            "maximum": 0.75
+          },
+          "minorPixelClamp": [
+            0.5,
+            4.0
+          ]
+        },
+        "meanFinalTransmittance": 0.6604454517364502
+      }
+    ],
+    "heldOutMean": {
+      "expandedMae": 0.03401640905067325,
+      "currentMae": 0.0938449751585722,
+      "ridgeRidgeMae": 0.07939690612256527,
+      "ridgeTotalMae": 0.10006553120911121
+    }
+  },
+  "artifacts": {
+    "gallery": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-kneecapper-core-skirt-state120-m075-global/index.html",
+    "cameraCount": 21
+  },
+  "ceiling": {
+    "truthful": true,
+    "notExactFullCovariance": true,
+    "notExactPerSplatOrder": true,
+    "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+    "orientationApproximation": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+    "interpretation": "coefficient/extinction transplant assay; not a shipping-renderer parity claim"
+  }
+}
