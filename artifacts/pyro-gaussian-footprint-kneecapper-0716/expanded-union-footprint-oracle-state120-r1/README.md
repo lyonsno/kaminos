@@ -10,6 +10,12 @@ The exact state-120 union contains `1,899,742` uncapped candidates. This is a pr
 
 `index.html` is a self-contained interactive comparison across all 21 cameras. It displays exact raymarch target, nearest projection, flow-tangent bilinear, and flow-oriented ellipse, with an aligned target wipe. It verifies the state, candidate count, output completeness, path-scale freeze, and Greenroom receipt before displaying evidence. Missing, partial, capped, or wrong-state reports fail visibly.
 
+## Cockpit Manifest
+
+`cockpit-manifest.v0.json` onboards this original treatment into `kaminos.pyro.cockpit-manifest.v0`. Its evidence stage is `produced`; absolute visual quality and attainable authored-basin quality remain `operator-unseen`. The existing numerical oracle and same-state target deltas remain valid. The manifest does not claim that the operator has explored or accepted the treatment.
+
+The manifest exposes exact target, nearest, bilinear, ellipse, difference, Ridge, Non-Ridge, and structural-support sockets for every camera. It distinguishes mutable exploration axes from predicate-locked state/support/transport identities and requires a caller-provided authored-fork path. A cockpit must preserve this original evidence unchanged and write any authored controls and interpretation into a new named fork.
+
 ## Route
 
 - Repo: `/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716`
@@ -36,9 +42,14 @@ The exact state-120 union contains `1,899,742` uncapped candidates. This is a pr
 - `images/camera-XX-nearest.png`: exact coefficients with nearest projected footprint.
 - `images/camera-XX-bilinear.png`: exact coefficients with flow-tangent five-tap bilinear footprint.
 - `images/camera-XX-ellipse.png`: exact coefficients with area-conserving flow-oriented ellipse.
+- `images/camera-XX-residual.png`: ellipse-versus-target residual heatmap.
+- `images/camera-XX-ridge.png`: Ridge layer contribution under the shared treatment.
+- `images/camera-XX-nonridge.png`: Non-Ridge layer contribution under the shared treatment.
+- `images/camera-XX-support-target.png`: structural-support target debug view.
 - `reports/*.json`: complete oracle reports for all three treatments.
 - `receipts/greenroom-ellipse.json`: effective Greenroom route and completion receipt.
-- `sha256sums.txt`: hashes for the page, reports, receipt, and all 84 images.
+- `cockpit-manifest.v0.json`: exact cockpit identities, routes, sockets, mutable/locked axes, and authored-fork contract.
+- `sha256sums.txt`: hashes for the page, reports, receipt, README, and all 168 images. The cockpit manifest binds this ledger by SHA-256 and is excluded from it to avoid a circular digest.
 
 ## Claim Boundary
 

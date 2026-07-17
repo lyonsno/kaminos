@@ -1,0 +1,314 @@
+{
+  "schema": "kaminos.pyro.cockpit-manifest.v0",
+  "manifestIdentity": "expanded-union-flow-ellipse-state120-cockpit-manifest-v0",
+  "experiment": {
+    "id": "expanded-union-footprint-oracle-state120-r1",
+    "question": "Does a deterministic view-independent flow-oriented footprint improve exact expanded Ridge plus Non-Ridge reconstruction across held cameras with support, coefficients, state, transport, and optical scale frozen?",
+    "originalEvidenceImmutable": true
+  },
+  "producer": {
+    "handle": "pyro-gaussian-footprint-kneecapper",
+    "tool": "codex",
+    "repo": "kaminos",
+    "worktree": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716",
+    "branch": "cc/pyro-gaussian-footprint-kneecapper-0716",
+    "implementationCommit": "e6393e08",
+    "evidenceCommit": "4e9e602e"
+  },
+  "evidenceState": {
+    "stage": "produced",
+    "visualQuality": "operator-unseen",
+    "operatorExplored": false,
+    "decisionBearing": false,
+    "numericalOraclePreserved": true,
+    "interpretation": "Same-state target-versus-treatment deltas are valid. Absolute appearance quality, attainable authored-basin quality, and representation ceiling remain operator-unseen until a named authored fork or no-useful-regime record is saved."
+  },
+  "checkpoint": {
+    "identity": "exact-local-layer-emission-extinction-v0",
+    "model": null,
+    "authority": "analytic per-native-cell coefficient teacher",
+    "learnedCheckpointUsed": false
+  },
+  "sourceState": {
+    "identity": "coefficient-state-120",
+    "stateStep": 120,
+    "frame": 120,
+    "simulationStep": 120,
+    "sameStateCaptureId": "filament-orbit-f120-s120",
+    "grid": 160,
+    "controlsHash": "ba122038332747804203b4d03c6a5e9bf7b1e5969ec5d1f5ef995d3b5adff5b9",
+    "sourceManifestSha256": "2841b79f3ae625bba8b7f36f2b5f7ae40755814b95214a2607a95b3390456483",
+    "hashes": {
+      "fluidSha256": "98d1d0650d67fcdf32f2fc7f5c353bac5355f7df01f45d1e0211c51eb02a7620",
+      "frontSha256": "27491552ce2c0294125d35658c3dd47289c91d0d068909c0c244e5167d7c7e35",
+      "boundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216",
+      "majorantSha256": "0b73c83d00b34d7fd2176f3d0709800b5b9a6617f04c736a359c3d30b2d71da1"
+    },
+    "hashMatch": true,
+    "historyRestored": true
+  },
+  "target": {
+    "identity": "exact-same-state-shared-transmittance-intrinsic-target-v0",
+    "coefficientBoundary": "per-sample-pre-tone-map-emission-extinction-v0",
+    "cameraCount": 21,
+    "imageWidth": 314,
+    "imageHeight": 242,
+    "socket": "target"
+  },
+  "treatment": {
+    "identity": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+    "family": "view-independent-projected-flow-oriented-footprint-v0",
+    "postProcessBlur": false,
+    "nominalQuadratureWeightSum": 1.0,
+    "socket": "treatment",
+    "comparisonTreatments": [
+      "nearest-projection-v0",
+      "flow-tangent-five-tap-bilinear-v0",
+      "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0"
+    ]
+  },
+  "support": {
+    "identity": "full-flame-ridge-nonridge-live-union-v0",
+    "admissionAuthority": "external-native-cell-index-list-v0",
+    "nativeCellIndexSha256": "995f195f0079108fd9de2b51c3e011fb758af4c0e3a594c2d24b9dcc5306e9f9",
+    "rowCount": 1899742,
+    "sampleCap": null,
+    "droppedRowCount": 0,
+    "duplicatePolicy": "forbidden",
+    "orderIdentity": "caller-ordered"
+  },
+  "coefficient": {
+    "identity": "exact-local-layer-emission-extinction-v0",
+    "boundary": "per-sample-pre-tone-map-emission-extinction-v0",
+    "channels": [
+      "ridge.emission.r",
+      "ridge.emission.g",
+      "ridge.emission.b",
+      "ridge.extinction",
+      "nonRidge.emission.r",
+      "nonRidge.emission.g",
+      "nonRidge.emission.b",
+      "nonRidge.extinction"
+    ],
+    "nonnegative": true
+  },
+  "covariance": {
+    "identity": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+    "descriptorSocket": "flow-kernel-local-descriptor-socket-v0",
+    "kernelIdentity": "flow-tangent-positive-symmetric-trilinear-v0",
+    "descriptorSha256": "4cae2517538cf701ac97aad9382f4d150526de8c11e6513c3b98a82d4b5f0122",
+    "fullThreeDimensionalCovariance": false,
+    "ceiling": "rank-one flow-tangent pressure plus base transverse extent"
+  },
+  "accumulation": {
+    "identity": "area-conserving-flow-ellipse-depth-bin-accumulation-v0",
+    "ordering": "camera-depth-96-bin-one-running-transmittance-v0",
+    "depthBins": 96,
+    "independentlyRenderedToneMappedImageAdditivity": false
+  },
+  "transport": {
+    "identity": "ridge-plus-non-ridge-extinction-one-running-transmittance-v0",
+    "composition": "one-globally-ordered-stream-v0",
+    "pathScale": 4.467670150820181,
+    "pathScaleAuthority": "nearest-camera-10-global-optical-fit-frozen-for-ellipse-v0"
+  },
+  "presentation": {
+    "identity": "native-314x242-exponential-power-tone-map-v0",
+    "imageWidth": 314,
+    "imageHeight": 242,
+    "renderScale": 1.0,
+    "exposure": 0.96,
+    "power": 0.84,
+    "postProcessBlur": false,
+    "background": "black"
+  },
+  "controls": {
+    "requested": {
+      "stateStep": 120,
+      "sampleCap": null,
+      "depthBins": 96,
+      "footprintMode": "ellipse",
+      "pathScale": 4.467670150820181,
+      "flowKernelStrength": 0.6,
+      "flowKernelRadiusWorld": 0.018,
+      "flowKernelCoherence": 0.7
+    },
+    "effective": {
+      "stateStep": 120,
+      "sampleCap": null,
+      "depthBins": 96,
+      "footprintMode": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+      "pathScale": 4.467670150820181,
+      "flowKernelStrength": 0.6,
+      "flowKernelRadiusWorld": 0.018,
+      "flowKernelCoherence": 0.7
+    },
+    "defaultSubstitution": false
+  },
+  "cameraOrbit": {
+    "identity": "filament-orbit-21-camera-yaw-v0",
+    "indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+    "angles": [-0.42, -0.378, -0.336, -0.294, -0.252, -0.21, -0.168, -0.126, -0.084, -0.042, 0.0, 0.042, 0.084, 0.126, 0.168, 0.21, 0.252, 0.294, 0.336, 0.378, 0.42],
+    "calibrationCameraIndex": 10,
+    "heldOutCameraIndices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+  },
+  "renderer": {
+    "composition": "offline-exact-coefficient-shared-transmittance-oracle-v0",
+    "shippingRendererParityClaim": false,
+    "sourceDescriptorRoute": "native-3d-compute-fluid-raymarch-v0"
+  },
+  "route": {
+    "greenroomJobId": "c5bea0cdd3e1",
+    "jobType": "kaminos_coefficient_ellipse_oracle_state120",
+    "requested": "/private/tmp/kaminos-mlx-residual-venv/bin/python volume-layer-coefficient-render-oracle.py --manifest /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-layer-coefficient-corpus-r4/training-manifest.json --capture-report /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-imported-coefficient-orbit-state120-r2/capture-report.json --out-dir /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-kneecapper-coefficient-ellipse-state120-r1 --report /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-kneecapper-coefficient-ellipse-state120-r1/report.json --state-step 120 --depth-bins 96 --footprint-mode ellipse --path-scale 4.467670150820181",
+    "effective": "/private/tmp/kaminos-mlx-residual-venv/bin/python volume-layer-coefficient-render-oracle.py --manifest /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-layer-coefficient-corpus-r4/training-manifest.json --capture-report /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-imported-coefficient-orbit-state120-r2/capture-report.json --out-dir /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-kneecapper-coefficient-ellipse-state120-r1 --report /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-kneecapper-coefficient-ellipse-state120-r1/report.json --state-step 120 --depth-bins 96 --footprint-mode ellipse --path-scale 4.467670150820181",
+    "executionBackend": "python-numpy-cpu-v0",
+    "descriptorSourceBackend": "WebGPU:apple",
+    "fallbackUsed": false,
+    "fallbackIdentity": null,
+    "capacityComplete": true,
+    "overflowCount": 0,
+    "effectiveTimeout": null,
+    "ignoredParameters": null,
+    "failurePhase": null,
+    "timingAuthority": "gpu-greenroom-process-wall-clock-v0",
+    "startedAtUnix": 1784304957.4523,
+    "finishedAtUnix": 1784305134.576402
+  },
+  "mutableAxes": [
+    "camera.orbitIndex",
+    "view.socket",
+    "presentation.exposure",
+    "presentation.power",
+    "transport.pathScale",
+    "footprint.globalScale",
+    "footprint.sharpness"
+  ],
+  "predicateLockedAxes": [
+    "sourceState.identity",
+    "sourceState.hashes",
+    "sourceState.controlsHash",
+    "support.nativeCellIndex",
+    "support.rowCount",
+    "coefficient.identity",
+    "covariance.descriptorSha256",
+    "accumulation.depthBins",
+    "transport.identity",
+    "target.identity"
+  ],
+  "sockets": {
+    "target": {
+      "identity": "exact-shared-transmittance-target-v0",
+      "pathPattern": "images/camera-{cameraId}-target.png"
+    },
+    "treatment": {
+      "identity": "flow-oriented-ellipse-v0",
+      "pathPattern": "images/camera-{cameraId}-ellipse.png"
+    },
+    "nearest": {
+      "identity": "nearest-projection-control-v0",
+      "pathPattern": "images/camera-{cameraId}-nearest.png"
+    },
+    "bilinear": {
+      "identity": "flow-tangent-bilinear-control-v0",
+      "pathPattern": "images/camera-{cameraId}-bilinear.png"
+    },
+    "difference": {
+      "identity": "ellipse-target-residual-heatmap-v0",
+      "pathPattern": "images/camera-{cameraId}-residual.png"
+    },
+    "ridge": {
+      "identity": "ridge-layer-contribution-v0",
+      "pathPattern": "images/camera-{cameraId}-ridge.png"
+    },
+    "nonRidge": {
+      "identity": "nonridge-layer-contribution-v0",
+      "pathPattern": "images/camera-{cameraId}-nonridge.png"
+    },
+    "debugSupport": {
+      "identity": "structural-support-target-v0",
+      "pathPattern": "images/camera-{cameraId}-support-target.png"
+    }
+  },
+  "loadRoutes": {
+    "originalPage": "http://127.0.0.1:18223/artifacts/pyro-gaussian-footprint-kneecapper-0716/expanded-union-footprint-oracle-state120-r1/index.html",
+    "manifest": "http://127.0.0.1:18223/artifacts/pyro-gaussian-footprint-kneecapper-0716/expanded-union-footprint-oracle-state120-r1/cockpit-manifest.v0.json",
+    "localPath": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716/artifacts/pyro-gaussian-footprint-kneecapper-0716/expanded-union-footprint-oracle-state120-r1",
+    "registrationState": "producer-manifest-emitted-integration-cockpit-adapter-pending",
+    "mountState": "served-from-owning-kaminos-worktree-port-18223"
+  },
+  "authoredFork": {
+    "callerProvidedPathRequired": true,
+    "pathArgument": "authoredForkPath",
+    "pathTemplate": "artifacts/pyro-gaussian-footprint-kneecapper-0716/expanded-union-footprint-oracle-state120-r1/authored-forks/{forkName}/fork.json",
+    "originalOverwriteForbidden": true,
+    "requiredFields": [
+      "forkName",
+      "createdAt",
+      "operatorExplorationState",
+      "sourceManifestSha256",
+      "originalManifestPath",
+      "requestedControls",
+      "effectiveControls",
+      "controlDelta",
+      "camera",
+      "route",
+      "backend",
+      "fallback",
+      "visualNotes",
+      "artifactPointers",
+      "interpretation"
+    ]
+  },
+  "artifacts": {
+    "hashLedger": {
+      "path": "sha256sums.txt",
+      "sha256": "081ba4f75ad39c5a40cd5d576986cfcd3f5d26a203748190231d008d448f0577",
+      "entryCount": 174,
+      "manifestExcludedToAvoidCircularDigest": true
+    },
+    "keyArtifacts": {
+      "page": {
+        "path": "index.html",
+        "sha256": "3f89f4e5e8ac1ab3dc70f3bba56b1f4fc104f5f53bfaabb7a43718c14274cc1d"
+      },
+      "nearestReport": {
+        "path": "reports/nearest.json",
+        "sha256": "e054ccc7314ffc1192628fede68de042e1386d828f32c30b86fe1debbdb75c0a"
+      },
+      "bilinearReport": {
+        "path": "reports/bilinear.json",
+        "sha256": "a4efb26b69259461c46b3d7cf88132e4cf76f8a5503b6628bae0a1b540c2c689"
+      },
+      "ellipseReport": {
+        "path": "reports/ellipse.json",
+        "sha256": "3b0eea218fad106537ffbad5d477472cee2bcd04081ce4b3afed41470bc973f1"
+      },
+      "greenroomReceipt": {
+        "path": "receipts/greenroom-ellipse.json",
+        "sha256": "40a971c85829a155484ac3fa2f66350cc20fbbb03439abe678f9ec8edbddd087"
+      }
+    }
+  },
+  "numericalOracle": {
+    "metric": "native-rgb-mae-to-shared-transmittance-target-v0",
+    "nearestHeldOutMean": 0.037600854970514776,
+    "bilinearHeldOutMean": 0.03441699910908937,
+    "ellipseHeldOutMean": 0.033900913782417774,
+    "ellipseGainVersusNearestPercent": 9.840045350256567,
+    "heldOutCameraWinsVersusNearest": 20,
+    "heldOutCameraCount": 20
+  },
+  "claimBoundary": {
+    "supports": "View-independent flow orientation and area-conserving projected integration carry useful footprint information across the frozen held-camera orbit.",
+    "doesNotSupport": [
+      "operator-explored appearance quality",
+      "attainable authored-basin quality",
+      "shipping renderer parity",
+      "full 3D covariance closure",
+      "exact per-splat ordering",
+      "learned checkpoint parity",
+      "production candidate budget closure"
+    ]
+  }
+}
