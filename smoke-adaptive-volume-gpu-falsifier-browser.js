@@ -498,6 +498,55 @@ async function profileRepeatedPass(device, { warmups, samples, dispatchRepeats, 
   return { aggregate, perDispatch, dispatchRepeats };
 }
 
+async function profilePairedRepeatedPasses(device, {
+  warmups,
+  samples,
+  dispatchRepeats,
+  encodeArm,
+}) {
+  const runPair = async index => {
+    const denseFirst = index % 2 === 0;
+    const order = denseFirst ? 'dense-compact' : 'compact-dense';
+    const timestamps = await resolveTimestamps(device, (encoder, querySet) => {
+      if (denseFirst) {
+        encodeArm(encoder, querySet, 'dense', 0, 1);
+        encodeArm(encoder, querySet, 'compact', 2, 3);
+      } else {
+        encodeArm(encoder, querySet, 'compact', 0, 1);
+        encodeArm(encoder, querySet, 'dense', 2, 3);
+      }
+    }, 4);
+    const firstGpuMs = Number(timestamps[1] - timestamps[0]) / 1_000_000;
+    const secondGpuMs = Number(timestamps[3] - timestamps[2]) / 1_000_000;
+    const denseAggregateGpuMs = denseFirst ? firstGpuMs : secondGpuMs;
+    const compactAggregateGpuMs = denseFirst ? secondGpuMs : firstGpuMs;
+    return {
+      order,
+      denseAggregateGpuMs,
+      compactAggregateGpuMs,
+      compactOverDenseRatio: compactAggregateGpuMs / denseAggregateGpuMs,
+    };
+  };
+  for (let index = 0; index < warmups; index += 1) await runPair(index);
+  const pairedSamples = [];
+  for (let index = 0; index < samples; index += 1) pairedSamples.push(await runPair(index));
+  const profile = arm => {
+    const aggregate = stats(pairedSamples.map(row => row[`${arm}AggregateGpuMs`]));
+    return {
+      aggregate,
+      perDispatch: stats(aggregate.samples.map(value => value / dispatchRepeats)),
+      dispatchRepeats,
+    };
+  };
+  return {
+    timingProtocol: 'paired-alternating-order-v0',
+    pairedSamples,
+    pairedRatio: stats(pairedSamples.map(row => row.compactOverDenseRatio)),
+    dense: profile('dense'),
+    compact: profile('compact'),
+  };
+}
+
 function summarizeRayWorkload(rays, grid, samplesPerCell, minimum, maximum) {
   const stepWorld = Math.min(...minimum.map((value, axis) => maximum[axis] - value)) / grid / samplesPerCell;
   let intersectingRayCount = 0;
@@ -585,28 +634,30 @@ async function profileScaleLawWorkloads(device, {
       { binding: 4, resource: { buffer: paramsAllocation.buffer } },
       { binding: 5, resource: { buffer: compactOutputAllocation.buffer } },
     ] });
-    const encodeRepeated = (pipeline, bindGroup) => (encoder, querySet) => {
-      const pass = encoder.beginComputePass({ timestampWrites: { querySet, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 } });
+    const armResources = {
+      dense: { pipeline: densePipeline, bindGroup: denseBindGroup },
+      compact: { pipeline: sparsePipeline, bindGroup: compactBindGroup },
+    };
+    const encodeArm = (encoder, querySet, arm, beginningOfPassWriteIndex, endOfPassWriteIndex) => {
+      const { pipeline, bindGroup } = armResources[arm];
+      const pass = encoder.beginComputePass({ timestampWrites: { querySet, beginningOfPassWriteIndex, endOfPassWriteIndex } });
       pass.setPipeline(pipeline);
       pass.setBindGroup(0, bindGroup);
       for (let repeat = 0; repeat < config.scaleDispatchRepeats; repeat += 1) pass.dispatchWorkgroups(Math.ceil(pixelCount / 64));
       pass.end();
     };
-    const denseProfile = await profileRepeatedPass(device, {
+    const pairedProfile = await profilePairedRepeatedPasses(device, {
       warmups: config.scaleWarmupSamples,
       samples: config.scaleSteadySamples,
       dispatchRepeats: config.scaleDispatchRepeats,
-      encode: encodeRepeated(densePipeline, denseBindGroup),
-    });
-    const compactProfile = await profileRepeatedPass(device, {
-      warmups: config.scaleWarmupSamples,
-      samples: config.scaleSteadySamples,
-      dispatchRepeats: config.scaleDispatchRepeats,
-      encode: encodeRepeated(sparsePipeline, compactBindGroup),
+      encodeArm,
     });
     const denseOutput = new Float32Array(await readBuffer(device, denseOutputAllocation.buffer, pixelCount * 4));
     const compactOutput = new Float32Array(await readBuffer(device, compactOutputAllocation.buffer, pixelCount * 4));
-    const comparison = compare(denseOutput, compactOutput);
+    const comparison = compare(denseOutput, compactOutput, {
+      width,
+      errorLimit: ADAPTIVE_VOLUME_GPU_ERROR_LIMITS.compactPrebuiltAgainstDenseMaximumAbsoluteError,
+    });
     workloads.push({
       scaleFactor,
       width,
@@ -614,8 +665,11 @@ async function profileScaleLawWorkloads(device, {
       pixelCount,
       ...workload,
       dispatchRepeats: config.scaleDispatchRepeats,
-      profiles: { dense: denseProfile, compact: compactProfile },
-      compactOverDenseRatio: compactProfile.perDispatch.median / denseProfile.perDispatch.median,
+      timingProtocol: pairedProfile.timingProtocol,
+      pairedSamples: pairedProfile.pairedSamples,
+      pairedRatio: pairedProfile.pairedRatio,
+      profiles: { dense: pairedProfile.dense, compact: pairedProfile.compact },
+      compactOverDenseRatio: pairedProfile.pairedRatio.median,
       comparison,
       outputsComplete: denseOutput.length === pixelCount && compactOutput.length === pixelCount,
     });
@@ -627,16 +681,42 @@ async function profileScaleLawWorkloads(device, {
   return workloads;
 }
 
-function compare(left, right) {
+function compare(left, right, { width = null, errorLimit = null } = {}) {
   if (left.length !== right.length) throw new Error('output comparison shape mismatch');
   let mse = 0;
+  let meanAbsoluteError = 0;
   let maximumAbsoluteError = 0;
+  let maximumAbsoluteErrorIndex = 0;
+  let aboveErrorLimitCount = 0;
+  const absoluteErrors = new Float32Array(left.length);
   for (let index = 0; index < left.length; index += 1) {
     const delta = Math.abs(left[index] - right[index]);
+    absoluteErrors[index] = delta;
     mse += delta * delta;
-    maximumAbsoluteError = Math.max(maximumAbsoluteError, delta);
+    meanAbsoluteError += delta;
+    if (delta > maximumAbsoluteError) {
+      maximumAbsoluteError = delta;
+      maximumAbsoluteErrorIndex = index;
+    }
+    if (Number.isFinite(errorLimit) && delta > errorLimit) aboveErrorLimitCount += 1;
   }
-  return { meanSquaredError: mse / left.length, maximumAbsoluteError };
+  absoluteErrors.sort();
+  const quantile = fraction => absoluteErrors[Math.floor((absoluteErrors.length - 1) * fraction)];
+  return {
+    sampleCount: left.length,
+    meanSquaredError: mse / left.length,
+    meanAbsoluteError: meanAbsoluteError / left.length,
+    maximumAbsoluteError,
+    maximumAbsoluteErrorIndex,
+    maximumAbsoluteErrorPixel: Number.isInteger(width) && width > 0
+      ? { x: maximumAbsoluteErrorIndex % width, y: Math.floor(maximumAbsoluteErrorIndex / width) }
+      : null,
+    maximumPair: { left: left[maximumAbsoluteErrorIndex], right: right[maximumAbsoluteErrorIndex] },
+    absoluteErrorQuantiles: { p99: quantile(0.99), p999: quantile(0.999), p9999: quantile(0.9999) },
+    errorLimit: Number.isFinite(errorLimit) ? errorLimit : null,
+    aboveErrorLimitCount,
+    aboveErrorLimitFraction: aboveErrorLimitCount / left.length,
+  };
 }
 
 function drawDepth(canvasId, values, width, height, exposure = 8) {
@@ -1055,6 +1135,7 @@ async function run() {
       falseClosureChecks: {
         workloadSurfaceIncomplete: scaleLawWorkloads.length < 3,
         timingAmplificationMissing: config.scaleDispatchRepeats <= 1,
+        unpairedTiming: scaleLawWorkloads.some(row => row.timingProtocol !== 'paired-alternating-order-v0'),
         aggregateBelowDeclaredFloor: scaleLawWorkloads.some(row => (
           row.profiles.dense.aggregate.median < config.minimumAggregateGpuMs
           || row.profiles.compact.aggregate.median < config.minimumAggregateGpuMs

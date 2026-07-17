@@ -138,6 +138,12 @@ assert.equal(validateAdaptiveVolumeGpuReport(validAdapterReport).optimizationCla
 
 function scaleWorkload(width, height, denseMedian, compactMedian) {
   const pixelCount = width * height;
+  const pairedSamples = Array.from({ length: 7 }, (_, index) => ({
+    order: index % 2 === 0 ? 'dense-compact' : 'compact-dense',
+    denseAggregateGpuMs: denseMedian,
+    compactAggregateGpuMs: compactMedian,
+    compactOverDenseRatio: compactMedian / denseMedian,
+  }));
   return {
     width,
     height,
@@ -145,11 +151,27 @@ function scaleWorkload(width, height, denseMedian, compactMedian) {
     intersectingRayCount: Math.floor(pixelCount * 0.8),
     denseStepCount: Math.floor(pixelCount * 0.8) * 160,
     dispatchRepeats: 8,
+    timingProtocol: 'paired-alternating-order-v0',
+    pairedSamples,
+    pairedRatio: { median: compactMedian / denseMedian },
+    compactOverDenseRatio: compactMedian / denseMedian,
     profiles: {
       dense: { aggregate: { median: denseMedian }, perDispatch: { median: denseMedian / 8 } },
       compact: { aggregate: { median: compactMedian }, perDispatch: { median: compactMedian / 8 } },
     },
-    comparison: { maximumAbsoluteError: 0.0009 },
+    comparison: {
+      sampleCount: pixelCount,
+      meanSquaredError: 1e-9,
+      meanAbsoluteError: 1e-5,
+      maximumAbsoluteError: 0.0009,
+      maximumAbsoluteErrorIndex: 17,
+      maximumAbsoluteErrorPixel: { x: 17 % width, y: Math.floor(17 / width) },
+      maximumPair: { left: 0.1, right: 0.1009 },
+      absoluteErrorQuantiles: { p99: 0.0001, p999: 0.0002, p9999: 0.0004 },
+      errorLimit: 0.001,
+      aboveErrorLimitCount: 0,
+      aboveErrorLimitFraction: 0,
+    },
   };
 }
 
@@ -159,6 +181,7 @@ validScaleReport.scaleLaw = {
   status: 'passed',
   requested: {
     dispatchRepeats: 8,
+    steadySamples: 7,
     minimumAggregateGpuMs: 2,
     hiddenWorkloadCapApplied: false,
   },
@@ -187,8 +210,13 @@ for (const mutate of [
   report => { report.scaleLaw.effective.workloads.pop(); },
   report => { report.scaleLaw.requested.dispatchRepeats = 1; },
   report => { report.scaleLaw.effective.workloads[0].profiles.dense.aggregate.median = 0.5; },
+  report => { report.scaleLaw.effective.workloads[0].timingProtocol = 'dense-then-compact'; },
+  report => { report.scaleLaw.effective.workloads[0].pairedSamples[1].order = 'dense-compact'; },
+  report => { report.scaleLaw.effective.workloads[0].profiles.dense.aggregate.median = 9; },
+  report => { report.scaleLaw.effective.workloads[0].compactOverDenseRatio = 9; },
   report => { report.scaleLaw.effective.workloads[0].intersectingRayCount = 0; },
   report => { report.scaleLaw.effective.workloads[1].denseStepCount = 1; },
+  report => { delete report.scaleLaw.effective.workloads[2].comparison.absoluteErrorQuantiles; },
   report => { report.scaleLaw.effective.workloads[2].comparison.maximumAbsoluteError = 1; },
   report => { report.scaleLaw.productionAttribution.measuredProductionBottleneck = true; },
   report => { report.scaleLaw.productionAttribution.observedMechanisms.pop(); },
@@ -301,6 +329,10 @@ assert.match(browser, /dispatchRepeats/, 'R8 must record effective timing amplif
 assert.match(browser, /minimumAggregateGpuMs/, 'R8 must reject aggregate timings that remain at the timestamp floor');
 assert.match(browser, /intersectingRayCount/, 'R8 must identify actual ray coverage for every workload');
 assert.match(browser, /denseStepCount/, 'R8 must identify the dense scalar work represented by every workload');
+assert.match(browser, /paired-alternating-order-v0/, 'R8b must pair dense and compact samples with alternating execution order');
+assert.match(browser, /pairedSamples/, 'R8b must preserve raw paired timing evidence');
+assert.match(browser, /absoluteErrorQuantiles/, 'R8b must distinguish a broad reconstruction failure from an extreme-value tail');
+assert.match(browser, /aboveErrorLimitCount/, 'R8b must report how many pixels violate the immutable max-error gate');
 const moduleSource = readFileSync(new URL('../smoke-adaptive-volume-gpu-falsifier.mjs', import.meta.url), 'utf8');
 assert.match(moduleSource, /kaminos\.smoke-adaptive-volume-scale-law\.v0/, 'R8 scale evidence needs its own nested schema');
 assert.match(browser, /productionAttribution/, 'R8 must bind its production comparison boundary to exact source evidence');

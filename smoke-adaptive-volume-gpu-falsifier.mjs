@@ -234,8 +234,10 @@ export function validateAdaptiveVolumeScaleLawReport(report) {
   if (scaleLaw?.status !== 'passed') reasons.push('scale-law-not-passed');
   if (scaleLaw?.requested?.hiddenWorkloadCapApplied !== false) reasons.push('scale-law-hidden-workload-cap');
   const dispatchRepeats = Number(scaleLaw?.requested?.dispatchRepeats);
+  const steadySamples = Number(scaleLaw?.requested?.steadySamples);
   const minimumAggregateGpuMs = Number(scaleLaw?.requested?.minimumAggregateGpuMs);
   if (!Number.isInteger(dispatchRepeats) || dispatchRepeats <= 1) reasons.push('scale-law-timing-amplification-missing');
+  if (!Number.isInteger(steadySamples) || steadySamples < 3) reasons.push('scale-law-steady-samples-invalid');
   if (!finitePositive(minimumAggregateGpuMs)) reasons.push('scale-law-aggregate-floor-missing');
   const workloads = scaleLaw?.effective?.workloads;
   if (!Array.isArray(workloads) || workloads.length < 3) {
@@ -255,6 +257,29 @@ export function validateAdaptiveVolumeScaleLawReport(report) {
       if (!Number.isInteger(intersectingRayCount) || intersectingRayCount <= 0 || intersectingRayCount > pixelCount) reasons.push(`${prefix}:ray-coverage-invalid`);
       if (!Number.isInteger(denseStepCount) || denseStepCount < intersectingRayCount) reasons.push(`${prefix}:dense-step-count-invalid`);
       if (Number(workload?.dispatchRepeats) !== dispatchRepeats) reasons.push(`${prefix}:dispatch-repeat-mismatch`);
+      if (workload?.timingProtocol !== 'paired-alternating-order-v0') reasons.push(`${prefix}:timing-protocol-invalid`);
+      const pairedSamples = workload?.pairedSamples;
+      if (!Array.isArray(pairedSamples) || pairedSamples.length !== steadySamples) {
+        reasons.push(`${prefix}:paired-samples-incomplete`);
+      } else {
+        for (const [sampleIndex, sample] of pairedSamples.entries()) {
+          const expectedOrder = sampleIndex % 2 === 0 ? 'dense-compact' : 'compact-dense';
+          if (sample?.order !== expectedOrder) reasons.push(`${prefix}:paired-order-invalid`);
+          if (!finitePositive(sample?.denseAggregateGpuMs)
+            || !finitePositive(sample?.compactAggregateGpuMs)
+            || !finitePositive(sample?.compactOverDenseRatio)) reasons.push(`${prefix}:paired-timing-invalid`);
+        }
+        const median = values => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
+        const denseMedian = median(pairedSamples.map(sample => Number(sample.denseAggregateGpuMs)));
+        const compactMedian = median(pairedSamples.map(sample => Number(sample.compactAggregateGpuMs)));
+        const ratioMedian = median(pairedSamples.map(sample => Number(sample.compactOverDenseRatio)));
+        if (Number(workload?.profiles?.dense?.aggregate?.median) !== denseMedian
+          || Number(workload?.profiles?.compact?.aggregate?.median) !== compactMedian
+          || Number(workload?.profiles?.dense?.perDispatch?.median) !== denseMedian / dispatchRepeats
+          || Number(workload?.profiles?.compact?.perDispatch?.median) !== compactMedian / dispatchRepeats
+          || Number(workload?.pairedRatio?.median) !== ratioMedian
+          || Number(workload?.compactOverDenseRatio) !== ratioMedian) reasons.push(`${prefix}:paired-summary-mismatch`);
+      }
       for (const arm of ['dense', 'compact']) {
         const profile = workload?.profiles?.[arm];
         if (!finitePositive(profile?.aggregate?.median) || profile.aggregate.median < minimumAggregateGpuMs) reasons.push(`${prefix}:${arm}-aggregate-below-floor`);
@@ -263,6 +288,33 @@ export function validateAdaptiveVolumeScaleLawReport(report) {
       if (!finiteNonNegative(workload?.comparison?.maximumAbsoluteError)
         || Number(workload.comparison.maximumAbsoluteError) > ADAPTIVE_VOLUME_GPU_ERROR_LIMITS.compactPrebuiltAgainstDenseMaximumAbsoluteError) {
         reasons.push(`${prefix}:output-error`);
+      }
+      const comparison = workload?.comparison;
+      const quantiles = comparison?.absoluteErrorQuantiles;
+      if (!finiteNonNegative(comparison?.meanSquaredError)
+        || !finiteNonNegative(comparison?.meanAbsoluteError)
+        || !Number.isFinite(Number(comparison?.maximumPair?.left))
+        || !Number.isFinite(Number(comparison?.maximumPair?.right))
+        || Number(comparison?.sampleCount) !== pixelCount
+        || !Number.isInteger(Number(comparison?.maximumAbsoluteErrorIndex))
+        || Number(comparison.maximumAbsoluteErrorIndex) < 0
+        || Number(comparison.maximumAbsoluteErrorIndex) >= pixelCount
+        || Number(comparison?.maximumAbsoluteErrorPixel?.x) !== Number(comparison.maximumAbsoluteErrorIndex) % width
+        || Number(comparison?.maximumAbsoluteErrorPixel?.y) !== Math.floor(Number(comparison.maximumAbsoluteErrorIndex) / width)) {
+        reasons.push(`${prefix}:error-location-invalid`);
+      }
+      if (![quantiles?.p99, quantiles?.p999, quantiles?.p9999].every(finiteNonNegative)
+        || !(Number(quantiles.p99) <= Number(quantiles.p999))
+        || !(Number(quantiles.p999) <= Number(quantiles.p9999))
+        || !(Number(quantiles.p9999) <= Number(comparison?.maximumAbsoluteError))) reasons.push(`${prefix}:error-quantiles-invalid`);
+      const aboveLimitCount = Number(comparison?.aboveErrorLimitCount);
+      if (Number(comparison?.errorLimit) !== ADAPTIVE_VOLUME_GPU_ERROR_LIMITS.compactPrebuiltAgainstDenseMaximumAbsoluteError
+        || !Number.isInteger(aboveLimitCount)
+        || aboveLimitCount < 0
+        || aboveLimitCount > pixelCount
+        || Math.abs(Number(comparison?.aboveErrorLimitFraction) - aboveLimitCount / pixelCount) > 1e-12
+        || (Number(comparison?.maximumAbsoluteError) > Number(comparison?.errorLimit)) !== (aboveLimitCount > 0)) {
+        reasons.push(`${prefix}:error-exceedance-invalid`);
       }
     }
   }
