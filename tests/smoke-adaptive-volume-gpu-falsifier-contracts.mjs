@@ -519,6 +519,11 @@ assert.match(browser, /productionSurvival/, 'R9 must emit a separately validated
 assert.match(browser, /exact-step45-sidecar-production-field-proxy-v0/, 'R9 must label the retained sidecar as a field proxy rather than live state');
 assert.doesNotMatch(browser, /new Float32Array\(cellCount \* 16\)/, 'R9 must not explode the source sidecar into a four-slot host allocation');
 assert.match(browser, /fieldProxyExpansionApplied:\s*false/, 'R9 must report that its field workload does not hide a host-side four-slot expansion');
+assert.doesNotMatch(browser, /production survival Retina rays/, 'R9 production survival must not allocate a full-frame host ray buffer');
+assert.doesNotMatch(browser, /var<storage, read> productionRays/, 'R9 production survival rays must be generated from camera matrices in shader');
+assert.match(browser, /inverseViewProjection/, 'R9 procedural rays must bind the exact inverse view-projection matrix');
+assert.match(browser, /intersectProductionBounds/, 'R9 procedural rays must preserve exact volume intersection accounting');
+assert.match(browser, /pixelCount \* 8/, 'R9 production depth and work counters must use the packed two-float output contract');
 assert.match(browser, /smoke-extinction-scalar-lookup-only-v0/, 'R9 arms may differ only at the tested scalar lookup');
 for (const productionMechanism of [
   /sampleWorldMajorant/,
