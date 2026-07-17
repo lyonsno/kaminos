@@ -140,7 +140,6 @@
       STRUCTURAL_MATERIAL_3D_ROUTE,
       STRUCTURAL_MATERIAL_3D_VISUAL_AUTHORITY,
       applyLayeredStructuralInteraction,
-      bindLayeredStructuralConnectivity,
       buildLayeredStructuralWitnessScenario,
       createLayeredStructuralDragInteraction,
       createLayeredStructuralMaterial,
@@ -158,6 +157,7 @@
     import {
       STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE,
       createLayeredStructuralHotWebGpuSidecar,
+      validateLayeredStructuralHotBindingReceipt,
     } from './structural-material-3d-webgpu-hot-sidecar.js';
     import {
       STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_ROUTE,
@@ -167,6 +167,10 @@
       createLayeredStructuralGpuTearRequestGate,
       runLayeredStructuralSympatheticTearWebGpu,
     } from './structural-material-3d-webgpu-tear.js';
+    import {
+      buildLayeredStructuralGpuBindingFailureReceipt,
+      buildLayeredStructuralGpuBindingMaterial,
+    } from './structural-material-3d-webgpu-bind.js';
     import {
       DEFAULT_STRUCTURAL_MATERIAL_NATIVE_HAPTIC_URL,
       buildLayeredStructuralHapticImpulse,
@@ -252,6 +256,8 @@
     let gpuRetainedPromise = null;
     let gpuTearReceipt = null;
     let gpuTearPromise = null;
+    let gpuBindingReceipt = null;
+    let gpuBindingPromise = null;
     let gpuTearOperationQueue = Promise.resolve();
     let gpuTearAppliedCount = 0;
     let gpuTearPreviousAppliedReceipt = null;
@@ -293,8 +299,9 @@
     function renderMaterial() {
       clearWorld();
       const nodeById = new Map(material.nodes.map(node => [node.id, node]));
-      const anchoredComponentId = material.sympatheticTear
-        ? `g${material.sympatheticTear.anchoredComponentLabel}`
+      const structuralMutation = material.sympatheticBinding || material.sympatheticTear;
+      const anchoredComponentId = structuralMutation
+        ? `g${structuralMutation.anchoredComponentLabel}`
         : 'c0';
       const maxStress = Math.max(0.001, ...material.bonds.map(bond => bond.lastStress || 0));
       for (const bond of material.bonds) {
@@ -333,16 +340,20 @@
 
     function updateReadout() {
       const summary = summarizeLayeredStructuralState(material);
-      readout.textContent = `broken ${summary.brokenBondCount} | depth ${summary.brokenDepthBondCount}/${summary.crossDepthBondCount} | components ${summary.componentCount} | sound ${summary.sound.signature}`;
+      readout.textContent = `broken ${summary.brokenBondCount} | repaired ${summary.repairedBondCount} | depth ${summary.brokenDepthBondCount}/${summary.crossDepthBondCount} | components ${summary.componentCount} | sound ${summary.sound.signature}`;
       route.textContent = `${STRUCTURAL_MATERIAL_3D_ROUTE} | ${STRUCTURAL_MATERIAL_3D_VISUAL_AUTHORITY}`;
-      gpuStatus.textContent = gpuTearReceipt
+      gpuStatus.textContent = gpuBindingReceipt
+        ? gpuBindingReceipt.binding?.noOp && material.sympatheticBinding
+          ? `GPU bind no-op | repaired ${material.sympatheticBinding.repairedBondCount}`
+          : `GPU bind ${gpuBindingReceipt.status} ${gpuBindingReceipt.binding?.eventCount ?? 0} edges`
+        : gpuTearReceipt
         ? `GPU tear ${gpuTearReceipt.status} ${gpuTearReceipt.topology?.componentCount ?? 0} components`
         : gpuRetainedReceipt
           ? `GPU retained ${gpuRetainedReceipt.status} ${gpuRetainedReceipt.parity?.gpuEventCount ?? 0}/${gpuRetainedReceipt.parity?.cpuEventCount ?? 0}`
         : gpuParityReceipt
           ? `GPU ${gpuParityReceipt.status} ${gpuParityReceipt.parity?.gpuBreakCount ?? 0}/${gpuParityReceipt.parity?.cpuBreakCount ?? 0}`
           : '';
-      gpuStatus.title = gpuTearReceipt?.effectiveRoute || gpuRetainedReceipt?.effectiveRoute || gpuParityReceipt?.effectiveRoute || STRUCTURAL_MATERIAL_3D_WEBGPU_ROUTE;
+      gpuStatus.title = gpuBindingReceipt?.effectiveRoute || gpuTearReceipt?.effectiveRoute || gpuRetainedReceipt?.effectiveRoute || gpuParityReceipt?.effectiveRoute || STRUCTURAL_MATERIAL_3D_WEBGPU_ROUTE;
       gesture.textContent = forceEnvelope
         ? `drag ${forceEnvelope.dragLength.toFixed(3)} | mag ${forceEnvelope.magnitude.toFixed(3)} | z ${forceEnvelope.point.z.toFixed(3)} | stress ${summary.maxStress.toFixed(3)}`
         : `drag 0.000 | mag 0.000 | z 0.500 | stress ${summary.maxStress.toFixed(3)}`;
@@ -377,6 +388,16 @@
             minDirectionDot: Math.min(...directionDots),
           };
         }),
+      };
+    }
+
+    function visibleBindingState() {
+      if (!material.sympatheticBinding) return null;
+      return {
+        ...material.sympatheticBinding,
+        finalBondLiveness: material.bonds.map(bond => bond.alive),
+        repairedBondIds: material.bonds.filter(bond => bond.repaired).map(bond => bond.id),
+        componentLabels: material.nodes.map(node => Number(node.componentId.slice(1))),
       };
     }
 
@@ -532,6 +553,7 @@
           runStructuralMutation('gpu-sympathetic-tear', () => {
             nextMaterial = buildLayeredStructuralGpuTearMaterial(effectiveSourceState, receipt, interaction);
             material = nextMaterial;
+            gpuBindingReceipt = null;
           });
           routeStructuralHaptics(effectiveSourceState, nextMaterial, receipt, interaction);
           gpuTearAppliedCount += 1;
@@ -548,6 +570,43 @@
       });
       gpuTearOperationQueue = promise.catch(() => undefined);
       gpuTearPromise = promise;
+      return promise;
+    }
+
+    function requestGpuBinding(binding) {
+      const requestEpoch = gpuTearRequestGate.begin();
+      const operation = async () => {
+        if (!gpuTearRequestGate.accepts(requestEpoch)) {
+          return buildLayeredStructuralGpuBindingFailureReceipt(
+            new Error('binding invalidated before execution'),
+            'request-invalidated-before-execution',
+          );
+        }
+        const effectiveSourceState = material;
+        const receipt = await ensureHotSidecar(effectiveSourceState)
+          .then(sidecar => sidecar.bind(binding))
+          .catch(error => buildLayeredStructuralGpuBindingFailureReceipt(
+            error,
+            'hot-sidecar-binding-initialization-or-execution',
+          ));
+        if (!gpuTearRequestGate.accepts(requestEpoch)) return receipt;
+        gpuBindingReceipt = receipt;
+        if (receipt.status === 'passed') {
+          runStructuralMutation('gpu-resident-binding', () => {
+            material = buildLayeredStructuralGpuBindingMaterial(effectiveSourceState, receipt);
+            gpuTearReceipt = null;
+          });
+        } else {
+          updateReadout();
+          renderScene();
+        }
+        return receipt;
+      };
+      const promise = gpuTearOperationQueue.then(operation, operation).finally(() => {
+        if (gpuBindingPromise === promise) gpuBindingPromise = null;
+      });
+      gpuTearOperationQueue = promise.catch(() => undefined);
+      gpuBindingPromise = promise;
       return promise;
     }
 
@@ -637,6 +696,7 @@
         dragStart = null;
         forceEnvelope = null;
         gpuTearReceipt = null;
+        gpuBindingReceipt = null;
       });
       synchronizeHotSidecar(material);
     });
@@ -661,18 +721,13 @@
     document.querySelector('#bind').addEventListener('click', () => {
       liveDragScheduler.invalidate();
       gpuTearRequestGate.invalidate();
-      runStructuralMutation('bind', () => {
-        const summary = summarizeLayeredStructuralState(material);
-        const bindPoint = summary.crackPath.find(edge => edge.bondKind === 'depth')?.midpoint || lastPoint;
-        material = bindLayeredStructuralConnectivity(material, {
-          point: bindPoint,
-          radius: 0.22,
-          strength: 1.25,
-        });
-        delete material.sympatheticTear;
-        gpuTearReceipt = null;
+      const summary = summarizeLayeredStructuralState(material);
+      const bindPoint = summary.crackPath.find(edge => edge.bondKind === 'depth')?.midpoint || lastPoint;
+      void requestGpuBinding({
+        point: bindPoint,
+        radius: 0.22,
+        strength: 1.25,
       });
-      synchronizeHotSidecar(material);
     });
 
     window.__structuralMaterial3dWitness = () => ({
@@ -687,6 +742,7 @@
       gpuParity: gpuParityReceipt,
       gpuRetainedParity: gpuRetainedReceipt,
       gpuSympatheticTear: gpuTearReceipt,
+      gpuResidentBinding: gpuBindingReceipt,
       gpuHotSidecar: gpuHotSidecar?.snapshot() || null,
       gpuTearAppliedCount,
       gpuTearRecentAppliedReceipts: [gpuTearPreviousAppliedReceipt, gpuTearLatestAppliedReceipt]
@@ -708,6 +764,9 @@
       },
       sympatheticTear: material.sympatheticTear || null,
       visibleTear: visibleTearState(),
+      sympatheticBinding: material.sympatheticBinding || null,
+      visibleBinding: visibleBindingState(),
+      gpuBindingPending: gpuBindingPromise !== null,
     });
 
     window.__structuralMaterial3dCameraWitness = () => ({
@@ -867,8 +926,8 @@
         disposeAgain,
         warmReuse: first.lifecycle.deviceRequestCount === 1 &&
           second.lifecycle.deviceRequestCount === 1 &&
-          first.lifecycle.pipelineCreateCount === 2 &&
-          second.lifecycle.pipelineCreateCount === 2 &&
+          first.lifecycle.pipelineCreateCount === 3 &&
+          second.lifecycle.pipelineCreateCount === 3 &&
           first.lifecycle.bufferAllocationCount === 9 &&
           second.lifecycle.bufferAllocationCount === 9,
         disposeIdempotent: JSON.stringify(dispose) === JSON.stringify(disposeAgain),
@@ -902,6 +961,68 @@
       return requestGpuSympatheticTear(sourceState, interaction, {
         applyToWorld: options.applyToWorld !== false,
       });
+    };
+
+    window.__structuralMaterial3dRunGpuBinding = async (binding = null) => {
+      liveDragScheduler.invalidate();
+      gpuTearRequestGate.invalidate();
+      const summary = summarizeLayeredStructuralState(material);
+      const point = binding?.point ||
+        summary.crackPath.find(edge => edge.bondKind === 'depth')?.midpoint ||
+        lastPoint;
+      return requestGpuBinding({
+        point,
+        radius: binding?.radius ?? 0.22,
+        strength: binding?.strength ?? 1.25,
+      });
+    };
+
+    window.__structuralMaterial3dRunGpuBindingRollbackWitness = async () => {
+      const scenario = buildLayeredStructuralWitnessScenario();
+      const witnessState = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true });
+      let bindingValidationCount = 0;
+      const sidecar = await createLayeredStructuralHotWebGpuSidecar({
+        state: witnessState,
+        bindingReceiptValidator(sourceState, receipt) {
+          const validation = validateLayeredStructuralHotBindingReceipt(sourceState, receipt);
+          bindingValidationCount += 1;
+          return bindingValidationCount === 1
+            ? { ...validation, ok: false, reasons: [...validation.reasons, 'injected-post-dispatch-rejection'] }
+            : validation;
+        },
+      });
+      const fractured = await sidecar.execute(scenario.force);
+      if (fractured.status !== 'passed') {
+        await sidecar.dispose();
+        throw new Error(`rollback witness fracture failed: ${fractured.failurePhase}`);
+      }
+      const point = scenario.summaries.cracked.crackPath
+        .find(edge => edge.bondKind === 'depth')?.midpoint || scenario.force.point;
+      const binding = { point, radius: 0.22, strength: 1.25 };
+      const rejected = await sidecar.bind(binding);
+      const expectedRepairEventCount = rejected.binding?.eventCount || 0;
+      const recovered = await sidecar.bind(binding);
+      const beforeDispose = sidecar.snapshot();
+      const dispose = await sidecar.dispose();
+      const passed = rejected.status === 'failed' &&
+        rejected.failurePhase === 'compact-binding-receipt-validation' &&
+        expectedRepairEventCount > 0 &&
+        recovered.status === 'passed' &&
+        recovered.binding?.eventCount === expectedRepairEventCount &&
+        recovered.lifecycle?.rollbackCount === 1 &&
+        recovered.lifecycle?.rollbackFailureCount === 0 &&
+        recovered.lifecycle?.residentStateTrusted === true &&
+        dispose.status === 'passed';
+      return {
+        schema: 'kaminos.structural-material.webgpu-binding-rollback-witness.v0',
+        status: passed ? 'passed' : 'failed',
+        expectedRepairEventCount,
+        fractured,
+        rejected,
+        recovered,
+        beforeDispose,
+        dispose,
+      };
     };
 
     window.addEventListener('pagehide', () => {

@@ -60,8 +60,8 @@ assert.match(pageSource, /__structuralMaterial3dRunGpuSympatheticTear/, '3D rout
 assert.match(pageSource, /pointerup/, 'effigy drag release remains the world-consequence boundary');
 assert.match(
   pageSource,
-  /querySelector\('#bind'\)\.addEventListener\('click',[\s\S]*?gpuTearRequestGate\.invalidate\(\);[\s\S]*?runStructuralMutation\('bind'/,
-  'Bind invalidates pending GPU tear completion before repairing connectivity',
+  /querySelector\('#bind'\)\.addEventListener\('click',[\s\S]*?gpuTearRequestGate\.invalidate\(\);[\s\S]*?requestGpuBinding/,
+  'Bind invalidates pending GPU tear completion before requesting resident connectivity repair',
 );
 
 const requestGate = createLayeredStructuralGpuTearRequestGate();

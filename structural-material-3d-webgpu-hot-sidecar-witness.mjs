@@ -283,7 +283,7 @@ try {
   report.cpuFallbackUsed = isolated.first.cpuFallbackUsed;
   report.checks.coldInitialization = isolated.coldInitialization.lifecycle.adapterRequestCount === 1 &&
     isolated.coldInitialization.lifecycle.deviceRequestCount === 1 &&
-    isolated.coldInitialization.lifecycle.pipelineCreateCount === 2 &&
+    isolated.coldInitialization.lifecycle.pipelineCreateCount === 3 &&
     isolated.coldInitialization.lifecycle.bufferAllocationCount === 9;
   report.checks.warmReuse = isolated.warmReuse === true &&
     isolated.first.lifecycle.executionCount === 1 &&
@@ -327,8 +327,8 @@ try {
     report.liveSecond.effectiveRoute === STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_ROUTE;
   report.checks.liveWarmReuse = report.liveFirst.lifecycle.deviceRequestCount === 1 &&
     report.liveSecond.lifecycle.deviceRequestCount === 1 &&
-    report.liveFirst.lifecycle.pipelineCreateCount === 2 &&
-    report.liveSecond.lifecycle.pipelineCreateCount === 2 &&
+    report.liveFirst.lifecycle.pipelineCreateCount === 3 &&
+    report.liveSecond.lifecycle.pipelineCreateCount === 3 &&
     report.liveFirst.lifecycle.bufferAllocationCount === 9 &&
     report.liveSecond.lifecycle.bufferAllocationCount === 9 &&
     report.liveFirst.lifecycle.executionCount === 1 &&
@@ -373,7 +373,7 @@ try {
   report.checks.resetReusesRuntime = reset.summary.brokenBondCount === 0 &&
     reset.summary.componentCount === 1 &&
     reset.gpuHotSidecar.lifecycle.deviceRequestCount === 1 &&
-    reset.gpuHotSidecar.lifecycle.pipelineCreateCount === 2 &&
+    reset.gpuHotSidecar.lifecycle.pipelineCreateCount === 3 &&
     reset.gpuHotSidecar.lifecycle.bufferAllocationCount === 9 &&
     reset.gpuHotSidecar.lifecycle.reinitializeCount === 1;
 

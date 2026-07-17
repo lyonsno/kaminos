@@ -154,7 +154,7 @@ function maxComponentSeparation(components) {
   return round(max);
 }
 
-function buildSound(events, brokenCount, repairedCount) {
+export function buildLayeredStructuralSound(events, brokenCount, repairedCount) {
   const impulseEnergy = events.reduce((sum, event) => sum + finite(event.energy), 0);
   const crackEvents = events.filter(event => event.kind === 'crack');
   const bindEvents = events.filter(event => event.kind === 'bind');
@@ -211,7 +211,7 @@ function finalizeState(state, forceDirection = { x: 1, y: 0, z: 0 }, magnitude =
     ...state,
     nodes,
     components,
-    sound: buildSound(state.sound.events, brokenCount, state.bonds.filter(bond => bond.repaired).length),
+    sound: buildLayeredStructuralSound(state.sound.events, brokenCount, state.bonds.filter(bond => bond.repaired).length),
   };
 }
 
@@ -309,7 +309,7 @@ export function createLayeredStructuralMaterial(options = {}) {
     bonds,
     components: [],
     appliedInteractions: [],
-    sound: buildSound([], 0, 0),
+    sound: buildLayeredStructuralSound([], 0, 0),
   };
   return finalizeState(initial);
 }

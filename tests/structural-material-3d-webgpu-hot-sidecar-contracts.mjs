@@ -38,8 +38,8 @@ const pageSource = readFileSync(pagePath, 'utf8');
 
 assert.equal(
   (hotSource.match(/createComputePipelineAsync/g) || []).length,
-  2,
-  'hot sidecar compiles fracture and topology pipelines once during initialization',
+  3,
+  'hot sidecar compiles fracture, binding, and topology pipelines once during initialization',
 );
 assert.match(hotSource, /operationQueue/, 'hot sidecar serializes execute, reinitialize, and dispose operations');
 assert.match(
@@ -164,6 +164,10 @@ assert.deepEqual(
     bufferAllocationCount: 9,
     executionAttemptCount: 0,
     executionCount: 0,
+    bindingAttemptCount: 0,
+    bindingCount: 0,
+    bindingDispatchCount: 0,
+    bindEventCount: 0,
     eventHeaderResetCount: 0,
     interactionUploadCount: 0,
     dispatchCount: 0,
@@ -173,6 +177,9 @@ assert.deepEqual(
     compactReadbackBufferCount: 2,
     fullValidationReadbackCount: 0,
     reinitializeCount: 0,
+    rollbackCount: 0,
+    rollbackFailureCount: 0,
+    residentStateTrusted: true,
     bufferDestroyCount: 9,
     bufferDestroyErrorCount: 0,
     deviceDestroyCount: 1,
@@ -199,10 +206,14 @@ const exactReceipt = {
   lifecycle: {
     adapterRequestCount: 1,
     deviceRequestCount: 1,
-    pipelineCreateCount: 2,
+    pipelineCreateCount: 3,
     bufferAllocationCount: 9,
     executionAttemptCount: 1,
     executionCount: 1,
+    bindingAttemptCount: 0,
+    bindingCount: 0,
+    bindingDispatchCount: 0,
+    bindEventCount: 0,
     eventHeaderResetCount: 1,
     compactReadbackCount: 1,
     compactReadbackBufferCount: 2,

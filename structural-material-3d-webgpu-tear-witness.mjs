@@ -4,7 +4,10 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 import { STRUCTURAL_MATERIAL_3D_ROUTE } from './structural-material-3d-core.js';
-import { STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE } from './structural-material-3d-webgpu-hot-sidecar.js';
+import {
+  STRUCTURAL_MATERIAL_3D_WEBGPU_BINDING_ROUTE,
+  STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE,
+} from './structural-material-3d-webgpu-hot-sidecar.js';
 import { STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_ROUTE } from './structural-material-3d-webgpu-tear.js';
 
 const SCHEMA = 'kaminos.structural-material.webgpu-sympathetic-tear-browser-witness.v0';
@@ -252,6 +255,9 @@ const report = {
   unnotchedControl: null,
   notchedTear: null,
   visibleTear: null,
+  residentBinding: null,
+  visibleBinding: null,
+  rollbackRecovery: null,
   checks: {},
   pixelProbe: null,
   screenshotPixelProbe: null,
@@ -456,7 +462,7 @@ try {
   report.checks.interactiveValidation = notched.interactiveValidation?.ok === true;
   report.checks.hotExecutionRoute = notched.executionRoute === STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE;
   report.checks.oneDevice = notched.lifecycle?.deviceRequestCount === 1;
-  report.checks.twoPipelines = notched.lifecycle?.pipelineCreateCount === 2;
+  report.checks.threePipelines = notched.lifecycle?.pipelineCreateCount === 3;
   report.checks.persistentBuffers = notched.lifecycle?.bufferAllocationCount === 9;
   const liveExecutionCount = pageAfter.liveDrag?.scheduler?.completedCount;
   report.checks.compactReadback = Number.isInteger(liveExecutionCount) && liveExecutionCount >= 2 &&
@@ -534,6 +540,103 @@ try {
     'configured native haptic companion did not accept a causal connectivity impulse',
   );
 
+  report.failurePhase = 'gpu-resident-binding';
+  const bindingCameraBefore = await evaluate('window.__structuralMaterial3dCameraWitness().state');
+  const brokenBeforeBinding = persisted.summary.brokenBondCount;
+  const componentCountBeforeBinding = persisted.summary.componentCount;
+  const reinitializeCountBeforeBinding = persisted.gpuHotSidecar?.lifecycle?.reinitializeCount || 0;
+  const residentBinding = await evaluate('window.__structuralMaterial3dRunGpuBinding()', true);
+  const boundPage = await evaluate('window.__structuralMaterial3dWitness()');
+  report.residentBinding = residentBinding;
+  report.visibleBinding = boundPage.visibleBinding;
+  report.checks.bindingStatusPassed = residentBinding.status === 'passed';
+  report.checks.bindingRouteIdentity = residentBinding.effectiveRoute ===
+    STRUCTURAL_MATERIAL_3D_WEBGPU_BINDING_ROUTE;
+  report.checks.bindingBackendIdentity = residentBinding.effectiveBackend === 'webgpu' &&
+    residentBinding.cpuFallbackUsed === false;
+  report.checks.bindingCompactValidation = residentBinding.compactValidation?.ok === true;
+  report.checks.bindingProducedEvents = residentBinding.binding?.eventCount > 0 &&
+    residentBinding.binding.eventCount === residentBinding.binding.events?.length;
+  report.checks.bindingReducedDamage = boundPage.summary.brokenBondCount < brokenBeforeBinding &&
+    boundPage.summary.repairedBondCount >= residentBinding.binding.eventCount &&
+    boundPage.summary.componentCount <= componentCountBeforeBinding;
+  report.checks.bindingGpuVisibleCoherence = JSON.stringify(
+    residentBinding.gpuStructuralState?.finalBondLiveness,
+  ) === JSON.stringify(boundPage.visibleBinding?.finalBondLiveness) &&
+    JSON.stringify(residentBinding.gpuStructuralState?.componentLabels) ===
+      JSON.stringify(boundPage.visibleBinding?.componentLabels);
+  report.checks.bindingMutationProvenance = residentBinding.binding.events.every(event =>
+    event.eventEpoch === residentBinding.eventEpoch &&
+    event.previousAlive === false &&
+    event.cause === 'operator-binding' &&
+    event.distance <= residentBinding.binding.effective.radius + 0.000001
+  );
+  report.checks.bindingStayedResident = residentBinding.lifecycle?.deviceRequestCount === 1 &&
+    residentBinding.lifecycle?.pipelineCreateCount === 3 &&
+    residentBinding.lifecycle?.bufferAllocationCount === 9 &&
+    residentBinding.lifecycle?.reinitializeCount === reinitializeCountBeforeBinding;
+  report.checks.bindingPreservedCamera = JSON.stringify(bindingCameraBefore) === JSON.stringify(
+    await evaluate('window.__structuralMaterial3dCameraWitness().state'),
+  );
+  for (const name of [
+    'bindingStatusPassed',
+    'bindingRouteIdentity',
+    'bindingBackendIdentity',
+    'bindingCompactValidation',
+    'bindingProducedEvents',
+    'bindingReducedDamage',
+    'bindingGpuVisibleCoherence',
+    'bindingMutationProvenance',
+    'bindingStayedResident',
+    'bindingPreservedCamera',
+  ]) assertCheck(report.checks[name], `GPU resident binding check failed: ${name}`);
+
+  const boundFingerprint = {
+    finalBondLiveness: boundPage.visibleBinding.finalBondLiveness,
+    componentLabels: boundPage.visibleBinding.componentLabels,
+    brokenBondCount: boundPage.summary.brokenBondCount,
+    repairedBondCount: boundPage.summary.repairedBondCount,
+    componentCount: boundPage.summary.componentCount,
+  };
+  const duplicateBinding = await evaluate(
+    `window.__structuralMaterial3dRunGpuBinding(${JSON.stringify(residentBinding.binding.effective)})`,
+    true,
+  );
+  const duplicatePage = await evaluate('window.__structuralMaterial3dWitness()');
+  const duplicateFingerprint = {
+    finalBondLiveness: duplicatePage.visibleBinding.finalBondLiveness,
+    componentLabels: duplicatePage.visibleBinding.componentLabels,
+    brokenBondCount: duplicatePage.summary.brokenBondCount,
+    repairedBondCount: duplicatePage.summary.repairedBondCount,
+    componentCount: duplicatePage.summary.componentCount,
+  };
+  report.duplicateBinding = duplicateBinding;
+  report.checks.duplicateBindingNoOp = duplicateBinding.status === 'passed' &&
+    duplicateBinding.binding?.noOp === true &&
+    duplicateBinding.binding?.eventCount === 0 &&
+    JSON.stringify(boundFingerprint) === JSON.stringify(duplicateFingerprint) &&
+    JSON.stringify(boundPage.visibleBinding) === JSON.stringify(duplicatePage.visibleBinding);
+  assertCheck(report.checks.duplicateBindingNoOp, 'duplicate binding contact was not an exact no-op');
+
+  report.failurePhase = 'post-dispatch-rollback-recovery';
+  report.rollbackRecovery = await evaluate(
+    'window.__structuralMaterial3dRunGpuBindingRollbackWitness()',
+    true,
+  );
+  report.checks.postDispatchRollbackRecovery = report.rollbackRecovery?.status === 'passed' &&
+    report.rollbackRecovery?.rejected?.status === 'failed' &&
+    report.rollbackRecovery?.rejected?.failurePhase === 'compact-binding-receipt-validation' &&
+    report.rollbackRecovery?.recovered?.status === 'passed' &&
+    report.rollbackRecovery?.recovered?.binding?.eventCount ===
+      report.rollbackRecovery?.expectedRepairEventCount &&
+    report.rollbackRecovery?.recovered?.binding?.eventCount > 0 &&
+    report.rollbackRecovery?.recovered?.lifecycle?.rollbackCount === 1 &&
+    report.rollbackRecovery?.recovered?.lifecycle?.rollbackFailureCount === 0;
+  assertCheck(
+    report.checks.postDispatchRollbackRecovery,
+    'a rejected post-dispatch bind did not restore the accepted resident snapshot',
+  );
+
   report.failurePhase = 'visual-evidence';
   report.pixelProbe = await evaluate('window.__structuralMaterial3dPixelProbe()', true);
   assertCheck(report.pixelProbe?.ok && report.pixelProbe.nonDarkPixels > 0, 'visual pixel probe is blank');
@@ -546,11 +649,24 @@ try {
     report.screenshotPixelProbe.minimumNonDarkPixels;
   report.checks.routeStatusVisible = await evaluate(`(() => {
     const status = document.querySelector('#gpu-status');
-    return status?.textContent.includes('GPU tear passed') && status?.title === ${JSON.stringify(STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_ROUTE)};
+    return status?.textContent.includes('GPU bind no-op | repaired 12') && status?.title === ${JSON.stringify(STRUCTURAL_MATERIAL_3D_WEBGPU_BINDING_ROUTE)};
   })()`);
   report.checks.noHorizontalOverflow = await evaluate('document.documentElement.scrollWidth === document.documentElement.clientWidth');
-  assertCheck(report.checks.routeStatusVisible, 'operator-visible GPU tear status lacks effective-route identity');
-  assertCheck(report.checks.noHorizontalOverflow, 'GPU tear route has horizontal overflow');
+  assertCheck(report.checks.routeStatusVisible, 'operator-visible GPU binding status lacks effective-route identity');
+  assertCheck(report.checks.noHorizontalOverflow, 'GPU binding route has horizontal overflow');
+
+  report.failurePhase = 'post-binding-refracture';
+  const repairedBondIndices = residentBinding.binding.events.map(event => event.bondIndex);
+  const refracture = await evaluate(
+    `window.__structuralMaterial3dRunGpuSympatheticTear({ interaction: ${JSON.stringify(dragged.forceEnvelope)} })`,
+    true,
+  );
+  const refracturedPage = await evaluate('window.__structuralMaterial3dWitness()');
+  report.postBindingRefracture = refracture;
+  report.checks.postBindingRefracture = refracture.status === 'passed' &&
+    repairedBondIndices.some(index => refracture.gpuStructuralState?.finalBondLiveness?.[index] === false) &&
+    refracturedPage.summary.brokenBondCount > duplicatePage.summary.brokenBondCount;
+  assertCheck(report.checks.postBindingRefracture, 'the causative force could not refracture a repaired GPU edge');
 
   report.failurePhase = 'reset';
   const denseFingerprint = {
@@ -573,7 +689,8 @@ try {
   const cameraReset = await evaluate('window.__structuralMaterial3dCameraWitness().state');
   report.checks.resetRestoredTopology = reset.summary.brokenBondCount === 0 &&
     reset.summary.componentCount === 1 &&
-    reset.visibleTear === null;
+    reset.visibleTear === null &&
+    reset.visibleBinding === null;
   report.checks.resetPreservedCamera = JSON.stringify(cameraAfter) === JSON.stringify(cameraReset);
   assertCheck(report.checks.resetRestoredTopology, 'reset did not restore pristine topology');
   assertCheck(report.checks.resetPreservedCamera, 'reset changed operator camera state');
@@ -640,6 +757,8 @@ try {
     effectiveRoute: report.effectiveRoute,
     effectiveSequenceIdentity: notched.effectiveSequenceIdentity,
     visibleTear: report.visibleTear,
+    residentBinding: report.residentBinding,
+    visibleBinding: report.visibleBinding,
     pixelProbe: report.pixelProbe,
     screenshotPixelProbe: report.screenshotPixelProbe,
     screenshotPath: config.screenshot,
