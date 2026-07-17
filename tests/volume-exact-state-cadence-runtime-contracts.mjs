@@ -21,6 +21,25 @@ assert.match(core, /device\.queue\.submit\(\[encoder\.finish\(\)\]\)[\s\S]*await
 assert.match(core, /function encodeExactStateCadencePresentation[\s\S]*selectPresentation[\s\S]*encodePresentation/, 'RAF presentation selects and interpolates only completed adjacent states');
 assert.match(core, /exactStateCadenceEffective[\s\S]*encodeExactStateCadencePresentation[\s\S]*else[\s\S]*encodeSim\(encoder\)/, 'effective cadence presentation replaces the RAF simulation step rather than duplicating it');
 assert.match(core, /function resetExactStateCadenceForControlChange[\s\S]*controlGeneration[\s\S]*source-controls-changed/, 'source-control changes invalidate the ring with an explicit generation reset');
+const cadenceSourceSignature = core.slice(
+  core.indexOf('function exactStateCadenceSimulatorControlValues'),
+  core.indexOf('function exactStateCadenceConfigurationSignature'),
+);
+assert.match(cadenceSourceSignature, /Object\.values\(exactStateCadenceSimulatorControlValues\(snapshot\)\)/, 'cadence generation derives from one named simulator-control normalization path');
+for (const simulatorControl of [
+  'microdetail',
+  'interfaceShred',
+  'fireLicks',
+  'fireScale',
+  'detailScale',
+  'plumeHeight',
+]) {
+  assert.match(
+    cadenceSourceSignature,
+    new RegExp(`snapshot\\.${simulatorControl}\\b`),
+    `${simulatorControl} changes must invalidate resident cadence history before a new generation can interpolate`,
+  );
+}
 assert.match(core, /selective-head-presentation-input-unavailable/, 'cadence refuses learned selective-head routing until that runtime can consume presentation buffers');
 assert.match(core, /exactStateCadenceRequested/, 'debug state preserves requested cadence mode');
 assert.match(core, /exactStateCadenceEffective/, 'debug state distinguishes requested from effective cadence mode');

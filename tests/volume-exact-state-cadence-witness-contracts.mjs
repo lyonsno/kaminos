@@ -24,6 +24,7 @@ assert.match(source, /distinctAlpha/, 'witness requires interpolation movement r
 assert.match(source, /frameDelta[\s\S]*simStepDelta/, 'witness measures producer cadence independently of RAF cadence');
 assert.match(source, /boundarySplatCandidateCount/, 'blank-frame diagnosis preserves the live candidate count');
 assert.match(source, /boundarySplatInstanceCount/, 'blank-frame diagnosis preserves the live instance count');
+assert.match(source, /boundarySplatAttributeModelIdentity/, 'witness preserves the applied learned attribute model identity');
 assert.match(source, /lastFrameEnergy/, 'blank-frame diagnosis preserves renderer energy telemetry');
 assert.match(source, /volumeReconstructionStyle/, 'blank-frame diagnosis preserves effective reconstruction identity');
 assert.match(source, /timing:\s*state\?\.timing/, 'witness preserves measured frame and queue timing rather than inferring cost from cadence settings');
@@ -36,5 +37,73 @@ assert.match(
 );
 assert.match(source, /writeReport\([\s\S]*catch/, 'witness preserves a report across primary-output failure');
 assert.match(source, /failurePhase/, 'failure report names the phase that failed');
+
+const validateEffectiveStateSource = source.slice(
+  source.indexOf('function validateEffectiveState'),
+  source.indexOf('function compactState'),
+);
+const validateEffectiveState = new Function(
+  'requestedConfigFromUrl',
+  'EFFECTIVE_ROUTE',
+  'EXACT_STATE_CADENCE_GPU_IDENTITY',
+  'ONE_SIMULATOR_AUTHORITY',
+  'PHASE_SOURCE',
+  'BOUNDARY_SPLAT_LEARNED_RENDERER_IDENTITY',
+  'BOUNDARY_SPLAT_LEARNED_ATTRIBUTE_MODEL_IDENTITY',
+  `${validateEffectiveStateSource}; return validateEffectiveState;`,
+)(
+  () => ({
+    requested: true,
+    depth: 4,
+    delaySteps: 2,
+    producerIntervalMs: 1,
+    presentationStepMs: 40,
+    boundarySplatMode: 'learned',
+    boundarySplatComposition: 'proof',
+    boundarySplatPbrScene: null,
+  }),
+  'native-3d-compute-fluid-raymarch-v0',
+  'kaminos.volume.exact-state-cadence-gpu.v0',
+  'single-authoritative-simulator-completed-state-history-v0',
+  'completed-exact-state-continuation-history',
+  'live-boundary-sidecar-learned-attribute-splats-v0',
+  'sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472',
+);
+
+const validCadenceButFalseLearnedSplatState = {
+  active: true,
+  effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
+  exactStateCadenceRequested: true,
+  exactStateCadenceEffective: 'active',
+  exactStateCadenceFallbackReason: null,
+  exactStateCadenceIdentity: 'kaminos.volume.exact-state-cadence-gpu.v0',
+  exactStateCadenceAddedSimulationPasses: 0,
+  exactStateCadenceProducerIntervalMs: 1,
+  exactStateCadencePresentationStepMs: 40,
+  exactStateCadence: {
+    authority: 'single-authoritative-simulator-completed-state-history-v0',
+    phaseSource: 'completed-exact-state-continuation-history',
+    allocation: {
+      requestedDepth: 4,
+      allocatedDepth: 4,
+      presentationDelaySteps: 2,
+    },
+  },
+  boundarySplatMode: 'off',
+  boundarySplatRendererIdentity: 'boundary-sidecar-splats-v0',
+  boundarySplatAttributeModelIdentity: null,
+  boundarySplatComposition: 'proof',
+  boundarySplatSourceCandidateCount: 0,
+  boundarySplatSelectedCandidateCount: 0,
+  boundarySplatInstanceCount: 0,
+  boundarySplatOverflowCount: 0,
+  boundarySplatCopyBytesThisFrame: 0,
+  boundarySplatFallbackReason: null,
+};
+assert.throws(
+  () => validateEffectiveState(validCadenceButFalseLearnedSplatState, 'http://127.0.0.1:18961/'),
+  /stale-default-or-fallback-cadence-config/,
+  'valid cadence cannot launder an off or empty learned-splat route into passing evidence',
+);
 
 console.log('exact-state cadence witness contracts passed');

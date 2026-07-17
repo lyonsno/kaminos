@@ -5,12 +5,15 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 import { measureBoundarySplatTemporalFrame } from './boundary-splat-temporal-collapse.mjs';
+import { BOUNDARY_SPLAT_ATTRIBUTE_MODEL_IDENTITY } from './models/boundary-splat-attribute/live-support-h64-v0/boundary-splat-attribute-model.generated.js';
 
 const SCHEMA = 'kaminos.volume.exact-state-cadence-witness.v0';
 const EFFECTIVE_ROUTE = 'native-3d-compute-fluid-raymarch-v0';
 const EXACT_STATE_CADENCE_GPU_IDENTITY = 'kaminos.volume.exact-state-cadence-gpu.v0';
 const ONE_SIMULATOR_AUTHORITY = 'single-authoritative-simulator-completed-state-history-v0';
 const PHASE_SOURCE = 'completed-exact-state-continuation-history';
+const BOUNDARY_SPLAT_LEARNED_RENDERER_IDENTITY = 'live-boundary-sidecar-learned-attribute-splats-v0';
+const BOUNDARY_SPLAT_LEARNED_ATTRIBUTE_MODEL_IDENTITY = BOUNDARY_SPLAT_ATTRIBUTE_MODEL_IDENTITY;
 
 const args = parseArgs(process.argv.slice(2));
 const requestedRoute = String(args.get('--url') || '');
@@ -165,12 +168,28 @@ function validateInputs() {
 
 function requestedConfigFromUrl(url) {
   const params = new URL(url).searchParams;
+  const requestedSplatMode = params.has('volume_boundary_splat_mode')
+    ? String(params.get('volume_boundary_splat_mode') || 'off').toLowerCase().replace(/-/g, '_')
+    : null;
+  const requestedComposition = params.has('volume_boundary_splat_composition')
+    ? String(params.get('volume_boundary_splat_composition') || 'proof').toLowerCase().replace(/_/g, '-')
+    : null;
+  const requestedPbrScene = params.has('volume_boundary_splat_pbr_scene')
+    ? String(params.get('volume_boundary_splat_pbr_scene') || 'off').toLowerCase().replace(/_/g, '-')
+    : null;
   return {
     requested: true,
     depth: Number(params.get('volume_cadence_depth')),
     delaySteps: Number(params.get('volume_cadence_delay_steps')),
     producerIntervalMs: Number(params.get('volume_cadence_producer_ms')),
     presentationStepMs: Number(params.get('volume_cadence_presentation_ms')),
+    boundarySplatMode: ['analytic', 'learned'].includes(requestedSplatMode) ? requestedSplatMode : requestedSplatMode === null ? null : 'off',
+    boundarySplatComposition: requestedComposition === null
+      ? null
+      : ['field', 'composed-field', 'field-100'].includes(requestedComposition) ? 'field' : 'proof',
+    boundarySplatPbrScene: requestedPbrScene === null
+      ? null
+      : ['fire-field', 'pbr-fire-field', 'court'].includes(requestedPbrScene) ? 'fire-field' : 'off',
   };
 }
 
@@ -192,6 +211,16 @@ function validateEffectiveState(state, pageUrl) {
   if (cadence?.allocation?.presentationDelaySteps !== expected.delaySteps) mismatches.push(['delaySteps', expected.delaySteps, cadence?.allocation?.presentationDelaySteps]);
   if (Number(state?.exactStateCadenceProducerIntervalMs) !== expected.producerIntervalMs) mismatches.push(['producerMs', expected.producerIntervalMs, state?.exactStateCadenceProducerIntervalMs]);
   if (Number(state?.exactStateCadencePresentationStepMs) !== expected.presentationStepMs) mismatches.push(['presentationMs', expected.presentationStepMs, state?.exactStateCadencePresentationStepMs]);
+  if (expected.boundarySplatMode !== null && state?.boundarySplatMode !== expected.boundarySplatMode) mismatches.push(['boundarySplatMode', expected.boundarySplatMode, state?.boundarySplatMode]);
+  if (expected.boundarySplatComposition !== null && state?.boundarySplatComposition !== expected.boundarySplatComposition) mismatches.push(['boundarySplatComposition', expected.boundarySplatComposition, state?.boundarySplatComposition]);
+  if (expected.boundarySplatPbrScene !== null && state?.boundarySplatPbrScene !== expected.boundarySplatPbrScene) mismatches.push(['boundarySplatPbrScene', expected.boundarySplatPbrScene, state?.boundarySplatPbrScene]);
+  if (expected.boundarySplatMode === 'learned') {
+    if (state?.boundarySplatRendererIdentity !== BOUNDARY_SPLAT_LEARNED_RENDERER_IDENTITY) mismatches.push(['boundarySplatRendererIdentity', BOUNDARY_SPLAT_LEARNED_RENDERER_IDENTITY, state?.boundarySplatRendererIdentity]);
+    if (state?.boundarySplatAttributeModelIdentity !== BOUNDARY_SPLAT_LEARNED_ATTRIBUTE_MODEL_IDENTITY) mismatches.push(['boundarySplatAttributeModelIdentity', BOUNDARY_SPLAT_LEARNED_ATTRIBUTE_MODEL_IDENTITY, state?.boundarySplatAttributeModelIdentity]);
+    if (!(Number(state?.boundarySplatSourceCandidateCount) > 0)) mismatches.push(['boundarySplatSourceCandidateCount', '>0', state?.boundarySplatSourceCandidateCount]);
+    if (!(Number(state?.boundarySplatSelectedCandidateCount) > 0)) mismatches.push(['boundarySplatSelectedCandidateCount', '>0', state?.boundarySplatSelectedCandidateCount]);
+    if (!(Number(state?.boundarySplatInstanceCount) > 0)) mismatches.push(['boundarySplatInstanceCount', '>0', state?.boundarySplatInstanceCount]);
+  }
   if (Number(state?.boundarySplatOverflowCount || 0) !== 0) mismatches.push(['splatOverflow', 0, state?.boundarySplatOverflowCount]);
   if (Number(state?.boundarySplatCopyBytesThisFrame || 0) !== 0) mismatches.push(['candidateCopyBytes', 0, state?.boundarySplatCopyBytesThisFrame]);
   if (state?.boundarySplatFallbackReason != null) mismatches.push(['splatFallback', null, state?.boundarySplatFallbackReason]);
@@ -214,7 +243,9 @@ function compactState(state) {
     volumeReconstructionStyle: state?.volumeReconstructionStyle || null,
     boundarySplatMode: state?.boundarySplatMode || null,
     boundarySplatRendererIdentity: state?.boundarySplatRendererIdentity || null,
+    boundarySplatAttributeModelIdentity: state?.boundarySplatAttributeModelIdentity || null,
     boundarySplatComposition: state?.boundarySplatComposition || null,
+    boundarySplatPbrScene: state?.boundarySplatPbrScene || null,
     boundarySplatCandidateCount: Number(state?.boundarySplatCandidateCount || 0),
     boundarySplatSourceCandidateCount: Number(state?.boundarySplatSourceCandidateCount || 0),
     boundarySplatSelectedCandidateCount: Number(state?.boundarySplatSelectedCandidateCount || 0),
