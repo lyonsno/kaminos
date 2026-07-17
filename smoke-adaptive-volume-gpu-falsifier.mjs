@@ -2,6 +2,11 @@ export const ADAPTIVE_VOLUME_GPU_REPORT_SCHEMA = 'kaminos.smoke-adaptive-volume-
 export const ADAPTIVE_VOLUME_GPU_ROUTE = 'isolated-adaptive-volume-webgpu-v0';
 export const COMPACT_SMOKE_PRODUCT_IDENTITY = 'compact-parent-mean-halo-atlas-v0';
 export const DENSE_DENIAL_METHOD = 'destroy-dense-source-before-compact-rerender-v0';
+export const ADAPTIVE_VOLUME_GPU_ERROR_LIMITS = Object.freeze({
+  denseAgainstCommittedReferenceMaximumAbsoluteError: 1e-5,
+  compactPrebuiltAgainstDenseMaximumAbsoluteError: 1e-3,
+  buildCompactAgainstDenseMaximumAbsoluteError: 1e-3,
+});
 
 function positiveInteger(value, label) {
   const number = Number(value);
@@ -130,6 +135,10 @@ function finitePositive(value) {
   return Number.isFinite(Number(value)) && Number(value) > 0;
 }
 
+function finiteNonNegative(value) {
+  return Number.isFinite(Number(value)) && Number(value) >= 0;
+}
+
 export function validateAdaptiveVolumeGpuReport(report) {
   const reasons = [];
   const isSha256 = value => typeof value === 'string' && /^sha256:[0-9a-f]+$/i.test(value);
@@ -137,6 +146,7 @@ export function validateAdaptiveVolumeGpuReport(report) {
   if (report?.status !== 'passed') reasons.push('report-not-passed');
   if (report?.effective?.route !== ADAPTIVE_VOLUME_GPU_ROUTE) reasons.push('effective-route-mismatch');
   if (report?.effective?.backend !== 'WebGPU:apple') reasons.push('effective-backend-mismatch');
+  if (!['adapter-info', 'cdp-system-info'].includes(report?.effective?.backendIdentitySource)) reasons.push('backend-identity-authority-missing');
   if (report?.effective?.timestampFeature !== 'timestamp-query' || report?.effective?.timestampStatus !== 'available') reasons.push('timestamp-authority-missing');
   if (report?.requested?.hiddenBrickCapApplied !== false) reasons.push('hidden-cap');
   for (const key of ['matchedReportSha256', 'fitReportSha256', 'sourceSidecarSha256', 'selectionArtifactSha256', 'referenceDepthSha256']) {
@@ -164,6 +174,17 @@ export function validateAdaptiveVolumeGpuReport(report) {
     || report?.denseDenial?.preDenialOutputSha256 !== report?.denseDenial?.postDenialOutputSha256
     || Number(report?.denseDenial?.maximumAbsoluteOutputDelta) !== 0) reasons.push('dense-denial-failed');
   if (report?.validation?.complete !== true) reasons.push('validation-incomplete');
+  for (const [key, limit] of Object.entries(ADAPTIVE_VOLUME_GPU_ERROR_LIMITS)) {
+    if (Number(report?.validation?.thresholds?.[key]) !== limit) reasons.push(`numerical-threshold-mismatch:${key}`);
+  }
+  const numericalChecks = [
+    ['dense-reference-error', report?.validation?.denseAgainstCommittedReference?.maximumAbsoluteError, ADAPTIVE_VOLUME_GPU_ERROR_LIMITS.denseAgainstCommittedReferenceMaximumAbsoluteError],
+    ['compact-prebuilt-error', report?.validation?.compactPrebuiltAgainstDense?.maximumAbsoluteError, ADAPTIVE_VOLUME_GPU_ERROR_LIMITS.compactPrebuiltAgainstDenseMaximumAbsoluteError],
+    ['build-compact-error', report?.validation?.buildCompactAgainstDense?.maximumAbsoluteError, ADAPTIVE_VOLUME_GPU_ERROR_LIMITS.buildCompactAgainstDenseMaximumAbsoluteError],
+  ];
+  for (const [reason, value, limit] of numericalChecks) {
+    if (!finiteNonNegative(value) || Number(value) > limit) reasons.push(reason);
+  }
   for (const [name, value] of Object.entries(report?.falseClosureChecks || {})) {
     if (value) reasons.push(`false-closure:${name}`);
   }

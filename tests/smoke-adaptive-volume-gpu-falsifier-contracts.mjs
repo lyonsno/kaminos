@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import {
+  ADAPTIVE_VOLUME_GPU_ERROR_LIMITS,
   bitonicSortRecordCount,
   buildBitonicSortStages,
   buildCompactSmokeProduct,
@@ -57,6 +58,7 @@ const validReport = {
     backend: 'WebGPU:apple',
     timestampFeature: 'timestamp-query',
     timestampStatus: 'available',
+    backendIdentitySource: 'cdp-system-info',
     sourceGrid: 4,
     coarseGrid: 2,
     blockSize: 2,
@@ -97,6 +99,10 @@ const validReport = {
     passed: true,
   },
   validation: {
+    thresholds: ADAPTIVE_VOLUME_GPU_ERROR_LIMITS,
+    denseAgainstCommittedReference: { maximumAbsoluteError: 0.000001 },
+    compactPrebuiltAgainstDense: { maximumAbsoluteError: 0.0009 },
+    buildCompactAgainstDense: { maximumAbsoluteError: 0.0009 },
     compactPrebuiltMaximumAbsoluteError: 0.01,
     buildCompactMaximumAbsoluteError: 0.01,
     complete: true,
@@ -124,6 +130,10 @@ for (const mutate of [
   report => { delete report.source.referenceDepthSha256; },
   report => { delete report.runtime.sourceFileSha256s.browser; },
   report => { report.compactProduct.sortOrderViolationCount = 1; },
+  report => { report.effective.backendIdentitySource = 'platform-fallback-untrusted'; },
+  report => { report.validation.denseAgainstCommittedReference.maximumAbsoluteError = 1; },
+  report => { report.validation.compactPrebuiltAgainstDense.maximumAbsoluteError = 1; },
+  report => { report.validation.buildCompactAgainstDense.maximumAbsoluteError = 1; },
 ]) {
   const report = structuredClone(validReport);
   mutate(report);
@@ -147,6 +157,8 @@ assert.match(browser, /denseBindingCountDuringRender:\s*0/);
 assert.match(browser, /allocationComplete/);
 assert.match(browser, /buildBitonicSortStages\(sortRecordCount\)/);
 assert.match(browser, /const sortRecordCount = bitonicSortRecordCount\(brickCount\)/);
+assert.match(browser, /dispatchWorkgroups\(Math\.ceil\(sortRecordCount \/ 256\)\)/, 'every bitonic stage must cover the padded domain');
+assert.doesNotMatch(browser, /dynamicSortPipeline[^\n]+dispatchWorkgroups\(Math\.ceil\(brickCount \/ 256\)\)/);
 assert.match(browser, /Pair\(-1\.0, brickIndex\)/, 'padding records must be explicit low-score sentinels');
 assert.match(browser, /brickIndex >= brickCount/, 'GPU hierarchy must separate padded records from physical bricks');
 assert.match(browser, /arrayLength\(&selectedPairs\)\s*-\s*1u\s*-\s*slot/, 'ascending sort must select its highest-energy suffix');
@@ -155,6 +167,8 @@ assert.match(browser, /let previousScore = -Infinity/);
 assert.match(browser, /index >= sortRecordCount - selected\.length/);
 assert.match(browser, /sortOrderViolationCount/);
 assert.match(browser, /allocationBytes\.total = allocationBytes\.totalBuildAndProduct/);
+assert.match(browser, /applyHostGpuIdentity/);
+assert.match(browser, /backendIdentitySource/);
 assert.match(browser, /const initializeBindGroup\s*=/, 'entry-point-specific auto layouts require an initialize bind group');
 assert.match(browser, /const scatterBindGroup\s*=/, 'entry-point-specific auto layouts require a scatter bind group');
 assert.match(browser, /setPipeline\(initializePipeline\);[^\n]*setBindGroup\(2, initializeBindGroup\)/);
@@ -168,6 +182,8 @@ assert.match(witness, /reuseBrowser/);
 assert.match(witness, /optimizationClaimAllowed/);
 assert.match(witness, /gitCommit[\s\S]*gitBranch[\s\S]*gitStatusShort/);
 assert.match(witness, /sourceFileSha256s/);
+assert.match(witness, /SystemInfo\.getInfo/);
+assert.match(witness, /applyHostGpuIdentity/);
 assert.match(browser, /matchedReportSha256[\s\S]*fitReportSha256[\s\S]*sourceSidecarSha256[\s\S]*selectionArtifactSha256[\s\S]*referenceDepthSha256/);
 
 console.log('smoke adaptive volume GPU falsifier contracts passed');

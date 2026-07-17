@@ -1,4 +1,5 @@
 import {
+  ADAPTIVE_VOLUME_GPU_ERROR_LIMITS,
   ADAPTIVE_VOLUME_GPU_REPORT_SCHEMA,
   ADAPTIVE_VOLUME_GPU_ROUTE,
   DENSE_DENIAL_METHOD,
@@ -32,6 +33,14 @@ const reportNode = document.getElementById('report');
 function setStatus(message) {
   statusNode.textContent = message;
   state.message = message;
+}
+
+function applyReportDisposition(report) {
+  const disposition = validateAdaptiveVolumeGpuReport(report);
+  report.optimizationClaimAllowed = disposition.optimizationClaimAllowed;
+  report.optimizationClaimRejectionReasons = disposition.reasons;
+  report.status = disposition.optimizationClaimAllowed ? 'passed' : 'invalid-for-optimization-claim';
+  return disposition;
 }
 
 function queryConfig() {
@@ -524,8 +533,9 @@ async function run() {
   const device = await adapter.requestDevice({ requiredFeatures: ['timestamp-query'], requiredLimits });
   const adapterInfo = adapter.info ? { ...adapter.info } : {};
   const adapterText = JSON.stringify(adapterInfo).toLowerCase();
-  const appleIdentity = adapterText.includes('apple') || /Mac/.test(navigator.platform || '');
-  const backend = appleIdentity ? 'WebGPU:apple' : 'WebGPU:unknown';
+  const adapterBackedAppleIdentity = adapterText.includes('apple');
+  const backend = adapterBackedAppleIdentity ? 'WebGPU:apple' : 'WebGPU:unknown';
+  const backendIdentitySource = adapterBackedAppleIdentity ? 'adapter-info' : 'platform-fallback-untrusted';
 
   failurePhase = 'allocation';
   setStatus('Allocating dense and independently resident compact products');
@@ -618,7 +628,7 @@ async function run() {
     pass.setPipeline(hierarchyPipeline); pass.setBindGroup(0, hierarchyBindGroup); pass.dispatchWorkgroups(Math.ceil(sortRecordCount / 64)); pass.end();
     for (let stage = 0; stage < sortStages.length; stage += 1) {
       pass = encoder.beginComputePass();
-      pass.setPipeline(dynamicSortPipeline); pass.setBindGroup(1, sortBindGroup, [stage * 256]); pass.dispatchWorkgroups(Math.ceil(brickCount / 256)); pass.end();
+      pass.setPipeline(dynamicSortPipeline); pass.setBindGroup(1, sortBindGroup, [stage * 256]); pass.dispatchWorkgroups(Math.ceil(sortRecordCount / 256)); pass.end();
     }
     pass = encoder.beginComputePass(); pass.setPipeline(initializePipeline); pass.setBindGroup(2, initializeBindGroup); pass.dispatchWorkgroups(Math.ceil(brickCount / 256)); pass.end();
     pass = encoder.beginComputePass(); pass.setPipeline(scatterPipeline); pass.setBindGroup(2, scatterBindGroup); pass.dispatchWorkgroups(Math.ceil(selected.length / 256)); pass.end();
@@ -736,8 +746,10 @@ async function run() {
     effective: {
       route: ADAPTIVE_VOLUME_GPU_ROUTE,
       backend,
+      backendIdentitySource,
       adapterInfo,
       navigatorPlatform: navigator.platform,
+      platformAppleHint: /Mac/.test(navigator.platform || ''),
       timestampFeature: 'timestamp-query',
       timestampStatus: device.features.has('timestamp-query') ? 'available' : 'unsupported',
       sourceGrid: grid,
@@ -817,6 +829,7 @@ async function run() {
     },
     validation: {
       complete: true,
+      thresholds: ADAPTIVE_VOLUME_GPU_ERROR_LIMITS,
       denseAgainstCommittedReference: denseComparison,
       compactPrebuiltAgainstDense: prebuiltComparison,
       buildCompactAgainstDense: builtComparison,
@@ -826,10 +839,7 @@ async function run() {
     falseClosureChecks,
     claimBoundary: 'Static isolated single-channel Apple WebGPU compute evidence. Source scalar formation from the live 16-channel fluid buffer and the production compositor are not timed. GPU build includes parent means, residual scoring, complete 65536-record bitonic sorting, top-K selection application, indirection, and padded fine-atlas packing. Dense denial destroys the source buffer before compact rerender.',
   };
-  const disposition = validateAdaptiveVolumeGpuReport(report);
-  report.optimizationClaimAllowed = disposition.optimizationClaimAllowed;
-  report.optimizationClaimRejectionReasons = disposition.reasons;
-  report.status = disposition.optimizationClaimAllowed ? 'passed' : 'invalid-for-optimization-claim';
+  const disposition = applyReportDisposition(report);
 
   drawDepth('dense', denseOutput, width, height);
   drawDepth('prebuilt', prebuiltAfterDenial, width, height);
@@ -848,6 +858,17 @@ window.__kaminosAdaptiveVolumeGpuFalsifier = {
   identity: 'adaptive-smoke-volume-three-arm-gpu-falsifier-v0',
   reuseBrowser: true,
   state: () => structuredClone(state),
+  applyHostGpuIdentity(identity) {
+    if (state.phase !== 'complete' || !state.report) throw new Error('GPU identity can only be applied to a complete browser report');
+    if (identity?.source !== 'cdp-system-info' || !Array.isArray(identity.devices)) throw new Error('invalid CDP GPU identity evidence');
+    state.report.effective.cdpGpuInfo = structuredClone(identity);
+    state.report.effective.backend = identity.appleDeviceObserved === true ? 'WebGPU:apple' : 'WebGPU:unknown';
+    state.report.effective.backendIdentitySource = 'cdp-system-info';
+    const disposition = applyReportDisposition(state.report);
+    setStatus(state.report.optimizationClaimAllowed ? 'Timestamp-backed compact independence gate passed' : `Optimization claim rejected: ${disposition.reasons.join(', ')}`);
+    reportNode.textContent = JSON.stringify(state.report, null, 2);
+    return structuredClone(state.report);
+  },
   run,
 };
 

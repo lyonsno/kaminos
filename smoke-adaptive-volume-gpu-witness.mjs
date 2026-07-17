@@ -54,10 +54,24 @@ let browserReport = null;
 let serverProcess = null;
 let chromeProcess = null;
 let consoleEvents = [];
+let cdpGpuIdentity = null;
 
 function delay(ms) { return new Promise(resolveDelay => setTimeout(resolveDelay, ms)); }
 
 function sha256(bytes) { return `sha256:${createHash('sha256').update(bytes).digest('hex')}`; }
+
+function normalizeCdpGpuIdentity(systemInfo) {
+  const devices = (systemInfo?.gpu?.devices || []).map(device => ({
+    vendorId: device.vendorId ?? null,
+    deviceId: device.deviceId ?? null,
+    vendorString: device.vendorString || '',
+    deviceString: device.deviceString || '',
+    driverVendor: device.driverVendor || '',
+    driverVersion: device.driverVersion || '',
+  }));
+  const appleDeviceObserved = devices.some(device => /apple/i.test(JSON.stringify(device)));
+  return { source: 'cdp-system-info', appleDeviceObserved, devices };
+}
 
 function writeReport(extra = {}) {
   mkdirSync(dirname(reportPath), { recursive: true });
@@ -86,6 +100,7 @@ function writeReport(extra = {}) {
     gitBranch,
     gitStatusShort,
     sourceFileSha256s: browserReport?.runtime?.sourceFileSha256s || null,
+    cdpGpuIdentity,
     consoleEvents,
     optimizationClaimAllowed: browserReport?.optimizationClaimAllowed === true,
     ...extra,
@@ -221,6 +236,13 @@ async function main() {
     });
     chromeProcess.once('error', error => { consoleEvents.push({ type: 'chrome-launch-error', text: error.message }); });
     await waitForEndpoint(`http://127.0.0.1:${debugPort}/json/version`, 'Chrome CDP endpoint');
+    const version = await fetchJson('/json/version');
+    if (!version?.webSocketDebuggerUrl) throw new Error('Chrome browser CDP target is missing');
+    const browserSocket = new WebSocket(version.webSocketDebuggerUrl);
+    await waitForWebSocketOpen(browserSocket);
+    const systemInfo = await wsRequest(browserSocket, 'SystemInfo.getInfo', {}, 30000);
+    browserSocket.close();
+    cdpGpuIdentity = normalizeCdpGpuIdentity(systemInfo);
     const targets = await fetchJson('/json/list');
     const page = targets.find(target => target.type === 'page' && target.url.includes('smoke-adaptive-volume-gpu-falsifier.html'))
       || targets.find(target => target.type === 'page');
@@ -233,6 +255,7 @@ async function main() {
 
     failurePhase = 'browser-run';
     browserReport = await waitForBrowserReport(socket);
+    browserReport = await evaluate(socket, `window.__kaminosAdaptiveVolumeGpuFalsifier.applyHostGpuIdentity(${JSON.stringify(cdpGpuIdentity)})`);
     const validation = validateAdaptiveVolumeGpuReport(browserReport);
     if (validation.optimizationClaimAllowed !== browserReport.optimizationClaimAllowed) {
       throw new Error(`browser/host report validation disagreement: ${validation.reasons.join(',')}`);
