@@ -241,6 +241,7 @@ validProductionSurvivalReport.productionSurvival = {
     pixelCount: 7_720_704,
     dispatchRepeats: 8,
     steadySamples: 7,
+    tileRows: 128,
     hiddenWorkloadCapApplied: false,
   },
   effective: {
@@ -258,6 +259,7 @@ validProductionSurvivalReport.productionSurvival = {
     workload: {
       ...scaleWorkload(3456, 2234, 48, 44),
       productionStepCount: 640_000_000,
+      dispatchedPixelCount: 7_720_704,
       majorantSkipCount: 120_000_000,
       earlyTerminationCount: 500_000,
       fieldSampleCount: 3_200_000_000,
@@ -290,6 +292,8 @@ for (const mutate of [
   report => { report.productionSurvival.effective.matchedMechanisms.pop(); },
   report => { report.productionSurvival.effective.differingMechanism = 'lookup-and-step-schedule'; },
   report => { report.productionSurvival.effective.workload.productionStepCount = 0; },
+  report => { report.productionSurvival.requested.tileRows = 0; },
+  report => { report.productionSurvival.effective.workload.dispatchedPixelCount -= 3456; },
   report => { report.productionSurvival.effective.workload.fieldSampleCount = 1; },
   report => { report.productionSurvival.effective.workload.comparison.maximumAbsoluteError = 1; },
   report => { report.productionSurvival.updateCost.separatelyCharged = false; },
@@ -525,6 +529,9 @@ for (const productionMechanism of [
   assert.match(browser, productionMechanism, `R9 production-shaped comparator lost ${productionMechanism}`);
 }
 assert.match(browser, /productionStepCount/, 'R9 must record actual production-shaped steps');
+assert.match(browser, /production_tile_rows/, 'R9 must accept bounded dispatch granularity without reducing the workload');
+assert.match(browser, /dispatchedPixelCount/, 'R9 must prove that row tiling still covers the complete framebuffer');
+assert.match(browser, /tileBindGroups/, 'R9 must submit separate bounded row grids rather than one watchdog-sized dispatch');
 assert.match(browser, /fieldSampleCount/, 'R9 must record the five-sample common field workload');
 assert.match(browser, /majorantSkipCount/, 'R9 must expose majorant skip activity');
 assert.match(browser, /earlyTerminationCount/, 'R9 must expose early termination activity');

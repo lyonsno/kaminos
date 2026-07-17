@@ -40,6 +40,7 @@ const DEFAULTS = Object.freeze({
   productionDispatchRepeats: 1,
   productionWarmupSamples: 1,
   productionSteadySamples: 5,
+  productionTileRows: 128,
 });
 
 const state = { phase: 'initializing', message: 'Initializing', report: null, error: null };
@@ -128,12 +129,14 @@ function queryConfig() {
     productionDispatchRepeats: integer('production_dispatch_repeats', DEFAULTS.productionDispatchRepeats),
     productionWarmupSamples: integer('production_warmup_samples', DEFAULTS.productionWarmupSamples),
     productionSteadySamples: integer('production_steady_samples', DEFAULTS.productionSteadySamples),
+    productionTileRows: integer('production_tile_rows', DEFAULTS.productionTileRows),
   };
   if (config.scaleDispatchRepeats <= 1) throw new Error('scale_dispatch_repeats must be greater than one');
   if (config.scaleWarmupSamples <= 0 || config.scaleSteadySamples <= 0) throw new Error('scale timing sample counts must be positive');
   if (config.productionDispatchRepeats <= 0 || config.productionWarmupSamples <= 0 || config.productionSteadySamples < 3) {
     throw new Error('production survival timing requires positive dispatch/warmup counts and at least three steady samples');
   }
+  if (config.productionTileRows <= 0 || config.productionTileRows > 2234) throw new Error('production_tile_rows must be in [1, 2234]');
   return config;
 }
 
@@ -429,6 +432,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 `;
 
+const PRODUCTION_TILE_WGSL = String.raw`
+struct ProductionTile { rowOffset: u32, rowCount: u32, pad0: u32, pad1: u32 };
+`;
+
 const PRODUCTION_MECHANISMS_WGSL = String.raw`
 fn readProxySlot(c: vec3<i32>, slot: u32) -> vec4<f32> {
   let cell = vec3<u32>(clamp(c, vec3<i32>(0), vec3<i32>(i32(productionP.grid) - 1)));
@@ -524,8 +531,10 @@ fn occupancySkipStepScale(occupancy: f32, occupancySkipStrength: f32, adaptiveRa
 fn raymarchEarlyTermination(transmittance: f32) -> bool { return transmittance < 0.012; }
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  if (gid.x >= productionP.width || gid.y >= productionP.height) { return; }
-  let pixel = gid.x + gid.y * productionP.width;
+  if (gid.x >= productionP.width || gid.y >= tileP.rowCount) { return; }
+  let globalY = gid.y + tileP.rowOffset;
+  if (globalY >= productionP.height) { return; }
+  let pixel = gid.x + globalY * productionP.width;
   let ray = productionRays[pixel];
   if (ray.endPad.x <= ray.directionStart.w) { productionOutput[pixel] = vec4<f32>(0.0); return; }
   let baseStep = min(min(productionP.maximum.x - productionP.minimum.x, productionP.maximum.y - productionP.minimum.y), productionP.maximum.z - productionP.minimum.z) / f32(productionP.grid) / productionP.samplesPerCell;
@@ -576,7 +585,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 `;
 
-const PRODUCTION_DENSE_WGSL = COMMON_WGSL + String.raw`
+const PRODUCTION_DENSE_WGSL = COMMON_WGSL + PRODUCTION_TILE_WGSL + String.raw`
 @group(0) @binding(0) var<storage, read> denseSmoke: array<f32>;
 @group(0) @binding(1) var<storage, read> fieldProxy: array<vec4<f32>>;
 @group(0) @binding(2) var<storage, read> frontProxy: array<f32>;
@@ -584,6 +593,7 @@ const PRODUCTION_DENSE_WGSL = COMMON_WGSL + String.raw`
 @group(0) @binding(4) var<storage, read> productionRays: array<Ray>;
 @group(0) @binding(5) var<uniform> productionP: Params;
 @group(0) @binding(6) var<storage, read_write> productionOutput: array<vec4<f32>>;
+@group(0) @binding(7) var<uniform> tileP: ProductionTile;
 fn sampleSmokeExtinction(point: vec3<f32>) -> f32 {
   let coordinate = (point - productionP.minimum.xyz) / (productionP.maximum.xyz - productionP.minimum.xyz) * f32(productionP.grid) - vec3<f32>(0.5);
   let base = vec3<i32>(floor(coordinate));
@@ -598,7 +608,7 @@ fn sampleSmokeExtinction(point: vec3<f32>) -> f32 {
 }
 ` + PRODUCTION_MECHANISMS_WGSL;
 
-const PRODUCTION_SPARSE_WGSL = COMMON_WGSL + String.raw`
+const PRODUCTION_SPARSE_WGSL = COMMON_WGSL + PRODUCTION_TILE_WGSL + String.raw`
 @group(0) @binding(0) var<storage, read> compactCoarse: array<f32>;
 @group(0) @binding(1) var<storage, read> compactIndirect: array<i32>;
 @group(0) @binding(2) var<storage, read> compactAtlas: array<f32>;
@@ -608,6 +618,7 @@ const PRODUCTION_SPARSE_WGSL = COMMON_WGSL + String.raw`
 @group(0) @binding(6) var<storage, read> productionRays: array<Ray>;
 @group(0) @binding(7) var<uniform> productionP: Params;
 @group(0) @binding(8) var<storage, read_write> productionOutput: array<vec4<f32>>;
+@group(0) @binding(9) var<uniform> tileP: ProductionTile;
 fn compactBrickIndex(c: vec3<u32>) -> u32 { return c.x + c.y * productionP.coarseGrid + c.z * productionP.coarseGrid * productionP.coarseGrid; }
 fn sampleSmokeExtinction(point: vec3<f32>) -> f32 {
   let cell = pointCell(point, productionP);
@@ -1048,9 +1059,21 @@ async function profileProductionSurvival(device, {
   const majorantAllocation = makeBuffer(device, 'step45 source-bound majorant proxy', productionProxy.majorant.byteLength, GPUBufferUsage.STORAGE, productionProxy.majorant);
   const denseOutputAllocation = makeBuffer(device, 'production survival dense output and counters', pixelCount * 16, storageCopy);
   const compactOutputAllocation = makeBuffer(device, 'production survival compact output and counters', pixelCount * 16, storageCopy);
+  const tileCount = Math.ceil(height / config.productionTileRows);
+  const tileParamsData = new Uint8Array(tileCount * 256);
+  const tileParamsView = new DataView(tileParamsData.buffer);
+  const tileRows = [];
+  for (let tile = 0; tile < tileCount; tile += 1) {
+    const rowOffset = tile * config.productionTileRows;
+    const rowCount = Math.min(config.productionTileRows, height - rowOffset);
+    tileParamsView.setUint32(tile * 256, rowOffset, true);
+    tileParamsView.setUint32(tile * 256 + 4, rowCount, true);
+    tileRows.push({ rowOffset, rowCount });
+  }
+  const tileParamsAllocation = makeBuffer(device, 'production survival tile parameters', tileParamsData.byteLength, GPUBufferUsage.UNIFORM, tileParamsData);
   const densePipeline = createComputePipeline(device, PRODUCTION_DENSE_WGSL, 'main', 'production-shaped dense scalar comparator');
   const compactPipeline = createComputePipeline(device, PRODUCTION_SPARSE_WGSL, 'main', 'production-shaped compact scalar comparator');
-  const denseBindGroup = device.createBindGroup({ layout: densePipeline.getBindGroupLayout(0), entries: [
+  const denseEntries = [
     { binding: 0, resource: { buffer: denseAllocation.buffer } },
     { binding: 1, resource: { buffer: fieldsAllocation.buffer } },
     { binding: 2, resource: { buffer: frontAllocation.buffer } },
@@ -1058,8 +1081,8 @@ async function profileProductionSurvival(device, {
     { binding: 4, resource: { buffer: raysAllocation.buffer } },
     { binding: 5, resource: { buffer: paramsAllocation.buffer } },
     { binding: 6, resource: { buffer: denseOutputAllocation.buffer } },
-  ] });
-  const compactBindGroup = device.createBindGroup({ layout: compactPipeline.getBindGroupLayout(0), entries: [
+  ];
+  const compactEntries = [
     { binding: 0, resource: { buffer: prebuiltCoarseAllocation.buffer } },
     { binding: 1, resource: { buffer: prebuiltIndirectAllocation.buffer } },
     { binding: 2, resource: { buffer: prebuiltAtlasAllocation.buffer } },
@@ -1069,10 +1092,20 @@ async function profileProductionSurvival(device, {
     { binding: 6, resource: { buffer: raysAllocation.buffer } },
     { binding: 7, resource: { buffer: paramsAllocation.buffer } },
     { binding: 8, resource: { buffer: compactOutputAllocation.buffer } },
-  ] });
+  ];
+  const tileBindGroups = {
+    dense: tileRows.map((_, tile) => device.createBindGroup({ layout: densePipeline.getBindGroupLayout(0), entries: [
+      ...denseEntries,
+      { binding: 7, resource: { buffer: tileParamsAllocation.buffer, offset: tile * 256, size: 16 } },
+    ] })),
+    compact: tileRows.map((_, tile) => device.createBindGroup({ layout: compactPipeline.getBindGroupLayout(0), entries: [
+      ...compactEntries,
+      { binding: 9, resource: { buffer: tileParamsAllocation.buffer, offset: tile * 256, size: 16 } },
+    ] })),
+  };
   const arms = {
-    dense: { pipeline: densePipeline, bindGroup: denseBindGroup },
-    compact: { pipeline: compactPipeline, bindGroup: compactBindGroup },
+    dense: { pipeline: densePipeline, bindGroups: tileBindGroups.dense },
+    compact: { pipeline: compactPipeline, bindGroups: tileBindGroups.compact },
   };
   const pairedProfile = await profilePairedRepeatedPasses(device, {
     warmups: config.productionWarmupSamples,
@@ -1081,9 +1114,11 @@ async function profileProductionSurvival(device, {
     encodeArm(encoder, querySet, arm, beginningOfPassWriteIndex, endOfPassWriteIndex) {
       const pass = encoder.beginComputePass({ timestampWrites: { querySet, beginningOfPassWriteIndex, endOfPassWriteIndex } });
       pass.setPipeline(arms[arm].pipeline);
-      pass.setBindGroup(0, arms[arm].bindGroup);
       for (let repeat = 0; repeat < config.productionDispatchRepeats; repeat += 1) {
-        pass.dispatchWorkgroups(Math.ceil(width / 8), Math.ceil(height / 8));
+        for (let tile = 0; tile < tileCount; tile += 1) {
+          pass.setBindGroup(0, arms[arm].bindGroups[tile]);
+          pass.dispatchWorkgroups(Math.ceil(width / 8), Math.ceil(tileRows[tile].rowCount / 8));
+        }
       }
       pass.end();
     },
@@ -1097,13 +1132,16 @@ async function profileProductionSurvival(device, {
     errorLimit: ADAPTIVE_VOLUME_GPU_ERROR_LIMITS.compactPrebuiltAgainstDenseMaximumAbsoluteError,
   });
   for (const allocation of [
-    raysAllocation, paramsAllocation, fieldsAllocation, frontAllocation, majorantAllocation,
+    raysAllocation, paramsAllocation, fieldsAllocation, frontAllocation, majorantAllocation, tileParamsAllocation,
     denseOutputAllocation, compactOutputAllocation,
   ]) allocation.buffer.destroy();
   return {
     width,
     height,
     pixelCount,
+    dispatchedPixelCount: width * tileRows.reduce((total, tile) => total + tile.rowCount, 0),
+    tileRows: config.productionTileRows,
+    tileCount,
     ...rayWorkload,
     dispatchRepeats: config.productionDispatchRepeats,
     timingProtocol: pairedProfile.timingProtocol,
@@ -1695,6 +1733,7 @@ async function run() {
         dispatchRepeats: config.productionDispatchRepeats,
         warmupSamples: config.productionWarmupSamples,
         steadySamples: config.productionSteadySamples,
+        tileRows: config.productionTileRows,
         hiddenWorkloadCapApplied: false,
       },
       effective: {

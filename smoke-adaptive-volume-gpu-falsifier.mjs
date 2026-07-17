@@ -374,6 +374,7 @@ export function validateAdaptiveVolumeProductionSurvivalReport(report) {
     || Number(requested?.pixelCount) !== 3456 * 2234) reasons.push('production-survival-workload-mismatch');
   if (!Number.isInteger(Number(requested?.dispatchRepeats)) || Number(requested.dispatchRepeats) <= 0) reasons.push('production-survival-dispatch-invalid');
   if (!Number.isInteger(Number(requested?.steadySamples)) || Number(requested.steadySamples) < 3) reasons.push('production-survival-samples-incomplete');
+  if (!Number.isInteger(Number(requested?.tileRows)) || Number(requested.tileRows) <= 0 || Number(requested.tileRows) > 2234) reasons.push('production-survival-tile-rows-invalid');
   if (requested?.hiddenWorkloadCapApplied !== false) reasons.push('production-survival-hidden-cap');
 
   const effective = survival?.effective;
@@ -391,6 +392,7 @@ export function validateAdaptiveVolumeProductionSurvivalReport(report) {
   if (Number(workload?.width) !== 3456 || Number(workload?.height) !== 2234 || Number(workload?.pixelCount) !== pixelCount) reasons.push('production-survival-effective-workload-mismatch');
   if (!Number.isInteger(Number(workload?.intersectingRayCount)) || Number(workload.intersectingRayCount) <= 0) reasons.push('production-survival-rays-empty');
   if (!Number.isInteger(Number(workload?.productionStepCount)) || Number(workload.productionStepCount) <= 0) reasons.push('production-survival-step-count-empty');
+  if (Number(workload?.dispatchedPixelCount) !== pixelCount) reasons.push('production-survival-dispatch-coverage-incomplete');
   if (Number(workload?.fieldSampleCount) !== Number(workload?.productionStepCount) * 5) reasons.push('production-survival-field-sample-count-invalid');
   if (!Number.isInteger(Number(workload?.majorantSkipCount)) || Number(workload.majorantSkipCount) < 0) reasons.push('production-survival-majorant-skip-invalid');
   if (!Number.isInteger(Number(workload?.earlyTerminationCount)) || Number(workload.earlyTerminationCount) < 0) reasons.push('production-survival-early-termination-invalid');
