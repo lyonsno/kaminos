@@ -119,6 +119,7 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
     .crucible-worktable-stage { position: absolute; left: 0; right: 0; bottom: 0; min-height: 68%; border: 1px solid rgba(150,124,80,0.54); border-radius: 8px; background: linear-gradient(135deg, rgba(104,83,55,0.96), rgba(58,46,35,0.96) 38%, rgba(116,99,65,0.94) 66%, rgba(50,43,36,0.97)), repeating-linear-gradient(92deg, rgba(255,246,202,0.08) 0 2px, transparent 2px 18px); box-shadow: inset 0 0 0 1px rgba(240,213,148,0.08), inset 0 34px 70px rgba(255,236,170,0.06), 0 22px 58px rgba(0,0,0,0.55); padding: clamp(18px, 2.8vw, 32px); display: grid; grid-template-columns: 1fr minmax(240px, 0.42fr); grid-template-rows: auto minmax(240px, 1fr) auto; gap: 16px; }
     .crucible-worktable-stage::after { content: ""; position: absolute; inset: 14px; border: 1px solid rgba(26,23,19,0.44); border-radius: 6px; pointer-events: none; box-shadow: inset 0 0 26px rgba(0,0,0,0.24); }
     .crucible-viewport-heading { position: relative; z-index: 1; grid-column: 1 / -1; display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; }
+    .crucible-viewport-heading-copy { min-width: 0; flex: 1; }
     .crucible-viewport-heading-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-shrink: 0; }
     .crucible-viewport-title { color: #ffe6a9; font-size: clamp(20px, 2.2vw, 30px); font-weight: 800; margin-bottom: 5px; text-shadow: 0 2px 12px rgba(0,0,0,0.52); }
     .crucible-viewport-subtitle { color: #d8d1ba; font-size: 12px; line-height: 1.42; max-width: 560px; }
@@ -129,6 +130,12 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
     .crucible-console-toggle { min-height: 30px; border: 1px solid rgba(177,181,156,0.42); border-radius: 6px; background: rgba(15,18,18,0.76); color: #e8dfc5; padding: 5px 9px; font-size: 10px; font-weight: 750; cursor: pointer; }
     .crucible-console-toggle:hover { border-color: rgba(234,197,117,0.72); color: #fff0c7; }
     .crucible-console-toggle[hidden] { display: none; }
+    .crucible-promoted-toolrail { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; width: min(500px, 100%); margin-top: 11px; }
+    .crucible-promoted-toolrail[hidden] { display: none; }
+    .crucible-promoted-tool { min-height: 34px; border: 1px solid rgba(130,158,151,0.48); border-radius: 6px; background: rgba(19,29,29,0.82); color: #d7ebe2; padding: 6px 8px; font-size: 10px; font-weight: 750; cursor: pointer; }
+    .crucible-promoted-tool:hover { border-color: rgba(234,197,117,0.72); color: #fff0c7; }
+    .crucible-promoted-tool[aria-pressed="true"] { border-color: rgba(231,181,88,0.82); background: rgba(91,58,26,0.9); color: #fff0c7; }
+    .crucible-promoted-tool:focus-visible { outline: 2px solid #e4b95e; outline-offset: 2px; }
     .crucible-viewport-zone { position: relative; z-index: 1; border: 1px solid rgba(31,34,34,0.72); border-radius: 8px; background: rgba(18,20,20,0.74); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.045), 0 12px 28px rgba(0,0,0,0.24); overflow: hidden; }
     .crucible-viewport-zone-label { color: #d7c382; font-size: 10px; font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase; }
     .crucible-viewport-plate { display: grid; grid-template-columns: minmax(170px, 0.44fr) 1fr; min-height: 264px; padding: 13px; gap: 13px; border-color: rgba(108,132,126,0.58); background: linear-gradient(135deg, rgba(19,28,29,0.84), rgba(12,14,15,0.72)); }
@@ -188,13 +195,18 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
     #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-viewport-proxy-sockets { display: none; }
     #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-room-backwall,
     #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-room-shelf { display: none; }
-    #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-worktable-stage { position: relative; left: auto; right: auto; bottom: auto; width: 100%; min-height: 0; max-height: calc(100vh - 28px); overflow-y: auto; padding: 11px; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; gap: 8px; background: linear-gradient(145deg, rgba(79,63,44,0.97), rgba(31,30,28,0.95)); backdrop-filter: blur(9px); }
+    #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-worktable-stage { position: relative; left: auto; right: auto; bottom: auto; display: flex; flex-direction: column; width: 100%; min-height: 0; max-height: calc(100vh - 28px); overflow-y: auto; padding: 11px; gap: 8px; background: linear-gradient(145deg, rgba(79,63,44,0.97), rgba(31,30,28,0.95)); backdrop-filter: blur(9px); }
+    #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-worktable-stage > * { width: 100%; flex: 0 0 auto; }
     #crucible-viewport-workspace[data-crucible-room-posture="cast-held"][data-crucible-console-state="tucked"] .crucible-worktable-stage { max-height: calc(100vh - 72px); }
     #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-viewport-heading,
     #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-viewport-heading,
     #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-viewport-receipt-tag,
     #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-viewport-receipt-tag { grid-column: 1; }
     #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-viewport-title { font-size: 17px; margin: 0; }
+    #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-viewport-heading { flex-direction: column; align-items: stretch; gap: 8px; }
+    #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-viewport-heading-actions { justify-content: flex-start; }
+    #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-promoted-toolrail { gap: 5px; margin-top: 8px; }
+    #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-promoted-tool { min-height: 38px; padding: 5px 4px; }
     #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-heat-badge { display: none; }
     #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-viewport-subtitle { display: none; }
     #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-viewport-plate { grid-template-columns: 68px minmax(0, 1fr); min-height: 0; padding: 8px; gap: 9px; }
@@ -208,6 +220,11 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
     #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-viewport-presentation-control { display: none; }
     #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-viewport-trays { grid-template-columns: minmax(0, 1fr); gap: 0; }
     #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-viewport-tray { min-height: 76px; padding: 9px; }
+    #crucible-viewport-workspace[data-crucible-composition-status="loaded"][data-crucible-console-state="tucked"] .crucible-viewport-proxy-sockets,
+    #crucible-viewport-workspace[data-crucible-composition-status="loaded"][data-crucible-console-state="tucked"][data-crucible-has-cast="false"] .crucible-viewport-cast-tray,
+    #crucible-viewport-workspace[data-crucible-composition-status="loaded"][data-crucible-console-state="tucked"][data-crucible-has-shards="false"] .crucible-viewport-shard-rack,
+    #crucible-viewport-workspace[data-crucible-composition-status="loaded"][data-crucible-console-state="tucked"][data-crucible-has-cast="false"][data-crucible-has-shards="false"] .crucible-viewport-trays,
+    #crucible-viewport-workspace[data-crucible-composition-status="loaded"][data-crucible-console-state="tucked"][data-crucible-has-receipt="false"] .crucible-viewport-receipt-tag { display: none; }
     #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-viewport-receipt-tag { min-height: 38px; }
     #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-viewport-receipt-tag summary { min-height: 36px; padding: 7px 10px; }
 
@@ -2609,9 +2626,14 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="crucible-room-shelf"></div>
       <div class="crucible-worktable-stage" id="crucible-worktable-stage">
         <div class="crucible-viewport-heading">
-          <div>
+          <div class="crucible-viewport-heading-copy">
             <div class="crucible-viewport-title" id="crucible-viewport-title">Unnamed crucible</div>
             <div class="crucible-viewport-subtitle" id="crucible-viewport-summary">This crucible is on the bench.</div>
+            <div class="crucible-promoted-toolrail" id="crucible-promoted-toolrail" aria-label="Promoted bench tools" hidden>
+              <button type="button" class="crucible-promoted-tool" data-crucible-bench-object-id="stone-receiver" title="Focus the matte stone receiver">View receiver</button>
+              <button type="button" class="crucible-promoted-tool" data-crucible-bench-object-id="specimen-tray" title="Focus the specimen tray">View tray</button>
+              <button type="button" class="crucible-promoted-tool" data-crucible-bench-object-id="titan-hammer" title="Focus the Titan Hammer">View Titan Hammer</button>
+            </div>
           </div>
           <div class="crucible-viewport-heading-actions">
             <button type="button" class="crucible-console-toggle" id="crucible-viewport-stage-assets-button">Stage bench</button>
@@ -13145,6 +13167,8 @@ let kaminosCrucibleCompositionState = {
   registeredObjectIds: [],
   aoEnabled: null,
   viewportFraming: null,
+  focusedObjectId: null,
+  focusFraming: null,
   error: null,
 };
 
@@ -13176,6 +13200,42 @@ function applyKaminosCrucibleCompositionFraming(manifest) {
     cameraTarget: baseTarget,
   };
 }
+
+function focusKaminosCrucibleCompositionObject(objectId) {
+  const record = sceneObjects.find(entry => entry.id === objectId);
+  if (kaminosCrucibleCompositionState.status !== 'loaded' || !record?.object) {
+    setInfo('Stage the promoted bench before focusing its tools.');
+    return null;
+  }
+  window.selectSceneObject(objectId);
+  const bounds = new THREE.Box3().setFromObject(record.object);
+  const center = bounds.getCenter(new THREE.Vector3());
+  const size = bounds.getSize(new THREE.Vector3());
+  const radius = Math.max(size.length() * 0.5, 0.1);
+  const viewDirection = camera.position.clone().sub(controls.target);
+  if (viewDirection.lengthSq() < 1e-6) viewDirection.set(1, 0.7, -1);
+  viewDirection.normalize();
+  const distance = radius / Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5)) * 1.35;
+  controls.target.copy(center);
+  camera.position.copy(center).add(viewDirection.multiplyScalar(distance));
+  camera.updateProjectionMatrix();
+  controls.update();
+  kaminosCrucibleCompositionState = {
+    ...kaminosCrucibleCompositionState,
+    focusedObjectId: objectId,
+    focusFraming: {
+      objectId,
+      cameraPosition: camera.position.toArray(),
+      cameraTarget: controls.target.toArray(),
+      boundsSize: size.toArray(),
+    },
+  };
+  renderCrucibleViewportWorkspace();
+  setInfo(`Focused ${record.label || record.fileName || objectId}`);
+  return record;
+}
+
+window.focusKaminosCrucibleCompositionObject = focusKaminosCrucibleCompositionObject;
 
 const CRUCIBLE_BENCH_STORAGE_KEY = 'kaminosCrucibleBenchState';
 const CRUCIBLE_BENCH_PROXY_ZONES = [
@@ -13411,7 +13471,7 @@ function crucibleViewportCastCopy(lastCast) {
 }
 
 function crucibleViewportConsoleState(roomPosture) {
-  if (roomPosture === 'bench') return 'expanded';
+  if (roomPosture === 'bench' && kaminosCrucibleCompositionState.status !== 'loaded') return 'expanded';
   return crucibleViewportConsolePreference === 'expanded' ? 'expanded' : 'tucked';
 }
 
@@ -13564,6 +13624,9 @@ function runCrucibleViewportFiring() {
   const flameContinuityMode = document.getElementById('crucible-viewport-flame-continuity-select')?.value
     || crucibleViewportFlameContinuityMode;
   crucibleViewportConsolePreference = 'auto';
+  if (kaminosCrucibleCompositionState.status === 'loaded') {
+    focusKaminosCrucibleCompositionObject('stone-receiver');
+  }
   return runKilnRouteBenchRoute(route.id, profileId, { firePresentationMode, flameContinuityMode });
 }
 
@@ -13714,6 +13777,11 @@ function renderCrucibleViewportWorkspace() {
   workspace.dataset.crucibleRouteStatus = kilnRouteBenchState.status || 'idle';
   workspace.dataset.crucibleRoomPosture = roomPosture;
   workspace.dataset.crucibleConsoleState = consoleState;
+  workspace.dataset.crucibleCompositionStatus = kaminosCrucibleCompositionState.status;
+  workspace.dataset.crucibleFocusedObjectId = kaminosCrucibleCompositionState.focusedObjectId || '';
+  workspace.dataset.crucibleHasCast = String(Boolean(lastCast));
+  workspace.dataset.crucibleHasShards = String(crucible.shards.length > 0);
+  workspace.dataset.crucibleHasReceipt = String(Boolean(lastReceipt));
   syncCrucibleViewportChrome(workspace);
   const title = document.getElementById('crucible-viewport-title');
   const summary = document.getElementById('crucible-viewport-summary');
@@ -13735,6 +13803,8 @@ function renderCrucibleViewportWorkspace() {
   const fireHelp = document.getElementById('crucible-viewport-fire-help');
   const castButton = document.getElementById('crucible-viewport-cast-button');
   const consoleToggle = document.getElementById('crucible-viewport-console-toggle');
+  const stageButton = document.getElementById('crucible-viewport-stage-assets-button');
+  const promotedToolrail = document.getElementById('crucible-promoted-toolrail');
   const progress = document.getElementById('crucible-viewport-progress');
   const progressFill = document.getElementById('crucible-viewport-progress-fill');
   const progressLabel = document.getElementById('crucible-viewport-progress-label');
@@ -13747,12 +13817,28 @@ function renderCrucibleViewportWorkspace() {
   }
   if (heatLabel) heatLabel.textContent = crucibleViewportHeatLabel(heatState);
   if (consoleToggle) {
-    consoleToggle.hidden = roomPosture === 'bench';
+    const compositionLoaded = kaminosCrucibleCompositionState.status === 'loaded';
+    consoleToggle.hidden = roomPosture === 'bench' && !compositionLoaded;
     consoleToggle.textContent = consoleState === 'tucked'
       ? 'Open bench'
       : roomPosture === 'cast-held'
         ? 'See cast'
-        : 'See furnace';
+        : roomPosture === 'firing'
+          ? 'See furnace'
+          : 'See objects';
+  }
+  if (stageButton) {
+    stageButton.hidden = kaminosCrucibleCompositionState.status === 'loaded';
+    stageButton.textContent = kaminosCrucibleCompositionState.status === 'loading' ? 'Staging...' : 'Stage bench';
+  }
+  if (promotedToolrail) {
+    const compositionLoaded = kaminosCrucibleCompositionState.status === 'loaded';
+    promotedToolrail.hidden = !compositionLoaded;
+    promotedToolrail.querySelectorAll('[data-crucible-bench-object-id]').forEach(button => {
+      const objectId = button.dataset.crucibleBenchObjectId;
+      button.disabled = !kaminosCrucibleCompositionState.registeredObjectIds.includes(objectId);
+      button.setAttribute('aria-pressed', String(objectId === kaminosCrucibleCompositionState.focusedObjectId));
+    });
   }
   renderCrucibleViewportSourceOptions(sourceSelect, currentSource);
   renderCrucibleViewportRouteOptions(routeSelect, profileSelect, route);
@@ -18768,7 +18854,11 @@ function initPipelineDock() {
     runCrucibleViewportFiring().catch(err => setInfo(err.message || String(err)));
   });
   document.getElementById('crucible-viewport-stage-assets-button')?.addEventListener('click', () => {
-    loadKaminosCrucibleComposition().catch(err => console.error('Crucible composition failed:', err));
+    loadKaminosCrucibleComposition(CRUCIBLE_PROMOTED_BENCH_ID, { activateTab: false })
+      .catch(err => console.error('Crucible composition failed:', err));
+  });
+  document.querySelectorAll('[data-crucible-bench-object-id]').forEach(button => {
+    button.addEventListener('click', () => focusKaminosCrucibleCompositionObject(button.dataset.crucibleBenchObjectId));
   });
   document.getElementById('crucible-viewport-cast-button')?.addEventListener('click', openCrucibleViewportCast);
   document.getElementById('crucible-viewport-console-toggle')?.addEventListener('click', toggleCrucibleViewportConsole);
@@ -23134,7 +23224,8 @@ async function loadSceneFile(file) {
   }
 }
 
-async function loadKaminosCrucibleComposition(compositionId = CRUCIBLE_PROMOTED_BENCH_ID) {
+async function loadKaminosCrucibleComposition(compositionId = CRUCIBLE_PROMOTED_BENCH_ID, options = {}) {
+  const activateTab = options.activateTab !== false;
   kaminosCrucibleCompositionState = {
     ...kaminosCrucibleCompositionState,
     status: 'loading',
@@ -23144,6 +23235,8 @@ async function loadKaminosCrucibleComposition(compositionId = CRUCIBLE_PROMOTED_
     registeredObjectIds: [],
     aoEnabled: null,
     viewportFraming: null,
+    focusedObjectId: null,
+    focusFraming: null,
     error: null,
   };
   const stageButton = document.getElementById('crucible-viewport-stage-assets-button');
@@ -23174,7 +23267,7 @@ async function loadKaminosCrucibleComposition(compositionId = CRUCIBLE_PROMOTED_
     if (aoToggle) aoToggle.checked = false;
     document.getElementById('ao-controls').style.display = 'none';
     if (aoIntensity) aoIntensity.value = 0;
-    setActiveTab('assets');
+    if (activateTab) setActiveTab('assets');
     const viewportFraming = applyKaminosCrucibleCompositionFraming(manifest);
     kaminosCrucibleCompositionState = {
       ...kaminosCrucibleCompositionState,
@@ -23183,7 +23276,10 @@ async function loadKaminosCrucibleComposition(compositionId = CRUCIBLE_PROMOTED_
       registeredObjectIds,
       aoEnabled: false,
       viewportFraming,
+      focusedObjectId: manifest.activeObjectId || null,
     };
+    if (!activateTab) crucibleViewportConsolePreference = 'auto';
+    renderCrucibleViewportWorkspace();
     setInfo(`Staged ${manifest.composition.label}`);
     window._kaminosDirty?.();
     return kaminosCrucibleCompositionDebugState();
@@ -23237,10 +23333,15 @@ initScene().then(() => {
   restoreSettings();
   const params = new URLSearchParams(window.location.search);
   const compositionId = params.get('composition');
+  const openOperationalCrucible = params.get('crucible_workspace') === 'operational';
   if (compositionId) {
-    loadKaminosCrucibleComposition(compositionId).catch(err => {
-      console.error('Crucible composition route failed:', err);
-    });
+    loadKaminosCrucibleComposition(compositionId, { activateTab: !openOperationalCrucible })
+      .then(() => {
+        if (openOperationalCrucible) setActiveTab('generate');
+      })
+      .catch(err => {
+        console.error('Crucible composition route failed:', err);
+      });
   } else {
     // Load HDR environment first, then auto-load a deep-linked splat if present.
     loadEnvironment('studio').then(async () => {
