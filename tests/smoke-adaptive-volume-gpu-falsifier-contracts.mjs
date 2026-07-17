@@ -318,6 +318,12 @@ assert.match(witness, /gitCommit[\s\S]*gitBranch[\s\S]*gitStatusShort/);
 assert.match(witness, /sourceFileSha256s/);
 assert.match(witness, /SystemInfo\.getInfo/);
 assert.match(witness, /applyHostGpuIdentity/);
+assert.match(
+  witness,
+  /writeFileSync\(browserReportPath[\s\S]*Page\.captureScreenshot/,
+  'validated browser metrics must be durable before screenshot capture can fail',
+);
+assert.match(witness, /captureBeyondViewport:\s*false/, 'R8b visual context must not rasterize the unbounded raw JSON report');
 assert.match(browser, /matchedReportSha256[\s\S]*fitReportSha256[\s\S]*sourceSidecarSha256[\s\S]*selectionArtifactSha256[\s\S]*referenceDepthSha256/);
 
 assert.match(
@@ -338,6 +344,9 @@ assert.match(
 );
 assert.match(browser, /absoluteErrorQuantiles/, 'R8b must distinguish a broad reconstruction failure from an extreme-value tail');
 assert.match(browser, /aboveErrorLimitCount/, 'R8b must report how many pixels violate the immutable max-error gate');
+assert.match(browser, /renderScaleLawSummary/, 'R8b screenshot must expose role-labeled scale timing and error rows');
+const html = readFileSync(new URL('../smoke-adaptive-volume-gpu-falsifier.html', import.meta.url), 'utf8');
+assert.match(html, /id="scale-law-summary"/, 'R8b screenshot needs a bounded scale-law context surface');
 const moduleSource = readFileSync(new URL('../smoke-adaptive-volume-gpu-falsifier.mjs', import.meta.url), 'utf8');
 assert.match(moduleSource, /kaminos\.smoke-adaptive-volume-scale-law\.v0/, 'R8 scale evidence needs its own nested schema');
 assert.match(browser, /productionAttribution/, 'R8 must bind its production comparison boundary to exact source evidence');

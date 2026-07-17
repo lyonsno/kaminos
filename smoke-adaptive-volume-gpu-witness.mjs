@@ -53,6 +53,8 @@ const reuseBrowser = true;
 
 let failurePhase = 'initialization';
 let primaryOutputWritten = false;
+let browserReportWritten = false;
+let screenshotWritten = false;
 let browserReport = null;
 let serverProcess = null;
 let chromeProcess = null;
@@ -89,8 +91,12 @@ function writeReport(extra = {}) {
     failurePhase,
     primaryOutputWritten,
     reportPath,
-    browserReportPath: primaryOutputWritten ? browserReportPath : null,
-    screenshotPath: primaryOutputWritten ? screenshotPath : null,
+    browserReportWritten,
+    browserReportPath: browserReportWritten ? browserReportPath : null,
+    browserReportSha256: browserReportWritten ? sha256(readFileSync(browserReportPath)) : null,
+    screenshotWritten,
+    screenshotPath: screenshotWritten ? screenshotPath : null,
+    screenshotSha256: screenshotWritten ? sha256(readFileSync(screenshotPath)) : null,
     serverPort,
     debugPort,
     chrome,
@@ -107,6 +113,7 @@ function writeReport(extra = {}) {
     consoleEvents,
     optimizationClaimAllowed: browserReport?.optimizationClaimAllowed === true,
     scaleLawEvidenceAllowed: browserReport?.scaleLawEvidenceAllowed === true,
+    browserReport: browserReportWritten ? browserReport : null,
     ...extra,
   };
   writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
@@ -269,20 +276,22 @@ async function main() {
       throw new Error(`browser/host scale-law validation disagreement: ${scaleLawValidation.reasons.join(',')}`);
     }
 
+    failurePhase = 'browser-report-output';
+    writeFileSync(browserReportPath, `${JSON.stringify(browserReport, null, 2)}\n`);
+    browserReportWritten = true;
+    writeReport({ status: 'validated-browser-report-pending-screenshot' });
+
     failurePhase = 'primary-output';
-    const screenshot = await wsRequest(socket, 'Page.captureScreenshot', { format: 'png', captureBeyondViewport: true }, 60000);
+    const screenshot = await wsRequest(socket, 'Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }, 60000);
     const pngBytes = Buffer.from(screenshot.data, 'base64');
     if (pngBytes.byteLength < 1000 || pngBytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') throw new Error('captured screenshot is blank or partial');
     writeFileSync(screenshotPath, pngBytes);
-    writeFileSync(browserReportPath, `${JSON.stringify(browserReport, null, 2)}\n`);
+    screenshotWritten = true;
     primaryOutputWritten = true;
     failurePhase = null;
     const report = writeReport({
       status: browserReport.scaleLawEvidenceAllowed ? 'valid-scale-law-evidence' : 'invalid-for-scale-law-claim',
-      browserReportSha256: sha256(readFileSync(browserReportPath)),
-      screenshotSha256: sha256(pngBytes),
       optimizationClaimRejectionReasons: browserReport.optimizationClaimRejectionReasons,
-      browserReport,
     });
     socket.close();
     process.stdout.write(`${JSON.stringify({ status: report.status, reportPath, browserReportPath, screenshotPath, optimizationClaimAllowed: report.optimizationClaimAllowed })}\n`);

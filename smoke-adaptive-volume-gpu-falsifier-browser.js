@@ -744,6 +744,45 @@ function drawDepth(canvasId, values, width, height, exposure = 8) {
 
 function setLabel(id, text) { document.getElementById(id).textContent = text; }
 
+function renderScaleLawSummary(scaleLaw) {
+  const node = document.getElementById('scale-law-summary');
+  node.replaceChildren();
+  const heading = document.createElement('h2');
+  heading.textContent = 'R8b Paired Scale Law';
+  const context = document.createElement('p');
+  context.textContent = 'Isolated single-channel traversal. Each row alternates dense/compact order; the 0.001 maximum-error gate remains binding.';
+  const table = document.createElement('table');
+  const header = document.createElement('tr');
+  for (const label of ['Workload', 'Dense ms', 'Compact ms', 'C/D ratio', 'p99.99 error', 'Max error', '> gate']) {
+    const cell = document.createElement('th');
+    cell.textContent = label;
+    header.append(cell);
+  }
+  const head = document.createElement('thead');
+  head.append(header);
+  const body = document.createElement('tbody');
+  for (const row of scaleLaw.effective.workloads) {
+    const tr = document.createElement('tr');
+    const values = [
+      `${row.width}x${row.height}`,
+      row.profiles.dense.perDispatch.median.toFixed(3),
+      row.profiles.compact.perDispatch.median.toFixed(3),
+      row.compactOverDenseRatio.toFixed(3),
+      row.comparison.absoluteErrorQuantiles.p9999.toExponential(2),
+      row.comparison.maximumAbsoluteError.toExponential(2),
+      String(row.comparison.aboveErrorLimitCount),
+    ];
+    for (const value of values) {
+      const cell = document.createElement('td');
+      cell.textContent = value;
+      tr.append(cell);
+    }
+    body.append(tr);
+  }
+  table.append(head, body);
+  node.append(heading, context, table);
+}
+
 async function run() {
   const config = queryConfig();
   const requestedRoute = location.href;
@@ -1167,6 +1206,7 @@ async function run() {
   setLabel('dense-label', `${denseProfile.median.toFixed(3)} ms median; reference max error ${denseComparison.maximumAbsoluteError.toExponential(2)}`);
   setLabel('prebuilt-label', `${prebuiltProfile.median.toFixed(3)} ms median; dense denied; max error ${prebuiltComparison.maximumAbsoluteError.toExponential(2)}`);
   setLabel('built-label', `${buildRenderProfile.total.median.toFixed(3)} ms build+render; max error ${builtComparison.maximumAbsoluteError.toExponential(2)}`);
+  renderScaleLawSummary(report.scaleLaw);
   setStatus(report.optimizationClaimAllowed ? 'Timestamp-backed compact independence gate passed' : `Optimization claim rejected: ${disposition.reasons.join(', ')}`);
   reportNode.textContent = JSON.stringify(report, null, 2);
   state.report = report;
