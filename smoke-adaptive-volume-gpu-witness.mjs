@@ -312,6 +312,8 @@ async function main() {
     writeReport({ status: 'validated-browser-report-pending-screenshot' });
 
     failurePhase = 'primary-output';
+    await evaluate(socket, 'window.scrollTo(0, 0); true');
+    await delay(100);
     const screenshot = await wsRequest(socket, 'Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }, 60000);
     const pngBytes = Buffer.from(screenshot.data, 'base64');
     if (pngBytes.byteLength < 1000 || pngBytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') throw new Error('captured screenshot is blank or partial');

@@ -507,6 +507,7 @@ assert.match(
   'validated browser metrics must be durable before screenshot capture can fail',
 );
 assert.match(witness, /captureBeyondViewport:\s*false/, 'R8b visual context must not rasterize the unbounded raw JSON report');
+assert.match(witness, /window\.scrollTo\(0,\s*0\)/, 'visual context capture must start at the labeled evidence origin');
 assert.match(browser, /matchedReportSha256[\s\S]*fitReportSha256[\s\S]*sourceSidecarSha256[\s\S]*selectionArtifactSha256[\s\S]*referenceDepthSha256/);
 
 assert.match(
@@ -577,6 +578,7 @@ assert.match(browser, /separatelyCharged:\s*true/, 'R9 must keep compact update 
 const html = readFileSync(new URL('../smoke-adaptive-volume-gpu-falsifier.html', import.meta.url), 'utf8');
 assert.match(html, /id="scale-law-summary"/, 'R8b screenshot needs a bounded scale-law context surface');
 assert.match(html, /id="production-survival-summary"/, 'R9 screenshot must anchor production timing to source, mechanism, support, and role labels');
+assert.match(html, /<header[\s\S]*id="production-survival-summary"[\s\S]*<main>/, 'R9 production context must appear before render panels so a bounded viewport cannot hide the verdict');
 assert.match(browser, /renderProductionSurvivalSummary/, 'R9 screenshot must expose the production comparator context instead of only scale-law rows');
 assert.match(browser, /Production comparator:/, 'R9 screenshot status must name the production result instead of implying isolated optimization success');
 assert.match(browser, /compact\/dense/, 'R9 screenshot status must expose the production compact/dense timing ratio');
