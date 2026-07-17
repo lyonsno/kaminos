@@ -58,11 +58,36 @@
       lowPhaseAligned: 'phase-aligned-low-field-control-v0',
       selectiveFullResidual: 'learned-selective-full-residual-composition-v0',
     });
+    const SELECTIVE_HEAD_LIVE_BASIN_PARAM_OVERRIDES = Object.freeze([
+      'volume_reaction_boundary_gradient',
+      'volume_reaction_boundary_support_thermal',
+      'volume_reaction_boundary_support_reaction',
+      'volume_reaction_boundary_support_front',
+      'volume_reaction_boundary_support_interface',
+      'volume_reaction_boundary_cut',
+      'volume_reaction_boundary_softness',
+      'volume_reaction_boundary_core_reject',
+      'volume_reaction_boundary_topology',
+      'volume_reaction_boundary_fire_ridge',
+      'volume_reaction_boundary_fire_ridge_cut',
+      'volume_reaction_boundary_fire_tip',
+      'volume_reaction_boundary_fire_erosion',
+      'volume_boundary_sidecar_source',
+      'volume_boundary_sidecar_view',
+      'volume_boundary_sidecar_blur',
+      'volume_boundary_sidecar_width',
+      'volume_boundary_sidecar_ridge',
+      'volume_boundary_splat_mode',
+      'volume_boundary_splat_radius',
+      'volume_boundary_splat_sharpness',
+      'volume_boundary_splat_feature_capture',
+    ]);
     const params = new URLSearchParams(location.search);
     let requestedRole = roles.includes(params.get('role')) ? params.get('role') : 'selectiveFullResidual';
     let requestedComposition = compositions.includes(params.get('composition')) ? params.get('composition') : 'smoke-raymarch-under-splats-v0';
     const warmupTarget = Math.max(0, Math.floor(Number(params.get('warmup_steps') ?? 96) || 0));
     const anchorBase = String(params.get('anchor_base') || 'http://127.0.0.1:18537').replace(/\/$/, '');
+    const startCapturePaused = ['1', 'true', 'yes'].includes(String(params.get('capture_paused') || '').toLowerCase());
     let warmupStarted = false;
     let warmupComplete = warmupTarget === 0;
     let warmupReceipt = null;
@@ -118,6 +143,11 @@
       volume_residual_feature_debug: '0',
       volume_quality_reason: 'selective-head-continuous-live-assay',
     });
+    for (const key of SELECTIVE_HEAD_LIVE_BASIN_PARAM_OVERRIDES) {
+      if (!params.has(key)) continue;
+      const value = params.get(key);
+      basinQuery.set(key, value);
+    }
     basin.src = `./?${basinQuery}`;
 
     function prototype() {
@@ -173,6 +203,7 @@
         encodedFrameCount: state?.selectiveHeadLive?.encodedFrameCount || 0,
         timing: state?.timing || null,
         boundarySplatFallbackReason: state?.boundarySplatFallbackReason || null,
+        capturePaused: state?.selectiveHeadLiveCapturePaused || false,
         error: warmupError || state?.error || null,
       };
     }
@@ -201,6 +232,7 @@
       warmupComplete = true;
       prototype().setSelectiveHeadLiveRole(requestedRole);
       prototype().setSelectiveHeadLiveRenderComposition(requestedComposition);
+      if (startCapturePaused) prototype().setSelectiveHeadLiveCapturePaused(true);
       await prototype().setActive(true);
     }
 

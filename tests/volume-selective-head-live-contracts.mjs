@@ -108,6 +108,11 @@ assert.match(page, /d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb9
 assert.match(page, /1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8/, 'page pins the exact high front checksum');
 assert.match(page, /warmupTarget/, 'page exposes the requested replay horizon');
 assert.match(page, /warmupComplete/, 'page distinguishes warmup from learned execution');
+assert.match(page, /SELECTIVE_HEAD_LIVE_BASIN_PARAM_OVERRIDES/, 'page names the allowlisted basin param forwarding surface');
+assert.match(page, /volume_reaction_boundary_support_front/, 'page can forward support/front audit controls into the inner basin route');
+assert.match(page, /basinQuery\.set\(key, value\)/, 'page forwards selected outer URL params into the inner basin query');
+assert.match(page, /capture_paused/, 'page exposes a capture-paused start route for exact frozen-state comparison');
+assert.match(page, /setSelectiveHeadLiveCapturePaused\(true\)/, 'page can pause the live route before activating the render loop');
 
 const witness = readFileSync(witnessPath, 'utf8');
 assert.match(witness, /kaminos\.volume\.selective-head-live-witness\.v0/);

@@ -1,0 +1,260 @@
+{
+  "schema": "kaminos.pyro-control-path.browser-gpu-frozen-capture-comparison.v0",
+  "generatedAt": "2026-07-17T17:32:29.668Z",
+  "control": "volume_reaction_boundary_support_front",
+  "classification": "browser-gpu-frozen-capture-source-step-drift",
+  "requested": {
+    "baseline": "0.4",
+    "treatment": "1.6",
+    "baselineUrlValue": "0.4",
+    "treatmentUrlValue": "1.6",
+    "effectiveEqualsRequested": true
+  },
+  "identity": {
+    "witnessSchema": "kaminos.volume.selective-head-composition-witness.v0",
+    "baselineUrl": "http://127.0.0.1:8099/volume-selective-head-live.html?volume_reaction_boundary_support_front=0.4&volume_boundary_splat_mode=learned&warmup_steps=96&anchor_base=http://127.0.0.1:18537",
+    "treatmentUrl": "http://127.0.0.1:8099/volume-selective-head-live.html?volume_reaction_boundary_support_front=1.6&volume_boundary_splat_mode=learned&warmup_steps=96&anchor_base=http://127.0.0.1:18537",
+    "effectiveRoute": "exact-basin-selective-head-live-v0",
+    "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0",
+    "sameStateAuthority": "same-state-selective-render-composition-v0",
+    "baselineSimStep": 99,
+    "treatmentSimStep": 100,
+    "sourceStateComparable": false
+  },
+  "fallback": null,
+  "postLoadMutation": null,
+  "appliedPasses": {
+    "splatApplied": true,
+    "raymarchApplied": true
+  },
+  "deltas": {
+    "screenshotHashChangedCount": 3,
+    "screenshotByteLengthMeanAbs": 56249.666666666664,
+    "boundarySplatGpuProfile": {
+      "candidateCopyBytesMeanAbs": 0
+    }
+  },
+  "captures": [
+    {
+      "composition": "splat-only-v0",
+      "baseline": {
+        "requestedComposition": "splat-only-v0",
+        "effectiveComposition": "splat-only-v0",
+        "compositionAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+        "role": "selectiveFullResidual",
+        "roleAuthority": "learned-selective-full-residual-composition-v0",
+        "simStepCount": 99,
+        "beforeSimStepCount": 99,
+        "frameCount": 100,
+        "renderElapsedMs": 3301.5402080000003,
+        "boundarySplatGpuProfile": null,
+        "screenshot": {
+          "path": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-support-front/baseline-cors/01-splat-only-v0.png",
+          "byteLength": 1539040,
+          "sha256": "50caffb1abed312acf2a0f333f3336209d9eb5eb9710e1c83cd504e6ba21241a"
+        },
+        "sha256": "50caffb1abed312acf2a0f333f3336209d9eb5eb9710e1c83cd504e6ba21241a"
+      },
+      "treatment": {
+        "requestedComposition": "splat-only-v0",
+        "effectiveComposition": "splat-only-v0",
+        "compositionAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+        "role": "selectiveFullResidual",
+        "roleAuthority": "learned-selective-full-residual-composition-v0",
+        "simStepCount": 100,
+        "beforeSimStepCount": 100,
+        "frameCount": 101,
+        "renderElapsedMs": 3609.4498750000002,
+        "boundarySplatGpuProfile": null,
+        "screenshot": {
+          "path": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-support-front/treatment-cors/01-splat-only-v0.png",
+          "byteLength": 1597114,
+          "sha256": "9d1962b4e2c93c3313dcdd7c40929235a7e54da16348695407655add7cbab019"
+        },
+        "sha256": "9d1962b4e2c93c3313dcdd7c40929235a7e54da16348695407655add7cbab019"
+      },
+      "passReceipt": {
+        "baseline": {
+          "identity": "selective-head-live-render-pass-receipt-v0",
+          "composition": "splat-only-v0",
+          "compositionAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+          "raymarchAuthority": "smoke-raymarch-authority-broad-smoke-only-v0",
+          "splatAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+          "raymarchFireAuthority": 0,
+          "raymarchEncoded": false,
+          "raymarchApplied": false,
+          "splatEncoded": true,
+          "splatApplied": true,
+          "fallbackReason": null
+        },
+        "treatment": {
+          "identity": "selective-head-live-render-pass-receipt-v0",
+          "composition": "splat-only-v0",
+          "compositionAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+          "raymarchAuthority": "smoke-raymarch-authority-broad-smoke-only-v0",
+          "splatAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+          "raymarchFireAuthority": 0,
+          "raymarchEncoded": false,
+          "raymarchApplied": false,
+          "splatEncoded": true,
+          "splatApplied": true,
+          "fallbackReason": null
+        }
+      },
+      "deltas": {
+        "screenshotHashChanged": true,
+        "screenshotByteLengthAbs": 58074,
+        "candidateCopyBytesAbs": 0
+      }
+    },
+    {
+      "composition": "smoke-raymarch-under-splats-v0",
+      "baseline": {
+        "requestedComposition": "smoke-raymarch-under-splats-v0",
+        "effectiveComposition": "smoke-raymarch-under-splats-v0",
+        "compositionAuthority": "smoke-raymarch-authority-broad-smoke-only-v0+splat-fire-authority-learned-boundary-sheets-v0",
+        "role": "selectiveFullResidual",
+        "roleAuthority": "learned-selective-full-residual-composition-v0",
+        "simStepCount": 99,
+        "beforeSimStepCount": 99,
+        "frameCount": 101,
+        "renderElapsedMs": 16.680167000000438,
+        "boundarySplatGpuProfile": null,
+        "screenshot": {
+          "path": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-support-front/baseline-cors/02-smoke-raymarch-under-splats-v0.png",
+          "byteLength": 1710655,
+          "sha256": "cbf8ca612b1f31fbcbe9cb26fdb02c4cc7e8a8a8bdb0d85a7ecfe5eae6f9c25d"
+        },
+        "sha256": "cbf8ca612b1f31fbcbe9cb26fdb02c4cc7e8a8a8bdb0d85a7ecfe5eae6f9c25d"
+      },
+      "treatment": {
+        "requestedComposition": "smoke-raymarch-under-splats-v0",
+        "effectiveComposition": "smoke-raymarch-under-splats-v0",
+        "compositionAuthority": "smoke-raymarch-authority-broad-smoke-only-v0+splat-fire-authority-learned-boundary-sheets-v0",
+        "role": "selectiveFullResidual",
+        "roleAuthority": "learned-selective-full-residual-composition-v0",
+        "simStepCount": 100,
+        "beforeSimStepCount": 100,
+        "frameCount": 102,
+        "renderElapsedMs": 15.060500000001412,
+        "boundarySplatGpuProfile": null,
+        "screenshot": {
+          "path": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-support-front/treatment-cors/02-smoke-raymarch-under-splats-v0.png",
+          "byteLength": 1763259,
+          "sha256": "f0f15a16a0505bdb0763a32bd75d1999d3bf5414a33e3a6625399d74f424b628"
+        },
+        "sha256": "f0f15a16a0505bdb0763a32bd75d1999d3bf5414a33e3a6625399d74f424b628"
+      },
+      "passReceipt": {
+        "baseline": {
+          "identity": "selective-head-live-render-pass-receipt-v0",
+          "composition": "smoke-raymarch-under-splats-v0",
+          "compositionAuthority": "smoke-raymarch-authority-broad-smoke-only-v0+splat-fire-authority-learned-boundary-sheets-v0",
+          "raymarchAuthority": "smoke-raymarch-authority-broad-smoke-only-v0",
+          "splatAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+          "raymarchFireAuthority": 0,
+          "raymarchEncoded": true,
+          "raymarchApplied": true,
+          "splatEncoded": true,
+          "splatApplied": true,
+          "fallbackReason": null
+        },
+        "treatment": {
+          "identity": "selective-head-live-render-pass-receipt-v0",
+          "composition": "smoke-raymarch-under-splats-v0",
+          "compositionAuthority": "smoke-raymarch-authority-broad-smoke-only-v0+splat-fire-authority-learned-boundary-sheets-v0",
+          "raymarchAuthority": "smoke-raymarch-authority-broad-smoke-only-v0",
+          "splatAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+          "raymarchFireAuthority": 0,
+          "raymarchEncoded": true,
+          "raymarchApplied": true,
+          "splatEncoded": true,
+          "splatApplied": true,
+          "fallbackReason": null
+        }
+      },
+      "deltas": {
+        "screenshotHashChanged": true,
+        "screenshotByteLengthAbs": 52604,
+        "candidateCopyBytesAbs": 0
+      }
+    },
+    {
+      "composition": "full-raymarch-under-splats-diagnostic-v0",
+      "baseline": {
+        "requestedComposition": "full-raymarch-under-splats-diagnostic-v0",
+        "effectiveComposition": "full-raymarch-under-splats-diagnostic-v0",
+        "compositionAuthority": "diagnostic-full-fire-raymarch-under-splats-duplicate-fire-authority-v0",
+        "role": "selectiveFullResidual",
+        "roleAuthority": "learned-selective-full-residual-composition-v0",
+        "simStepCount": 99,
+        "beforeSimStepCount": 99,
+        "frameCount": 102,
+        "renderElapsedMs": 16.17054199999984,
+        "boundarySplatGpuProfile": null,
+        "screenshot": {
+          "path": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-support-front/baseline-cors/03-full-raymarch-under-splats-diagnostic-v0.png",
+          "byteLength": 1707766,
+          "sha256": "35130462583c5cd36543a4053f365626eef30884b6b3393d3bb030095604817d"
+        },
+        "sha256": "35130462583c5cd36543a4053f365626eef30884b6b3393d3bb030095604817d"
+      },
+      "treatment": {
+        "requestedComposition": "full-raymarch-under-splats-diagnostic-v0",
+        "effectiveComposition": "full-raymarch-under-splats-diagnostic-v0",
+        "compositionAuthority": "diagnostic-full-fire-raymarch-under-splats-duplicate-fire-authority-v0",
+        "role": "selectiveFullResidual",
+        "roleAuthority": "learned-selective-full-residual-composition-v0",
+        "simStepCount": 100,
+        "beforeSimStepCount": 100,
+        "frameCount": 103,
+        "renderElapsedMs": 15.451874999998836,
+        "boundarySplatGpuProfile": null,
+        "screenshot": {
+          "path": "/private/tmp/kaminos-pyro-control-path-parity-auditor-0717/artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-support-front/treatment-cors/03-full-raymarch-under-splats-diagnostic-v0.png",
+          "byteLength": 1765837,
+          "sha256": "e9b67688cf69048f5060ebf95be7a0f7bfdaa5fb1b0f648cb404d2c2efa431f9"
+        },
+        "sha256": "e9b67688cf69048f5060ebf95be7a0f7bfdaa5fb1b0f648cb404d2c2efa431f9"
+      },
+      "passReceipt": {
+        "baseline": {
+          "identity": "selective-head-live-render-pass-receipt-v0",
+          "composition": "full-raymarch-under-splats-diagnostic-v0",
+          "compositionAuthority": "diagnostic-full-fire-raymarch-under-splats-duplicate-fire-authority-v0",
+          "raymarchAuthority": "diagnostic-raymarch-selected-fields-fire-smoke-v0",
+          "splatAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+          "raymarchFireAuthority": 1,
+          "raymarchEncoded": true,
+          "raymarchApplied": true,
+          "splatEncoded": true,
+          "splatApplied": true,
+          "fallbackReason": null
+        },
+        "treatment": {
+          "identity": "selective-head-live-render-pass-receipt-v0",
+          "composition": "full-raymarch-under-splats-diagnostic-v0",
+          "compositionAuthority": "diagnostic-full-fire-raymarch-under-splats-duplicate-fire-authority-v0",
+          "raymarchAuthority": "diagnostic-raymarch-selected-fields-fire-smoke-v0",
+          "splatAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+          "raymarchFireAuthority": 1,
+          "raymarchEncoded": true,
+          "raymarchApplied": true,
+          "splatEncoded": true,
+          "splatApplied": true,
+          "fallbackReason": null
+        }
+      },
+      "deltas": {
+        "screenshotHashChanged": true,
+        "screenshotByteLengthAbs": 58071,
+        "candidateCopyBytesAbs": 0
+      }
+    }
+  ],
+  "catches": "browser-gpu-frozen-capture-source-step-drift",
+  "falsifier": {
+    "tripped": true,
+    "reason": "baseline and treatment reports captured different source sim steps, so pixel deltas cannot prove a single frozen-state control perturbation"
+  }
+}
