@@ -141,10 +141,10 @@ assert.match(index, /Bonfire plume \(superseded\)/, 'Bonfire plume remains visib
 assert.match(index, /saveVolumeSettingsPreset/, 'Shared settings persistence uses a named durable orchestration path');
 assert.match(index, /refreshVolumeSettingsPresetList/, 'Shared settings persistence refreshes a server-backed index');
 assert.match(index, /navigateToSelectedVolumeSettingsPreset/, 'Shared settings loading uses one fresh-navigation path for current and new tabs');
-assert.match(index, /SETTINGS_PRESET_VIEW_BY_COMPOSITION/, 'Shared preset loading maps the wrapper composition to an explicit loader view');
-assert.match(index, /selectedVolumeSettingsPresetView[\s\S]*parent\.__kaminosSelectiveHeadLive/, 'Current-view loading reads the wrapper renderer identity without persisting it');
-assert.match(index, /wrapperState\?\.status !== 'running'[\s\S]*requestedComposition !== wrapperState\?\.effectiveComposition/, 'Current-view loading rejects unsettled or substituted wrapper composition');
-assert.match(index, /fallbackReason[\s\S]*compositionFallbackReason[\s\S]*boundarySplatFallbackReason/, 'Current-view loading fails loud on every wrapper fallback surface');
+assert.match(settingsPresetContract, /VOLUME_SETTINGS_PRESET_VIEW_BY_COMPOSITION/, 'Shared preset loading maps effective composition to an explicit loader view');
+assert.match(index, /function currentVolumeSettingsPresetRendererState\(\)[\s\S]*parent\.__kaminosSelectiveHeadLive[\s\S]*__kaminosVolumePrototype/, 'Current-view loading reads wrapper or ordinary-live renderer identity without persisting it');
+assert.match(settingsPresetContract, /requestedComposition !== rendererState\.effectiveComposition/, 'Current-view loading rejects requested/effective composition substitution');
+assert.match(settingsPresetContract, /fallbackReason[\s\S]*compositionFallbackReason[\s\S]*boundarySplatFallbackReason/, 'Current-view loading fails loud on every renderer fallback surface');
 assert.match(index, /preset=\$\{encodeURIComponent\(entry\.presetId\)\}&view=\$\{encodeURIComponent\(view\)\}/, 'Load Here and Open Fresh navigate by immutable preset id and explicit invocation-scoped view');
 assert.match(index, /validateVolumeSettingsPresetDocument[\s\S]*validateVolumeSettingsPresetTarget/, 'The ordinary live target imports exact preset admission');
 assert.match(index, /async function admitVolumeSettingsPresetRoute[\s\S]*validateVolumeSettingsPresetTarget\(receipt, params\)/, 'The ordinary live target re-reads and validates preset authority instead of trusting route text');

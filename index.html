@@ -439,6 +439,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .volume-readout .field { gap: 12px; margin: 0; padding: 0; min-width: 0; }
 .volume-readout .field-key { white-space: nowrap; }
 .volume-readout .field-val { max-width: 220px; text-align: right; }
+#volume-settings-preset-state { max-width: none; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; user-select: text; text-align: left; }
 .volume-pyro-atlas-wrap { margin-top: 8px; border-top: 1px solid #282828; padding-top: 8px; }
 #volume-pyro-dynamic-atlas { width: 100%; height: 54px; border: 1px solid #333; border-radius: 6px; background: #080808; }
 .volume-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
@@ -996,7 +997,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="field"><span class="field-key">Render</span><span class="field-val" id="volume-canonical-render-mode-state">default</span></div>
       <div class="field"><span class="field-key">Motion</span><span class="field-val" id="volume-canonical-motion-mode-state">animated</span></div>
       <div class="field"><span class="field-key">Content</span><span class="field-val" id="volume-canonical-content-mode-state">smoke</span></div>
-      <div class="field"><span class="field-key">Preset store</span><span class="field-val" id="volume-settings-preset-state">connecting...</span></div>
+      <div class="field"><span class="field-key">Preset store</span><span class="field-val" id="volume-settings-preset-state" role="status" aria-live="polite">connecting...</span></div>
       <div class="volume-presentation-switch" role="group" aria-label="Volume presentation">
         <button class="btn active" type="button" data-volume-presentation-mode="beauty">Beauty</button>
         <button class="btn" type="button" data-volume-presentation-mode="intrinsic">Intrinsic</button>
@@ -2632,6 +2633,7 @@ import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js?v=prototype-scene-ontology-0715';
 import { DEFAULT_VOLUME_SCENE, volumeSceneReceipt } from './volume-scene-ontology.mjs';
 import {
+  resolveVolumeSettingsPresetVisualView,
   validateVolumeSettingsPresetDocument,
   validateVolumeSettingsPresetTarget,
 } from './volume-settings-preset-contract.mjs';
@@ -12204,33 +12206,29 @@ async function saveVolumeSettingsPreset() {
   }
 }
 
-const SETTINGS_PRESET_VIEW_BY_COMPOSITION = Object.freeze({
-  'splat-only-v0': 'splat-only',
-  'raymarch-only-v0': 'raymarch-only',
-  'smoke-raymarch-under-splats-v0': 'smoke-hybrid',
-  'full-raymarch-under-splats-diagnostic-v0': 'full-hybrid-diagnostic',
-});
+function currentVolumeSettingsPresetRendererState() {
+  try {
+    const wrapper = window.parent !== window
+      ? window.parent.__kaminosSelectiveHeadLive
+      : window.__kaminosSelectiveHeadLive;
+    if (wrapper?.debugState) return wrapper.debugState();
+  } catch {}
+  const ordinaryState = window.__kaminosVolumePrototype?.debugState?.();
+  if (!ordinaryState) return null;
+  return {
+    source: 'ordinary-live-prototype',
+    status: ordinaryState.active && !ordinaryState.error ? 'running' : 'unavailable',
+    requestedComposition: ordinaryState.selectiveHeadLiveCompositionRequested,
+    effectiveComposition: ordinaryState.selectiveHeadLiveCompositionEffective,
+    fallbackReason: ordinaryState.error || ordinaryState.selectiveHeadLiveFallbackReason || null,
+    compositionFallbackReason: ordinaryState.selectiveHeadLiveCompositionFallbackReason || null,
+    boundarySplatFallbackReason: ordinaryState.boundarySplatFallbackReason || null,
+  };
+}
 
 function selectedVolumeSettingsPresetView() {
   const selected = document.getElementById('settings-preset-view')?.value || 'current';
-  if (selected !== 'current') return selected;
-  let wrapperState = null;
-  try {
-    wrapperState = window.parent !== window
-      ? window.parent.__kaminosSelectiveHeadLive?.debugState?.()
-      : window.__kaminosSelectiveHeadLive?.debugState?.();
-  } catch {}
-  if (wrapperState?.status !== 'running'
-    || wrapperState?.requestedComposition !== wrapperState?.effectiveComposition
-    || wrapperState?.fallbackReason
-    || wrapperState?.compositionFallbackReason
-    || wrapperState?.boundarySplatFallbackReason) {
-    throw new Error('current renderer view is not running cleanly; select an explicit preset renderer view');
-  }
-  const composition = wrapperState.effectiveComposition;
-  const view = SETTINGS_PRESET_VIEW_BY_COMPOSITION[composition];
-  if (!view) throw new Error('current renderer view is unavailable; select a preset renderer view');
-  return view;
+  return resolveVolumeSettingsPresetVisualView(selected, currentVolumeSettingsPresetRendererState());
 }
 
 function selectedVolumeSettingsPresetUrl() {

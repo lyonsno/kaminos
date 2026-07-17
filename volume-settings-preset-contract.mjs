@@ -5,6 +5,36 @@ export const VOLUME_SETTINGS_PRESET_VISUAL_VIEWS = Object.freeze({
   'smoke-hybrid': Object.freeze({ role: 'truthHigh', composition: 'smoke-raymarch-under-splats-v0' }),
   'full-hybrid-diagnostic': Object.freeze({ role: 'truthHigh', composition: 'full-raymarch-under-splats-diagnostic-v0' }),
 });
+const VOLUME_SETTINGS_PRESET_VIEW_BY_COMPOSITION = Object.freeze(Object.fromEntries(
+  Object.entries(VOLUME_SETTINGS_PRESET_VISUAL_VIEWS).map(([view, definition]) => [definition.composition, view]),
+));
+
+export function resolveVolumeSettingsPresetVisualView(selectedView, rendererState = null) {
+  const selected = String(selectedView || 'current');
+  if (selected !== 'current') {
+    if (!Object.hasOwn(VOLUME_SETTINGS_PRESET_VISUAL_VIEWS, selected)) {
+      throw new Error(`unsupported settings preset visual view: ${selected}`);
+    }
+    return selected;
+  }
+  if (rendererState?.status !== 'running') {
+    throw new Error('current renderer view is not running; select an explicit preset renderer view');
+  }
+  if (rendererState.requestedComposition !== rendererState.effectiveComposition) {
+    throw new Error(
+      `current renderer requested/effective composition substitution: ${rendererState.requestedComposition || 'missing'} -> ${rendererState.effectiveComposition || 'missing'}`,
+    );
+  }
+  const fallbackReason = rendererState.fallbackReason
+    || rendererState.compositionFallbackReason
+    || rendererState.boundarySplatFallbackReason;
+  if (fallbackReason) throw new Error(`current renderer fallback: ${fallbackReason}`);
+  const view = VOLUME_SETTINGS_PRESET_VIEW_BY_COMPOSITION[rendererState.effectiveComposition];
+  if (!view) {
+    throw new Error(`current renderer composition is unavailable: ${rendererState.effectiveComposition || 'missing'}`);
+  }
+  return view;
+}
 const VOLUME_APPEARANCE_DECOMPOSITION_MODES = Object.freeze([
   'off',
   'structural-a',
