@@ -223,12 +223,6 @@ try {
       resumeRenderLoop: false,
     })})`);
     assert.equal(render?.ok, true, `full-support render failed at frame ${frameIndex}`);
-    assert.equal(render.boundarySplatMode, MODE, `full-support mode drifted at frame ${frameIndex}`);
-    assert.equal(render.boundarySplatRendererIdentity, RENDERER, `renderer drifted at frame ${frameIndex}`);
-    assert.equal(render.boundarySplatFallbackReason, null, `fallback activated at frame ${frameIndex}`);
-    assert.equal(render.boundarySplatOverflowCount, 0, `candidate overflow at frame ${frameIndex}`);
-    assert.equal(render.boundarySplatCandidateCount, render.boundarySplatInstanceCount, `draw population truncated at frame ${frameIndex}`);
-    assert.ok(render.boundarySplatCandidateCount > 0, `empty full-support population at frame ${frameIndex}`);
 
     const state = await evaluate(socket, `(() => {
       const state = ${VOLUME_PROTOTYPE_EXPRESSION}.debugState();
@@ -263,9 +257,12 @@ try {
       };
     })()`);
     assert.equal(state.effectiveRoute, EFFECTIVE_ROUTE, `effective route drifted at frame ${frameIndex}`);
+    assert.equal(state.boundarySplatMode, MODE, `full-support mode drifted at frame ${frameIndex}`);
+    assert.equal(state.boundarySplatRendererIdentity, RENDERER, `renderer drifted at frame ${frameIndex}`);
     assert.equal(state.boundarySplatFallbackReason, null, `post-render fallback at frame ${frameIndex}`);
     assert.equal(state.overflowCount, 0, `post-render overflow at frame ${frameIndex}`);
     assert.equal(state.candidateCount, state.instanceCount, `post-render population truncation at frame ${frameIndex}`);
+    assert.ok(state.candidateCount > 0, `empty full-support population at frame ${frameIndex}`);
 
     const clip = clipFromCanvas(render.canvasCssRect);
     const screenshot = await socket.call('Page.captureScreenshot', {

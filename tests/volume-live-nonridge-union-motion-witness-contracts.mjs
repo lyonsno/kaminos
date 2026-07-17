@@ -23,6 +23,8 @@ assert.match(witness, /candidateCount/, 'witness records live candidate populati
 assert.match(witness, /instanceCount/, 'witness records the effective draw population');
 assert.match(witness, /overflowCount/, 'witness records and rejects overflow');
 assert.match(witness, /boundarySplatFallbackReason/, 'witness records and rejects fallback');
+assert.match(witness, /assert\.equal\(state\.boundarySplatMode, MODE/, 'witness validates mode from authoritative post-render state');
+assert.match(witness, /assert\.equal\(state\.boundarySplatRendererIdentity, RENDERER/, 'witness validates renderer from authoritative post-render state');
 assert.match(witness, /adjacentFramePixelDiffs/, 'witness measures adjacent-frame motion rather than inferring it');
 assert.match(witness, /partialFrames/, 'failure reports preserve frames captured before failure');
 assert.match(witness, /lastTrustworthyEvidence/, 'failure reports preserve the last trustworthy route evidence');
