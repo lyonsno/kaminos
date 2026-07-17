@@ -417,6 +417,7 @@ for (const mutate of [
 const browser = readFileSync(new URL('../smoke-adaptive-volume-gpu-falsifier-browser.js', import.meta.url), 'utf8');
 assert.match(browser, /timestamp-query/);
 assert.match(browser, /timestampWrites/);
+assert.match(browser, /Promise\.race\(\[[\s\S]*mapAsync\([\s\S]*device\.lost/, 'GPU readback must reject on device loss instead of hanging forever');
 assert.doesNotMatch(browser, /encoder\.writeTimestamp/);
 assert.doesNotMatch(browser, /const marker = encoder\.beginComputePass/, 'combined timing must not depend on an empty marker pass');
 assert.match(browser, /encodeBuild\(encoder, queries, true\), 3\)/, 'combined build/render timing uses three populated query slots');

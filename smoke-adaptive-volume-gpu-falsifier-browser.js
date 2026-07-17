@@ -721,7 +721,10 @@ async function readBuffer(device, source, bytes) {
   const encoder = device.createCommandEncoder();
   encoder.copyBufferToBuffer(source, 0, readback, 0, bytes);
   device.queue.submit([encoder.finish()]);
-  await readback.mapAsync(GPUMapMode.READ);
+  await Promise.race([
+    readback.mapAsync(GPUMapMode.READ),
+    device.lost.then(info => { throw new Error(`WebGPU device lost during readback: ${info.reason}: ${info.message}`); }),
+  ]);
   const copy = readback.getMappedRange().slice(0, bytes);
   readback.unmap();
   readback.destroy();
@@ -739,7 +742,10 @@ async function resolveTimestamps(device, encode, queryCount, monotonicGroups = [
     encoder.resolveQuerySet(querySet, 0, queryCount, resolve, 0);
     encoder.copyBufferToBuffer(resolve, 0, readback, 0, queryCount * 8);
     device.queue.submit([encoder.finish()]);
-    await readback.mapAsync(GPUMapMode.READ);
+    await Promise.race([
+      readback.mapAsync(GPUMapMode.READ),
+      device.lost.then(info => { throw new Error(`WebGPU device lost during timestamp readback: ${info.reason}: ${info.message}`); }),
+    ]);
     const values = new BigUint64Array(readback.getMappedRange().slice(0));
     readback.unmap();
     const validation = await device.popErrorScope();
