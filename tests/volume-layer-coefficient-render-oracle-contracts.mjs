@@ -40,6 +40,34 @@ assert.match(source, /--skirt-minor-scale/, 'core/skirt mode requires an explici
 assert.match(source, /--skirt-ridge-rejection/, 'core/skirt mode requires explicit Ridge conditioning');
 assert.match(source, /targetTopTailLumaUnderfit/, 'oracle reports missing target-aligned peak buildup');
 assert.match(source, /targetHighGradientUnderfit/, 'oracle reports missing target-aligned structural energy');
+assert.match(
+  source,
+  /flow-covariance-seven-by-seven-gauss-hermite-area-conserving-v0/,
+  'oracle names the matched higher-order covariance treatment without claiming analytic integration',
+);
+assert.match(source, /def gauss_hermite_pixel_samples\(/, 'oracle exposes higher-order projected quadrature');
+assert.match(
+  source,
+  /flow-bilinear-core-plus-gauss-hermite-compound-shared-mass-v0/,
+  'oracle names the lawful core-preserving compound treatment',
+);
+assert.match(source, /def compound_pixel_samples\(/, 'oracle exposes the compound core and halo partition');
+assert.match(source, /--compound-halo-mass/, 'compound treatment requires an explicit shared emission/extinction mass partition');
+assert.match(
+  source,
+  /view-independent-multiview-residual-three-child-subcell-split-v0/,
+  'oracle names the view-independent selective split treatment',
+);
+assert.match(source, /def candidate_residual_importance\(/, 'oracle exposes multiview residual backprojection');
+assert.match(source, /def selective_split_pixel_samples\(/, 'oracle exposes deterministic three-child splitting');
+assert.match(source, /--split-attribution-cameras/, 'selective splitting requires an explicit attribution cohort');
+assert.match(source, /--split-score-threshold/, 'selective splitting has an explicit uncapped selection threshold');
+assert.match(source, /--split-min-camera-support/, 'selective splitting requires explicit multiview support');
+assert.match(source, /--split-offset-world/, 'selective splitting requires an explicit world-space child offset');
+assert.match(source, /structuredDotSpectralPower/, 'oracle scores structured dot energy separately');
+assert.match(source, /targetWispUnderfit/, 'oracle scores target-aligned edge wisps separately');
+assert.match(source, /projectedFragments/, 'oracle reports projected fragment work instead of row count alone');
+assert.match(source, /splitSelectionCap.*None/, 'selective splitting records that no candidate cap was applied');
 
 const python = process.env.KAMINOS_MLX_PYTHON || '/private/tmp/kaminos-mlx-residual-venv/bin/python';
 const selfTest = spawnSync(python, [script.pathname, '--self-test'], { encoding: 'utf8' });
@@ -47,6 +75,10 @@ assert.equal(selfTest.status, 0, selfTest.stderr || selfTest.stdout);
 assert.match(selfTest.stdout, /coefficient render oracle self-test passed/);
 assert.match(selfTest.stdout, /core-skirt endpoint contracts passed/);
 assert.match(selfTest.stdout, /target-aligned metric contracts passed/);
+assert.match(selfTest.stdout, /higher-order covariance contracts passed/);
+assert.match(selfTest.stdout, /compound optical mass contracts passed/);
+assert.match(selfTest.stdout, /selective split contracts passed/);
+assert.match(selfTest.stdout, /deposition raster smoke contracts passed/);
 
 const root = await mkdtemp(join(tmpdir(), 'kaminos-coefficient-render-contract-'));
 const reportPath = join(root, 'failure-report.json');
@@ -143,5 +175,33 @@ assert.deepEqual(missingControlsFailure.requested.footprintControls, {
   skirtRidgeRejection: null,
 });
 assert.match(missingControlsFailure.error, /requires explicit/i);
+
+const missingCompoundReport = join(root, 'missing-compound-controls-report.json');
+const missingCompound = spawnSync(python, [
+  script.pathname,
+  '--manifest', invalidManifestPath,
+  '--capture-report', invalidManifestPath,
+  '--out-dir', join(root, 'missing-compound-out'),
+  '--report', missingCompoundReport,
+  '--footprint-mode', 'compound',
+], { encoding: 'utf8' });
+assert.notEqual(missingCompound.status, 0, 'compound mode without explicit mass partition must fail');
+const missingCompoundFailure = JSON.parse(await readFile(missingCompoundReport, 'utf8'));
+assert.equal(missingCompoundFailure.failurePhase, 'footprint-control-validation');
+assert.match(missingCompoundFailure.error, /explicit.*compound-halo-mass/i);
+
+const missingSplitReport = join(root, 'missing-selective-split-controls-report.json');
+const missingSplit = spawnSync(python, [
+  script.pathname,
+  '--manifest', invalidManifestPath,
+  '--capture-report', invalidManifestPath,
+  '--out-dir', join(root, 'missing-selective-split-out'),
+  '--report', missingSplitReport,
+  '--footprint-mode', 'selective-split',
+], { encoding: 'utf8' });
+assert.notEqual(missingSplit.status, 0, 'selective split without explicit attribution controls must fail');
+const missingSplitFailure = JSON.parse(await readFile(missingSplitReport, 'utf8'));
+assert.equal(missingSplitFailure.failurePhase, 'footprint-control-validation');
+assert.match(missingSplitFailure.error, /selective-split mode requires explicit/i);
 
 console.log('volume layer coefficient render oracle contracts passed');

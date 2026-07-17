@@ -39,7 +39,19 @@ FOOTPRINT_MODES = {
     "bilinear": "flow-tangent-five-tap-bilinear-v0",
     "ellipse": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
     "core-skirt": "flow-tangent-five-tap-core-plus-ridge-conditioned-normal-skirt-v0",
+    "higher-order": "flow-covariance-seven-by-seven-gauss-hermite-area-conserving-v0",
+    "compound": "flow-bilinear-core-plus-gauss-hermite-compound-shared-mass-v0",
+    "selective-split": "view-independent-multiview-residual-three-child-subcell-split-v0",
 }
+TANGENT_OFFSETS = np.asarray((-1.0, -0.5, 0.0, 0.5, 1.0), dtype=np.float64)
+TANGENT_WEIGHTS = np.asarray((0.075, 0.225, 0.4, 0.225, 0.075), dtype=np.float64)
+NORMAL_OFFSETS = np.asarray((-1.0, 0.0, 1.0), dtype=np.float64)
+NORMAL_WEIGHTS = np.asarray((0.125, 0.75, 0.125), dtype=np.float64)
+TANGENT_UNIT_VARIANCE = float(np.sum(TANGENT_WEIGHTS * np.square(TANGENT_OFFSETS)))
+NORMAL_UNIT_VARIANCE = float(np.sum(NORMAL_WEIGHTS * np.square(NORMAL_OFFSETS)))
+GAUSS_HERMITE_ORDER = 7
+GAUSS_HERMITE_RAW_NODES, GAUSS_HERMITE_RAW_WEIGHTS = np.polynomial.hermite.hermgauss(GAUSS_HERMITE_ORDER)
+GAUSS_HERMITE_WEIGHTS = GAUSS_HERMITE_RAW_WEIGHTS / math.sqrt(math.pi)
 FEATURE_ORDER = [
     "sidecar.support", "sidecar.coverage", "sidecar.ridge", "sidecar.footprint",
     "material.density", "material.heat", "material.fuel", "material.detail",
@@ -271,13 +283,109 @@ def tangent_pixel_samples(
     tangent_y: np.ndarray,
     major_px: np.ndarray,
 ):
-    tangent_offsets = (-1.0, -0.5, 0.0, 0.5, 1.0)
-    tangent_weights = (0.075, 0.225, 0.4, 0.225, 0.075)
-    for tangent_offset, tangent_weight in zip(tangent_offsets, tangent_weights):
+    for tangent_offset, tangent_weight in zip(TANGENT_OFFSETS, TANGENT_WEIGHTS):
         sample_x = pixel_x + tangent_x * major_px * tangent_offset
         sample_y = pixel_y + tangent_y * major_px * tangent_offset
         for x, y, pixel_weight in bilinear_pixel_samples(sample_x, sample_y):
             yield x, y, pixel_weight * tangent_weight
+
+
+def weighted_tangent_pixel_samples(
+    pixel_x: np.ndarray,
+    pixel_y: np.ndarray,
+    tangent_x: np.ndarray,
+    tangent_y: np.ndarray,
+    major_px: np.ndarray,
+    candidate_weight: np.ndarray,
+):
+    require(candidate_weight.shape == pixel_x.shape, "candidate weight shape must match candidate rows")
+    for x, y, weight in tangent_pixel_samples(pixel_x, pixel_y, tangent_x, tangent_y, major_px):
+        yield x, y, weight * candidate_weight
+
+
+def gauss_hermite_axis(variance: float) -> tuple[np.ndarray, np.ndarray]:
+    require(math.isfinite(variance) and variance > 0.0, "Gauss-Hermite variance must be finite and positive")
+    offsets = np.sqrt(2.0 * variance) * GAUSS_HERMITE_RAW_NODES
+    return offsets.astype(np.float64), GAUSS_HERMITE_WEIGHTS.astype(np.float64)
+
+
+def gauss_hermite_pixel_samples(
+    pixel_x: np.ndarray,
+    pixel_y: np.ndarray,
+    tangent_x: np.ndarray,
+    tangent_y: np.ndarray,
+    major_px: np.ndarray,
+    minor_px: np.ndarray,
+    candidate_weight: np.ndarray | None = None,
+):
+    tangent_nodes, tangent_weights = gauss_hermite_axis(TANGENT_UNIT_VARIANCE)
+    normal_nodes, normal_weights = gauss_hermite_axis(NORMAL_UNIT_VARIANCE)
+    normal_x = -tangent_y
+    normal_y = tangent_x
+    if candidate_weight is None:
+        candidate_weight = np.ones_like(pixel_x, dtype=np.float32)
+    require(candidate_weight.shape == pixel_x.shape, "candidate weight shape must match candidate rows")
+    for tangent_offset, tangent_weight in zip(tangent_nodes, tangent_weights):
+        for normal_offset, normal_weight in zip(normal_nodes, normal_weights):
+            sample_x = (
+                pixel_x
+                + tangent_x * major_px * tangent_offset
+                + normal_x * minor_px * normal_offset
+            )
+            sample_y = (
+                pixel_y
+                + tangent_y * major_px * tangent_offset
+                + normal_y * minor_px * normal_offset
+            )
+            quadrature_weight = float(tangent_weight * normal_weight)
+            for x, y, pixel_weight in bilinear_pixel_samples(sample_x, sample_y):
+                yield x, y, pixel_weight * quadrature_weight * candidate_weight
+
+
+def compound_pixel_samples(
+    pixel_x: np.ndarray,
+    pixel_y: np.ndarray,
+    tangent_x: np.ndarray,
+    tangent_y: np.ndarray,
+    major_px: np.ndarray,
+    minor_px: np.ndarray,
+    halo_mass: float,
+):
+    require(math.isfinite(halo_mass) and 0.0 <= halo_mass <= 1.0, "compound halo mass must remain in [0, 1]")
+    core_weight = np.full_like(pixel_x, 1.0 - halo_mass, dtype=np.float32)
+    halo_weight = np.full_like(pixel_x, halo_mass, dtype=np.float32)
+    yield from weighted_tangent_pixel_samples(
+        pixel_x, pixel_y, tangent_x, tangent_y, major_px, core_weight,
+    )
+    yield from gauss_hermite_pixel_samples(
+        pixel_x, pixel_y, tangent_x, tangent_y, major_px, minor_px, halo_weight,
+    )
+
+
+def selective_split_pixel_samples(
+    pixel_x: np.ndarray,
+    pixel_y: np.ndarray,
+    negative_x: np.ndarray,
+    negative_y: np.ndarray,
+    positive_x: np.ndarray,
+    positive_y: np.ndarray,
+    tangent_x: np.ndarray,
+    tangent_y: np.ndarray,
+    major_px: np.ndarray,
+    split_mask: np.ndarray,
+):
+    require(split_mask.shape == pixel_x.shape and split_mask.dtype == np.bool_, "split mask must be a boolean candidate-row vector")
+    child_rows = (
+        (negative_x, negative_y, 0.25),
+        (pixel_x, pixel_y, 0.50),
+        (positive_x, positive_y, 0.25),
+    )
+    for child_index, (child_x, child_y, child_mass) in enumerate(child_rows):
+        unsplit_mass = 1.0 if child_index == 1 else 0.0
+        candidate_weight = np.where(split_mask, child_mass, unsplit_mass).astype(np.float32)
+        yield from weighted_tangent_pixel_samples(
+            child_x, child_y, tangent_x, tangent_y, major_px, candidate_weight,
+        )
 
 
 def core_skirt_pixel_samples(
@@ -292,8 +400,6 @@ def core_skirt_pixel_samples(
     require(skirt_mix.shape == pixel_x.shape, "skirt mix shape must match candidate rows")
     require(np.all(np.isfinite(skirt_mix)), "skirt mix contains nonfinite values")
     require(float(np.min(skirt_mix)) >= 0.0 and float(np.max(skirt_mix)) <= 1.0, "effective skirt mix must remain in [0, 1]")
-    tangent_offsets = (-1.0, -0.5, 0.0, 0.5, 1.0)
-    tangent_weights = (0.075, 0.225, 0.4, 0.225, 0.075)
     normal_x = -tangent_y
     normal_y = tangent_x
     normal_samples = (
@@ -301,7 +407,7 @@ def core_skirt_pixel_samples(
         (0.0, 1.0 - skirt_mix * 0.25),
         (1.0, skirt_mix * 0.125),
     )
-    for tangent_offset, tangent_weight in zip(tangent_offsets, tangent_weights):
+    for tangent_offset, tangent_weight in zip(TANGENT_OFFSETS, TANGENT_WEIGHTS):
         for normal_offset, normal_weight in normal_samples:
             sample_x = (
                 pixel_x
@@ -344,7 +450,16 @@ def resolve_footprint_controls(args: argparse.Namespace) -> dict[str, Any]:
         "skirtRidgeRejection": args.skirt_ridge_rejection,
     }
     provided = [value is not None for value in requested.values()]
+    compound_provided = args.compound_halo_mass is not None
+    split_requested = {
+        "splitAttributionCameras": args.split_attribution_cameras,
+        "splitScoreThreshold": args.split_score_threshold,
+        "splitMinCameraSupport": args.split_min_camera_support,
+        "splitOffsetWorld": args.split_offset_world,
+    }
+    split_provided = [value is not None for value in split_requested.values()]
     if args.footprint_mode == "core-skirt":
+        require(not compound_provided and not any(split_provided), "core-skirt mode forbids compound and selective-split controls")
         require(all(provided), "core-skirt mode requires explicit --skirt-mix, --skirt-minor-scale, and --skirt-ridge-rejection")
         require(math.isfinite(args.skirt_mix) and 0.0 <= args.skirt_mix <= 1.0, "--skirt-mix must be finite and in [0, 1]")
         require(math.isfinite(args.skirt_minor_scale) and args.skirt_minor_scale > 0.0, "--skirt-minor-scale must be finite and positive")
@@ -353,21 +468,76 @@ def resolve_footprint_controls(args: argparse.Namespace) -> dict[str, Any]:
             **requested,
             "conditioningFeature": FEATURE_ORDER[RIDGE_FEATURE_INDEX],
             "controlsExplicit": True,
+            "compoundHaloMass": None,
+            **{key: None for key in split_requested},
         }
     require(not any(provided), "skirt controls are only lawful with --footprint-mode core-skirt")
+    if args.footprint_mode == "compound":
+        require(compound_provided, "compound mode requires explicit --compound-halo-mass")
+        require(not any(split_provided), "compound mode forbids selective-split controls")
+        require(math.isfinite(args.compound_halo_mass) and 0.0 <= args.compound_halo_mass <= 1.0, "--compound-halo-mass must be finite and in [0, 1]")
+        return {
+            "skirtMix": None, "skirtMinorScale": 1.0, "skirtRidgeRejection": None,
+            "conditioningFeature": None, "controlsExplicit": True,
+            "compoundHaloMass": float(args.compound_halo_mass),
+            **{key: None for key in split_requested},
+        }
+    require(not compound_provided, "--compound-halo-mass is only lawful with --footprint-mode compound")
+    if args.footprint_mode == "selective-split":
+        require(all(split_provided), "selective-split mode requires explicit attribution cameras, score threshold, minimum camera support, and world offset")
+        try:
+            attribution_cameras = [int(value) for value in args.split_attribution_cameras.split(",")]
+        except Exception as exc:
+            raise ValueError("--split-attribution-cameras must be a comma-separated integer list") from exc
+        require(len(attribution_cameras) >= 2, "selective-split attribution requires at least two cameras")
+        require(len(set(attribution_cameras)) == len(attribution_cameras), "selective-split attribution cameras must be unique")
+        require(all(0 <= value <= 20 for value in attribution_cameras), "selective-split attribution cameras must remain in [0, 20]")
+        held_out_cameras = set(range(21)) - set(attribution_cameras) - {10}
+        require(held_out_cameras, "selective-split must leave at least one non-calibration held-out camera")
+        require(math.isfinite(args.split_score_threshold) and args.split_score_threshold >= 0.0, "--split-score-threshold must be finite and nonnegative")
+        require(2 <= args.split_min_camera_support <= len(attribution_cameras), "--split-min-camera-support must be multiview and no larger than the attribution cohort")
+        require(math.isfinite(args.split_offset_world) and args.split_offset_world > 0.0, "--split-offset-world must be finite and positive")
+        return {
+            "skirtMix": None, "skirtMinorScale": 1.0, "skirtRidgeRejection": None,
+            "conditioningFeature": None, "controlsExplicit": True,
+            "compoundHaloMass": None,
+            "splitAttributionCameras": attribution_cameras,
+            "splitScoreThreshold": float(args.split_score_threshold),
+            "splitMinCameraSupport": int(args.split_min_camera_support),
+            "splitOffsetWorld": float(args.split_offset_world),
+        }
+    require(not any(split_provided), "selective-split controls are only lawful with --footprint-mode selective-split")
     if args.footprint_mode == "ellipse":
         return {
             "skirtMix": 1.0, "skirtMinorScale": 1.0, "skirtRidgeRejection": 0.0,
-            "conditioningFeature": None, "controlsExplicit": False,
+            "conditioningFeature": None, "controlsExplicit": False, "compoundHaloMass": None,
+            **{key: None for key in split_requested},
         }
     if args.footprint_mode == "bilinear":
         return {
             "skirtMix": 0.0, "skirtMinorScale": 1.0, "skirtRidgeRejection": 0.0,
-            "conditioningFeature": None, "controlsExplicit": False,
+            "conditioningFeature": None, "controlsExplicit": False, "compoundHaloMass": None,
+            **{key: None for key in split_requested},
         }
     return {
         "skirtMix": None, "skirtMinorScale": None, "skirtRidgeRejection": None,
-        "conditioningFeature": None, "controlsExplicit": False,
+        "conditioningFeature": None, "controlsExplicit": False, "compoundHaloMass": None,
+        **{key: None for key in split_requested},
+    }
+
+
+def bilinear_footprint_controls() -> dict[str, Any]:
+    return {
+        "skirtMix": 0.0,
+        "skirtMinorScale": 1.0,
+        "skirtRidgeRejection": 0.0,
+        "conditioningFeature": None,
+        "controlsExplicit": False,
+        "compoundHaloMass": None,
+        "splitAttributionCameras": None,
+        "splitScoreThreshold": None,
+        "splitMinCameraSupport": None,
+        "splitOffsetWorld": None,
     }
 
 
@@ -380,6 +550,8 @@ def rasterize_coefficients(
     depth_bins: int,
     footprint_mode: str,
     footprint_controls: dict[str, Any],
+    split_mask: np.ndarray | None = None,
+    split_world_offsets: np.ndarray | None = None,
 ) -> tuple[np.ndarray, dict[str, Any]]:
     width, height = int(camera["width"]), int(camera["height"])
     pose = camera["cameraPose"]
@@ -427,23 +599,68 @@ def rasterize_coefficients(
         pixel_samples = tangent_pixel_samples(pixel_x, pixel_y, tx, ty, major_px)
     elif footprint_mode == "ellipse":
         pixel_samples = ellipse_pixel_samples(pixel_x, pixel_y, tx, ty, major_px, minor_px)
-    else:
-        require(footprint_mode == "core-skirt", f"unknown footprint mode {footprint_mode}")
+        nominal_quadrature_samples = 15
+        nominal_pixel_deposits = 60
+    elif footprint_mode == "core-skirt":
         skirt_mix = conditioned_skirt_mix(
             features,
             float(footprint_controls["skirtMix"]),
             float(footprint_controls["skirtRidgeRejection"]),
         )
         pixel_samples = core_skirt_pixel_samples(pixel_x, pixel_y, tx, ty, major_px, minor_px, skirt_mix)
+        nominal_quadrature_samples = 15
+        nominal_pixel_deposits = 60
+    elif footprint_mode == "higher-order":
+        pixel_samples = gauss_hermite_pixel_samples(pixel_x, pixel_y, tx, ty, major_px, minor_px)
+        nominal_quadrature_samples = GAUSS_HERMITE_ORDER ** 2
+        nominal_pixel_deposits = nominal_quadrature_samples * 4
+    elif footprint_mode == "compound":
+        pixel_samples = compound_pixel_samples(
+            pixel_x, pixel_y, tx, ty, major_px, minor_px,
+            float(footprint_controls["compoundHaloMass"]),
+        )
+        nominal_quadrature_samples = 5 + GAUSS_HERMITE_ORDER ** 2
+        nominal_pixel_deposits = nominal_quadrature_samples * 4
+    else:
+        require(footprint_mode == "selective-split", f"unknown footprint mode {footprint_mode}")
+        require(split_mask is not None and split_mask.shape == (positions.shape[0],), "selective-split requires one frozen split mask for every candidate")
+        require(split_world_offsets is not None and split_world_offsets.shape == positions.shape, "selective-split requires one frozen world offset for every candidate")
+        negative_ndc, _, negative_valid = project(
+            positions - split_world_offsets, pose["matrixWorldInverse"], pose["projectionMatrix"],
+        )
+        positive_ndc, _, positive_valid = project(
+            positions + split_world_offsets, pose["matrixWorldInverse"], pose["projectionMatrix"],
+        )
+        negative_x = (negative_ndc[:, 0] * 0.5 + 0.5) * width
+        negative_y = (1.0 - (negative_ndc[:, 1] * 0.5 + 0.5)) * height
+        positive_x = (positive_ndc[:, 0] * 0.5 + 0.5) * width
+        positive_y = (1.0 - (positive_ndc[:, 1] * 0.5 + 0.5)) * height
+        valid &= (~split_mask) | (negative_valid & positive_valid)
+        pixel_samples = selective_split_pixel_samples(
+            pixel_x, pixel_y, negative_x, negative_y, positive_x, positive_y,
+            tx, ty, major_px, split_mask,
+        )
+        nominal_quadrature_samples = None
+        nominal_pixel_deposits = None
+    if footprint_mode == "nearest":
+        nominal_quadrature_samples = 5
+        nominal_pixel_deposits = 5
+    elif footprint_mode == "bilinear":
+        nominal_quadrature_samples = 5
+        nominal_pixel_deposits = 20
+    effective_projected_rows = int(np.count_nonzero(valid & tangent_valid))
+    require(effective_projected_rows > 0, f"camera {camera['cameraIndex']} retained zero effective projected rows")
+    projected_fragments = 0
     for sx, sy, sample_weight in pixel_samples:
         selected = valid & tangent_valid & (sample_weight > 0.0) & (sx >= 0) & (sx < width) & (sy >= 0) & (sy < height)
         rows = np.flatnonzero(selected)
+        projected_fragments += int(rows.size)
         flat = ((depth_index[rows] * height + sy[rows]) * width + sx[rows]).astype(np.int64)
         for channel in range(8):
             planes[..., channel] += scatter_channel(flat, coefficients[rows, channel] * sample_weight[rows], raster_size).reshape(depth_bins, height, width)
     return planes, {
         "admittedRows": int(positions.shape[0]),
-        "projectedRows": int(valid_indices.size),
+        "projectedRows": effective_projected_rows,
         "nearDepth": near,
         "farDepth": far,
         "depthBins": depth_bins,
@@ -452,13 +669,20 @@ def rasterize_coefficients(
         "footprintMode": footprint_identity(footprint_mode),
         "orientation": footprint_identity(footprint_mode),
         "nominalQuadratureWeightSum": 1.0,
+        "nominalQuadratureSamples": nominal_quadrature_samples,
+        "nominalPixelDepositsPerCandidate": nominal_pixel_deposits,
+        "projectedFragments": projected_fragments,
+        "projectedFragmentsPerProjectedRow": float(projected_fragments / effective_projected_rows),
         "postProcessBlur": False,
         "footprintControls": footprint_controls,
-        "effectiveSkirtMix": None if footprint_mode == "nearest" else {
+        "effectiveSkirtMix": {
             "minimum": float(np.min(skirt_mix)) if footprint_mode == "core-skirt" else float(footprint_controls["skirtMix"]),
             "mean": float(np.mean(skirt_mix)) if footprint_mode == "core-skirt" else float(footprint_controls["skirtMix"]),
             "maximum": float(np.max(skirt_mix)) if footprint_mode == "core-skirt" else float(footprint_controls["skirtMix"]),
-        },
+        } if footprint_mode in {"bilinear", "ellipse", "core-skirt"} else None,
+        "compoundHaloMass": footprint_controls["compoundHaloMass"],
+        "splitCandidateCount": int(np.count_nonzero(split_mask)) if split_mask is not None else 0,
+        "splitSelectionCap": None,
         "minorPixelClamp": [0.5, 4.0],
     }
 
@@ -492,7 +716,7 @@ def image_rgb(path: Path) -> np.ndarray:
     return np.asarray(Image.open(path).convert("RGB"), dtype=np.uint8)
 
 
-def image_metrics(candidate: np.ndarray, target: np.ndarray) -> dict[str, float]:
+def image_metrics(candidate: np.ndarray, target: np.ndarray) -> dict[str, Any]:
     a = candidate.astype(np.float32) / 255.0
     b = target.astype(np.float32) / 255.0
     delta = a - b
@@ -512,11 +736,24 @@ def image_metrics(candidate: np.ndarray, target: np.ndarray) -> dict[str, float]
     top_tail_mask = luma_b >= top_tail_threshold
     high_gradient_threshold = float(np.percentile(gradient_b, 90.0))
     high_gradient_mask = (gradient_b >= high_gradient_threshold) & (gradient_b > 0.0)
+    wisp_threshold = float(np.percentile(gradient_b, 97.5))
+    wisp_mask = (gradient_b >= wisp_threshold) & (gradient_b > 0.0)
 
     top_tail_underfit = np.maximum(luma_b[top_tail_mask] - luma_a[top_tail_mask], 0.0)
     high_gradient_underfit = np.maximum(
         gradient_b[high_gradient_mask] - gradient_a[high_gradient_mask], 0.0,
     )
+    wisp_underfit = np.maximum(gradient_b[wisp_mask] - gradient_a[wisp_mask], 0.0)
+    residual_luma = luma_a - luma_b
+    window_y = np.hanning(residual_luma.shape[0]).astype(np.float32)
+    window_x = np.hanning(residual_luma.shape[1]).astype(np.float32)
+    window = window_y[:, None] * window_x[None, :]
+    spectrum = np.fft.rfft2((residual_luma - float(np.mean(residual_luma))) * window)
+    power = np.square(np.abs(spectrum)) / max(float(np.sum(np.square(window))), 1e-12)
+    frequency_y = np.fft.fftfreq(residual_luma.shape[0])[:, None]
+    frequency_x = np.fft.rfftfreq(residual_luma.shape[1])[None, :]
+    frequency_radius = np.sqrt(np.square(frequency_x) + np.square(frequency_y))
+    dot_band = (frequency_radius >= 0.08) & (frequency_radius <= 0.45)
     return {
         "mae": float(np.mean(np.abs(delta))),
         "mse": float(np.mean(delta * delta)),
@@ -526,8 +763,120 @@ def image_metrics(candidate: np.ndarray, target: np.ndarray) -> dict[str, float]
         "targetTopTailLumaThreshold": top_tail_threshold,
         "targetHighGradientUnderfit": float(np.mean(high_gradient_underfit)) if high_gradient_underfit.size else 0.0,
         "targetHighGradientThreshold": high_gradient_threshold,
+        "targetWispUnderfit": float(np.mean(wisp_underfit)) if wisp_underfit.size else 0.0,
+        "targetWispGradientThreshold": wisp_threshold,
+        "structuredDotSpectralPower": float(np.mean(power[dot_band])) if np.any(dot_band) else 0.0,
+        "structuredDotFrequencyBandCyclesPerPixel": [0.08, 0.45],
         "meanLuma": float(np.mean(luma_a)),
         "targetMeanLuma": float(np.mean(luma_b)),
+    }
+
+
+def candidate_residual_importance(
+    positions: np.ndarray,
+    coefficients: np.ndarray,
+    camera: dict[str, Any],
+    planes: np.ndarray,
+    target: np.ndarray,
+    path_scale: float,
+    depth_bins: int,
+) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
+    candidate = tone_map(compose_planes(planes, path_scale, "total")[0])
+    a = candidate.astype(np.float32) / 255.0
+    b = target.astype(np.float32) / 255.0
+    luma_a = a @ np.asarray([0.2126, 0.7152, 0.0722], dtype=np.float32)
+    luma_b = b @ np.asarray([0.2126, 0.7152, 0.0722], dtype=np.float32)
+    gradient_a = np.zeros_like(luma_a)
+    gradient_b = np.zeros_like(luma_b)
+    gradient_a[:, :-1] += np.square(np.diff(luma_a, axis=1))
+    gradient_a[:-1, :] += np.square(np.diff(luma_a, axis=0))
+    gradient_b[:, :-1] += np.square(np.diff(luma_b, axis=1))
+    gradient_b[:-1, :] += np.square(np.diff(luma_b, axis=0))
+    np.sqrt(gradient_a, out=gradient_a)
+    np.sqrt(gradient_b, out=gradient_b)
+    tail_threshold = float(np.percentile(luma_b, 99.0))
+    wisp_threshold = float(np.percentile(gradient_b, 97.5))
+    residual_map = (
+        np.maximum(luma_b - luma_a, 0.0) * (luma_b >= tail_threshold)
+        + np.maximum(gradient_b - gradient_a, 0.0) * ((gradient_b >= wisp_threshold) & (gradient_b > 0.0))
+    ).astype(np.float32)
+
+    width, height = int(camera["width"]), int(camera["height"])
+    pose = camera["cameraPose"]
+    ndc, depth, valid = project(positions, pose["matrixWorldInverse"], pose["projectionMatrix"])
+    pixel_x = np.floor((ndc[:, 0] * 0.5 + 0.5) * width).astype(np.int32)
+    pixel_y = np.floor((1.0 - (ndc[:, 1] * 0.5 + 0.5)) * height).astype(np.int32)
+    valid &= (
+        (pixel_x >= 0) & (pixel_x < width) & (pixel_y >= 0) & (pixel_y < height)
+        & np.isfinite(depth)
+    )
+    valid_indices = np.flatnonzero(valid)
+    require(valid_indices.size > 0, f"camera {camera['cameraIndex']} attributed zero candidate rows")
+    near = float(np.percentile(depth[valid_indices], 0.01))
+    far = float(np.percentile(depth[valid_indices], 99.99))
+    depth_index = np.clip(
+        ((depth - near) / max(far - near, 1e-6) * (depth_bins - 1)).astype(np.int32),
+        0, depth_bins - 1,
+    )
+    ordered = valid_indices[np.argsort(depth_index[valid_indices], kind="stable")]
+    ordered_bins = depth_index[ordered]
+    bin_starts = np.searchsorted(ordered_bins, np.arange(depth_bins + 1), side="left")
+    transmittance = np.ones((height, width), dtype=np.float32)
+    scores = np.zeros(positions.shape[0], dtype=np.float32)
+    support = np.zeros(positions.shape[0], dtype=np.bool_)
+    emission_luma = (
+        (coefficients[:, 0] + coefficients[:, 4]) * 0.2126
+        + (coefficients[:, 1] + coefficients[:, 5]) * 0.7152
+        + (coefficients[:, 2] + coefficients[:, 6]) * 0.0722
+    )
+    sigma = coefficients[:, 3] + coefficients[:, 7]
+    local_optical_weight = 1.0 - np.exp(-np.maximum(emission_luma + sigma, 0.0) * path_scale)
+    for depth_index_value in range(depth_bins):
+        rows = ordered[bin_starts[depth_index_value]:bin_starts[depth_index_value + 1]]
+        if rows.size:
+            y = pixel_y[rows]
+            x = pixel_x[rows]
+            contribution = transmittance[y, x] * local_optical_weight[rows]
+            sampled_residual = residual_map[y, x]
+            scores[rows] = sampled_residual * contribution
+            support[rows] = (sampled_residual > 0.0) & (contribution > 0.0)
+        layer = planes[depth_index_value]
+        transmittance *= np.exp(-np.maximum(layer[..., 3] + layer[..., 7], 0.0) * path_scale)
+    return scores, support, {
+        "cameraIndex": int(camera["cameraIndex"]),
+        "tailThreshold": tail_threshold,
+        "wispThreshold": wisp_threshold,
+        "positiveResidualPixels": int(np.count_nonzero(residual_map > 0.0)),
+        "attributedCandidateRows": int(np.count_nonzero(support)),
+        "scoreMaximum": float(np.max(scores, initial=0.0)),
+        "scoreMeanPositive": float(np.mean(scores[scores > 0.0])) if np.any(scores > 0.0) else 0.0,
+    }
+
+
+def build_split_offsets(
+    descriptors: np.ndarray,
+    requested_mask: np.ndarray,
+    offset_world: float,
+) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
+    require(requested_mask.shape == (descriptors.shape[0],), "requested split mask shape drifted")
+    normals = np.asarray(descriptors[:, 16:19], dtype=np.float32)
+    tangents = np.asarray(descriptors[:, 20:23], dtype=np.float32)
+    normal_valid = np.asarray(descriptors[:, 19] > 0.5)
+    bitangents = np.cross(normals, tangents)
+    lengths = np.linalg.norm(bitangents, axis=1)
+    orientation_valid = normal_valid & np.isfinite(lengths) & (lengths > 1e-6)
+    effective_mask = requested_mask & orientation_valid
+    offsets = np.zeros_like(bitangents, dtype=np.float32)
+    offsets[effective_mask] = (
+        bitangents[effective_mask] / lengths[effective_mask, None] * float(offset_world)
+    ).astype(np.float32)
+    return effective_mask, offsets, {
+        "requestedSplitCount": int(np.count_nonzero(requested_mask)),
+        "effectiveSplitCount": int(np.count_nonzero(effective_mask)),
+        "orientationRejectedCount": int(np.count_nonzero(requested_mask & ~orientation_valid)),
+        "splitOffsetWorld": float(offset_world),
+        "orientationIdentity": "structure-normal-cross-flow-tangent-bitangent-v0",
+        "splitSelectionCap": None,
     }
 
 
@@ -649,6 +998,8 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
         }
     required = {"features", "admission", "coefficients", "kernelDescriptors"}
     require(required.issubset(paths), f"rendering requires row artifacts: {sorted(required - set(paths))}")
+    if args.footprint_mode in {"higher-order", "compound", "selective-split"}:
+        require(args.path_scale is not None, f"{args.footprint_mode} mode requires explicit --path-scale from the frozen bilinear baseline")
     capture_report = load_json(capture_path, "capture report")
     cameras = validate_capture_report(capture_report, state_step)
     capture_config = capture_report.get("captureConfig") or {}
@@ -674,9 +1025,13 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
     out_dir = Path(args.out_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     calibration_camera = cameras[10]
+    calibration_footprint_mode = "bilinear" if args.footprint_mode == "selective-split" else args.footprint_mode
+    calibration_footprint_controls = (
+        bilinear_footprint_controls() if args.footprint_mode == "selective-split" else footprint_controls
+    )
     calibration_planes, calibration_raster = rasterize_coefficients(
         descriptors[:, 0:3], descriptors[:, 20:23], features, coefficients, calibration_camera,
-        args.depth_bins, args.footprint_mode, footprint_controls,
+        args.depth_bins, calibration_footprint_mode, calibration_footprint_controls,
     )
     target_capture = find_capture(capture_report, 10, "sharedTransmittanceContributionSum", 160)
     target = image_rgb(Path(target_capture["imagePath"]))
@@ -697,13 +1052,84 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
     calibration_trials = calibration_fit["trials"]
     path_scale = float(calibration_fit["pathScale"])
 
+    split_mask: np.ndarray | None = None
+    split_world_offsets: np.ndarray | None = None
+    split_receipt: dict[str, Any] | None = None
+    attribution_camera_set: set[int] = set()
+    if args.footprint_mode == "selective-split":
+        attribution_cameras = list(footprint_controls["splitAttributionCameras"])
+        attribution_camera_set = set(attribution_cameras)
+        score_sum = np.zeros(count, dtype=np.float64)
+        camera_support = np.zeros(count, dtype=np.uint8)
+        attribution_rows: list[dict[str, Any]] = []
+        for camera_index in attribution_cameras:
+            camera = cameras[camera_index]
+            baseline_planes = calibration_planes if camera_index == 10 else rasterize_coefficients(
+                descriptors[:, 0:3], descriptors[:, 20:23], features, coefficients, camera,
+                args.depth_bins, "bilinear", bilinear_footprint_controls(),
+            )[0]
+            target_capture_for_importance = find_capture(
+                capture_report, camera_index, "sharedTransmittanceContributionSum", 160,
+            )
+            camera_scores, camera_rows, camera_receipt = candidate_residual_importance(
+                descriptors[:, 0:3], coefficients, camera, baseline_planes,
+                image_rgb(Path(target_capture_for_importance["imagePath"])),
+                path_scale, args.depth_bins,
+            )
+            score_sum += camera_scores
+            camera_support += camera_rows.astype(np.uint8)
+            attribution_rows.append(camera_receipt)
+        mean_score = (score_sum / len(attribution_cameras)).astype(np.float32)
+        requested_split_mask = (
+            (mean_score >= float(footprint_controls["splitScoreThreshold"]))
+            & (camera_support >= int(footprint_controls["splitMinCameraSupport"]))
+        )
+        split_mask, split_world_offsets, split_geometry_receipt = build_split_offsets(
+            descriptors, requested_split_mask, float(footprint_controls["splitOffsetWorld"]),
+        )
+        require(np.any(split_mask), "selective-split attribution selected zero lawful candidates")
+        importance_path = out_dir / "split-importance.f32"
+        selected_index_path = out_dir / "split-native-cell-indices.u32"
+        mean_score.astype("<f4", copy=False).tofile(importance_path)
+        np.asarray(indices[split_mask], dtype="<u4").tofile(selected_index_path)
+        require(importance_path.stat().st_size == count * 4, "split importance artifact is partial")
+        require(selected_index_path.stat().st_size == int(np.count_nonzero(split_mask)) * 4, "split native-index artifact is partial")
+        split_receipt = {
+            "identity": "view-independent-multiview-residual-three-child-subcell-split-v0",
+            "attributionCameras": attribution_cameras,
+            "heldOutCameras": [index for index in range(21) if index not in attribution_camera_set],
+            "scoreIdentity": "target-tail-plus-target-wisp-underfit-times-pre-bin-transmitted-optical-weight-v0",
+            "scoreThreshold": float(footprint_controls["splitScoreThreshold"]),
+            "minimumCameraSupport": int(footprint_controls["splitMinCameraSupport"]),
+            "scoreQuantiles": {
+                str(percentile): float(np.percentile(mean_score, percentile))
+                for percentile in (50.0, 90.0, 95.0, 99.0, 99.9, 100.0)
+            },
+            "cameraAttribution": attribution_rows,
+            **split_geometry_receipt,
+            "importanceArtifact": {
+                "path": str(importance_path), "dtype": "float32-le", "shape": [count],
+                "bytes": importance_path.stat().st_size, "sha256": sha256_file(importance_path),
+            },
+            "selectedNativeCellArtifact": {
+                "path": str(selected_index_path), "dtype": "uint32-le",
+                "shape": [int(np.count_nonzero(split_mask))],
+                "bytes": selected_index_path.stat().st_size,
+                "sha256": sha256_file(selected_index_path),
+            },
+        }
+        calibration_planes, calibration_raster = rasterize_coefficients(
+            descriptors[:, 0:3], descriptors[:, 20:23], features, coefficients, calibration_camera,
+            args.depth_bins, args.footprint_mode, footprint_controls, split_mask, split_world_offsets,
+        )
+
     camera_rows = []
     metrics_rows = []
     for camera in cameras:
         index = int(camera["cameraIndex"])
         planes, raster_receipt = (calibration_planes, calibration_raster) if index == 10 else rasterize_coefficients(
             descriptors[:, 0:3], descriptors[:, 20:23], features, coefficients, camera,
-            args.depth_bins, args.footprint_mode, footprint_controls,
+            args.depth_bins, args.footprint_mode, footprint_controls, split_mask, split_world_offsets,
         )
         expanded_linear, ridge_linear, nonridge_linear, trans = compose_planes(planes, path_scale, "total")
         ridge_total_planes = planes.copy()
@@ -743,7 +1169,10 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
         current_metrics = image_metrics(current, complete)
         metric = {
             "cameraIndex": index, "cameraAngle": float(camera["cameraAngle"]),
-            "split": "calibration" if index == 10 else "heldOut", "expanded": expanded_metrics,
+            "split": (
+                "attribution" if index in attribution_camera_set
+                else ("calibration" if index == 10 else "heldOut")
+            ), "expanded": expanded_metrics,
             "current": current_metrics, "ridgeRidge": image_metrics(ridge_ridge, complete),
             "ridgeTotal": image_metrics(ridge_total, complete), "raster": raster_receipt,
             "meanFinalTransmittance": float(np.mean(trans)),
@@ -770,6 +1199,13 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
                 "skirtMinorScale": args.skirt_minor_scale,
                 "skirtRidgeRejection": args.skirt_ridge_rejection,
             },
+            "depositionControls": {
+                "compoundHaloMass": args.compound_halo_mass,
+                "splitAttributionCameras": args.split_attribution_cameras,
+                "splitScoreThreshold": args.split_score_threshold,
+                "splitMinCameraSupport": args.split_min_camera_support,
+                "splitOffsetWorld": args.split_offset_world,
+            },
         },
         "effective": {
             "stateId": state.get("id"), "stateStep": state_step, "rowCount": count,
@@ -778,6 +1214,11 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
             "orderApproximation": ORDER_APPROXIMATION, "sampleCap": None, "droppedRowCount": 0,
             "footprintMode": footprint_identity(args.footprint_mode), "pathScale": path_scale,
             "footprintControls": footprint_controls,
+            "splitSelectionCap": None,
+            "momentMatchReference": (
+                "flow-tangent-five-by-three-ellipse-first-two-moments-v0"
+                if args.footprint_mode in {"higher-order", "compound"} else None
+            ),
             "independentlyRenderedToneMappedImageAdditivity": False,
         },
         "descriptorReceipt": descriptor_receipt,
@@ -796,10 +1237,18 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
             "calibrationExpansionDiagnostic": calibration_fit["calibrationExpansionDiagnostic"],
             "bracketUpper": calibration_fit["bracketUpper"],
         },
+        "selectiveSplit": split_receipt,
         "metrics": {
             "cameras": metrics_rows,
             "heldOutMean": {
+                "cameraCount": len(held),
                 "expandedMae": float(np.mean([row["expanded"]["mae"] for row in held])),
+                "expandedMaeStdDev": float(np.std([row["expanded"]["mae"] for row in held])),
+                "targetTopTailLumaUnderfit": float(np.mean([row["expanded"]["targetTopTailLumaUnderfit"] for row in held])),
+                "targetWispUnderfit": float(np.mean([row["expanded"]["targetWispUnderfit"] for row in held])),
+                "structuredDotSpectralPower": float(np.mean([row["expanded"]["structuredDotSpectralPower"] for row in held])),
+                "projectedFragmentsMean": float(np.mean([row["raster"]["projectedFragments"] for row in held])),
+                "projectedFragmentsTotal": int(np.sum([row["raster"]["projectedFragments"] for row in held])),
                 "currentMae": float(np.mean([row["current"]["mae"] for row in held])),
                 "ridgeRidgeMae": float(np.mean([row["ridgeRidge"]["mae"] for row in held])),
                 "ridgeTotalMae": float(np.mean([row["ridgeTotal"]["mae"] for row in held])),
@@ -886,12 +1335,99 @@ def self_test() -> None:
         ))
         require(abs(sum(float(weight[0]) for _, _, weight in candidate_samples) - 1.0) < 1e-6, "conditioned skirt does not conserve candidate mass")
     print("core-skirt endpoint contracts passed")
+    tangent_nodes, tangent_node_weights = gauss_hermite_axis(TANGENT_UNIT_VARIANCE)
+    normal_nodes, normal_node_weights = gauss_hermite_axis(NORMAL_UNIT_VARIANCE)
+    require(abs(float(np.sum(tangent_node_weights)) - 1.0) < 1e-12, "higher-order tangent weights do not conserve mass")
+    require(abs(float(np.sum(normal_node_weights)) - 1.0) < 1e-12, "higher-order normal weights do not conserve mass")
+    require(abs(float(np.sum(tangent_node_weights * tangent_nodes)) - 0.0) < 1e-12, "higher-order tangent mean drifted")
+    require(abs(float(np.sum(normal_node_weights * normal_nodes)) - 0.0) < 1e-12, "higher-order normal mean drifted")
+    require(abs(float(np.sum(tangent_node_weights * np.square(tangent_nodes))) - TANGENT_UNIT_VARIANCE) < 1e-12, "higher-order tangent covariance drifted")
+    require(abs(float(np.sum(normal_node_weights * np.square(normal_nodes))) - NORMAL_UNIT_VARIANCE) < 1e-12, "higher-order normal covariance drifted")
+    higher_order_samples = list(gauss_hermite_pixel_samples(
+        pixel_x, pixel_y, tangent_x, tangent_y, major_px, minor_px,
+    ))
+    require(len(higher_order_samples) == GAUSS_HERMITE_ORDER ** 2 * 4, "higher-order quadrature sample count drifted")
+    require(abs(sum(float(weight[0]) for _, _, weight in higher_order_samples) - 1.0) < 1e-6, "higher-order quadrature does not conserve integrated mass")
+    print("higher-order covariance contracts passed")
+    compound_samples = list(compound_pixel_samples(
+        pixel_x, pixel_y, tangent_x, tangent_y, major_px, minor_px, 0.35,
+    ))
+    require(abs(sum(float(weight[0]) for _, _, weight in compound_samples) - 1.0) < 1e-6, "compound treatment does not conserve shared coefficient mass")
+    require(len(compound_samples) == (5 + GAUSS_HERMITE_ORDER ** 2) * 4, "compound treatment sample count drifted")
+    print("compound optical mass contracts passed")
+    split_pixel_x = np.asarray([2.25, 5.25], dtype=np.float32)
+    split_pixel_y = np.asarray([3.5, 6.5], dtype=np.float32)
+    split_mask_fixture = np.asarray([True, False], dtype=np.bool_)
+    split_samples = list(selective_split_pixel_samples(
+        split_pixel_x, split_pixel_y,
+        split_pixel_x - 0.75, split_pixel_y,
+        split_pixel_x + 0.75, split_pixel_y,
+        np.ones(2, dtype=np.float32), np.zeros(2, dtype=np.float32),
+        np.full(2, 2.0, dtype=np.float32), split_mask_fixture,
+    ))
+    split_mass = np.zeros(2, dtype=np.float64)
+    for _, _, weight in split_samples:
+        split_mass += weight
+    require(np.allclose(split_mass, [1.0, 1.0], atol=1e-6), "selective split does not conserve each candidate's coefficient mass")
+    descriptor_fixture = np.zeros((2, 100), dtype=np.float32)
+    descriptor_fixture[:, 18] = 1.0
+    descriptor_fixture[:, 19] = 1.0
+    descriptor_fixture[:, 20] = 1.0
+    effective_mask, offsets_fixture, split_fixture_receipt = build_split_offsets(
+        descriptor_fixture, split_mask_fixture, 0.025,
+    )
+    require(np.array_equal(effective_mask, split_mask_fixture), "selective split changed a valid requested candidate set")
+    require(np.allclose(offsets_fixture[0], [0.0, 0.025, 0.0]), "selective split bitangent offset drifted")
+    require(split_fixture_receipt["splitSelectionCap"] is None, "selective split installed a hidden candidate cap")
+    print("selective split contracts passed")
+    raster_positions = np.asarray([[0.0, 0.0, -0.2], [0.1, 0.1, -0.4]], dtype=np.float32)
+    raster_tangents = np.asarray([[1.0, 0.0, 0.0], [1.0, 0.0, 0.0]], dtype=np.float32)
+    raster_features = np.zeros((2, len(FEATURE_ORDER)), dtype=np.float32)
+    raster_coefficients = np.asarray([
+        [1.0, 0.8, 0.6, 0.4, 0.2, 0.15, 0.1, 0.05],
+        [0.5, 0.4, 0.3, 0.2, 0.1, 0.075, 0.05, 0.025],
+    ], dtype=np.float32)
+    identity_matrix = np.eye(4, dtype=np.float64).reshape(-1, order="F").tolist()
+    raster_camera = {
+        "cameraIndex": 0,
+        "width": 16,
+        "height": 16,
+        "cameraPose": {
+            "matrixWorldInverse": identity_matrix,
+            "projectionMatrix": identity_matrix,
+        },
+    }
+    selective_controls = {
+        **bilinear_footprint_controls(),
+        "splitAttributionCameras": [0, 1],
+        "splitScoreThreshold": 0.01,
+        "splitMinCameraSupport": 2,
+        "splitOffsetWorld": 0.025,
+        "controlsExplicit": True,
+    }
+    raster_modes = (
+        ("higher-order", {**bilinear_footprint_controls(), "skirtMix": None}),
+        ("compound", {**bilinear_footprint_controls(), "skirtMix": None, "compoundHaloMass": 0.35, "controlsExplicit": True}),
+        ("selective-split", selective_controls),
+    )
+    for raster_mode, raster_controls in raster_modes:
+        raster_planes, raster_receipt = rasterize_coefficients(
+            raster_positions, raster_tangents, raster_features, raster_coefficients,
+            raster_camera, 4, raster_mode, raster_controls,
+            np.asarray([True, False], dtype=np.bool_) if raster_mode == "selective-split" else None,
+            np.asarray([[0.0, 0.025, 0.0], [0.0, 0.0, 0.0]], dtype=np.float32) if raster_mode == "selective-split" else None,
+        )
+        require(np.allclose(np.sum(raster_planes, axis=(0, 1, 2)), np.sum(raster_coefficients, axis=0), atol=2e-5), f"{raster_mode} raster changed integrated coefficient mass")
+        require(raster_receipt["projectedFragments"] > 0, f"{raster_mode} raster did not report projected work")
+    print("deposition raster smoke contracts passed")
     metric_target = np.zeros((10, 10, 3), dtype=np.uint8)
     metric_target[4:6, 4:6] = 255
     exact_metrics = image_metrics(metric_target, metric_target)
     missing_metrics = image_metrics(np.zeros_like(metric_target), metric_target)
     require(exact_metrics["targetTopTailLumaUnderfit"] == 0.0, "exact target has peak underfit")
     require(exact_metrics["targetHighGradientUnderfit"] == 0.0, "exact target has gradient underfit")
+    require(exact_metrics["targetWispUnderfit"] == 0.0, "exact target has wisp underfit")
+    require(exact_metrics["structuredDotSpectralPower"] == 0.0, "exact target has structured dot residual")
     require(missing_metrics["targetTopTailLumaUnderfit"] > 0.0, "missing peak was not diagnosed")
     require(missing_metrics["targetHighGradientUnderfit"] > 0.0, "missing target structure was not diagnosed")
     print("target-aligned metric contracts passed")
@@ -911,6 +1447,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--skirt-mix", type=float)
     parser.add_argument("--skirt-minor-scale", type=float)
     parser.add_argument("--skirt-ridge-rejection", type=float)
+    parser.add_argument("--compound-halo-mass", type=float)
+    parser.add_argument("--split-attribution-cameras")
+    parser.add_argument("--split-score-threshold", type=float)
+    parser.add_argument("--split-min-camera-support", type=int)
+    parser.add_argument("--split-offset-world", type=float)
     parser.add_argument("--validate-only", action="store_true")
     parser.add_argument("--skip-hash-verification", action="store_true")
     parser.add_argument("--self-test", action="store_true")
@@ -932,6 +1473,13 @@ def main() -> int:
             "skirtMix": args.skirt_mix,
             "skirtMinorScale": args.skirt_minor_scale,
             "skirtRidgeRejection": args.skirt_ridge_rejection,
+        },
+        "depositionControls": {
+            "compoundHaloMass": args.compound_halo_mass,
+            "splitAttributionCameras": args.split_attribution_cameras,
+            "splitScoreThreshold": args.split_score_threshold,
+            "splitMinCameraSupport": args.split_min_camera_support,
+            "splitOffsetWorld": args.split_offset_world,
         },
         "pathScale": args.path_scale,
         "stateStep": args.state_step,
