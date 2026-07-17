@@ -1,0 +1,268 @@
+{
+  "schema": "kaminos.smoke-matched-optics-falsifier-report.v0",
+  "identity": "smoke-matched-optics-falsifier-v0",
+  "status": "passed",
+  "failurePhase": null,
+  "createdAt": "2026-07-17T00:38:12.941Z",
+  "hiddenCellCapApplied": false,
+  "requested": {
+    "oracleReportPath": "artifacts/pyro-smoke-extinction-residual-oracle-r2-full-covariance-0716/source-step45/oracle-report.json",
+    "expectedOracleReportSha256": "sha256:d6647887561039c1bc027da91d1c84bf5e634969bb02ebb36a33f969bdc1a50b",
+    "cameraFitReportPath": "artifacts/pyro-smoke-extinction-residual-oracle-r2-full-covariance-0716/witness/combined/cameras/side-plus-90/oracle-fit-report.json",
+    "expectedGaussianFitReportSha256": null,
+    "expectedCameraFitReportSha256": "sha256:f68a18b61db499289dd9790c4393e30ea575be9d07e46c9ff3be0421649a156b",
+    "width": 320,
+    "height": 228,
+    "samplesPerCell": 1,
+    "extinctionCoefficient": 0.731,
+    "displayExposure": 8
+  },
+  "effective": {
+    "route": "native-3d-compute-fluid-raymarch-v0",
+    "prototypeIdentity": "kaminos-volume-prototype-v0",
+    "backend": "WebGPU:apple",
+    "oracleReportPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-extinction-residual-oracle-r2-full-covariance-0716/source-step45/oracle-report.json",
+    "oracleReportSha256": "sha256:d6647887561039c1bc027da91d1c84bf5e634969bb02ebb36a33f969bdc1a50b",
+    "gaussianFitReportPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-extinction-residual-oracle-r2-full-covariance-0716/witness/combined/cameras/side-plus-90/oracle-fit-report.json",
+    "gaussianFitReportSha256": "sha256:f68a18b61db499289dd9790c4393e30ea575be9d07e46c9ff3be0421649a156b",
+    "cameraIdentity": "sha256:3bd0a7873986b8caaf12384d92766e4d763b2148b861677080aedffc6b41ff20",
+    "grid": 160,
+    "width": 320,
+    "height": 228,
+    "samplesPerCell": 1,
+    "extinctionCoefficient": 0.731,
+    "displayExposure": 8,
+    "opticalModel": "beer-lambert-one-minus-exp-negative-depth-v0",
+    "productionCompositorAuthority": false
+  },
+  "massAccounting": {
+    "authority": "cell-sum-to-world-volume-integral-v0",
+    "physicalCellSum": 3991.67974237063,
+    "gaussianCellSum": 3991.679742532044,
+    "voxelVolume": 0.0000019531250000000005,
+    "physicalWorldIntegratedMass": 0.007796249496817638,
+    "gaussianWorldIntegratedMass": 0.007796249497132901
+  },
+  "roles": [
+    {
+      "id": "dense-direct",
+      "description": "Exact physical smoke-body scalar sampled trilinearly from the full grid.",
+      "opticalModel": "beer-lambert-one-minus-exp-negative-depth-v0",
+      "extinctionCoefficient": 0.731,
+      "nonzeroPixelCount": 31463,
+      "maximumOpticalDepth": 0.04596447944641113,
+      "artifacts": {
+        "opticalDepth": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-matched-optics-r5-0716/side-plus-90/dense-direct/optical-depth.f32",
+          "sha256": "sha256:6f25f8a520e9d1d96327e09e899c4e3649713231496a39b292bf47a80a1d2818",
+          "byteLength": 291840,
+          "dtype": "float32",
+          "byteOrder": "little-endian",
+          "shape": [
+            228,
+            320
+          ]
+        },
+        "transmittance": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-matched-optics-r5-0716/side-plus-90/dense-direct/transmittance.f32",
+          "sha256": "sha256:55aae1accc7534f7fca9eb1f71a8ba247a3524640d6e54fbe1a0e90a8f9e0464",
+          "byteLength": 291840,
+          "dtype": "float32",
+          "byteOrder": "little-endian",
+          "shape": [
+            228,
+            320
+          ]
+        },
+        "linearRadiance": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-matched-optics-r5-0716/side-plus-90/dense-direct/linear-smoke-radiance.f32",
+          "sha256": "sha256:7abcb9988ecf88aab286cdb3befe812a8ed8aa9ff9d1a7816abd97ee2fa6bb71",
+          "byteLength": 291840,
+          "dtype": "float32",
+          "byteOrder": "little-endian",
+          "shape": [
+            228,
+            320
+          ]
+        },
+        "displayPng": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-matched-optics-r5-0716/side-plus-90/dense-direct/display.png",
+          "sha256": "sha256:cdb7807be40bc47a74a79a98369112a3e65bf6b14eb1718c8f64f04dd34f7d9b",
+          "byteLength": 8614,
+          "width": 320,
+          "height": 228
+        }
+      },
+      "representation": "dense-cell-centered-physical-extinction-grid-v0",
+      "totalSamples": 12061035,
+      "renderMs": 13872.263458000001
+    },
+    {
+      "id": "connected-sparse-grid",
+      "description": "Every positive physical-body cell preserved with explicit six-neighbor connected-component identity.",
+      "opticalModel": "beer-lambert-one-minus-exp-negative-depth-v0",
+      "extinctionCoefficient": 0.731,
+      "nonzeroPixelCount": 31463,
+      "maximumOpticalDepth": 0.04596447944641113,
+      "artifacts": {
+        "opticalDepth": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-matched-optics-r5-0716/side-plus-90/connected-sparse-grid/optical-depth.f32",
+          "sha256": "sha256:6f25f8a520e9d1d96327e09e899c4e3649713231496a39b292bf47a80a1d2818",
+          "byteLength": 291840,
+          "dtype": "float32",
+          "byteOrder": "little-endian",
+          "shape": [
+            228,
+            320
+          ]
+        },
+        "transmittance": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-matched-optics-r5-0716/side-plus-90/connected-sparse-grid/transmittance.f32",
+          "sha256": "sha256:55aae1accc7534f7fca9eb1f71a8ba247a3524640d6e54fbe1a0e90a8f9e0464",
+          "byteLength": 291840,
+          "dtype": "float32",
+          "byteOrder": "little-endian",
+          "shape": [
+            228,
+            320
+          ]
+        },
+        "linearRadiance": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-matched-optics-r5-0716/side-plus-90/connected-sparse-grid/linear-smoke-radiance.f32",
+          "sha256": "sha256:7abcb9988ecf88aab286cdb3befe812a8ed8aa9ff9d1a7816abd97ee2fa6bb71",
+          "byteLength": 291840,
+          "dtype": "float32",
+          "byteOrder": "little-endian",
+          "shape": [
+            228,
+            320
+          ]
+        },
+        "displayPng": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-matched-optics-r5-0716/side-plus-90/connected-sparse-grid/display.png",
+          "sha256": "sha256:cdb7807be40bc47a74a79a98369112a3e65bf6b14eb1718c8f64f04dd34f7d9b",
+          "byteLength": 8614,
+          "width": 320,
+          "height": 228
+        }
+      },
+      "representation": "six-neighbor-positive-cell-sparse-grid-v0",
+      "positiveCellCount": 2993279,
+      "componentCount": 1,
+      "adjacencyEdgeCount": 8902421,
+      "totalSamples": 12061035,
+      "renderMs": 2026.3115839999991
+    },
+    {
+      "id": "analytic-gaussian",
+      "description": "R2/R4 Gaussian mass and full covariance integrated in closed form over each finite camera-ray segment.",
+      "opticalModel": "beer-lambert-one-minus-exp-negative-depth-v0",
+      "extinctionCoefficient": 0.731,
+      "nonzeroPixelCount": 30562,
+      "maximumOpticalDepth": 0.04978395253419876,
+      "artifacts": {
+        "opticalDepth": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-matched-optics-r5-0716/side-plus-90/analytic-gaussian/optical-depth.f32",
+          "sha256": "sha256:55cffc2fd368c03087fdf9239b5298e26145330231b71d70c34e4ff6c1c6a92a",
+          "byteLength": 291840,
+          "dtype": "float32",
+          "byteOrder": "little-endian",
+          "shape": [
+            228,
+            320
+          ]
+        },
+        "transmittance": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-matched-optics-r5-0716/side-plus-90/analytic-gaussian/transmittance.f32",
+          "sha256": "sha256:8b0e6b64bdaf458151da31b2b39db6c5f78d61f2e66aa8d83766f087e766436a",
+          "byteLength": 291840,
+          "dtype": "float32",
+          "byteOrder": "little-endian",
+          "shape": [
+            228,
+            320
+          ]
+        },
+        "linearRadiance": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-matched-optics-r5-0716/side-plus-90/analytic-gaussian/linear-smoke-radiance.f32",
+          "sha256": "sha256:788156078a3b0adfed4afe5d5874060302e9eb03deea14041b2ad21121552e6d",
+          "byteLength": 291840,
+          "dtype": "float32",
+          "byteOrder": "little-endian",
+          "shape": [
+            228,
+            320
+          ]
+        },
+        "displayPng": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-matched-optics-r5-0716/side-plus-90/analytic-gaussian/display.png",
+          "sha256": "sha256:a56cd2ef666b52d140a42a7af63bfdd86254649e9fc16df409b6ba4fa2a873bc",
+          "byteLength": 10661,
+          "width": 320,
+          "height": 228
+        }
+      },
+      "representation": "independent-full-covariance-gaussian-mixture-v0",
+      "integrator": "finite-camera-ray-3d-gaussian-closed-form-v0",
+      "gaussianCount": 50560,
+      "candidateMahalanobisSquared": 64,
+      "candidateRayCount": 32606661,
+      "integratedRayCount": 32606661,
+      "cellSumToWorldMassScale": 0.0000019531250000000005,
+      "renderMs": 3264.2373750000006
+    }
+  ],
+  "comparisons": {
+    "connectedToDense": {
+      "opticalDepthMse": 0,
+      "maximumAbsoluteOpticalDepthError": 0,
+      "luma": {
+        "meanSquaredError": 0,
+        "meanAbsoluteError": 0,
+        "maximumAbsoluteError": 0,
+        "targetMaximum": 0.044924113899469376,
+        "maximumErrorToTargetPeak": 0,
+        "targetMeanSquared": 0.000041131672533882706,
+        "normalizedMse": 0
+      }
+    },
+    "gaussianToDense": {
+      "opticalDepth": {
+        "meanSquaredError": 5.225063102450841e-7,
+        "meanAbsoluteError": 0.00017946844843060036,
+        "maximumAbsoluteError": 0.012338472530245781,
+        "targetMaximum": 0.04596447944641113,
+        "maximumErrorToTargetPeak": 0.26843494539366874,
+        "targetMeanSquared": 0.000042272390600881,
+        "normalizedMse": 0.012360462770567664
+      },
+      "luma": {
+        "meanSquaredError": 4.962650836555585e-7,
+        "meanAbsoluteError": 0.00017596350505453043,
+        "maximumAbsoluteError": 0.011899512261152267,
+        "targetMaximum": 0.044924113899469376,
+        "maximumErrorToTargetPeak": 0.2648802887416065,
+        "targetMeanSquared": 0.000041131672533882706,
+        "normalizedMse": 0.012065278484524407
+      }
+    }
+  },
+  "contextHtml": {
+    "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-matched-optics-r5-0716/side-plus-90/context.html",
+    "sha256": "sha256:786b17b1b461ab872e42a63e3b6707cc03429d61d3893c4779bc8ae163180507",
+    "byteLength": 2293
+  },
+  "lastTrustworthyEvidence": {
+    "oracleReportPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-extinction-residual-oracle-r2-full-covariance-0716/source-step45/oracle-report.json",
+    "oracleReportSha256": "sha256:d6647887561039c1bc027da91d1c84bf5e634969bb02ebb36a33f969bdc1a50b",
+    "sidecarPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-extinction-residual-oracle-r2-full-covariance-0716/source-step45/smoke-extinction-support-sidecar.f32",
+    "sidecarSha256": "sha256:564efca0905957a8a44592309b7ce1618b14cfc486e658d92c6cd0f323b26b5a",
+    "gaussianFitReportPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-extinction-residual-oracle-r2-full-covariance-0716/witness/combined/cameras/side-plus-90/oracle-fit-report.json",
+    "gaussianFitReportSha256": "sha256:f68a18b61db499289dd9790c4393e30ea575be9d07e46c9ff3be0421649a156b",
+    "gaussianArtifactPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-extinction-residual-oracle-r2-full-covariance-0716/source-step45/coarse-plus-residual.gaussians.f32",
+    "gaussianArtifactSha256": "sha256:1a3cfc24f6c0f66e4a629ee6e7d026b9ca47f509a94e7b6e6ccd185021b404e0",
+    "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+    "backend": "WebGPU:apple",
+    "cameraIdentity": "sha256:3bd0a7873986b8caaf12384d92766e4d763b2148b861677080aedffc6b41ff20"
+  }
+}

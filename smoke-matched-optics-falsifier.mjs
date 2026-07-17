@@ -328,7 +328,7 @@ export function integrateGaussianExtinctionSegment({ origin, direction, start, e
   );
 }
 
-function buildCameraRays(camera, width, height, minimum, maximum) {
+export function buildCameraRays(camera, width, height, minimum, maximum) {
   const viewProjection = multiplyMatrix4(camera.projectionMatrix, camera.matrixWorldInverse);
   const inverseViewProjection = invertMatrix4(viewProjection);
   const directions = new Float64Array(width * height * 3);
@@ -350,12 +350,12 @@ function buildCameraRays(camera, width, height, minimum, maximum) {
   return { directions, starts, ends };
 }
 
-function rayDirection(rays, pixel) {
+export function rayDirection(rays, pixel) {
   const offset = pixel * 3;
   return [rays.directions[offset], rays.directions[offset + 1], rays.directions[offset + 2]];
 }
 
-function renderGridDepth({ grid, sampler, camera, rays, minimum, maximum, width, height, samplesPerCell, extinctionCoefficient }) {
+export function renderGridDepth({ grid, sampler, camera, rays, minimum, maximum, width, height, samplesPerCell, extinctionCoefficient }) {
   const cellSize = minimum.map((value, axis) => (maximum[axis] - value) / grid);
   const stepWorld = Math.min(...cellSize) / samplesPerCell;
   const opticalDepth = new Float32Array(width * height);
@@ -429,7 +429,7 @@ function renderGaussianDepth({ rows, camera, rays, minimum, maximum, width, heig
   return { opticalDepth: Float32Array.from(opticalDepth), candidateRayCount, integratedRayCount };
 }
 
-function opticalOutputs(opticalDepth) {
+export function opticalOutputs(opticalDepth) {
   const transmittance = new Float32Array(opticalDepth.length);
   const luma = new Float32Array(opticalDepth.length);
   let nonzeroPixelCount = 0;
@@ -446,7 +446,7 @@ function opticalOutputs(opticalDepth) {
   return { transmittance, luma, nonzeroPixelCount, maximumOpticalDepth };
 }
 
-function compare(left, right) {
+export function compare(left, right) {
   if (left.length !== right.length) throw new Error('comparison shape mismatch');
   let squaredError = 0;
   let absoluteError = 0;
@@ -493,7 +493,7 @@ function pngChunk(type, data) {
   return output;
 }
 
-function encodeLumaPng(width, height, luma) {
+export function encodeLumaPng(width, height, luma) {
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);
   ihdr.writeUInt32BE(height, 4);

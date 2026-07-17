@@ -1,0 +1,22 @@
+<!doctype html><meta charset="utf-8"><title>Adaptive residual brick frontier</title>
+<style>
+  body { margin: 0; padding: 24px; background: #111416; color: #eef2f4; font: 14px/1.45 system-ui, sans-serif; }
+  h1 { font-size: 24px; margin: 0 0 8px; letter-spacing: 0; }
+  p { max-width: 1180px; color: #c6cdd1; }
+  main { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+  figure { margin: 0; border: 1px solid #3a4146; background: #181c1f; }
+  img { display: block; width: 100%; background: black; }
+  figcaption { padding: 9px; min-height: 92px; }
+  strong { color: #fff; }
+</style>
+<h1>Mass-conserving adaptive smoke volume frontier</h1>
+<p>Every arm uses source <code>sha256:cd5de8b525c360c1e40f381de4c4ce44a3a4e370282f9e9dc5110e5ed5cff95e</code>, camera <code>sha256:3bd0a7873986b8caaf12384d92766e4d763b2148b861677080aedffc6b41ff20</code>, extinction coefficient <code>0.731</code>, and beer-lambert-one-minus-exp-negative-depth-v0. Coarse parents retain exact mean extinction; selected complete residual bricks retain original R160 values plus a one-cell trilinear halo. Charged samples are a CPU traversal model, not measured production timing. PNGs use display-only 8x exposure; metrics remain linear.</p>
+<main><figure><img src="dense-reference/display.png"><figcaption><strong>DENSE R160 REFERENCE</strong><br>Exact R5 source, camera, and Beer-Lambert transfer. Dense samples: 12,061,035.</figcaption></figure><figure><img src="b4-e0000000/display.png"><figcaption><strong>R40 + 0% RESIDUAL ENERGY</strong><br>0 / 64,000 bricks; halo fine cells 0.0%; charged samples 33.4%; luma nMSE 5.716e-3.</figcaption></figure>
+<figure><img src="b4-e0250000/display.png"><figcaption><strong>R40 + 25% RESIDUAL ENERGY</strong><br>20 / 64,000 bricks; halo fine cells 0.1%; charged samples 33.5%; luma nMSE 3.962e-3.</figcaption></figure>
+<figure><img src="b4-e0500000/display.png"><figcaption><strong>R40 + 50% RESIDUAL ENERGY</strong><br>53 / 64,000 bricks; halo fine cells 0.2%; charged samples 33.5%; luma nMSE 2.770e-3.</figcaption></figure>
+<figure><img src="b4-e0750000/display.png"><figcaption><strong>R40 + 75% RESIDUAL ENERGY</strong><br>124 / 64,000 bricks; halo fine cells 0.4%; charged samples 33.6%; luma nMSE 1.561e-3.</figcaption></figure>
+<figure><img src="b4-e0900000/display.png"><figcaption><strong>R40 + 90% RESIDUAL ENERGY</strong><br>259 / 64,000 bricks; halo fine cells 0.6%; charged samples 33.8%; luma nMSE 6.728e-4.</figcaption></figure>
+<figure><img src="b4-e0950000/display.png"><figcaption><strong>R40 + 95% RESIDUAL ENERGY</strong><br>394 / 64,000 bricks; halo fine cells 0.9%; charged samples 34.0%; luma nMSE 3.223e-4.</figcaption></figure>
+<figure><img src="b4-e0980000/display.png"><figcaption><strong>R40 + 98% RESIDUAL ENERGY</strong><br>614 / 64,000 bricks; halo fine cells 1.4%; charged samples 34.3%; luma nMSE 1.268e-4.</figcaption></figure>
+<figure><img src="b4-e0990000/display.png"><figcaption><strong>R40 + 99% RESIDUAL ENERGY</strong><br>789 / 64,000 bricks; halo fine cells 1.7%; charged samples 34.5%; luma nMSE 6.873e-5.</figcaption></figure>
+<figure><img src="b4-e1000000/display.png"><figcaption><strong>R40 + 100% RESIDUAL ENERGY</strong><br>64,000 / 64,000 bricks; halo fine cells 100.0%; charged samples 100.0%; luma nMSE 0.000e+0.</figcaption></figure></main>

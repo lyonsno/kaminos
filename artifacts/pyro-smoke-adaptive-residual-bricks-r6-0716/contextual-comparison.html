@@ -1,0 +1,58 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>R6 adaptive smoke volume contextual comparison</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 22px; background: #101315; color: #edf1f3; font: 14px/1.35 system-ui, sans-serif; }
+  h1 { margin: 0 0 7px; font-size: 25px; letter-spacing: 0; }
+  .dek { max-width: 1500px; margin: 0 0 18px; color: #bec7cb; }
+  .row-label { margin: 20px 0 7px; font-size: 17px; color: #fff; }
+  .grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 9px; }
+  figure { margin: 0; border: 1px solid #3a4246; background: #181c1f; }
+  img { display: block; width: 100%; aspect-ratio: 320 / 228; object-fit: contain; background: #000; }
+  figcaption { min-height: 108px; padding: 9px; color: #c3cbcf; }
+  strong { display: block; color: #fff; margin-bottom: 4px; }
+  .reference { border-color: #768188; }
+</style>
+<h1>R6 adaptive participating-media smoke: quality-cost frontier</h1>
+<p class="dek">Exact R160 physical extinction is the reference. Every treatment uses an R40 parent-mean body and refines complete 4x4x4 residual bricks ranked by source-volume residual energy. Parent means conserve all extinction, selected bricks use access-guarded R160 values plus trilinear halo, and both camera rows use the identical persisted brick selection. PNGs use the same display-only 8x exposure; metrics are linear. Charged samples are a CPU hierarchy traversal model, not measured GPU timing.</p>
+
+<h2 class="row-label">Recorded native camera: asymmetric tongue and interior fold</h2>
+<section class="grid">
+  <figure class="reference"><img src="native/dense-reference/display.png"><figcaption><strong>DENSE R160 REFERENCE</strong>Exact physical extinction and matched Beer-Lambert transfer. Storage 100%; charged samples 100%.</figcaption></figure>
+  <figure><img src="native/b4-e0000000/display.png"><figcaption><strong>R40 COARSE ONLY</strong>No residual bricks. Storage 3.13%; charged samples 33.43%. nMSE 4.77e-3; peak error 13.66%. Horizontal collapse control.</figcaption></figure>
+  <figure><img src="native/b4-e0900000/display.png"><figcaption><strong>R40 + 90% RESIDUAL ENERGY</strong>259 / 64,000 bricks; halo fine cells 0.63%; storage 3.75%; charged samples 33.80%. nMSE 5.55e-4; peak 5.57%.</figcaption></figure>
+  <figure><img src="native/b4-e0950000/display.png"><figcaption><strong>R40 + 95% RESIDUAL ENERGY</strong>394 bricks; halo fine cells 0.89%; storage 4.01%; charged samples 33.99%. nMSE 2.58e-4; peak 3.32%.</figcaption></figure>
+  <figure><img src="native/b4-e0980000/display.png"><figcaption><strong>R40 + 98% RESIDUAL ENERGY</strong>614 bricks; halo fine cells 1.36%; storage 4.48%; charged samples 34.30%. nMSE 9.59e-5; peak 2.46%.</figcaption></figure>
+  <figure><img src="native/b4-e0990000/display.png"><figcaption><strong>R40 + 99% RESIDUAL ENERGY</strong>789 bricks; halo fine cells 1.67%; storage 4.80%; charged samples 34.53%. nMSE 4.95e-5; peak 2.46%.</figcaption></figure>
+</section>
+
+<h2 class="row-label">Elevated +35 camera: lateral fold and cavity boundary</h2>
+<section class="grid">
+  <figure class="reference"><img src="elevated-plus-35/dense-reference/display.png"><figcaption><strong>DENSE R160 REFERENCE</strong>Same physical source under the disjoint elevated camera. Storage 100%; charged samples 100%.</figcaption></figure>
+  <figure><img src="elevated-plus-35/b4-e0000000/display.png"><figcaption><strong>R40 COARSE ONLY</strong>No residual bricks. Storage 3.13%; charged samples 35.58%. nMSE 5.13e-3; peak error 14.20%. Cavity-softening control.</figcaption></figure>
+  <figure><img src="elevated-plus-35/b4-e0900000/display.png"><figcaption><strong>R40 + 90% RESIDUAL ENERGY</strong>Same 259 bricks. Storage 3.75%; charged samples 35.89%. nMSE 4.37e-4; peak 4.41%.</figcaption></figure>
+  <figure><img src="elevated-plus-35/b4-e0950000/display.png"><figcaption><strong>R40 + 95% RESIDUAL ENERGY</strong>Same 394 bricks. Storage 4.01%; charged samples 36.04%. nMSE 2.23e-4; peak 2.70%.</figcaption></figure>
+  <figure><img src="elevated-plus-35/b4-e0980000/display.png"><figcaption><strong>R40 + 98% RESIDUAL ENERGY</strong>Same 614 bricks. Storage 4.48%; charged samples 36.30%. nMSE 8.87e-5; peak 1.52%.</figcaption></figure>
+  <figure><img src="elevated-plus-35/b4-e0990000/display.png"><figcaption><strong>R40 + 99% RESIDUAL ENERGY</strong>Same 789 bricks. Storage 4.80%; charged samples 36.51%. nMSE 4.67e-5; peak 1.03%.</figcaption></figure>
+</section>
+
+<h2 class="row-label">Side +90 camera: hostile lateral body and layered envelope</h2>
+<section class="grid">
+  <figure class="reference"><img src="side-plus-90/dense-reference/display.png"><figcaption><strong>DENSE R160 REFERENCE</strong>Same physical source under the disjoint side camera. Storage 100%; charged samples 100%.</figcaption></figure>
+  <figure><img src="side-plus-90/b4-e0000000/display.png"><figcaption><strong>R40 COARSE ONLY</strong>No residual bricks. Storage 3.13%; charged samples 33.43%. nMSE 5.72e-3; peak error 19.05%. Layer-collapse control.</figcaption></figure>
+  <figure><img src="side-plus-90/b4-e0900000/display.png"><figcaption><strong>R40 + 90% RESIDUAL ENERGY</strong>Same 259 bricks. Storage 3.75%; charged samples 33.79%. nMSE 6.73e-4; peak 8.32%.</figcaption></figure>
+  <figure><img src="side-plus-90/b4-e0950000/display.png"><figcaption><strong>R40 + 95% RESIDUAL ENERGY</strong>Same 394 bricks. Storage 4.01%; charged samples 33.98%. nMSE 3.22e-4; peak 3.91%.</figcaption></figure>
+  <figure><img src="side-plus-90/b4-e0980000/display.png"><figcaption><strong>R40 + 98% RESIDUAL ENERGY</strong>Same 614 bricks. Storage 4.48%; charged samples 34.29%. nMSE 1.27e-4; peak 2.41%.</figcaption></figure>
+  <figure><img src="side-plus-90/b4-e0990000/display.png"><figcaption><strong>R40 + 99% RESIDUAL ENERGY</strong>Same 789 bricks. Storage 4.80%; charged samples 34.53%. nMSE 6.87e-5; peak 2.12%.</figcaption></figure>
+</section>
+
+<h2 class="row-label">Back +180 camera: opposing tongue and interior support</h2>
+<section class="grid">
+  <figure class="reference"><img src="back-plus-180/dense-reference/display.png"><figcaption><strong>DENSE R160 REFERENCE</strong>Same physical source under the disjoint back camera. Storage 100%; charged samples 100%.</figcaption></figure>
+  <figure><img src="back-plus-180/b4-e0000000/display.png"><figcaption><strong>R40 COARSE ONLY</strong>No residual bricks. Storage 3.13%; charged samples 33.43%. nMSE 5.01e-3; peak error 13.66%. Interior-smearing control.</figcaption></figure>
+  <figure><img src="back-plus-180/b4-e0900000/display.png"><figcaption><strong>R40 + 90% RESIDUAL ENERGY</strong>Same 259 bricks. Storage 3.75%; charged samples 33.79%. nMSE 5.23e-4; peak 5.18%.</figcaption></figure>
+  <figure><img src="back-plus-180/b4-e0950000/display.png"><figcaption><strong>R40 + 95% RESIDUAL ENERGY</strong>Same 394 bricks. Storage 4.01%; charged samples 33.97%. nMSE 2.63e-4; peak 3.02%.</figcaption></figure>
+  <figure><img src="back-plus-180/b4-e0980000/display.png"><figcaption><strong>R40 + 98% RESIDUAL ENERGY</strong>Same 614 bricks. Storage 4.48%; charged samples 34.28%. nMSE 9.81e-5; peak 2.73%.</figcaption></figure>
+  <figure><img src="back-plus-180/b4-e0990000/display.png"><figcaption><strong>R40 + 99% RESIDUAL ENERGY</strong>Same 789 bricks. Storage 4.80%; charged samples 34.52%. nMSE 5.00e-5; peak 1.72%.</figcaption></figure>
+</section>

@@ -1,0 +1,30 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Matched-optics smoke falsifier</title>
+<style>
+  body { margin: 0; padding: 24px; background: #101214; color: #f2f4f5; font: 15px/1.45 system-ui, sans-serif; }
+  h1 { margin: 0 0 8px; font-size: 24px; letter-spacing: 0; }
+  p { max-width: 1100px; color: #c7cdd1; }
+  main { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
+  figure { margin: 0; border: 1px solid #3a4146; background: #181c1f; }
+  img { display: block; width: 100%; image-rendering: auto; background: black; }
+  figcaption { padding: 10px; min-height: 84px; }
+  strong { color: #fff; }
+</style>
+<h1>Exact R160 smoke body under one matched Beer-Lambert model</h1>
+  <p>All roles use camera <code>sha256:3bd0a7873986b8caaf12384d92766e4d763b2148b861677080aedffc6b41ff20</code>, explicit extinction coefficient <code>0.731</code>, and <code>beer-lambert-one-minus-exp-negative-depth-v0</code>. PNGs use the same display-only <code>8x</code> exposure; metrics and float artifacts remain linear. Dense and connected roles integrate the exact physical-body grid. The Gaussian role integrates each 3D covariance along the finite camera ray, converts cell-sum mass to world-volume mass, and uses an explicit Mahalanobis-64 candidate window. This is an isolated optical falsifier, not the production compositor.</p>
+<main>
+    <figure>
+      <img src="dense-direct/display.png" alt="dense-direct">
+      <figcaption><strong>dense-direct</strong><br>Exact physical smoke-body scalar sampled trilinearly from the full grid.<br>Max depth 0.045964; nonzero pixels 31463.</figcaption>
+    </figure>
+
+    <figure>
+      <img src="connected-sparse-grid/display.png" alt="connected-sparse-grid">
+      <figcaption><strong>connected-sparse-grid</strong><br>Every positive physical-body cell preserved with explicit six-neighbor connected-component identity.<br>Max depth 0.045964; nonzero pixels 31463.</figcaption>
+    </figure>
+
+    <figure>
+      <img src="analytic-gaussian/display.png" alt="analytic-gaussian">
+      <figcaption><strong>analytic-gaussian</strong><br>R2/R4 Gaussian mass and full covariance integrated in closed form over each finite camera-ray segment.<br>Max depth 0.049784; nonzero pixels 30562.</figcaption>
+    </figure></main>

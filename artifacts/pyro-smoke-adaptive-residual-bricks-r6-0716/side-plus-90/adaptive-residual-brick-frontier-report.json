@@ -1,0 +1,1146 @@
+{
+  "schema": "kaminos.smoke-adaptive-residual-brick-frontier-report.v0",
+  "identity": "smoke-adaptive-residual-brick-frontier-v0",
+  "status": "passed",
+  "failurePhase": null,
+  "createdAt": "2026-07-17T00:39:04.724Z",
+  "hiddenBrickCapApplied": false,
+  "requested": {
+    "matchedOpticsReportPath": "artifacts/pyro-smoke-matched-optics-r5-0716/side-plus-90/matched-optics-report.json",
+    "expectedMatchedOpticsReportSha256": "sha256:cd5de8b525c360c1e40f381de4c4ce44a3a4e370282f9e9dc5110e5ed5cff95e",
+    "blockSizes": [
+      4
+    ],
+    "retainedResidualEnergyFractions": [
+      0,
+      0.25,
+      0.5,
+      0.75,
+      0.9,
+      0.95,
+      0.98,
+      0.99,
+      1
+    ]
+  },
+  "effective": {
+    "matchedOpticsReportPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-matched-optics-r5-0716/side-plus-90/matched-optics-report.json",
+    "matchedOpticsReportSha256": "sha256:cd5de8b525c360c1e40f381de4c4ce44a3a4e370282f9e9dc5110e5ed5cff95e",
+    "route": "native-3d-compute-fluid-raymarch-v0",
+    "backend": "WebGPU:apple",
+    "cameraIdentity": "sha256:3bd0a7873986b8caaf12384d92766e4d763b2148b861677080aedffc6b41ff20",
+    "grid": 160,
+    "width": 320,
+    "height": 228,
+    "samplesPerCell": 1,
+    "extinctionCoefficient": 0.731,
+    "displayExposure": 8,
+    "opticalModel": "beer-lambert-one-minus-exp-negative-depth-v0",
+    "productionCompositorAuthority": false,
+    "productionTimingAuthority": false
+  },
+  "reference": {
+    "id": "dense-reference",
+    "representation": "dense-cell-centered-physical-extinction-grid-v0",
+    "totalSamples": 12061035,
+    "renderMs": 1862.592208,
+    "outputs": {
+      "maximumOpticalDepth": 0.04596447944641113,
+      "nonzeroPixelCount": 31463
+    },
+    "artifacts": {
+      "opticalDepth": {
+        "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/dense-reference/optical-depth.f32",
+        "sha256": "sha256:6f25f8a520e9d1d96327e09e899c4e3649713231496a39b292bf47a80a1d2818",
+        "byteLength": 291840,
+        "dtype": "float32",
+        "byteOrder": "little-endian",
+        "shape": [
+          228,
+          320
+        ]
+      },
+      "linearRadiance": {
+        "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/dense-reference/linear-smoke-radiance.f32",
+        "sha256": "sha256:7abcb9988ecf88aab286cdb3befe812a8ed8aa9ff9d1a7816abd97ee2fa6bb71",
+        "byteLength": 291840,
+        "dtype": "float32",
+        "byteOrder": "little-endian",
+        "shape": [
+          228,
+          320
+        ]
+      },
+      "displayPng": {
+        "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/dense-reference/display.png",
+        "sha256": "sha256:cdb7807be40bc47a74a79a98369112a3e65bf6b14eb1718c8f64f04dd34f7d9b",
+        "byteLength": 8614,
+        "width": 320,
+        "height": 228
+      }
+    }
+  },
+  "frontier": [
+    {
+      "id": "b4-e0000000",
+      "representation": "mass-conserving-adaptive-residual-bricks-v0",
+      "blockSize": 4,
+      "coarseGrid": 40,
+      "brickCount": 64000,
+      "requestedRetainedResidualEnergyFraction": 0,
+      "actualRetainedResidualEnergyFraction": 0,
+      "selectedBrickCount": 0,
+      "selectionIdentity": "sha256:363918bb43ab52fc296b45a3dc3e4484063648171881962543ac716d11f594d2",
+      "selectedBrickFraction": 0,
+      "selectedComponentCount": 0,
+      "selectedAdjacencyEdgeCount": 0,
+      "maximumOmittedBrickOpticalDepthBound": 0.017488086690318656,
+      "fieldError": {
+        "cellMse": 0.000010196766896547055,
+        "maximumAbsoluteCellError": 0.2762449126748834
+      },
+      "massAccounting": {
+        "authority": "complete-parent-mean-or-full-residual-zero-sum-v0",
+        "sourceCellSum": 3991.67974237063,
+        "reconstructedCellSum": 3991.679742371035,
+        "relativeError": 1.0150611165995149e-13,
+        "droppedTailMass": 0
+      },
+      "storageAccounting": {
+        "authority": "float64-coarse-plus-unioned-float32-trilinear-halo-v0",
+        "denseBytes": 16384000,
+        "coarseBytes": 512000,
+        "retainedFineBytes": 0,
+        "totalBytes": 512000,
+        "byteRatioToDense": 0.03125,
+        "retainedFineCellCountWithHalo": 0,
+        "retainedFineCellRatio": 0
+      },
+      "workAccounting": {
+        "authority": "cpu-fixed-fine-segment-coarse-run-collapse-model-v0",
+        "denseSampleCount": 12061035,
+        "fineSampleCount": 0,
+        "coarseRunCount": 4032097,
+        "chargedSampleCount": 4032097,
+        "chargedSampleRatio": 0.3343077107395841,
+        "denseTextureFetchCount": 96488280,
+        "modeledTextureFetchCount": 4032097,
+        "modeledTextureFetchRatio": 0.04178846384244801,
+        "hierarchyLookupCount": 4032097,
+        "hiddenDenseTouchApplied": false,
+        "productionTimingAuthority": false
+      },
+      "comparisonToDense": {
+        "opticalDepth": {
+          "meanSquaredError": 2.4410795041720323e-7,
+          "meanAbsoluteError": 0.00012967886077444368,
+          "maximumAbsoluteError": 0.008763164281845093,
+          "targetMaximum": 0.04596447944641113,
+          "maximumErrorToTargetPeak": 0.1906507892047783,
+          "targetMeanSquared": 0.000042272390600881,
+          "normalizedMse": 0.005774642667408447
+        },
+        "maximumAbsoluteOpticalDepthError": 0.008763164281845093,
+        "luma": {
+          "meanSquaredError": 2.3510865441447859e-7,
+          "meanAbsoluteError": 0.00012762819971429563,
+          "maximumAbsoluteError": 0.008558874949812889,
+          "targetMaximum": 0.044924113899469376,
+          "maximumErrorToTargetPeak": 0.19051850346933571,
+          "targetMeanSquared": 0.000041131672533882706,
+          "normalizedMse": 0.005716000345495433
+        }
+      },
+      "renderMs": 942.6159170000001,
+      "productionTimingAuthority": false,
+      "artifacts": {
+        "opticalDepth": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0000000/optical-depth.f32",
+          "sha256": "sha256:45fee0c33d24370285f4bd2d7e5c72f45d22bc26e437d5816648e10964f38e9c",
+          "byteLength": 291840,
+          "dtype": "float32",
+          "byteOrder": "little-endian",
+          "shape": [
+            228,
+            320
+          ]
+        },
+        "linearRadiance": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0000000/linear-smoke-radiance.f32",
+          "sha256": "sha256:542d69d3c79f3bff32aa5d0215d9ae7dc712c23e1c82ae3ae7b7695043892215",
+          "byteLength": 291840,
+          "dtype": "float32",
+          "byteOrder": "little-endian",
+          "shape": [
+            228,
+            320
+          ]
+        },
+        "displayPng": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0000000/display.png",
+          "sha256": "sha256:82d5fee60676483e76c1989ce12a08b7d4852d316f437ed8fb58e9fa0494a176",
+          "byteLength": 9473,
+          "width": 320,
+          "height": 228
+        },
+        "selectedBrickIndices": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0000000/selected-brick-indices.sbrk",
+          "sha256": "sha256:363918bb43ab52fc296b45a3dc3e4484063648171881962543ac716d11f594d2",
+          "byteLength": 8,
+          "schema": "kaminos.adaptive-residual-brick-selection.v0",
+          "headerBytes": 8,
+          "dtype": "uint32",
+          "byteOrder": "little-endian",
+          "shape": [
+            0
+          ]
+        }
+      }
+    },
+    {
+      "id": "b4-e0250000",
+      "representation": "mass-conserving-adaptive-residual-bricks-v0",
+      "blockSize": 4,
+      "coarseGrid": 40,
+      "brickCount": 64000,
+      "requestedRetainedResidualEnergyFraction": 0.25,
+      "actualRetainedResidualEnergyFraction": 0.2594214974468737,
+      "selectedBrickCount": 20,
+      "selectionIdentity": "sha256:8af1ea51d182a445857acb25df7afe1c2fe31b8ddcbe2e66db633ac3876866e0",
+      "selectedBrickFraction": 0.0003125,
+      "selectedComponentCount": 9,
+      "selectedAdjacencyEdgeCount": 11,
+      "maximumOmittedBrickOpticalDepthBound": 0.017488086690318656,
+      "fieldError": {
+        "cellMse": 0.000007551506359128744,
+        "maximumAbsoluteCellError": 0.2762449126748834
+      },
+      "massAccounting": {
+        "authority": "complete-parent-mean-or-full-residual-zero-sum-v0",
+        "sourceCellSum": 3991.67974237063,
+        "reconstructedCellSum": 3991.6797423710323,
+        "relativeError": 1.0082256882049053e-13,
+        "droppedTailMass": 0
+      },
+      "storageAccounting": {
+        "authority": "float64-coarse-plus-unioned-float32-trilinear-halo-v0",
+        "denseBytes": 16384000,
+        "coarseBytes": 512000,
+        "retainedFineBytes": 13408,
+        "totalBytes": 525408,
+        "byteRatioToDense": 0.032068359375,
+        "retainedFineCellCountWithHalo": 3352,
+        "retainedFineCellRatio": 0.000818359375
+      },
+      "workAccounting": {
+        "authority": "cpu-fixed-fine-segment-coarse-run-collapse-model-v0",
+        "denseSampleCount": 12061035,
+        "fineSampleCount": 5015,
+        "coarseRunCount": 4030420,
+        "chargedSampleCount": 4035435,
+        "chargedSampleRatio": 0.33458446974078093,
+        "denseTextureFetchCount": 96488280,
+        "modeledTextureFetchCount": 4070540,
+        "modeledTextureFetchRatio": 0.04218688528803705,
+        "hierarchyLookupCount": 4035435,
+        "hiddenDenseTouchApplied": false,
+        "productionTimingAuthority": false
+      },
+      "comparisonToDense": {
+        "opticalDepth": {
+          "meanSquaredError": 1.6976348273190522e-7,
+          "meanAbsoluteError": 0.00011296974754466897,
+          "maximumAbsoluteError": 0.009447727352380753,
+          "targetMaximum": 0.04596447944641113,
+          "maximumErrorToTargetPeak": 0.2055440954878131,
+          "targetMeanSquared": 0.000042272390600881,
+          "normalizedMse": 0.004015942328285714
+        },
+        "maximumAbsoluteOpticalDepthError": 0.009447727352380753,
+        "luma": {
+          "meanSquaredError": 1.6296448479241625e-7,
+          "meanAbsoluteError": 0.00011116023425856918,
+          "maximumAbsoluteError": 0.009230643510818481,
+          "targetMaximum": 0.044924113899469376,
+          "maximumErrorToTargetPeak": 0.20547191050834526,
+          "targetMeanSquared": 0.000041131672533882706,
+          "normalizedMse": 0.0039620194062901844
+        }
+      },
+      "renderMs": 996.6124169999998,
+      "productionTimingAuthority": false,
+      "artifacts": {
+        "opticalDepth": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0250000/optical-depth.f32",
+          "sha256": "sha256:48d18ad44d0901113dbd61eddf851ed1ef4abd049d0464333408426a67c78ed8",
+          "byteLength": 291840,
+          "dtype": "float32",
+          "byteOrder": "little-endian",
+          "shape": [
+            228,
+            320
+          ]
+        },
+        "linearRadiance": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0250000/linear-smoke-radiance.f32",
+          "sha256": "sha256:dc1690829a6dab6ae6b1101051b244cda5dd5a04833a057a99853e2fd42d0806",
+          "byteLength": 291840,
+          "dtype": "float32",
+          "byteOrder": "little-endian",
+          "shape": [
+            228,
+            320
+          ]
+        },
+        "displayPng": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0250000/display.png",
+          "sha256": "sha256:2f37e4dd4b0b97f5a5d2bf2e78bfdbc18cedee49009e79d89d063837471b767d",
+          "byteLength": 9701,
+          "width": 320,
+          "height": 228
+        },
+        "selectedBrickIndices": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0250000/selected-brick-indices.sbrk",
+          "sha256": "sha256:8af1ea51d182a445857acb25df7afe1c2fe31b8ddcbe2e66db633ac3876866e0",
+          "byteLength": 88,
+          "schema": "kaminos.adaptive-residual-brick-selection.v0",
+          "headerBytes": 8,
+          "dtype": "uint32",
+          "byteOrder": "little-endian",
+          "shape": [
+            20
+          ]
+        }
+      }
+    },
+    {
+      "id": "b4-e0500000",
+      "representation": "mass-conserving-adaptive-residual-bricks-v0",
+      "blockSize": 4,
+      "coarseGrid": 40,
+      "brickCount": 64000,
+      "requestedRetainedResidualEnergyFraction": 0.5,
+      "actualRetainedResidualEnergyFraction": 0.5053623565614112,
+      "selectedBrickCount": 53,
+      "selectionIdentity": "sha256:a9a677bad00ddd357d3829fc798b3550d765a28f5f1b5703ac64d6da1157133f",
+      "selectedBrickFraction": 0.000828125,
+      "selectedComponentCount": 8,
+      "selectedAdjacencyEdgeCount": 51,
+      "maximumOmittedBrickOpticalDepthBound": 0.017488086690318656,
+      "fieldError": {
+        "cellMse": 0.0000050437047484004,
+        "maximumAbsoluteCellError": 0.2762449126748834
+      },
+      "massAccounting": {
+        "authority": "complete-parent-mean-or-full-residual-zero-sum-v0",
+        "sourceCellSum": 3991.67974237063,
+        "reconstructedCellSum": 3991.6797423710323,
+        "relativeError": 1.0082256882049053e-13,
+        "droppedTailMass": 0
+      },
+      "storageAccounting": {
+        "authority": "float64-coarse-plus-unioned-float32-trilinear-halo-v0",
+        "denseBytes": 16384000,
+        "coarseBytes": 512000,
+        "retainedFineBytes": 30656,
+        "totalBytes": 542656,
+        "byteRatioToDense": 0.03312109375,
+        "retainedFineCellCountWithHalo": 7664,
+        "retainedFineCellRatio": 0.00187109375
+      },
+      "workAccounting": {
+        "authority": "cpu-fixed-fine-segment-coarse-run-collapse-model-v0",
+        "denseSampleCount": 12061035,
+        "fineSampleCount": 13374,
+        "coarseRunCount": 4027607,
+        "chargedSampleCount": 4040981,
+        "chargedSampleRatio": 0.3350442976079582,
+        "denseTextureFetchCount": 96488280,
+        "modeledTextureFetchCount": 4134599,
+        "modeledTextureFetchRatio": 0.04285078975394732,
+        "hierarchyLookupCount": 4040981,
+        "hiddenDenseTouchApplied": false,
+        "productionTimingAuthority": false
+      },
+      "comparisonToDense": {
+        "opticalDepth": {
+          "meanSquaredError": 1.1868583954573788e-7,
+          "meanAbsoluteError": 0.00009770963550584486,
+          "maximumAbsoluteError": 0.00857224315404892,
+          "targetMaximum": 0.04596447944641113,
+          "maximumErrorToTargetPeak": 0.18649712250180248,
+          "targetMeanSquared": 0.000042272390600881,
+          "normalizedMse": 0.0028076443716259646
+        },
+        "maximumAbsoluteOpticalDepthError": 0.00857224315404892,
+        "luma": {
+          "meanSquaredError": 1.1392305455044527e-7,
+          "meanAbsoluteError": 0.00009619533649715854,
+          "maximumAbsoluteError": 0.008371604606509209,
+          "targetMaximum": 0.044924113899469376,
+          "maximumErrorToTargetPeak": 0.1863499105456611,
+          "targetMeanSquared": 0.000041131672533882706,
+          "normalizedMse": 0.00276971607358295
+        }
+      },
+      "renderMs": 998.7133749999994,
+      "productionTimingAuthority": false,
+      "artifacts": {
+        "opticalDepth": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0500000/optical-depth.f32",
+          "sha256": "sha256:0391114c65707ac55abd42a1bcf5e4df7866d469d9760a5462ba4320d3a44762",
+          "byteLength": 291840,
+          "dtype": "float32",
+          "byteOrder": "little-endian",
+          "shape": [
+            228,
+            320
+          ]
+        },
+        "linearRadiance": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0500000/linear-smoke-radiance.f32",
+          "sha256": "sha256:8a10437247a46d9499cbce1347c05a1c49db205c40cf6b6ec9d7641aaa3d2d3f",
+          "byteLength": 291840,
+          "dtype": "float32",
+          "byteOrder": "little-endian",
+          "shape": [
+            228,
+            320
+          ]
+        },
+        "displayPng": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0500000/display.png",
+          "sha256": "sha256:3deecc4b52480d377535908e95bbadd60ea4c91c0636883c04b8374fa870f96b",
+          "byteLength": 9747,
+          "width": 320,
+          "height": 228
+        },
+        "selectedBrickIndices": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0500000/selected-brick-indices.sbrk",
+          "sha256": "sha256:a9a677bad00ddd357d3829fc798b3550d765a28f5f1b5703ac64d6da1157133f",
+          "byteLength": 220,
+          "schema": "kaminos.adaptive-residual-brick-selection.v0",
+          "headerBytes": 8,
+          "dtype": "uint32",
+          "byteOrder": "little-endian",
+          "shape": [
+            53
+          ]
+        }
+      }
+    },
+    {
+      "id": "b4-e0750000",
+      "representation": "mass-conserving-adaptive-residual-bricks-v0",
+      "blockSize": 4,
+      "coarseGrid": 40,
+      "brickCount": 64000,
+      "requestedRetainedResidualEnergyFraction": 0.75,
+      "actualRetainedResidualEnergyFraction": 0.7511504985390391,
+      "selectedBrickCount": 124,
+      "selectionIdentity": "sha256:d2453dadb1b9b3d42087cc91de594012b830e7d7223fd84f46764d9eae141934",
+      "selectedBrickFraction": 0.0019375,
+      "selectedComponentCount": 5,
+      "selectedAdjacencyEdgeCount": 178,
+      "maximumOmittedBrickOpticalDepthBound": 0.011988359223027045,
+      "fieldError": {
+        "cellMse": 0.000002537460358719424,
+        "maximumAbsoluteCellError": 0.18937024417391513
+      },
+      "massAccounting": {
+        "authority": "complete-parent-mean-or-full-residual-zero-sum-v0",
+        "sourceCellSum": 3991.67974237063,
+        "reconstructedCellSum": 3991.6797423710223,
+        "relativeError": 9.831624507580037e-14,
+        "droppedTailMass": 0
+      },
+      "storageAccounting": {
+        "authority": "float64-coarse-plus-unioned-float32-trilinear-halo-v0",
+        "denseBytes": 16384000,
+        "coarseBytes": 512000,
+        "retainedFineBytes": 58624,
+        "totalBytes": 570624,
+        "byteRatioToDense": 0.034828125,
+        "retainedFineCellCountWithHalo": 14656,
+        "retainedFineCellRatio": 0.003578125
+      },
+      "workAccounting": {
+        "authority": "cpu-fixed-fine-segment-coarse-run-collapse-model-v0",
+        "denseSampleCount": 12061035,
+        "fineSampleCount": 31742,
+        "coarseRunCount": 4021323,
+        "chargedSampleCount": 4053065,
+        "chargedSampleRatio": 0.3360462016734053,
+        "denseTextureFetchCount": 96488280,
+        "modeledTextureFetchCount": 4275259,
+        "modeledTextureFetchRatio": 0.04430858338442762,
+        "hierarchyLookupCount": 4053065,
+        "hiddenDenseTouchApplied": false,
+        "productionTimingAuthority": false
+      },
+      "comparisonToDense": {
+        "opticalDepth": {
+          "meanSquaredError": 6.667412303079464e-8,
+          "meanAbsoluteError": 0.00007836430140083792,
+          "maximumAbsoluteError": 0.006079529412090778,
+          "targetMaximum": 0.04596447944641113,
+          "maximumErrorToTargetPeak": 0.132265816676522,
+          "targetMeanSquared": 0.000042272390600881,
+          "normalizedMse": 0.0015772498806680944
+        },
+        "maximumAbsoluteOpticalDepthError": 0.006079529412090778,
+        "luma": {
+          "meanSquaredError": 6.420754100403266e-8,
+          "meanAbsoluteError": 0.00007722733095937042,
+          "maximumAbsoluteError": 0.006017553154379129,
+          "targetMaximum": 0.044924113899469376,
+          "maximumErrorToTargetPeak": 0.13394928985900836,
+          "targetMeanSquared": 0.000041131672533882706,
+          "normalizedMse": 0.0015610243165079401
+        }
+      },
+      "renderMs": 996.5769579999996,
+      "productionTimingAuthority": false,
+      "artifacts": {
+        "opticalDepth": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0750000/optical-depth.f32",
+          "sha256": "sha256:d0af944126d800a2d0047f05eaa1ac013713198747f10fbd67e158e1ebfb4b3b",
+          "byteLength": 291840,
+          "dtype": "float32",
+          "byteOrder": "little-endian",
+          "shape": [
+            228,
+            320
+          ]
+        },
+        "linearRadiance": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0750000/linear-smoke-radiance.f32",
+          "sha256": "sha256:da744de9ccdc293683e4c79f8d154ca3115a89d77c2457f742abd7477900c679",
+          "byteLength": 291840,
+          "dtype": "float32",
+          "byteOrder": "little-endian",
+          "shape": [
+            228,
+            320
+          ]
+        },
+        "displayPng": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0750000/display.png",
+          "sha256": "sha256:42f8d0d2e3202f6357650bcf1a8052dddaf69f5c22660b03dcfe26bee98db240",
+          "byteLength": 9564,
+          "width": 320,
+          "height": 228
+        },
+        "selectedBrickIndices": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0750000/selected-brick-indices.sbrk",
+          "sha256": "sha256:d2453dadb1b9b3d42087cc91de594012b830e7d7223fd84f46764d9eae141934",
+          "byteLength": 504,
+          "schema": "kaminos.adaptive-residual-brick-selection.v0",
+          "headerBytes": 8,
+          "dtype": "uint32",
+          "byteOrder": "little-endian",
+          "shape": [
+            124
+          ]
+        }
+      }
+    },
+    {
+      "id": "b4-e0900000",
+      "representation": "mass-conserving-adaptive-residual-bricks-v0",
+      "blockSize": 4,
+      "coarseGrid": 40,
+      "brickCount": 64000,
+      "requestedRetainedResidualEnergyFraction": 0.9,
+      "actualRetainedResidualEnergyFraction": 0.9004015337653443,
+      "selectedBrickCount": 259,
+      "selectionIdentity": "sha256:aee8332ba5d17e7f2d071cbc6714f518185ed6884413faf1df15c3f212252732",
+      "selectedBrickFraction": 0.004046875,
+      "selectedComponentCount": 3,
+      "selectedAdjacencyEdgeCount": 497,
+      "maximumOmittedBrickOpticalDepthBound": 0.007750487350499704,
+      "fieldError": {
+        "cellMse": 0.0000010155823434483435,
+        "maximumAbsoluteCellError": 0.12242806999074674
+      },
+      "massAccounting": {
+        "authority": "complete-parent-mean-or-full-residual-zero-sum-v0",
+        "sourceCellSum": 3991.67974237063,
+        "reconstructedCellSum": 3991.6797423710377,
+        "relativeError": 1.0218965449941244e-13,
+        "droppedTailMass": 0
+      },
+      "storageAccounting": {
+        "authority": "float64-coarse-plus-unioned-float32-trilinear-halo-v0",
+        "denseBytes": 16384000,
+        "coarseBytes": 512000,
+        "retainedFineBytes": 103200,
+        "totalBytes": 615200,
+        "byteRatioToDense": 0.037548828125,
+        "retainedFineCellCountWithHalo": 25800,
+        "retainedFineCellRatio": 0.006298828125
+      },
+      "workAccounting": {
+        "authority": "cpu-fixed-fine-segment-coarse-run-collapse-model-v0",
+        "denseSampleCount": 12061035,
+        "fineSampleCount": 66585,
+        "coarseRunCount": 4009279,
+        "chargedSampleCount": 4075864,
+        "chargedSampleRatio": 0.3379365037909267,
+        "denseTextureFetchCount": 96488280,
+        "modeledTextureFetchCount": 4541959,
+        "modeledTextureFetchRatio": 0.04707264965237229,
+        "hierarchyLookupCount": 4075864,
+        "hiddenDenseTouchApplied": false,
+        "productionTimingAuthority": false
+      },
+      "comparisonToDense": {
+        "opticalDepth": {
+          "meanSquaredError": 2.851327632673042e-8,
+          "meanAbsoluteError": 0.000054929712627074154,
+          "maximumAbsoluteError": 0.003776073455810547,
+          "targetMaximum": 0.04596447944641113,
+          "maximumErrorToTargetPeak": 0.08215198999942942,
+          "targetMeanSquared": 0.000042272390600881,
+          "normalizedMse": 0.0006745129840406086
+        },
+        "maximumAbsoluteOpticalDepthError": 0.003776073455810547,
+        "luma": {
+          "meanSquaredError": 2.767487479977998e-8,
+          "meanAbsoluteError": 0.00005427361153072921,
+          "maximumAbsoluteError": 0.0037359073758125305,
+          "targetMaximum": 0.044924113899469376,
+          "maximumErrorToTargetPeak": 0.08316040209880818,
+          "targetMeanSquared": 0.000041131672533882706,
+          "normalizedMse": 0.0006728361161823038
+        }
+      },
+      "renderMs": 991.4528330000003,
+      "productionTimingAuthority": false,
+      "artifacts": {
+        "opticalDepth": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0900000/optical-depth.f32",
+          "sha256": "sha256:f2ac1917a19159a9764ffca09257cbd54cfc3ecd8cc3cd39ba476bd2ee517f74",
+          "byteLength": 291840,
+          "dtype": "float32",
+          "byteOrder": "little-endian",
+          "shape": [
+            228,
+            320
+          ]
+        },
+        "linearRadiance": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0900000/linear-smoke-radiance.f32",
+          "sha256": "sha256:5ac2cdfcb58ecb2e6f7267c507fbf863d26fdb1f9422086b4b182d84044287e1",
+          "byteLength": 291840,
+          "dtype": "float32",
+          "byteOrder": "little-endian",
+          "shape": [
+            228,
+            320
+          ]
+        },
+        "displayPng": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0900000/display.png",
+          "sha256": "sha256:6316127c7eb1974e0000939744443718c3dd916d9ad76a9a4c9e88c6201afdd5",
+          "byteLength": 9354,
+          "width": 320,
+          "height": 228
+        },
+        "selectedBrickIndices": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0900000/selected-brick-indices.sbrk",
+          "sha256": "sha256:aee8332ba5d17e7f2d071cbc6714f518185ed6884413faf1df15c3f212252732",
+          "byteLength": 1044,
+          "schema": "kaminos.adaptive-residual-brick-selection.v0",
+          "headerBytes": 8,
+          "dtype": "uint32",
+          "byteOrder": "little-endian",
+          "shape": [
+            259
+          ]
+        }
+      }
+    },
+    {
+      "id": "b4-e0950000",
+      "representation": "mass-conserving-adaptive-residual-bricks-v0",
+      "blockSize": 4,
+      "coarseGrid": 40,
+      "brickCount": 64000,
+      "requestedRetainedResidualEnergyFraction": 0.95,
+      "actualRetainedResidualEnergyFraction": 0.9501887288462116,
+      "selectedBrickCount": 394,
+      "selectionIdentity": "sha256:5092de7aceee59e8c533b25bf8b115ef7428a41166a964b0e02d0530da47a056",
+      "selectedBrickFraction": 0.00615625,
+      "selectedComponentCount": 7,
+      "selectedAdjacencyEdgeCount": 856,
+      "maximumOmittedBrickOpticalDepthBound": 0.0048953981289805775,
+      "fieldError": {
+        "cellMse": 5.07913920775881e-7,
+        "maximumAbsoluteCellError": 0.07732857530936599
+      },
+      "massAccounting": {
+        "authority": "complete-parent-mean-or-full-residual-zero-sum-v0",
+        "sourceCellSum": 3991.67974237063,
+        "reconstructedCellSum": 3991.679742371046,
+        "relativeError": 1.042402830177953e-13,
+        "droppedTailMass": 0
+      },
+      "storageAccounting": {
+        "authority": "float64-coarse-plus-unioned-float32-trilinear-halo-v0",
+        "denseBytes": 16384000,
+        "coarseBytes": 512000,
+        "retainedFineBytes": 145440,
+        "totalBytes": 657440,
+        "byteRatioToDense": 0.040126953125,
+        "retainedFineCellCountWithHalo": 36360,
+        "retainedFineCellRatio": 0.008876953125
+      },
+      "workAccounting": {
+        "authority": "cpu-fixed-fine-segment-coarse-run-collapse-model-v0",
+        "denseSampleCount": 12061035,
+        "fineSampleCount": 101276,
+        "coarseRunCount": 3997219,
+        "chargedSampleCount": 4098495,
+        "chargedSampleRatio": 0.33981287675560184,
+        "denseTextureFetchCount": 96488280,
+        "modeledTextureFetchCount": 4807427,
+        "modeledTextureFetchRatio": 0.049823947530207816,
+        "hierarchyLookupCount": 4098495,
+        "hiddenDenseTouchApplied": false,
+        "productionTimingAuthority": false
+      },
+      "comparisonToDense": {
+        "opticalDepth": {
+          "meanSquaredError": 1.3539022237194206e-8,
+          "meanAbsoluteError": 0.00003972394748414518,
+          "maximumAbsoluteError": 0.0017979443073272705,
+          "targetMaximum": 0.04596447944641113,
+          "maximumErrorToTargetPeak": 0.03911595059884122,
+          "targetMeanSquared": 0.000042272390600881,
+          "normalizedMse": 0.0003202804961996173
+        },
+        "maximumAbsoluteOpticalDepthError": 0.0017979443073272705,
+        "luma": {
+          "meanSquaredError": 1.3255259827748907e-8,
+          "meanAbsoluteError": 0.000039353299315222836,
+          "maximumAbsoluteError": 0.0017569810152053833,
+          "targetMaximum": 0.044924113899469376,
+          "maximumErrorToTargetPeak": 0.03910997597275115,
+          "targetMeanSquared": 0.000041131672533882706,
+          "normalizedMse": 0.00032226406103057757
+        }
+      },
+      "renderMs": 998.7122089999993,
+      "productionTimingAuthority": false,
+      "artifacts": {
+        "opticalDepth": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0950000/optical-depth.f32",
+          "sha256": "sha256:2eba9aee74d92d6945dd78718853f26b4f7e46c9756692057d5c2af2f2d4b85a",
+          "byteLength": 291840,
+          "dtype": "float32",
+          "byteOrder": "little-endian",
+          "shape": [
+            228,
+            320
+          ]
+        },
+        "linearRadiance": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0950000/linear-smoke-radiance.f32",
+          "sha256": "sha256:171107f4149a3c98bca3076dd1a570f4219cf0aafe6ac9fb735ee5607ed80a46",
+          "byteLength": 291840,
+          "dtype": "float32",
+          "byteOrder": "little-endian",
+          "shape": [
+            228,
+            320
+          ]
+        },
+        "displayPng": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0950000/display.png",
+          "sha256": "sha256:186051bd89ac8276a16606dd41e067168c7ea49721836d9026582d3e91f1dd35",
+          "byteLength": 9208,
+          "width": 320,
+          "height": 228
+        },
+        "selectedBrickIndices": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0950000/selected-brick-indices.sbrk",
+          "sha256": "sha256:5092de7aceee59e8c533b25bf8b115ef7428a41166a964b0e02d0530da47a056",
+          "byteLength": 1584,
+          "schema": "kaminos.adaptive-residual-brick-selection.v0",
+          "headerBytes": 8,
+          "dtype": "uint32",
+          "byteOrder": "little-endian",
+          "shape": [
+            394
+          ]
+        }
+      }
+    },
+    {
+      "id": "b4-e0980000",
+      "representation": "mass-conserving-adaptive-residual-bricks-v0",
+      "blockSize": 4,
+      "coarseGrid": 40,
+      "brickCount": 64000,
+      "requestedRetainedResidualEnergyFraction": 0.98,
+      "actualRetainedResidualEnergyFraction": 0.9800212175117752,
+      "selectedBrickCount": 614,
+      "selectionIdentity": "sha256:4bbc3105534b61a92e41e45fa2b2d52f3178a191cba95424dfb41df74ceaf8ec",
+      "selectedBrickFraction": 0.00959375,
+      "selectedComponentCount": 12,
+      "selectedAdjacencyEdgeCount": 1361,
+      "maximumOmittedBrickOpticalDepthBound": 0.0023851603441238808,
+      "fieldError": {
+        "cellMse": 2.037189879093616e-7,
+        "maximumAbsoluteCellError": 0.037676414958696114
+      },
+      "massAccounting": {
+        "authority": "complete-parent-mean-or-full-residual-zero-sum-v0",
+        "sourceCellSum": 3991.67974237063,
+        "reconstructedCellSum": 3991.679742371023,
+        "relativeError": 9.854409268895403e-14,
+        "droppedTailMass": 0
+      },
+      "storageAccounting": {
+        "authority": "float64-coarse-plus-unioned-float32-trilinear-halo-v0",
+        "denseBytes": 16384000,
+        "coarseBytes": 512000,
+        "retainedFineBytes": 222336,
+        "totalBytes": 734336,
+        "byteRatioToDense": 0.0448203125,
+        "retainedFineCellCountWithHalo": 55584,
+        "retainedFineCellRatio": 0.0135703125
+      },
+      "workAccounting": {
+        "authority": "cpu-fixed-fine-segment-coarse-run-collapse-model-v0",
+        "denseSampleCount": 12061035,
+        "fineSampleCount": 157959,
+        "coarseRunCount": 3977520,
+        "chargedSampleCount": 4135479,
+        "chargedSampleRatio": 0.34287928026077363,
+        "denseTextureFetchCount": 96488280,
+        "modeledTextureFetchCount": 5241192,
+        "modeledTextureFetchRatio": 0.054319467607879424,
+        "hierarchyLookupCount": 4135479,
+        "hiddenDenseTouchApplied": false,
+        "productionTimingAuthority": false
+      },
+      "comparisonToDense": {
+        "opticalDepth": {
+          "meanSquaredError": 5.301300467928004e-9,
+          "meanAbsoluteError": 0.000025570471830962875,
+          "maximumAbsoluteError": 0.0011065974831581116,
+          "targetMaximum": 0.04596447944641113,
+          "maximumErrorToTargetPeak": 0.024075057446223593,
+          "targetMeanSquared": 0.000042272390600881,
+          "normalizedMse": 0.000125408106628763
+        },
+        "maximumAbsoluteOpticalDepthError": 0.0011065974831581116,
+        "luma": {
+          "meanSquaredError": 5.214850594230532e-9,
+          "meanAbsoluteError": 0.00002537936647924547,
+          "maximumAbsoluteError": 0.0010813139379024506,
+          "targetMaximum": 0.044924113899469376,
+          "maximumErrorToTargetPeak": 0.024069788896052605,
+          "targetMeanSquared": 0.000041131672533882706,
+          "normalizedMse": 0.00012678430690934672
+        }
+      },
+      "renderMs": 1007.4259579999998,
+      "productionTimingAuthority": false,
+      "artifacts": {
+        "opticalDepth": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0980000/optical-depth.f32",
+          "sha256": "sha256:3bbd09cc624408539d38384d04838605615e9eb9bfde76c366f9d6aeb4820ba2",
+          "byteLength": 291840,
+          "dtype": "float32",
+          "byteOrder": "little-endian",
+          "shape": [
+            228,
+            320
+          ]
+        },
+        "linearRadiance": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0980000/linear-smoke-radiance.f32",
+          "sha256": "sha256:3a56a1e4be9ac1a91602b2a61bd1581f623536bbdd644be559ad86017fcb8967",
+          "byteLength": 291840,
+          "dtype": "float32",
+          "byteOrder": "little-endian",
+          "shape": [
+            228,
+            320
+          ]
+        },
+        "displayPng": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0980000/display.png",
+          "sha256": "sha256:9f01b17f69777e2568d72cab7d8d988ef984188129f819a72c0b980d78ffbcb1",
+          "byteLength": 8955,
+          "width": 320,
+          "height": 228
+        },
+        "selectedBrickIndices": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0980000/selected-brick-indices.sbrk",
+          "sha256": "sha256:4bbc3105534b61a92e41e45fa2b2d52f3178a191cba95424dfb41df74ceaf8ec",
+          "byteLength": 2464,
+          "schema": "kaminos.adaptive-residual-brick-selection.v0",
+          "headerBytes": 8,
+          "dtype": "uint32",
+          "byteOrder": "little-endian",
+          "shape": [
+            614
+          ]
+        }
+      }
+    },
+    {
+      "id": "b4-e0990000",
+      "representation": "mass-conserving-adaptive-residual-bricks-v0",
+      "blockSize": 4,
+      "coarseGrid": 40,
+      "brickCount": 64000,
+      "requestedRetainedResidualEnergyFraction": 0.99,
+      "actualRetainedResidualEnergyFraction": 0.9900144234001168,
+      "selectedBrickCount": 789,
+      "selectionIdentity": "sha256:594b2e11199dd26ddf3f0bbeea58f31cce41a9d14160b43971dcb5299781e6f3",
+      "selectedBrickFraction": 0.012328125,
+      "selectedComponentCount": 4,
+      "selectedAdjacencyEdgeCount": 1824,
+      "maximumOmittedBrickOpticalDepthBound": 0.002117827691530316,
+      "fieldError": {
+        "cellMse": 1.0182059691671737e-7,
+        "maximumAbsoluteCellError": 0.03345358106162166
+      },
+      "massAccounting": {
+        "authority": "complete-parent-mean-or-full-residual-zero-sum-v0",
+        "sourceCellSum": 3991.67974237063,
+        "reconstructedCellSum": 3991.679742371026,
+        "relativeError": 9.922763552841498e-14,
+        "droppedTailMass": 0
+      },
+      "storageAccounting": {
+        "authority": "float64-coarse-plus-unioned-float32-trilinear-halo-v0",
+        "denseBytes": 16384000,
+        "coarseBytes": 512000,
+        "retainedFineBytes": 273696,
+        "totalBytes": 785696,
+        "byteRatioToDense": 0.047955078125,
+        "retainedFineCellCountWithHalo": 68424,
+        "retainedFineCellRatio": 0.016705078125
+      },
+      "workAccounting": {
+        "authority": "cpu-fixed-fine-segment-coarse-run-collapse-model-v0",
+        "denseSampleCount": 12061035,
+        "fineSampleCount": 202167,
+        "coarseRunCount": 3962338,
+        "chargedSampleCount": 4164505,
+        "chargedSampleRatio": 0.3452858730614744,
+        "denseTextureFetchCount": 96488280,
+        "modeledTextureFetchCount": 5579674,
+        "modeledTextureFetchRatio": 0.05782747915083573,
+        "hierarchyLookupCount": 4164505,
+        "hiddenDenseTouchApplied": false,
+        "productionTimingAuthority": false
+      },
+      "comparisonToDense": {
+        "opticalDepth": {
+          "meanSquaredError": 2.8629643527030264e-9,
+          "meanAbsoluteError": 0.000019061785364549055,
+          "maximumAbsoluteError": 0.0009569162502884865,
+          "targetMaximum": 0.04596447944641113,
+          "maximumErrorToTargetPeak": 0.020818603012879366,
+          "targetMeanSquared": 0.000042272390600881,
+          "normalizedMse": 0.0000677265778444846
+        },
+        "maximumAbsoluteOpticalDepthError": 0.0009569162502884865,
+        "luma": {
+          "meanSquaredError": 2.827141542052397e-9,
+          "meanAbsoluteError": 0.000018942238610818254,
+          "maximumAbsoluteError": 0.0009520608000457287,
+          "targetMaximum": 0.044924113899469376,
+          "maximumErrorToTargetPeak": 0.021192645049744076,
+          "targetMeanSquared": 0.000041131672533882706,
+          "normalizedMse": 0.00006873393100471432
+        }
+      },
+      "renderMs": 1066.2519589999993,
+      "productionTimingAuthority": false,
+      "artifacts": {
+        "opticalDepth": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0990000/optical-depth.f32",
+          "sha256": "sha256:b20b0958653fe2c2af36d6d40e2234442e53bb37ba878fe15fe8265adfa9e14a",
+          "byteLength": 291840,
+          "dtype": "float32",
+          "byteOrder": "little-endian",
+          "shape": [
+            228,
+            320
+          ]
+        },
+        "linearRadiance": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0990000/linear-smoke-radiance.f32",
+          "sha256": "sha256:77b0d1063b53a11197e06183490cd90ada18693f290193c68dab3baa5fee7ba0",
+          "byteLength": 291840,
+          "dtype": "float32",
+          "byteOrder": "little-endian",
+          "shape": [
+            228,
+            320
+          ]
+        },
+        "displayPng": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0990000/display.png",
+          "sha256": "sha256:13c75f9ccf8784f018b657c0a5cffeb238e526086d0dd099af616ad9047dcf23",
+          "byteLength": 8752,
+          "width": 320,
+          "height": 228
+        },
+        "selectedBrickIndices": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e0990000/selected-brick-indices.sbrk",
+          "sha256": "sha256:594b2e11199dd26ddf3f0bbeea58f31cce41a9d14160b43971dcb5299781e6f3",
+          "byteLength": 3164,
+          "schema": "kaminos.adaptive-residual-brick-selection.v0",
+          "headerBytes": 8,
+          "dtype": "uint32",
+          "byteOrder": "little-endian",
+          "shape": [
+            789
+          ]
+        }
+      }
+    },
+    {
+      "id": "b4-e1000000",
+      "representation": "mass-conserving-adaptive-residual-bricks-v0",
+      "blockSize": 4,
+      "coarseGrid": 40,
+      "brickCount": 64000,
+      "requestedRetainedResidualEnergyFraction": 1,
+      "actualRetainedResidualEnergyFraction": 1,
+      "selectedBrickCount": 64000,
+      "selectionIdentity": "sha256:d25730d3265cbe15c71db75a4bc9fc40269919885e8e0efe3bdda541676c3417",
+      "selectedBrickFraction": 1,
+      "selectedComponentCount": 1,
+      "selectedAdjacencyEdgeCount": 187200,
+      "maximumOmittedBrickOpticalDepthBound": 0,
+      "fieldError": {
+        "cellMse": 0,
+        "maximumAbsoluteCellError": 0
+      },
+      "massAccounting": {
+        "authority": "complete-parent-mean-or-full-residual-zero-sum-v0",
+        "sourceCellSum": 3991.67974237063,
+        "reconstructedCellSum": 3991.67974237063,
+        "relativeError": 0,
+        "droppedTailMass": 0
+      },
+      "storageAccounting": {
+        "authority": "float64-coarse-plus-unioned-float32-trilinear-halo-v0",
+        "denseBytes": 16384000,
+        "coarseBytes": 512000,
+        "retainedFineBytes": 16384000,
+        "totalBytes": 16896000,
+        "byteRatioToDense": 1.03125,
+        "retainedFineCellCountWithHalo": 4096000,
+        "retainedFineCellRatio": 1
+      },
+      "workAccounting": {
+        "authority": "cpu-fixed-fine-segment-coarse-run-collapse-model-v0",
+        "denseSampleCount": 12061035,
+        "fineSampleCount": 12061035,
+        "coarseRunCount": 0,
+        "chargedSampleCount": 12061035,
+        "chargedSampleRatio": 1,
+        "denseTextureFetchCount": 96488280,
+        "modeledTextureFetchCount": 96488280,
+        "modeledTextureFetchRatio": 1,
+        "hierarchyLookupCount": 12061035,
+        "hiddenDenseTouchApplied": false,
+        "productionTimingAuthority": false
+      },
+      "comparisonToDense": {
+        "opticalDepth": {
+          "meanSquaredError": 0,
+          "meanAbsoluteError": 0,
+          "maximumAbsoluteError": 0,
+          "targetMaximum": 0.04596447944641113,
+          "maximumErrorToTargetPeak": 0,
+          "targetMeanSquared": 0.000042272390600881,
+          "normalizedMse": 0
+        },
+        "maximumAbsoluteOpticalDepthError": 0,
+        "luma": {
+          "meanSquaredError": 0,
+          "meanAbsoluteError": 0,
+          "maximumAbsoluteError": 0,
+          "targetMaximum": 0.044924113899469376,
+          "maximumErrorToTargetPeak": 0,
+          "targetMeanSquared": 0.000041131672533882706,
+          "normalizedMse": 0
+        }
+      },
+      "renderMs": 2945.0117500000015,
+      "productionTimingAuthority": false,
+      "artifacts": {
+        "opticalDepth": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e1000000/optical-depth.f32",
+          "sha256": "sha256:6f25f8a520e9d1d96327e09e899c4e3649713231496a39b292bf47a80a1d2818",
+          "byteLength": 291840,
+          "dtype": "float32",
+          "byteOrder": "little-endian",
+          "shape": [
+            228,
+            320
+          ]
+        },
+        "linearRadiance": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e1000000/linear-smoke-radiance.f32",
+          "sha256": "sha256:7abcb9988ecf88aab286cdb3befe812a8ed8aa9ff9d1a7816abd97ee2fa6bb71",
+          "byteLength": 291840,
+          "dtype": "float32",
+          "byteOrder": "little-endian",
+          "shape": [
+            228,
+            320
+          ]
+        },
+        "displayPng": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e1000000/display.png",
+          "sha256": "sha256:cdb7807be40bc47a74a79a98369112a3e65bf6b14eb1718c8f64f04dd34f7d9b",
+          "byteLength": 8614,
+          "width": 320,
+          "height": 228
+        },
+        "selectedBrickIndices": {
+          "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/b4-e1000000/selected-brick-indices.sbrk",
+          "sha256": "sha256:d25730d3265cbe15c71db75a4bc9fc40269919885e8e0efe3bdda541676c3417",
+          "byteLength": 256008,
+          "schema": "kaminos.adaptive-residual-brick-selection.v0",
+          "headerBytes": 8,
+          "dtype": "uint32",
+          "byteOrder": "little-endian",
+          "shape": [
+            64000
+          ]
+        }
+      }
+    }
+  ],
+  "contextHtml": {
+    "path": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-adaptive-residual-bricks-r6-0716/side-plus-90/context.html",
+    "sha256": "sha256:ccb26eb92d16736f6d632449375741d1f618474e30d822d6ab6436960550c773",
+    "byteLength": 3354
+  },
+  "lastTrustworthyEvidence": {
+    "matchedOpticsReportPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-matched-optics-r5-0716/side-plus-90/matched-optics-report.json",
+    "matchedOpticsReportSha256": "sha256:cd5de8b525c360c1e40f381de4c4ce44a3a4e370282f9e9dc5110e5ed5cff95e",
+    "sidecarPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-extinction-residual-oracle-r2-full-covariance-0716/source-step45/smoke-extinction-support-sidecar.f32",
+    "sidecarSha256": "sha256:564efca0905957a8a44592309b7ce1618b14cfc486e658d92c6cd0f323b26b5a",
+    "cameraFitReportPath": "/private/tmp/kaminos-pyro-tall-articulated-smoke-0716-r2/artifacts/pyro-smoke-extinction-residual-oracle-r2-full-covariance-0716/witness/combined/cameras/side-plus-90/oracle-fit-report.json",
+    "cameraFitReportSha256": "sha256:f68a18b61db499289dd9790c4393e30ea575be9d07e46c9ff3be0421649a156b",
+    "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+    "backend": "WebGPU:apple",
+    "cameraIdentity": "sha256:3bd0a7873986b8caaf12384d92766e4d763b2148b861677080aedffc6b41ff20"
+  },
+  "claimBoundary": "Static CPU optical-quality and modeled hierarchy-work frontier only. Charged samples and texture fetches model coarse-run collapse; they are not measured GPU or production-compositor timing. Full refinement is exact; partial arms preserve parent mass but may introduce coarse/fine boundary error."
+}
