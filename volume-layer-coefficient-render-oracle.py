@@ -606,6 +606,7 @@ def rasterize_coefficients(
     length = np.maximum(np.sqrt(tx * tx + ty * ty), 1e-5)
     tx = tx / length
     ty = ty / length
+    center_projected_mask = valid & tangent_valid
     base_radius = (2.0 / 160.0) * (0.60 + features[:, 3] * 2.65 + features[:, 2] * 0.48)
     pixel_world_scale = np.maximum(length / 0.03, 1.0)
     major_px = np.clip(np.sqrt(base_radius * base_radius + 0.5 * 0.03 * 0.03) * pixel_world_scale, 0.75, 5.0)
@@ -700,6 +701,22 @@ def rasterize_coefficients(
         flat = ((sample_depth_index[rows] * height + sy[rows]) * width + sx[rows]).astype(np.int64)
         for channel in range(8):
             planes[..., channel] += scatter_channel(flat, coefficients[rows, channel] * sample_weight[rows], raster_size).reshape(depth_bins, height, width)
+    expected_mass = np.sum(coefficients[center_projected_mask], axis=0, dtype=np.float64)
+    deposited_mass = np.sum(planes, axis=(0, 1, 2), dtype=np.float64)
+    mass_delta = deposited_mass - expected_mass
+    mass_tolerance = 2e-4 + np.abs(expected_mass) * 5e-5
+    mass_conserved = np.abs(mass_delta) <= mass_tolerance
+    require(
+        bool(np.all(mass_conserved)),
+        "viewport clipping changed deposited coefficient mass: "
+        + canonical_json({
+            "expected": expected_mass.tolist(),
+            "deposited": deposited_mass.tolist(),
+            "delta": mass_delta.tolist(),
+            "tolerance": mass_tolerance.tolist(),
+            "failedChannels": np.flatnonzero(~mass_conserved).tolist(),
+        }),
+    )
     return planes, {
         "admittedRows": int(positions.shape[0]),
         "projectedRows": effective_projected_rows,
@@ -715,6 +732,15 @@ def rasterize_coefficients(
         "nominalPixelDepositsPerCandidate": nominal_pixel_deposits,
         "projectedFragments": projected_fragments,
         "projectedFragmentsPerProjectedRow": float(projected_fragments / effective_projected_rows),
+        "coefficientMass": {
+            "identity": "center-visible-candidate-mass-equals-in-viewport-deposited-mass-v0",
+            "expected": expected_mass.tolist(),
+            "deposited": deposited_mass.tolist(),
+            "delta": mass_delta.tolist(),
+            "tolerance": mass_tolerance.tolist(),
+            "conserved": True,
+            "centerVisibleRows": int(np.count_nonzero(center_projected_mask)),
+        },
         "postProcessBlur": False,
         "footprintControls": footprint_controls,
         "effectiveSkirtMix": {
@@ -1475,6 +1501,40 @@ def self_test() -> None:
         )
         require(np.allclose(np.sum(raster_planes, axis=(0, 1, 2)), np.sum(raster_coefficients, axis=0), atol=2e-5), f"{raster_mode} raster changed integrated coefficient mass")
         require(raster_receipt["projectedFragments"] > 0, f"{raster_mode} raster did not report projected work")
+    depth_positions = np.asarray([
+        [0.0, 0.0, -0.5],
+        [-0.25, 0.0, -0.1],
+        [0.25, 0.0, -0.9],
+    ], dtype=np.float32)
+    depth_tangents = np.tile(np.asarray([[1.0, 0.0, 0.0]], dtype=np.float32), (3, 1))
+    depth_features = np.zeros((3, len(FEATURE_ORDER)), dtype=np.float32)
+    depth_coefficients = np.zeros((3, 8), dtype=np.float32)
+    depth_coefficients[0, 0] = 1.0
+    depth_mask = np.asarray([True, False, False], dtype=np.bool_)
+    depth_offsets = np.zeros((3, 3), dtype=np.float32)
+    depth_offsets[0, 2] = 0.2
+    depth_planes, _ = rasterize_coefficients(
+        depth_positions, depth_tangents, depth_features, depth_coefficients,
+        raster_camera, 9, "selective-split", selective_controls, depth_mask, depth_offsets,
+    )
+    depth_mass = np.sum(depth_planes[..., 0], axis=(1, 2))
+    occupied_depth_bins = np.flatnonzero(depth_mass > 1e-6)
+    require(np.array_equal(occupied_depth_bins, [1, 4, 6]), f"selective children did not use their own projected depth bins: {occupied_depth_bins.tolist()}")
+    require(np.allclose(depth_mass[occupied_depth_bins], [0.25, 0.5, 0.25], atol=1e-6), "selective child depth planes received the wrong coefficient mass")
+    edge_failure = None
+    try:
+        rasterize_coefficients(
+            np.asarray([[0.98, 0.0, -0.5]], dtype=np.float32),
+            np.asarray([[0.0, 1.0, 0.0]], dtype=np.float32),
+            np.zeros((1, len(FEATURE_ORDER)), dtype=np.float32),
+            np.ones((1, 8), dtype=np.float32),
+            raster_camera, 4, "selective-split", selective_controls,
+            np.asarray([True], dtype=np.bool_),
+            np.asarray([[0.2, 0.0, 0.0]], dtype=np.float32),
+        )
+    except ValueError as exc:
+        edge_failure = str(exc)
+    require(edge_failure is not None and "viewport clipping changed deposited coefficient mass" in edge_failure, "selective edge clipping did not fail loud on coefficient-mass loss")
     print("deposition raster smoke contracts passed")
     metric_target = np.zeros((10, 10, 3), dtype=np.uint8)
     metric_target[4:6, 4:6] = 255
