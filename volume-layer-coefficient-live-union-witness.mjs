@@ -443,10 +443,11 @@ async function captureCondition({ label, captureContext, overlay, raymarch = fal
   writeFileSync(imagePath, imageBytes);
   const metrics = pngPixelMetrics(imageBytes);
   if (!metrics.nonblank) throw new Error(`blank-capture:${label}`);
+  const { pngBase64: _pngBase64, ...rgbaCaptureReceipt } = rgbaCapture;
   return {
     label,
     requestedAuthority: raymarch ? 'matched-raymarch' : overlay ? overlay.identity : 'analytical-exact',
-    render,
+    render: { ...render, rgbaCapture: rgbaCaptureReceipt },
     overlay: overlayReceipt,
     populationAudit,
     metrics,

@@ -44,6 +44,16 @@ assert.match(witness, /render\.rgbaCapture/, 'witness consumes pixels returned b
 assert.match(witness, /gpu-rgba8-readback-frozen-sim-state-v0/, 'report names the exact GPU readback image authority');
 assert.match(witness, /OffscreenCanvas/, 'witness PNG-encodes exact GPU pixels in the child runtime before CDP transport');
 assert.match(witness, /pngBase64/, 'witness transports a compact PNG instead of millions of JSON integers');
+assert.match(
+  witness,
+  /const \{ pngBase64: _pngBase64, \.\.\.rgbaCaptureReceipt \} = rgbaCapture/,
+  'witness strips the transport-only PNG payload before publishing the durable report',
+);
+assert.match(
+  witness,
+  /render:\s*\{ \.\.\.render, rgbaCapture: rgbaCaptureReceipt \}/,
+  'witness preserves the compact exact-capture receipt after stripping its base64 payload',
+);
 assert.match(witness, /includeRgba:\s*!overlay/, 'overlay population priming does not request an unused pixel payload');
 assert.doesNotMatch(witness, /Page\.captureScreenshot/, 'witness must not let application-shell pixels satisfy visual evidence gates');
 assert.match(witness, /condition\.render\.controlOverrides\.boundarySplatMode/, 'union-mode assertion reads a field actually returned by the frozen renderer');
