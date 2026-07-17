@@ -29,8 +29,13 @@ assert.match(
 );
 assert.match(
   witness,
-  /if \(directRoute\)[\s\S]*postLoadControlMutation: false[\s\S]*postLoadCompositionMutation: false/,
-  'direct-route authority must reject hidden post-load control or composition mutation',
+  /postLoadControlMutation:\s*initialControlSha256 !== finalControlSha256[\s\S]*postLoadCompositionMutation:\s*initialCompositionSha256 !== finalCompositionSha256/,
+  'direct-route authority must measure hidden post-load control and composition mutation',
+);
+assert.match(
+  witness,
+  /directRouteAppliedPasses\?\.splatRasterRequested,\s*true[\s\S]*directRouteAppliedPasses\?\.rendererIdentity,\s*RENDERER[\s\S]*selectiveHeadLivePassReceipt\?\.raymarchApplied,\s*true[\s\S]*selectiveHeadLivePassReceipt\?\.splatApplied,\s*true/,
+  'direct-route authority must require the exact union renderer and both requested passes',
 );
 const compositionState = core.match(
   /function updateSelectiveHeadLiveCompositionState\(\) \{[\s\S]*?(?=\n  function recordSelectiveHeadLivePassReceipt)/,

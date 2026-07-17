@@ -381,6 +381,23 @@ async function captureDirectRouteWitness() {
         throw new Error('live-union-direct-route-runtime-api-missing');
       }
       const initial = prototype.debugState();
+      const canonicalSha256 = async value => {
+        const canonical = JSON.stringify(Object.fromEntries(
+          Object.entries(value || {}).sort(([left], [right]) => left.localeCompare(right)),
+        ));
+        const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical));
+        return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+      };
+      const compositionIdentity = state => ({
+        requestedRaw: state.selectiveHeadLiveCompositionRequestedRaw,
+        requested: state.selectiveHeadLiveCompositionRequested,
+        effective: state.selectiveHeadLiveCompositionEffective,
+        authority: state.selectiveHeadLiveCompositionAuthority,
+        fallbackReason: state.selectiveHeadLiveCompositionFallbackReason || null,
+      });
+      const initialControlSha256 = await canonicalSha256(initial.controls);
+      const initialComposition = compositionIdentity(initial);
+      const initialCompositionSha256 = await canonicalSha256(initialComposition);
       const route = new URL(location.href);
       const numberParam = name => route.searchParams.has(name) ? Number(route.searchParams.get(name)) : null;
       const directRouteRequestedControls = {
@@ -411,6 +428,9 @@ async function captureDirectRouteWitness() {
         auditError = error?.message || String(error);
       }
       const final = prototype.debugState();
+      const finalControlSha256 = await canonicalSha256(final.controls);
+      const finalComposition = compositionIdentity(final);
+      const finalCompositionSha256 = await canonicalSha256(finalComposition);
       const rect = prototype.canvasElement()?.getBoundingClientRect?.() || null;
       return {
         identity: 'live-union-direct-route-pre-mutation-v0',
@@ -441,8 +461,14 @@ async function captureDirectRouteWitness() {
           backend: final.backend,
           effectiveRoute: final.effectiveRoute,
         },
-        postLoadControlMutation: false,
-        postLoadCompositionMutation: false,
+        initialControlSha256,
+        finalControlSha256,
+        initialComposition,
+        finalComposition,
+        initialCompositionSha256,
+        finalCompositionSha256,
+        postLoadControlMutation: initialControlSha256 !== finalControlSha256,
+        postLoadCompositionMutation: initialCompositionSha256 !== finalCompositionSha256,
         audit,
         auditError,
         canvasCssRect: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
@@ -455,7 +481,12 @@ async function captureDirectRouteWitness() {
   assert.equal(directRouteReceipt.audit?.ok, true, `direct-route-union-candidate-population-is-zero:${directRouteReceipt.auditError || 'unknown'}`);
   assert.ok(directRouteReceipt.directRouteCandidateCounts?.candidateCount > 0, 'direct-route-union-candidate-population-is-zero');
   assert.equal(directRouteReceipt.directRouteCandidateCounts?.overflowCount, 0, 'direct-route-union-overflow-is-nonzero');
+  assert.equal(directRouteReceipt.postLoadControlMutation, false, 'direct-route-controls-mutated-after-load');
+  assert.equal(directRouteReceipt.postLoadCompositionMutation, false, 'direct-route-composition-mutated-after-load');
   assert.equal(directRouteReceipt.directRouteAppliedPasses?.fallbackReason, null, 'direct-route-union-used-fallback');
+  assert.equal(directRouteReceipt.directRouteAppliedPasses?.splatRasterRequested, true, 'direct-route-splat-raster-was-not-requested');
+  assert.equal(directRouteReceipt.directRouteAppliedPasses?.rendererIdentity, RENDERER, 'direct-route-union-renderer-identity-drifted');
+  assert.equal(directRouteReceipt.directRouteAppliedPasses?.selectiveHeadLivePassReceipt?.raymarchApplied, true, 'direct-route-raymarch-pass-was-not-applied');
   assert.equal(directRouteReceipt.directRouteAppliedPasses?.selectiveHeadLivePassReceipt?.splatApplied, true, 'direct-route-splat-pass-was-not-applied');
 
   failurePhase = 'direct-route-visible-canvas-capture';
