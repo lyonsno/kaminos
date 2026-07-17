@@ -17,6 +17,7 @@ for (const token of [
   'selectiveHeadLivePassReceipt',
   'splatApplied',
   'directRouteSourceMaturity',
+  'private-source-control-coordination-ref',
 ]) {
   assert.match(witness, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `direct-route witness must preserve ${token}`);
 }

@@ -480,6 +480,13 @@ async function captureDirectRouteWitness() {
     requestedUrl,
     requestedMode: MODE,
     directRouteAuthority: 'exact-url-no-post-load-mutation-v0',
+    source: {
+      commit: gitValue(['rev-parse', 'HEAD']),
+      branch: null,
+      branchAuthority: 'private-source-control-coordination-ref',
+      worktree: null,
+      worktreeAuthority: 'private-source-control-coordination-ref',
+    },
     directRouteReceipt,
     pixels,
     screenshot: artifact(screenshotPath),
