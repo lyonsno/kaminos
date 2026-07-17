@@ -29,6 +29,7 @@ const DEFAULTS = Object.freeze({
   buildWarmupSamples: 1,
   buildSteadySamples: 4,
   scaleFactors: [1, 2, 4],
+  workloadDimensions: [[3456, 2234]],
   scaleDispatchRepeats: 16,
   scaleWarmupSamples: 1,
   scaleSteadySamples: 7,
@@ -80,6 +81,19 @@ function queryConfig() {
   for (let index = 1; index < scaleFactors.length; index += 1) {
     if (!(scaleFactors[index] > scaleFactors[index - 1])) throw new Error('scale_factors must be strictly increasing');
   }
+  const workloadDimensions = (params.get('workload_dimensions') || DEFAULTS.workloadDimensions.map(([width, height]) => `${width}x${height}`).join(','))
+    .split(',')
+    .filter(Boolean)
+    .map(value => {
+      const match = /^(\d+)x(\d+)$/.exec(value.trim());
+      if (!match) throw new Error('workload_dimensions must contain WIDTHxHEIGHT values');
+      const width = Number(match[1]);
+      const height = Number(match[2]);
+      if (!Number.isInteger(width) || width <= 0 || !Number.isInteger(height) || height <= 0) {
+        throw new Error('workload_dimensions must contain positive integer dimensions');
+      }
+      return [width, height];
+    });
   const config = {
     matchedReport: params.get('matched_report') || DEFAULTS.matchedReport,
     fitReport: params.get('fit_report') || DEFAULTS.fitReport,
@@ -94,6 +108,7 @@ function queryConfig() {
     buildWarmupSamples: integer('build_warmup_samples', DEFAULTS.buildWarmupSamples),
     buildSteadySamples: integer('build_steady_samples', DEFAULTS.buildSteadySamples),
     scaleFactors,
+    workloadDimensions,
     scaleDispatchRepeats: integer('scale_dispatch_repeats', DEFAULTS.scaleDispatchRepeats),
     scaleWarmupSamples: integer('scale_warmup_samples', DEFAULTS.scaleWarmupSamples),
     scaleSteadySamples: integer('scale_steady_samples', DEFAULTS.scaleSteadySamples),
@@ -598,6 +613,17 @@ function inspectProductionVolumeSource(bytes) {
   };
 }
 
+function resolveWorkloadDimensions(config, baseWidth, baseHeight) {
+  const dimensions = config.scaleFactors.map(scaleFactor => ({
+    scaleFactor,
+    width: Math.max(1, Math.round(baseWidth * scaleFactor)),
+    height: Math.max(1, Math.round(baseHeight * scaleFactor)),
+  }));
+  for (const [width, height] of config.workloadDimensions) dimensions.push({ scaleFactor: null, width, height });
+  const unique = new Map(dimensions.map(row => [`${row.width}x${row.height}`, row]));
+  return [...unique.values()].sort((left, right) => left.width * left.height - right.width * right.height);
+}
+
 async function profileScaleLawWorkloads(device, {
   config,
   baseWidth,
@@ -619,9 +645,7 @@ async function profileScaleLawWorkloads(device, {
   storageCopy,
 }) {
   const workloads = [];
-  for (const scaleFactor of config.scaleFactors) {
-    const width = Math.max(1, Math.round(baseWidth * scaleFactor));
-    const height = Math.max(1, Math.round(baseHeight * scaleFactor));
+  for (const { scaleFactor, width, height } of resolveWorkloadDimensions(config, baseWidth, baseHeight)) {
     const pixelCount = width * height;
     const rays = buildRays(camera, width, height, minimum, maximum);
     const workload = summarizeRayWorkload(rays, grid, samplesPerCell, minimum, maximum);
@@ -835,8 +859,15 @@ async function run() {
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
   if (!adapter) throw new Error('WebGPU adapter unavailable');
   if (!adapter.features.has('timestamp-query')) throw new Error('timestamp-query-not-supported');
+  const workloadDimensions = resolveWorkloadDimensions(config, width, height);
+  const largestRayBufferBytes = Math.max(...workloadDimensions.map(row => row.width * row.height * 8 * Float32Array.BYTES_PER_ELEMENT));
+  const largestOutputBufferBytes = Math.max(...workloadDimensions.map(row => row.width * row.height * Float32Array.BYTES_PER_ELEMENT));
+  const largestRequiredBufferBytes = Math.max(source.byteLength, largestRayBufferBytes, largestOutputBufferBytes);
+  if (adapter.limits.maxStorageBufferBindingSize < largestRayBufferBytes) throw new Error('Retina ray buffer exceeds maxStorageBufferBindingSize');
+  if (adapter.limits.maxBufferSize < largestRequiredBufferBytes) throw new Error('Retina workload exceeds maxBufferSize');
   const requiredLimits = {};
-  if (adapter.limits.maxStorageBufferBindingSize >= source.byteLength) requiredLimits.maxStorageBufferBindingSize = source.byteLength;
+  requiredLimits.maxStorageBufferBindingSize = largestRayBufferBytes;
+  requiredLimits.maxBufferSize = largestRequiredBufferBytes;
   const device = await adapter.requestDevice({ requiredFeatures: ['timestamp-query'], requiredLimits });
   const adapterInfo = adapter.info ? { ...adapter.info } : {};
   const adapterText = JSON.stringify(adapterInfo).toLowerCase();
@@ -1172,6 +1203,14 @@ async function run() {
       status: 'passed',
       requested: {
         scaleFactors: config.scaleFactors,
+        workloadDimensions: config.workloadDimensions,
+        displayResolution: {
+          width: 3456,
+          height: 2234,
+          pixelCount: 3456 * 2234,
+          authority: 'system-profiler-liquid-retina-xdr-device-pixels-v0',
+          hiddenResolutionCapApplied: false,
+        },
         dispatchRepeats: config.scaleDispatchRepeats,
         warmupSamples: config.scaleWarmupSamples,
         steadySamples: config.scaleSteadySamples,

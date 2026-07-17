@@ -326,6 +326,23 @@ export function validateAdaptiveVolumeScaleLawReport(report) {
       }
     }
   }
+  const displayResolution = scaleLaw?.requested?.displayResolution;
+  if (displayResolution != null) {
+    const displayWidth = Number(displayResolution?.width);
+    const displayHeight = Number(displayResolution?.height);
+    const displayPixels = Number(displayResolution?.pixelCount);
+    if (displayResolution?.authority !== 'system-profiler-liquid-retina-xdr-device-pixels-v0') reasons.push('display-resolution-authority-mismatch');
+    if (displayResolution?.hiddenResolutionCapApplied !== false) reasons.push('display-resolution-hidden-cap');
+    if (displayWidth !== 3456 || displayHeight !== 2234 || displayPixels !== displayWidth * displayHeight) reasons.push('display-resolution-identity-mismatch');
+    const finalWorkload = Array.isArray(workloads) ? workloads.at(-1) : null;
+    if (Number(finalWorkload?.width) !== displayWidth
+      || Number(finalWorkload?.height) !== displayHeight
+      || Number(finalWorkload?.pixelCount) !== displayPixels
+      || !(Number(finalWorkload?.intersectingRayCount) > 0)
+      || !(Number(finalWorkload?.denseStepCount) >= Number(finalWorkload?.intersectingRayCount))) {
+      reasons.push('display-resolution-workload-mismatch');
+    }
+  }
   if (Number(report?.compactProduct?.selectedBrickCount) === Number(report?.effective?.physicalBrickCount)
     && Array.isArray(workloads)
     && workloads.some(workload => Number(workload?.comparison?.maximumAbsoluteError) > FULL_SELECTION_AGAINST_DENSE_MAXIMUM_ABSOLUTE_ERROR)) {

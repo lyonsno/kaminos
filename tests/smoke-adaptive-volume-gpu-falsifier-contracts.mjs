@@ -218,6 +218,32 @@ validScaleReport.scaleLaw = {
 };
 assert.equal(validateAdaptiveVolumeScaleLawReport(validScaleReport).scaleLawEvidenceAllowed, true);
 
+const validRetinaScaleReport = structuredClone(validScaleReport);
+validRetinaScaleReport.scaleLaw.requested.displayResolution = {
+  width: 3456,
+  height: 2234,
+  pixelCount: 7_720_704,
+  authority: 'system-profiler-liquid-retina-xdr-device-pixels-v0',
+  hiddenResolutionCapApplied: false,
+};
+validRetinaScaleReport.scaleLaw.effective.workloads.push(scaleWorkload(3456, 2234, 48, 39));
+assert.equal(validateAdaptiveVolumeScaleLawReport(validRetinaScaleReport).scaleLawEvidenceAllowed, true);
+
+for (const mutate of [
+  report => { report.scaleLaw.effective.workloads.at(-1).width = 3455; },
+  report => { report.scaleLaw.requested.displayResolution.authority = 'browser-css-pixels'; },
+  report => { report.scaleLaw.requested.displayResolution.hiddenResolutionCapApplied = true; },
+  report => { report.scaleLaw.effective.workloads.at(-1).intersectingRayCount = 0; },
+]) {
+  const report = structuredClone(validRetinaScaleReport);
+  mutate(report);
+  assert.equal(
+    validateAdaptiveVolumeScaleLawReport(report).scaleLawEvidenceAllowed,
+    false,
+    'Retina evidence must bind exact device pixels and nonempty volume work',
+  );
+}
+
 const truncatedSourceDigest = structuredClone(validScaleReport);
 truncatedSourceDigest.source.matchedReportSha256 = 'sha256:a';
 assert.equal(
@@ -395,6 +421,9 @@ assert.match(browser, /ceil\(midpointExitDistance \/ fineStep\)/, 'coarse jumps 
 assert.match(browser, /absoluteErrorQuantiles/, 'R8b must distinguish a broad reconstruction failure from an extreme-value tail');
 assert.match(browser, /aboveErrorLimitCount/, 'R8b must report how many pixels violate the immutable max-error gate');
 assert.match(browser, /renderScaleLawSummary/, 'R8b screenshot must expose role-labeled scale timing and error rows');
+assert.match(browser, /3456[^\n]+2234/, 'R9 must include the built-in Liquid Retina XDR device-pixel workload');
+assert.match(browser, /workload_dimensions/, 'R9 must accept explicit workload dimensions instead of assuming one aspect-ratio scale');
+assert.match(browser, /maxStorageBufferBindingSize[^\n]+largestRayBufferBytes/, 'R9 must request enough storage binding capacity for the uncapped Retina ray buffer');
 const html = readFileSync(new URL('../smoke-adaptive-volume-gpu-falsifier.html', import.meta.url), 'utf8');
 assert.match(html, /id="scale-law-summary"/, 'R8b screenshot needs a bounded scale-law context surface');
 const moduleSource = readFileSync(new URL('../smoke-adaptive-volume-gpu-falsifier.mjs', import.meta.url), 'utf8');
