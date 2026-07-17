@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>State 120 Expanded Union Footprint Oracle</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #080a0d;
+      --surface: #11151a;
+      --surface-raised: #181d23;
+      --line: #303844;
+      --text: #f4f6f8;
+      --muted: #9aa6b2;
+      --warm: #ffad42;
+      --cool: #66c7ff;
+      --good: #74d99f;
+      --bad: #ff7070;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); }
+    body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing: 0; }
+    button, input { font: inherit; letter-spacing: 0; }
+    button:focus-visible, input:focus-visible { outline: 2px solid var(--cool); outline-offset: 2px; }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      min-height: 68px;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--line);
+      background: #0c0f13;
+    }
+    h1 { margin: 0; font-size: 18px; font-weight: 680; }
+    .subtitle { margin-top: 3px; color: var(--muted); font-size: 12px; }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 190px;
+      justify-content: flex-end;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--warm); }
+    .status[data-evidence-status="verified"] { color: var(--good); }
+    .status[data-evidence-status="verified"]::before { background: var(--good); }
+    .status[data-evidence-status="failed"] { color: var(--bad); }
+    .status[data-evidence-status="failed"]::before { background: var(--bad); }
+
+    .controls {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto minmax(180px, .55fr);
+      align-items: end;
+      gap: 20px;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .control label, .control-label { display: block; margin-bottom: 7px; color: var(--muted); font-size: 11px; font-weight: 650; text-transform: uppercase; }
+    .range-row { display: grid; grid-template-columns: 1fr 44px; align-items: center; gap: 12px; }
+    input[type="range"] { width: 100%; accent-color: var(--warm); }
+    output { color: var(--text); font-variant-numeric: tabular-nums; text-align: right; }
+    .segments { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+    .segments button {
+      min-height: 34px;
+      padding: 0 12px;
+      border: 0;
+      border-right: 1px solid var(--line);
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .segments button:last-child { border-right: 0; }
+    .segments button[aria-pressed="true"] { background: var(--surface-raised); color: var(--text); box-shadow: inset 0 -2px var(--warm); }
+
+    main { padding: 16px 20px 24px; }
+    .visual-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    figure { margin: 0; min-width: 0; border: 1px solid var(--line); background: #000; }
+    figcaption {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 38px;
+      padding: 7px 10px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+      font-size: 12px;
+      font-weight: 620;
+    }
+    .metric { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 480; }
+    .frame {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 314 / 242;
+      overflow: hidden;
+      background: #000;
+    }
+    .frame img { display: block; position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; image-rendering: auto; }
+    .wipe-top { clip-path: inset(0 calc(100% - var(--wipe)) 0 0); }
+    .wipe-line { position: absolute; z-index: 3; top: 0; bottom: 0; left: var(--wipe); width: 1px; background: rgba(255,255,255,.8); pointer-events: none; }
+    .wipe-label { position: absolute; z-index: 4; top: 8px; padding: 4px 6px; background: rgba(8,10,13,.86); font-size: 10px; pointer-events: none; }
+    .wipe-label.left { left: 8px; color: var(--cool); }
+    .wipe-label.right { right: 8px; color: var(--warm); }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      border-top: 1px solid var(--line);
+      border-left: 1px solid var(--line);
+      margin-top: 16px;
+    }
+    .stat { min-height: 76px; padding: 12px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--surface); }
+    .stat-label { color: var(--muted); font-size: 10px; font-weight: 650; text-transform: uppercase; }
+    .stat-value { margin-top: 8px; font-size: 18px; font-weight: 680; font-variant-numeric: tabular-nums; }
+    .stat-value.good { color: var(--good); }
+    .stat-detail { margin-top: 4px; color: var(--muted); font-size: 11px; }
+
+    .failure { display: none; margin: 16px 20px; padding: 14px; border: 1px solid var(--bad); color: var(--bad); background: #231012; white-space: pre-wrap; }
+    body.failed .failure { display: block; }
+    body.failed main, body.failed .controls { display: none; }
+
+    @media (max-width: 840px) {
+      header { align-items: flex-start; }
+      .controls { grid-template-columns: 1fr; align-items: stretch; }
+      .segments { display: grid; grid-template-columns: repeat(3, 1fr); }
+      .visual-grid { grid-template-columns: 1fr; }
+      .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 480px) {
+      header { padding: 12px; gap: 8px; }
+      .status { min-width: 0; }
+      .controls, main { padding-left: 12px; padding-right: 12px; }
+      .segments button { padding: 0 7px; font-size: 11px; }
+      .summary { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>State 120 Expanded Union Footprint Oracle</h1>
+      <div class="subtitle">1,899,742 candidates | exact local coefficients | 21-camera orbit</div>
+    </div>
+    <div id="evidenceStatus" class="status" data-evidence-status="loading">Loading receipts</div>
+  </header>
+
+  <div id="failure" class="failure" role="alert">Evidence unavailable:</div>
+
+  <section class="controls" aria-label="Comparison controls">
+    <div class="control">
+      <label for="camera">Camera</label>
+      <div class="range-row">
+        <input id="camera" type="range" min="0" max="20" step="1" value="10">
+        <output id="cameraValue" for="camera">10</output>
+      </div>
+    </div>
+    <div>
+      <span class="control-label">Wipe treatment</span>
+      <div id="treatments" class="segments">
+        <button type="button" data-treatment="nearest" aria-pressed="false">Nearest</button>
+        <button type="button" data-treatment="bilinear" aria-pressed="false">Bilinear</button>
+        <button type="button" data-treatment="ellipse" aria-pressed="true">Ellipse</button>
+      </div>
+    </div>
+    <div class="control">
+      <label for="wipe">Target wipe</label>
+      <div class="range-row">
+        <input id="wipe" type="range" min="0" max="100" step="1" value="50">
+        <output id="wipeValue" for="wipe">50%</output>
+      </div>
+    </div>
+  </section>
+
+  <main>
+    <section class="visual-grid" aria-label="Aligned treatment images">
+      <figure>
+        <figcaption><span>Exact raymarch target</span><span class="metric" id="targetLuma"></span></figcaption>
+        <div class="frame"><img id="targetImage" alt="Exact shared-transmittance target"></div>
+      </figure>
+      <figure>
+        <figcaption><span>Nearest projection</span><span class="metric" id="nearestMetric"></span></figcaption>
+        <div class="frame"><img id="nearestImage" alt="Nearest projected footprint"></div>
+      </figure>
+      <figure>
+        <figcaption><span>Flow tangent bilinear</span><span class="metric" id="bilinearMetric"></span></figcaption>
+        <div class="frame"><img id="bilinearImage" alt="Flow tangent five-tap bilinear footprint"></div>
+      </figure>
+      <figure>
+        <figcaption><span>Flow oriented ellipse</span><span class="metric" id="ellipseMetric"></span></figcaption>
+        <div class="frame"><img id="ellipseImage" alt="Flow oriented area-conserving ellipse footprint"></div>
+      </figure>
+      <figure style="grid-column: 1 / -1">
+        <figcaption><span>Target wipe</span><span class="metric" id="wipeMetric"></span></figcaption>
+        <div id="wipeFrame" class="frame" style="--wipe: 50%">
+          <img id="wipeTreatment" alt="Selected footprint treatment">
+          <img id="wipeTarget" class="wipe-top" alt="Exact target overlay">
+          <span class="wipe-label left">Target</span>
+          <span id="wipeTreatmentLabel" class="wipe-label right">Ellipse</span>
+          <span class="wipe-line"></span>
+        </div>
+      </figure>
+    </section>
+
+    <section class="summary" aria-label="Evidence summary">
+      <div class="stat"><div class="stat-label">Held-out nearest MAE</div><div id="nearestHeld" class="stat-value"></div><div class="stat-detail">20 cameras</div></div>
+      <div class="stat"><div class="stat-label">Held-out bilinear MAE</div><div id="bilinearHeld" class="stat-value"></div><div class="stat-detail">independently refit path scale</div></div>
+      <div class="stat"><div class="stat-label">Held-out ellipse MAE</div><div id="ellipseHeld" class="stat-value good"></div><div class="stat-detail">nearest path scale frozen</div></div>
+      <div class="stat"><div class="stat-label">Ellipse gain vs nearest</div><div id="ellipseGain" class="stat-value good"></div><div id="cameraWins" class="stat-detail"></div></div>
+    </section>
+  </main>
+
+  <script>
+    const reportUrls = {
+      nearest: 'reports/nearest.json',
+      bilinear: 'reports/bilinear.json',
+      ellipse: 'reports/ellipse.json',
+    };
+    const expected = {
+      stateStep: 120,
+      rowCount: 1899742,
+      cameraCount: 21,
+      ellipseJob: 'c5bea0cdd3e1',
+    };
+    const state = { camera: 10, treatment: 'ellipse', wipe: 50, reports: null };
+    const byId = id => document.getElementById(id);
+    const imageUrl = (camera, treatment) => {
+      const cameraId = String(camera).padStart(2, '0');
+      return `images/camera-${cameraId}-${treatment}.png`;
+    };
+    const metric = (report, camera) => report.metrics.cameras.find(row => row.cameraIndex === camera);
+    const fmt = value => Number(value).toFixed(5);
+    const pct = value => `${Number(value).toFixed(2)}%`;
+
+    function assertEvidence(reports, receipt) {
+      for (const [name, report] of Object.entries(reports)) {
+        if (report.status !== 'complete') throw new Error(`${name} report is not complete`);
+        if (report.effective.stateStep !== expected.stateStep) throw new Error(`${name} state mismatch`);
+        if (report.effective.rowCount !== expected.rowCount) throw new Error(`${name} population mismatch`);
+        if (report.effective.droppedRowCount !== 0 || report.effective.sampleCap !== null) throw new Error(`${name} output is capped or partial`);
+        if (report.metrics.cameras.length !== expected.cameraCount) throw new Error(`${name} orbit is incomplete`);
+      }
+      if (reports.ellipse.effective.pathScale !== reports.nearest.calibration.pathScale) throw new Error('ellipse optical path scale was not frozen to nearest');
+      if (receipt.status !== 'done' || receipt.job_id !== expected.ellipseJob || receipt.exit_code !== 0) throw new Error('ellipse Greenroom receipt is incomplete or wrong');
+    }
+
+    function render() {
+      if (!state.reports) return;
+      const camera = state.camera;
+      for (const treatment of ['target', 'nearest', 'bilinear', 'ellipse']) {
+        byId(`${treatment}Image`).src = imageUrl(camera, treatment);
+      }
+      byId('wipeTreatment').src = imageUrl(camera, state.treatment);
+      byId('wipeTarget').src = imageUrl(camera, 'target');
+      byId('wipeFrame').style.setProperty('--wipe', `${state.wipe}%`);
+      byId('wipeTreatmentLabel').textContent = state.treatment[0].toUpperCase() + state.treatment.slice(1);
+      byId('cameraValue').textContent = String(camera).padStart(2, '0');
+      byId('wipeValue').textContent = `${state.wipe}%`;
+
+      const rows = Object.fromEntries(Object.entries(state.reports).map(([name, report]) => [name, metric(report, camera)]));
+      byId('targetLuma').textContent = `mean luma ${fmt(rows.ellipse.expanded.targetMeanLuma)}`;
+      for (const treatment of ['nearest', 'bilinear', 'ellipse']) {
+        byId(`${treatment}Metric`).textContent = `MAE ${fmt(rows[treatment].expanded.mae)}`;
+      }
+      byId('wipeMetric').textContent = `${state.treatment} MAE ${fmt(rows[state.treatment].expanded.mae)}`;
+    }
+
+    function renderSummary() {
+      const held = Object.fromEntries(Object.entries(state.reports).map(([name, report]) => [name, report.metrics.heldOutMean.expandedMae]));
+      byId('nearestHeld').textContent = fmt(held.nearest);
+      byId('bilinearHeld').textContent = fmt(held.bilinear);
+      byId('ellipseHeld').textContent = fmt(held.ellipse);
+      byId('ellipseGain').textContent = pct((held.nearest - held.ellipse) / held.nearest * 100);
+      const heldCameras = state.reports.ellipse.metrics.cameras.filter(row => row.split === 'heldOut');
+      const wins = heldCameras.filter(row => row.expanded.mae < metric(state.reports.nearest, row.cameraIndex).expanded.mae).length;
+      byId('cameraWins').textContent = `${wins}/${heldCameras.length} held-out cameras improved`;
+    }
+
+    async function loadEvidence() {
+      try {
+        const [nearest, bilinear, ellipse, receipt] = await Promise.all([
+          fetch(reportUrls.nearest).then(response => response.ok ? response.json() : Promise.reject(new Error(`nearest report HTTP ${response.status}`))),
+          fetch(reportUrls.bilinear).then(response => response.ok ? response.json() : Promise.reject(new Error(`bilinear report HTTP ${response.status}`))),
+          fetch(reportUrls.ellipse).then(response => response.ok ? response.json() : Promise.reject(new Error(`ellipse report HTTP ${response.status}`))),
+          fetch('receipts/greenroom-ellipse.json').then(response => response.ok ? response.json() : Promise.reject(new Error(`Greenroom receipt HTTP ${response.status}`))),
+        ]);
+        state.reports = { nearest, bilinear, ellipse };
+        assertEvidence(state.reports, receipt);
+        renderSummary();
+        render();
+        const status = byId('evidenceStatus');
+        status.dataset.evidenceStatus = 'verified';
+        status.textContent = 'Receipts verified';
+      } catch (error) {
+        document.body.classList.add('failed');
+        const status = byId('evidenceStatus');
+        status.dataset.evidenceStatus = 'failed';
+        status.textContent = 'Evidence failed';
+        byId('failure').textContent = `Evidence unavailable: ${error.message}`;
+      }
+    }
+
+    byId('camera').addEventListener('input', event => { state.camera = Number(event.target.value); render(); });
+    byId('wipe').addEventListener('input', event => { state.wipe = Number(event.target.value); render(); });
+    byId('treatments').addEventListener('click', event => {
+      const button = event.target.closest('button[data-treatment]');
+      if (!button) return;
+      state.treatment = button.dataset.treatment;
+      for (const candidate of byId('treatments').querySelectorAll('button')) candidate.setAttribute('aria-pressed', String(candidate === button));
+      render();
+    });
+    window.addEventListener('keydown', event => {
+      if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+      state.camera = Math.max(0, Math.min(20, state.camera + (event.key === 'ArrowRight' ? 1 : -1)));
+      byId('camera').value = state.camera;
+      render();
+    });
+    loadEvidence();
+  </script>
+</body>
+</html>

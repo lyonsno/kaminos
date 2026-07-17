@@ -1,0 +1,26 @@
+{
+  "job_id": "c5bea0cdd3e1",
+  "job_type": "kaminos_coefficient_ellipse_oracle_state120",
+  "status": "done",
+  "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-layer-coefficient-corpus-r4/training-manifest.json",
+  "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-kneecapper-coefficient-ellipse-state120-r1",
+  "effective_route": "/private/tmp/kaminos-mlx-residual-venv/bin/python volume-layer-coefficient-render-oracle.py --manifest /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-layer-coefficient-corpus-r4/training-manifest.json --capture-report /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-imported-coefficient-orbit-state120-r2/capture-report.json --out-dir /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-kneecapper-coefficient-ellipse-state120-r1 --report /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-kneecapper-coefficient-ellipse-state120-r1/report.json --state-step 120 --depth-bins 96 --footprint-mode ellipse --path-scale 4.467670150820181",
+  "effective_cwd": "/private/tmp/kaminos-pyro-gaussian-footprint-kneecapper-0716",
+  "effective_env": {
+    "PYTHONPATH": "."
+  },
+  "effective_defaults": {
+    "capture_report": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-imported-coefficient-orbit-state120-r2/capture-report.json",
+    "depth_bins": "96",
+    "path_scale": "4.467670150820181",
+    "state_step": "120"
+  },
+  "effective_timeout": null,
+  "ignored_params": null,
+  "started_at": 1784304957.4523,
+  "finished_at": 1784305134.576402,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "warnings": null
+}

@@ -1,0 +1,1098 @@
+{
+  "schema": "kaminos.volume.layer-coefficient-render-oracle.v0",
+  "startedAtUnix": 1784304957.5667121,
+  "finishedAtUnix": 1784305134.5312488,
+  "status": "complete",
+  "failurePhase": null,
+  "requested": {
+    "manifest": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-layer-coefficient-corpus-r4/training-manifest.json",
+    "captureReport": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-imported-coefficient-orbit-state120-r2/capture-report.json",
+    "stateStep": 120,
+    "sampleCap": null,
+    "depthBins": 96,
+    "footprintMode": "ellipse",
+    "pathScale": 4.467670150820181
+  },
+  "effective": {
+    "stateId": "coefficient-state-120",
+    "stateStep": 120,
+    "rowCount": 1899742,
+    "candidateAdmissionAuthority": "external-native-cell-index-list-v0",
+    "coefficientBoundary": "per-sample-pre-tone-map-emission-extinction-v0",
+    "sharedTransmittanceIdentity": "ridge-plus-non-ridge-extinction-one-running-transmittance-v0",
+    "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+    "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+    "sampleCap": null,
+    "droppedRowCount": 0,
+    "footprintMode": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+    "pathScale": 4.467670150820181,
+    "independentlyRenderedToneMappedImageAdditivity": false
+  },
+  "descriptorReceipt": {
+    "socketIdentity": "flow-kernel-local-descriptor-socket-v0",
+    "kernelIdentity": "flow-tangent-positive-symmetric-trilinear-v0",
+    "sourceHashes": {
+      "fluidSha256": "98d1d0650d67fcdf32f2fc7f5c353bac5355f7df01f45d1e0211c51eb02a7620",
+      "frontSha256": "27491552ce2c0294125d35658c3dd47289c91d0d068909c0c244e5167d7c7e35",
+      "boundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216",
+      "majorantSha256": "0b73c83d00b34d7fd2176f3d0709800b5b9a6617f04c736a359c3d30b2d71da1"
+    },
+    "sourceManifestSha256": "2841b79f3ae625bba8b7f36f2b5f7ae40755814b95214a2607a95b3390456483",
+    "indexSha256": "995f195f0079108fd9de2b51c3e011fb758af4c0e3a594c2d24b9dcc5306e9f9",
+    "descriptorSha256": "4cae2517538cf701ac97aad9382f4d150526de8c11e6513c3b98a82d4b5f0122",
+    "requestedControls": {
+      "strength": 0.6,
+      "radiusWorld": 0.018,
+      "coherence": 0.7
+    },
+    "effectiveControls": {
+      "strength": 0.6,
+      "radiusWorld": 0.018,
+      "coherence": 0.7
+    },
+    "runtimeReceipt": {
+      "ok": true,
+      "identity": "external-native-cell-index-list-v0",
+      "status": "applied",
+      "failurePhase": null,
+      "sessionId": "flow-kernel-index-mro8h41h-zpry2g7g",
+      "grid": 160,
+      "count": 1899742,
+      "byteLength": 7598968,
+      "indexSha256": "995f195f0079108fd9de2b51c3e011fb758af4c0e3a594c2d24b9dcc5306e9f9",
+      "duplicatePolicy": "forbidden",
+      "orderIdentity": "caller-ordered",
+      "chunkCount": 8,
+      "routeIdentity": "native-3d-compute-fluid-raymarch-v0",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "backend": "WebGPU:apple"
+    }
+  },
+  "frozenStateBinding": {
+    "sameStateCaptureId": "filament-orbit-f120-s120",
+    "controlsHash": "ba122038332747804203b4d03c6a5e9bf7b1e5969ec5d1f5ef995d3b5adff5b9",
+    "fluidSha256": "98d1d0650d67fcdf32f2fc7f5c353bac5355f7df01f45d1e0211c51eb02a7620",
+    "frontSha256": "27491552ce2c0294125d35658c3dd47289c91d0d068909c0c244e5167d7c7e35",
+    "hashMatch": true
+  },
+  "calibration": {
+    "identity": "caller-frozen-global-optical-path-v0",
+    "cameraIndex": 10,
+    "pathScale": 4.467670150820181,
+    "objective": "native-rgb-mae-to-shared-transmittance-target-v0",
+    "trials": [],
+    "calibrationBoundaryHit": false,
+    "calibrationExpansionCount": 0,
+    "calibrationExpansionDiagnostic": false,
+    "bracketUpper": null
+  },
+  "metrics": {
+    "cameras": [
+      {
+        "cameraIndex": 0,
+        "cameraAngle": -0.42,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.04086441919207573,
+          "mse": 0.004266711883246899,
+          "lumaMae": 0.040717341005802155,
+          "meanLuma": 0.19009794294834137,
+          "targetMeanLuma": 0.19719769060611725
+        },
+        "current": {
+          "mae": 0.0958554670214653,
+          "mse": 0.02986142411828041,
+          "lumaMae": 0.09823746234178543,
+          "meanLuma": 0.1096280962228775,
+          "targetMeanLuma": 0.19719769060611725
+        },
+        "ridgeRidge": {
+          "mae": 0.08354634046554565,
+          "mse": 0.020936941727995872,
+          "lumaMae": 0.08541765809059143,
+          "meanLuma": 0.12013629823923111,
+          "targetMeanLuma": 0.19719769060611725
+        },
+        "ridgeTotal": {
+          "mae": 0.10487564653158188,
+          "mse": 0.031221162527799606,
+          "lumaMae": 0.10959306359291077,
+          "meanLuma": 0.0913284495472908,
+          "targetMeanLuma": 0.19719769060611725
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1724297,
+          "nearDepth": 1.3252747058868408,
+          "farDepth": 3.341144561767578,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "orientation": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false
+        },
+        "meanFinalTransmittance": 0.6557652354240417
+      },
+      {
+        "cameraIndex": 1,
+        "cameraAngle": -0.378,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.041814617812633514,
+          "mse": 0.004418097902089357,
+          "lumaMae": 0.04175841808319092,
+          "meanLuma": 0.18998749554157257,
+          "targetMeanLuma": 0.19863560795783997
+        },
+        "current": {
+          "mae": 0.09714561700820923,
+          "mse": 0.030820857733488083,
+          "lumaMae": 0.09961742907762527,
+          "meanLuma": 0.10935430973768234,
+          "targetMeanLuma": 0.19863560795783997
+        },
+        "ridgeRidge": {
+          "mae": 0.084752656519413,
+          "mse": 0.021815527230501175,
+          "lumaMae": 0.08680430799722672,
+          "meanLuma": 0.11997964978218079,
+          "targetMeanLuma": 0.19863560795783997
+        },
+        "ridgeTotal": {
+          "mae": 0.10632222890853882,
+          "mse": 0.032281991094350815,
+          "lumaMae": 0.11113039404153824,
+          "meanLuma": 0.09134360402822495,
+          "targetMeanLuma": 0.19863560795783997
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1728698,
+          "nearDepth": 1.326470136642456,
+          "farDepth": 3.345355272293091,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "orientation": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false
+        },
+        "meanFinalTransmittance": 0.6558194160461426
+      },
+      {
+        "cameraIndex": 2,
+        "cameraAngle": -0.336,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.042391058057546616,
+          "mse": 0.004539525136351585,
+          "lumaMae": 0.042390547692775726,
+          "meanLuma": 0.1898694783449173,
+          "targetMeanLuma": 0.19944804906845093
+        },
+        "current": {
+          "mae": 0.09772321581840515,
+          "mse": 0.031411245465278625,
+          "lumaMae": 0.10018527507781982,
+          "meanLuma": 0.1091017872095108,
+          "targetMeanLuma": 0.19944804906845093
+        },
+        "ridgeRidge": {
+          "mae": 0.08562549948692322,
+          "mse": 0.02249215543270111,
+          "lumaMae": 0.08767608553171158,
+          "meanLuma": 0.11991697549819946,
+          "targetMeanLuma": 0.19944804906845093
+        },
+        "ridgeTotal": {
+          "mae": 0.10727766901254654,
+          "mse": 0.033028725534677505,
+          "lumaMae": 0.11212050169706345,
+          "meanLuma": 0.0914096012711525,
+          "targetMeanLuma": 0.19944804906845093
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1733385,
+          "nearDepth": 1.3290181159973145,
+          "farDepth": 3.3486475944519043,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "orientation": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false
+        },
+        "meanFinalTransmittance": 0.6558558940887451
+      },
+      {
+        "cameraIndex": 3,
+        "cameraAngle": -0.294,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.042519256472587585,
+          "mse": 0.004576193168759346,
+          "lumaMae": 0.04253075271844864,
+          "meanLuma": 0.18967582285404205,
+          "targetMeanLuma": 0.19985850155353546
+        },
+        "current": {
+          "mae": 0.09806222468614578,
+          "mse": 0.03168145939707756,
+          "lumaMae": 0.10050354897975922,
+          "meanLuma": 0.10886268317699432,
+          "targetMeanLuma": 0.19985850155353546
+        },
+        "ridgeRidge": {
+          "mae": 0.08606493473052979,
+          "mse": 0.022864725440740585,
+          "lumaMae": 0.08811379224061966,
+          "meanLuma": 0.1198827251791954,
+          "targetMeanLuma": 0.19985850155353546
+        },
+        "ridgeTotal": {
+          "mae": 0.10782474279403687,
+          "mse": 0.03340461477637291,
+          "lumaMae": 0.11269469559192657,
+          "meanLuma": 0.09146501868963242,
+          "targetMeanLuma": 0.19985850155353546
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1738459,
+          "nearDepth": 1.3323416709899902,
+          "farDepth": 3.3512604236602783,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "orientation": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false
+        },
+        "meanFinalTransmittance": 0.6558823585510254
+      },
+      {
+        "cameraIndex": 4,
+        "cameraAngle": -0.252,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.04219107702374458,
+          "mse": 0.004482593387365341,
+          "lumaMae": 0.04224342107772827,
+          "meanLuma": 0.18941643834114075,
+          "targetMeanLuma": 0.20007972419261932
+        },
+        "current": {
+          "mae": 0.09822551906108856,
+          "mse": 0.03173857554793358,
+          "lumaMae": 0.10065393894910812,
+          "meanLuma": 0.10860933363437653,
+          "targetMeanLuma": 0.20007972419261932
+        },
+        "ridgeRidge": {
+          "mae": 0.08622350543737411,
+          "mse": 0.0229372289031744,
+          "lumaMae": 0.08827657252550125,
+          "meanLuma": 0.11988759785890579,
+          "targetMeanLuma": 0.20007972419261932
+        },
+        "ridgeTotal": {
+          "mae": 0.10818164050579071,
+          "mse": 0.03354276716709137,
+          "lumaMae": 0.1130424290895462,
+          "meanLuma": 0.09149552881717682,
+          "targetMeanLuma": 0.20007972419261932
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1743863,
+          "nearDepth": 1.33753502368927,
+          "farDepth": 3.354090690612793,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "orientation": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false
+        },
+        "meanFinalTransmittance": 0.6559011340141296
+      },
+      {
+        "cameraIndex": 5,
+        "cameraAngle": -0.21,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.04119028523564339,
+          "mse": 0.004204188473522663,
+          "lumaMae": 0.0412130244076252,
+          "meanLuma": 0.18917597830295563,
+          "targetMeanLuma": 0.20001818239688873
+        },
+        "current": {
+          "mae": 0.09803851693868637,
+          "mse": 0.03146564960479736,
+          "lumaMae": 0.1004369929432869,
+          "meanLuma": 0.10836129635572433,
+          "targetMeanLuma": 0.20001818239688873
+        },
+        "ridgeRidge": {
+          "mae": 0.08581294864416122,
+          "mse": 0.022590290755033493,
+          "lumaMae": 0.08777327835559845,
+          "meanLuma": 0.1200365424156189,
+          "targetMeanLuma": 0.20001818239688873
+        },
+        "ridgeTotal": {
+          "mae": 0.10817340016365051,
+          "mse": 0.033234186470508575,
+          "lumaMae": 0.11299658566713333,
+          "meanLuma": 0.09158875793218613,
+          "targetMeanLuma": 0.20001818239688873
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1749513,
+          "nearDepth": 1.342123031616211,
+          "farDepth": 3.356788396835327,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "orientation": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false
+        },
+        "meanFinalTransmittance": 0.6559035778045654
+      },
+      {
+        "cameraIndex": 6,
+        "cameraAngle": -0.168,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.03961658850312233,
+          "mse": 0.003847283311188221,
+          "lumaMae": 0.039543990045785904,
+          "meanLuma": 0.18889406323432922,
+          "targetMeanLuma": 0.1997811198234558
+        },
+        "current": {
+          "mae": 0.09780285507440567,
+          "mse": 0.031157290562987328,
+          "lumaMae": 0.1001974493265152,
+          "meanLuma": 0.10820712894201279,
+          "targetMeanLuma": 0.1997811198234558
+        },
+        "ridgeRidge": {
+          "mae": 0.08521129935979843,
+          "mse": 0.02218121476471424,
+          "lumaMae": 0.08696846663951874,
+          "meanLuma": 0.12014661729335785,
+          "targetMeanLuma": 0.1997811198234558
+        },
+        "ridgeTotal": {
+          "mae": 0.10785533487796783,
+          "mse": 0.03275363892316818,
+          "lumaMae": 0.11262444406747818,
+          "meanLuma": 0.09169364720582962,
+          "targetMeanLuma": 0.1997811198234558
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1755402,
+          "nearDepth": 1.3459011316299438,
+          "farDepth": 3.358262777328491,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "orientation": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false
+        },
+        "meanFinalTransmittance": 0.6559238433837891
+      },
+      {
+        "cameraIndex": 7,
+        "cameraAngle": -0.126,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.037584710866212845,
+          "mse": 0.003455535974353552,
+          "lumaMae": 0.037391383200883865,
+          "meanLuma": 0.18859533965587616,
+          "targetMeanLuma": 0.1991971880197525
+        },
+        "current": {
+          "mae": 0.09729411453008652,
+          "mse": 0.030729465186595917,
+          "lumaMae": 0.0996098667383194,
+          "meanLuma": 0.10793710500001907,
+          "targetMeanLuma": 0.1991971880197525
+        },
+        "ridgeRidge": {
+          "mae": 0.08463949710130692,
+          "mse": 0.021651320159435272,
+          "lumaMae": 0.08619382977485657,
+          "meanLuma": 0.12027085572481155,
+          "targetMeanLuma": 0.1991971880197525
+        },
+        "ridgeTotal": {
+          "mae": 0.10736037790775299,
+          "mse": 0.0320526584982872,
+          "lumaMae": 0.11197330057621002,
+          "meanLuma": 0.09181591868400574,
+          "targetMeanLuma": 0.1991971880197525
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1761505,
+          "nearDepth": 1.3493596315383911,
+          "farDepth": 3.358963966369629,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "orientation": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false
+        },
+        "meanFinalTransmittance": 0.6559970378875732
+      },
+      {
+        "cameraIndex": 8,
+        "cameraAngle": -0.084,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.035451021045446396,
+          "mse": 0.0030798024963587523,
+          "lumaMae": 0.03510025516152382,
+          "meanLuma": 0.18832513689994812,
+          "targetMeanLuma": 0.19833216071128845
+        },
+        "current": {
+          "mae": 0.09715184569358826,
+          "mse": 0.030547060072422028,
+          "lumaMae": 0.09936454147100449,
+          "meanLuma": 0.10763349384069443,
+          "targetMeanLuma": 0.19833216071128845
+        },
+        "ridgeRidge": {
+          "mae": 0.08403367549180984,
+          "mse": 0.02124597877264023,
+          "lumaMae": 0.08537299931049347,
+          "meanLuma": 0.12033679336309433,
+          "targetMeanLuma": 0.19833216071128845
+        },
+        "ridgeTotal": {
+          "mae": 0.10660335421562195,
+          "mse": 0.03141893818974495,
+          "lumaMae": 0.11105747520923615,
+          "meanLuma": 0.09189189225435257,
+          "targetMeanLuma": 0.19833216071128845
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1767587,
+          "nearDepth": 1.3540103435516357,
+          "farDepth": 3.3585760593414307,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "orientation": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false
+        },
+        "meanFinalTransmittance": 0.6561538577079773
+      },
+      {
+        "cameraIndex": 9,
+        "cameraAngle": -0.042,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.03330780565738678,
+          "mse": 0.0027544894255697727,
+          "lumaMae": 0.032737553119659424,
+          "meanLuma": 0.18798477947711945,
+          "targetMeanLuma": 0.1969500482082367
+        },
+        "current": {
+          "mae": 0.09683006256818771,
+          "mse": 0.030383523553609848,
+          "lumaMae": 0.09893957525491714,
+          "meanLuma": 0.10720335692167282,
+          "targetMeanLuma": 0.1969500482082367
+        },
+        "ridgeRidge": {
+          "mae": 0.0832149088382721,
+          "mse": 0.020803632214665413,
+          "lumaMae": 0.08421614021062851,
+          "meanLuma": 0.12038332968950272,
+          "targetMeanLuma": 0.1969500482082367
+        },
+        "ridgeTotal": {
+          "mae": 0.10537205636501312,
+          "mse": 0.030672000721096992,
+          "lumaMae": 0.10961474478244781,
+          "meanLuma": 0.09192775934934616,
+          "targetMeanLuma": 0.1969500482082367
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1773507,
+          "nearDepth": 1.3592523336410522,
+          "farDepth": 3.3575360774993896,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "orientation": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false
+        },
+        "meanFinalTransmittance": 0.6564525365829468
+      },
+      {
+        "cameraIndex": 10,
+        "cameraAngle": 0.0,
+        "split": "calibration",
+        "expanded": {
+          "mae": 0.03153788298368454,
+          "mse": 0.0025156792253255844,
+          "lumaMae": 0.030773181468248367,
+          "meanLuma": 0.1875489056110382,
+          "targetMeanLuma": 0.19482989609241486
+        },
+        "current": {
+          "mae": 0.09580127894878387,
+          "mse": 0.029929494485259056,
+          "lumaMae": 0.09765975922346115,
+          "meanLuma": 0.10683651268482208,
+          "targetMeanLuma": 0.19482989609241486
+        },
+        "ridgeRidge": {
+          "mae": 0.08192362636327744,
+          "mse": 0.020192144438624382,
+          "lumaMae": 0.08248895406723022,
+          "meanLuma": 0.12032986432313919,
+          "targetMeanLuma": 0.19482989609241486
+        },
+        "ridgeTotal": {
+          "mae": 0.10359543561935425,
+          "mse": 0.0297265462577343,
+          "lumaMae": 0.1075996607542038,
+          "meanLuma": 0.09186676144599915,
+          "targetMeanLuma": 0.19482989609241486
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1778738,
+          "nearDepth": 1.364598274230957,
+          "farDepth": 3.355426549911499,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "orientation": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false
+        },
+        "meanFinalTransmittance": 0.6568703651428223
+      },
+      {
+        "cameraIndex": 11,
+        "cameraAngle": 0.042,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.030462929978966713,
+          "mse": 0.002388045657426119,
+          "lumaMae": 0.02949313074350357,
+          "meanLuma": 0.18703505396842957,
+          "targetMeanLuma": 0.19223961234092712
+        },
+        "current": {
+          "mae": 0.0944206565618515,
+          "mse": 0.029210165143013,
+          "lumaMae": 0.09621366858482361,
+          "meanLuma": 0.1063881441950798,
+          "targetMeanLuma": 0.19223961234092712
+        },
+        "ridgeRidge": {
+          "mae": 0.08019934594631195,
+          "mse": 0.019427280873060226,
+          "lumaMae": 0.0803750529885292,
+          "meanLuma": 0.12018941342830658,
+          "targetMeanLuma": 0.19223961234092712
+        },
+        "ridgeTotal": {
+          "mae": 0.10136965662240982,
+          "mse": 0.028606433421373367,
+          "lumaMae": 0.10517405718564987,
+          "meanLuma": 0.09174367785453796,
+          "targetMeanLuma": 0.19223961234092712
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1782332,
+          "nearDepth": 1.3701984882354736,
+          "farDepth": 3.351924419403076,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "orientation": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false
+        },
+        "meanFinalTransmittance": 0.6575002074241638
+      },
+      {
+        "cameraIndex": 12,
+        "cameraAngle": 0.084,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.029601335525512695,
+          "mse": 0.0023016128689050674,
+          "lumaMae": 0.028481779620051384,
+          "meanLuma": 0.18651369214057922,
+          "targetMeanLuma": 0.1896449476480484
+        },
+        "current": {
+          "mae": 0.09308358281850815,
+          "mse": 0.028613194823265076,
+          "lumaMae": 0.09481552243232727,
+          "meanLuma": 0.10590701550245285,
+          "targetMeanLuma": 0.1896449476480484
+        },
+        "ridgeRidge": {
+          "mae": 0.07835739105939865,
+          "mse": 0.018678272143006325,
+          "lumaMae": 0.07832134515047073,
+          "meanLuma": 0.1200675442814827,
+          "targetMeanLuma": 0.1896449476480484
+        },
+        "ridgeTotal": {
+          "mae": 0.09911142289638519,
+          "mse": 0.02759482152760029,
+          "lumaMae": 0.10278182476758957,
+          "meanLuma": 0.09161163866519928,
+          "targetMeanLuma": 0.1896449476480484
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1783991,
+          "nearDepth": 1.376676321029663,
+          "farDepth": 3.3474762439727783,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "orientation": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false
+        },
+        "meanFinalTransmittance": 0.6582554578781128
+      },
+      {
+        "cameraIndex": 13,
+        "cameraAngle": 0.126,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.028916744515299797,
+          "mse": 0.002238800283521414,
+          "lumaMae": 0.027640433982014656,
+          "meanLuma": 0.1859237104654312,
+          "targetMeanLuma": 0.18731717765331268
+        },
+        "current": {
+          "mae": 0.09220355749130249,
+          "mse": 0.028177132830023766,
+          "lumaMae": 0.09385353326797485,
+          "meanLuma": 0.1054808497428894,
+          "targetMeanLuma": 0.18731717765331268
+        },
+        "ridgeRidge": {
+          "mae": 0.07677710801362991,
+          "mse": 0.01805962063372135,
+          "lumaMae": 0.07647654414176941,
+          "meanLuma": 0.11984265595674515,
+          "targetMeanLuma": 0.18731717765331268
+        },
+        "ridgeTotal": {
+          "mae": 0.09713619947433472,
+          "mse": 0.026735354214906693,
+          "lumaMae": 0.10064560920000076,
+          "meanLuma": 0.09140307456254959,
+          "targetMeanLuma": 0.18731717765331268
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1785545,
+          "nearDepth": 1.3848398923873901,
+          "farDepth": 3.3426358699798584,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "orientation": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false
+        },
+        "meanFinalTransmittance": 0.6590460538864136
+      },
+      {
+        "cameraIndex": 14,
+        "cameraAngle": 0.168,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.028316201642155647,
+          "mse": 0.0021880122367292643,
+          "lumaMae": 0.02694116346538067,
+          "meanLuma": 0.1852671205997467,
+          "targetMeanLuma": 0.1851930022239685
+        },
+        "current": {
+          "mae": 0.09158104658126831,
+          "mse": 0.0278927031904459,
+          "lumaMae": 0.09316723048686981,
+          "meanLuma": 0.10505673289299011,
+          "targetMeanLuma": 0.1851930022239685
+        },
+        "ridgeRidge": {
+          "mae": 0.07552127540111542,
+          "mse": 0.017568141222000122,
+          "lumaMae": 0.07504670321941376,
+          "meanLuma": 0.11946526914834976,
+          "targetMeanLuma": 0.1851930022239685
+        },
+        "ridgeTotal": {
+          "mae": 0.09545604884624481,
+          "mse": 0.025973163545131683,
+          "lumaMae": 0.09884617477655411,
+          "meanLuma": 0.09112569689750671,
+          "targetMeanLuma": 0.1851930022239685
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1787072,
+          "nearDepth": 1.3939889669418335,
+          "farDepth": 3.3363590240478516,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "orientation": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false
+        },
+        "meanFinalTransmittance": 0.6598294377326965
+      },
+      {
+        "cameraIndex": 15,
+        "cameraAngle": 0.21,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.02783661149442196,
+          "mse": 0.002150555606931448,
+          "lumaMae": 0.026389870792627335,
+          "meanLuma": 0.1846533566713333,
+          "targetMeanLuma": 0.18332871794700623
+        },
+        "current": {
+          "mae": 0.09098726511001587,
+          "mse": 0.027651485055685043,
+          "lumaMae": 0.09243705868721008,
+          "meanLuma": 0.10471782088279724,
+          "targetMeanLuma": 0.18332871794700623
+        },
+        "ridgeRidge": {
+          "mae": 0.07442118227481842,
+          "mse": 0.01716737635433674,
+          "lumaMae": 0.0738016739487648,
+          "meanLuma": 0.11914383620023727,
+          "targetMeanLuma": 0.18332871794700623
+        },
+        "ridgeTotal": {
+          "mae": 0.09381081163883209,
+          "mse": 0.025273675099015236,
+          "lumaMae": 0.09707209467887878,
+          "meanLuma": 0.09092294424772263,
+          "targetMeanLuma": 0.18332871794700623
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1788588,
+          "nearDepth": 1.40484619140625,
+          "farDepth": 3.3292295932769775,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "orientation": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false
+        },
+        "meanFinalTransmittance": 0.660602867603302
+      },
+      {
+        "cameraIndex": 16,
+        "cameraAngle": 0.252,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.02748413011431694,
+          "mse": 0.002119660610333085,
+          "lumaMae": 0.02600042149424553,
+          "meanLuma": 0.18401572108268738,
+          "targetMeanLuma": 0.18157169222831726
+        },
+        "current": {
+          "mae": 0.09007315337657928,
+          "mse": 0.027351737022399902,
+          "lumaMae": 0.09139220416545868,
+          "meanLuma": 0.10444934666156769,
+          "targetMeanLuma": 0.18157169222831726
+        },
+        "ridgeRidge": {
+          "mae": 0.07345519959926605,
+          "mse": 0.016792520880699158,
+          "lumaMae": 0.07272105664014816,
+          "meanLuma": 0.11886542290449142,
+          "targetMeanLuma": 0.18157169222831726
+        },
+        "ridgeTotal": {
+          "mae": 0.09234361350536346,
+          "mse": 0.024637697264552116,
+          "lumaMae": 0.09549141675233841,
+          "meanLuma": 0.09070353209972382,
+          "targetMeanLuma": 0.18157169222831726
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1790094,
+          "nearDepth": 1.4174913167953491,
+          "farDepth": 3.3222262859344482,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "orientation": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false
+        },
+        "meanFinalTransmittance": 0.6613636612892151
+      },
+      {
+        "cameraIndex": 17,
+        "cameraAngle": 0.294,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.027235224843025208,
+          "mse": 0.002098727272823453,
+          "lumaMae": 0.025695640593767166,
+          "meanLuma": 0.18348634243011475,
+          "targetMeanLuma": 0.18002326786518097
+        },
+        "current": {
+          "mae": 0.08911552280187607,
+          "mse": 0.026953142136335373,
+          "lumaMae": 0.09014667570590973,
+          "meanLuma": 0.10446161031723022,
+          "targetMeanLuma": 0.18002326786518097
+        },
+        "ridgeRidge": {
+          "mae": 0.07227078825235367,
+          "mse": 0.016281330958008766,
+          "lumaMae": 0.07133398950099945,
+          "meanLuma": 0.11880265176296234,
+          "targetMeanLuma": 0.18002326786518097
+        },
+        "ridgeTotal": {
+          "mae": 0.09081846475601196,
+          "mse": 0.02392161265015602,
+          "lumaMae": 0.09390272945165634,
+          "meanLuma": 0.09062649309635162,
+          "targetMeanLuma": 0.18002326786518097
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1791549,
+          "nearDepth": 1.4312946796417236,
+          "farDepth": 3.3147802352905273,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "orientation": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false
+        },
+        "meanFinalTransmittance": 0.6620784401893616
+      },
+      {
+        "cameraIndex": 18,
+        "cameraAngle": 0.336,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.0270307045429945,
+          "mse": 0.002093323040753603,
+          "lumaMae": 0.025404192507267,
+          "meanLuma": 0.1828693151473999,
+          "targetMeanLuma": 0.17846229672431946
+        },
+        "current": {
+          "mae": 0.08822191506624222,
+          "mse": 0.02652083896100521,
+          "lumaMae": 0.08904585242271423,
+          "meanLuma": 0.10441704094409943,
+          "targetMeanLuma": 0.17846229672431946
+        },
+        "ridgeRidge": {
+          "mae": 0.07113956660032272,
+          "mse": 0.015827130526304245,
+          "lumaMae": 0.07006312906742096,
+          "meanLuma": 0.11866390705108643,
+          "targetMeanLuma": 0.17846229672431946
+        },
+        "ridgeTotal": {
+          "mae": 0.08940348774194717,
+          "mse": 0.02325543947517872,
+          "lumaMae": 0.09245583415031433,
+          "meanLuma": 0.09046919643878937,
+          "targetMeanLuma": 0.17846229672431946
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1792910,
+          "nearDepth": 1.4460127353668213,
+          "farDepth": 3.3060495853424072,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "orientation": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false
+        },
+        "meanFinalTransmittance": 0.6627688407897949
+      },
+      {
+        "cameraIndex": 19,
+        "cameraAngle": 0.378,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.027051690965890884,
+          "mse": 0.002117251744493842,
+          "lumaMae": 0.025342149659991264,
+          "meanLuma": 0.1821517050266266,
+          "targetMeanLuma": 0.1768222153186798
+        },
+        "current": {
+          "mae": 0.08711356669664383,
+          "mse": 0.025999633595347404,
+          "lumaMae": 0.08781873434782028,
+          "meanLuma": 0.10446047782897949,
+          "targetMeanLuma": 0.1768222153186798
+        },
+        "ridgeRidge": {
+          "mae": 0.07004303485155106,
+          "mse": 0.015396776609122753,
+          "lumaMae": 0.06882454454898834,
+          "meanLuma": 0.11846677958965302,
+          "targetMeanLuma": 0.1768222153186798
+        },
+        "ridgeTotal": {
+          "mae": 0.08800240606069565,
+          "mse": 0.022617105394601822,
+          "lumaMae": 0.09098798781633377,
+          "meanLuma": 0.09027707576751709,
+          "targetMeanLuma": 0.1768222153186798
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1794137,
+          "nearDepth": 1.4623174667358398,
+          "farDepth": 3.296684741973877,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "orientation": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false
+        },
+        "meanFinalTransmittance": 0.6635039448738098
+      },
+      {
+        "cameraIndex": 20,
+        "cameraAngle": 0.42,
+        "split": "heldOut",
+        "expanded": {
+          "mae": 0.027151862159371376,
+          "mse": 0.0021485970355570316,
+          "lumaMae": 0.0253851767629385,
+          "meanLuma": 0.18135681748390198,
+          "targetMeanLuma": 0.1750679314136505
+        },
+        "current": {
+          "mae": 0.08596979826688766,
+          "mse": 0.025504095479846,
+          "lumaMae": 0.08660528808832169,
+          "meanLuma": 0.1043957993388176,
+          "targetMeanLuma": 0.1750679314136505
+        },
+        "ridgeRidge": {
+          "mae": 0.06892942637205124,
+          "mse": 0.015008541755378246,
+          "lumaMae": 0.06755641102790833,
+          "meanLuma": 0.11825791746377945,
+          "targetMeanLuma": 0.1750679314136505
+        },
+        "ridgeTotal": {
+          "mae": 0.08668922632932663,
+          "mse": 0.022079946473240852,
+          "lumaMae": 0.08958691358566284,
+          "meanLuma": 0.09000594913959503,
+          "targetMeanLuma": 0.1750679314136505
+        },
+        "raster": {
+          "admittedRows": 1899742,
+          "projectedRows": 1795207,
+          "nearDepth": 1.4768134355545044,
+          "farDepth": 3.29015851020813,
+          "depthBins": 96,
+          "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+          "kernelGeometry": "base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0",
+          "footprintMode": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "orientation": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+          "nominalQuadratureWeightSum": 1.0,
+          "postProcessBlur": false
+        },
+        "meanFinalTransmittance": 0.6642382144927979
+      }
+    ],
+    "heldOutMean": {
+      "expandedMae": 0.033900913782417774,
+      "currentMae": 0.0938449751585722,
+      "ridgeRidgeMae": 0.07951197922229766,
+      "ridgeTotalMae": 0.10019938945770264
+    }
+  },
+  "artifacts": {
+    "gallery": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-kneecapper-coefficient-ellipse-state120-r1/index.html",
+    "cameraCount": 21
+  },
+  "ceiling": {
+    "truthful": true,
+    "notExactFullCovariance": true,
+    "notExactPerSplatOrder": true,
+    "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+    "orientationApproximation": "flow-tangent-five-by-three-area-conserving-ellipse-quadrature-v0",
+    "interpretation": "coefficient/extinction transplant assay; not a shipping-renderer parity claim"
+  }
+}
