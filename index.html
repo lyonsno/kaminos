@@ -1205,17 +1205,17 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       </div>
       <div class="slider-row">
         <span class="slider-label">Kernel strength</span>
-        <input type="range" id="volume-flow-kernel-strength" min="0" max="1" step="0.02" value="0.00">
+        <input type="range" id="volume-flow-kernel-strength" data-volume-settings-role="renderer" min="0" max="1" step="0.02" value="0.00">
         <span class="slider-val" id="volume-flow-kernel-strength-val">0.00</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Feature scale</span>
-        <input type="range" id="volume-flow-kernel-radius" min="0.0025" max="0.12" step="0.0025" value="0.0300">
+        <input type="range" id="volume-flow-kernel-radius" data-volume-settings-role="renderer" min="0.0025" max="0.12" step="0.0025" value="0.0300">
         <span class="slider-val" id="volume-flow-kernel-radius-val">0.0300</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Flow coherence</span>
-        <input type="range" id="volume-flow-kernel-coherence" min="0" max="2" step="0.05" value="1.00">
+        <input type="range" id="volume-flow-kernel-coherence" data-volume-settings-role="renderer" min="0" max="2" step="0.05" value="1.00">
         <span class="slider-val" id="volume-flow-kernel-coherence-val">1.00</span>
       </div>
       <span class="slider-help">Splat authority: support heat/reaction/front/interface, bake blur, baked ridge, and ridge select/cut shape candidate fields; splat radius/sharpness shape raster support. Step width and boundary display/color controls remain raymarch-only.</span>
@@ -12051,10 +12051,12 @@ function readVolumeDomControlValue(el) {
   return Number.isFinite(numericValue) ? numericValue : el.value;
 }
 
-function readVolumeDomControls() {
+function readVolumeSettingsControls(role = 'basin') {
   const controls = {};
   const fields = collectVolumeCockpitControlElements(document);
   for (const el of fields) {
+    const settingsRole = el.dataset.volumeSettingsRole || 'basin';
+    if (settingsRole !== role) continue;
     controls[el.id] = {
       id: el.id,
       param: volumeDomControlParamFromId(el.id),
@@ -12066,12 +12068,23 @@ function readVolumeDomControls() {
   return controls;
 }
 
-function buildVolumeAgentCaptureRoute(domControls = readVolumeDomControls()) {
+function readVolumeDomControls() {
+  return readVolumeSettingsControls('basin');
+}
+
+function readVolumeRendererControls() {
+  return readVolumeSettingsControls('renderer');
+}
+
+function buildVolumeAgentCaptureRoute(
+  domControls = readVolumeDomControls(),
+  rendererControls = readVolumeRendererControls(),
+) {
   const url = new URL(window.location.href);
   const sourceQualityReason = url.searchParams.get('volume_quality_reason') || 'agent-view-capture';
   url.search = '';
   url.searchParams.set('kaminos_volume_smoke', '1');
-  for (const entry of Object.values(domControls)) {
+  for (const entry of [...Object.values(domControls), ...Object.values(rendererControls)]) {
     if (!entry?.param) continue;
     if (entry.value === undefined || entry.value === null) continue;
     url.searchParams.set(entry.param, formatVolumeBasinRouteValue(entry.value));
@@ -12082,14 +12095,17 @@ function buildVolumeAgentCaptureRoute(domControls = readVolumeDomControls()) {
 
 function buildVolumeSettingsPreset() {
   const domControls = readVolumeDomControls();
+  const rendererControls = readVolumeRendererControls();
   return {
     identity: 'kaminos-volume-settings-preset-v2',
     kind: 'settings-preset',
     schemaIdentity: 'kaminos-volume-settings-preset-schema-v2',
     savedAt: new Date().toISOString(),
-    route: buildVolumeAgentCaptureRoute(domControls),
+    route: buildVolumeAgentCaptureRoute(domControls, rendererControls),
     domControls,
     controlCount: Object.keys(domControls).length,
+    rendererControls,
+    rendererControlCount: Object.keys(rendererControls).length,
     stateExclusions: {
       fluidField: true,
       frontField: true,
@@ -12123,6 +12139,7 @@ async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
     if (index.identity !== 'kaminos-volume-settings-preset-index-v1'
       || index.schemaIdentity !== 'kaminos-volume-settings-preset-schema-v2'
       || Number(index.controlCount) !== 186
+      || Number(index.rendererControlCount) !== 3
       || !Array.isArray(index.entries)) {
       throw new Error('preset index identity or schema mismatch');
     }
@@ -12141,7 +12158,7 @@ async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
         select.value = index.entries.some(entry => entry.presetId === previous) ? previous : index.entries[0].presetId;
       }
     }
-    volumeSettingsPresetStatus(`${index.entries.length} presets | 186 controls | ${index.storePath}`);
+    volumeSettingsPresetStatus(`${index.entries.length} presets | 186 basin controls + 3 renderer controls | ${index.storePath}`);
     return index;
   } catch (error) {
     volumeSettingsPresetIndex = null;
@@ -12168,12 +12185,13 @@ async function saveVolumeSettingsPreset() {
     if (!response.ok || !result.ok) throw new Error(result.error || `preset save failed: ${response.status}`);
     if (result.identity !== 'kaminos-volume-settings-preset-write-receipt-v1'
       || result.effective?.schemaIdentity !== 'kaminos-volume-settings-preset-schema-v2'
-      || Number(result.effective?.controlCount) !== 186) {
+      || Number(result.effective?.controlCount) !== 186
+      || Number(result.effective?.rendererControlCount) !== 3) {
       throw new Error('preset write receipt identity or schema mismatch');
     }
     await refreshVolumeSettingsPresetList(result.effective.presetId);
     if (labelInput) labelInput.value = result.effective.label;
-    volumeSettingsPresetStatus(`${result.effective.label} | ${result.effective.presetId} | 186/186 | ${result.effective.storePath}`);
+    volumeSettingsPresetStatus(`${result.effective.label} | ${result.effective.presetId} | 186 basin + 3 renderer controls | ${result.effective.storePath}`);
     console.log(JSON.stringify(result, null, 2));
     setInfo(`Volume settings preset saved: ${result.effective.label}`);
     return result;

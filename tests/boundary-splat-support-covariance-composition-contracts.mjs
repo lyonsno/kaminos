@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 const page = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const witness = readFileSync(new URL('../volume-raymarch-filament-orbit-witness.mjs', import.meta.url), 'utf8');
 
 assert.match(
   core,
@@ -83,6 +84,21 @@ assert.match(
   core,
   /sampleFrame,\s*sampleBoundarySplatFootprintAudit,\s*sampleDeterministicReplayFrame/,
   'the full-population audit must be exposed on the live prototype instead of remaining unreachable',
+);
+assert.match(
+  witness,
+  /flowKernelStrength\)\s*&&\s*flowKernelStrength\s*>\s*0\s*&&\s*flowKernelStrength\s*<=\s*1/,
+  'orbit witness accepts only the renderer strength range',
+);
+assert.match(
+  witness,
+  /flowKernelCoherence\)\s*&&\s*flowKernelCoherence\s*>=\s*0\s*&&\s*flowKernelCoherence\s*<=\s*2/,
+  'orbit witness accepts the complete renderer coherence range',
+);
+assert.match(
+  witness,
+  /candidateCount:\s*capture\.footprintAudit\.candidateCount[\s\S]*instanceCount:\s*capture\.footprintAudit\.instanceCount[\s\S]*overflowCount:\s*capture\.footprintAudit\.overflowCount/,
+  'camera holdout rows publish the post-retry audited population rather than stale frame telemetry',
 );
 
 console.log('boundary splat support and covariance composition contracts passed');

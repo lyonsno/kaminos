@@ -53,7 +53,7 @@ assert.equal(
 );
 assert.match(
   index,
-  /function readVolumeDomControls\(\)[\s\S]*controls\[el\.id\]\s*=\s*\{/,
+  /function readVolumeSettingsControls\(role = 'basin'\)[\s\S]*controls\[el\.id\]\s*=\s*\{[\s\S]*function readVolumeDomControls\(\)/,
   'native settings presets key controls by stable DOM id to match the canonical inventory',
 );
 assert.match(

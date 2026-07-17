@@ -139,9 +139,9 @@ try {
   assert.ok(rayStepCounts.length >= 2, 'at least two ray-step counts are required');
   assert.ok(orbitAngles.length >= 5, 'at least five orbit poses are required');
   assert.ok(rayStepCounts.every(value => value >= 24 && value <= 160), 'ray-step counts must be inside the live renderer range');
-  assert.ok(Number.isFinite(flowKernelStrength) && flowKernelStrength > 0 && flowKernelStrength <= 2, 'flow kernel strength must be inside the live renderer range');
+  assert.ok(Number.isFinite(flowKernelStrength) && flowKernelStrength > 0 && flowKernelStrength <= 1, 'flow kernel strength must be inside the live renderer range');
   assert.ok(Number.isFinite(flowKernelRadius) && flowKernelRadius > 0 && flowKernelRadius <= 0.12, 'flow kernel radius must be inside the live renderer range');
-  assert.ok(Number.isFinite(flowKernelCoherence) && flowKernelCoherence >= 0 && flowKernelCoherence <= 1, 'flow kernel coherence must be inside the live renderer range');
+  assert.ok(Number.isFinite(flowKernelCoherence) && flowKernelCoherence >= 0 && flowKernelCoherence <= 2, 'flow kernel coherence must be inside the live renderer range');
 
   failurePhase = 'browser-launch';
   browser = spawn(chrome, [
@@ -396,9 +396,9 @@ try {
         attributeSetId: capture.footprintAudit.attributeSetId,
         attributePayloadAuthority: capture.footprintAudit.attributePayloadAuthority,
         attributePayloadSha256: capture.footprintAudit.attributePayloadSha256,
-        candidateCount: capture.boundarySplatCandidateCount,
-        instanceCount: capture.boundarySplatInstanceCount,
-        overflowCount: capture.boundarySplatOverflowCount,
+        candidateCount: capture.footprintAudit.candidateCount,
+        instanceCount: capture.footprintAudit.instanceCount,
+        overflowCount: capture.footprintAudit.overflowCount,
         candidatePayloadSha256: capture.footprintAudit.candidatePayloadSha256,
         fallbackReason: capture.boundarySplatFallbackReason,
         targetAuthority: FULL_FLAME_TARGET,

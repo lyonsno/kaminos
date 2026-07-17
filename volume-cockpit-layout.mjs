@@ -29,12 +29,14 @@ function normalizedControlRecord(record) {
 export function validateVolumeCockpitControlInventory({ schema, controlRecords }) {
   if (schema?.identity !== 'kaminos-volume-settings-preset-schema-v2'
     || !Array.isArray(schema.controls)
-    || Number(schema.controlCount) !== schema.controls.length) {
+    || Number(schema.controlCount) !== schema.controls.length
+    || !Array.isArray(schema.rendererControls)) {
     throw new Error('volume-cockpit-schema-invalid');
   }
   if (!Array.isArray(controlRecords)) throw new Error('volume-cockpit-control-records-missing');
 
-  const expectedById = new Map(schema.controls.map(control => [control.key, normalizedControlRecord({
+  const expectedControls = [...schema.controls, ...schema.rendererControls];
+  const expectedById = new Map(expectedControls.map(control => [control.key, normalizedControlRecord({
     id: control.key,
     tagName: control.tagName,
     type: control.type,
@@ -77,14 +79,16 @@ export function validateVolumeCockpitControlInventory({ schema, controlRecords }
   if (typeSubstitutions.length) failures.push(`type=${typeSubstitutions.join(',')}`);
   if (invalidRootIds.length) failures.push(`root=${invalidRootIds.join(',')}`);
   if (misplacedAuthoredMixControls.length) failures.push(`authored-mix-root=${misplacedAuthoredMixControls.join(',')}`);
-  if (records.length !== Number(schema.controlCount)) failures.push(`count=${records.length}/${schema.controlCount}`);
+  if (records.length !== expectedControls.length) failures.push(`count=${records.length}/${expectedControls.length}`);
   if (failures.length) throw new Error(`volume-cockpit-control-inventory-invalid:${failures.join(';')}`);
 
   return {
     identity: 'kaminos-volume-cockpit-layout-receipt-v0',
     schemaIdentity: schema.identity,
     controlCount: records.length,
-    expectedControlCount: Number(schema.controlCount),
+    expectedControlCount: expectedControls.length,
+    presetControlCount: Number(schema.controlCount),
+    rendererControlCount: schema.rendererControls.length,
     controlRootIds: [...VOLUME_COCKPIT_CONTROL_ROOT_IDS],
     rootControlCounts,
     authoredMixControlIds: [...VOLUME_AUTHORED_MIX_CONTROL_IDS],

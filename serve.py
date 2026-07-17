@@ -61,9 +61,27 @@ def validate_volume_settings_preset_payload(payload, schema=None):
     if set(dom_controls) != set(expected_by_key):
         raise ValueError("settings preset control inventory does not match the canonical schema")
 
+    expected_renderer_controls = schema.get("rendererControls") or []
+    renderer_controls = payload.get("rendererControls")
+    if renderer_controls is None:
+        if payload.get("rendererControlCount") not in (None, 0):
+            raise ValueError("settings preset renderer control count is invalid")
+        renderer_controls = {}
+    elif (
+        not isinstance(renderer_controls, dict)
+        or payload.get("rendererControlCount") != len(expected_renderer_controls)
+        or len(renderer_controls) != len(expected_renderer_controls)
+    ):
+        raise ValueError(
+            f"settings preset requires exactly {len(expected_renderer_controls)} renderer controls when that axis is authored"
+        )
+    expected_renderer_by_key = {entry["key"]: entry for entry in expected_renderer_controls}
+    if renderer_controls and set(renderer_controls) != set(expected_renderer_by_key):
+        raise ValueError("settings preset renderer control inventory does not match the canonical schema")
+
     routed_values = {}
-    for key, descriptor in dom_controls.items():
-        expected = expected_by_key[key]
+    for key, descriptor in {**dom_controls, **renderer_controls}.items():
+        expected = expected_by_key.get(key) or expected_renderer_by_key.get(key)
         if not isinstance(descriptor, dict):
             raise ValueError(f"settings preset control descriptor is invalid: {key}")
         if (
@@ -126,11 +144,28 @@ def _volume_settings_control_values(payload, schema):
     }
 
 
+def _volume_settings_renderer_control_values(payload, schema):
+    controls = payload.get("rendererControls")
+    if not controls:
+        return None
+    return {
+        descriptor["key"]: (
+            controls[descriptor["key"]].get("rawValue")
+            if "rawValue" in controls[descriptor["key"]]
+            else controls[descriptor["key"]].get("value")
+        )
+        for descriptor in schema.get("rendererControls") or []
+    }
+
+
 def _volume_settings_content_hash(payload, schema):
     canonical = {
         "schemaIdentity": schema["identity"],
         "controls": _volume_settings_control_values(payload, schema),
     }
+    renderer_controls = _volume_settings_renderer_control_values(payload, schema)
+    if renderer_controls is not None:
+        canonical["rendererControls"] = renderer_controls
     encoded = json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
     return hashlib.sha256(encoded).hexdigest()
 
@@ -286,6 +321,7 @@ def write_volume_settings_preset(store_path, label, payload, source, schema=None
             "storePath": str(store),
             "schemaIdentity": schema["identity"],
             "controlCount": schema["controlCount"],
+            "rendererControlCount": len(payload.get("rendererControls") or {}),
             "idempotent": idempotent,
         },
         "presetUrl": preset_url,
@@ -372,6 +408,7 @@ def list_volume_settings_presets(store_path, schema=None):
             "contentHash": document["contentHash"],
             "schemaIdentity": document["schemaIdentity"],
             "controlCount": document["controlCount"],
+            "rendererControlCount": len((document.get("preset") or {}).get("rendererControls") or {}),
             "updatedAt": alias_document.get("updatedAt"),
             "source": alias_document.get("source") or {},
         })
@@ -381,6 +418,7 @@ def list_volume_settings_presets(store_path, schema=None):
         "storePath": str(store),
         "schemaIdentity": schema["identity"],
         "controlCount": schema["controlCount"],
+        "rendererControlCount": len(schema.get("rendererControls") or []),
         "entries": entries,
     }
 

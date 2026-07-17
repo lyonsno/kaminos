@@ -13,7 +13,7 @@ assert.match(
   /from ['"]\.\/volume-cockpit-layout\.mjs['"]/,
   'the primary viewer must load the explicit two-root cockpit contract',
 );
-assert.match(witness, /__kaminosVolumeCockpitLayoutReceipt[\s\S]*controlCount[\s\S]*rootControlCounts/, 'visual witness requires the validated 186-control layout receipt');
+assert.match(witness, /__kaminosVolumeCockpitLayoutReceipt[\s\S]*controlCount[\s\S]*rootControlCounts/, 'visual witness requires the validated complete layout receipt');
 assert.match(witness, /volume-authored-mix-panel[\s\S]*volume-authored-mix-body[\s\S]*volume-authored-mix-toggle/, 'visual witness inspects the complete panel surface');
 assert.match(witness, /elementFromPoint[\s\S]*hitInsidePanel/, 'visual witness rejects a panel painted behind another surface');
 assert.match(
@@ -81,7 +81,7 @@ assert.deepEqual(VOLUME_COCKPIT_CONTROL_ROOT_IDS, [
 assert.deepEqual(VOLUME_AUTHORED_MIX_CONTROL_IDS, ['volume-reaction-boundary-support-thermal']);
 
 function schemaRecords() {
-  return schema.controls.map(control => ({
+  return [...schema.controls, ...schema.rendererControls].map(control => ({
     id: control.key,
     tagName: control.tagName,
     type: control.type,
@@ -93,13 +93,15 @@ function schemaRecords() {
 
 const accepted = validateVolumeCockpitControlInventory({ schema, controlRecords: schemaRecords() });
 assert.equal(accepted.identity, 'kaminos-volume-cockpit-layout-receipt-v0');
-assert.equal(accepted.controlCount, 186);
-assert.equal(accepted.expectedControlCount, 186);
+assert.equal(accepted.controlCount, 189);
+assert.equal(accepted.expectedControlCount, 189);
+assert.equal(accepted.presetControlCount, 186);
+assert.equal(accepted.rendererControlCount, 3);
 assert.deepEqual(accepted.missingControlIds, []);
 assert.deepEqual(accepted.unexpectedControlIds, []);
 assert.deepEqual(accepted.duplicateControlIds, []);
 assert.deepEqual(accepted.rootControlCounts, {
-  'volume-primary-control-root': 185,
+  'volume-primary-control-root': 188,
   'volume-authored-mix-control-root': 1,
 });
 

@@ -1119,6 +1119,26 @@
       "type": "range"
     }
   ],
+  "rendererControls": [
+    {
+      "key": "volume-flow-kernel-strength",
+      "param": "volume_flow_kernel_strength",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-flow-kernel-radius",
+      "param": "volume_flow_kernel_radius",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-flow-kernel-coherence",
+      "param": "volume_flow_kernel_coherence",
+      "tagName": "INPUT",
+      "type": "range"
+    }
+  ],
   "legacyUnroutedParams": [],
   "routeExtraParams": [
     "volume_quality_reason"
@@ -1159,6 +1179,8 @@
     "route",
     "domControls",
     "controlCount",
+    "rendererControls",
+    "rendererControlCount",
     "stateExclusions",
     "note",
     "name"

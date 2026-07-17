@@ -61,12 +61,12 @@
       const receipt = validateVolumeSettingsPresetDocument(artifact, presetId, schema);
       presetTitle.textContent = 'Volume settings preset';
       if (!view) {
-        status.textContent = `${receipt.label || presetId} | effective ${receipt.presetId} | ${receipt.sourcePresetAuthority} | ${receipt.routeVolumeEntries.length} exact volume settings`;
+        status.textContent = `${receipt.label || presetId} | effective ${receipt.presetId} | ${receipt.sourcePresetAuthority} | ${receipt.preset.controlCount} basin settings + ${receipt.rendererControlCount} renderer controls`;
         viewCommands.hidden = false;
         return;
       }
       const target = buildVolumeSettingsPresetVisualTarget(receipt, location.origin, view);
-      status.textContent = `${receipt.label || presetId} | requested ${presetId} | effective ${receipt.presetId} | ${receipt.sourcePresetAuthority} | ${receipt.routeVolumeEntries.length} exact volume settings | effective ${view} view`;
+      status.textContent = `${receipt.label || presetId} | requested ${presetId} | effective ${receipt.presetId} | ${receipt.sourcePresetAuthority} | ${receipt.preset.controlCount} basin settings + ${receipt.rendererControlCount} renderer controls | effective ${view} view`;
       location.replace(target);
     }
 

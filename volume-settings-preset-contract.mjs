@@ -46,6 +46,15 @@ function validatePresetSchema(schema) {
     || new Set(schema.controls.map(entry => entry.param)).size !== schema.controls.length) {
     throw new Error('settings preset canonical control schema inventory is invalid');
   }
+  const rendererControls = schema.rendererControls || [];
+  if (!Array.isArray(rendererControls)
+    || new Set(rendererControls.map(entry => entry.key)).size !== rendererControls.length
+    || new Set(rendererControls.map(entry => entry.param)).size !== rendererControls.length
+    || rendererControls.some(entry => schema.controls.some(control => (
+      control.key === entry.key || control.param === entry.param
+    )))) {
+    throw new Error('settings preset renderer control schema inventory is invalid');
+  }
   return schema;
 }
 
@@ -99,6 +108,20 @@ export function validateVolumeSettingsPresetDocument(document, requestedPresetRe
     || domEntries.length !== Number(schema.controlCount)) {
     throw new Error(`settings preset requires exactly ${schema.controlCount} canonical controls`);
   }
+  const rendererControls = preset.rendererControls;
+  const rendererEntries = rendererControls === undefined ? [] : Object.entries(rendererControls || {});
+  const expectedRendererControls = schema.rendererControls || [];
+  if (rendererControls !== undefined && (!rendererControls || typeof rendererControls !== 'object' || Array.isArray(rendererControls))) {
+    throw new Error('settings preset renderer controls are invalid');
+  }
+  if (rendererControls === undefined) {
+    if (preset.rendererControlCount !== undefined && Number(preset.rendererControlCount) !== 0) {
+      throw new Error('settings preset renderer control count is invalid');
+    }
+  } else if (Number(preset.rendererControlCount) !== expectedRendererControls.length
+    || rendererEntries.length !== expectedRendererControls.length) {
+    throw new Error(`settings preset requires exactly ${expectedRendererControls.length} renderer controls when that axis is authored`);
+  }
   if (!preset.route) throw new Error('settings preset route is missing');
 
   const exclusions = preset.stateExclusions;
@@ -120,15 +143,17 @@ export function validateVolumeSettingsPresetDocument(document, requestedPresetRe
   const routeVolumeEntries = [...presetRoute.searchParams].filter(([key]) => key.startsWith('volume_'));
   const routeVolumeKeys = new Set(routeVolumeEntries.map(([key]) => key));
   const legacyUnroutedParams = new Set();
-  const expectedRoutedControlCount = schema.controls.length;
+  const expectedRoutedControlCount = schema.controls.length + rendererEntries.length;
   const expectedRouteVolumeCount = expectedRoutedControlCount + (schema.routeExtraParams || []).length;
   if (routeVolumeEntries.length !== expectedRouteVolumeCount || routeVolumeKeys.size !== expectedRouteVolumeCount) {
     throw new Error(`settings preset route requires exactly ${expectedRouteVolumeCount} unique volume parameters`);
   }
 
   const routedControlParams = new Set();
-  const schemaByKey = new Map(schema.controls.map(entry => [entry.key, entry]));
-  for (const [key, entry] of domEntries) {
+  const schemaByKey = new Map(
+    [...schema.controls, ...expectedRendererControls].map(entry => [entry.key, entry]),
+  );
+  for (const [key, entry] of [...domEntries, ...rendererEntries]) {
     const expectedDescriptor = schemaByKey.get(key);
     if (!entry || typeof entry !== 'object' || !String(entry.param || '').startsWith('volume_')) {
       throw new Error('settings preset contains an invalid DOM control descriptor');
@@ -169,6 +194,7 @@ export function validateVolumeSettingsPresetDocument(document, requestedPresetRe
     presetRoute,
     sourcePresetAuthority: 'shared-volume-settings-preset-v2',
     schemaIdentity: schema.identity,
+    rendererControlCount: rendererEntries.length,
     routeEntries: Object.freeze([...presetRoute.searchParams].map(entry => Object.freeze([...entry]))),
     routeVolumeEntries: Object.freeze(routeVolumeEntries.map(entry => Object.freeze([...entry]))),
   });

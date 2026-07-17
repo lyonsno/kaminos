@@ -336,8 +336,10 @@ try {
   }
   assert.equal(cockpitVisibility.anchorFound, true, `cockpit screenshot anchor is missing: ${cockpitAnchor}`);
   assert.equal(cockpitVisibility.layoutReceipt?.identity, 'kaminos-volume-cockpit-layout-receipt-v0', 'cockpit layout receipt is missing');
-  assert.equal(cockpitVisibility.layoutReceipt?.controlCount, 186, 'cockpit layout omitted canonical controls');
-  assert.equal(cockpitVisibility.layoutReceipt?.rootControlCounts?.['volume-primary-control-root'], 185, 'primary root count changed');
+  assert.equal(cockpitVisibility.layoutReceipt?.controlCount, 189, 'cockpit layout omitted basin or renderer controls');
+  assert.equal(cockpitVisibility.layoutReceipt?.presetControlCount, 186, 'canonical basin control count changed');
+  assert.equal(cockpitVisibility.layoutReceipt?.rendererControlCount, 3, 'renderer control axis is incomplete');
+  assert.equal(cockpitVisibility.layoutReceipt?.rootControlCounts?.['volume-primary-control-root'], 188, 'primary root count changed');
   assert.equal(cockpitVisibility.layoutReceipt?.rootControlCounts?.['volume-authored-mix-control-root'], 1, 'authored-mix root count changed');
   assert.equal(cockpitVisibility.layoutReceipt?.fallbackApplied, false, 'cockpit layout silently fell back');
   assert.equal(
@@ -460,6 +462,7 @@ try {
   assert.equal(presetDocument.preset?.identity, 'kaminos-volume-settings-preset-v2');
   assert.equal(presetDocument.preset?.kind, 'settings-preset');
   assert.equal(presetDocument.preset?.controlCount, 186);
+  assert.equal(presetDocument.preset?.rendererControlCount, 3);
   for (const field of ['fluidField', 'frontField', 'boundarySidecar', 'splatInstances', 'historyBuffers', 'pressureState', 'replayState', 'volumeDebugState', 'camera', 'viewport']) {
     assert.equal(Object.hasOwn(presetDocument.preset, field), false, `settings preset persisted forbidden state field ${field}`);
   }
@@ -501,6 +504,7 @@ try {
     writeReceipt: commandResult.effective,
     visualAuthority: 'not-evaluated-settings-persistence-only',
     controlCount: presetDocument.preset.controlCount,
+    rendererControlCount: presetDocument.preset.rendererControlCount,
     storePath: commandResult.effective.storePath,
     continuousFrameDelta,
     continuousSimStepDelta,
