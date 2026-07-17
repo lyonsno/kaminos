@@ -39,6 +39,12 @@ const GRID_DIMS = [32, 20, 32];
 const GRID_CELL_COUNT = GRID_DIMS[0] * GRID_DIMS[1] * GRID_DIMS[2];
 const BOUNDS_MIN = [-3.4, -1.2, -3.4];
 const BOUNDS_MAX = [3.4, 3.0, 3.4];
+const TRUTH_OCCUPIED_CELL_VOLUME = GRID_DIMS.reduce(
+  (volume, count, axis) => volume * ((BOUNDS_MAX[axis] - BOUNDS_MIN[axis]) / count),
+  1,
+);
+const MIN_TRUTH_OCCUPIED_CELL_COUNT = 2;
+const MIN_TRUTH_OCCUPIED_VOLUME = MIN_TRUTH_OCCUPIED_CELL_COUNT * TRUTH_OCCUPIED_CELL_VOLUME;
 const OBSTACLE_CENTER = [0.85, -0.43, 0.02];
 const OBSTACLE_RADIUS = 0.52;
 const VORTICITY_UPDATE_INTERVAL = 3;
@@ -1630,27 +1636,69 @@ export function evaluateFingerFluidTruthTrajectory(scene, trajectory) {
       throw new Error(`Dam-break trajectory requires at least 7000ms after its first checkpoint: ${elapsedHorizonMs}`);
     }
   }
+  let expectedParticleCount = null;
   const snapshots = trajectory.map((checkpoint, index) => {
     const snapshot = checkpoint?.fluidTruthSnapshot;
     if (!snapshot) throw new Error(`Finger fluid truth checkpoint ${index} is missing its snapshot`);
+    if (snapshot.schema !== 'kaminos.finger-fluid-truth-snapshot.v0') {
+      throw new Error(`Finger fluid truth checkpoint ${index} has invalid snapshot schema: ${snapshot.schema}`);
+    }
+    if (snapshot.contract !== KAMINOS_FINGER_FLUID_TRUTH_GAUNTLET_CONTRACT) {
+      throw new Error(`Finger fluid truth checkpoint ${index} has invalid snapshot contract: ${snapshot.contract}`);
+    }
+    if (snapshot.scene !== effectiveScene) {
+      throw new Error(`Finger fluid truth checkpoint ${index} has mismatched snapshot scene: ${snapshot.scene}; expected ${effectiveScene}`);
+    }
+    if (
+      !Number.isFinite(snapshot.relativeDensityErrorMean)
+      || !Number.isFinite(snapshot.relativeDensityErrorP95)
+      || snapshot.relativeDensityErrorMean < 0
+      || snapshot.relativeDensityErrorP95 < 0
+    ) {
+      throw new Error(`Finger fluid truth checkpoint ${index} contains invalid density evidence`);
+    }
     const required = [
       snapshot.particleCount,
       snapshot.finiteParticleCount,
+      snapshot.retainedParticleCount,
       snapshot.retainedParticleRatio,
       snapshot.sourceRecirculationCount,
       snapshot.totalKineticEnergy,
+      snapshot.relativeDensityErrorMean,
+      snapshot.relativeDensityErrorP95,
+      snapshot.occupiedCellCount,
       snapshot.occupiedVolumeProxy,
       ...(snapshot.centerOfMass || []),
     ];
-    if (required.length !== 9 || !required.every(Number.isFinite)) {
+    if (required.length !== 13 || !required.every(Number.isFinite)) {
       throw new Error(`Finger fluid truth checkpoint ${index} contains non-finite or partial state`);
+    }
+    if (
+      !Number.isInteger(snapshot.particleCount)
+      || !Number.isInteger(snapshot.finiteParticleCount)
+      || !Number.isInteger(snapshot.retainedParticleCount)
+      || !Number.isInteger(snapshot.sourceRecirculationCount)
+      || snapshot.sourceRecirculationCount < 0
+    ) {
+      throw new Error(`Finger fluid truth checkpoint ${index} contains invalid population identity`);
+    }
+    if (expectedParticleCount === null) expectedParticleCount = snapshot.particleCount;
+    if (snapshot.particleCount !== expectedParticleCount) {
+      throw new Error(`Finger fluid truth checkpoint ${index} changed particle identity: ${snapshot.particleCount}; expected ${expectedParticleCount}`);
     }
     if (
       snapshot.particleCount <= 0
       || snapshot.finiteParticleCount !== snapshot.particleCount
+      || snapshot.retainedParticleCount !== snapshot.particleCount
       || snapshot.retainedParticleRatio < 0.999999
     ) {
       throw new Error(`Finger fluid truth checkpoint ${index} lost its particle population`);
+    }
+    if (!Number.isInteger(snapshot.occupiedCellCount) || snapshot.occupiedCellCount < MIN_TRUTH_OCCUPIED_CELL_COUNT) {
+      throw new Error(`Finger fluid truth checkpoint ${index} has insufficient occupied support: ${snapshot.occupiedCellCount} cells`);
+    }
+    if (snapshot.occupiedVolumeProxy < MIN_TRUTH_OCCUPIED_VOLUME) {
+      throw new Error(`Finger fluid truth checkpoint ${index} has collapsed absolute support: ${snapshot.occupiedVolumeProxy}; minimum ${MIN_TRUTH_OCCUPIED_VOLUME}`);
     }
     if (effectiveScene !== 'multi_regime_playground' && snapshot.sourceRecirculationCount !== 0) {
       throw new Error(`Finger fluid truth checkpoint ${index} recirculated a closed population`);
