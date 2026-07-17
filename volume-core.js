@@ -11309,6 +11309,78 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       .map(value => value.toString(16).padStart(2, '0')).join('');
   }
 
+  async function auditBoundarySplatLiveUnionSourceHashes(options = {}) {
+    const importReceipt = state.fullFieldImportReceipt;
+    if (importReceipt?.status !== 'applied'
+      || typeof importReceipt.fluidSha256 !== 'string'
+      || typeof importReceipt.frontSha256 !== 'string') {
+      throw new Error('source-hash-audit-requires-checksum-validated-imported-fields');
+    }
+    if (!state.majorantBuilt || !state.boundarySidecarBuilt) {
+      throw new Error('source-hash-audit-requires-current-sidecar-and-majorant');
+    }
+    const expectedSourceHashes = options.expectedSourceHashes
+      || boundarySplatLiveUnionOverlay?.manifest?.source?.state?.sourceHashes
+      || null;
+    if (!expectedSourceHashes) {
+      throw new Error('source-hash-audit-missing-expected-source-hashes');
+    }
+    const descriptorSourceFluidBuffer = boundarySplatDescriptorSource?.fluid || null;
+    const descriptorSourceFrontBuffer = boundarySplatDescriptorSource?.front || null;
+    if (!descriptorSourceFluidBuffer || !descriptorSourceFrontBuffer) {
+      throw new Error('source-hash-audit-missing-effective-source-buffers');
+    }
+    const sourceHashes = {};
+    sourceHashes.fluidSha256 = await sha256Bytes(await readStorageBufferBytes(
+      descriptorSourceFluidBuffer,
+      fluidBufferBytes(gridSize),
+      'kaminos live union source-hash effective-fluid readback',
+    ));
+    sourceHashes.frontSha256 = await sha256Bytes(await readStorageBufferBytes(
+      descriptorSourceFrontBuffer,
+      frontFieldBufferBytes(gridSize),
+      'kaminos live union source-hash effective-front readback',
+    ));
+    sourceHashes.boundarySidecarSha256 = await sha256Bytes(await readStorageBufferBytes(
+      boundarySidecarBuffer,
+      boundarySidecarBufferBytes(gridSize),
+      'kaminos live union source-hash boundary-sidecar readback',
+    ));
+    sourceHashes.majorantSha256 = await sha256Bytes(await readStorageBufferBytes(
+      majorantBuffer,
+      majorantBufferBytes(majorantGridSize),
+      'kaminos live union source-hash majorant readback',
+    ));
+    const mismatch = Object.keys(sourceHashes).find(
+      key => sourceHashes[key] !== String(expectedSourceHashes[key] || '').toLowerCase(),
+    ) || null;
+    const receipt = {
+      ok: mismatch === null,
+      identity: 'boundary-splat-live-union-source-hash-audit-v0',
+      authority: 'effective-imported-fluid-front-plus-derived-sidecar-majorant-sha256-v0',
+      status: mismatch === null ? 'matched' : 'failed',
+      failurePhase: mismatch === null ? null : 'source-hash-comparison',
+      reason: mismatch === null ? null : `source-hash-audit-mismatch:${mismatch}`,
+      expectedSourceHashes: { ...expectedSourceHashes },
+      effectiveSourceHashes: sourceHashes,
+      sourceManifestSha256: importReceipt.sourceManifestSha256 || null,
+      fullFieldImportSessionId: importReceipt.sessionId || null,
+      routeIdentity: ROUTE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      backend: state.backend,
+      grid: gridSize,
+      majorantGrid: majorantGridSize,
+      frameCount: state.frameCount,
+      simStepCount: state.simStepCount,
+    };
+    if (mismatch !== null) {
+      const error = new Error(receipt.reason);
+      error.receipt = receipt;
+      throw error;
+    }
+    return receipt;
+  }
+
   async function sampleBoundarySplatKernelDescriptorCapture(instanceCount, options = {}) {
     if (!state.flowKernelDescriptorCaptureRequested) return null;
     if (!state.flowKernelDescriptorCaptureEffective || !flowKernelDescriptorBuffer) {
@@ -16845,6 +16917,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     releaseDebugFullFieldExport,
     loadBoundarySplatLiveUnionCoefficientOverlay,
     auditBoundarySplatLiveUnionCoefficientOverlayPopulation,
+    auditBoundarySplatLiveUnionSourceHashes,
     clearBoundarySplatLiveUnionCoefficientOverlay,
     sampleBoundarySplatFootprintAudit,
     boundarySplatCameraState,

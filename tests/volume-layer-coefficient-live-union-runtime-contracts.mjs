@@ -17,8 +17,11 @@ assert.match(core, /sharedTotalExtinctionCoefficient\s*=\s*in\.ridgeOptical\.w\s
 assert.match(core, /sharedEmissionCoefficient\s*=\s*in\.ridgeOptical\.rgb\s*\+\s*in\.nonRidgeOptical\.rgb/, 'learned RGB emission is combined only after layer-specific lookup');
 assert.match(core, /async function loadBoundarySplatLiveUnionCoefficientOverlay/, 'runtime exposes an explicit asynchronous load boundary');
 assert.match(core, /async function auditBoundarySplatLiveUnionCoefficientOverlayPopulation/, 'runtime exposes an exact live-population activation gate');
+assert.match(core, /async function auditBoundarySplatLiveUnionSourceHashes/, 'runtime exposes a compact imported-field and derived-sidecar checksum gate');
+assert.match(core, /fluidSha256[\s\S]*frontSha256[\s\S]*boundarySidecarSha256[\s\S]*majorantSha256/, 'source checksum gate covers every field that determines the live union and learned coefficients');
+assert.match(core, /source-hash-audit-mismatch/, 'source checksum gate fails loud instead of accepting a nearby imported state');
 assert.match(core, /stableNativeCellIdSha256[\s\S]*admissionIndexSha256[\s\S]*lookupMissCount[\s\S]*lookupExtraCount/, 'activation binds stable union identity and rejects missing or extra lookup rows');
 assert.match(core, /boundarySplatLiveUnionOverlayRequestedIdentity[\s\S]*boundarySplatLiveUnionOverlayEffectiveIdentity[\s\S]*boundarySplatLiveUnionOverlayFallbackReason/, 'debug state separates requested, effective, and failed overlay authority');
-assert.match(core, /loadBoundarySplatLiveUnionCoefficientOverlay,[\s\S]*auditBoundarySplatLiveUnionCoefficientOverlayPopulation,[\s\S]*clearBoundarySplatLiveUnionCoefficientOverlay/, 'the witness API can load, audit, and clear one overlay without UI coupling');
+assert.match(core, /loadBoundarySplatLiveUnionCoefficientOverlay,[\s\S]*auditBoundarySplatLiveUnionCoefficientOverlayPopulation,[\s\S]*auditBoundarySplatLiveUnionSourceHashes,[\s\S]*clearBoundarySplatLiveUnionCoefficientOverlay/, 'the witness API can load, audit source and population authority, and clear one overlay without UI coupling');
 
 console.log('volume layer coefficient live union runtime contracts passed');
