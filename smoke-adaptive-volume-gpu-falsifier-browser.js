@@ -272,10 +272,10 @@ fn sampleDense(point: vec3<f32>) -> f32 {
   }}}
   return max(0.0, sampled);
 }
-@compute @workgroup_size(64)
+@compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let pixel = gid.x;
-  if (pixel >= p.width * p.height) { return; }
+  if (gid.x >= p.width || gid.y >= p.height) { return; }
+  let pixel = gid.x + gid.y * p.width;
   let ray = rays[pixel];
   if (ray.endPad.x <= ray.directionStart.w) { output[pixel] = 0.0; return; }
   let stepWorld = min(min((p.maximum.x - p.minimum.x), (p.maximum.y - p.minimum.y)), (p.maximum.z - p.minimum.z)) / f32(p.grid) / p.samplesPerCell;
@@ -330,10 +330,10 @@ fn brickExitDistance(point: vec3<f32>, direction: vec3<f32>, brick: vec3<u32>) -
   }
   return result;
 }
-@compute @workgroup_size(64)
+@compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let pixel = gid.x;
-  if (pixel >= p.width * p.height) { return; }
+  if (gid.x >= p.width || gid.y >= p.height) { return; }
+  let pixel = gid.x + gid.y * p.width;
   let ray = rays[pixel];
   if (ray.endPad.x <= ray.directionStart.w) { output[pixel] = 0.0; return; }
   let fineStep = min(min((p.maximum.x - p.minimum.x), (p.maximum.y - p.minimum.y)), (p.maximum.z - p.minimum.z)) / f32(p.grid) / p.samplesPerCell;
@@ -680,7 +680,9 @@ async function profileScaleLawWorkloads(device, {
       const pass = encoder.beginComputePass({ timestampWrites: { querySet, beginningOfPassWriteIndex, endOfPassWriteIndex } });
       pass.setPipeline(pipeline);
       pass.setBindGroup(0, bindGroup);
-      for (let repeat = 0; repeat < config.scaleDispatchRepeats; repeat += 1) pass.dispatchWorkgroups(Math.ceil(pixelCount / 64));
+      for (let repeat = 0; repeat < config.scaleDispatchRepeats; repeat += 1) {
+        pass.dispatchWorkgroups(Math.ceil(width / 8), Math.ceil(height / 8));
+      }
       pass.end();
     };
     const pairedProfile = await profilePairedRepeatedPasses(device, {
@@ -958,7 +960,7 @@ async function run() {
     const pass = encoder.beginComputePass({ timestampWrites: { querySet, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: outputIndex } });
     pass.setPipeline(pipeline);
     pass.setBindGroup(0, bindGroup);
-    pass.dispatchWorkgroups(Math.ceil(width * height / 64));
+    pass.dispatchWorkgroups(Math.ceil(width / 8), Math.ceil(height / 8));
     pass.end();
   };
   const encodeBuild = (encoder, querySet, includeRender) => {
