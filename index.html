@@ -11391,6 +11391,11 @@ let routedCanonicalInjection = canonicalVolumeSourceDefaults('current').injectio
 let routedCanonicalBuoyancy = canonicalVolumeSourceDefaults('current').buoyancy;
 let routedVolumeReactionFuelScale = 1;
 let routedVolumeMajorantCadence = 1;
+let routedExactStateCadenceRequested = false;
+let routedExactStateCadenceDepth = 4;
+let routedExactStateCadenceDelaySteps = 2;
+let routedExactStateCadenceProducerIntervalMs = 20;
+let routedExactStateCadencePresentationStepMs = 40;
 let routedVolumePressureIterations = undefined;
 let routedVolumePressureStrategy = 'global';
 let routedVolumePressureMode = 'auto';
@@ -16632,6 +16637,11 @@ function readVolumeControls() {
     runtimeQualityRequested: routedVolumeRuntimeQuality,
     gpuPressure: routedVolumeGpuPressure,
     runtimeQualityReason: routedVolumeQualityReason,
+    exactStateCadenceRequested: routedExactStateCadenceRequested,
+    exactStateCadenceDepth: routedExactStateCadenceDepth,
+    exactStateCadenceDelaySteps: routedExactStateCadenceDelaySteps,
+    exactStateCadenceProducerIntervalMs: routedExactStateCadenceProducerIntervalMs,
+    exactStateCadencePresentationStepMs: routedExactStateCadencePresentationStepMs,
     majorantCadence: routedVolumeMajorantCadence,
     pressureIterations: pressureConfig.pressureIterations,
     pressureStrategy: pressureConfig.pressureStrategy,
@@ -17178,6 +17188,30 @@ async function initKaminosVolumeRoute() {
   const routeMajorantGrid = parseInt(params.get('volume_majorant_grid') || '', 10);
   if ([24, 32, 48].includes(routeMajorantGrid)) {
     document.getElementById('volume-majorant-grid').value = String(routeMajorantGrid);
+  }
+  if (params.has('volume_exact_state_cadence')) {
+    const requestedCadence = String(params.get('volume_exact_state_cadence') || '').toLowerCase();
+    routedExactStateCadenceRequested = ['1', 'true', 'yes', 'on'].includes(requestedCadence);
+  }
+  const routeCadenceDepth = Number(params.get('volume_cadence_depth'));
+  if (params.has('volume_cadence_depth') && Number.isSafeInteger(routeCadenceDepth) && routeCadenceDepth > 0) {
+    routedExactStateCadenceDepth = routeCadenceDepth;
+  }
+  const routeCadenceDelaySteps = Number(params.get('volume_cadence_delay_steps'));
+  if (
+    params.has('volume_cadence_delay_steps')
+    && Number.isSafeInteger(routeCadenceDelaySteps)
+    && routeCadenceDelaySteps >= 0
+  ) {
+    routedExactStateCadenceDelaySteps = routeCadenceDelaySteps;
+  }
+  const routeCadenceProducerMs = Number(params.get('volume_cadence_producer_ms'));
+  if (params.has('volume_cadence_producer_ms') && Number.isFinite(routeCadenceProducerMs) && routeCadenceProducerMs > 0) {
+    routedExactStateCadenceProducerIntervalMs = routeCadenceProducerMs;
+  }
+  const routeCadencePresentationMs = Number(params.get('volume_cadence_presentation_ms'));
+  if (params.has('volume_cadence_presentation_ms') && Number.isFinite(routeCadencePresentationMs) && routeCadencePresentationMs > 0) {
+    routedExactStateCadencePresentationStepMs = routeCadencePresentationMs;
   }
   const routeMajorantCadence = Number(params.get('volume_majorant_cadence'));
   if (params.has('volume_majorant_cadence') && Number.isFinite(routeMajorantCadence)) {
