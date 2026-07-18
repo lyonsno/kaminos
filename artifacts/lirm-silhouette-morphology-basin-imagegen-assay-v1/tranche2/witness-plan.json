@@ -1,0 +1,313 @@
+{
+  "schema": "kaminos.lirm-silhouette-morphology-basin-blender-witness-plan.v1",
+  "purpose": "Render fixed left, front, right, and opposite witnesses for five morphology-basin Trellis casts.",
+  "greenroomAuthority": "/Users/noahlyons/.local/state/gpu-greenroom",
+  "jobType": "kaminos_blender_glb_witness_molten_0715",
+  "effectiveCwd": "/private/tmp/kaminos-molten-silhouette-basin-0717",
+  "witnessScript": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+    "sha256": "d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+  },
+  "cells": [
+    {
+      "cellId": "basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "sourceTrellisJobId": "a549cbc54993",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/output.glb",
+        "sha256": "74c61511f5b9f786c3850b7af6ac609d57fc8d1aa5a68d26d33ab263ce6b07f4",
+        "bytes": 9382068
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/left",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/left/render.png",
+      "jobId": "11ae957beaa9"
+    },
+    {
+      "cellId": "basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "sourceTrellisJobId": "a549cbc54993",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/output.glb",
+        "sha256": "74c61511f5b9f786c3850b7af6ac609d57fc8d1aa5a68d26d33ab263ce6b07f4",
+        "bytes": 9382068
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/front",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/front/render.png",
+      "jobId": "bbf125c928bf"
+    },
+    {
+      "cellId": "basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "sourceTrellisJobId": "a549cbc54993",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/output.glb",
+        "sha256": "74c61511f5b9f786c3850b7af6ac609d57fc8d1aa5a68d26d33ab263ce6b07f4",
+        "bytes": 9382068
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/right",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/right/render.png",
+      "jobId": "ab580b5521a2"
+    },
+    {
+      "cellId": "basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "sourceTrellisJobId": "a549cbc54993",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/output.glb",
+        "sha256": "74c61511f5b9f786c3850b7af6ac609d57fc8d1aa5a68d26d33ab263ce6b07f4",
+        "bytes": 9382068
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/opposite",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/opposite/render.png",
+      "jobId": "67e44310ebe2"
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032",
+      "sourceTrellisJobId": "24f9ccf6da5b",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/output.glb",
+        "sha256": "fb2f5d7950c23aa0e83162976305e03181a1fb25576e1c05c3b83f2a07aebbdc",
+        "bytes": 8625500
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/left",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/left/render.png",
+      "jobId": "18f4503ca3db"
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032",
+      "sourceTrellisJobId": "24f9ccf6da5b",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/output.glb",
+        "sha256": "fb2f5d7950c23aa0e83162976305e03181a1fb25576e1c05c3b83f2a07aebbdc",
+        "bytes": 8625500
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/front",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/front/render.png",
+      "jobId": "1133d392cd63"
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032",
+      "sourceTrellisJobId": "24f9ccf6da5b",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/output.glb",
+        "sha256": "fb2f5d7950c23aa0e83162976305e03181a1fb25576e1c05c3b83f2a07aebbdc",
+        "bytes": 8625500
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/right",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/right/render.png",
+      "jobId": "907139407c03"
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032",
+      "sourceTrellisJobId": "24f9ccf6da5b",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/output.glb",
+        "sha256": "fb2f5d7950c23aa0e83162976305e03181a1fb25576e1c05c3b83f2a07aebbdc",
+        "bytes": 8625500
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/opposite",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/opposite/render.png",
+      "jobId": "59e3d073a230"
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "sourceTrellisJobId": "9f265ecee317",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/output.glb",
+        "sha256": "72b664064c67c645dadeb470948db949f6dfabbe293e928253fe42b0bc57b53e",
+        "bytes": 9268008
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/left",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/left/render.png",
+      "jobId": "621ba95728a7"
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "sourceTrellisJobId": "9f265ecee317",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/output.glb",
+        "sha256": "72b664064c67c645dadeb470948db949f6dfabbe293e928253fe42b0bc57b53e",
+        "bytes": 9268008
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/front",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/front/render.png",
+      "jobId": "6a0d46f57fb2"
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "sourceTrellisJobId": "9f265ecee317",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/output.glb",
+        "sha256": "72b664064c67c645dadeb470948db949f6dfabbe293e928253fe42b0bc57b53e",
+        "bytes": 9268008
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/right",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/right/render.png",
+      "jobId": "e631f605ae0c"
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "sourceTrellisJobId": "9f265ecee317",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/output.glb",
+        "sha256": "72b664064c67c645dadeb470948db949f6dfabbe293e928253fe42b0bc57b53e",
+        "bytes": 9268008
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/opposite",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/opposite/render.png",
+      "jobId": "061d10cc7f2d"
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032",
+      "sourceTrellisJobId": "74bafb248743",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/output.glb",
+        "sha256": "ec528069a6c0c833ca005a65728488273ebbdd2fdddb8953cd5b751da933ef82",
+        "bytes": 9230848
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/left",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/left/render.png",
+      "jobId": "c8774e2dca9b"
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032",
+      "sourceTrellisJobId": "74bafb248743",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/output.glb",
+        "sha256": "ec528069a6c0c833ca005a65728488273ebbdd2fdddb8953cd5b751da933ef82",
+        "bytes": 9230848
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/front",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/front/render.png",
+      "jobId": "74b684997580"
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032",
+      "sourceTrellisJobId": "74bafb248743",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/output.glb",
+        "sha256": "ec528069a6c0c833ca005a65728488273ebbdd2fdddb8953cd5b751da933ef82",
+        "bytes": 9230848
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/right",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/right/render.png",
+      "jobId": "ca8bbc2f2dd6"
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032",
+      "sourceTrellisJobId": "74bafb248743",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/output.glb",
+        "sha256": "ec528069a6c0c833ca005a65728488273ebbdd2fdddb8953cd5b751da933ef82",
+        "bytes": 9230848
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/opposite",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/opposite/render.png",
+      "jobId": "e9ac2d6fffe4"
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "sourceTrellisJobId": "23ae3d019281",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717032/output.glb",
+        "sha256": "6d48fc3a766e0c38982923d21f8933d273ca7b14d2d0fa18ba53897e5e41b94a",
+        "bytes": 9347792
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717032/left",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717032/left/render.png",
+      "jobId": "c94885fac1f5"
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "sourceTrellisJobId": "23ae3d019281",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717032/output.glb",
+        "sha256": "6d48fc3a766e0c38982923d21f8933d273ca7b14d2d0fa18ba53897e5e41b94a",
+        "bytes": 9347792
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717032/front",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717032/front/render.png",
+      "jobId": "64554d4ea0f4"
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "sourceTrellisJobId": "23ae3d019281",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717032/output.glb",
+        "sha256": "6d48fc3a766e0c38982923d21f8933d273ca7b14d2d0fa18ba53897e5e41b94a",
+        "bytes": 9347792
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717032/right",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717032/right/render.png",
+      "jobId": "3b458a54897c"
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "sourceTrellisJobId": "23ae3d019281",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2,
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717032/output.glb",
+        "sha256": "6d48fc3a766e0c38982923d21f8933d273ca7b14d2d0fa18ba53897e5e41b94a",
+        "bytes": 9347792
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717032/opposite",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/witness/basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717032/opposite/render.png",
+      "jobId": "7ec3b4f9168e"
+    }
+  ]
+}

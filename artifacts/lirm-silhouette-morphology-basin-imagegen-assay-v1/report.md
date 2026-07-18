@@ -46,3 +46,33 @@ Five `717032` cells cover nonredundant crystallization questions and consume the
 | basin 22 / metabolizer | Does the largest arch-bodied negative-space structure resolve rather than collapse into a shell? |
 
 `tranche2/trellis-plan.json` binds those exact input hashes to a fixed comparable route: `gpu-greenroom/trellis2mlx_fast`, seed `42`, resolution `512`, six steps, no cascade, 200,000 target faces, 1024px textures, and simplify-first. `tranche2/trellis-submission-report.json` records the five submitted Greenroom job IDs. No 3D result is admitted until the effective completion receipt proves that route and a four-view Blender witness establishes visible topology survival.
+
+## Trellis Crystallization
+
+All five promoted cells completed through the requested `trellis2mlx_fast` route with exit code zero. `tranche2/trellis-stage-receipts.json` preserves the full Greenroom request and completion receipts, effective route parameters, input and output hashes, Trellis extraction metrics, and all 20 Blender witness receipts. The durable GLBs are in `tranche2/trellis-outputs/`; the four-view renders are in `tranche2/witnesses/`.
+
+The Blender receipts retain an obsolete registered `effective_defaults.witness_script` path from the prior worktree. Every invocation overrides it: the request, effective command, recorded script hash, and effective cwd all point at this worktree's witness script, with `ignored_params: null`. The stale default is therefore recorded as receipt noise rather than treated as the route that ran.
+
+| Cell | Runtime | Sparse voxels | Final faces | Filled / oversized holes |
+| --- | ---: | ---: | ---: | ---: |
+| basin 03 / metabolizer | 85.9s | 2,905 | 192,170 | 5,928 / 1,083 |
+| basin 10 / crawler | 70.8s | 2,451 | 193,399 | 3,255 / 508 |
+| basin 10 / metabolizer | 71.2s | 2,461 | 167,136 | 3,303 / 683 |
+| basin 15 / crawler | 66.7s | 2,021 | 183,433 | 1,583 / 371 |
+| basin 22 / metabolizer | 94.8s | 3,145 | 156,560 | 5,992 / 1,806 |
+
+The five runs averaged 77.9 seconds and 178,540 final faces. The extraction diagnostics still report unresolved oversized holes, so these are not claimed to be watertight production meshes. That metric does not substitute for the visual question in this assay: whether the image basin becomes a complete, rear-resolved spatial object whose defining topology survives beyond the source view.
+
+`tranche2/trellis-witness-contact-sheet.png` is the inspected 5-row by 4-view witness; SHA-256: `eb022533832b1924f32ca5960e8e9245cec908b529a97eadcbd569c0fd873038`. Original-resolution inspection of the hidden sides establishes:
+
+- basin 03 / metabolizer preserves the bifurcated upright mass and large hollow arches. Its rear is modeled rather than an open source-view shell, although its long upper extrusion remains an awkward accidental appendage.
+- basin 10 / crawler resolves as a compact, closed, segmented beetle-larva body with six distributed contacts and a simple coherent rear.
+- basin 10 / metabolizer retains its front-loaded negative space and inverted mass hierarchy. The rear simplifies substantially but remains one visibly complete object.
+- basin 15 / crawler remains longer, lower, and more strongly annulated than basin 10. Its rear segmentation and broader contact plan survive, demonstrating that the two crawler controls do not collapse to one Trellis archetype.
+- basin 22 / metabolizer preserves the largest lateral arches and frontal cavity system. Its hidden side is simpler and more bilaterally regular, but the cast remains complete enough to read as the same organism from all four views.
+
+### Campaign verdict
+
+The image-to-3D stage strengthens the central result rather than erasing it. All five selected images become coherent 360-degree objects, and the differences between crawler and metabolizer outputs remain differences in silhouette, topology, negative space, segmentation, and contact plan rather than material decoration. The strongest evidence is the controlled basin 10 pair: one scaffold and seed produce either a low segmented crawler or a hollow front-loaded organism solely by changing the prompt stance, and both structures survive Trellis.
+
+This clears the campaign's second load-bearing gate: crude connected implicit geometry can seed a controllable image basin, and selected departures from the scaffold can crystallize into distinct spatial casts. It does not establish anatomical validity, production topology, riggability, or broad creature-space coverage. The next high-leverage question is whether silhouette and gestalt archetypes can be harvested or learned as additional armature pressure so the procedural system can vary whole-body identity before imagegen supplies anatomy.
