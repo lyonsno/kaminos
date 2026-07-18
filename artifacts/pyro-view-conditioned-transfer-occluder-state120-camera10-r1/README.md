@@ -15,7 +15,7 @@ Geometry: `interleaved-intragroup-plates-v0` with depth policy `alternating-quar
 
 Route:
 - generator worktree: `/private/tmp/kaminos-pyro-view-conditioned-transfer-compression-0717`
-- generator commit: `620d0a66d63757016a09060ce3c2e65ebc904ec9`
+- generator commit: `246abb3cee020604bc0b9b59a467547a52043601`
 - command: `/private/tmp/kaminos-mlx-residual-venv/bin/python /private/tmp/kaminos-pyro-view-conditioned-transfer-compression-0717/view-conditioned-transfer-occluder-witness.py --input-manifest /private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/input-manifest.json --geometry interleaved-intragroup-plates-v0 --occluder-rgb 0,0,0 --treatment d12-t2=/private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/reductions/d12-t2/report.json --treatment d12-t4=/private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/reductions/d12-t4/report.json --out-dir artifacts/pyro-view-conditioned-transfer-occluder-state120-camera10-r1`
 - source manifest: `/private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/input-manifest.json` (`c07a37517ad736ea69128984b8ef65bc8682a7df0668c2593246ce547d205c35`)
 - transfer arrays: `/private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/transfer-field.npz` (`4f37287be81ae00e23ff73c9a1d053ae3c251b492f07c722672bbad686f0a6f7`)
