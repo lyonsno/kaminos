@@ -618,37 +618,84 @@ const fetchOptionsRoute = await fetchOptionsSession.registerRoute({
 });
 const directFetchStarted = deferred();
 const directFetchRelease = deferred();
-const directFetchOptions = { headers: new Headers({ authorization: 'direct-admitted' }) };
+const directFetchOptions = {
+  headers: new Headers({ authorization: 'direct-admitted' }),
+  custom: {},
+};
 const observedDirectAuthorizations = [];
+const observedDirectRouting = [];
 const directSources = Object.freeze(Object.fromEntries(
   plan.chunkIds.map(chunkId => [chunkId, `https://models.example/direct-${chunkId}.bin`]),
 ));
 const directBytesByUrl = new Map(
   plan.chunkIds.map(chunkId => [directSources[chunkId], chunkBytes[chunkId]]),
 );
-const directLoad = fetchOptionsRoute.loadModelResourceChunksFromSources({
-  plan,
-  sources: directSources,
-  fetchOptions: directFetchOptions,
-  async fetch(url, options) {
-    observedDirectAuthorizations.push(new Headers(options.headers).get('authorization'));
-    if (url === directSources['encoder-0']) {
-      directFetchStarted.resolve();
-      await directFetchRelease.promise;
-      options.headers.set('authorization', 'direct-mutated-by-first-fetch');
-    }
-    return responseFor(directBytesByUrl.get(url));
-  },
-});
-await directFetchStarted.promise;
-directFetchOptions.headers.set('authorization', 'direct-mutated-after-admission');
-directFetchRelease.resolve();
-const directLease = await directLoad;
+const originalRoutingDescriptor = Object.getOwnPropertyDescriptor(Object.prototype, 'routing');
+let directLease;
+try {
+  const directLoad = fetchOptionsRoute.loadModelResourceChunksFromSources({
+    plan,
+    sources: directSources,
+    fetchOptions: directFetchOptions,
+    async fetch(url, options) {
+      observedDirectAuthorizations.push(new Headers(options.headers).get('authorization'));
+      observedDirectRouting.push(options.custom.routing ?? null);
+      if (url === directSources['encoder-0']) {
+        directFetchStarted.resolve();
+        await directFetchRelease.promise;
+        options.headers.authorization = 'direct-mutated-by-first-fetch';
+        Object.defineProperty(Object.prototype, 'routing', {
+          value: 'direct-mutated-by-first-fetch-prototype',
+          configurable: true,
+          writable: true,
+        });
+      }
+      return responseFor(directBytesByUrl.get(url));
+    },
+  });
+  await directFetchStarted.promise;
+  directFetchOptions.headers.set('authorization', 'direct-mutated-after-admission');
+  Object.defineProperty(Object.prototype, 'routing', {
+    value: 'direct-mutated-after-admission-prototype',
+    configurable: true,
+    writable: true,
+  });
+  directFetchRelease.resolve();
+  directLease = await directLoad;
+} finally {
+  directFetchRelease.resolve();
+  if (originalRoutingDescriptor) {
+    Object.defineProperty(Object.prototype, 'routing', originalRoutingDescriptor);
+  } else {
+    delete Object.prototype.routing;
+  }
+}
 assert.deepEqual(
   observedDirectAuthorizations,
   ['direct-admitted', 'direct-admitted', 'direct-admitted', 'direct-admitted'],
   'direct chunk loading must snapshot at admission and materialize independently per fetch',
 );
+assert.deepEqual(
+  observedDirectRouting,
+  [null, null, null, null],
+  'direct chunk loading must sever inherited prototype authority for every fetch',
+);
+const buffersBeforeNestedArray = fetchOptionsFixture.buffers.length;
+let nestedArrayFetchCount = 0;
+await assert.rejects(
+  () => fetchOptionsRoute.loadModelResourceChunksFromSources({
+    plan,
+    sources: directSources,
+    fetchOptions: { custom: [] },
+    async fetch() {
+      nestedArrayFetchCount += 1;
+      throw new Error('nested-array rejection must precede fetch');
+    },
+  }),
+  /fetchOptions.*arrays.*headers|arrays.*fetchOptions\.headers/i,
+);
+assert.equal(nestedArrayFetchCount, 0);
+assert.equal(fetchOptionsFixture.buffers.length, buffersBeforeNestedArray);
 assert.equal(directLease.release().status, 'released');
 fetchOptionsSession.unregisterRoute(fetchOptionsRoute.routeId);
 fetchOptionsSession.close();

@@ -1,4 +1,102 @@
 const FETCH_OPTION_SNAPSHOT_KIND = Symbol('kaminos.fetch-option-snapshot-kind');
+const HeadersConstructor = globalThis.Headers;
+const headersAppend = HeadersConstructor?.prototype?.append;
+const headersForEach = HeadersConstructor?.prototype?.forEach;
+
+function headerPrimitive(value, path, label) {
+  if (
+    value == null
+    || typeof value === 'string'
+    || typeof value === 'number'
+    || typeof value === 'boolean'
+    || typeof value === 'bigint'
+  ) return String(value);
+  throw new Error(`${label} fetchOptions headers require primitive names and values at ${path}`);
+}
+
+function assertOnlyDenseArrayIndexes(value, path, label) {
+  for (const key of Reflect.ownKeys(value)) {
+    if (key === 'length') continue;
+    if (typeof key === 'symbol' || !/^(0|[1-9][0-9]*)$/.test(key)) {
+      throw new Error(`${label} fetchOptions arrays cannot carry named properties at ${path}`);
+    }
+  }
+  for (let index = 0; index < value.length; index += 1) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, index);
+    if (!descriptor || !Object.hasOwn(descriptor, 'value')) {
+      throw new Error(`${label} fetchOptions require dense data arrays; invalid element at ${path}[${index}]`);
+    }
+  }
+}
+
+function snapshotHeadersInit(value, path, label) {
+  if (value == null) return value;
+  if (
+    typeof HeadersConstructor !== 'function'
+    || typeof headersAppend !== 'function'
+    || typeof headersForEach !== 'function'
+  ) {
+    throw new Error(`${label} fetchOptions headers require the platform Headers API`);
+  }
+
+  const normalized = new HeadersConstructor();
+  if (value instanceof HeadersConstructor) {
+    Reflect.apply(headersForEach, value, [
+      (headerValue, headerName) => {
+        Reflect.apply(headersAppend, normalized, [headerName, headerValue]);
+      },
+    ]);
+  } else if (Array.isArray(value)) {
+    assertOnlyDenseArrayIndexes(value, path, label);
+    for (let index = 0; index < value.length; index += 1) {
+      const tuple = Object.getOwnPropertyDescriptor(value, index).value;
+      if (!Array.isArray(tuple) || tuple.length !== 2) {
+        throw new Error(`${label} fetchOptions headers ${path}[${index}] must be a two-entry array`);
+      }
+      assertOnlyDenseArrayIndexes(tuple, `${path}[${index}]`, label);
+      const name = headerPrimitive(
+        Object.getOwnPropertyDescriptor(tuple, 0).value,
+        `${path}[${index}][0]`,
+        label,
+      );
+      const headerValue = headerPrimitive(
+        Object.getOwnPropertyDescriptor(tuple, 1).value,
+        `${path}[${index}][1]`,
+        label,
+      );
+      Reflect.apply(headersAppend, normalized, [name, headerValue]);
+    }
+  } else {
+    const prototype = typeof value === 'object' ? Object.getPrototypeOf(value) : null;
+    if (!value || typeof value !== 'object' || (prototype !== Object.prototype && prototype !== null)) {
+      throw new Error(`${label} fetchOptions headers must be Headers, a record, or tuple arrays`);
+    }
+    for (const key of Reflect.ownKeys(value)) {
+      if (typeof key === 'symbol') {
+        throw new Error(`${label} fetchOptions headers cannot contain symbol keys at ${path}`);
+      }
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) {
+        throw new Error(`${label} fetchOptions headers require enumerable data properties at ${path}.${key}`);
+      }
+      Reflect.apply(headersAppend, normalized, [
+        key,
+        headerPrimitive(descriptor.value, `${path}.${key}`, label),
+      ]);
+    }
+  }
+
+  const entries = [];
+  Reflect.apply(headersForEach, normalized, [
+    (headerValue, headerName) => {
+      entries.push(Object.freeze([headerName, headerValue]));
+    },
+  ]);
+  return Object.freeze({
+    [FETCH_OPTION_SNAPSHOT_KIND]: 'headers',
+    entries: Object.freeze(entries),
+  });
+}
 
 function snapshotValue(value, path, ancestors, label) {
   if (
@@ -18,12 +116,8 @@ function snapshotValue(value, path, ancestors, label) {
   }
   if (ancestors.has(value)) throw new Error(`${label} fetchOptions contain a cycle at ${path}`);
 
-  const HeadersConstructor = globalThis.Headers;
   if (typeof HeadersConstructor === 'function' && value instanceof HeadersConstructor) {
-    return Object.freeze({
-      [FETCH_OPTION_SNAPSHOT_KIND]: 'headers',
-      entries: Object.freeze([...value.entries()].map(entry => Object.freeze([...entry]))),
-    });
+    return snapshotHeadersInit(value, path, label);
   }
   const BlobConstructor = globalThis.Blob;
   if (typeof BlobConstructor === 'function' && value instanceof BlobConstructor) {
@@ -52,32 +146,18 @@ function snapshotValue(value, path, ancestors, label) {
     });
   }
 
+  if (Array.isArray(value)) {
+    throw new Error(`${label} fetchOptions arrays are only supported at fetchOptions.headers`);
+  }
   const prototype = Object.getPrototypeOf(value);
-  if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) {
+  if (prototype !== Object.prototype && prototype !== null) {
     const name = value.constructor?.name || 'host object';
     throw new Error(`${label} fetchOptions cannot snapshot mutable ${name} at ${path}`);
   }
 
   ancestors.add(value);
   try {
-    if (Array.isArray(value)) {
-      const snapshot = new Array(value.length);
-      for (let index = 0; index < value.length; index += 1) {
-        const descriptor = Object.getOwnPropertyDescriptor(value, index);
-        if (!descriptor || !Object.hasOwn(descriptor, 'value')) {
-          throw new Error(`${label} fetchOptions require dense data arrays; invalid element at ${path}[${index}]`);
-        }
-        snapshot[index] = snapshotValue(descriptor.value, `${path}[${index}]`, ancestors, label);
-      }
-      const namedKeys = Reflect.ownKeys(value).filter(key => (
-        key !== 'length' && (typeof key === 'symbol' || !/^(0|[1-9][0-9]*)$/.test(key))
-      ));
-      if (namedKeys.length > 0) {
-        throw new Error(`${label} fetchOptions arrays cannot carry named properties at ${path}`);
-      }
-      return Object.freeze(snapshot);
-    }
-    const snapshot = Object.create(prototype);
+    const snapshot = Object.create(null);
     for (const key of Reflect.ownKeys(value)) {
       if (typeof key === 'symbol') {
         throw new Error(`${label} fetchOptions cannot snapshot symbol keys at ${path}`);
@@ -86,8 +166,11 @@ function snapshotValue(value, path, ancestors, label) {
       if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) {
         throw new Error(`${label} fetchOptions require enumerable data properties at ${path}.${key}`);
       }
+      const childPath = `${path}.${key}`;
       Object.defineProperty(snapshot, key, {
-        value: snapshotValue(descriptor.value, `${path}.${key}`, ancestors, label),
+        value: path === 'fetchOptions' && key === 'headers'
+          ? snapshotHeadersInit(descriptor.value, childPath, label)
+          : snapshotValue(descriptor.value, childPath, ancestors, label),
         enumerable: true,
         configurable: false,
         writable: false,
@@ -102,13 +185,25 @@ function snapshotValue(value, path, ancestors, label) {
 export function materializeWebGpuModelFetchOptions(snapshot) {
   if (snapshot == null || typeof snapshot !== 'object') return snapshot;
   const kind = snapshot[FETCH_OPTION_SNAPSHOT_KIND];
-  if (kind === 'headers') return new globalThis.Headers(snapshot.entries);
+  if (kind === 'headers') {
+    const headers = Object.create(null);
+    for (let index = 0; index < snapshot.entries.length; index += 1) {
+      const entry = Object.getOwnPropertyDescriptor(snapshot.entries, index).value;
+      Object.defineProperty(headers, entry[0], {
+        value: entry[1],
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
+    }
+    return headers;
+  }
   if (kind === 'blob') return snapshot.value;
   if (kind === 'url-search-params') return new globalThis.URLSearchParams(snapshot.value);
   if (kind === 'array-buffer') return Uint8Array.from(snapshot.bytes).buffer;
   if (kind === 'bytes') return Uint8Array.from(snapshot.bytes);
-  if (Array.isArray(snapshot)) return snapshot.map(materializeWebGpuModelFetchOptions);
-  const value = Object.create(Object.getPrototypeOf(snapshot));
+  if (Array.isArray(snapshot)) throw new Error('model resource fetchOptions snapshot contains an unsupported array');
+  const value = Object.create(null);
   for (const [key, child] of Object.entries(snapshot)) {
     Object.defineProperty(value, key, {
       value: materializeWebGpuModelFetchOptions(child),

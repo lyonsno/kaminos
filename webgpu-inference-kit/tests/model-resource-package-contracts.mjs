@@ -464,7 +464,7 @@ const oneShotChunkLoad = snapshotRoute.loadModelResourcePackageFromSources({
     );
     if (url === oneShotChunkSources.encoder) return responseFor(byteSets.encoder);
     if (url === oneShotChunkSources.decoder['decoder-0']) {
-      options.headers.set('authorization', 'one-shot-mutated-by-first-chunk-fetch');
+      options.headers.authorization = 'one-shot-mutated-by-first-chunk-fetch';
       return responseFor(byteSets.decoder.slice(0, 4));
     }
     return responseFor(byteSets.decoder.slice(4));
@@ -855,7 +855,7 @@ const observedChildAuthorizations = [];
 const observedCustomFetchPairs = [];
 const admittedFetchOptions = {
   headers: { authorization: 'ordinary-admitted' },
-  custom: { pairs: [['routing', 'admitted']] },
+  custom: { routing: 'admitted' },
 };
 const childLoader = childLoaderRoute.createModelResourcePackageLoader({
   loaderId: 'phase-package-loader',
@@ -865,7 +865,7 @@ const childLoader = childLoaderRoute.createModelResourcePackageLoader({
   async fetch(url, options) {
     fetchedChildUrls.push(String(url));
     observedChildAuthorizations.push(new Headers(options.headers).get('authorization'));
-    observedCustomFetchPairs.push(options.custom.pairs[0][1]);
+    observedCustomFetchPairs.push(options.custom.routing);
     return responseFor(byteSets.encoder);
   },
 });
@@ -880,7 +880,7 @@ assert.equal(childLoaderFixture.buffers.length, 0, 'package admission must not a
 admittedSources.encoder = 'https://models.example/redirected-after-admission.bin';
 admittedChunkBytes.fill(0xff);
 admittedFetchOptions.headers.authorization = 'ordinary-mutated-after-admission';
-admittedFetchOptions.custom.pairs[0][1] = 'custom-mutated-after-admission';
+admittedFetchOptions.custom.routing = 'custom-mutated-after-admission';
 await assert.rejects(
   () => childLoader.acquireResource({ resourceId: 'missing' }),
   /unknown.*package resource|package resource.*missing/i,
@@ -1068,7 +1068,7 @@ const chunkFetchOptionsLoader = chunkFetchOptionsRoute.createModelResourcePackag
   async fetch(url, options) {
     observedChunkAuthorizations.push(new Headers(options.headers).get('authorization'));
     if (url === chunkSourceUrls['decoder-0']) {
-      options.headers.set('authorization', 'chunk-mutated-by-first-fetch');
+      options.headers.authorization = 'chunk-mutated-by-first-fetch';
     }
     return responseFor(url === chunkSourceUrls['decoder-0']
       ? byteSets.decoder.slice(0, 4)
@@ -1198,5 +1198,175 @@ assert.equal(partialResidentRoute.residency.snapshot().activeLeaseCount, 0);
 assert.equal(partialResidentLoader.close().status, 'closed');
 partialResidentSession.unregisterRoute(partialResidentRoute.routeId);
 partialResidentSession.close();
+
+const prototypeFixture = deviceFixture();
+const prototypeSession = await createWebGpuInferenceSession({
+  sessionId: 'model-resource-package-prototype-authority',
+  device: prototypeFixture.device,
+  adapterName: 'fixture-adapter',
+});
+const prototypeRoute = await prototypeSession.registerRoute({
+  routeId: 'package-prototype-authority-route',
+});
+const prototypeSources = {
+  encoder: 'https://models.example/prototype-encoder.bin',
+  decoder: {
+    'decoder-0': 'https://models.example/prototype-decoder-0.bin',
+    'decoder-1': 'https://models.example/prototype-decoder-1.bin',
+  },
+};
+const originalPrototypeRouting = Object.getOwnPropertyDescriptor(Object.prototype, 'routing');
+const oneShotPrototypeStarted = deferred();
+const oneShotPrototypeRelease = deferred();
+const observedOneShotPrototypeRouting = [];
+let oneShotPrototypeLease;
+try {
+  const loading = prototypeRoute.loadModelResourcePackageFromSources({
+    package: mixedPackage,
+    sources: prototypeSources,
+    fetchOptions: { custom: {} },
+    async fetch(url, options) {
+      observedOneShotPrototypeRouting.push(options.custom.routing ?? null);
+      if (url === prototypeSources.encoder) {
+        oneShotPrototypeStarted.resolve();
+        await oneShotPrototypeRelease.promise;
+        return responseFor(byteSets.encoder);
+      }
+      if (url === prototypeSources.decoder['decoder-0']) {
+        Object.defineProperty(Object.prototype, 'routing', {
+          value: 'one-shot-mutated-by-first-chunk-prototype',
+          configurable: true,
+          writable: true,
+        });
+        return responseFor(byteSets.decoder.slice(0, 4));
+      }
+      return responseFor(byteSets.decoder.slice(4));
+    },
+  });
+  await oneShotPrototypeStarted.promise;
+  Object.defineProperty(Object.prototype, 'routing', {
+    value: 'one-shot-mutated-after-admission-prototype',
+    configurable: true,
+    writable: true,
+  });
+  oneShotPrototypeRelease.resolve();
+  oneShotPrototypeLease = await loading;
+} finally {
+  oneShotPrototypeRelease.resolve();
+  if (originalPrototypeRouting) {
+    Object.defineProperty(Object.prototype, 'routing', originalPrototypeRouting);
+  } else {
+    delete Object.prototype.routing;
+  }
+}
+assert.deepEqual(
+  observedOneShotPrototypeRouting,
+  [null, null, null],
+  'one-shot package admission must sever inherited prototype authority across children and chunks',
+);
+assert.equal(oneShotPrototypeLease.release().status, 'released');
+for (const allocation of chunkOnlyPackage.resources[0].chunkPlan.allocations) {
+  assert.equal(
+    prototypeSession.residency.evict(allocation.resourceId).status,
+    'evicted',
+    'the reusable prototype probe must exercise fresh chunk fetches rather than resident reuse',
+  );
+}
+
+const reusablePrototypeSources = {
+  decoder: {
+    'decoder-0': 'https://models.example/reusable-prototype-decoder-0.bin',
+    'decoder-1': 'https://models.example/reusable-prototype-decoder-1.bin',
+  },
+};
+const observedReusablePrototypeRouting = [];
+const reusablePrototypeLoader = prototypeRoute.createModelResourcePackageLoader({
+  loaderId: 'package-prototype-authority-loader',
+  package: chunkOnlyPackage,
+  sources: reusablePrototypeSources,
+  fetchOptions: { custom: {} },
+  async fetch(url, options) {
+    observedReusablePrototypeRouting.push(options.custom.routing ?? null);
+    if (url === reusablePrototypeSources.decoder['decoder-0']) {
+      Object.defineProperty(Object.prototype, 'routing', {
+        value: 'reusable-mutated-by-first-chunk-prototype',
+        configurable: true,
+        writable: true,
+      });
+      return responseFor(byteSets.decoder.slice(0, 4));
+    }
+    return responseFor(byteSets.decoder.slice(4));
+  },
+});
+let reusablePrototypeLease;
+try {
+  Object.defineProperty(Object.prototype, 'routing', {
+    value: 'reusable-mutated-after-admission-prototype',
+    configurable: true,
+    writable: true,
+  });
+  reusablePrototypeLease = await reusablePrototypeLoader.acquireResource({ resourceId: 'decoder' });
+} finally {
+  if (originalPrototypeRouting) {
+    Object.defineProperty(Object.prototype, 'routing', originalPrototypeRouting);
+  } else {
+    delete Object.prototype.routing;
+  }
+}
+assert.deepEqual(
+  observedReusablePrototypeRouting,
+  [null, null],
+  'reusable package admission must sever inherited prototype authority across chunk fetches',
+);
+assert.equal(reusablePrototypeLease.release().status, 'released');
+assert.equal(reusablePrototypeLoader.close().status, 'closed');
+
+let tupleHeaderValue = null;
+let tupleHeadersWereCanonical = false;
+const tupleHeaderLease = await prototypeRoute.loadModelResourcePackageFromSources({
+  package: singleResourcePackage,
+  sources: { encoder: 'https://models.example/tuple-header-encoder.bin' },
+  fetchOptions: { headers: [['authorization', 'tuple-admitted']] },
+  async fetch(_url, options) {
+    tupleHeadersWereCanonical = Object.getPrototypeOf(options.headers) === null;
+    tupleHeaderValue = new Headers(options.headers).get('authorization');
+    return responseFor(byteSets.encoder);
+  },
+});
+assert.equal(
+  tupleHeadersWereCanonical,
+  true,
+  'lawful tuple-array HeadersInit must canonicalize to a prototype-severed HeadersInit record',
+);
+assert.equal(tupleHeaderValue, 'tuple-admitted');
+assert.equal(tupleHeaderLease.release().status, 'released');
+
+const buffersBeforePackageNestedArray = prototypeFixture.buffers.length;
+let packageNestedArrayFetchCount = 0;
+await assert.rejects(
+  () => prototypeRoute.loadModelResourcePackageFromSources({
+    package: singleResourcePackage,
+    sources: { encoder: 'https://models.example/rejected-array-encoder.bin' },
+    fetchOptions: { custom: [] },
+    async fetch() {
+      packageNestedArrayFetchCount += 1;
+      throw new Error('nested-array rejection must precede fetch');
+    },
+  }),
+  /fetchOptions.*arrays.*headers|arrays.*fetchOptions\.headers/i,
+);
+assert.throws(
+  () => prototypeRoute.createModelResourcePackageLoader({
+    loaderId: 'rejected-array-package-loader',
+    package: singleResourcePackage,
+    sources: { encoder: 'https://models.example/rejected-loader-array-encoder.bin' },
+    fetchOptions: { custom: [] },
+  }),
+  /fetchOptions.*arrays.*headers|arrays.*fetchOptions\.headers/i,
+);
+assert.equal(packageNestedArrayFetchCount, 0);
+assert.equal(prototypeFixture.buffers.length, buffersBeforePackageNestedArray);
+prototypeSession.unregisterRoute(prototypeRoute.routeId);
+prototypeSession.close();
 
 console.log('model resource package contracts passed');
