@@ -1,6 +1,7 @@
 export const KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE = 'webgpu-pbf-linked-cell-fluid-v0';
 export const KAMINOS_FINGER_FLUID_NEIGHBOR_GRID_CONTRACT = 'wgsl-linked-cell-neighbor-grid-v0';
 export const KAMINOS_FINGER_FLUID_DENSITY_CONTRACT = 'wgsl-pbf-density-constraint-v0';
+export const KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT = 'wgsl-analytic-boundary-density-support-v0';
 export const KAMINOS_FINGER_FLUID_VORTICITY_CONTRACT = 'wgsl-neighbor-vorticity-confinement-v0';
 export const KAMINOS_FINGER_FLUID_FREE_SURFACE_CONTRACT = 'wgsl-neighbor-free-surface-cohesion-v0';
 export const KAMINOS_FINGER_FLUID_REST_STATE_CONTRACT = 'wgsl-support-aware-persistent-rest-state-v0';
@@ -438,6 +439,53 @@ fn kernelGradient(offset: vec3<f32>) -> vec3<f32> {
   return offset / distance * magnitude;
 }
 
+fn boundary_kernel_antiderivative(x: f32) -> f32 {
+  let x2 = x * x;
+  let x3 = x2 * x;
+  let x5 = x3 * x2;
+  let x7 = x5 * x2;
+  let x9 = x7 * x2;
+  return x - (4.0 / 3.0) * x3 + (6.0 / 5.0) * x5 - (4.0 / 7.0) * x7 + x9 / 9.0;
+}
+
+fn boundary_missing_fraction(distance: f32) -> f32 {
+  let normalizedDistance = clamp(distance / params.fluid.x, 0.0, 1.0);
+  let fullHalfIntegral = boundary_kernel_antiderivative(1.0);
+  return (fullHalfIntegral - boundary_kernel_antiderivative(normalizedDistance)) / (2.0 * fullHalfIntegral);
+}
+
+fn boundary_missing_fraction_derivative(distance: f32) -> f32 {
+  if (distance >= params.fluid.x) { return 0.0; }
+  let normalizedDistance = distance / params.fluid.x;
+  let radialRemainder = 1.0 - normalizedDistance * normalizedDistance;
+  return -pow(radialRemainder, 4.0) / (2.0 * boundary_kernel_antiderivative(1.0) * params.fluid.x);
+}
+
+fn analytic_boundary_density_support(position: vec3<f32>) -> vec4<f32> {
+  let particleRadius = params.fluid.x * 0.22;
+  let terrainNormal = floorNormal(position);
+  let terrainSignedDistance = (position.y - (floorHeight(position) + particleRadius)) * terrainNormal.y;
+  let terrainDistance = max(0.0, terrainSignedDistance);
+  let terrainFraction = boundary_missing_fraction(terrainDistance);
+  let terrainFractionGradient = terrainNormal * boundary_missing_fraction_derivative(terrainDistance);
+
+  let sphereCenter = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]});
+  let fromSphere = position - sphereCenter;
+  let sphereNormal = normalize(fromSphere + vec3<f32>(0.00001, 0.00002, 0.00003));
+  let sphereSignedDistance = length(fromSphere) - (${OBSTACLE_RADIUS} + particleRadius);
+  let sphereDistance = max(0.0, sphereSignedDistance);
+  let sphereFraction = boundary_missing_fraction(sphereDistance);
+  let sphereFractionGradient = sphereNormal * boundary_missing_fraction_derivative(sphereDistance);
+
+  let missingFraction = terrainFraction + sphereFraction - terrainFraction * sphereFraction;
+  let fractionGradient = terrainFractionGradient * (1.0 - sphereFraction)
+    + sphereFractionGradient * (1.0 - terrainFraction);
+  let nonSelfRestDensity = max(params.fluid.y - 1.0, 0.0);
+  let densityContribution = nonSelfRestDensity * missingFraction;
+  let constraintGradient = fractionGradient * nonSelfRestDensity / max(params.fluid.y, 0.001);
+  return vec4<f32>(constraintGradient, densityContribution);
+}
+
 fn containsNeighbor(ids: vec4<u32>, candidate: u32) -> bool {
   return candidate != ${INVALID_NEIGHBOR_ID}u && any(ids == vec4<u32>(candidate));
 }
@@ -633,6 +681,11 @@ fn compute_density_lambda(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
   }
 
+  let boundarySupport = analytic_boundary_density_support(position);
+  density = density + boundarySupport.w;
+  gradientSelf = gradientSelf + boundarySupport.xyz;
+  gradientSquared = gradientSquared + dot(boundarySupport.xyz, boundarySupport.xyz);
+
   let constraint = density / params.fluid.y - 1.0;
   let lambda = -constraint / (gradientSquared + dot(gradientSelf, gradientSelf) + params.fluid.z);
   particles[index].predicted.w = clamp(lambda, -0.18, 0.12);
@@ -668,6 +721,8 @@ fn solve_position_delta(@builtin(global_invocation_id) gid: vec3<u32>) {
       }
     }
   }
+  let boundarySupport = analytic_boundary_density_support(position);
+  correction = correction + lambda * boundarySupport.xyz;
   let scaled = correction * params.fluid.w;
   let correctionLength = length(scaled);
   particles[index].delta = vec4<f32>(select(scaled, scaled * (0.008 / correctionLength), correctionLength > 0.008), particles[index].delta.w);
@@ -1630,6 +1685,76 @@ export function sampleFingerFluidPlaygroundHeight(x, z) {
   return -1.02 + radial * 0.22 + sourceShelf + spillway + shallowPool + deepPool + catchBasin + leftGate + rightGate + toyRipple;
 }
 
+function boundaryKernelAntiderivative(value) {
+  const x2 = value * value;
+  const x3 = x2 * value;
+  const x5 = x3 * x2;
+  const x7 = x5 * x2;
+  const x9 = x7 * x2;
+  return value - (4 / 3) * x3 + (6 / 5) * x5 - (4 / 7) * x7 + x9 / 9;
+}
+
+export function evaluateAnalyticBoundaryKernelSupport(boundaries, {
+  kernelRadius = 0.185,
+  restDensity = 24.3,
+} = {}) {
+  const radius = finite(kernelRadius, 0);
+  const targetDensity = finite(restDensity, 0);
+  if (radius <= 0 || targetDensity <= 0) {
+    throw new RangeError(`Boundary kernel support requires positive kernel radius and rest density: ${JSON.stringify({ kernelRadius, restDensity })}`);
+  }
+  if (!Array.isArray(boundaries)) throw new TypeError('Boundary kernel support requires an array of analytic boundaries');
+  const fullHalfIntegral = boundaryKernelAntiderivative(1);
+  let missingFraction = 0;
+  let fractionGradient = [0, 0, 0];
+  for (const boundary of boundaries) {
+    const distance = finite(boundary?.distance, Number.NaN);
+    const normal = boundary?.normal;
+    if (!Number.isFinite(distance) || !Array.isArray(normal) || normal.length !== 3 || !normal.every(Number.isFinite)) {
+      throw new TypeError(`Boundary kernel support received an invalid boundary: ${JSON.stringify(boundary)}`);
+    }
+    const normalizedDistance = clamp(distance / radius, 0, 1);
+    const boundaryFraction = (fullHalfIntegral - boundaryKernelAntiderivative(normalizedDistance)) / (2 * fullHalfIntegral);
+    const derivative = distance < radius
+      ? -((1 - normalizedDistance ** 2) ** 4) / (2 * fullHalfIntegral * radius)
+      : 0;
+    const boundaryGradient = normalize3(normal).map(component => component * derivative);
+    fractionGradient = fractionGradient.map((component, axis) => (
+      component * (1 - boundaryFraction) + boundaryGradient[axis] * (1 - missingFraction)
+    ));
+    missingFraction += boundaryFraction - missingFraction * boundaryFraction;
+  }
+  const nonSelfRestDensity = Math.max(targetDensity - 1, 0);
+  return {
+    contract: KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT,
+    missingFraction,
+    densityContribution: nonSelfRestDensity * missingFraction,
+    constraintGradient: fractionGradient.map(component => component * nonSelfRestDensity / targetDensity),
+  };
+}
+
+function measureAnalyticBoundaryDistance(position, kernelRadius) {
+  const [x, y, z] = position;
+  const particleRadius = kernelRadius * 0.22;
+  const sampleOffset = 0.018;
+  const terrainDx = (
+    sampleFingerFluidPlaygroundHeight(x + sampleOffset, z)
+    - sampleFingerFluidPlaygroundHeight(x - sampleOffset, z)
+  ) / (2 * sampleOffset);
+  const terrainDz = (
+    sampleFingerFluidPlaygroundHeight(x, z + sampleOffset)
+    - sampleFingerFluidPlaygroundHeight(x, z - sampleOffset)
+  ) / (2 * sampleOffset);
+  const terrainNormal = normalize3([-terrainDx, 1, -terrainDz]);
+  const terrainSignedDistance = (y - (sampleFingerFluidPlaygroundHeight(x, z) + particleRadius)) * terrainNormal[1];
+  const fromSphere = [x - OBSTACLE_CENTER[0], y - OBSTACLE_CENTER[1], z - OBSTACLE_CENTER[2]];
+  const sphereSignedDistance = Math.hypot(...fromSphere) - (OBSTACLE_RADIUS + particleRadius);
+  return {
+    distance: Math.max(0, Math.min(terrainSignedDistance, sphereSignedDistance)),
+    penetration: Math.max(0, -terrainSignedDistance, -sphereSignedDistance),
+  };
+}
+
 function smoothstepNumber(edge0, edge1, value) {
   const t = clamp((value - edge0) / (edge1 - edge0), 0, 1);
   return t * t * (3 - 2 * t);
@@ -1851,18 +1976,22 @@ export function createFingerFluidTruthSceneParticles(particleCount, scene = 'mul
 export function measureFingerFluidTruthSnapshot(particleData, particleCount, {
   scene = 'multi_regime_playground',
   restDensity = 24.3,
+  kernelRadius = 0.185,
   sourceRecirculationCount = 0,
 } = {}) {
   const effectiveScene = resolveFingerFluidTruthScene(scene);
   const count = Math.max(0, Math.min(Math.floor(finite(particleCount, 0)), Math.floor((particleData?.length || 0) / PARTICLE_FLOATS)));
   const occupancies = new Uint32Array(GRID_CELL_COUNT);
   const densityErrors = [];
+  const boundaryDensityErrors = [];
+  const bulkDensityErrors = [];
   const centerOfMass = [0, 0, 0];
   let finiteParticleCount = 0;
   let retainedParticleCount = 0;
   let totalKineticEnergy = 0;
   let densitySum = 0;
   let maxDensity = 0;
+  let maximumBoundaryPenetration = 0;
   for (let index = 0; index < count; index += 1) {
     const offset = index * PARTICLE_FLOATS;
     const position = [particleData[offset], particleData[offset + 1], particleData[offset + 2]];
@@ -1876,7 +2005,11 @@ export function measureFingerFluidTruthSnapshot(particleData, particleCount, {
     totalKineticEnergy += 0.5 * (velocity[0] ** 2 + velocity[1] ** 2 + velocity[2] ** 2);
     densitySum += density;
     maxDensity = Math.max(maxDensity, density);
-    densityErrors.push(Math.abs(density - restDensity) / Math.max(0.001, restDensity));
+    const relativeDensityError = Math.abs(density - restDensity) / Math.max(0.001, restDensity);
+    densityErrors.push(relativeDensityError);
+    const boundary = measureAnalyticBoundaryDistance(position, kernelRadius);
+    maximumBoundaryPenetration = Math.max(maximumBoundaryPenetration, boundary.penetration);
+    (boundary.distance < kernelRadius ? boundaryDensityErrors : bulkDensityErrors).push(relativeDensityError);
     const inBounds = position.every((value, axis) => value >= BOUNDS_MIN[axis] && value <= BOUNDS_MAX[axis]);
     if (!inBounds) continue;
     retainedParticleCount += 1;
@@ -1889,12 +2022,16 @@ export function measureFingerFluidTruthSnapshot(particleData, particleCount, {
   }
   const occupied = Array.from(occupancies).filter(value => value > 0).sort((a, b) => a - b);
   const sortedDensityErrors = densityErrors.sort((a, b) => a - b);
+  const sortedBoundaryDensityErrors = boundaryDensityErrors.sort((a, b) => a - b);
+  const sortedBulkDensityErrors = bulkDensityErrors.sort((a, b) => a - b);
   const percentile = (values, fraction) => values.length ? values[Math.min(values.length - 1, Math.floor((values.length - 1) * fraction))] : 0;
+  const mean = values => values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length);
   const cellSize = BOUNDS_MAX.map((value, axis) => (value - BOUNDS_MIN[axis]) / GRID_DIMS[axis]);
   const cellVolume = cellSize[0] * cellSize[1] * cellSize[2];
   return {
     schema: 'kaminos.finger-fluid-truth-snapshot.v0',
     contract: KAMINOS_FINGER_FLUID_TRUTH_GAUNTLET_CONTRACT,
+    boundaryPressureContract: KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT,
     scene: effectiveScene,
     populationMode: effectiveScene === 'multi_regime_playground' ? 'finite_source_recirculation' : 'closed_particle_population',
     particleCount: count,
@@ -1909,6 +2046,13 @@ export function measureFingerFluidTruthSnapshot(particleData, particleCount, {
     maxDensity: Number(maxDensity.toFixed(5)),
     relativeDensityErrorMean: Number((sortedDensityErrors.reduce((sum, value) => sum + value, 0) / Math.max(1, sortedDensityErrors.length)).toFixed(6)),
     relativeDensityErrorP95: Number(percentile(sortedDensityErrors, 0.95).toFixed(6)),
+    boundaryParticleCount: sortedBoundaryDensityErrors.length,
+    bulkParticleCount: sortedBulkDensityErrors.length,
+    boundaryRelativeDensityErrorMean: Number(mean(sortedBoundaryDensityErrors).toFixed(6)),
+    boundaryRelativeDensityErrorP95: Number(percentile(sortedBoundaryDensityErrors, 0.95).toFixed(6)),
+    bulkRelativeDensityErrorMean: Number(mean(sortedBulkDensityErrors).toFixed(6)),
+    bulkRelativeDensityErrorP95: Number(percentile(sortedBulkDensityErrors, 0.95).toFixed(6)),
+    maximumBoundaryPenetration: Number(maximumBoundaryPenetration.toFixed(6)),
     occupiedCellCount: occupied.length,
     occupiedVolumeProxy: Number((occupied.length * cellVolume).toFixed(6)),
     maximumCellOccupancy: occupied.at(-1) || 0,
@@ -1957,6 +2101,9 @@ export function evaluateFingerFluidTruthTrajectory(scene, trajectory) {
     ) {
       throw new Error(`Finger fluid truth checkpoint ${index} contains invalid density evidence`);
     }
+    if (snapshot.boundaryPressureContract !== KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT) {
+      throw new Error(`Finger fluid truth checkpoint ${index} has invalid boundary pressure contract: ${snapshot.boundaryPressureContract}`);
+    }
     if (!Number.isFinite(snapshot.totalKineticEnergy) || snapshot.totalKineticEnergy < 0) {
       throw new Error(`Finger fluid truth checkpoint ${index} contains invalid kinetic energy evidence`);
     }
@@ -1969,17 +2116,26 @@ export function evaluateFingerFluidTruthTrajectory(scene, trajectory) {
       snapshot.totalKineticEnergy,
       snapshot.relativeDensityErrorMean,
       snapshot.relativeDensityErrorP95,
+      snapshot.boundaryParticleCount,
+      snapshot.bulkParticleCount,
+      snapshot.boundaryRelativeDensityErrorMean,
+      snapshot.boundaryRelativeDensityErrorP95,
+      snapshot.bulkRelativeDensityErrorMean,
+      snapshot.bulkRelativeDensityErrorP95,
+      snapshot.maximumBoundaryPenetration,
       snapshot.occupiedCellCount,
       snapshot.occupiedVolumeProxy,
       ...(snapshot.centerOfMass || []),
     ];
-    if (required.length !== 13 || !required.every(Number.isFinite)) {
+    if (required.length !== 20 || !required.every(Number.isFinite)) {
       throw new Error(`Finger fluid truth checkpoint ${index} contains non-finite or partial state`);
     }
     if (
       !Number.isInteger(snapshot.particleCount)
       || !Number.isInteger(snapshot.finiteParticleCount)
       || !Number.isInteger(snapshot.retainedParticleCount)
+      || !Number.isInteger(snapshot.boundaryParticleCount)
+      || !Number.isInteger(snapshot.bulkParticleCount)
       || !Number.isInteger(snapshot.sourceRecirculationCount)
       || snapshot.sourceRecirculationCount < 0
     ) {
@@ -1996,6 +2152,18 @@ export function evaluateFingerFluidTruthTrajectory(scene, trajectory) {
       || snapshot.retainedParticleRatio < 0.999999
     ) {
       throw new Error(`Finger fluid truth checkpoint ${index} lost its particle population`);
+    }
+    if (
+      snapshot.boundaryParticleCount < 0
+      || snapshot.bulkParticleCount < 0
+      || snapshot.boundaryParticleCount + snapshot.bulkParticleCount !== snapshot.finiteParticleCount
+      || snapshot.boundaryRelativeDensityErrorMean < 0
+      || snapshot.boundaryRelativeDensityErrorP95 < 0
+      || snapshot.bulkRelativeDensityErrorMean < 0
+      || snapshot.bulkRelativeDensityErrorP95 < 0
+      || snapshot.maximumBoundaryPenetration < 0
+    ) {
+      throw new Error(`Finger fluid truth checkpoint ${index} contains invalid boundary density evidence`);
     }
     if (!Number.isInteger(snapshot.occupiedCellCount) || snapshot.occupiedCellCount < MIN_TRUTH_OCCUPIED_CELL_COUNT) {
       throw new Error(`Finger fluid truth checkpoint ${index} has insufficient occupied support: ${snapshot.occupiedCellCount} cells`);
@@ -3040,6 +3208,7 @@ export async function createWebGPUFingerFluidSolver({
       shaderRoute: KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE,
       neighborGridContract: KAMINOS_FINGER_FLUID_NEIGHBOR_GRID_CONTRACT,
       densityContract: KAMINOS_FINGER_FLUID_DENSITY_CONTRACT,
+      boundaryPressureContract: KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT,
       vorticityConfinementContract: KAMINOS_FINGER_FLUID_VORTICITY_CONTRACT,
       freeSurfaceContract: KAMINOS_FINGER_FLUID_FREE_SURFACE_CONTRACT,
       restStateContract: KAMINOS_FINGER_FLUID_REST_STATE_CONTRACT,

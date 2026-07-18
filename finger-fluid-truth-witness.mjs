@@ -258,8 +258,25 @@ async function requestCheckpoint(socket, checkpointIndex, elapsedMs) {
   if (fluidTruthSnapshot.finiteParticleCount !== state.runtime.particleCount || fluidTruthSnapshot.retainedParticleRatio < 0.999999) {
     throw new Error(`fluid particle population was lost or became non-finite: ${JSON.stringify(fluidTruthSnapshot)}`);
   }
-  for (const field of ['relativeDensityErrorMean', 'relativeDensityErrorP95', 'totalKineticEnergy', 'occupiedCellCount', 'occupiedVolumeProxy']) {
+  for (const field of [
+    'relativeDensityErrorMean',
+    'relativeDensityErrorP95',
+    'boundaryRelativeDensityErrorMean',
+    'boundaryRelativeDensityErrorP95',
+    'bulkRelativeDensityErrorMean',
+    'bulkRelativeDensityErrorP95',
+    'maximumBoundaryPenetration',
+    'totalKineticEnergy',
+    'occupiedCellCount',
+    'occupiedVolumeProxy',
+  ]) {
     if (!Number.isFinite(fluidTruthSnapshot[field])) throw new Error(`fluid truth field is non-finite: ${field}=${fluidTruthSnapshot[field]}`);
+  }
+  if (
+    fluidTruthSnapshot.boundaryParticleCount + fluidTruthSnapshot.bulkParticleCount !== fluidTruthSnapshot.finiteParticleCount
+    || fluidTruthSnapshot.boundaryParticleCount <= 0
+  ) {
+    throw new Error(`fluid boundary population evidence is missing or partial: ${JSON.stringify(fluidTruthSnapshot)}`);
   }
   if (fluidTruthSnapshot.occupiedCellCount < 2 || fluidTruthSnapshot.occupiedVolumeProxy <= 0) {
     throw new Error(`fluid support-volume occupancy collapsed: ${JSON.stringify(fluidTruthSnapshot)}`);
