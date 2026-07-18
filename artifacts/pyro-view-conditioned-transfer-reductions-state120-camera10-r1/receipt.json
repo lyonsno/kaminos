@@ -2,9 +2,9 @@
   "analyticalTargetRole": "context-only-not-metric-reference",
   "artifacts": {
     "README.md": {
-      "bytes": 3756,
+      "bytes": 3757,
       "path": "/private/tmp/kaminos-pyro-view-conditioned-transfer-compression-0717/artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/README.md",
-      "sha256": "86d9e69a52f31691d642b5504dfbb1913a3fbfd8d1940d28ac5ba2dae8b92950"
+      "sha256": "e1eec4403c79174912c3ceb787d7d7d843719a4b786894bcc546983643473fe4"
     },
     "adapted-reference.png": {
       "bytes": 91033,
@@ -88,10 +88,10 @@
   "repo": {
     "artifactCarrierCommit": null,
     "artifactCarrierCommitBoundary": "external-first-commit-containing-receipt-v0",
-    "generatorCommit": "7e78938042396a72d648e0d444cb0f5ad5dfc5a7",
+    "generatorCommit": "7548a1bc8605c74643c1bd6e70469f8e7ecdd75d",
     "generatorCommitSource": "git-rev-parse-head-v0",
-    "generatorTrackedStatus": "D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/README.md\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/adapted-reference.png\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/analytical-target.png\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/annotated-reduction-sheet.png\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/d1-t1-residual.png\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/d1-t1.png\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/d12-t2-residual.png\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/d12-t2.png\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/d12-t4-residual.png\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/d12-t4.png\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/d24-t1-residual.png\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/d24-t1.png\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/d24-t2-residual.png\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/d24-t2.png\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/d6-t8-residual.png\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/d6-t8.png",
-    "generatorTrackedWorktreeDirty": true,
+    "generatorTrackedStatus": null,
+    "generatorTrackedWorktreeDirty": false,
     "repoRoot": "/private/tmp/kaminos-pyro-view-conditioned-transfer-compression-0717",
     "worktree": "/private/tmp/kaminos-pyro-view-conditioned-transfer-compression-0717"
   },
