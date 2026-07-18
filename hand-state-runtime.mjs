@@ -60,16 +60,21 @@ let benchmarkSessionId = '';
 let pendingLatencySample = null;
 let benchmarkDroppedBeforeRender = 0;
 let lastBenchmarkError = null;
+let latencyFlushTimer = null;
 const captureMetricsByFrame = new Map();
 const latencySamples = [];
+const unflushedLatencySamples = [];
 
 function resetLatencyBenchmark() {
   benchmarkSessionId = globalThis.crypto?.randomUUID?.() || `hand-${Date.now()}`;
   pendingLatencySample = null;
   benchmarkDroppedBeforeRender = 0;
   lastBenchmarkError = null;
+  clearTimeout(latencyFlushTimer);
+  latencyFlushTimer = null;
   captureMetricsByFrame.clear();
   latencySamples.length = 0;
+  unflushedLatencySamples.length = 0;
 }
 
 function setStatus(message, state = 'idle') {
@@ -139,6 +144,31 @@ async function runtimeFetch(path, options = {}) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error || `${path} returned ${response.status}`);
   return payload;
+}
+
+async function flushLatencySamples() {
+  clearTimeout(latencyFlushTimer);
+  latencyFlushTimer = null;
+  if (!unflushedLatencySamples.length) return;
+  const batch = unflushedLatencySamples.splice(0);
+  try {
+    await runtimeFetch('/viewer-latency-samples', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        schema: 'hand-state.viewer-latency-batch.v0',
+        samples: batch,
+      }),
+    });
+  } catch (error) {
+    unflushedLatencySamples.unshift(...batch);
+    lastBenchmarkError = error.message || String(error);
+    if (running && !latencyFlushTimer) latencyFlushTimer = setTimeout(flushLatencySamples, 1000);
+  }
+}
+
+function scheduleLatencyFlush() {
+  if (!latencyFlushTimer) latencyFlushTimer = setTimeout(flushLatencySamples, 1000);
 }
 
 async function captureFrame() {
@@ -267,6 +297,7 @@ async function stop() {
   stream?.getTracks().forEach(track => track.stop());
   stream = null;
   video.srcObject = null;
+  await flushLatencySamples();
   try { await runtimeFetch('/sidecar/stop', { method: 'POST' }); } catch (error) { setStatus(error.message || String(error), 'error'); return; }
   toggle.textContent = 'Start Hand';
   toggle.dataset.running = 'false';
@@ -282,6 +313,12 @@ toggle.addEventListener('click', async () => {
 
 window.addEventListener('beforeunload', () => {
   stream?.getTracks().forEach(track => track.stop());
+  if (unflushedLatencySamples.length) {
+    navigator.sendBeacon?.(`${runtimeUrl}/viewer-latency-samples`, new Blob([JSON.stringify({
+      schema: 'hand-state.viewer-latency-batch.v0',
+      samples: unflushedLatencySamples,
+    })], { type: 'application/json' }));
+  }
   if (running) navigator.sendBeacon?.(`${runtimeUrl}/sidecar/stop`, new Blob([], { type: 'application/octet-stream' }));
 });
 
@@ -303,11 +340,8 @@ function animate(now) {
     Promise.resolve(renderPromise).then(() => {
       sample.captureToRenderCompleteMs = Math.max(0, Date.now() - sample.captureTimestampMs);
       latencySamples.push(sample);
-      runtimeFetch('/viewer-latency-sample', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sample),
-      }).catch(error => { lastBenchmarkError = error.message || String(error); });
+      unflushedLatencySamples.push(sample);
+      scheduleLatencyFlush();
     }).catch(error => { lastBenchmarkError = error.message || String(error); });
   }
   requestAnimationFrame(animate);

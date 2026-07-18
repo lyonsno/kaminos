@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { summarizeLatencySamples } from '../hand-state-latency-benchmark.mjs';
+
+const viewerSource = readFileSync(new URL('../hand-state-runtime.mjs', import.meta.url), 'utf8');
+assert.match(viewerSource, /viewer-latency-samples/, 'viewer batches latency receipts through the neutral runtime endpoint');
+assert.match(viewerSource, /setTimeout\(flushLatencySamples, 1000\)/, 'viewer keeps receipt I/O out of the per-frame render path');
+assert.doesNotMatch(viewerSource, /viewer-latency-sample['"]/, 'viewer must not post and sync one receipt per rendered frame');
 
 const sample = (frameId, value) => ({
   schema: 'hand-state.viewer-latency-sample.v0',
