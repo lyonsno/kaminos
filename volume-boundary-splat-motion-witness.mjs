@@ -8,8 +8,14 @@ import { basename, resolve } from 'node:path';
 import { inflateSync as zlibInflateSync } from 'node:zlib';
 
 const SCHEMA = 'kaminos.volume.boundary-splat-motion-witness.v0';
+const PROJECTED_WORK_SEQUENCE_SCHEMA = 'kaminos.volume.boundary-splat-projected-work-aligned-sequence.v0';
 const SPLAT_RENDERER = 'live-boundary-sidecar-analytic-splats-v0';
 const LEARNED_SPLAT_RENDERER = 'live-boundary-sidecar-learned-attribute-splats-v0';
+const FULL_FLAME_UNION_RENDERER = 'live-ridge-nonridge-union-kernel-moment-covariance-splats-v0';
+const SOURCE_PRESERVING_SELECTOR = 'boundary-splat-live-union-source-preserving-v0';
+const PROJECTED_WORK_SELECTOR = 'boundary-splat-live-union-projected-footprint-hash-thinning-v0';
+const EXPECTED_ROUTE = 'native-3d-compute-fluid-raymarch-v0';
+const PROJECTED_WORK_TARGETS = [0, 12, 24];
 const EXPECTED_LEARNED_MODEL = 'sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472';
 const REJECTED_LEARNED_MODELS = new Set([
   'sha256:54a41ba9d04132b8340884adef37a092c367c8cc8443e67907bd5f4f8573b911',
@@ -38,9 +44,14 @@ const lastTrustworthyEvidence = {};
 let browserSession = null;
 let ws = null;
 let failurePhase = 'startup';
+let projectedWorkTargets = null;
 
 try {
   if (!requestedRoute) throw new Error('missing --url');
+  const projectedWorkTargetsRaw = new URL(requestedRoute).searchParams.get('volume_boundary_splat_projected_work_sequence')
+    || args.get('--projected-work-targets')
+    || '';
+  projectedWorkTargets = parseProjectedWorkTargets(projectedWorkTargetsRaw);
   mkdirSync(outDir, { recursive: true });
   browserSession = await launchBrowser();
   failurePhase = 'cdp-connect';
@@ -84,12 +95,81 @@ try {
     },
   };
 
-  failurePhase = 'static-camera-capture';
-  const staticSequence = await captureSequence(staticCamera);
-  failurePhase = 'grazing-camera-capture';
-  const grazingSequence = await captureSequence(grazingCamera);
-  failurePhase = 'false-closure-validation';
-  const report = {
+  if (projectedWorkTargets) {
+    failurePhase = 'projected-work-sequence-capture';
+    const staticSequence = await captureProjectedWorkSequence(staticCamera);
+    const grazingSequence = await captureProjectedWorkSequence(grazingCamera);
+    const qualityComparisons = summarizeProjectedWorkQuality([staticSequence, grazingSequence]);
+    const report = {
+      schema: PROJECTED_WORK_SEQUENCE_SCHEMA,
+      status: 'completed',
+      runStartedAt,
+      runCompletedAt: new Date().toISOString(),
+      requestedRoute,
+      requestedRouteIdentity: {
+        requestedRoute,
+        rendererIdentity: FULL_FLAME_UNION_RENDERER,
+        sourceAuthority: SOURCE_AUTHORITY,
+        routeMode: 'boundary-splat-projected-work-aligned-sequence',
+        requestedTargets: projectedWorkTargets,
+      },
+      effectiveRoute: staticSequence.effectiveRoute || grazingSequence.effectiveRoute || null,
+      alignmentAuthority: 'same-browser-same-frozen-state-full-12-24-v0',
+      sourceAuthority: SOURCE_AUTHORITY,
+      rendererIdentity: FULL_FLAME_UNION_RENDERER,
+      expectedLearnedModelIdentity: EXPECTED_LEARNED_MODEL,
+      selectorIdentities: {
+        fullSupport: SOURCE_PRESERVING_SELECTOR,
+        thinned: PROJECTED_WORK_SELECTOR,
+      },
+      browser: {
+        identity: browserSession.identity,
+        mode: browserSession.mode,
+        port,
+        userDataDir,
+        keepBrowserOpen,
+        windowSize,
+        pageUrl: page.url,
+      },
+      captureConfig: {
+        frameCount,
+        stepMs,
+        wallStepMs,
+        projectedWorkTargets,
+        staticCameraDurationMs: (frameCount - 1) * stepMs,
+        grazingCameraDurationMs: (frameCount - 1) * stepMs,
+      },
+      timingStatus: 'not-measured-by-motion-witness',
+      timingAuthority: 'consume-separate-same-state-projected-work-curve-receipts-v0',
+      timingReason: 'This sequence measures aligned visual motion and does not substitute missing or partial timestamps for the existing same-state cost curve.',
+      staticCamera: staticSequence,
+      grazingCamera: grazingSequence,
+      qualityComparisons,
+      sequenceCertification: certifyProjectedWorkSequence([staticSequence, grazingSequence], qualityComparisons),
+      inspectedArtifacts: [staticSequence, grazingSequence]
+        .flatMap(sequence => sequence.frames.flatMap(frame => frame.captures.map(capture => capture.image.path))),
+      falseClosureChecks: {
+        rejectsWrongRouteBackendModelOrSource: true,
+        rejectsStaleRequestedEffectiveTargets: true,
+        rejectsHiddenSelectorFallback: true,
+        rejectsChangedFullUnionPopulation: true,
+        rejectsCopyOrOverflow: true,
+        rejectsMissingBlankOrPartialCapture: true,
+        rejectsCachedOrStaticOutput: true,
+        rejectsTimingSubstitution: true,
+      },
+    };
+    failurePhase = 'projected-work-sequence-validation';
+    rejectProjectedWorkFalseClosure(report);
+    writeFileSync(reportPath, JSON.stringify(report, null, 2));
+    console.log(JSON.stringify(report, null, 2));
+  } else {
+    failurePhase = 'static-camera-capture';
+    const staticSequence = await captureSequence(staticCamera);
+    failurePhase = 'grazing-camera-capture';
+    const grazingSequence = await captureSequence(grazingCamera);
+    failurePhase = 'false-closure-validation';
+    const report = {
     schema: SCHEMA,
     status: 'completed',
     runStartedAt,
@@ -137,12 +217,13 @@ try {
       rejectsRendererDisagreement: true,
     },
   };
-  rejectFalseClosure(report);
-  writeFileSync(reportPath, JSON.stringify(report, null, 2));
-  console.log(JSON.stringify(report, null, 2));
+    rejectFalseClosure(report);
+    writeFileSync(reportPath, JSON.stringify(report, null, 2));
+    console.log(JSON.stringify(report, null, 2));
+  }
 } catch (error) {
   const failureReport = {
-    schema: SCHEMA,
+    schema: projectedWorkTargets ? PROJECTED_WORK_SEQUENCE_SCHEMA : SCHEMA,
     status: 'failed',
     failurePhase,
     error: error?.stack || error?.message || String(error),
@@ -183,6 +264,16 @@ function parseArgs(argv) {
     }
   }
   return map;
+}
+
+function parseProjectedWorkTargets(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const targets = raw.split(',').map(item => Number(item.trim()));
+  const exact = targets.length === PROJECTED_WORK_TARGETS.length
+    && targets.every((target, index) => Number.isInteger(target) && target === PROJECTED_WORK_TARGETS[index]);
+  if (!exact) throw new Error('projected-work sequence requires exact targets 0,12,24');
+  return targets;
 }
 
 function defaultChromePath() {
@@ -322,6 +413,225 @@ async function setCameraPose(pose) {
     awaitPromise: true,
   });
   return result.result.value;
+}
+
+async function captureProjectedWorkSequence(config) {
+  const sequenceDir = resolve(outDir, `projected-work-${config.label}`);
+  mkdirSync(sequenceDir, { recursive: true });
+  const frames = [];
+  let sameBrowserSessionId = null;
+  let sequenceStartNowMs = null;
+  for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
+    const pose = config.sequenceKind === 'static-camera'
+      ? config.pose
+      : interpolatePose(config.from, config.to, frameIndex / Math.max(1, frameCount - 1));
+    const camera = await setCameraPose(pose);
+    if (wallStepMs > 0 && frameIndex > 0) await delay(wallStepMs);
+    const frameEval = await wsRequest('Runtime.evaluate', {
+      expression: `window.__kaminosVolumePrototype.controlledStepFrame(${JSON.stringify({
+        controlledStepFrameIndex: frameIndex,
+        advanceSim: frameIndex > 0,
+        sameBrowserSessionId,
+        startNow: sequenceStartNowMs,
+        stepDeltaMs: stepMs,
+        renderScales: [1],
+        includeRgba: false,
+        compactSamples: true,
+        resumeRenderLoop: false,
+      })})`,
+      awaitPromise: true,
+      returnByValue: true,
+    });
+    const frame = frameEval.result.value;
+    if (frame?.ok !== true || frame.sequenceAuthority !== 'controlled-step-sequence-v0') {
+      throw new Error(`projected-work controlled step failed for ${config.label} frame ${frameIndex}: ${JSON.stringify(frame)}`);
+    }
+    sameBrowserSessionId = frame.sameBrowserSessionId;
+    sequenceStartNowMs = frame.sequenceStartNowMs;
+    const scaleSet = frame.scaleSet;
+    const frameDir = resolve(sequenceDir, `frame-${String(frameIndex + 1).padStart(3, '0')}`);
+    mkdirSync(frameDir, { recursive: true });
+    const captures = [];
+    for (const targetPixels of projectedWorkTargets) {
+      captures.push(await captureProjectedWorkArm({
+        frameDir,
+        frameIndex,
+        scaleSet,
+        camera,
+        targetPixels,
+      }));
+    }
+    const frameReceipt = {
+      sequenceAuthority: frame.sequenceAuthority,
+      alignmentAuthority: 'same-browser-same-frozen-state-full-12-24-v0',
+      sameBrowserSessionId: frame.sameBrowserSessionId,
+      controlledStepFrameIndex: frameIndex,
+      controlledStepDeltaMs: frame.controlledStepDeltaMs,
+      controlledStepNowMs: frame.controlledStepNowMs,
+      controlledStepCapture: frame.controlledStepCapture,
+      sameStateCaptureId: scaleSet.sameStateCaptureId,
+      baseFrameCount: scaleSet.baseFrameCount,
+      baseSimStepCount: scaleSet.baseSimStepCount,
+      camera,
+      captures,
+    };
+    frames.push(frameReceipt);
+    lastTrustworthyEvidence.projectedWorkSequence = {
+      sequence: config.label,
+      completedFrames: frames.length,
+      expectedFrames: frameCount,
+      lastFrame: compactProjectedWorkFrame(frameReceipt),
+    };
+  }
+  const sequence = {
+    label: config.label,
+    sequenceKind: config.sequenceKind,
+    sameBrowserSessionId,
+    alignmentAuthority: 'same-browser-same-frozen-state-full-12-24-v0',
+    sampleAuthority: 'controlled-step-sim-advance-with-frozen-render-only-arms-v0',
+    frameCount,
+    stepMs,
+    sequenceDurationMs: (frameCount - 1) * stepMs,
+    effectiveRoute: frames[0]?.captures[0]?.effectiveRoute || null,
+    frames,
+  };
+  addProjectedWorkMotionEnergy(sequence);
+  return sequence;
+}
+
+async function captureProjectedWorkArm({ frameDir, frameIndex, scaleSet, camera, targetPixels }) {
+  const renderOptions = {
+    renderScale: 1,
+    now: scaleSet.fixedNowMs,
+    sameStateCaptureId: scaleSet.sameStateCaptureId,
+    baseFrameCount: scaleSet.baseFrameCount,
+    baseSimStepCount: scaleSet.baseSimStepCount,
+    boundarySplatComposition: 'splat-only-v0',
+    includeRgba: true,
+    controlOverrides: {
+      boundarySplatMode: 'kernel_moment_full_flame_union',
+      boundarySplatProjectedWorkTargetPixels: targetPixels,
+    },
+    restoreControls: true,
+    resumeRenderLoop: false,
+  };
+  const canvasEval = await wsRequest('Runtime.evaluate', {
+    expression: compactProjectedWorkRenderExpression(renderOptions),
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const canvasCapture = canvasEval.result.value;
+  if (canvasCapture?.ok !== true || canvasCapture.sampleAuthority !== 'render-only-frozen-sim-state') {
+    throw new Error(`projected-work arm render failed for target ${targetPixels}: ${JSON.stringify(canvasCapture)}`);
+  }
+  const postState = await debugState();
+  const rgbaCapture = canvasCapture.rgbaCapture;
+  if (!rgbaCapture?.pngBase64 || rgbaCapture.imageAuthority !== 'gpu-rgba8-readback-frozen-sim-state-v0') {
+    throw new Error(`projected-work blank/partial evidence rejected for target ${targetPixels}: missing exact PNG readback`);
+  }
+  const imageBuffer = Buffer.from(rgbaCapture.pngBase64, 'base64');
+  const requestedRenderer = targetPixels === 0 ? 'full-support' : `projected-work-target-${targetPixels}`;
+  const imagePath = resolve(frameDir, `${String(frameIndex + 1).padStart(3, '0')}-${slug(requestedRenderer)}.png`);
+  writeFileSync(imagePath, imageBuffer);
+  const capture = {
+    requestedRenderer,
+    targetPixels,
+    requestedRoute,
+    effectiveRoute: canvasCapture.effectiveRoute,
+    backend: canvasCapture.backend,
+    prototypeIdentity: canvasCapture.prototypeIdentity,
+    rendererIdentity: canvasCapture.boundarySplatRendererIdentity ?? postState?.boundarySplatRendererIdentity ?? null,
+    appliedModelIdentity: canvasCapture.boundarySplatAttributeModelIdentity ?? postState?.boundarySplatAttributeModelIdentity ?? null,
+    sourceAuthority: canvasCapture.boundarySplatSourceAuthority ?? postState?.boundarySplatSourceAuthority ?? null,
+    fallbackReason: canvasCapture.boundarySplatFallbackReason ?? postState?.boundarySplatFallbackReason ?? null,
+    selectorPolicyIdentity: canvasCapture.boundarySplatSelectorPolicyIdentity ?? postState?.boundarySplatSelectorPolicyIdentity ?? null,
+    requestedProjectedWorkTargetPixels: canvasCapture.boundarySplatRequestedProjectedWorkTargetPixels,
+    effectiveProjectedWorkTargetPixels: canvasCapture.boundarySplatEffectiveProjectedWorkTargetPixels,
+    projectedWorkRejectedCount: canvasCapture.boundarySplatProjectedWorkRejectedCount,
+    selectedCandidateCount: canvasCapture.boundarySplatSelectedCandidateCount ?? canvasCapture.boundarySplatCandidateCount,
+    candidateCount: canvasCapture.boundarySplatCandidateCount,
+    fullUnionCount: canvasCapture.boundarySplatUnionCount,
+    instanceCount: canvasCapture.boundarySplatInstanceCount,
+    overflowCount: canvasCapture.boundarySplatOverflowCount,
+    initialOverflowCount: canvasCapture.boundarySplatInitialOverflowCount,
+    capacityRetryCount: canvasCapture.boundarySplatCapacityRetryCount,
+    capacity: canvasCapture.boundarySplatCapacity,
+    candidateCopyBytes: postState?.boundarySplatCopyBytesThisFrame ?? null,
+    candidateCopyDisposition: postState?.boundarySplatCopyDisposition ?? null,
+    unionReceipt: canvasCapture.boundarySplatUnionReceipt ?? null,
+    camera,
+    image: {
+      path: imagePath,
+      basename: basename(imagePath),
+      sha256: sha256(imageBuffer),
+      authority: rgbaCapture.imageAuthority,
+      rgbaByteLength: rgbaCapture.rgbaByteLength,
+      expectedRgbaByteLength: Number(rgbaCapture.width) * Number(rgbaCapture.height) * 4,
+      metrics: measureScreenshot(imageBuffer),
+      width: rgbaCapture.width,
+      height: rgbaCapture.height,
+    },
+    canvasCapture: {
+      sampleAuthority: canvasCapture.sampleAuthority,
+      sameStateCaptureId: canvasCapture.sameStateCaptureId,
+      baseFrameCount: canvasCapture.baseFrameCount,
+      baseSimStepCount: canvasCapture.baseSimStepCount,
+      frameCount: canvasCapture.frameCount,
+      simStepCount: canvasCapture.simStepCount,
+      boundarySplatCompositionRequested: canvasCapture.boundarySplatCompositionRequested,
+      boundarySplatCompositionEffective: canvasCapture.boundarySplatCompositionEffective,
+      raymarchApplied: canvasCapture.raymarchApplied,
+      splatApplied: canvasCapture.splatApplied,
+    },
+  };
+  validateProjectedWorkCapture(capture);
+  return capture;
+}
+
+function compactProjectedWorkRenderExpression(renderOptions) {
+  return `(async () => {
+    const render = await window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify(renderOptions)});
+    const capture = render?.rgbaCapture;
+    if (!capture?.rgba) return render;
+    const rgba = Uint8ClampedArray.from(capture.rgba);
+    const surface = new OffscreenCanvas(capture.width, capture.height);
+    const context = surface.getContext('2d', { alpha: true });
+    if (!context) throw new Error('projected-work exact-rgba-png-context-unavailable');
+    context.putImageData(new ImageData(rgba, capture.width, capture.height), 0, 0);
+    const blob = await surface.convertToBlob({ type: 'image/png' });
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let binary = '';
+    for (let offset = 0; offset < bytes.length; offset += 32768) {
+      binary += String.fromCharCode(...bytes.subarray(offset, Math.min(bytes.length, offset + 32768)));
+    }
+    return {
+      ...render,
+      rgbaCapture: {
+        ...capture,
+        rgba: null,
+        rgbaByteLength: rgba.byteLength,
+        pngBase64: btoa(binary),
+      },
+    };
+  })()`;
+}
+
+function compactProjectedWorkFrame(frame) {
+  return {
+    controlledStepFrameIndex: frame.controlledStepFrameIndex,
+    sameBrowserSessionId: frame.sameBrowserSessionId,
+    sameStateCaptureId: frame.sameStateCaptureId,
+    baseFrameCount: frame.baseFrameCount,
+    baseSimStepCount: frame.baseSimStepCount,
+    captures: frame.captures.map(capture => ({
+      targetPixels: capture.targetPixels,
+      selectorPolicyIdentity: capture.selectorPolicyIdentity,
+      selectedCandidateCount: capture.selectedCandidateCount,
+      projectedWorkRejectedCount: capture.projectedWorkRejectedCount,
+      fullUnionCount: capture.fullUnionCount,
+      imageSha256: capture.image.sha256,
+    })),
+  };
 }
 
 async function captureSequence(config) {
@@ -604,6 +914,203 @@ function rejectFalseClosure(report) {
   if (report.candidateChurn.maxAbsDelta <= 0 && report.staticCamera.motionEnergy.maxMeanAbsDiff <= 0.1) {
     throw new Error('cached or static output rejected: sequence did not move in candidates or pixels');
   }
+}
+
+function validateProjectedWorkCapture(capture) {
+  if (capture.effectiveRoute !== EXPECTED_ROUTE || capture.backend !== 'WebGPU:apple') {
+    throw new Error(`projected-work route/backend disagreement: ${capture.effectiveRoute}/${capture.backend}`);
+  }
+  if (capture.rendererIdentity !== FULL_FLAME_UNION_RENDERER) {
+    throw new Error(`projected-work renderer disagreement: ${capture.rendererIdentity}`);
+  }
+  if (capture.appliedModelIdentity !== EXPECTED_LEARNED_MODEL || capture.sourceAuthority !== SOURCE_AUTHORITY) {
+    throw new Error(`projected-work model/source disagreement: ${capture.appliedModelIdentity}/${capture.sourceAuthority}`);
+  }
+  if (capture.fallbackReason || capture.canvasCapture.splatApplied !== true || capture.canvasCapture.raymarchApplied !== false) {
+    throw new Error(`projected-work fallback rejected: ${JSON.stringify({
+      fallbackReason: capture.fallbackReason,
+      splatApplied: capture.canvasCapture.splatApplied,
+      raymarchApplied: capture.canvasCapture.raymarchApplied,
+    })}`);
+  }
+  if (
+    capture.requestedProjectedWorkTargetPixels !== capture.targetPixels
+    || capture.effectiveProjectedWorkTargetPixels !== capture.targetPixels
+  ) {
+    throw new Error(`projected-work stale requested/effective target: ${JSON.stringify({
+      targetPixels: capture.targetPixels,
+      requested: capture.requestedProjectedWorkTargetPixels,
+      effective: capture.effectiveProjectedWorkTargetPixels,
+    })}`);
+  }
+  const expectedSelector = capture.targetPixels === 0 ? SOURCE_PRESERVING_SELECTOR : PROJECTED_WORK_SELECTOR;
+  if (capture.selectorPolicyIdentity !== expectedSelector) {
+    throw new Error(`projected-work selector identity disagreement: ${capture.selectorPolicyIdentity}`);
+  }
+  const selected = Number(capture.selectedCandidateCount);
+  const rejected = Number(capture.projectedWorkRejectedCount);
+  const fullUnion = Number(capture.fullUnionCount);
+  if (!Number.isInteger(selected) || selected <= 0 || !Number.isInteger(rejected) || rejected < 0 || !Number.isInteger(fullUnion) || fullUnion <= 0) {
+    throw new Error(`projected-work blank/partial evidence rejected: ${JSON.stringify({ selected, rejected, fullUnion })}`);
+  }
+  if (selected + rejected !== fullUnion) {
+    throw new Error(`projected-work full-union disagreement: ${JSON.stringify({ selected, rejected, fullUnion })}`);
+  }
+  if ((capture.targetPixels === 0 && rejected !== 0) || (capture.targetPixels > 0 && rejected <= 0)) {
+    throw new Error(`projected-work selector identity disagreement: target ${capture.targetPixels} rejected ${rejected}`);
+  }
+  if (
+    capture.overflowCount !== 0
+    || capture.initialOverflowCount !== 0
+    || capture.capacityRetryCount !== 0
+    || capture.candidateCopyBytes !== 0
+    || !capture.candidateCopyDisposition
+  ) {
+    throw new Error(`projected-work copy/overflow rejected: ${JSON.stringify({
+      overflowCount: capture.overflowCount,
+      initialOverflowCount: capture.initialOverflowCount,
+      capacityRetryCount: capture.capacityRetryCount,
+      candidateCopyBytes: capture.candidateCopyBytes,
+      candidateCopyDisposition: capture.candidateCopyDisposition,
+    })}`);
+  }
+  if (
+    capture.image.authority !== 'gpu-rgba8-readback-frozen-sim-state-v0'
+    || capture.image.rgbaByteLength !== capture.image.expectedRgbaByteLength
+    || capture.image.metrics.litPixels <= 20
+    || capture.image.metrics.meanLuma <= 1
+  ) {
+    throw new Error(`projected-work blank/partial evidence rejected: ${JSON.stringify(capture.image)}`);
+  }
+}
+
+function rejectProjectedWorkFalseClosure(report) {
+  if (report.timingStatus !== 'not-measured-by-motion-witness') {
+    throw new Error(`projected-work partial timestamp substitution rejected: ${report.timingStatus}`);
+  }
+  const sequences = [report.staticCamera, report.grazingCamera];
+  for (const sequence of sequences) {
+    if (sequence.frames.length !== frameCount || sequence.sameBrowserSessionId !== sequence.frames[0]?.sameBrowserSessionId) {
+      throw new Error(`projected-work blank/partial evidence rejected for ${sequence.label}`);
+    }
+    for (const frame of sequence.frames) {
+      if (frame.captures.length !== PROJECTED_WORK_TARGETS.length) {
+        throw new Error(`projected-work blank/partial evidence rejected for ${sequence.label} frame ${frame.controlledStepFrameIndex}`);
+      }
+      const targets = frame.captures.map(capture => capture.targetPixels);
+      if (!targets.every((target, index) => target === PROJECTED_WORK_TARGETS[index])) {
+        throw new Error(`projected-work stale requested/effective target list: ${targets.join(',')}`);
+      }
+      const stateIds = new Set(frame.captures.map(capture => capture.canvasCapture.sameStateCaptureId));
+      const frameCounts = new Set(frame.captures.map(capture => capture.canvasCapture.baseFrameCount));
+      const simStepCounts = new Set(frame.captures.map(capture => capture.canvasCapture.baseSimStepCount));
+      if (stateIds.size !== 1 || frameCounts.size !== 1 || simStepCounts.size !== 1) {
+        throw new Error(`projected-work same-state disagreement for ${sequence.label} frame ${frame.controlledStepFrameIndex}`);
+      }
+      for (const capture of frame.captures) validateProjectedWorkCapture(capture);
+      const fullUnionCounts = new Set(frame.captures.map(capture => capture.fullUnionCount));
+      if (fullUnionCounts.size !== 1) {
+        throw new Error(`projected-work full-union disagreement for ${sequence.label} frame ${frame.controlledStepFrameIndex}`);
+      }
+      const selected = frame.captures.map(capture => capture.selectedCandidateCount);
+      if (!(selected[1] <= selected[2] && selected[2] <= selected[0])) {
+        throw new Error(`projected-work selected-count monotonicity disagreement: ${selected.join(',')}`);
+      }
+    }
+  }
+  const expectedQualityRows = sequences.length * frameCount * (PROJECTED_WORK_TARGETS.length - 1);
+  if (report.qualityComparisons.comparisonCount !== expectedQualityRows) {
+    throw new Error(`projected-work blank/partial evidence rejected: expected ${expectedQualityRows} quality rows, got ${report.qualityComparisons.comparisonCount}`);
+  }
+  if (report.sequenceCertification.ok !== true) {
+    throw new Error(`projected-work live motion rejected: ${JSON.stringify(report.sequenceCertification)}`);
+  }
+}
+
+function summarizeProjectedWorkQuality(sequences) {
+  const comparisons = [];
+  for (const sequence of sequences) {
+    for (const frame of sequence.frames) {
+      const full = frame.captures.find(capture => capture.targetPixels === 0);
+      for (const targetPixels of PROJECTED_WORK_TARGETS.slice(1)) {
+        const selected = frame.captures.find(capture => capture.targetPixels === targetPixels);
+        if (!full || !selected) continue;
+        comparisons.push({
+          sequence: sequence.label,
+          controlledStepFrameIndex: frame.controlledStepFrameIndex,
+          sameStateCaptureId: frame.sameStateCaptureId,
+          targetPixels,
+          selectedCandidateRatio: selected.selectedCandidateCount / full.selectedCandidateCount,
+          retainedMeanLuma: selected.image.metrics.meanLuma / Math.max(full.image.metrics.meanLuma, 1e-9),
+          retainedLitCoverage: selected.image.metrics.litPixels / Math.max(full.image.metrics.litPixels, 1),
+          pixelDelta: imageDiff(full.image.path, selected.image.path),
+          fullImage: full.image.path,
+          selectedImage: selected.image.path,
+        });
+      }
+    }
+  }
+  const rowsFor = targetPixels => comparisons.filter(row => row.targetPixels === targetPixels);
+  const mean = (rows, key) => rows.length ? rows.reduce((sum, row) => sum + row[key], 0) / rows.length : null;
+  return {
+    authority: 'same-browser-same-frozen-state-full-12-24-native-png-quality-v0',
+    comparisonCount: comparisons.length,
+    byTarget: PROJECTED_WORK_TARGETS.slice(1).map(targetPixels => {
+      const rows = rowsFor(targetPixels);
+      return {
+        targetPixels,
+        comparisonCount: rows.length,
+        meanSelectedCandidateRatio: mean(rows, 'selectedCandidateRatio'),
+        meanRetainedLuma: mean(rows, 'retainedMeanLuma'),
+        meanRetainedLitCoverage: mean(rows, 'retainedLitCoverage'),
+        meanPixelAbsDiff: rows.length
+          ? rows.reduce((sum, row) => sum + row.pixelDelta.meanAbsDiff, 0) / rows.length
+          : null,
+      };
+    }),
+    comparisons,
+  };
+}
+
+function addProjectedWorkMotionEnergy(sequence) {
+  sequence.motionByTarget = PROJECTED_WORK_TARGETS.map(targetPixels => {
+    const captures = sequence.frames.map(frame => frame.captures.find(capture => capture.targetPixels === targetPixels));
+    const diffs = [];
+    for (let index = 1; index < captures.length; index += 1) {
+      diffs.push(imageDiff(captures[index - 1].image.path, captures[index].image.path));
+    }
+    return {
+      targetPixels,
+      authority: 'adjacent-frame-exact-gpu-readback-png-diff-v0',
+      diffs,
+      maxMeanAbsDiff: diffs.reduce((max, diff) => Math.max(max, diff.meanAbsDiff), 0),
+      maxChangedFraction: diffs.reduce((max, diff) => Math.max(max, diff.changedFraction), 0),
+    };
+  });
+}
+
+function certifyProjectedWorkSequence(sequences, qualityComparisons) {
+  const motionRows = sequences.flatMap(sequence => sequence.motionByTarget.map(row => ({
+    sequence: sequence.label,
+    targetPixels: row.targetPixels,
+    maxMeanAbsDiff: row.maxMeanAbsDiff,
+    maxChangedFraction: row.maxChangedFraction,
+    certified: row.maxMeanAbsDiff > 0.5 && row.maxChangedFraction > 0.02,
+  })));
+  const targetCertification = PROJECTED_WORK_TARGETS.map(targetPixels => ({
+    targetPixels,
+    certifiedSequenceCount: motionRows.filter(row => row.targetPixels === targetPixels && row.certified).length,
+  }));
+  return {
+    ok: targetCertification.every(row => row.certifiedSequenceCount > 0)
+      && qualityComparisons.comparisonCount === sequences.length * frameCount * (PROJECTED_WORK_TARGETS.length - 1),
+    authority: 'aligned-projected-work-learned-sequence-certification-v0',
+    minMotionMeanAbsDiff: 0.5,
+    minMotionChangedFraction: 0.02,
+    targetCertification,
+    motionRows,
+    qualityComparisonCount: qualityComparisons.comparisonCount,
+  };
 }
 
 function summarizeAnalyticLearnedComparison(frames) {
