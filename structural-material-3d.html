@@ -22,7 +22,7 @@
     }
     header {
       display: grid;
-      grid-template-columns: auto auto auto minmax(0, 1fr);
+      grid-template-columns: auto auto minmax(0, 1fr);
       gap: 10px;
       align-items: center;
       padding: 10px 14px;
@@ -42,6 +42,24 @@
       cursor: pointer;
     }
     button:hover { background: #263848; }
+    #operation-modes {
+      display: grid;
+      grid-template-columns: repeat(2, auto);
+    }
+    #operation-modes button {
+      border-radius: 0;
+      min-width: 66px;
+    }
+    #operation-modes button:first-child { border-radius: 6px 0 0 6px; }
+    #operation-modes button:last-child {
+      border-left: 0;
+      border-radius: 0 6px 6px 0;
+    }
+    #operation-modes button[aria-pressed="true"] {
+      border-color: #e2bf58;
+      background: #5d4c1d;
+      color: #fff4c7;
+    }
     #readout {
       font-family: ui-monospace, Menlo, monospace;
       font-size: 12px;
@@ -93,7 +111,7 @@
     }
     @media (max-width: 640px) {
       header {
-        grid-template-columns: auto auto auto minmax(0, 1fr);
+        grid-template-columns: auto auto minmax(0, 1fr);
         gap: 8px;
       }
       button {
@@ -122,8 +140,10 @@
 <body>
   <header>
     <button id="reset">Reset</button>
-    <button id="fracture">Shear</button>
-    <button id="bind">Bind</button>
+    <div id="operation-modes" role="group" aria-label="Structural operation">
+      <button id="fracture" aria-pressed="true">Shear</button>
+      <button id="bind" aria-pressed="false">Bind</button>
+    </div>
     <div id="readout"></div>
   </header>
   <main id="stage" aria-label="Layered structural material sidecar route">
@@ -176,6 +196,8 @@
     import {
       DEFAULT_STRUCTURAL_MATERIAL_NATIVE_HAPTIC_URL,
       buildLayeredStructuralHapticImpulse,
+      buildLayeredStructuralPickedBinding,
+      createStructuralInteractionModeController,
       createLatestStructuralGpuOperationTracker,
       createLatestStructuralInteractionScheduler,
       detectStructuralHapticCapabilities,
@@ -310,12 +332,17 @@
     const hapticCapabilities = detectStructuralHapticCapabilities(undefined, { nativeCompanionUrl: nativeHapticCompanionUrl });
     const gpuTearRequestGate = createLayeredStructuralGpuTearRequestGate();
     const latestGpuOperationTracker = createLatestStructuralGpuOperationTracker();
+    const structuralInteractionMode = createStructuralInteractionModeController('shear');
     const liveDragScheduler = createLatestStructuralInteractionScheduler({
-      execute: (interaction, scheduler) => requestGpuSympatheticTear(
-        material,
-        interaction,
-        { scheduler },
-      ),
+      execute: (interaction, scheduler) => {
+        if (interaction.operationMode === 'bind') {
+          return requestGpuBinding(buildLayeredStructuralPickedBinding(interaction));
+        }
+        if (interaction.operationMode === 'shear') {
+          return requestGpuSympatheticTear(material, interaction, { scheduler });
+        }
+        throw new Error(`picked gesture has unsupported operation mode: ${interaction.operationMode}`);
+      },
     });
 
     function worldCoordinate(value) {
@@ -488,6 +515,7 @@
 
     function updateReadout() {
       const summary = summarizeLayeredStructuralState(material);
+      const interactionMode = structuralInteractionMode.snapshot().mode;
       readout.textContent = `broken ${summary.brokenBondCount} | repaired ${summary.repairedBondCount} | depth ${summary.brokenDepthBondCount}/${summary.crossDepthBondCount} | components ${summary.componentCount} | sound ${summary.sound.signature}`;
       route.textContent = `${EFFIGY_TILE_GEOMETRY_ROUTE} | ${STRUCTURAL_MATERIAL_3D_VISUAL_AUTHORITY}`;
       const latestGpuOperation = latestGpuOperationTracker.snapshot();
@@ -500,7 +528,7 @@
           ? `GPU ${latestGpuOperation.kind === 'binding' ? 'bind' : 'tear'} failed | ${latestGpuReceipt?.failurePhase || 'unknown'}${timingSuffix}`
         : latestGpuOperation?.kind === 'binding'
         ? latestGpuReceipt?.binding?.noOp && material.sympatheticBinding
-          ? `GPU bind no-op | repaired ${material.sympatheticBinding.repairedBondCount}${timingSuffix}`
+          ? `GPU bind settled | repaired ${material.sympatheticBinding.repairedBondCount}${timingSuffix}`
           : `GPU bind ${latestGpuReceipt?.status} ${latestGpuReceipt?.binding?.eventCount ?? 0} edges${timingSuffix}`
         : latestGpuOperation?.kind === 'tear'
         ? `GPU tear ${latestGpuReceipt?.status} ${latestGpuReceipt?.topology?.componentCount ?? 0} components${timingSuffix}`
@@ -515,8 +543,8 @@
           ? `requested ${latestGpuReceipt.requestedRoute}; effective unavailable`
           : gpuRetainedReceipt?.effectiveRoute || gpuParityReceipt?.effectiveRoute || STRUCTURAL_MATERIAL_3D_WEBGPU_ROUTE);
       gesture.textContent = forceEnvelope
-        ? `input ${Math.round((forceEnvelope.inputLoad ?? forceEnvelope.magnitude / 1.95) * 100)}% | ramp ${Math.round((forceEnvelope.contactRamp ?? Math.min(1, forceEnvelope.magnitude / 0.45)) * 100)}% | stress ${summary.maxStress.toFixed(3)}`
-        : `input 0% | ramp 0% | stress ${summary.maxStress.toFixed(3)}`;
+        ? `${interactionMode} | input ${Math.round((forceEnvelope.inputLoad ?? forceEnvelope.magnitude / 1.95) * 100)}% | reach ${Math.round((forceEnvelope.radius ?? 0.12) / 0.34 * 100)}% | stress ${summary.maxStress.toFixed(3)}`
+        : `${interactionMode} | input 0% | reach 35% | stress ${summary.maxStress.toFixed(3)}`;
     }
 
     function visibleTearState() {
@@ -843,7 +871,8 @@
 
     function applyDrag(point) {
       return runStructuralMutation('material-drag', () => {
-        forceEnvelope = createLayeredStructuralPickedDragInteraction({
+        forceEnvelope = {
+          ...createLayeredStructuralPickedDragInteraction({
           start: dragStart?.screen || point,
           current: point,
           contactPoint: dragStart?.contactPoint || lastPoint,
@@ -852,7 +881,10 @@
           screenRight: dragStart?.screenRight,
           screenDown: dragStart?.screenDown,
           gestureId: dragStart?.gestureId,
-        });
+          }),
+          operationMode: dragStart?.operationMode || structuralInteractionMode.snapshot().mode,
+          operationModeRevision: dragStart?.operationModeRevision ?? structuralInteractionMode.snapshot().revision,
+        };
         lastPoint = forceEnvelope.point;
         return forceEnvelope;
       });
@@ -1133,6 +1165,32 @@
       }
     }
 
+    function updateStructuralInteractionModeControls() {
+      const mode = structuralInteractionMode.snapshot().mode;
+      document.querySelector('#fracture').setAttribute('aria-pressed', String(mode === 'shear'));
+      document.querySelector('#bind').setAttribute('aria-pressed', String(mode === 'bind'));
+    }
+
+    function cancelMaterialGesture() {
+      if (materialPointerId !== null && renderer.domElement.hasPointerCapture(materialPointerId)) {
+        renderer.domElement.releasePointerCapture(materialPointerId);
+      }
+      materialPointerId = null;
+      dragStart = null;
+      liveDragScheduler.invalidate();
+      gpuTearRequestGate.invalidate();
+    }
+
+    function selectStructuralInteractionMode(mode) {
+      const selection = structuralInteractionMode.select(mode);
+      if (!selection.changed) return selection;
+      cancelMaterialGesture();
+      updateStructuralInteractionModeControls();
+      updateReadout();
+      renderScene();
+      return selection;
+    }
+
     renderer.domElement.addEventListener('pointerdown', (event) => {
       if (event.button !== 0 || !event.isPrimary) return;
       const pick = pickStructuralContact(event);
@@ -1144,6 +1202,7 @@
       runStructuralMutation('material-drag-start', () => {
         const screen = eventPoint(event);
         const basis = cameraBasisInMaterial();
+        const operationMode = structuralInteractionMode.snapshot();
         latestStructuralPick = pick;
         dragStart = {
           gestureId: `picked-drag-${++structuralGestureSequence}`,
@@ -1158,8 +1217,11 @@
           },
           screenRight: basis.screenRight,
           screenDown: basis.screenDown,
+          operationMode: operationMode.mode,
+          operationModeRevision: operationMode.revision,
         };
-        forceEnvelope = createLayeredStructuralPickedDragInteraction({
+        forceEnvelope = {
+          ...createLayeredStructuralPickedDragInteraction({
           start: screen,
           current: screen,
           contactPoint: pick.point,
@@ -1168,7 +1230,10 @@
           screenRight: basis.screenRight,
           screenDown: basis.screenDown,
           gestureId: dragStart.gestureId,
-        });
+          }),
+          operationMode: dragStart.operationMode,
+          operationModeRevision: dragStart.operationModeRevision,
+        };
       });
     }, true);
     renderer.domElement.addEventListener('pointermove', (event) => {
@@ -1200,10 +1265,7 @@
     renderer.domElement.addEventListener('pointercancel', (event) => {
       if (event.pointerId !== materialPointerId) return;
       event.stopImmediatePropagation();
-      materialPointerId = null;
-      dragStart = null;
-      liveDragScheduler.invalidate();
-      gpuTearRequestGate.invalidate();
+      cancelMaterialGesture();
       synchronizeHotSidecar(material);
     }, true);
     document.querySelector('#reset').addEventListener('click', () => {
@@ -1226,33 +1288,10 @@
       synchronizeHotSidecar(material);
     });
     document.querySelector('#fracture').addEventListener('click', () => {
-      runStructuralMutation('shear', () => {
-        forceEnvelope = {
-          kind: 'screen-space-layered-drag',
-          authority: 'screen-space-drag-to-layered-force-envelope-v0',
-          start: { x: Math.max(0, lastPoint.x - 0.38), y: lastPoint.y, z: 0.5 },
-          point: lastPoint,
-          vector: { x: 0.84, y: 0.07, z: -0.54 },
-          dragLength: 0.5,
-          magnitude: 1.46,
-          radius: 0.26,
-        };
-      });
-      consumeLiveDragPromise(
-        liveDragScheduler.flush(forceEnvelope),
-        'live-drag-shear-command',
-      );
+      selectStructuralInteractionMode('shear');
     });
     document.querySelector('#bind').addEventListener('click', () => {
-      liveDragScheduler.invalidate();
-      gpuTearRequestGate.invalidate();
-      const summary = summarizeLayeredStructuralState(material);
-      const bindPoint = summary.crackPath.find(edge => edge.bondKind === 'depth')?.midpoint || lastPoint;
-      void requestGpuBinding({
-        point: bindPoint,
-        radius: 0.22,
-        strength: 1.25,
-      });
+      selectStructuralInteractionMode('bind');
     });
 
     window.__structuralMaterial3dWitness = () => {
@@ -1300,6 +1339,7 @@
         gpuOperationFailurePhase: latestGpuOperation?.receipt?.failurePhase || null,
         latestWarmTotalMs: latestGpuOperation?.receipt?.timingsMs?.warmTotal ?? null,
       },
+      interactionMode: structuralInteractionMode.snapshot(),
       gpuHotSidecar: gpuHotSidecar?.snapshot() || null,
       gpuTearAppliedCount,
       gpuTearRecentAppliedReceipts: [gpuTearPreviousAppliedReceipt, gpuTearLatestAppliedReceipt]

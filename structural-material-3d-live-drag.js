@@ -1,4 +1,5 @@
 export const STRUCTURAL_MATERIAL_3D_LIVE_DRAG_ROUTE = 'kaminos.structural-material.live-sympathetic-drag.v0';
+export const STRUCTURAL_MATERIAL_3D_INTERACTION_MODE_ROUTE = 'kaminos.structural-material.interaction-mode.v0';
 export const STRUCTURAL_MATERIAL_3D_HAPTIC_ROUTE = 'kaminos.structural-material.causal-haptics.v0';
 export const STRUCTURAL_MATERIAL_NATIVE_HAPTIC_ROUTE = 'kaminos.structural-material.native-trackpad-haptics.v0';
 export const DEFAULT_STRUCTURAL_MATERIAL_NATIVE_HAPTIC_URL = 'http://127.0.0.1:8396';
@@ -10,6 +11,75 @@ function finite(value, fallback = 0) {
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, finite(value, min)));
+}
+
+function round(value, digits = 6) {
+  const scale = 10 ** digits;
+  return Math.round(finite(value) * scale) / scale;
+}
+
+function structuralInteractionMode(value) {
+  if (value === 'shear' || value === 'bind') return value;
+  throw new Error(`unsupported structural interaction mode: ${value}`);
+}
+
+export function createStructuralInteractionModeController(initialMode = 'shear') {
+  let mode = structuralInteractionMode(initialMode);
+  let revision = 0;
+
+  return {
+    select(nextMode) {
+      const selected = structuralInteractionMode(nextMode);
+      const previousMode = mode;
+      const changed = selected !== mode;
+      if (changed) {
+        mode = selected;
+        revision += 1;
+      }
+      return {
+        changed,
+        route: STRUCTURAL_MATERIAL_3D_INTERACTION_MODE_ROUTE,
+        mode,
+        previousMode,
+        revision,
+      };
+    },
+    snapshot() {
+      return {
+        route: STRUCTURAL_MATERIAL_3D_INTERACTION_MODE_ROUTE,
+        mode,
+        revision,
+      };
+    },
+  };
+}
+
+export function buildLayeredStructuralPickedBinding(interaction = {}) {
+  if (interaction.operationMode !== 'bind') {
+    throw new Error('picked structural binding requires a bind-mode picked interaction');
+  }
+  const point = interaction.point;
+  if (![point?.x, point?.y, point?.z].every(Number.isFinite)) {
+    throw new Error('picked structural binding requires a finite rest-space contact point');
+  }
+  const contactIdentity = interaction.contactIdentity;
+  if (!contactIdentity || !['node', 'bond'].includes(contactIdentity.kind)) {
+    throw new Error('picked structural binding requires stable contact identity');
+  }
+  return {
+    schema: 'kaminos.structural-material.picked-binding-command.v0',
+    authority: 'picked-rest-contact-to-resident-binding-v0',
+    operationMode: 'bind',
+    gestureId: interaction.gestureId || null,
+    point: {
+      x: round(point.x),
+      y: round(point.y),
+      z: round(point.z),
+    },
+    radius: round(clamp(interaction.radius, 0.12, 0.34)),
+    strength: round(clamp(0.85 + finite(interaction.inputLoad) * 0.8, 0.85, 1.65)),
+    contactIdentity: { ...contactIdentity },
+  };
 }
 
 function interactionIdentity(interaction, fallback) {

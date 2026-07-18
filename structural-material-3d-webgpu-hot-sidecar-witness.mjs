@@ -4,7 +4,10 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 import { STRUCTURAL_MATERIAL_3D_ROUTE } from './structural-material-3d-core.js';
-import { STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE } from './structural-material-3d-webgpu-hot-sidecar.js';
+import {
+  STRUCTURAL_MATERIAL_3D_WEBGPU_BINDING_ROUTE,
+  STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE,
+} from './structural-material-3d-webgpu-hot-sidecar.js';
 import { STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_ROUTE } from './structural-material-3d-webgpu-tear.js';
 import {
   STRUCTURAL_MATERIAL_3D_RESIDENT_SOLVER_AUTHORITY,
@@ -152,31 +155,53 @@ async function probeScreenshot(evaluate, pngBase64) {
   })()`, true);
 }
 
-async function captureVisibleScreenshot(send, evaluate, timeoutMs) {
+async function captureVisibleScreenshot(send, evaluate, timeoutMs, {
+  minimumNonDarkPixels = 500,
+  minimumStructuralColorPixels = 180,
+  visualState = 'fractured-structural-material',
+} = {}) {
   const deadline = Date.now() + timeoutMs;
   const attempts = [];
+  let lastCapture = null;
+  let lastProbe = null;
   while (Date.now() < deadline) {
     const capture = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
     const probe = await probeScreenshot(evaluate, capture.data);
+    lastCapture = capture;
+    lastProbe = probe;
     attempts.push({
       attempt: attempts.length + 1,
       nonDarkPixels: probe.nonDarkPixels,
       structuralColorPixels: probe.structuralColorPixels,
     });
-    if (probe.nonDarkPixels >= 500 && probe.structuralColorPixels >= 180) {
+    if (probe.nonDarkPixels >= minimumNonDarkPixels &&
+        probe.structuralColorPixels >= minimumStructuralColorPixels) {
       return {
         capture,
         probe: {
           ...probe,
-          minimumNonDarkPixels: 500,
-          minimumStructuralColorPixels: 180,
+          visualState,
+          minimumNonDarkPixels,
+          minimumStructuralColorPixels,
           attempts,
+          ok: true,
         },
       };
     }
     await new Promise(resolveWait => setTimeout(resolveWait, 100));
   }
-  throw new Error(`hot sidecar screenshot remained blank for ${attempts.length} attempts`);
+  return {
+    capture: lastCapture,
+    probe: {
+      ...lastProbe,
+      visualState,
+      minimumNonDarkPixels,
+      minimumStructuralColorPixels,
+      attempts,
+      ok: false,
+      failure: `screenshot missed ${visualState} pixel thresholds after ${attempts.length} attempts`,
+    },
+  };
 }
 
 async function waitUntil(evaluate, expression, timeoutMs, message) {
@@ -202,6 +227,41 @@ async function dispatchProjectedStructuralDrag(send, evaluate, rect) {
   await send('Input.dispatchMouseEvent', {
     type: 'mouseMoved', ...end, button: 'left', buttons: 1,
   });
+  await send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased', ...end, button: 'left', buttons: 0, clickCount: 1,
+  });
+}
+
+async function dispatchPointerClick(send, evaluate, selector) {
+  const point = await evaluate(`(() => {
+    const rect = document.querySelector(${JSON.stringify(selector)})?.getBoundingClientRect();
+    return rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null;
+  })()`);
+  assertCheck(point, `pointer click target ${selector} was unavailable`);
+  await send('Input.dispatchMouseEvent', {
+    type: 'mousePressed', ...point, button: 'left', buttons: 1, clickCount: 1,
+  });
+  await send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased', ...point, button: 'left', buttons: 0, clickCount: 1,
+  });
+}
+
+async function beginProjectedStructuralDrag(send, target, rect) {
+  const start = { x: target.clientX, y: target.clientY };
+  const end = {
+    x: Math.min(rect.left + rect.width - 2, start.x + rect.width * 0.36),
+    y: start.y,
+  };
+  await send('Input.dispatchMouseEvent', {
+    type: 'mousePressed', ...start, button: 'left', buttons: 1, clickCount: 1,
+  });
+  await send('Input.dispatchMouseEvent', {
+    type: 'mouseMoved', ...end, button: 'left', buttons: 1,
+  });
+  return { start, end };
+}
+
+async function releaseProjectedStructuralDrag(send, end) {
   await send('Input.dispatchMouseEvent', {
     type: 'mouseReleased', ...end, button: 'left', buttons: 0, clickCount: 1,
   });
@@ -237,6 +297,8 @@ const report = {
   isolatedSequence: null,
   liveFirst: null,
   liveSecond: null,
+  modeSelection: null,
+  liveBinding: null,
   checks: {},
   screenshotPixelProbe: null,
   runtimeErrors: [],
@@ -391,19 +453,137 @@ try {
     livePage.visibleTear.components.filter(component => component.pinned)
       .every(component => component.maxPinnedDisplacement < 0.000001);
 
+  report.failurePhase = 'bind-mode-selection';
+  const bindSelectionBefore = await evaluate(`(() => {
+    const witness = window.__structuralMaterial3dWitness();
+    return {
+      summary: witness.summary,
+      geometrySidecar: witness.geometrySidecar,
+      gpuHotSidecarEventEpoch: witness.gpuHotSidecar?.eventEpoch ?? null,
+      latestGpuOperation: witness.latestGpuOperation,
+      gpuBindingPending: witness.gpuBindingPending,
+      camera: window.__structuralMaterial3dCameraWitness().state,
+    };
+  })()`);
+  await dispatchPointerClick(send, evaluate, '#bind');
+  const bindSelectionAfter = await evaluate(`(() => {
+    const witness = window.__structuralMaterial3dWitness();
+    return {
+      summary: witness.summary,
+      geometrySidecar: witness.geometrySidecar,
+      gpuHotSidecarEventEpoch: witness.gpuHotSidecar?.eventEpoch ?? null,
+      latestGpuOperation: witness.latestGpuOperation,
+      gpuBindingPending: witness.gpuBindingPending,
+      camera: window.__structuralMaterial3dCameraWitness().state,
+      interactionMode: witness.interactionMode,
+      shearPressed: document.querySelector('#fracture')?.getAttribute('aria-pressed'),
+      bindPressed: document.querySelector('#bind')?.getAttribute('aria-pressed'),
+    };
+  })()`);
+  report.modeSelection = { before: bindSelectionBefore, after: bindSelectionAfter };
+  report.checks.modeSelectionInert =
+    JSON.stringify(bindSelectionBefore.summary) === JSON.stringify(bindSelectionAfter.summary) &&
+    JSON.stringify(bindSelectionBefore.geometrySidecar) === JSON.stringify(bindSelectionAfter.geometrySidecar) &&
+    bindSelectionBefore.gpuHotSidecarEventEpoch === bindSelectionAfter.gpuHotSidecarEventEpoch &&
+    JSON.stringify(bindSelectionBefore.latestGpuOperation) === JSON.stringify(bindSelectionAfter.latestGpuOperation) &&
+    bindSelectionBefore.gpuBindingPending === false &&
+    bindSelectionAfter.gpuBindingPending === false &&
+    JSON.stringify(bindSelectionBefore.camera) === JSON.stringify(bindSelectionAfter.camera) &&
+    bindSelectionAfter.interactionMode?.mode === 'bind' &&
+    bindSelectionAfter.shearPressed === 'false' &&
+    bindSelectionAfter.bindPressed === 'true';
+
+  report.failurePhase = 'picked-bind-gesture';
+  const bindTarget = await evaluate(`(() => {
+    const targets = window.__structuralMaterial3dPickTargets();
+    const failed = window.__structuralMaterial3dWitness().summary.crackPath;
+    return targets
+      .map(target => ({
+        ...target,
+        failedDistance: Math.min(...failed.map(edge => Math.hypot(
+          target.restPoint.x - edge.midpoint.x,
+          target.restPoint.y - edge.midpoint.y,
+          target.restPoint.z - edge.midpoint.z,
+        ))),
+      }))
+      .sort((a, b) => a.failedDistance - b.failedDistance)[0] || null;
+  })()`);
+  assertCheck(bindTarget, 'fractured route exposed no projected Bind contact target');
+  const tearAppliedCountBeforeBind = livePage.gpuTearAppliedCount;
+  const brokenBondCountBeforeBind = livePage.summary.brokenBondCount;
+  const heldBind = await beginProjectedStructuralDrag(send, bindTarget, stageRect);
+  await waitUntil(
+    evaluate,
+    `(() => {
+      const witness = window.__structuralMaterial3dWitness();
+      return witness.latestGpuOperation?.kind === 'binding' &&
+        witness.latestGpuOperation.status === 'passed' &&
+        witness.gpuResidentBinding?.binding?.eventCount > 0;
+    })()`,
+    config.loadTimeoutMs,
+    'held picked Bind gesture did not repair resident connectivity',
+  );
+  report.liveBinding = await evaluate('window.__structuralMaterial3dWitness()');
+  await releaseProjectedStructuralDrag(send, heldBind.end);
+  await waitUntil(
+    evaluate,
+    `(() => {
+      const witness = window.__structuralMaterial3dWitness();
+      return witness.liveDrag.pointerActive === false &&
+        witness.liveDrag.scheduler.pointerExecutionActive === false &&
+        witness.gpuBindingPending === false;
+    })()`,
+    config.loadTimeoutMs,
+    'picked Bind release did not settle',
+  );
+  const boundPage = await evaluate('window.__structuralMaterial3dWitness()');
+  const effectiveBindPoint = report.liveBinding.gpuResidentBinding?.binding?.effective?.point;
+  const pickedBindPoint = report.liveBinding.forceEnvelope?.point;
+  report.checks.pickedBindLocality =
+    report.liveBinding.interactionMode?.mode === 'bind' &&
+    report.liveBinding.forceEnvelope?.operationMode === 'bind' &&
+    report.liveBinding.interactionDiagnostics?.pick?.id === report.liveBinding.forceEnvelope?.contactIdentity?.id &&
+    [effectiveBindPoint?.x, effectiveBindPoint?.y, effectiveBindPoint?.z].every(Number.isFinite) &&
+    Math.hypot(
+      effectiveBindPoint.x - pickedBindPoint.x,
+      effectiveBindPoint.y - pickedBindPoint.y,
+      effectiveBindPoint.z - pickedBindPoint.z,
+    ) <= 0.000001 &&
+    bindTarget.failedDistance <= report.liveBinding.gpuResidentBinding.binding.effective.radius + 0.000001;
+  report.checks.bindingRouteIdentity =
+    report.liveBinding.gpuResidentBinding?.status === 'passed' &&
+    report.liveBinding.gpuResidentBinding?.effectiveRoute === STRUCTURAL_MATERIAL_3D_WEBGPU_BINDING_ROUTE &&
+    report.liveBinding.gpuResidentBinding?.effectiveBackend === 'webgpu' &&
+    report.liveBinding.gpuResidentBinding?.cpuFallbackUsed === false;
+  report.checks.bindReducedLocalDamage =
+    report.liveBinding.summary.brokenBondCount < brokenBondCountBeforeBind &&
+    report.liveBinding.gpuResidentBinding.binding.eventCount > 0 &&
+    boundPage.summary.brokenBondCount <= report.liveBinding.summary.brokenBondCount;
+  report.checks.bindDidNotInvokeTear =
+    report.liveBinding.gpuTearAppliedCount === tearAppliedCountBeforeBind &&
+    boundPage.gpuTearAppliedCount === tearAppliedCountBeforeBind &&
+    boundPage.latestGpuOperation?.kind === 'binding';
+  report.checks.bindCameraPreserved = JSON.stringify(cameraBefore) === JSON.stringify(
+    await evaluate('window.__structuralMaterial3dCameraWitness().state'),
+  );
+
   report.failurePhase = 'visual-evidence';
-  const screenshotEvidence = await captureVisibleScreenshot(send, evaluate, config.loadTimeoutMs);
+  const screenshotEvidence = await captureVisibleScreenshot(send, evaluate, config.loadTimeoutMs, {
+    minimumNonDarkPixels: 500,
+    minimumStructuralColorPixels: 40,
+    visualState: 'post-picked-bind',
+  });
   report.screenshotPixelProbe = screenshotEvidence.probe;
+  assertCheck(screenshotEvidence.capture?.data, 'visual witness produced no screenshot payload');
   mkdirSync(dirname(config.screenshot), { recursive: true });
   writeFileSync(config.screenshot, Buffer.from(screenshotEvidence.capture.data, 'base64'));
-  report.checks.actualScreenshotPixels = report.screenshotPixelProbe.nonDarkPixels >=
-      report.screenshotPixelProbe.minimumNonDarkPixels &&
-    report.screenshotPixelProbe.structuralColorPixels >=
-      report.screenshotPixelProbe.minimumStructuralColorPixels;
-  report.checks.routeStatusVisible = await evaluate(`(() => {
+  report.checks.actualScreenshotPixels = report.screenshotPixelProbe.ok === true &&
+    report.screenshotPixelProbe.nonDarkPixels >= report.screenshotPixelProbe.minimumNonDarkPixels &&
+    report.screenshotPixelProbe.structuralColorPixels >= report.screenshotPixelProbe.minimumStructuralColorPixels;
+  report.checks.bindingRouteStatusVisible = await evaluate(`(() => {
     const status = document.querySelector('#gpu-status');
-    return status?.textContent.includes('GPU tear passed') &&
-      status?.title === ${JSON.stringify(STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_ROUTE)};
+    return status?.textContent.includes('GPU bind') &&
+      status?.title === ${JSON.stringify(STRUCTURAL_MATERIAL_3D_WEBGPU_BINDING_ROUTE)};
   })()`);
 
   report.failurePhase = 'reset-reinitialize';
@@ -435,6 +615,13 @@ try {
     effectiveRoute: report.effectiveRoute,
     isolatedLifecycle: isolated.beforeDispose.lifecycle,
     liveLifecycle: report.liveSecond.lifecycle,
+    liveBinding: {
+      effectiveRoute: report.liveBinding.gpuResidentBinding?.effectiveRoute || null,
+      effectiveBackend: report.liveBinding.gpuResidentBinding?.effectiveBackend || null,
+      eventEpoch: report.liveBinding.gpuResidentBinding?.eventEpoch || null,
+      eventCount: report.liveBinding.gpuResidentBinding?.binding?.eventCount || 0,
+      point: report.liveBinding.gpuResidentBinding?.binding?.effective?.point || null,
+    },
     screenshotPixelProbe: report.screenshotPixelProbe,
   };
 } catch (error) {

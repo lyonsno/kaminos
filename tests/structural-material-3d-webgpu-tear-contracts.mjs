@@ -74,9 +74,11 @@ assert.match(
 assert.match(pageSource, /pointerup/, 'effigy drag release remains the world-consequence boundary');
 assert.match(
   pageSource,
-  /querySelector\('#bind'\)\.addEventListener\('click',[\s\S]*?gpuTearRequestGate\.invalidate\(\);[\s\S]*?requestGpuBinding/,
-  'Bind invalidates pending GPU tear completion before requesting resident connectivity repair',
+  /querySelector\('#bind'\)\.addEventListener\('click', \(\) => \{\s*selectStructuralInteractionMode\('bind'\);\s*\}\);/,
+  'Bind selection changes operation mode without immediately repairing connectivity',
 );
+assert.match(pageSource, /function selectStructuralInteractionMode[\s\S]*?cancelMaterialGesture\(\)/, 'mode changes invalidate pending opposite-mode gesture work');
+assert.match(pageSource, /interaction\.operationMode === 'bind'[\s\S]*?requestGpuBinding/, 'a picked Bind gesture reaches resident connectivity repair');
 
 const requestGate = createLayeredStructuralGpuTearRequestGate();
 const staleToken = requestGate.begin();
