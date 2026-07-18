@@ -90,33 +90,94 @@ export function evaluateStructuralBurnAppearance({
   temperature = 0.08,
   fuel = 1,
   char = 0,
+  peakExposure = 0,
+  liveExposure = 0,
+  phase = 0,
+  consumptionRate = 0,
   bondAlive = true,
   strengthRatio = 1,
 } = {}) {
   const thermal = Math.max(0, finite(temperature, 0.08));
   const remainingFuel = clamp(finite(fuel, 1), 0, 1);
   const charPersistence = clamp(finite(char, 0), 0, 1);
+  const historicalExposure = Math.max(0, finite(peakExposure, 0));
+  const currentExposure = Math.max(0, finite(liveExposure, 0));
+  const ignited = finite(phase, 0) > 0 ? 1 : 0;
+  const reaction = Math.max(0, finite(consumptionRate, 0));
   const fuelLoss = 1 - remainingFuel;
   const heat = smoothstep(0.48, 1.15, thermal);
-  const scorch = clamp(charPersistence * 0.72 + fuelLoss * 0.22, 0, 1);
+  const charStage = smoothstep(0.02, 0.8, charPersistence);
+  const pyrolysis = smoothstep(0.000001, 0.0025, reaction) *
+    smoothstep(0.02, 0.35, remainingFuel) * ignited;
+  const preheat = Math.max(
+    smoothstep(0.12, 0.52, thermal),
+    smoothstep(0.02, 0.45, historicalExposure),
+  ) * (1 - charStage) * (1 - pyrolysis);
+  const contact = smoothstep(0.01, 0.6, currentExposure);
+  const virginWeight = clamp(1 - Math.max(preheat, pyrolysis, charStage), 0, 1);
   const virgin = [0.44, 0.29, 0.14];
-  const scorched = [0.16, 0.07, 0.025];
-  const charred = [0.105, 0.07, 0.045];
-  const ember = [0.98, 0.24, 0.025];
-  const base = mixColor(mixColor(virgin, scorched, scorch), charred, charPersistence ** 1.2);
-  const ignitionSupport = smoothstep(0.02, 0.35, remainingFuel);
-  const emissiveStrength = heat * ignitionSupport * (1 - charPersistence * 0.55);
-  const materialColor = mixColor(base, ember, Math.min(0.62, emissiveStrength * 0.62));
+  const heated = [0.52, 0.19, 0.05];
+  const pyrolyzing = [0.98, 0.20, 0.018];
+  const mildChar = [0.16, 0.11, 0.07];
+  const deepChar = [0.085, 0.062, 0.045];
+  const contactChar = [0.23, 0.075, 0.025];
+  const exposureScorch = smoothstep(0.15, 2.2, historicalExposure);
+  const charColor = mixColor(mildChar, deepChar, exposureScorch);
+  let materialColor = mixColor(virgin, heated, preheat);
+  materialColor = mixColor(materialColor, charColor, charStage);
+  materialColor = mixColor(materialColor, contactChar, contact * charStage * (1 - pyrolysis) * 0.28);
+  materialColor = mixColor(materialColor, pyrolyzing, pyrolysis * (0.28 + contact * 0.44));
+  const emissiveStrength = heat * pyrolysis * (0.25 + contact * 0.75) * (1 - charPersistence * 0.35);
   const remainingStrength = clamp(finite(strengthRatio, 1), 0, 1);
   const bondOpacity = bondAlive
     ? clamp(0.15 + 0.75 * remainingStrength * (1 - charPersistence * 0.35), 0.08, 0.9)
     : 0;
+  const semanticWeights = {
+    virgin: virginWeight,
+    preheat,
+    pyrolysis,
+    char: charStage,
+    contact,
+  };
+  const dominantStage = pyrolysis > 0.35
+    ? 'pyrolysis'
+    : charStage > 0.35
+      ? 'char'
+      : preheat > 0.25
+        ? 'preheat'
+        : 'virgin';
   return {
     materialColor,
     emissiveStrength,
     charPersistence,
     fuelLoss,
     bondOpacity,
+    semanticWeights,
+    dominantStage,
+  };
+}
+
+export function createStructuralBurnFaceEmitter({
+  worldOffset = [0, 0, 0],
+  displayScale = [1.12, 0.42, 0.36],
+  radius,
+} = {}) {
+  const vector = (value, fallback) => Array.from({ length: 3 }, (_, index) => finite(value?.[index], fallback[index]));
+  const center = vector(worldOffset, [0, 0, 0]);
+  const scale = vector(displayScale, [1.12, 0.42, 0.36]).map(value => Math.abs(value));
+  const contactRadius = Math.max(0.0001, finite(radius, Math.min(scale[1], scale[2]) * (17 / 72)));
+  const facePosition = [center[0] + scale[0] * 0.5, center[1], center[2]];
+  const emitterX = facePosition[0];
+  const segmentHalfWidth = contactRadius * (4 / 17);
+  const start = [emitterX - segmentHalfWidth, center[1] - scale[1] * (6 / 7), center[2]];
+  const end = [emitterX + segmentHalfWidth, center[1] - scale[1] * (5 / 42), center[2]];
+  return {
+    face: 'positive-x',
+    facePosition,
+    overlapDepth: contactRadius - Math.abs(emitterX - facePosition[0]),
+    start,
+    end,
+    radius: contactRadius,
   };
 }
 
@@ -752,6 +813,8 @@ struct VertexOut {
   @location(1) normal: vec3<f32>,
   @location(2) surface: f32,
   @location(3) emissive: f32,
+  @location(4) thermal: vec4<f32>,
+  @location(5) reaction: vec4<f32>,
 }
 
 @group(0) @binding(0) var<storage, read> nodes: array<NodeRecord>;
@@ -772,26 +835,51 @@ fn displayedPosition(nodeIndex: u32) -> vec3<f32> {
     node.displacement.xyz + presentation.world.xyz;
 }
 
-fn materialColor(material: NodeMaterial) -> vec3<f32> {
-  let heat = smoothstep(0.48, 1.15, material.thermal.x);
-  let charMass = clamp(material.thermal.z, 0.0, 1.0);
-  let fuelLoss = 1.0 - clamp(material.thermal.y, 0.0, 1.0);
-  let scorch = clamp(charMass * 0.72 + fuelLoss * 0.22, 0.0, 1.0);
+fn semanticBurnAppearance(thermal: vec4<f32>, reaction: vec4<f32>) -> vec4<f32> {
+  let temperature = max(0.0, thermal.x);
+  let fuel = clamp(thermal.y, 0.0, 1.0);
+  let charMass = clamp(thermal.z, 0.0, 1.0);
+  let peakExposure = max(0.0, thermal.w);
+  let liveExposure = max(0.0, reaction.x);
+  let consumedFuel = max(0.0, reaction.y);
+  let ignited = smoothstep(0.25, 0.75, reaction.z);
+  let heat = smoothstep(0.48, 1.15, temperature);
+  let charStage = smoothstep(0.02, 0.8, charMass);
+  let pyrolysis = smoothstep(0.000001, 0.0025, consumedFuel) *
+    smoothstep(0.02, 0.35, fuel) * ignited;
+  let preheat = max(
+    smoothstep(0.12, 0.52, temperature),
+    smoothstep(0.02, 0.45, peakExposure)
+  ) * (1.0 - charStage) * (1.0 - pyrolysis);
+  let contact = smoothstep(0.01, 0.6, liveExposure);
   let virgin = vec3<f32>(0.44, 0.29, 0.14);
-  let scorched = vec3<f32>(0.16, 0.07, 0.025);
-  let charred = vec3<f32>(0.105, 0.07, 0.045);
-  let ember = vec3<f32>(0.98, 0.24, 0.025);
-  let base = mix(mix(virgin, scorched, scorch), charred, pow(charMass, 1.2));
-  let ignitionSupport = smoothstep(0.02, 0.35, clamp(material.thermal.y, 0.0, 1.0));
-  let emissive = heat * ignitionSupport * (1.0 - charMass * 0.55);
-  return mix(base, ember, min(0.62, emissive * 0.62));
+  let heated = vec3<f32>(0.52, 0.19, 0.05);
+  let pyrolyzing = vec3<f32>(0.98, 0.20, 0.018);
+  let mildChar = vec3<f32>(0.16, 0.11, 0.07);
+  let deepChar = vec3<f32>(0.085, 0.062, 0.045);
+  let contactChar = vec3<f32>(0.23, 0.075, 0.025);
+  let exposureScorch = smoothstep(0.15, 2.2, peakExposure);
+  let charColor = mix(mildChar, deepChar, exposureScorch);
+  var color = mix(virgin, heated, preheat);
+  color = mix(color, charColor, charStage);
+  color = mix(color, contactChar, contact * charStage * (1.0 - pyrolysis) * 0.28);
+  color = mix(color, pyrolyzing, pyrolysis * (0.28 + contact * 0.44));
+  let emissive = heat * pyrolysis * (0.25 + contact * 0.75) * (1.0 - charMass * 0.35);
+  return vec4<f32>(color, emissive);
+}
+
+fn materialColor(material: NodeMaterial) -> vec3<f32> {
+  return semanticBurnAppearance(
+    material.thermal,
+    vec4<f32>(material.rates.xy, f32(material.identity.z), 0.0)
+  ).rgb;
 }
 
 fn materialEmissive(material: NodeMaterial) -> f32 {
-  let heat = smoothstep(0.48, 1.15, material.thermal.x);
-  let charMass = clamp(material.thermal.z, 0.0, 1.0);
-  let ignitionSupport = smoothstep(0.02, 0.35, clamp(material.thermal.y, 0.0, 1.0));
-  return heat * ignitionSupport * (1.0 - charMass * 0.55);
+  return semanticBurnAppearance(
+    material.thermal,
+    vec4<f32>(material.rates.xy, f32(material.identity.z), 0.0)
+  ).a;
 }
 
 fn surfaceCell(cellIndex: u32) -> vec3<u32> {
@@ -864,15 +952,15 @@ fn surfaceVertex(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_inde
   let rawNormal = cross(point1 - point0, point2 - point0);
   var surfaceNormal = vec3<f32>(0.0, 0.0, 1.0);
   if (dot(rawNormal, rawNormal) > 0.0000001) { surfaceNormal = normalize(rawNormal); }
-  let charMass = clamp(material.thermal.z, 0.0, 1.0);
   let grain = 0.94 + 0.06 * sin(nodes[surfaceNodeIndex].position.x * 31.0 + nodes[surfaceNodeIndex].position.z * 17.0);
-  let liftedChar = mix(materialColor(material), vec3<f32>(0.13, 0.095, 0.065), charMass * 0.22);
   var out: VertexOut;
   out.position = presentation.viewProjection * vec4<f32>(displayedPosition(surfaceNodeIndex), 1.0);
-  out.color = vec4<f32>(liftedChar * grain, select(0.0, 0.98, surfaceVisible));
+  out.color = vec4<f32>(vec3<f32>(grain), select(0.0, 0.98, surfaceVisible));
   out.normal = surfaceNormal;
   out.surface = 1.0;
   out.emissive = materialEmissive(material);
+  out.thermal = material.thermal;
+  out.reaction = vec4<f32>(material.rates.xy, f32(material.identity.z), 0.0);
   return out;
 }
 
@@ -892,6 +980,8 @@ fn bondVertex(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) 
   out.normal = vec3<f32>(0.0);
   out.surface = 0.0;
   out.emissive = 0.0;
+  out.thermal = material.thermal;
+  out.reaction = vec4<f32>(material.rates.xy, f32(material.identity.z), 0.0);
   return out;
 }
 
@@ -912,6 +1002,8 @@ fn nodeVertex(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) 
   out.normal = vec3<f32>(0.0);
   out.surface = 0.0;
   out.emissive = 0.0;
+  out.thermal = material.thermal;
+  out.reaction = vec4<f32>(material.rates.xy, f32(material.identity.z), 0.0);
   return out;
 }
 
@@ -919,11 +1011,13 @@ fn nodeVertex(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) 
 fn fragmentMain(in: VertexOut) -> @location(0) vec4<f32> {
   if (in.color.a <= 0.001) { discard; }
   if (in.surface > 0.5) {
+    let appearance = semanticBurnAppearance(in.thermal, in.reaction);
     let normal = normalize(in.normal);
     let keyLight = normalize(vec3<f32>(0.38, 0.82, 0.44));
     let diffuse = max(0.0, dot(normal, keyLight));
-    let litColor = in.color.rgb * (0.46 + diffuse * 0.54);
-    let finalColor = mix(litColor, in.color.rgb, clamp(in.emissive, 0.0, 1.0));
+    let albedo = appearance.rgb * in.color.rgb;
+    let litColor = albedo * (0.46 + diffuse * 0.54);
+    let finalColor = mix(litColor, albedo, clamp(appearance.a, 0.0, 1.0));
     return vec4<f32>(finalColor, in.color.a);
   }
   return in.color;

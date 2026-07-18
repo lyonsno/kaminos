@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../structural-combustion-gpu.mjs', import.meta.url), 'utf8');
 const volumeSource = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+const pageSource = readFileSync(new URL('../structural-combustion.html', import.meta.url), 'utf8');
 
 assert.match(
   source,
@@ -43,6 +44,21 @@ assert.match(
   source,
   /materialColor\(material\),\s*0\.32/,
   'node billboards remain only as a restrained material-state overlay',
+);
+assert.match(
+  source,
+  /@location\(4\) thermal: vec4<f32>[\s\S]*@location\(5\) reaction: vec4<f32>/,
+  'surface fragments receive interpolated thermal and reaction semantics rather than only vertex color',
+);
+assert.match(
+  source,
+  /semanticBurnAppearance\(in\.thermal, in\.reaction\)/,
+  'surface fragment shading classifies the interpolated resident material state',
+);
+assert.match(
+  pageSource,
+  /createStructuralBurnFaceEmitter\([\s\S]*targetPresentation[\s\S]*setExternalEmitters/,
+  'the visible Pyro contact is derived from the loaded beam presentation transform',
 );
 
 console.log('structural solid burn surface contracts: ok');

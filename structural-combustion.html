@@ -122,6 +122,7 @@
     import {
       STRUCTURAL_COMBUSTION_AUTHORITY,
       STRUCTURAL_COMBUSTION_SCHEMA,
+      createStructuralBurnFaceEmitter,
       createGpuStructuralCombustionAssembly,
     } from './structural-combustion-gpu.mjs';
 
@@ -465,6 +466,10 @@
         const controlState = createLayeredStructuralMaterial({ columns: 5, rows: 4, layers: 3, notch: true });
         const propagationTargetState = createLayeredStructuralMaterial({ columns: 3, rows: 2, layers: 2, notch: false });
         const propagationControlState = createLayeredStructuralMaterial({ columns: 3, rows: 2, layers: 2, notch: false });
+        const targetPresentation = Object.freeze({
+          worldOffset: [-0.56, 0.08, -0.18],
+          displayScale: [1.12, 0.42, 0.36],
+        });
         failurePhase = 'structural-sidecars';
         targetSidecar = await createLayeredStructuralHotWebGpuSidecar({
           state: targetState,
@@ -505,8 +510,7 @@
               motionEnabled: true,
               pyroScale: [0.18, 0.24, 0.18],
               pyroOffset: [0.41, 0.26, 0.41],
-              worldOffset: [-0.64, 0.08, 0],
-              displayScale: [1.12, 0.42, 0.36],
+              ...targetPresentation,
               burnRate: 0.003,
               charStrengthLoss: 0.95,
             },
@@ -571,14 +575,13 @@
         });
         failurePhase = 'gpu-loop-bind';
         await volume.setGpuStructuralCombustionAssembly(assembly);
+        const burnFaceEmitter = createStructuralBurnFaceEmitter(targetPresentation);
         volume.setExternalEmitters({
           mode: 'structural-burn-face',
           frameId: 1,
           timestampMs: performance.now(),
           emitters: [{
-            start: [-0.02, -0.28, -0.18],
-            end: [0.02, 0.03, -0.18],
-            radius: 0.085,
+            ...burnFaceEmitter,
             strength: 4,
             velocity: [0, 0.35, 0],
             smoke: 0.7,
