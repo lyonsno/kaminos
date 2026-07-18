@@ -16,7 +16,7 @@ const screenSpaceRefractionOut = resolve(args.get('--screen-space-refraction-out
 const sphereDebugOut = resolve(args.get('--sphere-debug-out') || out.replace(/\.png$/i, '.sphere-debug.png'));
 const resizedSurfaceOut = resolve(args.get('--resized-surface-out') || out.replace(/\.png$/i, '.screen-space-resized.png'));
 const invalidRendererOut = resolve(args.get('--invalid-renderer-out') || out.replace(/\.png$/i, '.invalid-renderer.png'));
-const opticalDebugModes = ['depth', 'normal', 'thickness', 'refraction_offset', 'fresnel', 'absorption'];
+const opticalDebugModes = ['depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption'];
 const opticalDebugOutputs = Object.fromEntries(opticalDebugModes.map(mode => [
   mode,
   resolve(args.get(`--optical-${mode.replace('_', '-')}-out`) || out.replace(/\.png$/i, `.optical-${mode.replace('_', '-')}.png`)),
@@ -53,6 +53,7 @@ let sameStateOpticalComparison = null;
 let rendererResizeWitness = null;
 let invalidRendererWitness = null;
 let opticalDebugViews = null;
+let slabValidityField = null;
 let primaryFrameBinding = null;
 let cadenceProbe = null;
 let automaticDiagnosticsRequestCount = null;
@@ -131,6 +132,7 @@ function writeReport(report = {}) {
     rendererResizeWitness,
     invalidRendererWitness,
     opticalDebugViews,
+    slabValidityField,
     opticalDebugOutputs,
     primaryFrameBinding,
     primaryRouteCanvasOut,
@@ -264,6 +266,40 @@ function measureCapturedPng(path, label) {
     darkRatio: Number((darkPixels / Math.max(1, pixelCount)).toFixed(5)),
     measurement: 'captured_webgpu_canvas_ffmpeg_rgb24_v0',
   };
+}
+
+function measureSlabValidityField(path) {
+  const decoded = spawnSync('ffmpeg', ['-v', 'error', '-i', path, '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], {
+    encoding: null,
+    maxBuffer: 128 * 1024 * 1024,
+  });
+  if (decoded.status !== 0 || !decoded.stdout?.length) {
+    throw new Error(`ffmpeg slab validity decode failed: ${decoded.stderr?.toString() || decoded.status}`);
+  }
+  let validExitPixels = 0;
+  let invalidExitPixels = 0;
+  for (let i = 0; i < decoded.stdout.length; i += 3) {
+    const r = decoded.stdout[i];
+    const g = decoded.stdout[i + 1];
+    const b = decoded.stdout[i + 2];
+    if (g > 96 && g > r * 1.35 && g > b * 1.35) validExitPixels += 1;
+    if (r > 96 && r > g * 1.35 && r > b * 1.35) invalidExitPixels += 1;
+  }
+  const pixelCount = decoded.stdout.length / 3;
+  const classifiedPixels = validExitPixels + invalidExitPixels;
+  const measurement = {
+    path,
+    pixelCount,
+    validExitPixels,
+    invalidExitPixels,
+    classifiedPixels,
+    classifiedRatio: Number((classifiedPixels / Math.max(1, pixelCount)).toFixed(5)),
+    measurement: 'captured_exit_validity_field_ffmpeg_rgb24_v0',
+  };
+  if (validExitPixels < 1000 || invalidExitPixels < 100) {
+    throw new Error(`slab validity field lacks independently visible valid and invalid exit geometry: ${JSON.stringify(measurement)}`);
+  }
+  return measurement;
 }
 
 function measureFluidProjection(path, label, mask = 'blue') {
@@ -992,7 +1028,12 @@ async function main() {
       refractionEvidence = lastDebugState.runtime?.refractionEvidence || null;
       if (
         refractionEvidence?.route !== 'webgpu-screen-space-liquid-refraction-v0'
-        || refractionEvidence?.opticalTransportRoute !== 'snell-single-interface-screen-space-optics-v0'
+        || refractionEvidence?.opticalTransportRoute !== 'snell-two-interface-screen-space-slab-v0'
+        || refractionEvidence?.slabRoute !== 'wgsl-particle-projected-front-back-slab-v0'
+        || refractionEvidence?.slabGeometryPassCount < 1
+        || refractionEvidence?.frontDepthTexture?.format !== 'rgba16float'
+        || refractionEvidence?.backDepthTexture?.format !== 'rgba16float'
+        || refractionEvidence?.invalidSlabDisposition !== 'entry_interface_only_no_exit_claim_v0'
         || refractionEvidence?.supportDepthRoute !== 'wgsl-analytic-heightfield-obstacle-depth-v0'
         || refractionEvidence?.analyticSupportDepthPassCount < 1
         || refractionEvidence?.opticalDebugMode !== requestedOpticalDebugMode
@@ -1241,16 +1282,17 @@ async function main() {
     if (canvasActivity.supportPixelRatio < 0.025) throw new Error(`shared playground support is not materially visible: ${JSON.stringify(canvasActivity)}`);
 
     phase = 'same_state_renderer_comparison';
-    const rendererCountersBefore = await evaluate(ws, `(() => {
-      const read = window.kaminosFingerFluidBenchDebugState || window.__kaminosFingerFluidBenchDebugState;
-      const runtime = typeof read === 'function' ? read()?.runtime : null;
-      return runtime ? {
-        stepCount: runtime.stepCount,
-        sphereDebugRenderFrameCount: runtime.sphereDebugRenderFrameCount,
-        screenSpaceSurfaceRenderFrameCount: runtime.screenSpaceSurfaceRenderFrameCount,
-        screenSpaceRefractionRenderFrameCount: runtime.screenSpaceRefractionRenderFrameCount,
-      } : null;
+    const rendererFreezeReceipt = await evaluate(ws, `(() => {
+      const render = window.kaminosFingerFluidBenchRenderCurrentStateForWitness;
+      if (typeof render !== 'function') throw new Error('pre-output failure: missing same-state renderer witness hook');
+      return render(${JSON.stringify(requestedRendererMode)}, ${JSON.stringify(requestedOpticalDebugMode)});
     })()`);
+    const rendererCountersBefore = rendererFreezeReceipt ? {
+      stepCount: rendererFreezeReceipt.stepCount,
+      sphereDebugRenderFrameCount: rendererFreezeReceipt.sphereDebugRenderFrameCount,
+      screenSpaceSurfaceRenderFrameCount: rendererFreezeReceipt.screenSpaceSurfaceRenderFrameCount,
+      screenSpaceRefractionRenderFrameCount: rendererFreezeReceipt.screenSpaceRefractionRenderFrameCount,
+    } : null;
     if (!rendererCountersBefore) throw new Error('missing pre-comparison renderer counters');
     const renderSameState = async (
       mode,
@@ -1284,7 +1326,7 @@ async function main() {
       if (mode === 'sphere_debug' && activity.activeRatio < minimumActiveRatio) {
         throw new Error(`blank sphere-debug output rejected: ${JSON.stringify(activity)}`);
       }
-      if (mode === 'screen_space_refraction' && activity.activeRatio < 0.01) {
+      if (mode === 'screen_space_refraction' && opticalDebugMode === 'shaded' && activity.activeRatio < 0.05) {
         throw new Error(`blank refraction output rejected: ${JSON.stringify(activity)}`);
       }
       return { receipt, activity };
@@ -1300,7 +1342,12 @@ async function main() {
     refractionEvidence = screenSpaceRefraction.receipt.refractionEvidence;
     if (
       refractionEvidence?.route !== 'webgpu-screen-space-liquid-refraction-v0'
-      || refractionEvidence?.opticalTransportRoute !== 'snell-single-interface-screen-space-optics-v0'
+      || refractionEvidence?.opticalTransportRoute !== 'snell-two-interface-screen-space-slab-v0'
+      || refractionEvidence?.slabRoute !== 'wgsl-particle-projected-front-back-slab-v0'
+      || refractionEvidence?.slabGeometryPassCount < 1
+      || refractionEvidence?.frontDepthTexture?.format !== 'rgba16float'
+      || refractionEvidence?.backDepthTexture?.format !== 'rgba16float'
+      || refractionEvidence?.invalidSlabDisposition !== 'entry_interface_only_no_exit_claim_v0'
       || refractionEvidence?.supportDepthRoute !== 'wgsl-analytic-heightfield-obstacle-depth-v0'
       || refractionEvidence?.analyticSupportDepthPassCount < 1
       || refractionEvidence?.opticalDebugMode !== 'shaded'
@@ -1323,6 +1370,7 @@ async function main() {
     }
     sameStateRendererComparison = {
       schema: 'kaminos.finger-fluid.same-state-renderer-comparison.v0',
+      rendererFreezeReceipt,
       stepCount: screenSpaceSurface.receipt.stepCount,
       sameSimulationState: sphereDebug.receipt.stepCount === screenSpaceSurface.receipt.stepCount,
       sphereDebug,
@@ -1490,7 +1538,12 @@ async function main() {
       if (
         capture.receipt.refractionEvidence?.opticalDebugMode !== opticalDebugMode
         || capture.receipt.refractionEvidence?.route !== 'webgpu-screen-space-liquid-refraction-v0'
-        || capture.receipt.refractionEvidence?.opticalTransportRoute !== 'snell-single-interface-screen-space-optics-v0'
+        || capture.receipt.refractionEvidence?.opticalTransportRoute !== 'snell-two-interface-screen-space-slab-v0'
+        || capture.receipt.refractionEvidence?.slabRoute !== 'wgsl-particle-projected-front-back-slab-v0'
+        || capture.receipt.refractionEvidence?.slabGeometryPassCount < 1
+        || capture.receipt.refractionEvidence?.frontDepthTexture?.format !== 'rgba16float'
+        || capture.receipt.refractionEvidence?.backDepthTexture?.format !== 'rgba16float'
+        || capture.receipt.refractionEvidence?.invalidSlabDisposition !== 'entry_interface_only_no_exit_claim_v0'
         || capture.receipt.refractionEvidence?.supportDepthRoute !== 'wgsl-analytic-heightfield-obstacle-depth-v0'
         || capture.receipt.refractionEvidence?.analyticSupportDepthPassCount < 1
       ) throw new Error(`optical debug view route evidence mismatch: ${JSON.stringify({ opticalDebugMode, receipt: capture.receipt })}`);
@@ -1520,6 +1573,9 @@ async function main() {
         visualDeltaFromShaded,
         visualDeltaFromPreviousDebug,
       };
+      if (opticalDebugMode === 'exit_validity') {
+        slabValidityField = measureSlabValidityField(opticalDebugOutputs[opticalDebugMode]);
+      }
       previousOpticalDebugMode = opticalDebugMode;
     }
 
