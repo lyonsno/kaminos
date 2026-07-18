@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kaminos GPU Object Ignition</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      background: #10120f;
+      color: #f2eee3;
+    }
+    * { box-sizing: border-box; }
+    html, body, #stage { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #10120f; }
+    #stage { position: fixed; inset: 0; cursor: grab; touch-action: none; }
+    #stage.orbiting { cursor: grabbing; }
+    #stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    #topbar {
+      position: fixed;
+      z-index: 4;
+      inset: 0 0 auto;
+      min-height: 54px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      padding: 8px 14px;
+      border-bottom: 1px solid rgba(239, 222, 181, 0.22);
+      background: rgba(13, 15, 12, 0.90);
+    }
+    #title { min-width: 220px; }
+    #title strong { display: block; font-size: 13px; }
+    #title span { display: block; margin-top: 3px; color: #aeb1a6; font: 10px/1.2 "SF Mono", Menlo, monospace; }
+    #status {
+      flex: 1;
+      min-width: 0;
+      color: #f2c666;
+      font: 10px/1.3 "SF Mono", Menlo, monospace;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .label {
+      position: fixed;
+      z-index: 3;
+      pointer-events: none;
+      padding: 4px 6px;
+      color: #d8d5ca;
+      background: rgba(12, 14, 11, 0.70);
+      border-left: 2px solid #8b8d82;
+      font: 9px/1.2 "SF Mono", Menlo, monospace;
+    }
+    .label strong { display: block; color: #fff8e9; font: 600 10px/1.2 Inter, sans-serif; }
+    #donor-label { left: 18%; top: 31%; border-color: #e78331; }
+    #target-label { left: 44%; top: 58%; border-color: #d9a13e; }
+    #control-label { right: 18%; top: 30%; border-color: #768f78; }
+    #ledger {
+      position: fixed;
+      z-index: 4;
+      inset: auto 0 0;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      min-height: 48px;
+      border-top: 1px solid rgba(239, 222, 181, 0.20);
+      background: rgba(13, 15, 12, 0.91);
+    }
+    .metric { min-width: 0; padding: 8px 12px; border-right: 1px solid rgba(239, 222, 181, 0.12); }
+    .metric:last-child { border-right: 0; }
+    .metric b { display: block; color: #959a8e; font-size: 8px; text-transform: uppercase; }
+    .metric span { display: block; margin-top: 4px; font: 10px/1.15 "SF Mono", Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #error {
+      position: fixed;
+      z-index: 6;
+      inset: 54px 0 48px;
+      display: none;
+      place-items: center;
+      padding: 24px;
+      color: #ffb19e;
+      background: #17120f;
+      font: 12px/1.5 "SF Mono", Menlo, monospace;
+      text-align: center;
+    }
+    @media (max-width: 760px) {
+      #topbar { gap: 8px; padding: 8px 9px; }
+      #title { min-width: 150px; }
+      #title strong { font-size: 11px; }
+      #title span, #status { font-size: 8px; }
+      .metric { padding: 8px 6px; }
+      .metric b { font-size: 7px; }
+      .metric span { font-size: 9px; }
+      #donor-label { left: 9%; }
+      #control-label { right: 7%; }
+    }
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+  <div id="topbar">
+    <div id="title"><strong>GPU object ignition</strong><span>Pyro to material to Pyro</span></div>
+    <div id="status">Initializing same-device command graph</div>
+  </div>
+  <div id="donor-label" class="label"><strong>Donor</strong>seeded GPU material</div>
+  <div id="target-label" class="label"><strong>Target</strong>external ignition disabled</div>
+  <div id="control-label" class="label"><strong>Control</strong>matched, outside exposure</div>
+  <div id="ledger">
+    <div class="metric"><b>Simulation</b><span id="sim-step">0</span></div>
+    <div class="metric"><b>GPU loop</b><span id="loop-step">0</span></div>
+    <div class="metric"><b>Presentation</b><span id="presentation-step">0</span></div>
+    <div class="metric"><b>Host feedback</b><span id="host-feedback">0</span></div>
+  </div>
+  <div id="error"></div>
+  <script type="module">
+    import * as THREE from './lib/three.webgpu.js';
+    import {
+      GPU_COMBUSTIBLE_OBJECT_LOOP_AUTHORITY,
+      GPU_COMBUSTIBLE_OBJECT_LOOP_SCHEMA,
+      createKaminosVolumePrototype,
+    } from './volume-core.js';
+
+    const ROUTE = 'kaminos.gpu-combustible-object-ignition.v0';
+    const stage = document.getElementById('stage');
+    const statusEl = document.getElementById('status');
+    const errorEl = document.getElementById('error');
+    const simStepEl = document.getElementById('sim-step');
+    const loopStepEl = document.getElementById('loop-step');
+    const presentationStepEl = document.getElementById('presentation-step');
+    const hostFeedbackEl = document.getElementById('host-feedback');
+    let volume = null;
+    let status = 'initializing';
+    let failurePhase = null;
+    let error = null;
+    let terminalReceipt = null;
+    let terminalPending = null;
+
+    const camera = new THREE.PerspectiveCamera(43, innerWidth / innerHeight, 0.05, 20);
+    camera.position.set(0, 0.1, 3.2);
+    camera.lookAt(0, 0, 0);
+    const CAMERA_CONTROL_IDENTITY = 'gpu-combustible-object-orbit-camera-v0';
+    const ORBIT_MIN_DISTANCE = 1.35;
+    const ORBIT_MAX_DISTANCE = 7.5;
+    const ORBIT_MIN_PITCH = -1.18;
+    const ORBIT_MAX_PITCH = 1.18;
+    const ORBIT_INITIAL = Object.freeze({
+      position: Object.freeze([0, 0.1, 3.2]),
+      yaw: 0,
+      pitch: Math.atan2(0.1, 3.2),
+      distance: Math.hypot(0.1, 3.2),
+    });
+    const cameraTarget = new THREE.Vector3(0, 0, 0);
+    const cameraControl = {
+      identity: CAMERA_CONTROL_IDENTITY,
+      yaw: ORBIT_INITIAL.yaw,
+      pitch: ORBIT_INITIAL.pitch,
+      distance: ORBIT_INITIAL.distance,
+      interactionCount: 0,
+      lastInteraction: 'initial',
+    };
+    const labelViewProjection = new THREE.Matrix4();
+    const labelPresentationAnchorInverse = new THREE.Matrix4();
+    const labelClip = new THREE.Vector4();
+    const labelAnchorWorldOrigin = new THREE.Vector4();
+    const labelAnchors = [
+      { element: document.getElementById('donor-label'), ndc: [-0.46, 0.27], offset: [-0.09, -0.055] },
+      { element: document.getElementById('target-label'), ndc: [-0.06, -0.18], offset: [-0.03, -0.01] },
+      { element: document.getElementById('control-label'), ndc: [0.46, 0.31], offset: [-0.012, -0.045] },
+    ];
+    let cameraDrag = null;
+    let cameraDirty = true;
+    let labelPresentationAnchorReady = false;
+    let labelPresentationAnchorNdcDepth = 0;
+
+    function clampCameraControl() {
+      cameraControl.pitch = Math.max(ORBIT_MIN_PITCH, Math.min(ORBIT_MAX_PITCH, cameraControl.pitch));
+      cameraControl.distance = Math.max(ORBIT_MIN_DISTANCE, Math.min(ORBIT_MAX_DISTANCE, cameraControl.distance));
+    }
+
+    function cameraControlSnapshot() {
+      return {
+        identity: cameraControl.identity,
+        yaw: cameraControl.yaw,
+        pitch: cameraControl.pitch,
+        distance: cameraControl.distance,
+        target: cameraTarget.toArray(),
+        position: camera.position.toArray(),
+        interactionCount: cameraControl.interactionCount,
+        lastInteraction: cameraControl.lastInteraction,
+      };
+    }
+
+    function currentCameraViewProjection() {
+      camera.updateMatrixWorld();
+      return labelViewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    }
+
+    function updateCameraLabels() {
+      if (!labelPresentationAnchorReady) return;
+      const viewProjection = currentCameraViewProjection();
+      const ledgerHeight = document.getElementById('ledger').offsetHeight || 48;
+      for (const anchor of labelAnchors) {
+        labelClip.set(anchor.ndc[0], anchor.ndc[1], labelPresentationAnchorNdcDepth, 1)
+          .applyMatrix4(labelPresentationAnchorInverse)
+          .applyMatrix4(viewProjection);
+        if (!(labelClip.w > 0)) {
+          anchor.element.style.opacity = '0';
+          continue;
+        }
+        const ndcX = labelClip.x / labelClip.w;
+        const ndcY = labelClip.y / labelClip.w;
+        if (Math.abs(ndcX) > 1.12 || Math.abs(ndcY) > 1.12) {
+          anchor.element.style.opacity = '0';
+          continue;
+        }
+        const left = (ndcX * 0.5 + 0.5 + anchor.offset[0]) * innerWidth;
+        const top = (0.5 - ndcY * 0.5 + anchor.offset[1]) * innerHeight;
+        anchor.element.style.right = 'auto';
+        anchor.element.style.left = `${Math.max(8, Math.min(innerWidth - anchor.element.offsetWidth - 8, left))}px`;
+        anchor.element.style.top = `${Math.max(62, Math.min(innerHeight - ledgerHeight - anchor.element.offsetHeight - 8, top))}px`;
+        anchor.element.style.opacity = '1';
+      }
+    }
+
+    function applyOrbitCamera() {
+      clampCameraControl();
+      if (cameraControl.yaw === ORBIT_INITIAL.yaw &&
+        cameraControl.pitch === ORBIT_INITIAL.pitch &&
+        cameraControl.distance === ORBIT_INITIAL.distance) {
+        camera.position.set(...ORBIT_INITIAL.position);
+      } else {
+        const horizontal = Math.cos(cameraControl.pitch) * cameraControl.distance;
+        camera.position.set(
+          cameraTarget.x + Math.sin(cameraControl.yaw) * horizontal,
+          cameraTarget.y + Math.sin(cameraControl.pitch) * cameraControl.distance,
+          cameraTarget.z + Math.cos(cameraControl.yaw) * horizontal,
+        );
+      }
+      camera.lookAt(cameraTarget);
+      camera.updateMatrixWorld();
+      updateCameraLabels();
+      cameraDirty = false;
+    }
+
+    function resetOrbitCamera(interaction = 'reset') {
+      cameraControl.yaw = ORBIT_INITIAL.yaw;
+      cameraControl.pitch = ORBIT_INITIAL.pitch;
+      cameraControl.distance = ORBIT_INITIAL.distance;
+      cameraControl.lastInteraction = interaction;
+      cameraControl.interactionCount += interaction === 'initial' ? 0 : 1;
+      cameraDirty = true;
+      applyOrbitCamera();
+    }
+
+    const cameraControls = {
+      update() {
+        if (cameraDirty) applyOrbitCamera();
+      },
+    };
+
+    resetOrbitCamera('initial');
+    const initialCameraViewProjection = currentCameraViewProjection();
+    labelPresentationAnchorInverse.copy(initialCameraViewProjection).invert();
+    labelAnchorWorldOrigin.set(0, 0, 0, 1).applyMatrix4(initialCameraViewProjection);
+    labelPresentationAnchorNdcDepth = labelAnchorWorldOrigin.z / labelAnchorWorldOrigin.w;
+    labelPresentationAnchorReady = true;
+    updateCameraLabels();
+
+    stage.addEventListener('pointerdown', event => {
+      if (event.button !== 0 || cameraDrag) return;
+      cameraDrag = {
+        pointerId: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        yaw: cameraControl.yaw,
+        pitch: cameraControl.pitch,
+      };
+      stage.classList.add('orbiting');
+      stage.setPointerCapture?.(event.pointerId);
+      event.preventDefault();
+    });
+    stage.addEventListener('pointermove', event => {
+      if (!cameraDrag || cameraDrag.pointerId !== event.pointerId) return;
+      cameraControl.yaw = cameraDrag.yaw - (event.clientX - cameraDrag.x) * 0.005;
+      cameraControl.pitch = cameraDrag.pitch - (event.clientY - cameraDrag.y) * 0.004;
+      cameraControl.lastInteraction = 'orbit';
+      cameraDirty = true;
+      applyOrbitCamera();
+      event.preventDefault();
+    });
+    function endCameraDrag(event) {
+      if (!cameraDrag || cameraDrag.pointerId !== event.pointerId) return;
+      stage.releasePointerCapture?.(event.pointerId);
+      cameraDrag = null;
+      cameraControl.interactionCount += 1;
+      stage.classList.remove('orbiting');
+    }
+    stage.addEventListener('pointerup', endCameraDrag);
+    stage.addEventListener('pointercancel', endCameraDrag);
+    stage.addEventListener('wheel', event => {
+      cameraControl.distance *= Math.exp(event.deltaY * 0.001);
+      cameraControl.interactionCount += 1;
+      cameraControl.lastInteraction = 'zoom';
+      cameraDirty = true;
+      applyOrbitCamera();
+      event.preventDefault();
+    }, { passive: false });
+    stage.addEventListener('dblclick', event => {
+      resetOrbitCamera();
+      event.preventDefault();
+    });
+    stage.addEventListener('contextmenu', event => event.preventDefault());
+    addEventListener('resize', () => {
+      camera.aspect = innerWidth / Math.max(1, innerHeight);
+      camera.updateProjectionMatrix();
+      cameraDirty = true;
+      applyOrbitCamera();
+    });
+
+    const controls = {
+      runtimeQualityRequested: 'live_full',
+      runtimeQualityReason: 'gpu-combustible-object-ignition-witness',
+      gpuPressure: 0,
+      resolution: 32,
+      majorantGrid: 24,
+      volumeScene: 'compact_plume',
+      inputRadius: 0.08,
+      flowRate: 0,
+      raySteps: 96,
+      density: 1.75,
+      fire: 2.9,
+      smoke: 1.25,
+      curl: 0.70,
+      speed: 1,
+      radiance: 3.7,
+      absorption: 0.72,
+      glow: 1.9,
+      projection: 0.42,
+      pressureIterations: 1,
+      pressureStrategy: 'global',
+      reactionFuelScale: 1,
+      renderScale: 0.82,
+      adaptiveRays: 0.62,
+      occupancySkip: 0,
+      majorantSkip: 0,
+      majorantSmooth: 0.82,
+      majorantGuard: 0.78,
+      temporalAccum: 0.12,
+      temporalJitter: 0.58,
+      historyClamp: 0.78,
+      fireScale: 0.84,
+      detailScale: 1.3,
+      plumeHeight: 1.1,
+      canonicalSourceInjection: 0,
+      canonicalBuoyancy: 1,
+      canonicalContentMode: 'fire_smoke',
+      canonicalMotionMode: 'animated',
+      boundarySplatMode: 'off',
+      pyroRadiance: 0,
+      pyroFlamePaint: 0,
+      pyroFlowBite: 0,
+    };
+
+    function debugState() {
+      const volumeState = volume?.debugState() || null;
+      return {
+        schema: 'kaminos.gpu-combustible-object-ignition-browser.v0',
+        requestedRoute: ROUTE,
+        effectiveRoute: ROUTE,
+        authority: GPU_COMBUSTIBLE_OBJECT_LOOP_AUTHORITY,
+        loopSchema: GPU_COMBUSTIBLE_OBJECT_LOOP_SCHEMA,
+        status,
+        failurePhase,
+        error,
+        fallback: null,
+        frameCount: volumeState?.frameCount ?? 0,
+        simStepCount: volumeState?.simStepCount ?? 0,
+        backend: volumeState?.backend ?? null,
+        volumeRoute: volumeState?.effectiveRoute ?? null,
+        gpuLoop: volumeState?.gpuCombustibleObjectLoop ?? null,
+        cameraControl: cameraControlSnapshot(),
+        terminalReceipt,
+      };
+    }
+    window.kaminosGpuCombustibleObjectDebugState = debugState;
+    window.kaminosGpuCombustibleObjectWaitFrames = async count => {
+      const start = volume?.debugState()?.frameCount ?? 0;
+      const target = start + Math.max(0, Math.floor(Number(count) || 0));
+      while ((volume?.debugState()?.frameCount ?? 0) < target) {
+        await new Promise(resolve => requestAnimationFrame(resolve));
+      }
+      return debugState();
+    };
+    window.kaminosGpuCombustibleObjectFreezeAndReadTerminal = async () => {
+      if (terminalReceipt) return terminalReceipt;
+      if (terminalPending) return terminalPending;
+      terminalPending = (async () => {
+        await volume.setActive(false);
+        terminalReceipt = await volume.readGpuCombustibleObjectTerminalReceipt();
+        status = 'terminal';
+        return terminalReceipt;
+      })();
+      return terminalPending;
+    };
+
+    function updateUi() {
+      const state = debugState();
+      simStepEl.textContent = String(state.simStepCount);
+      loopStepEl.textContent = String(state.gpuLoop?.dispatchCount ?? 0);
+      presentationStepEl.textContent = String(state.gpuLoop?.presentationCount ?? 0);
+      hostFeedbackEl.textContent = String(state.gpuLoop?.hostCausalFeedbackCount ?? 0);
+      statusEl.textContent = `${state.status} | ${state.backend ?? 'backend-pending'} | sim ${state.simStepCount} | GPU material/source ${state.gpuLoop?.dispatchCount ?? 0}`;
+      if (status !== 'terminal' && status !== 'failed') requestAnimationFrame(updateUi);
+    }
+
+    function fail(phase, caught) {
+      failurePhase = phase;
+      error = caught?.message || String(caught);
+      status = 'failed';
+      errorEl.style.display = 'grid';
+      errorEl.textContent = `GPU object ignition failed during ${phase}: ${error}`;
+      statusEl.textContent = `failed | ${phase}`;
+    }
+
+    async function initialize() {
+      try {
+        failurePhase = 'volume-create';
+        volume = createKaminosVolumePrototype({
+          THREE,
+          viewport: stage,
+          camera,
+          controls: cameraControls,
+          getControls: () => ({ ...controls }),
+          onStatus: event => {
+            if (event?.phase === 'gpu-error' || event?.phase === 'render-error') fail('volume-gpu', new Error(event.error));
+          },
+        });
+        volume.setVolumePrimitives([{
+          id: 'gpu-combustible-object-domain',
+          transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [0.08, 0.08, 0.08] },
+          simulation: { sourceRadius: 0.08, flowRate: 0 },
+        }]);
+        failurePhase = 'volume-activate';
+        await volume.setActive(true);
+        failurePhase = 'gpu-loop-bind';
+        await volume.setGpuCombustibleObjectLoop();
+        failurePhase = null;
+        status = 'running';
+        requestAnimationFrame(updateUi);
+      } catch (caught) {
+        fail(failurePhase || 'initialize', caught);
+      }
+    }
+
+    initialize();
+  </script>
+</body>
+</html>
