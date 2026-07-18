@@ -31,6 +31,14 @@ export {
 } from './phase-program.js';
 
 export {
+  WEBGPU_PHASE_RESOURCE_PLAN_SCHEMA,
+  WEBGPU_PHASE_RESOURCE_TRANSITION_SCHEMA,
+  WEBGPU_PHASE_RESOURCE_WORKING_SET_SCHEMA,
+  createWebGpuPhaseResourceWorkingSet,
+  defineWebGpuPhaseResourcePlan,
+} from './phase-resource-working-set.js';
+
+export {
   WEBGPU_INFERENCE_RUNTIME_SCHEMA,
   createCooperativeYield,
   createWebGpuInferenceRuntime,

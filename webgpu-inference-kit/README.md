@@ -300,6 +300,62 @@ Each child retains its own whole-source acquisition report or chunk-load report,
 
 This bounds source acquisition to the largest ordinary child source or declared chunk while loading package children sequentially. It does not claim an exact browser-process memory peak or eliminate the cache-miss copies inside the currently active source unit.
 
+### Hold Only The Model Resources A Phase Needs
+
+Long-running ports can declare the model resources required by each execution phase, prefetch the next useful resources, and release departed leases only after the target working set is complete:
+
+```js
+import {
+  createWebGpuPhaseResourceWorkingSet,
+  defineWebGpuPhaseResourcePlan,
+} from "@kaminos/webgpu-inference-kit";
+
+const phaseResources = {
+  encoder: { manifest: encoderManifest, source: encoderUrl },
+  decoder: { manifest: decoderManifest, source: decoderUrl },
+  head: { manifest: headManifest, source: headUrl },
+};
+
+const phasePlan = defineWebGpuPhaseResourcePlan({
+  planId: "sharp.image-to-splat.browser-f16",
+  resources: Object.entries(phaseResources).map(([resourceId, value]) => ({
+    resourceId,
+    declaredBytes: value.manifest.bundle.byteLength,
+  })),
+  phases: [
+    {
+      phaseId: "encode-image",
+      requiredResourceIds: ["encoder"],
+      prefetchResourceIds: ["decoder"],
+    },
+    {
+      phaseId: "decode-splats",
+      requiredResourceIds: ["decoder", "head"],
+    },
+  ],
+});
+
+const workingSet = createWebGpuPhaseResourceWorkingSet({
+  controllerId: "sharp:run-42:working-set",
+  plan: phasePlan,
+  residencySnapshot: () => session.residency.snapshot(),
+  acquireResource: ({ resource, signal }) => {
+    const spec = phaseResources[resource.resourceId];
+    return sharp.loadModelResourcesFromSource({ ...spec, signal });
+  },
+});
+
+await workingSet.transitionToPhase("encode-image", { signal });
+await runEncoder();
+const decodeTransition = await workingSet.transitionToPhase("decode-splats", { signal });
+decodeTransition.heldDeclaredBytes;
+decodeTransition.residency.evictionCandidates;
+
+workingSet.close();
+```
+
+The controller acquires required resources first and declared prefetch resources second, preserves existing leases across adjacent phases, and does not release the old phase until the complete target set has loaded. Acquisition failure or cancellation rolls back new leases and leaves the previous phase intact. If any release cannot be confirmed, the controller enters a recoverable `release-failed` or `close-failed` state, clears the phase claim, retains only unresolved leases in its snapshot, and lets `close()` retry that exact remainder. Residency diagnostics are caller-supplied and fail visibly without changing lease lifecycle. Plans, reports, transitions, and resource counts are uncapped.
+
 ### Stream Allocations As Authenticated Chunks
 
 When one allocation is itself too large to assemble before upload, pair its existing semantic manifest with a chunk plan. Every allocation is covered exactly by independently authenticated, allocation-relative chunks, and each verified chunk is written directly into its declared buffer range:
@@ -370,6 +426,7 @@ The chunk route's byte authority is complete allocation coverage by the declared
 - `createWebGpuInferenceCoordinator(input)`: admit eligible heads from multiple route queues through one uncapped global FIFO, preserving route-local barriers, pending cancellation, and honest non-preemption boundaries.
 - `createWebGpuInferenceSession(input)`: own one browser WebGPU device, backend identity, and coordinator across explicitly registered route runtimes, with device-loss and idle-close lifecycle truth.
 - `createWebGpuResourceResidency(input)`: account for caller-declared GPU allocations once across routes, issue explicit route leases, retain released allocations as eviction candidates, and invalidate the whole ledger on device loss without claiming access to browser-global VRAM.
+- `defineWebGpuPhaseResourcePlan(input)` and `createWebGpuPhaseResourceWorkingSet(input)`: declare phase-required and prefetched model resources, acquire complete target working sets before releasing departed leases, expose exact held-byte and residency pressure, and preserve recoverable unresolved custody after cancellation or release failure.
 - `createWebGpuResourceFactory(input)`: collapse concurrent asynchronous creation or weight-upload requests for one absent resource into a single abortable flight, issue independent route leases over the one resulting object, and optionally settle report-bearing cancellation from the creator's exact terminal failure.
 - `defineWebGpuModelResourceManifest(input)`: freeze an exact model revision, bundle SHA-256, packed allocation ranges, and typed tensor views into a validated loading contract.
 - `verifyWebGpuModelResourceBundle(manifest, bundle)`: hash the effective bytes with Web Crypto and reject length or identity mismatch before GPU work.
