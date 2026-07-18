@@ -4933,6 +4933,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     externalEmitterFrameId: null,
     combustibleObjectSource: null,
     gpuCombustibleObjectLoop: null,
+    gpuStructuralCombustionAssembly: null,
     scalarActivityReceiver: null,
     temporalAccumEffective: 0,
     temporalReprojectionConfidence: 0,
@@ -5280,6 +5281,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let externalEmitterState = normalizeExternalEmitters();
   let combustibleObjectSourceReceiver = null;
   let gpuCombustibleObjectLoop = null;
+  let gpuStructuralCombustionAssembly = null;
   let volumePrimitives = [];
   let majorantBuffer = null;
   let boundarySidecarBuffer = null;
@@ -7247,6 +7249,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function encodeSim(encoder, options = {}) {
+    if (gpuStructuralCombustionAssembly && fluidBuffers[currentFluid]) {
+      gpuStructuralCombustionAssembly.encode(encoder, fluidBuffers[currentFluid]);
+      state.gpuStructuralCombustionAssembly = gpuStructuralCombustionAssembly.debugState();
+    }
     if (gpuCombustibleObjectLoop && fluidBuffers[currentFluid]) {
       gpuCombustibleObjectLoop.encode(encoder, fluidBuffers[currentFluid]);
       state.gpuCombustibleObjectLoop = gpuCombustibleObjectLoop.debugState();
@@ -7528,6 +7534,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           gpuCombustibleObjectPresentationAnchorNdcDepth,
         );
         state.gpuCombustibleObjectLoop = gpuCombustibleObjectLoop.debugState();
+      }
+      if (gpuStructuralCombustionAssembly) {
+        gpuStructuralCombustionAssembly.encodePresentation(
+          encoder,
+          currentTexture.createView(),
+          viewProj.elements,
+        );
+        state.gpuStructuralCombustionAssembly = gpuStructuralCombustionAssembly.debugState();
       }
       encodeHistoryCopy(encoder, currentTexture);
       device.queue.submit([encoder.finish()]);
@@ -9337,6 +9351,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     },
     async setGpuCombustibleObjectLoop(options = {}) {
       await ensureGpu();
+      if (gpuStructuralCombustionAssembly) {
+        throw new Error('GPU object loop cannot share the dynamic Pyro source socket with structural combustion');
+      }
       gpuCombustibleObjectLoop?.destroy();
       gpuCombustibleObjectPresentationAnchorReady = false;
       gpuCombustibleObjectLoop = await createGpuCombustibleObjectLoop({
@@ -9375,6 +9392,54 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       emitStatus({ phase: 'gpu-combustible-object-loop-bound', gpuCombustibleObjectLoop: state.gpuCombustibleObjectLoop });
       return { ...state.gpuCombustibleObjectLoop };
     },
+    async setGpuStructuralCombustionAssembly(assembly, options = {}) {
+      await ensureGpu();
+      if (gpuCombustibleObjectLoop) {
+        throw new Error('GPU structural combustion cannot share the dynamic Pyro source socket with the object loop');
+      }
+      if (!assembly?.encode || !assembly?.encodePresentation || !assembly?.sourceDescriptor || !assembly?.debugState) {
+        throw new Error('GPU structural combustion assembly contract is incomplete');
+      }
+      const descriptor = assembly.sourceDescriptor();
+      validateCombustibleObjectSourceDescriptor(descriptor, {
+        device,
+        expectedGeneration: descriptor.allocationGeneration,
+        expectedTopologyEpoch: descriptor.topologyEpoch,
+      });
+      if (!combustibleObjectSourceReceiver || combustibleObjectSourceReceiver.gridSize !== gridSize) {
+        combustibleObjectSourceReceiver?.destroy();
+        combustibleObjectSourceReceiver = await createCombustibleObjectFireReceiver({
+          device,
+          gridSize,
+          validateDescriptor: validateCombustibleObjectSourceDescriptor,
+          transformIdentity: COMBUSTIBLE_OBJECT_FIRE_RECEIVER_TRANSFORM_ID,
+        });
+      }
+      combustibleObjectSourceReceiver.setSource(
+        descriptor,
+        options.transform || {
+          id: COMBUSTIBLE_OBJECT_FIRE_RECEIVER_TRANSFORM_ID,
+          scale: [1, 1, 1],
+          offset: [0, 0, 0],
+        },
+        options.transfer || [96, 128, 96, 96],
+      );
+      gpuStructuralCombustionAssembly = assembly;
+      state.combustibleObjectSource = combustibleObjectSourceDebug('gpu-structural-combustion-bound');
+      state.gpuStructuralCombustionAssembly = assembly.debugState();
+      emitStatus({
+        phase: 'gpu-structural-combustion-bound',
+        gpuStructuralCombustionAssembly: state.gpuStructuralCombustionAssembly,
+      });
+      return { ...state.gpuStructuralCombustionAssembly };
+    },
+    clearGpuStructuralCombustionAssembly() {
+      gpuStructuralCombustionAssembly = null;
+      combustibleObjectSourceReceiver?.clearSource();
+      state.gpuStructuralCombustionAssembly = null;
+      state.combustibleObjectSource = combustibleObjectSourceDebug('gpu-structural-combustion-cleared');
+      return { status: 'off', schema: 'kaminos.structural-combustion.node-material.v0' };
+    },
     clearGpuCombustibleObjectLoop() {
       gpuCombustibleObjectLoop?.destroy();
       gpuCombustibleObjectLoop = null;
@@ -9393,6 +9458,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         combustibleObjectSourceReceiver?.terminalStatsDescriptor(),
       );
       state.gpuCombustibleObjectLoop = gpuCombustibleObjectLoop.debugState();
+      return receipt;
+    },
+    async readGpuStructuralCombustionTerminalReceipt() {
+      if (!gpuStructuralCombustionAssembly) {
+        throw new Error('GPU structural combustion assembly is unavailable');
+      }
+      if (state.active) {
+        throw new Error('GPU structural combustion terminal readback requires the render loop to be inactive');
+      }
+      gpuStructuralCombustionAssembly.freeze();
+      if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+      const receipt = await gpuStructuralCombustionAssembly.readTerminalReceipt(
+        combustibleObjectSourceReceiver?.terminalStatsDescriptor(),
+      );
+      state.gpuStructuralCombustionAssembly = gpuStructuralCombustionAssembly.debugState();
       return receipt;
     },
     clearCombustibleObjectSources() {
@@ -9483,6 +9563,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         scalarActivityReceiver: scalarActivityReceiverDebug(),
         combustibleObjectSource: combustibleObjectSourceDebug(),
         gpuCombustibleObjectLoop: gpuCombustibleObjectLoop?.debugState() || null,
+        gpuStructuralCombustionAssembly: gpuStructuralCombustionAssembly?.debugState() || null,
         pyroDynamicDetail: clonePyroDynamicDetail(),
         pyroMaterialRendererCoupling: state.pyroMaterialRendererCoupling ? { ...state.pyroMaterialRendererCoupling } : null,
       };
@@ -9497,6 +9578,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       combustibleObjectSourceReceiver = null;
       gpuCombustibleObjectLoop?.destroy();
       gpuCombustibleObjectLoop = null;
+      gpuStructuralCombustionAssembly = null;
       gpuCombustibleObjectPresentationAnchorReady = false;
       frameTexture?.destroy();
       externalEmitterBuffer?.destroy();

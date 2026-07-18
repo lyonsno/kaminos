@@ -1,0 +1,4692 @@
+{
+  "schema": "kaminos.structural-combustion.browser-witness-report.v0",
+  "status": "passed",
+  "failurePhase": null,
+  "requestedConfig": {
+    "url": "http://127.0.0.1:8178/structural-combustion.html",
+    "requestedBackend": "webgpu",
+    "viewport": {
+      "width": 1468,
+      "height": 960
+    },
+    "finalFrames": 900,
+    "debugPort": 9342,
+    "reportPath": "/private/tmp/kaminos-sinter-structural-combustion-0718/artifacts/structural-combustion/browser-witness.json",
+    "screenshotPaths": {
+      "initial": "/private/tmp/kaminos-sinter-structural-combustion-0718/artifacts/structural-combustion/browser-witness.initial.png",
+      "orbit": "/private/tmp/kaminos-sinter-structural-combustion-0718/artifacts/structural-combustion/browser-witness.orbit.png",
+      "final": "/private/tmp/kaminos-sinter-structural-combustion-0718/artifacts/structural-combustion/browser-witness.final.png"
+    }
+  },
+  "effectiveConfig": {
+    "url": "http://127.0.0.1:8178/structural-combustion.html",
+    "backend": "WebGPU:apple",
+    "browserVersion": {
+      "Browser": "Chrome/150.0.7871.128",
+      "Protocol-Version": "1.3",
+      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/150.0.0.0 Safari/537.36",
+      "V8-Version": "15.0.1240245",
+      "WebKit-Version": "537.36 (@81891e5ca708047763816c778216799ef14c66cb)",
+      "webSocketDebuggerUrl": "ws://127.0.0.1:9342/devtools/browser/a6ba730c-047a-4364-9cf8-6e673eaf33da"
+    },
+    "pageRoute": "kaminos.structural-combustion-dimensional-witness.v0",
+    "authority": "same-device-pyro-node-material-bond-strength-v0"
+  },
+  "lastTrustworthyEvidence": {
+    "requestedUrl": "http://127.0.0.1:8178/structural-combustion.html",
+    "effectiveUrl": "http://127.0.0.1:8178/structural-combustion.html",
+    "requestedBackend": "webgpu",
+    "effectiveBackend": "WebGPU:apple",
+    "pageRoute": "kaminos.structural-combustion-dimensional-witness.v0",
+    "authority": "same-device-pyro-node-material-bond-strength-v0",
+    "initial": {
+      "screenshot": {
+        "path": "/private/tmp/kaminos-sinter-structural-combustion-0718/artifacts/structural-combustion/browser-witness.initial.png",
+        "bytes": 533411,
+        "sha256": "e2e2a7ea23268b74bca68f720ee269ad2536ab73c6f5fb1c44760ef0ff55fd51",
+        "nonDarkPixels": 588,
+        "sampledPixels": 9216
+      },
+      "frame": 38,
+      "simStep": 38,
+      "camera": {
+        "identity": "structural-combustion-orbit-camera-v0",
+        "yaw": 0,
+        "pitch": 0.031239833430268277,
+        "distance": 3.2015621187164243,
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "position": [
+          0,
+          0.1,
+          3.2
+        ],
+        "interactionCount": 0,
+        "lastInteraction": "initial"
+      }
+    },
+    "orbited": {
+      "screenshot": {
+        "path": "/private/tmp/kaminos-sinter-structural-combustion-0718/artifacts/structural-combustion/browser-witness.orbit.png",
+        "bytes": 1151395,
+        "sha256": "0388b8e16292661da2d502fb7ff2fce8e76a39534322189932f8fd7baabd8440",
+        "nonDarkPixels": 1457,
+        "sampledPixels": 9216
+      },
+      "frame": 66,
+      "simStep": 66,
+      "camera": {
+        "identity": "structural-combustion-orbit-camera-v0",
+        "yaw": -0.66,
+        "pitch": 0.33923983343026826,
+        "distance": 2.5693137831145108,
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "position": [
+          -1.4855105154497337,
+          0.8549914347303048,
+          1.914058899597471
+        ],
+        "interactionCount": 2,
+        "lastInteraction": "zoom"
+      }
+    },
+    "final": {
+      "screenshot": {
+        "path": "/private/tmp/kaminos-sinter-structural-combustion-0718/artifacts/structural-combustion/browser-witness.final.png",
+        "bytes": 1184037,
+        "sha256": "ed2481e2881dd4c8bc765aeb5203f72257fd26cf757b92eb47060d8f962f381c",
+        "nonDarkPixels": 1977,
+        "sampledPixels": 9216
+      },
+      "frame": 982,
+      "simStep": 982,
+      "camera": {
+        "identity": "structural-combustion-orbit-camera-v0",
+        "yaw": -0.66,
+        "pitch": 0.33923983343026826,
+        "distance": 2.5693137831145108,
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "position": [
+          -1.4855105154497337,
+          0.8549914347303048,
+          1.914058899597471
+        ],
+        "interactionCount": 2,
+        "lastInteraction": "zoom"
+      },
+      "terminalReceipt": {
+        "schema": "kaminos.structural-combustion.frozen-terminal-receipt.v0",
+        "authority": "same-device-pyro-node-material-bond-strength-v0",
+        "status": "passed",
+        "checks": {
+          "targetIgnited": true,
+          "nearFaceExposed": true,
+          "farFaceHeated": true,
+          "targetWeakened": true,
+          "targetSeparated": true,
+          "fractureAfterIgnition": true,
+          "controlCool": true,
+          "controlConnected": true,
+          "sourceFinalized": true,
+          "sourceAccepted": true,
+          "noHostFeedback": true
+        },
+        "dispatchCount": 945,
+        "presentationCount": 945,
+        "runtimeReadbackCount": 1,
+        "liveRuntimeReadbackCount": 0,
+        "terminalReadbackCount": 1,
+        "terminalMapAsyncCount": 1,
+        "hostCausalFeedbackCount": 0,
+        "structures": [
+          {
+            "id": "target",
+            "objectId": 21,
+            "control": false,
+            "nodes": [
+              {
+                "nodeId": "n0",
+                "objectId": 21,
+                "nodeIndex": 0,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0,
+                  0,
+                  0
+                ],
+                "temperature": 12.52358341217041,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 0.6269655823707581,
+                "ignitionStep": 64,
+                "firstEmissionStep": 64,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.06879265606403351
+              },
+              {
+                "nodeId": "n1",
+                "objectId": 21,
+                "nodeIndex": 1,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.25,
+                  0,
+                  0
+                ],
+                "temperature": 12.5994291305542,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 0.8990800380706787,
+                "ignitionStep": 60,
+                "firstEmissionStep": 60,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.0794820562005043
+              },
+              {
+                "nodeId": "n2",
+                "objectId": 21,
+                "nodeIndex": 2,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.5,
+                  0,
+                  0
+                ],
+                "temperature": 15.98741626739502,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 0.727796733379364,
+                "ignitionStep": 44,
+                "firstEmissionStep": 44,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.08082763105630875
+              },
+              {
+                "nodeId": "n3",
+                "objectId": 21,
+                "nodeIndex": 3,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.75,
+                  0,
+                  0
+                ],
+                "temperature": 11.818643569946289,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 0.6960532665252686,
+                "ignitionStep": 76,
+                "firstEmissionStep": 76,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.023654049262404442
+              },
+              {
+                "nodeId": "n4",
+                "objectId": 21,
+                "nodeIndex": 4,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  1,
+                  0,
+                  0
+                ],
+                "temperature": 11.778901100158691,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 0.6586095094680786,
+                "ignitionStep": 82,
+                "firstEmissionStep": 82,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.00733079481869936
+              },
+              {
+                "nodeId": "n5",
+                "objectId": 21,
+                "nodeIndex": 5,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0,
+                  0.33333,
+                  0
+                ],
+                "temperature": 13.643765449523926,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.5780928134918213,
+                "ignitionStep": 36,
+                "firstEmissionStep": 36,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.61448734998703
+              },
+              {
+                "nodeId": "n6",
+                "objectId": 21,
+                "nodeIndex": 6,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.25,
+                  0.33333,
+                  0
+                ],
+                "temperature": 14.615594863891602,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.880000114440918,
+                "ignitionStep": 14,
+                "firstEmissionStep": 14,
+                "firstIncidentFractureStep": 206,
+                "lastExposure": 2.880000114440918
+              },
+              {
+                "nodeId": "n7",
+                "objectId": 21,
+                "nodeIndex": 7,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.5,
+                  0.33333,
+                  0
+                ],
+                "temperature": 18.847145080566406,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.880000114440918,
+                "ignitionStep": 13,
+                "firstEmissionStep": 13,
+                "firstIncidentFractureStep": 164,
+                "lastExposure": 2.880000114440918
+              },
+              {
+                "nodeId": "n8",
+                "objectId": 21,
+                "nodeIndex": 8,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.75,
+                  0.33333,
+                  0
+                ],
+                "temperature": 13.492831230163574,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.6249303817749023,
+                "ignitionStep": 27,
+                "firstEmissionStep": 27,
+                "firstIncidentFractureStep": 187,
+                "lastExposure": 1.2531564235687256
+              },
+              {
+                "nodeId": "n9",
+                "objectId": 21,
+                "nodeIndex": 9,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  1,
+                  0.33333,
+                  0
+                ],
+                "temperature": 12.957099914550781,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.521371364593506,
+                "ignitionStep": 53,
+                "firstEmissionStep": 53,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.10282169282436371
+              },
+              {
+                "nodeId": "n10",
+                "objectId": 21,
+                "nodeIndex": 10,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0,
+                  0.66667,
+                  0
+                ],
+                "temperature": 14.467204093933105,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.835069417953491,
+                "ignitionStep": 30,
+                "firstEmissionStep": 30,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 1.1549499034881592
+              },
+              {
+                "nodeId": "n11",
+                "objectId": 21,
+                "nodeIndex": 11,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.25,
+                  0.66667,
+                  0
+                ],
+                "temperature": 15.389429092407227,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.880000114440918,
+                "ignitionStep": 14,
+                "firstEmissionStep": 14,
+                "firstIncidentFractureStep": 209,
+                "lastExposure": 2.880000114440918
+              },
+              {
+                "nodeId": "n12",
+                "objectId": 21,
+                "nodeIndex": 12,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.5,
+                  0.66667,
+                  0
+                ],
+                "temperature": 19.925491333007812,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.880000114440918,
+                "ignitionStep": 13,
+                "firstEmissionStep": 13,
+                "firstIncidentFractureStep": 164,
+                "lastExposure": 2.880000114440918
+              },
+              {
+                "nodeId": "n13",
+                "objectId": 21,
+                "nodeIndex": 13,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.75,
+                  0.66667,
+                  0
+                ],
+                "temperature": 15.755277633666992,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.880000114440918,
+                "ignitionStep": 14,
+                "firstEmissionStep": 14,
+                "firstIncidentFractureStep": 184,
+                "lastExposure": 2.880000114440918
+              },
+              {
+                "nodeId": "n14",
+                "objectId": 21,
+                "nodeIndex": 14,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  1,
+                  0.66667,
+                  0
+                ],
+                "temperature": 15.131184577941895,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.6955957412719727,
+                "ignitionStep": 23,
+                "firstEmissionStep": 23,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 1.53349769115448
+              },
+              {
+                "nodeId": "n15",
+                "objectId": 21,
+                "nodeIndex": 15,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0,
+                  1,
+                  0
+                ],
+                "temperature": 14.629091262817383,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.880000114440918,
+                "ignitionStep": 30,
+                "firstEmissionStep": 30,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 1.103071689605713
+              },
+              {
+                "nodeId": "n16",
+                "objectId": 21,
+                "nodeIndex": 16,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.25,
+                  1,
+                  0
+                ],
+                "temperature": 15.320253372192383,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.880000114440918,
+                "ignitionStep": 15,
+                "firstEmissionStep": 15,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 2.743441104888916
+              },
+              {
+                "nodeId": "n17",
+                "objectId": 21,
+                "nodeIndex": 17,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.5,
+                  1,
+                  0
+                ],
+                "temperature": 19.261943817138672,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.880000114440918,
+                "ignitionStep": 13,
+                "firstEmissionStep": 13,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 2.880000114440918
+              },
+              {
+                "nodeId": "n18",
+                "objectId": 21,
+                "nodeIndex": 18,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.75,
+                  1,
+                  0
+                ],
+                "temperature": 16.471210479736328,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.880000114440918,
+                "ignitionStep": 14,
+                "firstEmissionStep": 14,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 2.880000114440918
+              },
+              {
+                "nodeId": "n19",
+                "objectId": 21,
+                "nodeIndex": 19,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  1,
+                  1,
+                  0
+                ],
+                "temperature": 16.163063049316406,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.880000114440918,
+                "ignitionStep": 17,
+                "firstEmissionStep": 17,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 2.307591199874878
+              },
+              {
+                "nodeId": "n20",
+                "objectId": 21,
+                "nodeIndex": 20,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0,
+                  0,
+                  0.5
+                ],
+                "temperature": 9.451178550720215,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 0.6846528053283691,
+                "ignitionStep": 150,
+                "firstEmissionStep": 150,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.0037088110111653805
+              },
+              {
+                "nodeId": "n21",
+                "objectId": 21,
+                "nodeIndex": 21,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.25,
+                  0,
+                  0.5
+                ],
+                "temperature": 9.460837364196777,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 0.6772716045379639,
+                "ignitionStep": 147,
+                "firstEmissionStep": 147,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.006140959449112415
+              },
+              {
+                "nodeId": "n22",
+                "objectId": 21,
+                "nodeIndex": 22,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.5,
+                  0,
+                  0.5
+                ],
+                "temperature": 11.639552116394043,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 0.8190525770187378,
+                "ignitionStep": 110,
+                "firstEmissionStep": 110,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.013694471679627895
+              },
+              {
+                "nodeId": "n23",
+                "objectId": 21,
+                "nodeIndex": 23,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.75,
+                  0,
+                  0.5
+                ],
+                "temperature": 9.4446439743042,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 0.7815255522727966,
+                "ignitionStep": 143,
+                "firstEmissionStep": 143,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.010750318877398968
+              },
+              {
+                "nodeId": "n24",
+                "objectId": 21,
+                "nodeIndex": 24,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  1,
+                  0,
+                  0.5
+                ],
+                "temperature": 9.439356803894043,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 0.6319077610969543,
+                "ignitionStep": 145,
+                "firstEmissionStep": 145,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.01029508002102375
+              },
+              {
+                "nodeId": "n25",
+                "objectId": 21,
+                "nodeIndex": 25,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0,
+                  0.33333,
+                  0.5
+                ],
+                "temperature": 9.624356269836426,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.5537521839141846,
+                "ignitionStep": 135,
+                "firstEmissionStep": 135,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.032304976135492325
+              },
+              {
+                "nodeId": "n26",
+                "objectId": 21,
+                "nodeIndex": 26,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.25,
+                  0.33333,
+                  0.5
+                ],
+                "temperature": 9.689143180847168,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.5708963871002197,
+                "ignitionStep": 124,
+                "firstEmissionStep": 124,
+                "firstIncidentFractureStep": 201,
+                "lastExposure": 0.04951896518468857
+              },
+              {
+                "nodeId": "n27",
+                "objectId": 21,
+                "nodeIndex": 27,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.5,
+                  0.33333,
+                  0.5
+                ],
+                "temperature": 11.727822303771973,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.4528279304504395,
+                "ignitionStep": 94,
+                "firstEmissionStep": 94,
+                "firstIncidentFractureStep": 160,
+                "lastExposure": 0.068916454911232
+              },
+              {
+                "nodeId": "n28",
+                "objectId": 21,
+                "nodeIndex": 28,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.75,
+                  0.33333,
+                  0.5
+                ],
+                "temperature": 9.93006420135498,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.611356496810913,
+                "ignitionStep": 114,
+                "firstEmissionStep": 114,
+                "firstIncidentFractureStep": 161,
+                "lastExposure": 0.043833013623952866
+              },
+              {
+                "nodeId": "n29",
+                "objectId": 21,
+                "nodeIndex": 29,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  1,
+                  0.33333,
+                  0.5
+                ],
+                "temperature": 9.889047622680664,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.535203456878662,
+                "ignitionStep": 119,
+                "firstEmissionStep": 119,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.039319880306720734
+              },
+              {
+                "nodeId": "n30",
+                "objectId": 21,
+                "nodeIndex": 30,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0,
+                  0.66667,
+                  0.5
+                ],
+                "temperature": 9.9407320022583,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.6051981449127197,
+                "ignitionStep": 116,
+                "firstEmissionStep": 116,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.017431067302823067
+              },
+              {
+                "nodeId": "n31",
+                "objectId": 21,
+                "nodeIndex": 31,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.25,
+                  0.66667,
+                  0.5
+                ],
+                "temperature": 10.020745277404785,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.617725372314453,
+                "ignitionStep": 108,
+                "firstEmissionStep": 108,
+                "firstIncidentFractureStep": 236,
+                "lastExposure": 0.04983190819621086
+              },
+              {
+                "nodeId": "n32",
+                "objectId": 21,
+                "nodeIndex": 32,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.5,
+                  0.66667,
+                  0.5
+                ],
+                "temperature": 12.531427383422852,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.6570422649383545,
+                "ignitionStep": 65,
+                "firstEmissionStep": 65,
+                "firstIncidentFractureStep": 161,
+                "lastExposure": 0.28407198190689087
+              },
+              {
+                "nodeId": "n33",
+                "objectId": 21,
+                "nodeIndex": 33,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.75,
+                  0.66667,
+                  0.5
+                ],
+                "temperature": 11.008238792419434,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.6832120418548584,
+                "ignitionStep": 72,
+                "firstEmissionStep": 72,
+                "firstIncidentFractureStep": 160,
+                "lastExposure": 0.3086414635181427
+              },
+              {
+                "nodeId": "n34",
+                "objectId": 21,
+                "nodeIndex": 34,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  1,
+                  0.66667,
+                  0.5
+                ],
+                "temperature": 10.909598350524902,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.6690006256103516,
+                "ignitionStep": 76,
+                "firstEmissionStep": 76,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.353522926568985
+              },
+              {
+                "nodeId": "n35",
+                "objectId": 21,
+                "nodeIndex": 35,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0,
+                  1,
+                  0.5
+                ],
+                "temperature": 10.202138900756836,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.6704039573669434,
+                "ignitionStep": 103,
+                "firstEmissionStep": 103,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.03414105996489525
+              },
+              {
+                "nodeId": "n36",
+                "objectId": 21,
+                "nodeIndex": 36,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.25,
+                  1,
+                  0.5
+                ],
+                "temperature": 10.29032039642334,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.6598803997039795,
+                "ignitionStep": 94,
+                "firstEmissionStep": 94,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.05522643402218819
+              },
+              {
+                "nodeId": "n37",
+                "objectId": 21,
+                "nodeIndex": 37,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.5,
+                  1,
+                  0.5
+                ],
+                "temperature": 13.746026039123535,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.7149271965026855,
+                "ignitionStep": 37,
+                "firstEmissionStep": 37,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.8645937442779541
+              },
+              {
+                "nodeId": "n38",
+                "objectId": 21,
+                "nodeIndex": 38,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.75,
+                  1,
+                  0.5
+                ],
+                "temperature": 11.987913131713867,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.7195074558258057,
+                "ignitionStep": 39,
+                "firstEmissionStep": 39,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.9759767055511475
+              },
+              {
+                "nodeId": "n39",
+                "objectId": 21,
+                "nodeIndex": 39,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  1,
+                  1,
+                  0.5
+                ],
+                "temperature": 11.882742881774902,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.7063941955566406,
+                "ignitionStep": 46,
+                "firstEmissionStep": 46,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.8427057862281799
+              },
+              {
+                "nodeId": "n40",
+                "objectId": 21,
+                "nodeIndex": 40,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0,
+                  0,
+                  1
+                ],
+                "temperature": 8.090540885925293,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 0.679082453250885,
+                "ignitionStep": 213,
+                "firstEmissionStep": 213,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.00014507798186969012
+              },
+              {
+                "nodeId": "n41",
+                "objectId": 21,
+                "nodeIndex": 41,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.25,
+                  0,
+                  1
+                ],
+                "temperature": 8.091545104980469,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 0.758612871170044,
+                "ignitionStep": 209,
+                "firstEmissionStep": 209,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.00017957533418666571
+              },
+              {
+                "nodeId": "n42",
+                "objectId": 21,
+                "nodeIndex": 42,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.5,
+                  0,
+                  1
+                ],
+                "temperature": 9.713491439819336,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 0.760971188545227,
+                "ignitionStep": 165,
+                "firstEmissionStep": 165,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.001521101570688188
+              },
+              {
+                "nodeId": "n43",
+                "objectId": 21,
+                "nodeIndex": 43,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.75,
+                  0,
+                  1
+                ],
+                "temperature": 8.222037315368652,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 0.697212278842926,
+                "ignitionStep": 198,
+                "firstEmissionStep": 198,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.002237852895632386
+              },
+              {
+                "nodeId": "n44",
+                "objectId": 21,
+                "nodeIndex": 44,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  1,
+                  0,
+                  1
+                ],
+                "temperature": 8.221473693847656,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 0.5996289849281311,
+                "ignitionStep": 198,
+                "firstEmissionStep": 198,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.003452617209404707
+              },
+              {
+                "nodeId": "n45",
+                "objectId": 21,
+                "nodeIndex": 45,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0,
+                  0.33333,
+                  1
+                ],
+                "temperature": 8.10195541381836,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.6077539920806885,
+                "ignitionStep": 203,
+                "firstEmissionStep": 203,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.0015283719403669238
+              },
+              {
+                "nodeId": "n46",
+                "objectId": 21,
+                "nodeIndex": 46,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.25,
+                  0.33333,
+                  1
+                ],
+                "temperature": 8.1065034866333,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.572591543197632,
+                "ignitionStep": 193,
+                "firstEmissionStep": 193,
+                "firstIncidentFractureStep": 327,
+                "lastExposure": 0.0037264819256961346
+              },
+              {
+                "nodeId": "n47",
+                "objectId": 21,
+                "nodeIndex": 47,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.5,
+                  0.33333,
+                  1
+                ],
+                "temperature": 9.482803344726562,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.5286519527435303,
+                "ignitionStep": 161,
+                "firstEmissionStep": 161,
+                "firstIncidentFractureStep": 245,
+                "lastExposure": 0.013031486421823502
+              },
+              {
+                "nodeId": "n48",
+                "objectId": 21,
+                "nodeIndex": 48,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.75,
+                  0.33333,
+                  1
+                ],
+                "temperature": 8.373048782348633,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.539016008377075,
+                "ignitionStep": 174,
+                "firstEmissionStep": 174,
+                "firstIncidentFractureStep": 308,
+                "lastExposure": 0.012050244025886059
+              },
+              {
+                "nodeId": "n49",
+                "objectId": 21,
+                "nodeIndex": 49,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  1,
+                  0.33333,
+                  1
+                ],
+                "temperature": 8.369560241699219,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.5642592906951904,
+                "ignitionStep": 173,
+                "firstEmissionStep": 173,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.011745956726372242
+              },
+              {
+                "nodeId": "n50",
+                "objectId": 21,
+                "nodeIndex": 50,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0,
+                  0.66667,
+                  1
+                ],
+                "temperature": 8.244776725769043,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.698803186416626,
+                "ignitionStep": 185,
+                "firstEmissionStep": 185,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.006057428196072578
+              },
+              {
+                "nodeId": "n51",
+                "objectId": 21,
+                "nodeIndex": 51,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.25,
+                  0.66667,
+                  1
+                ],
+                "temperature": 8.253409385681152,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.7063608169555664,
+                "ignitionStep": 178,
+                "firstEmissionStep": 178,
+                "firstIncidentFractureStep": 357,
+                "lastExposure": 0.010176041163504124
+              },
+              {
+                "nodeId": "n52",
+                "objectId": 21,
+                "nodeIndex": 52,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.5,
+                  0.66667,
+                  1
+                ],
+                "temperature": 9.843551635742188,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.662545919418335,
+                "ignitionStep": 134,
+                "firstEmissionStep": 134,
+                "firstIncidentFractureStep": 216,
+                "lastExposure": 0.04456170275807381
+              },
+              {
+                "nodeId": "n53",
+                "objectId": 21,
+                "nodeIndex": 53,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.75,
+                  0.66667,
+                  1
+                ],
+                "temperature": 8.826935768127441,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.650681972503662,
+                "ignitionStep": 142,
+                "firstEmissionStep": 142,
+                "firstIncidentFractureStep": 313,
+                "lastExposure": 0.07064031809568405
+              },
+              {
+                "nodeId": "n54",
+                "objectId": 21,
+                "nodeIndex": 54,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  1,
+                  0.66667,
+                  1
+                ],
+                "temperature": 8.811712265014648,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.6538350582122803,
+                "ignitionStep": 137,
+                "firstEmissionStep": 137,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.08492626249790192
+              },
+              {
+                "nodeId": "n55",
+                "objectId": 21,
+                "nodeIndex": 55,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0,
+                  1,
+                  1
+                ],
+                "temperature": 8.43138599395752,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.7159430980682373,
+                "ignitionStep": 165,
+                "firstEmissionStep": 165,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.028154805302619934
+              },
+              {
+                "nodeId": "n56",
+                "objectId": 21,
+                "nodeIndex": 56,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.25,
+                  1,
+                  1
+                ],
+                "temperature": 8.450467109680176,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.7487218379974365,
+                "ignitionStep": 157,
+                "firstEmissionStep": 157,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.049845099449157715
+              },
+              {
+                "nodeId": "n57",
+                "objectId": 21,
+                "nodeIndex": 57,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.5,
+                  1,
+                  1
+                ],
+                "temperature": 10.750889778137207,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.6925485134124756,
+                "ignitionStep": 94,
+                "firstEmissionStep": 94,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.249803826212883
+              },
+              {
+                "nodeId": "n58",
+                "objectId": 21,
+                "nodeIndex": 58,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  0.75,
+                  1,
+                  1
+                ],
+                "temperature": 9.33292007446289,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.7148518562316895,
+                "ignitionStep": 110,
+                "firstEmissionStep": 110,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.3026045858860016
+              },
+              {
+                "nodeId": "n59",
+                "objectId": 21,
+                "nodeIndex": 59,
+                "phase": 1,
+                "control": false,
+                "position": [
+                  1,
+                  1,
+                  1
+                ],
+                "temperature": 9.305802345275879,
+                "fuel": 0,
+                "char": 1,
+                "peakExposure": 2.684676170349121,
+                "ignitionStep": 108,
+                "firstEmissionStep": 108,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0.32109612226486206
+              }
+            ],
+            "bonds": [
+              {
+                "bondId": "b0",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b1",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b2",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b3",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b4",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b5",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b6",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b7",
+                "initialStrength": 1.1376,
+                "strength": 0.20476800203323364,
+                "alive": true
+              },
+              {
+                "bondId": "b8",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b9",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b10",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b11",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b12",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b13",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b14",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b15",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b16",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b17",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b18",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b19",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b20",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b21",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b22",
+                "initialStrength": 0.5688,
+                "strength": 0.10238400101661682,
+                "alive": false
+              },
+              {
+                "bondId": "b23",
+                "initialStrength": 0.5688,
+                "strength": 0.10238400101661682,
+                "alive": false
+              },
+              {
+                "bondId": "b24",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b25",
+                "initialStrength": 1.1376,
+                "strength": 0.20476800203323364,
+                "alive": true
+              },
+              {
+                "bondId": "b26",
+                "initialStrength": 0.5688,
+                "strength": 0.10238400101661682,
+                "alive": false
+              },
+              {
+                "bondId": "b27",
+                "initialStrength": 0.5688,
+                "strength": 0.10238400101661682,
+                "alive": false
+              },
+              {
+                "bondId": "b28",
+                "initialStrength": 0.6636,
+                "strength": 0.11944800615310669,
+                "alive": false
+              },
+              {
+                "bondId": "b29",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b30",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b31",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b32",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b33",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b34",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b35",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b36",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b37",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b38",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b39",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b40",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b41",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b42",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b43",
+                "initialStrength": 1.1376,
+                "strength": 0.20476800203323364,
+                "alive": true
+              },
+              {
+                "bondId": "b44",
+                "initialStrength": 0.6636,
+                "strength": 0.11944800615310669,
+                "alive": false
+              },
+              {
+                "bondId": "b45",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b46",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b47",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b48",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b49",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b50",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b51",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b52",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b53",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b54",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b55",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b56",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b57",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b58",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b59",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b60",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b61",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b62",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b63",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b64",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b65",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b66",
+                "initialStrength": 1.1376,
+                "strength": 0.20476800203323364,
+                "alive": true
+              },
+              {
+                "bondId": "b67",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b68",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b69",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b70",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b71",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b72",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b73",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b74",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b75",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b76",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b77",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b78",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b79",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b80",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b81",
+                "initialStrength": 0.5688,
+                "strength": 0.10238400101661682,
+                "alive": false
+              },
+              {
+                "bondId": "b82",
+                "initialStrength": 0.5688,
+                "strength": 0.10238400101661682,
+                "alive": false
+              },
+              {
+                "bondId": "b83",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b84",
+                "initialStrength": 1.1376,
+                "strength": 0.20476800203323364,
+                "alive": true
+              },
+              {
+                "bondId": "b85",
+                "initialStrength": 0.5688,
+                "strength": 0.10238400101661682,
+                "alive": false
+              },
+              {
+                "bondId": "b86",
+                "initialStrength": 0.5688,
+                "strength": 0.10238400101661682,
+                "alive": false
+              },
+              {
+                "bondId": "b87",
+                "initialStrength": 0.6636,
+                "strength": 0.11944800615310669,
+                "alive": false
+              },
+              {
+                "bondId": "b88",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b89",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b90",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b91",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b92",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b93",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b94",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b95",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b96",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b97",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b98",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b99",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b100",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b101",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b102",
+                "initialStrength": 1.1376,
+                "strength": 0.20476800203323364,
+                "alive": true
+              },
+              {
+                "bondId": "b103",
+                "initialStrength": 0.6636,
+                "strength": 0.11944800615310669,
+                "alive": false
+              },
+              {
+                "bondId": "b104",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b105",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b106",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b107",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b108",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b109",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b110",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b111",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b112",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b113",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b114",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b115",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b116",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b117",
+                "initialStrength": 1.4536,
+                "strength": 0.261648029088974,
+                "alive": true
+              },
+              {
+                "bondId": "b118",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b119",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b120",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b121",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b122",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b123",
+                "initialStrength": 1.1376,
+                "strength": 0.20476800203323364,
+                "alive": true
+              },
+              {
+                "bondId": "b124",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b125",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b126",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b127",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b128",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b129",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b130",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b131",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b132",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b133",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b134",
+                "initialStrength": 0.5688,
+                "strength": 0.10238400101661682,
+                "alive": false
+              },
+              {
+                "bondId": "b135",
+                "initialStrength": 0.5688,
+                "strength": 0.10238400101661682,
+                "alive": false
+              },
+              {
+                "bondId": "b136",
+                "initialStrength": 1.1376,
+                "strength": 0.20476800203323364,
+                "alive": true
+              },
+              {
+                "bondId": "b137",
+                "initialStrength": 0.5688,
+                "strength": 0.10238400101661682,
+                "alive": false
+              },
+              {
+                "bondId": "b138",
+                "initialStrength": 0.5688,
+                "strength": 0.10238400101661682,
+                "alive": false
+              },
+              {
+                "bondId": "b139",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b140",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b141",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b142",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b143",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b144",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b145",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b146",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b147",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b148",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b149",
+                "initialStrength": 1.1376,
+                "strength": 0.20476800203323364,
+                "alive": true
+              },
+              {
+                "bondId": "b150",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b151",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b152",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b153",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b154",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b155",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              },
+              {
+                "bondId": "b156",
+                "initialStrength": 1.58,
+                "strength": 0.28440001606941223,
+                "alive": true
+              }
+            ],
+            "componentLabels": [
+              0,
+              0,
+              2,
+              3,
+              3,
+              0,
+              0,
+              2,
+              3,
+              3,
+              0,
+              0,
+              2,
+              3,
+              3,
+              0,
+              0,
+              2,
+              3,
+              3,
+              0,
+              0,
+              2,
+              3,
+              3,
+              0,
+              0,
+              2,
+              3,
+              3,
+              0,
+              0,
+              2,
+              3,
+              3,
+              0,
+              0,
+              2,
+              3,
+              3,
+              0,
+              0,
+              2,
+              3,
+              3,
+              0,
+              0,
+              2,
+              3,
+              3,
+              0,
+              0,
+              2,
+              3,
+              3,
+              0,
+              0,
+              2,
+              3,
+              3
+            ],
+            "componentCount": 3,
+            "brokenBondCount": 16,
+            "weakenedBondCount": 157
+          },
+          {
+            "id": "control",
+            "objectId": 22,
+            "control": true,
+            "nodes": [
+              {
+                "nodeId": "n0",
+                "objectId": 22,
+                "nodeIndex": 0,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0,
+                  0,
+                  0
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n1",
+                "objectId": 22,
+                "nodeIndex": 1,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.25,
+                  0,
+                  0
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n2",
+                "objectId": 22,
+                "nodeIndex": 2,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.5,
+                  0,
+                  0
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n3",
+                "objectId": 22,
+                "nodeIndex": 3,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.75,
+                  0,
+                  0
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n4",
+                "objectId": 22,
+                "nodeIndex": 4,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  1,
+                  0,
+                  0
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n5",
+                "objectId": 22,
+                "nodeIndex": 5,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0,
+                  0.33333,
+                  0
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n6",
+                "objectId": 22,
+                "nodeIndex": 6,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.25,
+                  0.33333,
+                  0
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n7",
+                "objectId": 22,
+                "nodeIndex": 7,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.5,
+                  0.33333,
+                  0
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n8",
+                "objectId": 22,
+                "nodeIndex": 8,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.75,
+                  0.33333,
+                  0
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n9",
+                "objectId": 22,
+                "nodeIndex": 9,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  1,
+                  0.33333,
+                  0
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n10",
+                "objectId": 22,
+                "nodeIndex": 10,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0,
+                  0.66667,
+                  0
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n11",
+                "objectId": 22,
+                "nodeIndex": 11,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.25,
+                  0.66667,
+                  0
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n12",
+                "objectId": 22,
+                "nodeIndex": 12,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.5,
+                  0.66667,
+                  0
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n13",
+                "objectId": 22,
+                "nodeIndex": 13,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.75,
+                  0.66667,
+                  0
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n14",
+                "objectId": 22,
+                "nodeIndex": 14,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  1,
+                  0.66667,
+                  0
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n15",
+                "objectId": 22,
+                "nodeIndex": 15,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0,
+                  1,
+                  0
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n16",
+                "objectId": 22,
+                "nodeIndex": 16,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.25,
+                  1,
+                  0
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n17",
+                "objectId": 22,
+                "nodeIndex": 17,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.5,
+                  1,
+                  0
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n18",
+                "objectId": 22,
+                "nodeIndex": 18,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.75,
+                  1,
+                  0
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n19",
+                "objectId": 22,
+                "nodeIndex": 19,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  1,
+                  1,
+                  0
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n20",
+                "objectId": 22,
+                "nodeIndex": 20,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0,
+                  0,
+                  0.5
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n21",
+                "objectId": 22,
+                "nodeIndex": 21,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.25,
+                  0,
+                  0.5
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n22",
+                "objectId": 22,
+                "nodeIndex": 22,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.5,
+                  0,
+                  0.5
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n23",
+                "objectId": 22,
+                "nodeIndex": 23,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.75,
+                  0,
+                  0.5
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n24",
+                "objectId": 22,
+                "nodeIndex": 24,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  1,
+                  0,
+                  0.5
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n25",
+                "objectId": 22,
+                "nodeIndex": 25,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0,
+                  0.33333,
+                  0.5
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n26",
+                "objectId": 22,
+                "nodeIndex": 26,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.25,
+                  0.33333,
+                  0.5
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n27",
+                "objectId": 22,
+                "nodeIndex": 27,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.5,
+                  0.33333,
+                  0.5
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n28",
+                "objectId": 22,
+                "nodeIndex": 28,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.75,
+                  0.33333,
+                  0.5
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n29",
+                "objectId": 22,
+                "nodeIndex": 29,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  1,
+                  0.33333,
+                  0.5
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n30",
+                "objectId": 22,
+                "nodeIndex": 30,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0,
+                  0.66667,
+                  0.5
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n31",
+                "objectId": 22,
+                "nodeIndex": 31,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.25,
+                  0.66667,
+                  0.5
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n32",
+                "objectId": 22,
+                "nodeIndex": 32,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.5,
+                  0.66667,
+                  0.5
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n33",
+                "objectId": 22,
+                "nodeIndex": 33,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.75,
+                  0.66667,
+                  0.5
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n34",
+                "objectId": 22,
+                "nodeIndex": 34,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  1,
+                  0.66667,
+                  0.5
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n35",
+                "objectId": 22,
+                "nodeIndex": 35,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0,
+                  1,
+                  0.5
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n36",
+                "objectId": 22,
+                "nodeIndex": 36,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.25,
+                  1,
+                  0.5
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n37",
+                "objectId": 22,
+                "nodeIndex": 37,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.5,
+                  1,
+                  0.5
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n38",
+                "objectId": 22,
+                "nodeIndex": 38,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.75,
+                  1,
+                  0.5
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n39",
+                "objectId": 22,
+                "nodeIndex": 39,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  1,
+                  1,
+                  0.5
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n40",
+                "objectId": 22,
+                "nodeIndex": 40,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0,
+                  0,
+                  1
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n41",
+                "objectId": 22,
+                "nodeIndex": 41,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.25,
+                  0,
+                  1
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n42",
+                "objectId": 22,
+                "nodeIndex": 42,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.5,
+                  0,
+                  1
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n43",
+                "objectId": 22,
+                "nodeIndex": 43,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.75,
+                  0,
+                  1
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n44",
+                "objectId": 22,
+                "nodeIndex": 44,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  1,
+                  0,
+                  1
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n45",
+                "objectId": 22,
+                "nodeIndex": 45,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0,
+                  0.33333,
+                  1
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n46",
+                "objectId": 22,
+                "nodeIndex": 46,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.25,
+                  0.33333,
+                  1
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n47",
+                "objectId": 22,
+                "nodeIndex": 47,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.5,
+                  0.33333,
+                  1
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n48",
+                "objectId": 22,
+                "nodeIndex": 48,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.75,
+                  0.33333,
+                  1
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n49",
+                "objectId": 22,
+                "nodeIndex": 49,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  1,
+                  0.33333,
+                  1
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n50",
+                "objectId": 22,
+                "nodeIndex": 50,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0,
+                  0.66667,
+                  1
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n51",
+                "objectId": 22,
+                "nodeIndex": 51,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.25,
+                  0.66667,
+                  1
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n52",
+                "objectId": 22,
+                "nodeIndex": 52,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.5,
+                  0.66667,
+                  1
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n53",
+                "objectId": 22,
+                "nodeIndex": 53,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.75,
+                  0.66667,
+                  1
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n54",
+                "objectId": 22,
+                "nodeIndex": 54,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  1,
+                  0.66667,
+                  1
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n55",
+                "objectId": 22,
+                "nodeIndex": 55,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0,
+                  1,
+                  1
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n56",
+                "objectId": 22,
+                "nodeIndex": 56,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.25,
+                  1,
+                  1
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n57",
+                "objectId": 22,
+                "nodeIndex": 57,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.5,
+                  1,
+                  1
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n58",
+                "objectId": 22,
+                "nodeIndex": 58,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  0.75,
+                  1,
+                  1
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              },
+              {
+                "nodeId": "n59",
+                "objectId": 22,
+                "nodeIndex": 59,
+                "phase": 0,
+                "control": true,
+                "position": [
+                  1,
+                  1,
+                  1
+                ],
+                "temperature": 0.07999999821186066,
+                "fuel": 1,
+                "char": 0,
+                "peakExposure": 0,
+                "ignitionStep": 0,
+                "firstEmissionStep": 0,
+                "firstIncidentFractureStep": 0,
+                "lastExposure": 0
+              }
+            ],
+            "bonds": [
+              {
+                "bondId": "b0",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b1",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b2",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b3",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b4",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b5",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b6",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b7",
+                "initialStrength": 1.1376,
+                "strength": 1.1375999450683594,
+                "alive": true
+              },
+              {
+                "bondId": "b8",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b9",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b10",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b11",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b12",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b13",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b14",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b15",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b16",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b17",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b18",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b19",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b20",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b21",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b22",
+                "initialStrength": 0.5688,
+                "strength": 0.5687999725341797,
+                "alive": true
+              },
+              {
+                "bondId": "b23",
+                "initialStrength": 0.5688,
+                "strength": 0.5687999725341797,
+                "alive": true
+              },
+              {
+                "bondId": "b24",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b25",
+                "initialStrength": 1.1376,
+                "strength": 1.1375999450683594,
+                "alive": true
+              },
+              {
+                "bondId": "b26",
+                "initialStrength": 0.5688,
+                "strength": 0.5687999725341797,
+                "alive": true
+              },
+              {
+                "bondId": "b27",
+                "initialStrength": 0.5688,
+                "strength": 0.5687999725341797,
+                "alive": true
+              },
+              {
+                "bondId": "b28",
+                "initialStrength": 0.6636,
+                "strength": 0.6636000275611877,
+                "alive": true
+              },
+              {
+                "bondId": "b29",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b30",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b31",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b32",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b33",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b34",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b35",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b36",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b37",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b38",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b39",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b40",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b41",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b42",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b43",
+                "initialStrength": 1.1376,
+                "strength": 1.1375999450683594,
+                "alive": true
+              },
+              {
+                "bondId": "b44",
+                "initialStrength": 0.6636,
+                "strength": 0.6636000275611877,
+                "alive": true
+              },
+              {
+                "bondId": "b45",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b46",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b47",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b48",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b49",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b50",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b51",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b52",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b53",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b54",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b55",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b56",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b57",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b58",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b59",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b60",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b61",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b62",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b63",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b64",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b65",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b66",
+                "initialStrength": 1.1376,
+                "strength": 1.1375999450683594,
+                "alive": true
+              },
+              {
+                "bondId": "b67",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b68",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b69",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b70",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b71",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b72",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b73",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b74",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b75",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b76",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b77",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b78",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b79",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b80",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b81",
+                "initialStrength": 0.5688,
+                "strength": 0.5687999725341797,
+                "alive": true
+              },
+              {
+                "bondId": "b82",
+                "initialStrength": 0.5688,
+                "strength": 0.5687999725341797,
+                "alive": true
+              },
+              {
+                "bondId": "b83",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b84",
+                "initialStrength": 1.1376,
+                "strength": 1.1375999450683594,
+                "alive": true
+              },
+              {
+                "bondId": "b85",
+                "initialStrength": 0.5688,
+                "strength": 0.5687999725341797,
+                "alive": true
+              },
+              {
+                "bondId": "b86",
+                "initialStrength": 0.5688,
+                "strength": 0.5687999725341797,
+                "alive": true
+              },
+              {
+                "bondId": "b87",
+                "initialStrength": 0.6636,
+                "strength": 0.6636000275611877,
+                "alive": true
+              },
+              {
+                "bondId": "b88",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b89",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b90",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b91",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b92",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b93",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b94",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b95",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b96",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b97",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b98",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b99",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b100",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b101",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b102",
+                "initialStrength": 1.1376,
+                "strength": 1.1375999450683594,
+                "alive": true
+              },
+              {
+                "bondId": "b103",
+                "initialStrength": 0.6636,
+                "strength": 0.6636000275611877,
+                "alive": true
+              },
+              {
+                "bondId": "b104",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b105",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b106",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b107",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b108",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b109",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b110",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b111",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b112",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b113",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b114",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b115",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b116",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b117",
+                "initialStrength": 1.4536,
+                "strength": 1.4536000490188599,
+                "alive": true
+              },
+              {
+                "bondId": "b118",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b119",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b120",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b121",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b122",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b123",
+                "initialStrength": 1.1376,
+                "strength": 1.1375999450683594,
+                "alive": true
+              },
+              {
+                "bondId": "b124",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b125",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b126",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b127",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b128",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b129",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b130",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b131",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b132",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b133",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b134",
+                "initialStrength": 0.5688,
+                "strength": 0.5687999725341797,
+                "alive": true
+              },
+              {
+                "bondId": "b135",
+                "initialStrength": 0.5688,
+                "strength": 0.5687999725341797,
+                "alive": true
+              },
+              {
+                "bondId": "b136",
+                "initialStrength": 1.1376,
+                "strength": 1.1375999450683594,
+                "alive": true
+              },
+              {
+                "bondId": "b137",
+                "initialStrength": 0.5688,
+                "strength": 0.5687999725341797,
+                "alive": true
+              },
+              {
+                "bondId": "b138",
+                "initialStrength": 0.5688,
+                "strength": 0.5687999725341797,
+                "alive": true
+              },
+              {
+                "bondId": "b139",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b140",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b141",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b142",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b143",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b144",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b145",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b146",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b147",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b148",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b149",
+                "initialStrength": 1.1376,
+                "strength": 1.1375999450683594,
+                "alive": true
+              },
+              {
+                "bondId": "b150",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b151",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b152",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b153",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b154",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b155",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              },
+              {
+                "bondId": "b156",
+                "initialStrength": 1.58,
+                "strength": 1.5800000429153442,
+                "alive": true
+              }
+            ],
+            "componentLabels": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "componentCount": 1,
+            "brokenBondCount": 0,
+            "weakenedBondCount": 0
+          }
+        ],
+        "sourceHeader": {
+          "magic": 1262702402,
+          "version": 0,
+          "allocationGeneration": 1,
+          "topologyEpoch": 0,
+          "writeTick": 945,
+          "complete": 1,
+          "published": 1,
+          "sourceFrameHash": 1398035011,
+          "sourceCount": 0,
+          "packedCount": 0,
+          "rejectedCount": 0,
+          "overflowCount": 0,
+          "materialStep": 945
+        },
+        "receiverAudit": {
+          "schema": "kaminos.pyro-combustible-object-source-consumer-receipt.v0",
+          "routeIdentity": "same-device-combustible-object-source-to-native-pyro-v0",
+          "status": "fresh-no-contact",
+          "lastConsumedTick": 945,
+          "acceptedRecords": 0,
+          "rejectedRecords": 0,
+          "touchedCells": 0,
+          "injectedHeat": 0,
+          "injectedFuel": 0,
+          "injectedSoot": 0,
+          "injectedSmoke": 0,
+          "sourceGeneration": 1,
+          "topologyEpoch": 0,
+          "sourceFrameHash": 1398035011,
+          "sourceCount": 0,
+          "packedCount": 0,
+          "overflowCount": 0,
+          "acceptedCell": null,
+          "materialStep": 945,
+          "auditedAcceptedRecords": 0,
+          "audit": {
+            "auditObjectId": 21,
+            "acceptedRecords": 12060,
+            "rejectedRecords": 0,
+            "targetOnlyDispatches": 401,
+            "injectedHeat": 1221.7251586914062,
+            "injectedFuel": 5529.553955078125,
+            "injectedSoot": 1794.4027404785156,
+            "injectedSmoke": 1290.201644897461,
+            "firstAcceptedStep": 13,
+            "lastAcceptedStep": 413,
+            "acceptedCell": [
+              16,
+              10,
+              13
+            ],
+            "sourceGeneration": 1,
+            "topologyEpoch": 0,
+            "sourceFrameHash": 1398035011
+          }
+        }
+      }
+    },
+    "runtimeErrors": []
+  },
+  "validation": {
+    "status": "passed",
+    "requestedRoute": "/structural-combustion.html",
+    "effectiveRoute": "/structural-combustion.html",
+    "effectiveBackend": "WebGPU:apple",
+    "terminalChecks": {
+      "targetIgnited": true,
+      "nearFaceExposed": true,
+      "farFaceHeated": true,
+      "targetWeakened": true,
+      "targetSeparated": true,
+      "fractureAfterIgnition": true,
+      "controlCool": true,
+      "controlConnected": true,
+      "sourceFinalized": true,
+      "sourceAccepted": true,
+      "noHostFeedback": true
+    }
+  },
+  "screenshots": {
+    "initial": {
+      "path": "/private/tmp/kaminos-sinter-structural-combustion-0718/artifacts/structural-combustion/browser-witness.initial.png",
+      "bytes": 533411,
+      "sha256": "e2e2a7ea23268b74bca68f720ee269ad2536ab73c6f5fb1c44760ef0ff55fd51",
+      "nonDarkPixels": 588,
+      "sampledPixels": 9216
+    },
+    "orbit": {
+      "path": "/private/tmp/kaminos-sinter-structural-combustion-0718/artifacts/structural-combustion/browser-witness.orbit.png",
+      "bytes": 1151395,
+      "sha256": "0388b8e16292661da2d502fb7ff2fce8e76a39534322189932f8fd7baabd8440",
+      "nonDarkPixels": 1457,
+      "sampledPixels": 9216
+    },
+    "final": {
+      "path": "/private/tmp/kaminos-sinter-structural-combustion-0718/artifacts/structural-combustion/browser-witness.final.png",
+      "bytes": 1184037,
+      "sha256": "ed2481e2881dd4c8bc765aeb5203f72257fd26cf757b92eb47060d8f962f381c",
+      "nonDarkPixels": 1977,
+      "sampledPixels": 9216
+    }
+  },
+  "runtimeErrors": [],
+  "stderrTail": "240:11630867:0718/140142.700245:VERBOSE1:chrome/updater/updater.cc:386] Available disk space in temporary directory (/var/folders/lm/2d0ldrgn52jd5h6rtghxs2s40000gn/T/): 244626493440B (227.826GiB) / 1995218165760B (1.815TiB)\n[59240:11630867:0718/140142.700310:VERBOSE2:chrome/updater/event_history.cc:265] Emitted a UPDATER_PROCESS START event to the history log\n[59237:11630861:0718/140142.700678:VERBOSE1:chrome/updater/crash_reporter.cc:124] Crash handler launched and ready.\n[59237:11630861:0718/140142.701276:VERBOSE1:chrome/updater/crash_client.cc:108] Found 0 completed crash reports\n[59237:11630861:0718/140142.701329:VERBOSE1:chrome/updater/crash_client.cc:132] Found 0 pending crash reports\n[59237:11630861:0718/140142.701393:ERROR:third_party/crashpad/crashpad/util/file/file_io_posix.cc:145] open /Users/noahlyons/Library/Application Support/Google/RLZ/Crashpad/settings.dat: No such file or directory (2)\n[59237:11630861:0718/140142.701432:ERROR:third_party/crashpad/crashpad/util/file/file_io_posix.cc:145] open /Users/noahlyons/Library/Application Support/Google/ChromeForTesting/Crashpad/settings.dat: No such file or directory (2)\n[59237:11630861:0718/140142.701445:VERBOSE1:chrome/updater/updater.cc:105] Crash reporting initialized.\n[59237:11630861:0718/140142.701611:VERBOSE1:chrome/updater/ipc/update_service_internal_proxy_mojo.cc:61] Run\n[58712:11627681:0718/140154.837319:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT\n[59237:11630861:0718/140155.124460:VERBOSE1:chrome/updater/app/app.cc:52] Shutdown: 0\n[59237:11630861:0718/140155.124705:VERBOSE2:chrome/updater/event_history.cc:265] Emitted a UPDATER_PROCESS END event to the history log\n[59237:11630861:0718/140155.124730:VERBOSE1:chrome/updater/updater.cc:419] UpdaterMain (--wake) returned 0.\n[59232:11630857:0718/140155.194798:VERBOSE1:chrome/updater/app/app_wakeall.cc:68] `/Users/noahlyons/Library/Application Support/Google/GoogleUpdater/152.0.7933.0/GoogleUpdater.app/Contents/MacOS/GoogleUpdater --wake` exited 0\n[59232:11630837:0718/140155.194863:VERBOSE1:chrome/updater/app/app.cc:52] Shutdown: 0\n[59232:11630837:0718/140155.195117:VERBOSE2:chrome/updater/event_history.cc:265] Emitted a UPDATER_PROCESS END event to the history log\n[59232:11630837:0718/140155.195133:VERBOSE1:chrome/updater/updater.cc:419] UpdaterMain (--wake-all) returned 0.\n",
+  "error": null
+}
