@@ -41,6 +41,7 @@ const viewportWidth = Number(args.get('--viewport-width') || 1280);
 const viewportHeight = Number(args.get('--viewport-height') || 960);
 const chunkBytes = Number(args.get('--chunk-bytes') || 4 * 1024 * 1024);
 const debugPort = Number(args.get('--debug-port') || randomInt(42000, 62000));
+const projectedWorkTargetPixels = normalizeProjectedWorkTargetPixels(args.get('--projected-work-target-pixels'));
 
 const sourceFieldManifest = readJson(sourceFieldManifestPath);
 const sourceCaptureReport = readJson(sourceCaptureReportPath);
@@ -311,9 +312,22 @@ try {
     assert.equal(condition.render.controlOverrides.boundarySplatMode, UNION_MODE, `${condition.label} union mode drifted`);
     assert.equal(condition.render.boundarySplatRendererIdentity, UNION_RENDERER, `${condition.label} renderer drifted`);
     assert.equal(condition.render.boundarySplatOverflowCount, 0, `${condition.label} overflowed`);
-    assert.equal(condition.populationAudit.stableNativeCellIdSha256, expectedSource.admissionIndexSha256, `${condition.label} stable native-cell population drifted`);
     const unionReceipt = condition.overlay?.unionReceipt || condition.populationAudit?.unionReceipt;
     assert.equal(unionReceipt?.effectiveMode, UNION_MODE, `${condition.label} union receipt drifted`);
+    const selectorActive = projectedWorkTargetPixels > 0;
+    if (selectorActive) {
+      assert.equal(condition.populationAudit.selectorPolicyIdentity, 'boundary-splat-live-union-projected-footprint-hash-thinning-v0', `${condition.label} selector identity drifted`);
+      assert.equal(condition.populationAudit.requestedProjectedWorkTargetPixels, projectedWorkTargetPixels, `${condition.label} requested selector target drifted`);
+      assert.equal(condition.populationAudit.effectiveProjectedWorkTargetPixels, projectedWorkTargetPixels, `${condition.label} effective selector target drifted`);
+      assert.ok(Number(condition.populationAudit.projectedWorkRejectedCount) > 0, `${condition.label} selector rejected no projected work`);
+      assert.equal(
+        Number(unionReceipt?.union ?? unionReceipt?.counts?.union),
+        Number(condition.populationAudit.initialDraw?.unionCount),
+        `${condition.label} selector changed full-union source count`,
+      );
+    } else {
+      assert.equal(condition.populationAudit.stableNativeCellIdSha256, expectedSource.admissionIndexSha256, `${condition.label} stable native-cell population drifted`);
+    }
   }
   assert.equal(learnedBaseline.overlay.effectiveOverlayIdentity, baselineOverlayManifest.identity, 'baseline overlay did not become effective');
   assert.equal(learnedFlow.overlay.effectiveOverlayIdentity, flowOverlayManifest.identity, 'flow overlay did not become effective');
@@ -345,6 +359,14 @@ try {
       state: sourceState,
       sameStateCaptureId,
       camera: FRONT_LEFT_CAMERA,
+    },
+    selector: {
+      requestedProjectedWorkTargetPixels: projectedWorkTargetPixels,
+      selectorActive: projectedWorkTargetPixels > 0,
+      requestedSelectorIdentity: projectedWorkTargetPixels > 0
+        ? 'boundary-splat-live-union-projected-footprint-hash-thinning-v0'
+        : 'boundary-splat-live-union-source-preserving-v0',
+      authority: '--projected-work-target-pixels explicit witness argument',
     },
     route: admission,
     presentation,
@@ -400,6 +422,7 @@ async function captureCondition({ label, captureContext, overlay, raymarch = fal
     boundarySplatComposition: raymarch ? 'raymarch-only-v0' : 'splat-only-v0',
     controlOverrides: {
       boundarySplatMode: UNION_MODE,
+      boundarySplatProjectedWorkTargetPixels: projectedWorkTargetPixels,
       ...FLOW_KERNEL_CONTROLS,
     },
     now: FIXED_NOW_MS,
@@ -441,6 +464,18 @@ async function captureCondition({ label, captureContext, overlay, raymarch = fal
         candidateCount: audit.candidateCount,
         instanceCount: audit.instanceCount,
         overflowCount: audit.overflowCount,
+        projectedWorkRejectedCount: audit.projectedWorkRejectedCount,
+        selectorPolicyId: audit.selectorPolicyId,
+        selectorPolicyIdentity: audit.selectorPolicyIdentity,
+        requestedProjectedWorkTargetPixels: audit.requestedProjectedWorkTargetPixels,
+        effectiveProjectedWorkTargetPixels: audit.effectiveProjectedWorkTargetPixels,
+        selectedCandidateCount: audit.selectedCandidateCount,
+        boundarySplatProjectedWorkRejectedCount: audit.projectedWorkRejectedCount,
+        boundarySplatSelectorPolicyId: audit.selectorPolicyId,
+        boundarySplatSelectorPolicyIdentity: audit.selectorPolicyIdentity,
+        boundarySplatRequestedProjectedWorkTargetPixels: audit.requestedProjectedWorkTargetPixels,
+        boundarySplatEffectiveProjectedWorkTargetPixels: audit.effectiveProjectedWorkTargetPixels,
+        boundarySplatSelectedCandidateCount: audit.selectedCandidateCount,
         initialDraw: audit.initialDraw,
         capacityRetryCount: audit.capacityRetryCount,
         capacityAfterRetry: audit.capacityAfterRetry,
@@ -548,6 +583,13 @@ function parseArgs(argv) {
     }
   }
   return values;
+}
+
+function normalizeProjectedWorkTargetPixels(value) {
+  const numeric = Number(value ?? 0);
+  if (!Number.isFinite(numeric) || numeric < 0) throw new Error(`invalid --projected-work-target-pixels: ${value}`);
+  if (numeric === 0) return 0;
+  return Math.max(1, Math.min(1_000_000, Math.round(numeric)));
 }
 
 function readJson(path) {

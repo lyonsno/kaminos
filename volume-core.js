@@ -77,6 +77,10 @@ const EXTERNAL_BOUNDARY_SIDECAR_AUTHORITY = 'externally-uploaded-boundary-sideca
 const EXTERNAL_BOUNDARY_SIDECAR_UPLOAD_IDENTITY = 'chunked-external-boundary-sidecar-upload-v0';
 const BOUNDARY_SPLAT_GPU_PROFILE_IDENTITY = 'boundary-splat-stage-gpu-timestamp-profile-v0';
 const BOUNDARY_SPLAT_ATTRIBUTE_HOOK_IDENTITY = 'boundary-splat-learned-attribute-hook-v0';
+const BOUNDARY_SPLAT_SOURCE_PRESERVING_SELECTOR_IDENTITY = 'boundary-splat-live-union-source-preserving-v0';
+const BOUNDARY_SPLAT_PROJECTED_WORK_SELECTOR_IDENTITY = 'boundary-splat-live-union-projected-footprint-hash-thinning-v0';
+const BOUNDARY_SPLAT_SOURCE_PRESERVING_SELECTOR_CODE = 0;
+const BOUNDARY_SPLAT_PROJECTED_WORK_SELECTOR_CODE = 1;
 const NATIVE_LOW_LEARNED_SPLAT_CALIBRATION_IDENTITY = 'native-low-learned-splat-calibration-v0';
 const FLOW_RECONSTRUCTION_KERNEL_IDENTITY = 'flow-tangent-positive-symmetric-trilinear-v0';
 const FLOW_KERNEL_COMPACT_POPULATION_IDENTITY = 'structural-splat-candidates-v0';
@@ -620,6 +624,24 @@ function boundarySplatFootprintAuthority(mode) {
 
 function boundarySplatAreaOpacityConserved(mode) {
   return ['analytic_conserved', 'learned_conserved', 'world_covariance', 'kernel_moment_covariance', 'kernel_moment_full_flame_union'].includes(normalizeBoundarySplatMode(mode));
+}
+
+function normalizeBoundarySplatProjectedWorkTargetPixels(value) {
+  const numeric = Number(value ?? 0);
+  if (!Number.isFinite(numeric) || numeric <= 0) return 0;
+  return Math.max(1, Math.min(1_000_000, Math.round(numeric)));
+}
+
+function boundarySplatSelectorPolicyCodeForTarget(targetPixels) {
+  return normalizeBoundarySplatProjectedWorkTargetPixels(targetPixels) > 0
+    ? BOUNDARY_SPLAT_PROJECTED_WORK_SELECTOR_CODE
+    : BOUNDARY_SPLAT_SOURCE_PRESERVING_SELECTOR_CODE;
+}
+
+function boundarySplatSelectorPolicyIdentityForCode(code) {
+  return Number(code) === BOUNDARY_SPLAT_PROJECTED_WORK_SELECTOR_CODE
+    ? BOUNDARY_SPLAT_PROJECTED_WORK_SELECTOR_IDENTITY
+    : BOUNDARY_SPLAT_SOURCE_PRESERVING_SELECTOR_IDENTITY;
 }
 
 function boundarySplatAttributeSetId(mode) {
@@ -5707,6 +5729,8 @@ const BOUNDARY_SPLAT_WGSL = `
 override GRID: u32 = 64u;
 override MAJORANT_GRID: u32 = 24u;
 const SLOTS_PER_CELL: u32 = 4u;
+const BOUNDARY_SPLAT_SOURCE_PRESERVING_SELECTOR_CODE: u32 = 0u;
+const BOUNDARY_SPLAT_PROJECTED_WORK_SELECTOR_CODE: u32 = 1u;
 
 struct BoundarySplat {
   positionSupport: vec4<f32>,
@@ -5731,7 +5755,12 @@ struct BoundarySplatDraw {
   overlapCount: atomic<u32>,
   unionCount: atomic<u32>,
   zeroGradientAdmissionCount: atomic<u32>,
-  _pad2: vec3<u32>,
+  projectedWorkRejectedCount: atomic<u32>,
+  selectorPolicyCode: u32,
+  requestedProjectedWorkTargetPixels: u32,
+  effectiveProjectedWorkTargetPixels: u32,
+  selectedCandidateCount: u32,
+  _pad2: vec2<u32>,
 };
 
 struct BoundarySplatCamera {
@@ -5742,6 +5771,7 @@ struct BoundarySplatCamera {
   calibration: vec4<f32>,
   reconstructionControls: vec4<f32>,
   unionControls: vec4<f32>,
+  selectorControls: vec4<f32>,
 };
 
 struct BoundarySplatVertexOut {
@@ -6087,6 +6117,71 @@ fn boundarySplatEnergyCompensation(footprintRadius: f32, kernelSharpness: f32) -
   return clamp(sqrt(energyRatio), 0.5, 2.5);
 }
 
+fn boundarySplatDeterministicHash(value: u32) -> u32 {
+  var x = value + 0x9e3779b9u;
+  x = (x ^ (x >> 16u)) * 0x7feb352du;
+  x = (x ^ (x >> 15u)) * 0x846ca68bu;
+  return x ^ (x >> 16u);
+}
+
+fn boundarySplatHash01(value: u32) -> f32 {
+  return f32(boundarySplatDeterministicHash(value) & 0x00ffffffu) / 16777216.0;
+}
+
+fn boundarySplatProjectedFootprintPixels(
+  world: vec3<f32>,
+  majorRadius: f32,
+  minorRadius: f32,
+) -> f32 {
+  let viewport = max(boundarySplatCamera.selectorControls.yz, vec2<f32>(1.0));
+  let viewportPixels = viewport.x * viewport.y;
+  let center = boundarySplatCamera.viewProj * vec4<f32>(world, 1.0);
+  if (center.w <= 0.0) { return 0.0; }
+  let centerNdc = center.xy / center.w;
+  let worldMajor = boundarySplatCamera.cameraRight.xyz * majorRadius * boundarySplatCamera.controls.x;
+  let worldMinor = boundarySplatCamera.cameraUp.xyz * minorRadius * boundarySplatCamera.controls.x;
+  let majorClip = boundarySplatCamera.viewProj * vec4<f32>(world + worldMajor, 1.0);
+  let minorClip = boundarySplatCamera.viewProj * vec4<f32>(world + worldMinor, 1.0);
+  if (majorClip.w <= 0.0 || minorClip.w <= 0.0) { return 0.0; }
+  let majorPixels = length(((majorClip.xy / majorClip.w) - centerNdc) * viewport * 0.5);
+  let minorPixels = length(((minorClip.xy / minorClip.w) - centerNdc) * viewport * 0.5);
+  if (majorPixels <= 0.0 || minorPixels <= 0.0) { return 0.0; }
+  return min(3.141592653589793 * majorPixels * minorPixels, viewportPixels);
+}
+
+fn boundarySplatProjectedWorkSurvivalProbability(
+  projectedFootprintPixels: f32,
+  targetPixels: f32,
+  ridgeAdmitted: bool,
+  structuralSignal: f32,
+  fireSignal: f32,
+) -> f32 {
+  if (targetPixels <= 0.0 || ridgeAdmitted) { return 1.0; }
+  if (projectedFootprintPixels <= targetPixels) { return 1.0; }
+  let raw = targetPixels / max(projectedFootprintPixels, 1.0);
+  let structureBias = mix(0.70, 1.15, clamp(structuralSignal, 0.0, 1.0));
+  let fireBias = mix(0.80, 1.20, smoothstep(0.08, 1.25, fireSignal));
+  return clamp(raw * structureBias * fireBias, 0.015, 1.0);
+}
+
+fn boundarySplatProjectedWorkSelectorKeeps(
+  cellIndex: u32,
+  projectedFootprintPixels: f32,
+  targetPixels: f32,
+  ridgeAdmitted: bool,
+  structuralSignal: f32,
+  fireSignal: f32,
+) -> bool {
+  let probability = boundarySplatProjectedWorkSurvivalProbability(
+    projectedFootprintPixels,
+    targetPixels,
+    ridgeAdmitted,
+    structuralSignal,
+    fireSignal,
+  );
+  return probability >= 1.0 || boundarySplatHash01(cellIndex) < probability;
+}
+
 @compute @workgroup_size(4, 4, 4)
 fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (any(gid >= vec3<u32>(GRID))) { return; }
@@ -6115,16 +6210,12 @@ fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (boundarySplatCamera.unionControls.y < 0.000001 && nonRidgeAdmitted) {
     atomicAdd(&boundarySplatDraw.zeroGradientAdmissionCount, 1u);
   }
-  let candidateIndex = atomicAdd(&boundarySplatDraw.candidateCount, 1u);
-  if (candidateIndex >= boundarySplatDraw.capacity) {
-    atomicAdd(&boundarySplatDraw.overflowCount, 1u);
-    return;
-  }
   let world = ((vec3<f32>(gid) + vec3<f32>(0.5)) / f32(GRID)) * 2.0 - vec3<f32>(1.0);
   var sidecar = admissionSidecar;
   var material = admissionMaterial;
   var fire = admissionFire;
   var micro = admissionMicro;
+  var descriptorReconstruction = boundarySplatFlowReconstructionRaw(world);
   let reconstructionStrength = clamp(boundarySplatCamera.reconstructionControls.x, 0.0, 1.0);
   if (reconstructionStrength > 0.0) {
     let reconstructed = boundarySplatFlowReconstruction(world);
@@ -6132,13 +6223,7 @@ fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
     material = reconstructed.material;
     fire = reconstructed.fire;
     micro = reconstructed.micro;
-    if (boundarySplatCamera.reconstructionControls.w > 0.5) {
-      let flowFrame = boundarySplatFlowFrame(world);
-      writeFlowKernelDescriptor(candidateIndex, cellIndex, world, flowFrame, reconstructed);
-    }
-  } else if (boundarySplatCamera.reconstructionControls.w > 0.5) {
-    let flowFrame = boundarySplatFlowFrame(world);
-    writeFlowKernelDescriptor(candidateIndex, cellIndex, world, flowFrame, boundarySplatFlowReconstructionRaw(world));
+    descriptorReconstruction = reconstructed;
   }
   let fireSignal = fire.x * 1.25 + fire.z * 0.52 + fire.w * 0.86 + micro.z * 0.72 + material.y * 0.24;
   let thermal = smoothstep(0.025, 0.78, material.y + fire.x * 0.28);
@@ -6188,6 +6273,28 @@ fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
   let nonRidgeEmissionCoefficient = completeEmissionCoefficient - ridgeEmissionCoefficient;
   let nonRidgeExtinctionCoefficient = completeExtinctionCoefficient - ridgeExtinctionCoefficient;
   let worldNormal = boundarySplatSupportGradient(gid);
+  let requestedProjectedWorkTargetPixels = boundarySplatCamera.selectorControls.x;
+  let projectedFootprintPixels = boundarySplatProjectedFootprintPixels(world, effectiveMajorRadius, effectiveMinorRadius);
+  if (!boundarySplatProjectedWorkSelectorKeeps(
+    cellIndex,
+    projectedFootprintPixels,
+    requestedProjectedWorkTargetPixels,
+    ridgeAdmitted,
+    structuralSignal,
+    fireSignal,
+  )) {
+    atomicAdd(&boundarySplatDraw.projectedWorkRejectedCount, 1u);
+    return;
+  }
+  let candidateIndex = atomicAdd(&boundarySplatDraw.candidateCount, 1u);
+  if (candidateIndex >= boundarySplatDraw.capacity) {
+    atomicAdd(&boundarySplatDraw.overflowCount, 1u);
+    return;
+  }
+  if (boundarySplatCamera.reconstructionControls.w > 0.5) {
+    let flowFrame = boundarySplatFlowFrame(world);
+    writeFlowKernelDescriptor(candidateIndex, cellIndex, world, flowFrame, descriptorReconstruction);
+  }
   if (boundarySplatCamera.controls.z > 0.5) {
     boundarySplatFeatureRows[candidateIndex].sidecar = sidecar;
     boundarySplatFeatureRows[candidateIndex].material = material;
@@ -6234,7 +6341,16 @@ fn evaluateFlowKernelDescriptorsForIndices(@builtin(global_invocation_id) gid: v
 
 @compute @workgroup_size(1)
 fn finalizeBoundarySplats() {
-  atomicStore(&boundarySplatDraw.instanceCount, min(atomicLoad(&boundarySplatDraw.candidateCount), boundarySplatDraw.capacity));
+  let selectedCandidateCount = min(atomicLoad(&boundarySplatDraw.candidateCount), boundarySplatDraw.capacity);
+  atomicStore(&boundarySplatDraw.instanceCount, selectedCandidateCount);
+  let requestedTarget = boundarySplatDraw.requestedProjectedWorkTargetPixels;
+  boundarySplatDraw.selectorPolicyCode = select(
+    BOUNDARY_SPLAT_SOURCE_PRESERVING_SELECTOR_CODE,
+    BOUNDARY_SPLAT_PROJECTED_WORK_SELECTOR_CODE,
+    requestedTarget > 0u,
+  );
+  boundarySplatDraw.effectiveProjectedWorkTargetPixels = requestedTarget;
+  boundarySplatDraw.selectedCandidateCount = selectedCandidateCount;
 }
 
 fn boundarySplatQuadCorner(vertexIndex: u32) -> vec2<f32> {
@@ -6562,6 +6678,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatOverlapCount: null,
     boundarySplatUnionCount: null,
     boundarySplatZeroGradientAdmissionCount: null,
+    boundarySplatProjectedWorkRejectedCount: null,
+    boundarySplatSelectorPolicyId: BOUNDARY_SPLAT_SOURCE_PRESERVING_SELECTOR_CODE,
+    boundarySplatSelectorPolicyIdentity: BOUNDARY_SPLAT_SOURCE_PRESERVING_SELECTOR_IDENTITY,
+    boundarySplatRequestedProjectedWorkTargetPixels: normalizeBoundarySplatProjectedWorkTargetPixels(controlsSnapshot.boundarySplatProjectedWorkTargetPixels),
+    boundarySplatEffectiveProjectedWorkTargetPixels: 0,
+    boundarySplatSelectedCandidateCount: null,
     boundarySplatUnionReceipt: null,
     boundarySplatCountAuthority: 'gpu-indirect-async-readback',
     boundarySplatInstanceCount: null,
@@ -7944,7 +8066,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     boundarySplatCameraBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} camera`,
-      size: 160,
+      size: 176,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     boundarySplatReadbackBuffer = device.createBuffer({
@@ -9347,7 +9469,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     if (boundarySplatCameraBuffer) {
       const cameraMatrix = camera.matrixWorld.elements;
-      const splatCamera = new Float32Array(40);
+      const splatCamera = new Float32Array(44);
       splatCamera.set(viewProj.elements, 0);
       const boundarySplatMode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
       const covarianceMode = boundarySplatMode === 'kernel_moment_covariance' || boundarySplatMode === 'kernel_moment_full_flame_union'
@@ -9375,6 +9497,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         state.boundarySplatLiveUnionOverlayEffectiveIdentity ? 1 : 0,
         0.011764705882352941,
       ], 36);
+      const projectedWorkTargetPixels = normalizeBoundarySplatProjectedWorkTargetPixels(controlsSnapshot.boundarySplatProjectedWorkTargetPixels);
+      splatCamera.set([
+        projectedWorkTargetPixels,
+        Math.max(1, Number(state.renderWidth || state.width || canvas.width || 1)),
+        Math.max(1, Number(state.renderHeight || state.height || canvas.height || 1)),
+        boundarySplatSelectorPolicyCodeForTarget(projectedWorkTargetPixels),
+      ], 40);
       device.queue.writeBuffer(boundarySplatCameraBuffer, 0, splatCamera);
     }
     const { renderPhaseTimeMs, renderPhaseFrame } = updateRenderPhaseState(now, state, lookFreeze);
@@ -10435,6 +10564,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         union: counts.unionCount ?? state.boundarySplatUnionCount,
       },
       zeroGradientAdmissionCount: counts.zeroGradientAdmissionCount ?? state.boundarySplatZeroGradientAdmissionCount,
+      projectedWorkRejectedCount: counts.projectedWorkRejectedCount ?? state.boundarySplatProjectedWorkRejectedCount,
+      selectedCandidateCount: counts.selectedCandidateCount ?? state.boundarySplatSelectedCandidateCount,
+      selectorPolicyId: counts.selectorPolicyId ?? state.boundarySplatSelectorPolicyId,
+      selectorPolicyIdentity: counts.selectorPolicyIdentity ?? state.boundarySplatSelectorPolicyIdentity,
+      requestedProjectedWorkTargetPixels: counts.requestedProjectedWorkTargetPixels ?? state.boundarySplatRequestedProjectedWorkTargetPixels,
+      effectiveProjectedWorkTargetPixels: counts.effectiveProjectedWorkTargetPixels ?? state.boundarySplatEffectiveProjectedWorkTargetPixels,
       stableNativeCellIdSource: requested ? 'boundary-splat-candidate-native-cell-membership-v0:nativeCellIndex' : 'off',
       fallbackReason: state.boundarySplatFallbackReason,
       backend: state.backend,
@@ -10543,9 +10678,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.boundarySplatUnionReceipt = boundarySplatUnionReceipt();
       return false;
     }
+    const requestedProjectedWorkTargetPixels = normalizeBoundarySplatProjectedWorkTargetPixels(controlsSnapshot.boundarySplatProjectedWorkTargetPixels);
+    const selectorPolicyCode = boundarySplatSelectorPolicyCodeForTarget(requestedProjectedWorkTargetPixels);
+    state.boundarySplatSelectorPolicyId = selectorPolicyCode;
+    state.boundarySplatSelectorPolicyIdentity = boundarySplatSelectorPolicyIdentityForCode(selectorPolicyCode);
+    state.boundarySplatRequestedProjectedWorkTargetPixels = requestedProjectedWorkTargetPixels;
+    state.boundarySplatEffectiveProjectedWorkTargetPixels = 0;
+    state.boundarySplatProjectedWorkRejectedCount = null;
     device.queue.writeBuffer(boundarySplatDrawBuffer, 0, new Uint32Array([
       6, 0, 0, 0, 0, 0, boundarySplatCapacity, 0,
-      0, 0, 0, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, selectorPolicyCode, requestedProjectedWorkTargetPixels,
+      0, 0, 0, 0,
     ]));
     const compactPass = encoder.beginComputePass({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compact pass` });
     compactPass.setPipeline(boundarySplatCompactPipeline);
@@ -10811,6 +10954,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.boundarySplatOverlapCount = drawState[10];
       state.boundarySplatUnionCount = drawState[11];
       state.boundarySplatZeroGradientAdmissionCount = drawState[12];
+      state.boundarySplatProjectedWorkRejectedCount = drawState[13];
+      state.boundarySplatSelectorPolicyId = drawState[14];
+      state.boundarySplatSelectorPolicyIdentity = boundarySplatSelectorPolicyIdentityForCode(drawState[14]);
+      state.boundarySplatRequestedProjectedWorkTargetPixels = drawState[15];
+      state.boundarySplatEffectiveProjectedWorkTargetPixels = drawState[16];
+      state.boundarySplatSelectedCandidateCount = drawState[17];
       state.boundarySplatUnionReceipt = boundarySplatUnionReceipt({
         ridgeOnlyCount: drawState[8],
         nonRidgeOnlyCount: drawState[9],
@@ -10851,6 +11000,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       overlapCount: drawState[10],
       unionCount: drawState[11],
       zeroGradientAdmissionCount: drawState[12],
+      projectedWorkRejectedCount: drawState[13],
+      selectorPolicyId: drawState[14],
+      selectorPolicyIdentity: boundarySplatSelectorPolicyIdentityForCode(drawState[14]),
+      requestedProjectedWorkTargetPixels: drawState[15],
+      effectiveProjectedWorkTargetPixels: drawState[16],
+      selectedCandidateCount: drawState[17],
       authority: 'gpu-indirect-post-submit-witness-readback',
     };
     readback.unmap();
@@ -10863,6 +11018,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySplatOverlapCount = result.overlapCount;
     state.boundarySplatUnionCount = result.unionCount;
     state.boundarySplatZeroGradientAdmissionCount = result.zeroGradientAdmissionCount;
+    state.boundarySplatProjectedWorkRejectedCount = result.projectedWorkRejectedCount;
+    state.boundarySplatSelectorPolicyId = result.selectorPolicyId;
+    state.boundarySplatSelectorPolicyIdentity = result.selectorPolicyIdentity;
+    state.boundarySplatRequestedProjectedWorkTargetPixels = result.requestedProjectedWorkTargetPixels;
+    state.boundarySplatEffectiveProjectedWorkTargetPixels = result.effectiveProjectedWorkTargetPixels;
+    state.boundarySplatSelectedCandidateCount = result.selectedCandidateCount;
     state.boundarySplatUnionReceipt = boundarySplatUnionReceipt(result);
     return result;
   }
@@ -11298,6 +11459,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         candidateCount: draw.candidateCount,
         instanceCount: draw.instanceCount,
         overflowCount: draw.overflowCount,
+        projectedWorkRejectedCount: draw.projectedWorkRejectedCount,
+        selectorPolicyId: draw.selectorPolicyId,
+        selectorPolicyIdentity: draw.selectorPolicyIdentity,
+        requestedProjectedWorkTargetPixels: draw.requestedProjectedWorkTargetPixels,
+        effectiveProjectedWorkTargetPixels: draw.effectiveProjectedWorkTargetPixels,
+        selectedCandidateCount: draw.selectedCandidateCount,
         initialDraw,
         capacityRetryCount: initialDraw.overflowCount > 0 ? 1 : 0,
         capacityAfterRetry: boundarySplatCapacity,
@@ -15283,6 +15450,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         boundarySplatOverlapCount: state.boundarySplatOverlapCount,
         boundarySplatUnionCount: state.boundarySplatUnionCount,
         boundarySplatZeroGradientAdmissionCount: state.boundarySplatZeroGradientAdmissionCount,
+        boundarySplatProjectedWorkRejectedCount: state.boundarySplatProjectedWorkRejectedCount,
+        boundarySplatSelectorPolicyId: state.boundarySplatSelectorPolicyId,
+        boundarySplatSelectorPolicyIdentity: state.boundarySplatSelectorPolicyIdentity,
+        boundarySplatRequestedProjectedWorkTargetPixels: state.boundarySplatRequestedProjectedWorkTargetPixels,
+        boundarySplatEffectiveProjectedWorkTargetPixels: state.boundarySplatEffectiveProjectedWorkTargetPixels,
+        boundarySplatSelectedCandidateCount: state.boundarySplatSelectedCandidateCount,
         boundarySplatUnionReceipt: state.boundarySplatUnionReceipt,
         boundarySplatCountAuthority: state.boundarySplatCountAuthority,
         boundarySplatFallbackReason: state.boundarySplatFallbackReason,
@@ -15676,6 +15849,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       boundarySplatOverlapCount: boundarySplatSample?.overlapCount ?? state.boundarySplatOverlapCount,
       boundarySplatUnionCount: boundarySplatSample?.unionCount ?? state.boundarySplatUnionCount,
       boundarySplatZeroGradientAdmissionCount: boundarySplatSample?.zeroGradientAdmissionCount ?? state.boundarySplatZeroGradientAdmissionCount,
+      boundarySplatProjectedWorkRejectedCount: boundarySplatSample?.projectedWorkRejectedCount ?? state.boundarySplatProjectedWorkRejectedCount,
+      boundarySplatSelectorPolicyId: boundarySplatSample?.selectorPolicyId ?? state.boundarySplatSelectorPolicyId,
+      boundarySplatSelectorPolicyIdentity: boundarySplatSample?.selectorPolicyIdentity ?? state.boundarySplatSelectorPolicyIdentity,
+      boundarySplatRequestedProjectedWorkTargetPixels: boundarySplatSample?.requestedProjectedWorkTargetPixels ?? state.boundarySplatRequestedProjectedWorkTargetPixels,
+      boundarySplatEffectiveProjectedWorkTargetPixels: boundarySplatSample?.effectiveProjectedWorkTargetPixels ?? state.boundarySplatEffectiveProjectedWorkTargetPixels,
+      boundarySplatSelectedCandidateCount: boundarySplatSample?.selectedCandidateCount ?? state.boundarySplatSelectedCandidateCount,
       boundarySplatUnionReceipt: state.boundarySplatUnionReceipt,
       boundarySplatCountAuthority: boundarySplatSample?.authority ?? state.boundarySplatCountAuthority,
       boundarySplatFallbackReason: state.boundarySplatFallbackReason,
@@ -16690,6 +16869,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         boundarySplatOverlapCount: state.boundarySplatOverlapCount,
         boundarySplatUnionCount: state.boundarySplatUnionCount,
         boundarySplatZeroGradientAdmissionCount: state.boundarySplatZeroGradientAdmissionCount,
+        boundarySplatProjectedWorkRejectedCount: state.boundarySplatProjectedWorkRejectedCount,
+        boundarySplatSelectorPolicyId: state.boundarySplatSelectorPolicyId,
+        boundarySplatSelectorPolicyIdentity: state.boundarySplatSelectorPolicyIdentity,
+        boundarySplatRequestedProjectedWorkTargetPixels: state.boundarySplatRequestedProjectedWorkTargetPixels,
+        boundarySplatEffectiveProjectedWorkTargetPixels: state.boundarySplatEffectiveProjectedWorkTargetPixels,
+        boundarySplatSelectedCandidateCount: state.boundarySplatSelectedCandidateCount,
         boundarySplatUnionReceipt: state.boundarySplatUnionReceipt,
         boundarySplatCapacity,
         boundarySplatInitialOverflowCount,
