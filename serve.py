@@ -42,6 +42,16 @@ KAMINOS_IMAGE_INBOX_DIR = Path(os.environ.get(
     "KAMINOS_IMAGE_INBOX_DIR",
     str(KAMINOS_ASSETS_DIR / "images" / "inbox"),
 )).expanduser()
+KAMINOS_SHARP_WEBGPU_REPO = Path(os.environ.get(
+    "KAMINOS_SHARP_WEBGPU_REPO",
+    os.path.expanduser("~/dev/sharp-webgpu"),
+)).expanduser().resolve()
+SHARP_INLINE_MODULE_PATH = KAMINOS_SHARP_WEBGPU_REPO / "dist-inline" / "sharp-inline.js"
+KAMINOS_SHARP_WEBGPU_WEIGHTS = Path(os.environ.get(
+    "KAMINOS_SHARP_WEBGPU_WEIGHTS",
+    str(KAMINOS_SHARP_WEBGPU_REPO / "public" / "weights.bin"),
+)).expanduser().resolve()
+SHARP_INLINE_WEIGHTS_PATH = KAMINOS_SHARP_WEBGPU_WEIGHTS
 
 BROWSE_ROOTS = {
     "scratch": ROOT / "scratch",
@@ -50,6 +60,7 @@ BROWSE_ROOTS = {
     "splat-production": KAMINOS_SPLAT_PRODUCTION_DIR,
     "image-inbox": KAMINOS_IMAGE_INBOX_DIR,
     "pipeline-runs": KAMINOS_PIPELINE_RUNS_DIR,
+    "sharp-inline": KAMINOS_SHARP_WEBGPU_REPO,
     "greenroom": Path(os.environ.get(
         "GPU_GREENROOM_DIR",
         os.path.expanduser("~/.local/state/gpu-greenroom"),
@@ -251,6 +262,16 @@ def runtime_config():
     return {
         "schema": "kaminos.runtime-config.v0",
         "hybridSplatOverlayModuleUrl": module_url or None,
+        "sharpInline": {
+            "registered": SHARP_INLINE_MODULE_PATH.is_file() and SHARP_INLINE_WEIGHTS_PATH.is_file(),
+            "repo": str(KAMINOS_SHARP_WEBGPU_REPO),
+            "modulePath": str(SHARP_INLINE_MODULE_PATH),
+            "moduleExists": SHARP_INLINE_MODULE_PATH.is_file(),
+            "moduleUrl": "/sharp-inline/sharp-inline.js",
+            "weightsPath": str(SHARP_INLINE_WEIGHTS_PATH),
+            "weightsExists": SHARP_INLINE_WEIGHTS_PATH.is_file(),
+            "weightsUrl": "/sharp-inline/weights.bin",
+        },
     }
 
 
@@ -1167,7 +1188,11 @@ def ingest_splat_asset(filename, content):
     sidecar = splat_correction_sidecar_path(target)
     if sidecar.exists():
         sidecar.unlink()
-    return build_asset_entry(root, target)
+    entry = build_asset_entry(root, target)
+    entry["sha256"] = _sha256_file(target)
+    entry["bytes"] = target.stat().st_size
+    entry["status"] = "real"
+    return entry
 
 
 def greenroom_output_roots():
@@ -1270,6 +1295,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_job_output(parse_qs(parsed.query))
         elif parsed.path == "/api/delete-scene":
             self.handle_delete_scene(parse_qs(parsed.query))
+        elif parsed.path.startswith("/sharp-inline/"):
+            self.handle_sharp_inline_file(parsed.path)
         else:
             super().do_GET()
 
@@ -1281,6 +1308,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_run_pipeline()
         elif parsed.path == "/api/ingest-splat":
             self.handle_ingest_splat(parse_qs(parsed.query))
+        elif parsed.path == "/api/sharp-inline-run-report":
+            self.handle_sharp_inline_run_report()
         elif parsed.path == "/api/splat-correction":
             self.handle_splat_correction_post(parse_qs(parsed.query))
         elif parsed.path == "/api/volume-capture":
@@ -1290,6 +1319,92 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def handle_runtime_config(self):
         self.send_json(runtime_config())
+
+    def handle_sharp_inline_run_report(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self.send_json({"error": "Invalid Content-Length"}, 400)
+            return
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError as error:
+            self.send_json({"error": f"Invalid JSON: {error}"}, 400)
+            return
+        document = payload.get("document") if isinstance(payload, dict) else None
+        if not isinstance(document, dict):
+            self.send_json({"error": "SHARP inline report document must be a JSON object"}, 400)
+            return
+        pipeline_id = str(payload.get("pipelineId") or "sharp-image-to-splat-live-v0")
+        firing_id = re.sub(r"[^A-Za-z0-9_.-]+", "-", str(payload.get("firingId") or "firing")).strip("-") or "firing"
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        run_dir = (KAMINOS_PIPELINE_RUNS_DIR / f"{stamp}-{time.time_ns()}-{os.getpid()}-{firing_id}").resolve()
+        report_path = run_dir / "sharp-inline-report.json"
+        try:
+            run_dir.mkdir(parents=True, exist_ok=False)
+            document = {
+                **document,
+                "pipelineId": document.get("pipelineId") or pipeline_id,
+                "outputRoot": str(run_dir),
+                "reportPath": str(report_path),
+                "writtenAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            }
+            report_path.write_text(json.dumps(document, indent=2))
+        except Exception as error:
+            failure_dir = (KAMINOS_PIPELINE_RUNS_DIR / f"{stamp}-{time.time_ns()}-{os.getpid()}-{firing_id}-failure").resolve()
+            failure_path = failure_dir / "sharp-inline-report.json"
+            failure_document = {
+                "schema": "kaminos.sharp-inline-pipeline-report-failure.v0",
+                "status": "failed",
+                "phase": "durable-report-write",
+                "pipelineId": pipeline_id,
+                "firingId": payload.get("firingId"),
+                "error": str(error),
+                "lastTrustworthyEvidence": document,
+            }
+            try:
+                failure_dir.mkdir(parents=True, exist_ok=False)
+                failure_path.write_text(json.dumps(failure_document, indent=2))
+            except Exception:
+                self.send_json({"error": f"SHARP inline report write failed: {error}"}, 500)
+                return
+            relative_failure = failure_path.relative_to(KAMINOS_PIPELINE_RUNS_DIR)
+            self.send_json({
+                "error": f"SHARP inline report write failed: {error}",
+                "failureReportPath": str(failure_path),
+                "failureReadUrl": f"/api/read?root=pipeline-runs&path={urlencode({'path': str(relative_failure)})[5:]}",
+            }, 500)
+            return
+        relative_path = report_path.relative_to(KAMINOS_PIPELINE_RUNS_DIR)
+        self.send_json({
+            "schema": "kaminos.sharp-inline-run-report-receipt.v0",
+            "path": str(report_path),
+            "outputRoot": str(run_dir),
+            "readUrl": f"/api/read?root=pipeline-runs&path={urlencode({'path': str(relative_path)})[5:]}",
+            "document": document,
+        })
+
+    def handle_sharp_inline_file(self, request_path):
+        if request_path == "/sharp-inline/sharp-inline.js":
+            target = SHARP_INLINE_MODULE_PATH
+            content_type = "application/javascript; charset=utf-8"
+        elif request_path == "/sharp-inline/weights.bin":
+            target = SHARP_INLINE_WEIGHTS_PATH
+            content_type = "application/octet-stream"
+        else:
+            self.send_error(404, "Unknown SHARP inline asset")
+            return
+        if not target.is_file():
+            self.send_error(404, f"SHARP inline asset missing: {target.name}")
+            return
+        stat = target.stat()
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(stat.st_size))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        with target.open("rb") as handle:
+            self.copyfile(handle, self.wfile)
 
     def handle_forge_host_registry(self):
         self.send_json(build_forge_host_registry_snapshot())

@@ -2937,6 +2937,9 @@ import {
   foregroundKilnStartAllowsPipeline,
 } from './lib/foreground-kiln-heartbeat.mjs';
 import {
+  createSharpSameDeviceKilnOpportunityHook,
+} from './lib/sharp-same-device-kiln-interlock.mjs';
+import {
   HYBRID_KILN_FIRE_PRESENTATION_MODE,
   createExpectedHybridKilnFirePresentation,
   waitForHybridKilnFirePresentation,
@@ -13105,6 +13108,404 @@ const SHARP_MONODEPTH_PHASE_LABELS = [
 ];
 window.__kaminosSharpMonodepthPhaseLabels = SHARP_MONODEPTH_PHASE_LABELS;
 
+const SHARP_INLINE_ELEMENT_PREFIX = 'kaminos-sharp-inline-';
+const SHARP_INLINE_ELEMENT_IDS = [
+  'drop-zone',
+  'file-input',
+  'status',
+  'error',
+  'output',
+  'results',
+  'input-canvas',
+  'depth-canvas',
+  'download-ply',
+  'use-spn',
+  'r-model',
+  'r-weights',
+  'r-patch',
+  'r-title',
+  'r-time-label',
+  'r-grid',
+  'r-features',
+  'r-time',
+  'r-valid',
+];
+let sharpInlineRuntimePromise = null;
+
+function ensureSharpInlineElementHost() {
+  let host = document.getElementById('kaminos-sharp-inline-host');
+  if (host) return host;
+  host = document.createElement('div');
+  host.id = 'kaminos-sharp-inline-host';
+  host.hidden = true;
+  host.setAttribute('aria-hidden', 'true');
+  for (const id of SHARP_INLINE_ELEMENT_IDS) {
+    let element;
+    if (id === 'file-input') {
+      element = document.createElement('input');
+      element.type = 'file';
+    } else if (id === 'input-canvas' || id === 'depth-canvas') {
+      element = document.createElement('canvas');
+    } else if (id === 'download-ply') {
+      element = document.createElement('a');
+    } else if (id === 'use-spn') {
+      element = document.createElement('input');
+      element.type = 'checkbox';
+      element.checked = true;
+    } else {
+      element = document.createElement('div');
+    }
+    element.id = `${SHARP_INLINE_ELEMENT_PREFIX}${id}`;
+    host.appendChild(element);
+  }
+  document.body.appendChild(host);
+  globalThis.__kaminosSharpElementPrefix = SHARP_INLINE_ELEMENT_PREFIX;
+  globalThis.__kaminosSharpElementRoot = host;
+  return host;
+}
+
+function sharpInlineSchedulerProfile(profileId) {
+  if (profileId === 'cooperative-spn-gaussian') {
+    return {
+      mode: 'cooperative',
+      spnPatchChunkSize: 1,
+      yieldMs: 3,
+      waitForSubmittedWorkDone: true,
+      gaussianPhaseYieldMs: 4,
+      vitBlockChunkSize: 2,
+      cpuChunkItems: 16384,
+      routeTailYieldMs: 3,
+    };
+  }
+  return { mode: 'default' };
+}
+
+async function loadSharpInlineProductRuntime() {
+  if (sharpInlineRuntimePromise) return sharpInlineRuntimePromise;
+  sharpInlineRuntimePromise = (async () => {
+    ensureSharpInlineElementHost();
+    const response = await fetch('/api/runtime-config', { cache: 'no-store' });
+    if (!response.ok) throw new Error(`SHARP inline runtime config failed: ${response.status}`);
+    const runtimeConfig = await response.json();
+    const mount = runtimeConfig.sharpInline;
+    if (!mount?.registered || !mount.moduleExists || !mount.weightsExists) {
+      throw new Error('SHARP inline runtime is not registered with both the reviewed module and weights');
+    }
+    if (!mount.moduleUrl || !mount.weightsUrl) {
+      throw new Error('SHARP inline runtime mount omitted its effective module or weights URL');
+    }
+    const module = await import(mount.moduleUrl);
+    const run = module.runSharpImageToSplat || globalThis.__kaminosRunSharpImageToSplat;
+    if (typeof run !== 'function') throw new Error('SHARP inline module did not expose runSharpImageToSplat');
+    return { runtimeConfig, mount, module, run };
+  })();
+  try {
+    return await sharpInlineRuntimePromise;
+  } catch (error) {
+    sharpInlineRuntimePromise = null;
+    throw error;
+  }
+}
+
+function createSharpInlineBackgroundHeartbeat(runDebug, foregroundSnapshot = null) {
+  const scheduler = runDebug?.schedulerTelemetry || null;
+  const events = scheduler?.eventTrace?.events || scheduler?.events || [];
+  const clock = scheduler?.eventTrace?.clock || null;
+  const runId = scheduler?.runId || null;
+  const starts = new Map();
+  const intervals = [];
+  const pairingFailures = [];
+  for (const event of events) {
+    if (event?.kind === 'queue-work-done-start') {
+      if (starts.has(event.dutyId)) pairingFailures.push(`duplicate queue-work-done start for ${event.dutyId}`);
+      starts.set(event.dutyId, event);
+      continue;
+    }
+    if (event?.kind !== 'queue-work-done-end') continue;
+    const start = starts.get(event.dutyId);
+    if (!start) {
+      pairingFailures.push(`queue-work-done end without start for ${event.dutyId}`);
+      continue;
+    }
+    starts.delete(event.dutyId);
+    intervals.push({
+      runId,
+      dutyId: event.dutyId,
+      phase: start.phase || event.phase || 'unknown',
+      boundary: start.boundary || event.boundary || start.phase || event.phase || 'unknown',
+      kind: 'submitted-work-drain-interval',
+      startMs: start.tMs,
+      endMs: event.tMs,
+      durationMs: Number((event.tMs - start.tMs).toFixed(3)),
+      startEpochMs: start.epochMs,
+      endEpochMs: event.epochMs,
+      stage: start.stage || event.stage || null,
+      step: start.step || event.step || null,
+      role: start.role || event.role || null,
+    });
+  }
+  for (const dutyId of starts.keys()) pairingFailures.push(`queue-work-done start without end for ${dutyId}`);
+  const startMs = runDebug?.startMs;
+  const endMs = runDebug?.endMs;
+  const timeOriginEpochMs = clock?.timeOriginEpochMs;
+  const inferenceWindow = {
+    runId,
+    startMs,
+    endMs,
+    durationMs: Number((endMs - startMs).toFixed(3)),
+  };
+  const foregroundSamples = Array.isArray(foregroundSnapshot?.samples) ? foregroundSnapshot.samples : [];
+  const overlapCandidates = [...events, ...intervals];
+  const worstFrameGaps = [];
+  for (let index = 1; index < foregroundSamples.length; index += 1) {
+    const previous = foregroundSamples[index - 1];
+    const current = foregroundSamples[index];
+    const gapStartMs = Math.max(startMs, previous?.timestampMs);
+    const gapEndMs = Math.min(endMs, current?.timestampMs);
+    if (!Number.isFinite(gapStartMs) || !Number.isFinite(gapEndMs) || gapEndMs <= gapStartMs) continue;
+    const overlappedEvents = overlapCandidates.filter(candidate => {
+      if (Number.isFinite(candidate?.intervalStartMs) && Number.isFinite(candidate?.intervalEndMs)) {
+        return candidate.intervalEndMs > gapStartMs && candidate.intervalStartMs < gapEndMs;
+      }
+      if (Number.isFinite(candidate?.startMs) && Number.isFinite(candidate?.endMs)) {
+        return candidate.endMs > gapStartMs && candidate.startMs < gapEndMs;
+      }
+      return Number.isFinite(candidate?.tMs) && candidate.tMs >= gapStartMs && candidate.tMs <= gapEndMs;
+    });
+    worstFrameGaps.push({
+      startMs: gapStartMs,
+      endMs: gapEndMs,
+      durationMs: Number((gapEndMs - gapStartMs).toFixed(3)),
+      overlapClassification: overlappedEvents.length ? 'scheduler-event-overlap' : 'uninstrumented-gap',
+      overlappedEvents,
+    });
+  }
+  worstFrameGaps.sort((left, right) => right.durationMs - left.durationMs);
+  return {
+    schema: 'sharp-webgpu.background-heartbeat.v0',
+    status: 'verified',
+    evidenceSource: 'same-page-foreground-raf-and-sharp-scheduler-event-trace',
+    disclaimer: 'browser-raf-and-submitted-work-host-await-not-gpu-exclusive-or-display-present-latency',
+    timingAuthority: events.length ? 'browser-scheduler-event-trace' : 'browser-wall-clock',
+    schedulerMode: scheduler?.requestedScheduler?.mode || scheduler?.effectiveScheduler?.mode || 'unknown',
+    verificationState: scheduler?.status || 'scheduler-unverified',
+    requestedScheduler: scheduler?.requestedScheduler || null,
+    effectiveScheduler: scheduler?.effectiveScheduler || null,
+    sampleRetention: 'uncapped',
+    eventTrace: {
+      schema: scheduler?.eventTrace?.schema || 'kaminos.webgpu-scheduler-event-trace.v0',
+      timingAuthority: scheduler?.eventTrace?.timingAuthority || 'not-observed',
+      clock,
+      eventCount: events.length,
+      boundaries: [...new Set(events.map(event => event?.boundary).filter(Boolean))],
+    },
+    crossPageClock: {
+      schema: 'kaminos.browser-epoch-monotonic-clock.v0',
+      timingAuthority: 'performance-time-origin-plus-now',
+      runId,
+      timeOriginEpochMs,
+      inferenceWindowStartEpochMs: timeOriginEpochMs + startMs,
+      inferenceWindowEndEpochMs: timeOriginEpochMs + endMs,
+    },
+    gpuDutyIntervals: {
+      schema: 'sharp-webgpu.submitted-work-drain-intervals.v0',
+      timingAuthority: 'queue-on-submitted-work-done-host-await-not-gpu-exclusive',
+      runId,
+      count: intervals.length,
+      intervals,
+      ...(pairingFailures.length ? { pairingFailures } : {}),
+    },
+    inferenceWindow,
+    gapRetention: 'uncapped',
+    mohelIndicator: {
+      tripped: worstFrameGaps.length > 120,
+      observedGapCount: worstFrameGaps.length,
+      diagnostic: 'All foreground frame gaps overlapping the inference window are retained.',
+    },
+    worstFrameGaps,
+  };
+}
+
+async function persistSharpInlineSplat(sharpResult, firingId) {
+  if (!(sharpResult?.plyBlob instanceof Blob) || sharpResult.plyBlob.size <= 0) {
+    throw new Error('SHARP inline route completed without a non-empty PLY blob');
+  }
+  const safeFiringId = String(firingId || 'firing').replace(/[^a-zA-Z0-9._-]+/g, '-');
+  const name = `sharp-inline-${safeFiringId}.ply`;
+  const response = await fetch('/api/ingest-splat' + '?' + new URLSearchParams({ name }), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/octet-stream' },
+    body: sharpResult.plyBlob,
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || result.error || !result.entry?.source || !result.entry?.path) {
+    throw new Error(result.error || `SHARP inline PLY ingest failed: ${response.status}`);
+  }
+  return result.entry;
+}
+
+async function persistSharpInlineRunReport({ document, firingId } = {}) {
+  const response = await fetch('/api/sharp-inline-run-report', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      pipelineId: 'sharp-image-to-splat-live-v0',
+      firingId,
+      document,
+    }),
+  });
+  const reportReceipt = await response.json().catch(() => ({}));
+  if (!response.ok || reportReceipt.error || !reportReceipt.path || !reportReceipt.outputRoot || !reportReceipt.readUrl) {
+    const failurePath = reportReceipt.failureReportPath ? ` Failure report: ${reportReceipt.failureReportPath}` : '';
+    throw new Error(`${reportReceipt.error || `SHARP inline report write failed: ${response.status}`}${failurePath}`);
+  }
+  return reportReceipt;
+}
+
+async function runSharpInlineProductRoute({ source, profileId, firingId, pipeline, generator, onProgress } = {}) {
+  const inline = await loadSharpInlineProductRuntime();
+  const gpuContext = volumePrototype.foregroundGpuContext();
+  if (!gpuContext?.device || gpuContext.queue !== gpuContext.device.queue) {
+    throw new Error('Crucible volume did not expose its exact WebGPU device and queue');
+  }
+  const sourceResponse = await fetch(source.source, { cache: 'no-store' });
+  if (!sourceResponse.ok) throw new Error(`SHARP source image fetch failed: ${sourceResponse.status}`);
+  const sourceBlob = await sourceResponse.blob();
+  const scheduler = sharpInlineSchedulerProfile(profileId);
+  const foregroundEnabled = profileId !== 'baseline-default';
+  let frameOrdinal = 0;
+  let opportunityHook = null;
+  let foregroundModeActivated = false;
+  onProgress?.({ progress: 0.03, message: 'The shared-device SHARP route is loading the source.' });
+  try {
+    if (foregroundEnabled) {
+      opportunityHook = createSharpSameDeviceKilnOpportunityHook({
+        volume: volumePrototype,
+        firingId,
+        nextFrameId: () => {
+          frameOrdinal += 1;
+          return volumePrototype.nextForegroundOpportunityFrameId({ firingId });
+        },
+      });
+      globalThis.__kaminosSharpForegroundOpportunity = opportunityHook;
+    }
+    const sharpResult = await inline.run(sourceBlob, {
+      gpuContext,
+      weightsUrl: inline.mount.weightsUrl,
+      scheduler,
+      beforeInference: async () => {
+        if (!foregroundEnabled || foregroundModeActivated) return;
+        await volumePrototype.setForegroundOpportunityMode(true);
+        foregroundModeActivated = true;
+      },
+      throwOnError: true,
+    });
+    if (!sharpResult?.ok || sharpResult.mode !== 'spn') {
+      throw new Error('SHARP inline route did not complete the real SPN-to-PLY path');
+    }
+    onProgress?.({ progress: 0.94, message: 'The model finished; Kaminos is storing the cast.' });
+    const entry = await persistSharpInlineSplat(sharpResult, firingId);
+    const foregroundSnapshot = activeForegroundKilnHeartbeat?.report({ phase: 'burning' }) || null;
+    const backgroundHeartbeat = createSharpInlineBackgroundHeartbeat(sharpResult.runDebug, foregroundSnapshot);
+    const pipelineScheduler = {
+      schema: 'kaminos.pipeline-scheduler-composition.v0',
+      scheduler: sharpResult.runDebug?.sharpScheduler || null,
+      schedulerVerification: sharpResult.runDebug?.schedulerTelemetry || null,
+      backpressure: sharpResult.runDebug?.backpressure || null,
+    };
+    const artifact = {
+      id: 'splat',
+      role: 'splat-candidate',
+      path: entry.path,
+      source: entry.source,
+      rootId: entry.root_id || 'splat-inbox',
+      sha256: entry.sha256,
+      status: entry.status,
+      bytes: entry.bytes,
+      size: entry.bytes,
+    };
+    const adapterReport = {
+      schema: 'kaminos.sharp-inline-product-route-report.v0',
+      status: 'real',
+      effectiveRoute: 'same-browser-product-realm-shared-device',
+      sharedGpu: {
+        deviceIdentity: gpuContext.deviceIdentity,
+        queueIdentity: gpuContext.queueIdentity,
+        exactObjectIdentityVerified: true,
+      },
+      firingId,
+      foregroundOpportunityMode: foregroundEnabled ? 'lease-driven' : 'ordinary-raf',
+      foregroundFrameCount: frameOrdinal,
+      requestedScheduler: backgroundHeartbeat.requestedScheduler,
+      effectiveScheduler: backgroundHeartbeat.effectiveScheduler,
+      breathingRoom: {
+        requestedScheduler: backgroundHeartbeat.requestedScheduler,
+        effectiveScheduler: backgroundHeartbeat.effectiveScheduler,
+        telemetry: sharpResult.runDebug?.schedulerTelemetry || null,
+        boundaryAssertions: sharpResult.runDebug?.schedulerTelemetry?.boundaryAssertions || [],
+      },
+      schedulerVerification: sharpResult.runDebug?.schedulerTelemetry || null,
+      sharpRunDebug: sharpResult.runDebug,
+      backgroundHeartbeat,
+      pipelineScheduler,
+    };
+    const rawResult = {
+      schema: 'kaminos.pipeline-run-result.v0',
+      ok: true,
+      pipelineId: 'sharp-image-to-splat-live-v0',
+      profileId,
+      schedulerProfile: { id: profileId, scheduler },
+      durationMs: sharpResult.runDebug?.elapsedMs || null,
+      source,
+      report: {
+        path: null,
+        document: {
+          schema: 'kaminos.sharp-inline-pipeline-report.v0',
+          status: 'real',
+          pipelineId: 'sharp-image-to-splat-live-v0',
+          requestedPipelineId: 'sharp-image-to-splat-live-v0',
+          effectiveRouteConfig: {
+            routeId: 'sharp-image-to-splat-live-v0',
+            routeAuthority: 'same-browser-product-realm-shared-device',
+          },
+          durationMs: sharpResult.runDebug?.elapsedMs || null,
+          pipelineScheduler,
+          stages: [{
+            id: 'run-sharp-image-to-splat',
+            status: 'real',
+            durationMs: sharpResult.runDebug?.elapsedMs || null,
+            effectiveRoute: { adapterReport, pipelineScheduler },
+          }],
+          artifacts: { splat: artifact },
+        },
+      },
+      bundle: {
+        path: null,
+        document: {
+          schema: 'kaminos.sharp-inline-pipeline-bundle.v0',
+          artifacts: [artifact],
+        },
+      },
+      inlineSharp: adapterReport,
+    };
+    const reportReceipt = await persistSharpInlineRunReport({
+      document: rawResult.report.document,
+      firingId,
+    });
+    rawResult.report.path = reportReceipt.path;
+    rawResult.report.readUrl = reportReceipt.readUrl;
+    rawResult.report.document = reportReceipt.document;
+    rawResult.bundle.document.outputRoot = reportReceipt.outputRoot;
+    onProgress?.({ progress: 1, message: 'The shared-device cast is stored.' });
+    return pipelineRememberRun(rawResult, source, pipeline, { generator });
+  } finally {
+    if (globalThis.__kaminosSharpForegroundOpportunity === opportunityHook) {
+      delete globalThis.__kaminosSharpForegroundOpportunity;
+    }
+    if (foregroundModeActivated) await volumePrototype.setForegroundOpportunityMode(false);
+  }
+}
+
 const KILN_ROUTE_BENCH_ROUTES = [
   {
     id: 'sharp-image-to-splat-live-v0',
@@ -17668,7 +18069,7 @@ async function pipelineLoadRunSplatArtifact(result, artifact) {
     pipelineSetActionStatus('Generated artifact is not a loadable splat; open the artifact evidence instead');
     return null;
   }
-  const url = pipelineRunReadUrlForPath(result, artifact?.path);
+  const url = artifact?.source || pipelineRunReadUrlForPath(result, artifact?.path);
   if (!url) {
     pipelineSetActionStatus('No generated splat output is available for this run');
     return null;
@@ -18535,13 +18936,8 @@ async function runKilnRouteBenchRoute(routeId, profileId, options = {}) {
   let run = null;
   let kilnFireEnded = false;
   try {
-    run = await runSelectedPipeline({
-      sourceOverride: source,
-      pipelineId,
-      pipeline,
-      generator: pipelineGeneratorForPipelineId(pipelineId),
-      schedulerProfileId: profileId,
-      onProgress: event => {
+    const generator = pipelineGeneratorForPipelineId(pipelineId);
+    const onProgress = event => {
         const progress = Number.isFinite(event?.progress) ? ` ${Math.round(event.progress * 100)}%` : '';
         const progressMessage = event?.message || 'The model is working on your cast.';
         setKilnRouteBenchStatus(`${profileLabel}: ${progressMessage}${progress}`, 'running', {
@@ -18550,8 +18946,24 @@ async function runKilnRouteBenchRoute(routeId, profileId, options = {}) {
           runningProfileId: profileId,
           progressEvent: event,
         });
-      },
-    });
+      };
+    run = pipelineId === 'sharp-image-to-splat-live-v0'
+      ? await runSharpInlineProductRoute({
+          source,
+          profileId,
+          firingId: crucibleFiring.id,
+          pipeline,
+          generator,
+          onProgress,
+        })
+      : await runSelectedPipeline({
+          sourceOverride: source,
+          pipelineId,
+          pipeline,
+          generator,
+          schedulerProfileId: profileId,
+          onProgress,
+        });
     await endSharpBreathingRoomKilnFire(run?.ok ? 'complete' : 'failed', {
       forceInactive: true,
       sharpHeartbeat: kilnRouteBenchBackgroundHeartbeat(run),

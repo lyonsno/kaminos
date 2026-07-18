@@ -5474,7 +5474,15 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
 }
 `;
 
-export function createKaminosVolumePrototype({ THREE, viewport, camera, controls, getControls, onStatus }) {
+export function createKaminosVolumePrototype({
+  THREE,
+  viewport,
+  camera,
+  controls,
+  getControls,
+  onStatus,
+  gpuContext = null,
+}) {
   const canvas = document.createElement('canvas');
   canvas.id = 'kaminos-volume-canvas';
   canvas.dataset.prototype = PROTOTYPE_IDENTITY;
@@ -6106,8 +6114,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return state.pyroDynamicDetail;
   }
 
-  let adapter = null;
-  let device = null;
+  let adapter = gpuContext?.adapter || null;
+  let device = gpuContext?.device || null;
+  let gpuInitialized = false;
+  const foregroundDeviceIdentity = gpuContext?.deviceIdentity
+    || `kaminos-volume-device:${crypto.randomUUID?.() || Date.now().toString(36)}`;
+  const foregroundQueueIdentity = gpuContext?.queueIdentity
+    || `kaminos-volume-queue:${crypto.randomUUID?.() || Date.now().toString(36)}`;
   let context = null;
   let pipeline = null;
   let readbackPipeline = null;
@@ -7512,25 +7525,31 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   async function ensureGpu() {
-    if (device) return;
-    if (!navigator.gpu) {
-      throw new Error('WebGPU unavailable');
+    if (gpuInitialized) return;
+    if (!device) {
+      if (!navigator.gpu) {
+        throw new Error('WebGPU unavailable');
+      }
+      adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+      if (!adapter) throw new Error('WebGPU adapter unavailable');
+      const maxRequestedFluidBufferBytes = fluidBufferBytes(Math.max(...SUPPORTED_GRID_SIZES));
+      const requiredLimits = {};
+      if ((adapter.limits?.maxStorageBufferBindingSize ?? 0) >= maxRequestedFluidBufferBytes) {
+        requiredLimits.maxStorageBufferBindingSize = maxRequestedFluidBufferBytes;
+      }
+      const requiredFeatures = [];
+      if (adapter.features?.has?.('timestamp-query')) {
+        requiredFeatures.push('timestamp-query');
+      }
+      const deviceDescriptor = {};
+      if (Object.keys(requiredLimits).length) deviceDescriptor.requiredLimits = requiredLimits;
+      if (requiredFeatures.length) deviceDescriptor.requiredFeatures = requiredFeatures;
+      device = await adapter.requestDevice(Object.keys(deviceDescriptor).length ? deviceDescriptor : undefined);
     }
-    adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
-    if (!adapter) throw new Error('WebGPU adapter unavailable');
-    const maxRequestedFluidBufferBytes = fluidBufferBytes(Math.max(...SUPPORTED_GRID_SIZES));
-    const requiredLimits = {};
-    if ((adapter.limits?.maxStorageBufferBindingSize ?? 0) >= maxRequestedFluidBufferBytes) {
-      requiredLimits.maxStorageBufferBindingSize = maxRequestedFluidBufferBytes;
+    if (!device?.queue) throw new Error('WebGPU device queue unavailable');
+    if (gpuContext?.queue && gpuContext.queue !== device.queue) {
+      throw new Error('injected WebGPU queue does not belong to the injected device');
     }
-    const requiredFeatures = [];
-    if (adapter.features?.has?.('timestamp-query')) {
-      requiredFeatures.push('timestamp-query');
-    }
-    const deviceDescriptor = {};
-    if (Object.keys(requiredLimits).length) deviceDescriptor.requiredLimits = requiredLimits;
-    if (requiredFeatures.length) deviceDescriptor.requiredFeatures = requiredFeatures;
-    device = await adapter.requestDevice(Object.keys(deviceDescriptor).length ? deviceDescriptor : undefined);
     setBoundarySplatGpuProfile(makeBoundarySplatGpuProfile({
       timestampStatus: device.features?.has?.('timestamp-query') ? 'available' : 'unsupported',
       reason: device.features?.has?.('timestamp-query') ? 'not-sampled-yet' : 'timestamp-query-not-supported',
@@ -7924,7 +7943,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (pipelineError) {
       throw new Error(`fluid pipeline validation: ${pipelineError.message || String(pipelineError)}`);
     }
-    state.backend = `WebGPU:${adapter.info?.vendor || 'adapter'}`;
+    gpuInitialized = true;
+    state.backend = `WebGPU:${adapter?.info?.vendor || 'adapter'}`;
     emitStatus({ phase: 'gpu-ready' });
   }
 
@@ -10601,7 +10621,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return { ok: true, decision, actuation };
   }
 
-  function renderLiveFrame(now, { preserveContinuityDecision = false, stageLedgerFrameId = null } = {}) {
+  function renderLiveFrame(now, {
+    preserveContinuityDecision = false,
+    stageLedgerFrameId = null,
+    submitCommandBuffers = null,
+    submissionInput = null,
+  } = {}) {
     const cpuStart = performance.now();
     const compositorFrameCountBefore = state.boundarySplatFrameCount;
     const sourceRenderFrameCountBefore = state.frameCount;
@@ -10672,7 +10697,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     encodeHistoryCopy(encoder, currentTexture);
     encodeBoundarySplatTelemetry(encoder);
     const submitStartedAtMs = performance.now();
-    device.queue.submit([encoder.finish()]);
+    const commandBuffer = encoder.finish();
+    const submission = submitCommandBuffers
+      ? submitCommandBuffers([commandBuffer], submissionInput || {})
+      : (() => {
+          device.queue.submit([commandBuffer]);
+          return null;
+        })();
     recordKilnFrameStage(
       stageLedgerFrameId,
       'queue-submit',
@@ -10705,7 +10736,142 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       liveFlameContinuityDecision(continuityClockEvidence);
     }
     finishKilnFrameStage(stageLedgerFrameId);
-    if (state.frameCount % 12 === 0) probeVolumeQueueTiming(stageLedgerFrameId);
+    if (!submitCommandBuffers && state.frameCount % 12 === 0) probeVolumeQueueTiming(stageLedgerFrameId);
+    return {
+      submission,
+      commandBufferCount: 1,
+      ...continuityClockEvidence,
+    };
+  }
+
+  async function setForegroundOpportunityMode(active) {
+    if (active === true && activeHoldoverRenderPromise) {
+      await activeHoldoverRenderPromise;
+    }
+    fireEpisodeFramesQuiescing = active === true;
+    cancelAnimationFrame(raf);
+    raf = 0;
+    if (!fireEpisodeFramesQuiescing && state.active) {
+      raf = requestAnimationFrame(render);
+    }
+    return {
+      active: state.active,
+      foregroundOpportunityMode: fireEpisodeFramesQuiescing ? 'lease-driven' : 'ordinary-raf',
+    };
+  }
+
+  function nextForegroundOpportunityFrameId(options = {}) {
+    const firingId = String(options.firingId || '');
+    if (!firingId) throw new Error('foreground kiln frame identity requires firingId');
+    return `${firingId}:${state.flameContinuityPresentationOrdinal + 1}`;
+  }
+
+  async function renderForegroundOpportunityFrame(options = {}) {
+    if (!state.active || !gpuInitialized || !device) {
+      throw new Error('foreground kiln frame requires an active initialized volume');
+    }
+    if (!fireEpisodeFramesQuiescing) {
+      throw new Error('foreground kiln frame requires lease-driven volume mode');
+    }
+    if (options.signal?.aborted) {
+      throw new Error('foreground kiln frame was canceled before encode');
+    }
+    if (typeof options.submit !== 'function') {
+      throw new Error('foreground kiln frame requires the SHARP submission lease');
+    }
+    const firingId = String(options.firingId || '');
+    const frameId = String(options.frameId || '');
+    const requestId = String(options.requestId || '');
+    if (!firingId || !frameId || !requestId) {
+      throw new Error('foreground kiln frame requires firing, frame, and request identity');
+    }
+    const expectedFrameId = nextForegroundOpportunityFrameId({ firingId });
+    if (frameId !== expectedFrameId) {
+      throw new Error(`foreground kiln frame identity mismatch: expected ${expectedFrameId}, got ${frameId}`);
+    }
+    const now = performance.now();
+    if (kilnFrameStageLedgerRecording && lastKilnFrameStageId) {
+      kilnFrameStageLedger.recordPresentationOpportunity(lastKilnFrameStageId, {
+        timestampMs: now,
+        authority: 'sharp-foreground-opportunity-request',
+      });
+      lastKilnFrameStageId = null;
+    }
+    state.flameContinuityPresentationOrdinal += 1;
+    const stageLedgerFrameId = kilnFrameStageLedgerRecording
+      ? kilnFrameStageLedger.beginFrame({
+          path: 'live',
+          presentationOrdinal: state.flameContinuityPresentationOrdinal,
+          continuityMode: state.flameContinuityEffective,
+          rafTimestampMs: now,
+          sourceGeneration: state.boundarySplatHistoryLastArchivedSourceCandidateGeneration || state.simStepCount,
+          simulatorStep: state.simStepCount,
+        })
+      : frameId;
+    if (stageLedgerFrameId !== frameId) {
+      throw new Error(`foreground kiln ledger frame mismatch: expected ${frameId}, got ${stageLedgerFrameId}`);
+    }
+    recordKilnFrameStage(
+      stageLedgerFrameId,
+      'volume-raf',
+      now,
+      'sharp-same-device-submission-lease',
+      { requestId },
+    );
+    let result;
+    try {
+      result = renderLiveFrame(now, {
+        stageLedgerFrameId,
+        submitCommandBuffers: options.submit,
+        submissionInput: {
+          submissionId: `${requestId}:kiln-submit`,
+          metadata: {
+            workloadIdentity: 'actual-volume-core-kiln-frame-v0',
+            firingId,
+            frameId,
+            requestId,
+            encoderIdentity: 'volume-core.renderLiveFrame',
+            deviceIdentity: foregroundDeviceIdentity,
+            queueIdentity: foregroundQueueIdentity,
+          },
+        },
+      });
+    } catch (error) {
+      finishKilnFrameStage(stageLedgerFrameId);
+      throw error;
+    }
+    return {
+      schema: 'kaminos.volume-foreground-frame-receipt.v0',
+      status: 'submitted',
+      firingId,
+      frameId,
+      requestId,
+      encoderIdentity: 'volume-core.renderLiveFrame',
+      deviceIdentity: foregroundDeviceIdentity,
+      queueIdentity: foregroundQueueIdentity,
+      commandBufferCount: 1,
+      submission: result.submission,
+      clocks: {
+        renderFrameCountBefore: result.renderFrameCountBefore,
+        renderFrameCount: result.renderFrameCount,
+        sourceRenderFrameCountBefore: result.sourceRenderFrameCountBefore,
+        sourceRenderFrameCount: result.sourceRenderFrameCount,
+        simulatorStepBefore: result.simulatorStepBefore,
+        simulatorStep: result.simulatorStep,
+      },
+    };
+  }
+
+  function foregroundGpuContext() {
+    if (!gpuInitialized || !device?.queue) return null;
+    return {
+      schema: 'kaminos.volume-foreground-gpu-context.v0',
+      device,
+      queue: device.queue,
+      adapter,
+      deviceIdentity: foregroundDeviceIdentity,
+      queueIdentity: foregroundQueueIdentity,
+    };
   }
 
   function stopVolumeRenderOnError(error) {
@@ -13515,6 +13681,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     canvasElement() {
       return canvas;
     },
+    setForegroundOpportunityMode,
+    nextForegroundOpportunityFrameId,
+    renderForegroundOpportunityFrame,
+    foregroundGpuContext,
     sampleFrame,
     primeBoundarySplatLiveHistory,
     sampleBoundarySplatDrawState,
