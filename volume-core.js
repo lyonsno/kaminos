@@ -18,6 +18,7 @@ import {
 import {
   NATIVE_LOW_INPUT_AUTHORITY,
   NATIVE_LOW_COARSE_SOURCE_HISTORY_SUPPORT_FRONT_REPLACEMENT,
+  NATIVE96_LEARNED_FRONT_ACTIVITY_FORCING,
   NATIVE96_SPARSE_FRONT_CONTINUITY,
   NATIVE_LOW_SHARED_DEVICE_ROUTE,
   NATIVE_LOW_TRANSPORT_MODE,
@@ -51,6 +52,7 @@ const BOUNDARY_SPLAT_GPU_PROFILE_IDENTITY = 'boundary-splat-stage-gpu-timestamp-
 const BOUNDARY_SPLAT_ATTRIBUTE_HOOK_IDENTITY = 'boundary-splat-learned-attribute-hook-v0';
 const NATIVE_LOW_LEARNED_SPLAT_CALIBRATION_IDENTITY = 'native-low-learned-splat-calibration-v0';
 const NATIVE_LOW_DIRECT_SPARSE_CUES_IDENTITY = 'native-low-gpu-resident-splat-materialization-bypass-v0';
+const SUPPORTED_NATIVE_LOW_SHARED_DEVICE_COMPOSITIONS = new Set(['raymarch-only-v0', 'splat-only-v0']);
 const NATIVE_LOW_DIRECT_SPARSE_GRID = 160;
 const BOUNDARY_SPLAT_INITIAL_CAPACITY = 131072;
 const BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES = 48;
@@ -5753,6 +5755,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let nativeLowDirectSparseResources = null;
   let nativeLowDirectDiagnosticsCache = null;
   const nativeLowSelectiveSharedRuntimes = new Map();
+  let native96LearnedActivityForcingState = {
+    receiverActive: false,
+    sourceControlSignature: null,
+    historyEpochIdentity: null,
+    cueValid: false,
+    modelOutputGeneration: 0,
+    producedAtSourceStep: null,
+    resetReason: 'not-started',
+  };
   let bindGroupLayout = null;
   let majorantFluidBindGroupLayout = null;
   let majorantWriteBindGroupLayout = null;
@@ -6000,12 +6011,23 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function scalarActivityReceiverDebug() {
     const controls = normalizeScalarActivityReceiverControls(controlsSnapshot);
-    const externalCueActive = oracleActivityCueUpload.status === 'uploaded' && oracleActivityCueUpload.externalCueCellCount > 0;
+    const learnedReceiverActive = native96LearnedActivityForcingState.receiverActive === true;
+    const externalCueActive = !learnedReceiverActive
+      && oracleActivityCueUpload.status === 'uploaded'
+      && oracleActivityCueUpload.externalCueCellCount > 0;
+    const learnedCueActive = learnedReceiverActive && native96LearnedActivityForcingState.cueValid === true;
     return {
       identity: TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY,
       hookIdentity: SCALAR_ACTIVITY_RECEIVER_HOOK_IDENTITY,
       requestedCueAuthority: TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
-      effectiveCueAuthority: externalCueActive ? TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY : PROCEDURAL_ACTIVITY_CUE_AUTHORITY,
+      effectiveCueAuthority: learnedCueActive
+        ? NATIVE96_LEARNED_FRONT_ACTIVITY_FORCING
+        : externalCueActive
+          ? TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY
+          : PROCEDURAL_ACTIVITY_CUE_AUTHORITY,
+      learnedCueActive,
+      learnedReceiverActive,
+      runtimeTruthUsed: false,
       enabled: controls.enabled,
       display: controls.display,
       curlNoiseGain: controls.curlNoiseGain,
@@ -8035,7 +8057,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[318] = selectiveCompositionDefinition.splat ? 1 : 0;
     uniforms[319] = 0;
     const scalarActivityReceiver = normalizeScalarActivityReceiverControls(controlsSnapshot);
-    const externalCueActive = oracleActivityCueUpload.status === 'uploaded' && oracleActivityCueUpload.externalCueCellCount > 0;
+    const learnedReceiverActive = native96LearnedActivityForcingState.receiverActive === true;
+    const externalCueActive = learnedReceiverActive
+      ? native96LearnedActivityForcingState.cueValid === true
+      : oracleActivityCueUpload.status === 'uploaded'
+        && oracleActivityCueUpload.externalCueCellCount > 0;
     uniforms[320] = scalarActivityReceiver.enabled;
     uniforms[321] = scalarActivityReceiver.curlNoiseGain;
     uniforms[322] = scalarActivityReceiver.vorticityGain;
@@ -12516,7 +12542,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     );
     if ((!state.active && !importedFieldCustody) || !device) return { ok: false, reason: 'inactive', ...state };
     const boundarySplatCompositionRequestedRaw = options.boundarySplatComposition ?? 'splat-only-v0';
-    if (!['splat-only-v0', 'raymarch-under-splats-v0'].includes(boundarySplatCompositionRequestedRaw)) {
+    if (!['raymarch-only-v0', 'splat-only-v0', 'raymarch-under-splats-v0'].includes(boundarySplatCompositionRequestedRaw)) {
       return {
         ok: false,
         reason: 'unsupported-boundary-splat-composition',
@@ -12550,20 +12576,28 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const encoder = device.createCommandEncoder({ label: 'kaminos frozen render-scale canvas capture' });
       encodeMajorant(encoder, { force: true });
       encodeBoundarySidecar(encoder);
-      encodeBoundarySplats(encoder);
+      if (boundarySplatCompositionRequestedRaw !== 'raymarch-only-v0') {
+        encodeBoundarySplats(encoder);
+      }
       const currentTexture = context.getCurrentTexture();
       let residualApplied = false;
       let raymarchEncoded = false;
       let splatEncoded = false;
       let raymarchApplied = false;
       let splatApplied = false;
-      let boundarySplatCompositionEffective = boundarySplatRequested()
-        ? boundarySplatCompositionRequested
-        : 'raymarch-only-v0';
+      let boundarySplatCompositionEffective = boundarySplatCompositionRequestedRaw === 'raymarch-only-v0'
+        ? 'raymarch-only-v0'
+        : (boundarySplatRequested() ? boundarySplatCompositionRequested : 'raymarch-only-v0');
       let featureCaptureSourcePassApplied = false;
       let sourcePassEncodeMs = null;
       let residualPassEncodeMs = null;
-      if (boundarySplatRequested()) {
+      if (boundarySplatCompositionRequestedRaw === 'raymarch-only-v0') {
+        encodeDraw(encoder, currentTexture.createView(), 'kaminos frozen explicit raymarch-only canvas pass');
+        raymarchEncoded = true;
+        boundarySplatCompositionEffective = 'raymarch-only-v0';
+        state.volumeReconstructionStyle = boundarySplatCompositionEffective;
+        recordBrowserResidualCost({ applied: false });
+      } else if (boundarySplatRequested()) {
         if (boundarySplatCompositionRequested === 'raymarch-under-splats-v0') {
           encodeDraw(encoder, currentTexture.createView(), 'kaminos frozen hybrid raymarch under splats pass');
           raymarchEncoded = true;
@@ -13163,7 +13197,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
   }
 
-  async function readNative96SparseFrontContinuityCostProfile(source, label, fallbackMs = null, f16Teacher = false, frontStudentWidth = null, frontAuthorityGate = false) {
+  async function readNative96SparseFrontContinuityCostProfile(source, label, fallbackMs = null, f16Teacher = false, frontStudentWidth = null, frontAuthorityGate = false, learnedActivityCue = false) {
     await source.mapAsync(GPUMapMode.READ);
     const values = new BigUint64Array(source.getMappedRange().slice(0));
     source.unmap();
@@ -13179,9 +13213,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         : frontAuthorityGate
           ? 'front-authority-gated-f32-front-teacher-candidate-dispatch-indirect-v0'
           : 'exact-front-teacher-candidate-dispatch-indirect-v0';
-    const invalid = values.length < 6
+    const requiredValueCount = learnedActivityCue ? 8 : 6;
+    const learnedActivityCueTimestampsInvalid = learnedActivityCue
+      && (values[6] === 0n || values[7] === 0n || values[7] < values[6]);
+    const invalid = values.length < requiredValueCount
       || values[0] === 0n || values[1] === 0n || values[2] === 0n || values[3] === 0n || values[4] === 0n || values[5] === 0n
-      || values[1] < values[0] || values[3] < values[2] || values[5] < values[4];
+      || values[1] < values[0] || values[3] < values[2] || values[5] < values[4]
+      || learnedActivityCueTimestampsInvalid;
     if (invalid) {
       return {
         identity: 'native-low-head-cost-profile-v0',
@@ -13194,6 +13232,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         f16FrontTeacherEvalGpuMs: null,
         frontStudentEvalGpuMs: null,
         continuityReconstructionGpuMs: null,
+        learnedActivityCueCollapseGpuMs: null,
         totalSparseFrontContinuityGpuMs: fallbackMs,
         inferenceGpuMs: fallbackMs,
         values: Array.from(values, value => value.toString()),
@@ -13202,7 +13241,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const sourceDeltaAdmissionGpuMs = Number(values[1] - values[0]) / 1_000_000;
     const frontModelEvalGpuMs = Number(values[3] - values[2]) / 1_000_000;
     const continuityReconstructionGpuMs = Number(values[5] - values[4]) / 1_000_000;
+    const learnedActivityCueCollapseGpuMs = learnedActivityCue ? Number(values[7] - values[6]) / 1_000_000 : 0;
     const totalSparseFrontContinuityGpuMs = sourceDeltaAdmissionGpuMs + frontModelEvalGpuMs + continuityReconstructionGpuMs;
+    const totalLearnedForcingGpuMs = totalSparseFrontContinuityGpuMs + learnedActivityCueCollapseGpuMs;
     return {
       identity: 'native-low-head-cost-profile-v0',
       label,
@@ -13218,8 +13259,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       exactFrontTeacherEvalStage: !f16Teacher && effectiveFrontStudentWidth === null ? frontModelEvalStage : null,
       continuityReconstructionGpuMs,
       continuityReconstructionStage: 'feathered-front-continuity-full-grid-v0',
+      learnedActivityCueCollapseGpuMs,
+      learnedActivityCueCollapseStage: learnedActivityCue ? 'positive-front-residual-to-native-grid-activity-v0' : 'inactive',
       totalSparseFrontContinuityGpuMs,
-      inferenceGpuMs: totalSparseFrontContinuityGpuMs,
+      totalLearnedForcingGpuMs,
+      inferenceGpuMs: totalLearnedForcingGpuMs,
       values: Array.from(values, value => value.toString()),
     };
   }
@@ -13271,10 +13315,22 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       'deterministic96To160',
       'modelBypass',
       'selectedLearnedPackage',
+      'native96LearnedForcing',
     ]);
     if (!supportedPresentationRoles.has(presentationRole)) throw new Error(`unsupportedNativeLowPresentationRole:${presentationRole}`);
     const cockpitPresentation = presentationRole !== 'comparisonCapture';
     const renderLearnedTreatment = !cockpitPresentation || presentationRole === 'selectedLearnedPackage';
+    const native96SparseFrontContinuityEnabled = options.native96SparseFrontContinuityEnabled === true;
+    const learnedActivityCueRequested = presentationRole === 'native96LearnedForcing' && options.learnedActivityCueEnabled === true;
+    const learnedActivityCueEnabled = learnedActivityCueRequested && native96SparseFrontContinuityEnabled;
+    const requestedLearnedRefreshCadence = Number(options.learnedActivityRefreshCadence ?? 1);
+    const effectiveLearnedRefreshCadence = Number.isFinite(requestedLearnedRefreshCadence) && requestedLearnedRefreshCadence > 0
+      ? Math.max(1, Math.floor(requestedLearnedRefreshCadence))
+      : 1;
+    const requestedSourceSimulationCadence = Number(options.sourceSimulationCadence ?? 1);
+    const effectiveSourceSimulationCadence = Number.isFinite(requestedSourceSimulationCadence) && requestedSourceSimulationCadence > 0
+      ? Math.max(1, Math.floor(requestedSourceSimulationCadence))
+      : 1;
     const nativeLowDirectSparseCuesEnabled = options.nativeLowDirectSparseCuesEnabled === true;
     const nativeLowDirectSparseTelemetryRequested = options.nativeLowDirectSparseTelemetryRequested === true;
     const wholeFrameDiagnosticsRequested = !nativeLowDirectSparseCuesEnabled
@@ -13283,9 +13339,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       || options.candidateHeadBenchmarkEnabled === true
       || options.candidateCueBufferLifecycleStressEnabled === true
       || options.vivisectorCandidateHeadReceiver?.enabled === true;
-    const renderNativeControl = !cockpitPresentation || presentationRole === 'native96Control' || presentationRole === 'modelBypass';
+    const renderNativeControl = !cockpitPresentation || presentationRole === 'native96Control' || presentationRole === 'modelBypass' || presentationRole === 'native96LearnedForcing';
     const renderDeterministicMaterialization = presentationRole === 'deterministic96To160';
-    const cockpitHistoryOnly = cockpitPresentation && presentationRole !== 'selectedLearnedPackage';
+    let cockpitHistoryOnly = cockpitPresentation && presentationRole !== 'selectedLearnedPackage' && !learnedActivityCueEnabled;
     const advanceSourceStep = options.advanceSourceStep !== false;
     const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
     const simulationClockAuthority = String(options.simulationClockAuthority || 'wall-clock-performance-now-v0');
@@ -13304,12 +13360,71 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     try {
       if (!state.active || !device) throw new Error('inactive');
       if (![96, 128].includes(sourceGrid)) throw new Error(`native-low-shared-device-grid-mismatch:${sourceGrid}`);
-      if (requestedComposition !== 'splat-only-v0') throw new Error(`unsupported-native-low-shared-device-composition:${requestedComposition}`);
+      if (!SUPPORTED_NATIVE_LOW_SHARED_DEVICE_COMPOSITIONS.has(requestedComposition)) {
+        throw new Error(`unsupported-native-low-shared-device-composition:${requestedComposition}`);
+      }
+      if (learnedActivityCueEnabled && sourceGrid !== 96) throw new Error(`native96-learned-activity-source-grid-mismatch:${sourceGrid}`);
+      if (learnedActivityCueRequested && !native96SparseFrontContinuityEnabled) {
+        throw new Error('unsupported-native96-learned-activity-without-sparse-front-continuity');
+      }
       cancelAnimationFrame(raf);
       raf = 0;
       if (wholeFrameDiagnosticsRequested && device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
       const runtime = await ensureNativeLowSelectiveSharedRuntime({ transferRouteId: requestedTransferRouteId, sourceGrid });
       const runtimeBeforeInference = runtime.debugState();
+
+      const sourceControlSignature = canonicalSourceControlSignature();
+      const historyEpochIdentity = [
+        'native-low-source-history-epoch-v0',
+        `grid-${sourceGrid}`,
+        `majorant-${sourceMajorantGrid}`,
+        `scene-${controlsSnapshot.volumeScene || 'unknown'}`,
+        `source-reset-${state.nativeLowSourceHistoryEpochCount ?? state.fluidStateResetCount ?? 0}`,
+      ].join(':');
+      let learnedCueResetReason = null;
+      let learnedCueReceiverRestore = null;
+      if (learnedActivityCueEnabled) {
+        native96LearnedActivityForcingState = {
+          ...native96LearnedActivityForcingState,
+          receiverActive: true,
+        };
+        if (native96LearnedActivityForcingState.sourceControlSignature === null) {
+          learnedCueResetReason = 'first-forcing-frame';
+        } else if (native96LearnedActivityForcingState.sourceControlSignature !== sourceControlSignature) {
+          learnedCueResetReason = 'source-control-signature-changed';
+        } else if (native96LearnedActivityForcingState.historyEpochIdentity !== historyEpochIdentity) {
+          learnedCueResetReason = 'history-epoch-changed';
+        }
+        if (learnedCueResetReason) {
+          ensureOracleActivityCueBuffer();
+          device.queue.writeBuffer(oracleActivityCueBuffer, 0, new Float32Array(gridCellCount(sourceGrid)));
+          native96LearnedActivityForcingState = {
+            ...native96LearnedActivityForcingState,
+            sourceControlSignature,
+            historyEpochIdentity,
+            cueValid: false,
+            producedAtSourceStep: null,
+            resetReason: learnedCueResetReason,
+          };
+        }
+      } else if (native96LearnedActivityForcingState.receiverActive) {
+        ensureOracleActivityCueBuffer();
+        if (oracleActivityCueSourceValues && oracleActivityCueSourceGrid) {
+          const restoredCue = resampleScalarActivityCue(oracleActivityCueSourceValues, oracleActivityCueSourceGrid, sourceGrid);
+          device.queue.writeBuffer(oracleActivityCueBuffer, 0, restoredCue);
+          learnedCueReceiverRestore = 'forcing-role-disabled-external-cue-restored';
+        } else {
+          device.queue.writeBuffer(oracleActivityCueBuffer, 0, new Float32Array(gridCellCount(sourceGrid)));
+          learnedCueReceiverRestore = 'forcing-role-disabled-procedural-receiver-restored';
+        }
+        native96LearnedActivityForcingState = {
+          ...native96LearnedActivityForcingState,
+          receiverActive: false,
+          cueValid: false,
+          producedAtSourceStep: null,
+          resetReason: learnedCueReceiverRestore,
+        };
+      }
 
       failurePhase = 'native-low-source-step';
       const nativeStepStart = performance.now();
@@ -13330,6 +13445,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const sourceFrameAfter = state.frameCount;
       const computedSourceStepIdentity = `native-low-shared-device-step-${sourceStep}-frame-${sourceFrameAfter}`;
       const sourceStepIdentity = options.expectedSourceStepIdentity || computedSourceStepIdentity;
+      const learnedModelRefreshDue = learnedActivityCueEnabled && (
+        !native96LearnedActivityForcingState.cueValid
+        || native96LearnedActivityForcingState.producedAtSourceStep === null
+        || sourceStep - native96LearnedActivityForcingState.producedAtSourceStep >= effectiveLearnedRefreshCadence
+      );
+      if (learnedActivityCueEnabled) cockpitHistoryOnly = !learnedModelRefreshDue;
       const simulationSteppingReceipt = {
         identity: 'native-low-simulation-stepping-receipt-v0',
         sourceFrameBefore: sourceFrame,
@@ -13339,6 +13460,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         simStepDelta,
         requiredSimStepDelta,
         advanceSourceStep,
+        nativeSourceSimulationCadence: {
+          requestedCadence: requestedSourceSimulationCadence,
+          effectiveCadence: effectiveSourceSimulationCadence,
+          sourceStepAdvanced: advanceSourceStep,
+        },
         authority: 'renderer-owned-native-source-step-before-model-consumption-v0',
       };
       lastTrustworthyEvidence = { sourceStepIdentity, sourceStep, nativeStepMs, simulationSteppingReceipt };
@@ -13353,8 +13479,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       let timestampWrites = null;
       let stageTimestampWrites = null;
       const coarseSourceHistorySupportFrontEnabled = options.coarseSourceHistorySupportFrontEnabled === true;
-      const native96SparseFrontContinuityEnabled = options.native96SparseFrontContinuityEnabled === true;
-      const timestampQueryCount = coarseSourceHistorySupportFrontEnabled || cockpitHistoryOnly ? 2 : 6;
+      const timestampQueryCount = coarseSourceHistorySupportFrontEnabled || cockpitHistoryOnly
+        ? 2
+        : learnedActivityCueEnabled
+          ? 8
+          : 6;
       const candidateCueBufferLifecycleStressEnabled = options.candidateCueBufferLifecycleStressEnabled === true;
       const candidateHeadBenchmarkEnabled = options.candidateHeadBenchmarkEnabled === true || candidateCueBufferLifecycleStressEnabled;
       const vivisectorCandidateHeadReceiverEnabled = options.vivisectorCandidateHeadReceiver?.enabled === true;
@@ -13385,6 +13514,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         if (native96SparseFrontContinuityEnabled && !cockpitHistoryOnly) {
           stageTimestampWrites.native96ExactFrontTeacher = { querySet, beginningOfPassWriteIndex: 2, endOfPassWriteIndex: 3 };
           stageTimestampWrites.native96SparseFrontContinuity = { querySet, beginningOfPassWriteIndex: 4, endOfPassWriteIndex: 5 };
+          if (learnedActivityCueEnabled) {
+            stageTimestampWrites.learnedActivityCue = { querySet, beginningOfPassWriteIndex: 6, endOfPassWriteIndex: 7 };
+          }
         } else if (!coarseSourceHistorySupportFrontEnabled) {
           stageTimestampWrites.supportFront = { querySet, beginningOfPassWriteIndex: 2, endOfPassWriteIndex: 3 };
           stageTimestampWrites.supportPositiveResidual = { querySet, beginningOfPassWriteIndex: 4, endOfPassWriteIndex: 5 };
@@ -13429,13 +13561,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const inferenceStart = performance.now();
       device.pushErrorScope('validation');
       const inferenceEncoder = device.createCommandEncoder({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} inference encoder` });
-      const historyEpochIdentity = [
-        'native-low-source-history-epoch-v0',
-        `grid-${sourceGrid}`,
-        `majorant-${sourceMajorantGrid}`,
-        `scene-${controlsSnapshot.volumeScene || 'unknown'}`,
-        `source-reset-${state.nativeLowSourceHistoryEpochCount ?? state.fluidStateResetCount ?? 0}`,
-      ].join(':');
       const historyResetReason = state.nativeLowSourceHistoryEpochReason || state.fluidStateResetReason || 'unknown';
       if (coarseSourceHistorySupportFrontEnabled) failurePhase = 'coarse-source-history-support-front-replacement';
       if (native96SparseFrontContinuityEnabled) failurePhase = 'native96-sparse-front-continuity';
@@ -13452,6 +13577,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         native96FrontStudentWidth: options.native96FrontStudentWidth ?? null,
         native96FrontAuthorityGateEnabled: options.native96FrontAuthorityGateEnabled === true,
         native96FrontAuthorityThreshold: Number(options.native96FrontAuthorityThreshold ?? 0.01),
+        learnedActivityCueEnabled,
+        learnedActivityCueBuffer: oracleActivityCueBuffer,
+        learnedActivityScale: Number(options.learnedActivityScale ?? 1),
+        learnedActivityRequestedCadence: requestedLearnedRefreshCadence,
+        learnedActivityEffectiveCadence: effectiveLearnedRefreshCadence,
+        learnedActivityCueAgeSourceSteps: native96LearnedActivityForcingState.producedAtSourceStep === null
+          ? 0
+          : Math.max(0, sourceStep - native96LearnedActivityForcingState.producedAtSourceStep),
+        sourceStep,
         historyOnly: cockpitHistoryOnly,
         vivisectorCandidateHeadReceiver: options.vivisectorCandidateHeadReceiver || null,
       });
@@ -13484,6 +13618,26 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const inferenceWallMs = performance.now() - inferenceStart;
       const validationError = await device.popErrorScope();
       if (validationError) throw new Error(`native-low-shared-device-validation:${validationError.message || String(validationError)}`);
+      if (learnedActivityCueEnabled) {
+        if (learnedModelRefreshDue) {
+          native96LearnedActivityForcingState = {
+            receiverActive: true,
+            sourceControlSignature,
+            historyEpochIdentity,
+            cueValid: true,
+            modelOutputGeneration: native96LearnedActivityForcingState.modelOutputGeneration + 1,
+            producedAtSourceStep: sourceStep,
+            resetReason: learnedCueResetReason,
+          };
+        } else {
+          native96LearnedActivityForcingState = {
+            ...native96LearnedActivityForcingState,
+            sourceControlSignature,
+            historyEpochIdentity,
+            resetReason: learnedCueResetReason,
+          };
+        }
+      }
       let inferenceTiming = wholeFrameDiagnosticsRequested
         ? { ms: inferenceWallMs, authority: 'queue-onSubmittedWorkDone-wall-proxy', sampledThisFrame: true, sampleAgeFrames: 0 }
         : {
@@ -13516,6 +13670,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
               options.native96F16FrontTeacherEnabled === true,
               options.native96FrontStudentWidth ?? null,
               options.native96FrontAuthorityGateEnabled === true,
+              learnedActivityCueEnabled,
             )
           : coarseSourceHistorySupportFrontEnabled || cockpitHistoryOnly
           ? await readNativeLowSourceDeltaOnlyCostProfile(timestampReadback, NATIVE_LOW_SHARED_DEVICE_ROUTE, inferenceWallMs)
@@ -13647,7 +13802,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         currentSourceConsumed: true,
         sourceHistoryAdvanced: true,
         modelEvaluationEnabled: !cockpitHistoryOnly,
-        modelOutputConsumed: presentationRole === 'selectedLearnedPackage' || !cockpitPresentation,
+        modelOutputConsumed: presentationRole === 'selectedLearnedPackage' || learnedActivityCueEnabled || !cockpitPresentation,
       };
       const stalePredictionRejection = {
         identity: 'native-low-stale-prediction-rejection-v0',
@@ -13659,6 +13814,50 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         modelEvaluationEnabled: !cockpitHistoryOnly,
         historyOnlyResidentPackageUpdate: cockpitHistoryOnly,
       };
+      const producedAtSourceStep = native96LearnedActivityForcingState.producedAtSourceStep;
+      const cueAgeSourceSteps = producedAtSourceStep === null ? null : Math.max(0, sourceStep - producedAtSourceStep);
+      const learnedModelRefreshCadence = {
+        identity: 'native96-learned-model-refresh-cadence-v0',
+        requestedCadence: requestedLearnedRefreshCadence,
+        effectiveCadence: effectiveLearnedRefreshCadence,
+        modelRefreshDue: learnedModelRefreshDue,
+        modelOutputGeneration: native96LearnedActivityForcingState.modelOutputGeneration,
+        cueAgeSourceSteps,
+      };
+      const learnedCueConsumption = {
+        identity: 'native96-learned-cue-consumption-v0',
+        oneSourceStepLag: true,
+        producedAtSourceStep,
+        firstConsumedAtSourceStep: producedAtSourceStep === null ? null : producedAtSourceStep + 1,
+        consumedThisSourceStep: producedAtSourceStep !== null && advanceSourceStep && sourceStep > producedAtSourceStep,
+      };
+      const learnedCueReset = {
+        identity: 'native96-learned-cue-reset-v0',
+        sourceControlSignature,
+        historyEpochIdentity,
+        resetReason: learnedCueResetReason,
+        staleCueClearedBeforeSourceStep: learnedCueResetReason !== null,
+      };
+      const native96LearnedActivityForcing = learnedActivityCueEnabled
+        ? {
+            identity: NATIVE96_LEARNED_FRONT_ACTIVITY_FORCING,
+            enabled: true,
+            authority: 'positive-learned-front-residual-native-grid-scalar-forcing-v0',
+            runtimeTruthUsed: false,
+            fullFeatureAuthority: 'full-low-field-plus-spatial-rbf-features-v0',
+            effectiveFeatureCount: 185,
+            fullGridModelIntermediary: true,
+            nativeGridReceiver: 'oracleActivityCueBuffer',
+            modelOutputConsumedBy: 'next-native96-simulator-step-v0',
+            learnedActivityScale: Number(options.learnedActivityScale ?? 1),
+            learnedModelRefreshCadence,
+            nativeSourceSimulationCadence: simulationSteppingReceipt.nativeSourceSimulationCadence,
+            learnedCueConsumption,
+            learnedCueReset,
+            runtimeReceipt: runtimeState.native96LearnedActivityCue || null,
+            failurePhase: null,
+          }
+        : null;
       const nativeLowInferenceWorkProfile = runtimeState.nativeLowInferenceWorkProfile || supportStats.nativeLowInferenceWorkProfile || null;
       nativeLowHeadCostProfile = {
         ...nativeLowHeadCostProfile,
@@ -13670,7 +13869,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         supportCompactedCount: nativeLowInferenceWorkProfile?.supportCompactedCount ?? null,
         residualHeadEvaluatedCount: nativeLowInferenceWorkProfile?.residualHeadEvaluatedCount ?? null,
       };
-      lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inferenceTiming, supportStats, supportStatsMs, nativeLowSupportTileProfile, nativeLowSourceTileCandidate, nativeLowFixedSourceDeltaAdmission, currentSourceFrameConsumption, stalePredictionRejection };
+      lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inferenceTiming, supportStats, supportStatsMs, nativeLowSupportTileProfile, nativeLowSourceTileCandidate, nativeLowFixedSourceDeltaAdmission, native96LearnedActivityForcing, currentSourceFrameConsumption, stalePredictionRejection };
 
       let treatmentRebuildMs = 0;
       let treatmentCopyMs = 0;
@@ -13943,6 +14142,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         : presentationRole === 'deterministic96To160'
           ? deterministicRender
           : controlRender;
+      const selectedPresentationRenderReceipt = {
+        identity: 'native-low-selected-presentation-render-pass-receipt-v0',
+        requestedComposition,
+        effectiveComposition: selectedPresentationRender?.boundarySplatCompositionEffective || requestedComposition,
+        raymarchEncoded: selectedPresentationRender?.raymarchEncoded === true,
+        splatEncoded: selectedPresentationRender?.splatEncoded === true,
+        raymarchApplied: selectedPresentationRender?.raymarchApplied === true,
+        splatApplied: selectedPresentationRender?.splatApplied === true,
+      };
       const nativeLowMaterializationProfile = {
         identity: 'native-low-shared-device-materialization-profile-v0',
         transportMode: 'shared-device-gpu-buffers-no-readback-import-v0',
@@ -14018,6 +14226,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         fallbackBackend: runtimeState.fallbackBackend,
         requestedComposition,
         effectiveComposition: selectedPresentationRender?.boundarySplatCompositionEffective || requestedComposition,
+        selectedPresentationRenderReceipt,
         modelSpecificTiming: {
           inferenceGpuMs: inferenceTiming.ms,
           uploadDispatchMs: inferenceWallMs,
@@ -14541,8 +14750,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             deterministicMaterializationIdentity: renderDeterministicMaterialization
               ? 'deterministic-native-low-nearest-96-to-160-materialization-v0'
               : null,
-            modelOutputConsumed: presentationRole === 'selectedLearnedPackage',
+            modelOutputConsumed: presentationRole === 'selectedLearnedPackage' || presentationRole === 'native96LearnedForcing',
             modelBypass: presentationRole === 'modelBypass',
+            learnedActivityForcing: presentationRole === 'native96LearnedForcing',
             cameraAutoRotation: false,
             cameraStateStableAcrossRoleSwitch: true,
             partialPresentationRejected: true,
@@ -14573,6 +14783,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         nativeLowCockpitPresentation,
         requestedComposition,
         effectiveComposition: selectedPresentationRender?.boundarySplatCompositionEffective || requestedComposition,
+        selectedPresentationRenderReceipt,
         compositionMismatch: (selectedPresentationRender?.boundarySplatCompositionEffective || requestedComposition) !== requestedComposition ? 'compositionMismatch' : null,
         requestedTransferRouteId,
         effectiveTransferRouteId: runtimeState.effectiveTransferRouteId || requestedTransferRouteId,
@@ -14594,6 +14805,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         noHiddenCaps: runtimeState.noHiddenCaps,
         nativeLowInferenceWorkProfile,
         nativeLowHeadCostProfile,
+        native96LearnedActivityForcing,
+        learnedModelRefreshCadence,
+        nativeSourceSimulationCadence: simulationSteppingReceipt.nativeSourceSimulationCadence,
+        learnedCueConsumption,
+        learnedCueReset,
         nativeLowSupportTileProfile,
         nativeLowSourceTileCandidate,
         supportPositiveCount,
@@ -15053,6 +15269,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const beforeHistoryEpoch = state.nativeLowSourceHistoryEpochCount ?? state.fluidStateResetCount ?? 0;
       const beforeSimStepCount = state.simStepCount;
       rebuildFluidState(gridSize, majorantGridSize, String(reason || 'operator-explicit-cockpit-reset'));
+      native96LearnedActivityForcingState = {
+        receiverActive: false,
+        sourceControlSignature: null,
+        historyEpochIdentity: null,
+        cueValid: false,
+        modelOutputGeneration: 0,
+        producedAtSourceStep: null,
+        resetReason: String(reason || 'operator-explicit-cockpit-reset'),
+      };
       return {
         ok: true,
         identity: 'native-low-cockpit-explicit-destructive-reset-v0',

@@ -32,6 +32,7 @@ export const NATIVE_LOW_VIVISECTOR_WIDTH32_LIVE_RECEIVER = 'native-low-vivisecto
 export const NATIVE_LOW_RESIDENT_CUE_BUFFER_LIFECYCLE_STRESS = 'native-low-resident-cue-buffer-lifecycle-stress-v0';
 export const NATIVE_LOW_COARSE_SOURCE_HISTORY_SUPPORT_FRONT_REPLACEMENT = 'native-low-coarse-source-history-support-front-replacement-v0';
 export const NATIVE96_SPARSE_FRONT_CONTINUITY = 'native96-sparse-front-continuity-v0';
+export const NATIVE96_LEARNED_FRONT_ACTIVITY_FORCING = 'native96-learned-front-activity-forcing-v0';
 export const NATIVE96_F16_FRONT_TEACHER_CANDIDATES = 'native96-f16-front-teacher-candidates-v0';
 export const NATIVE96_FRONT_AUTHORITY_GATED_F32_FRONT_TEACHER_CANDIDATES = 'native96-front-authority-gated-f32-front-teacher-candidates-v0';
 export const NATIVE96_F32_FRONT_STUDENT_WIDTHS = Object.freeze([16, 24, 32]);
@@ -786,6 +787,41 @@ fn featherNative96SparseFrontContinuity(@builtin(global_invocation_id) gid: vec3
 }
 `;
 
+const NATIVE96_LEARNED_ACTIVITY_CUE_WGSL = `
+const LOW_GRID: u32 = ${LOW_GRID}u;
+const HIGH_GRID: u32 = ${HIGH_GRID}u;
+
+@group(0) @binding(0) var<storage, read> lowFront: array<f32>;
+@group(0) @binding(1) var<storage, read> learnedFront: array<f32>;
+@group(0) @binding(2) var<storage, read_write> learnedActivityCue: array<f32>;
+@group(0) @binding(3) var<storage, read> learnedActivityParams: array<f32>;
+
+fn index3(cell: vec3<u32>, grid: u32) -> u32 {
+  return cell.x + cell.y * grid + cell.z * grid * grid;
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn collapseLearnedFrontResidualToNativeActivity(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (any(gid >= vec3<u32>(LOW_GRID))) { return; }
+  let lowIndex = index3(gid, LOW_GRID);
+  let baseFront = lowFront[lowIndex];
+  let highBegin = vec3<u32>(floor(vec3<f32>(gid) * f32(HIGH_GRID) / f32(LOW_GRID)));
+  let highEnd = min(
+    vec3<u32>(HIGH_GRID),
+    vec3<u32>(ceil(vec3<f32>(gid + vec3<u32>(1u)) * f32(HIGH_GRID) / f32(LOW_GRID))),
+  );
+  var positiveResidual = 0.0;
+  for (var z = highBegin.z; z < highEnd.z; z += 1u) {
+    for (var y = highBegin.y; y < highEnd.y; y += 1u) {
+      for (var x = highBegin.x; x < highEnd.x; x += 1u) {
+        positiveResidual = max(positiveResidual, learnedFront[index3(vec3<u32>(x, y, z), HIGH_GRID)] - baseFront);
+      }
+    }
+  }
+  learnedActivityCue[lowIndex] = clamp(max(0.0, positiveResidual) * max(0.0, learnedActivityParams[0]), 0.0, 1.0);
+}
+`;
+
 const NATIVE96_F16_SPARSE_FRONT_CONTINUITY_WGSL = NATIVE96_SPARSE_FRONT_CONTINUITY_WGSL
   .replace(/^/, 'enable f16;\n')
   .replace('var<storage, read> exactFrontTeacherModel: array<f32>;', 'var<storage, read> exactFrontTeacherModel: array<f16>;')
@@ -1380,6 +1416,37 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
     layout: native96SparseFrontContinuityPipelineLayout,
     compute: { module: native96SparseFrontContinuityShader, entryPoint: 'featherNative96SparseFrontContinuity' },
   });
+  const native96LearnedActivityCueShader = device.createShaderModule({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} learned native96 activity cue WGSL`,
+    code: specializeLowGridWgsl(NATIVE96_LEARNED_ACTIVITY_CUE_WGSL, lowGrid),
+  });
+  const native96LearnedActivityCueCompilation = await native96LearnedActivityCueShader.getCompilationInfo();
+  const native96LearnedActivityCueErrors = native96LearnedActivityCueCompilation.messages.filter(message => message.type === 'error');
+  if (native96LearnedActivityCueErrors.length) {
+    throw new Error(`native96 learned activity cue WGSL failed:${native96LearnedActivityCueErrors.map(error => `${error.lineNum}:${error.linePos} ${error.message}`).join('; ')}`);
+  }
+  const native96LearnedActivityCueLayout = device.createBindGroupLayout({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} learned native96 activity cue layout`,
+    entries: [
+      { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+    ],
+  });
+  const native96LearnedActivityCuePipeline = device.createComputePipeline({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} learned native96 activity cue collapse`,
+    layout: device.createPipelineLayout({
+      label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} learned native96 activity cue pipeline layout`,
+      bindGroupLayouts: [native96LearnedActivityCueLayout],
+    }),
+    compute: { module: native96LearnedActivityCueShader, entryPoint: 'collapseLearnedFrontResidualToNativeActivity' },
+  });
+  const learnedActivityCueParams = makeBuffer(
+    'native96 learned activity cue params',
+    4 * Float32Array.BYTES_PER_ELEMENT,
+    GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  );
   let encodedFrameCount = 0;
   let lastHistoryEpochIdentity = null;
   let lastSourceHistoryEpochReceipt = {
@@ -1455,6 +1522,16 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
     hardMaskTreatmentClaim: false,
     continuityReconstructionMode: 'feathered-local-5x5x5-front-residual-reconstruction-v0',
     learnedVisualClaim: false,
+    failurePhase: null,
+  };
+  let learnedActivityModelOutputGeneration = 0;
+  let lastLearnedActivityCue = {
+    identity: NATIVE96_LEARNED_FRONT_ACTIVITY_FORCING,
+    enabled: false,
+    runtimeTruthUsed: false,
+    fullGridModelIntermediary: true,
+    modelOutputGeneration: 0,
+    producedAtSourceStep: null,
     failurePhase: null,
   };
   let coarseSourceHistorySupportFrontActive = false;
@@ -2036,6 +2113,22 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
           dynamicPercentile: false,
           failurePhase: null,
         };
+        if (options.learnedActivityCueEnabled === true) {
+          lastLearnedActivityCue = {
+            ...lastLearnedActivityCue,
+            identity: NATIVE96_LEARNED_FRONT_ACTIVITY_FORCING,
+            enabled: true,
+            runtimeTruthUsed: false,
+            fullGridModelIntermediary: true,
+            modelRefreshDue: false,
+            cueReusedWithoutModelEvaluation: true,
+            modelOutputGeneration: learnedActivityModelOutputGeneration,
+            cueAgeSourceSteps: Number(options.learnedActivityCueAgeSourceSteps ?? 0),
+            requestedCadence: Number(options.learnedActivityRequestedCadence ?? 1),
+            effectiveCadence: Number(options.learnedActivityEffectiveCadence ?? 1),
+            failurePhase: null,
+          };
+        }
         encodedFrameCount += 1;
         lastHistoryEpochIdentity = currentHistoryEpochIdentity;
         return;
@@ -2131,6 +2224,51 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
         featherPass.setBindGroup(0, continuityBindGroup);
         featherPass.dispatchWorkgroups(Math.ceil(HIGH_GRID / 4), Math.ceil(HIGH_GRID / 4), Math.ceil(HIGH_GRID / 4));
         featherPass.end();
+        if (options.learnedActivityCueEnabled === true) {
+          if (!options.learnedActivityCueBuffer) throw new Error('native96-learned-activity-cue-buffer-missing');
+          const learnedActivityScale = Math.max(0, Number(options.learnedActivityScale ?? 1));
+          device.queue.writeBuffer(learnedActivityCueParams, 0, new Float32Array([learnedActivityScale, 0, 0, 0]));
+          const learnedActivityCueBindGroup = device.createBindGroup({
+            label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} learned native96 activity cue bind group`,
+            layout: native96LearnedActivityCueLayout,
+            entries: [
+              { binding: 0, resource: { buffer: sourceFront } },
+              { binding: 1, resource: { buffer: nativeUpsampleFront } },
+              { binding: 2, resource: { buffer: options.learnedActivityCueBuffer } },
+              { binding: 3, resource: { buffer: learnedActivityCueParams } },
+            ],
+          });
+          const learnedActivityCuePass = encoder.beginComputePass({
+            label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} collapse learned front residual to native96 activity`,
+            ...(options.stageTimestampWrites?.learnedActivityCue
+              ? { timestampWrites: options.stageTimestampWrites.learnedActivityCue }
+              : {}),
+          });
+          learnedActivityCuePass.setPipeline(native96LearnedActivityCuePipeline);
+          learnedActivityCuePass.setBindGroup(0, learnedActivityCueBindGroup);
+          learnedActivityCuePass.dispatchWorkgroups(Math.ceil(lowGrid / 4), Math.ceil(lowGrid / 4), Math.ceil(lowGrid / 4));
+          learnedActivityCuePass.end();
+          learnedActivityModelOutputGeneration += 1;
+          lastLearnedActivityCue = {
+            identity: NATIVE96_LEARNED_FRONT_ACTIVITY_FORCING,
+            enabled: true,
+            authority: 'positive-learned-front-residual-collapsed-to-native-grid-scalar-v0',
+            runtimeTruthUsed: false,
+            fullFeatureAuthority: NATIVE_LOW_FEATURE_AUTHORITY,
+            effectiveFeatureCount: FEATURE_COUNT,
+            fullGridModelIntermediary: true,
+            nativeGridReceiver: `${lowGrid}^3-oracleActivityCueBuffer`,
+            learnedActivityScale,
+            modelRefreshDue: true,
+            cueReusedWithoutModelEvaluation: false,
+            modelOutputGeneration: learnedActivityModelOutputGeneration,
+            producedAtSourceStep: Number(options.sourceStep ?? 0),
+            cueAgeSourceSteps: 0,
+            requestedCadence: Number(options.learnedActivityRequestedCadence ?? 1),
+            effectiveCadence: Number(options.learnedActivityEffectiveCadence ?? 1),
+            failurePhase: null,
+          };
+        }
         lastNative96SparseFrontContinuity = {
           identity: NATIVE96_SPARSE_FRONT_CONTINUITY,
           enabled: true,
@@ -2706,6 +2844,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
         nativeLowVivisectorWidth32LiveReceiver: lastVivisectorWidth32Receiver,
         nativeLowCoarseSourceHistorySupportFrontReplacement: lastCoarseSourceHistorySupportFrontReplacement,
         native96SparseFrontContinuity: lastNative96SparseFrontContinuity,
+        native96LearnedActivityCue: lastLearnedActivityCue,
         nativeLowCandidateCueBufferLifecycle: lastCandidateCueBufferLifecycle,
         ...lastStats,
       };
@@ -2728,6 +2867,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
       model.destroy();
       native96ExactFrontTeacherModel.destroy();
       native96F16FrontTeacherModel.destroy();
+      learnedActivityCueParams.destroy();
     },
   };
 }

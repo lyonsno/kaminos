@@ -51,9 +51,13 @@ const WITNESS_CONTRACT_MARKERS = Object.freeze({
 const args = parseArgs(process.argv.slice(2));
 const url = required('--url');
 const requestedUrl = new URL(url);
+const requestedCompositionParam = requestedUrl.searchParams.get('renderer') || requestedUrl.searchParams.get('render_composition') || 'raymarch-only-v0';
+const expectedComposition = String(args.get('--expected-composition') || (requestedCompositionParam === 'raymarch' ? 'raymarch-only-v0' : requestedCompositionParam));
+if (!['raymarch-only-v0', 'splat-only-v0'].includes(expectedComposition)) throw new Error(`unsupported expectedComposition:${expectedComposition}`);
 const cockpitRequested = requestedUrl.searchParams.get('cockpit') === '1';
 const requestedCockpitRole = requestedUrl.searchParams.get('cockpit_role') || 'native96Control';
-const cockpitLearnedRoleRequested = cockpitRequested && requestedCockpitRole === 'selectedLearnedPackage';
+const cockpitLearnedRoleRequested = cockpitRequested && ['selectedLearnedPackage', 'native96LearnedForcing'].includes(requestedCockpitRole);
+const cockpitLearnedForcingRequested = cockpitRequested && requestedCockpitRole === 'native96LearnedForcing';
 const requestedTransferRoute = requestedUrl.searchParams.get('native_low_transfer_route') || (cockpitRequested
   ? 'native-low-transfer-160-to-96-deployment-grid-v0'
   : 'native-low-transfer-160-to-128-zero-shot-v0');
@@ -71,12 +75,13 @@ const f16FrontTeacherRequested = sparseFrontContinuityRequested
   && requestedUrl.searchParams.get('f16_front_teacher') === '1';
 const requestedFrontStudentWidthParam = requestedUrl.searchParams.get('front_student_width');
 const requestedFrontStudentWidth = requestedFrontStudentWidthParam == null || requestedFrontStudentWidthParam === ''
-  ? null
+  ? (cockpitRequested ? 24 : null)
   : Number(requestedFrontStudentWidthParam);
 const requestedFrontStudent = requestedFrontStudentWidth === null ? null : NATIVE96_F32_FRONT_STUDENTS[requestedFrontStudentWidth];
 const frontAuthorityGateRequested = sparseFrontContinuityRequested
   && requestedUrl.searchParams.get('front_authority_gate') === '1';
 const requestedFrontAuthorityThreshold = Math.max(0, Number(requestedUrl.searchParams.get('front_authority_threshold') || 0.01));
+const requestedSourceSimulationCadence = Math.max(1, Math.floor(Number(requestedUrl.searchParams.get('source_sim_cadence') || 1)));
 const directSparseCuesRequested = requestedUrl.searchParams.get('direct_sparse_cues') === '1';
 const vivisectorCandidateHeadTrainedRouteRequested = Boolean(requestedUrl.searchParams.get('vivisector_candidate_head_package'))
   || requestedUrl.searchParams.get('candidate_head_trained_route') === 'vivisector-width32';
@@ -84,6 +89,7 @@ const out = resolve(String(args.get('--out') || '/tmp/kaminos-native-low-selecti
 const reportPath = resolve(String(args.get('--report') || '/tmp/kaminos-native-low-selective-live.json'));
 const minimumContinuousSeconds = Number(args.get('--minimum-seconds') || 5);
 const timeoutMs = Number(args.get('--timeout-ms') || 180000);
+const preserveTrajectory = args.has('--preserve-trajectory');
 const port = Number(args.get('--debug-port') || randomInt(42000, 62000));
 let failurePhase = 'argument-validation';
 let browser = null;
@@ -93,6 +99,7 @@ let lastTrustworthyEvidence = {};
 const witnessGitHead = gitHead();
 let servedSourceBundle = null;
 let cockpitInteractionAssay = null;
+let forcingRefreshFrame = null;
 
 class CdpSocket {
   constructor(socketUrl) {
@@ -211,13 +218,16 @@ try {
         && state?.nativeLowInferenceWorkProfile?.supportCompactionIdentity === 'native-low-support-positive-residual-dispatch-v0'
         && state?.nativeLowInferenceWorkProfile?.residualDispatchMode === 'support-positive-indirect-dispatch-args-v0';
     const headProfileReady = sparseFrontContinuityRequested
-      ? cockpitRequested && !cockpitLearnedRoleRequested
+      ? cockpitLearnedForcingRequested
+        ? state?.native96LearnedActivityForcing?.identity === 'native96-learned-front-activity-forcing-v0'
+          && Number(state?.native96LearnedActivityForcing?.learnedModelRefreshCadence?.modelOutputGeneration) >= 1
+        : cockpitRequested && !cockpitLearnedRoleRequested
         ? state?.headCostTimingAuthority === 'webgpu-timestamp-query-source-delta-only-v0'
           && state?.nativeLowHeadCostProfile?.values?.length === 2
           && Number(state?.nativeLowHeadCostProfile?.sourceDeltaAdmissionGpuMs) >= 0
           && state?.currentSourceFrameConsumption?.modelEvaluationEnabled === false
         : state?.headCostTimingAuthority === 'webgpu-timestamp-query-native96-sparse-front-continuity-v0'
-        && state?.nativeLowHeadCostProfile?.values?.length === 6
+        && state?.nativeLowHeadCostProfile?.values?.length === (cockpitLearnedForcingRequested ? 8 : 6)
         && Number(state?.nativeLowHeadCostProfile?.sourceDeltaAdmissionGpuMs) >= 0
         && Number(state?.nativeLowHeadCostProfile?.frontModelEvalGpuMs) >= 0
         && Number(state?.nativeLowHeadCostProfile?.continuityReconstructionGpuMs) >= 0
@@ -243,8 +253,8 @@ try {
       && state?.frameIndex >= 1
       && state?.modelIdentity === expectedModelIdentity
       && state?.modelSha256 === expectedModelSha256
-      && state?.requestedComposition === 'splat-only-v0'
-      && state?.effectiveComposition === 'splat-only-v0'
+      && state?.requestedComposition === expectedComposition
+      && state?.effectiveComposition === expectedComposition
       && state?.requestedCalibration === 'native-low-learned-splat-calibration-v0'
       && state?.effectiveCalibration === 'native-low-learned-splat-calibration-v0'
       && state?.modelOutputMutation === false
@@ -373,12 +383,51 @@ try {
     ) break;
     await delay(250);
   }
+  if (cockpitLearnedForcingRequested) {
+    failurePhase = 'forcing-refresh-frame-acquisition';
+    const forcingRefreshState = await evaluate(socket, `(async () => {
+      const api = window.__kaminosNativeLowSelectiveLive;
+      api.setCapturePaused(true);
+      const cadence = Math.max(1, Number(api.debugState()?.native96LearnedActivityForcing?.learnedModelRefreshCadence?.effectiveCadence || 1));
+      for (let index = 0; index <= cadence; index += 1) {
+        await api.stepCaptureFrame();
+        const sample = api.debugState();
+        if (
+          sample?.native96LearnedActivityForcing?.learnedModelRefreshCadence?.modelRefreshDue === true
+          && Number(sample?.nativeLowHeadCostProfile?.learnedActivityCueCollapseGpuMs) >= 0
+        ) return sample;
+      }
+      throw new Error('forcing-refresh-frame-not-observed-within-effective-cadence');
+    })()`);
+    forcingRefreshFrame = forcingRefreshState;
+    lastTrustworthyEvidence = { ...lastTrustworthyEvidence, forcingRefreshFrame: forcingRefreshState };
+    await evaluate(socket, 'window.__kaminosNativeLowSelectiveLive.setCapturePaused(false)');
+    const forcingResumedState = await evaluate(socket, 'window.__kaminosNativeLowSelectiveLive.debugState()');
+    assert.equal(forcingResumedState?.status, 'running', 'forcing route did not resume continuous execution after timed single-step acquisition');
+    state = {
+      ...forcingResumedState,
+      nativeLowHeadCostProfile: forcingRefreshState.nativeLowHeadCostProfile,
+      headCostTimingAuthority: forcingRefreshState.headCostTimingAuthority,
+      native96SparseFrontContinuity: forcingRefreshState.native96SparseFrontContinuity,
+      native96LearnedActivityForcing: forcingRefreshState.native96LearnedActivityForcing,
+      learnedModelRefreshCadence: forcingRefreshState.learnedModelRefreshCadence,
+      learnedCueConsumption: forcingRefreshState.learnedCueConsumption,
+      learnedCueReset: forcingRefreshState.learnedCueReset,
+    };
+    lastTrustworthyEvidence = { ...lastTrustworthyEvidence, forcingResumedState };
+  }
   assert.equal(state?.routeIdentity, ROUTE, 'wrong effective route');
   assert.equal(state?.status, 'running', 'live route did not reach running state');
   assert.equal(state?.modelIdentity, expectedModelIdentity, 'wrong model identity');
   assert.equal(state?.modelSha256, expectedModelSha256, 'wrong model checksum');
-  assert.equal(state?.requestedComposition, 'splat-only-v0', 'wrong requested composition');
-  assert.equal(state?.effectiveComposition, 'splat-only-v0', 'requested/effective composition drift');
+  assert.equal(state?.requestedComposition, expectedComposition, 'wrong requested composition');
+  assert.equal(state?.effectiveComposition, expectedComposition, 'requested/effective composition drift');
+  if (expectedComposition === 'raymarch-only-v0') {
+    assert.equal(state?.selectedPresentationRenderReceipt?.raymarchEncoded, true, 'Raymarch-only route did not encode Raymarch');
+    assert.equal(state?.selectedPresentationRenderReceipt?.raymarchApplied, true, 'Raymarch-only route did not apply Raymarch');
+    assert.equal(state?.selectedPresentationRenderReceipt?.splatEncoded, false, 'Raymarch-only route encoded splats');
+    assert.equal(state?.selectedPresentationRenderReceipt?.splatApplied, false, 'Raymarch-only route applied splats');
+  }
   assert.equal(state?.requestedCalibration, 'native-low-learned-splat-calibration-v0', 'wrong requested calibration');
   assert.equal(state?.effectiveCalibration, 'native-low-learned-splat-calibration-v0', 'wrong effective calibration');
   assert.equal(state?.modelOutputMutation, false, 'calibration mutated model outputs');
@@ -389,6 +438,14 @@ try {
   if (directSparseCuesRequested) {
     assert.equal(state?.simulationClockAuthority, 'fixed-one-sim-step-per-presented-frame-v0', 'direct sparse route retained renderer-latency-driven simulation time');
     assert.ok(Number(state?.simulationStepDeltaMs) > 0, 'direct sparse fixed simulation step is missing');
+  }
+  if (cockpitLearnedForcingRequested) {
+    assert.equal(state?.native96LearnedActivityForcing?.identity, 'native96-learned-front-activity-forcing-v0', 'learned forcing identity missing');
+    assert.equal(state?.native96LearnedActivityForcing?.runtimeTruthUsed, false, 'learned forcing used runtime truth');
+    assert.equal(state?.native96LearnedActivityForcing?.fullGridModelIntermediary, true, 'first forcing bridge hid its full-grid model intermediary');
+    assert.ok(Number(state?.native96LearnedActivityForcing?.learnedModelRefreshCadence?.modelOutputGeneration) >= 1, 'learned forcing never produced a cue generation');
+    assert.equal(state?.native96LearnedActivityForcing?.learnedCueConsumption?.oneSourceStepLag, true, 'learned forcing did not record its one-step consumption lag');
+    assert.ok(Number(state?.nativeLowHeadCostProfile?.learnedActivityCueCollapseGpuMs) >= 0, 'learned activity cue collapse timing missing');
   }
   assert.equal(state?.runtimeTruthAvailable, false, 'truth authority leaked into runtime');
   assert.equal(state?.syntheticDownsampleApplied, false, 'synthetic downsample leaked into runtime');
@@ -506,7 +563,16 @@ try {
     } else {
       assert.equal(sparseFront?.hardZeroOutsideCandidateVisuallyRejected, true, 'sparse-front route did not preserve hard-mask rejection');
       assert.equal(sparseFront?.hardMaskTreatmentClaim, false, 'sparse-front route revived a hard-mask claim');
-      assert.equal(sparseFront?.sparseContinuityTreatmentRendererConsumed, true, 'sparse-front treatment was not renderer-consumed');
+      if (cockpitLearnedForcingRequested) {
+        assert.equal(sparseFront?.sparseContinuityTreatmentRendererConsumed, false, 'forcing route falsely claimed direct renderer treatment consumption');
+        assert.equal(
+          state?.native96LearnedActivityForcing?.modelOutputConsumedBy,
+          'next-native96-simulator-step-v0',
+          'forcing route did not identify the native simulator as the learned cue consumer',
+        );
+      } else {
+        assert.equal(sparseFront?.sparseContinuityTreatmentRendererConsumed, true, 'sparse-front treatment was not renderer-consumed');
+      }
       const expectedFrontModelEvalStage = f16FrontTeacherRequested
         ? 'f16-front-teacher-candidate-dispatch-indirect-v0'
         : requestedFrontStudentWidth !== null
@@ -591,7 +657,7 @@ try {
     assert.equal(cockpit?.cameraStateStableAcrossRoleSwitch, true, 'cockpit camera state is not stable across role switches');
     assert.equal(cockpit?.noHiddenCandidateCap, true, 'cockpit hid candidate work');
     assert.equal(cockpit?.noHiddenInstanceCap, true, 'cockpit hid instance work');
-    if (!directSparseCuesRequested) {
+    if (!directSparseCuesRequested && !cockpitLearnedForcingRequested && !preserveTrajectory) {
       failurePhase = 'cockpit-interaction-assay';
       cockpitInteractionAssay = await evaluate(socket, `(() => {
       const api = window.__kaminosNativeLowSelectiveLive;
@@ -628,7 +694,9 @@ try {
     } else {
       cockpitInteractionAssay = {
         identity: 'native-low-cockpit-interaction-assay-deferral-v0',
-        status: 'deferred-to-preserve-unperturbed-direct-route-performance-window',
+        status: preserveTrajectory
+          ? 'deferred-by-explicit-unperturbed-trajectory-request'
+          : 'deferred-to-preserve-unperturbed-direct-route-performance-window',
         controlsMutated: false,
         roleMutated: false,
       };
@@ -653,6 +721,12 @@ try {
     if (cockpitRequested && !cockpitLearnedRoleRequested) {
       assert.equal(state?.nativeLowHeadCostProfile?.values?.length, 2, 'cockpit history-only profile did not record two timestamp values');
       assert.ok(nativeLowSourceDeltaOnlySumMatches(state?.nativeLowHeadCostProfile), 'cockpit history-only timing is not the exact source-delta sum');
+    } else if (cockpitLearnedForcingRequested) {
+      assert.equal(state?.nativeLowHeadCostProfile?.values?.length, 8, 'forcing head cost profile did not record eight timestamp values');
+      assert.ok(
+        Number(state?.nativeLowHeadCostProfile?.inferenceGpuMs) === Number(state?.nativeLowHeadCostProfile?.totalLearnedForcingGpuMs),
+        'forcing inferenceGpuMs is not the exact learned-forcing total',
+      );
     } else {
       assert.equal(state?.nativeLowHeadCostProfile?.values?.length, 6, 'sparse-front head cost profile did not record six timestamp values');
       assert.ok(
@@ -792,7 +866,11 @@ try {
     assert.equal(state?.nativeLowFrontTopologyAblation?.frontTopologyAblatedTreatment?.learnedSupportAndCarrierResidualsRetained, true, 'learned carrier residuals were not retained');
     assert.ok(Number(state?.frontTopologyAblatedSplatInstanceCount) >= 0, 'frontTopology ablated splat count missing');
   }
-  assert.equal(state?.simulationSteppingReceipt?.simStepDelta, 1, 'simulator did not step exactly once for this model frame');
+  assert.equal(
+    state?.simulationSteppingReceipt?.simStepDelta,
+    state?.nativeSourceSimulationCadence?.sourceStepAdvanced === true ? 1 : 0,
+    'simulator step delta disagreed with the effective source cadence receipt',
+  );
   assert.equal(state?.currentSourceFrameConsumption?.encodedFrameDelta, 1, 'model did not consume exactly one current source frame');
   assert.equal(state?.stalePredictionRejection?.repeatedStaticPrediction, false, 'stale prediction was not rejected');
   if (fixedGateDiscontinuityAssayRequested) {
@@ -832,16 +910,30 @@ try {
   const endState = await evaluate(socket, 'window.__kaminosNativeLowSelectiveLive.debugState()');
   const observedSeconds = (performance.now() - observationStartMs) / 1000;
   const frameDelta = Number(endState?.frameIndex || 0) - Number(startState?.frameIndex || 0);
+  const sourceSimulationStepDelta = Number(endState?.simulationSteppingReceipt?.sourceSimStepAfter || 0)
+    - Number(startState?.simulationSteppingReceipt?.sourceSimStepAfter || 0);
+  const expectedSourceStepDelta = frameDelta / requestedSourceSimulationCadence;
+  const sourceSimulationStepRatio = sourceSimulationStepDelta / Math.max(1, frameDelta);
   const observedPresentationFps = frameDelta / Math.max(0.001, observedSeconds);
   lastTrustworthyEvidence = { startState, endState, observedSeconds, frameDelta };
   assert.ok(observedSeconds >= minimumContinuousSeconds * 0.98, 'observation window was truncated');
   assert.ok(frameDelta >= 1, 'native-low treatment frames did not advance continuously');
+  assert.ok(
+    Math.abs(sourceSimulationStepDelta - expectedSourceStepDelta) <= 1,
+    `source simulator cadence drifted: ${sourceSimulationStepDelta} steps for ${frameDelta} frames at cadence ${requestedSourceSimulationCadence}`,
+  );
   if (cockpitRequested) {
     assert.ok(observedPresentationFps >= 5, `cockpit cadence below 5 fps: ${observedPresentationFps}`);
     assert.equal(endState?.nativeLowLiveResearchCockpit?.telemetry?.temporallyEven, true, 'cockpit presentation cadence was not temporally even');
     assert.ok(Number(endState?.nativeLowLiveResearchCockpit?.telemetry?.presentationSampleCount) >= 4, 'cockpit cadence sample strip is too short');
   }
   assert.equal(endState?.effectiveComposition, startState?.effectiveComposition, 'composition drift during observation');
+  if (expectedComposition === 'raymarch-only-v0') {
+    assert.equal(endState?.selectedPresentationRenderReceipt?.raymarchEncoded, true, 'Raymarch stopped encoding during observation');
+    assert.equal(endState?.selectedPresentationRenderReceipt?.raymarchApplied, true, 'Raymarch stopped applying during observation');
+    assert.equal(endState?.selectedPresentationRenderReceipt?.splatEncoded, false, 'splat encoding leaked into Raymarch observation');
+    assert.equal(endState?.selectedPresentationRenderReceipt?.splatApplied, false, 'splat application leaked into Raymarch observation');
+  }
   assert.equal(endState?.effectiveCalibration, startState?.effectiveCalibration, 'calibration drift during observation');
   assert.equal(endState?.modelOutputMutation, false, 'model-output mutation during observation');
   assert.ok(isWebGpuBackend(endState?.effectiveBackend), `backend drift during observation: ${endState?.effectiveBackend}`);
@@ -852,7 +944,11 @@ try {
   }
   assert.equal(endState?.runtimeBuildIdentity, expectedRuntimeBuildIdentity, 'runtime build identity drift during observation');
   assert.equal(endState?.sourceStepDrift, null, 'source-step drift during observation');
-  assert.equal(endState?.simulationSteppingReceipt?.simStepDelta, 1, 'simulator stopped stepping during observation');
+  assert.equal(
+    endState?.simulationSteppingReceipt?.simStepDelta,
+    endState?.nativeSourceSimulationCadence?.sourceStepAdvanced === true ? 1 : 0,
+    'simulator step delta drifted from the effective cadence receipt during observation',
+  );
   assert.equal(endState?.currentSourceFrameConsumption?.encodedFrameDelta, 1, 'model stopped consuming current source frames during observation');
   assert.equal(endState?.stalePredictionRejection?.repeatedStaticPrediction, false, 'repeated static prediction during observation');
   if (directSparseCuesRequested) {
@@ -909,11 +1005,13 @@ try {
     effectiveRoute: endState.routeIdentity,
     requestedComposition: endState.requestedComposition,
     effectiveComposition: endState.effectiveComposition,
+    expectedComposition,
     requestedCalibration: endState.requestedCalibration,
     effectiveCalibration: endState.effectiveCalibration,
     nativeLowControl: endState.nativeLowControl,
     nativeLowLiveResearchCockpit: endState.nativeLowLiveResearchCockpit,
     cockpitRequested,
+    preserveTrajectory,
     cockpitInteractionAssay,
     nativeLowSelectivePredicted: endState.nativeLowSelectivePredicted,
     modelOutputMutation: endState.modelOutputMutation,
@@ -921,6 +1019,17 @@ try {
     treatmentSplatOpacityGain: endState.treatmentSplatOpacityGain,
     nativeLowMaterializationProfile: endState.nativeLowMaterializationProfile,
     nativeLowDirectSparseCues: endState.nativeLowDirectSparseCues,
+    forcingRefreshFrame: forcingRefreshFrame ? {
+      nativeLowHeadCostProfile: forcingRefreshFrame.nativeLowHeadCostProfile,
+      learnedModelRefreshCadence: forcingRefreshFrame.learnedModelRefreshCadence,
+      native96LearnedActivityForcing: forcingRefreshFrame.native96LearnedActivityForcing,
+      headCostTimingAuthority: forcingRefreshFrame.headCostTimingAuthority,
+    } : null,
+    native96LearnedActivityForcing: endState.native96LearnedActivityForcing,
+    learnedModelRefreshCadence: endState.learnedModelRefreshCadence,
+    nativeSourceSimulationCadence: endState.nativeSourceSimulationCadence,
+    learnedCueConsumption: endState.learnedCueConsumption,
+    learnedCueReset: endState.learnedCueReset,
     simulationClockAuthority: endState.simulationClockAuthority,
     simulationStepDeltaMs: endState.simulationStepDeltaMs,
     nativeLowProductionStageLedger: endState.nativeLowProductionStageLedger,
@@ -995,6 +1104,9 @@ try {
     observedSeconds,
     observedPresentationFps,
     frameDelta,
+    sourceSimulationStepDelta,
+    expectedSourceStepDelta,
+    sourceSimulationStepRatio,
     inferenceGpuMs: endState.inferenceGpuMs,
     uploadDispatchMs: endState.uploadDispatchMs,
     treatmentRebuildMs: endState.treatmentRebuildMs,
