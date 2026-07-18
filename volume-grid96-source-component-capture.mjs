@@ -336,14 +336,6 @@ try {
 }
 
 async function captureState({ stateId, steps }) {
-  failurePhase = `${stateId}:coefficient-render-authority`;
-  const coefficientRenderAuthority = await evaluate(
-    socket,
-    `${VOLUME_PROTOTYPE_EXPRESSION}.setSelectiveHeadLiveRenderComposition('raymarch-only-v0')`,
-  );
-  assert.equal(coefficientRenderAuthority?.requestedComposition, 'raymarch-only-v0', `${stateId} coefficient render request drifted`);
-  assert.equal(coefficientRenderAuthority?.compositionFallbackReason ?? null, null, `${stateId} coefficient render composition fell back`);
-
   failurePhase = `${stateId}:deterministic-replay`;
   const replayStartTimeMs = 1000;
   const exactStateTimeMs = replayStartTimeMs + steps * (1000 / 60);
@@ -356,6 +348,47 @@ async function captureState({ stateId, steps }) {
   assert.equal(replay?.ok, true, `${stateId} replay failed: ${JSON.stringify(replay)}`);
   assert.equal(replay.completedSteps, steps, `${stateId} replay step count drifted`);
   assert.equal(replay.grid, runtimeIdentity.grid, `${stateId} replay grid drifted`);
+
+  failurePhase = `${stateId}:coefficient-render-authority`;
+  const coefficientRoleAuthority = await evaluate(
+    socket,
+    `${VOLUME_PROTOTYPE_EXPRESSION}.setSelectiveHeadLiveRole('truthHigh')`,
+  );
+  assert.equal(coefficientRoleAuthority?.requestedRole, 'truthHigh', `${stateId} coefficient render role drifted`);
+  assert.equal(coefficientRoleAuthority?.fallbackReason ?? null, null, `${stateId} coefficient render role fell back`);
+  const coefficientRenderAuthority = await evaluate(
+    socket,
+    `${VOLUME_PROTOTYPE_EXPRESSION}.setSelectiveHeadLiveRenderComposition('raymarch-only-v0')`,
+  );
+  assert.equal(coefficientRenderAuthority?.requestedComposition, 'raymarch-only-v0', `${stateId} coefficient render request drifted`);
+  assert.equal(coefficientRenderAuthority?.compositionFallbackReason ?? null, null, `${stateId} coefficient render composition fell back`);
+
+  failurePhase = `${stateId}:coefficient-render-pass`;
+  const coefficientRenderPass = await evaluate(socket, `(async () => {
+    const prototype = ${VOLUME_PROTOTYPE_EXPRESSION};
+    return prototype.captureSelectiveHeadLiveFrame({
+      advanceSim: false,
+      presentToCanvas: true,
+      startNow: ${exactStateTimeMs},
+    });
+  })()`);
+  assert.equal(coefficientRenderPass?.ok, true, `${stateId} coefficient render pass failed: ${JSON.stringify(coefficientRenderPass)}`);
+  assert.equal(coefficientRenderPass.advanceSim, false, `${stateId} coefficient authority pass advanced simulation`);
+  assert.equal(coefficientRenderPass.beforeSimStepCount, steps, `${stateId} coefficient authority pass began from the wrong replay step`);
+  assert.equal(coefficientRenderPass.simStepCount, steps, `${stateId} coefficient authority pass changed the replay step`);
+  assert.equal(coefficientRenderPass.requestedRole, 'truthHigh', `${stateId} coefficient authority pass role drifted`);
+  assert.equal(coefficientRenderPass.effectiveRole, 'truthHigh', `${stateId} coefficient authority pass role was not effective`);
+  assert.equal(coefficientRenderPass.selectiveHeadLiveCompositionRequested, 'raymarch-only-v0', `${stateId} coefficient authority pass composition drifted`);
+  assert.equal(coefficientRenderPass.selectiveHeadLiveCompositionEffective, 'raymarch-only-v0', `${stateId} coefficient authority pass composition was not effective`);
+  assert.equal(coefficientRenderPass.selectiveHeadLiveCompositionAuthority, 'diagnostic-raymarch-full-selected-field-authority-v0', `${stateId} coefficient authority pass lacks full-fire authority`);
+  assert.equal(coefficientRenderPass.selectiveHeadLiveCompositionFallbackReason ?? null, null, `${stateId} coefficient authority pass used composition fallback`);
+  assert.equal(coefficientRenderPass.fallbackReason ?? null, null, `${stateId} coefficient authority pass used role fallback`);
+  assert.equal(coefficientRenderPass.selectiveHeadLivePassReceipt?.raymarchFireAuthority, 1, `${stateId} coefficient authority pass lacks raymarch fire authority`);
+  assert.equal(coefficientRenderPass.selectiveHeadLivePassReceipt?.raymarchEncoded, true, `${stateId} coefficient authority pass did not encode raymarch`);
+  assert.equal(coefficientRenderPass.selectiveHeadLivePassReceipt?.raymarchApplied, true, `${stateId} coefficient authority pass did not apply raymarch`);
+  assert.equal(coefficientRenderPass.selectiveHeadLivePassReceipt?.splatEncoded, false, `${stateId} coefficient authority pass encoded splats`);
+  assert.equal(coefficientRenderPass.selectiveHeadLivePassReceipt?.splatApplied, false, `${stateId} coefficient authority pass applied splats`);
+  assert.equal(coefficientRenderPass.selectiveHeadLivePassReceipt?.fallbackReason ?? null, null, `${stateId} coefficient authority pass receipt used fallback`);
 
   failurePhase = `${stateId}:freeze`;
   const frozen = await evaluate(socket, `(() => {
@@ -403,11 +436,17 @@ async function captureState({ stateId, steps }) {
 
   const rows = await drainAnalyticalRows({ stateId, sourceBasis, effectiveControls });
   const coefficientRenderAuthorityReceipt = {
+    requestedRole: coefficientRoleAuthority.requestedRole,
+    effectiveRole: coefficientRenderPass.effectiveRole,
     requestedComposition: coefficientRenderAuthority.requestedComposition,
     effectiveComposition: frozen.selectiveHeadLiveCompositionEffective,
     compositionAuthority: frozen.selectiveHeadLiveCompositionAuthority,
     compositionFallbackReason: frozen.selectiveHeadLiveCompositionFallbackReason ?? null,
     routeIdentity: coefficientRenderAuthority.routeIdentity,
+    passReceipt: coefficientRenderPass.selectiveHeadLivePassReceipt,
+    sequenceAuthority: coefficientRenderPass.sequenceAuthority,
+    beforeSimStepCount: coefficientRenderPass.beforeSimStepCount,
+    afterSimStepCount: coefficientRenderPass.simStepCount,
   };
   failurePhase = `${stateId}:source-basis-release`;
   const sourceRelease = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.releaseDebugNonRidgeSourceBasisCapture(${JSON.stringify({

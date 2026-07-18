@@ -160,6 +160,53 @@ function selectiveHeadLiveRoleAuthority(role) {
   return SELECTIVE_HEAD_LIVE_ROLE_AUTHORITIES[normalizeSelectiveHeadLiveRole(role)];
 }
 
+export function resolveSelectiveHeadLiveRoleState({ role, grid, runtimeAvailable } = {}) {
+  const requestedRole = normalizeSelectiveHeadLiveRole(role);
+  if (requestedRole === 'off') {
+    return {
+      requestedRole,
+      effectiveRole: 'off',
+      roleAuthority: selectiveHeadLiveRoleAuthority('off'),
+      fallbackReason: null,
+      requiresRuntimeEncode: false,
+    };
+  }
+  if (requestedRole === 'truthHigh') {
+    return {
+      requestedRole,
+      effectiveRole: 'truthHigh',
+      roleAuthority: selectiveHeadLiveRoleAuthority('truthHigh'),
+      fallbackReason: null,
+      requiresRuntimeEncode: false,
+    };
+  }
+  if (Number(grid) !== 160) {
+    return {
+      requestedRole,
+      effectiveRole: 'truthHigh',
+      roleAuthority: selectiveHeadLiveRoleAuthority('truthHigh'),
+      fallbackReason: `unsupported-grid-${grid}-requires-160`,
+      requiresRuntimeEncode: false,
+    };
+  }
+  if (!runtimeAvailable) {
+    return {
+      requestedRole,
+      effectiveRole: 'truthHigh',
+      roleAuthority: selectiveHeadLiveRoleAuthority('truthHigh'),
+      fallbackReason: 'frozen-model-runtime-unavailable',
+      requiresRuntimeEncode: false,
+    };
+  }
+  return {
+    requestedRole,
+    effectiveRole: requestedRole,
+    roleAuthority: selectiveHeadLiveRoleAuthority(requestedRole),
+    fallbackReason: null,
+    requiresRuntimeEncode: true,
+  };
+}
+
 function normalizeSelectiveHeadLiveRenderComposition(value) {
   const normalized = String(value || SELECTIVE_HEAD_LIVE_DEFAULT_RENDER_COMPOSITION).trim();
   if (Object.hasOwn(SELECTIVE_HEAD_LIVE_RENDER_COMPOSITIONS, normalized)) return normalized;
@@ -6538,34 +6585,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function encodeSelectiveHeadLiveFields(encoder) {
     const requestedRole = selectiveHeadLiveRequestedRole();
-    state.selectiveHeadLiveRole = requestedRole;
-    state.selectiveHeadLiveRoleAuthority = selectiveHeadLiveRoleAuthority(requestedRole);
-    state.selectiveHeadLiveFallbackReason = null;
-    if (requestedRole === 'off') {
-      state.selectiveHeadLiveEffectiveRole = 'off';
+    const resolution = resolveSelectiveHeadLiveRoleState({
+      role: requestedRole,
+      grid: gridSize,
+      runtimeAvailable: Boolean(selectiveHeadLiveRuntime && selectiveHeadLiveBindGroups),
+    });
+    state.selectiveHeadLiveRole = resolution.requestedRole;
+    state.selectiveHeadLiveEffectiveRole = resolution.effectiveRole;
+    state.selectiveHeadLiveRoleAuthority = resolution.roleAuthority;
+    state.selectiveHeadLiveFallbackReason = resolution.fallbackReason;
+    if (!resolution.requiresRuntimeEncode) {
       state.selectiveHeadLive = null;
-      return false;
-    }
-    if (gridSize !== 160) {
-      state.selectiveHeadLiveEffectiveRole = 'truthHigh';
-      state.selectiveHeadLiveRoleAuthority = selectiveHeadLiveRoleAuthority('truthHigh');
-      state.selectiveHeadLiveFallbackReason = `unsupported-grid-${gridSize}-requires-160`;
-      return false;
-    }
-    if (requestedRole === 'truthHigh') {
-      state.selectiveHeadLiveEffectiveRole = 'truthHigh';
-      state.selectiveHeadLiveRoleAuthority = selectiveHeadLiveRoleAuthority('truthHigh');
-      state.selectiveHeadLive = null;
-      return false;
-    }
-    if (!selectiveHeadLiveRuntime || !selectiveHeadLiveBindGroups) {
-      state.selectiveHeadLiveEffectiveRole = 'truthHigh';
-      state.selectiveHeadLiveRoleAuthority = selectiveHeadLiveRoleAuthority('truthHigh');
-      state.selectiveHeadLiveFallbackReason = 'frozen-model-runtime-unavailable';
       return false;
     }
     selectiveHeadLiveRuntime.encode(encoder, currentFluid);
-    state.selectiveHeadLiveEffectiveRole = requestedRole;
     state.selectiveHeadLive = selectiveHeadLiveRuntime.debugState();
     return true;
   }
@@ -13020,15 +13053,23 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     },
     setSelectiveHeadLiveRole(role) {
       const requestedRole = normalizeSelectiveHeadLiveRole(role);
+      const resolution = resolveSelectiveHeadLiveRoleState({
+        role: requestedRole,
+        grid: gridSize,
+        runtimeAvailable: Boolean(selectiveHeadLiveRuntime && selectiveHeadLiveBindGroups),
+      });
       controlsSnapshot = { ...controlsSnapshot, selectiveHeadLiveRole: requestedRole };
-      state.selectiveHeadLiveRole = requestedRole;
+      state.selectiveHeadLiveRole = resolution.requestedRole;
+      state.selectiveHeadLiveEffectiveRole = resolution.effectiveRole;
+      state.selectiveHeadLiveRoleAuthority = resolution.roleAuthority;
+      state.selectiveHeadLiveFallbackReason = resolution.fallbackReason;
       resetTemporalHistory('selective-head-live-role-change');
       return {
-        requestedRole,
-        effectiveRole: state.selectiveHeadLiveEffectiveRole,
+        requestedRole: resolution.requestedRole,
+        effectiveRole: resolution.effectiveRole,
         routeIdentity: SELECTIVE_HEAD_LIVE_ROUTE,
         modelIdentity: SELECTIVE_HEAD_LIVE_MODEL.identity,
-        fallbackReason: state.selectiveHeadLiveFallbackReason,
+        fallbackReason: resolution.fallbackReason,
       };
     },
     setSelectiveHeadLiveRenderComposition(composition) {

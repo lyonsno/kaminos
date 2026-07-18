@@ -6,11 +6,57 @@ import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import { buildGrid96NativeSource } from '../volume-grid96-native-source-preflight.mjs';
+import { resolveSelectiveHeadLiveRoleState } from '../volume-core.js';
 
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 const exporter = readFileSync(new URL('../volume-full-grid-field-export.mjs', import.meta.url), 'utf8');
 const coefficientProducer = readFileSync(new URL('../volume-grid96-source-component-capture.mjs', import.meta.url), 'utf8');
 const sourcePreflight = new URL('../volume-grid96-native-source-preflight.mjs', import.meta.url);
+
+assert.deepEqual(
+  resolveSelectiveHeadLiveRoleState({ role: 'truthHigh', grid: 96, runtimeAvailable: false }),
+  {
+    requestedRole: 'truthHigh',
+    effectiveRole: 'truthHigh',
+    roleAuthority: 'current-high-field-reference-no-learned-composition-v0',
+    fallbackReason: null,
+    requiresRuntimeEncode: false,
+  },
+  'native Grid96 truthHigh must be direct current-field authority, not a learned-role fallback',
+);
+assert.deepEqual(
+  resolveSelectiveHeadLiveRoleState({ role: 'selectiveFullResidual', grid: 96, runtimeAvailable: true }),
+  {
+    requestedRole: 'selectiveFullResidual',
+    effectiveRole: 'truthHigh',
+    roleAuthority: 'current-high-field-reference-no-learned-composition-v0',
+    fallbackReason: 'unsupported-grid-96-requires-160',
+    requiresRuntimeEncode: false,
+  },
+  'native Grid96 must still reject learned selective-head roles that require Grid160',
+);
+assert.deepEqual(
+  resolveSelectiveHeadLiveRoleState({ role: 'selectiveFullResidual', grid: 160, runtimeAvailable: false }),
+  {
+    requestedRole: 'selectiveFullResidual',
+    effectiveRole: 'truthHigh',
+    roleAuthority: 'current-high-field-reference-no-learned-composition-v0',
+    fallbackReason: 'frozen-model-runtime-unavailable',
+    requiresRuntimeEncode: false,
+  },
+  'Grid160 learned roles must fail loud when their runtime is unavailable',
+);
+assert.deepEqual(
+  resolveSelectiveHeadLiveRoleState({ role: 'selectiveFullResidual', grid: 160, runtimeAvailable: true }),
+  {
+    requestedRole: 'selectiveFullResidual',
+    effectiveRole: 'selectiveFullResidual',
+    roleAuthority: 'learned-selective-full-residual-composition-v0',
+    fallbackReason: null,
+    requiresRuntimeEncode: true,
+  },
+  'Grid160 learned roles must explicitly require runtime encoding',
+);
 
 const materializeStart = core.indexOf('async function materializeFullFieldDerivedBuffersForDebugExport');
 const materializeEnd = core.indexOf('async function copyFullFieldBuffersForDebugExport', materializeStart);
@@ -21,6 +67,9 @@ const copySource = core.slice(copyStart, copyEnd);
 const publicStart = core.indexOf('function fullFieldExportPublicSession');
 const publicEnd = core.indexOf('function encodeFloat32ChunkBase64', publicStart);
 const publicSource = core.slice(publicStart, publicEnd);
+const selectiveRoleSetterStart = core.indexOf('setSelectiveHeadLiveRole(role)');
+const selectiveRoleSetterEnd = core.indexOf('setSelectiveHeadLiveRenderComposition(composition)', selectiveRoleSetterStart);
+const selectiveRoleSetterSource = core.slice(selectiveRoleSetterStart, selectiveRoleSetterEnd);
 
 assert.ok(materializeStart >= 0 && materializeEnd > materializeStart, 'full-field derived materialization is inspectable');
 assert.match(
@@ -39,10 +88,34 @@ assert.match(publicSource, /majorant:\s*session\.majorantDescriptor/, 'the publi
 assert.match(exporter, /phase = 'drain-majorant'/, 'the exporter must report a distinct majorant drain failure phase');
 assert.match(exporter, /drainSidecar\([\s\S]{0,180}'majorant'/, 'the exporter must drain the browser majorant artifact directly');
 assert.match(exporter, /sidecars:\s*\{\s*fluid,\s*front,\s*majorant\s*\}/, 'the manifest must bind majorant to the native source sidecar set');
+assert.match(
+  selectiveRoleSetterSource,
+  /resolveSelectiveHeadLiveRoleState\(\{[\s\S]{0,240}role:\s*requestedRole[\s\S]{0,240}grid:\s*gridSize/,
+  'the public role setter must resolve the newly requested role instead of returning stale fallback state',
+);
 assert.ok(existsSync(sourcePreflight), 'the native Grid96 source preflight must exist before GPU capture can be accepted');
-const coefficientAuthorityIndex = coefficientProducer.indexOf("setSelectiveHeadLiveRenderComposition('raymarch-only-v0')");
-const deterministicReplayIndex = coefficientProducer.indexOf('sampleDeterministicReplayFrame', coefficientProducer.indexOf('async function captureState'));
-assert.ok(coefficientAuthorityIndex >= 0 && coefficientAuthorityIndex < deterministicReplayIndex, 'coefficient fire authority must be installed before deterministic replay updates the GPU uniforms');
+const captureStateIndex = coefficientProducer.indexOf('async function captureState');
+const deterministicReplayIndex = coefficientProducer.indexOf('sampleDeterministicReplayFrame', captureStateIndex);
+const coefficientRoleIndex = coefficientProducer.indexOf("setSelectiveHeadLiveRole('truthHigh')", deterministicReplayIndex);
+const coefficientAuthorityIndex = coefficientProducer.indexOf("setSelectiveHeadLiveRenderComposition('raymarch-only-v0')", deterministicReplayIndex);
+const coefficientPassIndex = coefficientProducer.indexOf('captureSelectiveHeadLiveFrame', coefficientAuthorityIndex);
+const coefficientFreezeIndex = coefficientProducer.indexOf("failurePhase = `${stateId}:freeze`", coefficientPassIndex);
+const sourceBasisIndex = coefficientProducer.indexOf('beginDebugNonRidgeSourceBasisCapture', coefficientFreezeIndex);
+assert.ok(
+  deterministicReplayIndex >= 0
+    && coefficientRoleIndex > deterministicReplayIndex
+    && coefficientAuthorityIndex > coefficientRoleIndex
+    && coefficientPassIndex > coefficientAuthorityIndex
+    && coefficientFreezeIndex > coefficientPassIndex
+    && sourceBasisIndex > coefficientFreezeIndex,
+  'coefficient authority must replay first, activate truthHigh raymarch-only through a proving pass, freeze, and only then capture the source basis',
+);
+assert.match(coefficientProducer, /captureSelectiveHeadLiveFrame\(\{[\s\S]{0,220}advanceSim:\s*false[\s\S]{0,220}presentToCanvas:\s*true/, 'the authority pass must render the exact replay state without advancing simulation');
+assert.match(coefficientProducer, /raymarchFireAuthority[\s\S]{0,120}1/, 'the authority pass must prove full-fire raymarch authority');
+assert.match(coefficientProducer, /raymarchEncoded[\s\S]{0,120}true/, 'the authority pass must prove a raymarch pass was encoded');
+assert.match(coefficientProducer, /raymarchApplied[\s\S]{0,120}true/, 'the authority pass must prove a raymarch pass was applied');
+assert.match(coefficientProducer, /splatEncoded[\s\S]{0,120}false/, 'the authority pass must exclude splat encoding');
+assert.match(coefficientProducer, /splatApplied[\s\S]{0,120}false/, 'the authority pass must exclude splat application');
 assert.match(coefficientProducer, /selectiveHeadLiveCompositionAuthority[\s\S]{0,500}diagnostic-raymarch-full-selected-field-authority-v0/, 'the frozen source receipt must prove full-fire coefficient authority');
 assert.match(
   coefficientProducer,
