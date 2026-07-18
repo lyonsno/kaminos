@@ -54,6 +54,13 @@ def write_json(path: Path, value: dict[str, Any]) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
 
 
+def remove_primary_outputs(out_dir: Path) -> None:
+    for name in ("input-manifest.json", "transfer-field.npz"):
+        path = out_dir / name
+        if path.exists():
+            path.unlink()
+
+
 def validate_route(route: dict[str, Any]) -> None:
     for key in ("requested", "effective", "backend"):
         require(isinstance(route.get(key), str) and route[key], f"route {key} is missing")
@@ -158,7 +165,7 @@ def export_state_camera(args: argparse.Namespace, report: dict[str, Any]) -> dic
     report["failurePhase"] = "source-manifest-validation"
     manifest = oracle.load_json(manifest_path, "training manifest")
     state, paths, descriptor_receipt = oracle.validate_manifest(
-        manifest, manifest_path, args.state_step, not args.skip_hash_verification,
+        manifest, manifest_path, args.state_step, True,
     )
     required = {"features", "admission", "coefficients", "kernelDescriptors", "nativeCellIndices"}
     require(required.issubset(paths), f"adapter requires row artifacts: {sorted(required - set(paths))}")
@@ -268,13 +275,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--camera-index", type=int, default=10, choices=range(21))
     parser.add_argument("--depth-bins", type=int, default=96)
     parser.add_argument("--path-scale", type=float, required=True)
-    parser.add_argument("--skip-hash-verification", action="store_true")
     return parser.parse_args()
 
 
 def run_cli(args: argparse.Namespace) -> dict[str, Any]:
     out_dir = Path(args.out_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
+    remove_primary_outputs(out_dir)
     report_path = out_dir / "adapter-report.json"
     report: dict[str, Any] = {
         "schema": ADAPTER_REPORT_SCHEMA,
@@ -287,7 +294,7 @@ def run_cli(args: argparse.Namespace) -> dict[str, Any]:
             "cameraIndex": args.camera_index,
             "depthBins": args.depth_bins,
             "pathScale": args.path_scale,
-            "skipHashVerification": args.skip_hash_verification,
+            "sourceHashVerification": "required-complete",
             "sampleCap": None,
         },
         "effective": None,
@@ -304,6 +311,7 @@ def run_cli(args: argparse.Namespace) -> dict[str, Any]:
         write_json(report_path, report)
         return report
     except Exception as exc:
+        remove_primary_outputs(out_dir)
         report["status"] = "failed"
         report["error"] = f"{type(exc).__name__}: {exc}"
         report["traceback"] = traceback.format_exc()

@@ -63,6 +63,7 @@ class TransferReduction:
         self,
         groups: list[Transfer],
         depths: np.ndarray,
+        depth_spans: np.ndarray,
         source_height: int,
         source_width: int,
         source_depth_slice_count: int,
@@ -71,6 +72,9 @@ class TransferReduction:
     ):
         self.groups = groups
         self.depths = np.asarray(depths, dtype=np.float32)
+        self.depth_spans = np.asarray(depth_spans, dtype=np.float32)
+        require(self.depths.shape == (len(groups),), "reduction representative depth shape mismatch")
+        require(self.depth_spans.shape == (len(groups), 2), "reduction depth span shape mismatch")
         self.source_height = source_height
         self.source_width = source_width
         self.source_depth_slice_count = source_depth_slice_count
@@ -207,6 +211,10 @@ def reduce_transfer_field(source: TransferInput, depth_groups: int, tile_size: i
     exact_groups = group_depth_slices(slices, depth_groups)
     depth_partitions = np.array_split(source.depths, depth_groups)
     group_depths = np.asarray([np.mean(partition) for partition in depth_partitions], dtype=np.float32)
+    group_depth_spans = np.asarray(
+        [[float(partition[0]), float(partition[-1])] for partition in depth_partitions],
+        dtype=np.float32,
+    )
     tiled_groups = [
         Transfer(
             tile_average(group.radiance, tile_size),
@@ -218,6 +226,7 @@ def reduce_transfer_field(source: TransferInput, depth_groups: int, tile_size: i
     return TransferReduction(
         tiled_groups,
         depths=group_depths,
+        depth_spans=group_depth_spans,
         source_height=height,
         source_width=width,
         source_depth_slice_count=len(slices),
@@ -253,6 +262,7 @@ def prune_transfer_field(source: TransferInput, element_budget: int) -> Transfer
     return TransferReduction(
         groups,
         depths=source.depths,
+        depth_spans=np.stack([source.depths, source.depths], axis=-1),
         source_height=height,
         source_width=width,
         source_depth_slice_count=len(slices),
@@ -315,6 +325,21 @@ def render_reduced_transfer_with_occluder(
         expanded_reduction_groups(reduction), reduction.depths, occluder_depth, role_color,
     )
     return result[..., :3] + result[..., 3:6]
+
+
+def occlusion_authority(reduction: TransferReduction) -> dict[str, Any]:
+    exact = len(reduction.groups) == reduction.source_depth_slice_count
+    return {
+        "status": "exact-at-source-depth-centers" if exact else "non-closing",
+        "representativeDepthPolicy": "arithmetic-mean-source-depth-centers-v0",
+        "sourceDepthCenterSpans": reduction.depth_spans.astype(float).tolist(),
+        "opaqueGeometryInsideGroupCanBeWrong": not exact,
+        "interpretation": (
+            "No source depth centers were composed across an occlusion boundary."
+            if exact
+            else "Opaque geometry intersecting a composed group is an explicit unproven approximation."
+        ),
+    }
 
 
 def render_with_opaque_occluder(
@@ -470,8 +495,11 @@ def run_cli(args: argparse.Namespace) -> dict[str, Any]:
         require(args.depth_groups > 0, "depth group count must be positive")
         require(args.tile_size > 0, "tile size must be positive")
         source = load_transfer_input(args.input_manifest)
+        source_identity = source.manifest["source"]
         report["source"] = {
-            "identity": source.manifest["source"],
+            "sourceIdentity": source_identity["identity"],
+            "stateIdentity": source_identity["stateIdentity"],
+            "cameraIdentity": source_identity["cameraIdentity"],
             "manifestPath": str(source.manifest_path),
             "manifestSha256": source.manifest_sha256,
             "arraysPath": str(source.arrays_path),
@@ -501,6 +529,7 @@ def run_cli(args: argparse.Namespace) -> dict[str, Any]:
             "sourceWidth": source.shape[2],
             "elementCount": reduction.element_count,
             "activeElementCount": reduction.active_element_count,
+            "occlusionAuthority": occlusion_authority(reduction),
             "fallbackUsed": False,
             "ignoredParameters": None,
         }

@@ -191,6 +191,24 @@ class ReducerAndEvidenceContracts(unittest.TestCase):
             reduced = m.render_reduced_transfer_with_occluder(treatment, occluder_depth, occluder_color)
             self.assertTrue(np.allclose(exact, reduced, atol=2e-7))
 
+    def test_intra_group_occluder_error_is_explicitly_non_closing(self):
+        m = self.module
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest_path = write_fixture(Path(tmp))
+            source = m.load_transfer_input(manifest_path)
+            treatment = m.reduce_transfer_field(source, depth_groups=2, tile_size=1)
+            occluder_depth = np.full((4, 4), np.inf, dtype=np.float32)
+            occluder_depth[1:3, 1:3] = 1.5
+            occluder_color = np.zeros(3, dtype=np.float32)
+            exact = m.render_transfer_field_with_occluder(source, occluder_depth, occluder_color)
+            reduced = m.render_reduced_transfer_with_occluder(treatment, occluder_depth, occluder_color)
+            self.assertFalse(np.allclose(exact, reduced))
+            authority = m.occlusion_authority(treatment)
+            self.assertEqual(authority["status"], "non-closing")
+            self.assertEqual(authority["representativeDepthPolicy"], "arithmetic-mean-source-depth-centers-v0")
+            self.assertEqual(authority["sourceDepthCenterSpans"], [[1.0, 2.0], [3.0, 4.0]])
+            self.assertTrue(authority["opaqueGeometryInsideGroupCanBeWrong"])
+
     def test_fallback_and_hash_drift_are_rejected(self):
         m = self.module
         with tempfile.TemporaryDirectory() as tmp:
@@ -237,6 +255,35 @@ class ReducerAndEvidenceContracts(unittest.TestCase):
             self.assertFalse((out_dir / "treatment.npz").exists())
             self.assertEqual(report["requested"]["depthGroups"], 2)
             self.assertEqual(report["requested"]["tileSize"], 2)
+
+    def test_complete_report_exposes_scalar_source_identity_and_occlusion_authority(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_path = write_fixture(root)
+            out_dir = root / "out"
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--input-manifest",
+                    str(manifest_path),
+                    "--out-dir",
+                    str(out_dir),
+                    "--depth-groups",
+                    "2",
+                    "--tile-size",
+                    "2",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            report = json.loads((out_dir / "report.json").read_text())
+            self.assertEqual(report["source"]["sourceIdentity"], "synthetic-transfer-contract-v0")
+            self.assertEqual(report["source"]["stateIdentity"], "fixture-state-0")
+            self.assertEqual(report["source"]["cameraIdentity"], "fixture-camera-0")
+            self.assertIsInstance(report["source"]["sourceIdentity"], str)
+            self.assertEqual(report["effective"]["occlusionAuthority"]["status"], "non-closing")
 
 
 if __name__ == "__main__":

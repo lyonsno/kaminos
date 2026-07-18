@@ -2,6 +2,9 @@
 
 import importlib.util
 import json
+import argparse
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -140,6 +143,53 @@ class State120AdapterContracts(unittest.TestCase):
                         "fallbackIdentity": None,
                     },
                 )
+
+    def test_failed_rerun_removes_stale_primary_product_before_validation(self):
+        a = self.adapter
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "input-manifest.json").write_text('{"status":"complete"}\n')
+            (root / "transfer-field.npz").write_bytes(b"stale-product")
+            args = argparse.Namespace(
+                manifest=str(root / "missing-source.json"),
+                capture_report=str(root / "missing-capture.json"),
+                out_dir=str(root),
+                state_step=120,
+                camera_index=10,
+                depth_bins=96,
+                path_scale=4.0,
+            )
+            with self.assertRaises(ValueError):
+                a.run_cli(args)
+            self.assertFalse((root / "input-manifest.json").exists())
+            self.assertFalse((root / "transfer-field.npz").exists())
+            report = json.loads((root / "adapter-report.json").read_text())
+            self.assertEqual(report["status"], "failed")
+            self.assertEqual(report["failurePhase"], "source-manifest-validation")
+
+    def test_cli_forbids_skip_hash_verification(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(ADAPTER_PATH),
+                    "--manifest",
+                    "missing.json",
+                    "--capture-report",
+                    "missing.json",
+                    "--out-dir",
+                    tmp,
+                    "--path-scale",
+                    "4.0",
+                    "--skip-hash-verification",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("unrecognized arguments: --skip-hash-verification", completed.stderr)
+            self.assertFalse((Path(tmp) / "input-manifest.json").exists())
+            self.assertFalse((Path(tmp) / "transfer-field.npz").exists())
 
 
 if __name__ == "__main__":
