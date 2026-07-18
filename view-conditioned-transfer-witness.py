@@ -144,8 +144,12 @@ def load_treatment(
     rendered = reducer.render_reduced_transfer(reduction)
     recomputed_metrics = reducer.image_metrics(rendered, reference_linear)
     recorded_metrics = report.get("metrics") or {}
+    serialization_metric_delta: dict[str, float] = {}
     for key, value in recomputed_metrics.items():
-        require(np.isclose(value, recorded_metrics.get(key), rtol=1e-10, atol=1e-12), f"{label} metric {key} drifted")
+        recorded_value = recorded_metrics.get(key)
+        require(isinstance(recorded_value, (int, float)), f"{label} producer metric {key} is missing")
+        require(np.isclose(value, recorded_value, rtol=1e-5, atol=1e-6), f"{label} metric {key} drifted beyond float32 serialization")
+        serialization_metric_delta[key] = float(value - recorded_value)
     return rendered, {
         "label": label,
         "reportPath": str(report_path),
@@ -157,6 +161,9 @@ def load_treatment(
         "elementCount": effective.get("elementCount"),
         "activeElementCount": effective.get("activeElementCount"),
         "linearMetrics": recomputed_metrics,
+        "linearMetricsBasis": "reloaded-persisted-treatment-v0",
+        "producerInMemoryLinearMetrics": recorded_metrics,
+        "serializationMetricDelta": serialization_metric_delta,
         "occlusionAuthority": effective.get("occlusionAuthority"),
         "metricReference": "adapted-reference.png",
     }

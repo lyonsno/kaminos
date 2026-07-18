@@ -140,6 +140,15 @@ class TransferWitnessContracts(unittest.TestCase):
             self.assertEqual(report["analyticalTargetRole"], "context-only-not-metric-reference")
             self.assertEqual([item["label"] for item in report["treatments"]], ["d2-t2"])
             self.assertEqual(report["treatments"][0]["metricReference"], "adapted-reference.png")
+            self.assertEqual(
+                report["treatments"][0]["linearMetricsBasis"],
+                "reloaded-persisted-treatment-v0",
+            )
+            self.assertIn("producerInMemoryLinearMetrics", report["treatments"][0])
+            self.assertEqual(
+                set(report["treatments"][0]["serializationMetricDelta"]),
+                {"mae", "mse", "maxAbsError"},
+            )
             for name in (
                 "analytical-target.png",
                 "adapted-reference.png",
