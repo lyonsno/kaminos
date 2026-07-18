@@ -7,6 +7,8 @@ import argparse
 import importlib.util
 import json
 import re
+import shlex
+import subprocess
 import sys
 import textwrap
 import traceback
@@ -14,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from PIL import __version__ as PILLOW_VERSION
 from PIL import Image, ImageDraw, ImageFont
 
 
@@ -67,6 +70,32 @@ def parse_treatment(value: str) -> tuple[str, Path]:
     return label, Path(raw_path).resolve()
 
 
+def git_generator_identity() -> dict[str, Any]:
+    try:
+        repo_root = subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"], cwd=ROOT, text=True,
+        ).strip()
+        head = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True,
+        ).strip()
+        tracked_status = subprocess.check_output(
+            ["git", "status", "--porcelain", "--untracked-files=no"], cwd=ROOT, text=True,
+        ).strip()
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise ValueError(f"generator git identity could not be resolved: {exc}") from exc
+    require(bool(re.fullmatch(r"[0-9a-f]{40}", head)), "generator git HEAD is invalid")
+    return {
+        "worktree": str(ROOT),
+        "repoRoot": repo_root,
+        "generatorCommit": head,
+        "generatorCommitSource": "git-rev-parse-head-v0",
+        "generatorTrackedWorktreeDirty": bool(tracked_status),
+        "generatorTrackedStatus": tracked_status or None,
+        "artifactCarrierCommit": None,
+        "artifactCarrierCommitBoundary": "external-first-commit-containing-receipt-v0",
+    }
+
+
 def font(size: int, *, bold: bool = False) -> ImageFont.ImageFont:
     candidates = [
         Path("/System/Library/Fonts/Supplemental/Arial Bold.ttf" if bold else "/System/Library/Fonts/Supplemental/Arial.ttf"),
@@ -103,6 +132,8 @@ def load_treatment(
     require(isinstance(tile_size, int) and tile_size > 0, f"{label} tile size is invalid")
     require(effective.get("depthGroups") == depth_groups, f"{label} effective depth groups drifted")
     require(effective.get("tileSize") == tile_size, f"{label} effective tile size drifted")
+    authenticated_label = f"d{depth_groups}-t{tile_size}"
+    require(label == authenticated_label, f"{label} does not match authenticated label {authenticated_label}")
     descriptor = (report.get("artifacts") or {}).get("treatment") or {}
     treatment_path = Path(descriptor.get("path", ""))
     if not treatment_path.is_absolute():
@@ -307,7 +338,8 @@ Roles:
 
 Route:
 - repo: {report['repo']['worktree']}
-- commit: {report['repo']['commit']}
+- generator commit: {report['repo']['generatorCommit']} (derived from git HEAD; tracked worktree dirty: {str(report['repo']['generatorTrackedWorktreeDirty']).lower()})
+- artifact carrier commit: external first commit containing this self-hashed receipt; recorded by the owning research report because a receipt cannot self-name its eventual commit
 - command: `{report['command']}`
 - source manifest: `{report['source']['manifestPath']}` (`{report['source']['manifestSha256']}`)
 - transfer arrays: `{report['source']['arraysPath']}` (`{report['source']['arraysSha256']}`)
@@ -329,6 +361,9 @@ def run(args: argparse.Namespace, command: str) -> dict[str, Any]:
     output_names = {SHEET_NAME, "analytical-target.png", "adapted-reference.png", "README.md"}
     for label, _ in treatments_requested:
         output_names.update({f"{label}.png", f"{label}-residual.png"})
+    for path in out_dir.glob("*.png"):
+        if path.is_file() or path.is_symlink():
+            path.unlink()
     for name in output_names:
         path = out_dir / name
         if path.exists():
@@ -338,9 +373,12 @@ def run(args: argparse.Namespace, command: str) -> dict[str, Any]:
         "status": "running",
         "failurePhase": "input-validation",
         "command": command,
-        "repo": {
-            "worktree": str(ROOT),
-            "commit": args.commit,
+        "repo": git_generator_identity(),
+        "runtime": {
+            "pythonExecutable": sys.executable,
+            "pythonVersion": sys.version,
+            "numpyVersion": np.__version__,
+            "pillowVersion": PILLOW_VERSION,
         },
         "requested": {
             "inputManifest": str(Path(args.input_manifest).resolve()),
@@ -431,13 +469,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--analytical-target", required=True)
     parser.add_argument("--treatment", action="append", required=True)
     parser.add_argument("--out-dir", required=True)
-    parser.add_argument("--commit", default="uncommitted")
     return parser.parse_args(argv)
 
 
 def main() -> int:
     args = parse_args()
-    command = " ".join([Path(sys.executable).name, Path(__file__).name, *sys.argv[1:]])
+    command = shlex.join([sys.executable, str(Path(__file__).resolve()), *sys.argv[1:]])
     try:
         run(args, command)
     except Exception as exc:

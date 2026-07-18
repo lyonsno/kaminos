@@ -102,7 +102,14 @@ def run_reducer(manifest_path: Path, out_dir: Path) -> Path:
     return out_dir / "report.json"
 
 
-def run_witness(manifest_path: Path, target_path: Path, treatment_report: Path, out_dir: Path):
+def run_witness(
+    manifest_path: Path,
+    target_path: Path,
+    treatment_report: Path,
+    out_dir: Path,
+    *,
+    label: str = "d2-t2",
+):
     return subprocess.run(
         [
             sys.executable,
@@ -112,7 +119,7 @@ def run_witness(manifest_path: Path, target_path: Path, treatment_report: Path, 
             "--analytical-target",
             str(target_path),
             "--treatment",
-            f"d2-t2={treatment_report}",
+            f"{label}={treatment_report}",
             "--out-dir",
             str(out_dir),
         ],
@@ -132,10 +139,19 @@ class TransferWitnessContracts(unittest.TestCase):
             target_path = root / "analytical-target.png"
             Image.fromarray(np.full((4, 4, 3), 80, dtype=np.uint8), mode="RGB").save(target_path)
             out_dir = root / "witness"
+            out_dir.mkdir()
+            (out_dir / "d9-t9.png").write_bytes(b"stale-orphan")
+            (out_dir / "d9-t9-residual.png").write_bytes(b"stale-orphan")
             completed = run_witness(manifest_path, target_path, treatment_report, out_dir)
             self.assertEqual(completed.returncode, 0, completed.stderr)
             report = json.loads((out_dir / "receipt.json").read_text())
             self.assertEqual(report["status"], "complete")
+            expected_head = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True,
+            ).strip()
+            self.assertEqual(report["repo"]["generatorCommit"], expected_head)
+            self.assertEqual(report["repo"]["generatorCommitSource"], "git-rev-parse-head-v0")
+            self.assertNotIn("commit", report["repo"])
             self.assertEqual(report["metricReferenceRole"], "exact-adapted-96-bin-transfer-reference")
             self.assertEqual(report["analyticalTargetRole"], "context-only-not-metric-reference")
             self.assertEqual([item["label"] for item in report["treatments"]], ["d2-t2"])
@@ -162,6 +178,31 @@ class TransferWitnessContracts(unittest.TestCase):
                 with Image.open(image_path) as image:
                     self.assertGreater(image.width, 0)
                     self.assertGreater(image.height, 0)
+            self.assertFalse((out_dir / "d9-t9.png").exists())
+            self.assertFalse((out_dir / "d9-t9-residual.png").exists())
+
+    def test_treatment_label_must_match_authenticated_depth_and_tile_configuration(self):
+        if not WITNESS_PATH.is_file():
+            self.fail("view-conditioned transfer witness is absent")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_path = write_fixture(root)
+            treatment_report = run_reducer(manifest_path, root / "treatment")
+            target_path = root / "analytical-target.png"
+            Image.fromarray(np.zeros((4, 4, 3), dtype=np.uint8), mode="RGB").save(target_path)
+            out_dir = root / "witness"
+            completed = run_witness(
+                manifest_path,
+                target_path,
+                treatment_report,
+                out_dir,
+                label="d9-t9",
+            )
+            self.assertNotEqual(completed.returncode, 0)
+            report = json.loads((out_dir / "receipt.json").read_text())
+            self.assertEqual(report["status"], "failed")
+            self.assertEqual(report["failurePhase"], "treatment-validation")
+            self.assertIn("authenticated label d2-t2", report["error"])
 
     def test_hash_drift_removes_stale_primary_and_writes_failure_receipt(self):
         if not WITNESS_PATH.is_file():
