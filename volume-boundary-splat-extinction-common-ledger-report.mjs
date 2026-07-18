@@ -74,6 +74,17 @@ function validateCoefficientChannel(channel, channelName, errors) {
   return true;
 }
 
+function failureRequestedConfigMatches(requested, expected) {
+  return sameStringSet(requested?.stateIds, expected.stateIds)
+    && sameStringSet(requested?.armIds, expected.armIds)
+    && requested?.fullCandidateCount === expected.fullCandidateCount
+    && requested?.sparseCandidateCount === expected.sparseCandidateCount
+    && requested?.residualGridScale === expected.residualGridScale
+    && requested?.residualRaySteps === expected.residualRaySteps
+    && requested?.width === expected.width
+    && requested?.height === expected.height;
+}
+
 export function validateExtinctionCommonLedgerReport(report, expected) {
   const errors = [];
   const reject = (condition, code) => {
@@ -90,6 +101,55 @@ export function validateExtinctionCommonLedgerReport(report, expected) {
   if (report.status === 'failed') {
     reject(!isNonEmptyString(report.failurePhase), 'failure-phase-missing');
     reject(!isNonEmptyString(report.lastTrustworthyEvidence), 'last-trustworthy-evidence-missing');
+    const failureRoute = report.route ?? {};
+    const failureSource = report.source ?? {};
+    const failureContext = report.failureContext ?? {};
+    reject(failureRoute.requestedRoute !== expected.effectiveRoute, 'failure-requested-route-mismatch');
+    reject(failureSource.cohortSchema !== expected.cohortSchema, 'failure-cohort-schema-mismatch');
+    reject(failureSource.cohortManifestSha256 !== expected.cohortManifestSha256, 'failure-cohort-manifest-mismatch');
+    reject(failureSource.cohortAuthority !== expected.cohortAuthority, 'failure-cohort-authority-mismatch');
+    reject(failureSource.coefficientAuthority !== expected.coefficientAuthority, 'failure-coefficient-authority-mismatch');
+    reject(
+      failureSource.implementationBundleSha256 !== expected.implementationBundleSha256,
+      'failure-implementation-bundle-mismatch',
+    );
+    reject(failureSource.ownershipAuthority !== expected.ownershipAuthority, 'failure-ownership-authority-mismatch');
+    reject(!failureRequestedConfigMatches(report.request, expected), 'failure-requested-config-mismatch');
+
+    const routeStatuses = ['verified', 'unresolved-before-effective-route'];
+    const sourceStatuses = ['authenticated', 'unresolved-before-source-binding'];
+    const configStatuses = ['verified', 'unresolved-before-effective-config'];
+    reject(!routeStatuses.includes(failureContext.effectiveRouteStatus), 'failure-effective-route-status-invalid');
+    reject(!sourceStatuses.includes(failureContext.sourceBindingStatus), 'failure-source-binding-status-invalid');
+    reject(!configStatuses.includes(failureContext.effectiveConfigStatus), 'failure-effective-config-status-invalid');
+
+    if (failureContext.effectiveRouteStatus === 'verified') {
+      reject(
+        ![
+          failureRoute.effectiveRoute,
+          failureRoute.backend,
+          failureRoute.rendererIdentity,
+          failureRoute.modelIdentity,
+          failureRoute.recurrenceIdentity,
+          failureRoute.depthAuthority,
+        ].every(isNonEmptyString),
+        'failure-effective-route-identity-missing',
+      );
+    }
+    if (failureContext.effectiveConfigStatus === 'verified') {
+      const effective = report.effective ?? {};
+      reject(
+        !Array.isArray(effective.stateIds)
+          || !Array.isArray(effective.armIds)
+          || !Number.isInteger(effective.fullCandidateCount)
+          || !Number.isInteger(effective.sparseCandidateCount)
+          || !Number.isFinite(effective.residualGridScale)
+          || !Number.isInteger(effective.residualRaySteps)
+          || !isPositiveInteger(effective.width)
+          || !isPositiveInteger(effective.height),
+        'failure-effective-config-missing',
+      );
+    }
     return {
       ok: errors.length === 0,
       status: 'failed',
