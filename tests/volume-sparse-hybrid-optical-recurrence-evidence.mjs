@@ -39,6 +39,7 @@ function fixture() {
   const timingProfiles = [0.20, 0.15].map(scale => ({
     status: 'complete',
     effectiveRoute: ROUTE,
+    residualAuthorityIdentity: RESIDUAL_AUTHORITY,
     effectiveRaymarchScale: scale,
     raymarchScaleClamped: false,
     warmupIterations: 3,

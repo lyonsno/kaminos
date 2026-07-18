@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 
 const SCHEMA = 'kaminos.volume.sparse-hybrid-optical-orbit-capture.v0';
 const ROUTE = 'coarse-residual-plus-full-resolution-splat-shared-optical-recurrence-v1';
+const RESIDUAL_AUTHORITY = 'locally-preintegrated-non-ridge-emission-plus-extinction-intervals-v1';
+const RESIDUAL_PAYLOAD = 'locally-preintegrated-emission-plus-optical-depth-v1';
+const SUBINTERVAL_DISTRIBUTION = 'raymarch-equivalent-homogeneous-four-way-subinterval-distribution-v1';
+const RESOLVE = 'raymarch-equivalent-four-interval-residual-plus-sixteen-bin-splat-shared-optical-grade-v1';
 const CAPTURE_SCALES = [0.20, 0.15, 0.10];
 const TIMING_SCALES = [0.20, 0.15];
 const TIMING_STAGES = [
@@ -39,6 +43,10 @@ export function validateSparseHybridOpticalRecurrenceReport(report) {
     assert.equal(receipt.intermediateClamped, false, 'shared optical capture contains an intermediate clamp');
     assert.equal(receipt.selfTransmittanceParityEligible, true, 'shared optical capture lacks self-transmittance parity eligibility');
     assert.equal(receipt.coefficientConservationEligible, false, 'unproven learned splat coefficients claimed exact conservation');
+    assert.equal(receipt.residualAuthorityIdentity, RESIDUAL_AUTHORITY, 'shared optical residualAuthorityIdentity mismatch');
+    assert.equal(receipt.residualPayloadIdentity, RESIDUAL_PAYLOAD, 'shared optical residualPayloadIdentity mismatch');
+    assert.equal(receipt.subintervalDistributionIdentity, SUBINTERVAL_DISTRIBUTION, 'shared optical subintervalDistributionIdentity mismatch');
+    assert.equal(receipt.resolveIdentity, RESOLVE, 'shared optical resolveIdentity mismatch');
     assert.equal(Number(receipt.effectiveRaymarchScale), Number(capture.requestedRaymarchScale), 'shared optical capture scale substitution');
     assert.equal(capture.frameCount, report.frozenState?.baseFrameCount, 'shared optical capture advanced frame state');
     assert.equal(capture.simStepCount, report.frozenState?.baseSimStepCount, 'shared optical capture advanced simulation state');
@@ -56,6 +64,7 @@ export function validateSparseHybridOpticalRecurrenceReport(report) {
   for (const profile of timingProfiles) {
     assert.equal(profile.status, 'complete', 'shared optical timing profile is incomplete');
     assert.equal(profile.effectiveRoute, ROUTE, 'shared optical timing effective route mismatch');
+    assert.equal(profile.residualAuthorityIdentity, RESIDUAL_AUTHORITY, 'shared optical timing residual authority mismatch');
     assert.equal(profile.raymarchScaleClamped, false, 'shared optical timing contains a scale clamp');
     assert.equal(profile.warmupIterations, 3, 'shared optical timing warmup count mismatch');
     assert.equal(profile.sampleIterations, 7, 'shared optical timing sample count mismatch');

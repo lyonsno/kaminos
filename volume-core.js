@@ -6001,20 +6001,19 @@ fn coarseResidualSharedOpticalFs(in: CoarseResidualOpticalVertexOut) -> @locatio
       residualIntervalAlpha > 1e-6,
     );
     let residualSourceNumerator = select(
-      vec3<f32>(0.0),
-      residualSubintervalEmission * residualSubintervalOpticalDepth / max(residualSubintervalAlpha, 1e-6),
-      residualSubintervalOpticalDepth > 1e-6,
-    );
-    let residualVacuumEmission = select(
       residualSubintervalEmission,
-      vec3<f32>(0.0),
+      residualSubintervalEmission * residualSubintervalOpticalDepth / max(residualSubintervalAlpha, 1e-6),
       residualSubintervalOpticalDepth > 1e-6,
     );
     let accumulated = vec4<f32>(residualSourceNumerator, residualSubintervalOpticalDepth) + splatAccumulated;
     let opticalDepth = accumulated.a;
     let binAlpha = 1.0 - exp(-opticalDepth);
-    let binColor = select(vec3<f32>(0.0), accumulated.rgb / max(opticalDepth, 1e-6), opticalDepth > 1e-6);
-    color = residualVacuumEmission + binColor * binAlpha + color * (1.0 - binAlpha);
+    let binEmission = select(
+      accumulated.rgb,
+      accumulated.rgb * binAlpha / max(opticalDepth, 1e-6),
+      opticalDepth > 1e-6,
+    );
+    color = binEmission + color * (1.0 - binAlpha);
   }
   let ndc = in.uv * 2.0 - vec2<f32>(1.0);
   let vignette = 1.0 - smoothstep(0.28, 1.48, length(ndc));
