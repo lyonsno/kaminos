@@ -13188,8 +13188,8 @@ async function loadSharpInlineProductRuntime() {
     if (!response.ok) throw new Error(`SHARP inline runtime config failed: ${response.status}`);
     const runtimeConfig = await response.json();
     const mount = runtimeConfig.sharpInline;
-    if (!mount?.registered || !mount.moduleExists || !mount.weightsExists) {
-      throw new Error('SHARP inline runtime is not registered with both the reviewed module and weights');
+    if (!mount?.registered || !mount.moduleExists || !mount.weightsExists || !mount.revision) {
+      throw new Error('SHARP inline runtime is not registered with a source revision, reviewed module, and weights');
     }
     if (!mount.moduleUrl || !mount.weightsUrl) {
       throw new Error('SHARP inline runtime mount omitted its effective module or weights URL');
@@ -13427,6 +13427,7 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
     const adapterReport = {
       schema: 'kaminos.sharp-inline-product-route-report.v0',
       status: 'real',
+      revision: inline.mount.revision,
       effectiveRoute: 'same-browser-product-realm-shared-device',
       sharedGpu: {
         deviceIdentity: gpuContext.deviceIdentity,

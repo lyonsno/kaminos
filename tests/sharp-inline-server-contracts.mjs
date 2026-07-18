@@ -25,6 +25,11 @@ assert.match(
 );
 assert.match(
   serve,
+  /def _sharp_inline_revision\(\):[\s\S]{0,1200}git[\s\S]{0,300}rev-parse[\s\S]{0,300}HEAD[\s\S]{0,1200}sharp_revision = _sharp_inline_revision\(\)[\s\S]{0,1200}"revision": sharp_revision/,
+  'runtime config must expose the effective SHARP source revision rather than only its checkout path',
+);
+assert.match(
+  serve,
   /elif parsed\.path\.startswith\("\/sharp-inline\/"\):[\s\S]{0,200}self\.handle_sharp_inline_file\(parsed\.path\)/,
   'the GET router must dispatch inline assets through a bounded handler',
 );

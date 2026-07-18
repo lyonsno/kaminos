@@ -252,6 +252,23 @@ SHARP_SCHEDULER_PROFILES = {
 }
 
 
+def _sharp_inline_revision():
+    explicit_revision = os.environ.get("KAMINOS_SHARP_WEBGPU_REVISION", "").strip()
+    if explicit_revision:
+        return explicit_revision
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(KAMINOS_SHARP_WEBGPU_REPO), "rev-parse", "HEAD"],
+            capture_output=True,
+            check=True,
+            text=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return result.stdout.strip() or None
+
+
 def runtime_config():
     """Return runtime-only browser defaults for this dev server instance."""
     module_url = (
@@ -259,12 +276,15 @@ def runtime_config():
         or os.environ.get(HYBRID_SPLAT_OVERLAY_MODULE_URL_ENV_LEGACY)
         or ""
     ).strip()
+    sharp_revision = _sharp_inline_revision()
     return {
         "schema": "kaminos.runtime-config.v0",
         "hybridSplatOverlayModuleUrl": module_url or None,
         "sharpInline": {
-            "registered": SHARP_INLINE_MODULE_PATH.is_file() and SHARP_INLINE_WEIGHTS_PATH.is_file(),
+            "registered": bool(sharp_revision) and SHARP_INLINE_MODULE_PATH.is_file() and SHARP_INLINE_WEIGHTS_PATH.is_file(),
             "repo": str(KAMINOS_SHARP_WEBGPU_REPO),
+            "revision": sharp_revision,
+            "revisionStatus": "resolved" if sharp_revision else "missing",
             "modulePath": str(SHARP_INLINE_MODULE_PATH),
             "moduleExists": SHARP_INLINE_MODULE_PATH.is_file(),
             "moduleUrl": "/sharp-inline/sharp-inline.js",

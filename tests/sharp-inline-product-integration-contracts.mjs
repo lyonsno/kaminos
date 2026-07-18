@@ -37,7 +37,7 @@ assert.match(
 );
 assert.match(
   page,
-  /let foregroundModeActivated = false[\s\S]{0,5000}finally \{[\s\S]{0,1200}delete globalThis\.__kaminosSharpForegroundOpportunity[\s\S]{0,1200}if \(foregroundModeActivated\) await volumePrototype\.setForegroundOpportunityMode\(false\)/,
+  /let foregroundModeActivated = false[\s\S]{0,6500}finally \{[\s\S]{0,1200}delete globalThis\.__kaminosSharpForegroundOpportunity[\s\S]{0,1200}if \(foregroundModeActivated\) await volumePrototype\.setForegroundOpportunityMode\(false\)/,
   'the foreground lease mode and hook must always be released after inline inference',
 );
 assert.match(
@@ -54,6 +54,11 @@ assert.match(
   page,
   /breathingRoom: \{[\s\S]{0,1000}requestedScheduler: backgroundHeartbeat\.requestedScheduler[\s\S]{0,500}effectiveScheduler: backgroundHeartbeat\.effectiveScheduler[\s\S]{0,500}telemetry: sharpResult\.runDebug\?\.schedulerTelemetry/,
   'the durable adapter must project canonical scheduler telemetry through the established witness surface',
+);
+assert.match(
+  page,
+  /revision: inline\.mount\.revision/,
+  'the durable adapter must project the runtime-seated SHARP source revision into witness evidence',
 );
 assert.match(
   page,
