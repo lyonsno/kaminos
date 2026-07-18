@@ -803,6 +803,7 @@ def run_oracle(args: argparse.Namespace) -> dict[str, Any]:
             "candidateAdmissionAuthority": ADMISSION_AUTHORITY, "coefficientBoundary": COEFFICIENT_BOUNDARY,
             "sharedTransmittanceIdentity": SHARED_TRANSMITTANCE, "kernelGeometry": KERNEL_GEOMETRY,
             "footprintMode": footprint_identity(args.footprint_mode),
+            "depthBins": args.depth_bins,
             "orderApproximation": order_approximation_identity(args.depth_bins), "sampleCap": None, "droppedRowCount": 0,
             "independentlyRenderedToneMappedImageAdditivity": False,
             "coefficientSourceAuthority": PREDICTION_AUTHORITY if prediction_overlay_receipt else "exact-local-layer-emission-extinction-v0",
