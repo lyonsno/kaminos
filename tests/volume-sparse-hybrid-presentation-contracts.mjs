@@ -42,6 +42,7 @@ assert.match(orbitHarness, /sampleSparseHybridPresentationGpuProfile/, 'hybrid o
 assert.match(orbitHarness, /captured-awaiting-personal-inspection/, 'captured hybrid media must remain visibly unclosed before personal inspection');
 assert.match(orbitHarness, /sparseHybridRequested\s*=\s*args\.has\('--sparse-hybrid-scales'\)/, 'explicit sparse-hybrid intent must not disappear when its value is malformed');
 assert.match(orbitHarness, /parseStrictNumberList\(args\.get\('--sparse-hybrid-scales'\),\s*'--sparse-hybrid-scales'\)/, 'sparse-hybrid scales must use fail-loud parsing instead of filtering malformed tokens');
+assert.match(orbitHarness, /requireExplicitOptionValue\('--sparse-hybrid-scales'\)/, 'a bare sparse-hybrid scale flag must fail instead of becoming scale one');
 
 const { validateSparseHybridPresentationReport } = await import('../volume-sparse-hybrid-presentation-report.mjs');
 

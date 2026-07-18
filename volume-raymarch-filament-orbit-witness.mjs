@@ -30,6 +30,7 @@ const radianceParityReportPath = resolve(String(args.get('--radiance-parity-repo
 const opticalRecurrenceReportPath = resolve(String(args.get('--optical-recurrence-report') || `${outDir}/optical-recurrence-report.json`));
 const opticalRecurrenceRequested = args.has('--optical-recurrence-report');
 const sparseHybridRequested = args.has('--sparse-hybrid-scales');
+if (sparseHybridRequested) requireExplicitOptionValue('--sparse-hybrid-scales');
 const sparseHybridScales = sparseHybridRequested
   ? parseStrictNumberList(args.get('--sparse-hybrid-scales'), '--sparse-hybrid-scales')
   : [];
@@ -1480,6 +1481,7 @@ function parseArgs(argv) {
   ]);
   const map = new Map();
   map.errors = [];
+  map.missingValues = new Set();
   for (let index = 0; index < argv.length; index += 1) {
     const item = argv[index];
     if (!item.startsWith('--')) {
@@ -1497,13 +1499,20 @@ function parseArgs(argv) {
       continue;
     }
     const next = argv[index + 1];
-    if (!next || next.startsWith('--')) map.set(key, '1');
+    if (!next || next.startsWith('--')) {
+      map.set(key, '1');
+      map.missingValues.add(key);
+    }
     else {
       map.set(key, next);
       index += 1;
     }
   }
   return map;
+}
+
+function requireExplicitOptionValue(name) {
+  if (args.missingValues.has(name)) args.errors.push(`${name} requires an explicit value`);
 }
 
 function required(name) {
