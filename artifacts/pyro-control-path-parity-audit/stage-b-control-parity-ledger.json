@@ -1,7 +1,7 @@
 {
   "schema": "kaminos.pyro-control-path.stage-b-parity-ledger.v0",
   "scope": "stage-b-six-control-executable-slice",
-  "generatedAt": "2026-07-18T17:19:12.010Z",
+  "generatedAt": "2026-07-18T17:31:42.277Z",
   "source": {
     "revision": "fcccec02af5fc00ea63ff7817a58018777b5a49c",
     "files": {

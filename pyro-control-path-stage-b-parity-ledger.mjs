@@ -111,7 +111,35 @@ function scopeEvidence({
   };
 }
 
-function validateInputs({ sourceRevision, manifest, witness, priorMatrix }) {
+function validateStageBResources(manifest, receipt) {
+  requireContract(Array.isArray(receipt?.failures), 'Stage B receipt failures missing');
+  requireContract(receipt.failures.length === 0, `Stage B receipt failures present:${receipt.failures.join(',')}`);
+  requireContract(Array.isArray(manifest?.artifacts) && manifest.artifacts.length > 0, 'Stage B resource manifest artifacts missing');
+  requireContract(Array.isArray(receipt?.resources), 'Stage B resource receipts missing');
+  requireContract(receipt.resources.length === manifest.artifacts.length, 'Stage B resource receipt count mismatch');
+  const resourceMap = new Map(receipt.resources.map(resource => [resource?.id, resource]));
+  requireContract(resourceMap.size === receipt.resources.length, 'Stage B resource receipt id duplicate');
+  for (const artifact of manifest.artifacts) {
+    requireContract(typeof artifact?.id === 'string' && artifact.id.length > 0, 'Stage B resource artifact id missing');
+    requireContract(SHA256.test(artifact.sha256 || ''), `Stage B resource artifact hash invalid:${artifact.id}`);
+    requireContract(Number.isSafeInteger(artifact.bytes) && artifact.bytes > 0, `Stage B resource artifact bytes invalid:${artifact.id}`);
+    requireContract(typeof artifact.loadRoute === 'string' && artifact.loadRoute.length > 0, `Stage B resource artifact route missing:${artifact.id}`);
+    const resource = resourceMap.get(artifact.id);
+    const expectedUrl = new URL(artifact.path, receipt.effectiveManifestUrl).href;
+    requireContract(resource, `Stage B resource receipt missing:${artifact.id}`);
+    requireContract(resource.loadStatus === 'loaded', `Stage B resource load status invalid:${artifact.id}:${resource.loadStatus ?? 'missing'}`);
+    requireContract(resource.loadFallbackUsed === false, `Stage B resource fallback used:${artifact.id}`);
+    requireContract(resource.requestedUrl === resource.effectiveUrl, `Stage B resource URL substitution:${artifact.id}`);
+    requireContract(resource.effectiveUrl === expectedUrl, `Stage B resource manifest URL substitution:${artifact.id}`);
+    requireContract(resource.requestedRoute === resource.effectiveRoute, `Stage B resource route substitution:${artifact.id}`);
+    requireContract(resource.requestedRoute === artifact.loadRoute, `Stage B resource manifest route substitution:${artifact.id}`);
+    requireContract(resource.path === artifact.path, `Stage B resource path substitution:${artifact.id}`);
+    requireContract(resource.sha256 === artifact.sha256, `Stage B resource hash substitution:${artifact.id}`);
+    requireContract(resource.bytes === artifact.bytes, `Stage B resource byte substitution:${artifact.id}`);
+  }
+}
+
+function validateInputs({ sourceRevision, manifest, manifestBytes, witness, priorMatrix }) {
   requireContract(GIT_COMMIT.test(sourceRevision), `source revision invalid:${sourceRevision}`);
   requireContract(manifest?.schema === 'kaminos.pyro-cockpit-manifest.v0', 'manifest schema mismatch');
   requireContract(manifest.status === 'complete' && manifest.evidenceState === 'produced', 'manifest incomplete');
@@ -135,7 +163,21 @@ function validateInputs({ sourceRevision, manifest, witness, priorMatrix }) {
   requireContract(witness.status === 'passed', 'witness failed');
   requireContract(witness.stageBReceipt?.status === 'effective', 'Stage B receipt ineffective');
   requireContract(witness.stageBReceipt?.requestedTreatment === witness.stageBReceipt?.effectiveTreatment, 'treatment substitution');
+  requireContract(
+    typeof witness.stageBReceipt?.requestedManifestUrl === 'string'
+      && witness.stageBReceipt.requestedManifestUrl.length > 0,
+    'Stage B requested manifest URL missing',
+  );
+  requireContract(
+    witness.stageBReceipt?.requestedManifestUrl === witness.stageBReceipt?.effectiveManifestUrl,
+    'Stage B manifest URL substitution',
+  );
   requireContract(witness.stageBReceipt?.requestedManifestSha256 === witness.stageBReceipt?.effectiveManifestSha256, 'manifest load substitution');
+  requireContract(Buffer.isBuffer(manifestBytes), 'Stage B manifest bytes missing');
+  requireContract(
+    sha256(manifestBytes) === witness.stageBReceipt.effectiveManifestSha256,
+    'Stage B manifest bytes hash substitution',
+  );
   requireContract(witness.stageBReceipt?.fallbackUsed === false, 'Stage B fallback used');
   requireContract(
     witness.stageBReceipt?.resourceState === 'complete',
@@ -152,6 +194,7 @@ function validateInputs({ sourceRevision, manifest, witness, priorMatrix }) {
   for (const pass of requestedPasses) {
     requireContract(appliedPasses.includes(pass), `Stage B requested pass not applied:${pass}`);
   }
+  validateStageBResources(manifest, witness.stageBReceipt);
   requireContract(witness.stageBReceipt?.rendererReceipt?.fallbackReason === null, 'Stage B renderer fallback');
   requireContract(witness.stageBReceipt?.passes?.rendererRequested === true, 'Stage B renderer not requested');
   requireContract(witness.stageBReceipt?.passes?.rendererEncoded === true, 'Stage B renderer not encoded');
@@ -492,7 +535,7 @@ export async function buildStageBControlParityLedger({
   const resolvedRepoRoot = resolve(repoRoot);
   const revision = resolveRevision(resolvedRepoRoot, sourceRevision);
   requireContract(revision === sourceRevision, `source revision is not exact:${sourceRevision}:${revision}`);
-  validateInputs({ sourceRevision: revision, manifest, witness, priorMatrix });
+  validateInputs({ sourceRevision: revision, manifest, manifestBytes, witness, priorMatrix });
   const sources = Object.fromEntries(Object.entries(SOURCE_FILES).map(([key, path]) => {
     const text = Object.hasOwn(sourceOverrides, path)
       ? sourceOverrides[path]
@@ -557,7 +600,7 @@ export async function buildStageBControlParityLedger({
     source: {
       revision,
       files: Object.fromEntries(Object.entries(sources).map(([key, value]) => [key, withoutText(value)])),
-      manifestSha256: manifestBytes ? sha256(manifestBytes) : witness.stageBReceipt.effectiveManifestSha256,
+      manifestSha256: sha256(manifestBytes),
       witnessSha256: witnessBytes ? sha256(witnessBytes) : sha256(JSON.stringify(witness)),
     },
     runtime: {

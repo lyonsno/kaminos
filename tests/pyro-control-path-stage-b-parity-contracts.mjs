@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import {
@@ -66,7 +67,17 @@ const manifest = {
     depthBins: { requested: 16, effective: 16 },
   },
   capacity: { candidateCount: 1_899_742, capacity: 2_000_000, overflowCount: 0 },
+  artifacts: [{
+    id: 'matched-optical',
+    path: '/volume-core.js',
+    bytes: 911_472,
+    sha256: 'fb924be33f0cd5b3b2c1699326c29ef24dddaf72b0277e8ffa762bca4b2dee8d',
+    mediaType: 'text/javascript',
+    loadRoute: 'matched-optical-recurrence-v0',
+  }],
 };
+const manifestBytes = Buffer.from(JSON.stringify(manifest));
+const manifestSha256 = createHash('sha256').update(manifestBytes).digest('hex');
 
 const requestedRoute = new URL('http://127.0.0.1:18243/volume-selective-head-live.html');
 const effectiveRoute = new URL('http://127.0.0.1:18784/volume-selective-head-live.html');
@@ -94,10 +105,25 @@ const witness = {
     status: 'effective',
     requestedTreatment: 'matched-optical-recurrence-v0',
     effectiveTreatment: 'matched-optical-recurrence-v0',
-    requestedManifestSha256: '36ad2c8e831b6ac2f39d990f24262475e7ff5f4ee5e38fdd2ef106c1bc47db7a',
-    effectiveManifestSha256: '36ad2c8e831b6ac2f39d990f24262475e7ff5f4ee5e38fdd2ef106c1bc47db7a',
+    requestedManifestUrl: 'http://127.0.0.1:18784/stageB/manifest.json',
+    effectiveManifestUrl: 'http://127.0.0.1:18784/stageB/manifest.json',
+    requestedManifestSha256: manifestSha256,
+    effectiveManifestSha256: manifestSha256,
     fallbackUsed: false,
     resourceState: 'complete',
+    failures: [],
+    resources: [{
+      id: 'matched-optical',
+      path: '/volume-core.js',
+      bytes: 911_472,
+      sha256: 'fb924be33f0cd5b3b2c1699326c29ef24dddaf72b0277e8ffa762bca4b2dee8d',
+      requestedUrl: 'http://127.0.0.1:18784/volume-core.js',
+      effectiveUrl: 'http://127.0.0.1:18784/volume-core.js',
+      requestedRoute: 'matched-optical-recurrence-v0',
+      effectiveRoute: 'matched-optical-recurrence-v0',
+      loadStatus: 'loaded',
+      loadFallbackUsed: false,
+    }],
     passes: {
       requested: ['manifest-validation', 'resource-binding', 'resource-load-verification'],
       applied: ['manifest-validation', 'resource-binding', 'resource-load-verification'],
@@ -120,6 +146,7 @@ await assert.rejects(
     repoRoot,
     sourceRevision,
     manifest,
+    manifestBytes,
     witness: incompleteResourceWitness,
     priorMatrix: matrix,
   }),
@@ -134,6 +161,7 @@ await assert.rejects(
     repoRoot,
     sourceRevision,
     manifest,
+    manifestBytes,
     witness: strippedAppliedPassWitness,
     priorMatrix: matrix,
   }),
@@ -141,10 +169,64 @@ await assert.rejects(
   'requested renderer passes cannot substitute for applied resource verification',
 );
 
+const contradictoryResourceCases = [
+  ['nonempty failures', receipt => receipt.failures.push('stage-b-resource-load-failed:matched-optical')],
+  ['missing resources', receipt => { receipt.resources = []; }],
+  ['failed load status', receipt => { receipt.resources[0].loadStatus = 'failed'; }],
+  ['fallback load', receipt => { receipt.resources[0].loadFallbackUsed = true; }],
+  ['URL substitution', receipt => { receipt.resources[0].effectiveUrl = 'http://127.0.0.1:18784/fallback.js'; }],
+  ['route substitution', receipt => { receipt.resources[0].effectiveRoute = 'matched-presentation-v0'; }],
+  ['hash substitution', receipt => { receipt.resources[0].sha256 = '0'.repeat(64); }],
+  ['byte substitution', receipt => { receipt.resources[0].bytes -= 1; }],
+];
+for (const [label, mutate] of contradictoryResourceCases) {
+  const contradictoryWitness = structuredClone(witness);
+  mutate(contradictoryWitness.stageBReceipt);
+  await assert.rejects(
+    buildStageBControlParityLedger({
+      repoRoot,
+      sourceRevision,
+      manifest,
+      manifestBytes,
+      witness: contradictoryWitness,
+      priorMatrix: matrix,
+    }),
+    /Stage B (receipt failures present|resource)/,
+    `green Stage B summaries cannot hide ${label}`,
+  );
+}
+
+const substitutedManifestRouteWitness = structuredClone(witness);
+substitutedManifestRouteWitness.stageBReceipt.effectiveManifestUrl = 'http://127.0.0.1:18784/fallback/manifest.json';
+await assert.rejects(
+  buildStageBControlParityLedger({
+    repoRoot,
+    sourceRevision,
+    manifest,
+    manifestBytes,
+    witness: substitutedManifestRouteWitness,
+    priorMatrix: matrix,
+  }),
+  /Stage B manifest URL substitution/,
+);
+
+await assert.rejects(
+  buildStageBControlParityLedger({
+    repoRoot,
+    sourceRevision,
+    manifest,
+    manifestBytes: Buffer.from('{}'),
+    witness,
+    priorMatrix: matrix,
+  }),
+  /Stage B manifest bytes hash substitution/,
+);
+
 const ledger = await buildStageBControlParityLedger({
   repoRoot,
   sourceRevision,
   manifest,
+  manifestBytes,
   witness,
   priorMatrix: matrix,
 });
@@ -229,6 +311,7 @@ await assert.rejects(
     repoRoot,
     sourceRevision,
     manifest,
+    manifestBytes,
     witness,
     priorMatrix: matrix,
     sourceOverrides: {
