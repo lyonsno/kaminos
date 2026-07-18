@@ -116,6 +116,11 @@ assert.match(
   'Greenroom witness must stop comparing selected native ids to the full-source hash when selector reduction is active',
 );
 assert.match(
+  witness,
+  /receiptFullUnionCount[\s\S]*auditFullUnionCount/,
+  'Greenroom witness must compare selector full-union counts through route-visible audit fields, not source-preserving-only initial draw fields',
+);
+assert.match(
   overlay,
   /PROJECTED_WORK_SELECTOR_IDENTITY\s*=\s*'boundary-splat-live-union-projected-footprint-hash-thinning-v0'/,
   'coefficient overlay population audit must preserve the exact projected-work selector identity',

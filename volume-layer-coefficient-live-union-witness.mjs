@@ -320,9 +320,11 @@ try {
       assert.equal(condition.populationAudit.requestedProjectedWorkTargetPixels, projectedWorkTargetPixels, `${condition.label} requested selector target drifted`);
       assert.equal(condition.populationAudit.effectiveProjectedWorkTargetPixels, projectedWorkTargetPixels, `${condition.label} effective selector target drifted`);
       assert.ok(Number(condition.populationAudit.projectedWorkRejectedCount) > 0, `${condition.label} selector rejected no projected work`);
+      const receiptFullUnionCount = Number(unionReceipt?.counts?.union ?? unionReceipt?.unionCount ?? unionReceipt?.union);
+      const auditFullUnionCount = Number(condition.populationAudit.fullUnionCount ?? condition.populationAudit.unionReceipt?.counts?.union ?? condition.populationAudit.initialDraw?.unionCount);
       assert.equal(
-        Number(unionReceipt?.union ?? unionReceipt?.counts?.union),
-        Number(condition.populationAudit.initialDraw?.unionCount),
+        receiptFullUnionCount,
+        auditFullUnionCount,
         `${condition.label} selector changed full-union source count`,
       );
     } else {
