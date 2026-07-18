@@ -1198,7 +1198,7 @@ export async function createLayeredStructuralHotWebGpuSidecar(options = {}) {
     error: null,
   });
 
-  const bind = binding => {
+  const bind = (binding, { acceptReceipt = () => true } = {}) => {
     if (disposeRequested) {
       return Promise.resolve({
         ...baseBindingReceipt(),
@@ -1357,6 +1357,42 @@ export async function createLayeredStructuralHotWebGpuSidecar(options = {}) {
             };
           }
         } else {
+          const acceptance = await acceptReceipt(receipt);
+          if (acceptance === false || acceptance?.ok === false) {
+            const discardedExecution = {
+              status: receipt.status,
+              effectiveRoute: receipt.effectiveRoute,
+              executionRoute: receipt.executionRoute,
+              objectIdentity: receipt.objectIdentity,
+              eventEpoch: receipt.eventEpoch,
+              timingsMs: receipt.timingsMs ? { ...receipt.timingsMs } : null,
+              binding: receipt.binding ? {
+                eventCount: receipt.binding.eventCount,
+                noOp: receipt.binding.noOp,
+              } : null,
+            };
+            receipt.status = 'failed';
+            receipt.effectiveRoute = null;
+            receipt.failurePhase = acceptance?.failurePhase || 'post-execution-acceptance';
+            receipt.error = {
+              message: acceptance?.message || 'resident binding rejected after execution',
+            };
+            receipt.discardedExecution = discardedExecution;
+            receipt.timingsMs = null;
+            receipt.gpuStructuralState = null;
+            receipt.topology = null;
+            receipt.binding = null;
+            rollbackAttempted = true;
+            const rollbackError = await restoreAcceptedGpuState(sourceState);
+            receipt.lifecycle = cloneLifecycle(lifecycle);
+            if (rollbackError) {
+              receipt.failurePhase = 'resident-state-rollback';
+              receipt.error = {
+                message: `resident binding rejection and rollback failed: ${rollbackError.message}`,
+              };
+            }
+            return receipt;
+          }
           state = applyGpuBondMutationState(sourceState, bondMutationState);
         }
       } catch (error) {
@@ -1493,6 +1529,10 @@ export async function createLayeredStructuralHotWebGpuSidecar(options = {}) {
         eventEpoch,
         solverGeneration,
         lifecycle: cloneLifecycle(lifecycle),
+        acceptedConnectivity: {
+          bondLiveness: state.bonds.map(bond => bond.alive),
+          repairedBondIndices: state.bonds.flatMap((bond, index) => bond.repaired ? [index] : []),
+        },
       };
     },
   };

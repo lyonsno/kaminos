@@ -493,7 +493,6 @@ try {
     bindSelectionAfter.shearPressed === 'false' &&
     bindSelectionAfter.bindPressed === 'true';
 
-  report.failurePhase = 'picked-bind-gesture';
   const bindTarget = await evaluate(`(() => {
     const targets = window.__structuralMaterial3dPickTargets();
     const failed = window.__structuralMaterial3dWitness().summary.crackPath;
@@ -509,6 +508,70 @@ try {
       .sort((a, b) => a.failedDistance - b.failedDistance)[0] || null;
   })()`);
   assertCheck(bindTarget, 'fractured route exposed no projected Bind contact target');
+
+  report.failurePhase = 'cancelled-in-flight-binding';
+  const beforeCancelledBinding = await evaluate('window.__structuralMaterial3dWitness()');
+  await evaluate('window.__structuralMaterial3dArmBindingPostExecutionHoldForWitness()');
+  const cancelledBindDrag = await beginProjectedStructuralDrag(send, bindTarget, stageRect);
+  await waitUntil(
+    evaluate,
+    'window.__structuralMaterial3dBindingPostExecutionHoldStatus().reached',
+    config.loadTimeoutMs,
+    'GPU Bind never reached the post-execution cancellation boundary',
+  );
+  await evaluate(`(() => {
+    document.querySelector('#fracture').click();
+    window.__structuralMaterial3dReleaseBindingPostExecutionHoldForWitness();
+  })()`);
+  await releaseProjectedStructuralDrag(send, cancelledBindDrag.end);
+  await waitUntil(
+    evaluate,
+    `(() => {
+      const witness = window.__structuralMaterial3dWitness();
+      return witness.latestGpuOperation?.kind === 'binding' &&
+        witness.latestGpuOperation.status === 'failed' &&
+        witness.liveDrag.pointerActive === false &&
+        witness.liveDrag.scheduler.pointerExecutionActive === false &&
+        witness.gpuBindingPending === false;
+    })()`,
+    config.loadTimeoutMs,
+    'cancelled post-execution Bind did not settle as failed',
+  );
+  const cancelledBinding = await evaluate(`({
+    structural: window.__structuralMaterial3dWitness(),
+    status: window.__structuralMaterial3dGpuStatusWitness()
+  })`);
+  report.cancelledInFlightBinding = cancelledBinding;
+  const cancelledBindingReceipt = cancelledBinding.status?.latestGpuOperation?.receipt;
+  report.checks.cancelledInFlightBindingRejected =
+    cancelledBindingReceipt?.status === 'failed' &&
+    cancelledBindingReceipt?.failurePhase === 'request-invalidated-after-execution' &&
+    cancelledBindingReceipt?.effectiveRoute === null &&
+    cancelledBindingReceipt?.discardedExecution?.status === 'passed' &&
+    cancelledBindingReceipt?.discardedExecution?.binding?.eventCount > 0 &&
+    cancelledBinding.status?.latestGpuOperation?.kind === 'binding' &&
+    cancelledBinding.status?.text.includes('GPU bind failed') &&
+    cancelledBinding.structural?.interactionDiagnostics?.gpuOperationStatus === 'failed' &&
+    cancelledBinding.structural?.interactionDiagnostics?.latestWarmTotalMs === null;
+  report.checks.residentPageBindingAgreementAfterCancel =
+    JSON.stringify(cancelledBinding.structural?.summary) === JSON.stringify(beforeCancelledBinding.summary) &&
+    JSON.stringify(cancelledBinding.structural?.gpuHotSidecar?.acceptedConnectivity) ===
+      JSON.stringify(beforeCancelledBinding.gpuHotSidecar?.acceptedConnectivity) &&
+    cancelledBinding.structural?.gpuHotSidecar?.lifecycle?.rollbackCount ===
+      beforeCancelledBinding.gpuHotSidecar?.lifecycle?.rollbackCount + 1 &&
+    cancelledBinding.structural?.gpuHotSidecar?.lifecycle?.residentStateTrusted === true &&
+    cancelledBinding.structural?.interactionMode?.mode === 'shear';
+  assertCheck(
+    report.checks.cancelledInFlightBindingRejected,
+    'cancelled in-flight Bind remained operator-visible as passed',
+  );
+  assertCheck(
+    report.checks.residentPageBindingAgreementAfterCancel,
+    'cancelled in-flight Bind left resident and page connectivity out of agreement',
+  );
+  await dispatchPointerClick(send, evaluate, '#bind');
+
+  report.failurePhase = 'picked-bind-gesture';
   const tearAppliedCountBeforeBind = livePage.gpuTearAppliedCount;
   const brokenBondCountBeforeBind = livePage.summary.brokenBondCount;
   const heldBind = await beginProjectedStructuralDrag(send, bindTarget, stageRect);

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname;
 const pageSource = readFileSync(join(root, 'structural-material-3d.html'), 'utf8');
+const hotSidecarSource = readFileSync(join(root, 'structural-material-3d-webgpu-hot-sidecar.js'), 'utf8');
 const witnessSource = readFileSync(join(root, 'structural-material-3d-webgpu-hot-sidecar-witness.mjs'), 'utf8');
 const greenroomSource = readFileSync(join(root, 'structural-material-3d-interaction-mode-greenroom-launch.mjs'), 'utf8');
 const liveDrag = await import('../structural-material-3d-live-drag.js');
@@ -88,7 +89,37 @@ assert.match(witnessSource, /modeSelectionInert/, 'browser evidence rejects stru
 assert.match(witnessSource, /pickedBindLocality/, 'browser evidence binds the GPU repair point to the rendered picked contact');
 assert.match(witnessSource, /bindDidNotInvokeTear/, 'browser evidence rejects a Bind gesture routed through Shear');
 assert.match(witnessSource, /bindingRouteStatusVisible/, 'browser evidence requires the operator-visible status to identify resident binding');
-assert.match(greenroomSource, /bind-interaction-mode-greenroom-r3/, 'Bind mode has a dedicated non-overwriting Greenroom artifact identity');
+assert.match(
+  pageSource,
+  /gpuBindingPostExecutionWitnessHold/,
+  'Bind exposes a dedicated hold at the post-execution cancellation boundary',
+);
+assert.match(
+  pageSource,
+  /request-invalidated-after-execution[\s\S]*binding invalidated after GPU execution/,
+  'a Bind cancelled after resident execution settles as an explicit failed operation',
+);
+assert.match(
+  pageSource,
+  /sidecar\.bind\(binding,\s*\{[\s\S]*acceptReceipt[\s\S]*request-invalidated-after-execution/,
+  'the page gives resident Bind an acceptance predicate at its transactional boundary',
+);
+assert.match(
+  hotSidecarSource,
+  /acceptReceipt[\s\S]*restoreAcceptedGpuState\(sourceState\)[\s\S]*state = applyGpuBondMutationState/,
+  'the sidecar rolls a rejected Bind back before committing its accepted resident mirror',
+);
+assert.match(
+  witnessSource,
+  /cancelledInFlightBindingRejected/,
+  'browser evidence rejects a cancelled post-execution Bind that settles as passed',
+);
+assert.match(
+  witnessSource,
+  /residentPageBindingAgreementAfterCancel/,
+  'browser evidence compares resident connectivity with the page after cancelled Bind rollback',
+);
+assert.match(greenroomSource, /bind-interaction-mode-greenroom-r5/, 'Bind invalidation evidence has a dedicated non-overwriting Greenroom artifact identity');
 assert.match(greenroomSource, /structural-material-3d-resident-solver-greenroom-launch/, 'Bind mode evidence retains the accepted native-WebGPU route shield');
 assert.match(witnessSource, /visualState:\s*'post-picked-bind'/, 'visual evidence names the bound state whose color predicate it applies');
 assert.match(witnessSource, /capture:\s*lastCapture/, 'a failed pixel predicate still preserves the last trustworthy screenshot');

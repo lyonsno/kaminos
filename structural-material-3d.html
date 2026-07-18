@@ -313,6 +313,7 @@
     let gpuTearPostExecutionWitnessHold = null;
     let gpuBindingReceipt = null;
     let gpuBindingPromise = null;
+    let gpuBindingPostExecutionWitnessHold = null;
     let gpuTearOperationQueue = Promise.resolve();
     let gpuTearAppliedCount = 0;
     let gpuTearPreviousAppliedReceipt = null;
@@ -1079,12 +1080,26 @@
         }
         const effectiveSourceState = material;
         const receipt = await ensureHotSidecar(effectiveSourceState)
-          .then(sidecar => sidecar.bind(binding))
+          .then(sidecar => sidecar.bind(binding, {
+            acceptReceipt: async () => {
+              if (gpuBindingPostExecutionWitnessHold) {
+                const hold = gpuBindingPostExecutionWitnessHold;
+                hold.reached = true;
+                await hold.releasePromise;
+                if (gpuBindingPostExecutionWitnessHold === hold) gpuBindingPostExecutionWitnessHold = null;
+              }
+              if (gpuTearRequestGate.accepts(requestEpoch)) return { ok: true };
+              return {
+                ok: false,
+                failurePhase: 'request-invalidated-after-execution',
+                message: 'binding invalidated after GPU execution',
+              };
+            },
+          }))
           .catch(error => buildLayeredStructuralGpuBindingFailureReceipt(
             error,
             'hot-sidecar-binding-initialization-or-execution',
           ));
-        if (!gpuTearRequestGate.accepts(requestEpoch)) return receipt;
         gpuBindingReceipt = receipt;
         if (receipt.status === 'passed') {
           runStructuralMutation('gpu-resident-binding', () => {
@@ -1404,6 +1419,19 @@
     });
     window.__structuralMaterial3dReleasePostExecutionHoldForWitness = () => {
       gpuTearPostExecutionWitnessHold?.release();
+    };
+    window.__structuralMaterial3dArmBindingPostExecutionHoldForWitness = () => {
+      if (gpuBindingPostExecutionWitnessHold) throw new Error('binding post-execution witness hold already armed');
+      let release;
+      const releasePromise = new Promise(resolve => { release = resolve; });
+      gpuBindingPostExecutionWitnessHold = { reached: false, release, releasePromise };
+    };
+    window.__structuralMaterial3dBindingPostExecutionHoldStatus = () => ({
+      armed: gpuBindingPostExecutionWitnessHold !== null,
+      reached: gpuBindingPostExecutionWitnessHold?.reached === true,
+    });
+    window.__structuralMaterial3dReleaseBindingPostExecutionHoldForWitness = () => {
+      gpuBindingPostExecutionWitnessHold?.release();
     };
 
     async function countCanvasPixelsFromBlob() {
