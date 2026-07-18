@@ -18,7 +18,7 @@ export const KAMINOS_FINGER_FLUID_DOWGRADES = [
   'kaminos_native_synthetic_fluid_not_lerms_source_truth',
   'particle_render_not_final_surface_reconstruction',
   'screen_space_surface_first_slice_not_final_surface_reconstruction',
-  'screen_space_refraction_single_interface_not_final_optical_transport',
+  'screen_space_refraction_projected_slab_v0_not_watertight_optical_transport',
 ];
 
 function finite(value, fallback = 0) {
@@ -109,7 +109,7 @@ export function createFingerFluidBenchState(options = {}) {
       screenSpaceRefractionRenderFrameCount: nonNegativeInteger(options.screenSpaceRefractionRenderFrameCount, 0),
       requestedOpticalDebugMode: options.requestedOpticalDebugMode || 'shaded',
       effectiveOpticalDebugMode: options.effectiveOpticalDebugMode || options.requestedOpticalDebugMode || 'shaded',
-      opticalTransportRoute: options.opticalTransportRoute || 'snell-single-interface-screen-space-optics-v0',
+      opticalTransportRoute: options.opticalTransportRoute || 'snell-two-interface-screen-space-slab-v0',
       finalFingerJuiceRenderer: false,
       colorMode: options.colorMode || 'phase',
     },
