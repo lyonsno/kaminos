@@ -102,6 +102,83 @@ const validateKaminosSharpHeartbeat = vm.runInNewContext(
     SHARP_GPU_DUTY_INTERVALS_SCHEMA: 'sharp-webgpu.submitted-work-drain-intervals.v0',
   },
 );
+const liveSchedulerRuntimeEvidenceSource = wrapperSource.match(
+  /function liveSchedulerRuntimeEvidence\([\s\S]*?\n}\n(?=\nfunction uniqueTelemetryPhases)/,
+);
+assert.ok(liveSchedulerRuntimeEvidenceSource, 'adapter must expose testable live scheduler runtime evidence validation');
+const liveSchedulerRuntimeEvidence = vm.runInNewContext(`(${liveSchedulerRuntimeEvidenceSource[0]})`);
+const liveSchedulerIdentity = {
+  routeId: 'sharp.image-to-splat.webgpu.v1',
+  runId: 'sharp-live-runtime-run',
+  clock: {
+    clockId: 'sharp-live-runtime-clock',
+    source: 'performance.now',
+    timeOriginEpochMs: 1_700_000_000_000,
+  },
+};
+const validLiveSchedulerResult = {
+  schedulerTelemetry: {
+    schema: 'sharp-webgpu.scheduler-telemetry.v0',
+    status: 'verified',
+    runId: liveSchedulerIdentity.runId,
+    eventTrace: { clock: { ...liveSchedulerIdentity.clock } },
+  },
+  sharpRunDebug: {
+    schema: 'sharp.webgpu-route-run-debug.v0',
+    status: 'real',
+    schedulerApplication: {
+      schema: 'kaminos.webgpu-scheduler-application.v0',
+      routeId: liveSchedulerIdentity.routeId,
+      retention: 'uncapped',
+    },
+    commandDutyReport: {
+      schema: 'kaminos.webgpu-command-duty-report.v0',
+      status: 'succeeded',
+      ...liveSchedulerIdentity,
+      clock: { ...liveSchedulerIdentity.clock },
+      retention: 'uncapped',
+    },
+    hostPhaseReport: {
+      schema: 'kaminos.webgpu-host-phase-recorder.v0',
+      status: 'succeeded',
+      ...liveSchedulerIdentity,
+      clock: { ...liveSchedulerIdentity.clock },
+      retention: 'uncapped',
+    },
+  },
+};
+const validLiveSchedulerEvidence = liveSchedulerRuntimeEvidence(validLiveSchedulerResult);
+assert.equal(validLiveSchedulerEvidence.status, 'observed');
+assert.equal(validLiveSchedulerEvidence.source, 'sharp-browser-debug');
+assert.deepEqual(
+  JSON.parse(JSON.stringify(validLiveSchedulerEvidence.identity)),
+  liveSchedulerIdentity,
+  'observed runtime evidence must bind exact route/run/clock identity',
+);
+assert.equal(validLiveSchedulerEvidence.validation.status, 'valid');
+
+for (const [label, mutate, expectedError] of [
+  ['mixed run', value => { value.sharpRunDebug.commandDutyReport.runId = 'stale-run'; }, /run identity mismatch/],
+  ['mixed clock', value => { value.sharpRunDebug.hostPhaseReport.clock.clockId = 'stale-clock'; }, /clock identity mismatch/],
+  ['wrong schema', value => { value.sharpRunDebug.schedulerApplication.schema = 'stale.scheduler-application.v0'; }, /scheduler application schema/],
+  ['failed report', value => { value.sharpRunDebug.commandDutyReport.status = 'failed'; }, /command duty report status/],
+  ['partial debug', value => { value.sharpRunDebug.hostPhaseReport = null; }, /complete scheduler application, command duty, and host phase reports/],
+]) {
+  const candidate = structuredClone(validLiveSchedulerResult);
+  mutate(candidate);
+  const evidence = liveSchedulerRuntimeEvidence(candidate);
+  assert.equal(evidence.status, 'invalid', `${label} runtime evidence must not become observed`);
+  assert.equal(evidence.source, 'invalid-sharp-browser-debug');
+  assert.equal(evidence.schedulerApplication, null);
+  assert.equal(evidence.commandDutyReport, null);
+  assert.equal(evidence.hostPhaseReport, null);
+  assert.match(evidence.validationErrors.join('; '), expectedError);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(evidence.rejectedCandidate)),
+    JSON.parse(JSON.stringify(candidate)),
+    `${label} candidate must survive non-authoritatively for diagnosis`,
+  );
+}
 const zeroDutyHeartbeat = {
   schema: 'sharp-webgpu.background-heartbeat.v0',
   effectiveScheduler: { mode: 'default', waitForSubmittedWorkDone: false },

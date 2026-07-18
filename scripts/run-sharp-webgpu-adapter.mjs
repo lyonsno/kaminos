@@ -204,14 +204,112 @@ function liveSchedulerRuntimeEvidence(result = null) {
   const schedulerApplication = result?.schedulerApplication || sharpRunDebug?.schedulerApplication || null;
   const commandDutyReport = result?.commandDutyReport || sharpRunDebug?.commandDutyReport || null;
   const hostPhaseReport = result?.hostPhaseReport || sharpRunDebug?.hostPhaseReport || null;
+  const schedulerTelemetry = result?.schedulerTelemetry || sharpRunDebug?.schedulerTelemetry || null;
+  const rejectedCandidate = result || null;
+  const validationErrors = [];
+  const hasRuntimeCandidate = Boolean(schedulerApplication || commandDutyReport || hostPhaseReport);
+  const identityValue = (label, value) => {
+    if (typeof value !== 'string' || value.trim() === '') {
+      validationErrors.push(`${label} must be a non-empty string`);
+      return null;
+    }
+    return value;
+  };
+  const expectedClock = schedulerTelemetry?.eventTrace?.clock || null;
+  const routeId = identityValue('scheduler application route identity', schedulerApplication?.routeId);
+  const runId = identityValue('scheduler telemetry run identity', schedulerTelemetry?.runId);
+  const clockId = identityValue('scheduler telemetry clock identity', expectedClock?.clockId);
+
+  if (!hasRuntimeCandidate) {
+    return {
+      schema: 'kaminos.sharp-webgpu-live-scheduler-runtime-evidence.v0',
+      status: 'not-observed',
+      source: 'not-observed',
+      identity: null,
+      validation: { status: 'not-observed', errors: [] },
+      validationErrors: [],
+      schedulerApplication: null,
+      commandDutyReport: null,
+      hostPhaseReport: null,
+      rejectedCandidate: null,
+    };
+  }
+
+  if (!schedulerApplication || !commandDutyReport || !hostPhaseReport) {
+    validationErrors.push('live scheduler runtime requires complete scheduler application, command duty, and host phase reports');
+  }
+  if (schedulerTelemetry?.schema !== 'sharp-webgpu.scheduler-telemetry.v0') {
+    validationErrors.push('scheduler telemetry schema is invalid');
+  }
+  if (schedulerTelemetry?.status !== 'verified') {
+    validationErrors.push('scheduler telemetry status must be verified');
+  }
+  if (sharpRunDebug && sharpRunDebug.schema !== 'sharp.webgpu-route-run-debug.v0') {
+    validationErrors.push('SHARP run debug schema is invalid');
+  }
+  if (sharpRunDebug && sharpRunDebug.status !== 'real') {
+    validationErrors.push('SHARP run debug status must be real');
+  }
+  if (schedulerApplication?.schema !== 'kaminos.webgpu-scheduler-application.v0') {
+    validationErrors.push('scheduler application schema is invalid');
+  }
+
+  for (const [label, report, schema] of [
+    ['command duty report', commandDutyReport, 'kaminos.webgpu-command-duty-report.v0'],
+    ['host phase report', hostPhaseReport, 'kaminos.webgpu-host-phase-recorder.v0'],
+  ]) {
+    if (report?.schema !== schema) validationErrors.push(`${label} schema is invalid`);
+    if (report?.status !== 'succeeded') validationErrors.push(`${label} status must be succeeded`);
+    if (report?.retention !== 'uncapped') validationErrors.push(`${label} retention must be uncapped`);
+    if (routeId && report?.routeId !== routeId) validationErrors.push(`${label} route identity mismatch`);
+    if (runId && report?.runId !== runId) validationErrors.push(`${label} run identity mismatch`);
+    if (clockId && report?.clock?.clockId !== clockId) validationErrors.push(`${label} clock identity mismatch`);
+    if (expectedClock?.source && report?.clock?.source !== expectedClock.source) {
+      validationErrors.push(`${label} clock source mismatch`);
+    }
+    if (Number.isFinite(expectedClock?.timeOriginEpochMs)
+      && report?.clock?.timeOriginEpochMs !== expectedClock.timeOriginEpochMs) {
+      validationErrors.push(`${label} clock origin mismatch`);
+    }
+  }
+
+  if (schedulerApplication?.retention !== 'uncapped') {
+    validationErrors.push('scheduler application retention must be uncapped');
+  }
+  if (validationErrors.length) {
+    return {
+      schema: 'kaminos.sharp-webgpu-live-scheduler-runtime-evidence.v0',
+      status: 'invalid',
+      source: 'invalid-sharp-browser-debug',
+      identity: null,
+      validation: { status: 'invalid', errors: [...validationErrors] },
+      validationErrors,
+      schedulerApplication: null,
+      commandDutyReport: null,
+      hostPhaseReport: null,
+      rejectedCandidate,
+    };
+  }
+
   return {
     schema: 'kaminos.sharp-webgpu-live-scheduler-runtime-evidence.v0',
-    source: schedulerApplication || commandDutyReport || hostPhaseReport
-      ? 'sharp-browser-debug'
-      : 'not-observed',
+    status: 'observed',
+    source: 'sharp-browser-debug',
+    identity: {
+      routeId,
+      runId,
+      clock: {
+        clockId,
+        source: expectedClock.source,
+        timeOriginEpochMs: expectedClock.timeOriginEpochMs,
+      },
+    },
+    validation: { status: 'valid', errors: [] },
+    validationErrors: [],
     schedulerApplication,
     commandDutyReport,
     hostPhaseReport,
+    rejectedCandidate: null,
   };
 }
 

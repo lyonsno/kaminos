@@ -878,6 +878,7 @@ function adapterReportSummary(report, effectiveRoute = null) {
     backend: report.backend || null,
     revision: report?.backend?.revision || null,
     breathingRoom: report.breathingRoom || null,
+    liveSchedulerRuntime: report.liveSchedulerRuntime || null,
     schedulerVerification: report.schedulerVerification || pipelineScheduler.schedulerVerification || null,
     backgroundHeartbeat: report?.backgroundHeartbeat || null,
     pipelineScheduler,

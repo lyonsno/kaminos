@@ -408,6 +408,42 @@ writeFileSync(report, JSON.stringify({
       events: [{ phase: 'spn-patch-chunk', yieldMs: 2 }]
     }
   },
+  liveSchedulerRuntime: {
+    schema: 'kaminos.sharp-webgpu-live-scheduler-runtime-evidence.v0',
+    status: 'observed',
+    source: 'sharp-browser-debug',
+    identity: {
+      routeId: 'sharp.image-to-splat.webgpu.v1',
+      runId: 'mock-sharp-live-run',
+      clock: {
+        clockId: 'mock-sharp-live-clock',
+        source: 'performance.now',
+        timeOriginEpochMs: 1700000000000
+      }
+    },
+    validation: { status: 'valid', errors: [] },
+    schedulerApplication: {
+      schema: 'kaminos.webgpu-scheduler-application.v0',
+      routeId: 'sharp.image-to-splat.webgpu.v1',
+      retention: 'uncapped'
+    },
+    commandDutyReport: {
+      schema: 'kaminos.webgpu-command-duty-report.v0',
+      status: 'succeeded',
+      routeId: 'sharp.image-to-splat.webgpu.v1',
+      runId: 'mock-sharp-live-run',
+      clock: { clockId: 'mock-sharp-live-clock', source: 'performance.now', timeOriginEpochMs: 1700000000000 },
+      retention: 'uncapped'
+    },
+    hostPhaseReport: {
+      schema: 'kaminos.webgpu-host-phase-recorder.v0',
+      status: 'succeeded',
+      routeId: 'sharp.image-to-splat.webgpu.v1',
+      runId: 'mock-sharp-live-run',
+      clock: { clockId: 'mock-sharp-live-clock', source: 'performance.now', timeOriginEpochMs: 1700000000000 },
+      retention: 'uncapped'
+    }
+  },
   sideArtifacts: [
     { id: 'depthMap', role: 'depth-map', path: depthPath },
     { id: 'metadata', role: 'sharp-webgpu-metadata', path: metadataPath },
@@ -454,6 +490,9 @@ writeFileSync(report, JSON.stringify({
   assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.breathingRoom.requestedScheduler.spnPatchChunkSize, 1);
   assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.breathingRoom.effectiveScheduler.spnPatchChunkSize, 1);
   assert.deepEqual(liveReport.stages[0].effectiveRoute.adapterReport.breathingRoom.unsupportedFields, ['vitBlockChunkSize']);
+  assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.liveSchedulerRuntime.status, 'observed');
+  assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.liveSchedulerRuntime.identity.runId, 'mock-sharp-live-run');
+  assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.liveSchedulerRuntime.identity.clock.clockId, 'mock-sharp-live-clock');
   assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.schedulerVerification.schema, 'kaminos.webgpu-scheduler-verification-receipt.v0');
   assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.schedulerVerification.boundaryAssertions.some(assertion => assertion.field === 'phaseChunkSize.vitBlock' && assertion.status === 'unsupported'), true);
   assert.equal(liveReport.stages[0].effectiveRoute.adapterReport.pipelineScheduler.schema, 'kaminos.pipeline-scheduler-composition.v0');
