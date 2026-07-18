@@ -28,6 +28,7 @@ import {
   createWebGpuSchedulerApplication,
 } from './scheduler-application.js';
 import {
+  WEBGPU_FOREGROUND_OPPORTUNITY_SCHEMA,
   createWebGpuForegroundOpportunityInterlock,
 } from './foreground-opportunity.js';
 import {
@@ -49,6 +50,50 @@ function isNonEmptyString(value) {
 
 function clone(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
+function validateForegroundOpportunitySnapshot(snapshot, routeId) {
+  if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) {
+    throw new Error('foregroundOpportunities snapshot must be an object');
+  }
+  if (snapshot.schema !== WEBGPU_FOREGROUND_OPPORTUNITY_SCHEMA) {
+    throw new Error(`foregroundOpportunities snapshot schema must be ${WEBGPU_FOREGROUND_OPPORTUNITY_SCHEMA}`);
+  }
+  if (snapshot.routeId !== routeId) throw new Error('foregroundOpportunities route mismatch');
+  if (!isNonEmptyString(snapshot.runId)) {
+    throw new Error('foregroundOpportunities snapshot runId must be a non-empty caller-owned identity');
+  }
+  if (snapshot.retention !== 'uncapped') {
+    throw new Error('foregroundOpportunities snapshot retention must be uncapped');
+  }
+  for (const field of [
+    'pendingRequestCount',
+    'activeRequestCount',
+    'activeServiceCount',
+    'queuedServiceCount',
+  ]) {
+    if (!Number.isInteger(snapshot[field]) || snapshot[field] < 0) {
+      throw new Error(`foregroundOpportunities snapshot ${field} must be a non-negative integer`);
+    }
+  }
+  return snapshot;
+}
+
+function validateForegroundOpportunityInterlock(interlock, routeId) {
+  for (const method of ['request', 'serviceAtBoundary', 'snapshot', 'finish']) {
+    if (typeof interlock?.[method] !== 'function') {
+      throw new Error(`external foregroundOpportunities must expose ${method}()`);
+    }
+  }
+  validateForegroundOpportunitySnapshot(interlock.snapshot(), routeId);
+  return interlock;
+}
+
+function hasForegroundOpportunityPressure(snapshot) {
+  return snapshot.pendingRequestCount > 0
+    || snapshot.activeRequestCount > 0
+    || snapshot.activeServiceCount > 0
+    || snapshot.queuedServiceCount > 0;
 }
 
 function stableSerialize(value) {
@@ -509,21 +554,28 @@ export async function createWebGpuInferenceRuntime(input = {}) {
   let commandDutySequence = 0;
   const preparedCommandDutyInvocations = new WeakMap();
   const preparedCommandDutySequences = new WeakMap();
-  const foregroundOpportunities = input.foregroundOpportunities == null
+  const providedForegroundOpportunities = input.foregroundOpportunities;
+  const externalForegroundOpportunities = providedForegroundOpportunities != null
+    && (providedForegroundOpportunities.schema != null
+      || ['request', 'serviceAtBoundary', 'snapshot', 'finish']
+        .some(method => typeof providedForegroundOpportunities[method] === 'function'));
+  const foregroundOpportunities = providedForegroundOpportunities == null
     ? null
-    : (typeof input.foregroundOpportunities.request === 'function'
-        && typeof input.foregroundOpportunities.serviceAtBoundary === 'function'
-        && typeof input.foregroundOpportunities.snapshot === 'function'
-      ? input.foregroundOpportunities
+    : (externalForegroundOpportunities
+      ? validateForegroundOpportunityInterlock(providedForegroundOpportunities, input.routeId)
       : createWebGpuForegroundOpportunityInterlock({
-          ...input.foregroundOpportunities,
-          routeId: input.foregroundOpportunities.routeId || input.routeId,
+          ...providedForegroundOpportunities,
+          routeId: providedForegroundOpportunities.routeId || input.routeId,
           device,
           queue,
-          now: input.foregroundOpportunities.now || now,
+          now: providedForegroundOpportunities.now || now,
         }));
-  if (foregroundOpportunities && foregroundOpportunities.snapshot().routeId !== input.routeId) {
-    throw new Error('foregroundOpportunities route mismatch');
+
+  function foregroundOpportunitySnapshot() {
+    if (!foregroundOpportunities) {
+      throw new Error('foreground opportunity interlock is not configured for this runtime');
+    }
+    return validateForegroundOpportunitySnapshot(foregroundOpportunities.snapshot(), input.routeId);
   }
 
   function initializeCommandDuty(descriptorInput = {}, schedulerInvocation = null) {
@@ -581,6 +633,11 @@ export async function createWebGpuInferenceRuntime(input = {}) {
   }
 
   function prepareCommandDuty(descriptorInput = {}, schedulerInvocation = null) {
+    if (foregroundOpportunities && hasForegroundOpportunityPressure(foregroundOpportunitySnapshot())) {
+      throw new Error(
+        'foreground opportunity pressure requires awaiting prepareCommandDutyAtBoundary() before inference encode',
+      );
+    }
     return refreshCommandDuty(initializeCommandDuty(descriptorInput, schedulerInvocation), schedulerInvocation);
   }
 
@@ -606,8 +663,8 @@ export async function createWebGpuInferenceRuntime(input = {}) {
   async function prepareCommandDutyAtBoundary(descriptorInput = {}, schedulerInvocation = null) {
     const descriptor = initializeCommandDuty(descriptorInput, schedulerInvocation);
     if (!foregroundOpportunities) return refreshCommandDuty(descriptor, schedulerInvocation);
-    const foregroundSnapshot = foregroundOpportunities.snapshot();
-    if (foregroundSnapshot.pendingRequestCount === 0) {
+    const foregroundSnapshot = foregroundOpportunitySnapshot();
+    if (!hasForegroundOpportunityPressure(foregroundSnapshot)) {
       return refreshCommandDuty(descriptor, schedulerInvocation);
     }
     if (!isNonEmptyString(schedulerInvocation?.invocationId)) {
@@ -729,17 +786,16 @@ export async function createWebGpuInferenceRuntime(input = {}) {
     },
 
     foregroundOpportunitySnapshot() {
-      if (!foregroundOpportunities) {
-        throw new Error('foreground opportunity interlock is not configured for this runtime');
-      }
-      return foregroundOpportunities.snapshot();
+      return foregroundOpportunitySnapshot();
     },
 
     finishForegroundOpportunities() {
       if (!foregroundOpportunities) {
         throw new Error('foreground opportunity interlock is not configured for this runtime');
       }
-      return foregroundOpportunities.finish();
+      const report = foregroundOpportunities.finish();
+      validateForegroundOpportunitySnapshot(report, input.routeId);
+      return report;
     },
 
     getShaderModule(label, code, descriptor) {

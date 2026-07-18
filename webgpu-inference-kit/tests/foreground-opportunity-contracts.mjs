@@ -218,6 +218,58 @@ await assert.rejects(
   /before-encode/i,
 );
 
+let releaseSerializedFirst;
+let markSerializedFirstStarted;
+const serializedFirstStarted = new Promise(resolve => { markSerializedFirstStarted = resolve; });
+let serializedSecondStarted = false;
+const serializedInterlock = createWebGpuForegroundOpportunityInterlock({
+  routeId: 'sharp.image-to-splat.webgpu-local.v0',
+  runId: 'foreground-opportunity-serialized-services',
+  device,
+  queue,
+  now,
+});
+serializedInterlock.request({
+  requestId: 'serialized-foreground-frame-1',
+  async run() {
+    markSerializedFirstStarted();
+    await new Promise(resolve => { releaseSerializedFirst = resolve; });
+  },
+});
+const serializedFirstService = serializedInterlock.serviceAtBoundary({
+  invocationId: 'sharp-serialized-invocation-a',
+  boundaryId: 'sharp-serialized-boundary-a',
+  dutyId: 'sharp-serialized-duty-a',
+  phase: 'spn-fusion',
+  position: 'before-encode',
+});
+await serializedFirstStarted;
+serializedInterlock.request({
+  requestId: 'serialized-foreground-frame-2',
+  run() { serializedSecondStarted = true; },
+});
+const serializedSecondService = serializedInterlock.serviceAtBoundary({
+  invocationId: 'sharp-serialized-invocation-b',
+  boundaryId: 'sharp-serialized-boundary-b',
+  dutyId: 'sharp-serialized-duty-b',
+  phase: 'vit-block',
+  position: 'before-encode',
+});
+await Promise.resolve();
+assert.equal(
+  serializedSecondStarted,
+  false,
+  'a later boundary must not service or encode through an active foreground service turn',
+);
+assert.equal(serializedInterlock.snapshot().activeServiceCount, 1);
+assert.equal(serializedInterlock.snapshot().queuedServiceCount, 1);
+releaseSerializedFirst();
+assert.equal((await serializedFirstService).status, 'serviced');
+assert.equal((await serializedSecondService).status, 'serviced');
+assert.equal(serializedSecondStarted, true);
+assert.equal(serializedInterlock.snapshot().activeServiceCount, 0);
+assert.equal(serializedInterlock.snapshot().queuedServiceCount, 0);
+
 const runtimeSubmissions = [];
 const runtimeQueue = {
   submit(commandBuffers) {
@@ -242,6 +294,83 @@ const runtimeDevice = {
     };
   },
 };
+
+const externalSnapshot = () => ({
+  schema: WEBGPU_FOREGROUND_OPPORTUNITY_SCHEMA,
+  routeId: 'sharp.image-to-splat.webgpu-local.v0',
+  runId: 'external-foreground-opportunities',
+  retention: 'uncapped',
+  requestCount: 0,
+  pendingRequestCount: 0,
+  activeRequestCount: 0,
+  activeServiceCount: 0,
+  queuedServiceCount: 0,
+  receiptCount: 0,
+  serviceCount: 0,
+  noDemandBoundaryCount: 0,
+});
+const externalMethods = {
+  request() {},
+  async serviceAtBoundary() {},
+  snapshot: externalSnapshot,
+  finish() {},
+};
+await assert.rejects(
+  () => createWebGpuInferenceRuntime({
+    routeId: 'sharp.image-to-splat.webgpu-local.v0',
+    runtimeLabel: 'invalid-external-foreground-missing-finish',
+    device: runtimeDevice,
+    queue: runtimeQueue,
+    adapterName: 'Invalid External Foreground Interlock',
+    kernel: { profile: 'invalid-external-foreground-interlock' },
+    foregroundOpportunities: {
+      ...externalMethods,
+      finish: undefined,
+    },
+  }),
+  /finish/i,
+);
+await assert.rejects(
+  () => createWebGpuInferenceRuntime({
+    routeId: 'sharp.image-to-splat.webgpu-local.v0',
+    runtimeLabel: 'invalid-external-foreground-snapshot',
+    device: runtimeDevice,
+    queue: runtimeQueue,
+    adapterName: 'Invalid External Foreground Snapshot',
+    kernel: { profile: 'invalid-external-foreground-snapshot' },
+    foregroundOpportunities: {
+      ...externalMethods,
+      snapshot() {
+        const snapshot = externalSnapshot();
+        delete snapshot.pendingRequestCount;
+        return snapshot;
+      },
+    },
+  }),
+  /pendingRequestCount/i,
+);
+let externalSnapshotIsValid = true;
+const mutableExternalRuntime = await createWebGpuInferenceRuntime({
+  routeId: 'sharp.image-to-splat.webgpu-local.v0',
+  runtimeLabel: 'mutable-external-foreground-snapshot',
+  device: runtimeDevice,
+  queue: runtimeQueue,
+  adapterName: 'Mutable External Foreground Snapshot',
+  kernel: { profile: 'mutable-external-foreground-snapshot' },
+  foregroundOpportunities: {
+    ...externalMethods,
+    snapshot() {
+      const snapshot = externalSnapshot();
+      if (!externalSnapshotIsValid) snapshot.activeServiceCount = -1;
+      return snapshot;
+    },
+  },
+});
+externalSnapshotIsValid = false;
+assert.throws(
+  () => mutableExternalRuntime.foregroundOpportunitySnapshot(),
+  /activeServiceCount.*non-negative integer/i,
+);
 const schedulerApplication = createWebGpuSchedulerApplication({
   routeId: 'sharp.image-to-splat.webgpu-local.v0',
   scheduler: {
@@ -270,6 +399,59 @@ const runtime = await createWebGpuInferenceRuntime({
     now,
   },
 });
+
+let releaseRuntimeForeground;
+let markRuntimeForegroundStarted;
+const runtimeForegroundStarted = new Promise(resolve => { markRuntimeForegroundStarted = resolve; });
+runtime.requestForegroundOpportunity({
+  requestId: 'runtime-serialized-foreground-frame',
+  async run() {
+    markRuntimeForegroundStarted();
+    await new Promise(resolve => { releaseRuntimeForeground = resolve; });
+  },
+});
+const runtimeInvocationA = runtime.runInvocation(
+  { invocationId: 'runtime-serialized-invocation-a' },
+  context => runtime.runKernel({
+    name: 'serialized-spn-fusion-a',
+    pipeline: {},
+    bindGroup: {},
+    bindings: [],
+  }, {
+    schedulerInvocation: context,
+    dispatch: [1],
+  }),
+);
+await runtimeForegroundStarted;
+assert.throws(
+  () => runtime.prepareCommandDuty({ phase: 'raw-adapter-bypass' }),
+  /prepareCommandDutyAtBoundary/i,
+);
+let secondInferenceEncoded = false;
+const runtimeInvocationB = runtime.runInvocation(
+  { invocationId: 'runtime-serialized-invocation-b' },
+  context => runtime.runKernel({
+    name: 'serialized-vit-block-b',
+    pipeline: {},
+    bindGroup: {},
+    bindings: [],
+  }, {
+    schedulerInvocation: context,
+    dispatch() {
+      secondInferenceEncoded = true;
+      return [1];
+    },
+  }),
+);
+await new Promise(resolve => setTimeout(resolve, 0));
+assert.equal(
+  secondInferenceEncoded,
+  false,
+  'a concurrent inference invocation must wait for the active foreground service turn',
+);
+releaseRuntimeForeground();
+await Promise.all([runtimeInvocationA, runtimeInvocationB]);
+assert.equal(secondInferenceEncoded, true);
 
 const runtimeFrame = runtime.requestForegroundOpportunity({
   requestId: 'runtime-foreground-frame-1',
@@ -326,7 +508,7 @@ await runtime.runInvocation({ invocationId: 'runtime-sharp-invocation-a' }, cont
     return [1];
   },
 }));
-assert.deepEqual(runtimeSubmissions, [
+assert.deepEqual(runtimeSubmissions.slice(-2), [
   ['runtime-foreground-command'],
   ['inference-command'],
 ]);

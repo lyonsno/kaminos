@@ -67,6 +67,9 @@ export function createWebGpuForegroundOpportunityInterlock(input = {}) {
     receipts: [],
     services: [],
     activeRequestCount: 0,
+    activeServiceCount: 0,
+    queuedServiceCount: 0,
+    serviceTail: Promise.resolve(),
     noDemandBoundaryCount: 0,
   };
 
@@ -161,8 +164,7 @@ export function createWebGpuForegroundOpportunityInterlock(input = {}) {
     });
   }
 
-  async function serviceAtBoundary(boundaryInput = {}) {
-    const boundary = validateBoundary(boundaryInput);
+  async function serviceBoundaryTurn(boundary) {
     const captured = state.pending.filter(requestState => requestState.status === 'pending');
     if (captured.length === 0) {
       state.noDemandBoundaryCount += 1;
@@ -327,6 +329,23 @@ export function createWebGpuForegroundOpportunityInterlock(input = {}) {
     return service;
   }
 
+  async function serviceAtBoundary(boundaryInput = {}) {
+    const boundary = validateBoundary(boundaryInput);
+    const precedingTurn = state.serviceTail;
+    let releaseTurn;
+    state.serviceTail = new Promise(resolve => { releaseTurn = resolve; });
+    state.queuedServiceCount += 1;
+    await precedingTurn;
+    state.queuedServiceCount -= 1;
+    state.activeServiceCount += 1;
+    try {
+      return await serviceBoundaryTurn(boundary);
+    } finally {
+      state.activeServiceCount -= 1;
+      releaseTurn();
+    }
+  }
+
   function snapshot() {
     return deepFreeze({
       schema: WEBGPU_FOREGROUND_OPPORTUNITY_SCHEMA,
@@ -336,6 +355,8 @@ export function createWebGpuForegroundOpportunityInterlock(input = {}) {
       requestCount: state.requests.size,
       pendingRequestCount: state.pending.filter(requestState => requestState.status === 'pending').length,
       activeRequestCount: state.activeRequestCount,
+      activeServiceCount: state.activeServiceCount,
+      queuedServiceCount: state.queuedServiceCount,
       receiptCount: state.receipts.length,
       receipts: clone(state.receipts),
       serviceCount: state.services.length,
@@ -349,7 +370,10 @@ export function createWebGpuForegroundOpportunityInterlock(input = {}) {
     const report = snapshot();
     return deepFreeze({
       ...report,
-      status: report.pendingRequestCount === 0 && report.activeRequestCount === 0
+      status: report.pendingRequestCount === 0
+          && report.activeRequestCount === 0
+          && report.activeServiceCount === 0
+          && report.queuedServiceCount === 0
         ? 'succeeded'
         : 'incomplete',
     });
