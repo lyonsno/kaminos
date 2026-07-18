@@ -113,7 +113,7 @@ const [index, core, session, selectiveLive, witness] = await Promise.all([
 assert.match(index, /id="volume-full-support-source"/, 'cockpit exposes an explicit coefficient source selector');
 assert.match(index, /id="volume-full-support-receipt"/, 'cockpit exposes a wrapping authority receipt');
 assert.match(index, /Self-extinction \+ additive RGB/, 'operator sees the exact Stage A transport limitation');
-assert.match(index, /Matched optical recurrence[\s\S]*producer-evidence-unverified/i, 'Stage B remains visibly unavailable until producer evidence validates');
+assert.match(index, /Matched optical recurrence[\s\S]*stage-b-resources-missing/i, 'Stage B visibly names missing resources instead of presenting a generic evidence block');
 assert.match(index, /full_support_source_field_manifest/, 'cockpit route names its frozen source manifest explicitly');
 assert.match(
   index,
@@ -144,9 +144,10 @@ assert.doesNotMatch(
 );
 assert.ok(
   index.indexOf('await volumePrototype.setActive(true);', index.indexOf("params.get('kaminos_volume_smoke') === '1'"))
-    < index.indexOf('bootstrapFullSupportStageAState().catch'),
+    < index.indexOf('bootstrapFullSupportStageAState().then'),
   'routed WebGPU activation must complete before checksum-state bootstrap begins',
 );
+assert.match(index, /bootstrapFullSupportStageAState\(\)\.then\(stageAReceipt[\s\S]*return bootstrapStageBConsumer\(\)/, 'Stage B must wait for effective Stage A state and overlays');
 assert.match(core, /loadBoundarySplatLiveUnionCoefficientOverlay/, 'renderer exposes checksum-bound overlay loading');
 assert.match(core, /auditBoundarySplatLiveUnionCoefficientOverlayPopulation/, 'renderer gates overlay effectiveness on exact population');
 assert.match(core, /flow-tangent-five-tap-bilinear-v0/, 'renderer names the exact live deposition treatment');

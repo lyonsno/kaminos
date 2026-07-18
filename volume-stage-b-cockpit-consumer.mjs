@@ -2,7 +2,10 @@ const SHA256 = /^[0-9a-f]{64}$/;
 const GIT_COMMIT = /^[0-9a-f]{40}$/;
 const MANIFEST_SCHEMA = 'kaminos.pyro-cockpit-manifest.v0';
 const TREATMENT_IDENTITY = 'matched-optical-recurrence-v0';
-const DISABLED_REASON = 'producer-evidence-unverified';
+const MISSING_REASON = 'stage-b-resources-missing';
+const INCOMPLETE_REASON = 'stage-b-resources-incomplete';
+const PROVISIONAL_AUTHORITY = 'producer-evidence-unverified';
+const PROVISIONAL_SCOPE = 'operator-exploration-only';
 const PRESENTATION_BASELINE = '0859abf8d5b06359e4d2708f5b597c327b43c4af';
 const WRAPPER_ROUTE = 'exact-basin-selective-head-live-v0';
 const RENDERER_ROUTE = 'native-3d-compute-fluid-raymarch-v0';
@@ -34,7 +37,9 @@ const REQUIRED_VIEW_SOCKETS = Object.freeze([
 export const STAGE_B_COCKPIT_CONSUMER = Object.freeze({
   schema: MANIFEST_SCHEMA,
   identity: TREATMENT_IDENTITY,
-  disabledReason: DISABLED_REASON,
+  disabledReason: MISSING_REASON,
+  provisionalAuthority: PROVISIONAL_AUTHORITY,
+  provisionalScope: PROVISIONAL_SCOPE,
   producerContractCommit: '2a229b80',
   accumulationIdentity: 'depth-binned-emission-optical-depth-v0',
   transportIdentity: 'depth-binned-exponential-self-transmittance-v0',
@@ -158,7 +163,7 @@ function validateManifest(manifest) {
 
 function emptyPassReceipt() {
   return {
-    requested: ['manifest-validation', 'resource-binding'],
+    requested: ['manifest-validation', 'resource-binding', 'resource-load-verification'],
     applied: [],
     rendererRequested: false,
     rendererEncoded: false,
@@ -178,6 +183,7 @@ function baseReceipt(input) {
     requestedManifestSha256: input.requestedManifestSha256 ?? null,
     effectiveManifestSha256: null,
     fallbackUsed: false,
+    resourceState: 'missing',
     authority: null,
     viewSockets: null,
     authoredFork: null,
@@ -191,8 +197,8 @@ export function admitStageBCockpitManifest(input = {}) {
   const receipt = baseReceipt(input);
   if (!input.requestedManifestUrl && !input.manifest) {
     receipt.status = 'disabled';
-    receipt.disabledReason = DISABLED_REASON;
-    receipt.failures = [DISABLED_REASON];
+    receipt.disabledReason = MISSING_REASON;
+    receipt.failures = [MISSING_REASON];
     return receipt;
   }
 
@@ -205,13 +211,34 @@ export function admitStageBCockpitManifest(input = {}) {
   failures.push(...validateManifest(input.manifest));
   if (failures.length > 0) {
     receipt.failures = [...new Set(failures)];
+    if (receipt.failures.some(failure => [
+      'manifest-missing',
+      'manifest-partial',
+      'artifacts-incomplete',
+      'artifact-role-missing:original-presentation',
+      'artifact-role-missing:matched-optical',
+    ].includes(failure))) {
+      receipt.status = 'disabled';
+      receipt.disabledReason = INCOMPLETE_REASON;
+      receipt.resourceState = 'incomplete';
+    }
     return receipt;
   }
 
   const manifestUrl = new URL(input.effectiveManifestUrl);
+  const loadMap = new Map((Array.isArray(input.resourceLoadReceipts) ? input.resourceLoadReceipts : [])
+    .map(load => [load?.id, load]));
+  check(failures, loadMap.size === input.manifest.artifacts.length, 'stage-b-resource-load-incomplete');
   const resources = input.manifest.artifacts.map(artifact => {
     const effectiveUrl = new URL(artifact.path, manifestUrl);
-    if (effectiveUrl.origin !== manifestUrl.origin) throw new Error(`cross-origin-artifact-route:${artifact.id}`);
+    check(failures, effectiveUrl.origin === manifestUrl.origin, `cross-origin-artifact-route:${artifact.id}`);
+    const load = loadMap.get(artifact.id);
+    check(failures, Boolean(load), `stage-b-resource-load-missing:${artifact.id}`);
+    check(failures, load?.status === 'loaded', `stage-b-resource-load-failed:${artifact.id}`);
+    check(failures, load?.requestedUrl === effectiveUrl.href && load?.effectiveUrl === effectiveUrl.href, `stage-b-resource-route-substitution:${artifact.id}`);
+    check(failures, load?.requestedSha256 === artifact.sha256 && load?.effectiveSha256 === artifact.sha256, `stage-b-resource-hash-substitution:${artifact.id}`);
+    check(failures, load?.requestedBytes === artifact.bytes && load?.effectiveBytes === artifact.bytes, `stage-b-resource-byte-length-substitution:${artifact.id}`);
+    check(failures, load?.fallbackUsed === false, `stage-b-resource-fallback:${artifact.id}`);
     return {
       id: artifact.id,
       path: artifact.path,
@@ -222,10 +249,26 @@ export function admitStageBCockpitManifest(input = {}) {
       effectiveUrl: effectiveUrl.href,
       requestedRoute: artifact.loadRoute,
       effectiveRoute: artifact.loadRoute,
+      loadStatus: load?.status || 'missing',
+      loadFallbackUsed: load?.fallbackUsed ?? null,
     };
   });
 
+  if (failures.length > 0) {
+    receipt.failures = [...new Set(failures)];
+    receipt.resourceState = 'incomplete';
+    const incomplete = receipt.failures.some(failure => failure === 'stage-b-resource-load-incomplete'
+      || failure.startsWith('stage-b-resource-load-missing:')
+      || failure.startsWith('stage-b-resource-load-failed:'));
+    if (incomplete) {
+      receipt.status = 'disabled';
+      receipt.disabledReason = INCOMPLETE_REASON;
+    }
+    return receipt;
+  }
+
   receipt.status = 'effective';
+  receipt.resourceState = 'complete';
   receipt.effectiveTreatment = TREATMENT_IDENTITY;
   receipt.effectiveManifestUrl = input.effectiveManifestUrl;
   receipt.effectiveManifestSha256 = input.effectiveManifestSha256;
@@ -242,11 +285,15 @@ export function admitStageBCockpitManifest(input = {}) {
     overflowCount: input.manifest.capacity.overflowCount,
     lockedAxes: [...input.manifest.controls.locked],
     mutableAxes: [...input.manifest.controls.mutable],
+    evidenceAuthority: PROVISIONAL_AUTHORITY,
+    operatorScope: PROVISIONAL_SCOPE,
+    decisionBearing: false,
+    acceptanceCustodian: 'pyro-radiance-transfer-bailiff',
   };
   receipt.viewSockets = structuredClone(input.manifest.viewSockets);
   receipt.authoredFork = structuredClone(input.manifest.authoredFork);
   receipt.resources = resources;
-  receipt.passes.applied = ['manifest-validation', 'resource-binding'];
+  receipt.passes.applied = ['manifest-validation', 'resource-binding', 'resource-load-verification'];
   return receipt;
 }
 

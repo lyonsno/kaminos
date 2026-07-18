@@ -147,7 +147,9 @@ const resourceLoadReceipts = manifest.artifacts.map(artifact => ({
 }));
 
 assert.equal(STAGE_B_COCKPIT_CONSUMER.identity, 'matched-optical-recurrence-v0');
-assert.equal(STAGE_B_COCKPIT_CONSUMER.disabledReason, 'producer-evidence-unverified');
+assert.equal(STAGE_B_COCKPIT_CONSUMER.disabledReason, 'stage-b-resources-missing');
+assert.equal(STAGE_B_COCKPIT_CONSUMER.provisionalAuthority, 'producer-evidence-unverified');
+assert.equal(STAGE_B_COCKPIT_CONSUMER.provisionalScope, 'operator-exploration-only');
 
 const unavailable = admitStageBCockpitManifest({
   requestedTreatment: 'matched-optical-recurrence-v0',
@@ -215,7 +217,7 @@ for (const [label, mutate, expected] of [
   };
   mutate(input);
   const receipt = admitStageBCockpitManifest(input);
-  assert.equal(receipt.status, 'failed', label);
+  assert.notEqual(receipt.status, 'effective', label);
   assert.match(receipt.failures.join(','), expected, label);
   assert.equal(receipt.effectiveTreatment, null, label);
   assert.deepEqual(receipt.passes.applied, [], label);
@@ -274,7 +276,7 @@ const [index, session, selectiveLive, witness, core] = await Promise.all([
   readFile(new URL('../volume-core.js', import.meta.url), 'utf8'),
 ]);
 assert.match(index, /id="volume-stage-b-view"/, 'Stage B viewer must expose the producer-declared view sockets');
-assert.match(index, /id="volume-stage-b-status"[^]*producer-evidence-unverified/, 'Stage B must be visibly disabled before producer evidence validates');
+assert.match(index, /id="volume-stage-b-status"[^]*stage-b-resources-missing/, 'Stage B must visibly name its missing resource state before admission');
 assert.match(index, /bootstrapStageBConsumer/, 'cockpit must bootstrap manifest validation and resource binding');
 assert.match(index, /full_support_stage_b_manifest_sha256/, 'cockpit route must bind the requested producer manifest hash');
 assert.doesNotMatch(index, /Matched optical recurrence:\s*awaiting source manifest/i, 'stale manifest-dependency language must be removed');
@@ -282,7 +284,7 @@ assert.match(session, /--stage-b-manifest/, 'session launcher must accept a call
 assert.match(session, /--stage-b-manifest-sha256/, 'session launcher must accept the exact requested manifest identity');
 assert.match(selectiveLive, /key\.startsWith\('full_support_'\)/, 'wrapper must preserve Stage B manifest custody parameters');
 assert.match(witness, /__kaminosStageBCockpitReceipt/, 'browser witness must capture the effective Stage B consumer receipt');
-assert.match(witness, /producer-evidence-unverified/, 'pre-evidence witness must require the explicit disabled reason');
+assert.match(witness, /stage-b-resources-missing/, 'pre-resource witness must require the explicit missing-resource reason');
 assert.match(witness, /routeReceipt\.artifacts\?\.stageBManifest/, 'browser witness must branch on the effective route receipt instead of assuming evidence absence');
 assert.match(witness, /stageBReceipt\.status[^]*effective/, 'evidence-present route must admit an effective manifest and resource receipt');
 assert.match(witness, /stageBReceipt\.effectiveManifestSha256[^]*stageBManifestArtifact\.sha256/, 'evidence-present witness must bind the effective manifest hash');

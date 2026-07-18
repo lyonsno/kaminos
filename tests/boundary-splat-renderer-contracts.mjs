@@ -42,7 +42,7 @@ assert.match(core, /copyBufferToBuffer\(boundarySplatDrawBuffer,\s*0,\s*boundary
 assert.match(core, /boundarySplatComputeBindGroups/, 'splat compute uses separate bind groups from raster');
 assert.match(core, /boundarySplatRenderBindGroup[\s\S]*resource:\s*\{\s*buffer:\s*boundarySplatBuffer\s*\}/, 'splat raster reads the compacted candidate buffer directly after compute passes');
 assert.doesNotMatch(core, /boundarySplatRenderBuffer/, 'renderer no longer allocates a full-capacity render-copy buffer');
-assert.match(core, /pass\.drawIndirect\(boundarySplatIndirectBuffer,\s*0\)/, 'splat raster count comes from the GPU indirect buffer');
+assert.match(core, /const indirectBuffer = bilinear\s*\? boundarySplatBilinearIndirectBuffer\s*:\s*boundarySplatIndirectBuffer[\s\S]*pass\.drawIndirect\(indirectBuffer,\s*0\)/, 'splat raster count comes from the selected GPU indirect buffer');
 const splatDrawFunction = core.match(/function encodeBoundarySplatDraw\([\s\S]*?\n  \}/)?.[0] || '';
 assert.doesNotMatch(splatDrawFunction, /mapAsync|await/, 'live splat drawing must not depend on CPU readback');
 assert.match(splatDrawFunction, /const loadOp\s*=\s*options\.loadOp\s*===\s*'load'\s*\?\s*'load'\s*:\s*'clear'/, 'splat drawing explicitly normalizes clear versus composite attachment loading');
