@@ -61,6 +61,7 @@ const makeReport = async (grid, name, cohortIdentity, fixedManifestPath = null) 
       droppedRowCount: 0,
       footprintMode: 'flow-tangent-five-tap-bilinear-v0',
       pathScale: grid / 10,
+      coefficientSignal: { nonzeroCount: grid * 8 },
       depositionScaleIdentity: 'native-cell-width-from-effective-source-grid-v0',
       coefficientBoundary: 'per-sample-pre-tone-map-emission-extinction-v0',
       sharedTransmittanceIdentity: 'ridge-plus-non-ridge-extinction-one-running-transmittance-v0',
@@ -80,7 +81,7 @@ const makeReport = async (grid, name, cohortIdentity, fixedManifestPath = null) 
         cameras: Array.from({ length: 21 }, (_, cameraIndex) => ({ cameraIndex, width: 314, height: 242, cameraPoseHash: `pose-${cameraIndex}`, effectiveCameraPoseHash: `effective-pose-${cameraIndex}` })),
       },
     },
-    calibration: { identity: 'camera-10-only-global-optical-path-fit-v0', cameraIndex: 10, calibrationBoundaryHit: false },
+    calibration: { identity: 'camera-10-only-global-optical-path-fit-v0', cameraIndex: 10, pathScale: grid / 10, calibrationBoundaryHit: false },
     massAccounting: { allNominalKernelMassConserved: true, imageMetricAuthority: 'decision-bearing-exact-frozen-viewport-v0' },
     metrics: { cameras, heldOutMean: { cameraCount: 20 } },
     descriptorReceipt: {
@@ -195,6 +196,13 @@ await expectFailure('wrong-native-width', async () => {
   value.effective.nativeCellWidthWorld = 2 / 160;
   await writeJson(grid96.reportPath, value);
 }, /native.*cell.*width/i);
+
+await expectFailure('zero-calibration-scale', async () => {
+  const value = JSON.parse(await readFile(grid96.reportPath, 'utf8'));
+  value.effective.pathScale = 0;
+  value.calibration.pathScale = 0;
+  await writeJson(grid96.reportPath, value);
+}, /calibration.*scale/i);
 
 await expectFailure('unpinned-grid96-adapter-authority', async () => {
   const value = JSON.parse(await readFile(grid96.reportPath, 'utf8'));

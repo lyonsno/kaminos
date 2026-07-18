@@ -123,6 +123,8 @@ function validateOracle(path, expectedGrid, manifestPath) {
   require(effective.orderApproximation === ORDER_APPROXIMATION, `Grid${expectedGrid} order approximation drifted`);
   require(report.calibration?.identity === 'camera-10-only-global-optical-path-fit-v0', `Grid${expectedGrid} calibration policy drifted`);
   require(report.calibration?.cameraIndex === 10 && report.calibration?.calibrationBoundaryHit === false, `Grid${expectedGrid} calibration is invalid or boundary-limited`);
+  require(Number.isFinite(report.calibration?.pathScale) && report.calibration.pathScale > 0 && report.calibration.pathScale === effective.pathScale, `Grid${expectedGrid} calibration scale is zero, nonfinite, or inconsistent`);
+  require(Number.isInteger(effective.coefficientSignal?.nonzeroCount) && effective.coefficientSignal.nonzeroCount > 0, `Grid${expectedGrid} coefficient signal is empty`);
   require(report.massAccounting?.allNominalKernelMassConserved === true, `Grid${expectedGrid} changed nominal optical mass`);
   require(report.massAccounting?.imageMetricAuthority === 'decision-bearing-exact-frozen-viewport-v0', `Grid${expectedGrid} image metrics lack frozen-viewport authority`);
   const inputManifest = report.inputIdentity?.manifest || {};

@@ -1237,6 +1237,14 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
     descriptor_indices = np.rint(descriptors[:, 3]).astype(np.uint32)
     require(np.array_equal(descriptor_indices, indices), "kernel descriptor rows are not caller-ordered against native indices")
     require(np.all(np.isfinite(coefficients)) and float(np.min(coefficients)) >= 0.0, "coefficients contain nonfinite or negative values")
+    coefficient_nonzero_by_channel = np.count_nonzero(coefficients, axis=0)
+    require(int(np.sum(coefficient_nonzero_by_channel)) > 0, "coefficient payload is all zero")
+    coefficient_signal = {
+        "minimum": float(np.min(coefficients)),
+        "maximum": float(np.max(coefficients)),
+        "nonzeroCount": int(np.sum(coefficient_nonzero_by_channel)),
+        "nonzeroCountByChannel": [int(value) for value in coefficient_nonzero_by_channel],
+    }
 
     out_dir = Path(args.out_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -1455,6 +1463,7 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
             "footprintMode": footprint_identity(args.footprint_mode), "pathScale": path_scale,
             "footprintControls": footprint_controls,
             "splitSelectionCap": None,
+            "coefficientSignal": coefficient_signal,
             "momentMatchReference": (
                 "flow-tangent-five-by-three-ellipse-first-two-moments-v0"
                 if args.footprint_mode in {"higher-order", "compound"} else None

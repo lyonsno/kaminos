@@ -80,6 +80,7 @@ assert.match(source, /consumer-pinned-exact-grid96-source-adapter-feature-order-
 assert.match(source, /cameraCohort/, 'oracle records the complete camera cohort identity');
 assert.match(source, /effectiveCameraPoseHash/, 'oracle hashes the actual camera matrix payload it rasterizes');
 assert.match(source, /imageLedger/, 'oracle binds every published comparison image by hash and byte count');
+assert.match(source, /coefficient payload is all zero/, 'oracle rejects a source object with no emission or extinction signal');
 assert.match(source, /inputIdentity/, 'oracle records exact manifest and capture identities');
 
 const python = process.env.KAMINOS_MLX_PYTHON || '/private/tmp/kaminos-mlx-residual-venv/bin/python';
