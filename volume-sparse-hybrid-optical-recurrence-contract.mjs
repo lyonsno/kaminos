@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 
 const SCHEMA = 'kaminos.volume.sparse-hybrid-optical-orbit-capture.v0';
-const ROUTE = 'coarse-residual-plus-full-resolution-splat-shared-optical-recurrence-v0';
+const ROUTE = 'coarse-residual-plus-full-resolution-splat-shared-optical-recurrence-v1';
 const CAPTURE_SCALES = [0.20, 0.15, 0.10];
 const TIMING_SCALES = [0.20, 0.15];
 const TIMING_STAGES = [

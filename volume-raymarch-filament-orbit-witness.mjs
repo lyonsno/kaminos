@@ -47,7 +47,7 @@ const sparseHybridMode = sparseHybridOpticalRequested
   ? 'sparseHybridOpticalRecurrence'
   : 'sparseHybridPresentation';
 const sparseHybridRequestedRoute = sparseHybridOpticalRequested
-  ? 'coarse-residual-plus-full-resolution-splat-shared-optical-recurrence-v0'
+  ? 'coarse-residual-plus-full-resolution-splat-shared-optical-recurrence-v1'
   : 'coarse-residual-raymarch-under-full-resolution-splats-presentation-assay-v0';
 const rayStepCounts = parseIntegerList(args.get('--ray-steps') || '48,96,160');
 const orbitAngles = parseNumberList(args.get('--orbit-angles') || '-0.42,-0.28,-0.14,0,0.14,0.28,0.42');
@@ -1046,7 +1046,7 @@ function runtimeInitializationSource(config) {
           prototype.setControls({ boundarySplatMode: 'world_covariance', raySteps: request.raySteps });
           prototype.setBoundarySplatPresentationMode('matched-optical-recurrence-v0');
           operator.setComposition('splat-only-v0');
-          modeAuthority = 'coarse-residual-plus-full-resolution-splat-shared-optical-recurrence-v0';
+          modeAuthority = 'coarse-residual-plus-full-resolution-splat-shared-optical-recurrence-v1';
         } else if (request.mode === 'worldCovariance'
           || request.mode === 'worldCovarianceAdditive'
           || request.mode === 'worldCovarianceMatchedPresentation'
@@ -1084,11 +1084,11 @@ function runtimeInitializationSource(config) {
           const sharedOptical = request.mode === 'sparseHybridOpticalRecurrence';
           const rendered = await prototype.renderFrozenScaleToCanvas({
             boundarySplatComposition: sharedOptical
-              ? 'coarse-residual-plus-full-resolution-splat-shared-optical-recurrence-v0'
+              ? 'coarse-residual-plus-full-resolution-splat-shared-optical-recurrence-v1'
               : 'coarse-residual-raymarch-under-full-resolution-splats-presentation-assay-v0',
             coarseResidualRaymarchScale: request.raymarchScale,
             coarseResidualRaymarchAuthority: sharedOptical
-              ? 'non-ridge-positive-emission-extinction-coefficient-intervals-v0'
+              ? 'locally-preintegrated-non-ridge-emission-plus-extinction-intervals-v1'
               : 'non-ridge-contribution-under-complete-flame-transmittance-v0',
             controlOverrides: { raySteps: request.raySteps, temporalAccum: 0, temporalJitter: 0, gridOverlay: 0 },
             now: fixedNow,
@@ -1208,7 +1208,7 @@ function runtimeInitializationSource(config) {
         operator.setComposition('splat-only-v0');
         return prototype.sampleSparseHybridOpticalGpuProfile({
           coarseResidualRaymarchScale: request.raymarchScale,
-          coarseResidualRaymarchAuthority: 'non-ridge-positive-emission-extinction-coefficient-intervals-v0',
+          coarseResidualRaymarchAuthority: 'locally-preintegrated-non-ridge-emission-plus-extinction-intervals-v1',
           warmupIterations: 3,
           sampleIterations: 7,
           now: fixedNow,

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { validateSparseHybridOpticalRecurrenceReport } from '../volume-sparse-hybrid-optical-recurrence-contract.mjs';
 
-const ROUTE = 'coarse-residual-plus-full-resolution-splat-shared-optical-recurrence-v0';
+const ROUTE = 'coarse-residual-plus-full-resolution-splat-shared-optical-recurrence-v1';
 const SCALES = [0.20, 0.15, 0.10];
 
 function fixture() {

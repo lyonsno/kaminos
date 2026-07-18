@@ -67,11 +67,11 @@ const COARSE_RESIDUAL_RAYMARCH_PRESENTATION_RESOLVE_IDENTITY = 'coarse-linear-ra
 const COARSE_RESIDUAL_RAYMARCH_RESOLUTION_OWNERSHIP_IDENTITY = 'full-resolution-splats-independent-coarse-linear-raymarch-v0';
 const COARSE_RESIDUAL_RAYMARCH_AUTHORITY_IDENTITY = 'non-ridge-contribution-under-complete-flame-transmittance-v0';
 const COARSE_RESIDUAL_TRANSPORTED_RADIANCE_COMPOSITION_IDENTITY = 'separately-transported-radiance-sum-presentation-only-approximation-v0';
-const COARSE_RESIDUAL_SHARED_OPTICAL_RECURRENCE_IDENTITY = 'coarse-residual-plus-full-resolution-splat-shared-optical-recurrence-v0';
-const COARSE_RESIDUAL_OPTICAL_AUTHORITY_IDENTITY = 'non-ridge-positive-emission-extinction-coefficient-intervals-v0';
+const COARSE_RESIDUAL_SHARED_OPTICAL_RECURRENCE_IDENTITY = 'coarse-residual-plus-full-resolution-splat-shared-optical-recurrence-v1';
+const COARSE_RESIDUAL_OPTICAL_AUTHORITY_IDENTITY = 'locally-preintegrated-non-ridge-emission-plus-extinction-intervals-v1';
 const COARSE_RESIDUAL_OPTICAL_INTERVALS = 4;
 const COARSE_RESIDUAL_OPTICAL_RECONSTRUCTION_IDENTITY = 'bilinear-four-interval-optical-reconstruction-v0';
-const COARSE_RESIDUAL_SHARED_OPTICAL_RESOLVE_IDENTITY = 'four-interval-residual-plus-sixteen-bin-splat-shared-optical-grade-v0';
+const COARSE_RESIDUAL_SHARED_OPTICAL_RESOLVE_IDENTITY = 'raymarch-equivalent-four-interval-residual-plus-sixteen-bin-splat-shared-optical-grade-v1';
 const COARSE_RESIDUAL_SHARED_OPTICAL_DEPTH_INTERVAL_IDENTITY = 'camera-ray-entry-to-exit-sixteen-equal-intervals-v0';
 const BOUNDARY_SPLAT_INITIAL_CAPACITY = 131072;
 const BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES = 64;
@@ -5228,17 +5228,20 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     let ridgeOwnedExtinctionCoefficient = completeFlameExtinctionCoefficient * ridgeOwnershipWeight;
     let nonRidgeEmissionCoefficient = completeFlameEmissionCoefficient - ridgeOwnedEmissionCoefficient;
     let nonRidgeExtinctionCoefficient = completeFlameExtinctionCoefficient - ridgeOwnedExtinctionCoefficient;
-    let residualOpticalCoefficient = vec4<f32>(nonRidgeEmissionCoefficient, nonRidgeExtinctionCoefficient);
     let intervalCoordinate = clamp((t - startT) / max(endT - startT, 1e-6), 0.0, 0.999999);
     let residualInterval = u32(floor(intervalCoordinate * f32(${COARSE_RESIDUAL_OPTICAL_INTERVALS})));
     if (residualInterval == 0u) {
-      coarseResidualOptical0 = coarseResidualOptical0 + residualOpticalCoefficient;
+      coarseResidualOptical0.rgb = coarseResidualOptical0.rgb + exp(-coarseResidualOptical0.a) * nonRidgeEmissionCoefficient;
+      coarseResidualOptical0.a = coarseResidualOptical0.a + nonRidgeExtinctionCoefficient;
     } else if (residualInterval == 1u) {
-      coarseResidualOptical1 = coarseResidualOptical1 + residualOpticalCoefficient;
+      coarseResidualOptical1.rgb = coarseResidualOptical1.rgb + exp(-coarseResidualOptical1.a) * nonRidgeEmissionCoefficient;
+      coarseResidualOptical1.a = coarseResidualOptical1.a + nonRidgeExtinctionCoefficient;
     } else if (residualInterval == 2u) {
-      coarseResidualOptical2 = coarseResidualOptical2 + residualOpticalCoefficient;
+      coarseResidualOptical2.rgb = coarseResidualOptical2.rgb + exp(-coarseResidualOptical2.a) * nonRidgeEmissionCoefficient;
+      coarseResidualOptical2.a = coarseResidualOptical2.a + nonRidgeExtinctionCoefficient;
     } else {
-      coarseResidualOptical3 = coarseResidualOptical3 + residualOpticalCoefficient;
+      coarseResidualOptical3.rgb = coarseResidualOptical3.rgb + exp(-coarseResidualOptical3.a) * nonRidgeEmissionCoefficient;
+      coarseResidualOptical3.a = coarseResidualOptical3.a + nonRidgeExtinctionCoefficient;
     }
     let positiveRecomposedEmissionCoefficient = ridgeOwnedEmissionCoefficient + nonRidgeEmissionCoefficient;
     let positiveRecomposedExtinctionCoefficient = ridgeOwnedExtinctionCoefficient + nonRidgeExtinctionCoefficient;
@@ -5989,11 +5992,29 @@ fn coarseResidualSharedOpticalFs(in: CoarseResidualOpticalVertexOut) -> @locatio
       textureLoad(fullResolutionSplatOpticalBins, pixel, binIndex, 0),
       vec4<f32>(0.0),
     );
-    let accumulated = residualAccumulated / 4.0 + splatAccumulated;
+    let residualIntervalAlpha = 1.0 - exp(-residualAccumulated.a);
+    let residualSubintervalOpticalDepth = residualAccumulated.a / 4.0;
+    let residualSubintervalAlpha = 1.0 - exp(-residualSubintervalOpticalDepth);
+    let residualSubintervalEmission = select(
+      residualAccumulated.rgb / 4.0,
+      residualAccumulated.rgb * residualSubintervalAlpha / max(residualIntervalAlpha, 1e-6),
+      residualIntervalAlpha > 1e-6,
+    );
+    let residualSourceNumerator = select(
+      vec3<f32>(0.0),
+      residualSubintervalEmission * residualSubintervalOpticalDepth / max(residualSubintervalAlpha, 1e-6),
+      residualSubintervalOpticalDepth > 1e-6,
+    );
+    let residualVacuumEmission = select(
+      residualSubintervalEmission,
+      vec3<f32>(0.0),
+      residualSubintervalOpticalDepth > 1e-6,
+    );
+    let accumulated = vec4<f32>(residualSourceNumerator, residualSubintervalOpticalDepth) + splatAccumulated;
     let opticalDepth = accumulated.a;
     let binAlpha = 1.0 - exp(-opticalDepth);
     let binColor = select(vec3<f32>(0.0), accumulated.rgb / max(opticalDepth, 1e-6), opticalDepth > 1e-6);
-    color = binColor * binAlpha + color * (1.0 - binAlpha);
+    color = residualVacuumEmission + binColor * binAlpha + color * (1.0 - binAlpha);
   }
   let ndc = in.uv * 2.0 - vec2<f32>(1.0);
   let vignette = 1.0 - smoothstep(0.28, 1.48, length(ndc));
@@ -10665,7 +10686,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       splatDepthIntervalIdentity: COARSE_RESIDUAL_SHARED_OPTICAL_DEPTH_INTERVAL_IDENTITY,
       reconstructionIdentity: COARSE_RESIDUAL_OPTICAL_RECONSTRUCTION_IDENTITY,
       resolveIdentity: COARSE_RESIDUAL_SHARED_OPTICAL_RESOLVE_IDENTITY,
-      subintervalDistributionIdentity: 'uniform-four-way-subinterval-distribution-v0',
+      residualPayloadIdentity: 'locally-preintegrated-emission-plus-optical-depth-v1',
+      subintervalDistributionIdentity: 'raymarch-equivalent-homogeneous-four-way-subinterval-distribution-v1',
       orderingIdentity: 'far-to-near-shared-alpha-over-v0',
       alphaIdentity: BOUNDARY_SPLAT_OPTICAL_ALPHA_IDENTITY,
       blendIdentity: 'one-shared-emission-extinction-recurrence-v0',
