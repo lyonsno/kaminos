@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
 import { join } from 'node:path';
@@ -12,6 +13,7 @@ assert.ok(existsSync(modulePath), 'persistent sparse hybrid frontier consumer is
 const {
   EXPECTED_MANIFEST_SHA256,
   authenticatePersistentSparseCohort,
+  descriptorPath,
   failedFrontierReceipt,
   validatePersistentSparseCohortManifest,
 } = await import(pathToFileURL(modulePath));
@@ -72,12 +74,12 @@ function fixture() {
   };
 }
 
-test('exact immutable producer contract is admitted without selection authority', () => {
+test('structural admission cannot claim coefficient conservation', () => {
   assert.equal(EXPECTED_MANIFEST_SHA256, '4a93aeefe7eebec06f039dd35bd2947e4e76f292eadd7b7719e02235d062ac20');
   const receipt = validatePersistentSparseCohortManifest(fixture());
   assert.equal(receipt.ok, true);
   assert.equal(receipt.selectionRerunAuthorized, false);
-  assert.equal(receipt.coefficientConservationEligible, true);
+  assert.equal(receipt.coefficientConservationEligible, false);
 });
 
 test('unauthorized manifest binding fails before evidence can claim parity', async () => {
@@ -97,6 +99,41 @@ test('unauthorized manifest binding fails before evidence can claim parity', asy
         return true;
       },
     );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('local array descriptors reject symlink escape from the manifest root', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'persistent-sparse-frontier-path-'));
+  const root = join(directory, 'cohort');
+  const outside = join(directory, 'outside.bin');
+  mkdirSync(root);
+  writeFileSync(join(root, 'manifest.json'), '{}\n');
+  writeFileSync(outside, 'outside\n');
+  symlinkSync(outside, join(root, 'escaped.bin'));
+  try {
+    assert.throws(
+      () => descriptorPath({ path: 'escaped.bin' }, join(root, 'manifest.json'), true),
+      /escaped the manifest root/,
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('CLI argument failure writes a phase-specific ineligible receipt', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'persistent-sparse-frontier-cli-'));
+  const reportPath = join(directory, 'nested', 'failure.json');
+  try {
+    const result = spawnSync(process.execPath, [modulePath, '--report', reportPath], { encoding: 'utf8' });
+    assert.notEqual(result.status, 0);
+    const receipt = JSON.parse(readFileSync(reportPath, 'utf8'));
+    assert.equal(receipt.status, 'failed');
+    assert.equal(receipt.failurePhase, 'argument-validation');
+    assert.equal(receipt.coefficientConservationEligible, false);
+    assert.equal(receipt.visualClaimEligible, false);
+    assert.equal(receipt.productionEconomicsEligible, false);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

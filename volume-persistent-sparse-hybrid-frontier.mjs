@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { createReadStream, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -109,30 +109,29 @@ export function validatePersistentSparseCohortManifest(manifest) {
     rowsPerState: ROW_COUNT,
     selectionRerunAuthorized: false,
     residualRetargetingAuthorized: false,
-    coefficientConservationEligible: true,
+    coefficientConservationEligible: false,
     opticalOwnershipIdentity: OPTICAL_OWNERSHIP_IDENTITY,
   };
 }
 
-async function sha256File(path) {
-  const digest = createHash('sha256');
-  for await (const chunk of createReadStream(path)) digest.update(chunk);
-  return digest.digest('hex');
-}
-
-function descriptorPath(descriptor, manifestPath, localOnly) {
+export function descriptorPath(descriptor, manifestPath, localOnly) {
   const root = dirname(manifestPath);
   const path = resolve(root, descriptor.path);
   if (localOnly) {
-    const rel = relative(root, path);
+    const realRoot = realpathSync(root);
+    const realPath = realpathSync(path);
+    const rel = relative(realRoot, realPath);
     assert.ok(rel && rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel), 'cohort array path escaped the manifest root');
+    return realPath;
   }
   return path;
 }
 
-async function verifyFileDescriptor(descriptor, path, label) {
-  assert.equal(statSync(path).size, descriptor.bytes, `${label} on-disk byte count drifted`);
-  assert.equal(await sha256File(path), descriptor.sha256, `${label} on-disk SHA-256 drifted`);
+function readAuthenticatedDescriptor(descriptor, path, label) {
+  const bytes = readFileSync(path);
+  assert.equal(bytes.byteLength, descriptor.bytes, `${label} on-disk byte count drifted`);
+  assert.equal(createHash('sha256').update(bytes).digest('hex'), descriptor.sha256, `${label} on-disk SHA-256 drifted`);
+  return bytes;
 }
 
 async function inFailurePhase(failurePhase, operation) {
@@ -144,21 +143,21 @@ async function inFailurePhase(failurePhase, operation) {
   }
 }
 
-function verifySelectedSourceRows(state, manifestPath) {
-  const sourceRowsPath = descriptorPath(state.arrays.sourceRowIndices, manifestPath, true);
-  const selectedNativePath = descriptorPath(state.arrays.nativeCellIndices, manifestPath, true);
-  const selectedCoefficientPath = descriptorPath(state.arrays.coefficients, manifestPath, true);
-  const sourceNativePath = descriptorPath(state.sourceRows.nativeCellIndices, manifestPath, false);
-  const sourceCoefficientPath = descriptorPath(state.sourceRows.coefficients, manifestPath, false);
-  const typedFile = (path, Type) => {
-    const bytes = readFileSync(path);
+function typedBuffer(bytes, Type) {
+  assert.equal(bytes.byteLength % Type.BYTES_PER_ELEMENT, 0, 'authenticated array byte alignment drifted');
+  if (bytes.byteOffset % Type.BYTES_PER_ELEMENT === 0) {
     return new Type(bytes.buffer, bytes.byteOffset, bytes.byteLength / Type.BYTES_PER_ELEMENT);
-  };
-  const sourceRows = typedFile(sourceRowsPath, Uint32Array);
-  const selectedNative = typedFile(selectedNativePath, Uint32Array);
-  const selectedCoefficients = typedFile(selectedCoefficientPath, Float32Array);
-  const sourceNative = typedFile(sourceNativePath, Uint32Array);
-  const sourceCoefficients = typedFile(sourceCoefficientPath, Float32Array);
+  }
+  const aligned = Uint8Array.from(bytes);
+  return new Type(aligned.buffer, 0, aligned.byteLength / Type.BYTES_PER_ELEMENT);
+}
+
+function verifySelectedSourceRows(exportedArrays, sourceArrays) {
+  const sourceRows = typedBuffer(exportedArrays.get('sourceRowIndices'), Uint32Array);
+  const selectedNative = typedBuffer(exportedArrays.get('nativeCellIndices'), Uint32Array);
+  const selectedCoefficients = typedBuffer(exportedArrays.get('coefficients'), Float32Array);
+  const sourceNative = typedBuffer(sourceArrays.get('nativeCellIndices'), Uint32Array);
+  const sourceCoefficients = typedBuffer(sourceArrays.get('coefficients'), Float32Array);
   assert.equal(sourceRows.length, ROW_COUNT, 'source row index count drifted');
   const nativeIds = new Set();
   for (let row = 0; row < ROW_COUNT; row += 1) {
@@ -177,14 +176,10 @@ function verifySelectedSourceRows(state, manifestPath) {
   }
 }
 
-function verifyConsumerBounds(state, manifestPath) {
-  const typedFile = (path, Type) => {
-    const bytes = readFileSync(path);
-    return new Type(bytes.buffer, bytes.byteOffset, bytes.byteLength / Type.BYTES_PER_ELEMENT);
-  };
-  const footprint = typedFile(descriptorPath(state.arrays.footprintScales, manifestPath, true), Float32Array);
-  const multiplicity = typedFile(descriptorPath(state.arrays.depositMultiplicity, manifestPath, true), Uint8Array);
-  const retainedWeight = typedFile(descriptorPath(state.arrays.retainedQuadratureWeight, manifestPath, true), Float32Array);
+function verifyConsumerBounds(exportedArrays) {
+  const footprint = typedBuffer(exportedArrays.get('footprintScales'), Float32Array);
+  const multiplicity = typedBuffer(exportedArrays.get('depositMultiplicity'), Uint8Array);
+  const retainedWeight = typedBuffer(exportedArrays.get('retainedQuadratureWeight'), Float32Array);
   for (let row = 0; row < ROW_COUNT; row += 1) {
     assert.ok(Number.isFinite(footprint[row]) && footprint[row] >= 0.6875 && footprint[row] <= 1, 'exported footprint scale is out of bounds');
     assert.ok(multiplicity[row] <= 15, 'exported deposit multiplicity exceeds fixed-five/top-three bound');
@@ -203,22 +198,35 @@ export async function authenticatePersistentSparseCohort({ manifestPath, expecte
     return { manifest, manifestSha256, contract: validatePersistentSparseCohortManifest(manifest) };
   });
   for (const state of manifest.states) {
-    await inFailurePhase('exported-array-authentication', async () => {
+    const exportedArrays = await inFailurePhase('exported-array-authentication', async () => {
+      const authenticated = new Map();
       for (const [name, descriptor] of Object.entries(state.arrays)) {
-        await verifyFileDescriptor(descriptor, descriptorPath(descriptor, resolvedManifestPath, true), `${state.stateId}.${name}`);
+        authenticated.set(name, readAuthenticatedDescriptor(
+          descriptor,
+          descriptorPath(descriptor, resolvedManifestPath, true),
+          `${state.stateId}.${name}`,
+        ));
       }
+      return authenticated;
     });
-    await inFailurePhase('source-array-authentication', async () => {
+    const sourceArrays = await inFailurePhase('source-array-authentication', async () => {
+      const authenticated = new Map();
       for (const name of ['coefficients', 'nativeCellIndices']) {
         const descriptor = state.sourceRows[name];
-        await verifyFileDescriptor(descriptor, descriptorPath(descriptor, resolvedManifestPath, false), `${state.stateId}.sourceRows.${name}`);
+        authenticated.set(name, readAuthenticatedDescriptor(
+          descriptor,
+          descriptorPath(descriptor, resolvedManifestPath, false),
+          `${state.stateId}.sourceRows.${name}`,
+        ));
       }
+      return authenticated;
     });
-    await inFailurePhase('source-row-replay', async () => verifySelectedSourceRows(state, resolvedManifestPath));
-    await inFailurePhase('consumer-bounds', async () => verifyConsumerBounds(state, resolvedManifestPath));
+    await inFailurePhase('source-row-replay', async () => verifySelectedSourceRows(exportedArrays, sourceArrays));
+    await inFailurePhase('consumer-bounds', async () => verifyConsumerBounds(exportedArrays));
   }
   return {
     ...contract,
+    coefficientConservationEligible: true,
     status: 'authenticated-build-contract-only',
     manifestPath: resolvedManifestPath,
     manifestSha256,
@@ -253,12 +261,19 @@ function parseArgs(argv) {
 }
 
 async function main() {
-  const options = parseArgs(process.argv.slice(2));
-  assert.ok(options.manifest, '--manifest is required');
-  assert.ok(options.report, '--report is required');
-  const reportPath = resolve(options.report);
-  mkdirSync(dirname(reportPath), { recursive: true });
+  const argv = process.argv.slice(2);
+  const reportOptionIndex = argv.indexOf('--report');
+  let reportPath = reportOptionIndex >= 0 && argv[reportOptionIndex + 1] && !argv[reportOptionIndex + 1].startsWith('--')
+    ? resolve(argv[reportOptionIndex + 1])
+    : null;
+  let failurePhase = 'argument-validation';
   try {
+    const options = parseArgs(argv);
+    assert.ok(options.report, '--report is required');
+    reportPath = resolve(options.report);
+    mkdirSync(dirname(reportPath), { recursive: true });
+    assert.ok(options.manifest, '--manifest is required');
+    failurePhase = 'manifest-admission';
     const receipt = await authenticatePersistentSparseCohort({
       manifestPath: options.manifest,
       expectedManifestSha256: options['expected-manifest-sha256'],
@@ -266,8 +281,11 @@ async function main() {
     writeFileSync(reportPath, `${JSON.stringify(receipt, null, 2)}\n`);
     console.log(JSON.stringify(receipt, null, 2));
   } catch (error) {
-    const failure = failedFrontierReceipt(error);
-    writeFileSync(reportPath, `${JSON.stringify(failure, null, 2)}\n`);
+    const failure = failedFrontierReceipt(error, failurePhase);
+    if (reportPath) {
+      mkdirSync(dirname(reportPath), { recursive: true });
+      writeFileSync(reportPath, `${JSON.stringify(failure, null, 2)}\n`);
+    }
     console.error(JSON.stringify(failure, null, 2));
     process.exitCode = 1;
   }
