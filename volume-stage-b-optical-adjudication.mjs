@@ -91,7 +91,7 @@ export function adjudicateStageBOpticalLayers({
   let comparedChannelCount = 0;
 
   for (let outputY = 0; outputY < height; outputY += 1) {
-    const layerY = height - 1 - outputY;
+    const layerY = outputY;
     for (let x = 0; x < width; x += 1) {
       let colorR = 0;
       let colorG = 0;

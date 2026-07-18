@@ -112,6 +112,20 @@ const mismatch = adjudicateStageBOpticalLayers({
 assert.equal(mismatch.comparison.exactWithinTolerance, false, 'GPU mismatch must fail optical-chain fidelity');
 assert.ok(mismatch.comparison.maxAbsByteError >= 12);
 
+const orientationLayers = Array.from({ length: depthBins }, () => new Float32Array(1 * 2 * 4));
+orientationLayers[15].set([2, 0, 0, 1], 0);
+orientationLayers[15].set([0, 0, 2, 1], 4);
+const orientation = adjudicateStageBOpticalLayers({
+  width: 1,
+  height: 2,
+  layers: orientationLayers,
+  gpuRgba: new Uint8Array(8),
+  outputToleranceBytes: 255,
+  authority,
+});
+assert.ok(orientation.postTonemap.analyticalRgba[0] > orientation.postTonemap.analyticalRgba[2], 'top output row must sample the top optical attachment row');
+assert.ok(orientation.postTonemap.analyticalRgba[6] > orientation.postTonemap.analyticalRgba[4], 'bottom output row must sample the bottom optical attachment row');
+
 const nonFinite = layers.map(layer => Float32Array.from(layer));
 nonFinite[3][0] = Number.NaN;
 assert.throws(() => adjudicateStageBOpticalLayers({
