@@ -14,6 +14,12 @@ async function source(name) {
 const exporter = await source('view-conditioned-transfer-gpu-export.py');
 const page = await source('view-conditioned-transfer-gpu-benchmark.html');
 const witness = await source('view-conditioned-transfer-gpu-benchmark.mjs');
+let runCleanupActions;
+try {
+  ({ runCleanupActions } = await import(new URL('../view-conditioned-transfer-gpu-cleanup.mjs', import.meta.url)));
+} catch {
+  assert.fail('view-conditioned-transfer-gpu-cleanup.mjs is absent');
+}
 
 assert.match(exporter, /kaminos\.view-conditioned-transfer-gpu-input\.v0/, 'export schema is explicit');
 assert.match(exporter, /load_transfer_input[\s\S]*load_treatment/, 'export authenticates source and persisted treatment');
@@ -54,5 +60,16 @@ assert.match(witness, /addEventListener\(['"]error['"][\s\S]*rejectPending/, 'CD
 assert.match(witness, /phaseTimeout[\s\S]*Promise\.race/, 'transport waits are bounded by the caller timeout');
 assert.match(witness, /symlink[\s\S]*httpRoot[\s\S]*worktree[\s\S]*output/, 'HTTP server exposes only explicit worktree and durable-output mounts');
 assert.match(witness, /--directory[\s\S]*httpRoot/, 'HTTP server uses the isolated mount root rather than a filesystem-wide root');
+assert.match(witness, /runCleanupActions[\s\S]*chrome-termination[\s\S]*server-termination[\s\S]*http-root-removal/, 'witness names all load-bearing cleanup actions');
+
+const cleanupCalls = [];
+const cleanupErrors = await runCleanupActions([
+  { label: 'first-fails', run: async () => { cleanupCalls.push('first'); throw new Error('first failure'); } },
+  { label: 'second-runs', run: async () => { cleanupCalls.push('second'); } },
+  { label: 'third-fails', run: async () => { cleanupCalls.push('third'); throw new Error('third failure'); } },
+  { label: 'fourth-runs', run: async () => { cleanupCalls.push('fourth'); } },
+]);
+assert.deepEqual(cleanupCalls, ['first', 'second', 'third', 'fourth'], 'an earlier cleanup failure cannot skip later actions');
+assert.deepEqual(cleanupErrors.map(error => error.label), ['first-fails', 'third-fails'], 'cleanup preserves every failure label');
 
 console.log('view-conditioned transfer GPU benchmark contracts passed');

@@ -9,6 +9,7 @@ import { mkdir as mkdirAsync, mkdtemp as mkdtempAsync, readFile as readFileAsync
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { closeWritable, runCleanupActions } from './view-conditioned-transfer-gpu-cleanup.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const SCHEMA = 'kaminos.view-conditioned-transfer-gpu-benchmark.v0';
@@ -388,20 +389,34 @@ async function run(args) {
     await writeJson(reportPath, report);
     throw error;
   } finally {
-    try {
-      session?.close();
-      if (chrome) await terminate(chrome, args.phaseTimeoutMs, 'Chrome'); // chrome.kill is performed inside terminate.
-      if (server) await terminate(server, args.phaseTimeoutMs, 'HTTP server'); // server.kill is performed inside terminate.
-      browserLog?.end();
-      serverLog?.end();
-      if (profile) await rmAsync(profile, { recursive: true, force: true });
-      if (httpRoot) await rmAsync(httpRoot, { recursive: true, force: true });
-    } catch (cleanupError) {
+    const cleanupErrors = await runCleanupActions([
+      { label: 'session-close', run: async () => session?.close() },
+      { label: 'chrome-termination', run: async () => {
+        if (chrome) await terminate(chrome, args.phaseTimeoutMs, 'Chrome'); // chrome.kill is performed inside terminate.
+      } },
+      { label: 'server-termination', run: async () => {
+        if (server) await terminate(server, args.phaseTimeoutMs, 'HTTP server'); // server.kill is performed inside terminate.
+      } },
+      { label: 'browser-log-close', run: async () => closeWritable(browserLog) },
+      { label: 'server-log-close', run: async () => closeWritable(serverLog) },
+      { label: 'profile-removal', run: async () => {
+        if (profile) await rmAsync(profile, { recursive: true, force: true });
+      } },
+      { label: 'http-root-removal', run: async () => {
+        if (httpRoot) await rmAsync(httpRoot, { recursive: true, force: true });
+      } },
+    ]);
+    if (cleanupErrors.length > 0) {
+      const cleanupError = new AggregateError(
+        cleanupErrors.map(error => new Error(`${error.label}: ${error.name}: ${error.message}`)),
+        `benchmark cleanup failed in ${cleanupErrors.length} action(s)`,
+      );
       Object.assign(report, {
         status: 'failed',
         failurePhase: 'cleanup',
         error: `${cleanupError?.name || 'Error'}: ${cleanupError?.message || String(cleanupError)}`,
         stack: cleanupError?.stack || null,
+        cleanupErrors,
         optimizationClaimAllowed: false,
       });
       await writeJson(reportPath, report);
