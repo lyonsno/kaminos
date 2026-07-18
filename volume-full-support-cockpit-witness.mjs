@@ -155,14 +155,25 @@ try {
     const runtime = document.querySelector('#basin')?.contentWindow || window;
     return runtime.__kaminosStageBCockpitReceipt || null;
   })()`);
-  assert.equal(stageBReceipt.status, 'disabled', 'Stage B became authoritative without producer evidence');
-  assert.equal(stageBReceipt.disabledReason, 'producer-evidence-unverified', 'Stage B disabled reason was substituted');
   assert.equal(stageBReceipt.requestedTreatment, 'matched-optical-recurrence-v0', 'Stage B requested treatment was substituted');
-  assert.equal(stageBReceipt.effectiveTreatment, null, 'Stage B reported an effective treatment before evidence');
   assert.equal(stageBReceipt.fallbackUsed, false, 'Stage B fallback looked authoritative');
-  assert.deepEqual(stageBReceipt.passes?.applied, [], 'Stage B reported manifest/resource passes without evidence');
   assert.equal(stageBReceipt.passes?.rendererEncoded, false, 'Stage B renderer encoded without evidence');
   assert.equal(stageBReceipt.passes?.rendererApplied, false, 'Stage B renderer applied without evidence');
+  const stageBManifestArtifact = routeReceipt.artifacts?.stageBManifest;
+  if (stageBManifestArtifact) {
+    assert.equal(stageBReceipt.status, 'effective', 'verified Stage B manifest did not become resource-effective');
+    assert.equal(stageBReceipt.disabledReason, null, 'verified Stage B manifest retained a disabled reason');
+    assert.equal(stageBReceipt.effectiveTreatment, 'matched-optical-recurrence-v0', 'verified Stage B treatment identity was substituted');
+    assert.equal(stageBReceipt.requestedManifestSha256, stageBManifestArtifact.sha256, 'requested Stage B manifest hash drifted from the route receipt');
+    assert.equal(stageBReceipt.effectiveManifestSha256, stageBManifestArtifact.sha256, 'effective Stage B manifest hash drifted from the mounted artifact');
+    assert.deepEqual(stageBReceipt.passes?.applied, ['manifest-validation', 'resource-binding'], 'verified Stage B resource passes were not reported exactly');
+    assert.ok(stageBReceipt.resources?.length >= 2, 'verified Stage B manifest did not bind the required resources');
+  } else {
+    assert.equal(stageBReceipt.status, 'disabled', 'Stage B became authoritative without producer evidence');
+    assert.equal(stageBReceipt.disabledReason, 'producer-evidence-unverified', 'Stage B disabled reason was substituted');
+    assert.equal(stageBReceipt.effectiveTreatment, null, 'Stage B reported an effective treatment before evidence');
+    assert.deepEqual(stageBReceipt.passes?.applied, [], 'Stage B reported manifest/resource passes without evidence');
+  }
   lastTrustworthyEvidence = { ...lastTrustworthyEvidence, stageBReceipt };
 
   const sourceReceipts = [];

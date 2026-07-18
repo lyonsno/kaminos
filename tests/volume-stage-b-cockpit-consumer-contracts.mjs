@@ -179,6 +179,11 @@ for (const [label, mutate, expected] of [
   ['original overwrite admitted', input => { input.manifest.authoredFork.originalWitnessImmutable = false; }, /original-witness-mutable/],
   ['artifact role missing', input => { input.manifest.artifacts[0].id = 'debug'; }, /artifact-role-missing:original-presentation/],
   ['controls substituted', input => { input.manifest.controls.effectiveSha256 = sha('other-controls'); }, /controls-substitution/],
+  ['controls drifted from source', input => {
+    input.manifest.controls.requestedSha256 = sha('other-controls');
+    input.manifest.controls.effectiveSha256 = sha('other-controls');
+  }, /source-controls-substitution/],
+  ['locked axes malformed as text', input => { input.manifest.controls.locked = input.manifest.controls.locked.join(','); }, /locked-axes-invalid/],
 ]) {
   const input = {
     requestedTreatment: 'matched-optical-recurrence-v0',
@@ -234,6 +239,9 @@ assert.match(session, /--stage-b-manifest-sha256/, 'session launcher must accept
 assert.match(selectiveLive, /key\.startsWith\('full_support_'\)/, 'wrapper must preserve Stage B manifest custody parameters');
 assert.match(witness, /__kaminosStageBCockpitReceipt/, 'browser witness must capture the effective Stage B consumer receipt');
 assert.match(witness, /producer-evidence-unverified/, 'pre-evidence witness must require the explicit disabled reason');
+assert.match(witness, /routeReceipt\.artifacts\?\.stageBManifest/, 'browser witness must branch on the effective route receipt instead of assuming evidence absence');
+assert.match(witness, /stageBReceipt\.status[^]*effective/, 'evidence-present route must admit an effective manifest and resource receipt');
+assert.match(witness, /stageBReceipt\.effectiveManifestSha256[^]*stageBManifestArtifact\.sha256/, 'evidence-present witness must bind the effective manifest hash');
 assert.match(witness, /rendererApplied[^]*false/, 'pre-evidence witness must reject an unreported renderer application');
 
 console.log('volume Stage B cockpit consumer contracts passed');

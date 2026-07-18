@@ -132,8 +132,10 @@ function validateManifest(manifest) {
   check(failures, manifest.capacity?.overflowCount === 0, 'capacity-overflow');
   check(failures, SHA256.test(manifest.controls?.requestedSha256 || ''), 'requested-controls-hash-invalid');
   check(failures, manifest.controls?.effectiveSha256 === manifest.controls?.requestedSha256, 'controls-substitution');
+  check(failures, manifest.controls?.requestedSha256 === manifest.source?.controlsSha256, 'source-controls-substitution');
+  check(failures, Array.isArray(manifest.controls?.locked), 'locked-axes-invalid');
   for (const axis of REQUIRED_LOCKED_AXES) {
-    check(failures, manifest.controls?.locked?.includes(axis), `locked-axis-missing:${axis}`);
+    check(failures, Array.isArray(manifest.controls?.locked) && manifest.controls.locked.includes(axis), `locked-axis-missing:${axis}`);
   }
   check(failures, Array.isArray(manifest.controls?.mutable), 'mutable-axes-missing');
 
