@@ -43,7 +43,7 @@ assert.match(core, /median[\s\S]*p10[\s\S]*p90/, 'timing evidence must report a 
 assert.match(core, /reconstructionMs[\s\S]*splatRasterMs[\s\S]*recurrenceMs[\s\S]*totalGpuMs/, 'timing must split reconstruction, recurrence, splat, and total');
 assert.match(
   core,
-  /async function sampleSparseHybridOpticalGpuProfile[\s\S]*encodeBoundarySplatTelemetry\(encoder, true\)[\s\S]*await resolveBoundarySplatTelemetry\(\)[\s\S]*boundary-splat-optical-profile-overflow/,
+  /async function sampleSparseHybridOpticalGpuProfile[\s\S]*const telemetryEncoded\s*=\s*encodeBoundarySplatTelemetry\(encoder, true\)[\s\S]*boundary-splat-optical-profile-telemetry-unavailable[\s\S]*await resolveBoundarySplatTelemetry\(\)[\s\S]*Number\.isInteger\(overflowCount\)[\s\S]*boundary-splat-optical-profile-overflow/,
   'shared-optical timings must reject capacity-truncated splat raster evidence',
 );
 assert.match(witness, /captured-awaiting-personal-inspection/, 'nonblank shared-optical output must not claim visual acceptance');

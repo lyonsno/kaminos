@@ -10778,9 +10778,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       || boundarySplatTelemetryMapPending
       || !boundarySplatDrawBuffer
       || !boundarySplatReadbackBuffer
-    ) return;
+    ) return false;
     encoder.copyBufferToBuffer(boundarySplatDrawBuffer, 0, boundarySplatReadbackBuffer, 0, 32);
     boundarySplatTelemetryCopyPending = true;
+    return true;
   }
 
   function timestampQueriesAvailable() {
@@ -15496,7 +15497,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           },
         );
         if (!applied) throw new Error(state.sparseHybridPresentationReceipt?.fallbackReason || 'sparse-hybrid-optical-profile-route-unavailable');
-        encodeBoundarySplatTelemetry(encoder, true);
+        state.boundarySplatOverflowCount = null;
+        const telemetryEncoded = encodeBoundarySplatTelemetry(encoder, true);
+        if (!telemetryEncoded) throw new Error('boundary-splat-optical-profile-telemetry-unavailable:encode-skipped');
         encoder.resolveQuerySet(querySet, 0, queryCount, resolveBuffer, 0);
         encoder.copyBufferToBuffer(resolveBuffer, 0, readbackBuffer, 0, queryCount * 8);
         device.queue.submit([encoder.finish()]);
@@ -15507,8 +15510,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         errorScopeOpen = false;
         if (validationError) throw new Error(validationError.message || String(validationError));
         if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
-        if (Number(state.boundarySplatOverflowCount) > 0) {
-          throw new Error(`boundary-splat-optical-profile-overflow:${state.boundarySplatOverflowCount}`);
+        const overflowCount = state.boundarySplatOverflowCount;
+        if (!Number.isInteger(overflowCount) || overflowCount < 0) {
+          throw new Error('boundary-splat-optical-profile-telemetry-unavailable:readback-missing-or-failed');
+        }
+        if (overflowCount > 0) {
+          throw new Error(`boundary-splat-optical-profile-overflow:${overflowCount}`);
         }
         if (timestamps.some(value => value === 0n)) {
           throw new Error(`timestamp-query-incomplete:${Array.from(timestamps, value => value.toString()).join(',')}`);
