@@ -12445,6 +12445,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         directSparseInstanceCount: state.boundarySplatInstanceCount,
         directSparseOverflowCount: state.boundarySplatOverflowCount,
         directSparseCapacity: boundarySplatCapacity,
+        directSparseCountsSampledThisFrame: diagnosticTelemetryRequested,
+        directSparseCountsSampleAgeFrames: diagnosticTelemetryRequested
+          ? 0
+          : (nativeLowDirectDiagnosticsCache?.sampleAgeFrames ?? null),
+        directSparseCountsAuthority: 'periodic-last-sampled-boundary-splat-counts-v0',
         boundarySplatCandidateCount: state.boundarySplatCandidateCount,
         boundarySplatInstanceCount: state.boundarySplatInstanceCount,
         boundarySplatOverflowCount: state.boundarySplatOverflowCount,
@@ -12482,6 +12487,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         fullGridSidecarIntermediary: true,
         directModelCueEmission: false,
         fusedSparseModelOutput: false,
+        directSparseCountsSampledThisFrame: diagnosticTelemetryRequested,
+        directSparseCountsSampleAgeFrames: diagnosticTelemetryRequested
+          ? 0
+          : (nativeLowDirectDiagnosticsCache?.sampleAgeFrames ?? null),
+        directSparseCountsAuthority: 'periodic-last-sampled-boundary-splat-counts-v0',
         failurePhase: 'native-low-direct-sparse-render',
         error: error?.message || String(error),
       };
@@ -13535,9 +13545,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           vivisectorReceiverTiming?.values || [],
         );
       }
-      const nativeLowSupportTileProfile = (coarseSourceHistorySupportFrontEnabled || native96SparseFrontContinuityEnabled)
+      const directOrdinaryFrameDiagnosticsDeferred = nativeLowDirectSparseCuesEnabled && !wholeFrameDiagnosticsRequested;
+      const nativeLowSupportTileProfile = (
+        coarseSourceHistorySupportFrontEnabled
+        || native96SparseFrontContinuityEnabled
+        || directOrdinaryFrameDiagnosticsDeferred
+      )
         ? {
             identity: 'native-low-support-proximal-tile-profile-v0',
+            authority: directOrdinaryFrameDiagnosticsDeferred
+              ? 'periodic-direct-diagnostic-not-sampled-this-frame-v0'
+              : 'bypassed-by-active-sparse-route-v0',
             diagnosticFullSupportPassRequired: false,
             denseSupportFrontBypassed: coarseSourceHistorySupportFrontEnabled || native96SparseFrontContinuityEnabled,
             tileProfileReadbackMs: 0,
@@ -13549,10 +13567,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             droppedInputChannels: false,
           }
         : await runtime.sampleSupportTileProfile();
-      const nativeLowSourceTileCandidate = (coarseSourceHistorySupportFrontEnabled || native96SparseFrontContinuityEnabled)
+      const nativeLowSourceTileCandidate = (
+        coarseSourceHistorySupportFrontEnabled
+        || native96SparseFrontContinuityEnabled
+        || directOrdinaryFrameDiagnosticsDeferred
+      )
         ? {
             identity: 'native-low-source-proximal-tile-candidate-v0',
-            authority: native96SparseFrontContinuityEnabled
+            authority: directOrdinaryFrameDiagnosticsDeferred
+              ? 'periodic-direct-diagnostic-not-sampled-this-frame-v0'
+              : native96SparseFrontContinuityEnabled
               ? 'bypassed-by-native96-sparse-front-continuity-fixed-source-history-candidates-v0'
               : 'bypassed-by-native-low-coarse-source-history-support-front-replacement-v0',
             candidateEvaluationMode: 'source-history-fixed-gate-direct-candidate-list-v0',
@@ -13672,6 +13696,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             directSparseInstanceCount: treatmentRender?.directSparseInstanceCount ?? null,
             directSparseOverflowCount: treatmentRender?.directSparseOverflowCount ?? null,
             directSparseCapacity: treatmentRender?.directSparseCapacity ?? boundarySplatCapacity,
+            directSparseCountsSampledThisFrame: treatmentRender?.directSparseCountsSampledThisFrame === true,
+            directSparseCountsSampleAgeFrames: treatmentRender?.directSparseCountsSampleAgeFrames ?? null,
+            directSparseCountsAuthority: treatmentRender?.directSparseCountsAuthority || null,
             renderMs: treatmentRenderMs,
             failurePhase: treatmentRender?.failurePhase ?? null,
           };
@@ -14347,7 +14374,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           candidateStrideBytes: BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES,
           projectedSparseCandidateBytes,
           avoidedDenseReceiverWriteBytesLowerBound: Math.max(0, denseReceiverWriteBytes - projectedSparseCandidateBytes),
-          projectionAuthority: 'measured-splat-count-times-current-candidate-stride-v0',
+          countSampledThisFrame: nativeLowDirectSparseCues?.directSparseCountsSampledThisFrame ?? null,
+          countSampleAgeFrames: nativeLowDirectSparseCues?.directSparseCountsSampleAgeFrames ?? null,
+          projectionAuthority: nativeLowDirectSparseCuesEnabled
+            ? 'periodic-last-sampled-splat-count-times-current-candidate-stride-v0'
+            : 'measured-splat-count-times-current-candidate-stride-v0',
         },
         supportProximalTileProjection: {
           identity: nativeLowSupportTileProfile.identity,

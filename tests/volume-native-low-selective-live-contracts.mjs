@@ -344,6 +344,8 @@ assert.match(core, /diagnosticTelemetryReadbackThisFrame/, 'direct sparse route 
 assert.match(core, /wholeFrameCpuReadbackThisFrame[\s\S]*wholeFrameQueueCompletionWaitThisFrame/, 'direct sparse receipt distinguishes whole-frame diagnostic synchronization from receiver work');
 assert.match(core, /wholeFrameDiagnosticsRequested\s*&&\s*device\.queue\?\.onSubmittedWorkDone/, 'ordinary direct frames gate redundant stage fences behind diagnostic cadence');
 assert.match(core, /single-terminal-frame-fence-prevents-unbounded-control-latency-v0/, 'direct route retains one terminal backpressure fence instead of hiding GPU queue latency');
+assert.match(core, /periodic-direct-diagnostic-not-sampled-this-frame-v0/, 'ordinary direct frames do not fall through to tile-profile MAP_READ diagnostics');
+assert.match(core, /directSparseCountsSampledThisFrame[\s\S]*directSparseCountsSampleAgeFrames/, 'periodic direct sparse count receipts expose freshness');
 assert.match(core, /denseReceiverMaterializedThisFrame/, 'dense control receipt distinguishes retained availability from current-frame materialization');
 assert.match(core, /directSparseCandidateCount[\s\S]*directSparseInstanceCount[\s\S]*directSparseOverflowCount[\s\S]*directSparseCapacity/, 'direct sparse receipt preserves compaction capacity and overflow evidence');
 assert.match(witness, /nativeLowDirectSparseCues[\s\S]*fullGridReceiverMaterialization[\s\S]*receiverCopyBytes[\s\S]*fullGridSidecarIntermediary/, 'witness preserves direct sparse route and honest intermediary identity');

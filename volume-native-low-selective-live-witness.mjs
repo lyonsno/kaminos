@@ -296,6 +296,9 @@ try {
         && Number(directSparse?.directSparseInstanceCount) >= 0
         && Number(directSparse?.directSparseOverflowCount) === 0
         && Number(directSparse?.directSparseCapacity) >= Number(directSparse?.directSparseInstanceCount)
+        && typeof directSparse?.directSparseCountsSampledThisFrame === 'boolean'
+        && Number(directSparse?.directSparseCountsSampleAgeFrames) >= 0
+        && directSparse?.directSparseCountsAuthority === 'periodic-last-sampled-boundary-splat-counts-v0'
       ))
       && state?.nativeLowBreakEvenBudgetLedger?.identity === 'native-low-learned-transfer-break-even-ledger-v0'
       && Number(state?.nativeLowBreakEvenBudgetLedger?.outerKillBoundaryMs) === 24
@@ -400,6 +403,9 @@ try {
     assert.equal(directSparse?.fusedSparseModelOutput, false, 'direct sparse route impersonated fused sparse model output');
     assert.equal(Number(directSparse?.directSparseOverflowCount), 0, 'direct sparse compaction overflowed');
     assert.ok(Number(directSparse?.directSparseCapacity) >= Number(directSparse?.directSparseInstanceCount), 'direct sparse capacity is smaller than instance count');
+    assert.equal(typeof directSparse?.directSparseCountsSampledThisFrame, 'boolean', 'direct sparse count freshness flag missing');
+    assert.ok(Number(directSparse?.directSparseCountsSampleAgeFrames) >= 0, 'direct sparse count sample age missing');
+    assert.equal(directSparse?.directSparseCountsAuthority, 'periodic-last-sampled-boundary-splat-counts-v0', 'direct sparse count authority drifted');
     assert.equal(state?.nativeLowMaterializationProfile?.fullGridReceiverMaterialization, false, 'direct sparse materialization profile allowed a full receiver');
     assert.equal(state?.nativeLowMaterializationProfile?.receiverCopyBytes, 0, 'direct sparse materialization profile recorded receiver copies');
     assert.equal(state?.nativeLowMaterializationProfile?.fullGridSidecarIntermediary, true, 'direct sparse materialization profile hid the sidecar intermediary');
@@ -783,6 +789,13 @@ try {
       true,
       'observation did not include an ordinary readback-free direct frame',
     );
+    const ordinaryDirectState = startState?.nativeLowDirectSparseCues?.wholeFrameCpuReadbackThisFrame === false
+      ? startState
+      : endState;
+    assert.equal(ordinaryDirectState?.nativeLowSupportTileProfile?.tileProfileReadbackMs, 0, 'ordinary direct frame read support-tile diagnostics back to CPU');
+    assert.equal(ordinaryDirectState?.nativeLowSourceTileCandidate?.candidateReadbackMs, 0, 'ordinary direct frame read source-tile diagnostics back to CPU');
+    assert.equal(ordinaryDirectState?.nativeLowDirectSparseCues?.directSparseCountsSampledThisFrame, false, 'ordinary direct frame mislabeled stale count telemetry as current');
+    assert.ok(Number(ordinaryDirectState?.nativeLowDirectSparseCues?.directSparseCountsSampleAgeFrames) > 0, 'ordinary direct frame did not age last-sampled count telemetry');
     assert.equal(Number(endState?.nativeLowDirectSparseCues?.directSparseOverflowCount), 0, 'direct learned renderer overflowed during observation');
   }
   if (frontTopologyAblationRequested) {
