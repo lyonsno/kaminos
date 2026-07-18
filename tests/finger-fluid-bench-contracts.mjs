@@ -32,6 +32,11 @@ assert.match(benchCoreSource, /createFingerFluidBenchState/, 'bench core exports
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE\s*=\s*'webgpu-pbf-linked-cell-fluid-v0'/, 'GPU solver route is explicit');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_NEIGHBOR_GRID_CONTRACT\s*=\s*'wgsl-linked-cell-neighbor-grid-v0'/, 'linked-cell neighbor grid contract is explicit');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_DENSITY_CONTRACT\s*=\s*'wgsl-pbf-density-constraint-v0'/, 'PBF density contract is explicit');
+assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT\s*=\s*'wgsl-analytic-boundary-density-support-v0'/, 'analytic solids participate in a versioned pressure-support contract');
+assert.match(webgpuCoreSource, /fn analytic_boundary_density_support\(position: vec3<f32>\) -> vec4<f32>/, 'terrain and sphere boundary support share one analytic density/gradient function');
+assert.match(webgpuCoreSource, /fn compute_density_lambda[\s\S]*let boundarySupport = analytic_boundary_density_support\(position\)[\s\S]*density = density \+ boundarySupport\.w[\s\S]*gradientSquared = gradientSquared \+ dot\(boundarySupport\.xyz, boundarySupport\.xyz\)/, 'analytic boundary density and gradient enter the lambda solve');
+assert.match(webgpuCoreSource, /fn solve_position_delta[\s\S]*let boundarySupport = analytic_boundary_density_support\(position\)[\s\S]*correction = correction \+ lambda \* boundarySupport\.xyz/, 'analytic boundary support enters position correction before collision fallback');
+assert.match(webgpuCoreSource, /boundaryRelativeDensityErrorMean[\s\S]*boundaryRelativeDensityErrorP95[\s\S]*bulkRelativeDensityErrorMean[\s\S]*maximumBoundaryPenetration/, 'truth snapshots distinguish boundary pressure quality from bulk convergence and penetration');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_VORTICITY_CONTRACT\s*=\s*'wgsl-neighbor-vorticity-confinement-v0'/, 'neighbor-derived vorticity contract is explicit');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_OBSTACLE_CONTRACT\s*=\s*'shared-solver-render-obstacle-v0'/, 'solver and renderer share an obstacle contract');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_GPU_RENDERER_ROUTE\s*=\s*'webgpu-particle-sphere-renderer-v0'/, 'direct GPU renderer route is explicit');
@@ -408,6 +413,7 @@ assert.equal(state.source.schema, 'big-papa.finger-fluid.synthetic-source.v0');
 assert.equal(state.source.producerDiaulos, 'big-papa-finger-fluid');
 assert.equal(state.solver.identity, 'webgpu-pbf-linked-cell-fluid-v0');
 assert.deepEqual(state.solver.gridDimensions, [32, 20, 32]);
+assert.equal(state.solver.boundaryPressureContract, 'wgsl-analytic-boundary-density-support-v0');
 assert.equal(state.solver.vorticityConfinement, 'wgsl-neighbor-vorticity-confinement-v0');
 assert.equal(state.solver.restStateContract, 'wgsl-support-aware-persistent-rest-state-v0');
 assert.equal(state.solver.supportTransportContract, 'wgsl-support-tangential-transport-v0');
@@ -435,6 +441,23 @@ assert.throws(() => webgpuMod.resolveFingerFluidTruthScene('quietly_default'), /
 assert.equal(typeof webgpuMod.createFingerFluidTruthSceneParticles, 'function');
 assert.equal(typeof webgpuMod.measureFingerFluidTruthSnapshot, 'function');
 assert.equal(typeof webgpuMod.evaluateFingerFluidTruthTrajectory, 'function');
+assert.equal(typeof webgpuMod.evaluateAnalyticBoundaryKernelSupport, 'function');
+const oneWallSupport = webgpuMod.evaluateAnalyticBoundaryKernelSupport([
+  { distance: 0, normal: [0, 1, 0] },
+], { kernelRadius: 0.185, restDensity: 24.3 });
+assert.ok(Math.abs(oneWallSupport.missingFraction - 0.5) < 1e-9, 'a particle centered on one planar support recovers exactly the missing half-kernel');
+assert.ok(Math.abs(oneWallSupport.densityContribution - 11.65) < 1e-9, 'one planar support restores half of non-self rest density');
+assert.ok(oneWallSupport.constraintGradient[1] < 0, 'boundary density decreases in the outward support-normal direction');
+const twoWallSupport = webgpuMod.evaluateAnalyticBoundaryKernelSupport([
+  { distance: 0, normal: [0, 1, 0] },
+  { distance: 0, normal: [1, 0, 0] },
+], { kernelRadius: 0.185, restDensity: 24.3 });
+assert.ok(Math.abs(twoWallSupport.missingFraction - 0.75) < 1e-9, 'two orthogonal contacting supports compose as a bounded solid-union fraction');
+assert.ok(Math.abs(twoWallSupport.densityContribution - 17.475) < 1e-9, 'two supports cannot double-count more than their union kernel volume');
+const outsideSupport = webgpuMod.evaluateAnalyticBoundaryKernelSupport([
+  { distance: 0.185, normal: [0, 1, 0] },
+], { kernelRadius: 0.185, restDensity: 24.3 });
+assert.equal(outsideSupport.missingFraction, 0, 'solid support contributes nothing outside the compact kernel radius');
 const multiRegimeInitial = webgpuMod.createFingerFluidTruthSceneParticles(1024, 'multi_regime_playground');
 const deepPoolInitial = webgpuMod.createFingerFluidTruthSceneParticles(1024, 'deep_pool_rest');
 const damBreakInitial = webgpuMod.createFingerFluidTruthSceneParticles(1024, 'dam_break');
@@ -461,11 +484,17 @@ assert.equal(syntheticTruthSnapshot.retainedParticleRatio, 1);
 assert.equal(syntheticTruthSnapshot.totalKineticEnergy, 0.5);
 assert.equal(syntheticTruthSnapshot.occupiedCellCount, 1);
 assert.ok(syntheticTruthSnapshot.relativeDensityErrorMean > 0 && syntheticTruthSnapshot.relativeDensityErrorMean < 0.1);
+assert.equal(syntheticTruthSnapshot.boundaryPressureContract, 'wgsl-analytic-boundary-density-support-v0');
+assert.equal(syntheticTruthSnapshot.boundaryParticleCount + syntheticTruthSnapshot.bulkParticleCount, 2);
+assert.ok(Number.isFinite(syntheticTruthSnapshot.boundaryRelativeDensityErrorMean));
+assert.ok(Number.isFinite(syntheticTruthSnapshot.bulkRelativeDensityErrorMean));
+assert.ok(Number.isFinite(syntheticTruthSnapshot.maximumBoundaryPenetration));
 const truthCheckpoint = (elapsedMs, overrides = {}, scene = 'deep_pool_rest') => ({
   elapsedMs,
   fluidTruthSnapshot: {
     schema: 'kaminos.finger-fluid-truth-snapshot.v0',
     contract: 'kaminos-fluid-truth-gauntlet-v0',
+    boundaryPressureContract: 'wgsl-analytic-boundary-density-support-v0',
     scene,
     particleCount: 100,
     finiteParticleCount: 100,
@@ -476,6 +505,13 @@ const truthCheckpoint = (elapsedMs, overrides = {}, scene = 'deep_pool_rest') =>
     totalKineticEnergy: 100,
     relativeDensityErrorMean: 0.02,
     relativeDensityErrorP95: 0.05,
+    boundaryParticleCount: 40,
+    bulkParticleCount: 60,
+    boundaryRelativeDensityErrorMean: 0.03,
+    boundaryRelativeDensityErrorP95: 0.06,
+    bulkRelativeDensityErrorMean: 0.015,
+    bulkRelativeDensityErrorP95: 0.04,
+    maximumBoundaryPenetration: 0,
     occupiedCellCount: 32,
     occupiedVolumeProxy: 5,
     ...overrides,
@@ -512,6 +548,18 @@ assert.throws(() => webgpuMod.evaluateFingerFluidTruthTrajectory('deep_pool_rest
   truthCheckpoint(500, { relativeDensityErrorMean: Number.NaN }),
   truthCheckpoint(7000, { totalKineticEnergy: 20 }),
 ]), /density evidence/);
+assert.throws(() => webgpuMod.evaluateFingerFluidTruthTrajectory('deep_pool_rest', [
+  truthCheckpoint(500, { boundaryPressureContract: 'fallback-boundary-pressure-v0' }),
+  truthCheckpoint(7000, { totalKineticEnergy: 20 }),
+]), /boundary pressure contract/);
+assert.throws(() => webgpuMod.evaluateFingerFluidTruthTrajectory('deep_pool_rest', [
+  truthCheckpoint(500, { boundaryRelativeDensityErrorP95: Number.NaN }),
+  truthCheckpoint(7000, { totalKineticEnergy: 20 }),
+]), /non-finite or partial state/);
+assert.throws(() => webgpuMod.evaluateFingerFluidTruthTrajectory('deep_pool_rest', [
+  truthCheckpoint(500, { boundaryParticleCount: 39 }),
+  truthCheckpoint(7000, { totalKineticEnergy: 20 }),
+]), /boundary density evidence/);
 assert.throws(() => webgpuMod.evaluateFingerFluidTruthTrajectory('deep_pool_rest', [
   truthCheckpoint(500),
   truthCheckpoint(7000, { totalKineticEnergy: -20 }),

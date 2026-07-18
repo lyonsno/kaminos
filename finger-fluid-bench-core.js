@@ -65,6 +65,7 @@ export function createFingerFluidBenchState(options = {}) {
       gridDimensions: options.gridDimensions || [32, 20, 32],
       neighborGridContract: options.neighborGridContract || 'wgsl-linked-cell-neighbor-grid-v0',
       densityContinuity: options.densityContract || 'wgsl-pbf-density-constraint-v0',
+      boundaryPressureContract: options.boundaryPressureContract || 'wgsl-analytic-boundary-density-support-v0',
       pressureProjection: 'iterative_position_density_projection',
       vorticityConfinement: options.vorticityConfinementContract || 'wgsl-neighbor-vorticity-confinement-v0',
       freeSurfaceCohesion: options.freeSurfaceContract || 'wgsl-neighbor-free-surface-cohesion-v0',
