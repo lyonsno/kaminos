@@ -145,7 +145,8 @@ const exactReceipt = {
   },
 };
 
-const torn = buildLayeredStructuralGpuTearMaterial(notched, exactReceipt, scenario.force);
+const firstGestureForce = { ...scenario.force, gestureId: 'gesture-1' };
+const torn = buildLayeredStructuralGpuTearMaterial(notched, exactReceipt, firstGestureForce);
 assert.equal(torn.sympatheticTear.authority, STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_VISUAL_AUTHORITY);
 assert.equal(torn.sympatheticTear.effectiveRoute, STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_ROUTE);
 assert.equal(torn.components.length, notchedComponents.componentCount);
@@ -169,11 +170,84 @@ for (const node of torn.nodes) {
   }
 }
 
-const persisted = buildLayeredStructuralGpuTearMaterial(torn, exactReceipt, scenario.force);
+const persisted = buildLayeredStructuralGpuTearMaterial(torn, exactReceipt, firstGestureForce);
 assert.deepEqual(
   persisted.nodes.map(node => node.displacement),
   torn.nodes.map(node => node.displacement),
   'reapplying the same GPU tear receipt preserves rather than compounds separation',
+);
+assert.equal(
+  persisted.topologyEpoch,
+  torn.topologyEpoch,
+  'reapplying the same GPU tear receipt does not claim a new topology transition',
+);
+assert.equal(
+  persisted.connectivityEpoch,
+  torn.connectivityEpoch,
+  'reapplying the same GPU tear receipt does not claim a new connectivity transition',
+);
+
+const secondSequenceIdentity = `${sequenceIdentity}:gesture-2`;
+const secondReceipt = {
+  ...exactReceipt,
+  eventEpoch: 2,
+  requestedSequenceIdentity: secondSequenceIdentity,
+  effectiveSequenceIdentity: secondSequenceIdentity,
+};
+const secondGestureForce = {
+  ...scenario.force,
+  gestureId: 'gesture-2',
+  vector: { x: 0, y: 1, z: 0 },
+  magnitude: 0.72,
+};
+const continued = buildLayeredStructuralGpuTearMaterial(torn, secondReceipt, secondGestureForce);
+assert.equal(
+  continued.topologyEpoch,
+  torn.topologyEpoch,
+  'a visual-only second gesture with unchanged liveness does not advance topology epoch',
+);
+assert.equal(
+  continued.connectivityEpoch,
+  torn.connectivityEpoch,
+  'a visual-only second gesture with unchanged liveness does not advance connectivity epoch',
+);
+for (let index = 0; index < torn.nodes.length; index += 1) {
+  const before = torn.nodes[index];
+  const after = continued.nodes[index];
+  if (before.componentId === `g${notchedComponents.anchoredComponentLabel}`) continue;
+  assert.equal(
+    after.displacement.x,
+    before.displacement.x,
+    'a distinct second gesture preserves the first accepted displacement axis',
+  );
+  assert.ok(
+    after.displacement.y > before.displacement.y,
+    'a distinct second gesture composes its new displacement from the prior endpoint',
+  );
+}
+const continuedReplay = buildLayeredStructuralGpuTearMaterial(
+  continued,
+  secondReceipt,
+  secondGestureForce,
+);
+assert.deepEqual(
+  continuedReplay.nodes.map(node => node.displacement),
+  continued.nodes.map(node => node.displacement),
+  'replaying a second-gesture receipt remains idempotent',
+);
+
+const invalidLiveness = [...exactReceipt.gpuStructuralState.finalBondLiveness];
+invalidLiveness[0] = 1;
+assert.throws(
+  () => buildLayeredStructuralGpuTearMaterial(torn, {
+    ...exactReceipt,
+    gpuStructuralState: {
+      ...exactReceipt.gpuStructuralState,
+      finalBondLiveness: invalidLiveness,
+    },
+  }, firstGestureForce),
+  /invalid bond liveness/,
+  'the material-authoring boundary rejects non-boolean GPU liveness',
 );
 
 assert.throws(

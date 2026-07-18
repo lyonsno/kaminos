@@ -98,6 +98,7 @@
     "forceEnvelope": {
       "kind": "camera-relative-picked-layered-drag",
       "authority": "camera-relative-picked-contact-force-envelope-v0",
+      "gestureId": "picked-drag-2",
       "start": {
         "x": 0.23502504512296146,
         "y": 0.7200500748166779,

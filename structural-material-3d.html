@@ -277,6 +277,7 @@
     let hapticDispatchErrorCount = 0;
     let latestHapticImpulse = null;
     let latestHapticDispatchReceipt = null;
+    let structuralGestureSequence = 0;
     const hapticCapabilities = detectStructuralHapticCapabilities(undefined, { nativeCompanionUrl: nativeHapticCompanionUrl });
     const gpuTearRequestGate = createLayeredStructuralGpuTearRequestGate();
     const latestGpuOperationTracker = createLatestStructuralGpuOperationTracker();
@@ -568,6 +569,7 @@
           contactPoint: dragStart?.contactPoint || lastPoint,
           screenRight: dragStart?.screenRight,
           screenDown: dragStart?.screenDown,
+          gestureId: dragStart?.gestureId,
         });
         lastPoint = forceEnvelope.point;
         return forceEnvelope;
@@ -830,6 +832,7 @@
         const basis = cameraBasisInMaterial();
         latestStructuralPick = pick;
         dragStart = {
+          gestureId: `picked-drag-${++structuralGestureSequence}`,
           screen,
           contactPoint: pick.point,
           screenRight: basis.screenRight,
@@ -841,6 +844,7 @@
           contactPoint: pick.point,
           screenRight: basis.screenRight,
           screenDown: basis.screenDown,
+          gestureId: dragStart.gestureId,
         });
       });
     }, true);

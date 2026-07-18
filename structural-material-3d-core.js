@@ -443,6 +443,7 @@ export function createLayeredStructuralPickedDragInteraction({
   contactPoint,
   screenRight,
   screenDown,
+  gestureId,
 } = {}) {
   const dragStart = normalizedPoint2(start);
   const dragCurrent = normalizedPoint2(current, dragStart);
@@ -483,6 +484,9 @@ export function createLayeredStructuralPickedDragInteraction({
   return {
     kind: 'camera-relative-picked-layered-drag',
     authority: 'camera-relative-picked-contact-force-envelope-v0',
+    gestureId: typeof gestureId === 'string' || Number.isFinite(gestureId)
+      ? String(gestureId)
+      : null,
     start: { ...contact },
     point: { ...contact },
     visualEnd: { x: round(visualEnd.x), y: round(visualEnd.y), z: round(visualEnd.z) },

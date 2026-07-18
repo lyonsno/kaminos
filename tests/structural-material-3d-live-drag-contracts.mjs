@@ -254,6 +254,8 @@ assert.match(witnessSource, /preReleaseStructuralMutation/, 'browser witness req
 assert.match(witnessSource, /releaseFlushedFinalEnvelope/, 'browser witness proves release flushes the final envelope');
 assert.match(witnessSource, /latestEnvelopeCoalescing/, 'browser witness forces dense move events through latest-envelope coalescing');
 assert.match(witnessSource, /samplingInvariant/, 'browser witness compares dense and coarse sampling fingerprints');
+assert.match(witnessSource, /repeatDragPreservedPriorDisplacement/, 'browser witness rejects second-drag transform replacement');
+assert.match(witnessSource, /repeatPointerDownPreservedDisplacement/, 'browser witness rejects snapback before second-drag input');
 assert.match(witnessSource, /__structuralMaterial3dPickTarget/, 'browser witness begins from a rendered structural pick target');
 assert.match(witnessSource, /immediateInputLoadVisible/, 'browser witness observes input load in the pointer event task');
 assert.match(witnessSource, /immediateGpuPendingVisible/, 'browser witness distinguishes pending GPU work from applied input load');

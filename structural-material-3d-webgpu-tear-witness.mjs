@@ -258,6 +258,7 @@ const report = {
   unnotchedControl: null,
   notchedTear: null,
   visibleTear: null,
+  repeatDrag: null,
   residentBinding: null,
   visibleBinding: null,
   rollbackRecovery: null,
@@ -543,9 +544,94 @@ try {
     persisted.summary.brokenBondCount === pageAfter.summary.brokenBondCount;
   assertCheck(report.checks.releasePreservedSeparation, 'release did not preserve the GPU-authored separation');
 
+  report.failurePhase = 'repeat-drag-continuity';
+  const repeatPickTarget = await evaluate('window.__structuralMaterial3dPickTarget()');
+  assertCheck(repeatPickTarget, 'displaced material exposed no projected target for a second drag');
+  const repeatStart = { x: repeatPickTarget.clientX, y: repeatPickTarget.clientY };
+  const repeatEnd = {
+    x: repeatStart.x,
+    y: Math.min(stageRect.top + stageRect.height - 4, repeatStart.y + stageRect.height * 0.06),
+  };
+  const appliedBeforeRepeat = persisted.gpuTearAppliedCount;
+  const finalCompletedBeforeRepeat = persisted.liveDrag?.scheduler?.finalCompletedCount || 0;
+  await send('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    ...repeatStart,
+    button: 'left',
+    buttons: 1,
+    clickCount: 1,
+  });
+  const repeatPointerDown = await evaluate('window.__structuralMaterial3dWitness()');
+  report.checks.repeatPointerDownPreservedDisplacement =
+    JSON.stringify(repeatPointerDown.visibleTear) === JSON.stringify(persisted.visibleTear);
+  assertCheck(
+    report.checks.repeatPointerDownPreservedDisplacement,
+    'second pointer down changed accepted component displacement before drag input',
+  );
+  await send('Input.dispatchMouseEvent', {
+    type: 'mouseMoved',
+    ...repeatEnd,
+    button: 'left',
+    buttons: 1,
+  });
+  await send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    ...repeatEnd,
+    button: 'left',
+    buttons: 0,
+    clickCount: 1,
+  });
+  const repeatDeadline = Date.now() + config.loadTimeoutMs;
+  let repeatAfter = repeatPointerDown;
+  while (Date.now() < repeatDeadline) {
+    repeatAfter = await evaluate('window.__structuralMaterial3dWitness()');
+    if (repeatAfter.gpuTearAppliedCount > appliedBeforeRepeat &&
+        repeatAfter.liveDrag?.scheduler?.finalCompletedCount > finalCompletedBeforeRepeat &&
+        repeatAfter.liveDrag?.scheduler?.pointerExecutionActive === false &&
+        repeatAfter.liveDrag?.scheduler?.pendingInteractionId === null) break;
+    await new Promise(resolveWait => setTimeout(resolveWait, 20));
+  }
+  const beforeDisplacementByLabel = new Map(
+    persisted.visibleTear.components
+      .filter(component => !component.pinned)
+      .map(component => [component.label, component.maxDisplacement]),
+  );
+  const afterDisplacementByLabel = new Map(
+    repeatAfter.visibleTear.components
+      .filter(component => !component.pinned)
+      .map(component => [component.label, component.maxDisplacement]),
+  );
+  report.checks.repeatDragPreservedPriorDisplacement =
+    repeatAfter.gpuTearAppliedCount > appliedBeforeRepeat &&
+    [...beforeDisplacementByLabel].every(([label, before]) =>
+      (afterDisplacementByLabel.get(label) ?? -1) >= before - 0.000001
+    ) &&
+    [...beforeDisplacementByLabel].some(([label, before]) =>
+      (afterDisplacementByLabel.get(label) ?? -1) > before + 0.0001
+    );
+  report.repeatDrag = {
+    pointerDown: {
+      visibleTear: repeatPointerDown.visibleTear,
+      forceEnvelope: repeatPointerDown.forceEnvelope,
+    },
+    before: {
+      visibleTear: persisted.visibleTear,
+      appliedCount: appliedBeforeRepeat,
+    },
+    after: {
+      visibleTear: repeatAfter.visibleTear,
+      appliedCount: repeatAfter.gpuTearAppliedCount,
+      latestReceipt: repeatAfter.gpuSympatheticTear,
+    },
+  };
+  assertCheck(
+    report.checks.repeatDragPreservedPriorDisplacement,
+    'second drag replaced prior component displacement instead of composing from it',
+  );
+
   report.failurePhase = 'causal-haptics';
   const hapticDeadline = Date.now() + config.loadTimeoutMs;
-  let hapticWitness = persisted;
+  let hapticWitness = repeatAfter;
   while (config.requireNativeHaptics && Date.now() < hapticDeadline) {
     hapticWitness = await evaluate('window.__structuralMaterial3dWitness()');
     if (hapticWitness.haptics?.dispatchCount >= hapticWitness.haptics?.impulseCount) break;
@@ -569,9 +655,9 @@ try {
 
   report.failurePhase = 'gpu-resident-binding';
   const bindingCameraBefore = await evaluate('window.__structuralMaterial3dCameraWitness().state');
-  const brokenBeforeBinding = persisted.summary.brokenBondCount;
-  const componentCountBeforeBinding = persisted.summary.componentCount;
-  const reinitializeCountBeforeBinding = persisted.gpuHotSidecar?.lifecycle?.reinitializeCount || 0;
+  const brokenBeforeBinding = repeatAfter.summary.brokenBondCount;
+  const componentCountBeforeBinding = repeatAfter.summary.componentCount;
+  const reinitializeCountBeforeBinding = repeatAfter.gpuHotSidecar?.lifecycle?.reinitializeCount || 0;
   const residentBinding = await evaluate('window.__structuralMaterial3dRunGpuBinding()', true);
   const boundPage = await evaluate('window.__structuralMaterial3dWitness()');
   report.residentBinding = residentBinding;

@@ -11,6 +11,8 @@ import {
 export const STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_ROUTE = 'kaminos.structural-material.webgpu-sympathetic-tear.v0';
 export const STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_AUTHORITY = 'retained-webgpu-liveness-component-labels-v0';
 export const STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_VISUAL_AUTHORITY = 'gpu-component-label-to-visible-separation-v0';
+export const STRUCTURAL_MATERIAL_3D_VISUAL_GESTURE_AUTHORITY =
+  'gesture-baseline-relative-visible-displacement-v0';
 
 export function createLayeredStructuralGpuTearRequestGate() {
   let generation = 0;
@@ -168,6 +170,10 @@ export function buildLayeredStructuralGpuTearMaterial(state, receipt, interactio
   assertReceipt(Array.isArray(componentLabels), 'omits component labels');
   assertReceipt(finalBondLiveness.length === state.bonds.length, 'bond-liveness length mismatch');
   assertReceipt(componentLabels.length === state.nodes.length, 'component-label length mismatch');
+  assertReceipt(
+    finalBondLiveness.every(alive => typeof alive === 'boolean'),
+    'contains invalid bond liveness',
+  );
 
   const componentsByLabel = new Map();
   state.nodes.forEach((node, index) => {
@@ -204,6 +210,23 @@ export function buildLayeredStructuralGpuTearMaterial(state, receipt, interactio
   const direction = normalizedVector(interaction.vector);
   const magnitude = clamp(interaction.magnitude, 0, 5);
   const separationScale = components.length > 1 ? clamp(magnitude * 0.095, 0.055, 0.18) : 0;
+  const gestureId = typeof interaction.gestureId === 'string' || Number.isFinite(interaction.gestureId)
+    ? String(interaction.gestureId)
+    : receipt.effectiveSequenceIdentity;
+  const priorGesture = state.visualDisplacementGesture;
+  const priorBaseline = priorGesture?.gestureId === gestureId &&
+    Array.isArray(priorGesture.baselineDisplacements) &&
+    priorGesture.baselineDisplacements.length === state.nodes.length
+    ? priorGesture.baselineDisplacements
+    : null;
+  const baselineDisplacements = state.nodes.map((node, index) => {
+    const baseline = priorBaseline?.[index] || node.displacement;
+    return {
+      x: round(baseline?.x),
+      y: round(baseline?.y),
+      z: round(baseline?.z),
+    };
+  });
   const componentByLabel = new Map(components.map(component => [component.label, component]));
   let detachedNodeCount = 0;
   const nodes = state.nodes.map((node, index) => {
@@ -214,15 +237,16 @@ export function buildLayeredStructuralGpuTearMaterial(state, receipt, interactio
     const distanceFactor = anchoredNode
       ? 0
       : 0.82 + clamp(component.center.x, 0, 1) * 0.36;
+    const baseline = baselineDisplacements[index];
     return {
       ...node,
       componentId: `g${label}`,
       displacement: anchoredNode
         ? { x: 0, y: 0, z: 0 }
         : {
-            x: round(direction.x * separationScale * distanceFactor),
-            y: round(direction.y * separationScale * distanceFactor),
-            z: round(direction.z * separationScale * distanceFactor),
+            x: round(baseline.x + direction.x * separationScale * distanceFactor),
+            y: round(baseline.y + direction.y * separationScale * distanceFactor),
+            z: round(baseline.z + direction.z * separationScale * distanceFactor),
           },
     };
   });
@@ -231,6 +255,9 @@ export function buildLayeredStructuralGpuTearMaterial(state, receipt, interactio
     alive: finalBondLiveness[index],
     cause: finalBondLiveness[index] ? bond.cause : 'stress-threshold',
   }));
+  const livenessChanged = state.bonds.some(
+    (bond, index) => bond.alive !== finalBondLiveness[index],
+  );
   const brokenBondCount = finalBondLiveness.filter(alive => !alive).length;
 
   return {
@@ -238,8 +265,13 @@ export function buildLayeredStructuralGpuTearMaterial(state, receipt, interactio
     nodes,
     bonds,
     components,
-    topologyEpoch: state.topologyEpoch + (brokenBondCount > 0 ? 1 : 0),
-    connectivityEpoch: state.connectivityEpoch + (brokenBondCount > 0 ? 1 : 0),
+    visualDisplacementGesture: {
+      authority: STRUCTURAL_MATERIAL_3D_VISUAL_GESTURE_AUTHORITY,
+      gestureId,
+      baselineDisplacements,
+    },
+    topologyEpoch: state.topologyEpoch + (livenessChanged ? 1 : 0),
+    connectivityEpoch: state.connectivityEpoch + (livenessChanged ? 1 : 0),
     sympatheticTear: {
       authority: STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_VISUAL_AUTHORITY,
       structuralAuthority: STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_AUTHORITY,
@@ -253,6 +285,8 @@ export function buildLayeredStructuralGpuTearMaterial(state, receipt, interactio
       causingEventEpochs: [...new Set(receipt.gpuResult?.eventEpochs || [])].sort((a, b) => a - b),
       direction: { x: round(direction.x), y: round(direction.y), z: round(direction.z) },
       separationScale: round(separationScale),
+      gestureId,
+      displacementSemantics: 'gesture-baseline-plus-current-absolute-delta',
     },
   };
 }
