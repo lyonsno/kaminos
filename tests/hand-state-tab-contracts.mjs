@@ -18,7 +18,7 @@ assert.match(moduleSource, /127\.0\.0\.1:8766/, 'viewer defaults to the neutral 
 assert.match(moduleSource, /\/native-frame/, 'browser camera frames go to the runtime server');
 assert.match(moduleSource, /\/sidecar\/start/, 'runtime server owns sidecar launch');
 assert.match(moduleSource, /\/sidecar\/stop/, 'runtime server owns sidecar stop');
-assert.match(moduleSource, /\/state\?max_age_ms=/, 'viewer polls runtime-owned state');
+assert.match(moduleSource, /\/state\/next\?after_sequence=/, 'viewer waits for runtime-owned state events');
 assert.match(moduleSource, /BufferGeometry/, 'viewer renders a real mesh geometry');
 assert.match(moduleSource, /mano\.vertices/, 'viewer consumes runtime MANO vertices');
 assert.match(moduleSource, /mano\.faces/, 'viewer consumes runtime MANO faces');

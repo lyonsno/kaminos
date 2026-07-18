@@ -7,6 +7,9 @@ const viewerSource = readFileSync(new URL('../hand-state-runtime.mjs', import.me
 assert.match(viewerSource, /viewer-latency-samples/, 'viewer batches latency receipts through the neutral runtime endpoint');
 assert.match(viewerSource, /setTimeout\(flushLatencySamples, 1000\)/, 'viewer keeps receipt I/O out of the per-frame render path');
 assert.doesNotMatch(viewerSource, /viewer-latency-sample['"]/, 'viewer must not post and sync one receipt per rendered frame');
+assert.match(viewerSource, /state\/next\?after_sequence=/, 'viewer waits on the runtime event sequence');
+assert.match(viewerSource, /AbortController/, 'viewer can cancel the outstanding state wait on stop');
+assert.doesNotMatch(viewerSource, /setInterval\(pollState,\s*40\)/, 'viewer must not quantize state delivery behind a 40ms poll');
 
 const sample = (frameId, value) => ({
   schema: 'hand-state.viewer-latency-sample.v0',

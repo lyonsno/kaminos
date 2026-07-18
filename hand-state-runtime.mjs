@@ -51,7 +51,8 @@ let stream = null;
 let running = false;
 let captureInFlight = false;
 let captureTimer = null;
-let stateTimer = null;
+let stateAbortController = null;
+let lastStateSequence = 0;
 let faceSignature = '';
 let smoothedPositions = null;
 let lastLiveAt = 0;
@@ -219,55 +220,71 @@ async function captureFrame() {
   }
 }
 
-async function pollState() {
-  if (!running) return;
-  try {
-    const state = await runtimeFetch(`/state?max_age_ms=${maxAgeMs}`);
-    const frame = state.frame;
-    if (frame?.authority?.sourceAuthority === 'live_simulation' && updateHandSurface(frame.mano)) {
-      const frameId = frame.frame?.frameId;
-      const captureMetrics = captureMetricsByFrame.get(frameId);
-      if (frameId && captureMetrics && !latencySamples.some(sample => sample.frameId === frameId) && pendingLatencySample?.frameId !== frameId) {
-        const captureToViewerReceiveMs = Date.now() - frame.frame.captureTimestampMs;
-        const captureToSidecarPublishMs = frame.timing?.cameraFrameAgeMs;
-        const modelLatencyMs = frame.timing?.modelLatencyMs;
-        if ([captureToViewerReceiveMs, captureToSidecarPublishMs, modelLatencyMs].every(Number.isFinite)) {
-          if (pendingLatencySample) benchmarkDroppedBeforeRender += 1;
-          pendingLatencySample = {
-            schema: 'hand-state.viewer-latency-sample.v0',
-            benchmarkSessionId,
-            frameId,
-            runtimeOwner: state.runtimeOwner,
-            sourceAuthority: frame.authority.sourceAuthority,
-            requestedRoute: frame.source.requestedRoute,
-            effectiveRoute: frame.source.effectiveRoute,
-            model: frame.source.model,
-            deviceRoute: frame.source.deviceRoute,
-            dtypeRoute: frame.source.dtypeRoute,
-            manoVertexCount: frame.mano.vertexCount,
-            manoFaceCount: frame.mano.faceCount,
-            captureTimestampMs: frame.frame.captureTimestampMs,
-            viewerReceiveTimestampMs: Date.now(),
-            clientEncodeMs: captureMetrics.clientEncodeMs,
-            nativePostMs: captureMetrics.nativePostMs,
-            modelLatencyMs,
-            captureToSidecarPublishMs,
-            publishToViewerReceiveMs: Math.max(0, captureToViewerReceiveMs - captureToSidecarPublishMs),
-            captureToViewerReceiveMs,
-            captureToRenderCompleteMs: null,
-          };
-          captureMetricsByFrame.delete(frameId);
-        } else {
-          lastBenchmarkError = `incomplete live timing for ${frameId}`;
-        }
+function applyState(state) {
+  const frame = state.frame;
+  if (frame?.authority?.sourceAuthority === 'live_simulation' && updateHandSurface(frame.mano)) {
+    const frameId = frame.frame?.frameId;
+    const captureMetrics = captureMetricsByFrame.get(frameId);
+    if (frameId && captureMetrics && !latencySamples.some(sample => sample.frameId === frameId) && pendingLatencySample?.frameId !== frameId) {
+      const captureToViewerReceiveMs = Date.now() - frame.frame.captureTimestampMs;
+      const captureToSidecarPublishMs = frame.timing?.cameraFrameAgeMs;
+      const modelLatencyMs = frame.timing?.modelLatencyMs;
+      if ([captureToViewerReceiveMs, captureToSidecarPublishMs, modelLatencyMs].every(Number.isFinite)) {
+        if (pendingLatencySample) benchmarkDroppedBeforeRender += 1;
+        pendingLatencySample = {
+          schema: 'hand-state.viewer-latency-sample.v0',
+          benchmarkSessionId,
+          frameId,
+          runtimeOwner: state.runtimeOwner,
+          sourceAuthority: frame.authority.sourceAuthority,
+          requestedRoute: frame.source.requestedRoute,
+          effectiveRoute: frame.source.effectiveRoute,
+          model: frame.source.model,
+          deviceRoute: frame.source.deviceRoute,
+          dtypeRoute: frame.source.dtypeRoute,
+          manoVertexCount: frame.mano.vertexCount,
+          manoFaceCount: frame.mano.faceCount,
+          captureTimestampMs: frame.frame.captureTimestampMs,
+          viewerReceiveTimestampMs: Date.now(),
+          clientEncodeMs: captureMetrics.clientEncodeMs,
+          nativePostMs: captureMetrics.nativePostMs,
+          modelLatencyMs,
+          captureToSidecarPublishMs,
+          publishToViewerReceiveMs: Math.max(0, captureToViewerReceiveMs - captureToSidecarPublishMs),
+          captureToViewerReceiveMs,
+          captureToRenderCompleteMs: null,
+        };
+        captureMetricsByFrame.delete(frameId);
+      } else {
+        lastBenchmarkError = `incomplete live timing for ${frameId}`;
       }
-      const latency = pendingLatencySample?.captureToViewerReceiveMs || latencySamples.at(-1)?.captureToViewerReceiveMs;
-      setStatus(`live MANO / ${frame.mano.vertexCount} vertices${Number.isFinite(latency) ? ` / ${latency.toFixed(0)} ms receipt` : ''}`, 'live');
-    } else {
-      setStatus(`waiting for live MANO / ${frame?.authority?.fallbackReason || 'no frame'}`);
     }
-  } catch (error) {
-    setStatus(error.message || String(error), 'error');
+    const latency = pendingLatencySample?.captureToViewerReceiveMs || latencySamples.at(-1)?.captureToViewerReceiveMs;
+    setStatus(`live MANO / ${frame.mano.vertexCount} vertices${Number.isFinite(latency) ? ` / ${latency.toFixed(0)} ms receipt` : ''}`, 'live');
+  } else {
+    setStatus(`waiting for live MANO / ${frame?.authority?.fallbackReason || 'no frame'}`);
+  }
+}
+
+async function streamState() {
+  while (running) {
+    const controller = new AbortController();
+    stateAbortController = controller;
+    try {
+      const state = await runtimeFetch(
+        `/state/next?after_sequence=${lastStateSequence}&timeout_ms=1000&max_age_ms=${maxAgeMs}`,
+        { signal: controller.signal },
+      );
+      if (!running) return;
+      if (Number.isFinite(state.eventSequence)) lastStateSequence = state.eventSequence;
+      applyState(state);
+    } catch (error) {
+      if (!running || error?.name === 'AbortError') return;
+      setStatus(error.message || String(error), 'error');
+      await new Promise(resolve => setTimeout(resolve, 100));
+    } finally {
+      if (stateAbortController === controller) stateAbortController = null;
+    }
   }
 }
 
@@ -279,21 +296,21 @@ async function start() {
   await video.play();
   await runtimeFetch('/sidecar/start', { method: 'POST' });
   resetLatencyBenchmark();
+  lastStateSequence = 0;
   running = true;
   toggle.textContent = 'Stop Hand';
   toggle.dataset.running = 'true';
   captureTimer = setInterval(captureFrame, captureIntervalMs);
-  stateTimer = setInterval(pollState, 40);
+  void streamState();
   await captureFrame();
-  await pollState();
 }
 
 async function stop() {
   running = false;
   clearInterval(captureTimer);
-  clearInterval(stateTimer);
   captureTimer = null;
-  stateTimer = null;
+  stateAbortController?.abort();
+  stateAbortController = null;
   stream?.getTracks().forEach(track => track.stop());
   stream = null;
   video.srcObject = null;
@@ -312,6 +329,7 @@ toggle.addEventListener('click', async () => {
 });
 
 window.addEventListener('beforeunload', () => {
+  stateAbortController?.abort();
   stream?.getTracks().forEach(track => track.stop());
   if (unflushedLatencySamples.length) {
     navigator.sendBeacon?.(`${runtimeUrl}/viewer-latency-samples`, new Blob([JSON.stringify({
@@ -368,6 +386,8 @@ window.__kaminosHandStateDebugState = () => ({
   benchmarkSampleCount: latencySamples.length,
   benchmarkDroppedBeforeRender,
   benchmarkError: lastBenchmarkError,
+  eventSequence: lastStateSequence,
+  stateDeliveryMode: 'long_poll',
 });
 
 resize();
