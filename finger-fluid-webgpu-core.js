@@ -2,6 +2,9 @@ export const KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE = 'webgpu-pbf-linked-cell-flu
 export const KAMINOS_FINGER_FLUID_NEIGHBOR_GRID_CONTRACT = 'wgsl-linked-cell-neighbor-grid-v0';
 export const KAMINOS_FINGER_FLUID_DENSITY_CONTRACT = 'wgsl-pbf-density-constraint-v0';
 export const KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT = 'wgsl-analytic-boundary-density-support-v0';
+export const KAMINOS_FINGER_FLUID_SUPPORT_FRICTION_CONTRACT = 'wgsl-analytic-contact-partial-slip-v0';
+export const KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION = 1.6;
+export const KAMINOS_FINGER_FLUID_ENERGY_LEDGER_CONTRACT = 'wgsl-per-pass-kinetic-energy-ledger-v0';
 export const KAMINOS_FINGER_FLUID_VORTICITY_CONTRACT = 'wgsl-neighbor-vorticity-confinement-v0';
 export const KAMINOS_FINGER_FLUID_FREE_SURFACE_CONTRACT = 'wgsl-neighbor-free-surface-cohesion-v0';
 export const KAMINOS_FINGER_FLUID_REST_STATE_CONTRACT = 'wgsl-support-aware-persistent-rest-state-v0';
@@ -76,6 +79,8 @@ const NEIGHBOR_TOPOLOGY_WORDS = 8;
 const NEIGHBOR_TOPOLOGY_BYTES = NEIGHBOR_TOPOLOGY_WORDS * 4;
 const MATERIAL_TRACER_FLOATS = 4;
 const MATERIAL_TRACER_BYTES = MATERIAL_TRACER_FLOATS * 4;
+const ENERGY_RECORD_FLOATS = 4;
+const ENERGY_RECORD_BYTES = ENERGY_RECORD_FLOATS * 4;
 const INVALID_NEIGHBOR_ID = 0xffffffff;
 let nextLiquidFireContactAllocationGeneration = 1;
 
@@ -170,6 +175,14 @@ export function resolveFingerFluidParticleShiftStrength(value = 0) {
     throw new RangeError(`Finger fluid particle shift strength must be in [0, 1], received: ${value}`);
   }
   return strength;
+}
+
+export function resolveFingerFluidSupportFriction(value = KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION) {
+  const friction = Number(value);
+  if (!Number.isFinite(friction) || friction < 0) {
+    throw new RangeError(`Finger fluid support friction must be finite and non-negative, received: ${value}`);
+  }
+  return friction;
 }
 
 export function resolveFingerFluidChemistryDiffusion(value = 0) {
@@ -364,7 +377,7 @@ fn floorNormal(p: vec3<f32>) -> vec3<f32> {
   return toyFloorNormal(p);
 }
 
-fn supportPhaseWeights(position: vec3<f32>, velocity: vec3<f32>) -> vec4<f32> {
+fn supportContactFrame(position: vec3<f32>) -> vec4<f32> {
   let radius = params.fluid.x * 0.22;
   let floorSupportDistance = max(0.0, position.y - (floorHeight(position) + radius));
   let floorSupport = 1.0 - smoothstep(0.012, 0.09, floorSupportDistance);
@@ -375,6 +388,13 @@ fn supportPhaseWeights(position: vec3<f32>, velocity: vec3<f32>) -> vec4<f32> {
   let supportContact = max(floorSupport, sphereSupport);
   let sphereNormal = normalize(fromSphere + vec3<f32>(0.00001, 0.00002, 0.00003));
   let supportNormal = select(sphereNormal, floorNormal(position), floorSupport >= sphereSupport);
+  return vec4<f32>(supportNormal, supportContact);
+}
+
+fn supportPhaseWeights(position: vec3<f32>, velocity: vec3<f32>) -> vec4<f32> {
+  let supportFrame = supportContactFrame(position);
+  let supportNormal = supportFrame.xyz;
+  let supportContact = supportFrame.w;
   let tangentialVelocity = velocity - supportNormal * dot(velocity, supportNormal);
   let tangentialSpeed = length(tangentialVelocity);
   let speed = length(velocity);
@@ -840,6 +860,13 @@ fn compute_velocity_viscosity(@builtin(global_invocation_id) gid: vec3<u32>) {
     let sphereNormalSpeed = dot(velocity, sphereNormal);
     if (sphereNormalSpeed < 0.0) { velocity = velocity - sphereNormal * sphereNormalSpeed; }
   }
+  let supportFrame = supportContactFrame(position);
+  let supportContact = supportFrame.w;
+  let supportNormal = supportFrame.xyz;
+  let supportNormalSpeed = dot(velocity, supportNormal);
+  let supportTangentialVelocity = velocity - supportNormal * supportNormalSpeed;
+  let supportTangentialRetention = exp(-params.particleShift.y * supportContact * params.dt);
+  velocity = supportNormal * supportNormalSpeed + supportTangentialVelocity * supportTangentialRetention;
   if (position.x <= params.boundsMin.x + radius + 0.006 && velocity.x < 0.0) { velocity.x = 0.0; }
   if (position.x >= params.boundsMax.x - radius - 0.006 && velocity.x > 0.0) { velocity.x = 0.0; }
   if (position.z <= params.boundsMin.z + radius + 0.006 && velocity.z < 0.0) { velocity.z = 0.0; }
@@ -1233,6 +1260,64 @@ fn finalize_liquid_fire_contact_descriptor(@builtin(global_invocation_id) gid: v
 }
 `;
 
+const ENERGY_DIAGNOSTICS_SHADER = /* wgsl */`
+struct Particle {
+  position: vec4<f32>,
+  predicted: vec4<f32>,
+  velocity: vec4<f32>,
+  delta: vec4<f32>,
+}
+
+struct Params {
+  dt: f32,
+  particleCount: u32,
+  frameIndex: u32,
+  gridCellCount: u32,
+  gridDims: vec4<u32>,
+  boundsMin: vec4<f32>,
+  boundsMax: vec4<f32>,
+  fluid: vec4<f32>,
+  forces: vec4<f32>,
+  particleShift: vec4<f32>,
+  chemistry: vec4<f32>,
+  contactIdentity: vec4<u32>,
+}
+
+@group(0) @binding(0) var<storage, read> particles: array<Particle>;
+@group(0) @binding(1) var<uniform> params: Params;
+@group(0) @binding(2) var<storage, read_write> energyRecords: array<vec4<f32>>;
+
+fn kineticEnergy(velocity: vec3<f32>) -> f32 {
+  return 0.5 * dot(velocity, velocity);
+}
+
+@compute @workgroup_size(${WORKGROUP_SIZE})
+fn measure_projection_energy(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (gid.x >= params.particleCount) { return; }
+  let particle = particles[gid.x];
+  let velocity = (particle.predicted.xyz - particle.position.xyz) / max(params.dt, 0.00001);
+  energyRecords[gid.x].x = kineticEnergy(velocity);
+}
+
+@compute @workgroup_size(${WORKGROUP_SIZE})
+fn measure_viscosity_energy(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (gid.x >= params.particleCount) { return; }
+  energyRecords[gid.x].y = kineticEnergy(particles[gid.x].delta.xyz);
+}
+
+@compute @workgroup_size(${WORKGROUP_SIZE})
+fn measure_vorticity_energy(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (gid.x >= params.particleCount) { return; }
+  energyRecords[gid.x].z = kineticEnergy(particles[gid.x].delta.xyz);
+}
+
+@compute @workgroup_size(${WORKGROUP_SIZE})
+fn measure_cohesion_energy(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (gid.x >= params.particleCount) { return; }
+  energyRecords[gid.x].w = kineticEnergy(particles[gid.x].delta.xyz);
+}
+`;
+
 const RENDER_SHADER = /* wgsl */`
 struct Particle {
   position: vec4<f32>,
@@ -1607,6 +1692,71 @@ function finite(value, fallback = 0) {
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+export function applySupportFrictionVelocity(velocity, normal, contactWeight, friction, dt) {
+  if (!Array.isArray(velocity) || velocity.length !== 3 || !velocity.every(Number.isFinite)) {
+    throw new TypeError('Finger fluid support friction requires a finite 3D velocity');
+  }
+  if (!Array.isArray(normal) || normal.length !== 3 || !normal.every(Number.isFinite)) {
+    throw new TypeError('Finger fluid support friction requires a finite 3D support normal');
+  }
+  const normalLength = Math.hypot(...normal);
+  if (normalLength <= 1e-9) throw new RangeError('Finger fluid support friction requires a nonzero support normal');
+  const safeContactWeight = Number(contactWeight);
+  const safeDt = Number(dt);
+  if (!Number.isFinite(safeContactWeight)) throw new TypeError('Finger fluid support friction requires a finite contact weight');
+  if (!Number.isFinite(safeDt) || safeDt < 0) throw new RangeError('Finger fluid support friction requires a non-negative finite time step');
+  const safeFriction = resolveFingerFluidSupportFriction(friction);
+  const contact = clamp(safeContactWeight, 0, 1);
+  if (contact === 0 || safeFriction === 0 || safeDt === 0) return [...velocity];
+
+  const supportNormal = normal.map(value => value / normalLength);
+  const normalSpeed = velocity.reduce((sum, value, axis) => sum + value * supportNormal[axis], 0);
+  const tangentialRetention = Math.exp(-safeFriction * contact * safeDt);
+  return velocity.map((value, axis) => {
+    const normalVelocity = supportNormal[axis] * normalSpeed;
+    return normalVelocity + (value - normalVelocity) * tangentialRetention;
+  });
+}
+
+export function summarizeFingerFluidEnergyLedger(records, particleCount, stepCount) {
+  const count = Number(particleCount);
+  if (!(records instanceof Float32Array) || !Number.isSafeInteger(count) || count <= 0 || records.length !== count * ENERGY_RECORD_FLOATS) {
+    throw new Error(`Finger fluid energy ledger readback is missing or partial: ${JSON.stringify({
+      recordType: records?.constructor?.name || typeof records,
+      recordLength: records?.length ?? null,
+      particleCount,
+    })}`);
+  }
+  if (!Number.isSafeInteger(stepCount) || stepCount < 0) {
+    throw new Error(`Finger fluid energy ledger has invalid step count: ${stepCount}`);
+  }
+  const stageNames = ['projection', 'viscosity', 'vorticity', 'cohesion'];
+  const totals = [0, 0, 0, 0];
+  for (let offset = 0; offset < records.length; offset += ENERGY_RECORD_FLOATS) {
+    for (let stage = 0; stage < ENERGY_RECORD_FLOATS; stage += 1) {
+      const value = records[offset + stage];
+      if (!Number.isFinite(value) || value < 0) {
+        throw new Error(`Finger fluid energy ledger contains invalid ${stageNames[stage]} energy at particle ${offset / ENERGY_RECORD_FLOATS}: ${value}`);
+      }
+      totals[stage] += value;
+    }
+  }
+  const totalKineticEnergy = Object.fromEntries(stageNames.map((name, index) => [name, totals[index]]));
+  const averageKineticEnergy = Object.fromEntries(stageNames.map((name, index) => [name, totals[index] / count]));
+  return {
+    contract: KAMINOS_FINGER_FLUID_ENERGY_LEDGER_CONTRACT,
+    stepCount,
+    particleCount: count,
+    totalKineticEnergy,
+    averageKineticEnergy,
+    stageDelta: {
+      viscosity: averageKineticEnergy.viscosity - averageKineticEnergy.projection,
+      vorticity: averageKineticEnergy.vorticity - averageKineticEnergy.viscosity,
+      cohesion: averageKineticEnergy.cohesion - averageKineticEnergy.vorticity,
+    },
+  };
 }
 
 function normalize3(value) {
@@ -2267,6 +2417,7 @@ export async function createWebGPUFingerFluidSolver({
   colorMode = 'phase',
   rendererMode = 'screen_space_surface',
   particleShiftStrength = 0,
+  supportFriction = KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION,
   chemistryDiffusion = 0,
   transparentBackground = false,
 } = {}) {
@@ -2291,6 +2442,7 @@ export async function createWebGPUFingerFluidSolver({
   const safeColorMode = resolveFingerFluidColorMode(colorMode);
   const safeRendererMode = resolveFingerFluidRendererMode(rendererMode);
   const safeParticleShiftStrength = resolveFingerFluidParticleShiftStrength(particleShiftStrength);
+  const safeSupportFriction = resolveFingerFluidSupportFriction(supportFriction);
   const safeChemistryDiffusion = resolveFingerFluidChemistryDiffusion(chemistryDiffusion);
   const liquidFireContactAllocationGeneration = nextLiquidFireContactAllocationGeneration;
   nextLiquidFireContactAllocationGeneration = (nextLiquidFireContactAllocationGeneration % 0x00fffffe) + 1;
@@ -2321,6 +2473,16 @@ export async function createWebGPUFingerFluidSolver({
   const diagnosticsBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-diagnostics-readback',
     size: particleData.byteLength,
+    usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+  });
+  const energyDiagnosticsBuffer = device.createBuffer({
+    label: 'kaminos-finger-fluid-energy-diagnostics',
+    size: safeParticleCount * ENERGY_RECORD_BYTES,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+  });
+  const energyDiagnosticsReadbackBuffer = device.createBuffer({
+    label: 'kaminos-finger-fluid-energy-diagnostics-readback',
+    size: safeParticleCount * ENERGY_RECORD_BYTES,
     usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
   });
   const interfaceRecordsBuffer = device.createBuffer({
@@ -2389,6 +2551,7 @@ export async function createWebGPUFingerFluidSolver({
     usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
   });
   device.queue.writeBuffer(particleBuffer, 0, particleData);
+  device.queue.writeBuffer(energyDiagnosticsBuffer, 0, new Float32Array(safeParticleCount * ENERGY_RECORD_FLOATS));
   device.queue.writeBuffer(interfaceCountersBuffer, 0, new Uint32Array(3));
   device.queue.writeBuffer(liquidFireContactHeaderBuffer, 0, new Uint32Array(LIQUID_FIRE_CONTACT_HEADER_WORDS));
   device.queue.writeBuffer(restStateBuffer, 0, new Float32Array(safeParticleCount * REST_STATE_FLOATS));
@@ -2466,6 +2629,44 @@ export async function createWebGPUFingerFluidSolver({
       { binding: 8, resource: { buffer: materialTracerBuffer } },
       { binding: 9, resource: { buffer: liquidFireContactRecordsBuffer } },
       { binding: 10, resource: { buffer: liquidFireContactHeaderBuffer } },
+    ],
+  });
+  const energyDiagnosticsModule = device.createShaderModule({
+    label: KAMINOS_FINGER_FLUID_ENERGY_LEDGER_CONTRACT,
+    code: ENERGY_DIAGNOSTICS_SHADER,
+  });
+  const energyDiagnosticsLayout = device.createBindGroupLayout({
+    label: 'kaminos-finger-fluid-energy-diagnostics-layout',
+    entries: [
+      { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
+      { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+    ],
+  });
+  const energyDiagnosticsPipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [energyDiagnosticsLayout] });
+  const energyPipelineFor = entryPoint => device.createComputePipelineAsync({
+    label: `${KAMINOS_FINGER_FLUID_ENERGY_LEDGER_CONTRACT}:${entryPoint}`,
+    layout: energyDiagnosticsPipelineLayout,
+    compute: { module: energyDiagnosticsModule, entryPoint },
+  });
+  let energyPipelines;
+  try {
+    energyPipelines = {
+      projection: await energyPipelineFor('measure_projection_energy'),
+      viscosity: await energyPipelineFor('measure_viscosity_energy'),
+      vorticity: await energyPipelineFor('measure_vorticity_energy'),
+      cohesion: await energyPipelineFor('measure_cohesion_energy'),
+    };
+  } catch (error) {
+    return createUnavailableSolver(`WebGPU energy diagnostic pipeline validation failed: ${error.message || String(error)}`);
+  }
+  const energyDiagnosticsBindGroup = device.createBindGroup({
+    label: 'kaminos-finger-fluid-energy-diagnostics-bind-group',
+    layout: energyDiagnosticsLayout,
+    entries: [
+      { binding: 0, resource: { buffer: particleBuffer } },
+      { binding: 1, resource: { buffer: paramsBuffer } },
+      { binding: 2, resource: { buffer: energyDiagnosticsBuffer } },
     ],
   });
 
@@ -2693,6 +2894,7 @@ export async function createWebGPUFingerFluidSolver({
     view.setFloat32(88, 0.07, true);
     view.setFloat32(92, 0.025, true);
     view.setFloat32(96, safeParticleShiftStrength, true);
+    view.setFloat32(100, safeSupportFriction, true);
     view.setFloat32(112, safeChemistryDiffusion, true);
     view.setUint32(128, liquidFireContactAllocationGeneration, true);
     view.setUint32(132, liquidFireContactEpoch, true);
@@ -2704,6 +2906,13 @@ export async function createWebGPUFingerFluidSolver({
   function dispatch(pass, pipeline, count) {
     pass.setPipeline(pipeline);
     pass.dispatchWorkgroups(Math.ceil(count / WORKGROUP_SIZE));
+  }
+
+  function dispatchEnergy(pass, pipeline) {
+    pass.setPipeline(pipeline);
+    pass.setBindGroup(0, energyDiagnosticsBindGroup);
+    pass.dispatchWorkgroups(Math.ceil(safeParticleCount / WORKGROUP_SIZE));
+    pass.setBindGroup(0, computeBindGroup);
   }
 
   function step(dt = 1 / 60) {
@@ -2739,14 +2948,18 @@ export async function createWebGPUFingerFluidSolver({
       }
       dispatch(pass, pipelines.classifySurface, safeParticleCount);
       freeSurfaceClassificationPassCount += 1;
+      dispatchEnergy(pass, energyPipelines.projection);
       dispatch(pass, pipelines.velocity, safeParticleCount);
+      dispatchEnergy(pass, energyPipelines.viscosity);
       if (frameIndex % VORTICITY_UPDATE_INTERVAL === 0) {
         dispatch(pass, pipelines.vorticity, safeParticleCount);
         dispatch(pass, pipelines.confinement, safeParticleCount);
         vorticityPassCount += 2;
       }
+      dispatchEnergy(pass, energyPipelines.vorticity);
       dispatch(pass, pipelines.cohesion, safeParticleCount);
       surfaceCohesionPassCount += 1;
+      dispatchEnergy(pass, energyPipelines.cohesion);
       dispatch(pass, pipelines.applyVelocity, safeParticleCount);
       dispatch(pass, pipelines.clearInterface, 1);
       dispatch(pass, pipelines.compactInterface, safeParticleCount);
@@ -2916,12 +3129,13 @@ export async function createWebGPUFingerFluidSolver({
     diagnosticsPending = true;
     diagnosticsRequestCount += 1;
     const diagnosticsStartedAtMs = performance.now();
-    const readbackBuffers = [diagnosticsBuffer, interfaceCountersReadbackBuffer, interfaceRecordsReadbackBuffer, restStateReadbackBuffer, neighborTopologyReadbackBuffer, materialTracerReadbackBuffer, liquidFireContactHeaderReadbackBuffer];
+    const readbackBuffers = [diagnosticsBuffer, energyDiagnosticsReadbackBuffer, interfaceCountersReadbackBuffer, interfaceRecordsReadbackBuffer, restStateReadbackBuffer, neighborTopologyReadbackBuffer, materialTracerReadbackBuffer, liquidFireContactHeaderReadbackBuffer];
     try {
       const diagnosticsStepCount = stepCount;
       const diagnosticsCapturedAtMs = performance.now();
       const encoder = device.createCommandEncoder({ label: 'kaminos-finger-fluid-diagnostics-copy' });
       encoder.copyBufferToBuffer(particleBuffer, 0, diagnosticsBuffer, 0, particleData.byteLength);
+      encoder.copyBufferToBuffer(energyDiagnosticsBuffer, 0, energyDiagnosticsReadbackBuffer, 0, safeParticleCount * ENERGY_RECORD_BYTES);
       encoder.copyBufferToBuffer(interfaceCountersBuffer, 0, interfaceCountersReadbackBuffer, 0, 12);
       encoder.copyBufferToBuffer(interfaceRecordsBuffer, 0, interfaceRecordsReadbackBuffer, 0, safeParticleCount * INTERFACE_RECORD_BYTES);
       encoder.copyBufferToBuffer(restStateBuffer, 0, restStateReadbackBuffer, 0, safeParticleCount * REST_STATE_BYTES);
@@ -2933,6 +3147,7 @@ export async function createWebGPUFingerFluidSolver({
       const failedMap = mapResults.find(result => result.status === 'rejected');
       if (failedMap) throw failedMap.reason;
       const values = new Float32Array(diagnosticsBuffer.getMappedRange());
+      const energyValues = new Float32Array(energyDiagnosticsReadbackBuffer.getMappedRange());
       const interfaceCounters = new Uint32Array(interfaceCountersReadbackBuffer.getMappedRange());
       const interfaceValues = new Float32Array(interfaceRecordsReadbackBuffer.getMappedRange());
       const restStateValues = new Float32Array(restStateReadbackBuffer.getMappedRange());
@@ -3096,6 +3311,7 @@ export async function createWebGPUFingerFluidSolver({
         restDensity: 24.3,
         sourceRecirculationCount: interfaceCounters[2],
       });
+      const energyLedger = summarizeFingerFluidEnergyLedger(energyValues, safeParticleCount, diagnosticsStepCount);
       diagnostics = {
         readbackMode: 'explicit_sparse_gpu_diagnostics_v0',
         stepCount: diagnosticsStepCount,
@@ -3151,6 +3367,7 @@ export async function createWebGPUFingerFluidSolver({
         supportedTransportParticleCount,
         supportedTransportParticleRatio: Number((supportedTransportParticleCount / safeParticleCount).toFixed(4)),
         averageSupportedTangentialSpeed: Number((supportedTangentialSpeedSum / Math.max(1, supportedTransportParticleCount)).toFixed(4)),
+        energyLedger,
         fluidTruthSnapshot,
         playgroundZoneDiagnostics: playgroundZoneDiagnostics(values, restStateValues, topologyValues, safeParticleCount),
         sourceRecirculationCount: interfaceCounters[2],
@@ -3222,6 +3439,8 @@ export async function createWebGPUFingerFluidSolver({
       neighborGridContract: KAMINOS_FINGER_FLUID_NEIGHBOR_GRID_CONTRACT,
       densityContract: KAMINOS_FINGER_FLUID_DENSITY_CONTRACT,
       boundaryPressureContract: KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT,
+      supportFrictionContract: KAMINOS_FINGER_FLUID_SUPPORT_FRICTION_CONTRACT,
+      energyLedgerContract: KAMINOS_FINGER_FLUID_ENERGY_LEDGER_CONTRACT,
       vorticityConfinementContract: KAMINOS_FINGER_FLUID_VORTICITY_CONTRACT,
       freeSurfaceContract: KAMINOS_FINGER_FLUID_FREE_SURFACE_CONTRACT,
       restStateContract: KAMINOS_FINGER_FLUID_REST_STATE_CONTRACT,
@@ -3233,6 +3452,7 @@ export async function createWebGPUFingerFluidSolver({
       truthScene: safeTruthScene,
       colorMode: safeColorMode,
       particleShiftStrength: safeParticleShiftStrength,
+      supportFriction: safeSupportFriction,
       chemistryDiffusion: safeChemistryDiffusion,
       obstacleContract: KAMINOS_FINGER_FLUID_OBSTACLE_CONTRACT,
       obstacle: { center: [...OBSTACLE_CENTER], radius: OBSTACLE_RADIUS, rendered: directRenderFrameCount > 0 },
@@ -3285,6 +3505,7 @@ export async function createWebGPUFingerFluidSolver({
       },
       playgroundZoneDiagnostics: diagnostics?.playgroundZoneDiagnostics || null,
       fluidTruthSnapshot: diagnostics?.fluidTruthSnapshot || null,
+      energyLedger: diagnostics?.energyLedger || null,
       sourceRecirculationMode: safeTruthScene === 'multi_regime_playground'
         ? 'material_tagged_finite_particle_loop_v0'
         : 'closed_particle_population_no_source_recirculation_v0',
@@ -3375,6 +3596,8 @@ export async function createWebGPUFingerFluidSolver({
     particleNextBuffer.destroy();
     paramsBuffer.destroy();
     diagnosticsBuffer.destroy();
+    energyDiagnosticsBuffer.destroy();
+    energyDiagnosticsReadbackBuffer.destroy();
     interfaceRecordsBuffer.destroy();
     interfaceCountersBuffer.destroy();
     liquidFireContactRecordsBuffer.destroy();
