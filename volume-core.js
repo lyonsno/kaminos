@@ -37,6 +37,10 @@ import {
   createLayerCoefficientLiveUnionGpuResources,
   loadLayerCoefficientLiveUnionOverlay,
 } from './volume-layer-coefficient-live-union-overlay.mjs';
+import {
+  adjudicateStageBOpticalLayers,
+  validateStageBOpticalAuthority,
+} from './volume-stage-b-optical-adjudication.mjs';
 
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
@@ -15928,6 +15932,138 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
   }
 
+  async function readBoundarySplatOpticalAdjudication({ gpuRgba, authority, sample }) {
+    validateStageBOpticalAuthority(authority);
+    const expectedSize = `${state.width}x${state.height}x${BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS}`;
+    if (!boundarySplatOpticalTexture || boundarySplatOpticalTextureSize !== expectedSize) {
+      throw new Error('stage-b-optical-adjudication-attachment-missing');
+    }
+    if (authority.candidateCount !== sample?.boundarySplatCandidateCount) {
+      throw new Error(`stage-b-optical-adjudication-candidate-drift:${authority.candidateCount}:${sample?.boundarySplatCandidateCount}`);
+    }
+    if (sample?.boundarySplatOverflowCount !== 0) throw new Error('stage-b-optical-adjudication-overflow');
+    if (sample?.boundarySplatFallbackReason) throw new Error(`stage-b-optical-adjudication-fallback:${sample.boundarySplatFallbackReason}`);
+    if (sample?.boundarySplatPresentationReceipt?.effectiveMode !== BOUNDARY_SPLAT_OPTICAL_MODE) {
+      throw new Error(`stage-b-optical-adjudication-mode-substitution:${sample?.boundarySplatPresentationReceipt?.effectiveMode || 'missing'}`);
+    }
+    if (sample?.selectiveHeadLivePassReceipt?.splatEncoded !== true || sample?.selectiveHeadLivePassReceipt?.splatApplied !== true) {
+      throw new Error('stage-b-optical-adjudication-pass-not-applied');
+    }
+
+    const bytesPerPixel = 8;
+    const unpaddedBytesPerRow = state.width * bytesPerPixel;
+    const bytesPerRow = Math.ceil(unpaddedBytesPerRow / 256) * 256;
+    const layerBytes = bytesPerRow * state.height;
+    const readback = device.createBuffer({
+      label: 'kaminos Stage B exact optical adjudication readback',
+      size: layerBytes * BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const encoder = device.createCommandEncoder({ label: 'kaminos Stage B exact optical adjudication encoder' });
+    encoder.copyTextureToBuffer(
+      { texture: boundarySplatOpticalTexture },
+      { buffer: readback, bytesPerRow, rowsPerImage: state.height },
+      { width: state.width, height: state.height, depthOrArrayLayers: BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS },
+    );
+    device.queue.submit([encoder.finish()]);
+    await readback.mapAsync(GPUMapMode.READ);
+    const mapped = readback.getMappedRange();
+    const mappedBytes = new Uint8Array(mapped);
+    const words = new Uint16Array(mapped);
+    const wordsPerRow = bytesPerRow / Uint16Array.BYTES_PER_ELEMENT;
+    const wordsPerLayer = layerBytes / Uint16Array.BYTES_PER_ELEMENT;
+    const layerPayloadSha256 = await sha256Bytes(mappedBytes);
+    const output = gpuRgba instanceof Uint8Array ? gpuRgba : Uint8Array.from(gpuRgba || []);
+    const gpuOutputSha256 = await sha256Bytes(output);
+    const result = adjudicateStageBOpticalLayers({
+      width: state.width,
+      height: state.height,
+      readPixel(binIndex, x, y, target) {
+        const offset = binIndex * wordsPerLayer + y * wordsPerRow + x * 4;
+        target[0] = decodeFloat16(words[offset]);
+        target[1] = decodeFloat16(words[offset + 1]);
+        target[2] = decodeFloat16(words[offset + 2]);
+        target[3] = decodeFloat16(words[offset + 3]);
+        return target;
+      },
+      gpuRgba: output,
+      outputToleranceBytes: 2,
+      includeAnalyticalRgba: false,
+      authority,
+    });
+    readback.unmap();
+    readback.destroy();
+    const camera = sample?.volumePresentationApplication?.camera || null;
+    const cameraSha256 = await sha256Bytes(new TextEncoder().encode(JSON.stringify(camera)));
+    return {
+      ...result,
+      hashes: {
+        layerPayloadSha256,
+        gpuOutputSha256,
+        cameraSha256,
+        resources: {
+          sourceManifestSha256: authority.sourceManifestSha256,
+          manifestSha256: authority.manifestSha256,
+          fluidSha256: authority.fluidSha256,
+          frontSha256: authority.frontSha256,
+          supportSha256: authority.supportSha256,
+          coefficientSha256: authority.coefficientSha256,
+          covarianceSha256: authority.covarianceSha256,
+          candidatePayloadSha256: authority.candidatePayloadSha256,
+          controlsSha256: authority.controlsSha256,
+        },
+      },
+      attachments: {
+        accumulation: { requested: 'rgba16float-array', effective: `${BOUNDARY_SPLAT_HDR_TARGET_FORMAT}-array`, layers: BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS },
+        layer: { requested: 'rgba16float', effective: BOUNDARY_SPLAT_HDR_TARGET_FORMAT },
+        presentation: { requested: 'rgba8unorm', effective: 'rgba8unorm' },
+      },
+      capture: {
+        sameStateCaptureId: sample?.sameStateCaptureId || null,
+        frameCount: sample?.frameCount ?? null,
+        simStepCount: sample?.simStepCount ?? null,
+        sampleAuthority: sample?.sampleAuthority || null,
+        camera,
+        route: {
+          effectiveRenderer: sample?.effectiveRoute || null,
+          backend: sample?.backend || null,
+        },
+      },
+      renderer: {
+        requestedMode: authority.requestedMode,
+        effectiveMode: sample?.boundarySplatPresentationReceipt?.effectiveMode || null,
+        accumulationIdentity: BOUNDARY_SPLAT_OPTICAL_ACCUMULATION_IDENTITY,
+        transportIdentity: BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY,
+        passReceipt: sample?.selectiveHeadLivePassReceipt || null,
+        fallbackUsed: false,
+        fallbackReason: null,
+      },
+    };
+  }
+
+  async function sampleBoundarySplatOpticalAdjudication(options = {}) {
+    const authority = structuredClone(options.authority || {});
+    validateStageBOpticalAuthority(authority);
+    if (boundarySplatPresentationModeEffective !== BOUNDARY_SPLAT_OPTICAL_MODE) {
+      throw new Error(`stage-b-optical-adjudication-not-effective:${boundarySplatPresentationModeEffective || 'missing'}`);
+    }
+    const sample = await sampleFrame({
+      advanceSim: false,
+      includeRgba: true,
+      sameStateCaptureId: authority.sameStateCaptureId,
+      baseFrameCount: state.frameCount,
+      baseSimStepCount: state.simStepCount,
+      now: Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now(),
+    });
+    if (!sample?.ok) throw new Error(`stage-b-optical-adjudication-sample-failed:${sample?.reason || 'unknown'}`);
+    if (!sample.image?.rgba) throw new Error('stage-b-optical-adjudication-gpu-output-missing');
+    return readBoundarySplatOpticalAdjudication({
+      gpuRgba: Uint8Array.from(sample.image.rgba),
+      authority,
+      sample,
+    });
+  }
+
   async function sampleFrame(options = {}) {
     if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
     const advanceSim = options.advanceSim !== false;
@@ -18032,6 +18168,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return canvas;
     },
     sampleFrame,
+    sampleBoundarySplatOpticalAdjudication,
     sampleBoundarySplatFootprintAudit,
     sampleDeterministicReplayFrame,
     beginDebugFullFieldImport,
