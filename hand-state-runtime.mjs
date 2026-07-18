@@ -4,6 +4,7 @@ import {
   createLiveFingerJuiceEmitterPacket,
   MANO_DISPLAY_ORIENTATION_CONTRACT,
   normalizeManoSurface,
+  projectDisplayPointToFingerJuiceWorld,
 } from './hand-state-finger-juice.mjs';
 import { createWebGPUFingerJuiceSolver } from './lerms-finger-juice-webgpu-core.js';
 
@@ -83,6 +84,14 @@ let previousFingerTips = null;
 let previousFingerTimestampMs = null;
 let fingerJuiceError = null;
 
+const MANO_FINGERTIP_VERTICES = Object.freeze([
+  ['thumb', 745, 'splash'],
+  ['index', 317, 'knockback'],
+  ['middle', 444, 'pooling'],
+  ['ring', 556, 'weird'],
+  ['pinky', 673, 'weird'],
+]);
+
 function resetLatencyBenchmark() {
   benchmarkSessionId = globalThis.crypto?.randomUUID?.() || `hand-${Date.now()}`;
   pendingLatencySample = null;
@@ -155,9 +164,60 @@ async function ensureFingerJuice() {
   return fingerJuiceInitPromise;
 }
 
+async function probeFingerJuice(emitterPacket, steps = 24) {
+  const solver = await ensureFingerJuice();
+  const growth = solver.setEmitterPacket(emitterPacket);
+  fingerJuicePacket = {
+    ...emitterPacket,
+    active_emitter_count: emitterPacket.emitters?.filter(emitter => emitter.active).length || 0,
+  };
+  fingerJuiceCanvas.style.visibility = 'visible';
+  const respawn = await solver.stepAndRead(1, 1 / 60, {
+    cpuOracle: false,
+    summaryMode: 'live_lightweight_readback_v0',
+    reason: 'visual witness inactive-to-live emitter respawn probe',
+  });
+  for (let index = 1; index < Math.max(1, Number(steps) || 1); index += 1) {
+    await solver.step(1, 1 / 60);
+    fingerJuiceRenderer.render({
+      width: window.innerWidth,
+      height: window.innerHeight,
+      pixelRatio: window.devicePixelRatio || 1,
+      camera: { yaw: 0, pitch: 0, zoom: 1, panX: 0, panY: 0 },
+    });
+  }
+  return { growth, respawn };
+}
+
+function fixtureEmitterPacket() {
+  const positions = handGeometry.getAttribute('position')?.array;
+  if (!positions || positions.length < 778 * 3) throw new Error('recorded MANO surface is unavailable for the emitter witness');
+  const emitters = MANO_FINGERTIP_VERTICES.map(([id, vertexIndex, chemistry]) => {
+    const offset = vertexIndex * 3;
+    const display = [positions[offset], positions[offset + 1], positions[offset + 2]];
+    return {
+      id,
+      active: true,
+      emission_state: 'jet',
+      chemistry,
+      origin_world: projectDisplayPointToFingerJuiceWorld(display, { width: window.innerWidth, height: window.innerHeight }),
+      aim_world: [display[0] * 0.18, 0.32, 0.93],
+      motion_world: [0, 0, 0],
+      radius: id === 'middle' ? 0.052 : 0.044,
+      strength: 1.15,
+    };
+  });
+  return {
+    packet_id: 'fixture-emitter-capacity-probe',
+    route_identity: 'recorded-mano-fingertip-vertices-v0',
+    emitters,
+  };
+}
+
 function updateFingerJuice(state) {
   fingerJuicePacket = createLiveFingerJuiceEmitterPacket(state, {
     manoTransform: currentManoTransform,
+    viewport: { width: window.innerWidth, height: window.innerHeight },
     previousTips: previousFingerTips,
     previousTimestampMs: previousFingerTimestampMs,
     nowMs: Date.now(),
@@ -426,6 +486,8 @@ window.__kaminosHandStateLatencyBenchmark = () => ({
 });
 
 window.__kaminosHandStateInitFingerJuice = ensureFingerJuice;
+window.__kaminosHandStateProbeFingerJuice = probeFingerJuice;
+window.__kaminosHandStateFixtureEmitterPacket = fixtureEmitterPacket;
 
 window.__kaminosHandStateDebugState = () => ({
   schema: 'kaminos.hand-state-runtime-viewer.v0',

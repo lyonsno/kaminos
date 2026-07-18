@@ -12,7 +12,7 @@ assert.match(index, /data-tab="hand-state"/, 'Kaminos exposes a Hand tab');
 assert.match(index, /id="tab-hand-state"/, 'Hand tab has operator controls');
 assert.match(index, /id="hand-state-runtime-frame"/, 'Hand tab mounts the live runtime viewer');
 assert.match(index, /hand-state-runtime\.html/, 'Hand tab loads the dedicated live viewer');
-assert.match(index, /palm-finger-juice-0718/, 'Hand tab cache identity advances with live finger-fluid integration');
+assert.match(index, /palm-fluid-visual-respawn-0718/, 'Hand tab cache identity advances with visually witnessed fluid respawn repair');
 
 assert.match(page, /Start Hand/, 'viewer has one explicit camera start command');
 assert.match(page, /data-runtime-owner="hand-state-runtime"/, 'viewer declares runtime ownership');
@@ -25,7 +25,7 @@ assert.match(moduleSource, /BufferGeometry/, 'viewer renders a real mesh geometr
 assert.match(moduleSource, /mano\.vertices/, 'viewer consumes runtime MANO vertices');
 assert.match(moduleSource, /mano\.faces/, 'viewer consumes runtime MANO faces');
 assert.match(moduleSource, /MANO_DISPLAY_ORIENTATION_CONTRACT/, 'viewer reports the effective MANO orientation contract');
-assert.match(fingerJuiceSource, /mano-proper-rotation-z-pi-v0/, 'orientation adapter names the corrected proper MANO transform');
+assert.match(fingerJuiceSource, /mano-camera-display-x-preserved-y-inverted-v1/, 'orientation adapter names the camera/display transform that preserves thumb side');
 assert.match(moduleSource, /wilor-mano-surface\.json/, 'visual fixture uses a recorded WiLoR MANO surface');
 assert.doesNotMatch(moduleSource, /addBox|BoxGeometry|fixtureMano/, 'viewer must not synthesize substitute hand geometry');
 

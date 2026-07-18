@@ -2816,15 +2816,21 @@ fn hash01(seed: u32) -> f32 {
   return f32(value & 0x00ffffffu) / 16777215.0;
 }
 
-fn respawnParticle(particle: Particle, index: u32, stepSeed: u32) -> Particle {
+fn respawnParticle(particle: Particle, index: u32, stepSeed: u32, preserveEmitterHint: bool) -> Particle {
   var out = particle;
   if (params.emitterCount == 0u) {
     out.flags.y = 0.0;
     return out;
   }
-  let hintedEmitterIndex = u32(max(0.0, particle.flags.x));
-  let fallbackSlot = index % params.emitterCount;
-  let emitterSlot = select(fallbackSlot, hintedEmitterIndex, hintedEmitterIndex < params.emitterCount);
+  var emitterSlot = index % params.emitterCount;
+  if (preserveEmitterHint) {
+    let hintedEmitterIndex = u32(max(0.0, particle.flags.x));
+    for (var slot = 0u; slot < params.emitterCount; slot = slot + 1u) {
+      if (u32(emitters[slot].strengthExtensionIndexLife.z) == hintedEmitterIndex) {
+        emitterSlot = slot;
+      }
+    }
+  }
   let emitter = emitters[emitterSlot];
   let origin = emitter.originActive.xyz;
   let aim = normalize(emitter.aimChem.xyz + vec3f(0.00001, 0.00001, 0.00001));
@@ -2932,7 +2938,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3u) {
   }
   var particle = particles[index];
   if (particle.flags.y < 0.5) {
-    return;
+    if (params.emitterCount == 0u) {
+      return;
+    }
+    particle = respawnParticle(particle, index, params.stepCount, false);
   }
   for (var s: u32 = 0u; s < params.steps; s = s + 1u) {
     var position = particle.posPhase.xyz;
@@ -2947,7 +2956,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3u) {
       continue;
     }
     if (age >= life) {
-      particle = respawnParticle(particle, index, params.stepCount + s);
+      particle = respawnParticle(particle, index, params.stepCount + s, true);
       position = particle.posPhase.xyz;
       phase = particle.posPhase.w;
       velocity = particle.velChem.xyz;

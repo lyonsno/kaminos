@@ -17,9 +17,9 @@ const surface = normalizeManoSurface([
   [1, 2, -0.5],
 ]);
 assert.ok(surface, 'MANO normalization returns a surface and transform');
-assert.ok(surface.positions[0] > 0 && surface.positions[1] > 0, 'display transform rotates source x/y by pi so fingers point up without a reflection');
+assert.ok(surface.positions[0] < 0 && surface.positions[1] > 0, 'display transform preserves camera x while inverting y so thumb side and finger direction both agree with the operator');
 assert.ok(surface.positions[2] > 0, 'display transform preserves palm-facing depth');
-assert.equal(surface.orientationContract, 'mano-proper-rotation-z-pi-v0');
+assert.equal(surface.orientationContract, 'mano-camera-display-x-preserved-y-inverted-v1');
 
 const points = Array.from({ length: 21 }, () => [0, 0, 0]);
 points[0] = [0, -0.4, 0];
@@ -58,6 +58,7 @@ const liveState = {
 
 const packet = createLiveFingerJuiceEmitterPacket(liveState, {
   manoTransform: { center: [0, 0, 0], scale: 1 },
+  viewport: { width: 1340, height: 1080 },
   nowMs: 10_050,
 });
 assert.equal(packet.schema, 'lerms.world-finger-juice-emitters.v0');
@@ -67,6 +68,21 @@ assert.deepEqual(packet.emitters.filter(emitter => emitter.active).map(emitter =
 assert.equal(packet.emitters.find(emitter => emitter.id === 'middle').emission_state, 'off', 'bent finger fails closed');
 assert.ok(packet.emitters.filter(emitter => emitter.active).every(emitter => emitter.emission_state === 'jet'), 'active fingers only jet');
 assert.ok(packet.emitters.every(emitter => emitter.emission_state !== 'dribble'), 'first live slice has no dribble state');
+
+const indexEmitter = packet.emitters.find(emitter => emitter.id === 'index');
+const handFocalLength = 1080 / (2 * Math.tan((33 * Math.PI / 180) / 2));
+const handDepth = 3.8;
+const expectedIndexScreen = [
+  1340 * 0.5 + points[8][0] * handFocalLength / handDepth,
+  1080 * 0.5 - (-points[8][1] - 0.05) * handFocalLength / handDepth,
+];
+const fluidProjectionScale = Math.min(1340 * 0.82, 1080 * 1.22) / (2.6 + indexEmitter.origin_world[2]);
+const actualIndexScreen = [
+  1340 * 0.5 + indexEmitter.origin_world[0] * fluidProjectionScale,
+  1080 * 0.64 - (indexEmitter.origin_world[1] - 0.64) * fluidProjectionScale,
+];
+assert.ok(Math.abs(expectedIndexScreen[0] - actualIndexScreen[0]) < 1, 'finger-fluid x projection lands on the rendered fingertip');
+assert.ok(Math.abs(expectedIndexScreen[1] - actualIndexScreen[1]) < 1, 'finger-fluid y projection lands on the rendered fingertip');
 
 const stalePacket = createLiveFingerJuiceEmitterPacket({
   ...liveState,
@@ -83,6 +99,7 @@ assert.match(solver, /nextEmitterData\.data\.byteLength > emitterBufferByteLengt
 assert.match(solver, /emitterBuffer = device\.createBuffer/, 'GPU emitter storage can be replaced for larger live packets');
 assert.match(solver, /bindGroup = createComputeBindGroup\(\)/, 'GPU emitter storage growth rebinds compute resources');
 assert.doesNotMatch(solver, /expanded emitter packet has/, 'larger live emitter packets are not rejected by startup capacity');
+assert.match(solver, /particle\.flags\.y < 0\.5[\s\S]*respawnParticle/, 'particles initialized without emitters can activate when live emitters arrive');
 assert.match(viewer, /cpuOracle:\s*false/, 'live hand route disables startup CPU oracle');
 assert.match(solver, /options\.cpuOracle === false \? null/, 'WebGPU solver honors the no-oracle live initialization path');
 

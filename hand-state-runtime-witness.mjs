@@ -19,6 +19,7 @@ let phase = 'initializing';
 let effectiveUrl = null;
 let debugState = null;
 let emitterGrowthReceipt = null;
+let inactiveEmitterRespawnReceipt = null;
 let primaryOutputWritten = false;
 let stderr = '';
 
@@ -38,6 +39,7 @@ function writeReport(extra = {}) {
     consoleEvents,
     debugState,
     emitterGrowthReceipt,
+    inactiveEmitterRespawnReceipt,
     stderrTail: stderr.slice(-2000),
     ...extra,
   }, null, 2));
@@ -155,30 +157,17 @@ async function main() {
     const fluidReceipt = await evaluate(socket, `(async () => {
       const frame = document.getElementById('hand-state-runtime-frame');
       const initialize = frame?.contentWindow?.__kaminosHandStateInitFingerJuice;
+      const probe = frame?.contentWindow?.__kaminosHandStateProbeFingerJuice;
+      const fixturePacket = frame?.contentWindow?.__kaminosHandStateFixtureEmitterPacket;
       const read = frame?.contentWindow?.__kaminosHandStateDebugState;
-      if (typeof initialize !== 'function' || typeof read !== 'function') throw new Error('finger-fluid witness API missing');
-      const solver = await initialize();
-      const emitter = index => ({
-        id: 'fixture-' + index,
-        active: true,
-        emission_state: 'jet',
-        chemistry: 'knockback',
-        origin_world: [index * 0.02, 0.4, -0.8],
-        aim_world: [0, 0.2, 1],
-        motion_world: [0, 0, 0],
-        radius: 0.04,
-        strength: 1,
-      });
-      const growth = solver.setEmitterPacket({
-        packet_id: 'fixture-emitter-capacity-probe',
-        route_identity: 'fixture-capacity-only',
-        emitters: Array.from({ length: 5 }, (_, index) => emitter(index)),
-      });
-      solver.setEmitterPacket({ packet_id: 'fixture-zero-emitters', emitters: [] });
-      return { state: read(), growth };
+      if (typeof initialize !== 'function' || typeof probe !== 'function' || typeof fixturePacket !== 'function' || typeof read !== 'function') throw new Error('finger-fluid witness API missing');
+      await initialize();
+      const { growth, respawn } = await probe(fixturePacket(), 12);
+      return { state: read(), growth, respawn };
     })()`);
     debugState = fluidReceipt?.state || null;
     emitterGrowthReceipt = fluidReceipt?.growth || null;
+    inactiveEmitterRespawnReceipt = fluidReceipt?.respawn || null;
     if (debugState?.fingerJuice?.solverBackend !== 'webgpu_compute') {
       throw new Error(`finger-fluid solver route mismatch: ${debugState?.fingerJuice?.solverBackend || 'missing'}`);
     }
@@ -188,8 +177,15 @@ async function main() {
     if (emitterGrowthReceipt?.emitterCount !== 5) {
       throw new Error(`finger-fluid emitter growth count mismatch: ${emitterGrowthReceipt?.emitterCount ?? 'missing'}`);
     }
-    if (debugState?.fingerJuice?.activeEmitterCount !== 0) {
-      throw new Error('fixture witness must initialize with zero active emitters');
+    if (!inactiveEmitterRespawnReceipt || inactiveEmitterRespawnReceipt.particleCount <= 0) {
+      throw new Error(`finger-fluid inactive particle respawn failed: ${inactiveEmitterRespawnReceipt?.particleCount ?? 'missing'}`);
+    }
+    const emitterBuckets = Object.entries(inactiveEmitterRespawnReceipt.particlesPerEmitter || {}).filter(([, count]) => count > 0);
+    if (emitterBuckets.length !== 5) {
+      throw new Error(`finger-fluid particle allocation reached ${emitterBuckets.length}/5 emitters`);
+    }
+    if (debugState?.fingerJuice?.activeEmitterCount !== 5) {
+      throw new Error('fixture witness must capture all five active emitters');
     }
     const fatalConsole = consoleEvents.filter(event => event.type === 'exception' || event.type === 'error');
     if (fatalConsole.length) throw new Error(`browser console emitted ${fatalConsole.length} fatal event(s)`);

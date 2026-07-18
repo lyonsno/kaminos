@@ -1,6 +1,6 @@
 import { normalizeWorldFingerJuiceEmitterPacket } from './lerms-finger-juice-core.js';
 
-export const MANO_DISPLAY_ORIENTATION_CONTRACT = 'mano-proper-rotation-z-pi-v0';
+export const MANO_DISPLAY_ORIENTATION_CONTRACT = 'mano-camera-display-x-preserved-y-inverted-v1';
 export const LIVE_FINGER_JUICE_ADAPTER_CONTRACT = 'hand-state-distal-axis-full-extension-emitters-v0';
 export const FULL_EXTENSION_THRESHOLD = 0.86;
 
@@ -49,7 +49,7 @@ function displayPoint(point, transform) {
   const center = transform?.center || [0, 0, 0];
   const scale = finite(transform?.scale, 1);
   return [
-    -(source[0] - center[0]) * scale,
+    (source[0] - center[0]) * scale,
     -(source[1] - center[1]) * scale,
     (source[2] - center[2]) * scale,
   ];
@@ -87,8 +87,20 @@ function fingerExtension(points, joints) {
   return clamp(Math.min(reachScore, angleScore));
 }
 
-function emitterWorldPoint(display) {
-  return [display[0] * 0.33, 0.84 + display[1] * 0.33, -0.8 + display[2] * 0.16];
+export function projectDisplayPointToFingerJuiceWorld(display, viewport = {}) {
+  const width = Math.max(1, finite(viewport.width, 1340));
+  const height = Math.max(1, finite(viewport.height, 1080));
+  const fluidZ = -0.8 + display[2] * 0.16;
+  const handFocalLength = height / (2 * Math.tan((33 * Math.PI / 180) / 2));
+  const handDepth = Math.max(0.01, 3.8 - display[2]);
+  const screenX = width * 0.5 + display[0] * handFocalLength / handDepth;
+  const screenY = height * 0.5 - (display[1] - 0.05) * handFocalLength / handDepth;
+  const fluidProjectionScale = Math.min(width * 0.82, height * 1.22) / Math.max(0.58, 2.6 + fluidZ);
+  return [
+    (screenX - width * 0.5) / fluidProjectionScale,
+    0.64 - (screenY - height * 0.64) / fluidProjectionScale,
+    fluidZ,
+  ];
 }
 
 function inactivePacket(state, reason, nowMs) {
@@ -115,6 +127,7 @@ function inactivePacket(state, reason, nowMs) {
 
 export function createLiveFingerJuiceEmitterPacket(state, {
   manoTransform = null,
+  viewport = null,
   previousTips = null,
   previousTimestampMs = null,
   nowMs = Date.now(),
@@ -139,8 +152,8 @@ export function createLiveFingerJuiceEmitterPacket(state, {
     const active = extension >= FULL_EXTENSION_THRESHOLD;
     const displayTip = displayPoint(tip, manoTransform);
     const displayDistal = displayPoint(distal, manoTransform);
-    const originWorld = emitterWorldPoint(displayTip);
-    const distalWorld = emitterWorldPoint(displayDistal);
+    const originWorld = projectDisplayPointToFingerJuiceWorld(displayTip, viewport);
+    const distalWorld = projectDisplayPointToFingerJuiceWorld(displayDistal, viewport);
     const previous = previousTips?.[finger.id];
     const motionWorld = previous && dt > 0
       ? sub(originWorld, previous).map(component => component / dt)
