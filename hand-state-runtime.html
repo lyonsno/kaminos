@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en" data-runtime-owner="hand-state-runtime">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kaminos Live Hand</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #07090b; color: #dce7ea; }
+    body { font-family: "SF Mono", "Menlo", monospace; }
+    #hand-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    #controls { position: absolute; top: 16px; left: 16px; z-index: 2; display: flex; align-items: center; gap: 10px; }
+    button { height: 34px; border: 1px solid #3b6570; border-radius: 6px; padding: 0 13px; background: #112128; color: #d7edf2; font: 11px inherit; cursor: pointer; }
+    button:hover { background: #183039; border-color: #68a8b7; }
+    button[data-running="true"] { background: #42291b; border-color: #bf7b43; color: #ffe0b8; }
+    #status { max-width: min(620px, calc(100vw - 170px)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #79a2aa; font-size: 10px; }
+    #status[data-state="live"] { color: #7ed6bd; }
+    #status[data-state="error"] { color: #ef9588; }
+    #receipt { position: absolute; right: 16px; bottom: 14px; z-index: 2; color: #507078; font-size: 9px; }
+    video, #capture-canvas { display: none; }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./lib/three.webgpu.js",
+      "three/webgpu": "./lib/three.webgpu.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <canvas id="hand-canvas"></canvas>
+  <div id="controls">
+    <button id="hand-toggle" type="button">Start Hand</button>
+    <span id="status" data-state="idle">runtime idle</span>
+  </div>
+  <div id="receipt">hand-state-runtime / Kaminos</div>
+  <video id="camera" playsinline muted></video>
+  <canvas id="capture-canvas"></canvas>
+  <script type="module" src="./hand-state-runtime.mjs"></script>
+</body>
+</html>

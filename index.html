@@ -479,6 +479,13 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 #finger-juice-operator-panel[hidden] { display: none; }
 #finger-juice-viewport-frame { width: 100%; height: 100%; border: 0; display: block; background: #10120f; }
 
+/* Standalone hand-state runtime viewer */
+.hand-state-readout { display: grid; grid-template-columns: 1fr; gap: 4px; margin-top: 8px; }
+.hand-state-readout .field { margin: 0; padding: 0; }
+#hand-state-runtime-panel { position: absolute; inset: 0; z-index: 5; background: #07090b; }
+#hand-state-runtime-panel[hidden] { display: none; }
+#hand-state-runtime-frame { width: 100%; height: 100%; border: 0; display: block; background: #07090b; }
+
 /* Native Finger Juice host */
 .finger-juice-host-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin-top: 8px; }
 .finger-juice-host-readout .field { margin: 0; padding: 0; }
@@ -526,6 +533,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
     <div class="tab" data-tab="finger-fluid-bench">Fluid</div>
     <div class="tab" data-tab="finger-juice-host">Host</div>
     <div class="tab" data-tab="finger-juice">Juice</div>
+    <div class="tab" data-tab="hand-state">Hand</div>
     <div class="tab" data-tab="greenroom">Greenroom</div>
     <div class="tab" data-tab="pipeline">Pipeline</div>
     <div class="tab" data-tab="search">Search</div>
@@ -2315,6 +2323,24 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
     </div>
   </div>
 
+  <!-- Standalone Hand State Tab -->
+  <div class="tab-content" id="tab-hand-state">
+    <h2>Live Hand</h2>
+    <div class="panel">
+      <div class="field"><span class="field-key">Owner</span><span class="field-val">hand-state-runtime</span></div>
+      <div class="field"><span class="field-key">Viewer</span><span class="field-val">Kaminos MANO surface</span></div>
+      <div class="volume-actions">
+        <button class="btn" id="hand-state-reload">Reload</button>
+        <a class="btn" href="hand-state-runtime.html" target="_blank" rel="noopener">Open Direct</a>
+      </div>
+    </div>
+    <div class="panel hand-state-readout">
+      <div class="field"><span class="field-key">Runtime</span><span class="field-val">127.0.0.1:8766</span></div>
+      <div class="field"><span class="field-key">Input</span><span class="field-val">browser camera</span></div>
+      <div class="field"><span class="field-key">Surface</span><span class="field-val">live MANO mesh</span></div>
+    </div>
+  </div>
+
   <!-- Greenroom Tab -->
   <div class="tab-content" id="tab-greenroom">
     <h2 style="display:flex; align-items:center; gap:8px;">Splat Assets <button class="btn" onclick="grBrowseSplatAssets()" style="font-size:9px; padding:2px 8px;">Refresh</button></h2>
@@ -2544,6 +2570,15 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       title="LERMS Finger Juice Primitive"
       data-src="lerms-finger-juice.html?lerms_world_finger_juice=1"
       allow="fullscreen"
+      loading="lazy"
+    ></iframe>
+  </div>
+  <div id="hand-state-runtime-panel" hidden>
+    <iframe
+      id="hand-state-runtime-frame"
+      title="Kaminos Live Hand"
+      data-src="hand-state-runtime.html"
+      allow="camera"
       loading="lazy"
     ></iframe>
   </div>
@@ -9365,6 +9400,29 @@ function ensureFingerJuiceTabFrameLoaded() {
   fingerJuiceFrame.src = fingerJuiceFrame.dataset.src || FINGER_JUICE_STANDALONE_ROUTE;
 }
 
+function ensureHandStateRuntimeFrameLoaded() {
+  const frame = document.getElementById('hand-state-runtime-frame');
+  if (!frame || frame.src) return;
+  frame.src = frame.dataset.src || 'hand-state-runtime.html';
+}
+
+function initKaminosHandStateRoute() {
+  const params = new URLSearchParams(window.location.search);
+  const frame = document.getElementById('hand-state-runtime-frame');
+  document.getElementById('hand-state-reload')?.addEventListener('click', () => {
+    if (!frame) return;
+    frame.src = frame.src || frame.dataset.src || 'hand-state-runtime.html';
+    frame.contentWindow?.location.reload();
+  });
+  if (params.get('kaminos_hand_state') !== '1') return;
+  const childParams = new URLSearchParams();
+  if (params.get('hand_fixture') === '1') childParams.set('fixture', '1');
+  if (params.get('runtime_url')) childParams.set('runtime_url', params.get('runtime_url'));
+  if (frame) frame.dataset.src = `hand-state-runtime.html${childParams.size ? `?${childParams}` : ''}`;
+  setActiveTab('hand-state');
+  setInfo('Standalone hand-state runtime viewer active');
+}
+
 function setActiveTab(tabName) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${tabName}`));
@@ -9383,6 +9441,11 @@ function setActiveTab(tabName) {
   if (fingerJuicePanel) {
     fingerJuicePanel.hidden = tabName !== 'finger-juice';
     if (tabName === 'finger-juice') ensureFingerJuiceTabFrameLoaded();
+  }
+  const handStatePanel = document.getElementById('hand-state-runtime-panel');
+  if (handStatePanel) {
+    handStatePanel.hidden = tabName !== 'hand-state';
+    if (tabName === 'hand-state') ensureHandStateRuntimeFrameLoaded();
   }
   const pipelineBrowser = document.getElementById('pipeline-main-browser');
   if (pipelineBrowser) pipelineBrowser.hidden = tabName !== 'pipeline';
@@ -21714,6 +21777,7 @@ initScene().then(() => {
   initKaminosFingerFluidBenchRoute();
   initKaminosFingerJuiceHostRoute();
   initKaminosFingerJuiceTabRoute();
+  initKaminosHandStateRoute();
 }).catch(err => {
   console.error('initScene failed:', err);
   // Still init non-3D parts
@@ -21727,6 +21791,7 @@ initScene().then(() => {
   initKaminosFingerFluidBenchRoute();
   initKaminosFingerJuiceHostRoute();
   initKaminosFingerJuiceTabRoute();
+  initKaminosHandStateRoute();
 });
 </script>
 </body>
