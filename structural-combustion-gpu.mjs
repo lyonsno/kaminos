@@ -24,6 +24,23 @@ const PRESENTATION_BYTES = 96;
 const SOURCE_FRAME_HASH = 0x53545243;
 const WORKGROUP_SIZE = 64;
 
+function shaderSourceIdentity(source) {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
+async function assertShaderModuleCompiles(module, label, source) {
+  const compilation = await module.getCompilationInfo();
+  const errors = compilation.messages.filter(message => message.type === 'error');
+  if (errors.length === 0) return;
+  const detail = errors.map(message => `${message.lineNum}:${message.linePos} ${message.message}`).join('\n');
+  throw new Error(`${label} WGSL compilation failed (source ${shaderSourceIdentity(source)}):\n${detail}`);
+}
+
 function finite(value, fallback) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
@@ -905,10 +922,28 @@ export async function createGpuStructuralCombustionAssembly({
     });
   }
 
+  const computeShaderSource = structuralCombustionShader(grid);
   const module = device.createShaderModule({
     label: STRUCTURAL_COMBUSTION_AUTHORITY,
-    code: structuralCombustionShader(grid),
+    code: computeShaderSource,
   });
+  const presentationModule = device.createShaderModule({
+    label: 'structural combustion dimensional presentation',
+    code: STRUCTURAL_COMBUSTION_PRESENTATION_SHADER,
+  });
+  try {
+    await Promise.all([
+      assertShaderModuleCompiles(module, STRUCTURAL_COMBUSTION_AUTHORITY, computeShaderSource),
+      assertShaderModuleCompiles(
+        presentationModule,
+        'structural combustion dimensional presentation',
+        STRUCTURAL_COMBUSTION_PRESENTATION_SHADER,
+      ),
+    ]);
+  } catch (error) {
+    ownedBuffers.forEach(buffer => buffer.destroy());
+    throw error;
+  }
   const computeLayout = device.createBindGroupLayout({
     label: 'structural combustion compute layout',
     entries: [
@@ -964,10 +999,6 @@ export async function createGpuStructuralCombustionAssembly({
     device.createComputePipelineAsync({ label: 'structural combustion emit carried sources', layout: emissionPipelineLayout, compute: { module, entryPoint: 'emitSources' } }),
     device.createComputePipelineAsync({ label: 'structural combustion finalize source', layout: computePipelineLayout, compute: { module, entryPoint: 'finalizeSource' } }),
   ]);
-  const presentationModule = device.createShaderModule({
-    label: 'structural combustion dimensional presentation',
-    code: STRUCTURAL_COMBUSTION_PRESENTATION_SHADER,
-  });
   const presentationLayout = device.createBindGroupLayout({
     label: 'structural combustion presentation layout',
     entries: [

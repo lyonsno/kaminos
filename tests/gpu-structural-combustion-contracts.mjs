@@ -101,6 +101,7 @@ globalThis.GPUBufferUsage = { STORAGE: 1, COPY_DST: 2, COPY_SRC: 4, UNIFORM: 8, 
 globalThis.GPUShaderStage = { COMPUTE: 1, VERTEX: 2, FRAGMENT: 4 };
 
 const buffers = [];
+let presentationCompilationMessages = [];
 const queue = { writeBuffer() {}, async onSubmittedWorkDone() {} };
 const device = {
   queue,
@@ -109,7 +110,17 @@ const device = {
     buffers.push(buffer);
     return buffer;
   },
-  createShaderModule() { return {}; },
+  createShaderModule(descriptor) {
+    return {
+      async getCompilationInfo() {
+        return {
+          messages: descriptor.label === 'structural combustion dimensional presentation'
+            ? presentationCompilationMessages
+            : [],
+        };
+      },
+    };
+  },
   createBindGroupLayout() { return {}; },
   createPipelineLayout() { return {}; },
   async createComputePipelineAsync() { return { getBindGroupLayout() { return {}; } }; },
@@ -167,6 +178,34 @@ try {
     /propagation-target/i,
     'carried-fire mode cannot fall back to the two-object structural predicate',
   );
+  presentationCompilationMessages = [{
+    type: 'error',
+    lineNum: 74,
+    linePos: 19,
+    offset: 1902,
+    length: 8,
+    message: 'portable compiler rejected bond material expression',
+  }];
+  await assert.rejects(
+    () => createGpuStructuralCombustionAssembly({
+      device,
+      gridSize: 32,
+      format: 'rgba8unorm',
+      structures: [
+        { id: 'target', objectId: 21, state: targetState, sidecar: targetSidecar, control: false },
+        { id: 'control', objectId: 22, state: controlState, sidecar: controlSidecar, control: true },
+      ],
+    }),
+    error => {
+      assert.match(error.message, /structural combustion dimensional presentation/i);
+      assert.match(error.message, /source [0-9a-f]{8}/i);
+      assert.match(error.message, /74:19/);
+      assert.match(error.message, /portable compiler rejected bond material expression/);
+      return true;
+    },
+    'presentation WGSL failure preserves module, source, line, column, and compiler message',
+  );
+  presentationCompilationMessages = [];
   const assembly = await createGpuStructuralCombustionAssembly({
     device,
     gridSize: 32,

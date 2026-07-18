@@ -431,7 +431,9 @@
 
     function fail(phase, caught) {
       failurePhase = phase;
-      error = caught?.message || String(caught);
+      const effectiveBackend = volume?.debugState?.()?.backend || 'backend-unknown';
+      const browserIdentity = navigator.userAgent.match(/(?:Chrome|Firefox|Version)\/[\d.]+/)?.[0] || 'browser-unknown';
+      error = `[${effectiveBackend}; ${browserIdentity}] ${caught?.message || String(caught)}`;
       status = 'failed';
       errorEl.style.display = 'grid';
       errorEl.textContent = `Structural combustion failed during ${phase}: ${error}`;
