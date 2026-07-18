@@ -41,6 +41,11 @@ assert.match(witness, /warmupIterations:\s*3/, 'timing must include explicit war
 assert.match(witness, /sampleIterations:\s*7/, 'timing must retain repeated post-warmup samples');
 assert.match(core, /median[\s\S]*p10[\s\S]*p90/, 'timing evidence must report a distribution rather than one noisy sample');
 assert.match(core, /reconstructionMs[\s\S]*splatRasterMs[\s\S]*recurrenceMs[\s\S]*totalGpuMs/, 'timing must split reconstruction, recurrence, splat, and total');
+assert.match(
+  core,
+  /async function sampleSparseHybridOpticalGpuProfile[\s\S]*encodeBoundarySplatTelemetry\(encoder, true\)[\s\S]*await resolveBoundarySplatTelemetry\(\)[\s\S]*boundary-splat-optical-profile-overflow/,
+  'shared-optical timings must reject capacity-truncated splat raster evidence',
+);
 assert.match(witness, /captured-awaiting-personal-inspection/, 'nonblank shared-optical output must not claim visual acceptance');
 assert.match(witness, /candidate payload hash disagrees with requested authority/, 'shared-optical replay must fail on candidate substitution');
 
