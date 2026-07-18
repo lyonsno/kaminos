@@ -185,6 +185,13 @@
       buildRenderedStructuralMotionEntry,
       buildRenderedStructuralMotionTimeline,
     } from './structural-material-3d-motion-audit.js';
+    import {
+      EFFIGY_TILE_GEOMETRY_AUTHORITY,
+      EFFIGY_TILE_GEOMETRY_ROUTE,
+      assessEffigyTileGeometryTransition,
+      buildEffigyTileGeometrySidecar,
+      resolveEffigyTileSurfaceContact,
+    } from './structural-material-3d-geometry-sidecar.js';
 
     const stage = document.querySelector('#stage');
     const readout = document.querySelector('#readout');
@@ -192,6 +199,8 @@
     const gpuStatus = document.querySelector('#gpu-status');
     const gesture = document.querySelector('#gesture');
     const CAMERA_CONTROL_AUTHORITY = 'operator-camera-controls-v0';
+    const EFFIGY_TILE_PROFILE = 'rib-upper-v0';
+    const showStructuralOverlay = new URL(window.location.href).searchParams.get('structuralOverlay') === '1';
     const hapticCompanionParameter = new URL(window.location.href).searchParams.get('hapticCompanion');
     const nativeHapticCompanionUrl = hapticCompanionParameter === 'off'
       ? null
@@ -248,13 +257,21 @@
     const nodeMaterial = new THREE.MeshStandardMaterial({ color: 0xf4efe0, roughness: 0.82, metalness: 0.05 });
     const pinnedMaterial = new THREE.MeshStandardMaterial({ color: 0x697a9a, roughness: 0.7, metalness: 0.08 });
     const looseMaterial = new THREE.MeshStandardMaterial({ color: 0xffe078, roughness: 0.66, metalness: 0.05 });
+    const tileShellMaterial = new THREE.MeshStandardMaterial({ color: 0xb9c7b6, roughness: 0.88, metalness: 0.02, side: THREE.DoubleSide });
+    const tileStressedMaterial = new THREE.MeshStandardMaterial({ color: 0xd9bd61, roughness: 0.8, metalness: 0.02, side: THREE.DoubleSide });
+    const tileLooseMaterial = new THREE.MeshStandardMaterial({ color: 0xe2d49c, roughness: 0.84, metalness: 0.02, side: THREE.DoubleSide });
+    const tileSupportMaterial = new THREE.MeshStandardMaterial({ color: 0x7185a6, roughness: 0.78, metalness: 0.03, side: THREE.DoubleSide });
+    const tileFractureMaterial = new THREE.MeshStandardMaterial({ color: 0xb63a2d, roughness: 0.96, metalness: 0, side: THREE.DoubleSide });
+    const tileNotchMaterial = new THREE.MeshStandardMaterial({ color: 0x403a36, roughness: 0.98, metalness: 0, side: THREE.DoubleSide });
     const forceMaterial = new THREE.LineBasicMaterial({ color: 0xf1cc62, transparent: true, opacity: 0.96 });
     const forceNodeMaterial = new THREE.MeshBasicMaterial({ color: 0xff785a });
     const structuralRaycaster = new THREE.Raycaster();
     structuralRaycaster.params.Line.threshold = 0.075;
     const structuralPointerNdc = new THREE.Vector2();
 
-    let material = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true });
+    let material = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true, profile: EFFIGY_TILE_PROFILE });
+    let geometrySidecar = buildEffigyTileGeometrySidecar(material, { profile: 'rib-upper-v0' });
+    const geometryTransitionLedger = [];
     let materialPointerId = null;
     let dragStart = null;
     let latestStructuralPick = null;
@@ -297,12 +314,20 @@
       ),
     });
 
-    function worldPoint(node) {
+    function worldCoordinate(value) {
       return new THREE.Vector3(
-        (node.x + node.displacement.x - 0.5) * 2.35,
-        (0.5 - node.y - node.displacement.y) * 1.25,
-        (node.z + node.displacement.z - 0.5) * 0.95,
+        (value.x - 0.5) * 2.35,
+        (0.5 - value.y) * 1.25,
+        (value.z - 0.5) * 0.95,
       );
+    }
+
+    function worldPoint(node) {
+      return worldCoordinate({
+        x: node.x + node.displacement.x,
+        y: node.y + node.displacement.y,
+        z: node.z + node.displacement.z,
+      });
     }
 
     function clearWorld() {
@@ -317,14 +342,77 @@
       return new THREE.Line(geometry, lineMaterial);
     }
 
+    function geometryForEffigyFace(face) {
+      const positions = new Float32Array(face.currentVertices.flatMap(vertex => {
+        const rendered = worldCoordinate(vertex);
+        return [rendered.x, rendered.y, rendered.z];
+      }));
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geometry.setIndex(face.triangles.flat());
+      geometry.computeVertexNormals();
+      return geometry;
+    }
+
     function renderMaterial() {
       clearWorld();
+      const previousGeometrySidecar = geometrySidecar;
+      const nextGeometrySidecar = buildEffigyTileGeometrySidecar(material, { profile: 'rib-upper-v0' });
+      if (nextGeometrySidecar.status !== 'passed') {
+        throw new Error(`effigy tile sidecar failed: ${nextGeometrySidecar.validation.errors.join(', ')}`);
+      }
+      if (previousGeometrySidecar?.assetIdentity === nextGeometrySidecar.assetIdentity) {
+        const transition = assessEffigyTileGeometryTransition(previousGeometrySidecar, nextGeometrySidecar, {
+          contactNodeId: forceEnvelope?.contactIdentity?.kind === 'node'
+            ? forceEnvelope.contactIdentity.id
+            : latestStructuralPick?.kind === 'node'
+              ? latestStructuralPick.id
+              : null,
+        });
+        if (transition.maxSurfaceDelta > 0.000000001 || transition.bondLivenessChanged) {
+          geometryTransitionLedger.push({
+            sequence: geometryTransitionLedger.length + 1,
+            gestureId: forceEnvelope?.gestureId || null,
+            interactionKind: forceEnvelope?.kind || null,
+            interactionMagnitude: forceEnvelope?.magnitude ?? null,
+            ...transition,
+          });
+        }
+      }
+      geometrySidecar = nextGeometrySidecar;
       const nodeById = new Map(material.nodes.map(node => [node.id, node]));
+      const bondsByNode = new Map(material.nodes.map(node => [node.id, []]));
+      for (const bond of material.bonds) {
+        bondsByNode.get(bond.a)?.push(bond);
+        bondsByNode.get(bond.b)?.push(bond);
+      }
       const structuralMutation = material.sympatheticBinding || material.sympatheticTear;
       const anchoredComponentId = structuralMutation
         ? `g${structuralMutation.anchoredComponentLabel}`
         : 'c0';
       const maxStress = Math.max(0.001, ...material.bonds.map(bond => bond.lastStress || 0));
+      for (const face of geometrySidecar.faces) {
+        if (face.visibility === 'hidden-live-adjacency') continue;
+        const nodeStress = Math.max(0, ...(bondsByNode.get(face.structuralNodeId) || []).map(bond => bond.lastStress || 0));
+        const faceMaterial = face.visibility === 'fracture-surface'
+          ? tileFractureMaterial
+          : face.visibility === 'authored-opening'
+            ? tileNotchMaterial
+            : face.pinned
+              ? tileSupportMaterial
+              : face.componentId !== anchoredComponentId
+                ? tileLooseMaterial
+                : nodeStress / maxStress > 0.42
+                  ? tileStressedMaterial
+                  : tileShellMaterial;
+        const mesh = new THREE.Mesh(geometryForEffigyFace(face), faceMaterial);
+        mesh.userData.effigySurfacePick = {
+          authority: EFFIGY_TILE_GEOMETRY_AUTHORITY,
+          faceId: face.id,
+          structuralNodeId: face.structuralNodeId,
+        };
+        world.add(mesh);
+      }
       for (const bond of material.bonds) {
         const a = worldPoint(nodeById.get(bond.a));
         const b = worldPoint(nodeById.get(bond.b));
@@ -338,6 +426,7 @@
           : brokenMaterial;
         const line = lineBetween(a, b, lineMaterial);
         line.userData.structuralPick = { kind: 'bond', id: bond.id };
+        line.visible = showStructuralOverlay;
         if (!bond.alive) line.computeLineDistances?.();
         world.add(line);
       }
@@ -349,6 +438,7 @@
         mesh.position.copy(worldPoint(node));
         mesh.scale.setScalar(node.pinned ? 1.32 : 1);
         mesh.userData.structuralPick = { kind: 'node', id: node.id };
+        mesh.visible = showStructuralOverlay;
         world.add(mesh);
       }
       if (forceEnvelope) {
@@ -395,7 +485,7 @@
     function updateReadout() {
       const summary = summarizeLayeredStructuralState(material);
       readout.textContent = `broken ${summary.brokenBondCount} | repaired ${summary.repairedBondCount} | depth ${summary.brokenDepthBondCount}/${summary.crossDepthBondCount} | components ${summary.componentCount} | sound ${summary.sound.signature}`;
-      route.textContent = `${STRUCTURAL_MATERIAL_3D_ROUTE} | ${STRUCTURAL_MATERIAL_3D_VISUAL_AUTHORITY}`;
+      route.textContent = `${EFFIGY_TILE_GEOMETRY_ROUTE} | ${STRUCTURAL_MATERIAL_3D_VISUAL_AUTHORITY}`;
       const latestGpuOperation = latestGpuOperationTracker.snapshot();
       const latestGpuReceipt = latestGpuOperation?.receipt;
       const latestWarmTotal = latestGpuReceipt?.timingsMs?.warmTotal;
@@ -649,8 +739,40 @@
       structuralRaycaster.setFromCamera(structuralPointerNdc, camera);
       const hit = structuralRaycaster
         .intersectObjects(world.children, false)
-        .find(intersection => intersection.object.userData.structuralPick);
+        .find(intersection => intersection.object.userData.effigySurfacePick || intersection.object.userData.structuralPick);
       if (!hit) return null;
+      const effigySurfacePick = hit.object.userData.effigySurfacePick;
+      if (effigySurfacePick) {
+        const face = geometrySidecar.faces.find(candidate => candidate.id === effigySurfacePick.faceId);
+        if (!face) throw new Error(`rendered effigy face ${effigySurfacePick.faceId} has no sidecar state`);
+        const triangleIndex = Math.max(0, Math.min(face.triangles.length - 1, hit.faceIndex ?? 0));
+        const triangle = face.triangles[triangleIndex];
+        const displayPoint = displayedStructuralPointFromWorld(hit.point);
+        const hitPoint = new THREE.Vector3(displayPoint.x, displayPoint.y, displayPoint.z);
+        const trianglePoints = triangle.map(index => {
+          const vertex = face.currentVertices[index];
+          return new THREE.Vector3(vertex.x, vertex.y, vertex.z);
+        });
+        const barycentric = new THREE.Triangle(...trianglePoints).getBarycoord(hitPoint, new THREE.Vector3());
+        const surfaceContact = resolveEffigyTileSurfaceContact(geometrySidecar, {
+          faceId: face.id,
+          triangleIndex,
+          barycentric,
+        });
+        const contact = resolveLayeredStructuralRestContact(material, {
+          kind: surfaceContact.structuralContact.kind,
+          id: surfaceContact.structuralContact.id,
+          displayPoint,
+        });
+        return {
+          ...contact,
+          surfaceContact: {
+            ...surfaceContact,
+            surfaceCurrentPoint: displayPoint,
+          },
+          distance: hit.distance,
+        };
+      }
       const structuralPick = hit.object.userData.structuralPick;
       const displayPoint = displayedStructuralPointFromWorld(hit.point);
       let segmentT = null;
@@ -1084,7 +1206,7 @@
       runStructuralMutation('reset', () => {
         liveDragScheduler.invalidate();
         gpuTearRequestGate.invalidate();
-        material = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true });
+        material = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true, profile: EFFIGY_TILE_PROFILE });
         dragStart = null;
         latestStructuralPick = null;
         forceEnvelope = null;
@@ -1094,6 +1216,8 @@
         renderedMotionSequence = 0;
         renderedMotionLedger.length = 0;
         renderedMotionAuditErrors.length = 0;
+        geometrySidecar = null;
+        geometryTransitionLedger.length = 0;
       });
       synchronizeHotSidecar(material);
     });
@@ -1132,6 +1256,22 @@
       return {
       requestedRoute: STRUCTURAL_MATERIAL_3D_ROUTE,
       effectiveRoute: STRUCTURAL_MATERIAL_3D_ROUTE,
+      requestedGeometryRoute: EFFIGY_TILE_GEOMETRY_ROUTE,
+      effectiveGeometryRoute: EFFIGY_TILE_GEOMETRY_ROUTE,
+      geometryAuthority: EFFIGY_TILE_GEOMETRY_AUTHORITY,
+      geometrySidecar: {
+        schema: geometrySidecar.schema,
+        route: geometrySidecar.route,
+        authority: geometrySidecar.authority,
+        profile: geometrySidecar.profile,
+        assetIdentity: geometrySidecar.assetIdentity,
+        topologyEpoch: geometrySidecar.topologyEpoch,
+        connectivityEpoch: geometrySidecar.connectivityEpoch,
+        status: geometrySidecar.status,
+        summary: geometrySidecar.summary,
+        validation: geometrySidecar.validation,
+      },
+      geometryTransitionLedger: structuredClone(geometryTransitionLedger),
       visualConsumerAuthority: STRUCTURAL_MATERIAL_3D_VISUAL_AUTHORITY,
       summary: summarizeLayeredStructuralState(material),
       forceEnvelope,
@@ -1201,6 +1341,7 @@
     window.__structuralMaterial3dPickTarget = projectedStructuralPickTarget;
     window.__structuralMaterial3dPickTargets = projectedStructuralPickTargets;
     window.__structuralMaterial3dPickProbe = (clientX, clientY) => pickStructuralContact({ clientX, clientY });
+    window.__structuralMaterial3dGeometrySidecar = () => structuredClone(geometrySidecar);
     window.__structuralMaterial3dGpuStatusWitness = () => ({
       latestGpuOperation: latestGpuOperationTracker.snapshot(),
       text: gpuStatus.textContent,
@@ -1299,7 +1440,7 @@
     window.__structuralMaterial3dRunGpuParity = async () => {
       if (!gpuParityPromise) {
         const scenario = buildLayeredStructuralWitnessScenario();
-        const parityState = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true });
+        const parityState = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true, profile: EFFIGY_TILE_PROFILE });
         gpuParityPromise = runLayeredStructuralWebGpuParity({
           state: parityState,
           interaction: scenario.force,
@@ -1318,7 +1459,7 @@
     window.__structuralMaterial3dRunGpuRetainedParity = async () => {
       if (!gpuRetainedPromise) {
         const scenario = buildLayeredStructuralWitnessScenario();
-        const retainedState = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true });
+        const retainedState = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true, profile: EFFIGY_TILE_PROFILE });
         const interactions = buildLayeredStructuralRetainedWitnessInteractions(scenario.force);
         gpuRetainedPromise = runLayeredStructuralRetainedWebGpuParity({
           state: retainedState,
@@ -1337,7 +1478,7 @@
 
     window.__structuralMaterial3dRunHotSidecarWitness = async () => {
       const scenario = buildLayeredStructuralWitnessScenario();
-      const witnessState = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true });
+      const witnessState = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true, profile: EFFIGY_TILE_PROFILE });
       const sidecar = await createLayeredStructuralHotWebGpuSidecar({ state: witnessState });
       const first = await sidecar.execute(scenario.force);
       const second = await sidecar.execute({
@@ -1377,7 +1518,7 @@
 
     window.__structuralMaterial3dRunGpuContactLocalityWitness = async () => {
       const runContact = async point => {
-        const state = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true });
+        const state = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true, profile: EFFIGY_TILE_PROFILE });
         const contactNode = state.nodes.reduce((nearest, node) => {
           const distance = Math.hypot(node.x - point.x, node.y - point.y, node.z - point.z);
           return !nearest || distance < nearest.distance ? { node, distance } : nearest;
@@ -1501,12 +1642,15 @@
 
     window.__structuralMaterial3dRunGpuSympatheticTear = async (options = {}) => {
       const scenario = buildLayeredStructuralWitnessScenario();
-      const sourceState = createLayeredStructuralMaterial({
-        columns: 9,
-        rows: 5,
-        layers: 4,
-        notch: options.notch !== false,
-      });
+      const sourceState = options.useCurrentState
+        ? material
+        : createLayeredStructuralMaterial({
+            columns: 9,
+            rows: 5,
+            layers: 4,
+            notch: options.notch !== false,
+            profile: EFFIGY_TILE_PROFILE,
+          });
       const interaction = options.interaction || scenario.force;
       if (options.applyToWorld !== false) {
         runStructuralMutation('gpu-sympathetic-tear-force', () => {
@@ -1544,7 +1688,7 @@
 
     window.__structuralMaterial3dRunGpuBindingRollbackWitness = async () => {
       const scenario = buildLayeredStructuralWitnessScenario();
-      const witnessState = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true });
+      const witnessState = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true, profile: EFFIGY_TILE_PROFILE });
       let bindingValidationCount = 0;
       const sidecar = await createLayeredStructuralHotWebGpuSidecar({
         state: witnessState,

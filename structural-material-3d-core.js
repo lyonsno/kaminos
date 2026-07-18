@@ -55,6 +55,7 @@ function cloneState(state) {
       lastStrain: finite(bond.lastStrain),
     })),
     components: state.components.map(component => ({ ...component, center: { ...component.center }, nodeIds: [...component.nodeIds] })),
+    authoredOpeningNodePairs: (state.authoredOpeningNodePairs || []).map(pair => ({ ...pair })),
     appliedInteractions: state.appliedInteractions.map(interaction => ({ ...interaction })),
     sound: {
       ...state.sound,
@@ -98,6 +99,14 @@ function geometryRoleForBond(a, b, bondKind, notch) {
   if (seamDistance < 0.22 && centerY <= 0.36) return 'notch-shoulder';
   if (midpoint.z < 0.08 || midpoint.z > 0.92) return 'skin';
   return 'body';
+}
+
+function effigyProfileInfluence(midpoint, profile) {
+  if (profile !== 'rib-upper-v0' && profile !== 'rib-lower-v0') return 0;
+  const centerY = profile === 'rib-lower-v0' ? 0.72 : 0.28;
+  const dx = midpoint.x - 0.68;
+  const dy = midpoint.y - centerY;
+  return Math.exp(-(dx * dx) / 0.035 - (dy * dy) / 0.055);
 }
 
 function computeComponents(nodes, bonds) {
@@ -220,6 +229,7 @@ export function createLayeredStructuralMaterial(options = {}) {
   const rows = Math.max(4, Math.floor(finite(options.rows, 5)));
   const layers = Math.max(2, Math.floor(finite(options.layers, 4)));
   const notch = options.notch !== false;
+  const effigyProfile = options.profile || 'uniform-v0';
   const nodes = [];
   for (let z = 0; z < layers; z += 1) {
     for (let y = 0; y < rows; y += 1) {
@@ -240,6 +250,7 @@ export function createLayeredStructuralMaterial(options = {}) {
   const byId = new Map(nodes.map(node => [node.id, node]));
   const pairs = new Set();
   const bonds = [];
+  const authoredOpeningNodePairs = [];
   const addBond = (x0, y0, z0, x1, y1, z1, bondKind = 'in-plane') => {
     if (
       x0 < 0 || x0 >= columns || y0 < 0 || y0 >= rows || z0 < 0 || z0 >= layers ||
@@ -248,13 +259,23 @@ export function createLayeredStructuralMaterial(options = {}) {
     const a = byId.get(nodeIdAt(x0, y0, z0, columns, rows));
     const b = byId.get(nodeIdAt(x1, y1, z1, columns, rows));
     const key = bondKey(a.id, b.id);
-    if (pairs.has(key) || shouldSkipNotchBond(a, b, notch)) return;
+    if (pairs.has(key)) return;
     pairs.add(key);
+    if (shouldSkipNotchBond(a, b, notch)) {
+      authoredOpeningNodePairs.push({ a: a.id, b: b.id, kind: 'notch' });
+      return;
+    }
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const dz = b.z - a.z;
+    const changedAxisCount = [dx, dy, dz].filter(delta => Math.abs(delta) > 0.000001).length;
     const rest = Math.hypot(dx, dy, dz);
     const role = geometryRoleForBond(a, b, bondKind, notch);
+    const profileInfluence = effigyProfileInfluence({
+      x: (a.x + b.x) * 0.5,
+      y: (a.y + b.y) * 0.5,
+      z: (a.z + b.z) * 0.5,
+    }, effigyProfile);
     const strengthScale = role === 'notch-depth-tie'
       ? 0.42
       : role === 'notch-bridge'
@@ -271,10 +292,16 @@ export function createLayeredStructuralMaterial(options = {}) {
       rest: round(rest),
       direction: { x: round(dx / rest), y: round(dy / rest), z: round(dz / rest) },
       midpoint: { x: round((a.x + b.x) * 0.5), y: round((a.y + b.y) * 0.5), z: round((a.z + b.z) * 0.5) },
-      strength: round(1.58 * strengthScale),
-      stiffness: role === 'notch-depth-tie' ? 0.72 : role === 'notch-bridge' ? 0.82 : 1,
+      strength: round(1.58 * strengthScale * (1 + profileInfluence * 0.08)),
+      stiffness: round(
+        (role === 'notch-depth-tie' ? 0.72 : role === 'notch-bridge' ? 0.82 : 1) *
+          (1 + profileInfluence * 0.18),
+      ),
+      effigyProfile,
+      profileInfluence: round(profileInfluence),
       geometryRole: role,
       bondKind,
+      surfaceGovernance: changedAxisCount === 1 ? 'dual-cell-interface' : 'interior-brace',
       alive: true,
       repaired: false,
       lastStress: 0,
@@ -305,8 +332,10 @@ export function createLayeredStructuralMaterial(options = {}) {
     columns,
     rows,
     layers,
+    effigyProfile,
     nodes,
     bonds,
+    authoredOpeningNodePairs,
     components: [],
     appliedInteractions: [],
     sound: buildLayeredStructuralSound([], 0, 0),
