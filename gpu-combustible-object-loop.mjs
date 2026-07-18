@@ -25,6 +25,7 @@ const TERMINAL_SOURCE_HEADER_OFFSET = TERMINAL_EVENT_OFFSET + EVENT_BUFFER_BYTES
 const TERMINAL_RECEIVER_STATS_OFFSET = TERMINAL_SOURCE_HEADER_OFFSET + COMBUSTIBLE_OBJECT_SOURCE_HEADER_BYTES;
 const TERMINAL_READBACK_BYTES = TERMINAL_RECEIVER_STATS_OFFSET + COMBUSTIBLE_OBJECT_FIRE_CONSUMER_STATS_BYTES;
 const PARAMS_BYTES = 64;
+const PRESENTATION_PARAMS_BYTES = 20 * Float32Array.BYTES_PER_ELEMENT;
 const SOURCE_FRAME_HASH = 0x4750554f;
 const REQUIRED_VERDICT_BITS = 0x1ff;
 
@@ -364,7 +365,13 @@ struct VertexOutput {
   @location(1) local: vec2<f32>,
 };
 
+struct PresentationParams {
+  presentationTransform: mat4x4<f32>,
+  anchorNdcDepth: vec4<f32>,
+};
+
 @group(0) @binding(0) var<storage, read> materials: array<MaterialState>;
+@group(0) @binding(1) var<uniform> presentation: PresentationParams;
 
 @vertex
 fn vertexMain(
@@ -387,7 +394,7 @@ fn vertexMain(
   let base = mix(state.color.rgb, vec3<f32>(0.055, 0.036, 0.024), charMix);
   let hot = vec3<f32>(1.0, 0.31, 0.055) * burning * (1.0 - charMix) * 0.20;
   var output: VertexOutput;
-  output.position = vec4<f32>(center + rotated, 0.0, 1.0);
+  output.position = presentation.presentationTransform * vec4<f32>(center + rotated, presentation.anchorNdcDepth.x, 1.0);
   output.color = vec4<f32>(base + hot, 0.98);
   output.local = local;
   return output;
@@ -544,6 +551,11 @@ export async function createGpuCombustibleObjectLoop({ device, gridSize, format 
     size: PARAMS_BYTES,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
+  const presentationParamsBuffer = device.createBuffer({
+    label: 'kaminos GPU combustible presentation camera transform',
+    size: PRESENTATION_PARAMS_BYTES,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+  });
   device.queue.writeBuffer(materialBuffer, 0, makeInitialMaterials());
   device.queue.writeBuffer(eventBuffer, 0, new Uint8Array(EVENT_BUFFER_BYTES));
   const params = new ArrayBuffer(PARAMS_BYTES);
@@ -554,6 +566,14 @@ export async function createGpuCombustibleObjectLoop({ device, gridSize, format 
   paramsF32.set([0.56, 0.0025, 0.0040, 0.32], 8);
   paramsF32.set([0.018, 0.014, 0.004, 0.006], 12);
   device.queue.writeBuffer(paramsBuffer, 0, params);
+  const presentationParamsValues = new Float32Array([
+    1, 0, 0, 0,
+    0, 1, 0, 0,
+    0, 0, 1, 0,
+    0, 0, 0, 1,
+    0, 0, 0, 0,
+  ]);
+  device.queue.writeBuffer(presentationParamsBuffer, 0, presentationParamsValues);
 
   const simulationModule = device.createShaderModule({ label: 'kaminos GPU combustible simulation', code: createSimulationShader(grid) });
   const presentationModule = device.createShaderModule({ label: 'kaminos GPU combustible presentation', code: PRESENTATION_WGSL });
@@ -585,7 +605,10 @@ export async function createGpuCombustibleObjectLoop({ device, gridSize, format 
   ]);
   const presentationLayout = device.createBindGroupLayout({
     label: 'kaminos GPU combustible presentation layout',
-    entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } }],
+    entries: [
+      { binding: 0, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+      { binding: 1, visibility: GPUShaderStage.VERTEX, buffer: { type: 'uniform' } },
+    ],
   });
   const presentationPipeline = device.createRenderPipeline({
     label: 'kaminos GPU combustible object presentation',
@@ -607,7 +630,10 @@ export async function createGpuCombustibleObjectLoop({ device, gridSize, format 
   const presentationBindGroup = device.createBindGroup({
     label: 'kaminos GPU combustible presentation state',
     layout: presentationLayout,
-    entries: [{ binding: 0, resource: { buffer: materialBuffer } }],
+    entries: [
+      { binding: 0, resource: { buffer: materialBuffer } },
+      { binding: 1, resource: { buffer: presentationParamsBuffer } },
+    ],
   });
   const simulationBindGroups = new Map();
   let dispatchCount = 0;
@@ -651,8 +677,22 @@ export async function createGpuCombustibleObjectLoop({ device, gridSize, format 
     return true;
   }
 
-  function encodePresentation(encoder, view) {
+  function encodePresentation(encoder, view, presentationTransform, presentationAnchorNdcDepth) {
     if (destroyed) return false;
+    if (!presentationTransform || presentationTransform.length !== 16) {
+      throw new Error('GPU combustible presentation transform must contain 16 finite values');
+    }
+    for (let index = 0; index < presentationTransform.length; index += 1) {
+      if (!Number.isFinite(presentationTransform[index])) {
+        throw new Error('GPU combustible presentation transform must contain 16 finite values');
+      }
+    }
+    if (!Number.isFinite(presentationAnchorNdcDepth) || presentationAnchorNdcDepth < -1 || presentationAnchorNdcDepth > 1) {
+      throw new Error('GPU combustible presentation anchor depth must be finite normalized device depth');
+    }
+    presentationParamsValues.set(presentationTransform, 0);
+    presentationParamsValues[16] = presentationAnchorNdcDepth;
+    device.queue.writeBuffer(presentationParamsBuffer, 0, presentationParamsValues);
     const pass = encoder.beginRenderPass({
       label: 'kaminos GPU combustible object overlay',
       colorAttachments: [{ view, loadOp: 'load', storeOp: 'store' }],
@@ -816,6 +856,7 @@ export async function createGpuCombustibleObjectLoop({ device, gridSize, format 
       sourceRecordsBuffer.destroy();
       eventBuffer.destroy();
       paramsBuffer.destroy();
+      presentationParamsBuffer.destroy();
       simulationBindGroups.clear();
     },
   };

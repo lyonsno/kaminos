@@ -49,7 +49,11 @@ assert.ok(
   encodeSimStart >= 0 && loopUpdate > encodeSimStart && sourceScatter > loopUpdate && fluidStep > sourceScatter,
   'the GPU command graph orders material/source update before scatter and the authoritative fluid step',
 );
-assert.match(volumeSource, /gpuCombustibleObjectLoop\.encodePresentation\(encoder, currentTexture\.createView\(\)\)/);
+assert.match(
+  volumeSource,
+  /gpuCombustibleObjectLoop\.encodePresentation\([\s\S]*currentTexture\.createView\(\)[\s\S]*gpuCombustibleObjectPresentationTransformValues/,
+  'the GPU object presentation receives the camera-relative transform on every render',
+);
 const liveEncodeStart = runtimeSource.indexOf('function encode(encoder, fluidBuffer)');
 const terminalReadStart = runtimeSource.indexOf('async function readTerminalReceipt(receiverStatsDescriptor)');
 assert.ok(liveEncodeStart >= 0 && terminalReadStart > liveEncodeStart);
@@ -82,6 +86,19 @@ const pageSource = await readFile(pageUrl, 'utf8');
 const witnessSource = await readFile(witnessUrl, 'utf8');
 assert.match(pageSource, /setGpuCombustibleObjectLoop\s*\(/);
 assert.doesNotMatch(pageSource, /stepCombustiblePlank|ignitionRequested|readCombustibleObjectSourceReceipt|mapAsync/);
+assert.match(pageSource, /gpu-combustible-object-orbit-camera-v0/, 'the route names its operator camera contract');
+assert.match(pageSource, /setPointerCapture/, 'orbit drag retains pointer custody outside the canvas bounds');
+assert.match(pageSource, /addEventListener\('wheel',[\s\S]*passive:\s*false/, 'wheel and trackpad zoom are active rather than page scroll');
+assert.match(pageSource, /ORBIT_MIN_DISTANCE[\s\S]*ORBIT_MAX_DISTANCE/, 'camera zoom has explicit near and far inspection bounds');
+assert.match(pageSource, /cameraControl:/, 'debug state exposes effective camera identity and interaction state');
+assert.match(pageSource, /controls:\s*cameraControls/, 'the volume render loop updates the real operator camera controls');
+assert.match(runtimeSource, /presentationTransform/, 'the GPU object overlay consumes the anchored camera transform');
+assert.match(runtimeSource, /anchorNdcDepth/, 'the GPU object overlay reconstructs its anchor on the scene-depth plane');
+assert.match(
+  volumeSource,
+  /gpuCombustibleObjectPresentationAnchorInverse[\s\S]*gpuCombustibleObjectPresentationAnchorNdcDepth[\s\S]*gpuCombustibleObjectPresentationTransform/,
+  'the volume composes current camera projection against the witness presentation anchor',
+);
 assert.doesNotMatch(
   pageSource,
   /\.metric:nth-child\(n \+ 3\)\s*\{\s*display:\s*none/,
@@ -97,6 +114,16 @@ assert.match(witnessSource, /supportLossStep/);
 assert.match(witnessSource, /impactStep/);
 assert.match(witnessSource, /receiverAudit\.auditObjectId/);
 assert.match(witnessSource, /receiverAudit\.injectedHeat/);
+assert.match(witnessSource, /cameraSmokeRequested/, 'the existing witness has an explicit operator-camera smoke mode');
+assert.match(witnessSource, /Input\.dispatchMouseEvent/, 'camera smoke uses real browser pointer and wheel input');
+assert.match(witnessSource, /cameraControlBefore[\s\S]*cameraControlAfter/, 'camera smoke preserves before and after control receipts');
+assert.match(witnessSource, /cameraInputReceipt/, 'camera smoke records requested pointer and wheel input');
+assert.match(witnessSource, /finalState\s*=\s*cameraState/, 'camera smoke persists its final live state into the report');
+assert.match(
+  witnessSource,
+  /cameraState\.gpuLoop\.hostCausalFeedbackCount, 0/,
+  'camera interaction cannot masquerade as causal simulation feedback',
+);
 assert.match(
   witnessSource,
   /validateGpuCombustibleObjectPixelSequence/,

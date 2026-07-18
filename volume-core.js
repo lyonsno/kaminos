@@ -5443,6 +5443,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
+  const gpuCombustibleObjectPresentationAnchorInverse = new THREE.Matrix4();
+  const gpuCombustibleObjectPresentationTransform = new THREE.Matrix4();
+  const gpuCombustibleObjectPresentationTransformValues = new Float32Array(16);
+  const gpuCombustibleObjectPresentationAnchorWorldOrigin = new THREE.Vector4();
+  let gpuCombustibleObjectPresentationAnchorReady = false;
+  let gpuCombustibleObjectPresentationAnchorNdcDepth = 0;
   const uniforms = new Float32Array(344);
   let controlsSnapshot = applyRuntimeQualityControls(getControls());
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
@@ -6519,6 +6525,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (gpuCombustibleObjectLoop && gpuCombustibleObjectLoop.gridSize !== gridSize) {
       gpuCombustibleObjectLoop.destroy();
       gpuCombustibleObjectLoop = null;
+      gpuCombustibleObjectPresentationAnchorReady = false;
       state.gpuCombustibleObjectLoop = null;
     }
   }
@@ -9558,7 +9565,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         recordBrowserResidualCost({ applied: false });
       }
       if (gpuCombustibleObjectLoop) {
-        gpuCombustibleObjectLoop.encodePresentation(encoder, currentTexture.createView());
+        if (!gpuCombustibleObjectPresentationAnchorReady) {
+          throw new Error('GPU combustible object presentation camera anchor is unavailable');
+        }
+        gpuCombustibleObjectPresentationTransform.multiplyMatrices(
+          viewProj,
+          gpuCombustibleObjectPresentationAnchorInverse,
+        );
+        gpuCombustibleObjectPresentationTransformValues.set(gpuCombustibleObjectPresentationTransform.elements);
+        gpuCombustibleObjectLoop.encodePresentation(
+          encoder,
+          currentTexture.createView(),
+          gpuCombustibleObjectPresentationTransformValues,
+          gpuCombustibleObjectPresentationAnchorNdcDepth,
+        );
         state.gpuCombustibleObjectLoop = gpuCombustibleObjectLoop.debugState();
       }
       encodeHistoryCopy(encoder, currentTexture);
@@ -13332,11 +13352,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     async setGpuCombustibleObjectLoop(options = {}) {
       await ensureGpu();
       gpuCombustibleObjectLoop?.destroy();
+      gpuCombustibleObjectPresentationAnchorReady = false;
       gpuCombustibleObjectLoop = await createGpuCombustibleObjectLoop({
         device,
         gridSize,
         format,
       });
+      camera.updateMatrixWorld();
+      viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+      gpuCombustibleObjectPresentationAnchorInverse.copy(viewProj).invert();
+      gpuCombustibleObjectPresentationAnchorWorldOrigin.set(0, 0, 0, 1).applyMatrix4(viewProj);
+      gpuCombustibleObjectPresentationAnchorNdcDepth =
+        gpuCombustibleObjectPresentationAnchorWorldOrigin.z / gpuCombustibleObjectPresentationAnchorWorldOrigin.w;
+      gpuCombustibleObjectPresentationAnchorReady = true;
       if (!combustibleObjectSourceReceiver || combustibleObjectSourceReceiver.gridSize !== gridSize) {
         combustibleObjectSourceReceiver?.destroy();
         combustibleObjectSourceReceiver = await createCombustibleObjectFireReceiver({
@@ -13364,6 +13392,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     clearGpuCombustibleObjectLoop() {
       gpuCombustibleObjectLoop?.destroy();
       gpuCombustibleObjectLoop = null;
+      gpuCombustibleObjectPresentationAnchorReady = false;
       combustibleObjectSourceReceiver?.clearSource();
       state.gpuCombustibleObjectLoop = null;
       state.combustibleObjectSource = combustibleObjectSourceDebug('gpu-loop-cleared');
@@ -13579,6 +13608,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       combustibleObjectSourceReceiver = null;
       gpuCombustibleObjectLoop?.destroy();
       gpuCombustibleObjectLoop = null;
+      gpuCombustibleObjectPresentationAnchorReady = false;
       frameTexture?.destroy();
       browserResidualFeatureTexture?.destroy();
       externalEmitterBuffer?.destroy();

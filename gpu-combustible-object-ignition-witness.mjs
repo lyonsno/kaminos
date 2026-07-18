@@ -24,6 +24,7 @@ const width = positiveInteger(args.get('--width'), 1468);
 const height = positiveInteger(args.get('--height'), 960);
 const ignitionFrames = positiveInteger(args.get('--ignition-frames'), 145);
 const finalFrames = positiveInteger(args.get('--final-frames'), 135);
+const cameraSmokeRequested = args.get('--camera-smoke') === 'true';
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-gpu-object-ignition-${port}-${process.pid}`;
 const headless = process.env.KAMINOS_WITNESS_HEADLESS !== '0';
@@ -38,12 +39,16 @@ let ignitionState = null;
 let finalState = null;
 let terminalReceipt = null;
 let pixelChecks = null;
+let cameraControlBefore = null;
+let cameraControlAfter = null;
+let cameraInputReceipt = null;
 let chromeProcess = null;
 let chromeLaunchError = null;
 let ws = null;
 const browserEvents = [];
-const screenshots = { initial: null, ignition: null, final: null };
-const screenshotPngs = { initial: null, ignition: null, final: null };
+const screenshots = { initial: null, ignition: null, final: null, camera: null };
+const screenshotPngs = { initial: null, ignition: null, final: null, camera: null };
+const cameraOut = out.replace(/\.png$/i, '.camera.png');
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
@@ -65,6 +70,10 @@ function writeReport(extra = {}) {
     requestedViewport: { width, height },
     ignitionFrames,
     finalFrames,
+    cameraSmokeRequested,
+    cameraInputReceipt,
+    cameraControlBefore,
+    cameraControlAfter,
     userDataDir,
     screenshots,
     stderrTail: stderr.slice(-2400),
@@ -225,6 +234,51 @@ try {
   phase = 'capturing-initial';
   screenshots.initial = await captureScreenshot(initialOut, 'initial');
 
+  if (cameraSmokeRequested) {
+    cameraControlBefore = initialState.cameraControl;
+    assert.equal(cameraControlBefore?.identity, 'gpu-combustible-object-orbit-camera-v0');
+    assert.equal(cameraControlBefore.interactionCount, 0);
+    const startX = Math.round(width * 0.50);
+    const startY = Math.round(height * 0.48);
+    const endX = Math.round(width * 0.58);
+    const endY = Math.round(height * 0.41);
+    cameraInputReceipt = {
+      pointer: { startX, startY, endX, endY, button: 'left' },
+      wheel: { x: endX, y: endY, deltaX: 0, deltaY: -260 },
+    };
+    phase = 'dispatching-camera-orbit';
+    await wsRequest('Input.dispatchMouseEvent', {
+      type: 'mousePressed', x: startX, y: startY, button: 'left', buttons: 1, clickCount: 1,
+    });
+    await wsRequest('Input.dispatchMouseEvent', {
+      type: 'mouseMoved', x: endX, y: endY, button: 'left', buttons: 1,
+    });
+    await wsRequest('Input.dispatchMouseEvent', {
+      type: 'mouseReleased', x: endX, y: endY, button: 'left', buttons: 0, clickCount: 1,
+    });
+    phase = 'dispatching-camera-zoom';
+    await wsRequest('Input.dispatchMouseEvent', {
+      type: 'mouseWheel', x: endX, y: endY, deltaX: 0, deltaY: -260,
+    });
+    await evaluate('window.kaminosGpuCombustibleObjectWaitFrames(8)', 30_000);
+    const cameraState = await evaluate('window.kaminosGpuCombustibleObjectDebugState()');
+    finalState = cameraState;
+    cameraControlAfter = cameraState.cameraControl;
+    assert.equal(cameraState.effectiveRoute, 'kaminos.gpu-combustible-object-ignition.v0');
+    assert.equal(cameraState.gpuLoop.hostCausalFeedbackCount, 0);
+    assert.equal(cameraState.gpuLoop.runtimeReadbackCount, 0);
+    assert.equal(cameraControlAfter?.identity, cameraControlBefore.identity);
+    assert.ok(cameraControlAfter.interactionCount >= 2, 'camera input did not reach both orbit and zoom controls');
+    assert.notEqual(cameraControlAfter.yaw, cameraControlBefore.yaw, 'pointer drag did not change camera yaw');
+    assert.notEqual(cameraControlAfter.pitch, cameraControlBefore.pitch, 'pointer drag did not change camera pitch');
+    assert.ok(cameraControlAfter.distance < cameraControlBefore.distance, 'negative wheel delta did not zoom toward the scene');
+    assert.ok(cameraControlAfter.distance >= 1.35 && cameraControlAfter.distance <= 7.5, 'camera zoom escaped its bounds');
+    phase = 'capturing-camera-interaction';
+    screenshots.camera = await captureScreenshot(cameraOut, 'camera');
+    phase = 'camera-smoke-completed';
+    writeReport({ status: 'ok' });
+    process.stdout.write(`${reportPath}\n`);
+  } else {
   phase = 'advancing-through-ignition';
   ignitionState = await evaluate(`window.kaminosGpuCombustibleObjectWaitFrames(${ignitionFrames})`, 60_000);
   assert.equal(ignitionState.gpuLoop.hostCausalFeedbackCount, 0);
@@ -277,6 +331,7 @@ try {
   phase = 'completed';
   writeReport({ status: 'ok' });
   process.stdout.write(`${reportPath}\n`);
+  }
 } catch (error) {
   if (ws && !finalState) {
     try {

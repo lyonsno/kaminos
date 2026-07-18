@@ -1,0 +1,166 @@
+{
+  "schema": "kaminos.gpu-combustible-object-ignition-witness-report.v0",
+  "requestedUrl": "http://127.0.0.1:8097/gpu-combustible-object-ignition.html",
+  "effectiveUrl": "http://127.0.0.1:8097/gpu-combustible-object-ignition.html",
+  "requestedRoute": "kaminos.gpu-combustible-object-ignition.v0",
+  "effectiveRoute": "kaminos.gpu-combustible-object-ignition.v0",
+  "authority": "same-device-pyro-material-emission-mechanics-v0",
+  "phase": "camera-smoke-completed",
+  "browserVersion": {
+    "Browser": "Chrome/150.0.7871.128",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/150.0.0.0 Safari/537.36",
+    "V8-Version": "15.0.1240245",
+    "WebKit-Version": "537.36 (@81891e5ca708047763816c778216799ef14c66cb)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9519/devtools/browser/64282119-dbf9-4157-80eb-9d8de7004e04"
+  },
+  "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "debugPort": 9519,
+  "requestedViewport": {
+    "width": 1468,
+    "height": 960
+  },
+  "ignitionFrames": 145,
+  "finalFrames": 135,
+  "cameraSmokeRequested": true,
+  "cameraInputReceipt": {
+    "pointer": {
+      "startX": 734,
+      "startY": 461,
+      "endX": 851,
+      "endY": 394,
+      "button": "left"
+    },
+    "wheel": {
+      "x": 851,
+      "y": 394,
+      "deltaX": 0,
+      "deltaY": -260
+    }
+  },
+  "cameraControlBefore": {
+    "identity": "gpu-combustible-object-orbit-camera-v0",
+    "yaw": 0,
+    "pitch": 0.031239833430268277,
+    "distance": 3.2015621187164243,
+    "target": [
+      0,
+      0,
+      0
+    ],
+    "interactionCount": 0,
+    "lastInteraction": "initial"
+  },
+  "cameraControlAfter": {
+    "identity": "gpu-combustible-object-orbit-camera-v0",
+    "yaw": -0.585,
+    "pitch": 0.2992398334302683,
+    "distance": 2.468569548684924,
+    "target": [
+      0,
+      0,
+      0
+    ],
+    "interactionCount": 2,
+    "lastInteraction": "zoom"
+  },
+  "userDataDir": "/tmp/kaminos-gpu-object-ignition-9519-74584",
+  "screenshots": {
+    "initial": {
+      "path": "/private/tmp/kaminos-sinter-gpu-object-ignition-0717/artifacts/gpu-combustible-object-ignition/run-019-orbit-input-final/final.initial.png",
+      "bytes": 124162
+    },
+    "ignition": null,
+    "final": null,
+    "camera": {
+      "path": "/private/tmp/kaminos-sinter-gpu-object-ignition-0717/artifacts/gpu-combustible-object-ignition/run-019-orbit-input-final/final.camera.png",
+      "bytes": 206303
+    }
+  },
+  "stderrTail": "\nDevTools listening on ws://127.0.0.1:9519/devtools/browser/64282119-dbf9-4157-80eb-9d8de7004e04\n",
+  "browserEvents": [],
+  "initialState": {
+    "schema": "kaminos.gpu-combustible-object-ignition-browser.v0",
+    "requestedRoute": "kaminos.gpu-combustible-object-ignition.v0",
+    "effectiveRoute": "kaminos.gpu-combustible-object-ignition.v0",
+    "authority": "same-device-pyro-material-emission-mechanics-v0",
+    "loopSchema": "kaminos.gpu-combustible-object-loop.v0",
+    "status": "running",
+    "failurePhase": null,
+    "error": null,
+    "fallback": null,
+    "frameCount": 13,
+    "simStepCount": 13,
+    "backend": "WebGPU:apple",
+    "volumeRoute": "native-3d-compute-fluid-raymarch-v0",
+    "gpuLoop": {
+      "schema": "kaminos.gpu-combustible-object-loop.v0",
+      "authority": "same-device-pyro-material-emission-mechanics-v0",
+      "status": "active",
+      "dispatchCount": 9,
+      "presentationCount": 9,
+      "hostCausalFeedbackCount": 0,
+      "runtimeReadbackCount": 0,
+      "lastTerminalReceipt": null,
+      "sourceFrameHash": 1196447055
+    },
+    "cameraControl": {
+      "identity": "gpu-combustible-object-orbit-camera-v0",
+      "yaw": 0,
+      "pitch": 0.031239833430268277,
+      "distance": 3.2015621187164243,
+      "target": [
+        0,
+        0,
+        0
+      ],
+      "interactionCount": 0,
+      "lastInteraction": "initial"
+    },
+    "terminalReceipt": null
+  },
+  "ignitionState": null,
+  "finalState": {
+    "schema": "kaminos.gpu-combustible-object-ignition-browser.v0",
+    "requestedRoute": "kaminos.gpu-combustible-object-ignition.v0",
+    "effectiveRoute": "kaminos.gpu-combustible-object-ignition.v0",
+    "authority": "same-device-pyro-material-emission-mechanics-v0",
+    "loopSchema": "kaminos.gpu-combustible-object-loop.v0",
+    "status": "running",
+    "failurePhase": null,
+    "error": null,
+    "fallback": null,
+    "frameCount": 42,
+    "simStepCount": 42,
+    "backend": "WebGPU:apple",
+    "volumeRoute": "native-3d-compute-fluid-raymarch-v0",
+    "gpuLoop": {
+      "schema": "kaminos.gpu-combustible-object-loop.v0",
+      "authority": "same-device-pyro-material-emission-mechanics-v0",
+      "status": "active",
+      "dispatchCount": 38,
+      "presentationCount": 38,
+      "hostCausalFeedbackCount": 0,
+      "runtimeReadbackCount": 0,
+      "lastTerminalReceipt": null,
+      "sourceFrameHash": 1196447055
+    },
+    "cameraControl": {
+      "identity": "gpu-combustible-object-orbit-camera-v0",
+      "yaw": -0.585,
+      "pitch": 0.2992398334302683,
+      "distance": 2.468569548684924,
+      "target": [
+        0,
+        0,
+        0
+      ],
+      "interactionCount": 2,
+      "lastInteraction": "zoom"
+    },
+    "terminalReceipt": null
+  },
+  "terminalReceipt": null,
+  "pixelChecks": null,
+  "status": "ok"
+}
