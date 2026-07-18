@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Kaminos transfer compositor GPU witness</title>
+  <style>
+    :root { color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #101315; color: #eef1f2; }
+    main { width: min(1160px, 100%); margin: 0 auto; padding: 24px; }
+    header { display: flex; align-items: baseline; justify-content: space-between; gap: 24px; border-bottom: 1px solid #394146; padding-bottom: 14px; }
+    h1 { margin: 0; font: 700 22px/1.2 system-ui, sans-serif; letter-spacing: 0; }
+    #status { margin: 0; color: #f0c25a; text-align: right; }
+    .identity { margin: 14px 0 18px; color: #aab4b9; font-size: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    figure { margin: 0; border: 1px solid #394146; background: #080a0b; }
+    canvas { display: block; width: 100%; aspect-ratio: 314 / 242; image-rendering: pixelated; }
+    figcaption { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border-top: 1px solid #394146; color: #d7dde0; font-size: 12px; }
+    dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin: 16px 0 0; background: #394146; border: 1px solid #394146; }
+    dl div { min-width: 0; padding: 10px 12px; background: #171b1e; }
+    dt { color: #8f9ba1; font-size: 10px; text-transform: uppercase; }
+    dd { margin: 4px 0 0; overflow-wrap: anywhere; font-size: 13px; }
+    #failure { display: none; margin-top: 16px; padding: 12px; border: 1px solid #a84747; background: #241516; color: #ffc6c6; white-space: pre-wrap; }
+    body[data-state="failed"] #failure { display: block; }
+    @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } dl { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  </style>
+</head>
+<body data-state="running">
+  <main>
+    <header>
+      <h1>Transfer compositor GPU witness</h1>
+      <p id="status">Loading authenticated inputs</p>
+    </header>
+    <p class="identity">Dense 96-bin compositor vs reduced 12-group depth-tile compositor, identical opaque scene depth</p>
+    <section class="grid">
+      <figure>
+        <canvas id="dense" width="314" height="242"></canvas>
+        <figcaption><span>Reference role: dense</span><span id="dense-time">pending</span></figcaption>
+      </figure>
+      <figure>
+        <canvas id="reduced" width="314" height="242"></canvas>
+        <figcaption><span>Prediction role: d12-t2 reduced</span><span id="reduced-time">pending</span></figcaption>
+      </figure>
+    </section>
+    <dl>
+      <div><dt>Timing source</dt><dd id="timing-source">pending</dd></div>
+      <div><dt>Samples</dt><dd id="sample-count">pending</dd></div>
+      <div><dt>Dense validation</dt><dd id="dense-validation">pending</dd></div>
+      <div><dt>Reduced validation</dt><dd id="reduced-validation">pending</dd></div>
+      <div><dt>Dense identity</dt><dd>dense-96-bin-compositor-v0</dd></div>
+      <div><dt>Reduced identity</dt><dd>reduced-depth-tile-compositor-v0</dd></div>
+      <div><dt>Upload + build</dt><dd id="setup-time">pending</dd></div>
+      <div><dt>Dispatch ratio</dt><dd id="dispatch-ratio">pending</dd></div>
+    </dl>
+    <pre id="failure"></pre>
+  </main>
+  <script type="module">
+    const SCHEMA = 'kaminos.view-conditioned-transfer-gpu-page.v0';
+    const DENSE_IDENTITY = 'dense-96-bin-compositor-v0';
+    const REDUCED_IDENTITY = 'reduced-depth-tile-compositor-v0';
+    const initialReport = {
+      schema: SCHEMA,
+      status: 'running',
+      failurePhase: 'query-validation',
+      timestampStatus: 'pending',
+      outputValidation: null,
+      optimizationClaimAllowed: false,
+    };
+    window.__TRANSFER_GPU_BENCHMARK__ = initialReport;
+
+    function requireValue(condition, message) {
+      if (!condition) throw new Error(message);
+    }
+
+    function parsePositiveInteger(params, name, allowZero = false) {
+      const raw = params.get(name);
+      requireValue(raw !== null && /^\d+$/.test(raw), `missing or invalid ${name}`);
+      const value = Number(raw);
+      requireValue(Number.isSafeInteger(value) && (allowZero ? value >= 0 : value > 0), `${name} is out of range`);
+      return value;
+    }
+
+    function percentile(values, fraction) {
+      const sorted = [...values].sort((a, b) => a - b);
+      const index = Math.min(sorted.length - 1, Math.max(0, Math.floor((sorted.length - 1) * fraction)));
+      return sorted[index];
+    }
+
+    function summarize(values) {
+      return {
+        sampleCount: values.length,
+        minMs: Math.min(...values),
+        p10Ms: percentile(values, 0.10),
+        medianMs: percentile(values, 0.50),
+        p90Ms: percentile(values, 0.90),
+        maxMs: Math.max(...values),
+        meanMs: values.reduce((sum, value) => sum + value, 0) / values.length,
+        samplesMs: values,
+      };
+    }
+
+    async function sha256Hex(bytes) {
+      const hash = await crypto.subtle.digest('SHA-256', bytes);
+      return Array.from(new Uint8Array(hash), value => value.toString(16).padStart(2, '0')).join('');
+    }
+
+    async function loadBinary(baseUrl, descriptor) {
+      const url = new URL(descriptor.path, baseUrl);
+      const response = await fetch(url);
+      requireValue(response.ok, `binary fetch failed ${response.status}: ${descriptor.path}`);
+      const bytes = await response.arrayBuffer();
+      requireValue(bytes.byteLength === descriptor.bytes, `binary byte count drifted: ${descriptor.path}`);
+      requireValue(await sha256Hex(bytes) === descriptor.sha256, `binary hash drifted: ${descriptor.path}`);
+      return bytes;
+    }
+
+    function makeStorageBuffer(device, label, bytes) {
+      const buffer = device.createBuffer({
+        label,
+        size: Math.ceil(bytes.byteLength / 4) * 4,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
+      device.queue.writeBuffer(buffer, 0, bytes);
+      return buffer;
+    }
+
+    function createPipeline(device, identity, depthCount, sourceWidth, sourceHeight, outputWidth, outputHeight, tileSize) {
+      const code = `
+        @group(0) @binding(0) var<storage, read> ridge: array<vec4f>;
+        @group(0) @binding(1) var<storage, read> nonridge: array<vec4f>;
+        @group(0) @binding(2) var<storage, read> transmittance: array<f32>;
+        @group(0) @binding(3) var<storage, read> depths: array<f32>;
+        @group(0) @binding(4) var<storage, read> occluderDepth: array<f32>;
+        @group(0) @binding(5) var<storage, read_write> output: array<vec4f>;
+
+        @compute @workgroup_size(8, 8)
+        fn main(@builtin(global_invocation_id) gid: vec3u) {
+          if (gid.x >= ${outputWidth}u || gid.y >= ${outputHeight}u) { return; }
+          let outputIndex = gid.y * ${outputWidth}u + gid.x;
+          let sourceX = gid.x / ${tileSize}u;
+          let sourceY = gid.y / ${tileSize}u;
+          var throughput = 1.0;
+          var accumulated = vec3f(0.0);
+          for (var depthIndex = 0u; depthIndex < ${depthCount}u; depthIndex += 1u) {
+            if (depths[depthIndex] < occluderDepth[outputIndex]) {
+              let sourceIndex = (depthIndex * ${sourceHeight}u + sourceY) * ${sourceWidth}u + sourceX;
+              accumulated += throughput * (ridge[sourceIndex].xyz + nonridge[sourceIndex].xyz);
+              throughput *= transmittance[sourceIndex];
+            }
+          }
+          output[outputIndex] = vec4f(accumulated, 1.0);
+        }
+      `;
+      const module = device.createShaderModule({ label: `${identity} shader`, code });
+      return device.createComputePipeline({
+        label: identity,
+        layout: 'auto',
+        compute: { module, entryPoint: 'main' },
+      });
+    }
+
+    function createRoute(device, identity, pipeline, buffers, outputByteLength) {
+      const output = device.createBuffer({
+        label: `${identity} output`,
+        size: outputByteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+      });
+      const bindGroup = device.createBindGroup({
+        label: `${identity} bindings`,
+        layout: pipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: buffers.ridge } },
+          { binding: 1, resource: { buffer: buffers.nonridge } },
+          { binding: 2, resource: { buffer: buffers.transmittance } },
+          { binding: 3, resource: { buffer: buffers.depths } },
+          { binding: 4, resource: { buffer: buffers.occluderDepth } },
+          { binding: 5, resource: { buffer: output } },
+        ],
+      });
+      return { identity, pipeline, bindGroup, output };
+    }
+
+    function writeTimestamp(querySet, beginningOfPassWriteIndex, endOfPassWriteIndex) {
+      return { querySet, beginningOfPassWriteIndex, endOfPassWriteIndex };
+    }
+
+    async function dispatch(device, route, width, height, measured) {
+      let querySet = null;
+      let resolveBuffer = null;
+      let readbackBuffer = null;
+      const encoder = device.createCommandEncoder({ label: `${route.identity} command` });
+      let passDescriptor = { label: `${route.identity} compute` };
+      if (measured) {
+        querySet = device.createQuerySet({ label: `${route.identity} timestamp query`, type: 'timestamp', count: 2 });
+        resolveBuffer = device.createBuffer({
+          label: `${route.identity} timestamp resolve`, size: 16,
+          usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
+        });
+        readbackBuffer = device.createBuffer({
+          label: `${route.identity} timestamp readback`, size: 16,
+          usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+        });
+        passDescriptor = { ...passDescriptor, timestampWrites: writeTimestamp(querySet, 0, 1) };
+      }
+      const pass = encoder.beginComputePass(passDescriptor);
+      pass.setPipeline(route.pipeline);
+      pass.setBindGroup(0, route.bindGroup);
+      pass.dispatchWorkgroups(Math.ceil(width / 8), Math.ceil(height / 8));
+      pass.end();
+      if (measured) {
+        encoder.resolveQuerySet(querySet, 0, 2, resolveBuffer, 0);
+        encoder.copyBufferToBuffer(resolveBuffer, 0, readbackBuffer, 0, 16);
+      }
+      device.queue.submit([encoder.finish()]);
+      if (!measured) {
+        await device.queue.onSubmittedWorkDone();
+        return null;
+      }
+      await readbackBuffer.mapAsync(GPUMapMode.READ);
+      const timestamps = new BigUint64Array(readbackBuffer.getMappedRange().slice(0));
+      readbackBuffer.unmap();
+      requireValue(timestamps[0] > 0n && timestamps[1] > timestamps[0], `${route.identity} timestamp query was incomplete or nonmonotonic`);
+      const milliseconds = Number(timestamps[1] - timestamps[0]) / 1_000_000;
+      resolveBuffer.destroy();
+      readbackBuffer.destroy();
+      querySet.destroy?.();
+      return milliseconds;
+    }
+
+    async function readOutput(device, route, byteLength) {
+      const readback = device.createBuffer({
+        label: `${route.identity} output readback`, size: byteLength,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+      });
+      const encoder = device.createCommandEncoder({ label: `${route.identity} output copy` });
+      encoder.copyBufferToBuffer(route.output, 0, readback, 0, byteLength);
+      device.queue.submit([encoder.finish()]);
+      await readback.mapAsync(GPUMapMode.READ);
+      const values = new Float32Array(readback.getMappedRange().slice(0));
+      readback.unmap();
+      readback.destroy();
+      return values;
+    }
+
+    function validateOutput(actual, expected) {
+      requireValue(actual.length === expected.length, 'GPU output element count drifted');
+      let sum = 0;
+      let max = 0;
+      let finite = true;
+      for (let index = 0; index < actual.length; index += 1) {
+        finite &&= Number.isFinite(actual[index]);
+        const error = Math.abs(actual[index] - expected[index]);
+        sum += error;
+        max = Math.max(max, error);
+      }
+      const expectedMae = sum / actual.length;
+      const expectedMaxAbsError = max;
+      return {
+        finite,
+        expectedMae,
+        expectedMaxAbsError,
+        passed: finite && expectedMae <= 0.00005 && expectedMaxAbsError <= 0.0005,
+        thresholds: { expectedMae: 0.00005, expectedMaxAbsError: 0.0005 },
+      };
+    }
+
+    function draw(canvas, values) {
+      const context = canvas.getContext('2d');
+      const image = context.createImageData(canvas.width, canvas.height);
+      for (let pixel = 0; pixel < canvas.width * canvas.height; pixel += 1) {
+        for (let channel = 0; channel < 3; channel += 1) {
+          const linear = Math.max(0, values[pixel * 4 + channel]);
+          image.data[pixel * 4 + channel] = Math.min(255, Math.round(255 * Math.pow(linear * 0.88, 0.84)));
+        }
+        image.data[pixel * 4 + 3] = 255;
+      }
+      context.putImageData(image, 0, 0);
+    }
+
+    async function main() {
+      const params = new URLSearchParams(location.search);
+      const manifestParameter = params.get('manifest');
+      requireValue(manifestParameter, 'manifest query parameter is required');
+      const requestedSamples = parsePositiveInteger(params, 'samples');
+      const requestedWarmup = parsePositiveInteger(params, 'warmup', true);
+      initialReport.requestedSamples = requestedSamples;
+      initialReport.requestedWarmup = requestedWarmup;
+      initialReport.requestedManifest = manifestParameter;
+
+      initialReport.failurePhase = 'manifest-authentication';
+      const manifestUrl = new URL(manifestParameter, location.href);
+      const manifestResponse = await fetch(manifestUrl);
+      requireValue(manifestResponse.ok, `manifest fetch failed ${manifestResponse.status}`);
+      const manifestBytes = await manifestResponse.arrayBuffer();
+      const manifest = JSON.parse(new TextDecoder().decode(manifestBytes));
+      requireValue(manifest.schema === 'kaminos.view-conditioned-transfer-gpu-input.v0', 'input manifest schema drifted');
+      requireValue(manifest.status === 'complete' && manifest.failurePhase === null, 'input manifest is not complete');
+      requireValue(manifest.effective.denseCompositor === DENSE_IDENTITY, 'dense compositor identity drifted');
+      requireValue(manifest.effective.reducedCompositor === REDUCED_IDENTITY, 'reduced compositor identity drifted');
+      initialReport.inputManifest = {
+        url: manifestUrl.href,
+        sha256: await sha256Hex(manifestBytes),
+        sourceManifestSha256: manifest.source.manifestSha256,
+        treatmentReportSha256: manifest.treatment.reportSha256,
+        treatmentLabel: manifest.treatment.label,
+      };
+
+      initialReport.failurePhase = 'binary-authentication';
+      const binaryEntries = await Promise.all(Object.entries(manifest.artifacts).map(async ([name, descriptor]) => [name, await loadBinary(manifestUrl, descriptor)]));
+      const binaries = Object.fromEntries(binaryEntries);
+      const [depthCount, outputHeight, outputWidth] = manifest.effective.denseShape;
+      const [reducedDepthCount, reducedHeight, reducedWidth] = manifest.effective.reducedShape;
+      requireValue(depthCount === 96, 'dense depth count is not 96');
+      requireValue(reducedDepthCount === 12, 'reduced depth count is not 12');
+      const outputByteLength = outputWidth * outputHeight * 16;
+
+      initialReport.failurePhase = 'webgpu-device';
+      requireValue(navigator.gpu, 'WebGPU is unavailable');
+      const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+      requireValue(adapter, 'WebGPU adapter is unavailable');
+      requireValue(adapter.features.has('timestamp-query'), 'timestamp-query is unavailable on the effective adapter');
+      const requestedDeviceDescriptor = { requiredFeatures: ['timestamp-query'] };
+      const device = await adapter.requestDevice(requestedDeviceDescriptor);
+      requireValue(device.features.has('timestamp-query'), 'timestamp-query was not enabled on the effective device');
+      const adapterInfo = typeof adapter.requestAdapterInfo === 'function' ? await adapter.requestAdapterInfo() : (adapter.info ?? {});
+      initialReport.timestampStatus = 'available';
+      initialReport.backend = {
+        requestedFeatures: requestedDeviceDescriptor.requiredFeatures,
+        effectiveFeatures: Array.from(device.features).sort(),
+        adapterInfo,
+        limits: {
+          maxBufferSize: device.limits.maxBufferSize,
+          maxStorageBufferBindingSize: device.limits.maxStorageBufferBindingSize,
+          maxStorageBuffersPerShaderStage: device.limits.maxStorageBuffersPerShaderStage,
+        },
+        fallbackUsed: false,
+      };
+
+      initialReport.failurePhase = 'gpu-upload-and-build';
+      const setupStart = performance.now();
+      const occluderDepth = makeStorageBuffer(device, 'shared opaque scene depth', binaries.occluderDepth);
+      const denseBuffers = {
+        ridge: makeStorageBuffer(device, 'dense ridge', binaries.denseRidge),
+        nonridge: makeStorageBuffer(device, 'dense nonridge', binaries.denseNonridge),
+        transmittance: makeStorageBuffer(device, 'dense transmittance', binaries.denseTransmittance),
+        depths: makeStorageBuffer(device, 'dense depths', binaries.denseDepths),
+        occluderDepth,
+      };
+      const reducedBuffers = {
+        ridge: makeStorageBuffer(device, 'reduced ridge', binaries.reducedRidge),
+        nonridge: makeStorageBuffer(device, 'reduced nonridge', binaries.reducedNonridge),
+        transmittance: makeStorageBuffer(device, 'reduced transmittance', binaries.reducedTransmittance),
+        depths: makeStorageBuffer(device, 'reduced depths', binaries.reducedDepths),
+        occluderDepth,
+      };
+      const densePipeline = createPipeline(device, DENSE_IDENTITY, depthCount, outputWidth, outputHeight, outputWidth, outputHeight, 1);
+      const reducedPipeline = createPipeline(device, REDUCED_IDENTITY, reducedDepthCount, reducedWidth, reducedHeight, outputWidth, outputHeight, manifest.effective.tileSize);
+      const routes = {
+        dense: createRoute(device, DENSE_IDENTITY, densePipeline, denseBuffers, outputByteLength),
+        reduced: createRoute(device, REDUCED_IDENTITY, reducedPipeline, reducedBuffers, outputByteLength),
+      };
+      await device.queue.onSubmittedWorkDone();
+      const setupMilliseconds = performance.now() - setupStart;
+
+      initialReport.failurePhase = 'warmup';
+      for (let index = 0; index < requestedWarmup; index += 1) {
+        await dispatch(device, routes.dense, outputWidth, outputHeight, false);
+        await dispatch(device, routes.reduced, outputWidth, outputHeight, false);
+      }
+
+      initialReport.failurePhase = 'timestamp-sampling';
+      const samples = { dense: [], reduced: [] };
+      for (let roundIndex = 0; roundIndex < requestedSamples; roundIndex += 1) {
+        const order = roundIndex % 2 === 0 ? ['dense', 'reduced'] : ['reduced', 'dense'];
+        for (const role of order) {
+          samples[role].push(await dispatch(device, routes[role], outputWidth, outputHeight, true));
+        }
+      }
+      const timing = { dense: summarize(samples.dense), reduced: summarize(samples.reduced) };
+      const effectiveSamples = { dense: timing.dense.sampleCount, reduced: timing.reduced.sampleCount };
+      requireValue(effectiveSamples.dense === requestedSamples && effectiveSamples.reduced === requestedSamples, 'effective sample count was silently reduced');
+
+      initialReport.failurePhase = 'output-validation';
+      const denseActual = await readOutput(device, routes.dense, outputByteLength);
+      const reducedActual = await readOutput(device, routes.reduced, outputByteLength);
+      const denseExpected = new Float32Array(binaries.denseExpected);
+      const reducedExpected = new Float32Array(binaries.reducedExpected);
+      const outputValidation = {
+        dense: validateOutput(denseActual, denseExpected),
+        reduced: validateOutput(reducedActual, reducedExpected),
+      };
+      requireValue(outputValidation.dense.passed, `dense GPU output failed CPU reference: ${JSON.stringify(outputValidation.dense)}`);
+      requireValue(outputValidation.reduced.passed, `reduced GPU output failed CPU reference: ${JSON.stringify(outputValidation.reduced)}`);
+      draw(document.getElementById('dense'), denseActual);
+      draw(document.getElementById('reduced'), reducedActual);
+
+      const ratio = timing.dense.medianMs / timing.reduced.medianMs;
+      const report = {
+        ...initialReport,
+        status: 'complete',
+        failurePhase: null,
+        requestedSamples,
+        effectiveSamples,
+        requestedWarmup,
+        effectiveWarmup: requestedWarmup,
+        compositorIdentities: { dense: DENSE_IDENTITY, reduced: REDUCED_IDENTITY },
+        workload: {
+          outputWidth, outputHeight, outputPixels: outputWidth * outputHeight,
+          denseDepthBins: depthCount, reducedDepthGroups: reducedDepthCount,
+          reducedTileSize: manifest.effective.tileSize,
+          sharedOccluderDepth: true,
+        },
+        setupMilliseconds,
+        timestampStatus: 'available',
+        timingSource: 'webgpu-timestamp-query-compute-pass-v0',
+        timing,
+        medianDenseToReducedRatio: ratio,
+        outputValidation,
+        optimizationClaimAllowed: true,
+      };
+      window.__TRANSFER_GPU_BENCHMARK__ = report;
+      document.body.dataset.state = 'complete';
+      document.getElementById('status').textContent = 'Authenticated GPU measurement complete';
+      document.getElementById('timing-source').textContent = report.timingSource;
+      document.getElementById('sample-count').textContent = `${requestedSamples} each, AB/BA`;
+      document.getElementById('dense-time').textContent = `${timing.dense.medianMs.toFixed(4)} ms median`;
+      document.getElementById('reduced-time').textContent = `${timing.reduced.medianMs.toFixed(4)} ms median`;
+      document.getElementById('dense-validation').textContent = `MAE ${outputValidation.dense.expectedMae.toExponential(2)}`;
+      document.getElementById('reduced-validation').textContent = `MAE ${outputValidation.reduced.expectedMae.toExponential(2)}`;
+      document.getElementById('setup-time').textContent = `${setupMilliseconds.toFixed(1)} ms`;
+      document.getElementById('dispatch-ratio').textContent = `${ratio.toFixed(2)}x dense/reduced`;
+    }
+
+    main().catch(error => {
+      const failure = {
+        ...initialReport,
+        status: 'failed',
+        error: `${error?.name || 'Error'}: ${error?.message || String(error)}`,
+        stack: error?.stack || null,
+        optimizationClaimAllowed: false,
+      };
+      window.__TRANSFER_GPU_BENCHMARK__ = failure;
+      document.body.dataset.state = 'failed';
+      document.getElementById('status').textContent = `Failed during ${failure.failurePhase}`;
+      document.getElementById('failure').textContent = `${failure.error}\n\n${failure.stack || ''}`;
+    });
+  </script>
+</body>
+</html>
