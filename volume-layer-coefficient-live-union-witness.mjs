@@ -420,12 +420,30 @@ async function captureCondition({ label, captureContext, overlay, raymarch = fal
   } else if (!raymarch) {
     populationAudit = await evaluate(socket, `(async () => {
       const audit = await ${VOLUME_PROTOTYPE_EXPRESSION}.sampleBoundarySplatFootprintAudit({ now: ${FIXED_NOW_MS} });
+      const boundarySplatGpuProfile = await ${VOLUME_PROTOTYPE_EXPRESSION}.sampleBoundarySplatGpuProfile();
       return {
         status: audit.ok ? 'effective' : 'failed',
+        authority: audit.authority,
+        footprintAuthority: audit.footprintAuthority,
+        candidatePayloadAuthority: audit.candidatePayloadAuthority,
+        candidatePayloadSha256: audit.candidatePayloadSha256,
+        attributePayloadAuthority: audit.attributePayloadAuthority,
+        attributePayloadSha256: audit.attributePayloadSha256,
+        stateWitnessAuthority: audit.stateWitnessAuthority,
+        stateWitnessSha256: audit.stateWitnessSha256,
+        controlAuthority: audit.controlAuthority,
+        controlSha256: audit.controlSha256,
+        stableNativeCellIdAuthority: audit.stableNativeCellIdAuthority,
         stableNativeCellIdSha256: audit.stableNativeCellIdSha256,
         candidateCount: audit.candidateCount,
         instanceCount: audit.instanceCount,
         overflowCount: audit.overflowCount,
+        initialDraw: audit.initialDraw,
+        capacityRetryCount: audit.capacityRetryCount,
+        capacityAfterRetry: audit.capacityAfterRetry,
+        descriptorFrameMetrics: audit.descriptorFrameMetrics,
+        projectionMetrics: audit.projectionMetrics,
+        boundarySplatGpuProfile,
         decodedMembershipCounts: audit.decodedMembershipCounts,
         unionReceipt: audit.unionReceipt,
       };
@@ -665,6 +683,7 @@ async function waitForRuntime(cdp, timeout) {
             && prototype.auditBoundarySplatLiveUnionSourceHashes
             && prototype.loadBoundarySplatLiveUnionCoefficientOverlay
             && prototype.auditBoundarySplatLiveUnionCoefficientOverlayPopulation
+            && prototype.sampleBoundarySplatGpuProfile
           ),
         } : null;
       })()`);

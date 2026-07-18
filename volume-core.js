@@ -11117,6 +11117,34 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         let tangentNormalCrossLengthMin = Infinity;
         let tangentNormalCrossLengthMax = 0;
         const matrix = viewProj.elements;
+        const viewportWidth = Math.max(1, Number(state.renderWidth || state.width || canvas.width || 1));
+        const viewportHeight = Math.max(1, Number(state.renderHeight || state.height || canvas.height || 1));
+        const viewportPixelCount = viewportWidth * viewportHeight;
+        const depthBinCount = 64;
+        const depthBins = new Uint32Array(depthBinCount);
+        let projectedFootprintPixels = 0;
+        const projectPoint = (x, y, z) => {
+          const clipX = matrix[0] * x + matrix[4] * y + matrix[8] * z + matrix[12];
+          const clipY = matrix[1] * x + matrix[5] * y + matrix[9] * z + matrix[13];
+          const clipZ = matrix[2] * x + matrix[6] * y + matrix[10] * z + matrix[14];
+          const clipW = matrix[3] * x + matrix[7] * y + matrix[11] * z + matrix[15];
+          if (!(clipW > 0)) return { clipX, clipY, clipZ, clipW, visible: false };
+          const ndcX = clipX / clipW;
+          const ndcY = clipY / clipW;
+          const ndcZ = clipZ / clipW;
+          return {
+            clipX,
+            clipY,
+            clipZ,
+            clipW,
+            ndcX,
+            ndcY,
+            ndcZ,
+            pixelX: (ndcX * 0.5 + 0.5) * viewportWidth,
+            pixelY: (0.5 - ndcY * 0.5) * viewportHeight,
+            visible: true,
+          };
+        };
         for (let index = 0; index < draw.instanceCount; index += 1) {
           const candidateOffset = index * strideFloats;
           const descriptorOffset = index * descriptorStrideFloats;
@@ -11148,7 +11176,56 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           if (clipW > 0 && Math.abs(clipX) <= clipW && Math.abs(clipY) <= clipW && clipZ >= 0 && clipZ <= clipW) {
             centerInFrustumCount += 1;
           }
+          const center = projectPoint(x, y, z);
+          if (center.visible) {
+            const radiusX = values[candidateOffset + 8] * globalRadius;
+            const radiusY = values[candidateOffset + 9] * globalRadius;
+            let tangentUnitX = tangentLength > 1e-8 ? tangentX / tangentLength : 1;
+            let tangentUnitY = tangentLength > 1e-8 ? tangentY / tangentLength : 0;
+            let tangentUnitZ = tangentLength > 1e-8 ? tangentZ / tangentLength : 0;
+            let bitangentX = normalY * tangentUnitZ - normalZ * tangentUnitY;
+            let bitangentY = normalZ * tangentUnitX - normalX * tangentUnitZ;
+            let bitangentZ = normalX * tangentUnitY - normalY * tangentUnitX;
+            let bitangentLength = Math.hypot(bitangentX, bitangentY, bitangentZ);
+            if (!(bitangentLength > 1e-8)) {
+              bitangentX = 0;
+              bitangentY = 1;
+              bitangentZ = 0;
+              bitangentLength = 1;
+            }
+            bitangentX /= bitangentLength;
+            bitangentY /= bitangentLength;
+            bitangentZ /= bitangentLength;
+            const tangentEdge = projectPoint(
+              x + tangentUnitX * radiusX,
+              y + tangentUnitY * radiusX,
+              z + tangentUnitZ * radiusX,
+            );
+            const bitangentEdge = projectPoint(
+              x + bitangentX * radiusY,
+              y + bitangentY * radiusY,
+              z + bitangentZ * radiusY,
+            );
+            const radiusPxX = tangentEdge.visible
+              ? Math.hypot(tangentEdge.pixelX - center.pixelX, tangentEdge.pixelY - center.pixelY)
+              : 0;
+            const radiusPxY = bitangentEdge.visible
+              ? Math.hypot(bitangentEdge.pixelX - center.pixelX, bitangentEdge.pixelY - center.pixelY)
+              : 0;
+            if (Number.isFinite(radiusPxX) && Number.isFinite(radiusPxY) && radiusPxX > 0 && radiusPxY > 0) {
+              projectedFootprintPixels += Math.min(Math.PI * radiusPxX * radiusPxY, viewportPixelCount);
+            }
+            if (center.ndcZ >= 0 && center.ndcZ <= 1) {
+              const depthBin = Math.min(depthBinCount - 1, Math.max(0, Math.floor(center.ndcZ * depthBinCount)));
+              depthBins[depthBin] += 1;
+            }
+          }
         }
+        const occupiedDepthBins = Array.from(depthBins, count => count).filter(count => count > 0);
+        const sortedDepthBins = [...occupiedDepthBins].sort((left, right) => left - right);
+        const p95DepthBinIndex = sortedDepthBins.length > 0
+          ? Math.min(sortedDepthBins.length - 1, Math.floor(sortedDepthBins.length * 0.95))
+          : 0;
         descriptorFrameMetrics = {
           authority: 'gpu-flow-kernel-descriptor-plus-compacted-candidate-readback-v0',
           finiteFrameCount,
@@ -11158,10 +11235,29 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           tangentNormalCrossLengthMax,
         };
         projectionMetrics = {
-          authority: 'cpu-view-projection-of-gpu-compacted-candidate-centers-v0',
+          authority: 'cpu-projected-ellipse-footprint-from-gpu-compacted-candidates-v0',
           positiveClipWCount,
           centerInFrustumCount,
           candidateCount: draw.instanceCount,
+          projectedSurvivors: positiveClipWCount,
+          projectedFootprintPixels,
+          totalSplatPixelWork: projectedFootprintPixels,
+          meanDepthComplexity: projectedFootprintPixels / viewportPixelCount,
+          viewport: {
+            width: viewportWidth,
+            height: viewportHeight,
+            pixelCount: viewportPixelCount,
+          },
+          depthBinOccupancy: {
+            authority: 'clip-z-bin-occupancy-from-projected-candidate-centers-v0',
+            binCount: depthBinCount,
+            occupiedBins: occupiedDepthBins.length,
+            meanEntriesPerOccupiedBin: occupiedDepthBins.length > 0
+              ? occupiedDepthBins.reduce((sum, count) => sum + count, 0) / occupiedDepthBins.length
+              : 0,
+            p95EntriesPerOccupiedBin: sortedDepthBins[p95DepthBinIndex] ?? 0,
+            maxEntriesPerOccupiedBin: sortedDepthBins.at(-1) ?? 0,
+          },
         };
       }
       const controlPayload = Object.fromEntries(
@@ -17161,6 +17257,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     auditBoundarySplatLiveUnionSourceHashes,
     clearBoundarySplatLiveUnionCoefficientOverlay,
     sampleBoundarySplatFootprintAudit,
+    sampleBoundarySplatGpuProfile,
     boundarySplatCameraState,
     captureBoundarySplatSupervisionCandidates,
     sampleRenderScaleSet,
