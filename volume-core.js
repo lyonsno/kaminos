@@ -6585,6 +6585,18 @@ fn boundarySplatOpticalFs(in: BoundarySplatVertexOut) -> @location(0) vec4<f32> 
   let alpha = max(in.colorOpacity.a * gaussian * energyCompensation, 0.0);
   return vec4<f32>(in.colorOpacity.rgb * alpha, alpha);
 }
+
+@fragment
+fn boundarySplatBilinearOpticalFs(in: BoundarySplatVertexOut) -> @location(0) vec4<f32> {
+  if (in.depthBin != OPTICAL_BIN) { discard; }
+  let sharedEmissionCoefficient = in.ridgeOptical.rgb + in.nonRidgeOptical.rgb;
+  let sharedTotalExtinctionCoefficient = in.ridgeOptical.w + in.nonRidgeOptical.w;
+  let depositionWeight = max(in.depositionWeight, 0.0);
+  return vec4<f32>(
+    sharedEmissionCoefficient * depositionWeight,
+    sharedTotalExtinctionCoefficient * depositionWeight,
+  );
+}
 `;
 
 const BOUNDARY_SPLAT_PRESENTATION_WGSL = `
@@ -7267,8 +7279,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySplatReadbackPipeline = null;
   let boundarySplatBilinearRenderPipeline = null;
   let boundarySplatBilinearReadbackPipeline = null;
+  let boundarySplatBilinearHdrPipeline = null;
   let boundarySplatHdrPipeline = null;
   let boundarySplatOpticalPipelines = [];
+  let boundarySplatBilinearOpticalPipelines = [];
   let boundarySplatPresentationShader = null;
   let boundarySplatOpticalPresentationShader = null;
   let boundarySplatPresentationRenderPipeline = null;
@@ -8804,13 +8818,25 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       'point-list',
     );
     boundarySplatHdrPipeline = makeBoundarySplatRenderPipeline(BOUNDARY_SPLAT_HDR_TARGET_FORMAT, `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} hdr accumulation ${gridSize}^3`);
-    boundarySplatOpticalPipelines = Array.from({ length: BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS }, (_, binIndex) => device.createRenderPipeline({
-      label: `kaminos ${BOUNDARY_SPLAT_OPTICAL_ACCUMULATION_IDENTITY} bin ${binIndex}`,
+    boundarySplatBilinearHdrPipeline = makeBoundarySplatRenderPipeline(
+      BOUNDARY_SPLAT_HDR_TARGET_FORMAT,
+      `kaminos ${FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY} hdr accumulation ${gridSize}^3`,
+      'boundarySplatBilinearVs',
+      'boundarySplatBilinearFs',
+      'point-list',
+    );
+    const makeBoundarySplatOpticalPipelines = (
+      vertexEntryPoint,
+      fragmentEntryPoint,
+      topology,
+      labelSuffix,
+    ) => Array.from({ length: BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS }, (_, binIndex) => device.createRenderPipeline({
+      label: `kaminos ${BOUNDARY_SPLAT_OPTICAL_ACCUMULATION_IDENTITY} ${labelSuffix} bin ${binIndex}`,
       layout: boundarySplatRenderPipelineLayout,
-      vertex: { module: boundarySplatShader, entryPoint: 'boundarySplatVs' },
+      vertex: { module: boundarySplatShader, entryPoint: vertexEntryPoint },
       fragment: {
         module: boundarySplatShader,
-        entryPoint: 'boundarySplatOpticalFs',
+        entryPoint: fragmentEntryPoint,
         constants: { OPTICAL_BIN: binIndex },
         targets: [{
           format: BOUNDARY_SPLAT_HDR_TARGET_FORMAT,
@@ -8820,8 +8846,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           },
         }],
       },
-      primitive: { topology: 'triangle-list' },
+      primitive: { topology },
     }));
+    boundarySplatOpticalPipelines = makeBoundarySplatOpticalPipelines(
+      'boundarySplatVs',
+      'boundarySplatOpticalFs',
+      'triangle-list',
+      'gaussian',
+    );
+    boundarySplatBilinearOpticalPipelines = makeBoundarySplatOpticalPipelines(
+      'boundarySplatBilinearVs',
+      'boundarySplatBilinearOpticalFs',
+      'point-list',
+      FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY,
+    );
     const makeBoundarySplatPresentationPipeline = (targetFormat, label) => device.createRenderPipeline({
       label,
       layout: 'auto',
@@ -11321,14 +11359,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return true;
   }
 
+  function resolveBoundarySplatBilinearPipeline(targetPipeline) {
+    if (targetPipeline === boundarySplatRenderPipeline) return boundarySplatBilinearRenderPipeline;
+    if (targetPipeline === boundarySplatReadbackPipeline) return boundarySplatBilinearReadbackPipeline;
+    if (targetPipeline === boundarySplatHdrPipeline) return boundarySplatBilinearHdrPipeline;
+    const opticalIndex = boundarySplatOpticalPipelines.indexOf(targetPipeline);
+    if (opticalIndex >= 0) return boundarySplatBilinearOpticalPipelines[opticalIndex] || null;
+    return null;
+  }
+
   function encodeBoundarySplatDraw(encoder, view, targetPipeline = boundarySplatRenderPipeline, options = {}) {
     if (!boundarySplatRequested() || state.boundarySplatFallbackReason || !targetPipeline) return false;
     const bilinear = state.fullSupportDepositionEffective === FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY;
-    const effectivePipeline = bilinear
-      ? (targetPipeline === boundarySplatReadbackPipeline
-        ? boundarySplatBilinearReadbackPipeline
-        : boundarySplatBilinearRenderPipeline)
-      : targetPipeline;
+    const effectivePipeline = bilinear ? resolveBoundarySplatBilinearPipeline(targetPipeline) : targetPipeline;
     const indirectBuffer = bilinear ? boundarySplatBilinearIndirectBuffer : boundarySplatIndirectBuffer;
     if (!effectivePipeline || !indirectBuffer) return false;
     const loadOp = options.loadOp === 'load' ? 'load' : 'clear';

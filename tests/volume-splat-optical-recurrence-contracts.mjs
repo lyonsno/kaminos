@@ -14,6 +14,10 @@ assert.match(core, /depth-binned-emission-optical-depth-v0/, 'live receipt must 
 assert.match(core, /depth-binned-exponential-self-transmittance-v0/, 'live receipt must identify the optical recurrence');
 assert.match(core, /projected-ndc-zero-to-one-depth-interval-v0/, 'live receipt must identify the effective depth interval');
 assert.match(core, /encodeBoundarySplatOpticalRecurrence/, 'live route must encode the optical treatment separately');
+assert.match(core, /boundarySplatBilinearHdrPipeline/, 'bilinear deposition must expose an rgba16float HDR counterpart');
+assert.match(core, /boundarySplatBilinearOpticalPipelines/, 'bilinear deposition must expose per-bin rgba16float optical counterparts');
+assert.match(core, /fn boundarySplatBilinearOpticalFs[\s\S]*in\.depthBin != OPTICAL_BIN[\s\S]*in\.depositionWeight/, 'bilinear optical accumulation must preserve depth-bin and deposition-weight authority');
+assert.match(core, /resolveBoundarySplatBilinearPipeline[\s\S]*boundarySplatHdrPipeline[\s\S]*boundarySplatBilinearHdrPipeline[\s\S]*boundarySplatOpticalPipelines[\s\S]*boundarySplatBilinearOpticalPipelines/, 'bilinear routing must map HDR and optical targets to format-compatible pipelines');
 const orbitWitness = readFileSync(join(root, 'volume-raymarch-filament-orbit-witness.mjs'), 'utf8');
 assert.match(orbitWitness, /worldCovarianceMatchedOpticalRecurrence[\s\S]*matched-optical-recurrence-v0/, 'frozen witness delegate must expose the matched optical arm explicitly');
 
