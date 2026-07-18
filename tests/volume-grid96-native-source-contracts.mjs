@@ -71,6 +71,18 @@ const selectiveRoleSetterStart = core.indexOf('setSelectiveHeadLiveRole(role)');
 const selectiveRoleSetterEnd = core.indexOf('setSelectiveHeadLiveRenderComposition(composition)', selectiveRoleSetterStart);
 const selectiveRoleSetterSource = core.slice(selectiveRoleSetterStart, selectiveRoleSetterEnd);
 
+for (const api of [
+  'applyDebugNonRidgeCausalControls',
+  'beginDebugNonRidgeSourceBasisCapture',
+  'beginFlowKernelDescriptorIndexUpload',
+]) {
+  assert.match(
+    core,
+    new RegExp(`\\b${api}\\b`),
+    `the Grid96 source runtime must expose ${api} because the producer invokes it after route admission`,
+  );
+}
+
 assert.ok(materializeStart >= 0 && materializeEnd > materializeStart, 'full-field derived materialization is inspectable');
 assert.match(
   materializeSource,

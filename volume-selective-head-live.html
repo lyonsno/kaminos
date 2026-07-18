@@ -10,14 +10,15 @@
     * { box-sizing: border-box; }
     body { margin: 0; overflow: hidden; background: #050607; }
     iframe { width: 100vw; height: 100vh; border: 0; display: block; }
-    #toolbar { position: fixed; z-index: 10; top: 12px; left: 12px; right: 12px; display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid rgba(190, 215, 220, .28); background: rgba(6, 9, 10, .90); backdrop-filter: blur(8px); border-radius: 6px; box-shadow: 0 8px 26px rgba(0, 0, 0, .32); }
+    #toolbar { position: fixed; z-index: 10; top: 12px; left: 12px; right: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid rgba(190, 215, 220, .28); background: rgba(6, 9, 10, .90); backdrop-filter: blur(8px); border-radius: 6px; box-shadow: 0 8px 26px rgba(0, 0, 0, .32); }
     #title { min-width: 210px; }
     #title strong { display: block; font-size: 13px; line-height: 1.25; }
     #title span { display: block; color: #91a3a8; font-size: 10px; margin-top: 2px; }
-    #roles, #compositions { display: flex; gap: 4px; }
-    button { min-height: 32px; padding: 0 11px; border: 1px solid #35454b; border-radius: 4px; background: #12191c; color: #dce7e9; font: inherit; font-size: 12px; cursor: pointer; }
+    #presentations, #smoke-presentations, #appearance-assay, #roles, #compositions { display: flex; gap: 4px; }
+    button { min-height: 32px; padding: 0 11px; border: 1px solid #35454b; border-radius: 4px; background: #12191c; color: #dce7e9; font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
     button[aria-pressed="true"] { background: #275768; border-color: #6db1c3; color: #fff; }
-    #status { margin-left: auto; max-width: min(52vw, 660px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #9eafb4; font: 10px/1.35 "SF Mono", Menlo, monospace; }
+    button:disabled { cursor: not-allowed; opacity: .36; }
+    #status { flex: 1 1 100%; max-width: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #9eafb4; font: 10px/1.35 "SF Mono", Menlo, monospace; }
     #status.bad { color: #ff9d8d; }
   </style>
 </head>
@@ -25,7 +26,30 @@
   <div id="toolbar">
     <div id="title">
       <strong>Continuous same-history live assay</strong>
-      <span>Load checksum-bound training step 96, then 160 truth -> 128 phase-aligned input -> frozen heads -> 160 render</span>
+      <span id="assay-source">Load checksum-bound training step 96, then 160 truth -> 128 phase-aligned input -> frozen heads -> 160 render</span>
+    </div>
+    <div id="presentations" role="group" aria-label="Volume presentation">
+      <button type="button" data-presentation="beauty">Beauty</button>
+      <button type="button" data-presentation="intrinsic">Intrinsic</button>
+    </div>
+    <div id="smoke-presentations" role="group" aria-label="Raymarch smoke presentation">
+      <button type="button" data-smoke-presentation="on">Smoke On</button>
+      <button type="button" data-smoke-presentation="off">Smoke Off</button>
+    </div>
+    <div id="appearance-assay" role="group" aria-label="Appearance decomposition">
+      <button type="button" data-appearance-assay="off">Assay Off</button>
+      <button type="button" data-appearance-assay="structural-a">A</button>
+      <button type="button" data-appearance-assay="broad-carrier-b">B coefficients</button>
+      <button type="button" data-appearance-assay="b-applied-to-fixed-a">B on A</button>
+      <button type="button" data-appearance-assay="a-plus-b-recomposition">A+B</button>
+      <button type="button" data-appearance-assay="smoke-off-beauty-control">Control</button>
+      <button type="button" data-appearance-assay="complete-flame-emission">Complete Emission</button>
+      <button type="button" data-appearance-assay="complete-flame-extinction">Complete Extinction</button>
+      <button type="button" data-appearance-assay="ridge-owned-emission">Ridge Emission</button>
+      <button type="button" data-appearance-assay="ridge-owned-extinction">Ridge Extinction</button>
+      <button type="button" data-appearance-assay="non-ridge-emission">Non-Ridge Emission</button>
+      <button type="button" data-appearance-assay="non-ridge-extinction">Non-Ridge Extinction</button>
+      <button type="button" data-appearance-assay="positive-optical-recomposition">Positive Sum</button>
     </div>
     <div id="roles" role="group" aria-label="Live reconstruction role">
       <button type="button" data-role="truthHigh">Truth high</button>
@@ -42,6 +66,11 @@
   </div>
   <iframe id="basin" title="Kaminos exact selective-head live basin"></iframe>
   <script type="module">
+    import {
+      validateVolumeSettingsPresetDocument,
+      validateVolumeSettingsPresetVisualTarget,
+    } from './volume-settings-preset-contract.mjs';
+
     const ROUTE_IDENTITY = 'exact-basin-selective-head-live-v0';
     const WARMUP_AUTHORITY = 'checksum-bound-exact-basin-step96-field-anchor-v0';
     const ANCHOR_FLUID_SHA256 = 'd58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1';
@@ -53,6 +82,23 @@
       'raymarch-only-v0',
       'full-raymarch-under-splats-diagnostic-v0',
     ];
+    const presentations = ['beauty', 'intrinsic'];
+    const raymarchSmokePresentations = ['on', 'off'];
+    const appearanceAssayModes = [
+      'off',
+      'structural-a',
+      'broad-carrier-b',
+      'b-applied-to-fixed-a',
+      'a-plus-b-recomposition',
+      'smoke-off-beauty-control',
+      'complete-flame-emission',
+      'complete-flame-extinction',
+      'ridge-owned-emission',
+      'ridge-owned-extinction',
+      'non-ridge-emission',
+      'non-ridge-extinction',
+      'positive-optical-recomposition',
+    ];
     const roleAuthorities = Object.freeze({
       truthHigh: 'current-high-field-reference-no-learned-composition-v0',
       lowPhaseAligned: 'phase-aligned-low-field-control-v0',
@@ -61,16 +107,52 @@
     const params = new URLSearchParams(location.search);
     let requestedRole = roles.includes(params.get('role')) ? params.get('role') : 'selectiveFullResidual';
     let requestedComposition = compositions.includes(params.get('composition')) ? params.get('composition') : 'smoke-raymarch-under-splats-v0';
-    const warmupTarget = Math.max(0, Math.floor(Number(params.get('warmup_steps') ?? 96) || 0));
+    let requestedPresentation = presentations.includes(params.get('volume_presentation')) ? params.get('volume_presentation') : 'beauty';
+    const requestedRaymarchSmokePresentationRaw = params.get('volume_raymarch_smoke');
+    let requestedRaymarchSmokePresentation = raymarchSmokePresentations.includes(requestedRaymarchSmokePresentationRaw)
+      ? requestedRaymarchSmokePresentationRaw
+      : 'on';
+    const requestedAppearanceAssayRaw = params.get('volume_appearance_decomposition');
+    let requestedAppearanceAssay = appearanceAssayModes.includes(requestedAppearanceAssayRaw)
+      ? requestedAppearanceAssayRaw
+      : 'off';
+    const warmupParam = params.get('warmup_steps');
+    const parsedWarmupTarget = warmupParam === null ? 96 : Number(warmupParam);
+    const warmupParamValid = warmupParam === null
+      || warmupParam === '0'
+      || (warmupParam.trim() !== '' && Number.isFinite(parsedWarmupTarget) && parsedWarmupTarget >= 1);
+    const warmupTarget = warmupParam === '0'
+      ? 0
+      : (warmupParamValid ? Math.max(1, Math.floor(parsedWarmupTarget)) : 96);
+    const warmupAuthority = warmupTarget === 0
+      ? 'fresh-live-settings-no-anchor-v0'
+      : WARMUP_AUTHORITY;
     const anchorBase = String(params.get('anchor_base') || 'http://127.0.0.1:18537').replace(/\/$/, '');
     let warmupStarted = false;
     let warmupComplete = warmupTarget === 0;
-    let warmupReceipt = null;
-    let warmupError = null;
+    let warmupReceipt = warmupTarget === 0
+      ? { ok: true, authority: warmupAuthority, completedSteps: 0, importedAnchor: false }
+      : null;
+    let warmupError = warmupParamValid ? null : `invalid warmup_steps: ${JSON.stringify(warmupParam)}`;
+    if (requestedRaymarchSmokePresentationRaw !== null
+      && !raymarchSmokePresentations.includes(requestedRaymarchSmokePresentationRaw)) {
+      warmupError ||= `unsupported-raymarch-smoke-presentation-mode:${requestedRaymarchSmokePresentationRaw}`;
+    }
+    if (requestedAppearanceAssayRaw !== null && !appearanceAssayModes.includes(requestedAppearanceAssayRaw)) {
+      warmupError ||= `unsupported-appearance-decomposition-mode:${requestedAppearanceAssayRaw}`;
+    }
+    const sourceSettingsPresetRequestedId = params.get('settings_preset') || null;
+    let sourceSettingsPresetReceipt = null;
     const basin = document.getElementById('basin');
     const status = document.getElementById('status');
+    document.getElementById('assay-source').textContent = warmupTarget === 0
+      ? 'Fresh live simulation from routed basin settings; no checksum field anchor imported'
+      : 'Load checksum-bound training step 96, then 160 truth -> 128 phase-aligned input -> frozen heads -> 160 render';
     const buttons = Array.from(document.querySelectorAll('[data-role]'));
     const compositionButtons = Array.from(document.querySelectorAll('[data-composition]'));
+    const presentationButtons = Array.from(document.querySelectorAll('[data-presentation]'));
+    const smokePresentationButtons = Array.from(document.querySelectorAll('[data-smoke-presentation]'));
+    const appearanceAssayButtons = Array.from(document.querySelectorAll('[data-appearance-assay]'));
     const basinQuery = new URLSearchParams({
       kaminos_volume_smoke: '1',
       volume_scene: 'tall_plume',
@@ -118,7 +200,31 @@
       volume_residual_feature_debug: '0',
       volume_quality_reason: 'selective-head-continuous-live-assay',
     });
-    basin.src = `./?${basinQuery}`;
+    for (const [key, value] of params) {
+      if (key.startsWith('volume_')) basinQuery.set(key, value);
+    }
+    if (params.has('settings_preset_authority') && !sourceSettingsPresetRequestedId) {
+      warmupError ||= 'settings preset authority was requested without a settings preset id';
+    }
+    if (sourceSettingsPresetRequestedId && !warmupError) {
+      try {
+        const [artifactResponse, schemaResponse] = await Promise.all([
+          fetch(`/api/volume-settings-preset?id=${encodeURIComponent(sourceSettingsPresetRequestedId)}`, { cache: 'no-store' }),
+          fetch('/volume-settings-preset-schema-v2.json', { cache: 'no-store' }),
+        ]);
+        if (!artifactResponse.ok) throw new Error(`settings preset artifact load failed (${artifactResponse.status})`);
+        if (!schemaResponse.ok) throw new Error(`settings preset schema load failed (${schemaResponse.status})`);
+        sourceSettingsPresetReceipt = validateVolumeSettingsPresetDocument(
+          await artifactResponse.json(),
+          sourceSettingsPresetRequestedId,
+          await schemaResponse.json(),
+        );
+        validateVolumeSettingsPresetVisualTarget(sourceSettingsPresetReceipt, params);
+      } catch (error) {
+        warmupError = `settings preset visual admission failed: ${error?.message || String(error)}`;
+      }
+    }
+    if (!warmupError) basin.src = `./?${basinQuery}`;
 
     function prototype() {
       return basin.contentWindow?.__kaminosVolumePrototype || null;
@@ -136,33 +242,186 @@
 
     function setComposition(composition) {
       if (!compositions.includes(composition)) return;
+      if (requestedAppearanceAssay !== 'off') {
+        return {
+          ok: false,
+          reason: 'composition-controls-disabled-during-appearance-assay',
+          requestedComposition,
+          effectiveAppearanceAssay: requestedAppearanceAssay,
+        };
+      }
+      if (requestedPresentation !== 'beauty') {
+        return {
+          ok: false,
+          reason: 'composition-controls-disabled-during-intrinsic',
+          requestedComposition,
+          effectivePresentation: requestedPresentation,
+        };
+      }
       requestedComposition = composition;
       for (const button of compositionButtons) button.setAttribute('aria-pressed', String(button.dataset.composition === composition));
       const next = new URL(location.href);
       next.searchParams.set('composition', composition);
       history.replaceState(null, '', next);
-      prototype()?.setSelectiveHeadLiveRenderComposition?.(composition);
+      return prototype()?.setSelectiveHeadLiveRenderComposition?.(composition) || null;
+    }
+
+    function syncCompositionControlAvailability(presentation) {
+      const appearanceAssay = requestedAppearanceAssay;
+      const disabled = presentation !== 'beauty' || appearanceAssay !== 'off';
+      for (const button of compositionButtons) {
+        button.disabled = disabled;
+        button.setAttribute('aria-disabled', String(disabled));
+      }
+    }
+
+    function setPresentation(presentation) {
+      if (!presentations.includes(presentation)) return null;
+      requestedPresentation = presentation;
+      for (const button of presentationButtons) button.setAttribute('aria-pressed', String(button.dataset.presentation === presentation));
+      syncCompositionControlAvailability(presentation);
+      const next = new URL(location.href);
+      next.searchParams.set('volume_presentation', presentation);
+      history.replaceState(null, '', next);
+      const receipt = prototype()?.setVolumePresentationMode?.(presentation) || null;
+      if (presentation === 'beauty' && requestedAppearanceAssay === 'off') {
+        prototype()?.setSelectiveHeadLiveRenderComposition?.(requestedComposition);
+      }
+      return receipt;
+    }
+
+    function setRaymarchSmokePresentation(mode) {
+      if (!raymarchSmokePresentations.includes(mode)) return null;
+      requestedRaymarchSmokePresentation = mode;
+      for (const button of smokePresentationButtons) {
+        button.setAttribute('aria-pressed', String(button.dataset.smokePresentation === mode));
+      }
+      const next = new URL(location.href);
+      next.searchParams.set('volume_raymarch_smoke', mode);
+      history.replaceState(null, '', next);
+      const receipt = prototype()?.setRaymarchSmokePresentationMode?.(mode) || null;
+      const effectiveRaymarchSmokePresentation = receipt?.effectiveMode || null;
+      return {
+        ...receipt,
+        requestedRaymarchSmokePresentation,
+        effectiveRaymarchSmokePresentation,
+      };
+    }
+
+    function setAppearanceAssay(mode) {
+      if (!appearanceAssayModes.includes(mode)) return null;
+      requestedAppearanceAssay = mode;
+      for (const button of appearanceAssayButtons) {
+        button.setAttribute('aria-pressed', String(button.dataset.appearanceAssay === mode));
+      }
+      const next = new URL(location.href);
+      next.searchParams.set('volume_appearance_decomposition', mode);
+      history.replaceState(null, '', next);
+      const appearanceDecompositionReceipt = prototype()?.setAppearanceDecompositionMode?.(mode) || null;
+      syncCompositionControlAvailability(requestedPresentation);
+      if (mode === 'off' && requestedPresentation === 'beauty') {
+        prototype()?.setSelectiveHeadLiveRenderComposition?.(requestedComposition);
+      }
+      const effectiveAppearanceAssay = appearanceDecompositionReceipt?.effectiveMode || null;
+      return { ...appearanceDecompositionReceipt, requestedAppearanceAssay, effectiveAppearanceAssay };
+    }
+
+    function passReceiptMatchesComposition(receipt, composition) {
+      if (!receipt || receipt.composition !== composition || receipt.fallbackReason) return false;
+      if (composition === 'splat-only-v0') return receipt.splatApplied === true && receipt.raymarchApplied === false;
+      if (composition === 'raymarch-only-v0') return receipt.raymarchApplied === true && receipt.splatApplied === false;
+      if (composition === 'smoke-raymarch-under-splats-v0') return receipt.raymarchApplied === true && receipt.splatApplied === true;
+      if (composition === 'full-raymarch-under-splats-diagnostic-v0') return receipt.raymarchApplied === true && receipt.splatApplied === true;
+      return false;
     }
 
     function debugState() {
       const state = prototype()?.debugState?.() || null;
+      const effectiveRole = state?.selectiveHeadLiveEffectiveRole || null;
+      const effectiveComposition = state?.selectiveHeadLiveCompositionEffective || null;
+      const passReceipt = state?.selectiveHeadLivePassReceipt || null;
+      const volumePresentationReceipt = state?.volumePresentationReceipt || null;
+      const effectivePresentation = volumePresentationReceipt?.effectiveMode || state?.volumePresentationModeEffective || null;
+      const raymarchSmokePresentationReceipt = state?.raymarchSmokePresentationReceipt || null;
+      const effectiveRaymarchSmokePresentation = raymarchSmokePresentationReceipt?.effectiveMode
+        || state?.raymarchSmokePresentationModeEffective
+        || null;
+      const appearanceDecompositionReceipt = state?.appearanceDecompositionReceipt || null;
+      const effectiveAppearanceAssay = appearanceDecompositionReceipt?.effectiveMode
+        || state?.appearanceDecompositionModeEffective
+        || null;
+      const splatPassRequested = requestedAppearanceAssay === 'off'
+        && requestedPresentation === 'beauty'
+        && requestedComposition !== 'raymarch-only-v0';
+      const fallback = (effectiveRole !== requestedRole ? state?.selectiveHeadLiveFallbackReason : null)
+        || (requestedPresentation === 'beauty' && effectiveComposition !== requestedComposition
+          ? state?.selectiveHeadLiveCompositionFallbackReason
+          : null)
+        || (splatPassRequested ? state?.boundarySplatFallbackReason : null)
+        || volumePresentationReceipt?.fallbackReason
+        || raymarchSmokePresentationReceipt?.fallbackReason
+        || appearanceDecompositionReceipt?.fallbackReason
+        || null;
+      const appliedPresentation = volumePresentationReceipt?.application || null;
+      const appearanceApplication = appearanceDecompositionReceipt?.application || null;
+      const presentationSettled = requestedAppearanceAssay !== 'off'
+        ? effectiveAppearanceAssay === requestedAppearanceAssay
+          && appearanceApplication?.raymarchApplied === true
+          && appearanceApplication?.splatsApplied === false
+          && appearanceApplication?.residualApplied === false
+          && appearanceApplication?.smokeApplied === false
+        : requestedPresentation === 'intrinsic'
+        ? effectivePresentation === 'intrinsic'
+          && appliedPresentation?.effectiveMode === 'intrinsic'
+          && appliedPresentation?.raymarchApplied === true
+          && appliedPresentation?.splatsApplied === false
+        : effectivePresentation === 'beauty'
+          && effectiveComposition === requestedComposition
+          && passReceiptMatchesComposition(passReceipt, requestedComposition);
+      const rendererSettled = warmupComplete
+        && state?.active
+        && effectiveRole === requestedRole
+        && presentationSettled;
       return {
         routeIdentity: ROUTE_IDENTITY,
-        status: warmupError || state?.error ? 'failed' : warmupComplete && state?.active ? 'running' : 'warming',
+        status: warmupError || state?.error || fallback
+          ? 'failed'
+          : (rendererSettled ? 'running' : (warmupComplete && state?.active ? 'settling' : 'warming')),
         requestedRole,
         requestedComposition,
-        warmupAuthority: WARMUP_AUTHORITY,
+        requestedPresentation,
+        effectivePresentation,
+        volumePresentationReceipt,
+        requestedRaymarchSmokePresentation,
+        effectiveRaymarchSmokePresentation,
+        raymarchSmokePresentationReceipt,
+        requestedAppearanceAssay,
+        effectiveAppearanceAssay,
+        appearanceDecompositionReceipt,
+        sourceCaptureId: params.get('basin_capture') || null,
+        sourceSettingsPresetRequestedId,
+        sourceSettingsPresetId: sourceSettingsPresetReceipt?.presetId || null,
+        sourceSettingsPresetAuthority: sourceSettingsPresetReceipt?.sourcePresetAuthority || null,
+        sourceSettingsPresetAlias: sourceSettingsPresetReceipt?.alias || null,
+        sourceSettingsPresetLabel: sourceSettingsPresetReceipt?.label || null,
+        sourceSettingsPresetContentHash: sourceSettingsPresetReceipt?.contentHash || null,
+        sourceSettingsPresetStorePath: sourceSettingsPresetReceipt?.storePath || null,
+        sourceSettingsPresetSchemaIdentity: sourceSettingsPresetReceipt?.schemaIdentity || null,
+        sourceSettingsPresetControlCount: Object.keys(sourceSettingsPresetReceipt?.preset?.domControls || {}).length,
+        warmupAuthority,
         warmupTarget,
         warmupComplete,
         warmupStarted,
         warmupReceipt,
-        effectiveRole: state?.selectiveHeadLiveEffectiveRole || null,
+        effectiveRole,
         roleAuthority: state?.selectiveHeadLiveRoleAuthority || null,
         compositionAuthority: state?.selectiveHeadLiveCompositionAuthority || null,
-        effectiveComposition: state?.selectiveHeadLiveCompositionEffective || null,
-        compositionFallbackReason: state?.selectiveHeadLiveCompositionFallbackReason || null,
-        selectiveHeadLivePassReceipt: state?.selectiveHeadLivePassReceipt || null,
-        fallbackReason: state?.selectiveHeadLiveFallbackReason || null,
+        effectiveComposition,
+        compositionFallbackReason: requestedPresentation === 'beauty' && effectiveComposition !== requestedComposition
+          ? state?.selectiveHeadLiveCompositionFallbackReason || 'requested-effective-composition-mismatch'
+          : null,
+        selectiveHeadLivePassReceipt: passReceipt,
+        fallbackReason: fallback,
         modelIdentity: state?.selectiveHeadLiveModelIdentity || null,
         featureAuthority: state?.selectiveHeadLiveFeatureAuthority || null,
         pairAuthority: state?.selectiveHeadLivePairAuthority || null,
@@ -172,13 +431,14 @@
         simStepCount: state?.simStepCount || 0,
         encodedFrameCount: state?.selectiveHeadLive?.encodedFrameCount || 0,
         timing: state?.timing || null,
-        boundarySplatFallbackReason: state?.boundarySplatFallbackReason || null,
+        boundarySplatFallbackReason: splatPassRequested ? state?.boundarySplatFallbackReason || null : null,
         error: warmupError || state?.error || null,
       };
     }
 
     async function initializeWarmup() {
       if (warmupStarted) return;
+      if (warmupError) throw new Error(warmupError);
       const started = performance.now();
       while (!prototype()?.debugState?.()?.active) {
         if (performance.now() - started > 120000) throw new Error('exact basin did not activate before replay warmup');
@@ -201,6 +461,9 @@
       warmupComplete = true;
       prototype().setSelectiveHeadLiveRole(requestedRole);
       prototype().setSelectiveHeadLiveRenderComposition(requestedComposition);
+      prototype().setVolumePresentationMode(requestedPresentation);
+      prototype().setRaymarchSmokePresentationMode(requestedRaymarchSmokePresentation);
+      prototype().setAppearanceDecompositionMode(requestedAppearanceAssay);
       await prototype().setActive(true);
     }
 
@@ -219,8 +482,14 @@
 
     for (const button of buttons) button.addEventListener('click', () => setRole(button.dataset.role));
     for (const button of compositionButtons) button.addEventListener('click', () => setComposition(button.dataset.composition));
+    for (const button of presentationButtons) button.addEventListener('click', () => setPresentation(button.dataset.presentation));
+    for (const button of smokePresentationButtons) button.addEventListener('click', () => setRaymarchSmokePresentation(button.dataset.smokePresentation));
+    for (const button of appearanceAssayButtons) button.addEventListener('click', () => setAppearanceAssay(button.dataset.appearanceAssay));
+    for (const button of compositionButtons) button.setAttribute('aria-pressed', String(button.dataset.composition === requestedComposition));
     setRole(requestedRole);
-    setComposition(requestedComposition);
+    setPresentation(requestedPresentation);
+    setRaymarchSmokePresentation(requestedRaymarchSmokePresentation);
+    setAppearanceAssay(requestedAppearanceAssay);
     const loop = () => {
       const state = debugState();
       const targetRole = state.warmupComplete ? requestedRole : 'off';
@@ -228,15 +497,25 @@
         prototype().setSelectiveHeadLiveRole(targetRole);
       }
       const fallback = state.fallbackReason || state.compositionFallbackReason || state.boundarySplatFallbackReason;
-      const pass = state.selectiveHeadLivePassReceipt || {};
+      const appliedPass = state.volumePresentationReceipt?.application || state.selectiveHeadLivePassReceipt || {};
       status.classList.toggle('bad', Boolean(fallback || state.error));
       status.textContent = [
-        state.warmupComplete ? `trained horizon crossed: ${state.warmupTarget}` : `warming exact basin: ${state.simStepCount}/${state.warmupTarget}`,
+        state.sourceSettingsPresetId
+          ? `settings preset: ${state.sourceSettingsPresetId} (${state.sourceSettingsPresetAuthority})`
+          : (state.sourceSettingsPresetRequestedId
+              ? `settings preset rejected: ${state.sourceSettingsPresetRequestedId}`
+              : (state.sourceCaptureId ? `legacy capture: ${state.sourceCaptureId}` : 'source: direct route')),
+        state.warmupAuthority === 'fresh-live-settings-no-anchor-v0'
+          ? 'fresh settings live: no anchor imported'
+          : (state.warmupComplete ? `trained horizon crossed: ${state.warmupTarget}` : `warming exact basin: ${state.simStepCount}/${state.warmupTarget}`),
         `effective role: ${state.effectiveRole || 'starting'}`,
         `role authority: ${state.roleAuthority || roleAuthorities[requestedRole]}`,
         `effective composition: ${state.effectiveComposition || 'starting'}`,
+        `presentation: ${state.requestedPresentation} -> ${state.effectivePresentation || 'starting'}`,
+        `raymarch smoke: ${state.requestedRaymarchSmokePresentation} -> ${state.effectiveRaymarchSmokePresentation || 'starting'}`,
+        `appearance assay: ${state.requestedAppearanceAssay} -> ${state.effectiveAppearanceAssay || 'starting'}`,
         `composition authority: ${state.compositionAuthority || 'loading'}`,
-        `pass receipt: raymarch ${pass.raymarchApplied ? 'applied' : 'off'} / splat ${pass.splatApplied ? 'applied' : 'off'}`,
+        `pass receipt: raymarch ${appliedPass.raymarchApplied ? 'applied' : 'off'} / splat ${(appliedPass.splatsApplied ?? appliedPass.splatApplied) ? 'applied' : 'off'}`,
         `model identity: ${state.modelIdentity || 'loading'}`,
         `step: ${state.simStepCount}`,
         `fps: ${Number(state.timing?.rafFps || 0).toFixed(1)}`,
@@ -245,7 +524,7 @@
       ].filter(Boolean).join(' | ');
       requestAnimationFrame(loop);
     };
-    window.__kaminosSelectiveHeadLive = { routeIdentity: ROUTE_IDENTITY, debugState, setRole, setComposition, captureFrame, setCapturePaused, stepCaptureFrame };
+    window.__kaminosSelectiveHeadLive = { routeIdentity: ROUTE_IDENTITY, debugState, setRole, setComposition, setPresentation, setRaymarchSmokePresentation, setAppearanceAssay, captureFrame, setCapturePaused, stepCaptureFrame };
     loop();
     initializeWarmup().catch(error => { warmupError = error?.message || String(error); });
   </script>

@@ -5,6 +5,7 @@ const core = await readFile(new URL('../volume-core.js', import.meta.url), 'utf8
 const page = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const witness = await readFile(new URL('../volume-witness.mjs', import.meta.url), 'utf8');
 const featureCapture = await import('../boundary-splat-feature-capture.mjs');
+const { canonicalizeBoundarySplatAuditRows } = await import('../volume-core.js');
 const modelArtifact = JSON.parse(await readFile(new URL('../models/boundary-splat-attribute/analytic-teacher-h64-v0/model-artifact.json', import.meta.url), 'utf8'));
 
 assert.match(core, /BOUNDARY_SPLAT_RENDERER_IDENTITY\s*=\s*'live-boundary-sidecar-analytic-splats-v0'/, 'splat renderer route identity is explicit');
@@ -25,18 +26,36 @@ assert.match(core, /boundarySplatCompactPipeline/, 'renderer owns a GPU splat co
 assert.match(core, /boundarySplatFinalizePipeline/, 'renderer caps the indirect instance count after compaction');
 assert.match(core, /boundarySplatRenderPipeline/, 'renderer owns a GPU splat raster pipeline');
 assert.match(core, /boundarySplatReadbackPipeline/, 'witness owns a same-route RGBA8 splat readback pipeline');
+const canonicalRowA = [0.5, -0.5, 0.25, 0.8, ...Array.from({ length: 20 }, (_, index) => index + 1)];
+const canonicalRowB = [-0.5, 0.5, -0.25, 0.6, ...Array.from({ length: 20 }, (_, index) => index + 21)];
+const canonicalForward = canonicalizeBoundarySplatAuditRows(Float32Array.from([...canonicalRowA, ...canonicalRowB]), 2, 24);
+const canonicalPermuted = canonicalizeBoundarySplatAuditRows(Float32Array.from([...canonicalRowB, ...canonicalRowA]), 2, 24);
+assert.deepEqual(canonicalForward.positionSupport, canonicalPermuted.positionSupport, 'candidate identity ignores GPU atomic append permutation');
+assert.deepEqual(canonicalForward.attributes, canonicalPermuted.attributes, 'effective live-union attributes remain paired with canonical candidate rows');
 assert.match(core, /atomicAdd\(&boundarySplatDraw\.candidateCount/, 'compaction counts live sidecar candidates on GPU');
 assert.match(core, /min\(atomicLoad\(&boundarySplatDraw\.candidateCount\),\s*boundarySplatDraw\.capacity\)/, 'indirect instance count is clamped to the runtime buffer capacity');
 assert.doesNotMatch(core, /const BOUNDARY_SPLAT_CAPACITY:\s*u32/, 'the shader must not compile a fixed first-N spatial truncation capacity');
 assert.match(core, /function nextBoundarySplatCapacity\([\s\S]*Math\.min\(gridCellCount\(gridSize\),[\s\S]*nextPowerOfTwo/, 'capacity growth is bounded by physical grid cells and otherwise rounds up to avoid repeated reallocations');
 assert.match(core, /async function resolveBoundarySplatTelemetry[\s\S]*overflowCount\s*>\s*0[\s\S]*growBoundarySplatCapacity\(candidateCount\)/, 'asynchronous GPU overflow evidence triggers buffer growth instead of leaving a bisected volume');
-assert.match(core, /new Uint32Array\(\[6,\s*0,\s*0,\s*0,\s*0,\s*0,\s*boundarySplatCapacity,\s*0\]\)/, 'each compaction pass publishes the effective runtime capacity to WGSL');
+assert.match(core, /new Uint32Array\(\[[\s\S]*?6,\s*0,\s*0,\s*0,\s*0,\s*0,\s*boundarySplatCapacity,\s*0,[\s\S]*?\]\)/, 'each compaction pass publishes the effective runtime capacity to WGSL');
 assert.match(core, /fn boundarySplatAttributeFeatures[\s\S]*features\[0\]\s*=\s*sidecar\.x[\s\S]*features\[15\]\s*=\s*micro\.w/, 'WGSL builds the ordered 16-channel learned-attribute feature vector');
 assert.match(core, /fn applyBoundarySplatAttributeHook[\s\S]*analyticColorOpacity[\s\S]*analyticRadiusScale[\s\S]*BoundarySplatAttributeHookOutput/, 'WGSL exposes a no-op learned-attribute output hook before model integration');
-assert.match(core, /applyBoundarySplatAttributeHook[\s\S]*boundarySplats\[candidateIndex\]\.colorOpacity\s*=\s*attributeOutput\.colorOpacity[\s\S]*radius \* attributeOutput\.radiusScale\.x[\s\S]*radius \* attributeOutput\.radiusScale\.y/, 'splat color opacity and radius scale flow through the hook without changing candidate selection');
+assert.match(core, /applyBoundarySplatAttributeHook[\s\S]*baseMajorRadius\s*=\s*radius \* attributeOutput\.radiusScale\.x[\s\S]*baseMinorRadius\s*=\s*radius \* attributeOutput\.radiusScale\.y[\s\S]*boundarySplats\[candidateIndex\]\.colorOpacity\s*=\s*attributeOutput\.colorOpacity/, 'splat color opacity and base radius scale flow through the hook without changing candidate selection');
 assert.match(core, /corner\.x \* splat\.shape\.x \* boundarySplatCamera\.controls\.x[\s\S]*corner\.y \* splat\.shape\.y \* boundarySplatCamera\.controls\.x/, 'live radius control scales learned and analytic splat footprints in the raster vertex stage');
 assert.match(core, /let kernelSharpness = clamp\(boundarySplatCamera\.controls\.w,[\s\S]*let gaussian = exp\(-radius2 \* kernelSharpness\)/, 'live sharpness control changes the Gaussian kernel instead of applying a screen-space post-filter');
 assert.match(core, /let footprintRadius = clamp\(boundarySplatCamera\.controls\.x,[\s\S]*let energyRatio = \(kernelSharpness \/ 3\.4\) \/ max\(footprintRadius \* footprintRadius,[\s\S]*let energyCompensation = clamp\(sqrt\(energyRatio\),[\s\S]*in\.colorOpacity\.a \* gaussian \* energyCompensation/, 'radius and kernel ablations preserve approximate integrated splat opacity without overdriving dense alpha-over overlap');
+assert.match(core, /fn boundarySplatKernelIntegral\(kernelSharpness: f32\) -> f32/, 'compaction WGSL defines the Gaussian kernel integral used by coefficient normalization');
+assert.match(core, /fn boundarySplatEnergyCompensation\(footprintRadius: f32, kernelSharpness: f32\) -> f32/, 'compaction WGSL defines the same bounded footprint energy compensation used by raster');
+assert.match(core, /fn boundarySplatSupportAt\(cell: vec3<i32>\) -> f32/, 'compaction WGSL defines bounded support reads used to orient anisotropic splats');
+assert.match(core, /fn boundarySplatSupportGradient\(cell: vec3<u32>\) -> vec3<f32>/, 'compaction WGSL defines the sidecar support gradient used as the live splat normal');
+assert.ok(
+  core.indexOf('fn boundarySplatKernelIntegral') < core.indexOf('let kernelIntegral = boundarySplatKernelIntegral'),
+  'compaction WGSL declares kernel normalization helpers before their call sites',
+);
+assert.ok(
+  core.indexOf('fn boundarySplatSupportGradient') < core.indexOf('let worldNormal = boundarySplatSupportGradient'),
+  'compaction WGSL declares support-gradient helpers before their call sites',
+);
 assert.match(core, /splatCamera\.set\(\[normalizeBoundarySplatRadius\(controlsSnapshot\.boundarySplatRadius\),[\s\S]*normalizeBoundarySplatSharpness\(controlsSnapshot\.boundarySplatSharpness\)\]/, 'each frame publishes normalized radius and sharpness controls to WGSL');
 assert.match(core, /copyBufferToBuffer\(boundarySplatDrawBuffer,\s*0,\s*boundarySplatIndirectBuffer,\s*0,\s*16\)/, 'storage draw state is copied into a separate indirect-only buffer');
 assert.match(core, /boundarySplatComputeBindGroups/, 'splat compute uses separate bind groups from raster');
@@ -54,8 +73,8 @@ assert.match(core, /const nativeDevicePixelRatio\s*=\s*Math\.max\(1,\s*Number\(w
 assert.match(core, /const canvasDevicePixelRatio\s*=\s*boundarySplatRequested\(\)\s*\?\s*nativeDevicePixelRatio\s*:\s*1/, 'live splats rasterize at native device pixel ratio without changing the raymarch default');
 assert.match(core, /state\.canvasDevicePixelRatio\s*=\s*canvasDevicePixelRatio/, 'runtime state exposes the effective canvas pixel ratio used for splat rasterization');
 assert.match(core, /return \{\s*ok:\s*true,[\s\S]*cssWidth:\s*state\.cssWidth[\s\S]*nativeDevicePixelRatio:\s*state\.nativeDevicePixelRatio[\s\S]*canvasDevicePixelRatio:\s*state\.canvasDevicePixelRatio/, 'successful frame samples preserve CSS size and requested/effective device pixel ratios');
-assert.match(core, /sampleFrame[\s\S]*encodeBoundarySidecar\(encoder\)[\s\S]*encodeBoundarySplats\(encoder\)[\s\S]*encodeBoundarySplatDraw\(encoder,\s*frameTexture\.createView\(\),\s*boundarySplatReadbackPipeline\)/, 'frozen witness renders the requested splat route instead of substituting raymarch');
-assert.match(core, /renderFrozenScaleToCanvas[\s\S]*encodeBoundarySidecar\(encoder\)[\s\S]*encodeBoundarySplats\(encoder\)[\s\S]*encodeBoundarySplatDraw\(encoder,\s*currentTexture\.createView\(\)\)/, 'controlled canvas capture renders the requested splat route instead of substituting raymarch');
+assert.match(core, /sampleFrame[\s\S]*encodeBoundarySidecar\(encoder[\s\S]*encodeBoundarySplats\(encoder[\s\S]*encodeBoundarySplatDraw\(\s*encoder,\s*frameTexture\.createView\(\),\s*boundarySplatReadbackPipeline[\s\S]{0,180}\)/, 'frozen witness renders the requested splat route instead of substituting raymarch');
+assert.match(core, /renderFrozenScaleToCanvas[\s\S]*encodeBoundarySidecar\(encoder[\s\S]*encodeBoundarySplats\(encoder[\s\S]*encodeBoundarySplatDraw\(\s*encoder,\s*currentTexture\.createView\(\)[\s\S]{0,180}\)/, 'controlled canvas capture renders the requested splat route instead of substituting raymarch');
 const frozenRenderFunction = core.match(/async function renderFrozenScaleToCanvas\(options = \{\}\) \{[\s\S]*?\n  \}\n\n  return \{/)?.[0] || '';
 assert.match(frozenRenderFunction, /boundarySplatCompositionRequested/, 'frozen splat capture records the requested composition independently from splat mode');
 assert.match(frozenRenderFunction, /boundarySplatCompositionRequestedRaw[\s\S]*unsupported-boundary-splat-composition/, 'direct frozen-render callers fail loud on unsupported raw composition values instead of silently becoming splat-only');
