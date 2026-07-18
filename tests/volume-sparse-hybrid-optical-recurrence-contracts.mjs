@@ -8,14 +8,14 @@ const witness = readFileSync(join(root, 'volume-raymarch-filament-orbit-witness.
 
 assert.match(
   core,
-  /COARSE_RESIDUAL_SHARED_OPTICAL_RECURRENCE_IDENTITY\s*=\s*['"]coarse-residual-plus-full-resolution-splat-shared-optical-recurrence-v0['"]/,
-  'hybrid path lacks the distinct shared optical recurrence route',
+  /COARSE_RESIDUAL_SHARED_OPTICAL_RECURRENCE_IDENTITY\s*=\s*['"]coarse-residual-plus-full-resolution-splat-shared-optical-recurrence-v1['"]/,
+  'hybrid path lacks the repaired shared optical recurrence route',
 );
 assert.match(core, /COARSE_RESIDUAL_OPTICAL_INTERVALS\s*=\s*4/, 'shared hybrid route must retain four residual optical intervals');
 assert.match(
   core,
-  /let residualOpticalCoefficient\s*=\s*vec4<f32>\(nonRidgeEmissionCoefficient,\s*nonRidgeExtinctionCoefficient\)/,
-  'residual intervals must carry the exact positive non-ridge emission and extinction complement',
+  /coarseResidualOptical0\.rgb\s*=\s*coarseResidualOptical0\.rgb\s*\+\s*exp\(-coarseResidualOptical0\.a\)\s*\*\s*nonRidgeEmissionCoefficient[\s\S]*coarseResidualOptical0\.a\s*=\s*coarseResidualOptical0\.a\s*\+\s*nonRidgeExtinctionCoefficient/,
+  'residual intervals must preintegrate raymarch emission under their local transmittance',
 );
 assert.match(
   core,
@@ -24,11 +24,16 @@ assert.match(
 );
 assert.match(
   core,
-  /fn coarseResidualSharedOpticalFs[\s\S]*residualAccumulated\s*\/\s*4\.0[\s\S]*splatAccumulated[\s\S]*1\.0\s*-\s*exp\(-opticalDepth\)/,
-  'shared resolve must conserve each coarse interval while merging it into ordered splat optical bins',
+  /fn coarseResidualSharedOpticalFs[\s\S]*residualIntervalAlpha\s*=\s*1\.0\s*-\s*exp\(-residualAccumulated\.a\)[\s\S]*residualSubintervalEmission[\s\S]*residualSourceNumerator[\s\S]*splatAccumulated[\s\S]*1\.0\s*-\s*exp\(-opticalDepth\)/,
+  'shared resolve must reconstruct raymarch-equivalent interval emission before merging ordered splat optical bins',
 );
 assert.match(core, /far-to-near-shared-alpha-over-v0/, 'shared route receipt must name the effective ordered recurrence');
-assert.match(core, /uniform-four-way-subinterval-distribution-v0/, 'shared route must disclose its within-interval approximation');
+assert.match(core, /raymarch-equivalent-homogeneous-four-way-subinterval-distribution-v1/, 'shared route must disclose its raymarch-equivalent within-interval approximation');
+assert.doesNotMatch(
+  core,
+  /let accumulated\s*=\s*residualAccumulated\s*\/\s*4\.0\s*\+\s*splatAccumulated/,
+  'already-integrated raymarch emission must never be reinterpreted as a source-function numerator',
+);
 assert.match(core, /COARSE_RESIDUAL_SHARED_OPTICAL_DEPTH_INTERVAL_IDENTITY\s*=\s*['"]camera-ray-entry-to-exit-sixteen-equal-intervals-v0['"]/, 'splat and residual recurrence must share linear camera-ray depth semantics');
 assert.match(core, /boundarySplatSharedOpticalPipelines[\s\S]*SHARED_LINEAR_OPTICAL_DEPTH:\s*1/, 'shared route must not reuse projected-NDC bins against linear residual intervals');
 assert.match(core, /coefficientConservationEligible:\s*false/, 'unproven learned splat coefficients must not claim exact coefficient conservation');
