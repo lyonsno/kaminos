@@ -48,14 +48,14 @@ assert.doesNotMatch(splatDrawFunction, /mapAsync|await/, 'live splat drawing mus
 assert.match(splatDrawFunction, /const loadOp\s*=\s*options\.loadOp\s*===\s*'load'\s*\?\s*'load'\s*:\s*'clear'/, 'splat drawing explicitly normalizes clear versus composite attachment loading');
 assert.match(splatDrawFunction, /loadOp,/, 'splat drawing applies the normalized attachment load operation');
 
-assert.match(core, /encodeBoundarySidecar\(encoder\)[\s\S]*encodeBoundarySplats\(encoder\)/, 'splat compaction runs after the current frame sidecar bake');
+assert.match(core, /encodeBoundarySidecar\(encoder(?:,|\))[\s\S]*encodeBoundarySplats\(encoder(?:,|\))/, 'splat compaction runs after the current frame sidecar bake');
 assert.match(core, /boundarySplatRequested[\s\S]*encodeBoundarySplatDraw/, 'the opt-in route selects splat rasterization instead of silently falling back');
 assert.match(core, /const nativeDevicePixelRatio\s*=\s*Math\.max\(1,\s*Number\(win\?\.devicePixelRatio\)\s*\|\|\s*1\)/, 'renderer reads the physical display pixel ratio explicitly');
 assert.match(core, /const canvasDevicePixelRatio\s*=\s*boundarySplatRequested\(\)\s*\?\s*nativeDevicePixelRatio\s*:\s*1/, 'live splats rasterize at native device pixel ratio without changing the raymarch default');
 assert.match(core, /state\.canvasDevicePixelRatio\s*=\s*canvasDevicePixelRatio/, 'runtime state exposes the effective canvas pixel ratio used for splat rasterization');
 assert.match(core, /return \{\s*ok:\s*true,[\s\S]*cssWidth:\s*state\.cssWidth[\s\S]*nativeDevicePixelRatio:\s*state\.nativeDevicePixelRatio[\s\S]*canvasDevicePixelRatio:\s*state\.canvasDevicePixelRatio/, 'successful frame samples preserve CSS size and requested/effective device pixel ratios');
-assert.match(core, /sampleFrame[\s\S]*encodeBoundarySidecar\(encoder\)[\s\S]*encodeBoundarySplats\(encoder\)[\s\S]*encodeBoundarySplatDraw\(encoder,\s*frameTexture\.createView\(\),\s*boundarySplatReadbackPipeline\)/, 'frozen witness renders the requested splat route instead of substituting raymarch');
-assert.match(core, /renderFrozenScaleToCanvas[\s\S]*encodeBoundarySidecar\(encoder\)[\s\S]*encodeBoundarySplats\(encoder\)[\s\S]*encodeBoundarySplatDraw\(encoder,\s*currentTexture\.createView\(\)\)/, 'controlled canvas capture renders the requested splat route instead of substituting raymarch');
+assert.match(core, /sampleFrame[\s\S]*encodeBoundarySidecar\(encoder(?:,|\))[\s\S]*encodeBoundarySplats\(encoder(?:,|\))[\s\S]*encodeBoundarySplatDraw\(\s*encoder,\s*frameTexture\.createView\(\),\s*boundarySplatReadbackPipeline(?:,|\))/, 'frozen witness renders the requested splat route instead of substituting raymarch');
+assert.match(core, /renderFrozenScaleToCanvas[\s\S]*encodeBoundarySidecar\(encoder(?:,|\))[\s\S]*encodeBoundarySplats\(encoder(?:,|\))[\s\S]*encodeBoundarySplatDraw\(\s*encoder,\s*currentTexture\.createView\(\),\s*boundarySplatRenderPipeline(?:,|\))/, 'controlled canvas capture renders the requested splat route instead of substituting raymarch');
 const frozenRenderFunction = core.match(/async function renderFrozenScaleToCanvas\(options = \{\}\) \{[\s\S]*?\n  \}\n\n  return \{/)?.[0] || '';
 assert.match(frozenRenderFunction, /boundarySplatCompositionRequested/, 'frozen splat capture records the requested composition independently from splat mode');
 assert.match(frozenRenderFunction, /boundarySplatCompositionRequestedRaw[\s\S]*unsupported-boundary-splat-composition/, 'direct frozen-render callers fail loud on unsupported raw composition values instead of silently becoming splat-only');
