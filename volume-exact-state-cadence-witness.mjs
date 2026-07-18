@@ -19,6 +19,8 @@ const BOUNDARY_SPLAT_LEARNED_ATTRIBUTE_MODEL_IDENTITY = BOUNDARY_SPLAT_ATTRIBUTE
 const OWNED_SERVER_IDENTITY = 'exact-state-cadence-owned-http-server-v0';
 const OWNED_BROWSER_IDENTITY = 'exact-state-cadence-owned-headless-browser-v0';
 const DEFAULT_CHROME_PATH = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const FORCED_UNDERFLOW_RAF_TIMESTAMP_SLACK_MS = 100;
+const FORCED_UNDERFLOW_RESUME_ENVELOPE_MS = 30000;
 
 const args = parseArgs(process.argv.slice(2));
 const requestedRoute = String(args.get('--url') || '');
@@ -672,37 +674,98 @@ async function collectPageDiagnostic(state = null) {
 
 async function forcePresentationUnderflow(effectivePageUrl) {
   const before = compactState(await debugState());
-  await wsRequest('Page.setWebLifecycleState', { state: 'frozen' });
-  await delay(forceUnderflowMs);
-  await wsRequest('Page.setWebLifecycleState', { state: 'active' });
-  let last = null;
-  for (let attempt = 0; attempt < 120; attempt += 1) {
-    const state = await debugState();
-    validateEffectiveState(state, effectivePageUrl);
-    last = compactState(state);
-    if (last.presentationDisposition === 'held-lead-underflow') {
-      validateCadenceRow(last, 0);
+  const resumeTimeoutMs = forceUnderflowMs + FORCED_UNDERFLOW_RESUME_ENVELOPE_MS;
+  let pressure;
+  try {
+    pressure = await evaluate(`(async () => {
+      const prototype = window.__kaminosVolumePrototype;
+      if (!prototype?.debugState) return { error: 'volume-prototype-missing' };
+      const startedAt = performance.now();
+      const durationMs = ${forceUnderflowMs};
+      const resumedFrame = new Promise(resolveFrame => {
+        requestAnimationFrame(firstRafNow => {
+          requestAnimationFrame(resumedRafNow => resolveFrame({
+            firstRafNow,
+            resumedRafNow,
+            state: prototype.debugState(),
+          }));
+        });
+      });
+      while (performance.now() - startedAt < durationMs) {}
+      const finishedAt = performance.now();
+      const resumed = await resumedFrame;
       return {
-        row: last,
-        evidence: {
-          status: 'held-observed',
-          freezeDurationMs: forceUnderflowMs,
-          pollAttempt: attempt,
-          before,
-          held: last,
-        },
+        requestedDurationMs: durationMs,
+        observedDurationMs: finishedAt - startedAt,
+        startedAt,
+        finishedAt,
+        ...resumed,
       };
-    }
-    await delay(5);
+    })()`, true, resumeTimeoutMs, 'forced-underflow-resume-timeout');
+  } catch (error) {
+    const resumeTimedOut = error?.message?.includes('forced-underflow-resume-timeout');
+    lastTrustworthyEvidence.forcedUnderflow = {
+      status: resumeTimedOut
+        ? 'pressure-resume-timeout'
+        : 'pressure-evaluation-failed',
+      pressureMode: 'owned-page-main-thread-block-v0',
+      requestedDurationMs: forceUnderflowMs,
+      resumeTimeoutMs,
+      before,
+      error: error?.message || String(error),
+    };
+    if (resumeTimedOut) throw error;
+    throw new Error(
+      `forced-underflow-pressure-evaluation-failed:${error?.message || String(error)}`,
+      { cause: error },
+    );
   }
+  const evidence = {
+    status: 'pressure-applied',
+    pressureMode: 'owned-page-main-thread-block-v0',
+    requestedDurationMs: forceUnderflowMs,
+    observedDurationMs: Number(pressure?.observedDurationMs),
+    firstResumedRafNow: Number(pressure?.firstRafNow),
+    resumedRafNow: Number(pressure?.resumedRafNow),
+    resumedRafElapsedMs: Number(pressure?.resumedRafNow) - Number(pressure?.firstRafNow),
+    requiredResumedRafElapsedMs: Math.max(0, forceUnderflowMs - FORCED_UNDERFLOW_RAF_TIMESTAMP_SLACK_MS),
+    resumeTimeoutMs,
+    before,
+  };
+  if (
+    pressure?.error
+    || Number(pressure?.requestedDurationMs) !== forceUnderflowMs
+    || !Number.isFinite(evidence.observedDurationMs)
+    || evidence.observedDurationMs < forceUnderflowMs
+  ) {
+    evidence.status = 'pressure-duration-mismatch';
+    evidence.error = pressure?.error || null;
+    lastTrustworthyEvidence.forcedUnderflow = evidence;
+    throw new Error(`forced-underflow-pressure-duration-mismatch:${JSON.stringify(evidence)}`);
+  }
+  if (
+    !Number.isFinite(evidence.firstResumedRafNow)
+    || !Number.isFinite(evidence.resumedRafNow)
+    || evidence.resumedRafNow <= evidence.firstResumedRafNow
+    || evidence.resumedRafElapsedMs < evidence.requiredResumedRafElapsedMs
+  ) {
+    evidence.status = 'raf-timestamp-mismatch';
+    lastTrustworthyEvidence.forcedUnderflow = evidence;
+    throw new Error(`forced-underflow-raf-timestamp-mismatch:${JSON.stringify(evidence)}`);
+  }
+  validateEffectiveState(pressure.state, effectivePageUrl);
+  const resumed = compactState(pressure.state);
+  evidence.resumed = resumed;
+  if (resumed.presentationDisposition === 'held-lead-underflow') {
+    validateCadenceRow(resumed, 0);
+    evidence.status = 'held-observed';
+    evidence.held = resumed;
+    return { row: resumed, evidence };
+  }
+  evidence.status = 'hold-not-observed';
   return {
     row: null,
-    evidence: {
-      status: 'hold-not-observed',
-      freezeDurationMs: forceUnderflowMs,
-      before,
-      last,
-    },
+    evidence,
   };
 }
 
@@ -964,8 +1027,25 @@ function wsRequest(method, params = {}) {
   });
 }
 
-async function evaluate(expression, awaitPromise = false) {
-  const result = await wsRequest('Runtime.evaluate', { expression, awaitPromise, returnByValue: true });
+async function evaluate(expression, awaitPromise = false, timeoutMs = null, timeoutClass = 'runtime-evaluate-timeout') {
+  const request = wsRequest('Runtime.evaluate', { expression, awaitPromise, returnByValue: true });
+  let timeoutId = null;
+  let result;
+  try {
+    result = timeoutMs == null
+      ? await request
+      : await Promise.race([
+        request,
+        new Promise((_, rejectTimeout) => {
+          timeoutId = setTimeout(
+            () => rejectTimeout(new Error(`${timeoutClass}:${timeoutMs}ms`)),
+            timeoutMs,
+          );
+        }),
+      ]);
+  } finally {
+    if (timeoutId != null) clearTimeout(timeoutId);
+  }
   if (result.exceptionDetails) throw new Error(`Runtime.evaluate failed: ${result.exceptionDetails.text || 'unknown exception'}`);
   return result.result.value;
 }
@@ -1023,6 +1103,10 @@ function classifyFailure(error, phase) {
     'producer-remains-raf-locked',
     'presentation-source-regressed',
     'required-held-presentation-not-observed',
+    'forced-underflow-pressure-duration-mismatch',
+    'forced-underflow-raf-timestamp-mismatch',
+    'forced-underflow-resume-timeout',
+    'forced-underflow-pressure-evaluation-failed',
     'blank-or-partial-cadence-canvas',
     'gpu-texture-readback-unavailable',
     'gpu-texture-readback-authority-mismatch',

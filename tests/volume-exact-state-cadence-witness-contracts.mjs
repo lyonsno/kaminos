@@ -34,7 +34,19 @@ assert.match(source, /presentationDisposition/, 'witness records whether a visib
 assert.match(source, /presentationHoldReceipt/, 'witness preserves the held source and attempted underflow instead of hiding contention');
 assert.match(source, /--require-held-presentation/, 'witness can make the repaired underflow path a required acceptance predicate');
 assert.match(source, /--force-underflow-ms/, 'witness can autonomously create lifecycle pressure instead of depending on operator timing');
-assert.match(source, /Page\.setWebLifecycleState[\s\S]*frozen[\s\S]*active/, 'forced underflow pressure freezes and resumes its owned page');
+assert.doesNotMatch(source, /Page\.setWebLifecycleState/, 'forced underflow pressure cannot use a headless lifecycle transition that may never resume RAF');
+assert.match(
+  source,
+  /performance\.now\(\)[\s\S]*forceUnderflowMs[\s\S]*while \(performance\.now\(\) - startedAt < durationMs\)/,
+  'forced underflow pressure blocks the owned page main thread for the caller-requested duration before real RAF resumes',
+);
+assert.match(
+  source,
+  /requestAnimationFrame\(firstRafNow[\s\S]*requestAnimationFrame\(resumedRafNow/,
+  'forced underflow observes the second resumed RAF because Chrome may reuse the pre-block timestamp on the first resumed RAF',
+);
+assert.match(source, /firstResumedRafNow[\s\S]*resumedRafNow/, 'forced pressure evidence records both resumed RAF timestamps');
+assert.match(source, /requestedDurationMs[\s\S]*observedDurationMs/, 'forced pressure evidence records requested and observed block duration');
 assert.match(source, /toSourceStep\s*-\s*fromSourceStep/, 'witness checks adjacent completed states');
 assert.match(source, /distinctAlpha/, 'witness requires interpolation movement rather than held copies');
 assert.match(source, /presentation-source-regressed/, 'witness rejects a visible presentation source clock that moves backward');
@@ -68,6 +80,109 @@ assert.match(
 );
 assert.match(source, /writeReport\([\s\S]*catch/, 'witness preserves a report across primary-output failure');
 assert.match(source, /failurePhase/, 'failure report names the phase that failed');
+
+const forcePresentationUnderflowSource = source.slice(
+  source.indexOf('async function forcePresentationUnderflow'),
+  source.indexOf('async function waitForActiveCadence'),
+);
+const forcePresentationUnderflow = new Function(
+  'forceUnderflowMs',
+  'debugState',
+  'compactState',
+  'evaluate',
+  'validateEffectiveState',
+  'validateCadenceRow',
+  'lastTrustworthyEvidence',
+  'FORCED_UNDERFLOW_RAF_TIMESTAMP_SLACK_MS',
+  'FORCED_UNDERFLOW_RESUME_ENVELOPE_MS',
+  `${forcePresentationUnderflowSource}; return forcePresentationUnderflow;`,
+)(
+  5000,
+  async () => ({ presentationDisposition: 'interpolated' }),
+  state => state,
+  async () => ({
+    requestedDurationMs: 5000,
+    observedDurationMs: 5000,
+    firstRafNow: 4000,
+    resumedRafNow: 4001,
+    state: { presentationDisposition: 'held-lead-underflow' },
+  }),
+  () => {},
+  () => {},
+  {},
+  100,
+  30000,
+);
+await assert.rejects(
+  forcePresentationUnderflow('http://127.0.0.1:18971/'),
+  /forced-underflow-raf-timestamp-mismatch/,
+  'a held row cannot close the witness when the second RAF did not expose the requested elapsed wall time',
+);
+
+const evaluationFailureEvidence = {};
+const forceEvaluationFailure = new Function(
+  'forceUnderflowMs',
+  'debugState',
+  'compactState',
+  'evaluate',
+  'validateEffectiveState',
+  'validateCadenceRow',
+  'lastTrustworthyEvidence',
+  'FORCED_UNDERFLOW_RAF_TIMESTAMP_SLACK_MS',
+  'FORCED_UNDERFLOW_RESUME_ENVELOPE_MS',
+  `${forcePresentationUnderflowSource}; return forcePresentationUnderflow;`,
+)(
+  5000,
+  async () => ({ presentationDisposition: 'interpolated' }),
+  state => state,
+  async () => { throw new Error('page-evaluation-boom'); },
+  () => {},
+  () => {},
+  evaluationFailureEvidence,
+  100,
+  30000,
+);
+await assert.rejects(
+  forceEvaluationFailure('http://127.0.0.1:18971/'),
+  /forced-underflow-pressure-evaluation-failed:page-evaluation-boom/,
+  'a non-timeout pressure evaluation failure retains an exact terminal failure class',
+);
+assert.equal(evaluationFailureEvidence.forcedUnderflow?.status, 'pressure-evaluation-failed');
+
+const evaluateSource = source.slice(
+  source.indexOf('async function evaluate'),
+  source.indexOf('async function debugState'),
+);
+const hangingEvaluate = new Function(
+  'wsRequest',
+  `${evaluateSource}; return evaluate;`,
+)(() => new Promise(() => {}));
+await assert.rejects(
+  Promise.race([
+    hangingEvaluate('1', true, 5, 'forced-underflow-resume-timeout'),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('test-safety-timeout')), 100)),
+  ]),
+  /forced-underflow-resume-timeout/,
+  'a CDP evaluation that never resolves must fail before the test safety deadline',
+);
+
+const classifyFailureSource = source.slice(
+  source.indexOf('function classifyFailure'),
+  source.indexOf('function encodeRgbaPng'),
+);
+const classifyFailure = new Function(`${classifyFailureSource}; return classifyFailure;`)();
+for (const failureClass of [
+  'forced-underflow-pressure-duration-mismatch',
+  'forced-underflow-raf-timestamp-mismatch',
+  'forced-underflow-resume-timeout',
+  'forced-underflow-pressure-evaluation-failed',
+]) {
+  assert.equal(
+    classifyFailure(new Error(failureClass), 'cadence-sampling'),
+    failureClass,
+    `${failureClass} remains exact in the terminal report`,
+  );
+}
 
 const cleanupCaptureSource = source.match(/async function captureCleanupOutcome\([\s\S]*?\n\}/)?.[0] || '';
 assert.ok(cleanupCaptureSource, 'witness owns a cleanup failure capture helper');
