@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 
 const core = await readFile(new URL('../volume-core.js', import.meta.url), 'utf8');
 const witness = await readFile(new URL('../volume-layer-coefficient-live-union-witness.mjs', import.meta.url), 'utf8');
+const overlay = await readFile(new URL('../volume-layer-coefficient-live-union-overlay.mjs', import.meta.url), 'utf8');
 
 assert.match(
   core,
@@ -113,6 +114,16 @@ assert.match(
   witness,
   /unionReceipt[\s\S]*selectorActive[\s\S]*stableNativeCellIdSha256/,
   'Greenroom witness must stop comparing selected native ids to the full-source hash when selector reduction is active',
+);
+assert.match(
+  overlay,
+  /PROJECTED_WORK_SELECTOR_IDENTITY\s*=\s*'boundary-splat-live-union-projected-footprint-hash-thinning-v0'/,
+  'coefficient overlay population audit must preserve the exact projected-work selector identity',
+);
+assert.match(
+  overlay,
+  /selectorSubsetCoveredByFullOverlay[\s\S]*lookupMissCount === 0[\s\S]*lookupExtraCount > 0/,
+  'coefficient overlay population audit must accept a selector-thinned subset only when the full overlay covers every selected candidate and selector identity is explicit',
 );
 
 console.log('boundary splat projected-work selector contracts passed');

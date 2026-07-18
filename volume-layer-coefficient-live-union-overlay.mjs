@@ -5,6 +5,7 @@ const SELECTOR_AUTHORITY = 'explicit-source-field-operator-v0';
 const SELECTOR_RECIPE_SHA256 = '541836e6c45ef014ab0b8be23ebd8dce9898900a7639a0c4e21f38336daef8f9';
 const COMPOSITION_IDENTITY = 'separate-ridge-nonridge-shared-total-extinction-v0';
 const LOOKUP_ENCODING = 'row-plus-one-zero-missing-v0';
+const PROJECTED_WORK_SELECTOR_IDENTITY = 'boundary-splat-live-union-projected-footprint-hash-thinning-v0';
 const COEFFICIENT_ORDER = [
   'ridge.emission.r', 'ridge.emission.g', 'ridge.emission.b', 'ridge.extinction',
   'nonRidge.emission.r', 'nonRidge.emission.g', 'nonRidge.emission.b', 'nonRidge.extinction',
@@ -248,22 +249,45 @@ export function auditLayerCoefficientLiveUnionPopulation({ overlay, audit, exact
     else matchedLookupCount += 1;
   }
   const lookupExtraCount = overlay.receipt.lookupPopulation - matchedLookupCount;
+  const requestedProjectedWorkTargetPixels = Number(audit.requestedProjectedWorkTargetPixels ?? 0);
+  const effectiveProjectedWorkTargetPixels = Number(audit.effectiveProjectedWorkTargetPixels ?? 0);
+  const projectedWorkRejectedCount = Number(audit.projectedWorkRejectedCount ?? 0);
+  const fullUnionCount = Number(audit.unionReceipt?.counts?.union ?? audit.initialDraw?.unionCount ?? 0);
+  const selectorSubsetCoveredByFullOverlay = exactUnionModeEffective
+    && audit.selectorPolicyIdentity === PROJECTED_WORK_SELECTOR_IDENTITY
+    && requestedProjectedWorkTargetPixels > 0
+    && effectiveProjectedWorkTargetPixels === requestedProjectedWorkTargetPixels
+    && projectedWorkRejectedCount > 0
+    && audit.overflowCount === 0
+    && audit.candidateCount === audit.instanceCount
+    && audit.instanceCount < overlay.receipt.admittedRowCount
+    && fullUnionCount === overlay.receipt.admittedRowCount
+    && lookupMissCount === 0
+    && lookupExtraCount > 0;
   const failures = [];
   if (!exactUnionModeEffective) failures.push('exact-live-union-mode-not-effective');
-  if (stableNativeCellIdSha256 !== admissionIndexSha256) {
+  if (!selectorSubsetCoveredByFullOverlay && stableNativeCellIdSha256 !== admissionIndexSha256) {
     failures.push(`stable-native-cell-sha256-mismatch:${stableNativeCellIdSha256}:${admissionIndexSha256}`);
   }
   if (audit.overflowCount !== 0 || audit.candidateCount !== audit.instanceCount) {
     failures.push(`partial-live-union-population:${audit.candidateCount}:${audit.instanceCount}:${audit.overflowCount}`);
   }
-  if (audit.instanceCount !== overlay.receipt.admittedRowCount) {
+  if (!selectorSubsetCoveredByFullOverlay && audit.instanceCount !== overlay.receipt.admittedRowCount) {
     failures.push(`admitted-row-count-mismatch:${audit.instanceCount}:${overlay.receipt.admittedRowCount}`);
   }
   if (lookupMissCount !== 0) failures.push(`lookup-misses:${lookupMissCount}`);
-  if (lookupExtraCount !== 0) failures.push(`lookup-extras:${lookupExtraCount}`);
+  if (!selectorSubsetCoveredByFullOverlay && lookupExtraCount !== 0) failures.push(`lookup-extras:${lookupExtraCount}`);
   return {
     identity: 'layer-coefficient-live-union-population-audit-v0',
     status: failures.length === 0 ? 'effective' : 'failed',
+    populationMode: selectorSubsetCoveredByFullOverlay ? 'selector-thinned-subset-covered-by-full-overlay' : 'source-preserving-full-overlay',
+    selectorSubsetCoveredByFullOverlay,
+    selectorPolicyIdentity: audit.selectorPolicyIdentity ?? null,
+    requestedProjectedWorkTargetPixels,
+    effectiveProjectedWorkTargetPixels,
+    projectedWorkRejectedCount,
+    selectedCandidateCount: audit.selectedCandidateCount ?? audit.instanceCount,
+    fullUnionCount,
     stableNativeCellIdSha256,
     admissionIndexSha256,
     candidateCount: audit.candidateCount,
