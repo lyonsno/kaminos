@@ -363,7 +363,7 @@ async function acquire(manifest, source, options) {
 
     phase = 'source-verification';
     bundle = await prepareWebGpuModelResourceBundle(manifest, acquired.buffer, {
-      ownership: cache ? 'copy' : (options.ownership || 'transfer'),
+      ownership: cache ? 'copy' : (options.ownership || 'copy'),
       signal: options.signal,
       subtle: options.subtle,
     });

@@ -133,6 +133,12 @@ assert.equal(directBlob.report.requestedSource.kind, 'blob');
 assert.equal(directBlob.report.effectiveSource.byteLength, bytes.byteLength);
 directBlob.bundle.release();
 
+const defaultCopied = Uint8Array.from(bytes).buffer;
+const defaultBuffer = await acquireWebGpuModelResourceBundle(manifest, defaultCopied);
+assert.equal(defaultCopied.byteLength, bytes.byteLength, 'default acquisition must preserve caller ArrayBuffer custody');
+assert.equal(defaultBuffer.bundle.ownership, 'copy');
+defaultBuffer.bundle.release();
+
 const transferred = Uint8Array.from(bytes).buffer;
 const directBuffer = await acquireWebGpuModelResourceBundle(manifest, transferred, {
   ownership: 'transfer',
