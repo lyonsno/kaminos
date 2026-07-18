@@ -1,0 +1,105 @@
+{
+  "schema": "kaminos.lirm-crawler-basin-robustness-manifest.v0",
+  "selectionFrozenAt": "2026-07-18T23:23:50Z",
+  "fitOutcomesObserved": false,
+  "intent": "Test whether the reviewed semantic crawler SDF program recovers materially different donors inside one low-crawler morphology basin.",
+  "requestedRoute": "kaminos/reference-fitted-armature/software-glb-raster-plus-sdf-fit-v0",
+  "fixedRoute": {
+    "parameterVocabulary": "kaminos.reference-fitted-armature.13-semantic-parameters.v0",
+    "initialization": "reviewed-default-initialization",
+    "cameraIds": [
+      "az000",
+      "az045",
+      "az090",
+      "az135",
+      "az180",
+      "az225",
+      "az270",
+      "az315"
+    ],
+    "fitViewIds": [
+      "az000",
+      "az090",
+      "az180",
+      "az270"
+    ],
+    "heldOutViewIds": [
+      "az045",
+      "az135",
+      "az225",
+      "az315"
+    ],
+    "width": 40,
+    "height": 32,
+    "passes": 4,
+    "search": "deterministic-bounded-coordinate-descent"
+  },
+  "acceptance": {
+    "donorRecovery": {
+      "minimumHeldOutSilhouetteImprovements": 3,
+      "requireMeanHeldOutDepthMaeImprovement": true
+    },
+    "basin": {
+      "donorCount": 4,
+      "minimumRecoveredDonors": 3,
+      "requireSingleComparisonWitness": true,
+      "allowDonorReplacement": false
+    }
+  },
+  "sourceWitness": {
+    "path": "artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/trellis/gestalt-trellis-witness-contact-sheet.png",
+    "bytes": 3289804,
+    "sha256": "sha256:6029fd9fdb902421de863cabd0c358722a83d5d82b93014d0e18569ed63469c0",
+    "mappingPath": "artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/trellis/witness-contact-sheet-inputs.json"
+  },
+  "donors": [
+    {
+      "id": "basin-03-preserve",
+      "path": "artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/trellis/glbs/lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046.glb",
+      "bytes": 9723692,
+      "sha256": "sha256:ce5b64444907e073bbcf38e3e042899e2f0d502c8cab0d60b6b1007553a245a8",
+      "witnessTitle": "BASIN 03 / PRESERVE",
+      "visualSelectionRationale": "Longest admitted crawler with repeated dorsal segmentation, a projected anterior tube, a low belly, and a relatively narrow contact footprint; this is the strongest axial-extent and segmentation challenge in the set."
+    },
+    {
+      "id": "basin-10-lineage",
+      "path": "artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/trellis/glbs/lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046.glb",
+      "bytes": 9814284,
+      "sha256": "sha256:1b5efd2cafc26d5593705abad0a9ddec293ddb7e4405e7cd4a85029aa617030d",
+      "witnessTitle": "BASIN 10 / LINEAGE",
+      "visualSelectionRationale": "Compact rounded crawler with concentrated anterior mass, a domed dorsal ridge, and a nearly circular posterior lobe; this challenges length reduction and front-to-back mass concentration."
+    },
+    {
+      "id": "basin-15-lineage",
+      "path": "artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/trellis/glbs/lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046.glb",
+      "bytes": 8929476,
+      "sha256": "sha256:8c9acec75125eb1e801f9440db79c257efd03d89f49da25133315b00d2835e93",
+      "witnessTitle": "BASIN 15 / LINEAGE",
+      "visualSelectionRationale": "Taller-backed crawler with a narrow front view, strong shell pressure, and a distinct tapered posterior appendage; this supplies the vertical-mass and silhouette-taper challenge."
+    },
+    {
+      "id": "basin-22-lineage-control",
+      "path": "artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/trellis/glbs/lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046.glb",
+      "bytes": 9586284,
+      "sha256": "sha256:5b481bfddb75dffc27c2c518f3cfcc5ea0407a4545c3fcff7bb61c3e27a55088",
+      "witnessTitle": "BASIN 22 / LINEAGE",
+      "visualSelectionRationale": "Broad low crawler with paired posterior masses and a shallow dorsal arc; retained as the already-proven control and the widest lateral/contact-footprint member of the set."
+    }
+  ],
+  "missClassifications": [
+    "parameter-range-failure",
+    "topology-family-mismatch",
+    "donor-incoherence",
+    "camera-or-normalization-failure"
+  ],
+  "nonGoals": [
+    "automatic-topology-family-selection",
+    "arbitrary-topology-composition",
+    "learned-initialization",
+    "image-only-recovery",
+    "production-surfacing",
+    "rigging",
+    "motion",
+    "generator-firing"
+  ]
+}
