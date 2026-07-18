@@ -334,14 +334,54 @@ function normalizeMechanismAnchor(report) {
 }
 
 function normalizeMechanismProjectedWork(report, analytical, render, counts) {
+  const populationAudit = analytical.populationAudit || {};
+  const projectionMetrics = populationAudit.projectionMetrics || render.projectionMetrics || {};
+  const descriptorFrameMetrics = populationAudit.descriptorFrameMetrics || render.descriptorFrameMetrics || {};
+  const gpuProfile = render.boundarySplatGpuProfile || populationAudit.boundarySplatGpuProfile || {};
+  const stages = gpuProfile.stages || {};
+  const projectedFootprintPixels = finiteOptionalNumber(
+    projectionMetrics.projectedFootprintPixels ?? projectionMetrics.totalSplatPixelWork,
+  );
+  const positiveClipWCount = finiteOptionalNumber(projectionMetrics.positiveClipWCount);
+  const centerInFrustumCount = finiteOptionalNumber(projectionMetrics.centerInFrustumCount);
+  const projectionAuthority = projectionMetrics.authority || 'not-exposed-for-analytical-exact-condition';
+  const depthMean = finiteOptionalNumber(projectionMetrics.meanDepthComplexity);
+  const depthBins = normalizeOptionalMechanismDepthBins(projectionMetrics.depthBinOccupancy || projectionMetrics.depthBins);
+
   return {
     projectedSurvivors: {
-      value: counts.union,
-      authority: 'populationAudit.candidateCount equals uncapped union count',
+      value: finiteOptionalNumber(projectionMetrics.projectedSurvivors)
+        ?? positiveClipWCount
+        ?? counts.union,
+      authority: projectionMetrics.projectedSurvivors != null || positiveClipWCount != null
+        ? projectionAuthority
+        : 'populationAudit.candidateCount equals uncapped union count',
     },
-    footprintOrTileIntersections: unavailable('footprint or tile intersections', 'not-exposed-for-analytical-exact-condition'),
-    footprintIntersections: unavailable('footprintIntersections', 'not-exposed-for-analytical-exact-condition'),
-    fragmentWork: unavailable('fragment work', 'not-exposed-for-analytical-exact-condition'),
+    footprintOrTileIntersections: projectedFootprintPixels != null || positiveClipWCount != null || centerInFrustumCount != null
+      ? {
+        status: 'captured',
+        value: projectedFootprintPixels,
+        positiveClipWCount,
+        centerInFrustumCount,
+        authority: projectionAuthority,
+        claimBoundary: 'Projected footprint work from the analytical compacted candidate readback; not a production selector, cap, or count-derived economics claim.',
+      }
+      : unavailable('footprint or tile intersections', projectionAuthority),
+    footprintIntersections: projectedFootprintPixels != null
+      ? {
+        status: 'captured',
+        value: projectedFootprintPixels,
+        authority: projectionAuthority,
+      }
+      : unavailable('footprintIntersections', projectionAuthority),
+    fragmentWork: projectedFootprintPixels != null
+      ? {
+        status: 'captured',
+        value: finiteOptionalNumber(projectionMetrics.totalSplatPixelWork) ?? projectedFootprintPixels,
+        unit: 'projected-pixel-fragments',
+        authority: projectionAuthority,
+      }
+      : unavailable('fragment work', projectionAuthority),
     overlap: {
       ridgeOnly: counts.ridgeOnly,
       nonRidgeOnly: counts.nonRidgeOnly,
@@ -350,13 +390,36 @@ function normalizeMechanismProjectedWork(report, analytical, render, counts) {
       overlapRatio: counts.overlap / counts.union,
       authority: 'boundarySplatUnionReceipt.counts',
     },
-    depthComplexity: unavailable('depth complexity', 'not-exposed-for-analytical-exact-condition'),
-    depthBinOccupancy: unavailable('depth-bin occupancy', 'not-exposed-for-analytical-exact-condition'),
+    depthComplexity: depthMean != null || descriptorFrameMetrics.finiteFrameCount != null
+      ? {
+        status: 'captured',
+        mean: depthMean,
+        finiteFrameCount: descriptorFrameMetrics.finiteFrameCount ?? null,
+        tangentLengthMin: descriptorFrameMetrics.tangentLengthMin ?? null,
+        tangentLengthMax: descriptorFrameMetrics.tangentLengthMax ?? null,
+        tangentNormalCrossLengthMin: descriptorFrameMetrics.tangentNormalCrossLengthMin ?? null,
+        tangentNormalCrossLengthMax: descriptorFrameMetrics.tangentNormalCrossLengthMax ?? null,
+        authority: projectionMetrics.authority || descriptorFrameMetrics.authority || projectionAuthority,
+      }
+      : unavailable('depth complexity', projectionAuthority),
+    depthBinOccupancy: depthBins ?? unavailable('depth-bin occupancy', projectionAuthority),
     sortBinWork: unavailable('sort/bin work', 'not-exposed-by-tiger-coefficient-witness'),
     sortCost: unavailable('sort cost', 'not-exposed-by-tiger-coefficient-witness'),
-    accumulationCost: unavailable('accumulation cost', 'not-exposed-by-tiger-coefficient-witness'),
-    buildCost: unavailable('build/update cost', 'not-exposed-by-tiger-coefficient-witness'),
-    renderCost: unavailable('render cost', 'not-isolated-by-tiger-coefficient-witness'),
+    accumulationCost: normalizeOptionalMechanismCost(
+      stages.splatRaster || projectionMetrics.accumulationCost,
+      'accumulation cost',
+      'not-exposed-by-tiger-coefficient-witness',
+    ),
+    buildCost: normalizeOptionalMechanismCost(
+      stages.compaction || projectionMetrics.buildCost,
+      'build/update cost',
+      'not-exposed-by-tiger-coefficient-witness',
+    ),
+    renderCost: normalizeOptionalMechanismCost(
+      stages.total || stages.splatRaster || projectionMetrics.renderCost,
+      'render cost',
+      'not-isolated-by-tiger-coefficient-witness',
+    ),
     reuseCadence: {
       sourceRowsPreserved: true,
       sourceReusedAcrossFrames: true,
@@ -385,6 +448,7 @@ function normalizeMechanismProjectedWork(report, analytical, render, counts) {
 }
 
 function normalizeMechanismDistributions(report, analytical) {
+  const projectionMetrics = analytical.populationAudit?.projectionMetrics || analytical.render?.projectionMetrics || {};
   const opticalContributionDistribution = {
     status: 'captured',
     bins: (report.conditions || [])
@@ -399,16 +463,63 @@ function normalizeMechanismDistributions(report, analytical) {
       })),
     authority: 'condition.metrics summary distribution; no per-row optical attribution socket exposed',
   };
-  const projectedFootprintDistribution = unavailable(
-    'projected footprint distribution',
-    analytical.render?.flowKernelDescriptorCaptureRequested === false
-      ? 'flowKernelDescriptorCaptureEffective false'
-      : 'not-exposed-by-tiger-coefficient-witness',
-  );
+  const projectedFootprintDistribution = projectionMetrics.projectedFootprintPixels != null
+    ? {
+      status: 'captured',
+      projectedFootprintPixels: projectionMetrics.projectedFootprintPixels,
+      meanDepthComplexity: projectionMetrics.meanDepthComplexity ?? null,
+      positiveClipWCount: projectionMetrics.positiveClipWCount ?? null,
+      centerInFrustumCount: projectionMetrics.centerInFrustumCount ?? null,
+      viewport: projectionMetrics.viewport || null,
+      depthBinOccupancy: projectionMetrics.depthBinOccupancy || null,
+      authority: projectionMetrics.authority || 'mechanism-projected-footprint-distribution',
+    }
+    : unavailable(
+      'projected footprint distribution',
+      analytical.render?.flowKernelDescriptorCaptureRequested === false
+        ? 'flowKernelDescriptorCaptureEffective false'
+        : 'not-exposed-by-tiger-coefficient-witness',
+    );
   return {
     opticalContributionDistribution,
     projectedFootprintDistribution,
   };
+}
+
+function normalizeOptionalMechanismCost(value, missingSocket, missingAuthority) {
+  if (!value || typeof value !== 'object') return unavailable(missingSocket, missingAuthority);
+  const ms = finiteOptionalNumber(value.ms ?? value.medianMs ?? value.totalMs);
+  if (ms == null) return unavailable(missingSocket, missingAuthority);
+  return {
+    status: 'captured',
+    ms,
+    authority: value.authority || value.status || 'boundarySplatGpuProfile',
+    disposition: value.disposition || null,
+  };
+}
+
+function normalizeOptionalMechanismDepthBins(value) {
+  if (!value || typeof value !== 'object') return null;
+  const binCount = finiteOptionalNumber(value.binCount ?? value.depthBinCount);
+  const occupiedBins = finiteOptionalNumber(value.occupiedBins);
+  const meanEntriesPerOccupiedBin = finiteOptionalNumber(value.meanEntriesPerOccupiedBin);
+  const maxEntriesPerOccupiedBin = finiteOptionalNumber(value.maxEntriesPerOccupiedBin);
+  if (binCount == null || occupiedBins == null || meanEntriesPerOccupiedBin == null || maxEntriesPerOccupiedBin == null) {
+    return null;
+  }
+  return {
+    binCount,
+    occupiedBins,
+    meanEntriesPerOccupiedBin,
+    p95EntriesPerOccupiedBin: value.p95EntriesPerOccupiedBin ?? null,
+    maxEntriesPerOccupiedBin,
+    authority: value.authority || 'depth-bin-occupancy',
+  };
+}
+
+function finiteOptionalNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }
 
 function opticalSummary(condition = {}) {

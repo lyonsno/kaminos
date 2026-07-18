@@ -90,6 +90,81 @@ class BoundarySplatProjectedWorkWitnessContracts < Minitest::Test
     end
   end
 
+  def test_mechanism_anchor_preserves_live_projected_work_sockets_when_source_exposes_them
+    Dir.mktmpdir('kaminos-mechanism-projected-work-contract') do |dir|
+      input_path = File.join(dir, 'mechanism-report.json')
+      output_path = File.join(dir, 'report.json')
+      source = mechanism_report_fixture
+      source[:conditions][0][:populationAudit].merge!(
+        descriptorFrameMetrics: {
+          authority: 'gpu-flow-kernel-descriptor-plus-compacted-candidate-readback-v0',
+          finiteFrameCount: 1_899_742,
+          tangentLengthMin: 0.0125,
+          tangentLengthMax: 0.224,
+          tangentNormalCrossLengthMin: 0.011,
+          tangentNormalCrossLengthMax: 0.219
+        },
+        projectionMetrics: {
+          authority: 'cpu-projected-ellipse-footprint-from-gpu-compacted-candidates-v0',
+          positiveClipWCount: 1_812_345,
+          centerInFrustumCount: 1_204_321,
+          candidateCount: 1_899_742,
+          projectedFootprintPixels: 36_543_210.5,
+          totalSplatPixelWork: 36_543_210.5,
+          meanDepthComplexity: 42.29538252314815,
+          depthBinOccupancy: {
+            authority: 'clip-z-bin-occupancy-from-projected-candidate-centers-v0',
+            binCount: 64,
+            occupiedBins: 41,
+            meanEntriesPerOccupiedBin: 44_201.09756097561,
+            maxEntriesPerOccupiedBin: 88_123
+          }
+        }
+      )
+      source[:conditions][0][:render][:boundarySplatGpuProfile] = {
+        identity: 'boundary-splat-gpu-profile-v0',
+        timestampStatus: 'available',
+        timeUnit: 'ms',
+        candidateCopyBytes: 0,
+        stages: {
+          compaction: { status: 'sampled', ms: 1.25 },
+          candidateCopy: { status: 'sampled', ms: 0, disposition: 'removed-full-capacity-copy', candidateCopyBytes: 0 },
+          indirectSetup: { status: 'sampled', ms: 0.07 },
+          splatRaster: { status: 'sampled', ms: 5.75 },
+          total: { status: 'sampled', ms: 8.5 }
+        }
+      }
+      File.write(input_path, JSON.pretty_generate(source))
+
+      stdout, stderr, status = Open3.capture3(
+        'node',
+        witness_path,
+        '--anchor-class', 'mechanism-anchor',
+        '--mechanism-report', input_path,
+        '--out-dir', dir,
+        '--report', output_path,
+      )
+
+      assert(status.success?, "mechanism projected-work fixture should capture\nstdout=#{stdout}\nstderr=#{stderr}")
+      report = JSON.parse(File.read(output_path))
+      projected = report.dig('mechanismAnchor', 'projectedWork')
+      assert_equal('captured', projected.dig('footprintOrTileIntersections', 'status'))
+      assert_equal(1_812_345, projected.dig('footprintOrTileIntersections', 'positiveClipWCount'))
+      assert_equal(1_204_321, projected.dig('footprintOrTileIntersections', 'centerInFrustumCount'))
+      assert_equal('captured', projected.dig('footprintIntersections', 'status'))
+      assert_equal(36_543_210.5, projected.dig('footprintIntersections', 'value'))
+      assert_equal('captured', projected.dig('fragmentWork', 'status'))
+      assert_equal(36_543_210.5, projected.dig('fragmentWork', 'value'))
+      assert_equal('captured', projected.dig('depthComplexity', 'status'))
+      assert_equal(42.29538252314815, projected.dig('depthComplexity', 'mean'))
+      assert_equal(64, projected.dig('depthBinOccupancy', 'binCount'))
+      assert_equal(1.25, projected.dig('buildCost', 'ms'))
+      assert_equal(5.75, projected.dig('accumulationCost', 'ms'))
+      assert_equal(8.5, projected.dig('renderCost', 'ms'))
+      assert_equal('captured', report.dig('mechanismAnchor', 'distributions', 'projectedFootprintDistribution', 'status'))
+    end
+  end
+
   def test_witness_rejects_reduction_policy_and_preserves_source_rows
     assert_match(/sourceRowsPreserved/, witness)
     assert_match(/preserveAllSourceRows/, witness)
