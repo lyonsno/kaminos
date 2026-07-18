@@ -82,6 +82,27 @@ assert.ok(
   'active material away from current Pyro contact must not become the same saturated glow field',
 );
 
+const fractionalPhase = evaluateStructuralBurnAppearance({
+  temperature: 1.25,
+  fuel: 0.72,
+  char: 0.28,
+  peakExposure: 2.4,
+  liveExposure: 0.9,
+  phase: 0.5,
+  consumptionRate: 0.003,
+});
+assert.equal(
+  Number(fractionalPhase.semanticWeights.pyrolysis.toFixed(6)),
+  0.5,
+  'the JS oracle must mirror WGSL fractional phase interpolation',
+);
+assert.equal(Number(fractionalPhase.semanticWeights.ignition.toFixed(6)), 0.5);
+assert.equal(
+  Number(fractionalPhase.emissiveStrength.toFixed(6)),
+  Number((activelyHot.emissiveStrength * 0.5).toFixed(6)),
+  'fractional phase must scale active emission by the shared ignition weight',
+);
+
 const cooledChar = evaluateStructuralBurnAppearance({
   temperature: 0.08,
   fuel: 0.06,

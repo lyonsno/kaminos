@@ -102,13 +102,13 @@ export function evaluateStructuralBurnAppearance({
   const charPersistence = clamp(finite(char, 0), 0, 1);
   const historicalExposure = Math.max(0, finite(peakExposure, 0));
   const currentExposure = Math.max(0, finite(liveExposure, 0));
-  const ignited = finite(phase, 0) > 0 ? 1 : 0;
+  const ignition = smoothstep(0.25, 0.75, Math.max(0, finite(phase, 0)));
   const reaction = Math.max(0, finite(consumptionRate, 0));
   const fuelLoss = 1 - remainingFuel;
   const heat = smoothstep(0.48, 1.15, thermal);
   const charStage = smoothstep(0.02, 0.8, charPersistence);
   const pyrolysis = smoothstep(0.000001, 0.0025, reaction) *
-    smoothstep(0.02, 0.35, remainingFuel) * ignited;
+    smoothstep(0.02, 0.35, remainingFuel) * ignition;
   const preheat = Math.max(
     smoothstep(0.12, 0.52, thermal),
     smoothstep(0.02, 0.45, historicalExposure),
@@ -138,6 +138,7 @@ export function evaluateStructuralBurnAppearance({
     pyrolysis,
     char: charStage,
     contact,
+    ignition,
   };
   const dominantStage = pyrolysis > 0.35
     ? 'pyrolysis'
