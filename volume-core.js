@@ -15496,6 +15496,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           },
         );
         if (!applied) throw new Error(state.sparseHybridPresentationReceipt?.fallbackReason || 'sparse-hybrid-optical-profile-route-unavailable');
+        encodeBoundarySplatTelemetry(encoder, true);
         encoder.resolveQuerySet(querySet, 0, queryCount, resolveBuffer, 0);
         encoder.copyBufferToBuffer(resolveBuffer, 0, readbackBuffer, 0, queryCount * 8);
         device.queue.submit([encoder.finish()]);
@@ -15505,6 +15506,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         const validationError = await device.popErrorScope();
         errorScopeOpen = false;
         if (validationError) throw new Error(validationError.message || String(validationError));
+        if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
+        if (Number(state.boundarySplatOverflowCount) > 0) {
+          throw new Error(`boundary-splat-optical-profile-overflow:${state.boundarySplatOverflowCount}`);
+        }
         if (timestamps.some(value => value === 0n)) {
           throw new Error(`timestamp-query-incomplete:${Array.from(timestamps, value => value.toString()).join(',')}`);
         }
