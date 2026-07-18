@@ -96,6 +96,10 @@ canvas { display: block; }
 #volume-full-support-receipt { margin-top: 8px; padding: 7px; border-left: 2px solid #59676b; background: #121617; color: #9fadb1; font: 9px 'SF Mono', monospace; line-height: 1.4; overflow-wrap: anywhere; white-space: normal; }
 #volume-full-support-receipt[data-status="effective"] { border-color: #4aa36a; color: #bde6c9; }
 #volume-full-support-receipt[data-status="failed"] { border-color: #d16454; color: #efb2a8; }
+#volume-stage-b-status { margin-top: 8px; padding: 7px; border-left: 2px solid #59676b; background: #121617; color: #9fadb1; font: 9px 'SF Mono', monospace; line-height: 1.4; overflow-wrap: anywhere; white-space: normal; }
+#volume-stage-b-status[data-status="effective"] { border-color: #4aa36a; color: #bde6c9; }
+#volume-stage-b-status[data-status="disabled"] { border-color: #8b773a; color: #d8c98f; }
+#volume-stage-b-status[data-status="failed"] { border-color: #d16454; color: #efb2a8; }
 #volume-authored-mix-control-root .slider-row { margin: 8px 0; }
 #volume-authored-mix-control-root .slider-label { min-width: 92px; color: #879398; }
 #volume-authored-mix-control-root .slider-val { color: #aab4b7; }
@@ -2638,9 +2642,19 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="volume-full-support-row"><label>Transport</label><div class="volume-full-support-fixed">Self-extinction + additive RGB</div></div>
       <div class="volume-full-support-actions">
         <button id="volume-full-support-apply" type="button">Apply source</button>
-        <button id="volume-full-support-stage-b" type="button" disabled title="Bailiff producer manifest is not available">Matched optical recurrence: awaiting source manifest</button>
       </div>
       <div id="volume-full-support-receipt" data-status="idle">No Stage A source requested.</div>
+      <div class="volume-full-support-heading" style="margin-top:12px"><strong>Matched optical recurrence</strong><span>Stage B</span></div>
+      <div class="volume-full-support-row">
+        <label for="volume-stage-b-view">View</label>
+        <select id="volume-stage-b-view" disabled>
+          <option value="">Producer evidence required</option>
+        </select>
+      </div>
+      <div class="volume-full-support-actions">
+        <button id="volume-full-support-stage-b" type="button" disabled title="Producer evidence has not been verified">Apply treatment</button>
+      </div>
+      <div id="volume-stage-b-status" data-status="disabled">producer-evidence-unverified | requested matched-optical-recurrence-v0 | effective none | renderer not encoded/applied</div>
     </section>
     <div id="volume-authored-mix-control-root" data-volume-control-root="authored-mix"></div>
   </div>
@@ -2664,6 +2678,7 @@ import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js?v=full-support-stage-a-0717';
 import { FULL_SUPPORT_STAGE_A, admitFullSupportStageA } from './volume-full-support-cockpit.mjs';
+import { admitStageBCockpitManifest } from './volume-stage-b-cockpit-consumer.mjs';
 import { DEFAULT_VOLUME_SCENE, volumeSceneReceipt } from './volume-scene-ontology.mjs';
 import {
   resolveVolumeSettingsPresetVisualView,
@@ -17971,6 +17986,128 @@ async function initKaminosVolumeRoute() {
   });
   window.__kaminosApplyFullSupportSource = applyFullSupportSource;
   window.__kaminosBootstrapFullSupportStageAState = bootstrapFullSupportStageAState;
+  const stageBStatus = document.getElementById('volume-stage-b-status');
+  const stageBView = document.getElementById('volume-stage-b-view');
+  const stageBApply = document.getElementById('volume-full-support-stage-b');
+  const stageBViewLabels = {
+    target: 'Raymarch target',
+    treatment: 'Matched optical treatment',
+    difference: 'Target minus treatment',
+    ridge: 'Ridge layer',
+    nonRidge: 'Non-Ridge layer',
+    combined: 'Combined layers',
+    debug: 'Depth-bin optical debug',
+  };
+  const renderStageBReceipt = receipt => {
+    window.__kaminosStageBCockpitReceipt = receipt;
+    if (!stageBStatus) return;
+    stageBStatus.dataset.status = receipt?.status || 'failed';
+    const failures = receipt?.failures?.length ? ` | ${receipt.failures.join(', ')}` : '';
+    const applied = receipt?.passes?.rendererApplied === true ? 'applied' : 'not applied';
+    stageBStatus.textContent = receipt?.status === 'effective'
+      ? `${receipt.requestedTreatment} -> ${receipt.effectiveTreatment} | manifest ${receipt.effectiveManifestSha256} | ${receipt.resources.length} resources bound | renderer ${applied}`
+      : `${receipt?.disabledReason || receipt?.status || 'failed'} | requested ${receipt?.requestedTreatment || 'none'} | effective ${receipt?.effectiveTreatment || 'none'} | renderer not encoded/applied${failures}`;
+  };
+  const configureStageBView = receipt => {
+    if (!stageBView || !stageBApply) return;
+    stageBView.replaceChildren();
+    if (receipt?.status !== 'effective') {
+      stageBView.append(new Option('Producer evidence required', ''));
+      stageBView.disabled = true;
+      stageBApply.disabled = true;
+      stageBApply.title = receipt?.disabledReason || receipt?.failures?.join(', ') || 'Stage B is unavailable';
+      return;
+    }
+    for (const [key, identity] of Object.entries(receipt.viewSockets || {})) {
+      stageBView.append(new Option(stageBViewLabels[key] || key, key));
+      stageBView.options[stageBView.options.length - 1].dataset.identity = identity;
+    }
+    stageBView.value = 'treatment';
+    stageBView.disabled = false;
+    const rendererAvailable = typeof volumePrototype.setBoundarySplatPresentationMode === 'function';
+    stageBApply.disabled = !rendererAvailable;
+    stageBApply.title = rendererAvailable
+      ? 'Apply the verified matched optical recurrence treatment'
+      : 'Manifest validated; renderer treatment adapter is not installed on this source head';
+  };
+  const bootstrapStageBConsumer = async () => {
+    const requestedManifestUrl = params.get('full_support_stage_b_manifest');
+    const requestedManifestSha256 = params.get('full_support_stage_b_manifest_sha256');
+    if (!requestedManifestUrl && !requestedManifestSha256) {
+      const receipt = admitStageBCockpitManifest({
+        requestedTreatment: FULL_SUPPORT_STAGE_A.stageB.identity,
+        requestedManifestUrl: null,
+        requestedManifestSha256: null,
+      });
+      configureStageBView(receipt);
+      renderStageBReceipt(receipt);
+      return receipt;
+    }
+    if (!requestedManifestUrl || !requestedManifestSha256) {
+      const failure = {
+        status: 'failed',
+        requestedTreatment: FULL_SUPPORT_STAGE_A.stageB.identity,
+        effectiveTreatment: null,
+        fallbackUsed: false,
+        resources: [],
+        passes: { applied: [], rendererEncoded: false, rendererApplied: false },
+        failures: ['stage-b-manifest-route-hash-pair-incomplete'],
+      };
+      configureStageBView(failure);
+      renderStageBReceipt(failure);
+      return failure;
+    }
+    const effectiveManifestUrl = new URL(requestedManifestUrl, window.location.href).href;
+    const response = await fetch(effectiveManifestUrl, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`stage-b-manifest-fetch-failed:${response.status}`);
+    const bytes = await response.arrayBuffer();
+    const effectiveManifestSha256 = await fullSupportSha256(bytes);
+    const manifest = JSON.parse(new TextDecoder().decode(bytes));
+    const receipt = admitStageBCockpitManifest({
+      requestedTreatment: FULL_SUPPORT_STAGE_A.stageB.identity,
+      requestedManifestUrl: effectiveManifestUrl,
+      requestedManifestSha256,
+      effectiveManifestUrl,
+      effectiveManifestSha256,
+      manifest,
+    });
+    configureStageBView(receipt);
+    renderStageBReceipt(receipt);
+    return receipt;
+  };
+  stageBApply?.addEventListener('click', () => {
+    const receipt = window.__kaminosStageBCockpitReceipt;
+    if (receipt?.status !== 'effective' || typeof volumePrototype.setBoundarySplatPresentationMode !== 'function') return;
+    const requestedView = stageBView?.value || 'treatment';
+    const requestedIdentity = receipt.viewSockets?.[requestedView];
+    if (requestedView !== 'treatment') {
+      renderStageBReceipt({
+        ...receipt,
+        status: 'failed',
+        effectiveTreatment: null,
+        failures: [`renderer-view-adapter-unavailable:${requestedIdentity || requestedView}`],
+        passes: { ...receipt.passes, rendererRequested: true, rendererEncoded: false, rendererApplied: false },
+      });
+      return;
+    }
+    volumePrototype.setBoundarySplatPresentationMode(receipt.requestedTreatment);
+    const state = volumePrototype.debugState();
+    const presentation = state.boundarySplatPresentationReceipt;
+    renderStageBReceipt({
+      ...receipt,
+      status: presentation?.effectiveMode === receipt.requestedTreatment && !presentation?.fallbackReason ? 'effective' : 'failed',
+      effectiveTreatment: presentation?.effectiveMode === receipt.requestedTreatment ? receipt.requestedTreatment : null,
+      fallbackUsed: Boolean(presentation?.fallbackReason),
+      failures: presentation?.fallbackReason ? [`renderer-fallback:${presentation.fallbackReason}`] : [],
+      passes: {
+        ...receipt.passes,
+        rendererRequested: true,
+        rendererEncoded: presentation?.effectiveMode === receipt.requestedTreatment,
+        rendererApplied: presentation?.effectiveMode === receipt.requestedTreatment && !presentation?.fallbackReason,
+      },
+    });
+  });
+  window.__kaminosBootstrapStageBConsumer = bootstrapStageBConsumer;
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     document.getElementById(field.id)?.addEventListener('input', syncControls);
     document.getElementById(field.id)?.addEventListener('change', syncControls);
@@ -18071,6 +18208,19 @@ async function initKaminosVolumeRoute() {
     const failure = { status: 'failed', failures: [error?.message || String(error)] };
     window.__kaminosFullSupportStageABootstrapReceipt = failure;
     renderFullSupportReceipt(failure);
+  });
+  bootstrapStageBConsumer().catch(error => {
+    const failure = {
+      status: 'failed',
+      requestedTreatment: FULL_SUPPORT_STAGE_A.stageB.identity,
+      effectiveTreatment: null,
+      fallbackUsed: false,
+      resources: [],
+      passes: { applied: [], rendererEncoded: false, rendererApplied: false },
+      failures: [error?.message || String(error)],
+    };
+    configureStageBView(failure);
+    renderStageBReceipt(failure);
   });
   syncControls();
   setInterval(refreshVolumeReadout, 500);

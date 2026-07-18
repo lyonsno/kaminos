@@ -150,6 +150,21 @@ try {
   assert.equal(bootstrap.presentedState?.lookFreeze, 1, 'bootstrap did not pin the imported state');
   lastTrustworthyEvidence = { ...lastTrustworthyEvidence, bootstrap };
 
+  failurePhase = 'stage-b-pre-evidence-admission';
+  const stageBReceipt = await waitForValue(socket, timeoutMs, `(() => {
+    const runtime = document.querySelector('#basin')?.contentWindow || window;
+    return runtime.__kaminosStageBCockpitReceipt || null;
+  })()`);
+  assert.equal(stageBReceipt.status, 'disabled', 'Stage B became authoritative without producer evidence');
+  assert.equal(stageBReceipt.disabledReason, 'producer-evidence-unverified', 'Stage B disabled reason was substituted');
+  assert.equal(stageBReceipt.requestedTreatment, 'matched-optical-recurrence-v0', 'Stage B requested treatment was substituted');
+  assert.equal(stageBReceipt.effectiveTreatment, null, 'Stage B reported an effective treatment before evidence');
+  assert.equal(stageBReceipt.fallbackUsed, false, 'Stage B fallback looked authoritative');
+  assert.deepEqual(stageBReceipt.passes?.applied, [], 'Stage B reported manifest/resource passes without evidence');
+  assert.equal(stageBReceipt.passes?.rendererEncoded, false, 'Stage B renderer encoded without evidence');
+  assert.equal(stageBReceipt.passes?.rendererApplied, false, 'Stage B renderer applied without evidence');
+  lastTrustworthyEvidence = { ...lastTrustworthyEvidence, stageBReceipt };
+
   const sourceReceipts = [];
   for (const source of SOURCES) {
     failurePhase = `source-switch:${source}`;
@@ -202,6 +217,7 @@ try {
     requestedRoute: routeReceipt.requestedRoute,
     effectiveRoute: expectedUrl,
     bootstrap,
+    stageBReceipt,
     sourceReceipts,
     screenshotPath,
     elapsedMs: performance.now() - witnessStartedAt,

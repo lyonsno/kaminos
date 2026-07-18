@@ -48,7 +48,8 @@ export const FULL_SUPPORT_STAGE_A = Object.freeze({
   }),
   stageB: Object.freeze({
     identity: 'matched-optical-recurrence-v0',
-    status: 'awaiting-source-manifest',
+    status: 'producer-evidence-unverified',
+    producerContractCommit: '2a229b80',
   }),
 });
 

@@ -12,6 +12,10 @@ const sourceCaptureReportPath = requiredPath('--source-capture-report');
 const exactOverlayManifestPath = requiredPath('--exact-overlay-manifest');
 const baselineOverlayManifestPath = requiredPath('--baseline-overlay-manifest');
 const flowOverlayManifestPath = requiredPath('--flow-overlay-manifest');
+const stageBManifestArgument = args.get('--stage-b-manifest');
+const stageBManifestSha256 = args.get('--stage-b-manifest-sha256');
+assert.equal(Boolean(stageBManifestArgument), Boolean(stageBManifestSha256), '--stage-b-manifest and --stage-b-manifest-sha256 must be provided together');
+const stageBManifestPath = stageBManifestArgument ? requiredPath('--stage-b-manifest') : null;
 const port = normalizePort(args.get('--port') || 18782);
 const requestedSource = String(args.get('--source') || 'analytical-exact');
 assert.ok(['analytical-exact', 'learned-baseline', 'learned-flow'].includes(requestedSource), `unsupported --source: ${requestedSource}`);
@@ -32,6 +36,7 @@ const mounts = {
   baseline: dirname(baselineOverlayManifestPath),
   flow: dirname(flowOverlayManifestPath),
 };
+if (stageBManifestPath) mounts.stageB = dirname(stageBManifestPath);
 for (const [name, target] of Object.entries(mounts)) ensureMount(join(mountRoot, name), target);
 
 const origin = `http://127.0.0.1:${port}`;
@@ -46,6 +51,12 @@ route.searchParams.set('full_support_source_front', `/scratch/${mountSlug}/state
 route.searchParams.set('full_support_exact_manifest', `/scratch/${mountSlug}/exact/${basename(exactOverlayManifestPath)}`);
 route.searchParams.set('full_support_baseline_manifest', `/scratch/${mountSlug}/baseline/${basename(baselineOverlayManifestPath)}`);
 route.searchParams.set('full_support_flow_manifest', `/scratch/${mountSlug}/flow/${basename(flowOverlayManifestPath)}`);
+if (stageBManifestPath) {
+  const stageBArtifact = artifact(stageBManifestPath);
+  assert.equal(stageBArtifact.sha256, stageBManifestSha256, 'Stage B manifest hash does not match --stage-b-manifest-sha256');
+  route.searchParams.set('full_support_stage_b_manifest', `/scratch/${mountSlug}/stageB/${basename(stageBManifestPath)}`);
+  route.searchParams.set('full_support_stage_b_manifest_sha256', String(stageBManifestSha256));
+}
 
 const routeReceipt = {
   schema: 'kaminos.pyro.full-support-cockpit-session.v0',
@@ -62,6 +73,7 @@ const routeReceipt = {
     exactOverlayManifest: artifact(exactOverlayManifestPath),
     baselineOverlayManifest: artifact(baselineOverlayManifestPath),
     flowOverlayManifest: artifact(flowOverlayManifestPath),
+    stageBManifest: stageBManifestPath ? artifact(stageBManifestPath) : null,
   },
 };
 const receiptPath = join(mountRoot, 'route-receipt.json');

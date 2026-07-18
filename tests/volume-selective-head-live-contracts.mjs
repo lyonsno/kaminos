@@ -112,12 +112,12 @@ assert.match(page, /warmupTarget/, 'page exposes the requested replay horizon');
 assert.match(page, /warmupComplete/, 'page distinguishes warmup from learned execution');
 assert.match(
   page,
-  /for \(const \[key, value\] of params\)[\s\S]*if \(key\.startsWith\('volume_'\)\) basinQuery\.set\(key, value\)/,
+  /for \(const \[key, value\] of params\)[\s\S]*if \(key\.startsWith\('volume_'\) \|\| key\.startsWith\('full_support_'\)\) basinQuery\.set\(key, value\)/,
   'selective-head wrapper passes explicitly routed basin settings into the native iframe instead of silently replacing them with its defaults',
 );
 assert.match(
   page,
-  /kaminos_volume_smoke:\s*'1'[\s\S]*if \(key\.startsWith\('volume_'\)\) basinQuery\.set\(key, value\)/,
+  /kaminos_volume_smoke:\s*'1'[\s\S]*if \(key\.startsWith\('volume_'\) \|\| key\.startsWith\('full_support_'\)\) basinQuery\.set\(key, value\)/,
   'selective-head wrapper keeps its required inner smoke route active instead of accepting an outer route-gate override',
 );
 assert.match(

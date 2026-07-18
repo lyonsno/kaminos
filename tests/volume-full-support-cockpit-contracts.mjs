@@ -24,7 +24,7 @@ assert.equal(FULL_SUPPORT_STAGE_A.population.droppedRowCount, 0);
 assert.equal(FULL_SUPPORT_STAGE_A.deposition.identity, 'flow-tangent-five-tap-bilinear-v0');
 assert.equal(FULL_SUPPORT_STAGE_A.transport.identity, 'per-splat-self-extinction-additive-rgb-v0');
 assert.equal(FULL_SUPPORT_STAGE_A.transport.attenuatesBehindColor, false);
-assert.equal(FULL_SUPPORT_STAGE_A.stageB.status, 'awaiting-source-manifest');
+assert.equal(FULL_SUPPORT_STAGE_A.stageB.status, 'producer-evidence-unverified');
 assert.deepEqual(Object.keys(FULL_SUPPORT_STAGE_A.sources), ['analytical-exact', 'learned-baseline', 'learned-flow']);
 for (const source of Object.values(FULL_SUPPORT_STAGE_A.sources)) {
   assert.match(source.overlayIdentity, /^sha256:[a-f0-9]{64}$/, 'every Stage A arm is bound to one runtime manifest identity');
@@ -113,7 +113,7 @@ const [index, core, session, selectiveLive, witness] = await Promise.all([
 assert.match(index, /id="volume-full-support-source"/, 'cockpit exposes an explicit coefficient source selector');
 assert.match(index, /id="volume-full-support-receipt"/, 'cockpit exposes a wrapping authority receipt');
 assert.match(index, /Self-extinction \+ additive RGB/, 'operator sees the exact Stage A transport limitation');
-assert.match(index, /Matched optical recurrence[\s\S]*awaiting source manifest/i, 'Stage B remains visibly unavailable');
+assert.match(index, /Matched optical recurrence[\s\S]*producer-evidence-unverified/i, 'Stage B remains visibly unavailable until producer evidence validates');
 assert.match(index, /full_support_source_field_manifest/, 'cockpit route names its frozen source manifest explicitly');
 assert.match(
   index,
