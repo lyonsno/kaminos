@@ -154,6 +154,11 @@ export {
 } from './model-resource-source.js';
 
 export {
+  WEBGPU_MODEL_RESOURCE_CACHE_STORAGE_SCHEMA,
+  createWebGpuModelResourceCacheStorage,
+} from './model-resource-cache-storage.js';
+
+export {
   WEBGPU_COMMAND_DUTY_DESCRIPTOR_SCHEMA,
   WEBGPU_COMMAND_DUTY_OBSERVATION_SCHEMA,
   WEBGPU_COMMAND_DUTY_REPORT_SCHEMA,

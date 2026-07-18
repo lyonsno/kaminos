@@ -17,6 +17,9 @@ import {
 import {
   loadWebGpuModelResources,
 } from './model-resource-manifest.js';
+import {
+  acquireWebGpuModelResourceBundle,
+} from './model-resource-source.js';
 
 export const WEBGPU_INFERENCE_SESSION_SCHEMA = 'kaminos.webgpu-inference-session.v0';
 export const WEBGPU_INFERENCE_SESSION_DEVICE_LOSS_SCHEMA = 'kaminos.webgpu-inference-session-device-loss.v0';
@@ -56,6 +59,23 @@ function assertNoReservedOptions(options, reserved, label) {
   for (const key of reserved) {
     if (Object.hasOwn(options, key)) throw new Error(`session owns ${key}; ${label} cannot override it`);
   }
+}
+
+function errorWithAcquisitionReport(cause, report) {
+  const error = cause instanceof Error ? cause : new Error(String(cause));
+  try {
+    error.acquisitionReport = report;
+    if (error.acquisitionReport === report) return error;
+  } catch {}
+  const wrapped = new Error(error.message);
+  wrapped.name = error.name;
+  wrapped.cause = error;
+  wrapped.acquisitionReport = report;
+  return wrapped;
+}
+
+function modelLeaseWithAcquisitionReport(lease, report) {
+  return Object.freeze({ ...lease, acquisitionReport: report });
 }
 
 export async function createWebGpuInferenceSession(input = {}) {
@@ -289,6 +309,59 @@ export async function createWebGpuInferenceSession(input = {}) {
             throw new Error('session route owns route; loadModelResources cannot override it');
           }
           return loadWebGpuModelResources({ ...modelInput, route: route.handle });
+        },
+        async loadModelResourcesFromSource(modelInput = {}) {
+          assertAttached(route);
+          assertActive();
+          if (!isPlainObject(modelInput)) throw new Error('model resource source input must be an object');
+          if (Object.hasOwn(modelInput, 'route')) {
+            throw new Error('session route owns route; loadModelResourcesFromSource cannot override it');
+          }
+          if (Object.hasOwn(modelInput, 'bundle')) {
+            throw new Error('loadModelResourcesFromSource owns intermediate bundle custody; use source instead of bundle');
+          }
+          const { manifest, source, signal, subtle } = modelInput;
+          let acquired;
+          try {
+            acquired = await acquireWebGpuModelResourceBundle(manifest, source, {
+              cache: modelInput.cache,
+              fetch: modelInput.fetch,
+              fetchOptions: modelInput.fetchOptions,
+              ownership: modelInput.ownership,
+              onProgress: modelInput.onProgress,
+              now: modelInput.now,
+              signal,
+              subtle,
+              maxBytes: modelInput.maxBytes,
+              maxChunks: modelInput.maxChunks,
+              maxProgressEvents: modelInput.maxProgressEvents,
+            });
+          } catch (error) {
+            if (error?.report) throw errorWithAcquisitionReport(error, error.report);
+            throw error;
+          }
+          try {
+            assertAttached(route);
+            assertActive();
+            let lease;
+            try {
+              lease = await loadWebGpuModelResources({
+                manifest,
+                bundle: acquired.bundle,
+                route: route.handle,
+                signal,
+                subtle,
+              });
+            } catch (error) {
+              throw errorWithAcquisitionReport(error, acquired.report);
+            }
+            return modelLeaseWithAcquisitionReport(lease, acquired.report);
+          } catch (error) {
+            if (error?.acquisitionReport === acquired.report) throw error;
+            throw errorWithAcquisitionReport(error, acquired.report);
+          } finally {
+            acquired.bundle.release();
+          }
         },
         enqueue(jobInput = {}) {
           assertAttached(route);
