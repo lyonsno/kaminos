@@ -67,6 +67,12 @@ const COARSE_RESIDUAL_RAYMARCH_PRESENTATION_RESOLVE_IDENTITY = 'coarse-linear-ra
 const COARSE_RESIDUAL_RAYMARCH_RESOLUTION_OWNERSHIP_IDENTITY = 'full-resolution-splats-independent-coarse-linear-raymarch-v0';
 const COARSE_RESIDUAL_RAYMARCH_AUTHORITY_IDENTITY = 'non-ridge-contribution-under-complete-flame-transmittance-v0';
 const COARSE_RESIDUAL_TRANSPORTED_RADIANCE_COMPOSITION_IDENTITY = 'separately-transported-radiance-sum-presentation-only-approximation-v0';
+const COARSE_RESIDUAL_SHARED_OPTICAL_RECURRENCE_IDENTITY = 'coarse-residual-plus-full-resolution-splat-shared-optical-recurrence-v0';
+const COARSE_RESIDUAL_OPTICAL_AUTHORITY_IDENTITY = 'non-ridge-positive-emission-extinction-coefficient-intervals-v0';
+const COARSE_RESIDUAL_OPTICAL_INTERVALS = 4;
+const COARSE_RESIDUAL_OPTICAL_RECONSTRUCTION_IDENTITY = 'bilinear-four-interval-optical-reconstruction-v0';
+const COARSE_RESIDUAL_SHARED_OPTICAL_RESOLVE_IDENTITY = 'four-interval-residual-plus-sixteen-bin-splat-shared-optical-grade-v0';
+const COARSE_RESIDUAL_SHARED_OPTICAL_DEPTH_INTERVAL_IDENTITY = 'camera-ray-entry-to-exit-sixteen-equal-intervals-v0';
 const BOUNDARY_SPLAT_INITIAL_CAPACITY = 131072;
 const BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES = 64;
 const BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES = BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
@@ -4023,6 +4029,10 @@ struct RaymarchResult {
   color: vec4<f32>,
   linearRadianceTransmittance: vec4<f32>,
   residualFeature: vec4<f32>,
+  coarseResidualOptical0: vec4<f32>,
+  coarseResidualOptical1: vec4<f32>,
+  coarseResidualOptical2: vec4<f32>,
+  coarseResidualOptical3: vec4<f32>,
 };
 
 struct ResidualSourceOutput {
@@ -4030,11 +4040,30 @@ struct ResidualSourceOutput {
   @location(1) residualFeature: vec4<f32>,
 };
 
-fn makeRaymarchResult(color: vec4<f32>, linearRadianceTransmittance: vec4<f32>, residualFeature: vec4<f32>) -> RaymarchResult {
+struct CoarseResidualOpticalOutput {
+  @location(0) interval0: vec4<f32>,
+  @location(1) interval1: vec4<f32>,
+  @location(2) interval2: vec4<f32>,
+  @location(3) interval3: vec4<f32>,
+};
+
+fn makeRaymarchResult(
+  color: vec4<f32>,
+  linearRadianceTransmittance: vec4<f32>,
+  residualFeature: vec4<f32>,
+  coarseResidualOptical0: vec4<f32>,
+  coarseResidualOptical1: vec4<f32>,
+  coarseResidualOptical2: vec4<f32>,
+  coarseResidualOptical3: vec4<f32>,
+) -> RaymarchResult {
   var result: RaymarchResult;
   result.color = color;
   result.linearRadianceTransmittance = linearRadianceTransmittance;
   result.residualFeature = residualFeature;
+  result.coarseResidualOptical0 = coarseResidualOptical0;
+  result.coarseResidualOptical1 = coarseResidualOptical1;
+  result.coarseResidualOptical2 = coarseResidualOptical2;
+  result.coarseResidualOptical3 = coarseResidualOptical3;
   return result;
 }
 
@@ -4050,7 +4079,15 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
   let rd = normalize(farWorld - nearWorld);
   let hit = boxHit(ro, rd, vec3<f32>(1.0, 1.0, 1.0));
   if (hit.y <= max(hit.x, 0.0)) {
-    return makeRaymarchResult(vec4<f32>(0.004, 0.005, 0.006, 1.0), vec4<f32>(0.004, 0.005, 0.006, 1.0), vec4<f32>(0.0));
+    return makeRaymarchResult(
+      vec4<f32>(0.004, 0.005, 0.006, 1.0),
+      vec4<f32>(0.004, 0.005, 0.006, 1.0),
+      vec4<f32>(0.0),
+      vec4<f32>(0.0),
+      vec4<f32>(0.0),
+      vec4<f32>(0.0),
+      vec4<f32>(0.0),
+    );
   }
 
   let steps = clamp(u.viewport_steps_density.z, 24.0, 192.0);
@@ -4205,6 +4242,10 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
   var ridgeOwnedExtinctionColor = vec3<f32>(0.0);
   var nonRidgeEmissionColor = vec3<f32>(0.0);
   var nonRidgeExtinctionColor = vec3<f32>(0.0);
+  var coarseResidualOptical0 = vec4<f32>(0.0);
+  var coarseResidualOptical1 = vec4<f32>(0.0);
+  var coarseResidualOptical2 = vec4<f32>(0.0);
+  var coarseResidualOptical3 = vec4<f32>(0.0);
   var residualRadianceAuthority = 0.0;
   var residualFireAuthority = 0.0;
   var residualInterfaceAuthority = 0.0;
@@ -5187,6 +5228,18 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     let ridgeOwnedExtinctionCoefficient = completeFlameExtinctionCoefficient * ridgeOwnershipWeight;
     let nonRidgeEmissionCoefficient = completeFlameEmissionCoefficient - ridgeOwnedEmissionCoefficient;
     let nonRidgeExtinctionCoefficient = completeFlameExtinctionCoefficient - ridgeOwnedExtinctionCoefficient;
+    let residualOpticalCoefficient = vec4<f32>(nonRidgeEmissionCoefficient, nonRidgeExtinctionCoefficient);
+    let intervalCoordinate = clamp((t - startT) / max(endT - startT, 1e-6), 0.0, 0.999999);
+    let residualInterval = u32(floor(intervalCoordinate * f32(${COARSE_RESIDUAL_OPTICAL_INTERVALS})));
+    if (residualInterval == 0u) {
+      coarseResidualOptical0 = coarseResidualOptical0 + residualOpticalCoefficient;
+    } else if (residualInterval == 1u) {
+      coarseResidualOptical1 = coarseResidualOptical1 + residualOpticalCoefficient;
+    } else if (residualInterval == 2u) {
+      coarseResidualOptical2 = coarseResidualOptical2 + residualOpticalCoefficient;
+    } else {
+      coarseResidualOptical3 = coarseResidualOptical3 + residualOpticalCoefficient;
+    }
     let positiveRecomposedEmissionCoefficient = ridgeOwnedEmissionCoefficient + nonRidgeEmissionCoefficient;
     let positiveRecomposedExtinctionCoefficient = ridgeOwnedExtinctionCoefficient + nonRidgeExtinctionCoefficient;
     if (appearanceAssayActive > 0.5) {
@@ -5286,7 +5339,15 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     clamp(1.0 - exp(-residualInterfaceAuthority * 0.90), 0.0, 1.0),
     clamp(1.0 - exp(-residualSmokeAuthority * 0.56), 0.0, 1.0)
   );
-  return makeRaymarchResult(vec4<f32>(resolvedColor, 1.0), vec4<f32>(color, trans), residualFeature);
+  return makeRaymarchResult(
+    vec4<f32>(resolvedColor, 1.0),
+    vec4<f32>(color, trans),
+    residualFeature,
+    coarseResidualOptical0,
+    coarseResidualOptical1,
+    coarseResidualOptical2,
+    coarseResidualOptical3,
+  );
 }
 
 @fragment
@@ -5299,6 +5360,17 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 fn fsLinearRadiance(in: VSOut) -> @location(0) vec4<f32> {
   let result = raymarchVolume(in);
   return result.linearRadianceTransmittance;
+}
+
+@fragment
+fn fsCoarseResidualOpticalIntervals(in: VSOut) -> CoarseResidualOpticalOutput {
+  let result = raymarchVolume(in);
+  var out: CoarseResidualOpticalOutput;
+  out.interval0 = result.coarseResidualOptical0;
+  out.interval1 = result.coarseResidualOptical1;
+  out.interval2 = result.coarseResidualOptical2;
+  out.interval3 = result.coarseResidualOptical3;
+  return out;
 }
 
 @fragment
@@ -5453,6 +5525,7 @@ struct BoundarySplatCamera {
   cameraRight: vec4<f32>,
   cameraUp: vec4<f32>,
   controls: vec4<f32>,
+  cameraPosition: vec4<f32>,
 };
 
 struct BoundarySplatVertexOut {
@@ -5483,6 +5556,17 @@ ${BOUNDARY_SPLAT_ATTRIBUTE_MODEL_WGSL}
 @group(0) @binding(4) var<uniform> boundarySplatCamera: BoundarySplatCamera;
 @group(0) @binding(5) var<storage, read> boundarySplatsForRender: array<BoundarySplat>;
 @group(0) @binding(6) var<storage, read_write> boundarySplatFeatureRows: array<BoundarySplatFeatureRow>;
+
+override SHARED_LINEAR_OPTICAL_DEPTH: u32 = 0u;
+
+fn boundarySplatBoxHit(ro: vec3<f32>, rd: vec3<f32>) -> vec2<f32> {
+  let inv = 1.0 / rd;
+  let t0 = (-vec3<f32>(1.0) - ro) * inv;
+  let t1 = (vec3<f32>(1.0) - ro) * inv;
+  let tmin = min(t0, t1);
+  let tmax = max(t0, t1);
+  return vec2<f32>(max(max(tmin.x, tmin.y), tmin.z), min(min(tmax.x, tmax.y), tmax.z));
+}
 
 fn boundarySplatCellIndex(cell: vec3<u32>) -> u32 {
   return cell.x + cell.y * GRID + cell.z * GRID * GRID;
@@ -5647,7 +5731,18 @@ fn boundarySplatVs(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_in
   out.colorOpacity = splat.colorOpacity;
   out.local = corner;
   let projectedDepth = clamp(centerClip.z / max(centerClip.w, 1e-6), 0.0, 0.999999);
-  out.depthBin = u32(floor(projectedDepth * f32(${BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS})));
+  let cameraToCenter = splat.positionSupport.xyz - boundarySplatCamera.cameraPosition.xyz;
+  let centerDistance = length(cameraToCenter);
+  let centerRay = cameraToCenter / max(centerDistance, 1e-6);
+  let volumeHit = boundarySplatBoxHit(boundarySplatCamera.cameraPosition.xyz, centerRay);
+  let volumeEntry = max(volumeHit.x, 0.0);
+  let linearVolumeDepth = clamp(
+    (centerDistance - volumeEntry) / max(volumeHit.y - volumeEntry, 1e-6),
+    0.0,
+    0.999999,
+  );
+  let opticalDepthCoordinate = select(projectedDepth, linearVolumeDepth, SHARED_LINEAR_OPTICAL_DEPTH == 1u);
+  out.depthBin = u32(floor(opticalDepthCoordinate * f32(${BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS})));
   return out;
 }
 
@@ -5806,6 +5901,100 @@ fn coarseResidualRaymarchPresentationFs(in: CoarseResidualRaymarchPresentationVe
   let raymarchRadiance = max(loadCoarseResidualBilinear(sampleUv).rgb, vec3<f32>(0.0));
   let splatRadiance = max(textureLoad(fullResolutionSplatHdr, splatPixel, 0).rgb, vec3<f32>(0.0));
   let color = raymarchRadiance + splatRadiance;
+  let ndc = in.uv * 2.0 - vec2<f32>(1.0);
+  let vignette = 1.0 - smoothstep(0.28, 1.48, length(ndc));
+  let exposed = vec3<f32>(1.0) - exp(-color * 0.96);
+  let grade = exposed * (0.80 + 0.18 * vignette);
+  let current = pow(max(grade, vec3<f32>(0.0)), vec3<f32>(0.84));
+  return vec4<f32>(current, 1.0);
+}
+`;
+
+const COARSE_RESIDUAL_SHARED_OPTICAL_WGSL = `
+struct CoarseResidualOpticalVertexOut {
+  @builtin(position) position: vec4<f32>,
+  @location(0) uv: vec2<f32>,
+};
+
+struct CoarseResidualOpticalReconstructionOutput {
+  @location(0) interval0: vec4<f32>,
+  @location(1) interval1: vec4<f32>,
+  @location(2) interval2: vec4<f32>,
+  @location(3) interval3: vec4<f32>,
+};
+
+@group(0) @binding(0) var coarseResidualOpticalIntervals: texture_2d_array<f32>;
+@group(0) @binding(1) var fullResolutionSplatOpticalBins: texture_2d_array<f32>;
+
+@vertex
+fn coarseResidualOpticalVs(@builtin(vertex_index) vertexIndex: u32) -> CoarseResidualOpticalVertexOut {
+  var positions = array<vec2<f32>, 3>(
+    vec2<f32>(-1.0, -1.0),
+    vec2<f32>(3.0, -1.0),
+    vec2<f32>(-1.0, 3.0),
+  );
+  let position = positions[vertexIndex];
+  var out: CoarseResidualOpticalVertexOut;
+  out.position = vec4<f32>(position, 0.0, 1.0);
+  out.uv = position * 0.5 + vec2<f32>(0.5);
+  return out;
+}
+
+fn loadCoarseResidualOpticalBilinear(uv: vec2<f32>, interval: i32) -> vec4<f32> {
+  let dimensions = vec2<i32>(textureDimensions(coarseResidualOpticalIntervals));
+  let coordinate = clamp(uv, vec2<f32>(0.0), vec2<f32>(1.0)) * vec2<f32>(dimensions) - vec2<f32>(0.5);
+  let base = vec2<i32>(floor(coordinate));
+  let fraction = fract(coordinate);
+  let limit = dimensions - vec2<i32>(1);
+  let p00 = clamp(base, vec2<i32>(0), limit);
+  let p10 = clamp(base + vec2<i32>(1, 0), vec2<i32>(0), limit);
+  let p01 = clamp(base + vec2<i32>(0, 1), vec2<i32>(0), limit);
+  let p11 = clamp(base + vec2<i32>(1, 1), vec2<i32>(0), limit);
+  let row0 = mix(
+    textureLoad(coarseResidualOpticalIntervals, p00, interval, 0),
+    textureLoad(coarseResidualOpticalIntervals, p10, interval, 0),
+    fraction.x,
+  );
+  let row1 = mix(
+    textureLoad(coarseResidualOpticalIntervals, p01, interval, 0),
+    textureLoad(coarseResidualOpticalIntervals, p11, interval, 0),
+    fraction.x,
+  );
+  return max(mix(row0, row1, fraction.y), vec4<f32>(0.0));
+}
+
+@fragment
+fn coarseResidualOpticalReconstructionFs(in: CoarseResidualOpticalVertexOut) -> CoarseResidualOpticalReconstructionOutput {
+  var out: CoarseResidualOpticalReconstructionOutput;
+  out.interval0 = loadCoarseResidualOpticalBilinear(in.uv, 0);
+  out.interval1 = loadCoarseResidualOpticalBilinear(in.uv, 1);
+  out.interval2 = loadCoarseResidualOpticalBilinear(in.uv, 2);
+  out.interval3 = loadCoarseResidualOpticalBilinear(in.uv, 3);
+  return out;
+}
+
+@fragment
+fn coarseResidualSharedOpticalFs(in: CoarseResidualOpticalVertexOut) -> @location(0) vec4<f32> {
+  let dimensions = vec2<i32>(textureDimensions(fullResolutionSplatOpticalBins));
+  let sampleUv = vec2<f32>(in.uv.x, 1.0 - in.uv.y);
+  let pixel = clamp(vec2<i32>(sampleUv * vec2<f32>(dimensions)), vec2<i32>(0), dimensions - vec2<i32>(1));
+  var color = vec3<f32>(0.0);
+  for (var binIndex = ${BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS - 1}; binIndex >= 0; binIndex -= 1) {
+    let residualInterval = binIndex / ${BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS / COARSE_RESIDUAL_OPTICAL_INTERVALS};
+    let residualAccumulated = max(
+      textureLoad(coarseResidualOpticalIntervals, pixel, residualInterval, 0),
+      vec4<f32>(0.0),
+    );
+    let splatAccumulated = max(
+      textureLoad(fullResolutionSplatOpticalBins, pixel, binIndex, 0),
+      vec4<f32>(0.0),
+    );
+    let accumulated = residualAccumulated / 4.0 + splatAccumulated;
+    let opticalDepth = accumulated.a;
+    let binAlpha = 1.0 - exp(-opticalDepth);
+    let binColor = select(vec3<f32>(0.0), accumulated.rgb / max(opticalDepth, 1e-6), opticalDepth > 1e-6);
+    color = binColor * binAlpha + color * (1.0 - binAlpha);
+  }
   let ndc = in.uv * 2.0 - vec2<f32>(1.0);
   let vignette = 1.0 - smoothstep(0.28, 1.48, length(ndc));
   let exposed = vec3<f32>(1.0) - exp(-color * 0.96);
@@ -6393,6 +6582,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySplatReadbackPipeline = null;
   let boundarySplatHdrPipeline = null;
   let boundarySplatOpticalPipelines = [];
+  let boundarySplatSharedOpticalPipelines = [];
   let boundarySplatPresentationShader = null;
   let boundarySplatOpticalPresentationShader = null;
   let boundarySplatPresentationRenderPipeline = null;
@@ -6402,12 +6592,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let coarseResidualRaymarchPipeline = null;
   let coarseResidualRaymarchPresentationShader = null;
   let coarseResidualRaymarchPresentationPipeline = null;
+  let coarseResidualOpticalRaymarchPipeline = null;
+  let coarseResidualSharedOpticalShader = null;
+  let coarseResidualOpticalReconstructionPipeline = null;
+  let coarseResidualSharedOpticalPipeline = null;
   let boundarySplatHdrTexture = null;
   let boundarySplatHdrTextureSize = '';
   let boundarySplatOpticalTexture = null;
   let boundarySplatOpticalTextureSize = '';
   let coarseResidualRaymarchTexture = null;
   let coarseResidualRaymarchTextureSize = '';
+  let coarseResidualOpticalTexture = null;
+  let coarseResidualOpticalTextureSize = '';
+  let coarseResidualOpticalReconstructedTexture = null;
+  let coarseResidualOpticalReconstructedTextureSize = '';
   let bindGroups = [];
   let majorantFrontBindGroups = [];
   let boundarySidecarReadBindGroups = [];
@@ -7411,7 +7609,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     boundarySplatCameraBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} camera`,
-      size: 112,
+      size: 128,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     boundarySplatReadbackBuffer = device.createBuffer({
@@ -7614,6 +7812,44 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       },
       primitive: { topology: 'triangle-list' },
     });
+    coarseResidualOpticalRaymarchPipeline = device.createRenderPipeline({
+      label: `kaminos ${COARSE_RESIDUAL_SHARED_OPTICAL_RECURRENCE_IDENTITY} coefficient intervals ${gridSize}^3`,
+      layout: pipelineLayout,
+      vertex: { module: shader, entryPoint: 'vs' },
+      fragment: {
+        module: shader,
+        entryPoint: 'fsCoarseResidualOpticalIntervals',
+        constants: renderPipelineConstants,
+        targets: Array.from({ length: COARSE_RESIDUAL_OPTICAL_INTERVALS }, () => ({
+          format: BOUNDARY_SPLAT_HDR_TARGET_FORMAT,
+        })),
+      },
+      primitive: { topology: 'triangle-list' },
+    });
+    coarseResidualOpticalReconstructionPipeline = device.createRenderPipeline({
+      label: `kaminos ${COARSE_RESIDUAL_OPTICAL_RECONSTRUCTION_IDENTITY}`,
+      layout: 'auto',
+      vertex: { module: coarseResidualSharedOpticalShader, entryPoint: 'coarseResidualOpticalVs' },
+      fragment: {
+        module: coarseResidualSharedOpticalShader,
+        entryPoint: 'coarseResidualOpticalReconstructionFs',
+        targets: Array.from({ length: COARSE_RESIDUAL_OPTICAL_INTERVALS }, () => ({
+          format: BOUNDARY_SPLAT_HDR_TARGET_FORMAT,
+        })),
+      },
+      primitive: { topology: 'triangle-list' },
+    });
+    coarseResidualSharedOpticalPipeline = device.createRenderPipeline({
+      label: `kaminos ${COARSE_RESIDUAL_SHARED_OPTICAL_RESOLVE_IDENTITY} canvas resolve`,
+      layout: 'auto',
+      vertex: { module: coarseResidualSharedOpticalShader, entryPoint: 'coarseResidualOpticalVs' },
+      fragment: {
+        module: coarseResidualSharedOpticalShader,
+        entryPoint: 'coarseResidualSharedOpticalFs',
+        targets: [{ format }],
+      },
+      primitive: { topology: 'triangle-list' },
+    });
     browserResidualSourcePipeline = device.createRenderPipeline({
       label: `kaminos volume browser residual shader-material-authority source ${gridSize}^3`,
       layout: pipelineLayout,
@@ -7712,6 +7948,28 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       label: `kaminos ${BOUNDARY_SPLAT_OPTICAL_ACCUMULATION_IDENTITY} bin ${binIndex}`,
       layout: boundarySplatRenderPipelineLayout,
       vertex: { module: boundarySplatShader, entryPoint: 'boundarySplatVs' },
+      fragment: {
+        module: boundarySplatShader,
+        entryPoint: 'boundarySplatOpticalFs',
+        constants: { OPTICAL_BIN: binIndex },
+        targets: [{
+          format: BOUNDARY_SPLAT_HDR_TARGET_FORMAT,
+          blend: {
+            color: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
+            alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
+          },
+        }],
+      },
+      primitive: { topology: 'triangle-list' },
+    }));
+    boundarySplatSharedOpticalPipelines = Array.from({ length: BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS }, (_, binIndex) => device.createRenderPipeline({
+      label: `kaminos ${COARSE_RESIDUAL_SHARED_OPTICAL_DEPTH_INTERVAL_IDENTITY} bin ${binIndex}`,
+      layout: boundarySplatRenderPipelineLayout,
+      vertex: {
+        module: boundarySplatShader,
+        entryPoint: 'boundarySplatVs',
+        constants: { SHARED_LINEAR_OPTICAL_DEPTH: 1 },
+      },
       fragment: {
         module: boundarySplatShader,
         entryPoint: 'boundarySplatOpticalFs',
@@ -8002,6 +8260,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
         .join('\n');
       throw new Error(`Coarse residual raymarch presentation WGSL compilation failed:\n${detail}`);
+    }
+    coarseResidualSharedOpticalShader = device.createShaderModule({
+      label: `kaminos ${COARSE_RESIDUAL_SHARED_OPTICAL_RESOLVE_IDENTITY} wgsl`,
+      code: COARSE_RESIDUAL_SHARED_OPTICAL_WGSL,
+    });
+    const coarseSharedOpticalCompilationInfo = await coarseResidualSharedOpticalShader.getCompilationInfo();
+    const coarseSharedOpticalCompilationErrors = coarseSharedOpticalCompilationInfo.messages.filter(message => message.type === 'error');
+    if (coarseSharedOpticalCompilationErrors.length > 0) {
+      const detail = coarseSharedOpticalCompilationErrors
+        .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
+        .join('\n');
+      throw new Error(`Coarse residual shared optical WGSL compilation failed:\n${detail}`);
     }
     bindGroupLayout = device.createBindGroupLayout({
       label: 'kaminos fluid bind group layout',
@@ -8363,6 +8633,40 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
     });
     coarseResidualRaymarchTextureSize = key;
+    return { width, height, effectiveScale };
+  }
+
+  function ensureCoarseResidualOpticalTextures(scale) {
+    const effectiveScale = normalizeCoarseResidualRaymarchScale(scale);
+    const width = Math.max(1, Math.floor(state.width * effectiveScale));
+    const height = Math.max(1, Math.floor(state.height * effectiveScale));
+    const coarseKey = `${width}x${height}x${COARSE_RESIDUAL_OPTICAL_INTERVALS}@${effectiveScale}`;
+    if (!coarseResidualOpticalTexture || coarseResidualOpticalTextureSize !== coarseKey) {
+      coarseResidualOpticalTexture?.destroy();
+      coarseResidualOpticalTexture = device.createTexture({
+        label: `kaminos ${COARSE_RESIDUAL_SHARED_OPTICAL_RECURRENCE_IDENTITY} coarse coefficient intervals`,
+        size: { width, height, depthOrArrayLayers: COARSE_RESIDUAL_OPTICAL_INTERVALS },
+        format: BOUNDARY_SPLAT_HDR_TARGET_FORMAT,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
+      });
+      coarseResidualOpticalTextureSize = coarseKey;
+    }
+    const reconstructedKey = `${state.width}x${state.height}x${COARSE_RESIDUAL_OPTICAL_INTERVALS}`;
+    if (!coarseResidualOpticalReconstructedTexture
+      || coarseResidualOpticalReconstructedTextureSize !== reconstructedKey) {
+      coarseResidualOpticalReconstructedTexture?.destroy();
+      coarseResidualOpticalReconstructedTexture = device.createTexture({
+        label: `kaminos ${COARSE_RESIDUAL_OPTICAL_RECONSTRUCTION_IDENTITY} coefficient intervals`,
+        size: {
+          width: state.width,
+          height: state.height,
+          depthOrArrayLayers: COARSE_RESIDUAL_OPTICAL_INTERVALS,
+        },
+        format: BOUNDARY_SPLAT_HDR_TARGET_FORMAT,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
+      });
+      coarseResidualOpticalReconstructedTextureSize = reconstructedKey;
+    }
     return { width, height, effectiveScale };
   }
 
@@ -8875,12 +9179,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     if (boundarySplatCameraBuffer) {
       const cameraMatrix = camera.matrixWorld.elements;
-      const splatCamera = new Float32Array(28);
+      const splatCamera = new Float32Array(32);
       splatCamera.set(viewProj.elements, 0);
       const boundarySplatMode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
       splatCamera.set([cameraMatrix[0], cameraMatrix[1], cameraMatrix[2], boundarySplatMode === 'world_covariance' ? 1 : 0], 16);
       splatCamera.set([cameraMatrix[4], cameraMatrix[5], cameraMatrix[6], boundarySplatAreaOpacityConserved(boundarySplatMode) ? 1 : 0], 20);
       splatCamera.set([normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius), boundarySplatLearnedAttributesRequested() ? 1 : 0, state.boundarySplatFeatureCaptureEffective ? 1 : 0, normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness)], 24);
+      splatCamera.set([camera.position.x, camera.position.y, camera.position.z, 0], 28);
       device.queue.writeBuffer(boundarySplatCameraBuffer, 0, splatCamera);
     }
     const { renderPhaseTimeMs, renderPhaseFrame } = updateRenderPhaseState(now, state, lookFreeze);
@@ -10184,6 +10489,190 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       transportedRadianceCompositionIdentity: COARSE_RESIDUAL_TRANSPORTED_RADIANCE_COMPOSITION_IDENTITY,
       coefficientConservationEligible: false,
       selfTransmittanceParityEligible: false,
+    };
+    return true;
+  }
+
+  function encodeCoarseResidualSharedOpticalRecurrence(encoder, targetView, options = {}) {
+    const requestedScale = Number(options.raymarchScale);
+    const effectiveScale = normalizeCoarseResidualRaymarchScale(requestedScale);
+    const unavailable = fallbackReason => {
+      state.sparseHybridPresentationReceipt = {
+        identity: 'sparse-hybrid-shared-optical-receipt-v0',
+        requestedRoute: COARSE_RESIDUAL_SHARED_OPTICAL_RECURRENCE_IDENTITY,
+        effectiveRoute: 'unavailable',
+        fallbackReason,
+        coefficientConservationEligible: false,
+        selfTransmittanceParityEligible: false,
+      };
+      return false;
+    };
+    if (!coarseResidualOpticalRaymarchPipeline
+      || !coarseResidualOpticalReconstructionPipeline
+      || !coarseResidualSharedOpticalPipeline
+      || boundarySplatSharedOpticalPipelines.length !== BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS) {
+      return unavailable('coarse-residual-shared-optical-route-unavailable');
+    }
+    ensureBoundarySplatOpticalTexture();
+    const coarse = ensureCoarseResidualOpticalTextures(effectiveScale);
+    uniforms[20] = coarse.width;
+    uniforms[21] = coarse.height;
+    uniforms[307] = APPEARANCE_DECOMPOSITION_MODES['non-ridge-transport-total-extinction'].uniform;
+    device.queue.writeBuffer(uniformBuffer, 0, uniforms);
+
+    const raymarchPass = encoder.beginRenderPass({
+      label: `kaminos ${COARSE_RESIDUAL_SHARED_OPTICAL_RECURRENCE_IDENTITY} coefficient interval pass`,
+      ...(options.raymarchTimestampWrites ? { timestampWrites: options.raymarchTimestampWrites } : {}),
+      colorAttachments: Array.from({ length: COARSE_RESIDUAL_OPTICAL_INTERVALS }, (_, intervalIndex) => ({
+        view: coarseResidualOpticalTexture.createView({
+          dimension: '2d',
+          baseArrayLayer: intervalIndex,
+          arrayLayerCount: 1,
+        }),
+        clearValue: { r: 0, g: 0, b: 0, a: 0 },
+        loadOp: 'clear',
+        storeOp: 'store',
+      })),
+    });
+    raymarchPass.setPipeline(coarseResidualOpticalRaymarchPipeline);
+    raymarchPass.setBindGroup(0, options.bindGroup || bindGroups[currentFluid]);
+    raymarchPass.draw(3);
+    raymarchPass.end();
+
+    const reconstructionBindGroup = device.createBindGroup({
+      label: `kaminos ${COARSE_RESIDUAL_OPTICAL_RECONSTRUCTION_IDENTITY} bind group`,
+      layout: coarseResidualOpticalReconstructionPipeline.getBindGroupLayout(0),
+      entries: [{
+        binding: 0,
+        resource: coarseResidualOpticalTexture.createView({
+          dimension: '2d-array',
+          baseArrayLayer: 0,
+          arrayLayerCount: COARSE_RESIDUAL_OPTICAL_INTERVALS,
+        }),
+      }],
+    });
+    const reconstructionPass = encoder.beginRenderPass({
+      label: `kaminos ${COARSE_RESIDUAL_OPTICAL_RECONSTRUCTION_IDENTITY} pass`,
+      ...(options.reconstructionTimestampWrites ? { timestampWrites: options.reconstructionTimestampWrites } : {}),
+      colorAttachments: Array.from({ length: COARSE_RESIDUAL_OPTICAL_INTERVALS }, (_, intervalIndex) => ({
+        view: coarseResidualOpticalReconstructedTexture.createView({
+          dimension: '2d',
+          baseArrayLayer: intervalIndex,
+          arrayLayerCount: 1,
+        }),
+        clearValue: { r: 0, g: 0, b: 0, a: 0 },
+        loadOp: 'clear',
+        storeOp: 'store',
+      })),
+    });
+    reconstructionPass.setPipeline(coarseResidualOpticalReconstructionPipeline);
+    reconstructionPass.setBindGroup(0, reconstructionBindGroup);
+    reconstructionPass.draw(3);
+    reconstructionPass.end();
+
+    for (let binIndex = 0; binIndex < BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS; binIndex += 1) {
+      const timestampWrites = options.splatTimestampWrites
+        && (binIndex === 0 || binIndex === BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS - 1)
+        ? {
+          querySet: options.splatTimestampWrites.querySet,
+          ...(binIndex === 0
+            ? { beginningOfPassWriteIndex: options.splatTimestampWrites.beginningOfPassWriteIndex }
+            : {}),
+          ...(binIndex === BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS - 1
+            ? { endOfPassWriteIndex: options.splatTimestampWrites.endOfPassWriteIndex }
+            : {}),
+        }
+        : null;
+      const accumulated = encodeBoundarySplatDraw(
+        encoder,
+        boundarySplatOpticalTexture.createView({
+          dimension: '2d',
+          baseArrayLayer: binIndex,
+          arrayLayerCount: 1,
+        }),
+        boundarySplatSharedOpticalPipelines[binIndex],
+        {
+          loadOp: 'clear',
+          clearValue: { r: 0, g: 0, b: 0, a: 0 },
+          recordFrame: false,
+          ...(timestampWrites ? { timestampWrites } : {}),
+        },
+      );
+      if (!accumulated) return unavailable(state.boundarySplatFallbackReason || 'splat-optical-accumulation-unavailable');
+    }
+
+    const resolveBindGroup = device.createBindGroup({
+      label: `kaminos ${COARSE_RESIDUAL_SHARED_OPTICAL_RESOLVE_IDENTITY} bind group`,
+      layout: coarseResidualSharedOpticalPipeline.getBindGroupLayout(0),
+      entries: [
+        {
+          binding: 0,
+          resource: coarseResidualOpticalReconstructedTexture.createView({
+            dimension: '2d-array',
+            baseArrayLayer: 0,
+            arrayLayerCount: COARSE_RESIDUAL_OPTICAL_INTERVALS,
+          }),
+        },
+        {
+          binding: 1,
+          resource: boundarySplatOpticalTexture.createView({
+            dimension: '2d-array',
+            baseArrayLayer: 0,
+            arrayLayerCount: BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS,
+          }),
+        },
+      ],
+    });
+    const resolvePass = encoder.beginRenderPass({
+      label: `kaminos ${COARSE_RESIDUAL_SHARED_OPTICAL_RESOLVE_IDENTITY} pass`,
+      ...(options.recurrenceTimestampWrites ? { timestampWrites: options.recurrenceTimestampWrites } : {}),
+      colorAttachments: [{
+        view: targetView,
+        clearValue: { r: 0, g: 0, b: 0, a: 1 },
+        loadOp: 'clear',
+        storeOp: 'store',
+      }],
+    });
+    resolvePass.setPipeline(coarseResidualSharedOpticalPipeline);
+    resolvePass.setBindGroup(0, resolveBindGroup);
+    resolvePass.draw(3);
+    resolvePass.end();
+
+    state.boundarySplatFrameCount += 1;
+    state.volumeReconstructionStyle = COARSE_RESIDUAL_SHARED_OPTICAL_RECURRENCE_IDENTITY;
+    state.sparseHybridPresentationReceipt = {
+      identity: 'sparse-hybrid-shared-optical-receipt-v0',
+      requestedRoute: COARSE_RESIDUAL_SHARED_OPTICAL_RECURRENCE_IDENTITY,
+      effectiveRoute: COARSE_RESIDUAL_SHARED_OPTICAL_RECURRENCE_IDENTITY,
+      fallbackReason: null,
+      conclusionScope: 'shared-optical-recurrence-assay-awaiting-personal-inspection-v0',
+      requestedRaymarchScale: requestedScale,
+      effectiveRaymarchScale: effectiveScale,
+      raymarchScaleClamped: requestedScale !== effectiveScale,
+      splatScale: 1,
+      splatWidth: state.width,
+      splatHeight: state.height,
+      raymarchWidth: coarse.width,
+      raymarchHeight: coarse.height,
+      splatFormat: BOUNDARY_SPLAT_HDR_TARGET_FORMAT,
+      residualIntervalFormat: BOUNDARY_SPLAT_HDR_TARGET_FORMAT,
+      reconstructedIntervalFormat: BOUNDARY_SPLAT_HDR_TARGET_FORMAT,
+      intermediateClamped: false,
+      residualOpticalIntervals: COARSE_RESIDUAL_OPTICAL_INTERVALS,
+      splatOpticalDepthBins: BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS,
+      residualAuthorityIdentity: COARSE_RESIDUAL_OPTICAL_AUTHORITY_IDENTITY,
+      residualIntervalIdentity: 'camera-ray-entry-to-exit-four-equal-intervals-v0',
+      splatDepthIntervalIdentity: COARSE_RESIDUAL_SHARED_OPTICAL_DEPTH_INTERVAL_IDENTITY,
+      reconstructionIdentity: COARSE_RESIDUAL_OPTICAL_RECONSTRUCTION_IDENTITY,
+      resolveIdentity: COARSE_RESIDUAL_SHARED_OPTICAL_RESOLVE_IDENTITY,
+      subintervalDistributionIdentity: 'uniform-four-way-subinterval-distribution-v0',
+      orderingIdentity: 'far-to-near-shared-alpha-over-v0',
+      alphaIdentity: BOUNDARY_SPLAT_OPTICAL_ALPHA_IDENTITY,
+      blendIdentity: 'one-shared-emission-extinction-recurrence-v0',
+      curve: { exposure: 0.96, vignetteBase: 0.80, vignetteGain: 0.18, power: 0.84 },
+      coefficientConservationEligible: false,
+      coefficientConservationReason: 'learned-splat-coefficients-not-proven-as-exact-owned-source-complement',
+      selfTransmittanceParityEligible: true,
     };
     return true;
   }
@@ -14927,6 +15416,199 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
   }
 
+  async function sampleSparseHybridOpticalGpuProfile(options = {}) {
+    const identity = 'sparse-hybrid-shared-optical-gpu-profile-v0';
+    const requestedScale = Number(options.coarseResidualRaymarchScale ?? 0.15);
+    const effectiveScale = normalizeCoarseResidualRaymarchScale(requestedScale);
+    const requestedAuthority = String(options.coarseResidualRaymarchAuthority || '');
+    const warmupIterations = 3;
+    const sampleIterations = 7;
+    const unavailable = reason => ({
+      identity,
+      status: 'unavailable',
+      authority: 'gpu-timestamp-query-v0',
+      reason,
+      requestedRoute: COARSE_RESIDUAL_SHARED_OPTICAL_RECURRENCE_IDENTITY,
+      requestedRaymarchScale: requestedScale,
+      effectiveRaymarchScale: effectiveScale,
+      raymarchScaleClamped: requestedScale !== effectiveScale,
+      warmupIterations,
+      sampleIterations,
+      simulationAdvanced: false,
+    });
+    if (!state.active || !device) return unavailable('inactive');
+    if (requestedAuthority !== COARSE_RESIDUAL_OPTICAL_AUTHORITY_IDENTITY) {
+      return unavailable(`coarse-residual-authority-mismatch:${requestedAuthority || 'missing'}`);
+    }
+    if (!boundarySplatRequested()) return unavailable('boundary-splat-route-not-requested');
+    if (!timestampQueriesAvailable()) {
+      return unavailable(device?.features?.has?.('timestamp-query')
+        ? 'timestamp-query-write-api-unavailable'
+        : 'timestamp-query-not-supported');
+    }
+
+    const profileRenderLoopWasRunning = state.active && !selectiveHeadLiveCapturePaused;
+    cancelAnimationFrame(raf);
+    raf = 0;
+    const controlsBefore = { ...controlsSnapshot };
+    const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+    const sampleOnce = async iteration => {
+      const queryCount = 14;
+      const querySet = device.createQuerySet({ type: 'timestamp', count: queryCount });
+      const resolveBuffer = device.createBuffer({
+        label: `kaminos sparse hybrid optical timestamp resolve ${iteration}`,
+        size: queryCount * 8,
+        usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
+      });
+      const readbackBuffer = device.createBuffer({
+        label: `kaminos sparse hybrid optical timestamp readback ${iteration}`,
+        size: queryCount * 8,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+      });
+      let errorScopeOpen = false;
+      try {
+        device.pushErrorScope('validation');
+        errorScopeOpen = true;
+        const encoder = device.createCommandEncoder({ label: `kaminos sparse hybrid optical profile ${iteration}` });
+        encodeMajorant(encoder, {
+          force: true,
+          timestampWrites: { querySet, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 },
+        });
+        encodeBoundarySidecar(encoder, {
+          force: true,
+          timestampWrites: { querySet, beginningOfPassWriteIndex: 2, endOfPassWriteIndex: 3 },
+        });
+        const splatsEncoded = encodeBoundarySplats(encoder, {
+          compactTimestampWrites: { querySet, beginningOfPassWriteIndex: 4 },
+          finalizeTimestampWrites: { querySet, endOfPassWriteIndex: 5 },
+        });
+        if (!splatsEncoded) throw new Error(state.boundarySplatFallbackReason || 'boundary-splat-profile-route-unavailable');
+        const applied = encodeCoarseResidualSharedOpticalRecurrence(
+          encoder,
+          context.getCurrentTexture().createView(),
+          {
+            raymarchScale: requestedScale,
+            bindGroup: selectiveHeadLiveRoleGroups('render'),
+            raymarchTimestampWrites: { querySet, beginningOfPassWriteIndex: 6, endOfPassWriteIndex: 7 },
+            reconstructionTimestampWrites: { querySet, beginningOfPassWriteIndex: 8, endOfPassWriteIndex: 9 },
+            splatTimestampWrites: { querySet, beginningOfPassWriteIndex: 10, endOfPassWriteIndex: 11 },
+            recurrenceTimestampWrites: { querySet, beginningOfPassWriteIndex: 12, endOfPassWriteIndex: 13 },
+          },
+        );
+        if (!applied) throw new Error(state.sparseHybridPresentationReceipt?.fallbackReason || 'sparse-hybrid-optical-profile-route-unavailable');
+        encoder.resolveQuerySet(querySet, 0, queryCount, resolveBuffer, 0);
+        encoder.copyBufferToBuffer(resolveBuffer, 0, readbackBuffer, 0, queryCount * 8);
+        device.queue.submit([encoder.finish()]);
+        await readbackBuffer.mapAsync(GPUMapMode.READ);
+        const timestamps = new BigUint64Array(readbackBuffer.getMappedRange().slice(0));
+        readbackBuffer.unmap();
+        const validationError = await device.popErrorScope();
+        errorScopeOpen = false;
+        if (validationError) throw new Error(validationError.message || String(validationError));
+        if (timestamps.some(value => value === 0n)) {
+          throw new Error(`timestamp-query-incomplete:${Array.from(timestamps, value => value.toString()).join(',')}`);
+        }
+        const passPairs = [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9], [10, 11], [12, 13]];
+        for (const [beginIndex, endIndex] of passPairs) {
+          if (timestamps[endIndex] < timestamps[beginIndex]) {
+            throw new Error(`timestamp-query-pass-reversed:${beginIndex}-${endIndex}`);
+          }
+        }
+        const ms = (end, start) => Number(timestamps[end] - timestamps[start]) / 1_000_000;
+        const queueSpanStart = timestamps.reduce((minimum, value) => value < minimum ? value : minimum);
+        const queueSpanEnd = timestamps.reduce((maximum, value) => value > maximum ? value : maximum);
+        return {
+          majorantMs: ms(1, 0),
+          sidecarMs: ms(3, 2),
+          compactionMs: ms(5, 4),
+          coarseRaymarchMs: ms(7, 6),
+          reconstructionMs: ms(9, 8),
+          splatRasterMs: ms(11, 10),
+          recurrenceMs: ms(13, 12),
+          totalGpuMs: Number(queueSpanEnd - queueSpanStart) / 1_000_000,
+        };
+      } finally {
+        if (errorScopeOpen) await device.popErrorScope().catch(() => null);
+        resolveBuffer.destroy();
+        readbackBuffer.destroy();
+        querySet.destroy?.();
+      }
+    };
+    const summarize = values => {
+      const sorted = [...values].sort((left, right) => left - right);
+      const quantile = fraction => {
+        const index = (sorted.length - 1) * fraction;
+        const lower = Math.floor(index);
+        const upper = Math.ceil(index);
+        const weight = index - lower;
+        return sorted[lower] * (1 - weight) + sorted[upper] * weight;
+      };
+      return { median: quantile(0.5), p10: quantile(0.1), p90: quantile(0.9) };
+    };
+    try {
+      if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+      controlsSnapshot = applyRuntimeQualityControls({
+        ...controlsSnapshot,
+        renderScale: 1,
+        selectiveHeadLiveRenderComposition: 'full-raymarch-under-splats-diagnostic-v0',
+      });
+      updateUniforms(fixedNow);
+      for (let iteration = 0; iteration < warmupIterations; iteration += 1) {
+        await sampleOnce(`warmup-${iteration + 1}`);
+      }
+      const samples = [];
+      for (let iteration = 0; iteration < sampleIterations; iteration += 1) {
+        samples.push(await sampleOnce(`sample-${iteration + 1}`));
+      }
+      const stageNames = [
+        'majorantMs',
+        'sidecarMs',
+        'compactionMs',
+        'coarseRaymarchMs',
+        'reconstructionMs',
+        'splatRasterMs',
+        'recurrenceMs',
+        'totalGpuMs',
+      ];
+      const distribution = Object.fromEntries(stageNames.map(stageName => [
+        stageName,
+        summarize(samples.map(sample => sample[stageName])),
+      ]));
+      return {
+        identity,
+        status: 'complete',
+        authority: 'gpu-timestamp-query-warmed-repeated-v0',
+        reason: 'three-warmup-seven-sample-timestamp-query',
+        requestedRoute: COARSE_RESIDUAL_SHARED_OPTICAL_RECURRENCE_IDENTITY,
+        effectiveRoute: state.sparseHybridPresentationReceipt?.effectiveRoute || 'unavailable',
+        requestedRaymarchScale: requestedScale,
+        effectiveRaymarchScale: effectiveScale,
+        raymarchScaleClamped: requestedScale !== effectiveScale,
+        residualAuthorityIdentity: COARSE_RESIDUAL_OPTICAL_AUTHORITY_IDENTITY,
+        simulationAdvanced: false,
+        frameCount: state.frameCount,
+        simStepCount: state.simStepCount,
+        warmupIterations,
+        sampleIterations,
+        samples,
+        distribution,
+        coarseRaymarchMs: distribution.coarseRaymarchMs,
+        reconstructionMs: distribution.reconstructionMs,
+        splatRasterMs: distribution.splatRasterMs,
+        recurrenceMs: distribution.recurrenceMs,
+        totalGpuMs: distribution.totalGpuMs,
+      };
+    } catch (error) {
+      return unavailable(`timestamp-query-profile-failed:${error?.message || String(error)}`);
+    } finally {
+      controlsSnapshot = controlsBefore;
+      updateUniforms(fixedNow);
+      if (profileRenderLoopWasRunning && state.active && !selectiveHeadLiveCapturePaused) {
+        raf = requestAnimationFrame(render);
+      }
+    }
+  }
+
   async function renderFrozenScaleToCanvas(options = {}) {
     const fullFieldImportSessionId = String(options.fullFieldImportSessionId || '');
     const importedFieldCustody = Boolean(
@@ -14940,24 +15622,33 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const compositionExplicit = options.boundarySplatComposition != null;
     const boundarySplatCompositionRequestedRaw = options.boundarySplatComposition ?? 'splat-only-v0';
     const coarseResidualPresentationAssay = boundarySplatCompositionRequestedRaw === COARSE_RESIDUAL_RAYMARCH_PRESENTATION_ASSAY_IDENTITY;
+    const coarseResidualSharedOpticalAssay = boundarySplatCompositionRequestedRaw === COARSE_RESIDUAL_SHARED_OPTICAL_RECURRENCE_IDENTITY;
+    const coarseResidualAssay = coarseResidualPresentationAssay || coarseResidualSharedOpticalAssay;
     const coarseResidualRaymarchAuthorityRequested = String(options.coarseResidualRaymarchAuthority || '');
-    const compositionRequest = coarseResidualPresentationAssay
+    const coarseResidualAuthorityExpected = coarseResidualSharedOpticalAssay
+      ? COARSE_RESIDUAL_OPTICAL_AUTHORITY_IDENTITY
+      : COARSE_RESIDUAL_RAYMARCH_AUTHORITY_IDENTITY;
+    const compositionRequest = coarseResidualAssay
       ? {
         raw: boundarySplatCompositionRequestedRaw,
-        requested: COARSE_RESIDUAL_RAYMARCH_PRESENTATION_ASSAY_IDENTITY,
+        requested: boundarySplatCompositionRequestedRaw,
         fallbackReason: null,
         definition: {
           raymarch: true,
           splat: true,
           raymarchFireAuthority: 1,
-          compositionAuthority: 'diagnostic-coarse-non-ridge-transported-radiance-plus-full-resolution-splat-presentation-only-v0',
+          compositionAuthority: coarseResidualSharedOpticalAssay
+            ? 'diagnostic-coarse-non-ridge-coefficients-plus-full-resolution-splat-shared-optical-recurrence-v0'
+            : 'diagnostic-coarse-non-ridge-transported-radiance-plus-full-resolution-splat-presentation-only-v0',
         },
       }
       : selectiveHeadLiveRenderCompositionRequest(boundarySplatCompositionRequestedRaw);
-    if (coarseResidualPresentationAssay && coarseResidualRaymarchAuthorityRequested !== COARSE_RESIDUAL_RAYMARCH_AUTHORITY_IDENTITY) {
+    if (coarseResidualAssay && coarseResidualRaymarchAuthorityRequested !== coarseResidualAuthorityExpected) {
       state.sparseHybridPresentationReceipt = {
-        identity: 'sparse-hybrid-presentation-receipt-v0',
-        requestedRoute: COARSE_RESIDUAL_RAYMARCH_PRESENTATION_ASSAY_IDENTITY,
+        identity: coarseResidualSharedOpticalAssay
+          ? 'sparse-hybrid-shared-optical-receipt-v0'
+          : 'sparse-hybrid-presentation-receipt-v0',
+        requestedRoute: boundarySplatCompositionRequestedRaw,
         effectiveRoute: 'unavailable',
         fallbackReason: `coarse-residual-authority-mismatch:${coarseResidualRaymarchAuthorityRequested || 'missing'}`,
         residualAuthorityIdentity: 'unavailable',
@@ -14968,7 +15659,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         ok: false,
         reason: 'coarse-residual-authority-mismatch',
         boundarySplatCompositionRequestedRaw,
-        boundarySplatCompositionRequested: COARSE_RESIDUAL_RAYMARCH_PRESENTATION_ASSAY_IDENTITY,
+        boundarySplatCompositionRequested: boundarySplatCompositionRequestedRaw,
         boundarySplatCompositionEffective: 'unavailable',
         sparseHybridPresentationReceipt: { ...state.sparseHybridPresentationReceipt },
         raymarchEncoded: false,
@@ -14999,12 +15690,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const coarseResidualRaymarchScaleRequested = Number(
       options.coarseResidualRaymarchScale ?? options.renderScale ?? 0.10,
     );
-    const renderScale = coarseResidualPresentationAssay
+    const renderScale = coarseResidualAssay
       ? 1
       : normalizeRenderScale(options.renderScale ?? controlsSnapshot.renderScale);
     const controlOverrides = {
       ...(options.controlOverrides && typeof options.controlOverrides === 'object' ? options.controlOverrides : {}),
-      selectiveHeadLiveRenderComposition: coarseResidualPresentationAssay
+      selectiveHeadLiveRenderComposition: coarseResidualAssay
         ? 'full-raymarch-under-splats-diagnostic-v0'
         : compositionRequest.requested,
     };
@@ -15062,8 +15753,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
           };
         }
-        if (coarseResidualPresentationAssay) {
-          splatEncoded = encodeCoarseResidualRaymarchPresentationAssay(
+        if (coarseResidualAssay) {
+          splatEncoded = (coarseResidualSharedOpticalAssay
+            ? encodeCoarseResidualSharedOpticalRecurrence
+            : encodeCoarseResidualRaymarchPresentationAssay)(
             encoder,
             currentTexture.createView(),
             {
@@ -15081,7 +15774,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           raymarchEncoded = true;
         }
         if (compositionDefinition.splat) {
-          if (!coarseResidualPresentationAssay) {
+          if (!coarseResidualAssay) {
             splatEncoded = encodeBoundarySplatPresentation(
               encoder,
               currentTexture.createView(),
@@ -15170,8 +15863,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         const retryTexture = context.getCurrentTexture();
         let retryRaymarchEncoded = false;
         let retrySplatEncoded = false;
-        if (coarseResidualPresentationAssay) {
-          retrySplatEncoded = encodeCoarseResidualRaymarchPresentationAssay(
+        if (coarseResidualAssay) {
+          retrySplatEncoded = (coarseResidualSharedOpticalAssay
+            ? encodeCoarseResidualSharedOpticalRecurrence
+            : encodeCoarseResidualRaymarchPresentationAssay)(
             retryEncoder,
             retryTexture.createView(),
             {
@@ -15188,7 +15883,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           );
           retryRaymarchEncoded = true;
         }
-        if (!coarseResidualPresentationAssay) {
+        if (!coarseResidualAssay) {
           retrySplatEncoded = encodeBoundarySplatPresentation(
             retryEncoder,
             retryTexture.createView(),
@@ -15327,7 +16022,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         boundarySplatCapacityRetryCount,
         boundarySplatFallbackReason: state.boundarySplatFallbackReason,
         boundarySplatMode: normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode),
-        sparseHybridPresentationReceipt: coarseResidualPresentationAssay && state.sparseHybridPresentationReceipt
+        sparseHybridPresentationReceipt: coarseResidualAssay && state.sparseHybridPresentationReceipt
           ? {
             ...state.sparseHybridPresentationReceipt,
             curve: state.sparseHybridPresentationReceipt.curve ? { ...state.sparseHybridPresentationReceipt.curve } : null,
@@ -15339,7 +16034,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         controlsSnapshot = controlsBefore;
         resetTemporalHistory('same-state-render-scale-canvas-restore');
       }
-      if (coarseResidualPresentationAssay && device) updateUniforms(fixedNow);
+      if (coarseResidualAssay && device) updateUniforms(fixedNow);
       if (options.resumeRenderLoop === true && state.active) {
         cancelAnimationFrame(raf);
         raf = requestAnimationFrame(render);
@@ -15891,6 +16586,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     controlledStepSequence,
     captureSelectiveHeadLiveFrame,
     sampleSparseHybridPresentationGpuProfile,
+    sampleSparseHybridOpticalGpuProfile,
     renderFrozenScaleToCanvas,
     dispose() {
       this.setActive(false);
@@ -15898,6 +16594,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       boundarySplatHdrTexture?.destroy();
       boundarySplatOpticalTexture?.destroy();
       coarseResidualRaymarchTexture?.destroy();
+      coarseResidualOpticalTexture?.destroy();
+      coarseResidualOpticalReconstructedTexture?.destroy();
       browserResidualFeatureTexture?.destroy();
       externalEmitterBuffer?.destroy();
       boundarySplatCameraBuffer?.destroy();

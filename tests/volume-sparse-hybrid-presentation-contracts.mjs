@@ -6,7 +6,7 @@ const core = fs.readFileSync(new URL('../volume-core.js', import.meta.url), 'utf
 assert.match(core, /COARSE_RESIDUAL_RAYMARCH_PRESENTATION_ASSAY_IDENTITY\s*=\s*'coarse-residual-raymarch-under-full-resolution-splats-presentation-assay-v0'/, 'hybrid assay must have a stable route identity');
 const genericLiveCompositionTable = core.match(/const SELECTIVE_HEAD_LIVE_RENDER_COMPOSITIONS[\s\S]*?const SELECTIVE_HEAD_LIVE_REPLAY_ANCHOR_AUTHORITY/)?.[0] || '';
 assert.doesNotMatch(genericLiveCompositionTable, /COARSE_RESIDUAL_RAYMARCH_PRESENTATION_ASSAY_IDENTITY/, 'frozen coarse assay must not be advertised by generic live composition paths');
-assert.match(core, /coarseResidualPresentationAssay\s*\?[\s\S]*requested:\s*COARSE_RESIDUAL_RAYMARCH_PRESENTATION_ASSAY_IDENTITY[\s\S]*selectiveHeadLiveRenderCompositionRequest/, 'frozen capture must admit the coarse assay through its dedicated route');
+assert.match(core, /coarseResidualAssay\s*=\s*coarseResidualPresentationAssay\s*\|\|\s*coarseResidualSharedOpticalAssay[\s\S]*requested:\s*boundarySplatCompositionRequestedRaw[\s\S]*selectiveHeadLiveRenderCompositionRequest/, 'frozen capture must admit each coarse assay through a dedicated route');
 assert.match(core, /function normalizeCoarseResidualRaymarchScale[\s\S]*0\.05[\s\S]*1/, 'coarse raymarch scale must be independent and permit the requested five-percent linear scale');
 assert.match(core, /struct RaymarchResult[\s\S]*linearRadianceTransmittance:\s*vec4<f32>/, 'raymarch must expose pre-presentation linear radiance instead of a clipped presentation image');
 assert.match(core, /fn fsLinearRadiance[\s\S]*return result\.linearRadianceTransmittance/, 'coarse raymarch target must receive linear HDR radiance');
@@ -16,16 +16,16 @@ assert.match(core, /fn coarseResidualRaymarchPresentationFs[\s\S]*raymarchRadian
 assert.match(core, /selfTransmittanceParityEligible:\s*false/, 'presentation-only assay must not claim optical or self-transmittance parity');
 assert.match(core, /resolutionOwnershipIdentity:\s*'full-resolution-splats-independent-coarse-linear-raymarch-v0'/, 'receipt must record separate resolution ownership');
 assert.match(core, /COARSE_RESIDUAL_RAYMARCH_AUTHORITY_IDENTITY\s*=\s*'non-ridge-contribution-under-complete-flame-transmittance-v0'/, 'coarse presentation assay must name the analytical broad-radiance authority');
-assert.match(core, /coarseResidualRaymarchAuthorityRequested\s*!==\s*COARSE_RESIDUAL_RAYMARCH_AUTHORITY_IDENTITY/, 'coarse assay must fail loud instead of silently rendering an empty or full-flame residual');
+assert.match(core, /coarseResidualAuthorityExpected\s*=\s*coarseResidualSharedOpticalAssay[\s\S]*COARSE_RESIDUAL_RAYMARCH_AUTHORITY_IDENTITY[\s\S]*coarseResidualRaymarchAuthorityRequested\s*!==\s*coarseResidualAuthorityExpected/, 'coarse assay must fail loud against its route-specific authority instead of silently rendering an empty or full-flame residual');
 assert.match(core, /uniforms\[307\]\s*=\s*APPEARANCE_DECOMPOSITION_MODES\['non-ridge-transport-total-extinction'\]\.uniform/, 'coarse raymarch must privately select the analytical non-ridge transport without disabling splats globally');
 assert.match(core, /COARSE_RESIDUAL_TRANSPORTED_RADIANCE_COMPOSITION_IDENTITY\s*=\s*'separately-transported-radiance-sum-presentation-only-approximation-v0'/, 'presentation ladder must name its transported-radiance approximation');
 assert.match(core, /transportedRadianceCompositionIdentity:\s*COARSE_RESIDUAL_TRANSPORTED_RADIANCE_COMPOSITION_IDENTITY/, 'receipt must disclose that the first ladder is not a shared optical recurrence');
 assert.match(core, /state\.sparseHybridPresentationReceipt\s*=\s*null;[\s\S]*const compositionExplicit/, 'every frozen capture must clear stale hybrid evidence before route selection');
-assert.match(core, /sparseHybridPresentationReceipt:\s*coarseResidualPresentationAssay\s*&&\s*state\.sparseHybridPresentationReceipt/, 'only a coarse assay capture may return a hybrid receipt');
-assert.match(core, /finally\s*\{[\s\S]*controlsSnapshot\s*=\s*controlsBefore[\s\S]*coarseResidualPresentationAssay[\s\S]*updateUniforms\(fixedNow\)/, 'all private coarse-pass uniforms must be restored after the assay');
+assert.match(core, /sparseHybridPresentationReceipt:\s*coarseResidualAssay\s*&&\s*state\.sparseHybridPresentationReceipt/, 'only a coarse assay capture may return a hybrid receipt');
+assert.match(core, /finally\s*\{[\s\S]*controlsSnapshot\s*=\s*controlsBefore[\s\S]*coarseResidualAssay[\s\S]*updateUniforms\(fixedNow\)/, 'all private coarse-pass uniforms must be restored after the assay');
 assert.match(core, /async function sampleSparseHybridPresentationGpuProfile[\s\S]*timestamp-query/, 'hybrid assay must expose an isolated GPU timestamp profile');
 assert.match(core, /sampleSparseHybridPresentationGpuProfile[\s\S]*majorant[\s\S]*sidecar[\s\S]*compaction[\s\S]*coarseRaymarch[\s\S]*splatRaster[\s\S]*compositeResolve[\s\S]*total/, 'hybrid profile must charge every renderer stage separately');
-assert.match(core, /sampleSparseHybridPresentationGpuProfile,\s*\n\s*renderFrozenScaleToCanvas/, 'hybrid GPU profile must be exposed through the prototype debug API');
+assert.match(core, /sampleSparseHybridPresentationGpuProfile,\s*\n\s*sampleSparseHybridOpticalGpuProfile,\s*\n\s*renderFrozenScaleToCanvas/, 'hybrid GPU profiles must be exposed through the prototype debug API');
 assert.match(core, /sampleSparseHybridPresentationGpuProfile[\s\S]*profileRenderLoopWasRunning[\s\S]*cancelAnimationFrame\(raf\)[\s\S]*requestAnimationFrame\(render\)/, 'hybrid GPU profile must suspend and faithfully restore a live render loop');
 
 const witness = fs.readFileSync(new URL('../volume-sparse-hybrid-presentation-witness.mjs', import.meta.url), 'utf8');
@@ -40,9 +40,9 @@ assert.match(orbitHarness, /sparseHybridPresentation[\s\S]*renderFrozenScaleToCa
 assert.match(orbitHarness, /coarseResidualRaymarchAuthority:\s*'non-ridge-contribution-under-complete-flame-transmittance-v0'/, 'hybrid orbit frames must pin the exact analytical residual authority');
 assert.match(orbitHarness, /sampleSparseHybridPresentationGpuProfile/, 'hybrid orbit must collect a hardware timing receipt for each scale');
 assert.match(orbitHarness, /captured-awaiting-personal-inspection/, 'captured hybrid media must remain visibly unclosed before personal inspection');
-assert.match(orbitHarness, /sparseHybridRequested\s*=\s*args\.has\('--sparse-hybrid-scales'\)/, 'explicit sparse-hybrid intent must not disappear when its value is malformed');
-assert.match(orbitHarness, /parseStrictNumberList\(args\.get\('--sparse-hybrid-scales'\),\s*'--sparse-hybrid-scales'\)/, 'sparse-hybrid scales must use fail-loud parsing instead of filtering malformed tokens');
-assert.match(orbitHarness, /requireExplicitOptionValue\('--sparse-hybrid-scales'\)/, 'a bare sparse-hybrid scale flag must fail instead of becoming scale one');
+assert.match(orbitHarness, /sparseHybridPresentationRequested\s*=\s*args\.has\('--sparse-hybrid-scales'\)[\s\S]*sparseHybridRequested\s*=\s*sparseHybridPresentationRequested\s*\|\|\s*sparseHybridOpticalRequested/, 'explicit sparse-hybrid intent must not disappear when its value is malformed');
+assert.match(orbitHarness, /sparseHybridScaleOption[\s\S]*parseStrictNumberList\(args\.get\(sparseHybridScaleOption\),\s*sparseHybridScaleOption\)/, 'sparse-hybrid scales must use fail-loud parsing instead of filtering malformed tokens');
+assert.match(orbitHarness, /requireExplicitOptionValue\(sparseHybridScaleOption\)/, 'a bare sparse-hybrid scale flag must fail instead of becoming scale one');
 assert.match(orbitHarness, /expectedCandidatePayloadSha256/, 'checksum-bound sparse hybrid replay must declare the accepted candidate payload hash');
 assert.match(orbitHarness, /candidate payload hash disagrees with requested authority/, 'sparse hybrid capture must fail on the first candidate payload substitution');
 assert.match(orbitHarness, /every\(capture\s*=>\s*capture\.footprintAudit\?\.candidatePayloadSha256\s*===\s*firstCapture\.footprintAudit\?\.candidatePayloadSha256\)/, 'all scale and camera captures must retain one candidate payload');

@@ -14,8 +14,13 @@ assert.match(
 assert.match(core, /COARSE_RESIDUAL_OPTICAL_INTERVALS\s*=\s*4/, 'shared hybrid route must retain four residual optical intervals');
 assert.match(
   core,
-  /fn fsCoarseResidualOpticalIntervals[\s\S]*nonRidgeEmissionCoefficient[\s\S]*nonRidgeExtinctionCoefficient/,
+  /let residualOpticalCoefficient\s*=\s*vec4<f32>\(nonRidgeEmissionCoefficient,\s*nonRidgeExtinctionCoefficient\)/,
   'residual intervals must carry the exact positive non-ridge emission and extinction complement',
+);
+assert.match(
+  core,
+  /fn fsCoarseResidualOpticalIntervals[\s\S]*out\.interval0\s*=\s*result\.coarseResidualOptical0[\s\S]*out\.interval3\s*=\s*result\.coarseResidualOptical3/,
+  'coarse optical fragment must retain all four accumulated coefficient intervals',
 );
 assert.match(
   core,
@@ -24,6 +29,8 @@ assert.match(
 );
 assert.match(core, /far-to-near-shared-alpha-over-v0/, 'shared route receipt must name the effective ordered recurrence');
 assert.match(core, /uniform-four-way-subinterval-distribution-v0/, 'shared route must disclose its within-interval approximation');
+assert.match(core, /COARSE_RESIDUAL_SHARED_OPTICAL_DEPTH_INTERVAL_IDENTITY\s*=\s*['"]camera-ray-entry-to-exit-sixteen-equal-intervals-v0['"]/, 'splat and residual recurrence must share linear camera-ray depth semantics');
+assert.match(core, /boundarySplatSharedOpticalPipelines[\s\S]*SHARED_LINEAR_OPTICAL_DEPTH:\s*1/, 'shared route must not reuse projected-NDC bins against linear residual intervals');
 assert.match(core, /coefficientConservationEligible:\s*false/, 'unproven learned splat coefficients must not claim exact coefficient conservation');
 assert.match(core, /selfTransmittanceParityEligible:\s*true/, 'accepted shared recurrence must expose its bounded optical parity eligibility');
 
@@ -32,8 +39,8 @@ assert.match(witness, /sparseHybridOpticalRecurrence/, 'orbit witness must captu
 assert.match(witness, /profileSparseHybridOptical/, 'witness must expose corrected-route optical timing');
 assert.match(witness, /warmupIterations:\s*3/, 'timing must include explicit warmup iterations');
 assert.match(witness, /sampleIterations:\s*7/, 'timing must retain repeated post-warmup samples');
-assert.match(witness, /median[\s\S]*p10[\s\S]*p90/, 'timing evidence must report a distribution rather than one noisy sample');
-assert.match(witness, /reconstructionMs[\s\S]*recurrenceMs[\s\S]*splatRasterMs[\s\S]*totalGpuMs/, 'timing must split reconstruction, recurrence, splat, and total');
+assert.match(core, /median[\s\S]*p10[\s\S]*p90/, 'timing evidence must report a distribution rather than one noisy sample');
+assert.match(core, /reconstructionMs[\s\S]*splatRasterMs[\s\S]*recurrenceMs[\s\S]*totalGpuMs/, 'timing must split reconstruction, recurrence, splat, and total');
 assert.match(witness, /captured-awaiting-personal-inspection/, 'nonblank shared-optical output must not claim visual acceptance');
 assert.match(witness, /candidate payload hash disagrees with requested authority/, 'shared-optical replay must fail on candidate substitution');
 

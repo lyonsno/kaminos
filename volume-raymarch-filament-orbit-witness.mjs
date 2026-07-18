@@ -10,6 +10,7 @@ import {
   validateSplatOpticalRecurrenceReport,
   writeSplatOpticalRecurrenceFailureReport,
 } from './volume-splat-optical-recurrence-contract.mjs';
+import { validateSparseHybridOpticalRecurrenceReport } from './volume-sparse-hybrid-optical-recurrence-contract.mjs';
 
 const SCHEMA = 'kaminos.volume.raymarch-filament-orbit-witness.v0';
 const WRAPPER_ROUTE = 'exact-basin-selective-head-live-v0';
@@ -29,11 +30,25 @@ const holdoutReportPath = resolve(String(args.get('--holdout-report') || `${outD
 const radianceParityReportPath = resolve(String(args.get('--radiance-parity-report') || `${outDir}/radiance-parity-report.json`));
 const opticalRecurrenceReportPath = resolve(String(args.get('--optical-recurrence-report') || `${outDir}/optical-recurrence-report.json`));
 const opticalRecurrenceRequested = args.has('--optical-recurrence-report');
-const sparseHybridRequested = args.has('--sparse-hybrid-scales');
-if (sparseHybridRequested) requireExplicitOptionValue('--sparse-hybrid-scales');
+const sparseHybridPresentationRequested = args.has('--sparse-hybrid-scales');
+const sparseHybridOpticalRequested = args.has('--sparse-hybrid-optical-scales');
+const sparseHybridRequested = sparseHybridPresentationRequested || sparseHybridOpticalRequested;
+if (sparseHybridPresentationRequested && sparseHybridOpticalRequested) {
+  args.errors.push('choose exactly one sparse hybrid treatment flag');
+}
+const sparseHybridScaleOption = sparseHybridOpticalRequested
+  ? '--sparse-hybrid-optical-scales'
+  : '--sparse-hybrid-scales';
+if (sparseHybridRequested) requireExplicitOptionValue(sparseHybridScaleOption);
 const sparseHybridScales = sparseHybridRequested
-  ? parseStrictNumberList(args.get('--sparse-hybrid-scales'), '--sparse-hybrid-scales')
+  ? parseStrictNumberList(args.get(sparseHybridScaleOption), sparseHybridScaleOption)
   : [];
+const sparseHybridMode = sparseHybridOpticalRequested
+  ? 'sparseHybridOpticalRecurrence'
+  : 'sparseHybridPresentation';
+const sparseHybridRequestedRoute = sparseHybridOpticalRequested
+  ? 'coarse-residual-plus-full-resolution-splat-shared-optical-recurrence-v0'
+  : 'coarse-residual-raymarch-under-full-resolution-splats-presentation-assay-v0';
 const rayStepCounts = parseIntegerList(args.get('--ray-steps') || '48,96,160');
 const orbitAngles = parseNumberList(args.get('--orbit-angles') || '-0.42,-0.28,-0.14,0,0.14,0.28,0.42');
 const expectedFrameCount = optionalInteger('--expected-frame-count');
@@ -151,6 +166,9 @@ try {
     assert.equal(orbitAngles.length, 21, 'sparse hybrid witness requires the exact 21-camera frozen orbit');
     assert.ok(sparseHybridScales.every(value => value >= 0.05 && value <= 1), 'sparse hybrid scales must remain inside the renderer contract');
     assert.equal(new Set(sparseHybridScales).size, sparseHybridScales.length, 'sparse hybrid scales must be unique');
+    if (sparseHybridOpticalRequested) {
+      assert.deepEqual([...sparseHybridScales].sort((left, right) => right - left), [0.20, 0.15, 0.10], 'shared optical witness must retain only 0.20, 0.15, and the declared 0.10 cliff comparator');
+    }
   }
 
   failurePhase = 'browser-launch';
@@ -230,7 +248,7 @@ try {
     for (const camera of initialization.cameras) {
       for (const raymarchScale of sparseHybridScales) {
         failurePhase = `camera-${camera.index}-sparse-hybrid-${raymarchScale}`;
-        const capture = await captureAndPersist(camera, 'sparseHybridPresentation', maxRaySteps, raymarchScale);
+        const capture = await captureAndPersist(camera, sparseHybridMode, maxRaySteps, raymarchScale);
         if (expectedCandidatePayloadSha256 !== null) {
           assert.equal(capture.footprintAudit?.candidatePayloadSha256, expectedCandidatePayloadSha256, 'candidate payload hash disagrees with requested authority');
         }
@@ -278,21 +296,31 @@ try {
     failurePhase = 'sparse-hybrid-gpu-profiles';
     const centerCamera = initialization.cameras.reduce((best, camera) => Math.abs(camera.angle) < Math.abs(best.angle) ? camera : best);
     const timingProfiles = [];
-    for (const raymarchScale of sparseHybridScales) {
-      const profile = await evaluate(socket, `window.__kaminosFilamentOrbitWitness.profileSparseHybrid(${JSON.stringify({ camera: centerCamera, raymarchScale })})`);
+    const timingScaleLadder = sparseHybridOpticalRequested ? [0.20, 0.15] : sparseHybridScales;
+    for (const raymarchScale of timingScaleLadder) {
+      const profileFunction = sparseHybridOpticalRequested ? 'profileSparseHybridOptical' : 'profileSparseHybrid';
+      const profile = await evaluate(socket, `window.__kaminosFilamentOrbitWitness.${profileFunction}(${JSON.stringify({ camera: centerCamera, raymarchScale })})`);
       assert.equal(profile.status, 'complete', `sparse hybrid GPU profile unavailable at scale ${raymarchScale}: ${profile.reason}`);
       assert.equal(profile.effectiveRaymarchScale, raymarchScale, 'sparse hybrid GPU profile scale substitution');
+      if (sparseHybridOpticalRequested) {
+        assert.equal(profile.warmupIterations, 3, 'shared optical timing warmup count disagrees');
+        assert.equal(profile.sampleIterations, 7, 'shared optical timing sample count disagrees');
+      }
       timingProfiles.push(profile);
     }
     const firstCapture = captures[0];
     const sparseReport = {
-      schema: 'kaminos.volume.sparse-hybrid-orbit-capture.v0',
+      schema: sparseHybridOpticalRequested
+        ? 'kaminos.volume.sparse-hybrid-optical-orbit-capture.v0'
+        : 'kaminos.volume.sparse-hybrid-orbit-capture.v0',
       status: 'captured-awaiting-personal-inspection',
-      conclusionScope: 'presentation-only-no-self-transmittance-claim-v0',
+      conclusionScope: sparseHybridOpticalRequested
+        ? 'shared-optical-recurrence-assay-awaiting-personal-inspection-v0'
+        : 'presentation-only-no-self-transmittance-claim-v0',
       runStartedAt,
       runCompletedAt: new Date().toISOString(),
       requestedUrl,
-      requestedRoute: 'coarse-residual-raymarch-under-full-resolution-splats-presentation-assay-v0',
+      requestedRoute: sparseHybridRequestedRoute,
       effectiveWrapperRoute: initialization.summary.wrapperRoute,
       effectiveRendererRoute: initialization.summary.effectiveRoute,
       commit: gitValue(['rev-parse', 'HEAD']),
@@ -307,6 +335,7 @@ try {
         cameras: initialization.cameras,
       },
       scaleLadder: sparseHybridScales,
+      timingScaleLadder,
       raySteps: maxRaySteps,
       candidatePayload: {
         count: firstCapture.footprintAudit?.candidateCount,
@@ -326,6 +355,14 @@ try {
     assert.ok(firstCapture.footprintAudit?.candidatePayloadSha256, 'sparse hybrid source payload hash missing');
     assert.ok(sparseReport.captures.every(capture => capture.footprintAudit?.candidatePayloadSha256 === firstCapture.footprintAudit?.candidatePayloadSha256), 'candidate payload changed across sparse hybrid scale-camera captures');
     assert.ok(sparseReport.captures.every(capture => capture.sparseHybridPresentationReceipt?.fallbackReason == null), 'sparse hybrid route fallback present');
+    assert.ok(sparseReport.captures.every(capture => capture.sparseHybridPresentationReceipt?.effectiveRoute === sparseHybridRequestedRoute), 'sparse hybrid effective route substitution present');
+    assert.ok(sparseReport.captures.every(capture => capture.sparseHybridPresentationReceipt?.raymarchScaleClamped === false), 'sparse hybrid scale clamp present');
+    assert.ok(sparseReport.captures.every(capture => capture.sparseHybridPresentationReceipt?.intermediateClamped === false), 'sparse hybrid intermediate clamp present');
+    if (sparseHybridOpticalRequested) {
+      assert.ok(sparseReport.captures.every(capture => capture.sparseHybridPresentationReceipt?.selfTransmittanceParityEligible === true), 'shared optical recurrence eligibility missing');
+      assert.ok(sparseReport.captures.every(capture => capture.sparseHybridPresentationReceipt?.coefficientConservationEligible === false), 'unproven learned splat coefficients claimed exact conservation');
+      sparseReport.contractValidation = validateSparseHybridOpticalRecurrenceReport(sparseReport);
+    }
     assert.ok(sparseReport.captures.every(capture => capture.frameCount === sparseReport.frozenState.baseFrameCount && capture.simStepCount === sparseReport.frozenState.baseSimStepCount), 'sparse hybrid capture advanced simulator state');
     assert.ok(new Set(sparseReport.captures.map(capture => capture.cameraPoseHash)).size === 21, 'sparse hybrid camera orbit is partial or duplicated');
     writeFileSync(captureReportPath, JSON.stringify(sparseReport, null, 2));
@@ -737,7 +774,7 @@ function runtimeInitializationSource(config) {
       const operator = window.__kaminosSelectiveHeadLive || null;
       const basinWindow = document.querySelector('#basin')?.contentWindow || window;
       const prototype = basinWindow.__kaminosVolumePrototype;
-      if (!operator?.debugState || !prototype?.debugState || !prototype?.sampleFrame || !prototype?.renderFrozenScaleToCanvas || !prototype?.sampleSparseHybridPresentationGpuProfile || !basinWindow.kaminosSetCameraDebugPose) {
+      if (!operator?.debugState || !prototype?.debugState || !prototype?.sampleFrame || !prototype?.renderFrozenScaleToCanvas || !prototype?.sampleSparseHybridPresentationGpuProfile || !prototype?.sampleSparseHybridOpticalGpuProfile || !basinWindow.kaminosSetCameraDebugPose) {
         throw new Error('filament-orbit-runtime-api-missing');
       }
       const digest = async value => {
@@ -1003,6 +1040,13 @@ function runtimeInitializationSource(config) {
           prototype.setBoundarySplatPresentationMode('matched-presentation-v0');
           operator.setComposition('splat-only-v0');
           modeAuthority = 'coarse-residual-raymarch-under-full-resolution-splats-presentation-assay-v0';
+        } else if (request.mode === 'sparseHybridOpticalRecurrence') {
+          operator.setAppearanceAssay('off');
+          operator.setPresentation('beauty');
+          prototype.setControls({ boundarySplatMode: 'world_covariance', raySteps: request.raySteps });
+          prototype.setBoundarySplatPresentationMode('matched-optical-recurrence-v0');
+          operator.setComposition('splat-only-v0');
+          modeAuthority = 'coarse-residual-plus-full-resolution-splat-shared-optical-recurrence-v0';
         } else if (request.mode === 'worldCovariance'
           || request.mode === 'worldCovarianceAdditive'
           || request.mode === 'worldCovarianceMatchedPresentation'
@@ -1036,11 +1080,16 @@ function runtimeInitializationSource(config) {
         const smoke = prototype.setRaymarchSmokePresentationMode('off');
         const cameraPose = basinWindow.kaminosCameraDebugState();
         let sample;
-        if (request.mode === 'sparseHybridPresentation') {
+        if (request.mode === 'sparseHybridPresentation' || request.mode === 'sparseHybridOpticalRecurrence') {
+          const sharedOptical = request.mode === 'sparseHybridOpticalRecurrence';
           const rendered = await prototype.renderFrozenScaleToCanvas({
-            boundarySplatComposition: 'coarse-residual-raymarch-under-full-resolution-splats-presentation-assay-v0',
+            boundarySplatComposition: sharedOptical
+              ? 'coarse-residual-plus-full-resolution-splat-shared-optical-recurrence-v0'
+              : 'coarse-residual-raymarch-under-full-resolution-splats-presentation-assay-v0',
             coarseResidualRaymarchScale: request.raymarchScale,
-            coarseResidualRaymarchAuthority: 'non-ridge-contribution-under-complete-flame-transmittance-v0',
+            coarseResidualRaymarchAuthority: sharedOptical
+              ? 'non-ridge-positive-emission-extinction-coefficient-intervals-v0'
+              : 'non-ridge-contribution-under-complete-flame-transmittance-v0',
             controlOverrides: { raySteps: request.raySteps, temporalAccum: 0, temporalJitter: 0, gridOverlay: 0 },
             now: fixedNow,
             sameStateCaptureId,
@@ -1085,7 +1134,7 @@ function runtimeInitializationSource(config) {
         const metrics = pixelMetrics({ ...sample.image, rgba });
         if (!metrics.nonblank) throw new Error('missing, partial, or blank capture: ' + request.key);
         const effectiveRaySteps = sample.volumePresentationReceipt?.effectiveRayQuality?.raySteps ?? sample.controls?.raySteps ?? null;
-        const footprintAudit = ['analyticBillboard', 'learnedBillboard', 'worldCovariance', 'worldCovarianceAdditive', 'worldCovarianceMatchedPresentation', 'worldCovarianceMatchedOpticalRecurrence', 'sparseHybridPresentation'].includes(request.mode)
+        const footprintAudit = ['analyticBillboard', 'learnedBillboard', 'worldCovariance', 'worldCovarianceAdditive', 'worldCovarianceMatchedPresentation', 'worldCovarianceMatchedOpticalRecurrence', 'sparseHybridPresentation', 'sparseHybridOpticalRecurrence'].includes(request.mode)
           ? await prototype.sampleBoundarySplatFootprintAudit()
           : null;
         const record = {
@@ -1147,6 +1196,21 @@ function runtimeInitializationSource(config) {
         return prototype.sampleSparseHybridPresentationGpuProfile({
           coarseResidualRaymarchScale: request.raymarchScale,
           coarseResidualRaymarchAuthority: 'non-ridge-contribution-under-complete-flame-transmittance-v0',
+          now: fixedNow,
+        });
+      }
+
+      async function profileSparseHybridOptical(request) {
+        basinWindow.kaminosSetCameraDebugPose(request.camera.pose);
+        operator.setAppearanceAssay('off');
+        operator.setPresentation('beauty');
+        prototype.setControls({ boundarySplatMode: 'world_covariance', raySteps: Math.max(...${JSON.stringify(config.rayStepCounts)}) });
+        operator.setComposition('splat-only-v0');
+        return prototype.sampleSparseHybridOpticalGpuProfile({
+          coarseResidualRaymarchScale: request.raymarchScale,
+          coarseResidualRaymarchAuthority: 'non-ridge-positive-emission-extinction-coefficient-intervals-v0',
+          warmupIterations: 3,
+          sampleIterations: 7,
           now: fixedNow,
         });
       }
@@ -1382,7 +1446,7 @@ function runtimeInitializationSource(config) {
         };
       }
 
-      window.__kaminosFilamentOrbitWitness = { capture, profileSparseHybrid, analyze, analyzeCovariance, analyzeCrossExtinction, frozenRepeat };
+      window.__kaminosFilamentOrbitWitness = { capture, profileSparseHybrid, profileSparseHybridOptical, analyze, analyzeCovariance, analyzeCrossExtinction, frozenRepeat };
       return {
         summary: {
           wrapperRoute: wrapperBefore.routeIdentity,
@@ -1474,6 +1538,7 @@ function parseArgs(argv) {
     '--radiance-parity-report',
     '--optical-recurrence-report',
     '--sparse-hybrid-scales',
+    '--sparse-hybrid-optical-scales',
     '--ray-steps',
     '--orbit-angles',
     '--expected-frame-count',
