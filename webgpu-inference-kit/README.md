@@ -253,6 +253,47 @@ That policy selects the content-addressed `physicalResourceId` for residency whi
 
 Raw bundle input uses an owned byte snapshot, then hashes those exact bytes with Web Crypto before any GPU allocation. `prepareWebGpuModelResourceBundle()` makes ownership explicit: `copy` preserves mutable caller input, while `transfer` accepts a full `ArrayBuffer`, detaches it, and verifies/uploads the transferred storage without the loader allocating its own second full-size byte array. Transfer is ownership-consuming even when digest verification later fails; use `copy` when the caller must retain retry bytes. Prepared handles are module-authenticated, bound to the complete normalized manifest, do not expose mutable bytes, and reject reuse after release. Bundle length or digest mismatch fails before upload. Concurrent loads single-flight each policy-selected allocation identity, while cancellation and partial failure release every model lease already acquired. Released GPU buffers remain visible in session residency as explicit eviction candidates until caller policy evicts them; they are not reported as an active model.
 
+### Load Large Models As Verified Packages
+
+When one whole-model bundle would amplify host memory too far, compose several independently authenticated manifests into one model resource package. The route loads package resources strictly in declaration order, releases each source's intermediate custody before acquiring the next, and returns one composite lease:
+
+```js
+import { defineWebGpuModelResourcePackage } from "@kaminos/webgpu-inference-kit";
+
+const modelPackage = defineWebGpuModelResourcePackage({
+  packageId: "acme/vision-model:browser-f16",
+  modelId: "acme/vision-model",
+  revision: "0123456789abcdef",
+  resources: [
+    { resourceId: "encoder", manifest: encoderManifest },
+    { resourceId: "decoder", manifest: decoderManifest },
+    { resourceId: "head", manifest: headManifest },
+  ],
+});
+
+const weights = await sharp.loadModelResourcePackageFromSources({
+  package: modelPackage,
+  sources: {
+    encoder: new URL("./encoder.weights.bin", import.meta.url),
+    decoder: new URL("./decoder.weights.bin", import.meta.url),
+    head: new URL("./head.weights.bin", import.meta.url),
+  },
+  cache: modelBundleCache,
+  signal: loadController.signal,
+  onProgress(event) {
+    console.info(event.resourceId, event.resourceEvent.loadedBytes);
+  },
+});
+
+const encoderWeight = weights.tensors["encoder.weight"];
+weights.report.sourceMemoryBound.largestResourceByteLength;
+weights.release();
+```
+
+Every child manifest must name the same model and revision, resource ids and tensor names must be package-unique, and the complete source map is validated before GPU work starts. Each resource retains its own SHA-256, CacheStorage entry, acquisition report, allocation identities, and cross-route single-flight reuse. Failure or cancellation releases every child lease already acquired and names the exact failed resource.
+
+This bounds source acquisition to one declared package resource at a time; each resource can still carry the current cache-miss copies described above. It does not split one enormous allocation or claim an exact browser-process memory peak. Converters should partition large weight sets into useful independently allocated resources until a later chunk-authenticated format can safely stream within one allocation.
+
 ## What The Kit Gives A Port
 
 - `createWebGpuInferenceRuntime(input)`: acquire or wrap a browser WebGPU device, preserve backend identity, expose runtime helpers, time named stages, and finish a runtime profile.
@@ -281,6 +322,7 @@ Raw bundle input uses an owned byte snapshot, then hashes those exact bytes with
 - `acquireWebGpuModelResourceBundle(manifest, source, options)`: fetch or consume browser-native model bytes, stream uncapped progress, honor cancellation, verify exact manifest identity, recover from corrupt persistent cache entries, and return a verified custody handle plus effective-source report.
 - `createWebGpuModelResourceCacheStorage(input)`: adapt browser CacheStorage into an uncapped, caller-namespaced persistent model-bundle cache with cancellation and retriable lazy opening.
 - `route.loadModelResourcesFromSource(input)`: acquire, verify, persist, and upload a browser-native source through shared session residency, release intermediate custody automatically, and return one model lease plus its acquisition report.
+- `defineWebGpuModelResourcePackage(input)` and `route.loadModelResourcePackageFromSources(input)`: compose several same-model manifests into one sequentially acquired large-model package, preserve per-resource verification/cache/report identity, and return one composite lease with bounded source-resource granularity.
 - `loadWebGpuModelResources(input)` and `route.loadModelResources(input)`: upload each content-derived allocation through shared single-flight residency and return one independently releasable model lease whose tensor views plug into kernels and phase programs.
 - `runtime.runStage(name, fn, metadata)`: wrap major model phases such as ViT encoder blocks, diffusion steps, triplane decode, mask decode, readback, or mesh/splat finalization.
 - `runtime.finishProfile(options)`: emit a `kaminos.webgpu-runtime-profile.v0` profile that downstream routes and schedulers can consume.

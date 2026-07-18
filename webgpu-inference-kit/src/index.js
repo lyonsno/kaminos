@@ -159,6 +159,16 @@ export {
 } from './model-resource-cache-storage.js';
 
 export {
+  WEBGPU_MODEL_RESOURCE_PACKAGE_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_PACKAGE_LEASE_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_PACKAGE_REPORT_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_PACKAGE_PROGRESS_SCHEMA,
+  defineWebGpuModelResourcePackage,
+  validateWebGpuModelResourcePackage,
+  loadWebGpuModelResourcePackageFromSources,
+} from './model-resource-package.js';
+
+export {
   WEBGPU_COMMAND_DUTY_DESCRIPTOR_SCHEMA,
   WEBGPU_COMMAND_DUTY_OBSERVATION_SCHEMA,
   WEBGPU_COMMAND_DUTY_REPORT_SCHEMA,
