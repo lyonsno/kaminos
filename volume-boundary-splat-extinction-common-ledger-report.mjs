@@ -272,6 +272,13 @@ export function validateExtinctionCommonLedgerReport(report, expected) {
     const fullLedger = armsById.get('full-correct')?.coefficientLedger;
     const dropLedger = armsById.get('sparse-drop')?.coefficientLedger;
     const complementLedger = armsById.get('sparse-positive-complement')?.coefficientLedger;
+    const dropCaptureHash = armsById.get('sparse-drop')?.capture?.linearHdrSha256;
+    reject(
+      [...armsById.entries()].some(([armId, arm]) => (
+        armId !== 'sparse-drop' && arm?.capture?.linearHdrSha256 === dropCaptureHash
+      )),
+      'drop-capture-aliases-nondrop-arm',
+    );
     reject(
       armsById.get('full-correct')?.membershipSha256 === armsById.get('sparse-drop')?.membershipSha256,
       'full-sparse-membership-alias',
