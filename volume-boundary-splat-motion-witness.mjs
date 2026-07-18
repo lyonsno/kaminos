@@ -16,6 +16,9 @@ const SOURCE_PRESERVING_SELECTOR = 'boundary-splat-live-union-source-preserving-
 const PROJECTED_WORK_SELECTOR = 'boundary-splat-live-union-projected-footprint-hash-thinning-v0';
 const EXPECTED_ROUTE = 'native-3d-compute-fluid-raymarch-v0';
 const PROJECTED_WORK_TARGETS = [0, 12, 24];
+const PROJECTED_WORK_FLOOR_TARGETS = [0, 3, 6, 9, 12, 24];
+const PROJECTED_WORK_TARGET_SETS = [PROJECTED_WORK_TARGETS, PROJECTED_WORK_FLOOR_TARGETS];
+const PROJECTED_WORK_ALIGNMENT_AUTHORITY = 'same-browser-same-frozen-state-full-12-24-v0';
 const VOLUME_PROTOTYPE_EXPRESSION = `(document.querySelector('#basin')?.contentWindow?.__kaminosVolumePrototype || window.__kaminosVolumePrototype)`;
 const OPERATOR_WINDOW_EXPRESSION = `(document.querySelector('#basin')?.contentWindow || window)`;
 const EXPECTED_LEARNED_MODEL = 'sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472';
@@ -116,7 +119,7 @@ try {
         requestedTargets: projectedWorkTargets,
       },
       effectiveRoute: staticSequence.effectiveRoute || grazingSequence.effectiveRoute || null,
-      alignmentAuthority: 'same-browser-same-frozen-state-full-12-24-v0',
+      alignmentAuthority: projectedWorkAlignmentAuthority(projectedWorkTargets),
       sourceAuthority: SOURCE_AUTHORITY,
       rendererIdentity: FULL_FLAME_UNION_RENDERER,
       expectedLearnedModelIdentity: EXPECTED_LEARNED_MODEL,
@@ -272,10 +275,20 @@ function parseProjectedWorkTargets(value) {
   const raw = String(value || '').trim();
   if (!raw) return null;
   const targets = raw.split(',').map(item => Number(item.trim()));
-  const exact = targets.length === PROJECTED_WORK_TARGETS.length
-    && targets.every((target, index) => Number.isInteger(target) && target === PROJECTED_WORK_TARGETS[index]);
-  if (!exact) throw new Error('projected-work sequence requires exact targets 0,12,24');
-  return targets;
+  const canonicalTargets = PROJECTED_WORK_TARGET_SETS.find(candidate => (
+    targets.length === candidate.length
+    && targets.every((target, index) => Number.isInteger(target) && target === candidate[index])
+  ));
+  if (!canonicalTargets) throw new Error('projected-work sequence requires exact targets 0,12,24 or 0,3,6,9,12,24');
+  return [...canonicalTargets];
+}
+
+function projectedWorkAlignmentAuthority(targets) {
+  if (targets.length === PROJECTED_WORK_TARGETS.length
+    && targets.every((target, index) => target === PROJECTED_WORK_TARGETS[index])) {
+    return PROJECTED_WORK_ALIGNMENT_AUTHORITY;
+  }
+  return `same-browser-same-frozen-state-${targets.map(target => target === 0 ? 'full' : target).join('-')}-v0`;
 }
 
 function defaultChromePath() {
@@ -465,7 +478,7 @@ async function captureProjectedWorkSequence(config) {
     }
     const frameReceipt = {
       sequenceAuthority: frame.sequenceAuthority,
-      alignmentAuthority: 'same-browser-same-frozen-state-full-12-24-v0',
+      alignmentAuthority: projectedWorkAlignmentAuthority(projectedWorkTargets),
       sameBrowserSessionId: frame.sameBrowserSessionId,
       controlledStepFrameIndex: frameIndex,
       controlledStepDeltaMs: frame.controlledStepDeltaMs,
@@ -489,7 +502,7 @@ async function captureProjectedWorkSequence(config) {
     label: config.label,
     sequenceKind: config.sequenceKind,
     sameBrowserSessionId,
-    alignmentAuthority: 'same-browser-same-frozen-state-full-12-24-v0',
+    alignmentAuthority: projectedWorkAlignmentAuthority(projectedWorkTargets),
     sampleAuthority: 'controlled-step-sim-advance-with-frozen-render-only-arms-v0',
     frameCount,
     stepMs,
@@ -996,11 +1009,11 @@ function rejectProjectedWorkFalseClosure(report) {
       throw new Error(`projected-work blank/partial evidence rejected for ${sequence.label}`);
     }
     for (const frame of sequence.frames) {
-      if (frame.captures.length !== PROJECTED_WORK_TARGETS.length) {
+      if (frame.captures.length !== projectedWorkTargets.length) {
         throw new Error(`projected-work blank/partial evidence rejected for ${sequence.label} frame ${frame.controlledStepFrameIndex}`);
       }
       const targets = frame.captures.map(capture => capture.targetPixels);
-      if (!targets.every((target, index) => target === PROJECTED_WORK_TARGETS[index])) {
+      if (!targets.every((target, index) => target === projectedWorkTargets[index])) {
         throw new Error(`projected-work stale requested/effective target list: ${targets.join(',')}`);
       }
       const stateIds = new Set(frame.captures.map(capture => capture.canvasCapture.sameStateCaptureId));
@@ -1015,12 +1028,14 @@ function rejectProjectedWorkFalseClosure(report) {
         throw new Error(`projected-work full-union disagreement for ${sequence.label} frame ${frame.controlledStepFrameIndex}`);
       }
       const selected = frame.captures.map(capture => capture.selectedCandidateCount);
-      if (!(selected[1] <= selected[2] && selected[2] <= selected[0])) {
+      const thinnedSelected = selected.slice(1);
+      const thinnedMonotonic = thinnedSelected.every((count, index) => index === 0 || thinnedSelected[index - 1] <= count);
+      if (!thinnedMonotonic || thinnedSelected.at(-1) > selected[0]) {
         throw new Error(`projected-work selected-count monotonicity disagreement: ${selected.join(',')}`);
       }
     }
   }
-  const expectedQualityRows = sequences.length * frameCount * (PROJECTED_WORK_TARGETS.length - 1);
+  const expectedQualityRows = sequences.length * frameCount * (projectedWorkTargets.length - 1);
   if (report.qualityComparisons.comparisonCount !== expectedQualityRows) {
     throw new Error(`projected-work blank/partial evidence rejected: expected ${expectedQualityRows} quality rows, got ${report.qualityComparisons.comparisonCount}`);
   }
@@ -1034,7 +1049,7 @@ function summarizeProjectedWorkQuality(sequences) {
   for (const sequence of sequences) {
     for (const frame of sequence.frames) {
       const full = frame.captures.find(capture => capture.targetPixels === 0);
-      for (const targetPixels of PROJECTED_WORK_TARGETS.slice(1)) {
+      for (const targetPixels of projectedWorkTargets.slice(1)) {
         const selected = frame.captures.find(capture => capture.targetPixels === targetPixels);
         if (!full || !selected) continue;
         comparisons.push({
@@ -1055,9 +1070,9 @@ function summarizeProjectedWorkQuality(sequences) {
   const rowsFor = targetPixels => comparisons.filter(row => row.targetPixels === targetPixels);
   const mean = (rows, key) => rows.length ? rows.reduce((sum, row) => sum + row[key], 0) / rows.length : null;
   return {
-    authority: 'same-browser-same-frozen-state-full-12-24-native-png-quality-v0',
+    authority: `${projectedWorkAlignmentAuthority(projectedWorkTargets)}-native-png-quality-v0`,
     comparisonCount: comparisons.length,
-    byTarget: PROJECTED_WORK_TARGETS.slice(1).map(targetPixels => {
+    byTarget: projectedWorkTargets.slice(1).map(targetPixels => {
       const rows = rowsFor(targetPixels);
       return {
         targetPixels,
@@ -1075,7 +1090,7 @@ function summarizeProjectedWorkQuality(sequences) {
 }
 
 function addProjectedWorkMotionEnergy(sequence) {
-  sequence.motionByTarget = PROJECTED_WORK_TARGETS.map(targetPixels => {
+  sequence.motionByTarget = projectedWorkTargets.map(targetPixels => {
     const captures = sequence.frames.map(frame => frame.captures.find(capture => capture.targetPixels === targetPixels));
     const diffs = [];
     for (let index = 1; index < captures.length; index += 1) {
@@ -1099,13 +1114,13 @@ function certifyProjectedWorkSequence(sequences, qualityComparisons) {
     maxChangedFraction: row.maxChangedFraction,
     certified: row.maxMeanAbsDiff > 0.5 && row.maxChangedFraction > 0.02,
   })));
-  const targetCertification = PROJECTED_WORK_TARGETS.map(targetPixels => ({
+  const targetCertification = projectedWorkTargets.map(targetPixels => ({
     targetPixels,
     certifiedSequenceCount: motionRows.filter(row => row.targetPixels === targetPixels && row.certified).length,
   }));
   return {
     ok: targetCertification.every(row => row.certifiedSequenceCount > 0)
-      && qualityComparisons.comparisonCount === sequences.length * frameCount * (PROJECTED_WORK_TARGETS.length - 1),
+      && qualityComparisons.comparisonCount === sequences.length * frameCount * (projectedWorkTargets.length - 1),
     authority: 'aligned-projected-work-learned-sequence-certification-v0',
     minMotionMeanAbsDiff: 0.5,
     minMotionChangedFraction: 0.02,
