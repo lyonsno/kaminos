@@ -1,0 +1,247 @@
+{
+  "schema": "kaminos.lirm-morphology-basin-durable-outputs.v1",
+  "routeReceipt": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/route-receipts.json",
+  "count": 16,
+  "outputs": [
+    {
+      "cellId": "basin-03-s3p00-n00-lineage-seed-clay-normal-seed717031",
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-03-s3p00-n00-lineage-seed-clay-normal-seed717031/output.png",
+      "durablePath": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/outputs/basin-03-s3p00-n00-lineage-seed-clay-normal-seed717031.png",
+      "sha256": "97dd7f1974a6ba6b80e5dbcfe4121a0dfa34c88f2466e1cd6a9f8a5a8358375e",
+      "bytes": 266638,
+      "visual": {
+        "width": 512,
+        "height": 512,
+        "colorType": 2,
+        "sampledUniqueRgb": 4381,
+        "sampledDynamicRange": 253,
+        "nonblank": true
+      }
+    },
+    {
+      "cellId": "basin-03-s3p00-n00-lineage-seed-clay-depth-normal-seed717031",
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-03-s3p00-n00-lineage-seed-clay-depth-normal-seed717031/output.png",
+      "durablePath": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/outputs/basin-03-s3p00-n00-lineage-seed-clay-depth-normal-seed717031.png",
+      "sha256": "b43a5dd7406793de51205453ccb0c0431b903fd75faa311d2342fe715d1cb635",
+      "bytes": 267063,
+      "visual": {
+        "width": 512,
+        "height": 512,
+        "colorType": 2,
+        "sampledUniqueRgb": 4886,
+        "sampledDynamicRange": 251,
+        "nonblank": true
+      }
+    },
+    {
+      "cellId": "basin-03-s3p00-n00-prior-forward-clay-normal-seed717031",
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-03-s3p00-n00-prior-forward-clay-normal-seed717031/output.png",
+      "durablePath": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/outputs/basin-03-s3p00-n00-prior-forward-clay-normal-seed717031.png",
+      "sha256": "72580ad99e808136db6daa13c3ef1df52040f911a5b74d4723e00f0095686cff",
+      "bytes": 260935,
+      "visual": {
+        "width": 512,
+        "height": 512,
+        "colorType": 2,
+        "sampledUniqueRgb": 3628,
+        "sampledDynamicRange": 245,
+        "nonblank": true
+      }
+    },
+    {
+      "cellId": "basin-03-s3p00-n00-prior-forward-clay-depth-normal-seed717031",
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-03-s3p00-n00-prior-forward-clay-depth-normal-seed717031/output.png",
+      "durablePath": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/outputs/basin-03-s3p00-n00-prior-forward-clay-depth-normal-seed717031.png",
+      "sha256": "a3cbb21a2f3c20abb23be09364b8dd9e469a7746e0f5ec9c20d496116b9d6669",
+      "bytes": 232559,
+      "visual": {
+        "width": 512,
+        "height": 512,
+        "colorType": 2,
+        "sampledUniqueRgb": 3259,
+        "sampledDynamicRange": 245,
+        "nonblank": true
+      }
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-lineage-seed-clay-normal-seed717031",
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-10-s3p00-n00-lineage-seed-clay-normal-seed717031/output.png",
+      "durablePath": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/outputs/basin-10-s3p00-n00-lineage-seed-clay-normal-seed717031.png",
+      "sha256": "2d2280b174cf035b747b9161ddef6730f3f692edf62860e667fa82378508fc01",
+      "bytes": 246103,
+      "visual": {
+        "width": 512,
+        "height": 512,
+        "colorType": 2,
+        "sampledUniqueRgb": 4429,
+        "sampledDynamicRange": 255,
+        "nonblank": true
+      }
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-lineage-seed-clay-depth-normal-seed717031",
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-10-s3p00-n00-lineage-seed-clay-depth-normal-seed717031/output.png",
+      "durablePath": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/outputs/basin-10-s3p00-n00-lineage-seed-clay-depth-normal-seed717031.png",
+      "sha256": "95d419432ea9afac7e86ea03aa34d9d8aa11f3a31b5a73795d56406e7dbeb6e3",
+      "bytes": 240579,
+      "visual": {
+        "width": 512,
+        "height": 512,
+        "colorType": 2,
+        "sampledUniqueRgb": 4450,
+        "sampledDynamicRange": 255,
+        "nonblank": true
+      }
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-prior-forward-clay-normal-seed717031",
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-10-s3p00-n00-prior-forward-clay-normal-seed717031/output.png",
+      "durablePath": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/outputs/basin-10-s3p00-n00-prior-forward-clay-normal-seed717031.png",
+      "sha256": "76694b5f89d53adf84507ac22fddefe86860b97fdbaeb81b0015bd89b3298f43",
+      "bytes": 252302,
+      "visual": {
+        "width": 512,
+        "height": 512,
+        "colorType": 2,
+        "sampledUniqueRgb": 4078,
+        "sampledDynamicRange": 253,
+        "nonblank": true
+      }
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-prior-forward-clay-depth-normal-seed717031",
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-10-s3p00-n00-prior-forward-clay-depth-normal-seed717031/output.png",
+      "durablePath": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/outputs/basin-10-s3p00-n00-prior-forward-clay-depth-normal-seed717031.png",
+      "sha256": "abcc9af06f22546772952dddea5c03a4e11bf79f823bae9df7734393ce42a036",
+      "bytes": 242906,
+      "visual": {
+        "width": 512,
+        "height": 512,
+        "colorType": 2,
+        "sampledUniqueRgb": 4131,
+        "sampledDynamicRange": 242,
+        "nonblank": true
+      }
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-lineage-seed-clay-normal-seed717031",
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-15-s3p00-n00-lineage-seed-clay-normal-seed717031/output.png",
+      "durablePath": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/outputs/basin-15-s3p00-n00-lineage-seed-clay-normal-seed717031.png",
+      "sha256": "adc1819010d5df764146b67928619fa64a0e76fe48ddac4b1f80a664f8e7d3f9",
+      "bytes": 232363,
+      "visual": {
+        "width": 512,
+        "height": 512,
+        "colorType": 2,
+        "sampledUniqueRgb": 3967,
+        "sampledDynamicRange": 252,
+        "nonblank": true
+      }
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-lineage-seed-clay-depth-normal-seed717031",
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-15-s3p00-n00-lineage-seed-clay-depth-normal-seed717031/output.png",
+      "durablePath": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/outputs/basin-15-s3p00-n00-lineage-seed-clay-depth-normal-seed717031.png",
+      "sha256": "4b98d901697c9f052995b334424bcb647b18fce5fba491258870d0afe8eb7811",
+      "bytes": 232839,
+      "visual": {
+        "width": 512,
+        "height": 512,
+        "colorType": 2,
+        "sampledUniqueRgb": 3515,
+        "sampledDynamicRange": 253,
+        "nonblank": true
+      }
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-prior-forward-clay-normal-seed717031",
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-15-s3p00-n00-prior-forward-clay-normal-seed717031/output.png",
+      "durablePath": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/outputs/basin-15-s3p00-n00-prior-forward-clay-normal-seed717031.png",
+      "sha256": "2dcad3a2e241c0fdd64b83ab85bf9300fffbca7b5d5dbcbd24471e9e1f1251a1",
+      "bytes": 231417,
+      "visual": {
+        "width": 512,
+        "height": 512,
+        "colorType": 2,
+        "sampledUniqueRgb": 3204,
+        "sampledDynamicRange": 250,
+        "nonblank": true
+      }
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-prior-forward-clay-depth-normal-seed717031",
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-15-s3p00-n00-prior-forward-clay-depth-normal-seed717031/output.png",
+      "durablePath": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/outputs/basin-15-s3p00-n00-prior-forward-clay-depth-normal-seed717031.png",
+      "sha256": "4a23078dbd69e41491813cb47e9bd566e100ff8990dbdcfc072cde428ae25bf0",
+      "bytes": 225645,
+      "visual": {
+        "width": 512,
+        "height": 512,
+        "colorType": 2,
+        "sampledUniqueRgb": 2712,
+        "sampledDynamicRange": 255,
+        "nonblank": true
+      }
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-lineage-seed-clay-normal-seed717031",
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-22-s1p50-n00-lineage-seed-clay-normal-seed717031/output.png",
+      "durablePath": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/outputs/basin-22-s1p50-n00-lineage-seed-clay-normal-seed717031.png",
+      "sha256": "dc3c089baddc5d67591acb1ce27cce3ae16c31bf7b4d44282c74f4a80d8fdebe",
+      "bytes": 280304,
+      "visual": {
+        "width": 512,
+        "height": 512,
+        "colorType": 2,
+        "sampledUniqueRgb": 5306,
+        "sampledDynamicRange": 255,
+        "nonblank": true
+      }
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-lineage-seed-clay-depth-normal-seed717031",
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-22-s1p50-n00-lineage-seed-clay-depth-normal-seed717031/output.png",
+      "durablePath": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/outputs/basin-22-s1p50-n00-lineage-seed-clay-depth-normal-seed717031.png",
+      "sha256": "d68188f6ae296ee0a67698961e003a939111b01a8aa10e532793d7c506854649",
+      "bytes": 282889,
+      "visual": {
+        "width": 512,
+        "height": 512,
+        "colorType": 2,
+        "sampledUniqueRgb": 5242,
+        "sampledDynamicRange": 251,
+        "nonblank": true
+      }
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-prior-forward-clay-normal-seed717031",
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-22-s1p50-n00-prior-forward-clay-normal-seed717031/output.png",
+      "durablePath": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/outputs/basin-22-s1p50-n00-prior-forward-clay-normal-seed717031.png",
+      "sha256": "6cf9b8490f7c7e8e542a1729cd48afa7c7f824b98588a5b1d808cae975ac46e2",
+      "bytes": 254153,
+      "visual": {
+        "width": 512,
+        "height": 512,
+        "colorType": 2,
+        "sampledUniqueRgb": 3868,
+        "sampledDynamicRange": 240,
+        "nonblank": true
+      }
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-prior-forward-clay-depth-normal-seed717031",
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-22-s1p50-n00-prior-forward-clay-depth-normal-seed717031/output.png",
+      "durablePath": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/outputs/basin-22-s1p50-n00-prior-forward-clay-depth-normal-seed717031.png",
+      "sha256": "251700bc901b552daa97709494ba1bfbb0459545fe9fe96870f6cadc01e32e01",
+      "bytes": 245749,
+      "visual": {
+        "width": 512,
+        "height": 512,
+        "colorType": 2,
+        "sampledUniqueRgb": 3336,
+        "sampledDynamicRange": 243,
+        "nonblank": true
+      }
+    }
+  ]
+}

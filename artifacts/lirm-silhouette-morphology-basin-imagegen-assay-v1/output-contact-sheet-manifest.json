@@ -1,0 +1,90 @@
+{
+  "width": 2048,
+  "cellWidth": 512,
+  "cellHeight": 548,
+  "imageHeight": 512,
+  "imageOffsetY": 0,
+  "headerHeight": 36,
+  "cells": [
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-03-s3p00-n00-lineage-seed-clay-normal-seed717031/output.png",
+      "title": "basin-03-s3p00-n00",
+      "viewLabel": "LINEAGE CN"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-03-s3p00-n00-lineage-seed-clay-depth-normal-seed717031/output.png",
+      "title": "basin-03-s3p00-n00",
+      "viewLabel": "LINEAGE CDN"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-03-s3p00-n00-prior-forward-clay-normal-seed717031/output.png",
+      "title": "basin-03-s3p00-n00",
+      "viewLabel": "PRIOR CN"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-03-s3p00-n00-prior-forward-clay-depth-normal-seed717031/output.png",
+      "title": "basin-03-s3p00-n00",
+      "viewLabel": "PRIOR CDN"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-10-s3p00-n00-lineage-seed-clay-normal-seed717031/output.png",
+      "title": "basin-10-s3p00-n00",
+      "viewLabel": "LINEAGE CN"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-10-s3p00-n00-lineage-seed-clay-depth-normal-seed717031/output.png",
+      "title": "basin-10-s3p00-n00",
+      "viewLabel": "LINEAGE CDN"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-10-s3p00-n00-prior-forward-clay-normal-seed717031/output.png",
+      "title": "basin-10-s3p00-n00",
+      "viewLabel": "PRIOR CN"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-10-s3p00-n00-prior-forward-clay-depth-normal-seed717031/output.png",
+      "title": "basin-10-s3p00-n00",
+      "viewLabel": "PRIOR CDN"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-15-s3p00-n00-lineage-seed-clay-normal-seed717031/output.png",
+      "title": "basin-15-s3p00-n00",
+      "viewLabel": "LINEAGE CN"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-15-s3p00-n00-lineage-seed-clay-depth-normal-seed717031/output.png",
+      "title": "basin-15-s3p00-n00",
+      "viewLabel": "LINEAGE CDN"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-15-s3p00-n00-prior-forward-clay-normal-seed717031/output.png",
+      "title": "basin-15-s3p00-n00",
+      "viewLabel": "PRIOR CN"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-15-s3p00-n00-prior-forward-clay-depth-normal-seed717031/output.png",
+      "title": "basin-15-s3p00-n00",
+      "viewLabel": "PRIOR CDN"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-22-s1p50-n00-lineage-seed-clay-normal-seed717031/output.png",
+      "title": "basin-22-s1p50-n00",
+      "viewLabel": "LINEAGE CN"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-22-s1p50-n00-lineage-seed-clay-depth-normal-seed717031/output.png",
+      "title": "basin-22-s1p50-n00",
+      "viewLabel": "LINEAGE CDN"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-22-s1p50-n00-prior-forward-clay-normal-seed717031/output.png",
+      "title": "basin-22-s1p50-n00",
+      "viewLabel": "PRIOR CN"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-20260717/cells/basin-22-s1p50-n00-prior-forward-clay-depth-normal-seed717031/output.png",
+      "title": "basin-22-s1p50-n00",
+      "viewLabel": "PRIOR CDN"
+    }
+  ]
+}

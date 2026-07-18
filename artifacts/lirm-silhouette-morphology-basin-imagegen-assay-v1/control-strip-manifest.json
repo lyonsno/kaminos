@@ -1,0 +1,30 @@
+{
+  "width": 2048,
+  "cellWidth": 512,
+  "cellHeight": 548,
+  "imageHeight": 512,
+  "imageOffsetY": 0,
+  "headerHeight": 36,
+  "cells": [
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-03-s3p00-n00/clay.png",
+      "title": "basin-03-s3p00-n00",
+      "viewLabel": "CONTROL"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-10-s3p00-n00/clay.png",
+      "title": "basin-10-s3p00-n00",
+      "viewLabel": "CONTROL"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-15-s3p00-n00/clay.png",
+      "title": "basin-15-s3p00-n00",
+      "viewLabel": "CONTROL"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-22-s1p50-n00/clay.png",
+      "title": "basin-22-s1p50-n00",
+      "viewLabel": "CONTROL"
+    }
+  ]
+}

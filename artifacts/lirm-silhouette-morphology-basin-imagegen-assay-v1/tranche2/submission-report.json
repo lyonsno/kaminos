@@ -1,0 +1,154 @@
+{
+  "schema": "kaminos.lirm-silhouette-imagegen-basin-assay-submission-report.v1",
+  "updatedAt": "2026-07-18T03:41:36Z",
+  "plannedCellCount": 24,
+  "submittedCellCount": 24,
+  "submissionFailureCount": 0,
+  "complete": true,
+  "cells": [
+    {
+      "cellId": "basin-03-s3p00-n00-lineage-seed-clay-normal-seed717032",
+      "jobId": "e430647bbab7",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-03-s3p00-n00-lineage-seed-clay-normal-seed717033",
+      "jobId": "e9e7ddca35bf",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-03-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032",
+      "jobId": "4ad190e80755",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-03-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717033",
+      "jobId": "ec26ae73743b",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "jobId": "0808ed4a8802",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717033",
+      "jobId": "14904d82e6a3",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-lineage-seed-clay-normal-seed717032",
+      "jobId": "a3a960f7ef81",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-lineage-seed-clay-normal-seed717033",
+      "jobId": "9c5632f11523",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032",
+      "jobId": "6d38a338590a",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717033",
+      "jobId": "460063e5eb06",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "jobId": "f1f3b122ed31",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717033",
+      "jobId": "1e8b69ce77f2",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-lineage-seed-clay-normal-seed717032",
+      "jobId": "57e37817411b",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-lineage-seed-clay-normal-seed717033",
+      "jobId": "82d321860284",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032",
+      "jobId": "903c8b26e155",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717033",
+      "jobId": "20e1f49bbfc2",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "jobId": "cdec5f006880",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-silhouette-metabolizer-clay-normal-seed717033",
+      "jobId": "08ee1af783c3",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-lineage-seed-clay-normal-seed717032",
+      "jobId": "ec6e0734543f",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-lineage-seed-clay-normal-seed717033",
+      "jobId": "623e36a4d814",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-non-tetrapod-crawler-clay-normal-seed717032",
+      "jobId": "88933428207f",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-non-tetrapod-crawler-clay-normal-seed717033",
+      "jobId": "a76067ffcc75",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "jobId": "80a559e80318",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717033",
+      "jobId": "943bfb227820",
+      "submissionFailure": null,
+      "lastTrustworthyEvidence": "greenroom_submission_receipt"
+    }
+  ]
+}
