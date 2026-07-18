@@ -177,6 +177,28 @@ assert.equal(built.support.sourceManifestSha256, 'a'.repeat(64));
 assert.equal(built.claimBoundary.learnerCampaign, false);
 assert.equal(built.claimBoundary.depositionAdjudication, false);
 
+const sparseWithinSupportCoefficients = artifact('sparse-within-support-coefficients.f32', f32([
+  0.1, 0.2, 0.3, 0.4, 0, 0, 0, 0,
+  0, 0, 0, 0, 0.5, 0.6, 0.7, 0.8,
+  0, 0, 0, 0, 0, 0, 0, 0,
+]), {
+  dtype: 'float32-le', shape: [rowCount, 8], semanticRole: 'exact-local-layer-emission-extinction',
+  nativeCellIndexSha256: indices.sha256,
+  rowOrderIdentity: 'caller-ordered-native-cell-index-v0',
+});
+assert.doesNotThrow(
+  () => buildGrid96Components({
+    source,
+    equivalence,
+    producer: {
+      ...producer,
+      state: { ...producer.state, rows: { ...producer.state.rows, coefficients: sparseWithinSupportCoefficients } },
+    },
+    sourceManifestSha256: 'a'.repeat(64),
+  }),
+  'analytical Full Support may contain zero-contribution rows without redefining support around the optical target',
+);
+
 assert.throws(
   () => buildGrid96Components({
     source,
