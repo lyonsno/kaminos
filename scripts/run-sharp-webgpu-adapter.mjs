@@ -192,14 +192,16 @@ function liveSchedulerRuntimeEvidence(result = null) {
   const schedulerApplication = result?.schedulerApplication || sharpRunDebug?.schedulerApplication || null;
   const commandDutyReport = result?.commandDutyReport || sharpRunDebug?.commandDutyReport || null;
   const hostPhaseReport = result?.hostPhaseReport || sharpRunDebug?.hostPhaseReport || null;
+  const foregroundOpportunityReport = result?.foregroundOpportunityReport || sharpRunDebug?.foregroundOpportunityReport || null;
   return {
     schema: 'kaminos.sharp-webgpu-live-scheduler-runtime-evidence.v0',
-    source: schedulerApplication || commandDutyReport || hostPhaseReport
+    source: schedulerApplication || commandDutyReport || hostPhaseReport || foregroundOpportunityReport
       ? 'sharp-browser-debug'
       : 'not-observed',
     schedulerApplication,
     commandDutyReport,
     hostPhaseReport,
+    foregroundOpportunityReport,
   };
 }
 
@@ -902,6 +904,7 @@ async function runBrowserInference() {
           schedulerApplication: sharpRunDebug?.schedulerApplication || null,
           commandDutyReport: sharpRunDebug?.commandDutyReport || null,
           hostPhaseReport: sharpRunDebug?.hostPhaseReport || null,
+          foregroundOpportunityReport: sharpRunDebug?.foregroundOpportunityReport || null,
         });
       }
       return false;

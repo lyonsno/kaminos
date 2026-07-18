@@ -14,13 +14,13 @@ assert.ok(existsSync(packageLockPath), 'Kaminos pipeline tooling must lock npm d
 const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
 assert.equal(
   packageJson.dependencies?.['@kaminos/webgpu-inference-kit'],
-  '^0.1.24',
-  'Pipeline scheduler evidence must consume the live scheduler WebGPU inference kit package range',
+  '^0.1.26',
+  'Pipeline scheduler evidence must consume the foreground opportunity WebGPU inference kit package range',
 );
 
 const packageLock = JSON.parse(readFileSync(packageLockPath, 'utf8'));
 const lockedKit = packageLock.packages?.['node_modules/@kaminos/webgpu-inference-kit'];
-assert.match(lockedKit?.version || '', /^0\.1\.(2[4-9]|[3-9]\d+)$/, 'WebGPU inference kit lockfile must pin a live scheduler package version');
+assert.equal(lockedKit?.version, '0.1.26', 'WebGPU inference kit lockfile must pin Cranial foreground opportunity package version');
 assert.ok(lockedKit?.integrity, 'WebGPU inference kit lockfile must preserve published package integrity');
 
 for (const sourcePath of [witnessPath, wrapperPath]) {
@@ -72,7 +72,7 @@ assert.match(
   /window\.__sharpDebug\?\.lastRun/,
   'Pipeline SHARP adapter wrapper must capture the SHARP browser debug run record, not only legacy scheduler telemetry',
 );
-for (const field of ['schedulerApplication', 'commandDutyReport', 'hostPhaseReport']) {
+for (const field of ['schedulerApplication', 'commandDutyReport', 'hostPhaseReport', 'foregroundOpportunityReport']) {
   assert.match(
     wrapperSource,
     new RegExp(field),
