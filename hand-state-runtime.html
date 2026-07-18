@@ -8,7 +8,9 @@
     * { box-sizing: border-box; }
     html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #07090b; color: #dce7ea; }
     body { font-family: "SF Mono", "Menlo", monospace; }
-    #hand-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    #hand-canvas, #finger-juice-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    #hand-canvas { z-index: 0; }
+    #finger-juice-canvas { z-index: 1; pointer-events: none; }
     #controls { position: absolute; top: 16px; left: 16px; z-index: 2; display: flex; align-items: center; gap: 10px; }
     button { height: 34px; border: 1px solid #3b6570; border-radius: 6px; padding: 0 13px; background: #112128; color: #d7edf2; font: 11px inherit; cursor: pointer; }
     button:hover { background: #183039; border-color: #68a8b7; }
@@ -30,6 +32,7 @@
 </head>
 <body>
   <canvas id="hand-canvas"></canvas>
+  <canvas id="finger-juice-canvas"></canvas>
   <div id="controls">
     <button id="hand-toggle" type="button">Start Hand</button>
     <span id="status" data-state="idle">runtime idle</span>
@@ -37,6 +40,6 @@
   <div id="receipt">hand-state-runtime / Kaminos</div>
   <video id="camera" playsinline muted></video>
   <canvas id="capture-canvas"></canvas>
-  <script type="module" src="./hand-state-runtime.mjs?v=palm-live-latency-0718"></script>
+  <script type="module" src="./hand-state-runtime.mjs?v=palm-finger-juice-0718"></script>
 </body>
 </html>

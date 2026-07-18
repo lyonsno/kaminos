@@ -18,6 +18,7 @@ const consoleEvents = [];
 let phase = 'initializing';
 let effectiveUrl = null;
 let debugState = null;
+let emitterGrowthReceipt = null;
 let primaryOutputWritten = false;
 let stderr = '';
 
@@ -36,6 +37,7 @@ function writeReport(extra = {}) {
     viewport: { width, height },
     consoleEvents,
     debugState,
+    emitterGrowthReceipt,
     stderrTail: stderr.slice(-2000),
     ...extra,
   }, null, 2));
@@ -148,6 +150,47 @@ async function main() {
     if (!debugState.fixtureMode) throw new Error('visual witness must identify its fixture authority');
     if (debugState.runtimeOwner !== 'hand-state-runtime') throw new Error(`runtime owner mismatch: ${debugState.runtimeOwner}`);
     if ((debugState.vertexCount || 0) <= 0 || (debugState.faceCount || 0) <= 0) throw new Error('hand surface has no indexed geometry');
+
+    phase = 'initialize_finger_fluid';
+    const fluidReceipt = await evaluate(socket, `(async () => {
+      const frame = document.getElementById('hand-state-runtime-frame');
+      const initialize = frame?.contentWindow?.__kaminosHandStateInitFingerJuice;
+      const read = frame?.contentWindow?.__kaminosHandStateDebugState;
+      if (typeof initialize !== 'function' || typeof read !== 'function') throw new Error('finger-fluid witness API missing');
+      const solver = await initialize();
+      const emitter = index => ({
+        id: 'fixture-' + index,
+        active: true,
+        emission_state: 'jet',
+        chemistry: 'knockback',
+        origin_world: [index * 0.02, 0.4, -0.8],
+        aim_world: [0, 0.2, 1],
+        motion_world: [0, 0, 0],
+        radius: 0.04,
+        strength: 1,
+      });
+      const growth = solver.setEmitterPacket({
+        packet_id: 'fixture-emitter-capacity-probe',
+        route_identity: 'fixture-capacity-only',
+        emitters: Array.from({ length: 5 }, (_, index) => emitter(index)),
+      });
+      solver.setEmitterPacket({ packet_id: 'fixture-zero-emitters', emitters: [] });
+      return { state: read(), growth };
+    })()`);
+    debugState = fluidReceipt?.state || null;
+    emitterGrowthReceipt = fluidReceipt?.growth || null;
+    if (debugState?.fingerJuice?.solverBackend !== 'webgpu_compute') {
+      throw new Error(`finger-fluid solver route mismatch: ${debugState?.fingerJuice?.solverBackend || 'missing'}`);
+    }
+    if (debugState?.fingerJuice?.renderBackend !== 'webgpu_direct_render') {
+      throw new Error(`finger-fluid renderer route mismatch: ${debugState?.fingerJuice?.renderBackend || 'missing'}`);
+    }
+    if (emitterGrowthReceipt?.emitterCount !== 5) {
+      throw new Error(`finger-fluid emitter growth count mismatch: ${emitterGrowthReceipt?.emitterCount ?? 'missing'}`);
+    }
+    if (debugState?.fingerJuice?.activeEmitterCount !== 0) {
+      throw new Error('fixture witness must initialize with zero active emitters');
+    }
     const fatalConsole = consoleEvents.filter(event => event.type === 'exception' || event.type === 'error');
     if (fatalConsole.length) throw new Error(`browser console emitted ${fatalConsole.length} fatal event(s)`);
 

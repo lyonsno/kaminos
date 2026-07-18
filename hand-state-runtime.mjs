@@ -1,5 +1,11 @@
 import * as THREE from 'three';
 import { summarizeLatencySamples } from './hand-state-latency-benchmark.mjs';
+import {
+  createLiveFingerJuiceEmitterPacket,
+  MANO_DISPLAY_ORIENTATION_CONTRACT,
+  normalizeManoSurface,
+} from './hand-state-finger-juice.mjs';
+import { createWebGPUFingerJuiceSolver } from './lerms-finger-juice-webgpu-core.js';
 
 const params = new URLSearchParams(window.location.search);
 const runtimeUrl = params.get('runtime_url') || 'http://127.0.0.1:8766';
@@ -8,6 +14,7 @@ const maxAgeMs = 750;
 const captureIntervalMs = 80;
 
 const canvas = document.getElementById('hand-canvas');
+const fingerJuiceCanvas = document.getElementById('finger-juice-canvas');
 const video = document.getElementById('camera');
 const captureCanvas = document.getElementById('capture-canvas');
 const captureContext = captureCanvas.getContext('2d', { alpha: false });
@@ -55,6 +62,7 @@ let stateAbortController = null;
 let lastStateSequence = 0;
 let faceSignature = '';
 let smoothedPositions = null;
+let currentManoTransform = null;
 let lastLiveAt = 0;
 let frameSequence = 0;
 let benchmarkSessionId = '';
@@ -65,6 +73,15 @@ let latencyFlushTimer = null;
 const captureMetricsByFrame = new Map();
 const latencySamples = [];
 const unflushedLatencySamples = [];
+let fingerJuiceSolver = null;
+let fingerJuiceRenderer = null;
+let fingerJuiceInitPromise = null;
+let fingerJuiceStepPromise = null;
+let fingerJuiceLastStepAt = 0;
+let fingerJuicePacket = createLiveFingerJuiceEmitterPacket(null);
+let previousFingerTips = null;
+let previousFingerTimestampMs = null;
+let fingerJuiceError = null;
 
 function resetLatencyBenchmark() {
   benchmarkSessionId = globalThis.crypto?.randomUUID?.() || `hand-${Date.now()}`;
@@ -83,39 +100,12 @@ function setStatus(message, state = 'idle') {
   status.dataset.state = state;
 }
 
-function parseVertex(vertex) {
-  if (Array.isArray(vertex)) return [Number(vertex[0]), Number(vertex[1]), Number(vertex[2])];
-  return [Number(vertex?.x), Number(vertex?.y), Number(vertex?.z)];
-}
-
-function normalizedPositions(vertices) {
-  const points = vertices.map(parseVertex).filter(point => point.every(Number.isFinite));
-  if (!points.length) return null;
-  const center = [0, 0, 0];
-  for (const point of points) {
-    center[0] += point[0];
-    center[1] += point[1];
-    center[2] += point[2];
-  }
-  center[0] /= points.length;
-  center[1] /= points.length;
-  center[2] /= points.length;
-  let radius = 0;
-  for (const point of points) radius = Math.max(radius, Math.hypot(point[0] - center[0], point[1] - center[1], point[2] - center[2]));
-  const scale = 1.05 / Math.max(radius, 1e-5);
-  const normalized = new Float32Array(points.length * 3);
-  points.forEach((point, index) => {
-    normalized[index * 3] = -(point[0] - center[0]) * scale;
-    normalized[index * 3 + 1] = (point[1] - center[1]) * scale;
-    normalized[index * 3 + 2] = (point[2] - center[2]) * scale;
-  });
-  return normalized;
-}
-
 function updateHandSurface(mano) {
   if (!mano?.available || !Array.isArray(mano.vertices) || !Array.isArray(mano.faces)) return false;
-  const target = normalizedPositions(mano.vertices);
-  if (!target) return false;
+  const surface = normalizeManoSurface(mano.vertices);
+  if (!surface) return false;
+  const target = surface.positions;
+  currentManoTransform = surface.transform;
   if (!smoothedPositions || smoothedPositions.length !== target.length) smoothedPositions = target.slice();
   else for (let index = 0; index < target.length; index += 1) smoothedPositions[index] += (target[index] - smoothedPositions[index]) * 0.62;
 
@@ -138,6 +128,45 @@ function updateHandSurface(mano) {
   handMesh.visible = true;
   lastLiveAt = performance.now();
   return true;
+}
+
+async function ensureFingerJuice() {
+  if (fingerJuiceSolver && fingerJuiceRenderer) return fingerJuiceSolver;
+  if (fingerJuiceInitPromise) return fingerJuiceInitPromise;
+  fingerJuiceInitPromise = createWebGPUFingerJuiceSolver({
+    seed: 23,
+    maxParticles: 36_000,
+    emitterPacket: fingerJuicePacket,
+    cpuOracle: false,
+  }).then(async solver => {
+    if (solver.solver_backend !== 'webgpu_compute') throw new Error(solver.reason || 'finger fluid WebGPU solver unavailable');
+    const fluidRenderer = await solver.createRenderer(fingerJuiceCanvas);
+    if (fluidRenderer?.render_backend !== 'webgpu_direct_render') throw new Error(fluidRenderer?.reason || 'finger fluid renderer unavailable');
+    fingerJuiceSolver = solver;
+    fingerJuiceRenderer = fluidRenderer;
+    fingerJuiceSolver.setEmitterPacket(fingerJuicePacket);
+    fingerJuiceError = null;
+    return solver;
+  }).catch(error => {
+    fingerJuiceError = error.message || String(error);
+    fingerJuiceInitPromise = null;
+    throw error;
+  });
+  return fingerJuiceInitPromise;
+}
+
+function updateFingerJuice(state) {
+  fingerJuicePacket = createLiveFingerJuiceEmitterPacket(state, {
+    manoTransform: currentManoTransform,
+    previousTips: previousFingerTips,
+    previousTimestampMs: previousFingerTimestampMs,
+    nowMs: Date.now(),
+  });
+  if (fingerJuicePacket.adapter) {
+    previousFingerTips = fingerJuicePacket.adapter.tips;
+    previousFingerTimestampMs = fingerJuicePacket.adapter.timestampMs;
+  }
+  if (fingerJuiceSolver) fingerJuiceSolver.setEmitterPacket(fingerJuicePacket);
 }
 
 async function runtimeFetch(path, options = {}) {
@@ -223,6 +252,7 @@ async function captureFrame() {
 function applyState(state) {
   const frame = state.frame;
   if (frame?.authority?.sourceAuthority === 'live_simulation' && updateHandSurface(frame.mano)) {
+    updateFingerJuice(state);
     const frameId = frame.frame?.frameId;
     const captureMetrics = captureMetricsByFrame.get(frameId);
     if (frameId && captureMetrics && !latencySamples.some(sample => sample.frameId === frameId) && pendingLatencySample?.frameId !== frameId) {
@@ -260,8 +290,9 @@ function applyState(state) {
       }
     }
     const latency = pendingLatencySample?.captureToViewerReceiveMs || latencySamples.at(-1)?.captureToViewerReceiveMs;
-    setStatus(`live MANO / ${frame.mano.vertexCount} vertices${Number.isFinite(latency) ? ` / ${latency.toFixed(0)} ms receipt` : ''}`, 'live');
+    setStatus(`live MANO / ${frame.mano.vertexCount} vertices / ${fingerJuicePacket.active_emitter_count} jets${Number.isFinite(latency) ? ` / ${latency.toFixed(0)} ms receipt` : ''}`, 'live');
   } else {
+    updateFingerJuice(state);
     setStatus(`waiting for live MANO / ${frame?.authority?.fallbackReason || 'no frame'}`);
   }
 }
@@ -298,10 +329,12 @@ async function start() {
   resetLatencyBenchmark();
   lastStateSequence = 0;
   running = true;
+  fingerJuiceCanvas.style.visibility = 'visible';
   toggle.textContent = 'Stop Hand';
   toggle.dataset.running = 'true';
   captureTimer = setInterval(captureFrame, captureIntervalMs);
   void streamState();
+  void ensureFingerJuice().catch(error => setStatus(error.message || String(error), 'error'));
   await captureFrame();
 }
 
@@ -311,6 +344,11 @@ async function stop() {
   captureTimer = null;
   stateAbortController?.abort();
   stateAbortController = null;
+  fingerJuicePacket = createLiveFingerJuiceEmitterPacket(null);
+  fingerJuiceSolver?.setEmitterPacket(fingerJuicePacket);
+  previousFingerTips = null;
+  previousFingerTimestampMs = null;
+  fingerJuiceCanvas.style.visibility = 'hidden';
   stream?.getTracks().forEach(track => track.stop());
   stream = null;
   video.srcObject = null;
@@ -352,6 +390,21 @@ function animate(now) {
   if (handMesh.visible && now - lastLiveAt > 1200 && !fixtureMode) handMaterial.emissiveIntensity = 0;
   handMesh.rotation.y = Math.sin(now * 0.00022) * 0.08;
   const renderPromise = renderer.renderAsync(scene, camera);
+  if (running && fingerJuiceSolver && fingerJuiceRenderer) {
+    const dt = fingerJuiceLastStepAt ? Math.min(1 / 30, Math.max(1 / 120, (now - fingerJuiceLastStepAt) / 1000)) : 1 / 60;
+    fingerJuiceLastStepAt = now;
+    if (!fingerJuiceStepPromise) {
+      fingerJuiceStepPromise = fingerJuiceSolver.step(1, dt)
+        .catch(error => { fingerJuiceError = error.message || String(error); })
+        .finally(() => { fingerJuiceStepPromise = null; });
+    }
+    fingerJuiceRenderer.render({
+      width: window.innerWidth,
+      height: window.innerHeight,
+      pixelRatio: window.devicePixelRatio || 1,
+      camera: { yaw: 0, pitch: 0, zoom: 1, panX: 0, panY: 0 },
+    });
+  }
   if (pendingLatencySample) {
     const sample = pendingLatencySample;
     pendingLatencySample = null;
@@ -372,6 +425,8 @@ window.__kaminosHandStateLatencyBenchmark = () => ({
   report: latencySamples.length ? summarizeLatencySamples(latencySamples) : null,
 });
 
+window.__kaminosHandStateInitFingerJuice = ensureFingerJuice;
+
 window.__kaminosHandStateDebugState = () => ({
   schema: 'kaminos.hand-state-runtime-viewer.v0',
   runtimeOwner: 'hand-state-runtime',
@@ -388,6 +443,16 @@ window.__kaminosHandStateDebugState = () => ({
   benchmarkError: lastBenchmarkError,
   eventSequence: lastStateSequence,
   stateDeliveryMode: 'long_poll',
+  manoOrientationContract: MANO_DISPLAY_ORIENTATION_CONTRACT,
+  fingerJuice: {
+    solverBackend: fingerJuiceSolver?.solver_backend || (fingerJuiceInitPromise ? 'initializing' : 'stopped'),
+    renderBackend: fingerJuiceRenderer?.render_backend || null,
+    emitterBufferRoute: fingerJuiceSolver?.emitterBufferRoute || null,
+    activeEmitterCount: fingerJuicePacket.active_emitter_count || 0,
+    adapterContract: fingerJuicePacket.route_identity || null,
+    emissionStates: fingerJuicePacket.emitters?.map(emitter => ({ id: emitter.id, state: emitter.emission_state, extension: emitter.extension })) || [],
+    error: fingerJuiceError,
+  },
 });
 
 resize();

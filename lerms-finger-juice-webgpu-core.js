@@ -3141,7 +3141,7 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     { stepCount: 0 },
   );
   let currentTerrainSampleBufferData = createWebGPUTerrainSampleBufferData(currentTerrainSampleSurface);
-  const cpuOracleBase = runCpuFingerJuiceOracle(data, {
+  const cpuOracleBase = options.cpuOracle === false ? null : runCpuFingerJuiceOracle(data, {
     steps: options.oracleSteps || 180,
     dt: options.oracleDt || 1 / 60,
     sources: currentSources,
@@ -3171,8 +3171,8 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
     size: byteLength,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
   });
-  const emitterBufferByteLength = emitterData.data.byteLength;
-  const emitterBuffer = device.createBuffer({
+  let emitterBufferByteLength = emitterData.data.byteLength;
+  let emitterBuffer = device.createBuffer({
     label: 'lerms-finger-juice-emitters',
     size: emitterBufferByteLength,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
@@ -3478,7 +3478,14 @@ export async function createWebGPUFingerJuiceSolver(options = {}) {
   function setEmitterPacket(emitterPacket = {}) {
     const nextEmitterData = createWebGPUEmitterBufferData(emitterPacket);
     if (nextEmitterData.data.byteLength > emitterBufferByteLength) {
-      throw new Error(`expanded emitter packet has ${nextEmitterData.data.byteLength} bytes, exceeds allocated ${emitterBufferByteLength}`);
+      emitterBuffer.destroy?.();
+      emitterBuffer = device.createBuffer({
+        label: 'lerms-finger-juice-emitters',
+        size: nextEmitterData.data.byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
+      emitterBufferByteLength = nextEmitterData.data.byteLength;
+      bindGroup = createComputeBindGroup();
     }
     currentEmitterData = nextEmitterData;
     currentSources = nextEmitterData.sources;

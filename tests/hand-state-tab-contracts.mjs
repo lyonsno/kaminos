@@ -6,12 +6,13 @@ const root = new URL('..', import.meta.url).pathname;
 const index = readFileSync(join(root, 'index.html'), 'utf8');
 const page = readFileSync(join(root, 'hand-state-runtime.html'), 'utf8');
 const moduleSource = readFileSync(join(root, 'hand-state-runtime.mjs'), 'utf8');
+const fingerJuiceSource = readFileSync(join(root, 'hand-state-finger-juice.mjs'), 'utf8');
 
 assert.match(index, /data-tab="hand-state"/, 'Kaminos exposes a Hand tab');
 assert.match(index, /id="tab-hand-state"/, 'Hand tab has operator controls');
 assert.match(index, /id="hand-state-runtime-frame"/, 'Hand tab mounts the live runtime viewer');
 assert.match(index, /hand-state-runtime\.html/, 'Hand tab loads the dedicated live viewer');
-assert.match(index, /palm-event-stream-0718/, 'Hand tab cache identity advances with event-driven delivery');
+assert.match(index, /palm-finger-juice-0718/, 'Hand tab cache identity advances with live finger-fluid integration');
 
 assert.match(page, /Start Hand/, 'viewer has one explicit camera start command');
 assert.match(page, /data-runtime-owner="hand-state-runtime"/, 'viewer declares runtime ownership');
@@ -23,6 +24,8 @@ assert.match(moduleSource, /\/state\/next\?after_sequence=/, 'viewer waits for r
 assert.match(moduleSource, /BufferGeometry/, 'viewer renders a real mesh geometry');
 assert.match(moduleSource, /mano\.vertices/, 'viewer consumes runtime MANO vertices');
 assert.match(moduleSource, /mano\.faces/, 'viewer consumes runtime MANO faces');
+assert.match(moduleSource, /MANO_DISPLAY_ORIENTATION_CONTRACT/, 'viewer reports the effective MANO orientation contract');
+assert.match(fingerJuiceSource, /mano-proper-rotation-z-pi-v0/, 'orientation adapter names the corrected proper MANO transform');
 assert.match(moduleSource, /wilor-mano-surface\.json/, 'visual fixture uses a recorded WiLoR MANO surface');
 assert.doesNotMatch(moduleSource, /addBox|BoxGeometry|fixtureMano/, 'viewer must not synthesize substitute hand geometry');
 
