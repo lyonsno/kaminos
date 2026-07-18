@@ -48,13 +48,24 @@ assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_VORTICITY_CONTRACT\s*=\s*'w
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_OBSTACLE_CONTRACT\s*=\s*'shared-solver-render-obstacle-v0'/, 'solver and renderer share an obstacle contract');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_GPU_RENDERER_ROUTE\s*=\s*'webgpu-particle-sphere-renderer-v0'/, 'direct GPU renderer route is explicit');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE\s*=\s*'webgpu-screen-space-liquid-surface-v0'/, 'screen-space liquid renderer route is explicit');
+assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE\s*=\s*'webgpu-screen-space-liquid-refraction-v0'/, 'screen-space liquid refraction renderer route is explicit');
+assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_OPTICAL_TRANSPORT_ROUTE\s*=\s*'snell-two-interface-screen-space-slab-v0'/, 'two-interface optical transport identity is explicit');
+assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_OPTICAL_SLAB_ROUTE\s*=\s*'wgsl-particle-projected-front-back-slab-v0'/, 'projected particle slab identity is explicit and separate from optical transport');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE\s*=\s*'webgpu-particle-sphere-debug-renderer-v0'/, 'particle sphere renderer survives as an explicit debug route');
-assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_RENDERER_MODES\s*=\s*Object\.freeze\(\['screen_space_surface', 'sphere_debug'\]\)/, 'fluid renderer modes are explicit and screen-space is primary');
+assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_RENDERER_MODES\s*=\s*Object\.freeze\(\['screen_space_surface', 'screen_space_refraction', 'sphere_debug'\]\)/, 'surface, refraction, and sphere-debug renderer modes are explicit');
+assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES\s*=\s*Object\.freeze\(\['shaded', 'depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption'\]\)/, 'entry, exit, path, validity, and shading debug quantities are explicit and bounded');
 assert.match(webgpuCoreSource, /resolveFingerFluidRendererMode/, 'renderer mode resolution is testable and fails loud');
+assert.match(webgpuCoreSource, /resolveFingerFluidOpticalDebugMode/, 'optical debug mode resolution is testable and fails loud');
 assert.match(webgpuCoreSource, /requestedRendererMode[\s\S]*effectiveRendererMode[\s\S]*fallbackReason/, 'runtime state distinguishes requested/effective renderer identity and fallback');
 assert.match(webgpuCoreSource, /SCREEN_SPACE_SURFACE_SHADER/, 'screen-space renderer owns a separate shading pass');
 assert.match(webgpuCoreSource, /kaminos-finger-fluid-surface-accumulation/, 'screen-space renderer allocates particle depth plus optical thickness accumulation');
 assert.match(webgpuCoreSource, /screenSpaceSurfaceAccumulationPipeline/, 'renderer has a particle depth/thickness accumulation pipeline');
+assert.match(webgpuCoreSource, /struct AccumFragmentOutput\s*\{[\s\S]*@location\(0\) accumulation:[\s\S]*@location\(1\) frontDepth:[\s\S]*@location\(2\) backDepth:/, 'particle raster emits accumulation plus independent front and back slab depths');
+assert.match(webgpuCoreSource, /input\.viewDepth - cap \* input\.radius/, 'entry depth comes from the projected particle sphere front cap');
+assert.match(webgpuCoreSource, /input\.viewDepth \+ cap \* input\.radius/, 'exit depth comes from the projected particle sphere back cap');
+assert.match(webgpuCoreSource, /kaminos-finger-fluid-optical-slab-front-depth/, 'renderer owns a front-depth slab texture');
+assert.match(webgpuCoreSource, /kaminos-finger-fluid-optical-slab-back-depth/, 'renderer owns a back-depth slab texture');
+assert.match(webgpuCoreSource, /format:\s*'rgba16float'[\s\S]*operation:\s*'min'[\s\S]*format:\s*'rgba16float'[\s\S]*operation:\s*'max'/, 'front and back slab attachments use independent deterministic min/max blending');
 assert.match(webgpuCoreSource, /screenSpaceSurfaceCompositePipeline/, 'renderer has a fullscreen smoothing/normal/shading pipeline');
 assert.match(
   webgpuCoreSource,
@@ -62,18 +73,50 @@ assert.match(
   'screen-space composite addresses the accumulation texture in fragment framebuffer coordinates without a clip-space Y reflection',
 );
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE/, 'screen-space liquid names its analytic support-depth authority');
-assert.match(webgpuCoreSource, /fn vs_analytic_support_depth[\s\S]*toyFloorHeight/, 'support depth is rasterized from the solver analytic heightfield rather than decorative billboard depth');
+assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE\s*=\s*'wgsl-analytic-heightfield-obstacle-presentation-v0'/, 'shared support color and depth have an explicit presentation route');
+assert.match(webgpuCoreSource, /fn vs_analytic_support_presentation[\s\S]*toyFloorHeight[\s\S]*toyFloorNormal/, 'support presentation is rasterized from the solver analytic heightfield and its continuous normal');
+assert.match(webgpuCoreSource, /fn fs_analytic_support_presentation[\s\S]*fwidth[\s\S]*worldPosition/, 'support presentation exposes world-anchored antialiased calibration landmarks');
 assert.match(webgpuCoreSource, /@builtin\(frag_depth\) depth: f32/, 'screen-space composite emits reconstructed liquid depth');
-assert.match(webgpuCoreSource, /let supportSafeViewDepth = input\.viewDepth;[\s\S]*return vec4<f32>\(opticalThickness, input\.tracer \* opticalThickness, depthWeight, supportSafeViewDepth\)/, 'support ordering uses collision-valid particle centers rather than camera-facing splat caps that penetrate terrain');
+assert.match(webgpuCoreSource, /let supportSafeViewDepth = input\.viewDepth;[\s\S]*output\.accumulation = vec4<f32>\(opticalThickness, input\.tracer \* opticalThickness, depthWeight, supportSafeViewDepth\)/, 'support ordering uses collision-valid particle centers rather than camera-facing splat caps that penetrate terrain');
 assert.match(webgpuCoreSource, /nearest_particle_center_view_depth/, 'screen-space evidence names the support-ordering depth it actually records');
 assert.match(webgpuCoreSource, /let supportOrderingDepth = weightedDepth\(centerAccum\);[\s\S]*let shadingDepth = edgePreservingDepth\(pixel, centerAccum\);[\s\S]*output\.depth = clamp\(viewDepthToNdc\(supportOrderingDepth/, 'neighbor-smoothed shading depth cannot pull hidden liquid in front of analytic support');
 assert.match(webgpuCoreSource, /screenSpaceSurfaceCompositePipeline[\s\S]*depthStencil:\s*\{\s*format:\s*'depth24plus',\s*depthWriteEnabled:\s*false,\s*depthCompare:\s*'less'/, 'screen-space liquid depth-tests against analytic support without replacing support depth');
-assert.match(webgpuCoreSource, /analyticSupportDepthPass[\s\S]*depthLoadOp:\s*'clear'[\s\S]*analyticSupportDepthPipeline/, 'analytic support replaces decorative billboard depth before liquid composition');
+assert.match(webgpuCoreSource, /analyticSupportPresentationPass[\s\S]*loadOp:\s*'clear'[\s\S]*depthLoadOp:\s*'clear'[\s\S]*analyticSupportPresentationPipeline/, 'one analytic support pass clears and writes coherent color plus collision-authoritative depth');
+assert.match(webgpuCoreSource, /analyticSupportPresentationPass\.draw\(ANALYTIC_SUPPORT_VERTEX_COUNT\)[\s\S]*if \(effectiveRendererMode === 'sphere_debug'\)/, 'all renderer modes execute the same support presentation before their liquid-specific branch');
+assert.match(webgpuCoreSource, /effectiveRendererMode === 'sphere_debug'[\s\S]*pass\.draw\(6, safeParticleCount\)/, 'sphere-debug preserves particle spheres without drawing tiled support proxies');
+assert.doesNotMatch(webgpuCoreSource, /draw\(6, safeParticleCount \+ PLAYGROUND_TILE_COUNT/, 'sphere-debug cannot silently restore particle-tiled support geometry');
 assert.match(webgpuCoreSource, /compositePass[\s\S]*depthStencilAttachment:\s*\{[\s\S]*view:\s*depthTexture\.createView\(\)[\s\S]*depthLoadOp:\s*'load'/, 'surface composite loads analytic support depth instead of painting through terrain');
 assert.match(webgpuCoreSource, /edgePreservingDepth/, 'screen-space shader performs edge-preserving depth smoothing');
 assert.match(webgpuCoreSource, /reconstructSurfaceNormal/, 'screen-space shader reconstructs normals from smoothed particle depth');
 assert.match(webgpuCoreSource, /fresnel/, 'screen-space shader exposes Fresnel/specular water shading');
 assert.match(webgpuCoreSource, /absorption/, 'screen-space shader exposes optical-thickness absorption');
+assert.match(webgpuCoreSource, /kaminos-finger-fluid-refraction-scene-color/, 'refraction captures a renderer-owned scene-color texture');
+assert.match(webgpuCoreSource, /screenSpaceRefractionScenePassCount/, 'runtime evidence counts actual scene-color capture passes');
+assert.match(webgpuCoreSource, /screenSpaceRefractionCompositePipeline/, 'refraction owns a distinct fullscreen optical transport pipeline');
+assert.match(webgpuCoreSource, /fn reconstructRefractionOffset/, 'refraction derives an inspectable screen-space transport offset');
+assert.match(webgpuCoreSource, /refract\(-viewDir, normal, 1\.0 \/ 1\.333\)/, 'entry refraction applies air-to-water Snell transport analytically');
+assert.match(webgpuCoreSource, /refract\(insideRay, -exitNormal, 1\.333\)/, 'exit refraction applies water-to-air Snell transport against the outward back-surface normal');
+assert.match(webgpuCoreSource, /clamp\(offsetPixels, vec2<f32>\(-28\.0\), vec2<f32>\(28\.0\)\)/, 'two-interface screen-space transport cannot leave an unbounded sampling displacement');
+assert.match(webgpuCoreSource, /struct OpticalSlab\s*\{[\s\S]*entryDepth:[\s\S]*exitDepth:[\s\S]*geometricPathLength:[\s\S]*supportPerSpanConfidence:[\s\S]*exitValidity:/, 'optical slab makes entry, exit, path, confidence, and validity independently inspectable');
+assert.match(webgpuCoreSource, /fn reconstructExitNormal/, 'back-depth gradients produce an explicit exit-normal estimate');
+assert.match(webgpuCoreSource, /let unclampedExitUv =[\s\S]*let exitInFrame = all\(unclampedExitUv >= vec2<f32>\(0\.001\)\) && all\(unclampedExitUv <= vec2<f32>\(0\.999\)\)/, 'off-screen exit invalidity is measured before scene-coordinate clamping');
+assert.match(webgpuCoreSource, /entry_interface_only_no_exit_claim_v0/, 'invalid slab geometry has an evidence-named non-exit disposition instead of silent two-interface fallback');
+assert.match(webgpuCoreSource, /fn fs_refraction[\s\S]{0,120}-> CompositeOutput/, 'refraction emits reconstructed liquid fragment depth instead of bypassing support ordering');
+assert.match(webgpuCoreSource, /fn fs_refraction\(@builtin\(position\) fragmentPosition: vec4<f32>\) -> CompositeOutput[\s\S]*let pixel = vec2<i32>\(fragmentPosition\.xy\)/, 'refraction reads accumulation in framebuffer coordinates instead of vertically inverted fullscreen UV space');
+assert.match(webgpuCoreSource, /fn fs_refraction[\s\S]*centerAccum\.z < 0\.018 \|\| centerAccum\.x < 0\.012[\s\S]*discard/, 'refraction residency uses landed depth weight and optical thickness channels');
+assert.match(webgpuCoreSource, /fn fs_refraction[\s\S]*let supportOrderingDepth = weightedDepth\(centerAccum\);[\s\S]*let shadingDepth = edgePreservingDepth\(pixel, centerAccum\);[\s\S]*let thickness = centerAccum\.x;/, 'refraction keeps raw nearest-center ordering separate from smoothed shading depth and optical thickness');
+assert.match(webgpuCoreSource, /fn refractionOutput[\s\S]*output\.depth = clamp\(viewDepthToNdc\(supportOrderingDepth \+ 0\.003\)/, 'every optical debug and shaded return carries the same raw support-ordering depth');
+assert.match(webgpuCoreSource, /context\.configure\(\{ device, format, alphaMode: canvasAlphaMode, usage: GPUTextureUsage\.RENDER_ATTACHMENT \| GPUTextureUsage\.COPY_SRC \}\)/, 'refraction can capture the exact same-camera support presentation from the current canvas texture');
+assert.match(webgpuCoreSource, /kaminos-finger-fluid-refraction-scene-color[\s\S]*GPUTextureUsage\.COPY_DST/, 'renderer-owned refraction scene color accepts the exact support presentation copy');
+assert.match(webgpuCoreSource, /copyTextureToTexture\([\s\S]*texture: currentTexture[\s\S]*texture: screenSpaceRefractionSceneTexture/, 'scene color is copied from the same presented support frame instead of rerendered proxy geometry');
+assert.match(webgpuCoreSource, /analyticSupportPresentationPass\.end\(\)[\s\S]*copyTextureToTexture\([\s\S]*screenSpaceRefractionSceneTexture/, 'refraction captures scene color only after the analytic support presentation is complete');
+assert.match(webgpuCoreSource, /screenSpaceRefractionCompositePipeline[\s\S]*depthStencil:\s*\{\s*format:\s*'depth24plus',\s*depthWriteEnabled:\s*false,\s*depthCompare:\s*'less'/, 'refraction depth-tests raw liquid ordering against analytic support depth');
+assert.match(webgpuCoreSource, /refractionEnabled[\s\S]*two-interface-optical-slab-composite[\s\S]*loadOp:\s*'load'/, 'refraction overlays only liquid pixels on the copied support presentation');
+assert.match(webgpuCoreSource, /opticalDebugMode/, 'runtime evidence records the effective optical debug quantity');
+assert.match(webgpuCoreSource, /refractionEvidence:\s*\{[\s\S]*opticalTransportRoute:[\s\S]*sceneColorTexture:[\s\S]*scenePassCount:[\s\S]*compositePassCount:/, 'refraction evidence binds route, scene source, and executed passes');
+assert.match(webgpuCoreSource, /refractionEvidence:\s*\{[\s\S]*supportDepthRoute:\s*KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE[\s\S]*analyticSupportDepthPassCount/, 'refraction evidence names the landed analytic support-depth route and executed pass count');
+assert.match(webgpuCoreSource, /supportPresentationEvidence:\s*\{[\s\S]*route:\s*KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE[\s\S]*colorDepthAuthority:\s*'same_pass_same_analytic_geometry_v0'[\s\S]*particleSupportDrawCount/, 'runtime evidence binds the shared support presentation route, same-geometry authority, and absence of proxy draws');
+assert.match(webgpuCoreSource, /refractionEvidence:\s*\{[\s\S]*slabRoute:\s*KAMINOS_FINGER_FLUID_OPTICAL_SLAB_ROUTE[\s\S]*slabGeometryPassCount[\s\S]*frontDepthTexture:[\s\S]*backDepthTexture:[\s\S]*invalidSlabDisposition:/, 'refraction evidence binds slab route, executed geometry passes, textures, and invalidity disposition');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_STABILITY_CONTRACT\s*=\s*'bounded-pbf-energy-v0'/, 'bounded-energy stability contract is explicit');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_TRUTH_GAUNTLET_CONTRACT\s*=\s*'kaminos-fluid-truth-gauntlet-v0'/, 'fluid-truth gauntlet has an explicit contract');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_TRUTH_SCENES/, 'canonical truth-scene registry is explicit');
@@ -199,7 +242,7 @@ assert.match(webgpuCoreSource, /let diagnosticsRequestCount = 0/, 'full GPU diag
 assert.match(webgpuCoreSource, /let diagnosticsCompletionCount = 0/, 'full GPU diagnostics expose an exact completion count');
 assert.match(webgpuCoreSource, /diagnosticsRequestCount \+= 1/, 'accepted full-diagnostic requests are counted at their execution boundary');
 assert.match(webgpuCoreSource, /diagnosticsCompletionCount \+= 1/, 'completed full-diagnostic snapshots are counted separately from requests');
-assert.match(webgpuCoreSource, /pass\.draw\(6, safeParticleCount \+ PLAYGROUND_TILE_COUNT \+ PLAYGROUND_SKIRT_COUNT \+ PLAYGROUND_OBSTACLE_COUNT\)/, 'direct renderer draws the shared playground and connected shelf cliff in the operator viewport');
+assert.match(webgpuCoreSource, /analyticSupportPresentationPass\.draw\(ANALYTIC_SUPPORT_VERTEX_COUNT\)/, 'direct renderer draws the shared analytic playground and obstacle in the operator viewport');
 assert.match(webgpuCoreSource, /playgroundZoneDiagnostics/, 'sparse diagnostics measure population and energy by playground regime');
 assert.match(webgpuCoreSource, /supportedTransportParticleCount/, 'sparse diagnostics expose the support-adjacent transport population');
 assert.match(webgpuCoreSource, /averageSupportedTangentialSpeed/, 'sparse diagnostics quantify support-adjacent lateral speed');
@@ -243,7 +286,9 @@ assert.match(webgpuCoreSource, /freeSurfaceClassificationPassCount/, 'runtime ev
 assert.match(webgpuCoreSource, /surfaceCohesionPassCount/, 'runtime evidence reports executed cohesion passes');
 assert.match(webgpuCoreSource, /postProjectionGridRefreshCount/, 'runtime evidence reports exact post-projection support refreshes');
 assert.match(webgpuCoreSource, /isObstacle/, 'the direct renderer distinguishes shared obstacle support geometry');
-assert.match(webgpuCoreSource, /pass\.draw\(6, safeParticleCount \+ PLAYGROUND_TILE_COUNT \+ PLAYGROUND_SKIRT_COUNT \+ PLAYGROUND_OBSTACLE_COUNT\)/, 'the exact solver playground, shelf cliff, and obstacle are rendered as shared support instances');
+assert.match(webgpuCoreSource, /geometrySource:\s*'toyFloorHeight_toyFloorNormal_plus_analytic_obstacle_v0'/, 'the exact solver playground and obstacle are named as analytic support presentation geometry');
+assert.doesNotMatch(webgpuCoreSource, /shared_analytic_heightfield_billboard_tiles_and_cliff_skirt_v0/, 'human-visible support metadata cannot advertise the retired billboard topology');
+assert.match(webgpuCoreSource, /supportGeometryMode:\s*'shared_analytic_heightfield_mesh_plus_analytic_obstacle_v0'[\s\S]*supportPresentationRoute:\s*KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE[\s\S]*supportGeometryCount:\s*ANALYTIC_SUPPORT_VERTEX_COUNT[\s\S]*supportGeometryCountUnit:\s*'vertices'/, 'playground receipt names the effective analytic presentation topology, route, and count unit');
 assert.match(webgpuCoreSource, /obstacle:\s*\{[^}]*rendered:\s*directRenderFrameCount\s*>\s*0[^}]*\}/, 'obstacle render evidence derives from an actual submitted render frame');
 
 assert.match(indexSource, /data-tab="finger-fluid-bench"/, 'Kaminos sidebar exposes a Finger Fluid bench tab');
@@ -259,7 +304,14 @@ assert.match(indexSource, /finger_fluid_color_mode/, 'native route accepts an ex
 assert.match(indexSource, /finger_fluid_renderer/, 'native route accepts an explicit renderer mode');
 assert.match(indexSource, /requestedRendererMode/, 'native debug state preserves requested renderer identity');
 assert.match(indexSource, /effectiveRendererMode/, 'native debug state preserves effective renderer identity');
+assert.match(indexSource, /requestedRendererModeLabel[\s\S]*effectiveRendererModeLabel[\s\S]*finger-fluid-bench-renderer/, 'human-visible renderer readout names exact requested and effective modes');
+assert.match(indexSource, /finger-fluid-bench-renderer-route[\s\S]*grid-column:\s*1\s*\/\s*-1/, 'requested/effective renderer identities remain fully visible in the two-column bench readout');
 assert.match(indexSource, /finger_fluid_renderer=sphere_debug/, 'native route preserves the current sphere renderer as explicit debug mode');
+assert.match(indexSource, /schema:\s*'kaminos\.finger-fluid\.same-state-renderer-witness\.v0'[\s\S]*supportPresentationEvidence:\s*runtime\.supportPresentationEvidence/, 'same-state renderer receipts preserve the effective analytic support presentation evidence');
+assert.match(indexSource, /finger_fluid_renderer=screen_space_refraction/, 'native route exposes refraction as an explicit requested renderer mode');
+assert.match(indexSource, /finger_fluid_optical_debug/, 'native route accepts an explicit optical sidecar debug view');
+assert.match(indexSource, /requestedOpticalDebugMode/, 'native debug state preserves requested optical debug identity');
+assert.match(indexSource, /effectiveOpticalDebugMode/, 'native debug state preserves effective optical debug identity');
 assert.match(indexSource, /finger_fluid_particle_shift/, 'native route accepts an explicit particle-shift strength');
 assert.match(indexSource, /requestedColorMode/, 'native debug state preserves requested color-mode identity');
 assert.match(indexSource, /particleShiftStrength/, 'native debug state preserves effective particle-shift strength');
@@ -367,12 +419,40 @@ assert.match(benchWitnessSource, /finger_fluid_renderer/, 'bench witness records
 assert.match(benchWitnessSource, /screen_space_surface/, 'bench witness can target the reconstructed surface route');
 assert.match(benchWitnessSource, /sphere_debug/, 'bench witness preserves same-state sphere debug comparison');
 assert.match(benchWitnessSource, /sameStateRendererComparison/, 'bench witness captures same solver state renderer A/B evidence');
-assert.match(benchWitnessSource, /renderSameState = async \(mode, path, captureRect = canvasRect, minimumActiveRatio = 0\.05\)/, 'same-state nonblank gate accepts the measured 6.97% sphere truth while still rejecting sparse output');
+assert.match(benchWitnessSource, /rendererFreezeReceipt[\s\S]*kaminosFingerFluidBenchRenderCurrentStateForWitness/, 'same-state comparison freezes and snapshots counters in one browser call instead of racing an animation frame');
+assert.match(benchWitnessSource, /minimumActiveRatio = 0\.05/, 'same-state nonblank gate accepts the measured 6.97% sphere truth while still rejecting sparse output');
 assert.match(benchWitnessSource, /surfaceRegistrationViews/, 'bench witness captures the reconstructed surface against sphere debug from multiple camera angles');
+assert.match(benchWitnessSource, /measureSharedSupportIdentity/, 'bench witness compares captured support pixels across every renderer route');
+assert.match(benchWitnessSource, /sharedSupportIdentity\.mismatchRatio > 0\.002/, 'shared support witness fails on route-dependent or partial support presentation');
+assert.match(benchWitnessSource, /supportPresentationEvidence\?\.route !== 'wgsl-analytic-heightfield-obstacle-presentation-v0'/, 'bench witness rejects a missing or substituted analytic support presentation route');
+assert.match(benchWitnessSource, /supportPresentationEvidence\?\.particleSupportDrawCount !== 0/, 'bench witness rejects any hidden particle-support proxy draw');
+assert.match(benchWitnessSource, /playground\.supportGeometryMode !== 'shared_analytic_heightfield_mesh_plus_analytic_obstacle_v0'/, 'bench witness rejects stale billboard playground metadata');
+assert.match(benchWitnessSource, /playground\.supportGeometryCount !== playground\.terrainVertexCount \+ playground\.obstacleVertexCount/, 'bench witness verifies the exact analytic support topology count rather than a loose proxy threshold');
 assert.match(benchWitnessSource, /support_grazing[\s\S]*pitch:\s*-0\.15/, 'bench witness includes a grazing camera inside the operator orbit contract');
 assert.match(benchWitnessSource, /normalizedCentroidDistance/, 'multi-angle registration rejects a reconstructed surface that is displaced from the particle projection');
 assert.match(benchWitnessSource, /minimumBoundsOverlap/, 'multi-angle registration rejects a reflected surface even when both renderer outputs are nonblank');
+assert.match(benchWitnessSource, /screen-space-refraction-thickness\.png/, 'multi-angle registration captures a high-contrast refraction support mask at the same camera and state');
+assert.match(benchWitnessSource, /mask === 'optical_thickness'/, 'refraction registration measures the complete optical-thickness silhouette instead of a shading-dependent blue subset');
+assert.match(benchWitnessSource, /refractionProjection/, 'multi-angle registration measures refraction independently of reconstructed-surface registration');
+assert.match(benchWitnessSource, /refraction registration mismatch/, 'multi-angle registration rejects vertically inverted or displaced optical transport support');
 assert.match(benchWitnessSource, /finger-fluid-bench-overlay[\s\S]*visibility = 'hidden'/, 'registration masks exclude the diagnostic HUD instead of accepting its fixed cyan bounds as fluid');
+assert.match(benchWitnessSource, /screen_space_refraction/, 'bench witness captures the explicit refraction route');
+assert.match(benchWitnessSource, /sameStateOpticalComparison/, 'bench witness records same-state sphere/surface/refraction A/B/C evidence');
+assert.match(benchWitnessSource, /refractionEvidence/, 'bench witness requires source-honest optical transport evidence');
+assert.match(benchWitnessSource, /refractionEvidence\?\.supportDepthRoute !== 'wgsl-analytic-heightfield-obstacle-depth-v0'/, 'bench witness rejects refraction that silently drops landed support-depth authority');
+assert.match(benchWitnessSource, /refractionEvidence\?\.analyticSupportDepthPassCount < 1/, 'bench witness rejects refraction evidence without an executed analytic support-depth pass');
+assert.match(benchWitnessSource, /opticalDebugViews/, 'bench witness preserves same-state analytical optical-field captures');
+assert.match(benchWitnessSource, /\['depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption'\]/, 'bench witness exercises every entry, exit, path, validity, and shading debug quantity');
+assert.match(benchWitnessSource, /refractionEvidence\?\.slabRoute !== 'wgsl-particle-projected-front-back-slab-v0'/, 'bench witness rejects a missing or substituted optical slab route');
+assert.match(benchWitnessSource, /refractionEvidence\?\.slabGeometryPassCount < 1/, 'bench witness rejects slab evidence without an executed geometry pass');
+assert.match(benchWitnessSource, /slabValidityField/, 'bench witness preserves pixel evidence for valid and invalid exit geometry');
+assert.match(benchWitnessSource, /visualDeltaFromShaded/, 'every optical field carries pixel evidence against shaded refraction');
+assert.match(benchWitnessSource, /visualDeltaFromPreviousDebug/, 'optical fields cannot all collapse to one non-shaded diagnostic output');
+assert.match(benchWitnessSource, /primaryFrameBinding/, 'primary output records the exact synchronously rendered route receipt and canvas evidence');
+assert.match(benchWitnessSource, /primary screenshot renderer disagreement/, 'primary output rejects requested/effective renderer or optical mode drift');
+assert.match(benchWitnessSource, /optical renderer disagreement/, 'bench witness rejects stale/default optical route substitution');
+assert.match(benchWitnessSource, /blank refraction output/, 'bench witness rejects blank refraction captures');
+assert.match(benchWitnessSource, /mode === 'screen_space_refraction' && opticalDebugMode === 'shaded' && activity\.activeRatio < 0\.05/, 'shaded refraction must remain materially legible against the dark support scene');
 assert.match(benchWitnessSource, /screenSpaceSurfaceEvidence/, 'bench witness records reconstructed-surface visual evidence');
 assert.match(benchWitnessSource, /renderer disagreement/, 'bench witness rejects requested/effective renderer disagreement');
 assert.match(benchWitnessSource, /blank reconstructed-surface output/, 'bench witness rejects blank screen-space surface captures');
@@ -400,6 +480,9 @@ assert.match(truthWitnessSource, /totalKineticEnergy/, 'truth witness measures e
 assert.match(truthWitnessSource, /occupiedCellCount/, 'truth witness records support-volume occupancy rather than particle count alone');
 assert.match(truthWitnessSource, /requestedUrl/, 'truth witness records the exact requested route');
 assert.match(truthWitnessSource, /effectiveUrl/, 'truth witness records the effective browser route');
+assert.match(truthWitnessSource, /requestedOpticalDebugMode\s*=\s*requestedUrlObject\.searchParams\.get\('finger_fluid_optical_debug'\)/, 'truth witness derives requested optical-debug authority from the exact URL');
+assert.match(truthWitnessSource, /validateFingerFluidTruthRendererState\(requestedRendererMode, state\.runtime, \{ requestedOpticalDebugMode \}\)/, 'truth checkpoints validate requested optical-debug authority');
+assert.match(truthWitnessSource, /validateFingerFluidTruthRendererAdvance\(lastRendererAuthority, rendererAuthority\)/, 'truth checkpoints reject frozen route-specific renderer evidence');
 assert.match(truthWitnessSource, /requestedSupportFriction\s*!==\s*effectiveSupportFriction/, 'truth witness rejects silent support-friction fallback');
 assert.match(truthWitnessSource, /energyLedger/, 'truth witness records per-pass kinetic-energy attribution at every requested checkpoint');
 assert.match(truthWitnessSource, /energyLedger\.stepCount\s*!==\s*state\.runtime\.diagnostics\?\.stepCount/, 'energy attribution is bound to the captured diagnostics step rather than a later live animation step');
@@ -683,9 +766,14 @@ assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_TOPOLOGY_CONTRACT, 'wgsl-four-neighb
 assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_PARTICLE_SHIFT_CONTRACT, 'wgsl-opt-in-support-tangential-particle-shift-v0');
 assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_CHEMISTRY_CONTRACT, 'wgsl-passive-material-tracer-diffusion-v0');
 assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE, 'webgpu-screen-space-liquid-surface-v0');
+assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE, 'webgpu-screen-space-liquid-refraction-v0');
+assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_OPTICAL_TRANSPORT_ROUTE, 'snell-two-interface-screen-space-slab-v0');
+assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_OPTICAL_SLAB_ROUTE, 'wgsl-particle-projected-front-back-slab-v0');
 assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE, 'webgpu-particle-sphere-debug-renderer-v0');
 assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE, 'wgsl-analytic-heightfield-obstacle-depth-v0');
+assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE, 'wgsl-analytic-heightfield-obstacle-presentation-v0');
 assert.equal(webgpuMod.resolveFingerFluidRendererMode('screen_space_surface'), 'screen_space_surface');
+assert.equal(webgpuMod.resolveFingerFluidRendererMode('screen_space_refraction'), 'screen_space_refraction');
 assert.equal(webgpuMod.resolveFingerFluidRendererMode('sphere_debug'), 'sphere_debug');
 assert.throws(() => webgpuMod.resolveFingerFluidRendererMode('fallback'), /Unsupported finger fluid renderer mode/);
 assert.equal(typeof webgpuMod.validateFingerFluidTruthRendererState, 'function');
@@ -695,6 +783,14 @@ const screenSpaceRendererRuntime = {
   requestedRenderer: webgpuMod.KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE,
   effectiveRenderer: webgpuMod.KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE,
   fallbackReason: null,
+  supportPresentationEvidence: {
+    route: webgpuMod.KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE,
+    depthRoute: webgpuMod.KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE,
+    colorDepthAuthority: 'same_pass_same_analytic_geometry_v0',
+    refractionCaptureOrder: 'copy_after_analytic_support_presentation_v0',
+    passCount: 7,
+    particleSupportDrawCount: 0,
+  },
   screenSpaceSurfaceEvidence: {
     route: webgpuMod.KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE,
     shaderRoute: webgpuMod.KAMINOS_FINGER_FLUID_SCREEN_SPACE_SHADER_ROUTE,
@@ -712,6 +808,7 @@ assert.deepEqual(
     requestedRenderer: webgpuMod.KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE,
     effectiveRenderer: webgpuMod.KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE,
     fallbackReason: null,
+    supportPresentationEvidence: screenSpaceRendererRuntime.supportPresentationEvidence,
     screenSpaceSurfaceEvidence: screenSpaceRendererRuntime.screenSpaceSurfaceEvidence,
   },
 );
@@ -722,9 +819,114 @@ assert.deepEqual(
     requestedRenderer: webgpuMod.KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE,
     effectiveRenderer: webgpuMod.KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE,
     fallbackReason: null,
+    supportPresentationEvidence: screenSpaceRendererRuntime.supportPresentationEvidence,
   }).effectiveRenderer,
   webgpuMod.KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE,
 );
+const refractionRendererRuntime = {
+  requestedRendererMode: 'screen_space_refraction',
+  effectiveRendererMode: 'screen_space_refraction',
+  requestedRenderer: webgpuMod.KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE,
+  effectiveRenderer: webgpuMod.KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE,
+  fallbackReason: null,
+  requestedOpticalDebugMode: 'shaded',
+  effectiveOpticalDebugMode: 'shaded',
+  supportPresentationEvidence: screenSpaceRendererRuntime.supportPresentationEvidence,
+  refractionEvidence: {
+    route: webgpuMod.KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE,
+    shaderRoute: webgpuMod.KAMINOS_FINGER_FLUID_SCREEN_SPACE_SHADER_ROUTE,
+    opticalTransportRoute: webgpuMod.KAMINOS_FINGER_FLUID_OPTICAL_TRANSPORT_ROUTE,
+    supportDepthRoute: webgpuMod.KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE,
+    slabRoute: webgpuMod.KAMINOS_FINGER_FLUID_OPTICAL_SLAB_ROUTE,
+    analyticSupportDepthPassCount: 7,
+    slabGeometryPassCount: 7,
+    frontDepthTexture: { format: 'rgba16float' },
+    backDepthTexture: { format: 'rgba16float' },
+    invalidSlabDisposition: 'entry_interface_only_no_exit_claim_v0',
+    opticalDebugMode: 'shaded',
+    sceneColorTexture: { source: 'same-camera-analytic-support-presentation-color-v0' },
+    scenePassCount: 7,
+    accumulationPassCount: 7,
+    compositePassCount: 7,
+  },
+};
+assert.deepEqual(
+  webgpuMod.validateFingerFluidTruthRendererState('screen_space_refraction', refractionRendererRuntime),
+  {
+    requestedRendererMode: 'screen_space_refraction',
+    effectiveRendererMode: 'screen_space_refraction',
+    requestedRenderer: webgpuMod.KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE,
+    effectiveRenderer: webgpuMod.KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE,
+    fallbackReason: null,
+    requestedOpticalDebugMode: 'shaded',
+    effectiveOpticalDebugMode: 'shaded',
+    supportPresentationEvidence: screenSpaceRendererRuntime.supportPresentationEvidence,
+    screenSpaceSurfaceEvidence: null,
+    refractionEvidence: refractionRendererRuntime.refractionEvidence,
+  },
+);
+assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('screen_space_refraction', {
+  ...refractionRendererRuntime,
+  refractionEvidence: {
+    ...refractionRendererRuntime.refractionEvidence,
+    sceneColorTexture: { source: 'stale-or-proxy-scene-v0' },
+  },
+}), /refraction renderer evidence is missing or partial/);
+assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('screen_space_refraction', {
+  ...refractionRendererRuntime,
+  refractionEvidence: {
+    ...refractionRendererRuntime.refractionEvidence,
+    sceneColorTexture: null,
+  },
+}), /refraction renderer evidence is missing or partial/);
+assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('screen_space_refraction', {
+  ...refractionRendererRuntime,
+  effectiveOpticalDebugMode: 'normal',
+  refractionEvidence: {
+    ...refractionRendererRuntime.refractionEvidence,
+    opticalDebugMode: 'normal',
+  },
+}, { requestedOpticalDebugMode: 'shaded' }), /optical debug mode disagreement/);
+assert.equal(typeof webgpuMod.validateFingerFluidTruthRendererAdvance, 'function');
+assert.throws(() => webgpuMod.validateFingerFluidTruthRendererAdvance(
+  webgpuMod.validateFingerFluidTruthRendererState('screen_space_refraction', refractionRendererRuntime),
+  webgpuMod.validateFingerFluidTruthRendererState('screen_space_refraction', refractionRendererRuntime),
+), /refraction renderer passes did not advance/);
+assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('sphere_debug', {
+  requestedRendererMode: 'sphere_debug',
+  effectiveRendererMode: 'sphere_debug',
+  requestedRenderer: webgpuMod.KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE,
+  effectiveRenderer: webgpuMod.KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE,
+  fallbackReason: null,
+}), /support presentation evidence is missing or partial/);
+assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('screen_space_surface', {
+  ...screenSpaceRendererRuntime,
+  supportPresentationEvidence: {
+    ...screenSpaceRendererRuntime.supportPresentationEvidence,
+    particleSupportDrawCount: 1,
+  },
+}), /support presentation evidence is missing or partial/);
+assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('screen_space_refraction', {
+  ...refractionRendererRuntime,
+  supportPresentationEvidence: {
+    ...refractionRendererRuntime.supportPresentationEvidence,
+    refractionCaptureOrder: 'copy_before_support_presentation',
+  },
+}), /support presentation evidence is missing or partial/);
+assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('screen_space_refraction', {
+  ...refractionRendererRuntime,
+  refractionEvidence: {
+    ...refractionRendererRuntime.refractionEvidence,
+    analyticSupportDepthPassCount: 0,
+  },
+}), /refraction renderer evidence is missing or partial/);
+assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('screen_space_refraction', {
+  ...refractionRendererRuntime,
+  refractionEvidence: {
+    ...refractionRendererRuntime.refractionEvidence,
+    slabGeometryPassCount: 0,
+  },
+}), /refraction renderer evidence is missing or partial/);
 assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('screen_space_surface', {
   ...screenSpaceRendererRuntime,
   effectiveRendererMode: 'sphere_debug',
@@ -752,6 +954,9 @@ assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('screen_spac
     accumulationPassCount: 0,
   },
 }), /screen-space renderer evidence/);
+assert.deepEqual(webgpuMod.KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES, ['shaded', 'depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption']);
+assert.equal(webgpuMod.resolveFingerFluidOpticalDebugMode('refraction_offset'), 'refraction_offset');
+assert.throws(() => webgpuMod.resolveFingerFluidOpticalDebugMode('pretty_fallback'), /Unsupported finger fluid optical debug mode/);
 assert.equal(webgpuMod.KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_SCHEMA, 'kaminos.liquid-fire-contact-descriptor.v1');
 assert.equal(webgpuMod.KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_PACKING, 'gpu-sparse-liquid-fire-contact-source-vec4x8-v1');
 assert.equal(typeof webgpuMod.validateLiquidFireContactDescriptorHeader, 'function');

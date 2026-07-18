@@ -15,15 +15,20 @@ export const KAMINOS_FINGER_FLUID_CHEMISTRY_CONTRACT = 'wgsl-passive-material-tr
 export const KAMINOS_FINGER_FLUID_OBSTACLE_CONTRACT = 'shared-solver-render-obstacle-v0';
 export const KAMINOS_FINGER_FLUID_PLAYGROUND_CONTRACT = 'wgsl-shared-multi-regime-toy-playground-v0';
 export const KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_SCHEMA = 'kaminos.liquid-interface-carrier.v0';
+export const KAMINOS_FINGER_FLUID_INTERFACE_GEOMETRY_CONTRACT = 'wgsl-solver-owned-interface-normal-curvature-confidence-v1';
 export const KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_SCHEMA = 'kaminos.liquid-fire-contact-descriptor.v1';
 export const KAMINOS_LIQUID_FIRE_CONTACT_DESCRIPTOR_PACKING = 'gpu-sparse-liquid-fire-contact-source-vec4x8-v1';
 export const KAMINOS_FINGER_FLUID_GPU_RENDERER_ROUTE = 'webgpu-particle-sphere-renderer-v0';
 export const KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE = 'webgpu-screen-space-liquid-surface-v0';
+export const KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE = 'webgpu-screen-space-liquid-refraction-v0';
+export const KAMINOS_FINGER_FLUID_OPTICAL_TRANSPORT_ROUTE = 'snell-two-interface-screen-space-slab-v0';
+export const KAMINOS_FINGER_FLUID_OPTICAL_SLAB_ROUTE = 'wgsl-particle-projected-front-back-slab-v0';
 export const KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE = 'webgpu-particle-sphere-debug-renderer-v0';
 export const KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE = 'wgsl-pbf-linked-cell-fluid-v0';
 export const KAMINOS_FINGER_FLUID_RENDER_SHADER_ROUTE = 'wgsl-fluid-particle-sphere-v0';
 export const KAMINOS_FINGER_FLUID_SCREEN_SPACE_SHADER_ROUTE = 'wgsl-fluid-screen-space-surface-v0';
 export const KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE = 'wgsl-analytic-heightfield-obstacle-depth-v0';
+export const KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE = 'wgsl-analytic-heightfield-obstacle-presentation-v0';
 export const KAMINOS_FINGER_FLUID_STABILITY_CONTRACT = 'bounded-pbf-energy-v0';
 export const KAMINOS_FINGER_FLUID_TRUTH_GAUNTLET_CONTRACT = 'kaminos-fluid-truth-gauntlet-v0';
 
@@ -86,7 +91,8 @@ let nextLiquidFireContactAllocationGeneration = 1;
 
 export const KAMINOS_FINGER_FLUID_COLOR_MODES = Object.freeze(['phase', 'particle_id', 'speed', 'density', 'surface', 'neighbor_retention', 'chemistry']);
 export const KAMINOS_FINGER_FLUID_TRUTH_SCENES = Object.freeze(['multi_regime_playground', 'deep_pool_rest', 'dam_break']);
-export const KAMINOS_FINGER_FLUID_RENDERER_MODES = Object.freeze(['screen_space_surface', 'sphere_debug']);
+export const KAMINOS_FINGER_FLUID_RENDERER_MODES = Object.freeze(['screen_space_surface', 'screen_space_refraction', 'sphere_debug']);
+export const KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES = Object.freeze(['shaded', 'depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption']);
 
 export function resolveFingerFluidColorMode(value = 'phase') {
   const mode = String(value || 'phase');
@@ -112,14 +118,91 @@ export function resolveFingerFluidRendererMode(value = 'screen_space_surface') {
   return mode;
 }
 
-export function validateFingerFluidTruthRendererState(requestedMode, runtime) {
+export function estimateFingerFluidInterfaceGeometry(position, neighbors, {
+  kernelRadius = 0.185,
+  fallbackNormal = [0, 1, 0],
+} = {}) {
+  if (!Array.isArray(position) || position.length !== 3 || !position.every(Number.isFinite)) {
+    throw new TypeError('Finger fluid interface geometry requires a finite 3D source position');
+  }
+  if (!Array.isArray(neighbors)) {
+    throw new TypeError('Finger fluid interface geometry requires a neighbor array');
+  }
+  if (!Number.isFinite(kernelRadius) || kernelRadius <= 0) {
+    throw new RangeError(`Finger fluid interface geometry requires a positive kernel radius, received: ${kernelRadius}`);
+  }
+  if (!Array.isArray(fallbackNormal) || fallbackNormal.length !== 3 || !fallbackNormal.every(Number.isFinite)) {
+    throw new TypeError('Finger fluid interface geometry requires a finite nonzero fallback normal');
+  }
+  const fallbackLength = Math.hypot(...fallbackNormal);
+  if (fallbackLength <= 1e-9) throw new TypeError('Finger fluid interface geometry requires a finite nonzero fallback normal');
+
+  const directionalSupport = [0, 0, 0];
+  const accepted = [];
+  let supportWeight = 0;
+  for (const neighbor of neighbors) {
+    const neighborPosition = neighbor?.position;
+    const confidence = Number(neighbor?.confidence ?? 1);
+    if (!Array.isArray(neighborPosition) || neighborPosition.length !== 3 || !neighborPosition.every(Number.isFinite) || !Number.isFinite(confidence)) {
+      throw new TypeError('Finger fluid interface geometry received a malformed neighbor');
+    }
+    if (confidence < 0.32) continue;
+    const offset = position.map((value, axis) => value - neighborPosition[axis]);
+    const distance = Math.hypot(...offset);
+    if (distance <= 1e-9 || distance >= kernelRadius) continue;
+    const normalizedDistance = distance / kernelRadius;
+    const weight = ((1 - normalizedDistance) ** 3) * confidence;
+    supportWeight += weight;
+    for (let axis = 0; axis < 3; axis += 1) directionalSupport[axis] += offset[axis] / distance * weight;
+    accepted.push({ offset, weight });
+  }
+
+  const supportLength = Math.hypot(...directionalSupport);
+  const normal = supportLength > 1e-9
+    ? directionalSupport.map(value => value / supportLength)
+    : fallbackNormal.map(value => value / fallbackLength);
+  let weightedNormalOffset = 0;
+  let weightedTangentSpan = 0;
+  for (const { offset, weight } of accepted) {
+    const normalOffset = offset.reduce((sum, value, axis) => sum + value * normal[axis], 0);
+    const tangentOffset = offset.map((value, axis) => value - normal[axis] * normalOffset);
+    weightedNormalOffset += normalOffset * weight;
+    weightedTangentSpan += tangentOffset.reduce((sum, value) => sum + value * value, 0) * weight;
+  }
+  const smoothstep = (edge0, edge1, value) => {
+    const t = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
+    return t * t * (3 - 2 * t);
+  };
+  const meanTangentSpanSquared = weightedTangentSpan / Math.max(1e-9, supportWeight);
+  const countConfidence = smoothstep(3, 8, accepted.length);
+  const spanConfidence = smoothstep((kernelRadius * 0.08) ** 2, (kernelRadius * 0.2) ** 2, meanTangentSpanSquared);
+  const resolutionConfidence = countConfidence * spanConfidence;
+  const rawCurvature = weightedTangentSpan > 1e-9
+    ? 2 * weightedNormalOffset / weightedTangentSpan
+    : 0;
+  const maximumResolvableCurvature = 2 / kernelRadius;
+  const resolved = resolutionConfidence >= 0.2 && Math.abs(rawCurvature) <= maximumResolvableCurvature;
+  const curvature = resolved ? rawCurvature : 0;
+  const supportConfidence = Math.min(1, supportWeight / Math.max(1e-9, accepted.length * 0.08));
+  return {
+    contract: KAMINOS_FINGER_FLUID_INTERFACE_GEOMETRY_CONTRACT,
+    normal,
+    curvature,
+    confidence: resolved ? supportConfidence * resolutionConfidence : 0,
+    resolved,
+    maximumResolvableCurvature,
+    neighborCount: accepted.length,
+  };
+}
+
+export function validateFingerFluidTruthRendererState(requestedMode, runtime, {
+  requestedOpticalDebugMode = 'shaded',
+} = {}) {
   const expectedMode = resolveFingerFluidRendererMode(requestedMode);
   if (!runtime || typeof runtime !== 'object') {
     throw new Error('Finger fluid truth renderer state is missing');
   }
-  const expectedRenderer = expectedMode === 'sphere_debug'
-    ? KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE
-    : KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE;
+  const expectedRenderer = rendererRouteForMode(expectedMode);
   if (runtime.requestedRendererMode !== expectedMode || runtime.effectiveRendererMode !== expectedMode) {
     throw new Error(`Finger fluid truth renderer mode disagreement: ${JSON.stringify({
       expectedMode,
@@ -136,6 +219,19 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime) {
   }
   if (runtime.fallbackReason) {
     throw new Error(`Finger fluid truth renderer fallback is not accepted: ${runtime.fallbackReason}`);
+  }
+
+  const supportPresentationEvidence = runtime.supportPresentationEvidence;
+  if (
+    supportPresentationEvidence?.route !== KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE
+    || supportPresentationEvidence?.depthRoute !== KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE
+    || supportPresentationEvidence?.colorDepthAuthority !== 'same_pass_same_analytic_geometry_v0'
+    || supportPresentationEvidence?.refractionCaptureOrder !== 'copy_after_analytic_support_presentation_v0'
+    || !Number.isInteger(supportPresentationEvidence?.passCount)
+    || supportPresentationEvidence.passCount <= 0
+    || supportPresentationEvidence?.particleSupportDrawCount !== 0
+  ) {
+    throw new Error(`Finger fluid truth support presentation evidence is missing or partial: ${JSON.stringify(supportPresentationEvidence)}`);
   }
 
   let screenSpaceSurfaceEvidence = null;
@@ -159,14 +255,118 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime) {
     };
   }
 
+  let refractionEvidence = null;
+  let expectedOpticalDebugMode = null;
+  if (expectedMode === 'screen_space_refraction') {
+    expectedOpticalDebugMode = resolveFingerFluidOpticalDebugMode(requestedOpticalDebugMode);
+    if (
+      runtime.requestedOpticalDebugMode !== expectedOpticalDebugMode
+      || runtime.effectiveOpticalDebugMode !== expectedOpticalDebugMode
+    ) {
+      throw new Error(`Finger fluid truth optical debug mode disagreement: ${JSON.stringify({
+        expectedOpticalDebugMode,
+        requestedOpticalDebugMode: runtime.requestedOpticalDebugMode,
+        effectiveOpticalDebugMode: runtime.effectiveOpticalDebugMode,
+      })}`);
+    }
+    const evidence = runtime.refractionEvidence;
+    if (
+      evidence?.route !== KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE
+      || evidence?.shaderRoute !== KAMINOS_FINGER_FLUID_SCREEN_SPACE_SHADER_ROUTE
+      || evidence?.opticalTransportRoute !== KAMINOS_FINGER_FLUID_OPTICAL_TRANSPORT_ROUTE
+      || evidence?.slabRoute !== KAMINOS_FINGER_FLUID_OPTICAL_SLAB_ROUTE
+      || evidence?.supportDepthRoute !== KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE
+      || !Number.isInteger(evidence?.analyticSupportDepthPassCount)
+      || evidence.analyticSupportDepthPassCount <= 0
+      || !Number.isInteger(evidence?.scenePassCount)
+      || evidence.scenePassCount <= 0
+      || !Number.isInteger(evidence?.slabGeometryPassCount)
+      || evidence.slabGeometryPassCount <= 0
+      || evidence?.frontDepthTexture?.format !== 'rgba16float'
+      || evidence?.backDepthTexture?.format !== 'rgba16float'
+      || evidence?.invalidSlabDisposition !== 'entry_interface_only_no_exit_claim_v0'
+      || evidence?.opticalDebugMode !== expectedOpticalDebugMode
+      || evidence?.sceneColorTexture?.source !== 'same-camera-analytic-support-presentation-color-v0'
+      || !Number.isInteger(evidence?.accumulationPassCount)
+      || evidence.accumulationPassCount <= 0
+      || !Number.isInteger(evidence?.compositePassCount)
+      || evidence.compositePassCount <= 0
+    ) {
+      throw new Error(`Finger fluid truth refraction renderer evidence is missing or partial: ${JSON.stringify(evidence)}`);
+    }
+    refractionEvidence = {
+      ...evidence,
+    };
+  }
+
   return {
     requestedRendererMode: runtime.requestedRendererMode,
     effectiveRendererMode: runtime.effectiveRendererMode,
     requestedRenderer: runtime.requestedRenderer,
     effectiveRenderer: runtime.effectiveRenderer,
     fallbackReason: runtime.fallbackReason || null,
+    ...(expectedMode === 'screen_space_refraction' ? {
+      requestedOpticalDebugMode: runtime.requestedOpticalDebugMode,
+      effectiveOpticalDebugMode: runtime.effectiveOpticalDebugMode,
+    } : {}),
+    supportPresentationEvidence: {
+      ...supportPresentationEvidence,
+    },
     screenSpaceSurfaceEvidence,
+    ...(expectedMode === 'screen_space_refraction' ? { refractionEvidence } : {}),
   };
+}
+
+export function validateFingerFluidTruthRendererAdvance(previousAuthority, currentAuthority) {
+  if (!previousAuthority || !currentAuthority) {
+    throw new Error('Finger fluid truth renderer advancement requires previous and current authority');
+  }
+  if (previousAuthority.effectiveRendererMode !== currentAuthority.effectiveRendererMode) {
+    throw new Error(`Finger fluid truth renderer changed between checkpoints: ${JSON.stringify({
+      previous: previousAuthority.effectiveRendererMode,
+      current: currentAuthority.effectiveRendererMode,
+    })}`);
+  }
+  const mode = currentAuthority.effectiveRendererMode;
+  if (mode === 'screen_space_surface') {
+    const previous = previousAuthority.screenSpaceSurfaceEvidence;
+    const current = currentAuthority.screenSpaceSurfaceEvidence;
+    if (
+      current?.analyticSupportDepthPassCount <= previous?.analyticSupportDepthPassCount
+      || current?.accumulationPassCount <= previous?.accumulationPassCount
+      || current?.compositePassCount <= previous?.compositePassCount
+    ) {
+      throw new Error(`Finger fluid truth screen-space renderer passes did not advance: ${JSON.stringify({ previous, current })}`);
+    }
+  }
+  if (mode === 'screen_space_refraction') {
+    const previous = previousAuthority.refractionEvidence;
+    const current = currentAuthority.refractionEvidence;
+    if (
+      current?.analyticSupportDepthPassCount <= previous?.analyticSupportDepthPassCount
+      || current?.scenePassCount <= previous?.scenePassCount
+      || current?.slabGeometryPassCount <= previous?.slabGeometryPassCount
+      || current?.accumulationPassCount <= previous?.accumulationPassCount
+      || current?.compositePassCount <= previous?.compositePassCount
+    ) {
+      throw new Error(`Finger fluid truth refraction renderer passes did not advance: ${JSON.stringify({ previous, current })}`);
+    }
+  }
+  return currentAuthority;
+}
+
+export function resolveFingerFluidOpticalDebugMode(value = 'shaded') {
+  const mode = String(value || 'shaded');
+  if (!KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES.includes(mode)) {
+    throw new RangeError(`Unsupported finger fluid optical debug mode: ${mode}`);
+  }
+  return mode;
+}
+
+function rendererRouteForMode(mode) {
+  if (mode === 'sphere_debug') return KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE;
+  if (mode === 'screen_space_refraction') return KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE;
+  return KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE;
 }
 
 export function resolveFingerFluidParticleShiftStrength(value = 0) {
@@ -1082,6 +1282,55 @@ fn apply_support_particle_shift(@builtin(global_invocation_id) gid: vec3<u32>) {
   particles[index] = particle;
 }
 
+fn estimate_interface_curvature(position: vec3<f32>, interfaceNormal: vec3<f32>) -> vec2<f32> {
+  let baseCell = gridCoord(position);
+  var weightedNormalOffset = 0.0;
+  var weightedTangentSpan = 0.0;
+  var interfaceWeight = 0.0;
+  var interfaceNeighborCount = 0u;
+
+  for (var z = -1; z <= 1; z = z + 1) {
+    for (var y = -1; y <= 1; y = y + 1) {
+      for (var x = -1; x <= 1; x = x + 1) {
+        let neighborCell = baseCell + vec3<i32>(x, y, z);
+        if (any(neighborCell < vec3<i32>(0)) || any(neighborCell >= vec3<i32>(params.gridDims.xyz))) { continue; }
+        var current = atomicLoad(&cellHeads[cellIndex(neighborCell)]);
+        while (current >= 0) {
+          let neighborIndex = u32(current);
+          let offset = position - particles[neighborIndex].position.xyz;
+          let distance = length(offset);
+          let neighborConfidence = restStates[neighborIndex].x;
+          let weight = kernelWeight(distance) * neighborConfidence;
+          if (distance > 0.00001 && weight > 0.0 && neighborConfidence >= ${INTERFACE_THRESHOLD}) {
+            let normalOffset = dot(offset, interfaceNormal);
+            let tangentOffset = offset - interfaceNormal * dot(offset, interfaceNormal);
+            weightedNormalOffset = weightedNormalOffset + normalOffset * weight;
+            weightedTangentSpan = weightedTangentSpan + dot(tangentOffset, tangentOffset) * weight;
+            interfaceWeight = interfaceWeight + weight;
+            interfaceNeighborCount = interfaceNeighborCount + 1u;
+          }
+          current = particleNext[neighborIndex];
+        }
+      }
+    }
+  }
+  if (interfaceNeighborCount < 4u || weightedTangentSpan <= 0.000001 || interfaceWeight <= 0.000001) {
+    return vec2<f32>(0.0);
+  }
+  let meanTangentSpanSquared = weightedTangentSpan / interfaceWeight;
+  let countConfidence = smoothstep(3.0, 8.0, f32(interfaceNeighborCount));
+  let minimumSpan = params.fluid.x * 0.08;
+  let resolvedSpan = params.fluid.x * 0.2;
+  let spanConfidence = smoothstep(minimumSpan * minimumSpan, resolvedSpan * resolvedSpan, meanTangentSpanSquared);
+  let resolutionConfidence = countConfidence * spanConfidence;
+  let rawCurvature = 2.0 * weightedNormalOffset / weightedTangentSpan;
+  let maximumResolvableCurvature = 2.0 / params.fluid.x;
+  if (resolutionConfidence < 0.2 || abs(rawCurvature) > maximumResolvableCurvature) {
+    return vec2<f32>(0.0);
+  }
+  return vec2<f32>(rawCurvature, resolutionConfidence);
+}
+
 @compute @workgroup_size(1)
 fn clear_interface_counters(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (gid.x == 0u) {
@@ -1129,7 +1378,6 @@ fn compact_interface_records(@builtin(global_invocation_id) gid: vec3<u32>) {
   let sphereCenter = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]});
   let sphereContact = select(0.0, 1.0, abs(length(position - sphereCenter) - (${OBSTACLE_RADIUS} + radius)) < 0.045);
   let contact = max(floorContact, sphereContact);
-  let anisotropy = length(directionalSupport) / max(supportWeight, 0.0001);
   let fallbackNormal = select(vec3<f32>(0.0, 1.0, 0.0), floorNormal(position), floorContact > 0.5);
   let sphereSupportNormal = normalize(position - sphereCenter + vec3<f32>(0.00001, 0.00002, 0.00003));
   let contactSupportNormal = select(sphereSupportNormal, floorNormal(position), floorContact > 0.5);
@@ -1140,6 +1388,9 @@ fn compact_interface_records(@builtin(global_invocation_id) gid: vec3<u32>) {
   let supportAlignment = select(1.0, dot(interfaceNormal, contactSupportNormal), contact > 0.5);
   let interfaceAge = restStates[index].y;
   if (surfaceFactor < ${INTERFACE_THRESHOLD}) { return; }
+  let curvatureGeometry = estimate_interface_curvature(position, interfaceNormal);
+  let interfaceCurvature = curvatureGeometry.x;
+  let geometryConfidence = surfaceFactor * curvatureGeometry.y;
 
   let slot = atomicAdd(&interfaceCounters[0], 1u);
   if (slot >= params.particleCount) {
@@ -1149,8 +1400,8 @@ fn compact_interface_records(@builtin(global_invocation_id) gid: vec3<u32>) {
   let speed = length(particle.velocity.xyz);
   let thickness = params.fluid.x * clamp(supportWeight / max(params.fluid.y, 0.0001), 0.18, 2.5);
   interfaceRecords[slot].positionId = vec4<f32>(position, f32(index));
-  interfaceRecords[slot].velocityConfidence = vec4<f32>(particle.velocity.xyz, surfaceFactor);
-  interfaceRecords[slot].normalCurvature = vec4<f32>(interfaceNormal, anisotropy);
+  interfaceRecords[slot].velocityConfidence = vec4<f32>(particle.velocity.xyz, geometryConfidence);
+  interfaceRecords[slot].normalCurvature = vec4<f32>(interfaceNormal, interfaceCurvature);
   interfaceRecords[slot].thicknessContactWetnessMaterial = vec4<f32>(thickness, contact, surfaceFactor, particle.velocity.w);
   interfaceRecords[slot].stabilityAgeSource = vec4<f32>(1.0 - clamp(speed / ${MAX_FLUID_SPEED}, 0.0, 1.0), interfaceAge, f32(params.frameIndex), supportAlignment);
 }
@@ -1462,7 +1713,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
 }
 `;
 
-const ANALYTIC_SUPPORT_DEPTH_SHADER = /* wgsl */`
+const ANALYTIC_SUPPORT_PRESENTATION_SHADER = /* wgsl */`
 struct RenderParams {
   viewProjection: mat4x4<f32>,
   cameraRight: vec4<f32>,
@@ -1482,9 +1733,18 @@ fn triangleCorner(vertexInCell: u32) -> vec2<f32> {
   return corners[vertexInCell];
 }
 
+struct AnalyticSupportVertexOutput {
+  @builtin(position) position: vec4<f32>,
+  @location(0) worldPosition: vec3<f32>,
+  @location(1) worldNormal: vec3<f32>,
+  @location(2) supportKind: f32,
+}
+
 @vertex
-fn vs_analytic_support_depth(@builtin(vertex_index) vertexIndex: u32) -> @builtin(position) vec4<f32> {
+fn vs_analytic_support_presentation(@builtin(vertex_index) vertexIndex: u32) -> AnalyticSupportVertexOutput {
   var worldPosition = vec3<f32>(0.0);
+  var worldNormal = vec3<f32>(0.0, 1.0, 0.0);
+  var supportKind = 0.0;
   if (vertexIndex < ${ANALYTIC_SUPPORT_TERRAIN_VERTEX_COUNT}u) {
     let cellIndex = vertexIndex / 6u;
     let corner = triangleCorner(vertexIndex % 6u);
@@ -1495,6 +1755,7 @@ fn vs_analytic_support_depth(@builtin(vertex_index) vertexIndex: u32) -> @builti
     let x = mix(${BOUNDS_MIN[0]}, ${BOUNDS_MAX[0]}, u);
     let z = mix(${BOUNDS_MIN[2]}, ${BOUNDS_MAX[2]}, v);
     worldPosition = vec3<f32>(x, toyFloorHeight(vec3<f32>(x, 0.0, z)), z);
+    worldNormal = toyFloorNormal(worldPosition);
   } else {
     let sphereVertex = vertexIndex - ${ANALYTIC_SUPPORT_TERRAIN_VERTEX_COUNT}u;
     let sphereCell = sphereVertex / 6u;
@@ -1504,10 +1765,48 @@ fn vs_analytic_support_depth(@builtin(vertex_index) vertexIndex: u32) -> @builti
     let longitude = (f32(longitudeCell) + corner.x) / f32(${ANALYTIC_SUPPORT_SPHERE_COLUMNS}) * 6.28318530718;
     let latitude = (f32(latitudeCell) + corner.y) / f32(${ANALYTIC_SUPPORT_SPHERE_ROWS}) * 3.14159265359;
     let radial = sin(latitude);
-    let normal = vec3<f32>(radial * cos(longitude), cos(latitude), radial * sin(longitude));
-    worldPosition = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]}) + normal * ${OBSTACLE_RADIUS};
+    worldNormal = vec3<f32>(radial * cos(longitude), cos(latitude), radial * sin(longitude));
+    worldPosition = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]}) + worldNormal * ${OBSTACLE_RADIUS};
+    supportKind = 1.0;
   }
-  return params.viewProjection * vec4<f32>(worldPosition, 1.0);
+  var output: AnalyticSupportVertexOutput;
+  output.position = params.viewProjection * vec4<f32>(worldPosition, 1.0);
+  output.worldPosition = worldPosition;
+  output.worldNormal = worldNormal;
+  output.supportKind = supportKind;
+  return output;
+}
+
+fn worldGrid(worldPosition: vec3<f32>, cellsPerWorldUnit: f32) -> f32 {
+  let coordinate = worldPosition.xz * cellsPerWorldUnit;
+  let derivative = max(fwidth(coordinate), vec2<f32>(0.0001));
+  let distanceToLine = abs(fract(coordinate - 0.5) - 0.5) / derivative;
+  return 1.0 - min(min(distanceToLine.x, distanceToLine.y), 1.0);
+}
+
+@fragment
+fn fs_analytic_support_presentation(input: AnalyticSupportVertexOutput) -> @location(0) vec4<f32> {
+  let normal = normalize(input.worldNormal);
+  let lightDirection = normalize(vec3<f32>(-0.38, 0.82, 0.43));
+  let diffuse = max(dot(normal, lightDirection), 0.0);
+  let hemisphere = normal.y * 0.5 + 0.5;
+  let terrainLight = 0.34 + diffuse * 0.48 + hemisphere * 0.18;
+  let terrainBase = vec3<f32>(0.20, 0.23, 0.215) * terrainLight;
+  let minorGrid = worldGrid(input.worldPosition, 2.0);
+  let majorGrid = worldGrid(input.worldPosition, 0.5);
+  var terrainColor = mix(terrainBase, vec3<f32>(0.37, 0.43, 0.40), minorGrid * 0.34);
+  terrainColor = mix(terrainColor, vec3<f32>(0.63, 0.66, 0.56), majorGrid * 0.52);
+  let xAxisWidth = max(fwidth(input.worldPosition.z), 0.0005);
+  let zAxisWidth = max(fwidth(input.worldPosition.x), 0.0005);
+  let xAxis = 1.0 - smoothstep(xAxisWidth, xAxisWidth * 2.5, abs(input.worldPosition.z));
+  let zAxis = 1.0 - smoothstep(zAxisWidth, zAxisWidth * 2.5, abs(input.worldPosition.x));
+  terrainColor = mix(terrainColor, vec3<f32>(0.65, 0.25, 0.20), xAxis * 0.68);
+  terrainColor = mix(terrainColor, vec3<f32>(0.18, 0.48, 0.60), zAxis * 0.68);
+
+  let obstacleLight = 0.28 + diffuse * 0.58 + hemisphere * 0.14;
+  let obstacleColor = vec3<f32>(0.48, 0.34, 0.14) * obstacleLight;
+  let color = select(terrainColor, obstacleColor, input.supportKind > 0.5);
+  return vec4<f32>(color, 1.0);
 }
 `;
 
@@ -1540,6 +1839,10 @@ struct RenderParams {
 @group(0) @binding(2) var<storage, read> neighborTopology: array<NeighborTopologyState>;
 @group(0) @binding(3) var<storage, read> materialTracers: array<MaterialTracerState>;
 @group(0) @binding(4) var surfaceAccumulation: texture_2d<f32>;
+@group(0) @binding(5) var refractionSceneColor: texture_2d<f32>;
+@group(0) @binding(6) var refractionSceneSampler: sampler;
+@group(0) @binding(7) var opticalSlabFrontDepth: texture_2d<f32>;
+@group(0) @binding(8) var opticalSlabBackDepth: texture_2d<f32>;
 
 struct AccumVertexOutput {
   @builtin(position) position: vec4<f32>,
@@ -1548,6 +1851,7 @@ struct AccumVertexOutput {
   @location(2) surface: f32,
   @location(3) speed: f32,
   @location(4) tracer: f32,
+  @location(5) radius: f32,
 }
 
 @vertex
@@ -1570,11 +1874,18 @@ fn vs_accumulate(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_inde
   output.surface = surface;
   output.speed = length(particle.velocity.xyz);
   output.tracer = materialTracers[instanceIndex].concentrationDeltaRecipeSource.x;
+  output.radius = radius;
   return output;
 }
 
+struct AccumFragmentOutput {
+  @location(0) accumulation: vec4<f32>,
+  @location(1) frontDepth: vec4<f32>,
+  @location(2) backDepth: vec4<f32>,
+}
+
 @fragment
-fn fs_accumulate(input: AccumVertexOutput) -> @location(0) vec4<f32> {
+fn fs_accumulate(input: AccumVertexOutput) -> AccumFragmentOutput {
   let r2 = dot(input.uv, input.uv);
   if (r2 > 1.0) { discard; }
   let cap = sqrt(max(0.0, 1.0 - r2));
@@ -1584,7 +1895,11 @@ fn fs_accumulate(input: AccumVertexOutput) -> @location(0) vec4<f32> {
   let opticalThickness = thickness * (0.55 + 0.45 * smoothstep(0.0, ${MAX_FLUID_SPEED}, input.speed));
   let depthWeight = edge * surfaceWeight;
   let supportSafeViewDepth = input.viewDepth;
-  return vec4<f32>(opticalThickness, input.tracer * opticalThickness, depthWeight, supportSafeViewDepth);
+  var output: AccumFragmentOutput;
+  output.accumulation = vec4<f32>(opticalThickness, input.tracer * opticalThickness, depthWeight, supportSafeViewDepth);
+  output.frontDepth = vec4<f32>(max(0.001, input.viewDepth - cap * input.radius));
+  output.backDepth = vec4<f32>(input.viewDepth + cap * input.radius);
+  return output;
 }
 
 struct FullscreenVertexOutput {
@@ -1609,6 +1924,16 @@ fn vs_fullscreen(@builtin(vertex_index) vertexIndex: u32) -> FullscreenVertexOut
 fn readAccum(pixel: vec2<i32>) -> vec4<f32> {
   let dims = vec2<i32>(textureDimensions(surfaceAccumulation));
   return textureLoad(surfaceAccumulation, clamp(pixel, vec2<i32>(0), dims - vec2<i32>(1)), 0);
+}
+
+fn readFrontDepth(pixel: vec2<i32>) -> f32 {
+  let dims = vec2<i32>(textureDimensions(opticalSlabFrontDepth));
+  return textureLoad(opticalSlabFrontDepth, clamp(pixel, vec2<i32>(0), dims - vec2<i32>(1)), 0).x;
+}
+
+fn readBackDepth(pixel: vec2<i32>) -> f32 {
+  let dims = vec2<i32>(textureDimensions(opticalSlabBackDepth));
+  return textureLoad(opticalSlabBackDepth, clamp(pixel, vec2<i32>(0), dims - vec2<i32>(1)), 0).x;
 }
 
 fn weightedDepth(sampleValue: vec4<f32>) -> f32 {
@@ -1643,6 +1968,57 @@ fn reconstructSurfaceNormal(pixel: vec2<i32>, centerDepth: f32) -> vec3<f32> {
   return normalize(vec3<f32>(-gradient.x * 7.2, gradient.y * 7.2, 1.0 + centerDepth * 0.015));
 }
 
+fn coherentSlabDepth(pixel: vec2<i32>, centerDepth: f32, backSurface: bool) -> f32 {
+  let candidate = select(readFrontDepth(pixel), readBackDepth(pixel), backSurface);
+  let populated = select((candidate < 29.5), (candidate > 0.001), backSurface);
+  return select(centerDepth, candidate, populated && abs(candidate - centerDepth) < 0.72);
+}
+
+fn reconstructEntryNormal(pixel: vec2<i32>, centerDepth: f32) -> vec3<f32> {
+  let left = coherentSlabDepth(pixel + vec2<i32>(-1, 0), centerDepth, false);
+  let right = coherentSlabDepth(pixel + vec2<i32>(1, 0), centerDepth, false);
+  let down = coherentSlabDepth(pixel + vec2<i32>(0, -1), centerDepth, false);
+  let up = coherentSlabDepth(pixel + vec2<i32>(0, 1), centerDepth, false);
+  let gradient = vec2<f32>(right - left, up - down);
+  return normalize(vec3<f32>(-gradient.x * 7.2, gradient.y * 7.2, 1.0));
+}
+
+fn reconstructExitNormal(pixel: vec2<i32>, centerDepth: f32) -> vec3<f32> {
+  let left = coherentSlabDepth(pixel + vec2<i32>(-1, 0), centerDepth, true);
+  let right = coherentSlabDepth(pixel + vec2<i32>(1, 0), centerDepth, true);
+  let down = coherentSlabDepth(pixel + vec2<i32>(0, -1), centerDepth, true);
+  let up = coherentSlabDepth(pixel + vec2<i32>(0, 1), centerDepth, true);
+  let gradient = vec2<f32>(right - left, up - down);
+  return normalize(vec3<f32>(gradient.x * 7.2, -gradient.y * 7.2, -1.0));
+}
+
+struct OpticalSlab {
+  entryDepth: f32,
+  exitDepth: f32,
+  geometricPathLength: f32,
+  supportPerSpanConfidence: f32,
+  exitValidity: f32,
+}
+
+fn evaluateOpticalSlab(pixel: vec2<i32>, centerAccum: vec4<f32>) -> OpticalSlab {
+  let entryDepth = readFrontDepth(pixel);
+  let exitDepth = readBackDepth(pixel);
+  let geometricPathLength = max(0.0, exitDepth - entryDepth);
+  let spanInParticleDiameters = geometricPathLength / max(params.viewport.z * 2.0, 0.001);
+  let supportPerSpan = centerAccum.z / max(spanInParticleDiameters, 1.0);
+  let supportPerSpanConfidence = smoothstep(0.10, 0.72, supportPerSpan);
+  let geometryValid = entryDepth < 29.5
+    && exitDepth > entryDepth + 0.004
+    && geometricPathLength < 3.2;
+  var slab: OpticalSlab;
+  slab.entryDepth = entryDepth;
+  slab.exitDepth = exitDepth;
+  slab.geometricPathLength = geometricPathLength;
+  slab.supportPerSpanConfidence = supportPerSpanConfidence;
+  slab.exitValidity = select(0.0, supportPerSpanConfidence, geometryValid);
+  return slab;
+}
+
 struct CompositeOutput {
   @location(0) color: vec4<f32>,
   @builtin(frag_depth) depth: f32,
@@ -1652,6 +2028,27 @@ fn viewDepthToNdc(viewDepth: f32) -> f32 {
   let near = 0.08;
   let far = 30.0;
   return far / (far - near) - (near * far) / ((far - near) * max(viewDepth, near));
+}
+
+fn reconstructRefractionOffset(normal: vec3<f32>, thickness: f32) -> vec2<f32> {
+  let viewDir = vec3<f32>(0.0, 0.0, 1.0);
+  let refracted = refract(-viewDir, normal, 1.0 / 1.333);
+  let projectedDirection = refracted.xy / max(abs(refracted.z), 0.25);
+  let offsetPixels = projectedDirection * clamp(thickness * 3.6, 1.0, 42.0);
+  return clamp(offsetPixels, vec2<f32>(-28.0), vec2<f32>(28.0));
+}
+
+fn projectViewRayOffset(ray: vec3<f32>, pathLength: f32, entryDepth: f32) -> vec2<f32> {
+  let focalPixels = params.viewport.y * 0.5 / tan(0.5 * 3.14159265 / 3.15);
+  let projectedDirection = ray.xy / max(abs(ray.z), 0.25);
+  return projectedDirection * pathLength * focalPixels / max(entryDepth, 0.08);
+}
+
+fn refractionOutput(color: vec4<f32>, supportOrderingDepth: f32) -> CompositeOutput {
+  var output: CompositeOutput;
+  output.color = color;
+  output.depth = clamp(viewDepthToNdc(supportOrderingDepth + 0.003), 0.0, 1.0);
+  return output;
 }
 
 @fragment
@@ -1682,6 +2079,105 @@ fn fs_composite(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOutp
   output.color = vec4<f32>(color, alpha);
   output.depth = clamp(viewDepthToNdc(supportOrderingDepth + 0.003), 0.0, 1.0);
   return output;
+}
+
+@fragment
+fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOutput {
+  let dims = vec2<i32>(textureDimensions(surfaceAccumulation));
+  let dimsFloat = vec2<f32>(dims);
+  let pixel = vec2<i32>(fragmentPosition.xy);
+  let sceneUv = clamp((vec2<f32>(pixel) + vec2<f32>(0.5)) / dimsFloat, vec2<f32>(0.0), vec2<f32>(1.0));
+  let centerAccum = readAccum(pixel);
+  if (centerAccum.z < 0.018 || centerAccum.x < 0.012) { discard; }
+
+  let supportOrderingDepth = weightedDepth(centerAccum);
+  let shadingDepth = edgePreservingDepth(pixel, centerAccum);
+  let slab = evaluateOpticalSlab(pixel, centerAccum);
+  let normal = reconstructEntryNormal(pixel, slab.entryDepth);
+  let thickness = centerAccum.x;
+  let viewDir = vec3<f32>(0.0, 0.0, 1.0);
+  let insideRay = refract(-viewDir, normal, 1.0 / 1.333);
+  let insideRayValid = length(insideRay) > 0.001;
+  let geometricPathLength = slab.geometricPathLength / max(abs(insideRay.z), 0.25);
+  let insideOffset = projectViewRayOffset(insideRay, geometricPathLength, slab.entryDepth);
+  let unclampedExitUv = sceneUv + insideOffset / dimsFloat;
+  let exitInFrame = all(unclampedExitUv >= vec2<f32>(0.001)) && all(unclampedExitUv <= vec2<f32>(0.999));
+  let exitUv = clamp(unclampedExitUv, vec2<f32>(0.001), vec2<f32>(0.999));
+  let exitPixel = vec2<i32>(exitUv * dimsFloat);
+  let sampledExitDepth = readBackDepth(exitPixel);
+  let exitDepthValid = sampledExitDepth > slab.entryDepth + 0.004 && sampledExitDepth < 29.5;
+  let exitNormal = reconstructExitNormal(exitPixel, sampledExitDepth);
+  let outgoingRay = refract(insideRay, -exitNormal, 1.333);
+  let outgoingRayValid = length(outgoingRay) > 0.001;
+  let exitDirectionDelta = outgoingRay.xy / max(abs(outgoingRay.z), 0.25)
+    - insideRay.xy / max(abs(insideRay.z), 0.25);
+  let exitOffset = exitDirectionDelta * clamp(geometricPathLength * 7.0, 0.0, 12.0);
+  let twoInterfaceOffset = clamp(insideOffset + exitOffset, vec2<f32>(-28.0), vec2<f32>(28.0));
+  let entryOnlyOffset = reconstructRefractionOffset(normal, thickness);
+  let exitValidity = slab.exitValidity
+    * select(0.0, 1.0, exitInFrame)
+    * select(0.0, 1.0, insideRayValid && outgoingRayValid && exitDepthValid);
+  let offsetPixels = mix(entryOnlyOffset, twoInterfaceOffset, exitValidity);
+  let refractedUv = clamp(sceneUv + offsetPixels / dimsFloat, vec2<f32>(0.001), vec2<f32>(0.999));
+  let refractedScene = textureSampleLevel(refractionSceneColor, refractionSceneSampler, refractedUv, 0.0);
+  let ndv = clamp(dot(normal, viewDir), 0.0, 1.0);
+  let f0 = 0.02037;
+  let fresnel = f0 + (1.0 - f0) * pow(1.0 - ndv, 5.0);
+  let absorptionPath = mix(thickness * 0.12, geometricPathLength, exitValidity);
+  let absorption = exp(-vec3<f32>(0.46, 0.15, 0.055) * absorptionPath);
+  let opticalDebugMode = i32(round(params.cameraUp.w));
+
+  if (opticalDebugMode == 1) {
+    let depthView = 1.0 - exp(-supportOrderingDepth * 0.22);
+    return refractionOutput(vec4<f32>(vec3<f32>(depthView), 1.0), supportOrderingDepth);
+  }
+  if (opticalDebugMode == 2) {
+    let depthView = 1.0 - exp(-slab.entryDepth * 0.22);
+    return refractionOutput(vec4<f32>(depthView * 0.45, depthView * 0.72, depthView, 1.0), supportOrderingDepth);
+  }
+  if (opticalDebugMode == 3) {
+    return refractionOutput(vec4<f32>(normal * 0.5 + vec3<f32>(0.5), 1.0), supportOrderingDepth);
+  }
+  if (opticalDebugMode == 4) {
+    let depthView = 1.0 - exp(-sampledExitDepth * 0.22);
+    return refractionOutput(vec4<f32>(depthView, depthView * 0.54, depthView * 0.24, 1.0), supportOrderingDepth);
+  }
+  if (opticalDebugMode == 5) {
+    return refractionOutput(vec4<f32>(exitNormal * 0.5 + vec3<f32>(0.5), 1.0), supportOrderingDepth);
+  }
+  if (opticalDebugMode == 6) {
+    let thicknessView = 0.62 + 0.38 * (1.0 - exp(-thickness * 0.18));
+    return refractionOutput(vec4<f32>(thicknessView, thicknessView * 0.76, thicknessView * 0.34, 1.0), supportOrderingDepth);
+  }
+  if (opticalDebugMode == 7) {
+    let pathView = 1.0 - exp(-geometricPathLength * 1.4);
+    return refractionOutput(vec4<f32>(pathView, pathView * 0.82, 0.12 + pathView * 0.3, 1.0), supportOrderingDepth);
+  }
+  if (opticalDebugMode == 8) {
+    return refractionOutput(vec4<f32>(1.0 - exitValidity, exitValidity, slab.supportPerSpanConfidence * 0.35, 1.0), supportOrderingDepth);
+  }
+  if (opticalDebugMode == 9) {
+    let encodedOffset = offsetPixels / 56.0 + vec2<f32>(0.5);
+    return refractionOutput(vec4<f32>(encodedOffset, length(offsetPixels) / 28.0, 1.0), supportOrderingDepth);
+  }
+  if (opticalDebugMode == 10) {
+    return refractionOutput(vec4<f32>(vec3<f32>(fresnel), 1.0), supportOrderingDepth);
+  }
+  if (opticalDebugMode == 11) {
+    return refractionOutput(vec4<f32>(absorption, 1.0), supportOrderingDepth);
+  }
+
+  let absorptionLoss = vec3<f32>(1.0) - absorption;
+  let waterScatter = vec3<f32>(0.055, 0.30, 0.42) * (vec3<f32>(0.42) + absorptionLoss * 0.58);
+  let transmitted = refractedScene.rgb * absorption + waterScatter;
+  let reflectedSky = vec3<f32>(0.48, 0.78, 0.94) * (0.62 + 0.38 * max(normal.y, 0.0));
+  let directLight = max(dot(normal, normalize(vec3<f32>(-0.28, 0.64, 1.72))), 0.0);
+  let broadSpecular = pow(directLight, 38.0) * 0.32;
+  let crestSpecular = pow(directLight, 128.0) * 0.46;
+  let color = mix(transmitted, reflectedSky, fresnel)
+    + vec3<f32>(0.72, 0.92, 1.0) * broadSpecular
+    + vec3<f32>(1.0) * crestSpecular * (0.22 + fresnel * 0.78);
+  return refractionOutput(vec4<f32>(color, 1.0), supportOrderingDepth);
 }
 `;
 
@@ -2416,6 +2912,7 @@ export async function createWebGPUFingerFluidSolver({
   truthScene = 'multi_regime_playground',
   colorMode = 'phase',
   rendererMode = 'screen_space_surface',
+  opticalDebugMode = 'shaded',
   particleShiftStrength = 0,
   supportFriction = KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION,
   chemistryDiffusion = 0,
@@ -2441,6 +2938,7 @@ export async function createWebGPUFingerFluidSolver({
   const safeTruthScene = resolveFingerFluidTruthScene(truthScene);
   const safeColorMode = resolveFingerFluidColorMode(colorMode);
   const safeRendererMode = resolveFingerFluidRendererMode(rendererMode);
+  const safeOpticalDebugMode = resolveFingerFluidOpticalDebugMode(opticalDebugMode);
   const safeParticleShiftStrength = resolveFingerFluidParticleShiftStrength(particleShiftStrength);
   const safeSupportFriction = resolveFingerFluidSupportFriction(supportFriction);
   const safeChemistryDiffusion = resolveFingerFluidChemistryDiffusion(chemistryDiffusion);
@@ -2672,7 +3170,7 @@ export async function createWebGPUFingerFluidSolver({
 
   const format = navigator.gpu.getPreferredCanvasFormat();
   const canvasAlphaMode = transparentBackground ? 'premultiplied' : 'opaque';
-  context.configure({ device, format, alphaMode: canvasAlphaMode });
+  context.configure({ device, format, alphaMode: canvasAlphaMode, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
   const renderParamsBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-render-params',
     size: 112,
@@ -2680,7 +3178,10 @@ export async function createWebGPUFingerFluidSolver({
   });
   const renderModule = device.createShaderModule({ label: KAMINOS_FINGER_FLUID_RENDER_SHADER_ROUTE, code: RENDER_SHADER });
   const screenSpaceModule = device.createShaderModule({ label: KAMINOS_FINGER_FLUID_SCREEN_SPACE_SHADER_ROUTE, code: SCREEN_SPACE_SURFACE_SHADER });
-  const analyticSupportDepthModule = device.createShaderModule({ label: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE, code: ANALYTIC_SUPPORT_DEPTH_SHADER });
+  const analyticSupportPresentationModule = device.createShaderModule({
+    label: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE,
+    code: ANALYTIC_SUPPORT_PRESENTATION_SHADER,
+  });
   const screenSpaceAccumulationLayout = device.createBindGroupLayout({
     label: 'kaminos-finger-fluid-screen-space-accumulation-layout',
     entries: [
@@ -2697,19 +3198,32 @@ export async function createWebGPUFingerFluidSolver({
       { binding: 4, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
     ],
   });
-  const analyticSupportDepthLayout = device.createBindGroupLayout({
-    label: 'kaminos-finger-fluid-analytic-support-depth-layout',
+  const analyticSupportPresentationLayout = device.createBindGroupLayout({
+    label: 'kaminos-finger-fluid-analytic-support-presentation-layout',
     entries: [
       { binding: 1, visibility: GPUShaderStage.VERTEX, buffer: { type: 'uniform' } },
     ],
   });
+  const screenSpaceRefractionCompositeLayout = device.createBindGroupLayout({
+    label: 'kaminos-finger-fluid-screen-space-refraction-composite-layout',
+    entries: [
+      { binding: 1, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+      { binding: 4, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
+      { binding: 5, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
+      { binding: 6, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
+      { binding: 7, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
+      { binding: 8, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
+    ],
+  });
   const screenSpaceAccumulationPipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [screenSpaceAccumulationLayout] });
   const screenSpaceCompositePipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [screenSpaceCompositeLayout] });
-  const analyticSupportDepthPipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [analyticSupportDepthLayout] });
+  const analyticSupportPresentationPipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [analyticSupportPresentationLayout] });
+  const screenSpaceRefractionCompositePipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [screenSpaceRefractionCompositeLayout] });
   let renderPipeline;
   let screenSpaceSurfaceAccumulationPipeline;
   let screenSpaceSurfaceCompositePipeline;
-  let analyticSupportDepthPipeline;
+  let analyticSupportPresentationPipeline;
+  let screenSpaceRefractionCompositePipeline;
   try {
     renderPipeline = await device.createRenderPipelineAsync({
       label: KAMINOS_FINGER_FLUID_GPU_RENDERER_ROUTE,
@@ -2736,13 +3250,29 @@ export async function createWebGPUFingerFluidSolver({
       fragment: {
         module: screenSpaceModule,
         entryPoint: 'fs_accumulate',
-        targets: [{
-          format: 'rgba16float',
-          blend: {
-            color: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
-            alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'min' },
+        targets: [
+          {
+            format: 'rgba16float',
+            blend: {
+              color: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
+              alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'min' },
+            },
           },
-        }],
+          {
+            format: 'rgba16float',
+            blend: {
+              color: { srcFactor: 'one', dstFactor: 'one', operation: 'min' },
+              alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'min' },
+            },
+          },
+          {
+            format: 'rgba16float',
+            blend: {
+              color: { srcFactor: 'one', dstFactor: 'one', operation: 'max' },
+              alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'max' },
+            },
+          },
+        ],
       },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
     });
@@ -2764,12 +3294,29 @@ export async function createWebGPUFingerFluidSolver({
       primitive: { topology: 'triangle-list', cullMode: 'none' },
       depthStencil: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'less' },
     });
-    analyticSupportDepthPipeline = await device.createRenderPipelineAsync({
-      label: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE,
-      layout: analyticSupportDepthPipelineLayout,
-      vertex: { module: analyticSupportDepthModule, entryPoint: 'vs_analytic_support_depth' },
+    analyticSupportPresentationPipeline = await device.createRenderPipelineAsync({
+      label: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE,
+      layout: analyticSupportPresentationPipelineLayout,
+      vertex: { module: analyticSupportPresentationModule, entryPoint: 'vs_analytic_support_presentation' },
+      fragment: {
+        module: analyticSupportPresentationModule,
+        entryPoint: 'fs_analytic_support_presentation',
+        targets: [{ format }],
+      },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
       depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
+    });
+    screenSpaceRefractionCompositePipeline = await device.createRenderPipelineAsync({
+      label: `${KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE}:snell-fresnel-absorption-composite`,
+      layout: screenSpaceRefractionCompositePipelineLayout,
+      vertex: { module: screenSpaceModule, entryPoint: 'vs_fullscreen' },
+      fragment: {
+        module: screenSpaceModule,
+        entryPoint: 'fs_refraction',
+        targets: [{ format }],
+      },
+      primitive: { topology: 'triangle-list', cullMode: 'none' },
+      depthStencil: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'less' },
     });
   } catch (error) {
     return createUnavailableSolver(`WebGPU render pipeline validation failed: ${error.message || String(error)}`);
@@ -2784,17 +3331,26 @@ export async function createWebGPUFingerFluidSolver({
       { binding: 3, resource: { buffer: materialTracerBuffer } },
     ],
   });
-  const analyticSupportDepthBindGroup = device.createBindGroup({
-    label: 'kaminos-finger-fluid-analytic-support-depth-bind-group',
-    layout: analyticSupportDepthLayout,
+  const analyticSupportPresentationBindGroup = device.createBindGroup({
+    label: 'kaminos-finger-fluid-analytic-support-presentation-bind-group',
+    layout: analyticSupportPresentationLayout,
     entries: [
       { binding: 1, resource: { buffer: renderParamsBuffer } },
     ],
   });
 
   let screenSpaceSurfaceAccumulationTexture = null;
+  let screenSpaceOpticalSlabFrontDepthTexture = null;
+  let screenSpaceOpticalSlabBackDepthTexture = null;
   let screenSpaceSurfaceAccumulationBindGroup = null;
   let screenSpaceSurfaceCompositeBindGroup = null;
+  let screenSpaceRefractionSceneTexture = null;
+  let screenSpaceRefractionCompositeBindGroup = null;
+  const screenSpaceRefractionSceneSampler = device.createSampler({
+    label: 'kaminos-finger-fluid-refraction-scene-sampler',
+    magFilter: 'linear',
+    minFilter: 'linear',
+  });
 
   let depthTexture = null;
   let configuredExtent = '';
@@ -2815,10 +3371,17 @@ export async function createWebGPUFingerFluidSolver({
   let sphereDebugRenderFrameCount = 0;
   let screenSpaceSurfaceRenderFrameCount = 0;
   let screenSpaceSurfaceAccumulationPassCount = 0;
+  let screenSpaceOpticalSlabGeometryPassCount = 0;
   let screenSpaceSurfaceCompositePassCount = 0;
   let analyticSupportDepthPassCount = 0;
+  let analyticSupportPresentationPassCount = 0;
+  let particleSupportDrawCount = 0;
+  let screenSpaceRefractionRenderFrameCount = 0;
+  let screenSpaceRefractionScenePassCount = 0;
+  let screenSpaceRefractionCompositePassCount = 0;
   let lastEffectiveRendererMode = safeRendererMode;
   let lastRequestedRendererMode = safeRendererMode;
+  let lastOpticalDebugMode = safeOpticalDebugMode;
   let lastRendererFallbackReason = null;
   let lastFrameCpuMs = 0;
   let diagnosticsPending = false;
@@ -2835,7 +3398,7 @@ export async function createWebGPUFingerFluidSolver({
     if (configuredExtent === key) return { width: targetWidth, height: targetHeight };
     canvas.width = targetWidth;
     canvas.height = targetHeight;
-    context.configure({ device, format, alphaMode: canvasAlphaMode });
+    context.configure({ device, format, alphaMode: canvasAlphaMode, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
     depthTexture?.destroy();
     depthTexture = device.createTexture({
       label: 'kaminos-finger-fluid-depth',
@@ -2849,6 +3412,27 @@ export async function createWebGPUFingerFluidSolver({
       size: [targetWidth, targetHeight],
       format: 'rgba16float',
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+    });
+    screenSpaceOpticalSlabFrontDepthTexture?.destroy();
+    screenSpaceOpticalSlabFrontDepthTexture = device.createTexture({
+      label: 'kaminos-finger-fluid-optical-slab-front-depth',
+      size: [targetWidth, targetHeight],
+      format: 'rgba16float',
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+    });
+    screenSpaceOpticalSlabBackDepthTexture?.destroy();
+    screenSpaceOpticalSlabBackDepthTexture = device.createTexture({
+      label: 'kaminos-finger-fluid-optical-slab-back-depth',
+      size: [targetWidth, targetHeight],
+      format: 'rgba16float',
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+    });
+    screenSpaceRefractionSceneTexture?.destroy();
+    screenSpaceRefractionSceneTexture = device.createTexture({
+      label: 'kaminos-finger-fluid-refraction-scene-color',
+      size: [targetWidth, targetHeight],
+      format,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
     });
     screenSpaceSurfaceAccumulationBindGroup = device.createBindGroup({
       label: 'kaminos-finger-fluid-screen-space-accumulation-bind-group',
@@ -2866,6 +3450,18 @@ export async function createWebGPUFingerFluidSolver({
       entries: [
         { binding: 1, resource: { buffer: renderParamsBuffer } },
         { binding: 4, resource: screenSpaceSurfaceAccumulationTexture.createView() },
+      ],
+    });
+    screenSpaceRefractionCompositeBindGroup = device.createBindGroup({
+      label: 'kaminos-finger-fluid-screen-space-refraction-composite-bind-group',
+      layout: screenSpaceRefractionCompositeLayout,
+      entries: [
+        { binding: 1, resource: { buffer: renderParamsBuffer } },
+        { binding: 4, resource: screenSpaceSurfaceAccumulationTexture.createView() },
+        { binding: 5, resource: screenSpaceRefractionSceneTexture.createView() },
+        { binding: 6, resource: screenSpaceRefractionSceneSampler },
+        { binding: 7, resource: screenSpaceOpticalSlabFrontDepthTexture.createView() },
+        { binding: 8, resource: screenSpaceOpticalSlabBackDepthTexture.createView() },
       ],
     });
     configuredExtent = key;
@@ -2991,13 +3587,16 @@ export async function createWebGPUFingerFluidSolver({
     target = [0, -0.05, 0],
     colorMode = safeColorMode,
     rendererMode = safeRendererMode,
+    opticalDebugMode = safeOpticalDebugMode,
   } = {}) {
     if (destroyed) return;
     const extent = ensureExtent(width, height, pixelRatio);
     const requestedRendererMode = String(rendererMode || safeRendererMode);
     const effectiveRendererMode = resolveFingerFluidRendererMode(requestedRendererMode);
+    const effectiveOpticalDebugMode = resolveFingerFluidOpticalDebugMode(opticalDebugMode);
     lastRequestedRendererMode = requestedRendererMode;
     lastEffectiveRendererMode = effectiveRendererMode;
+    lastOpticalDebugMode = effectiveOpticalDebugMode;
     lastRendererFallbackReason = null;
     const cp = Math.cos(pitch);
     const eye = [
@@ -3016,92 +3615,50 @@ export async function createWebGPUFingerFluidSolver({
     const colorModeIndex = KAMINOS_FINGER_FLUID_COLOR_MODES.indexOf(effectiveColorMode);
     renderData.set(viewProjection, 0);
     renderData.set([...right, colorModeIndex], 16);
-    renderData.set([...up, 0], 20);
+    renderData.set([...up, KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES.indexOf(effectiveOpticalDebugMode)], 20);
     renderData.set([extent.width, extent.height, 0.046, safeParticleCount], 24);
     device.queue.writeBuffer(renderParamsBuffer, 0, renderData);
 
     const currentTexture = context.getCurrentTexture();
     const currentTextureView = currentTexture.createView();
     const encoder = device.createCommandEncoder({ label: `kaminos-finger-fluid-render-frame:${effectiveRendererMode}` });
+    const refractionEnabled = effectiveRendererMode === 'screen_space_refraction';
+    const analyticSupportPresentationPass = encoder.beginRenderPass({
+      label: `${KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE}:shared-color-depth`,
+      colorAttachments: [{
+        view: currentTextureView,
+        clearValue: transparentBackground
+          ? { r: 0, g: 0, b: 0, a: 0 }
+          : { r: 0.006, g: 0.012, b: 0.018, a: 1 },
+        loadOp: 'clear',
+        storeOp: 'store',
+      }],
+      depthStencilAttachment: {
+        view: depthTexture.createView(),
+        depthClearValue: 1,
+        depthLoadOp: 'clear',
+        depthStoreOp: 'store',
+      },
+    });
+    analyticSupportPresentationPass.setPipeline(analyticSupportPresentationPipeline);
+    analyticSupportPresentationPass.setBindGroup(0, analyticSupportPresentationBindGroup);
+    analyticSupportPresentationPass.draw(ANALYTIC_SUPPORT_VERTEX_COUNT);
+    analyticSupportPresentationPass.end();
+    analyticSupportPresentationPassCount += 1;
+    analyticSupportDepthPassCount += 1;
+
+    if (refractionEnabled) {
+      encoder.copyTextureToTexture(
+        { texture: currentTexture },
+        { texture: screenSpaceRefractionSceneTexture },
+        { width: extent.width, height: extent.height, depthOrArrayLayers: 1 },
+      );
+      screenSpaceRefractionScenePassCount += 1;
+    }
+
     if (effectiveRendererMode === 'sphere_debug') {
       const pass = encoder.beginRenderPass({
         label: KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE,
-        colorAttachments: [{
-          view: currentTextureView,
-          clearValue: transparentBackground
-            ? { r: 0, g: 0, b: 0, a: 0 }
-            : { r: 0.006, g: 0.012, b: 0.018, a: 1 },
-          loadOp: 'clear',
-          storeOp: 'store',
-        }],
-        depthStencilAttachment: {
-          view: depthTexture.createView(),
-          depthClearValue: 1,
-          depthLoadOp: 'clear',
-          depthStoreOp: 'store',
-        },
-      });
-      pass.setPipeline(renderPipeline);
-      pass.setBindGroup(0, renderBindGroup);
-      pass.draw(6, safeParticleCount + PLAYGROUND_TILE_COUNT + PLAYGROUND_SKIRT_COUNT + PLAYGROUND_OBSTACLE_COUNT);
-      pass.end();
-      sphereDebugRenderFrameCount += 1;
-    } else {
-      const supportPass = encoder.beginRenderPass({
-        label: `${KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE}:shared-support-underlay`,
-        colorAttachments: [{
-          view: currentTextureView,
-          clearValue: transparentBackground
-            ? { r: 0, g: 0, b: 0, a: 0 }
-            : { r: 0.006, g: 0.012, b: 0.018, a: 1 },
-          loadOp: 'clear',
-          storeOp: 'store',
-        }],
-        depthStencilAttachment: {
-          view: depthTexture.createView(),
-          depthClearValue: 1,
-          depthLoadOp: 'clear',
-          depthStoreOp: 'store',
-        },
-      });
-      supportPass.setPipeline(renderPipeline);
-      supportPass.setBindGroup(0, renderBindGroup);
-      supportPass.draw(6, PLAYGROUND_TILE_COUNT + PLAYGROUND_SKIRT_COUNT + PLAYGROUND_OBSTACLE_COUNT, 0, safeParticleCount);
-      supportPass.end();
-
-      const analyticSupportDepthPass = encoder.beginRenderPass({
-        label: `${KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE}:analytic-support-depth`,
-        colorAttachments: [],
-        depthStencilAttachment: {
-          view: depthTexture.createView(),
-          depthClearValue: 1,
-          depthLoadOp: 'clear',
-          depthStoreOp: 'store',
-        },
-      });
-      analyticSupportDepthPass.setPipeline(analyticSupportDepthPipeline);
-      analyticSupportDepthPass.setBindGroup(0, analyticSupportDepthBindGroup);
-      analyticSupportDepthPass.draw(ANALYTIC_SUPPORT_VERTEX_COUNT);
-      analyticSupportDepthPass.end();
-      analyticSupportDepthPassCount += 1;
-
-      const accumulationPass = encoder.beginRenderPass({
-        label: `${KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE}:particle-depth-optical-thickness`,
-        colorAttachments: [{
-          view: screenSpaceSurfaceAccumulationTexture.createView(),
-          clearValue: { r: 0, g: 0, b: 0, a: 30 },
-          loadOp: 'clear',
-          storeOp: 'store',
-        }],
-      });
-      accumulationPass.setPipeline(screenSpaceSurfaceAccumulationPipeline);
-      accumulationPass.setBindGroup(0, screenSpaceSurfaceAccumulationBindGroup);
-      accumulationPass.draw(6, safeParticleCount);
-      accumulationPass.end();
-      screenSpaceSurfaceAccumulationPassCount += 1;
-
-      const compositePass = encoder.beginRenderPass({
-        label: `${KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE}:edge-preserving-surface-composite`,
         colorAttachments: [{
           view: currentTextureView,
           loadOp: 'load',
@@ -3113,12 +3670,71 @@ export async function createWebGPUFingerFluidSolver({
           depthStoreOp: 'store',
         },
       });
-      compositePass.setPipeline(screenSpaceSurfaceCompositePipeline);
-      compositePass.setBindGroup(0, screenSpaceSurfaceCompositeBindGroup);
+      pass.setPipeline(renderPipeline);
+      pass.setBindGroup(0, renderBindGroup);
+      pass.draw(6, safeParticleCount);
+      pass.end();
+      sphereDebugRenderFrameCount += 1;
+    } else {
+      const accumulationPass = encoder.beginRenderPass({
+        label: `${KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE}:particle-depth-optical-thickness`,
+        colorAttachments: [
+          {
+            view: screenSpaceSurfaceAccumulationTexture.createView(),
+            clearValue: { r: 0, g: 0, b: 0, a: 30 },
+            loadOp: 'clear',
+            storeOp: 'store',
+          },
+          {
+            view: screenSpaceOpticalSlabFrontDepthTexture.createView(),
+            clearValue: { r: 30, g: 30, b: 30, a: 30 },
+            loadOp: 'clear',
+            storeOp: 'store',
+          },
+          {
+            view: screenSpaceOpticalSlabBackDepthTexture.createView(),
+            clearValue: { r: 0, g: 0, b: 0, a: 0 },
+            loadOp: 'clear',
+            storeOp: 'store',
+          },
+        ],
+      });
+      accumulationPass.setPipeline(screenSpaceSurfaceAccumulationPipeline);
+      accumulationPass.setBindGroup(0, screenSpaceSurfaceAccumulationBindGroup);
+      accumulationPass.draw(6, safeParticleCount);
+      accumulationPass.end();
+      screenSpaceSurfaceAccumulationPassCount += 1;
+      screenSpaceOpticalSlabGeometryPassCount += 1;
+
+      const compositePass = encoder.beginRenderPass({
+        label: refractionEnabled
+          ? `${KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE}:two-interface-optical-slab-composite`
+          : `${KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE}:edge-preserving-surface-composite`,
+        colorAttachments: [{
+          view: currentTextureView,
+          clearValue: transparentBackground
+            ? { r: 0, g: 0, b: 0, a: 0 }
+            : { r: 0.006, g: 0.012, b: 0.018, a: 1 },
+          loadOp: 'load',
+          storeOp: 'store',
+        }],
+        depthStencilAttachment: {
+          view: depthTexture.createView(),
+          depthLoadOp: 'load',
+          depthStoreOp: 'store',
+        },
+      });
+      compositePass.setPipeline(refractionEnabled ? screenSpaceRefractionCompositePipeline : screenSpaceSurfaceCompositePipeline);
+      compositePass.setBindGroup(0, refractionEnabled ? screenSpaceRefractionCompositeBindGroup : screenSpaceSurfaceCompositeBindGroup);
       compositePass.draw(3);
       compositePass.end();
-      screenSpaceSurfaceCompositePassCount += 1;
-      screenSpaceSurfaceRenderFrameCount += 1;
+      if (refractionEnabled) {
+        screenSpaceRefractionCompositePassCount += 1;
+        screenSpaceRefractionRenderFrameCount += 1;
+      } else {
+        screenSpaceSurfaceCompositePassCount += 1;
+        screenSpaceSurfaceRenderFrameCount += 1;
+      }
     }
     device.queue.submit([encoder.finish()]);
     directRenderFrameCount += 1;
@@ -3289,6 +3905,12 @@ export async function createWebGPUFingerFluidSolver({
       let malformedRecordCount = 0;
       let contactRecordCount = 0;
       let minimumContactSupportAlignment = 1;
+      let curvatureSum = 0;
+      let absoluteCurvatureSum = 0;
+      let minimumCurvature = Infinity;
+      let maximumCurvature = -Infinity;
+      let resolvedCurvatureRecordCount = 0;
+      let unresolvedCurvatureRecordCount = 0;
       for (let index = 0; index < activeInterfaceCount; index += 1) {
         const record = readInterfaceRecord(index);
         const fields = [...record.position, ...record.velocity, ...record.normal, record.confidence, record.curvature, record.thickness, record.contact, record.wetness, record.material, record.stability, record.ageSeconds, record.sourceFrame, record.supportAlignment];
@@ -3299,6 +3921,15 @@ export async function createWebGPUFingerFluidSolver({
         if (record.contact >= 0.5) {
           contactRecordCount += 1;
           minimumContactSupportAlignment = Math.min(minimumContactSupportAlignment, record.supportAlignment);
+        }
+        if (record.confidence > 0) {
+          resolvedCurvatureRecordCount += 1;
+          curvatureSum += record.curvature;
+          absoluteCurvatureSum += Math.abs(record.curvature);
+          minimumCurvature = Math.min(minimumCurvature, record.curvature);
+          maximumCurvature = Math.max(maximumCurvature, record.curvature);
+        } else {
+          unresolvedCurvatureRecordCount += 1;
         }
       }
       const sampleRecords = [];
@@ -3373,6 +4004,7 @@ export async function createWebGPUFingerFluidSolver({
         sourceRecirculationCount: interfaceCounters[2],
         interfaceCarrier: {
           schema: KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_SCHEMA,
+          interfaceGeometryContract: KAMINOS_FINGER_FLUID_INTERFACE_GEOMETRY_CONTRACT,
           sourceFrame: 'kaminos/finger-fluid-bench:gpu-simulation-frame',
           recordFloats: INTERFACE_RECORD_FLOATS,
           recordBytes: INTERFACE_RECORD_BYTES,
@@ -3387,6 +4019,15 @@ export async function createWebGPUFingerFluidSolver({
           malformedRecordCount,
           contactRecordCount,
           minimumContactSupportAlignment: contactRecordCount > 0 ? Number(minimumContactSupportAlignment.toFixed(4)) : null,
+          curvatureResolutionMode: 'kernel-bandwidth-reject-unresolved-v0',
+          maximumResolvableCurvature: Number((2 / 0.185).toFixed(6)),
+          resolvedCurvatureRecordCount,
+          unresolvedCurvatureRecordCount,
+          curvatureResolutionRatio: Number((resolvedCurvatureRecordCount / Math.max(1, activeInterfaceCount)).toFixed(6)),
+          averageCurvature: resolvedCurvatureRecordCount > 0 ? Number((curvatureSum / resolvedCurvatureRecordCount).toFixed(6)) : 0,
+          averageAbsoluteCurvature: resolvedCurvatureRecordCount > 0 ? Number((absoluteCurvatureSum / resolvedCurvatureRecordCount).toFixed(6)) : 0,
+          minimumCurvature: resolvedCurvatureRecordCount > 0 ? Number(minimumCurvature.toFixed(6)) : 0,
+          maximumCurvature: resolvedCurvatureRecordCount > 0 ? Number(maximumCurvature.toFixed(6)) : 0,
           sampleCoverageMode: 'stratified_across_active_compacted_population_v0',
           sampleRecords,
         },
@@ -3459,18 +4100,23 @@ export async function createWebGPUFingerFluidSolver({
       playgroundContract: KAMINOS_FINGER_FLUID_PLAYGROUND_CONTRACT,
       playground: {
         zones: [...KAMINOS_FINGER_FLUID_PLAYGROUND_ZONES],
-        supportGeometryMode: 'shared_analytic_heightfield_billboard_tiles_and_cliff_skirt_v0',
-        supportGeometryCount: PLAYGROUND_TILE_COUNT + PLAYGROUND_SKIRT_COUNT + PLAYGROUND_OBSTACLE_COUNT,
-        terrainTileCount: PLAYGROUND_TILE_COUNT,
-        cliffSkirtCount: PLAYGROUND_SKIRT_COUNT,
+        supportGeometryMode: 'shared_analytic_heightfield_mesh_plus_analytic_obstacle_v0',
+        supportPresentationRoute: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE,
+        supportGeometryCount: ANALYTIC_SUPPORT_VERTEX_COUNT,
+        supportGeometryCountUnit: 'vertices',
+        terrainVertexCount: ANALYTIC_SUPPORT_TERRAIN_VERTEX_COUNT,
+        obstacleVertexCount: ANALYTIC_SUPPORT_SPHERE_VERTEX_COUNT,
         obstacleCount: PLAYGROUND_OBSTACLE_COUNT,
+        particleSupportDrawCount,
         rendered: directRenderFrameCount > 0,
       },
       interfaceCarrierSchema: KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_SCHEMA,
+      interfaceGeometryContract: KAMINOS_FINGER_FLUID_INTERFACE_GEOMETRY_CONTRACT,
       interfaceCapacity: safeParticleCount,
       candidateCapMode: 'uncapped_exact_particle_population_capacity',
       interfaceCarrier: diagnostics?.interfaceCarrier || {
         schema: KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_SCHEMA,
+        interfaceGeometryContract: KAMINOS_FINGER_FLUID_INTERFACE_GEOMETRY_CONTRACT,
         sourceFrame: 'kaminos/finger-fluid-bench:gpu-simulation-frame',
         recordFloats: INTERFACE_RECORD_FLOATS,
         recordBytes: INTERFACE_RECORD_BYTES,
@@ -3513,21 +4159,19 @@ export async function createWebGPUFingerFluidSolver({
       stabilityContract: KAMINOS_FINGER_FLUID_STABILITY_CONTRACT,
       requestedRendererMode: lastRequestedRendererMode,
       effectiveRendererMode: lastEffectiveRendererMode,
-      requestedRenderer: lastRequestedRendererMode === 'sphere_debug'
-        ? KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE
-        : KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE,
-      effectiveRenderer: lastEffectiveRendererMode === 'sphere_debug'
-        ? KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE
-        : KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE,
+      requestedRenderer: rendererRouteForMode(lastRequestedRendererMode),
+      effectiveRenderer: rendererRouteForMode(lastEffectiveRendererMode),
       fallbackReason: lastRendererFallbackReason,
-      renderRoute: lastEffectiveRendererMode === 'sphere_debug'
-        ? KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE
-        : KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE,
+      renderRoute: rendererRouteForMode(lastEffectiveRendererMode),
+      opticalDebugMode: lastOpticalDebugMode,
+      opticalTransportRoute: KAMINOS_FINGER_FLUID_OPTICAL_TRANSPORT_ROUTE,
       sphereDebugRendererRoute: KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE,
       screenSpaceSurfaceRendererRoute: KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE,
+      screenSpaceRefractionRendererRoute: KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE,
       renderShaderRoute: KAMINOS_FINGER_FLUID_RENDER_SHADER_ROUTE,
       screenSpaceSurfaceShaderRoute: KAMINOS_FINGER_FLUID_SCREEN_SPACE_SHADER_ROUTE,
       analyticSupportDepthRoute: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE,
+      analyticSupportPresentationRoute: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE,
       particleCount: safeParticleCount,
       gridDimensions: [...GRID_DIMS],
       gridCellCount: GRID_CELL_COUNT,
@@ -3551,8 +4195,24 @@ export async function createWebGPUFingerFluidSolver({
       sphereDebugRenderFrameCount,
       screenSpaceSurfaceRenderFrameCount,
       screenSpaceSurfaceAccumulationPassCount,
+      screenSpaceOpticalSlabGeometryPassCount,
       screenSpaceSurfaceCompositePassCount,
       analyticSupportDepthPassCount,
+      analyticSupportPresentationPassCount,
+      particleSupportDrawCount,
+      screenSpaceRefractionRenderFrameCount,
+      screenSpaceRefractionScenePassCount,
+      screenSpaceRefractionCompositePassCount,
+      supportPresentationEvidence: {
+        route: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE,
+        depthRoute: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE,
+        colorDepthAuthority: 'same_pass_same_analytic_geometry_v0',
+        geometrySource: 'toyFloorHeight_toyFloorNormal_plus_analytic_obstacle_v0',
+        calibrationLandmarks: 'world_anchored_half_unit_grid_major_grid_and_axes_v0',
+        refractionCaptureOrder: 'copy_after_analytic_support_presentation_v0',
+        passCount: analyticSupportPresentationPassCount,
+        particleSupportDrawCount,
+      },
       screenSpaceSurfaceEvidence: {
         route: KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE,
         shaderRoute: KAMINOS_FINGER_FLUID_SCREEN_SPACE_SHADER_ROUTE,
@@ -3569,6 +4229,42 @@ export async function createWebGPUFingerFluidSolver({
         smoothing: 'edgePreservingDepth',
         normalReconstruction: 'reconstructSurfaceNormal',
         shading: 'fresnel_specular_absorption_from_particle_depth_plus_optical_thickness_v0',
+      },
+      refractionEvidence: {
+        route: KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE,
+        shaderRoute: KAMINOS_FINGER_FLUID_SCREEN_SPACE_SHADER_ROUTE,
+        opticalTransportRoute: KAMINOS_FINGER_FLUID_OPTICAL_TRANSPORT_ROUTE,
+        slabRoute: KAMINOS_FINGER_FLUID_OPTICAL_SLAB_ROUTE,
+        slabGeometryPassCount: screenSpaceOpticalSlabGeometryPassCount,
+        frontDepthTexture: configuredExtent ? {
+          label: 'kaminos-finger-fluid-optical-slab-front-depth',
+          format: 'rgba16float',
+          extent: configuredExtent,
+          channel: 'projected_particle_sphere_front_view_depth_min',
+        } : null,
+        backDepthTexture: configuredExtent ? {
+          label: 'kaminos-finger-fluid-optical-slab-back-depth',
+          format: 'rgba16float',
+          extent: configuredExtent,
+          channel: 'projected_particle_sphere_back_view_depth_max',
+        } : null,
+        slabGeometry: 'projected_particle_interval_hull_not_watertight_surface_v0',
+        invalidSlabDisposition: 'entry_interface_only_no_exit_claim_v0',
+        supportDepthRoute: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE,
+        analyticSupportDepthPassCount,
+        opticalDebugMode: lastOpticalDebugMode,
+        sceneColorTexture: configuredExtent ? {
+          label: 'kaminos-finger-fluid-refraction-scene-color',
+          format,
+          extent: configuredExtent,
+          source: 'same-camera-analytic-support-presentation-color-v0',
+        } : null,
+        scenePassCount: screenSpaceRefractionScenePassCount,
+        accumulationPassCount: screenSpaceSurfaceAccumulationPassCount,
+        compositePassCount: screenSpaceRefractionCompositePassCount,
+        refraction: 'bounded_air_to_water_slab_propagation_water_to_air_snell_v0',
+        fresnel: 'schlick_f0_0.02037_v0',
+        absorption: 'beer_lambert_from_particle_optical_thickness_v0',
       },
       diagnosticsPending,
       diagnosticsRequestCount,
@@ -3614,6 +4310,9 @@ export async function createWebGPUFingerFluidSolver({
     renderParamsBuffer.destroy();
     depthTexture?.destroy();
     screenSpaceSurfaceAccumulationTexture?.destroy();
+    screenSpaceOpticalSlabFrontDepthTexture?.destroy();
+    screenSpaceOpticalSlabBackDepthTexture?.destroy();
+    screenSpaceRefractionSceneTexture?.destroy();
   }
 
   device.lost.then(info => {

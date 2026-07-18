@@ -4,9 +4,11 @@ export const BIG_PAPA_FLUID_SOURCE_SCHEMA = 'big-papa.finger-fluid.synthetic-sou
 export const KAMINOS_FINGER_FLUID_SOLVER_IDENTITY = 'webgpu-pbf-linked-cell-fluid-v0';
 export const KAMINOS_FINGER_FLUID_RENDERER_IDENTITY = 'webgpu-particle-sphere-renderer-v0';
 export const KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_IDENTITY = 'webgpu-screen-space-liquid-surface-v0';
+export const KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_IDENTITY = 'webgpu-screen-space-liquid-refraction-v0';
 export const KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_IDENTITY = 'webgpu-particle-sphere-debug-renderer-v0';
 export const KAMINOS_FINGER_FLUID_PLAYGROUND_IDENTITY = 'wgsl-shared-multi-regime-toy-playground-v0';
 export const KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_IDENTITY = 'kaminos.liquid-interface-carrier.v0';
+export const KAMINOS_FINGER_FLUID_INTERFACE_GEOMETRY_IDENTITY = 'wgsl-solver-owned-interface-normal-curvature-confidence-v1';
 export const KAMINOS_FINGER_FLUID_REST_STATE_IDENTITY = 'wgsl-support-aware-persistent-rest-state-v0';
 export const KAMINOS_FINGER_FLUID_SUPPORT_TRANSPORT_IDENTITY = 'wgsl-support-tangential-transport-v0';
 export const KAMINOS_FINGER_FLUID_SUPPORT_FRICTION_IDENTITY = 'wgsl-analytic-contact-partial-slip-v0';
@@ -19,6 +21,7 @@ export const KAMINOS_FINGER_FLUID_DOWGRADES = [
   'kaminos_native_synthetic_fluid_not_lerms_source_truth',
   'particle_render_not_final_surface_reconstruction',
   'screen_space_surface_first_slice_not_final_surface_reconstruction',
+  'screen_space_refraction_projected_slab_v0_not_watertight_optical_transport',
 ];
 
 function finite(value, fallback = 0) {
@@ -86,6 +89,7 @@ export function createFingerFluidBenchState(options = {}) {
       chemistryDiffusionPassCount: nonNegativeInteger(options.chemistryDiffusionPassCount, 0),
       playgroundContract: options.playgroundContract || KAMINOS_FINGER_FLUID_PLAYGROUND_IDENTITY,
       interfaceCarrierSchema: options.interfaceCarrierSchema || KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_IDENTITY,
+      interfaceGeometryContract: options.interfaceGeometryContract || KAMINOS_FINGER_FLUID_INTERFACE_GEOMETRY_IDENTITY,
       stepCount: nonNegativeInteger(options.stepCount, 0),
       linkedCellGridBuildCount: nonNegativeInteger(options.linkedCellGridBuildCount, 0),
       densityIterationCount: nonNegativeInteger(options.densityIterationCount, 0),
@@ -111,6 +115,10 @@ export function createFingerFluidBenchState(options = {}) {
       directRenderFrameCount: nonNegativeInteger(options.directRenderFrameCount, 0),
       sphereDebugRenderFrameCount: nonNegativeInteger(options.sphereDebugRenderFrameCount, 0),
       screenSpaceSurfaceRenderFrameCount: nonNegativeInteger(options.screenSpaceSurfaceRenderFrameCount, 0),
+      screenSpaceRefractionRenderFrameCount: nonNegativeInteger(options.screenSpaceRefractionRenderFrameCount, 0),
+      requestedOpticalDebugMode: options.requestedOpticalDebugMode || 'shaded',
+      effectiveOpticalDebugMode: options.effectiveOpticalDebugMode || options.requestedOpticalDebugMode || 'shaded',
+      opticalTransportRoute: options.opticalTransportRoute || 'snell-two-interface-screen-space-slab-v0',
       finalFingerJuiceRenderer: false,
       colorMode: options.colorMode || 'phase',
     },

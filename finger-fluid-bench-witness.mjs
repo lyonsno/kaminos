@@ -10,10 +10,17 @@ const url = args.get('--url') || 'http://127.0.0.1:8100/index.html?kaminos_finge
 const out = resolve(args.get('--out') || '/tmp/kaminos-finger-fluid-bench.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const canvasOut = resolve(args.get('--canvas-out') || out.replace(/\.png$/i, '.canvas.png'));
+const primaryRouteCanvasOut = resolve(args.get('--primary-route-canvas-out') || out.replace(/\.png$/i, '.primary-route-canvas.png'));
 const screenSpaceSurfaceOut = resolve(args.get('--screen-space-surface-out') || out.replace(/\.png$/i, '.screen-space-surface.png'));
+const screenSpaceRefractionOut = resolve(args.get('--screen-space-refraction-out') || out.replace(/\.png$/i, '.screen-space-refraction.png'));
 const sphereDebugOut = resolve(args.get('--sphere-debug-out') || out.replace(/\.png$/i, '.sphere-debug.png'));
 const resizedSurfaceOut = resolve(args.get('--resized-surface-out') || out.replace(/\.png$/i, '.screen-space-resized.png'));
 const invalidRendererOut = resolve(args.get('--invalid-renderer-out') || out.replace(/\.png$/i, '.invalid-renderer.png'));
+const opticalDebugModes = ['depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption'];
+const opticalDebugOutputs = Object.fromEntries(opticalDebugModes.map(mode => [
+  mode,
+  resolve(args.get(`--optical-${mode.replace('_', '-')}-out`) || out.replace(/\.png$/i, `.optical-${mode.replace('_', '-')}.png`)),
+]));
 const preContactOut = resolve(args.get('--pre-contact-out') || out.replace(/\.png$/i, '.pre-contact.png'));
 const midContactOut = resolve(args.get('--mid-contact-out') || out.replace(/\.png$/i, '.mid-contact.png'));
 const postContactOut = resolve(args.get('--post-contact-out') || out.replace(/\.png$/i, '.post-contact.png'));
@@ -39,10 +46,15 @@ let primaryOutputWritten = false;
 let lastDebugState = null;
 let canvasActivity = null;
 let screenSpaceSurfaceEvidence = null;
+let refractionEvidence = null;
 let sameStateRendererComparison = null;
 let surfaceRegistrationViews = null;
+let sameStateOpticalComparison = null;
 let rendererResizeWitness = null;
 let invalidRendererWitness = null;
+let opticalDebugViews = null;
+let slabValidityField = null;
+let primaryFrameBinding = null;
 let cadenceProbe = null;
 let automaticDiagnosticsRequestCount = null;
 let explicitDiagnosticsReceipt = null;
@@ -110,12 +122,20 @@ function writeReport(report = {}) {
     recoveryComposedSample,
     canvasOut,
     screenSpaceSurfaceOut,
+    screenSpaceRefractionOut,
     sphereDebugOut,
     screenSpaceSurfaceEvidence,
+    refractionEvidence,
     sameStateRendererComparison,
     surfaceRegistrationViews,
+    sameStateOpticalComparison,
     rendererResizeWitness,
     invalidRendererWitness,
+    opticalDebugViews,
+    slabValidityField,
+    opticalDebugOutputs,
+    primaryFrameBinding,
+    primaryRouteCanvasOut,
     resizedSurfaceOut,
     invalidRendererOut,
     preContactOut,
@@ -248,7 +268,41 @@ function measureCapturedPng(path, label) {
   };
 }
 
-function measureFluidProjection(path, label) {
+function measureSlabValidityField(path) {
+  const decoded = spawnSync('ffmpeg', ['-v', 'error', '-i', path, '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], {
+    encoding: null,
+    maxBuffer: 128 * 1024 * 1024,
+  });
+  if (decoded.status !== 0 || !decoded.stdout?.length) {
+    throw new Error(`ffmpeg slab validity decode failed: ${decoded.stderr?.toString() || decoded.status}`);
+  }
+  let validExitPixels = 0;
+  let invalidExitPixels = 0;
+  for (let i = 0; i < decoded.stdout.length; i += 3) {
+    const r = decoded.stdout[i];
+    const g = decoded.stdout[i + 1];
+    const b = decoded.stdout[i + 2];
+    if (g > 96 && g > r * 1.35 && g > b * 1.35) validExitPixels += 1;
+    if (r > 96 && r > g * 1.35 && r > b * 1.35) invalidExitPixels += 1;
+  }
+  const pixelCount = decoded.stdout.length / 3;
+  const classifiedPixels = validExitPixels + invalidExitPixels;
+  const measurement = {
+    path,
+    pixelCount,
+    validExitPixels,
+    invalidExitPixels,
+    classifiedPixels,
+    classifiedRatio: Number((classifiedPixels / Math.max(1, pixelCount)).toFixed(5)),
+    measurement: 'captured_exit_validity_field_ffmpeg_rgb24_v0',
+  };
+  if (validExitPixels < 1000 || invalidExitPixels < 100) {
+    throw new Error(`slab validity field lacks independently visible valid and invalid exit geometry: ${JSON.stringify(measurement)}`);
+  }
+  return measurement;
+}
+
+function measureFluidProjection(path, label, mask = 'blue') {
   const probe = spawnSync('ffprobe', [
     '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'json', path,
   ], { encoding: 'utf8' });
@@ -277,7 +331,10 @@ function measureFluidProjection(path, label) {
     const r = decoded.stdout[offset];
     const g = decoded.stdout[offset + 1];
     const b = decoded.stdout[offset + 2];
-    if (b < 58 || b < r * 1.28 || b < g * 0.92 || g < r * 1.02) continue;
+    const included = mask === 'optical_thickness'
+      ? r > 110 && r > g * 1.12 && g > b * 1.18
+      : b >= 58 && b >= r * 1.28 && b >= g * 0.92 && g >= r * 1.02;
+    if (!included) continue;
     const x = pixel % width;
     const y = Math.floor(pixel / width);
     count += 1;
@@ -297,7 +354,7 @@ function measureFluidProjection(path, label) {
     pixelCount: count,
     centroid: { x: sumX / count / width, y: sumY / count / height },
     bounds: { minX: minX / width, minY: minY / height, maxX: maxX / width, maxY: maxY / height },
-    measurement: 'captured_blue_fluid_projection_ffmpeg_rgb24_v0',
+    measurement: `captured_${mask}_fluid_projection_ffmpeg_rgb24_v0`,
   };
 }
 
@@ -309,6 +366,155 @@ function compareFluidProjections(sphere, surface) {
   return {
     normalizedCentroidDistance: Math.hypot(surface.centroid.x - sphere.centroid.x, surface.centroid.y - sphere.centroid.y),
     minimumBoundsOverlap: intersectionWidth * intersectionHeight / Math.max(1e-6, Math.min(sphereArea, surfaceArea)),
+  };
+}
+
+function measureSharedSupportIdentity(spherePath, surfacePath, refractionThicknessPath, label) {
+  const probe = spawnSync('ffprobe', [
+    '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'json', spherePath,
+  ], { encoding: 'utf8' });
+  const stream = probe.status === 0 ? JSON.parse(probe.stdout || '{}')?.streams?.[0] : null;
+  const width = Number(stream?.width);
+  const height = Number(stream?.height);
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
+    throw new Error(`ffprobe ${label} support identity dimensions failed: ${probe.stderr || probe.status}`);
+  }
+  const decode = path => spawnSync('ffmpeg', ['-v', 'error', '-i', path, '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], {
+    encoding: null,
+    maxBuffer: 128 * 1024 * 1024,
+  });
+  const sphere = decode(spherePath);
+  const surface = decode(surfacePath);
+  const refraction = decode(refractionThicknessPath);
+  const expectedBytes = width * height * 3;
+  if (
+    sphere.status !== 0
+    || surface.status !== 0
+    || refraction.status !== 0
+    || sphere.stdout?.length !== expectedBytes
+    || surface.stdout?.length !== expectedBytes
+    || refraction.stdout?.length !== expectedBytes
+  ) {
+    throw new Error(`ffmpeg ${label} support identity decode failed or dimensions disagree`);
+  }
+
+  let liquidMask = new Uint8Array(width * height);
+  for (let pixel = 0; pixel < width * height; pixel += 1) {
+    const offset = pixel * 3;
+    const sphereR = sphere.stdout[offset];
+    const sphereG = sphere.stdout[offset + 1];
+    const sphereB = sphere.stdout[offset + 2];
+    const surfaceR = surface.stdout[offset];
+    const surfaceG = surface.stdout[offset + 1];
+    const surfaceB = surface.stdout[offset + 2];
+    const thicknessR = refraction.stdout[offset];
+    const thicknessG = refraction.stdout[offset + 1];
+    const thicknessB = refraction.stdout[offset + 2];
+    const sphereLiquid = sphereB >= 58 && sphereB >= sphereR * 1.28 && sphereB >= sphereG * 0.92 && sphereG >= sphereR * 1.02;
+    const surfaceLiquid = surfaceB >= 58 && surfaceB >= surfaceR * 1.28 && surfaceB >= surfaceG * 0.92 && surfaceG >= surfaceR * 1.02;
+    const thicknessLiquid = thicknessR > 110 && thicknessR > thicknessG * 1.12 && thicknessG > thicknessB * 1.18;
+    if (sphereLiquid || surfaceLiquid || thicknessLiquid) liquidMask[pixel] = 1;
+  }
+  for (let dilation = 0; dilation < 12; dilation += 1) {
+    const expanded = liquidMask.slice();
+    for (let y = 1; y < height - 1; y += 1) {
+      for (let x = 1; x < width - 1; x += 1) {
+        const pixel = y * width + x;
+        if (!liquidMask[pixel]) continue;
+        expanded[pixel - width - 1] = 1;
+        expanded[pixel - width] = 1;
+        expanded[pixel - width + 1] = 1;
+        expanded[pixel - 1] = 1;
+        expanded[pixel + 1] = 1;
+        expanded[pixel + width - 1] = 1;
+        expanded[pixel + width] = 1;
+        expanded[pixel + width + 1] = 1;
+      }
+    }
+    liquidMask = expanded;
+  }
+
+  let comparedPixels = 0;
+  let mismatchedPixels = 0;
+  let absoluteChannelDelta = 0;
+  for (let pixel = 0; pixel < width * height; pixel += 1) {
+    if (liquidMask[pixel]) continue;
+    const offset = pixel * 3;
+    let maximumDelta = 0;
+    for (let channel = 0; channel < 3; channel += 1) {
+      const sphereValue = sphere.stdout[offset + channel];
+      const surfaceDelta = Math.abs(sphereValue - surface.stdout[offset + channel]);
+      const refractionDelta = Math.abs(sphereValue - refraction.stdout[offset + channel]);
+      maximumDelta = Math.max(maximumDelta, surfaceDelta, refractionDelta);
+      absoluteChannelDelta += surfaceDelta + refractionDelta;
+    }
+    comparedPixels += 1;
+    if (maximumDelta > 4) mismatchedPixels += 1;
+  }
+  const pixelCount = width * height;
+  if (comparedPixels < pixelCount * 0.35) {
+    throw new Error(`${label} support identity mask left insufficient full-frame evidence: ${comparedPixels}/${pixelCount}`);
+  }
+  return {
+    label,
+    spherePath,
+    surfacePath,
+    refractionThicknessPath,
+    pixelCount,
+    comparedPixels,
+    comparedRatio: Number((comparedPixels / pixelCount).toFixed(5)),
+    mismatchedPixels,
+    mismatchRatio: Number((mismatchedPixels / comparedPixels).toFixed(6)),
+    meanAbsoluteChannelDelta: Number((absoluteChannelDelta / Math.max(1, comparedPixels * 6)).toFixed(4)),
+    liquidMaskDilationPixels: 12,
+    measurement: 'same_camera_nonliquid_shared_support_rgb24_identity_v0',
+  };
+}
+
+function requireSharedSupportPresentation(receipt, label) {
+  const supportPresentationEvidence = receipt?.supportPresentationEvidence;
+  if (
+    supportPresentationEvidence?.route !== 'wgsl-analytic-heightfield-obstacle-presentation-v0'
+    || supportPresentationEvidence?.depthRoute !== 'wgsl-analytic-heightfield-obstacle-depth-v0'
+    || supportPresentationEvidence?.colorDepthAuthority !== 'same_pass_same_analytic_geometry_v0'
+    || supportPresentationEvidence?.refractionCaptureOrder !== 'copy_after_analytic_support_presentation_v0'
+    || supportPresentationEvidence?.passCount < 1
+    || supportPresentationEvidence?.particleSupportDrawCount !== 0
+  ) {
+    throw new Error(`${label} shared analytic support presentation evidence missing or partial: ${JSON.stringify(supportPresentationEvidence)}`);
+  }
+  return supportPresentationEvidence;
+}
+
+function measureCapturedPngDelta(leftPath, rightPath, label) {
+  const decode = path => spawnSync('ffmpeg', ['-v', 'error', '-i', path, '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], {
+    encoding: null,
+    maxBuffer: 128 * 1024 * 1024,
+  });
+  const left = decode(leftPath);
+  const right = decode(rightPath);
+  if (left.status !== 0 || right.status !== 0 || !left.stdout?.length || left.stdout.length !== right.stdout?.length) {
+    throw new Error(`ffmpeg ${label} delta decode failed or dimensions disagree`);
+  }
+  let changedPixels = 0;
+  let absoluteChannelDelta = 0;
+  for (let i = 0; i < left.stdout.length; i += 3) {
+    const delta = Math.abs(left.stdout[i] - right.stdout[i])
+      + Math.abs(left.stdout[i + 1] - right.stdout[i + 1])
+      + Math.abs(left.stdout[i + 2] - right.stdout[i + 2]);
+    absoluteChannelDelta += delta;
+    if (delta >= 18) changedPixels += 1;
+  }
+  const pixelCount = left.stdout.length / 3;
+  return {
+    label,
+    leftPath,
+    rightPath,
+    pixelCount,
+    changedPixels,
+    changedRatio: Number((changedPixels / Math.max(1, pixelCount)).toFixed(5)),
+    meanAbsoluteChannelDelta: Number((absoluteChannelDelta / Math.max(1, left.stdout.length)).toFixed(3)),
+    measurement: 'same_state_captured_rgb24_absolute_delta_v0',
   };
 }
 
@@ -907,22 +1113,54 @@ async function main() {
     if (lastDebugState.runtime?.topologyContract !== 'wgsl-four-neighbor-topology-retention-v0') throw new Error(`topology contract mismatch: ${lastDebugState.runtime?.topologyContract}`);
     if (lastDebugState.runtime?.particleShiftContract !== 'wgsl-opt-in-support-tangential-particle-shift-v0') throw new Error(`particle-shift contract mismatch: ${lastDebugState.runtime?.particleShiftContract}`);
     if (lastDebugState.runtime?.chemistryContract !== 'wgsl-passive-material-tracer-diffusion-v0') throw new Error(`passive tracer contract mismatch: ${lastDebugState.runtime?.chemistryContract}`);
+    if (lastDebugState.runtime?.interfaceGeometryContract !== 'wgsl-solver-owned-interface-normal-curvature-confidence-v1') throw new Error(`interface geometry contract mismatch: ${lastDebugState.runtime?.interfaceGeometryContract}`);
     const requestedRoute = new URL(url);
     const requestedColorMode = requestedRoute.searchParams.get('finger_fluid_color_mode') || 'phase';
     const requestedRendererMode = requestedRoute.searchParams.get('finger_fluid_renderer') || 'screen_space_surface';
+    const requestedOpticalDebugMode = requestedRoute.searchParams.get('finger_fluid_optical_debug') || 'shaded';
     const requestedParticleShiftStrength = Number(requestedRoute.searchParams.get('finger_fluid_particle_shift') ?? 0);
     const requestedChemistryDiffusion = Number(requestedRoute.searchParams.get('finger_fluid_chemistry_diffusion') ?? 0);
     const effectiveColorMode = lastDebugState.runtime?.effectiveColorMode;
     const effectiveRendererMode = lastDebugState.runtime?.effectiveRendererMode;
+    const effectiveOpticalDebugMode = lastDebugState.runtime?.effectiveOpticalDebugMode;
     const effectiveParticleShiftStrength = lastDebugState.runtime?.effectiveParticleShiftStrength;
     const effectiveChemistryDiffusion = lastDebugState.runtime?.effectiveChemistryDiffusion;
     if (requestedColorMode !== effectiveColorMode) throw new Error(`silent color-mode fallback rejected: ${JSON.stringify({ requestedColorMode, effectiveColorMode })}`);
     if (requestedRendererMode !== effectiveRendererMode) throw new Error(`renderer disagreement rejected: ${JSON.stringify({ requestedRendererMode, effectiveRendererMode, fallbackReason: lastDebugState.runtime?.fallbackReason })}`);
+    if (requestedOpticalDebugMode !== effectiveOpticalDebugMode) throw new Error(`optical renderer disagreement rejected: ${JSON.stringify({ requestedOpticalDebugMode, effectiveOpticalDebugMode })}`);
+    const expectedRendererRoute = {
+      screen_space_surface: 'webgpu-screen-space-liquid-surface-v0',
+      screen_space_refraction: 'webgpu-screen-space-liquid-refraction-v0',
+      sphere_debug: 'webgpu-particle-sphere-debug-renderer-v0',
+    }[requestedRendererMode];
+    if (!expectedRendererRoute || lastDebugState.runtime?.requestedRenderer !== expectedRendererRoute || lastDebugState.runtime?.effectiveRenderer !== expectedRendererRoute) {
+      throw new Error(`optical renderer disagreement in requested/effective route identity: ${JSON.stringify({ requestedRendererMode, expectedRendererRoute, requestedRenderer: lastDebugState.runtime?.requestedRenderer, effectiveRenderer: lastDebugState.runtime?.effectiveRenderer })}`);
+    }
     if (lastDebugState.runtime?.fallbackReason) throw new Error(`renderer fallback rejected: ${lastDebugState.runtime.fallbackReason}`);
+    requireSharedSupportPresentation(lastDebugState.runtime, 'initial runtime');
     if (effectiveRendererMode === 'screen_space_surface') {
       screenSpaceSurfaceEvidence = lastDebugState.runtime?.screenSpaceSurfaceEvidence || null;
       if (screenSpaceSurfaceEvidence?.route !== 'webgpu-screen-space-liquid-surface-v0') throw new Error(`screen-space route evidence mismatch: ${JSON.stringify(screenSpaceSurfaceEvidence)}`);
       if (screenSpaceSurfaceEvidence?.accumulationPassCount < 1 || screenSpaceSurfaceEvidence?.compositePassCount < 1) throw new Error(`screen-space pass evidence missing: ${JSON.stringify(screenSpaceSurfaceEvidence)}`);
+    }
+    if (effectiveRendererMode === 'screen_space_refraction') {
+      refractionEvidence = lastDebugState.runtime?.refractionEvidence || null;
+      if (
+        refractionEvidence?.route !== 'webgpu-screen-space-liquid-refraction-v0'
+        || refractionEvidence?.opticalTransportRoute !== 'snell-two-interface-screen-space-slab-v0'
+        || refractionEvidence?.slabRoute !== 'wgsl-particle-projected-front-back-slab-v0'
+        || refractionEvidence?.slabGeometryPassCount < 1
+        || refractionEvidence?.frontDepthTexture?.format !== 'rgba16float'
+        || refractionEvidence?.backDepthTexture?.format !== 'rgba16float'
+        || refractionEvidence?.invalidSlabDisposition !== 'entry_interface_only_no_exit_claim_v0'
+        || refractionEvidence?.supportDepthRoute !== 'wgsl-analytic-heightfield-obstacle-depth-v0'
+        || refractionEvidence?.analyticSupportDepthPassCount < 1
+        || refractionEvidence?.opticalDebugMode !== requestedOpticalDebugMode
+        || refractionEvidence?.sceneColorTexture?.source !== 'same-camera-analytic-support-presentation-color-v0'
+        || refractionEvidence?.scenePassCount < 1
+        || refractionEvidence?.accumulationPassCount < 1
+        || refractionEvidence?.compositePassCount < 1
+      ) throw new Error(`refraction route evidence missing or partial: ${JSON.stringify(refractionEvidence)}`);
     }
     if (requestedParticleShiftStrength !== effectiveParticleShiftStrength) throw new Error(`silent particle-shift fallback rejected: ${JSON.stringify({ requestedParticleShiftStrength, effectiveParticleShiftStrength })}`);
     if (requestedChemistryDiffusion !== effectiveChemistryDiffusion) throw new Error(`silent chemistry-diffusion fallback rejected: ${JSON.stringify({ requestedChemistryDiffusion, effectiveChemistryDiffusion })}`);
@@ -931,8 +1169,18 @@ async function main() {
     if (effectiveChemistryDiffusion === 0 && lastDebugState.runtime?.chemistryDiffusionPassCount !== 0) throw new Error(`zero diffusion dispatched hidden chemistry work: ${lastDebugState.runtime?.chemistryDiffusionPassCount}`);
     if (effectiveChemistryDiffusion > 0 && lastDebugState.runtime?.chemistryDiffusionPassCount < lastDebugState.runtime.stepCount * 2) throw new Error(`enabled chemistry diffusion missed required passes: ${JSON.stringify({ chemistryDiffusionPassCount: lastDebugState.runtime?.chemistryDiffusionPassCount, stepCount: lastDebugState.runtime?.stepCount })}`);
     if (lastDebugState.runtime?.playgroundContract !== 'wgsl-shared-multi-regime-toy-playground-v0') throw new Error(`playground contract mismatch: ${lastDebugState.runtime?.playgroundContract}`);
-    if (!lastDebugState.runtime?.playground?.rendered || lastDebugState.runtime.playground.supportGeometryCount < 300) {
-      throw new Error(`shared playground geometry is missing from the operator viewport: ${JSON.stringify(lastDebugState.runtime?.playground)}`);
+    const playground = lastDebugState.runtime?.playground;
+    if (
+      !playground?.rendered
+      || playground.supportGeometryMode !== 'shared_analytic_heightfield_mesh_plus_analytic_obstacle_v0'
+      || playground.supportPresentationRoute !== 'wgsl-analytic-heightfield-obstacle-presentation-v0'
+      || playground.supportGeometryCountUnit !== 'vertices'
+      || playground.terrainVertexCount <= 0
+      || playground.obstacleVertexCount <= 0
+      || playground.supportGeometryCount !== playground.terrainVertexCount + playground.obstacleVertexCount
+      || playground.particleSupportDrawCount !== 0
+    ) {
+      throw new Error(`shared analytic playground presentation is missing or stale: ${JSON.stringify(playground)}`);
     }
     if (lastDebugState.runtime?.obstacleContract !== 'shared-solver-render-obstacle-v0' || lastDebugState.runtime?.obstacle?.rendered !== true) throw new Error(`solver obstacle is not attributable in the renderer: ${JSON.stringify(lastDebugState.runtime?.obstacle)}`);
     if (lastDebugState.runtime?.stepCount < 20) throw new Error(`insufficient real compute steps: ${lastDebugState.runtime?.stepCount}`);
@@ -1071,6 +1319,7 @@ async function main() {
     }
     const interfaceCarrier = lastDebugState.runtime?.interfaceCarrier;
     if (interfaceCarrier?.schema !== 'kaminos.liquid-interface-carrier.v0') throw new Error(`interface carrier schema mismatch: ${interfaceCarrier?.schema}`);
+    if (interfaceCarrier?.interfaceGeometryContract !== 'wgsl-solver-owned-interface-normal-curvature-confidence-v1') throw new Error(`interface carrier geometry authority mismatch: ${interfaceCarrier?.interfaceGeometryContract}`);
     if (interfaceCarrier.capacity !== lastDebugState.runtime.particleCount) throw new Error(`hidden interface capacity cap rejected: ${JSON.stringify(interfaceCarrier)}`);
     if (interfaceCarrier.candidateCapMode !== 'uncapped_exact_particle_population_capacity') throw new Error(`interface candidate cap identity mismatch: ${interfaceCarrier.candidateCapMode}`);
     if (interfaceCarrier.overflowCount !== 0) throw new Error(`interface compaction overflowed: ${JSON.stringify(interfaceCarrier)}`);
@@ -1081,6 +1330,13 @@ async function main() {
     if (interfaceCarrier.malformedRecordCount !== 0) throw new Error(`interface carrier contains malformed records: ${JSON.stringify(interfaceCarrier)}`);
     if (interfaceCarrier.contactRecordCount < 64) throw new Error(`interface carrier lacks material contact coverage: ${JSON.stringify(interfaceCarrier)}`);
     if (interfaceCarrier.minimumContactSupportAlignment < -0.001) throw new Error(`interface carrier contains a support-facing contact normal: ${JSON.stringify(interfaceCarrier)}`);
+    if (interfaceCarrier.curvatureResolutionMode !== 'kernel-bandwidth-reject-unresolved-v0') throw new Error(`interface curvature resolution route mismatch: ${JSON.stringify(interfaceCarrier)}`);
+    if (interfaceCarrier.resolvedCurvatureRecordCount + interfaceCarrier.unresolvedCurvatureRecordCount !== interfaceCarrier.activeCount) throw new Error(`interface curvature resolution accounting mismatch: ${JSON.stringify(interfaceCarrier)}`);
+    if (!Number.isFinite(interfaceCarrier.curvatureResolutionRatio) || interfaceCarrier.curvatureResolutionRatio < 0 || interfaceCarrier.curvatureResolutionRatio > 1) throw new Error(`interface curvature resolution ratio is malformed: ${JSON.stringify(interfaceCarrier)}`);
+    if (!Number.isFinite(interfaceCarrier.maximumResolvableCurvature) || interfaceCarrier.maximumResolvableCurvature <= 0) throw new Error(`interface curvature bandwidth is missing: ${JSON.stringify(interfaceCarrier)}`);
+    if (Math.abs(interfaceCarrier.minimumCurvature) > interfaceCarrier.maximumResolvableCurvature + 0.001 || Math.abs(interfaceCarrier.maximumCurvature) > interfaceCarrier.maximumResolvableCurvature + 0.001) {
+      throw new Error(`interface carrier published curvature outside its declared spatial bandwidth: ${JSON.stringify(interfaceCarrier)}`);
+    }
     const liquidFireContactDescriptor = lastDebugState.runtime?.liquidFireContactDescriptor;
     if (liquidFireContactDescriptor?.schema !== 'kaminos.liquid-fire-contact-descriptor.v1') throw new Error(`liquid/fire contact descriptor schema mismatch: ${liquidFireContactDescriptor?.schema}`);
     if (!liquidFireContactDescriptor.valid || !liquidFireContactDescriptor.complete) throw new Error(`liquid/fire contact descriptor was not sealed: ${JSON.stringify(liquidFireContactDescriptor)}`);
@@ -1101,9 +1357,11 @@ async function main() {
         throw new Error(`interface record contains non-finite fields: ${JSON.stringify(record)}`);
       }
       const normalLength = Math.hypot(...record.normal);
-      if (normalLength < 0.8 || normalLength > 1.2 || record.confidence < 0.3 || record.confidence > 1.001 || record.thickness <= 0) {
+      if (normalLength < 0.8 || normalLength > 1.2 || record.confidence < 0 || record.confidence > 1.001 || record.thickness <= 0) {
         throw new Error(`interface geometry record is not physically legible: ${JSON.stringify(record)}`);
       }
+      if (record.confidence === 0 && record.curvature !== 0) throw new Error(`unresolved interface geometry published nonzero curvature: ${JSON.stringify(record)}`);
+      if (record.confidence > 0 && Math.abs(record.curvature) > interfaceCarrier.maximumResolvableCurvature + 0.001) throw new Error(`resolved interface sample exceeds declared curvature bandwidth: ${JSON.stringify(record)}`);
       if (record.contact >= 0.5 && record.supportAlignment < -0.001) throw new Error(`contact interface sample normal points into support geometry: ${JSON.stringify(record)}`);
     }
     const restDensity = lastDebugState.runtime?.restDensity;
@@ -1143,7 +1401,7 @@ async function main() {
       const max = Math.max(r, g, b);
       const min = Math.min(r, g, b);
       if (max > 66 && max - min > 18) activePixels += 1;
-      if (g > 28 && r > 20 && g > r * 1.03 && r > b * 1.12 && max < 105) supportPixels += 1;
+      if (g > 28 && r > 20 && b > 20 && g > r * 1.03 && g >= b * 0.98 && b >= r * 0.95 && max < 130) supportPixels += 1;
     }
     const pixelCount = Math.floor(decoded.stdout.length / 3);
     canvasActivity = {
@@ -1156,29 +1414,44 @@ async function main() {
       supportPixelRatio: Number((supportPixels / Math.max(1, pixelCount)).toFixed(5)),
       measurement: 'captured_webgpu_canvas_ffmpeg_rgb24_v0',
     };
-    if (canvasActivity.activeRatio < 0.09) throw new Error(`native GPU fluid bench too sparse: ${JSON.stringify(canvasActivity)}`);
+    const refractionActivityAccepted = requestedRendererMode === 'screen_space_refraction'
+      && canvasActivity.activeRatio >= 0.01
+      && canvasActivity.supportPixelRatio >= 0.07;
+    if (canvasActivity.activeRatio < 0.09 && !refractionActivityAccepted) throw new Error(`native GPU fluid bench too sparse: ${JSON.stringify(canvasActivity)}`);
     if (canvasActivity.supportPixelRatio < 0.025) throw new Error(`shared playground support is not materially visible: ${JSON.stringify(canvasActivity)}`);
 
     phase = 'same_state_renderer_comparison';
-    const rendererCountersBefore = await evaluate(ws, `(() => {
-      const read = window.kaminosFingerFluidBenchDebugState || window.__kaminosFingerFluidBenchDebugState;
-      const runtime = typeof read === 'function' ? read()?.runtime : null;
-      return runtime ? {
-        stepCount: runtime.stepCount,
-        sphereDebugRenderFrameCount: runtime.sphereDebugRenderFrameCount,
-        screenSpaceSurfaceRenderFrameCount: runtime.screenSpaceSurfaceRenderFrameCount,
-      } : null;
+    const rendererFreezeReceipt = await evaluate(ws, `(() => {
+      const render = window.kaminosFingerFluidBenchRenderCurrentStateForWitness;
+      if (typeof render !== 'function') throw new Error('pre-output failure: missing same-state renderer witness hook');
+      return render(${JSON.stringify(requestedRendererMode)}, ${JSON.stringify(requestedOpticalDebugMode)});
     })()`);
+    const rendererCountersBefore = rendererFreezeReceipt ? {
+      stepCount: rendererFreezeReceipt.stepCount,
+      sphereDebugRenderFrameCount: rendererFreezeReceipt.sphereDebugRenderFrameCount,
+      screenSpaceSurfaceRenderFrameCount: rendererFreezeReceipt.screenSpaceSurfaceRenderFrameCount,
+      screenSpaceRefractionRenderFrameCount: rendererFreezeReceipt.screenSpaceRefractionRenderFrameCount,
+    } : null;
     if (!rendererCountersBefore) throw new Error('missing pre-comparison renderer counters');
-    const renderSameState = async (mode, path, captureRect = canvasRect, minimumActiveRatio = 0.05) => {
+    const renderSameState = async (
+      mode,
+      path,
+      captureRect = canvasRect,
+      opticalDebugMode = 'shaded',
+      minimumActiveRatio = 0.05,
+    ) => {
       const receipt = await evaluate(ws, `(() => {
         const render = window.kaminosFingerFluidBenchRenderCurrentStateForWitness;
         if (typeof render !== 'function') throw new Error('pre-output failure: missing same-state renderer witness hook');
-        return render(${JSON.stringify(mode)});
+        return render(${JSON.stringify(mode)}, ${JSON.stringify(opticalDebugMode)});
       })()`);
       if (receipt.requestedRendererMode !== mode || receipt.effectiveRendererMode !== mode || receipt.fallbackReason) {
         throw new Error(`renderer disagreement during same-state comparison: ${JSON.stringify(receipt)}`);
       }
+      if (receipt.requestedOpticalDebugMode !== opticalDebugMode || receipt.effectiveOpticalDebugMode !== opticalDebugMode) {
+        throw new Error(`optical renderer disagreement during same-state comparison: ${JSON.stringify(receipt)}`);
+      }
+      requireSharedSupportPresentation(receipt, `${mode}:${opticalDebugMode}`);
       const shot = await wsRequest(ws, 'Page.captureScreenshot', {
         format: 'png',
         captureBeyondViewport: false,
@@ -1193,30 +1466,78 @@ async function main() {
       if (mode === 'sphere_debug' && activity.activeRatio < minimumActiveRatio) {
         throw new Error(`blank sphere-debug output rejected: ${JSON.stringify(activity)}`);
       }
+      if (mode === 'screen_space_refraction' && opticalDebugMode === 'shaded' && activity.activeRatio < 0.05) {
+        throw new Error(`blank refraction output rejected: ${JSON.stringify(activity)}`);
+      }
       return { receipt, activity };
     };
     const sphereDebug = await renderSameState('sphere_debug', sphereDebugOut);
     const screenSpaceSurface = await renderSameState('screen_space_surface', screenSpaceSurfaceOut);
+    const screenSpaceRefraction = await renderSameState('screen_space_refraction', screenSpaceRefractionOut);
+    const refractionVisualDelta = measureCapturedPngDelta(screenSpaceSurfaceOut, screenSpaceRefractionOut, 'surface_to_refraction');
+    if (refractionVisualDelta.changedRatio < 0.025 || refractionVisualDelta.meanAbsoluteChannelDelta < 1.5) {
+      throw new Error(`refraction output is visually indistinguishable from the un-refracted surface: ${JSON.stringify(refractionVisualDelta)}`);
+    }
+    screenSpaceSurfaceEvidence = screenSpaceSurface.receipt.screenSpaceSurfaceEvidence;
+    refractionEvidence = screenSpaceRefraction.receipt.refractionEvidence;
+    if (
+      refractionEvidence?.route !== 'webgpu-screen-space-liquid-refraction-v0'
+      || refractionEvidence?.opticalTransportRoute !== 'snell-two-interface-screen-space-slab-v0'
+      || refractionEvidence?.slabRoute !== 'wgsl-particle-projected-front-back-slab-v0'
+      || refractionEvidence?.slabGeometryPassCount < 1
+      || refractionEvidence?.frontDepthTexture?.format !== 'rgba16float'
+      || refractionEvidence?.backDepthTexture?.format !== 'rgba16float'
+      || refractionEvidence?.invalidSlabDisposition !== 'entry_interface_only_no_exit_claim_v0'
+      || refractionEvidence?.supportDepthRoute !== 'wgsl-analytic-heightfield-obstacle-depth-v0'
+      || refractionEvidence?.analyticSupportDepthPassCount < 1
+      || refractionEvidence?.opticalDebugMode !== 'shaded'
+      || refractionEvidence?.sceneColorTexture?.source !== 'same-camera-analytic-support-presentation-color-v0'
+      || refractionEvidence?.scenePassCount < 1
+      || refractionEvidence?.compositePassCount < 1
+    ) throw new Error(`same-state refraction evidence missing or partial: ${JSON.stringify(refractionEvidence)}`);
     if (
       sphereDebug.receipt.sphereDebugRenderFrameCount !== rendererCountersBefore.sphereDebugRenderFrameCount + 1
       || sphereDebug.receipt.screenSpaceSurfaceRenderFrameCount !== rendererCountersBefore.screenSpaceSurfaceRenderFrameCount
+      || sphereDebug.receipt.screenSpaceRefractionRenderFrameCount !== rendererCountersBefore.screenSpaceRefractionRenderFrameCount
       || screenSpaceSurface.receipt.sphereDebugRenderFrameCount !== sphereDebug.receipt.sphereDebugRenderFrameCount
       || screenSpaceSurface.receipt.screenSpaceSurfaceRenderFrameCount !== sphereDebug.receipt.screenSpaceSurfaceRenderFrameCount + 1
+      || screenSpaceSurface.receipt.screenSpaceRefractionRenderFrameCount !== sphereDebug.receipt.screenSpaceRefractionRenderFrameCount
+      || screenSpaceRefraction.receipt.sphereDebugRenderFrameCount !== screenSpaceSurface.receipt.sphereDebugRenderFrameCount
+      || screenSpaceRefraction.receipt.screenSpaceSurfaceRenderFrameCount !== screenSpaceSurface.receipt.screenSpaceSurfaceRenderFrameCount
+      || screenSpaceRefraction.receipt.screenSpaceRefractionRenderFrameCount !== screenSpaceSurface.receipt.screenSpaceRefractionRenderFrameCount + 1
     ) {
-      throw new Error(`route-specific renderer counters crossed modes: ${JSON.stringify({ rendererCountersBefore, sphereDebug: sphereDebug.receipt, screenSpaceSurface: screenSpaceSurface.receipt })}`);
+      throw new Error(`route-specific renderer counters crossed modes: ${JSON.stringify({ rendererCountersBefore, sphereDebug: sphereDebug.receipt, screenSpaceSurface: screenSpaceSurface.receipt, screenSpaceRefraction: screenSpaceRefraction.receipt })}`);
     }
     sameStateRendererComparison = {
       schema: 'kaminos.finger-fluid.same-state-renderer-comparison.v0',
+      rendererFreezeReceipt,
       stepCount: screenSpaceSurface.receipt.stepCount,
       sameSimulationState: sphereDebug.receipt.stepCount === screenSpaceSurface.receipt.stepCount,
       sphereDebug,
       screenSpaceSurface,
+      screenSpaceRefraction,
+      refractionVisualDelta,
       visibleDelta: {
         activeRatioDelta: Number((screenSpaceSurface.activity.activeRatio - sphereDebug.activity.activeRatio).toFixed(5)),
         highlightRatioDelta: Number((screenSpaceSurface.activity.highlightRatio - sphereDebug.activity.highlightRatio).toFixed(5)),
       },
     };
     if (!sameStateRendererComparison.sameSimulationState) throw new Error(`same-state renderer comparison stepped the simulation: ${JSON.stringify(sameStateRendererComparison)}`);
+    sameStateOpticalComparison = {
+      schema: 'kaminos.finger-fluid.same-state-optical-comparison.v0',
+      stepCount: screenSpaceRefraction.receipt.stepCount,
+      sameSimulationState: sphereDebug.receipt.stepCount === screenSpaceSurface.receipt.stepCount
+        && screenSpaceSurface.receipt.stepCount === screenSpaceRefraction.receipt.stepCount,
+      sphereDebug,
+      screenSpaceSurface,
+      screenSpaceRefraction,
+      refractionVisualDelta,
+      visibleDelta: {
+        refractionVsSurfaceActiveRatio: Number((screenSpaceRefraction.activity.activeRatio - screenSpaceSurface.activity.activeRatio).toFixed(5)),
+        refractionVsSurfaceHighlightRatio: Number((screenSpaceRefraction.activity.highlightRatio - screenSpaceSurface.activity.highlightRatio).toFixed(5)),
+      },
+    };
+    if (!sameStateOpticalComparison.sameSimulationState) throw new Error(`same-state optical comparison stepped the simulation: ${JSON.stringify(sameStateOpticalComparison)}`);
 
     phase = 'renderer_resize_recreate';
     const resizedViewport = {
@@ -1248,6 +1569,7 @@ async function main() {
       || resizedSurface.receipt.stepCount !== screenSpaceSurface.receipt.stepCount
       || resizedSurface.receipt.sphereDebugRenderFrameCount !== screenSpaceSurface.receipt.sphereDebugRenderFrameCount
       || resizedSurface.receipt.screenSpaceSurfaceRenderFrameCount !== screenSpaceSurface.receipt.screenSpaceSurfaceRenderFrameCount + 1
+      || resizedSurface.receipt.screenSpaceRefractionRenderFrameCount !== screenSpaceRefraction.receipt.screenSpaceRefractionRenderFrameCount
     ) {
       throw new Error(`renderer resize/recreate evidence mismatch: ${JSON.stringify({ initialExtent, resizedExtent, screenSpaceSurface: screenSpaceSurface.receipt, resizedSurface: resizedSurface.receipt })}`);
     }
@@ -1258,12 +1580,13 @@ async function main() {
       mobile: false,
     });
     await delay(160);
-    const restoredReceipt = await evaluate(ws, `(() => window.kaminosFingerFluidBenchRenderCurrentStateForWitness?.('screen_space_surface'))()`);
+    const restoredReceipt = await evaluate(ws, `(() => window.kaminosFingerFluidBenchRenderCurrentStateForWitness?.('screen_space_surface', 'shaded'))()`);
     const restoredExtent = restoredReceipt?.screenSpaceSurfaceEvidence?.accumulationTexture?.extent;
     if (
       restoredReceipt?.stepCount !== screenSpaceSurface.receipt.stepCount
       || restoredReceipt?.sphereDebugRenderFrameCount !== resizedSurface.receipt.sphereDebugRenderFrameCount
       || restoredReceipt?.screenSpaceSurfaceRenderFrameCount !== resizedSurface.receipt.screenSpaceSurfaceRenderFrameCount + 1
+      || restoredReceipt?.screenSpaceRefractionRenderFrameCount !== resizedSurface.receipt.screenSpaceRefractionRenderFrameCount
       || restoredExtent !== initialExtent
     ) {
       throw new Error(`route-specific renderer counters or restored extent diverged: ${JSON.stringify({ initialExtent, restoredExtent, resizedSurface: resizedSurface.receipt, restoredReceipt })}`);
@@ -1280,7 +1603,6 @@ async function main() {
       resizedSurface,
       restoredReceipt,
     };
-
     phase = 'multi_angle_surface_registration';
     const originalCamera = await evaluate(ws, `window.kaminosFingerFluidCompositionCameraState?.()`);
     if (!originalCamera) throw new Error('missing original camera state for multi-angle surface registration');
@@ -1304,23 +1626,40 @@ async function main() {
       if (!effectiveCamera) throw new Error(`camera setter unavailable for registration view ${camera.id}`);
       const spherePath = resolve(surfaceRegistrationDir, `${camera.id}.sphere-debug.png`);
       const surfacePath = resolve(surfaceRegistrationDir, `${camera.id}.screen-space-surface.png`);
-      const sphereRender = await renderSameState('sphere_debug', spherePath, canvasRect, 0.005);
-      const surfaceRender = await renderSameState('screen_space_surface', surfacePath, canvasRect, 0.005);
-      if (sphereRender.receipt.stepCount !== surfaceRender.receipt.stepCount) {
+      const refractionPath = resolve(surfaceRegistrationDir, `${camera.id}.screen-space-refraction-thickness.png`);
+      const sphereRender = await renderSameState('sphere_debug', spherePath, canvasRect, 'shaded', 0.005);
+      const surfaceRender = await renderSameState('screen_space_surface', surfacePath, canvasRect, 'shaded', 0.005);
+      const refractionRender = await renderSameState('screen_space_refraction', refractionPath, canvasRect, 'thickness', 0.005);
+      if (
+        sphereRender.receipt.stepCount !== surfaceRender.receipt.stepCount
+        || sphereRender.receipt.stepCount !== refractionRender.receipt.stepCount
+      ) {
         throw new Error(`registration view ${camera.id} advanced the simulation between renderers`);
       }
       const sphereProjection = measureFluidProjection(spherePath, `${camera.id}:sphere_debug`);
       const surfaceProjection = measureFluidProjection(surfacePath, `${camera.id}:screen_space_surface`);
-      const comparison = compareFluidProjections(sphereProjection, surfaceProjection);
-      if (comparison.normalizedCentroidDistance > 0.12 || comparison.minimumBoundsOverlap < 0.35) {
-        throw new Error(`surface registration mismatch at ${camera.id}: ${JSON.stringify(comparison)}`);
+      const refractionProjection = measureFluidProjection(refractionPath, `${camera.id}:screen_space_refraction:thickness`, 'optical_thickness');
+      const surfaceComparison = compareFluidProjections(sphereProjection, surfaceProjection);
+      const refractionComparison = compareFluidProjections(sphereProjection, refractionProjection);
+      const sharedSupportIdentity = measureSharedSupportIdentity(spherePath, surfacePath, refractionPath, camera.id);
+      if (surfaceComparison.normalizedCentroidDistance > 0.12 || surfaceComparison.minimumBoundsOverlap < 0.35) {
+        throw new Error(`surface registration mismatch at ${camera.id}: ${JSON.stringify(surfaceComparison)}`);
+      }
+      if (refractionComparison.normalizedCentroidDistance > 0.12 || refractionComparison.minimumBoundsOverlap < 0.35) {
+        throw new Error(`refraction registration mismatch at ${camera.id}: ${JSON.stringify(refractionComparison)}`);
+      }
+      if (sharedSupportIdentity.mismatchRatio > 0.002 || sharedSupportIdentity.meanAbsoluteChannelDelta > 0.25) {
+        throw new Error(`shared support presentation mismatch at ${camera.id}: ${JSON.stringify(sharedSupportIdentity)}`);
       }
       surfaceRegistrationViews.push({
         camera: effectiveCamera,
         stepCount: surfaceRender.receipt.stepCount,
         sphereProjection,
         surfaceProjection,
-        ...comparison,
+        refractionProjection,
+        surfaceComparison,
+        refractionComparison,
+        sharedSupportIdentity,
       });
     }
     await evaluate(ws, `(() => {
@@ -1329,14 +1668,100 @@ async function main() {
       return true;
     })()`);
     await evaluate(ws, `window.kaminosFingerFluidBenchSetCameraForWitness?.(${JSON.stringify(originalCamera)})`);
-    await evaluate(ws, `window.kaminosFingerFluidBenchRenderCurrentStateForWitness?.('screen_space_surface')`);
-    await evaluate(ws, `(() => { window.kaminosFingerFluidBenchResumeAfterWitness?.(); return true; })()`);
+    await evaluate(ws, `window.kaminosFingerFluidBenchRenderCurrentStateForWitness?.('screen_space_surface', 'shaded')`);
+
+    phase = 'same_state_optical_debug_views';
+    opticalDebugViews = {};
+    let previousOpticalDebugMode = null;
+    for (const opticalDebugMode of opticalDebugModes) {
+      const capture = await renderSameState(
+        'screen_space_refraction',
+        opticalDebugOutputs[opticalDebugMode],
+        canvasRect,
+        opticalDebugMode,
+      );
+      if (
+        capture.receipt.refractionEvidence?.opticalDebugMode !== opticalDebugMode
+        || capture.receipt.refractionEvidence?.route !== 'webgpu-screen-space-liquid-refraction-v0'
+        || capture.receipt.refractionEvidence?.opticalTransportRoute !== 'snell-two-interface-screen-space-slab-v0'
+        || capture.receipt.refractionEvidence?.slabRoute !== 'wgsl-particle-projected-front-back-slab-v0'
+        || capture.receipt.refractionEvidence?.slabGeometryPassCount < 1
+        || capture.receipt.refractionEvidence?.frontDepthTexture?.format !== 'rgba16float'
+        || capture.receipt.refractionEvidence?.backDepthTexture?.format !== 'rgba16float'
+        || capture.receipt.refractionEvidence?.invalidSlabDisposition !== 'entry_interface_only_no_exit_claim_v0'
+        || capture.receipt.refractionEvidence?.supportDepthRoute !== 'wgsl-analytic-heightfield-obstacle-depth-v0'
+        || capture.receipt.refractionEvidence?.analyticSupportDepthPassCount < 1
+      ) throw new Error(`optical debug view route evidence mismatch: ${JSON.stringify({ opticalDebugMode, receipt: capture.receipt })}`);
+      const visualDeltaFromShaded = measureCapturedPngDelta(
+        screenSpaceRefractionOut,
+        opticalDebugOutputs[opticalDebugMode],
+        `shaded_to_${opticalDebugMode}`,
+      );
+      if (visualDeltaFromShaded.changedRatio < 0.02 || visualDeltaFromShaded.meanAbsoluteChannelDelta < 1) {
+        throw new Error(`optical debug view collapsed to shaded refraction: ${JSON.stringify({ opticalDebugMode, visualDeltaFromShaded })}`);
+      }
+      const visualDeltaFromPreviousDebug = previousOpticalDebugMode
+        ? measureCapturedPngDelta(
+          opticalDebugOutputs[previousOpticalDebugMode],
+          opticalDebugOutputs[opticalDebugMode],
+          `${previousOpticalDebugMode}_to_${opticalDebugMode}`,
+        )
+        : null;
+      if (
+        visualDeltaFromPreviousDebug
+        && (visualDeltaFromPreviousDebug.changedRatio < 0.01 || visualDeltaFromPreviousDebug.meanAbsoluteChannelDelta < 0.5)
+      ) {
+        throw new Error(`neighboring optical debug views collapsed to one output: ${JSON.stringify({ previousOpticalDebugMode, opticalDebugMode, visualDeltaFromPreviousDebug })}`);
+      }
+      opticalDebugViews[opticalDebugMode] = {
+        ...capture,
+        visualDeltaFromShaded,
+        visualDeltaFromPreviousDebug,
+      };
+      if (opticalDebugMode === 'exit_validity') {
+        slabValidityField = measureSlabValidityField(opticalDebugOutputs[opticalDebugMode]);
+      }
+      previousOpticalDebugMode = opticalDebugMode;
+    }
+
+    phase = 'bind_primary_requested_route';
+    const primaryRouteCanvas = await renderSameState(
+      requestedRendererMode,
+      primaryRouteCanvasOut,
+      canvasRect,
+      requestedOpticalDebugMode,
+    );
+    if (
+      primaryRouteCanvas.receipt.requestedRendererMode !== requestedRendererMode
+      || primaryRouteCanvas.receipt.effectiveRendererMode !== requestedRendererMode
+      || primaryRouteCanvas.receipt.requestedOpticalDebugMode !== requestedOpticalDebugMode
+      || primaryRouteCanvas.receipt.effectiveOpticalDebugMode !== requestedOpticalDebugMode
+      || primaryRouteCanvas.receipt.fallbackReason
+      || primaryRouteCanvas.receipt.stepCount !== sameStateOpticalComparison.stepCount
+    ) {
+      throw new Error(`primary screenshot renderer disagreement: ${JSON.stringify({ requestedRendererMode, requestedOpticalDebugMode, receipt: primaryRouteCanvas.receipt })}`);
+    }
+    primaryFrameBinding = {
+      schema: 'kaminos.finger-fluid.primary-frame-binding.v0',
+      requestedRendererMode,
+      effectiveRendererMode: primaryRouteCanvas.receipt.effectiveRendererMode,
+      requestedOpticalDebugMode,
+      effectiveOpticalDebugMode: primaryRouteCanvas.receipt.effectiveOpticalDebugMode,
+      stepCount: primaryRouteCanvas.receipt.stepCount,
+      sameSimulationState: true,
+      canvasOut: primaryRouteCanvasOut,
+      canvasActivity: primaryRouteCanvas.activity,
+      receipt: primaryRouteCanvas.receipt,
+    };
 
     phase = 'capture_screenshot';
     const screenshot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
     mkdirSync(dirname(out), { recursive: true });
     writeFileSync(out, Buffer.from(screenshot.data, 'base64'));
     primaryOutputWritten = true;
+    primaryFrameBinding.output = out;
+
+    await evaluate(ws, `(() => { window.kaminosFingerFluidBenchResumeAfterWitness?.(); return true; })()`);
 
     phase = 'cadence_probe';
     const cadenceBefore = {
