@@ -23,6 +23,9 @@ import {
 import {
   loadWebGpuModelResourcePackageFromSources,
 } from './model-resource-package.js';
+import {
+  loadWebGpuModelResourceChunksFromSources,
+} from './model-resource-chunk-plan.js';
 
 export const WEBGPU_INFERENCE_SESSION_SCHEMA = 'kaminos.webgpu-inference-session.v0';
 export const WEBGPU_INFERENCE_SESSION_DEVICE_LOSS_SCHEMA = 'kaminos.webgpu-inference-session-device-loss.v0';
@@ -374,6 +377,15 @@ export async function createWebGpuInferenceSession(input = {}) {
             throw new Error('session route owns route; loadModelResourcePackageFromSources cannot override it');
           }
           return loadWebGpuModelResourcePackageFromSources({ ...packageInput, route: route.handle });
+        },
+        loadModelResourceChunksFromSources(chunkInput = {}) {
+          assertAttached(route);
+          assertActive();
+          if (!isPlainObject(chunkInput)) throw new Error('model resource chunk input must be an object');
+          if (Object.hasOwn(chunkInput, 'route')) {
+            throw new Error('session route owns route; loadModelResourceChunksFromSources cannot override it');
+          }
+          return loadWebGpuModelResourceChunksFromSources({ ...chunkInput, route: route.handle });
         },
         enqueue(jobInput = {}) {
           assertAttached(route);

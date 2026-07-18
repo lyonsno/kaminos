@@ -160,8 +160,8 @@ function validateCache(cache) {
   return cache;
 }
 
-function cacheKey(manifest) {
-  return `sha256:${manifest.bundle.sha256}:bytes:${manifest.bundle.byteLength}`;
+function cacheKey(expected) {
+  return `sha256:${expected.sha256}:bytes:${expected.byteLength}`;
 }
 
 function cacheStatus(state) {
@@ -203,14 +203,14 @@ function failureWithReport(cause, report) {
   return wrapped;
 }
 
-async function acquire(manifest, source, options) {
+async function acquire(expected, source, options) {
   const progress = [];
   const now = typeof options.now === 'function'
     ? options.now
     : (() => globalThis.performance?.now?.() ?? Date.now());
   const startedAtMs = now();
   let phase = 'option-validation';
-  let manifestIdentity = isNonEmptyString(manifest?.identity) ? manifest.identity : null;
+  let resourceIdentity = isNonEmptyString(expected?.identity) ? expected.identity : null;
   let requestedSource = null;
   let effectiveSource = null;
   let cache = null;
@@ -246,10 +246,12 @@ async function acquire(manifest, source, options) {
   }
 
   function finishReport(status, failure = null) {
+    const identity = resourceIdentity;
     return deepFreeze({
-      schema: WEBGPU_MODEL_RESOURCE_SOURCE_REPORT_SCHEMA,
+      schema: expected.reportSchema,
       status,
-      manifestIdentity,
+      manifestIdentity: expected.manifestIdentity || identity,
+      ...(expected.identityField === 'manifestIdentity' ? {} : { [expected.identityField]: identity }),
       requestedSource,
       effectiveSource,
       cache: publicCacheState(cacheState),
@@ -258,7 +260,7 @@ async function acquire(manifest, source, options) {
       progress: [...progress],
       lastTrustworthyProgress: progress.at(-1) || null,
       failure,
-      authority: 'source-bytes-verified-against-manifest-no-network-or-cache-freshness-beyond-effective-read-claim',
+      authority: expected.authority,
     });
   }
 
@@ -266,10 +268,9 @@ async function acquire(manifest, source, options) {
     if (options.maxBytes != null || options.maxChunks != null || options.maxProgressEvents != null) {
       throw new Error('model resource acquisition is uncapped; maxBytes, maxChunks, and maxProgressEvents are not supported');
     }
-    phase = 'manifest-validation';
-    const validation = validateWebGpuModelResourceManifest(manifest);
-    if (!validation.ok) throw new Error(`invalid WebGPU model resource manifest:\n${validation.errors.join('\n')}`);
-    manifestIdentity = manifest.identity;
+    phase = expected.validationPhase;
+    expected.validate();
+    resourceIdentity = expected.identity;
 
     phase = 'cache-validation';
     try {
@@ -278,7 +279,7 @@ async function acquire(manifest, source, options) {
       cacheState.validationFailure = normalizeError(error);
       throw error;
     }
-    if (cache) cacheState.key = cacheKey(manifest);
+    if (cache) cacheState.key = cacheKey(expected);
 
     phase = 'source-normalization';
     requestedSource = describeWebGpuModelResourceSource(source);
@@ -290,9 +291,10 @@ async function acquire(manifest, source, options) {
       try {
         cachedSource = await awaitWithAbort(cache.get(cacheState.key, Object.freeze({
           signal: options.signal || null,
-          manifestIdentity: manifest.identity,
-          expectedByteLength: manifest.bundle.byteLength,
-          expectedSha256: manifest.bundle.sha256,
+          manifestIdentity: expected.manifestIdentity || expected.identity,
+          resourceIdentity: expected.identity,
+          expectedByteLength: expected.byteLength,
+          expectedSha256: expected.sha256,
           ownership: 'acquisition-owned-source',
         })), options.signal);
         cacheState.readSettled = true;
@@ -314,7 +316,7 @@ async function acquire(manifest, source, options) {
             backingSource: cachedBytes.effectiveSource,
           });
           phase = 'cache-verification';
-          bundle = await prepareWebGpuModelResourceBundle(manifest, cachedBytes.buffer, {
+          bundle = await expected.prepare(cachedBytes.buffer, {
             ownership: 'transfer', signal: options.signal, subtle: options.subtle,
           });
           throwIfAborted(options.signal);
@@ -333,7 +335,8 @@ async function acquire(manifest, source, options) {
               await awaitWithAbort(cache.delete(cacheState.key, Object.freeze({
                 signal: options.signal || null,
                 reason: 'cached-model-bundle-failed-verification',
-                manifestIdentity: manifest.identity,
+                manifestIdentity: expected.manifestIdentity || expected.identity,
+                resourceIdentity: expected.identity,
               })), options.signal);
             } catch (deleteError) {
               if (deleteError?.name === 'AbortError' && options.signal?.aborted) throw deleteError;
@@ -362,7 +365,7 @@ async function acquire(manifest, source, options) {
     throwIfAborted(options.signal);
 
     phase = 'source-verification';
-    bundle = await prepareWebGpuModelResourceBundle(manifest, acquired.buffer, {
+    bundle = await expected.prepare(acquired.buffer, {
       ownership: cache ? 'copy' : (options.ownership || 'copy'),
       signal: options.signal,
       subtle: options.subtle,
@@ -373,9 +376,10 @@ async function acquire(manifest, source, options) {
       try {
         await awaitWithAbort(cache.put(cacheState.key, acquired.buffer.slice(0), Object.freeze({
           signal: options.signal || null,
-          manifestIdentity: manifest.identity,
-          expectedByteLength: manifest.bundle.byteLength,
-          expectedSha256: manifest.bundle.sha256,
+          manifestIdentity: expected.manifestIdentity || expected.identity,
+          resourceIdentity: expected.identity,
+          expectedByteLength: expected.byteLength,
+          expectedSha256: expected.sha256,
           ownership: 'cache-owned-array-buffer',
         })), options.signal);
         cacheState.writeSettled = true;
@@ -402,5 +406,25 @@ async function acquire(manifest, source, options) {
 }
 
 export function acquireWebGpuModelResourceBundle(manifest, source, options = {}) {
-  return acquire(manifest, source, options ?? {});
+  return acquire({
+    identity: manifest?.identity,
+    identityField: 'manifestIdentity',
+    manifestIdentity: manifest?.identity,
+    reportSchema: WEBGPU_MODEL_RESOURCE_SOURCE_REPORT_SCHEMA,
+    validationPhase: 'manifest-validation',
+    byteLength: manifest?.bundle?.byteLength,
+    sha256: manifest?.bundle?.sha256,
+    authority: 'source-bytes-verified-against-manifest-no-network-or-cache-freshness-beyond-effective-read-claim',
+    validate() {
+      const validation = validateWebGpuModelResourceManifest(manifest);
+      if (!validation.ok) throw new Error(`invalid WebGPU model resource manifest:\n${validation.errors.join('\n')}`);
+    },
+    prepare(buffer, prepareOptions) {
+      return prepareWebGpuModelResourceBundle(manifest, buffer, prepareOptions);
+    },
+  }, source, options ?? {});
+}
+
+export function acquireWebGpuVerifiedResourceSource(expected, source, options = {}) {
+  return acquire(expected, source, options ?? {});
 }

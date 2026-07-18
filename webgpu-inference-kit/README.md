@@ -236,7 +236,7 @@ sf3dWeights.release();
 
 `createWebGpuModelResourceCacheStorage()` adapts the browser CacheStorage API with an explicit caller-owned `cacheId`, cache name, and HTTP(S) key namespace. Keys are derived from the manifest digest and byte length. Invalid cached bytes are deleted and refetched; transient cache failures remain visible in `acquisitionReport` while a valid source load can still succeed. The lower-level `acquireWebGpuModelResourceBundle()` and `route.loadModelResources()` calls remain available when a port needs to hold verified host bytes or control the source and upload phases separately.
 
-The first acquisition implementation assembles the complete source before exact-byte verification. On a cache miss, peak host memory may include that assembled source, the verified custody snapshot, and one independent cache-write buffer. It does not claim streaming verification directly into GPU allocations; ports with very large bundles should account for those three representations until the loader gains a chunk-authenticated bundle format.
+The complete-bundle acquisition path assembles the complete source before exact-byte verification. On a cache miss, peak host memory may include that assembled source, the verified custody snapshot, and one independent cache-write buffer. It does not claim streaming verification directly into GPU allocations; ports with very large bundles should use the chunk-plan path below or account for those three representations.
 
 Resource sharing is semantic by default. Model id, revision, manifest metadata, allocation metadata, tensor layout and metadata, bundle bytes, range, and usage all participate in the authenticated allocation identity. Equal bytes under different model semantics therefore produce different resident buffers.
 
@@ -296,6 +296,55 @@ Each resource retains its own SHA-256, CacheStorage entry, acquisition report, a
 
 This bounds source acquisition to one declared package resource at a time; each resource can still carry the current cache-miss copies described above. It does not split one enormous allocation or claim an exact browser-process memory peak. Converters should partition large weight sets into useful independently allocated resources until a later chunk-authenticated format can safely stream within one allocation.
 
+### Stream Allocations As Authenticated Chunks
+
+When one allocation is itself too large to assemble before upload, pair its existing semantic manifest with a chunk plan. Every allocation is covered exactly by independently authenticated, allocation-relative chunks, and each verified chunk is written directly into its declared buffer range:
+
+```js
+import {
+  createWebGpuModelResourceCacheStorage,
+  defineWebGpuModelResourceChunkPlan,
+} from "@kaminos/webgpu-inference-kit";
+
+const chunkPlan = defineWebGpuModelResourceChunkPlan({
+  planId: "acme/vision-model:browser-f16-chunks",
+  manifest,
+  allocations: manifest.allocations.map(allocation => ({
+    allocationId: allocation.allocationId,
+    chunks: converterChunks[allocation.allocationId].map(chunk => ({
+      chunkId: chunk.id,
+      byteOffset: chunk.allocationByteOffset,
+      byteLength: chunk.byteLength,
+      sha256: chunk.sha256,
+    })),
+  })),
+});
+
+const weights = await route.loadModelResourceChunksFromSources({
+  plan: chunkPlan,
+  sources: Object.fromEntries(chunkPlan.chunkIds.map(chunkId => [
+    chunkId,
+    new URL(`./weights/${chunkId}.bin`, import.meta.url),
+  ])),
+  cache: createWebGpuModelResourceCacheStorage({
+    cacheId: "vision-model-weights",
+    cacheName: "kaminos-model-weights-v1",
+    cacheStorage: globalThis.caches,
+    baseUrl: "https://app.example/.kaminos/model-cache/",
+  }),
+});
+
+weights.tensors["encoder.blocks.0.attn.qkv.weight"];
+weights.chunkReport.sourceMemoryBound.largestChunkByteLength;
+weights.release();
+```
+
+Chunk ids are globally unique inside a plan. Chunks must be positive, contiguous, 4-byte-aligned, and cover each allocation exactly in declaration order; chunk boundaries cannot cross allocations. Plan identity binds the manifest's normalized allocation/tensor semantics, logical chunk ids, ordered coverage, byte lengths, and chunk SHA-256 digests. Chunk-backed physical identities permit explicit content-addressed allocation reuse, while the default semantic policy keeps model meaning in the resource identity.
+
+The route validates the complete source map before work, fetches and verifies one chunk at a time through the same persistent cache contract, and publishes an allocation through the existing resource factory only after all of its chunks verify. Corrupt persistent chunks are deleted, refetched, reverified, and replaced before upload. Corruption or all-waiter cancellation destroys the unpublished buffer; failure reports retain the exact allocation, chunk, cache/source report, completed allocations, progress, and cleanup. Concurrent routes single-flight the allocation and every waiter receives the creator's exact chunk failure identity. Multi-chunk plans reject mutable direct byte sources instead of cloning a whole model at admission; use immutable `Blob`, URL, `Request`, or `Response` sources. A single mutable chunk is snapshotted synchronously before the first asynchronous boundary. Fetch-backed content and consumable bodies are read when their chunk reaches the sequential loader; remote bytes are not snapshotted at plan admission.
+
+The chunk route's byte authority is complete allocation coverage by the declared per-chunk SHA-256 digests. It does not claim to recompute `manifest.bundle.sha256`, authenticate unused bundle gaps, expose browser-global memory, or eliminate the current cache-miss copies within one chunk. Peak loader-owned source custody is bounded by the largest declared chunk, not an exact browser-process peak. There is no hidden chunk count or byte cap.
+
 ## What The Kit Gives A Port
 
 - `createWebGpuInferenceRuntime(input)`: acquire or wrap a browser WebGPU device, preserve backend identity, expose runtime helpers, time named stages, and finish a runtime profile.
@@ -326,6 +375,7 @@ This bounds source acquisition to one declared package resource at a time; each 
 - `createWebGpuModelResourceCacheStorage(input)`: adapt browser CacheStorage into an uncapped, caller-namespaced persistent model-bundle cache with cancellation and retriable lazy opening.
 - `route.loadModelResourcesFromSource(input)`: acquire, verify, persist, and upload a browser-native source through shared session residency, release intermediate custody automatically, and return one model lease plus its acquisition report.
 - `defineWebGpuModelResourcePackage(input)` and `route.loadModelResourcePackageFromSources(input)`: compose several same-model manifests into one sequentially acquired large-model package, preserve per-resource verification/cache/report identity, and return one composite lease with bounded source-resource granularity.
+- `defineWebGpuModelResourceChunkPlan(input)` and `route.loadModelResourceChunksFromSources(input)`: bind a semantic model manifest to exact per-allocation chunk coverage, verify/cache one source chunk at a time, upload verified bytes directly into ranged GPU buffer offsets, and publish each allocation through shared single-flight residency only after complete chunk verification.
 - `loadWebGpuModelResources(input)` and `route.loadModelResources(input)`: upload each content-derived allocation through shared single-flight residency and return one independently releasable model lease whose tensor views plug into kernels and phase programs.
 - `runtime.runStage(name, fn, metadata)`: wrap major model phases such as ViT encoder blocks, diffusion steps, triplane decode, mask decode, readback, or mesh/splat finalization.
 - `runtime.finishProfile(options)`: emit a `kaminos.webgpu-runtime-profile.v0` profile that downstream routes and schedulers can consume.
