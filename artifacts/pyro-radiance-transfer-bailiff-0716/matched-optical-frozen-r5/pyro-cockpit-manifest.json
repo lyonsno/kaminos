@@ -1,0 +1,183 @@
+{
+  "schema": "kaminos.pyro-cockpit-manifest.v0",
+  "status": "complete",
+  "evidenceState": "produced",
+  "visualQuality": "operator-unseen",
+  "experiment": {
+    "identity": "matched-splat-optical-recurrence-parity-v0",
+    "originalWitnessImmutable": true
+  },
+  "producer": {
+    "identity": "radiance-transfer-producer-v0"
+  },
+  "source": {
+    "commit": "8509882187d87a8dd31d1fac9f8d9bde98f74444",
+    "presentationBaselineCommit": "0859abf8d5b06359e4d2708f5b597c327b43c4af",
+    "sameStateCaptureId": "filament-orbit-f96-s96",
+    "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+    "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+    "supportSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+    "coefficientSha256": "684c6b41fc0afed0c20bd1fa2039b6f7d16fea414f3a826d351e14c8f2f5b5d7",
+    "covarianceSha256": "5f5c90be924bf8237fed0c1f5d6cbc48e9842e8b1b761faa6d334d13661d51f0",
+    "candidateCount": 147389,
+    "fluidSha256": "d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1",
+    "frontSha256": "1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8"
+  },
+  "checkpoint": {
+    "identity": "analytic-live-splat-attributes-v0",
+    "model": "no-new-training-v0"
+  },
+  "identities": {
+    "target": "smoke-off-complete-flame-local-emission-extinction-v0",
+    "treatment": "matched-optical-recurrence-v0",
+    "support": "sha256:cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+    "coefficient": "sha256:684c6b41fc0afed0c20bd1fa2039b6f7d16fea414f3a826d351e14c8f2f5b5d7",
+    "covariance": "sha256:5f5c90be924bf8237fed0c1f5d6cbc48e9842e8b1b761faa6d334d13661d51f0",
+    "accumulation": "depth-binned-emission-optical-depth-v0",
+    "transport": "depth-binned-exponential-self-transmittance-v0",
+    "presentation": "raymarch-matched-exponential-power-grade-v0"
+  },
+  "artifacts": [
+    {
+      "id": "original-presentation",
+      "path": "presentation-orbit.mp4",
+      "bytes": 101476,
+      "sha256": "832471ca0c902c235bee7bc5b6e0cf35ad61d9cd7a634690c0dbac82ba4c6982",
+      "mediaType": "video/mp4",
+      "frameCount": 21,
+      "loadRoute": "matched-presentation-v0"
+    },
+    {
+      "id": "presentation-contact-sheet",
+      "path": "presentation-contact-sheet.png",
+      "bytes": 2066935,
+      "sha256": "fcf87b599565143dfb709f569af42db4a78b72648994f25c8190a86ffc1ba4a5",
+      "mediaType": "image/png",
+      "loadRoute": "matched-presentation-v0"
+    },
+    {
+      "id": "matched-optical",
+      "path": "optical-orbit.mp4",
+      "bytes": 74081,
+      "sha256": "dd6133a5135d5fc21378670f2cde90d2af0695c22e2415f382e19ea2e9fc74df",
+      "mediaType": "video/mp4",
+      "frameCount": 21,
+      "loadRoute": "matched-optical-recurrence-v0"
+    },
+    {
+      "id": "optical-contact-sheet",
+      "path": "optical-contact-sheet.png",
+      "bytes": 1859421,
+      "sha256": "18cc98a6ab85f11a1baf5a72ea44474d90db7c2a8b5adf92db4094faed5a790c",
+      "mediaType": "image/png",
+      "loadRoute": "matched-optical-recurrence-v0"
+    }
+  ],
+  "routes": {
+    "requested": "/volume-selective-head-live.html",
+    "effectiveWrapper": "exact-basin-selective-head-live-v0",
+    "effectiveRenderer": "native-3d-compute-fluid-raymarch-v0",
+    "loadAction": "load-cockpit-manifest-v0"
+  },
+  "controls": {
+    "requestedSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+    "effectiveSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+    "locked": [
+      "support",
+      "candidate-membership",
+      "candidate-count",
+      "positions",
+      "covariance",
+      "radius",
+      "sharpness",
+      "coefficients",
+      "learned-attributes",
+      "authored-layers",
+      "simulator-state",
+      "raymarch-target",
+      "camera-orbit"
+    ],
+    "mutable": [
+      "presentation-view",
+      "difference-gain",
+      "debug-view"
+    ]
+  },
+  "camera": {
+    "orbitIdentity": "filament-orbit-21-camera-v0",
+    "cameraCount": 21,
+    "poseHashes": [
+      "45c3c25b041faae5c1d26fb7fe531e1331e7414542ba7ace601f2f738fc170d4",
+      "cf4fab1a382f414305efc33b765312c3dff85a46b1722ed653c427e49d471db7",
+      "51e69ecf78f4bbb5bafe4538f0689ceea52f2a348c318eb4f4eb45b219c204cd",
+      "05b26ed28713e3c300744fee93c8026433bc518e816effe04c2dc8e04f9f7b03",
+      "77e73d6c53eaa7642cbe2f5cbc3324eaebd0e996aac5e9abe2d21591e49c5e8d",
+      "7758c0e393b43649c60c01a58766aa31e4f174547b3b4b74ff036e5e6e9f016f",
+      "4385b764d62b5321531c4d0c1cc176a500358cac979798e0e34af23fbf90341d",
+      "9ca4ccd7748e2b4cb65199ead48f5a3ab8ddebf9c4ddc8d2c88a1532f24e464d",
+      "74134f304b285292ce863e4611c1ca16d5862fc5df201aa07ac89d3efbcc6af0",
+      "c8fd12aa540ddfcf69a0b8e26119aede00419c1dfc56bc56c81f3a49533450f1",
+      "5d20c917cf1dd8c58a3e5b00a77b604ca330cac831187759b3a248a0b85fd3f0",
+      "ee87c53b2a77093df2d5487aef61205f53a07216050c38c7b70e8cec1c2182d2",
+      "e94122271c9eeef8c9e664d56606bb42c49f210e7afcf1846f3b0cac8668d205",
+      "22fc95573905f9bf90271b845ace8f54a8e97495e6d7479e824ba2fc38d5cf6a",
+      "cc3370c636f4d69b75527dc2306f5dea7e1735e62f7793b68cd7200178d74bcd",
+      "8335bbde7157adec382a65ebf6ec4d2bd32aa024eff6970bed20174147f75d68",
+      "627a591dc68bc0ab1a9ac07ab1274e6aa7501fe9fc094be6695c32a96936eb9f",
+      "ede20dc45218027be28f051df39f308f45cb5cb4ca03d18873a607ca2ecd2c72",
+      "8dc7ee28d0c6827a5e0d2302d6163e1abf167b667b10f6186b7868a092a1b49e",
+      "9711add1728f84054d43e5be3250217a930c7cb59773688f3ac84da038c8f2f9",
+      "df5690f8f82524d911f6c690ceea77222ec858955602b950b22780e0e7c8c5d8"
+    ]
+  },
+  "state": {
+    "sameStateCaptureId": "filament-orbit-f96-s96",
+    "fluidSha256": "d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1",
+    "frontSha256": "1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8",
+    "historyIdentity": "frozen-no-history-advance-v0"
+  },
+  "renderer": {
+    "composition": "splat-only-v0",
+    "backend": "WebGPU:apple",
+    "fallbackReason": null,
+    "targetFormat": "rgba16float-array",
+    "layerFormat": "rgba16float",
+    "depthBins": {
+      "requested": 16,
+      "effective": 16,
+      "intervalIdentity": "projected-ndc-zero-to-one-depth-interval-v0",
+      "orderingIdentity": "far-to-near-alpha-over-v0",
+      "alphaIdentity": "one-minus-exp-negative-summed-optical-depth-v0"
+    }
+  },
+  "capacity": {
+    "candidateCount": 147389,
+    "capacity": 262144,
+    "overflowCount": 0
+  },
+  "timing": {
+    "authority": "boundary-splat-stage-gpu-timestamp-profile-v0",
+    "status": "suppressed"
+  },
+  "viewSockets": {
+    "target": "raymarch-target-v0",
+    "treatment": "matched-optical-recurrence-v0",
+    "difference": "target-minus-treatment-v0",
+    "ridge": "ridge-layer-isolation-v0",
+    "nonRidge": "non-ridge-layer-isolation-v0",
+    "combined": "ridge-plus-non-ridge-v0",
+    "debug": "depth-bin-optical-debug-v0"
+  },
+  "authoredFork": {
+    "outputPath": "authored-forks/matched-optical-recurrence.json",
+    "originalWitnessImmutable": true,
+    "writeMode": "create-new",
+    "writes": [
+      "authored-controls",
+      "route-state-identities",
+      "visual-notes",
+      "artifact-pointers",
+      "original-to-authored-control-delta"
+    ]
+  }
+}

@@ -1,0 +1,1021 @@
+{
+  "schema": "kaminos.volume.splat-radiance-parity.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "runStartedAt": "2026-07-18T17:09:19.101Z",
+  "runCompletedAt": "2026-07-18T17:14:29.603Z",
+  "requestedRoute": "/volume-selective-head-live.html",
+  "effectiveWrapperRoute": "exact-basin-selective-head-live-v0",
+  "effectiveRendererRoute": "native-3d-compute-fluid-raymarch-v0",
+  "backend": "WebGPU:apple",
+  "cameraCount": 21,
+  "curve": {
+    "exposure": 0.96,
+    "vignetteBase": 0.8,
+    "vignetteGain": 0.18,
+    "power": 0.84
+  },
+  "source": {
+    "commit": "8509882187d87a8dd31d1fac9f8d9bde98f74444",
+    "sameStateCaptureId": "filament-orbit-f96-s96",
+    "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+    "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+    "candidateCount": 147389,
+    "fluidSha256": "d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1",
+    "frontSha256": "1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8"
+  },
+  "arms": [
+    {
+      "id": "current-additive-v0",
+      "requestedRoute": "current-additive-v0",
+      "effectiveRoute": "current-additive-v0",
+      "targetFormat": "rgba8unorm",
+      "resolveIdentity": "direct-additive-presentation-v0",
+      "blendIdentity": "additive-rgb-gaussian-alpha-v0",
+      "intermediateClamped": false,
+      "intermediateReadbackStatus": "not-applicable",
+      "fallbackReason": null,
+      "captures": [
+        {
+          "cameraIndex": 0,
+          "cameraPoseHash": "45c3c25b041faae5c1d26fb7fe531e1331e7414542ba7ace601f2f738fc170d4",
+          "pixelHash": "118e5403e592433ef837133824fa422aed04092ec71bffc560608abdc6ab76ff",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-00-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 38110,
+            "meanLuma": 43.56171736062708,
+            "maxLuma": 254.42239999999998,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 1,
+          "cameraPoseHash": "cf4fab1a382f414305efc33b765312c3dff85a46b1722ed653c427e49d471db7",
+          "pixelHash": "ba6859626b7799896049a8418b4b3fb7bf5acc0a027d7047278eb2ec9e89217a",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-01-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 37489,
+            "meanLuma": 43.31311130967219,
+            "maxLuma": 254.99999999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 2,
+          "cameraPoseHash": "51e69ecf78f4bbb5bafe4538f0689ceea52f2a348c318eb4f4eb45b219c204cd",
+          "pixelHash": "1dec0c0a8a9cda95978f9d8046773ef6325889c122acf73bbf739ffdc4c9ec58",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-02-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 36870,
+            "meanLuma": 43.0887418302807,
+            "maxLuma": 253.48379999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 3,
+          "cameraPoseHash": "05b26ed28713e3c300744fee93c8026433bc518e816effe04c2dc8e04f9f7b03",
+          "pixelHash": "4f1e3ae6c24a2ea06c2299116bd683c6ab91f92d3d8b87fae619e6941e414a37",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-03-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 36098,
+            "meanLuma": 42.838701392316274,
+            "maxLuma": 253.91699999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 4,
+          "cameraPoseHash": "77e73d6c53eaa7642cbe2f5cbc3324eaebd0e996aac5e9abe2d21591e49c5e8d",
+          "pixelHash": "c0f72225fa20b88f5b30011bfe384189d3126576956addfbd30f42333f41d14f",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-04-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 35458,
+            "meanLuma": 42.63184747064499,
+            "maxLuma": 254.06139999999996,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 5,
+          "cameraPoseHash": "7758c0e393b43649c60c01a58766aa31e4f174547b3b4b74ff036e5e6e9f016f",
+          "pixelHash": "c5eb7940264ce9b8c85934beeb4b1153700394608ef8549d4338451aedbb2b92",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-05-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 34898,
+            "meanLuma": 42.42212904141891,
+            "maxLuma": 253.05059999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 6,
+          "cameraPoseHash": "4385b764d62b5321531c4d0c1cc176a500358cac979798e0e34af23fbf90341d",
+          "pixelHash": "1393b055cb32af4e8b6f4a2e796055eb58013df4f5acef1665fa4e9af2737172",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-06-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 34408,
+            "meanLuma": 42.22070729324849,
+            "maxLuma": 254.99999999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 7,
+          "cameraPoseHash": "9ca4ccd7748e2b4cb65199ead48f5a3ab8ddebf9c4ddc8d2c88a1532f24e464d",
+          "pixelHash": "6871c3292cc9ea15b968c0d261536f0b1f6bcb59de35a88a3e6456cf7361ec9c",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-07-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 33833,
+            "meanLuma": 42.018142938350366,
+            "maxLuma": 254.20579999999998,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 8,
+          "cameraPoseHash": "74134f304b285292ce863e4611c1ca16d5862fc5df201aa07ac89d3efbcc6af0",
+          "pixelHash": "034cd0ae51838e8df05bfd8114b3a4a03884849eac24953f11b05f9f8b693f3f",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-08-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 33264,
+            "meanLuma": 41.76216396272276,
+            "maxLuma": 252.40079999999998,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 9,
+          "cameraPoseHash": "c8fd12aa540ddfcf69a0b8e26119aede00419c1dfc56bc56c81f3a49533450f1",
+          "pixelHash": "de0f7ff5ceeaba03dc3f5b69668ec91ad417db684c6a1e3d885902971ed3aa15",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-09-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 32910,
+            "meanLuma": 41.54260860398153,
+            "maxLuma": 252.97839999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 10,
+          "cameraPoseHash": "5d20c917cf1dd8c58a3e5b00a77b604ca330cac831187759b3a248a0b85fd3f0",
+          "pixelHash": "a2d67e495dbb55eda59327b45a02fcb10ccc31b0dc600507f0b77ee6659b67f6",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-10-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 32500,
+            "meanLuma": 41.34844147232931,
+            "maxLuma": 254.99999999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 11,
+          "cameraPoseHash": "ee87c53b2a77093df2d5487aef61205f53a07216050c38c7b70e8cec1c2182d2",
+          "pixelHash": "5e5dc6e4886eb594f99456521f5abae5eb8c4bfabecaab22b23d0fc8f5274c4a",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-11-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 32121,
+            "meanLuma": 41.13423309469054,
+            "maxLuma": 252.1392,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 12,
+          "cameraPoseHash": "e94122271c9eeef8c9e664d56606bb42c49f210e7afcf1846f3b0cac8668d205",
+          "pixelHash": "c01ec2a5a1e4fac6f8dba5a6b55248b4318ebec838dcec8e172d8f4737d3283d",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-12-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 31611,
+            "meanLuma": 40.90253494761445,
+            "maxLuma": 254.99999999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 13,
+          "cameraPoseHash": "22fc95573905f9bf90271b845ace8f54a8e97495e6d7479e824ba2fc38d5cf6a",
+          "pixelHash": "b63feba4d0f94031f06f12b6f26be8436d33e4b32379072bb2e40837aaf064e7",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-13-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 31004,
+            "meanLuma": 40.704047252189156,
+            "maxLuma": 254.99999999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 14,
+          "cameraPoseHash": "cc3370c636f4d69b75527dc2306f5dea7e1735e62f7793b68cd7200178d74bcd",
+          "pixelHash": "7b0501820d233a1437ba22e2b439e255efaa4033241a08063bab89b4fa64308b",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-14-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 31351,
+            "meanLuma": 40.52860238194634,
+            "maxLuma": 254.99999999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 15,
+          "cameraPoseHash": "8335bbde7157adec382a65ebf6ec4d2bd32aa024eff6970bed20174147f75d68",
+          "pixelHash": "83f78a5fef12fc386b958e44d7633bb258d9bcb61815de15ce5bea0a6d8e8099",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-15-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 31654,
+            "meanLuma": 40.37782667788809,
+            "maxLuma": 254.99999999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 16,
+          "cameraPoseHash": "627a591dc68bc0ab1a9ac07ab1274e6aa7501fe9fc094be6695c32a96936eb9f",
+          "pixelHash": "62e1c5129908e0ad7bac9494e2116f6f57ef0f420b102e0674b5de069f3ad165",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-16-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 31973,
+            "meanLuma": 40.342171255979196,
+            "maxLuma": 254.99999999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 17,
+          "cameraPoseHash": "ede20dc45218027be28f051df39f308f45cb5cb4ca03d18873a607ca2ecd2c72",
+          "pixelHash": "ef6822220efcb0dac8fe398a095f48a8135e05bd2027fce114b1a5183926ca8c",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-17-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 32323,
+            "meanLuma": 40.2623044191107,
+            "maxLuma": 254.99999999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 18,
+          "cameraPoseHash": "8dc7ee28d0c6827a5e0d2302d6163e1abf167b667b10f6186b7868a092a1b49e",
+          "pixelHash": "d35d662dbc102bf175e12f2cc31380dfb1e1e1cc4f6d896147b7f3d924c5a7a8",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-18-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 32586,
+            "meanLuma": 40.270459617299885,
+            "maxLuma": 254.63899999999998,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 19,
+          "cameraPoseHash": "9711add1728f84054d43e5be3250217a930c7cb59773688f3ac84da038c8f2f9",
+          "pixelHash": "bb61907ae70f3b6e49bb16212e2caad169cc83c6a84278aa89326f84a086fe03",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-19-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 32686,
+            "meanLuma": 40.273037150594774,
+            "maxLuma": 254.99999999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        },
+        {
+          "cameraIndex": 20,
+          "cameraPoseHash": "df5690f8f82524d911f6c690ceea77222ec858955602b950b22780e0e7c8c5d8",
+          "pixelHash": "60e2355e501122f678133d4e7b894383960b5a7d3144001a79b8967452feea13",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-20-worldCovarianceAdditive-160.png",
+          "metrics": {
+            "litPixels": 32727,
+            "meanLuma": 40.22598946148638,
+            "maxLuma": 254.99999999999997,
+            "nonblank": true
+          },
+          "hdrTelemetry": null
+        }
+      ]
+    },
+    {
+      "id": "matched-presentation-v0",
+      "requestedRoute": "matched-presentation-v0",
+      "effectiveRoute": "matched-presentation-v0",
+      "targetFormat": "rgba16float",
+      "resolveIdentity": "raymarch-matched-exponential-power-grade-v0",
+      "blendIdentity": "additive-rgb-gaussian-alpha-v0",
+      "intermediateClamped": false,
+      "intermediateReadbackStatus": "complete",
+      "fallbackReason": null,
+      "captures": [
+        {
+          "cameraIndex": 0,
+          "cameraPoseHash": "45c3c25b041faae5c1d26fb7fe531e1331e7414542ba7ace601f2f738fc170d4",
+          "pixelHash": "047585a715c93e23990ac53d76d91fcc6cca25373374683efd3e2ff9e20e5c2b",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-00-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 45356,
+            "meanLuma": 38.057878612412765,
+            "maxLuma": 222.7676,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.732421875,
+            "meanRgb": 0.1966106105693942,
+            "channelsAboveOne": 9356,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.98291015625,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 1,
+          "cameraPoseHash": "cf4fab1a382f414305efc33b765312c3dff85a46b1722ed653c427e49d471db7",
+          "pixelHash": "c28cbf8e688ba81d43adae5b4a49e086d41b192e85c04c73cec308d258ed6303",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-01-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 44231,
+            "meanLuma": 37.79232074274909,
+            "maxLuma": 222.2008,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.724609375,
+            "meanRgb": 0.19553380907972873,
+            "channelsAboveOne": 9379,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.984375,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 2,
+          "cameraPoseHash": "51e69ecf78f4bbb5bafe4538f0689ceea52f2a348c318eb4f4eb45b219c204cd",
+          "pixelHash": "84f7ea47a7c4a2664729e6cdb27c6d7c02d58d7a59f6b43c9fe267c98fb65fc6",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-02-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 43367,
+            "meanLuma": 37.54845812496706,
+            "maxLuma": 221.48559999999998,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.583984375,
+            "meanRgb": 0.1946017993270741,
+            "channelsAboveOne": 9338,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.98095703125,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 3,
+          "cameraPoseHash": "05b26ed28713e3c300744fee93c8026433bc518e816effe04c2dc8e04f9f7b03",
+          "pixelHash": "f38705e7bf6b7a126ba862a6d8e3a88657d6518bb99dea25a18e6311258708b3",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-03-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 42331,
+            "meanLuma": 37.28744547560136,
+            "maxLuma": 221.05239999999998,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.669921875,
+            "meanRgb": 0.19358526592598435,
+            "channelsAboveOne": 9194,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.98193359375,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 4,
+          "cameraPoseHash": "77e73d6c53eaa7642cbe2f5cbc3324eaebd0e996aac5e9abe2d21591e49c5e8d",
+          "pixelHash": "57be9e2e26d63e50c1a3f8b09e4812a3d942e2e441ac699548a0279a2f2d8c18",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-04-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 41421,
+            "meanLuma": 37.04463844028017,
+            "maxLuma": 220.2036,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.529296875,
+            "meanRgb": 0.1925870503468286,
+            "channelsAboveOne": 9133,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.98046875,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 5,
+          "cameraPoseHash": "7758c0e393b43649c60c01a58766aa31e4f174547b3b4b74ff036e5e6e9f016f",
+          "pixelHash": "ed5415620edc28a2a3e1e52fb94f6d16bcd0f1677d17a6b066138810612a99fc",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-05-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 40874,
+            "meanLuma": 36.81000556140437,
+            "maxLuma": 221.2008,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.625,
+            "meanRgb": 0.19142819483479817,
+            "channelsAboveOne": 8984,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.98193359375,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 6,
+          "cameraPoseHash": "4385b764d62b5321531c4d0c1cc176a500358cac979798e0e34af23fbf90341d",
+          "pixelHash": "9c43935b3920e4d11419cc35a42b20bb86d246f46e785f4526d03b7e71233ef4",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-06-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 39834,
+            "meanLuma": 36.590283128915054,
+            "maxLuma": 222.7784,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.634765625,
+            "meanRgb": 0.1904454723818128,
+            "channelsAboveOne": 9029,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.982421875,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 7,
+          "cameraPoseHash": "9ca4ccd7748e2b4cb65199ead48f5a3ab8ddebf9c4ddc8d2c88a1532f24e464d",
+          "pixelHash": "a5b808aaf104dd408ac4df37b45f874983116cd4650d84846f63f19265ed0a2c",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-07-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 39061,
+            "meanLuma": 36.36724995525613,
+            "maxLuma": 222.273,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.73046875,
+            "meanRgb": 0.1893582321153442,
+            "channelsAboveOne": 8901,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.98388671875,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 8,
+          "cameraPoseHash": "74134f304b285292ce863e4611c1ca16d5862fc5df201aa07ac89d3efbcc6af0",
+          "pixelHash": "2fc87c890df0c215accbc610d8a4032141c33daee254f4a3e66fcde407df9896",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-08-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 38486,
+            "meanLuma": 36.12122134284341,
+            "maxLuma": 223.41059999999996,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.849609375,
+            "meanRgb": 0.18809046280059638,
+            "channelsAboveOne": 8798,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.98388671875,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 9,
+          "cameraPoseHash": "c8fd12aa540ddfcf69a0b8e26119aede00419c1dfc56bc56c81f3a49533450f1",
+          "pixelHash": "7e0f4f772e55379e01b8fc1291226d4d42ca36284a6fc61a6f8bbe44b0163cca",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-09-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 37828,
+            "meanLuma": 35.89481197294305,
+            "maxLuma": 221.05239999999998,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.5625,
+            "meanRgb": 0.187037896281716,
+            "channelsAboveOne": 8827,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.97998046875,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 10,
+          "cameraPoseHash": "5d20c917cf1dd8c58a3e5b00a77b604ca330cac831187759b3a248a0b85fd3f0",
+          "pixelHash": "da42b71197a4ea97e7b1fc912bac95921bb381654172e78d5efb4863d152ad1e",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-10-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 37338,
+            "meanLuma": 35.701011138600606,
+            "maxLuma": 225.9132,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 4.0625,
+            "meanRgb": 0.18600288724302524,
+            "channelsAboveOne": 8733,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.9853515625,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 11,
+          "cameraPoseHash": "ee87c53b2a77093df2d5487aef61205f53a07216050c38c7b70e8cec1c2182d2",
+          "pixelHash": "e65b7047a2f6b390b6afd9624db200abf63e25a44136e930cdfc62a15cfc0093",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-11-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 36927,
+            "meanLuma": 35.50621772121938,
+            "maxLuma": 219.908,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.568359375,
+            "meanRgb": 0.18485142991109663,
+            "channelsAboveOne": 8767,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.9814453125,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 12,
+          "cameraPoseHash": "e94122271c9eeef8c9e664d56606bb42c49f210e7afcf1846f3b0cac8668d205",
+          "pixelHash": "588dbb58dbf7d82eafcff8325a0c236322842d250374f634697946a38e391856",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-12-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 36780,
+            "meanLuma": 35.33484998157631,
+            "maxLuma": 218.3372,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.51953125,
+            "meanRgb": 0.1837718940367812,
+            "channelsAboveOne": 8697,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.97998046875,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 13,
+          "cameraPoseHash": "22fc95573905f9bf90271b845ace8f54a8e97495e6d7479e824ba2fc38d5cf6a",
+          "pixelHash": "cf0b1b30efd1a746e5dd699144b89b7fa9b9e54d111bb7ab4023bbbbad4094bf",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-13-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 36427,
+            "meanLuma": 35.21101449965827,
+            "maxLuma": 217.67940000000002,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.572265625,
+            "meanRgb": 0.1829381668792622,
+            "channelsAboveOne": 8586,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.97900390625,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 14,
+          "cameraPoseHash": "cc3370c636f4d69b75527dc2306f5dea7e1735e62f7793b68cd7200178d74bcd",
+          "pixelHash": "b36ad6e1f3f8fea241f9745cf231cf8dcea4b22a0ad3481a19616a7ee35458ea",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-14-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 36597,
+            "meanLuma": 35.193530236353105,
+            "maxLuma": 219.6874,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.642578125,
+            "meanRgb": 0.1821667550932775,
+            "channelsAboveOne": 8474,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.9814453125,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 15,
+          "cameraPoseHash": "8335bbde7157adec382a65ebf6ec4d2bd32aa024eff6970bed20174147f75d68",
+          "pixelHash": "69ff39ebf139bf62421e1974971db9de73625716f0ae8d18e934e5af792ffd58",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-15-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 37314,
+            "meanLuma": 35.18142435647751,
+            "maxLuma": 223.3344,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.8984375,
+            "meanRgb": 0.18119663004054937,
+            "channelsAboveOne": 8361,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.98388671875,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 16,
+          "cameraPoseHash": "627a591dc68bc0ab1a9ac07ab1274e6aa7501fe9fc094be6695c32a96936eb9f",
+          "pixelHash": "663fecf26fc5611c6f6b1bf734c7a0c92dfc58e216558a9df67dca19f66ded25",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-16-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 37831,
+            "meanLuma": 35.240396452071444,
+            "maxLuma": 226.48,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 4.17578125,
+            "meanRgb": 0.1807459098354597,
+            "channelsAboveOne": 8211,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.98779296875,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 17,
+          "cameraPoseHash": "ede20dc45218027be28f051df39f308f45cb5cb4ca03d18873a607ca2ecd2c72",
+          "pixelHash": "eeddd582be25d65e34fc09ec3a0c0b8ff97403b6bf8a84a7070effeb43d7c443",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-17-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 38414,
+            "meanLuma": 35.258001968732,
+            "maxLuma": 223.61239999999998,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 4.0859375,
+            "meanRgb": 0.18018137829646283,
+            "channelsAboveOne": 8186,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.98681640625,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 18,
+          "cameraPoseHash": "8dc7ee28d0c6827a5e0d2302d6163e1abf167b667b10f6186b7868a092a1b49e",
+          "pixelHash": "7c8d3310de0e6089d47ebf687cf1928a6c8c92d1dce87862c3d5834e2319fe0c",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-18-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 38777,
+            "meanLuma": 35.29218885876719,
+            "maxLuma": 226.5562,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 4.046875,
+            "meanRgb": 0.1798152812856102,
+            "channelsAboveOne": 8132,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.98583984375,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 19,
+          "cameraPoseHash": "9711add1728f84054d43e5be3250217a930c7cb59773688f3ac84da038c8f2f9",
+          "pixelHash": "a7dc0429cc4c916b2b65cc7619339e9e83a6c6314beaacbeba2ff26f14596133",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-19-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 39117,
+            "meanLuma": 35.31420451650268,
+            "maxLuma": 225.4038,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 4.1484375,
+            "meanRgb": 0.17949299229218202,
+            "channelsAboveOne": 8075,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.98486328125,
+            "intermediateClamped": false
+          }
+        },
+        {
+          "cameraIndex": 20,
+          "cameraPoseHash": "df5690f8f82524d911f6c690ceea77222ec858955602b950b22780e0e7c8c5d8",
+          "pixelHash": "9e04a874cc873f4a1f8ab513ebb5cab9ec57854d45e6e772d4070d5791b8d084",
+          "candidateCount": 147389,
+          "candidatePayloadSha256": "cd3b16f070193bf6f83d0862f55300d0967b8dd1949fe35d69eefc85f97b5b4d",
+          "controlsSha256": "dd8b25a6fad4775355e539d58d107fc7a26588ac23e7ec123a5d0eb999bb406f",
+          "nonblank": true,
+          "imagePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-pyro-radiance-transfer-optical-frozen-r5/camera-20-worldCovarianceMatchedPresentation-160.png",
+          "metrics": {
+            "litPixels": 39264,
+            "meanLuma": 35.32821138074452,
+            "maxLuma": 216.7408,
+            "nonblank": true
+          },
+          "hdrTelemetry": {
+            "status": "complete",
+            "targetFormat": "rgba16float",
+            "width": 314,
+            "height": 242,
+            "pixelCount": 75988,
+            "maxRgb": 3.66796875,
+            "meanRgb": 0.17934051640016027,
+            "channelsAboveOne": 7922,
+            "nonFiniteChannels": 0,
+            "alphaMax": 0.98095703125,
+            "intermediateClamped": false
+          }
+        }
+      ]
+    }
+  ]
+}

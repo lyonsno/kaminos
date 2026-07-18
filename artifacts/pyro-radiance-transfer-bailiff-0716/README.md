@@ -1,5 +1,13 @@
 # HDR splat presentation parity witness
 
+The separately authorized optical-recurrence continuation and restored Stage B
+acceptance are preserved in
+`matched-optical-frozen-r5/README.md`. Cockpit Manifest V0 is accepted there as
+loadable producer evidence with the narrow verdict that presentation resolve
+and optical recurrence are both material but incomplete; the continuation does
+not revise this presentation-only baseline into a self-transmittance parity
+claim.
+
 This witness compares the existing direct-additive world-covariance splat presentation with the same splat accumulation resolved through the exact effective raymarch presentation transform. It is presentation-only evidence: support, count, positions, covariance, radius, sharpness, learned attributes, authored layers, simulation state, target, and the 21-camera orbit are unchanged.
 
 ## Narrow verdict
