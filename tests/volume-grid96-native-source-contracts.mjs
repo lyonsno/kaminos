@@ -9,6 +9,7 @@ import { buildGrid96NativeSource } from '../volume-grid96-native-source-prefligh
 
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 const exporter = readFileSync(new URL('../volume-full-grid-field-export.mjs', import.meta.url), 'utf8');
+const coefficientProducer = readFileSync(new URL('../volume-grid96-source-component-capture.mjs', import.meta.url), 'utf8');
 const sourcePreflight = new URL('../volume-grid96-native-source-preflight.mjs', import.meta.url);
 
 const materializeStart = core.indexOf('async function materializeFullFieldDerivedBuffersForDebugExport');
@@ -39,6 +40,15 @@ assert.match(exporter, /phase = 'drain-majorant'/, 'the exporter must report a d
 assert.match(exporter, /drainSidecar\([\s\S]{0,180}'majorant'/, 'the exporter must drain the browser majorant artifact directly');
 assert.match(exporter, /sidecars:\s*\{\s*fluid,\s*front,\s*majorant\s*\}/, 'the manifest must bind majorant to the native source sidecar set');
 assert.ok(existsSync(sourcePreflight), 'the native Grid96 source preflight must exist before GPU capture can be accepted');
+const coefficientAuthorityIndex = coefficientProducer.indexOf("setSelectiveHeadLiveRenderComposition('raymarch-only-v0')");
+const deterministicReplayIndex = coefficientProducer.indexOf('sampleDeterministicReplayFrame', coefficientProducer.indexOf('async function captureState'));
+assert.ok(coefficientAuthorityIndex >= 0 && coefficientAuthorityIndex < deterministicReplayIndex, 'coefficient fire authority must be installed before deterministic replay updates the GPU uniforms');
+assert.match(coefficientProducer, /selectiveHeadLiveCompositionAuthority[\s\S]{0,500}diagnostic-raymarch-full-selected-field-authority-v0/, 'the frozen source receipt must prove full-fire coefficient authority');
+assert.match(
+  coefficientProducer,
+  /rows:\s*\{[\s\S]{0,900}coefficientRenderAuthority:/,
+  'the durable producer state must retain the frozen full-fire coefficient authority receipt',
+);
 
 const scratch = mkdtempSync(join(tmpdir(), 'kaminos-grid96-native-source-contract-'));
 const root = resolve(import.meta.dirname, '..');

@@ -5,6 +5,11 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  assertLayerCoefficientPopulation,
+  summarizeLayerCoefficientPopulation,
+} from './volume-layer-coefficient-population.mjs';
+
 export const GRID96_FULL_SUPPORT_COMPANION_SCHEMA = 'kaminos.volume.grid96-full-support-companion.v0';
 export const GRID96_CAUSAL_QUESTION = 'source-lattice-subcell-vs-deposit-space-quadrature-v0';
 export const GRID96_NATIVE_CELL_COUNT = 96 ** 3;
@@ -96,14 +101,15 @@ export function buildGrid96FullSupportCompanion(inputs) {
     support: pick(inputs.support, [
       'identity', 'admissionIdentity', 'admissionAuthority', 'nativeCellIndexSha256', 'rowCount',
       'sampleCap', 'droppedRowCount', 'overflowCount', 'duplicatePolicy', 'nativeCellIndices', 'admission', 'features',
+      'producerReceipt',
     ]),
     descriptors: pick(inputs.descriptors, [
       'identity', 'kernelIdentity', 'candidateAdmissionAuthority', 'nativeCellIndexSha256', 'rowCount',
-      'strideFloats', 'descriptorOrder', 'artifact',
+      'strideFloats', 'descriptorOrder', 'artifact', 'producerReceipt',
     ]),
     coefficients: pick(inputs.coefficients, [
       'identity', 'coefficientBoundary', 'partitionIdentity', 'channels', 'nonnegative',
-      'nativeCellIndexSha256', 'rowCount', 'artifact',
+      'nativeCellIndexSha256', 'rowCount', 'artifact', 'producerReceipt',
     ]),
     cameraCohort: pick(inputs.cameras, [
       'identity', 'indices', 'angles', 'calibrationCameraIndex', 'heldOutCameraIndices', 'cameras',
@@ -153,9 +159,9 @@ function validateAll(inputs) {
   for (const [role, component] of native) validateNativeComponent(component, role, inputs.source.route);
   validateSameStateAndSource(native, inputs.refs.source.sha256);
   validateSource(inputs.source);
-  validateSupport(inputs.support);
+  const admission = validateSupport(inputs.support);
   validateDescriptors(inputs.descriptors, inputs.support);
-  validateCoefficients(inputs.coefficients, inputs.support);
+  validateCoefficients(inputs.coefficients, inputs.support, admission);
   validateCameraCohort(inputs.cameras);
   validateTeacher(inputs.teacher, inputs.cameras, inputs.support, inputs.coefficients);
   validateGrid160Comparison(inputs.comparison, inputs.support, inputs.refs.comparison.sha256);
@@ -178,8 +184,18 @@ function validateNativeComponent(component, role, sourceRoute) {
   } else {
     assertSourceRoute(component.route, role);
     if (sourceRoute) assert.equal(component.route.requested, sourceRoute.requested, `${role} requested source route differs from source`);
+    if (['support', 'descriptors', 'coefficients'].includes(role)) validateCoefficientProducerReceipt(component.producerReceipt, role);
   }
   if (containsForbiddenNativeLineage(component)) throw new Error(`${role} native component contains resize or resample lineage`);
+}
+
+function validateCoefficientProducerReceipt(receipt, role) {
+  assert.ok(receipt && typeof receipt === 'object', `${role} producer receipt is missing`);
+  const authority = receipt.coefficientRenderAuthority;
+  assert.equal(authority?.requestedComposition, 'raymarch-only-v0', `${role} coefficient render authority request drifted`);
+  assert.equal(authority?.effectiveComposition, 'raymarch-only-v0', `${role} coefficient render authority was not effective`);
+  assert.equal(authority?.compositionAuthority, 'diagnostic-raymarch-full-selected-field-authority-v0', `${role} coefficient render authority lacks full-fire authority`);
+  assert.equal(authority?.compositionFallbackReason ?? null, null, `${role} coefficient render authority used fallback`);
 }
 
 function containsForbiddenNativeLineage(value) {
@@ -250,7 +266,7 @@ function validateSupport(support) {
   const admissionReceipt = validateArtifact(support.admission, {
     label: 'support admission', dtype: 'float32-le', shape: [support.rowCount, 2], semanticRole: 'analytical-ridge-or-nonridge-admission',
   });
-  validateFloatPayload(admissionReceipt.buffer, 'support admission', {
+  const admission = validateFloatPayload(admissionReceipt.buffer, 'support admission', {
     nonnegative: true,
     rowWidth: 2,
     requirePositivePerRow: 'Ridge or Non-Ridge membership',
@@ -259,6 +275,7 @@ function validateSupport(support) {
     label: 'support features', dtype: 'float32-le', shape: [support.rowCount, 24], semanticRole: 'post-admission-local-features',
   });
   validateFloatPayload(featureReceipt.buffer, 'support features');
+  return admission;
 }
 
 function validateDescriptors(descriptors, support) {
@@ -275,7 +292,7 @@ function validateDescriptors(descriptors, support) {
   validateFloatPayload(descriptorReceipt.buffer, 'kernel descriptors');
 }
 
-function validateCoefficients(coefficients, support) {
+function validateCoefficients(coefficients, support, admission) {
   assert.equal(coefficients.identity, EXPECTED_COEFFICIENT_IDENTITY, 'coefficient teacher identity drifted');
   assert.equal(coefficients.coefficientBoundary, EXPECTED_COEFFICIENT_BOUNDARY, 'coefficient boundary drifted');
   assert.equal(coefficients.partitionIdentity, EXPECTED_PARTITION_IDENTITY, 'Ridge/Non-Ridge partition identity drifted');
@@ -286,7 +303,11 @@ function validateCoefficients(coefficients, support) {
   const coefficientReceipt = validateArtifact(coefficients.artifact, {
     label: 'exact layer coefficients', dtype: 'float32-le', shape: [support.rowCount, 8], semanticRole: 'exact-local-layer-emission-extinction',
   });
-  validateFloatPayload(coefficientReceipt.buffer, 'exact layer coefficients', { nonnegative: true });
+  const coefficientValues = validateFloatPayload(coefficientReceipt.buffer, 'exact layer coefficients', { nonnegative: true });
+  assertLayerCoefficientPopulation(summarizeLayerCoefficientPopulation({
+    coefficients: coefficientValues,
+    admission,
+  }));
 }
 
 function validateCameraCohort(cameras) {
@@ -452,9 +473,11 @@ function validateNativeCellIndices(bytes, rowCount) {
 function validateFloatPayload(bytes, label, options = {}) {
   const values = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const count = bytes.byteLength / 4;
+  const decoded = new Float32Array(count);
   let rowHasPositive = false;
   for (let index = 0; index < count; index += 1) {
     const value = values.getFloat32(index * 4, true);
+    decoded[index] = value;
     assert.ok(Number.isFinite(value), `${label} contains a non-finite float at index ${index}`);
     if (options.nonnegative) assert.ok(value >= 0, `${label} contains a negative float at index ${index}`);
     if (options.rowWidth) {
@@ -466,6 +489,7 @@ function validateFloatPayload(bytes, label, options = {}) {
       }
     }
   }
+  return decoded;
 }
 
 function assertSourceRoute(route, role) {
@@ -486,6 +510,10 @@ function assertExecutionRoute(route, role) {
   assert.equal(route.fallbackUsed, false, `${role} execution route contains fallback evidence`);
   assert.equal(route.failurePhase, null, `${role} execution route contains a failure phase`);
   assert.equal(route.sampleCap, null, `${role} execution route contains a sample cap`);
+  assert.equal(route.requestedDepthBins, 96, `${role} requested depth-bin count drifted`);
+  assert.equal(route.effectiveDepthBins, route.requestedDepthBins, `${role} effective depth-bin count drifted`);
+  assert.match(route.requested, /(?:^|\s)--depth-bins 96(?:\s|$)/, `${role} requested execution command omits depth-bin identity`);
+  assert.match(route.effective, /(?:^|\s)--depth-bins 96(?:\s|$)/, `${role} effective execution command omits depth-bin identity`);
 }
 
 function finiteArray(value, length, label) {
@@ -608,9 +636,9 @@ async function main() {
     validateSource(loaded.source.manifest);
 
     failurePhase = 'support-coupling-validation';
-    validateSupport(loaded.support.manifest);
+    const admission = validateSupport(loaded.support.manifest);
     validateDescriptors(loaded.descriptors.manifest, loaded.support.manifest);
-    validateCoefficients(loaded.coefficients.manifest, loaded.support.manifest);
+    validateCoefficients(loaded.coefficients.manifest, loaded.support.manifest, admission);
 
     failurePhase = 'camera-cohort-validation';
     validateCameraCohort(loaded.cameras.manifest);

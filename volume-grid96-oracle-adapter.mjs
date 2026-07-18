@@ -2,8 +2,11 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { assertLayerCoefficientPopulation } from './volume-layer-coefficient-population.mjs';
+import { summarizeLayerCoefficientPopulation } from './volume-layer-coefficient-population.mjs';
 
 const COEFFICIENT_ORDER = Object.freeze([
   'ridge.emission.r', 'ridge.emission.g', 'ridge.emission.b', 'ridge.extinction',
@@ -99,6 +102,12 @@ function validate(source, support, descriptors, coefficients) {
   assert.equal(descriptors.kernelIdentity, 'flow-tangent-positive-symmetric-trilinear-v0', 'descriptor kernel identity drifted');
   assert.equal(coefficients.identity, 'exact-local-layer-emission-extinction-v0', 'coefficient source is not exact');
   assert.equal(coefficients.coefficientBoundary, 'per-sample-pre-tone-map-emission-extinction-v0', 'coefficient boundary drifted');
+  const coefficientValues = readFloat32Artifact(coefficients.artifact, [support.rowCount, 8], 'coefficient');
+  const admissionValues = readFloat32Artifact(support.admission, [support.rowCount, 2], 'admission');
+  const coefficientPopulation = coefficients.artifact?.coefficientPopulation;
+  const recomputedPopulation = summarizeLayerCoefficientPopulation({ coefficients: coefficientValues, admission: admissionValues });
+  assert.deepEqual(coefficientPopulation, recomputedPopulation, 'coefficient population receipt differs from the binary artifact');
+  assertLayerCoefficientPopulation(recomputedPopulation);
   assert.equal(descriptors.artifact?.candidateAdmissionAuthority, 'external-native-cell-index-list-v0', 'descriptor admission authority drifted');
   const indexAuthority = descriptors.artifact?.admissionIndexAuthority;
   assert.equal(indexAuthority?.identity, 'external-native-cell-index-list-v0', 'descriptor index authority drifted');
@@ -109,6 +118,26 @@ function validate(source, support, descriptors, coefficients) {
   assert.equal(indexAuthority?.runtimeReceipt?.status, 'applied', 'descriptor runtime population was not applied');
   assert.ok(indexAuthority?.runtimeReceipt?.fallbackReason == null, 'descriptor runtime population used fallback');
   assert.equal(indexAuthority?.runtimeReceipt?.grid, 96, 'descriptor runtime population was not grid96');
+}
+
+function readFloat32Artifact(artifact, shape, label) {
+  assert.ok(artifact && typeof artifact === 'object', `${label} artifact is missing`);
+  assert.ok(isAbsolute(artifact.path || ''), `${label} artifact path must be absolute`);
+  assert.equal(artifact.dtype, 'float32-le', `${label} artifact dtype drifted`);
+  assert.deepEqual(artifact.shape, shape, `${label} artifact shape drifted`);
+  const bytes = readFileSync(artifact.path);
+  assert.equal(artifact.bytes, bytes.length, `${label} artifact byte count drifted`);
+  assert.equal(bytes.length, shape.reduce((total, value) => total * value, 1) * 4, `${label} artifact physical size drifted`);
+  assert.equal(artifact.sha256, sha256(bytes), `${label} artifact checksum drifted`);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const values = new Float32Array(bytes.byteLength / 4);
+  for (let index = 0; index < values.length; index += 1) {
+    const value = view.getFloat32(index * 4, true);
+    assert.ok(Number.isFinite(value), `${label} artifact contains a non-finite value at index ${index}`);
+    assert.ok(value >= 0, `${label} artifact contains a negative value at index ${index}`);
+    values[index] = value;
+  }
+  return values;
 }
 
 function clone(value) {

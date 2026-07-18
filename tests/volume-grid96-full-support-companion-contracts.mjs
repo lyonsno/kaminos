@@ -30,8 +30,10 @@ const route = {
   fallbackReason: null,
 };
 const executionRoute = {
-  requested: 'python volume-layer-coefficient-render-oracle.py --grid 96 --sample-cap none',
-  effective: 'python volume-layer-coefficient-render-oracle.py --grid 96 --sample-cap none',
+  requested: 'python volume-layer-coefficient-render-oracle.py --state-step 120 --depth-bins 96 --sample-cap none',
+  effective: 'python volume-layer-coefficient-render-oracle.py --state-step 120 --depth-bins 96 --sample-cap none',
+  requestedDepthBins: 96,
+  effectiveDepthBins: 96,
   backend: 'python-numpy-cpu-v0',
   fallbackUsed: false,
   failurePhase: null,
@@ -115,6 +117,15 @@ function writePngArtifact(name, width, height, fill, metadata = {}) {
 }
 
 function component(role, details = {}) {
+  const producerReceipt = ['support', 'descriptors', 'coefficients'].includes(role) ? {
+    authority: 'exact-grid96-source-support-coefficient-descriptor-capture-v0',
+    coefficientRenderAuthority: {
+      requestedComposition: 'raymarch-only-v0',
+      effectiveComposition: 'raymarch-only-v0',
+      compositionAuthority: 'diagnostic-raymarch-full-selected-field-authority-v0',
+      compositionFallbackReason: null,
+    },
+  } : undefined;
   return {
     schema: `kaminos.volume.grid96-${role}.v0`,
     status: 'complete',
@@ -126,6 +137,7 @@ function component(role, details = {}) {
     requestedControlIdentity: controlIdentity,
     effectiveControlIdentity: controlIdentity,
     route,
+    ...(producerReceipt ? { producerReceipt } : {}),
     ...details,
   };
 }
@@ -322,12 +334,29 @@ assert.equal(manifest.cameraCohort.calibrationCameraIndex, 10);
 assert.equal(manifest.cameraCohort.heldOutCameraIndices.length, 20);
 assert.equal(manifest.teacher.transportIdentity, 'ridge-plus-non-ridge-extinction-one-running-transmittance-v0');
 assert.equal(manifest.teacher.executionRoute.backend, 'python-numpy-cpu-v0');
+assert.equal(manifest.teacher.executionRoute.effectiveDepthBins, 96);
+assert.equal(manifest.coefficients.producerReceipt.coefficientRenderAuthority.effectiveComposition, 'raymarch-only-v0');
 assert.equal(manifest.teacher.targetWidth, targetWidth);
 assert.equal(manifest.teacher.targetHeight, targetHeight);
 assert.equal(manifest.teacher.supportNativeCellIndexSha256, supportIndexSha);
 assert.equal(manifest.teacher.coefficientArtifactSha256, coefficientArtifactSha256);
 assert.equal(manifest.comparison.grid, 160);
 assert.equal(manifest.comparison.role, 'immutable-external-comparison-only');
+
+const missingRenderAuthority = JSON.parse(readFileSync(coefficientsPath, 'utf8'));
+delete missingRenderAuthority.producerReceipt;
+const missingRenderAuthorityResult = run({
+  coefficients: writeJson('coefficients-missing-render-authority.json', missingRenderAuthority),
+});
+assert.notEqual(missingRenderAuthorityResult.result.status, 0);
+assert.match(missingRenderAuthorityResult.result.stderr, /render authority|producer receipt|raymarch-only/);
+
+const staleDepthBins = JSON.parse(readFileSync(teacherPath, 'utf8'));
+staleDepthBins.executionRoute.effectiveDepthBins = 95;
+staleDepthBins.executionRoute.effective = staleDepthBins.executionRoute.effective.replace('--depth-bins 96', '--depth-bins 95');
+const staleDepthBinsResult = run({ teacher: writeJson('teacher-stale-depth-bins.json', staleDepthBins) });
+assert.notEqual(staleDepthBinsResult.result.status, 0);
+assert.match(staleDepthBinsResult.result.stderr, /depth.?bin|effective/);
 assert.equal(manifest.claimBoundary.cheaperDemoClaim, false);
 assert.equal(manifest.claimBoundary.depositionAdjudication, false);
 assert.equal(manifest.claimBoundary.learnerCampaign, false);
@@ -447,6 +476,23 @@ negativeCoefficientsManifest.artifact = negativeCoefficientArtifact;
 const negativeCoefficients = run({ coefficients: writeJson('coefficients-negative.json', negativeCoefficientsManifest) });
 assert.notEqual(negativeCoefficients.result.status, 0);
 assert.match(negativeCoefficients.result.stderr, /exact layer coefficients contains a negative float/);
+
+const zeroCoefficientArtifact = writeFloat32Artifact(
+  'coefficients-zero.f32',
+  Array.from({ length: rowCount * 8 }, () => 0),
+  { dtype: 'float32-le', shape: [rowCount, 8], semanticRole: 'exact-local-layer-emission-extinction' },
+);
+const zeroCoefficientsManifest = JSON.parse(readFileSync(coefficientsPath, 'utf8'));
+zeroCoefficientsManifest.artifact = zeroCoefficientArtifact;
+const zeroCoefficientTeacher = JSON.parse(readFileSync(teacherPath, 'utf8'));
+zeroCoefficientTeacher.coefficientArtifactSha256 = zeroCoefficientArtifact.sha256;
+for (const target of zeroCoefficientTeacher.targets) target.coefficientArtifactSha256 = zeroCoefficientArtifact.sha256;
+const zeroCoefficients = run({
+  coefficients: writeJson('coefficients-zero.json', zeroCoefficientsManifest),
+  teacher: writeJson('teacher-zero-coefficients.json', zeroCoefficientTeacher),
+});
+assert.notEqual(zeroCoefficients.result.status, 0);
+assert.match(zeroCoefficients.result.stderr, /exact coefficients contain no positive Ridge or Non-Ridge optical mass/);
 
 const wrongTeacherSupport = JSON.parse(readFileSync(teacherPath, 'utf8'));
 wrongTeacherSupport.supportNativeCellIndexSha256 = 'b'.repeat(64);

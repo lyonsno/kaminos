@@ -5,6 +5,10 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GRID96_DESCRIPTOR_ORDER } from './volume-grid96-full-support-companion.mjs';
+import {
+  assertLayerCoefficientPopulation,
+  summarizeLayerCoefficientPopulation,
+} from './volume-layer-coefficient-population.mjs';
 
 const GRID = 96;
 const CELL_COUNT = GRID ** 3;
@@ -58,6 +62,7 @@ export function buildGrid96Components({ source, equivalence, producer, sourceMan
       effectiveControlIdentity: producer.effectiveControlIdentity,
       route: { ...producer.route },
       stateId: state.id,
+      coefficientRenderAuthority: { ...rows.coefficientRenderAuthority },
     },
   };
 
@@ -202,6 +207,11 @@ function validateClaimBoundary(boundary, label) {
 function validateRows(rows) {
   assert.ok(Number.isInteger(rows?.count) && rows.count > 0, 'analytical admission retained zero rows');
   const count = rows.count;
+  const coefficientRenderAuthority = rows.coefficientRenderAuthority;
+  assert.equal(coefficientRenderAuthority?.requestedComposition, 'raymarch-only-v0', 'coefficient render authority request drifted');
+  assert.equal(coefficientRenderAuthority?.effectiveComposition, 'raymarch-only-v0', 'coefficient render authority was not effective');
+  assert.equal(coefficientRenderAuthority?.compositionAuthority, 'diagnostic-raymarch-full-selected-field-authority-v0', 'coefficient render authority lacks full-fire authority');
+  assert.equal(coefficientRenderAuthority?.compositionFallbackReason ?? null, null, 'coefficient render authority used fallback');
   const nativeCellIndices = validateArtifact(rows.nativeCellIndices, {
     label: 'native-cell indices', dtype: 'uint32-le', shape: [count], semanticRole: 'analytical-admission-native-cell-indices',
   });
@@ -219,7 +229,12 @@ function validateRows(rows) {
   });
   assert.equal(rows.coefficients.nativeCellIndexSha256, nativeCellIndices.sha256, 'coefficient native-cell support hash drifted');
   assert.equal(rows.coefficients.rowOrderIdentity, 'caller-ordered-native-cell-index-v0', 'coefficient row order identity drifted');
-  validateFloatPayload(coefficients.buffer, 'exact coefficients', { nonnegative: true });
+  const coefficientValues = validateFloatPayload(coefficients.buffer, 'exact coefficients', { nonnegative: true });
+  const admissionValues = floatValues(admission.buffer);
+  const coefficientPopulation = assertLayerCoefficientPopulation(summarizeLayerCoefficientPopulation({
+    coefficients: coefficientValues,
+    admission: admissionValues,
+  }));
   const kernelDescriptors = validateArtifact(rows.kernelDescriptors, {
     label: 'kernel descriptors', dtype: 'float32-le', shape: [count, GRID96_DESCRIPTOR_ORDER.length],
     semanticRole: 'camera-independent-flow-kernel-descriptors',
@@ -237,8 +252,9 @@ function validateRows(rows) {
     nativeCellIndices: stripBuffer(nativeCellIndices),
     admission: stripBuffer(admission),
     features: stripBuffer(features),
-    coefficients: stripBuffer(coefficients),
+    coefficients: { ...stripBuffer(coefficients), coefficientPopulation },
     kernelDescriptors: stripBuffer(kernelDescriptors),
+    coefficientRenderAuthority: { ...coefficientRenderAuthority },
   };
 }
 
@@ -267,7 +283,7 @@ function validateNativeCellIndices(buffer, count) {
 }
 
 function validateFloatPayload(buffer, label, { nonnegative = false, rowWidth = null, requirePositivePerRow = false } = {}) {
-  const values = new Float32Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 4);
+  const values = floatValues(buffer);
   for (const value of values) {
     assert.ok(Number.isFinite(value), `${label} contains a non-finite float`);
     if (nonnegative) assert.ok(value >= 0, `${label} contains a negative float`);
@@ -277,6 +293,11 @@ function validateFloatPayload(buffer, label, { nonnegative = false, rowWidth = n
       assert.ok(values.subarray(offset, offset + rowWidth).some(value => value > 0), `${label} row has no positive Ridge or Non-Ridge membership`);
     }
   }
+  return values;
+}
+
+function floatValues(buffer) {
+  return new Float32Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 4);
 }
 
 function stripBuffer(value) {

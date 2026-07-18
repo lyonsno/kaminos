@@ -95,7 +95,9 @@ export function buildGrid96CameraTeacherComponents(inputs) {
     stateBinding: clone(stateBinding),
     executionRoute: {
       requested: `python volume-layer-coefficient-render-oracle.py --state-step ${oracle.requested.stateStep} --depth-bins ${oracle.requested.depthBins} --sample-cap none`,
-      effective: `python volume-layer-coefficient-render-oracle.py --state-step ${oracle.effective.stateStep} --depth-bins ${oracle.requested.depthBins} --sample-cap none`,
+      effective: `python volume-layer-coefficient-render-oracle.py --state-step ${oracle.effective.stateStep} --depth-bins ${oracle.effective.depthBins} --sample-cap none`,
+      requestedDepthBins: oracle.requested.depthBins,
+      effectiveDepthBins: oracle.effective.depthBins,
       backend: 'python-numpy-cpu-v0',
       fallbackUsed: false,
       failurePhase: null,
@@ -195,6 +197,8 @@ function validateOracle(oracle, orbit, support, coefficients) {
   assert.equal(oracle.failurePhase, null, 'oracle carries a failure phase');
   assert.equal(oracle.requested?.stateStep, 120, 'oracle requested state drifted');
   assert.equal(oracle.effective?.stateStep, 120, 'oracle effective state drifted');
+  assert.equal(oracle.requested?.depthBins, 96, 'oracle requested depth-bin count drifted');
+  assert.equal(oracle.effective?.depthBins, oracle.requested.depthBins, 'oracle effective depth-bin count drifted');
   assert.equal(oracle.requested?.sampleCap, null, 'oracle requested a sampleCap');
   assert.equal(oracle.effective?.sampleCap, null, 'oracle applied a sampleCap');
   assert.equal(oracle.effective?.droppedRowCount, 0, 'oracle dropped rows');
@@ -210,6 +214,12 @@ function validateOracle(oracle, orbit, support, coefficients) {
   assert.equal(oracle.frozenStateBinding?.hashMatch, true, 'oracle source hashes did not match');
   assert.equal(oracle.descriptorReceipt?.indexSha256, support.nativeCellIndexSha256, 'oracle support index drifted');
   assert.equal(oracle.effective?.rowCount, coefficients.rowCount, 'oracle coefficient rows drifted');
+  assert.equal(oracle.calibration?.identity, 'camera-10-only-global-optical-path-fit-v0', 'oracle calibration identity drifted');
+  assert.equal(oracle.calibration?.cameraIndex, 10, 'oracle calibration did not use camera 10');
+  assert.ok(Number.isFinite(oracle.calibration?.pathScale) && oracle.calibration.pathScale > 0, 'oracle optical path calibration is not positive');
+  const calibrationTrials = oracle.calibration?.trials || [];
+  assert.ok(calibrationTrials.length > 0, 'oracle calibration trials are missing');
+  assert.ok(calibrationTrials.some(trial => Number.isFinite(trial.meanLuma) && trial.meanLuma > 0), 'oracle calibration produced no positive exact-render luminance');
   assert.equal(oracle.artifacts?.cameraCount, 21, 'oracle target cohort is partial');
   const cameras = oracle.metrics?.cameras || [];
   assert.equal(cameras.length, 21, 'oracle camera metrics are partial');
@@ -218,6 +228,8 @@ function validateOracle(oracle, orbit, support, coefficients) {
     assert.equal(camera.cameraAngle, EXPECTED_ANGLES[camera.cameraIndex], `oracle camera ${camera.cameraIndex} angle drifted`);
     const expectedSplit = camera.cameraIndex === 10 ? 'calibration' : ORACLE_HELD_OUT_SPLIT;
     assert.equal(camera.split, expectedSplit, `oracle camera ${camera.cameraIndex} split drifted`);
+    assert.ok(Number.isFinite(camera.expanded?.meanLuma) && camera.expanded.meanLuma > 0, `oracle camera ${camera.cameraIndex} exact render has no positive luminance`);
+    assert.ok(Number.isFinite(camera.expanded?.targetMeanLuma) && camera.expanded.targetMeanLuma > 0, `oracle camera ${camera.cameraIndex} target has no positive luminance`);
   }
 }
 

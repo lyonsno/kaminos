@@ -152,6 +152,7 @@ function fixtures() {
     requested: { stateStep: 120, sampleCap: null, depthBins: 96 },
     effective: {
       stateStep: 120, rowCount: 370194, sampleCap: null, droppedRowCount: 0,
+      depthBins: 96,
       coefficientBoundary: 'per-sample-pre-tone-map-emission-extinction-v0',
       sharedTransmittanceIdentity: 'ridge-plus-non-ridge-extinction-one-running-transmittance-v0',
       orderApproximation: 'camera-depth-96-bin-one-running-transmittance-v0',
@@ -159,7 +160,20 @@ function fixtures() {
     },
     frozenStateBinding: { sameStateCaptureId: orbit.frozenState.sameStateCaptureId, controlsHash, fluidSha256, frontSha256, hashMatch: true },
     descriptorReceipt: { indexSha256: supportSha256 },
-    metrics: { cameras: angles.map((cameraAngle, cameraIndex) => ({ cameraIndex, cameraAngle, split: cameraIndex === 10 ? 'calibration' : 'heldOut' })) },
+    calibration: {
+      identity: 'camera-10-only-global-optical-path-fit-v0',
+      cameraIndex: 10,
+      pathScale: 0.5,
+      trials: [{ pathScale: 0.5, meanLuma: 0.2, targetMeanLuma: 0.25 }],
+    },
+    metrics: {
+      cameras: angles.map((cameraAngle, cameraIndex) => ({
+        cameraIndex,
+        cameraAngle,
+        split: cameraIndex === 10 ? 'calibration' : 'heldOut',
+        expanded: { meanLuma: 0.2, targetMeanLuma: 0.25 },
+      })),
+    },
     artifacts: { cameraCount: 21 },
   };
   return { source, support, coefficients, orbit, oracle };
@@ -195,7 +209,14 @@ for (const [label, mutate, pattern] of [
   ['non-WebGPU source backend', value => { value.coefficients.route.backend = 'CPU'; }, /WebGPU|backend/],
   ['hidden sample cap', value => { value.oracle.effective.sampleCap = 1000; }, /sampleCap|cap/],
   ['dropped rows', value => { value.oracle.effective.droppedRowCount = 1; }, /dropped/],
+  ['effective depth-bin drift', value => { value.oracle.effective.depthBins = 95; }, /depth.?bin|effective/],
   ['oracle support drift', value => { value.oracle.descriptorReceipt.indexSha256 = '8'.repeat(64); }, /support|index/],
+  ['zero optical calibration', value => {
+    value.oracle.calibration.pathScale = 0;
+    value.oracle.calibration.trials[0].pathScale = 0;
+    value.oracle.calibration.trials[0].meanLuma = 0;
+    for (const camera of value.oracle.metrics.cameras) camera.expanded.meanLuma = 0;
+  }, /calibration|luminance|optical path/],
   ['blank target', value => { writeFileSync(value.orbit.captures[0].imagePath, Buffer.alloc(0)); }, /blank|PNG|target/],
   ['replaced valid target', value => { writePng(0, 255); }, /pixel|hash|witness/],
 ]) {

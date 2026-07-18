@@ -99,7 +99,11 @@ const admission = artifact('admission.f32', f32([1, 0, 0, 0.5, 0.25, 0.75]), {
 const features = artifact('features.f32', f32(Array.from({ length: rowCount * 24 }, (_, index) => index / 100)), {
   dtype: 'float32-le', shape: [rowCount, 24], semanticRole: 'post-admission-local-features',
 });
-const coefficients = artifact('coefficients.f32', f32(Array.from({ length: rowCount * 8 }, (_, index) => index / 50)), {
+const coefficients = artifact('coefficients.f32', f32([
+  0.1, 0.2, 0.3, 0.4, 0, 0, 0, 0,
+  0, 0, 0, 0, 0.5, 0.6, 0.7, 0.8,
+  0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6,
+]), {
   dtype: 'float32-le', shape: [rowCount, 8], semanticRole: 'exact-local-layer-emission-extinction',
   nativeCellIndexSha256: indices.sha256,
   rowOrderIdentity: 'caller-ordered-native-cell-index-v0',
@@ -144,7 +148,20 @@ const producer = {
       backend: source.route.backend,
     },
     sourceHashes,
-    rows: { count: rowCount, nativeCellIndices: indices, admission, features, coefficients, kernelDescriptors: descriptors },
+    rows: {
+      count: rowCount,
+      nativeCellIndices: indices,
+      admission,
+      features,
+      coefficients,
+      kernelDescriptors: descriptors,
+      coefficientRenderAuthority: {
+        requestedComposition: 'raymarch-only-v0',
+        effectiveComposition: 'raymarch-only-v0',
+        compositionAuthority: 'diagnostic-raymarch-full-selected-field-authority-v0',
+        compositionFallbackReason: null,
+      },
+    },
   },
 };
 equivalence.identity = producer.sourceEquivalenceIdentity;
@@ -159,6 +176,19 @@ assert.equal(built.support.sameStateCaptureId, source.sameStateCaptureId);
 assert.equal(built.support.sourceManifestSha256, 'a'.repeat(64));
 assert.equal(built.claimBoundary.learnerCampaign, false);
 assert.equal(built.claimBoundary.depositionAdjudication, false);
+
+assert.throws(
+  () => buildGrid96Components({
+    source,
+    equivalence,
+    producer: {
+      ...producer,
+      state: { ...producer.state, rows: { ...producer.state.rows, coefficientRenderAuthority: undefined } },
+    },
+    sourceManifestSha256: 'a'.repeat(64),
+  }),
+  /coefficient render authority|full-fire authority/,
+);
 
 assert.throws(
   () => buildGrid96Components({ source, equivalence: { ...equivalence, exactByteIdentity: false }, producer, sourceManifestSha256: 'a'.repeat(64) }),
@@ -221,6 +251,61 @@ assert.throws(
     sourceManifestSha256: 'a'.repeat(64),
   }),
   /coefficient native-cell support hash/,
+);
+const allZeroCoefficients = artifact('all-zero-coefficients.f32', f32(new Array(rowCount * 8).fill(0)), {
+  dtype: 'float32-le', shape: [rowCount, 8], semanticRole: 'exact-local-layer-emission-extinction',
+  nativeCellIndexSha256: indices.sha256,
+  rowOrderIdentity: 'caller-ordered-native-cell-index-v0',
+});
+assert.throws(
+  () => buildGrid96Components({
+    source,
+    equivalence,
+    producer: {
+      ...producer,
+      state: { ...producer.state, rows: { ...producer.state.rows, coefficients: allZeroCoefficients } },
+    },
+    sourceManifestSha256: 'a'.repeat(64),
+  }),
+  /exact coefficients contain no positive Ridge or Non-Ridge optical mass/,
+);
+const admissionMismatchedCoefficients = artifact('admission-mismatched-coefficients.f32', f32([
+  0, 0, 0, 0, 1, 1, 1, 1,
+  1, 1, 1, 1, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0,
+]), {
+  dtype: 'float32-le', shape: [rowCount, 8], semanticRole: 'exact-local-layer-emission-extinction',
+  nativeCellIndexSha256: indices.sha256,
+  rowOrderIdentity: 'caller-ordered-native-cell-index-v0',
+});
+assert.throws(
+  () => buildGrid96Components({
+    source,
+    equivalence,
+    producer: {
+      ...producer,
+      state: { ...producer.state, rows: { ...producer.state.rows, coefficients: admissionMismatchedCoefficients } },
+    },
+    sourceManifestSha256: 'a'.repeat(64),
+  }),
+  /Ridge-admitted row|Non-Ridge-admitted row|matching optical mass|optical mass outside|outside admitted/,
+);
+const crossLayerLeakageCoefficients = artifact('cross-layer-leakage-coefficients.f32', f32(new Array(rowCount * 8).fill(1)), {
+  dtype: 'float32-le', shape: [rowCount, 8], semanticRole: 'exact-local-layer-emission-extinction',
+  nativeCellIndexSha256: indices.sha256,
+  rowOrderIdentity: 'caller-ordered-native-cell-index-v0',
+});
+assert.throws(
+  () => buildGrid96Components({
+    source,
+    equivalence,
+    producer: {
+      ...producer,
+      state: { ...producer.state, rows: { ...producer.state.rows, coefficients: crossLayerLeakageCoefficients } },
+    },
+    sourceManifestSha256: 'a'.repeat(64),
+  }),
+  /unadmitted Ridge|unadmitted Non-Ridge|optical mass outside/,
 );
 assert.throws(
   () => buildGrid96Components({

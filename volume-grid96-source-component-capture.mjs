@@ -35,6 +35,12 @@ import {
   buildGrid96SourceComponentProducer,
   validateGrid96SourceComponentAuthority,
 } from './volume-grid96-source-component-manifest.mjs';
+import {
+  assertLayerCoefficientPopulation,
+  emptyLayerCoefficientPopulation,
+  mergeLayerCoefficientPopulation,
+  summarizeLayerCoefficientPopulation,
+} from './volume-layer-coefficient-population.mjs';
 const WITNESS_IDENTITY = 'exact-grid96-source-support-coefficient-descriptor-capture-v0';
 const PRODUCER_SCHEMA = 'kaminos.volume.grid96-coefficient-source-capture.v0';
 const STATE_ID = 'coefficient-state-120';
@@ -330,6 +336,14 @@ try {
 }
 
 async function captureState({ stateId, steps }) {
+  failurePhase = `${stateId}:coefficient-render-authority`;
+  const coefficientRenderAuthority = await evaluate(
+    socket,
+    `${VOLUME_PROTOTYPE_EXPRESSION}.setSelectiveHeadLiveRenderComposition('raymarch-only-v0')`,
+  );
+  assert.equal(coefficientRenderAuthority?.requestedComposition, 'raymarch-only-v0', `${stateId} coefficient render request drifted`);
+  assert.equal(coefficientRenderAuthority?.compositionFallbackReason ?? null, null, `${stateId} coefficient render composition fell back`);
+
   failurePhase = `${stateId}:deterministic-replay`;
   const replayStartTimeMs = 1000;
   const exactStateTimeMs = replayStartTimeMs + steps * (1000 / 60);
@@ -360,10 +374,18 @@ async function captureState({ stateId, steps }) {
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
       backend: state.backend,
+      selectiveHeadLiveCompositionRequested: state.selectiveHeadLiveCompositionRequested,
+      selectiveHeadLiveCompositionEffective: state.selectiveHeadLiveCompositionEffective,
+      selectiveHeadLiveCompositionAuthority: state.selectiveHeadLiveCompositionAuthority,
+      selectiveHeadLiveCompositionFallbackReason: state.selectiveHeadLiveCompositionFallbackReason,
     };
   })()`);
   assert.equal(frozen.active, true, `${stateId} renderer became unavailable while freezing`);
   assert.equal(frozen.capturePaused, true, `${stateId} renderer loop did not pause`);
+  assert.equal(frozen.selectiveHeadLiveCompositionRequested, 'raymarch-only-v0', `${stateId} frozen coefficient composition drifted`);
+  assert.equal(frozen.selectiveHeadLiveCompositionEffective, 'raymarch-only-v0', `${stateId} frozen coefficient composition was not effective`);
+  assert.equal(frozen.selectiveHeadLiveCompositionAuthority, 'diagnostic-raymarch-full-selected-field-authority-v0', `${stateId} frozen coefficient composition lacks full-fire authority`);
+  assert.equal(frozen.selectiveHeadLiveCompositionFallbackReason ?? null, null, `${stateId} frozen coefficient composition used fallback`);
   const effectiveControls = causalControlsFromRuntime(frozen.controls);
   const controlIdentity = `sha256:${sha256(Buffer.from(canonicalJson(effectiveControls)))}`;
 
@@ -380,6 +402,13 @@ async function captureState({ stateId, steps }) {
   assert.equal(sourceBasis.overflowCount, 0, `${stateId} source-basis capture overflowed`);
 
   const rows = await drainAnalyticalRows({ stateId, sourceBasis, effectiveControls });
+  const coefficientRenderAuthorityReceipt = {
+    requestedComposition: coefficientRenderAuthority.requestedComposition,
+    effectiveComposition: frozen.selectiveHeadLiveCompositionEffective,
+    compositionAuthority: frozen.selectiveHeadLiveCompositionAuthority,
+    compositionFallbackReason: frozen.selectiveHeadLiveCompositionFallbackReason ?? null,
+    routeIdentity: coefficientRenderAuthority.routeIdentity,
+  };
   failurePhase = `${stateId}:source-basis-release`;
   const sourceRelease = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.releaseDebugNonRidgeSourceBasisCapture(${JSON.stringify({
     sessionId: sourceBasis.sessionId,
@@ -477,6 +506,7 @@ async function captureState({ stateId, steps }) {
       nativeCellIndices: rows.nativeCellIndices,
       coefficients: rows.coefficients,
       kernelDescriptors,
+      coefficientRenderAuthority: coefficientRenderAuthorityReceipt,
     },
   };
 }
@@ -499,6 +529,7 @@ async function drainAnalyticalRows({ stateId, sourceBasis, effectiveControls }) 
   let startFloat = 0;
   let sourceRowCount = 0;
   let retainedCount = 0;
+  const coefficientPopulation = emptyLayerCoefficientPopulation();
   while (startFloat < sourceBasis.rowCount * SOURCE_BASIS_GPU_ROW_FLOATS) {
     const requestedFloatCount = Math.min(
       chunkRows * SOURCE_BASIS_GPU_ROW_FLOATS,
@@ -520,6 +551,10 @@ async function drainAnalyticalRows({ stateId, sourceBasis, effectiveControls }) 
       effectiveControls,
       nativeCellIndexOffset: startFloat / SOURCE_BASIS_GPU_ROW_FLOATS,
     });
+    mergeLayerCoefficientPopulation(coefficientPopulation, summarizeLayerCoefficientPopulation({
+      coefficients: selected.coefficients,
+      admission: selected.admission,
+    }));
     sinks.features.write(f32Bytes(selected.features));
     sinks.admission.write(f32Bytes(selected.admission));
     sinks.nativeCellIndices.write(u32Bytes(selected.nativeCellIndices));
@@ -530,6 +565,7 @@ async function drainAnalyticalRows({ stateId, sourceBasis, effectiveControls }) 
   }
   assert.equal(sourceRowCount, sourceBasis.rowCount, `${stateId} did not drain the full source grid`);
   assert.ok(retainedCount > 0, `${stateId} analytical admission retained zero rows`);
+  assertLayerCoefficientPopulation(coefficientPopulation);
   const nativeCellIndices = sinks.nativeCellIndices.close([retainedCount]);
   return {
     count: retainedCount,
@@ -542,6 +578,7 @@ async function drainAnalyticalRows({ stateId, sourceBasis, effectiveControls }) 
     coefficients: sinks.coefficients.close([retainedCount, COEFFICIENT_ORDER.length], {
       nativeCellIndexSha256: nativeCellIndices.sha256,
       rowOrderIdentity: 'caller-ordered-native-cell-index-v0',
+      coefficientPopulation,
     }),
   };
 }
