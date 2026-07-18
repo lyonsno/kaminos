@@ -16360,6 +16360,8 @@ function readVolumeControls() {
   const boundarySplatMode = normalizeBoundarySplatMode(document.getElementById('volume-boundary-splat-mode')?.value);
   const boundarySplatFeatureCapture = ['1', 'true', 'on'].includes(String(params.get('volume_boundary_splat_feature_capture') || '').toLowerCase());
   const flowKernelDescriptorCapture = ['1', 'true', 'on'].includes(String(params.get('volume_flow_kernel_descriptor_capture') || '').toLowerCase());
+  const boundarySplatInstanceConsumer = ['1', 'true', 'on'].includes(String(params.get('volume_boundary_splat_instance_consumer') || '').toLowerCase());
+  const boundarySplatInstances = Math.max(1, Math.min(128, Math.round(Number(params.get('volume_boundary_splat_instances') || 1))));
   const reactionBoundaryControls = {
     identity: 'reaction-boundary-live-controls-v0',
     gradientGain: parseFloat(document.getElementById('volume-reaction-boundary-gradient').value),
@@ -16428,6 +16430,8 @@ function readVolumeControls() {
     boundarySplatMode,
     boundarySplatFeatureCapture,
     flowKernelDescriptorCapture,
+    boundarySplatInstanceConsumer,
+    boundarySplatInstances,
     boundarySplatRadius: parseFloat(document.getElementById('volume-boundary-splat-radius').value),
     boundarySplatSharpness: parseFloat(document.getElementById('volume-boundary-splat-sharpness').value),
     flowKernelStrength: parseFloat(document.getElementById('volume-flow-kernel-strength').value),
