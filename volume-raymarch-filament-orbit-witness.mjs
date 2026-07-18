@@ -29,6 +29,10 @@ const holdoutReportPath = resolve(String(args.get('--holdout-report') || `${outD
 const radianceParityReportPath = resolve(String(args.get('--radiance-parity-report') || `${outDir}/radiance-parity-report.json`));
 const opticalRecurrenceReportPath = resolve(String(args.get('--optical-recurrence-report') || `${outDir}/optical-recurrence-report.json`));
 const opticalRecurrenceRequested = args.has('--optical-recurrence-report');
+const sparseHybridRequested = args.has('--sparse-hybrid-scales');
+const sparseHybridScales = sparseHybridRequested
+  ? parseStrictNumberList(args.get('--sparse-hybrid-scales'), '--sparse-hybrid-scales')
+  : [];
 const rayStepCounts = parseIntegerList(args.get('--ray-steps') || '48,96,160');
 const orbitAngles = parseNumberList(args.get('--orbit-angles') || '-0.42,-0.28,-0.14,0,0.14,0.28,0.42');
 const expectedFrameCount = optionalInteger('--expected-frame-count');
@@ -140,6 +144,11 @@ try {
   assert.ok(rayStepCounts.length >= 2, 'at least two ray-step counts are required');
   assert.ok(orbitAngles.length >= 5, 'at least five orbit poses are required');
   assert.ok(rayStepCounts.every(value => value >= 24 && value <= 160), 'ray-step counts must be inside the live renderer range');
+  if (sparseHybridRequested) {
+    assert.equal(orbitAngles.length, 21, 'sparse hybrid witness requires the exact 21-camera frozen orbit');
+    assert.ok(sparseHybridScales.every(value => value >= 0.05 && value <= 1), 'sparse hybrid scales must remain inside the renderer contract');
+    assert.equal(new Set(sparseHybridScales).size, sparseHybridScales.length, 'sparse hybrid scales must be unique');
+  }
 
   failurePhase = 'browser-launch';
   browser = spawn(chrome, [
@@ -214,7 +223,14 @@ try {
 
   const captures = [];
   const maxRaySteps = Math.max(...rayStepCounts);
-  for (const camera of initialization.cameras) {
+  if (sparseHybridRequested) {
+    for (const camera of initialization.cameras) {
+      for (const raymarchScale of sparseHybridScales) {
+        failurePhase = `camera-${camera.index}-sparse-hybrid-${raymarchScale}`;
+        captures.push(await captureAndPersist(camera, 'sparseHybridPresentation', maxRaySteps, raymarchScale));
+      }
+    }
+  } else for (const camera of initialization.cameras) {
     failurePhase = `camera-${camera.index}-support`;
     captures.push(await captureAndPersist(camera, 'stateDerivedSupport', Math.max(...rayStepCounts)));
     failurePhase = `camera-${camera.index}-non-ridge-filaments`;
@@ -251,6 +267,69 @@ try {
     }
   }
 
+  if (sparseHybridRequested) {
+    failurePhase = 'sparse-hybrid-gpu-profiles';
+    const centerCamera = initialization.cameras.reduce((best, camera) => Math.abs(camera.angle) < Math.abs(best.angle) ? camera : best);
+    const timingProfiles = [];
+    for (const raymarchScale of sparseHybridScales) {
+      const profile = await evaluate(socket, `window.__kaminosFilamentOrbitWitness.profileSparseHybrid(${JSON.stringify({ camera: centerCamera, raymarchScale })})`);
+      assert.equal(profile.status, 'complete', `sparse hybrid GPU profile unavailable at scale ${raymarchScale}: ${profile.reason}`);
+      assert.equal(profile.effectiveRaymarchScale, raymarchScale, 'sparse hybrid GPU profile scale substitution');
+      timingProfiles.push(profile);
+    }
+    const firstCapture = captures[0];
+    const sparseReport = {
+      schema: 'kaminos.volume.sparse-hybrid-orbit-capture.v0',
+      status: 'captured-awaiting-personal-inspection',
+      conclusionScope: 'presentation-only-no-self-transmittance-claim-v0',
+      runStartedAt,
+      runCompletedAt: new Date().toISOString(),
+      requestedUrl,
+      requestedRoute: 'coarse-residual-raymarch-under-full-resolution-splats-presentation-assay-v0',
+      effectiveWrapperRoute: initialization.summary.wrapperRoute,
+      effectiveRendererRoute: initialization.summary.effectiveRoute,
+      commit: gitValue(['rev-parse', 'HEAD']),
+      branch: gitValue(['branch', '--show-current']),
+      worktree: process.cwd(),
+      sourceSettingsPreset: initialization.summary.sourceSettingsPreset,
+      replayAuthority: initialization.summary.replayAuthority,
+      frozenState: initialization.summary.frozenState,
+      orbit: {
+        identity: '21-camera-frozen-orbit-v0',
+        cameraCount: initialization.cameras.length,
+        cameras: initialization.cameras,
+      },
+      scaleLadder: sparseHybridScales,
+      raySteps: maxRaySteps,
+      candidatePayload: {
+        count: firstCapture.footprintAudit?.candidateCount,
+        sha256: firstCapture.footprintAudit?.candidatePayloadSha256,
+        coefficientSha256: firstCapture.footprintAudit?.coefficientPayloadSha256,
+        covarianceSha256: firstCapture.footprintAudit?.covariancePayloadSha256,
+      },
+      captures: captures.map(({ pngDataUrl, ...capture }) => capture),
+      timingProfiles,
+      inspection: {
+        personallyInspected: false,
+        disposition: 'captured-awaiting-personal-inspection',
+      },
+      browserEvents: socket.browserEvents,
+    };
+    assert.ok(firstCapture.footprintAudit?.candidatePayloadSha256, 'sparse hybrid source payload hash missing');
+    assert.ok(sparseReport.captures.every(capture => capture.sparseHybridPresentationReceipt?.fallbackReason == null), 'sparse hybrid route fallback present');
+    assert.ok(sparseReport.captures.every(capture => capture.frameCount === sparseReport.frozenState.baseFrameCount && capture.simStepCount === sparseReport.frozenState.baseSimStepCount), 'sparse hybrid capture advanced simulator state');
+    assert.ok(new Set(sparseReport.captures.map(capture => capture.cameraPoseHash)).size === 21, 'sparse hybrid camera orbit is partial or duplicated');
+    writeFileSync(captureReportPath, JSON.stringify(sparseReport, null, 2));
+    writeFileSync(reportPath, JSON.stringify(sparseReport, null, 2));
+    console.log(JSON.stringify({
+      status: sparseReport.status,
+      report: reportPath,
+      captureReport: captureReportPath,
+      captureCount: sparseReport.captures.length,
+      scaleLadder: sparseHybridScales,
+      timingProfiles,
+    }, null, 2));
+  } else {
   failurePhase = 'frozen-repeat';
   const centerCamera = initialization.cameras.reduce((best, camera) => Math.abs(camera.angle) < Math.abs(best.angle) ? camera : best);
   const frozenRepeat = await captureAndPersist(centerCamera, 'raymarchRepeat', Math.max(...rayStepCounts));
@@ -584,6 +663,7 @@ try {
     filamentSummary: report.filamentContinuity.summary,
     crossExtinctionSummary: report.crossExtinctionAnalysis.summary,
   }, null, 2));
+  }
 } catch (error) {
   const failureReport = {
     schema: SCHEMA,
@@ -628,10 +708,11 @@ try {
   if (!keepBrowserOpen) browser?.kill('SIGTERM');
 }
 
-async function captureAndPersist(camera, mode, raySteps) {
-  const key = `${camera.index}-${mode}-${raySteps}`;
-  const capture = await evaluate(socket, `window.__kaminosFilamentOrbitWitness.capture(${JSON.stringify({ key, camera, mode, raySteps })})`);
-  const filename = `camera-${String(camera.index).padStart(2, '0')}-${mode}-${raySteps}.png`;
+async function captureAndPersist(camera, mode, raySteps, raymarchScale = null) {
+  const scaleSuffix = raymarchScale === null ? '' : `-scale-${raymarchScale}`;
+  const key = `${camera.index}-${mode}-${raySteps}${scaleSuffix}`;
+  const capture = await evaluate(socket, `window.__kaminosFilamentOrbitWitness.capture(${JSON.stringify({ key, camera, mode, raySteps, raymarchScale })})`);
+  const filename = `camera-${String(camera.index).padStart(2, '0')}-${mode}-${raySteps}${scaleSuffix}.png`;
   const imagePath = resolve(outDir, filename);
   writeDataUrl(imagePath, capture.pngDataUrl);
   const persisted = { ...capture, imagePath };
@@ -646,7 +727,7 @@ function runtimeInitializationSource(config) {
       const operator = window.__kaminosSelectiveHeadLive || null;
       const basinWindow = document.querySelector('#basin')?.contentWindow || window;
       const prototype = basinWindow.__kaminosVolumePrototype;
-      if (!operator?.debugState || !prototype?.debugState || !prototype?.sampleFrame || !basinWindow.kaminosSetCameraDebugPose) {
+      if (!operator?.debugState || !prototype?.debugState || !prototype?.sampleFrame || !prototype?.renderFrozenScaleToCanvas || !prototype?.sampleSparseHybridPresentationGpuProfile || !basinWindow.kaminosSetCameraDebugPose) {
         throw new Error('filament-orbit-runtime-api-missing');
       }
       const digest = async value => {
@@ -905,6 +986,13 @@ function runtimeInitializationSource(config) {
           prototype.setControls({ boundarySplatMode: 'learned_conserved', raySteps: request.raySteps });
           operator.setComposition('splat-only-v0');
           modeAuthority = 'learned-camera-facing-billboard-v0';
+        } else if (request.mode === 'sparseHybridPresentation') {
+          operator.setAppearanceAssay('off');
+          operator.setPresentation('beauty');
+          prototype.setControls({ boundarySplatMode: 'world_covariance', raySteps: request.raySteps });
+          prototype.setBoundarySplatPresentationMode('matched-presentation-v0');
+          operator.setComposition('splat-only-v0');
+          modeAuthority = 'coarse-residual-raymarch-under-full-resolution-splats-presentation-assay-v0';
         } else if (request.mode === 'worldCovariance'
           || request.mode === 'worldCovarianceAdditive'
           || request.mode === 'worldCovarianceMatchedPresentation'
@@ -937,20 +1025,57 @@ function runtimeInitializationSource(config) {
         }
         const smoke = prototype.setRaymarchSmokePresentationMode('off');
         const cameraPose = basinWindow.kaminosCameraDebugState();
-        const sample = await prototype.sampleFrame({
-          advanceSim: false,
-          includeRgba: true,
-          now: fixedNow,
-          sameStateCaptureId,
-          baseFrameCount,
-          baseSimStepCount,
-        });
+        let sample;
+        if (request.mode === 'sparseHybridPresentation') {
+          const rendered = await prototype.renderFrozenScaleToCanvas({
+            boundarySplatComposition: 'coarse-residual-raymarch-under-full-resolution-splats-presentation-assay-v0',
+            coarseResidualRaymarchScale: request.raymarchScale,
+            coarseResidualRaymarchAuthority: 'non-ridge-contribution-under-complete-flame-transmittance-v0',
+            controlOverrides: { raySteps: request.raySteps, temporalAccum: 0, temporalJitter: 0, gridOverlay: 0 },
+            now: fixedNow,
+            sameStateCaptureId,
+            baseFrameCount,
+            baseSimStepCount,
+            resumeRenderLoop: false,
+          });
+          if (!rendered.ok) throw new Error('sparse hybrid render failed: ' + (rendered.reason || request.key));
+          const sourceCanvas = prototype.canvasElement();
+          const canvasPngDataUrl = sourceCanvas.toDataURL('image/png');
+          const serializedImage = new Image();
+          serializedImage.src = canvasPngDataUrl;
+          await serializedImage.decode();
+          const readbackCanvas = document.createElement('canvas');
+          readbackCanvas.width = sourceCanvas.width;
+          readbackCanvas.height = sourceCanvas.height;
+          const context2d = readbackCanvas.getContext('2d', { willReadFrequently: true });
+          context2d.drawImage(serializedImage, 0, 0);
+          const image = context2d.getImageData(0, 0, readbackCanvas.width, readbackCanvas.height);
+          const after = prototype.debugState();
+          sample = {
+            ...after,
+            ...rendered,
+            ok: true,
+            image: { width: image.width, height: image.height, rgba: [...image.data] },
+            canvasPngDataUrl,
+            controls: after.controls,
+            sparseHybridPresentationReceipt: rendered.sparseHybridPresentationReceipt,
+          };
+        } else {
+          sample = await prototype.sampleFrame({
+            advanceSim: false,
+            includeRgba: true,
+            now: fixedNow,
+            sameStateCaptureId,
+            baseFrameCount,
+            baseSimStepCount,
+          });
+        }
         if (!sample.ok || !sample.image?.rgba?.length) throw new Error('missing, partial, or blank capture: ' + request.key);
         const rgba = Uint8Array.from(sample.image.rgba);
         const metrics = pixelMetrics({ ...sample.image, rgba });
         if (!metrics.nonblank) throw new Error('missing, partial, or blank capture: ' + request.key);
         const effectiveRaySteps = sample.volumePresentationReceipt?.effectiveRayQuality?.raySteps ?? sample.controls?.raySteps ?? null;
-        const footprintAudit = ['analyticBillboard', 'learnedBillboard', 'worldCovariance', 'worldCovarianceAdditive', 'worldCovarianceMatchedPresentation', 'worldCovarianceMatchedOpticalRecurrence'].includes(request.mode)
+        const footprintAudit = ['analyticBillboard', 'learnedBillboard', 'worldCovariance', 'worldCovarianceAdditive', 'worldCovarianceMatchedPresentation', 'worldCovarianceMatchedOpticalRecurrence', 'sparseHybridPresentation'].includes(request.mode)
           ? await prototype.sampleBoundarySplatFootprintAudit()
           : null;
         const record = {
@@ -958,6 +1083,7 @@ function runtimeInitializationSource(config) {
           cameraIndex: request.camera.index,
           cameraAngle: request.camera.angle,
           mode: request.mode,
+          requestedRaymarchScale: request.raymarchScale,
           requestedRaySteps: request.raySteps,
           effectiveRaySteps,
           sameStateCaptureId,
@@ -983,11 +1109,12 @@ function runtimeInitializationSource(config) {
           boundarySplatOverflowCount: sample.boundarySplatOverflowCount,
           boundarySplatFallbackReason: sample.boundarySplatFallbackReason,
           boundarySplatPresentationReceipt: sample.boundarySplatPresentationReceipt,
+          sparseHybridPresentationReceipt: sample.sparseHybridPresentationReceipt,
           volumePresentationReceipt: sample.volumePresentationReceipt,
           raymarchSmokePresentationReceipt: sample.raymarchSmokePresentationReceipt,
           appearanceDecompositionReceipt: sample.appearanceDecompositionReceipt,
           selectiveHeadLivePassReceipt: sample.selectiveHeadLivePassReceipt,
-          pngDataUrl: pngDataUrl({ ...sample.image, rgba }),
+          pngDataUrl: sample.canvasPngDataUrl || pngDataUrl({ ...sample.image, rgba }),
         };
         const expectedMasks = expectedTransportMasks[request.mode];
         if (expectedMasks) {
@@ -999,6 +1126,19 @@ function runtimeInitializationSource(config) {
         }
         captures.set(request.key, { ...record, rgba });
         return record;
+      }
+
+      async function profileSparseHybrid(request) {
+        basinWindow.kaminosSetCameraDebugPose(request.camera.pose);
+        operator.setAppearanceAssay('off');
+        operator.setPresentation('beauty');
+        prototype.setControls({ boundarySplatMode: 'world_covariance', raySteps: Math.max(...${JSON.stringify(config.rayStepCounts)}) });
+        operator.setComposition('splat-only-v0');
+        return prototype.sampleSparseHybridPresentationGpuProfile({
+          coarseResidualRaymarchScale: request.raymarchScale,
+          coarseResidualRaymarchAuthority: 'non-ridge-contribution-under-complete-flame-transmittance-v0',
+          now: fixedNow,
+        });
       }
 
       function analyze() {
@@ -1232,7 +1372,7 @@ function runtimeInitializationSource(config) {
         };
       }
 
-      window.__kaminosFilamentOrbitWitness = { capture, analyze, analyzeCovariance, analyzeCrossExtinction, frozenRepeat };
+      window.__kaminosFilamentOrbitWitness = { capture, profileSparseHybrid, analyze, analyzeCovariance, analyzeCrossExtinction, frozenRepeat };
       return {
         summary: {
           wrapperRoute: wrapperBefore.routeIdentity,
@@ -1323,6 +1463,7 @@ function parseArgs(argv) {
     '--holdout-report',
     '--radiance-parity-report',
     '--optical-recurrence-report',
+    '--sparse-hybrid-scales',
     '--ray-steps',
     '--orbit-angles',
     '--expected-frame-count',
@@ -1390,6 +1531,16 @@ function parseIntegerList(value) {
 
 function parseNumberList(value) {
   return String(value).split(',').map(Number).filter(Number.isFinite);
+}
+
+function parseStrictNumberList(value, name) {
+  const tokens = String(value ?? '').split(',').map(item => item.trim());
+  const values = tokens.map(Number);
+  if (tokens.length === 0 || tokens.some(token => token === '') || values.some(value => !Number.isFinite(value))) {
+    args.errors.push(`${name} must be a comma-separated list of finite numbers`);
+    return [];
+  }
+  return values;
 }
 
 function writeDataUrl(path, dataUrl) {

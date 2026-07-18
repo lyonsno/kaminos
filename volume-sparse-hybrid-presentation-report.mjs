@@ -3,6 +3,8 @@ const TREATMENT = 'coarse-residual-raymarch-under-full-resolution-splats-present
 const SCOPE = 'presentation-only-no-self-transmittance-claim-v0';
 const RESOLUTION_OWNERSHIP = 'full-resolution-splats-independent-coarse-linear-raymarch-v0';
 const RESOLVE = 'coarse-linear-raymarch-plus-full-resolution-splat-raymarch-grade-v0';
+const RESIDUAL_AUTHORITY = 'non-ridge-contribution-under-complete-flame-transmittance-v0';
+const TRANSPORTED_RADIANCE_COMPOSITION = 'separately-transported-radiance-sum-presentation-only-approximation-v0';
 
 function isSha256(value) {
   return typeof value === 'string' && /^[a-f0-9]{64}$/i.test(value);
@@ -44,6 +46,9 @@ export function validateSparseHybridPresentationReport(report) {
   const presentation = report.presentation || {};
   if (presentation.resolveIdentity !== RESOLVE) errors.push('presentation-resolve-substitution');
   if (presentation.blendIdentity !== 'linear-radiance-sum-before-single-presentation-resolve-v0') errors.push('blend-substitution');
+  if (presentation.residualAuthorityIdentity !== RESIDUAL_AUTHORITY) errors.push('residual-authority-substitution');
+  if (presentation.transportedRadianceCompositionIdentity !== TRANSPORTED_RADIANCE_COMPOSITION) errors.push('transported-radiance-composition-substitution');
+  if (presentation.coefficientConservationEligible !== false) errors.push('coefficient-conservation-overclaim');
   if (presentation.selfTransmittanceParityEligible !== false) errors.push('self-transmittance-overclaim');
   const curve = presentation.curve || {};
   if (curve.exposure !== 0.96 || curve.vignetteBase !== 0.80 || curve.vignetteGain !== 0.18 || curve.power !== 0.84) errors.push('presentation-curve-substitution');

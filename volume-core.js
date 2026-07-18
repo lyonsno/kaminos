@@ -65,6 +65,8 @@ const BOUNDARY_SPLAT_OPTICAL_ALPHA_IDENTITY = 'one-minus-exp-negative-summed-opt
 const COARSE_RESIDUAL_RAYMARCH_PRESENTATION_ASSAY_IDENTITY = 'coarse-residual-raymarch-under-full-resolution-splats-presentation-assay-v0';
 const COARSE_RESIDUAL_RAYMARCH_PRESENTATION_RESOLVE_IDENTITY = 'coarse-linear-raymarch-plus-full-resolution-splat-raymarch-grade-v0';
 const COARSE_RESIDUAL_RAYMARCH_RESOLUTION_OWNERSHIP_IDENTITY = 'full-resolution-splats-independent-coarse-linear-raymarch-v0';
+const COARSE_RESIDUAL_RAYMARCH_AUTHORITY_IDENTITY = 'non-ridge-contribution-under-complete-flame-transmittance-v0';
+const COARSE_RESIDUAL_TRANSPORTED_RADIANCE_COMPOSITION_IDENTITY = 'separately-transported-radiance-sum-presentation-only-approximation-v0';
 const BOUNDARY_SPLAT_INITIAL_CAPACITY = 131072;
 const BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES = 64;
 const BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES = BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
@@ -9811,7 +9813,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       updateSimCostLedger({ majorantBuiltThisFrame: false });
       return;
     }
-    const pass = encoder.beginComputePass({ label: 'kaminos coarse majorant build pass' });
+    const pass = encoder.beginComputePass({
+      label: 'kaminos coarse majorant build pass',
+      ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
+    });
     pass.setPipeline(majorantComputePipeline);
     pass.setBindGroup(0, options.readBindGroup || majorantFrontBindGroups[currentFluid]);
     pass.setBindGroup(1, majorantWriteBindGroup);
@@ -9988,7 +9993,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return false;
     }
     device.queue.writeBuffer(boundarySplatDrawBuffer, 0, new Uint32Array([6, 0, 0, 0, 0, 0, boundarySplatCapacity, 0]));
-    const compactPass = encoder.beginComputePass({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compact pass` });
+    const compactPass = encoder.beginComputePass({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compact pass`,
+      ...(hooks.compactTimestampWrites ? { timestampWrites: hooks.compactTimestampWrites } : {}),
+    });
     compactPass.setPipeline(boundarySplatCompactPipeline);
     const computeBindGroup = hooks.computeBindGroup || boundarySplatComputeBindGroups[currentFluid];
     compactPass.setBindGroup(0, computeBindGroup);
@@ -10108,19 +10116,24 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const coarse = ensureCoarseResidualRaymarchTexture(effectiveScale);
     uniforms[20] = coarse.width;
     uniforms[21] = coarse.height;
+    uniforms[307] = APPEARANCE_DECOMPOSITION_MODES['non-ridge-transport-total-extinction'].uniform;
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     encodeDraw(
       encoder,
       coarseResidualRaymarchTexture.createView(),
       `kaminos ${COARSE_RESIDUAL_RAYMARCH_PRESENTATION_ASSAY_IDENTITY} coarse linear raymarch`,
       coarseResidualRaymarchPipeline,
-      { bindGroup: options.bindGroup },
+      { bindGroup: options.bindGroup, timestampWrites: options.raymarchTimestampWrites },
     );
     const splatApplied = encodeBoundarySplatDraw(
       encoder,
       boundarySplatHdrTexture.createView(),
       boundarySplatHdrPipeline,
-      { loadOp: 'clear', clearValue: { r: 0, g: 0, b: 0, a: 0 } },
+      {
+        loadOp: 'clear',
+        clearValue: { r: 0, g: 0, b: 0, a: 0 },
+        timestampWrites: options.splatTimestampWrites,
+      },
     );
     if (!splatApplied) return false;
     const resolveBindGroup = device.createBindGroup({
@@ -10133,6 +10146,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     const resolvePass = encoder.beginRenderPass({
       label: `kaminos ${COARSE_RESIDUAL_RAYMARCH_PRESENTATION_RESOLVE_IDENTITY} pass`,
+      ...(options.resolveTimestampWrites ? { timestampWrites: options.resolveTimestampWrites } : {}),
       colorAttachments: [{
         view: targetView,
         clearValue: { r: 0, g: 0, b: 0, a: 1 },
@@ -10166,6 +10180,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       resolveIdentity: COARSE_RESIDUAL_RAYMARCH_PRESENTATION_RESOLVE_IDENTITY,
       curve: { exposure: 0.96, vignetteBase: 0.80, vignetteGain: 0.18, power: 0.84 },
       blendIdentity: 'linear-radiance-sum-before-single-presentation-resolve-v0',
+      residualAuthorityIdentity: COARSE_RESIDUAL_RAYMARCH_AUTHORITY_IDENTITY,
+      transportedRadianceCompositionIdentity: COARSE_RESIDUAL_TRANSPORTED_RADIANCE_COMPOSITION_IDENTITY,
+      coefficientConservationEligible: false,
       selfTransmittanceParityEligible: false,
     };
     return true;
@@ -14747,6 +14764,169 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
   }
 
+  async function sampleSparseHybridPresentationGpuProfile(options = {}) {
+    const identity = 'sparse-hybrid-presentation-gpu-profile-v0';
+    const requestedScale = Number(options.coarseResidualRaymarchScale ?? 0.10);
+    const effectiveScale = normalizeCoarseResidualRaymarchScale(requestedScale);
+    const requestedAuthority = String(options.coarseResidualRaymarchAuthority || '');
+    const unavailable = reason => ({
+      identity,
+      status: 'unavailable',
+      authority: 'gpu-timestamp-query-v0',
+      reason,
+      requestedRaymarchScale: requestedScale,
+      effectiveRaymarchScale: effectiveScale,
+      raymarchScaleClamped: requestedScale !== effectiveScale,
+      simulationAdvanced: false,
+    });
+    if (!state.active || !device) return unavailable('inactive');
+    if (requestedAuthority !== COARSE_RESIDUAL_RAYMARCH_AUTHORITY_IDENTITY) {
+      return unavailable(`coarse-residual-authority-mismatch:${requestedAuthority || 'missing'}`);
+    }
+    if (!boundarySplatRequested()) return unavailable('boundary-splat-route-not-requested');
+    if (!timestampQueriesAvailable()) {
+      return unavailable(device?.features?.has?.('timestamp-query')
+        ? 'timestamp-query-write-api-unavailable'
+        : 'timestamp-query-not-supported');
+    }
+
+    const profileRenderLoopWasRunning = state.active && !selectiveHeadLiveCapturePaused;
+    cancelAnimationFrame(raf);
+    raf = 0;
+    const controlsBefore = { ...controlsSnapshot };
+    const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+    let querySet = null;
+    let resolveBuffer = null;
+    let readbackBuffer = null;
+    try {
+      if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+      controlsSnapshot = applyRuntimeQualityControls({
+        ...controlsSnapshot,
+        renderScale: 1,
+        selectiveHeadLiveRenderComposition: 'full-raymarch-under-splats-diagnostic-v0',
+      });
+      updateUniforms(fixedNow);
+
+      const queryCount = 12;
+      querySet = device.createQuerySet({ type: 'timestamp', count: queryCount });
+      resolveBuffer = device.createBuffer({
+        label: 'kaminos sparse hybrid presentation timestamp resolve',
+        size: queryCount * 8,
+        usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
+      });
+      readbackBuffer = device.createBuffer({
+        label: 'kaminos sparse hybrid presentation timestamp readback',
+        size: queryCount * 8,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+      });
+
+      device.pushErrorScope('validation');
+      const encoder = device.createCommandEncoder({ label: 'kaminos sparse hybrid presentation timestamp profile' });
+      encodeMajorant(encoder, {
+        force: true,
+        timestampWrites: { querySet, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 },
+      });
+      encodeBoundarySidecar(encoder, {
+        force: true,
+        timestampWrites: { querySet, beginningOfPassWriteIndex: 2, endOfPassWriteIndex: 3 },
+      });
+      const splatsEncoded = encodeBoundarySplats(encoder, {
+        compactTimestampWrites: { querySet, beginningOfPassWriteIndex: 4 },
+        finalizeTimestampWrites: { querySet, endOfPassWriteIndex: 5 },
+      });
+      if (!splatsEncoded) throw new Error(state.boundarySplatFallbackReason || 'boundary-splat-profile-route-unavailable');
+      const applied = encodeCoarseResidualRaymarchPresentationAssay(
+        encoder,
+        context.getCurrentTexture().createView(),
+        {
+          raymarchScale: requestedScale,
+          bindGroup: selectiveHeadLiveRoleGroups('render'),
+          raymarchTimestampWrites: { querySet, beginningOfPassWriteIndex: 6, endOfPassWriteIndex: 7 },
+          splatTimestampWrites: { querySet, beginningOfPassWriteIndex: 8, endOfPassWriteIndex: 9 },
+          resolveTimestampWrites: { querySet, beginningOfPassWriteIndex: 10, endOfPassWriteIndex: 11 },
+        },
+      );
+      if (!applied) throw new Error(state.sparseHybridPresentationReceipt?.fallbackReason || 'sparse-hybrid-profile-route-unavailable');
+      encodeBoundarySplatTelemetry(encoder, true);
+      encoder.resolveQuerySet(querySet, 0, queryCount, resolveBuffer, 0);
+      encoder.copyBufferToBuffer(resolveBuffer, 0, readbackBuffer, 0, queryCount * 8);
+      device.queue.submit([encoder.finish()]);
+      await readbackBuffer.mapAsync(GPUMapMode.READ);
+      const timestamps = new BigUint64Array(readbackBuffer.getMappedRange().slice(0));
+      readbackBuffer.unmap();
+      const validationError = await device.popErrorScope();
+      if (validationError) throw new Error(validationError.message || String(validationError));
+      if (timestamps.some(value => value === 0n)) {
+        throw new Error(`timestamp-query-incomplete:${Array.from(timestamps, value => value.toString()).join(',')}`);
+      }
+      const passPairs = [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9], [10, 11]];
+      for (const [beginIndex, endIndex] of passPairs) {
+        if (timestamps[endIndex] < timestamps[beginIndex]) {
+          throw new Error(`timestamp-query-pass-reversed:${beginIndex}-${endIndex}:${Array.from(timestamps, value => value.toString()).join(',')}`);
+        }
+      }
+      if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
+      if (Number(state.boundarySplatOverflowCount) > 0) {
+        throw new Error(`boundary-splat-profile-overflow:${state.boundarySplatOverflowCount}`);
+      }
+      const ms = (end, start) => Number(timestamps[end] - timestamps[start]) / 1_000_000;
+      const queueSpanStart = timestamps.reduce((minimum, value) => value < minimum ? value : minimum);
+      const queueSpanEnd = timestamps.reduce((maximum, value) => value > maximum ? value : maximum);
+      const stages = {
+        majorant: ms(1, 0),
+        sidecar: ms(3, 2),
+        compaction: ms(5, 4),
+        indirectSetup: {
+          status: 'included-in-ordered-compaction-to-raster-dependency-v0',
+          reason: 'buffer-copy-has-no-separate-webgpu-timestamp-boundary',
+        },
+        coarseRaymarch: ms(7, 6),
+        splatRaster: ms(9, 8),
+        compositeResolve: ms(11, 10),
+        total: Number(queueSpanEnd - queueSpanStart) / 1_000_000,
+      };
+      return {
+        identity,
+        status: 'complete',
+        authority: 'gpu-timestamp-query-v0',
+        reason: 'timestamp-query-sampled',
+        requestedRoute: COARSE_RESIDUAL_RAYMARCH_PRESENTATION_ASSAY_IDENTITY,
+        effectiveRoute: state.sparseHybridPresentationReceipt?.effectiveRoute || 'unavailable',
+        requestedRaymarchScale: requestedScale,
+        effectiveRaymarchScale: effectiveScale,
+        raymarchScaleClamped: requestedScale !== effectiveScale,
+        residualAuthorityIdentity: COARSE_RESIDUAL_RAYMARCH_AUTHORITY_IDENTITY,
+        simulationAdvanced: false,
+        frameCount: state.frameCount,
+        simStepCount: state.simStepCount,
+        stages,
+        coarseRaymarchMs: stages.coarseRaymarch,
+        splatRasterMs: stages.splatRaster,
+        compositeResolveMs: stages.compositeResolve,
+        totalGpuMs: stages.total,
+      };
+    } catch (error) {
+      try {
+        const validationError = await device.popErrorScope();
+        if (validationError && !String(error?.message || error).includes(validationError.message)) {
+          error = new Error(`${error?.message || String(error)}; validation:${validationError.message || String(validationError)}`);
+        }
+      } catch {
+        // Preserve the original profile failure if the validation scope was already popped.
+      }
+      return unavailable(`timestamp-query-profile-failed:${error?.message || String(error)}`);
+    } finally {
+      controlsSnapshot = controlsBefore;
+      updateUniforms(fixedNow);
+      resolveBuffer?.destroy();
+      readbackBuffer?.destroy();
+      querySet?.destroy?.();
+      if (profileRenderLoopWasRunning && state.active && !selectiveHeadLiveCapturePaused) {
+        raf = requestAnimationFrame(render);
+      }
+    }
+  }
+
   async function renderFrozenScaleToCanvas(options = {}) {
     const fullFieldImportSessionId = String(options.fullFieldImportSessionId || '');
     const importedFieldCustody = Boolean(
@@ -14760,6 +14940,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const compositionExplicit = options.boundarySplatComposition != null;
     const boundarySplatCompositionRequestedRaw = options.boundarySplatComposition ?? 'splat-only-v0';
     const coarseResidualPresentationAssay = boundarySplatCompositionRequestedRaw === COARSE_RESIDUAL_RAYMARCH_PRESENTATION_ASSAY_IDENTITY;
+    const coarseResidualRaymarchAuthorityRequested = String(options.coarseResidualRaymarchAuthority || '');
     const compositionRequest = coarseResidualPresentationAssay
       ? {
         raw: boundarySplatCompositionRequestedRaw,
@@ -14768,11 +14949,34 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         definition: {
           raymarch: true,
           splat: true,
-          raymarchFireAuthority: 0,
-          compositionAuthority: 'diagnostic-coarse-broad-smoke-raymarch-plus-full-resolution-splat-fire-presentation-only-v0',
+          raymarchFireAuthority: 1,
+          compositionAuthority: 'diagnostic-coarse-non-ridge-transported-radiance-plus-full-resolution-splat-presentation-only-v0',
         },
       }
       : selectiveHeadLiveRenderCompositionRequest(boundarySplatCompositionRequestedRaw);
+    if (coarseResidualPresentationAssay && coarseResidualRaymarchAuthorityRequested !== COARSE_RESIDUAL_RAYMARCH_AUTHORITY_IDENTITY) {
+      state.sparseHybridPresentationReceipt = {
+        identity: 'sparse-hybrid-presentation-receipt-v0',
+        requestedRoute: COARSE_RESIDUAL_RAYMARCH_PRESENTATION_ASSAY_IDENTITY,
+        effectiveRoute: 'unavailable',
+        fallbackReason: `coarse-residual-authority-mismatch:${coarseResidualRaymarchAuthorityRequested || 'missing'}`,
+        residualAuthorityIdentity: 'unavailable',
+        coefficientConservationEligible: false,
+        selfTransmittanceParityEligible: false,
+      };
+      return {
+        ok: false,
+        reason: 'coarse-residual-authority-mismatch',
+        boundarySplatCompositionRequestedRaw,
+        boundarySplatCompositionRequested: COARSE_RESIDUAL_RAYMARCH_PRESENTATION_ASSAY_IDENTITY,
+        boundarySplatCompositionEffective: 'unavailable',
+        sparseHybridPresentationReceipt: { ...state.sparseHybridPresentationReceipt },
+        raymarchEncoded: false,
+        splatEncoded: false,
+        raymarchApplied: false,
+        splatApplied: false,
+      };
+    }
     if (compositionRequest.fallbackReason) {
       return {
         ok: false,
@@ -14801,7 +15005,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const controlOverrides = {
       ...(options.controlOverrides && typeof options.controlOverrides === 'object' ? options.controlOverrides : {}),
       selectiveHeadLiveRenderComposition: coarseResidualPresentationAssay
-        ? 'smoke-raymarch-under-splats-v0'
+        ? 'full-raymarch-under-splats-diagnostic-v0'
         : compositionRequest.requested,
     };
     const boundarySplatCompositionRequested = boundarySplatCompositionRequestedRaw === 'raymarch-under-splats-v0'
@@ -15131,15 +15335,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           : null,
       };
     } finally {
-      if (coarseResidualPresentationAssay && device) {
-        uniforms[20] = state.width;
-        uniforms[21] = state.height;
-        device.queue.writeBuffer(uniformBuffer, 0, uniforms);
-      }
       if (options.restoreControls !== false) {
         controlsSnapshot = controlsBefore;
         resetTemporalHistory('same-state-render-scale-canvas-restore');
       }
+      if (coarseResidualPresentationAssay && device) updateUniforms(fixedNow);
       if (options.resumeRenderLoop === true && state.active) {
         cancelAnimationFrame(raf);
         raf = requestAnimationFrame(render);
@@ -15690,6 +15890,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     controlledStepFrame,
     controlledStepSequence,
     captureSelectiveHeadLiveFrame,
+    sampleSparseHybridPresentationGpuProfile,
     renderFrozenScaleToCanvas,
     dispose() {
       this.setActive(false);
