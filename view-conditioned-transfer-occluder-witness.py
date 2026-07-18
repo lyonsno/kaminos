@@ -256,6 +256,8 @@ def build_sheet(
     for item in treatments:
         metrics = item["metadata"]["occludedLinearMetrics"]
         isolated = item["metadata"]["occlusionSpecificLinearMetrics"]
+        specific_ratio = item["metadata"]["occlusionSpecificToUnoccludedMaeRatio"]
+        specific_ratio_label = "n/a" if specific_ratio is None else f"{specific_ratio:.3f}x base"
         rows.append([
             base.make_panel(
                 Image.fromarray(item["occludedPixels"], mode="RGB"),
@@ -279,7 +281,7 @@ def build_sheet(
                 f"{item['metadata']['label'].upper()} DEPTH-ONLY PENALTY",
                 [
                     "occluded error minus base compression error",
-                    f"isolated linear MAE {isolated['mae']:.5f}",
+                    f"isolated MAE {isolated['mae']:.5f} | {specific_ratio_label}",
                 ],
                 (234, 112, 88),
                 panel_width,
@@ -419,6 +421,8 @@ def run(args: argparse.Namespace, command: str) -> dict[str, Any]:
             occluded_treatment = reducer.render_reduced_transfer_with_occluder(reduction, depth_map, occluder_rgb)
             occluded_metrics = reducer.image_metrics(occluded_treatment, exact_occluded_linear)
             unoccluded_metrics = reducer.image_metrics(unoccluded_treatment, unoccluded_linear)
+            occluded_region_metrics = masked_metrics(occluded_treatment, exact_occluded_linear, finite_mask)
+            unoccluded_region_metrics = masked_metrics(unoccluded_treatment, unoccluded_linear, finite_mask)
             occluded_error = occluded_treatment - exact_occluded_linear
             baseline_error = unoccluded_treatment - unoccluded_linear
             specific_metrics = reducer.image_metrics(occluded_error, baseline_error)
@@ -426,12 +430,25 @@ def run(args: argparse.Namespace, command: str) -> dict[str, Any]:
             interior_count = int(np.count_nonzero(interior_mask))
             require(interior_count > 0, f"{metadata['label']} has no intra-group occluder pixels")
             ratio = None if unoccluded_metrics["mae"] <= 1e-15 else occluded_metrics["mae"] / unoccluded_metrics["mae"]
+            region_ratio = (
+                None
+                if unoccluded_region_metrics["mae"] <= 1e-15
+                else occluded_region_metrics["mae"] / unoccluded_region_metrics["mae"]
+            )
+            specific_ratio = (
+                None
+                if unoccluded_metrics["mae"] <= 1e-15
+                else specific_metrics["mae"] / unoccluded_metrics["mae"]
+            )
             metadata.update({
                 "unoccludedLinearMetrics": unoccluded_metrics,
                 "occludedLinearMetrics": occluded_metrics,
-                "occluderRegionLinearMetrics": masked_metrics(occluded_treatment, exact_occluded_linear, finite_mask),
+                "unoccludedOccluderRegionLinearMetrics": unoccluded_region_metrics,
+                "occluderRegionLinearMetrics": occluded_region_metrics,
                 "occlusionSpecificLinearMetrics": specific_metrics,
                 "occludedToUnoccludedMaeRatio": ratio,
+                "occluderRegionOccludedToUnoccludedMaeRatio": region_ratio,
+                "occlusionSpecificToUnoccludedMaeRatio": specific_ratio,
                 "occlusionErrorIncreaseMae": occluded_metrics["mae"] - unoccluded_metrics["mae"],
                 "interiorOccluderPixelCount": interior_count,
                 "metricReference": "exact-occluded-reference.png",

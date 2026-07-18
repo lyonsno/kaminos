@@ -168,7 +168,13 @@ class TransferOccluderWitnessContracts(unittest.TestCase):
                     set(item["occlusionSpecificLinearMetrics"]),
                     {"mae", "mse", "maxAbsError"},
                 )
+                self.assertEqual(
+                    set(item["unoccludedOccluderRegionLinearMetrics"]),
+                    {"mae", "mse", "maxAbsError"},
+                )
                 self.assertIn("occludedToUnoccludedMaeRatio", item)
+                self.assertIn("occluderRegionOccludedToUnoccludedMaeRatio", item)
+                self.assertIn("occlusionSpecificToUnoccludedMaeRatio", item)
                 self.assertEqual(item["metricReference"], "exact-occluded-reference.png")
             expected_images = {
                 "unoccluded-reference.png",
