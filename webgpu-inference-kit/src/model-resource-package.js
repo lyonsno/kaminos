@@ -16,6 +16,9 @@ export const WEBGPU_MODEL_RESOURCE_PACKAGE_SCHEMA = 'kaminos.webgpu-model-resour
 export const WEBGPU_MODEL_RESOURCE_PACKAGE_LEASE_SCHEMA = 'kaminos.webgpu-model-resource-package-lease.v0';
 export const WEBGPU_MODEL_RESOURCE_PACKAGE_REPORT_SCHEMA = 'kaminos.webgpu-model-resource-package-report.v0';
 export const WEBGPU_MODEL_RESOURCE_PACKAGE_PROGRESS_SCHEMA = 'kaminos.webgpu-model-resource-package-progress.v0';
+export const WEBGPU_MODEL_RESOURCE_PACKAGE_LOADER_SCHEMA = 'kaminos.webgpu-model-resource-package-loader.v0';
+export const WEBGPU_MODEL_RESOURCE_PACKAGE_CHILD_LEASE_SCHEMA = 'kaminos.webgpu-model-resource-package-child-lease.v0';
+export const WEBGPU_MODEL_RESOURCE_PACKAGE_CHILD_REPORT_SCHEMA = 'kaminos.webgpu-model-resource-package-child-report.v0';
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
@@ -130,6 +133,21 @@ function errorWithPackageReport(cause, report) {
   wrapped.name = error.name;
   wrapped.cause = error;
   wrapped.packageReport = report;
+  return wrapped;
+}
+
+function errorWithPackageChildReport(cause, report) {
+  const error = cause instanceof Error ? cause : new Error(String(cause));
+  if (!Object.hasOwn(error, 'packageChildReport')) {
+    try {
+      error.packageChildReport = report;
+      if (error.packageChildReport === report) return error;
+    } catch {}
+  }
+  const wrapped = new Error(error.message);
+  wrapped.name = error.name;
+  wrapped.cause = error;
+  wrapped.packageChildReport = report;
   return wrapped;
 }
 
@@ -333,7 +351,23 @@ function validateSources(modelPackage, sources) {
   return descriptions;
 }
 
-export async function loadWebGpuModelResourcePackageFromSources(input = {}) {
+function snapshotOrdinarySource(source, description) {
+  if (description.kind === 'array-buffer') {
+    const bytes = source.slice(0);
+    return typeof globalThis.Blob === 'function'
+      ? new globalThis.Blob([bytes], { type: 'application/octet-stream' })
+      : bytes;
+  }
+  if (description.kind === 'typed-array') {
+    const bytes = source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength);
+    return typeof globalThis.Blob === 'function'
+      ? new globalThis.Blob([bytes], { type: 'application/octet-stream' })
+      : bytes;
+  }
+  return source;
+}
+
+function preparePackageAdmission(input, capNames) {
   const validation = validateWebGpuModelResourcePackage(input.package);
   if (!validation.ok) throw new Error(`invalid WebGPU model resource package:\n${validation.errors.join('\n')}`);
   const modelPackage = defineWebGpuModelResourcePackage(input.package);
@@ -351,21 +385,32 @@ export async function loadWebGpuModelResourcePackageFromSources(input = {}) {
   ) {
     throw new Error('chunk-backed model resource package loading requires route.loadModelResourceChunksFromSources');
   }
-  if (input.maxResources != null || input.maxBytes != null || input.maxProgressEvents != null) {
-    throw new Error('model resource package loading is uncapped; maxResources, maxBytes, and maxProgressEvents are not supported');
+  const presentCaps = capNames.filter(name => input[name] != null);
+  if (presentCaps.length > 0) {
+    throw new Error(`model resource package loading is uncapped; ${capNames.join(', ')} are not supported`);
   }
   const sourceDescriptions = validateSources(modelPackage, input.sources);
   const sources = Object.create(null);
   for (const resource of modelPackage.resources) {
+    const description = sourceDescriptions.get(resource.resourceId);
     sources[resource.resourceId] = resource.chunkPlan
       ? snapshotWebGpuModelResourceChunkSources(
         resource.chunkPlan,
         input.sources[resource.resourceId],
-        sourceDescriptions.get(resource.resourceId),
+        description,
       )
-      : input.sources[resource.resourceId];
+      : snapshotOrdinarySource(input.sources[resource.resourceId], description);
   }
   Object.freeze(sources);
+  return { modelPackage, sources, sourceDescriptions };
+}
+
+export async function loadWebGpuModelResourcePackageFromSources(input = {}) {
+  const { modelPackage, sources } = preparePackageAdmission(input, [
+    'maxResources',
+    'maxBytes',
+    'maxProgressEvents',
+  ]);
   throwIfAborted(input.signal);
 
   const now = typeof input.now === 'function'
@@ -548,5 +593,319 @@ export async function loadWebGpuModelResourcePackageFromSources(input = {}) {
         ...cleanup,
       });
     },
+  });
+}
+
+export function createWebGpuModelResourcePackageLoader(input = {}) {
+  if (!isNonEmptyString(input.loaderId)) {
+    throw new Error('model resource package loaderId must be a non-empty string');
+  }
+  input = Object.freeze({
+    ...input,
+    ...(input.fetchOptions == null ? {} : {
+      fetchOptions: Object.freeze({ ...input.fetchOptions }),
+    }),
+  });
+  const { modelPackage, sources, sourceDescriptions } = preparePackageAdmission(input, [
+    'maxActiveResources',
+    'maxActiveLeases',
+    'maxAcquisitions',
+    'maxBytes',
+    'maxProgressEvents',
+    'retentionLimit',
+  ]);
+  if (
+    modelPackage.resources.some(resource => !resource.chunkPlan)
+    && typeof input.route.loadResidentModelResources !== 'function'
+  ) {
+    throw new Error('source-backed model resource package child loading requires route.loadResidentModelResources');
+  }
+  const resourceById = new Map(modelPackage.resources.map(resource => [resource.resourceId, resource]));
+  const resourceIndexById = new Map(modelPackage.resourceIds.map((resourceId, index) => [resourceId, index]));
+  const now = typeof input.now === 'function'
+    ? input.now
+    : (() => globalThis.performance?.now?.() ?? Date.now());
+  const state = {
+    status: 'active',
+    acquisitionCount: 0,
+    residentReuseCount: 0,
+    sourceLoadCount: 0,
+    chunkLoadCount: 0,
+    leaseSequence: 0,
+    activeLeases: new Map(),
+    closedAtMs: null,
+  };
+
+  function activeResourceIds() {
+    const active = new Set([...state.activeLeases.values()].map(entry => entry.resourceId));
+    return modelPackage.resourceIds.filter(resourceId => active.has(resourceId));
+  }
+
+  function snapshot() {
+    return deepFreeze({
+      schema: WEBGPU_MODEL_RESOURCE_PACKAGE_LOADER_SCHEMA,
+      loaderId: input.loaderId,
+      packageIdentity: modelPackage.identity,
+      routeId: input.route.routeId,
+      status: state.status,
+      resourceIds: modelPackage.resourceIds,
+      acquisitionCount: state.acquisitionCount,
+      residentReuseCount: state.residentReuseCount,
+      sourceLoadCount: state.sourceLoadCount,
+      chunkLoadCount: state.chunkLoadCount,
+      activeLeaseCount: state.activeLeases.size,
+      activeResourceIds: activeResourceIds(),
+      sourceMemoryBound: sourceMemoryBound(modelPackage),
+      closedAtMs: state.closedAtMs,
+    });
+  }
+
+  async function acquireResource(acquireInput = {}) {
+    if (state.status !== 'active') throw new Error('model resource package resource loader is closed');
+    if (!acquireInput || typeof acquireInput !== 'object' || Array.isArray(acquireInput)) {
+      throw new Error('model resource package child acquisition input must be an object');
+    }
+    if (
+      acquireInput.maxBytes != null
+      || acquireInput.maxChunks != null
+      || acquireInput.maxProgressEvents != null
+    ) {
+      throw new Error('model resource package child acquisition is uncapped; maxBytes, maxChunks, and maxProgressEvents are not supported');
+    }
+    const resourceId = acquireInput.resourceId ?? acquireInput.resource?.resourceId;
+    if (!isNonEmptyString(resourceId) || !resourceById.has(resourceId)) {
+      throw new Error(`unknown model package resource ${resourceId || '<missing>'}`);
+    }
+    throwIfAborted(acquireInput.signal);
+    const resource = resourceById.get(resourceId);
+    const resourceIndex = resourceIndexById.get(resourceId);
+    const startedAtMs = now();
+    const progress = [];
+    const recordProgress = event => {
+      const childEvent = deepFreeze({
+        schema: WEBGPU_MODEL_RESOURCE_PACKAGE_PROGRESS_SCHEMA,
+        sequence: progress.length + 1,
+        packageIdentity: modelPackage.identity,
+        resourceId,
+        resourceIndex,
+        resourceCount: modelPackage.resources.length,
+        resourceEvent: event,
+      });
+      progress.push(childEvent);
+      if (typeof input.onProgress === 'function') input.onProgress(childEvent);
+      if (typeof acquireInput.onProgress === 'function') acquireInput.onProgress(childEvent);
+    };
+    let lease;
+    let loadPath = resource.chunkPlan ? 'chunks' : 'source';
+    try {
+      const common = {
+        cache: input.cache,
+        fetch: input.fetch,
+        fetchOptions: input.fetchOptions,
+        signal: acquireInput.signal,
+        subtle: input.subtle,
+        now: input.now,
+        onProgress: recordProgress,
+      };
+      if (resource.chunkPlan) {
+        lease = await input.route.loadModelResourceChunksFromSources({
+          ...common,
+          plan: resource.chunkPlan,
+          sources: sources[resourceId],
+        });
+      } else {
+        try {
+          lease = await input.route.loadResidentModelResources({
+            manifest: resource.manifest,
+            signal: acquireInput.signal,
+          });
+          loadPath = 'resident';
+        } catch (error) {
+          if (
+            error?.code !== 'WEBGPU_RESOURCE_NOT_RESIDENT'
+            || (error.cleanup?.failedReleaseCount ?? 0) > 0
+          ) throw error;
+        }
+        if (!lease) lease = await input.route.loadModelResourcesFromSource({
+          ...common,
+          manifest: resource.manifest,
+          source: sources[resourceId],
+          ownership: input.ownership,
+        });
+      }
+    } catch (error) {
+      const acquisitionReport = error?.acquisitionReport ?? null;
+      const chunkReport = error?.chunkReport ?? null;
+      const residentReuseReport = error?.residentReuseReport ?? null;
+      const report = deepFreeze({
+        schema: WEBGPU_MODEL_RESOURCE_PACKAGE_CHILD_REPORT_SCHEMA,
+        status: error?.name === 'AbortError' ? 'canceled' : 'failed',
+        loaderId: input.loaderId,
+        packageIdentity: modelPackage.identity,
+        routeId: input.route.routeId,
+        resourceId,
+        resourceIndex,
+        loadKind: resource.loadKind,
+        loadPath,
+        phaseId: acquireInput.phaseId ?? null,
+        purpose: acquireInput.purpose ?? null,
+        startedAtMs,
+        settledAtMs: now(),
+        sourceDescription: sourceDescriptions.get(resourceId),
+        acquisitionReport,
+        chunkReport,
+        residentReuseReport,
+        authorityReport: residentReuseReport ?? chunkReport ?? acquisitionReport,
+        progress,
+        failure: {
+          name: error?.name || 'Error',
+          message: String(error?.message || error),
+        },
+      });
+      throw errorWithPackageChildReport(error, report);
+    }
+
+    state.acquisitionCount += 1;
+    if (loadPath === 'resident') state.residentReuseCount += 1;
+    if (loadPath === 'source') state.sourceLoadCount += 1;
+    if (loadPath === 'chunks') state.chunkLoadCount += 1;
+    state.leaseSequence += 1;
+    const childLeaseId = `${encodeURIComponent(input.loaderId)}:${state.leaseSequence}`;
+    const acquisitionReport = lease.acquisitionReport ?? null;
+    const chunkReport = lease.chunkReport ?? null;
+    const residentReuseReport = lease.residentReuseReport ?? null;
+    const report = deepFreeze({
+      schema: WEBGPU_MODEL_RESOURCE_PACKAGE_CHILD_REPORT_SCHEMA,
+      status: 'loaded',
+      loaderId: input.loaderId,
+      packageIdentity: modelPackage.identity,
+      routeId: input.route.routeId,
+      resourceId,
+      resourceIndex,
+      loadKind: resource.loadKind,
+      loadPath,
+      phaseId: acquireInput.phaseId ?? null,
+      purpose: acquireInput.purpose ?? null,
+      startedAtMs,
+      settledAtMs: now(),
+      sourceDescription: sourceDescriptions.get(resourceId),
+      acquisitionReport,
+      chunkReport,
+      residentReuseReport,
+      authorityReport: residentReuseReport ?? chunkReport ?? acquisitionReport,
+      progress,
+      failure: null,
+    });
+    const activeEntry = { resourceId, lease };
+    state.activeLeases.set(childLeaseId, activeEntry);
+    let terminal = false;
+    return Object.freeze({
+      schema: WEBGPU_MODEL_RESOURCE_PACKAGE_CHILD_LEASE_SCHEMA,
+      childLeaseId,
+      loaderId: input.loaderId,
+      packageIdentity: modelPackage.identity,
+      packageId: modelPackage.packageId,
+      modelId: modelPackage.modelId,
+      revision: modelPackage.revision,
+      routeId: input.route.routeId,
+      resourceId,
+      loadKind: resource.loadKind,
+      manifest: resource.manifest,
+      allocations: lease.allocations,
+      tensors: lease.tensors,
+      acquisitionReport,
+      chunkReport,
+      residentReuseReport,
+      authorityReport: residentReuseReport ?? chunkReport ?? acquisitionReport,
+      report,
+      release() {
+        if (terminal) {
+          return deepFreeze({
+            schema: WEBGPU_MODEL_RESOURCE_PACKAGE_CHILD_LEASE_SCHEMA,
+            childLeaseId,
+            loaderId: input.loaderId,
+            packageIdentity: modelPackage.identity,
+            routeId: input.route.routeId,
+            resourceId,
+            status: 'already-released',
+          });
+        }
+        const release = lease.release();
+        if (release != null && typeof release.then === 'function') {
+          throw new Error(`model package resource ${resourceId} lease release must complete synchronously`);
+        }
+        const status = release?.status ?? 'released';
+        if (status === 'release-failed') {
+          return deepFreeze({
+            schema: WEBGPU_MODEL_RESOURCE_PACKAGE_CHILD_LEASE_SCHEMA,
+            childLeaseId,
+            loaderId: input.loaderId,
+            packageIdentity: modelPackage.identity,
+            routeId: input.route.routeId,
+            resourceId,
+            status,
+            underlyingRelease: release ?? null,
+          });
+        }
+        if (status !== 'released' && status !== 'already-released' && status !== 'invalidated') {
+          throw new Error(`model package resource ${resourceId} lease release returned unsupported status ${status}`);
+        }
+        terminal = true;
+        state.activeLeases.delete(childLeaseId);
+        return deepFreeze({
+          schema: WEBGPU_MODEL_RESOURCE_PACKAGE_CHILD_LEASE_SCHEMA,
+          childLeaseId,
+          loaderId: input.loaderId,
+          packageIdentity: modelPackage.identity,
+          routeId: input.route.routeId,
+          resourceId,
+          status,
+          underlyingRelease: release ?? null,
+        });
+      },
+    });
+  }
+
+  function close() {
+    if (state.status === 'closed') {
+      return deepFreeze({
+        schema: WEBGPU_MODEL_RESOURCE_PACKAGE_LOADER_SCHEMA,
+        loaderId: input.loaderId,
+        packageIdentity: modelPackage.identity,
+        routeId: input.route.routeId,
+        status: 'already-closed',
+        activeLeaseCount: state.activeLeases.size,
+        activeResourceIds: activeResourceIds(),
+        closedAtMs: state.closedAtMs,
+      });
+    }
+    state.status = 'closed';
+    state.closedAtMs = now();
+    return deepFreeze({
+      schema: WEBGPU_MODEL_RESOURCE_PACKAGE_LOADER_SCHEMA,
+      loaderId: input.loaderId,
+      packageIdentity: modelPackage.identity,
+      routeId: input.route.routeId,
+      status: state.activeLeases.size > 0 ? 'closed-with-active-leases' : 'closed',
+      activeLeaseCount: state.activeLeases.size,
+      activeResourceIds: activeResourceIds(),
+      closedAtMs: state.closedAtMs,
+    });
+  }
+
+  return Object.freeze({
+    schema: WEBGPU_MODEL_RESOURCE_PACKAGE_LOADER_SCHEMA,
+    loaderId: input.loaderId,
+    identity: `${modelPackage.identity}#loader:${encodeURIComponent(input.loaderId)}@${encodeURIComponent(input.route.routeId)}`,
+    packageIdentity: modelPackage.identity,
+    packageId: modelPackage.packageId,
+    modelId: modelPackage.modelId,
+    revision: modelPackage.revision,
+    routeId: input.route.routeId,
+    package: modelPackage,
+    resourceIds: modelPackage.resourceIds,
+    acquireResource,
+    snapshot,
+    close,
   });
 }

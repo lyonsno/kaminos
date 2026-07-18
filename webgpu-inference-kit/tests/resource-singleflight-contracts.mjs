@@ -18,6 +18,16 @@ function deferred() {
 
 const residency = createWebGpuResourceResidency({ sessionId: 'singleflight' });
 const factory = createWebGpuResourceFactory({ sessionId: 'singleflight', residency });
+await assert.rejects(
+  () => factory.acquireExisting({
+    resourceId: 'not-present',
+    routeId: 'resident-probe',
+    declaredBytes: 4,
+    kind: 'model-weight',
+    metadata: null,
+  }),
+  error => error.code === 'WEBGPU_RESOURCE_NOT_RESIDENT' && error.resourceId === 'not-present',
+);
 const creation = deferred();
 let createCount = 0;
 const requests = Array.from({ length: 32 }, (_, index) => factory.acquireOrCreate({
@@ -55,6 +65,16 @@ assert.equal(leases[0].resource, shared);
 assert.equal(residency.snapshot().totalResidentDeclaredBytes, 4096);
 assert.equal(residency.snapshot().activeLeaseCount, 32);
 leases.forEach(lease => lease.release());
+const residentLease = await factory.acquireExisting({
+  resourceId: 'weights.shared',
+  routeId: 'resident-reuse',
+  declaredBytes: 4096,
+  kind: 'model-weight',
+  metadata: { precision: 'f16' },
+});
+assert.equal(residentLease.resource, shared);
+assert.equal(createCount, 1, 'resident-only acquisition must not invoke a creator');
+assert.equal(residentLease.release().status, 'released');
 
 const partial = deferred();
 const partialAbort = new AbortController();

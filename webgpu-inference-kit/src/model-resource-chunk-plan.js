@@ -427,9 +427,15 @@ export function snapshotWebGpuModelResourceChunkSources(plan, sources, descripti
     const source = sources[chunkId];
     const description = sourceDescriptions.get(chunkId);
     if (plan.chunkIds.length === 1 && description.kind === 'array-buffer') {
-      snapshot[chunkId] = source.slice(0);
+      const bytes = source.slice(0);
+      snapshot[chunkId] = typeof globalThis.Blob === 'function'
+        ? new globalThis.Blob([bytes], { type: 'application/octet-stream' })
+        : bytes;
     } else if (plan.chunkIds.length === 1 && description.kind === 'typed-array') {
-      snapshot[chunkId] = Uint8Array.from(new Uint8Array(source.buffer, source.byteOffset, source.byteLength));
+      const bytes = Uint8Array.from(new Uint8Array(source.buffer, source.byteOffset, source.byteLength));
+      snapshot[chunkId] = typeof globalThis.Blob === 'function'
+        ? new globalThis.Blob([bytes], { type: 'application/octet-stream' })
+        : bytes;
     } else {
       snapshot[chunkId] = source;
     }

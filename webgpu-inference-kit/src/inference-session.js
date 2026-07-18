@@ -15,12 +15,14 @@ import {
   createWebGpuResourceFactory,
 } from './resource-factory.js';
 import {
+  loadResidentWebGpuModelResources,
   loadWebGpuModelResources,
 } from './model-resource-manifest.js';
 import {
   acquireWebGpuModelResourceBundle,
 } from './model-resource-source.js';
 import {
+  createWebGpuModelResourcePackageLoader,
   loadWebGpuModelResourcePackageFromSources,
 } from './model-resource-package.js';
 import {
@@ -291,6 +293,15 @@ export async function createWebGpuInferenceSession(input = {}) {
       }
       const routeResidency = Object.freeze({
         acquire: acquireResource,
+        acquireExisting(resourceInput = {}) {
+          assertAttached(route);
+          assertActive();
+          if (!isPlainObject(resourceInput)) throw new Error('resource input must be an object');
+          if (Object.hasOwn(resourceInput, 'routeId')) {
+            throw new Error('session route owns routeId; acquireExisting cannot override it');
+          }
+          return resourceFactory.acquireExisting({ ...resourceInput, routeId: route.routeId });
+        },
         acquireOrCreate(resourceInput = {}) {
           assertAttached(route);
           assertActive();
@@ -315,6 +326,18 @@ export async function createWebGpuInferenceSession(input = {}) {
             throw new Error('session route owns route; loadModelResources cannot override it');
           }
           return loadWebGpuModelResources({ ...modelInput, route: route.handle });
+        },
+        loadResidentModelResources(modelInput = {}) {
+          assertAttached(route);
+          assertActive();
+          if (!isPlainObject(modelInput)) throw new Error('resident model resource input must be an object');
+          if (Object.hasOwn(modelInput, 'route')) {
+            throw new Error('session route owns route; loadResidentModelResources cannot override it');
+          }
+          if (Object.hasOwn(modelInput, 'bundle')) {
+            throw new Error('resident model resource reuse does not accept source bundle custody');
+          }
+          return loadResidentWebGpuModelResources({ ...modelInput, route: route.handle });
         },
         async loadModelResourcesFromSource(modelInput = {}) {
           assertAttached(route);
@@ -377,6 +400,15 @@ export async function createWebGpuInferenceSession(input = {}) {
             throw new Error('session route owns route; loadModelResourcePackageFromSources cannot override it');
           }
           return loadWebGpuModelResourcePackageFromSources({ ...packageInput, route: route.handle });
+        },
+        createModelResourcePackageLoader(packageInput = {}) {
+          assertAttached(route);
+          assertActive();
+          if (!isPlainObject(packageInput)) throw new Error('model resource package loader input must be an object');
+          if (Object.hasOwn(packageInput, 'route')) {
+            throw new Error('session route owns route; createModelResourcePackageLoader cannot override it');
+          }
+          return createWebGpuModelResourcePackageLoader({ ...packageInput, route: route.handle });
         },
         loadModelResourceChunksFromSources(chunkInput = {}) {
           assertAttached(route);

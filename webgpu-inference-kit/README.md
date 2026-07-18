@@ -271,16 +271,18 @@ const modelPackage = defineWebGpuModelResourcePackage({
   ],
 });
 
+const modelPackageSources = {
+  encoder: new URL("./encoder.weights.bin", import.meta.url),
+  decoder: Object.fromEntries(decoderChunkPlan.chunkIds.map(chunkId => [
+    chunkId,
+    new URL(`./decoder/${chunkId}.bin`, import.meta.url),
+  ])),
+  head: new URL("./head.weights.bin", import.meta.url),
+};
+
 const weights = await sharp.loadModelResourcePackageFromSources({
   package: modelPackage,
-  sources: {
-    encoder: new URL("./encoder.weights.bin", import.meta.url),
-    decoder: Object.fromEntries(decoderChunkPlan.chunkIds.map(chunkId => [
-      chunkId,
-      new URL(`./decoder/${chunkId}.bin`, import.meta.url),
-    ])),
-    head: new URL("./head.weights.bin", import.meta.url),
-  },
+  sources: modelPackageSources,
   cache: modelBundleCache,
   signal: loadController.signal,
   onProgress(event) {
@@ -300,6 +302,8 @@ Each child retains its own whole-source acquisition report or chunk-load report,
 
 This bounds source acquisition to the largest ordinary child source or declared chunk while loading package children sequentially. It does not claim an exact browser-process memory peak or eliminate the cache-miss copies inside the currently active source unit.
 
+For phase-aware loading, admit the same complete package and source map once with `route.createModelResourcePackageLoader()`. Admission validates every source and snapshots lawful mutable direct inputs before any GPU work, while `acquireResource()` loads only the named child and returns an independently releasable lease. A later acquisition reuses matching ordinary allocations directly from session residency without refetching source bytes; explicit eviction falls back to the source captured at admission. Chunk-backed children retain their chunk verification provenance and resident reuse path. Use replayable URL, `Request`, or `Blob` sources when an evicted resource may need to load again; a consumed `Response` remains a one-shot source rather than pretending to be replayable.
+
 ### Hold Only The Model Resources A Phase Needs
 
 Long-running ports can declare the model resources required by each execution phase, prefetch the next useful resources, and release departed leases only after the target working set is complete:
@@ -310,17 +314,18 @@ import {
   defineWebGpuPhaseResourcePlan,
 } from "@kaminos/webgpu-inference-kit";
 
-const phaseResources = {
-  encoder: { manifest: encoderManifest, source: encoderUrl },
-  decoder: { manifest: decoderManifest, source: decoderUrl },
-  head: { manifest: headManifest, source: headUrl },
-};
+const packageLoader = sharp.createModelResourcePackageLoader({
+  loaderId: "sharp.browser-f16.phase-loader",
+  package: modelPackage,
+  sources: modelPackageSources,
+  cache: modelBundleCache,
+});
 
 const phasePlan = defineWebGpuPhaseResourcePlan({
   planId: "sharp.image-to-splat.browser-f16",
-  resources: Object.entries(phaseResources).map(([resourceId, value]) => ({
-    resourceId,
-    declaredBytes: value.manifest.bundle.byteLength,
+  resources: modelPackage.resources.map(resource => ({
+    resourceId: resource.resourceId,
+    declaredBytes: resource.manifest.bundle.byteLength,
   })),
   phases: [
     {
@@ -339,10 +344,7 @@ const workingSet = createWebGpuPhaseResourceWorkingSet({
   controllerId: "sharp:run-42:working-set",
   plan: phasePlan,
   residencySnapshot: () => session.residency.snapshot(),
-  acquireResource: ({ resource, signal }) => {
-    const spec = phaseResources[resource.resourceId];
-    return sharp.loadModelResourcesFromSource({ ...spec, signal });
-  },
+  acquireResource: packageLoader.acquireResource,
 });
 
 await workingSet.transitionToPhase("encode-image", { signal });
@@ -352,6 +354,7 @@ decodeTransition.heldDeclaredBytes;
 decodeTransition.residency.evictionCandidates;
 
 workingSet.close();
+packageLoader.close();
 ```
 
 The controller acquires required resources first and declared prefetch resources second, preserves existing leases across adjacent phases, and does not release the old phase until the complete target set has loaded. Acquisition failure or cancellation rolls back new leases and leaves the previous phase intact. If any release cannot be confirmed, the controller enters a recoverable `release-failed` or `close-failed` state, clears the phase claim, retains only unresolved leases in its snapshot, and lets `close()` retry that exact remainder. Device-loss invalidation clears non-retryable custody separately as `invalidatedResourceIds` and produces `prepared-after-invalidation` or `closed-after-invalidation` instead of relabeling invalidation as release. Residency diagnostics are caller-supplied and fail visibly without changing lease lifecycle. Plans, reports, transitions, and resource counts are uncapped.
@@ -436,6 +439,7 @@ The chunk route's byte authority is complete allocation coverage by the declared
 - `createWebGpuModelResourceCacheStorage(input)`: adapt browser CacheStorage into an uncapped, caller-namespaced persistent model-bundle cache with cancellation and retriable lazy opening.
 - `route.loadModelResourcesFromSource(input)`: acquire, verify, persist, and upload a browser-native source through shared session residency, release intermediate custody automatically, and return one model lease plus its acquisition report.
 - `defineWebGpuModelResourcePackage(input)` and `route.loadModelResourcePackageFromSources(input)`: compose ordinary source-backed and chunk-plan-backed same-model children into one sequential package, preserve each child's verification/cache/report identity, and return one composite lease bounded by the largest ordinary source or chunk.
+- `route.createModelResourcePackageLoader(input)`: validate one complete heterogeneous package admission without GPU work, acquire named children independently for phase working sets, reuse still-resident ordinary allocations without refetching, and fall back to admitted authenticated sources after explicit eviction.
 - `defineWebGpuModelResourceChunkPlan(input)` and `route.loadModelResourceChunksFromSources(input)`: bind a semantic model manifest to exact per-allocation chunk coverage, verify/cache one source chunk at a time, upload verified bytes directly into ranged GPU buffer offsets, and publish each allocation through shared single-flight residency only after complete chunk verification.
 - `loadWebGpuModelResources(input)` and `route.loadModelResources(input)`: upload each content-derived allocation through shared single-flight residency and return one independently releasable model lease whose tensor views plug into kernels and phase programs.
 - `runtime.runStage(name, fn, metadata)`: wrap major model phases such as ViT encoder blocks, diffusion steps, triplane decode, mask decode, readback, or mesh/splat finalization.

@@ -5,6 +5,7 @@ export const WEBGPU_MODEL_RESOURCE_BUNDLE_VERIFICATION_SCHEMA = 'kaminos.webgpu-
 export const WEBGPU_MODEL_RESOURCE_BUNDLE_CUSTODY_SCHEMA = 'kaminos.webgpu-model-resource-bundle-custody.v0';
 export const WEBGPU_MODEL_RESOURCE_LEASE_SCHEMA = 'kaminos.webgpu-model-resource-lease.v0';
 export const WEBGPU_MODEL_RESOURCE_TENSOR_SCHEMA = 'kaminos.webgpu-model-resource-tensor.v0';
+export const WEBGPU_MODEL_RESOURCE_RESIDENT_REUSE_SCHEMA = 'kaminos.webgpu-model-resource-resident-reuse.v0';
 export const WEBGPU_MODEL_RESOURCE_SHARING_POLICIES = Object.freeze({
   semanticIdentity: 'semantic-identity',
   contentAddressedPhysicalDedupe: 'content-addressed-physical-dedupe',
@@ -646,124 +647,52 @@ function releaseLeases(leases) {
   });
 }
 
-export async function loadWebGpuModelResources(input = {}) {
-  const { manifest, route, signal } = input;
-  assertRoute(route);
-  throwIfAborted(signal);
-  let custody = bundleCustody.get(input.bundle);
-  if (!custody) {
-    if (input.bundle?.schema === WEBGPU_MODEL_RESOURCE_BUNDLE_CUSTODY_SCHEMA) {
-      throw new Error('model bundle custody handle must be authentic and module-issued');
-    }
-    const prepared = await prepareBundle(
-      manifest,
-      input.bundle,
-      'copy',
-      { signal, subtle: input.subtle },
-      { byteCustody: 'loader-owned-snapshot-before-verification' },
-    );
-    try {
-      return await loadWebGpuModelResources({ ...input, bundle: prepared });
-    } finally {
-      prepared.release();
-    }
-  }
-  if (custody.released) throw new Error('model bundle custody handle is released');
-  const validation = validateWebGpuModelResourceManifest(manifest);
-  if (!validation.ok) throw new Error(`invalid WebGPU model resource manifest:\n${validation.errors.join('\n')}`);
-  if (custody.identity !== manifest?.identity) {
-    throw new Error(`prepared model bundle manifest identity ${custody.identity} does not match ${manifest?.identity || '<missing>'}`);
-  }
-  if (custody.manifestFingerprint !== canonicalJson(manifest)) {
-    throw new Error('prepared model bundle manifest content does not match the manifest used to establish custody');
-  }
-  const bytes = custody.bytes;
-  const verification = input.bundle.verification;
-  const leases = [];
-  const allocations = [];
-  try {
-    for (const allocation of manifest.allocations) {
-      throwIfAborted(signal);
-      let lease;
-      try {
-        const sharedPhysical = manifest.resourceSharing.policy
-          === WEBGPU_MODEL_RESOURCE_SHARING_POLICIES.contentAddressedPhysicalDedupe;
-        lease = await route.residency.acquireOrCreate({
-          resourceId: allocation.resourceId,
-          declaredBytes: allocation.byteLength,
-          kind: 'model-weight-buffer',
-          metadata: {
-            resourceSharingPolicy: manifest.resourceSharing.policy,
-            physicalResourceId: allocation.physicalResourceId,
-            bundleSha256: manifest.bundle.sha256,
-            bundleByteLength: manifest.bundle.byteLength,
-            sourceByteOffset: allocation.byteOffset,
-            byteLength: allocation.byteLength,
-            usage: allocation.usage,
-            ...(sharedPhysical ? {} : {
-              semanticResourceId: allocation.semanticResourceId,
-              modelId: manifest.modelId,
-              revision: manifest.revision,
-              manifestMetadata: manifest.metadata,
-              allocationId: allocation.allocationId,
-              allocationMetadata: allocation.metadata,
-              tensorSemantics: allocation.tensors,
-            }),
-          },
-          signal,
-          create({ signal: flightSignal }) {
-            throwIfAborted(flightSignal);
-            let buffer;
-            try {
-              buffer = route.runtime.createBuffer({
-                label: `${manifest.modelId}@${manifest.revision}:${allocation.allocationId}`,
-                size: allocation.byteLength,
-                usage: allocation.usage,
-              });
-              route.runtime.writeBuffer(
-                buffer,
-                bytes.subarray(allocation.byteOffset, allocation.byteOffset + allocation.byteLength),
-              );
-              return buffer;
-            } catch (error) {
-              if (buffer && typeof buffer.destroy === 'function') buffer.destroy();
-              throw error;
-            }
-          },
-          dispose(buffer) {
-            if (typeof buffer.destroy === 'function') buffer.destroy();
-          },
-        });
-      } catch (cause) {
-        const error = new Error(`failed to load model allocation ${allocation.allocationId}: ${String(cause?.message || cause)}`);
-        error.name = cause?.name || 'Error';
-        error.cause = cause;
-        error.phase = 'allocation';
-        error.allocationId = allocation.allocationId;
-        throw error;
-      }
-      leases.push(lease);
-      allocations.push(Object.freeze({
-        allocationId: allocation.allocationId,
-        resourceId: allocation.resourceId,
-        physicalResourceId: allocation.physicalResourceId,
+function modelAllocationDescriptor(manifest, allocation) {
+  const sharedPhysical = manifest.resourceSharing.policy
+    === WEBGPU_MODEL_RESOURCE_SHARING_POLICIES.contentAddressedPhysicalDedupe;
+  return {
+    resourceId: allocation.resourceId,
+    declaredBytes: allocation.byteLength,
+    kind: 'model-weight-buffer',
+    metadata: {
+      resourceSharingPolicy: manifest.resourceSharing.policy,
+      physicalResourceId: allocation.physicalResourceId,
+      bundleSha256: manifest.bundle.sha256,
+      bundleByteLength: manifest.bundle.byteLength,
+      sourceByteOffset: allocation.byteOffset,
+      byteLength: allocation.byteLength,
+      usage: allocation.usage,
+      ...(sharedPhysical ? {} : {
         semanticResourceId: allocation.semanticResourceId,
-        semanticLeaseId: `${allocation.semanticResourceId}:lease:${lease.leaseId}`,
-        resourceSharingPolicy: manifest.resourceSharing.policy,
-        leaseId: lease.leaseId,
-        generation: lease.generation,
-        byteOffset: allocation.byteOffset,
-        byteLength: allocation.byteLength,
-        usage: allocation.usage,
-        buffer: lease.resource,
-      }));
-    }
-  } catch (error) {
-    error.cleanup = releaseLeases(leases);
-    error.verification = verification;
-    throw error;
-  }
+        modelId: manifest.modelId,
+        revision: manifest.revision,
+        manifestMetadata: manifest.metadata,
+        allocationId: allocation.allocationId,
+        allocationMetadata: allocation.metadata,
+        tensorSemantics: allocation.tensors,
+      }),
+    },
+  };
+}
 
+function modelAllocationFromLease(manifest, allocation, lease) {
+  return Object.freeze({
+    allocationId: allocation.allocationId,
+    resourceId: allocation.resourceId,
+    physicalResourceId: allocation.physicalResourceId,
+    semanticResourceId: allocation.semanticResourceId,
+    semanticLeaseId: `${allocation.semanticResourceId}:lease:${lease.leaseId}`,
+    resourceSharingPolicy: manifest.resourceSharing.policy,
+    leaseId: lease.leaseId,
+    generation: lease.generation,
+    byteOffset: allocation.byteOffset,
+    byteLength: allocation.byteLength,
+    usage: allocation.usage,
+    buffer: lease.resource,
+  });
+}
+
+function createModelResourceLease({ manifest, route, verification, residentReuseReport, leases, allocations }) {
   const allocationById = new Map(allocations.map(allocation => [allocation.allocationId, allocation]));
   const tensors = Object.create(null);
   for (const manifestAllocation of manifest.allocations) {
@@ -805,6 +734,7 @@ export async function loadWebGpuModelResources(input = {}) {
     routeId: route.routeId,
     manifest,
     verification,
+    residentReuseReport: residentReuseReport ?? null,
     allocations: Object.freeze(allocations),
     tensors: Object.freeze(tensors),
     release() {
@@ -829,5 +759,159 @@ export async function loadWebGpuModelResources(input = {}) {
         ...cleanup,
       });
     },
+  });
+}
+
+export async function loadResidentWebGpuModelResources(input = {}) {
+  const { manifest, route, signal } = input;
+  if (input.bundle != null || input.source != null) {
+    throw new Error('resident model resource reuse accepts manifest identity only; source and bundle custody are not read');
+  }
+  if (input.maxResources != null || input.maxBytes != null || input.retentionLimit != null) {
+    throw new Error('resident model resource reuse is uncapped; maxResources, maxBytes, and retentionLimit are not supported');
+  }
+  assertRoute(route);
+  if (typeof route.residency.acquireExisting !== 'function') {
+    throw new Error('route.residency must expose acquireExisting for resident model reuse');
+  }
+  throwIfAborted(signal);
+  const validation = validateWebGpuModelResourceManifest(manifest);
+  if (!validation.ok) throw new Error(`invalid WebGPU model resource manifest:\n${validation.errors.join('\n')}`);
+  const leases = [];
+  const allocations = [];
+  try {
+    for (const allocation of manifest.allocations) {
+      throwIfAborted(signal);
+      let lease;
+      try {
+        lease = await route.residency.acquireExisting({
+          ...modelAllocationDescriptor(manifest, allocation),
+          signal,
+        });
+      } catch (cause) {
+        const error = new Error(`failed to reacquire resident model allocation ${allocation.allocationId}: ${String(cause?.message || cause)}`);
+        error.name = cause?.name || 'Error';
+        error.code = cause?.code;
+        error.resourceId = cause?.resourceId || allocation.resourceId;
+        error.cause = cause;
+        error.phase = 'resident-allocation';
+        error.allocationId = allocation.allocationId;
+        throw error;
+      }
+      leases.push(lease);
+      allocations.push(modelAllocationFromLease(manifest, allocation, lease));
+    }
+  } catch (error) {
+    error.cleanup = releaseLeases(leases);
+    throw error;
+  }
+  const residentReuseReport = deepFreeze({
+    schema: WEBGPU_MODEL_RESOURCE_RESIDENT_REUSE_SCHEMA,
+    status: 'resident-reused',
+    manifestIdentity: manifest.identity,
+    routeId: route.routeId,
+    allocationResourceIds: allocations.map(allocation => allocation.resourceId),
+    authority: 'resident-allocation-identity-and-metadata-match-normalized-manifest-source-bytes-not-reread',
+  });
+  return createModelResourceLease({
+    manifest,
+    route,
+    verification: null,
+    residentReuseReport,
+    leases,
+    allocations,
+  });
+}
+
+export async function loadWebGpuModelResources(input = {}) {
+  const { manifest, route, signal } = input;
+  assertRoute(route);
+  throwIfAborted(signal);
+  let custody = bundleCustody.get(input.bundle);
+  if (!custody) {
+    if (input.bundle?.schema === WEBGPU_MODEL_RESOURCE_BUNDLE_CUSTODY_SCHEMA) {
+      throw new Error('model bundle custody handle must be authentic and module-issued');
+    }
+    const prepared = await prepareBundle(
+      manifest,
+      input.bundle,
+      'copy',
+      { signal, subtle: input.subtle },
+      { byteCustody: 'loader-owned-snapshot-before-verification' },
+    );
+    try {
+      return await loadWebGpuModelResources({ ...input, bundle: prepared });
+    } finally {
+      prepared.release();
+    }
+  }
+  if (custody.released) throw new Error('model bundle custody handle is released');
+  const validation = validateWebGpuModelResourceManifest(manifest);
+  if (!validation.ok) throw new Error(`invalid WebGPU model resource manifest:\n${validation.errors.join('\n')}`);
+  if (custody.identity !== manifest?.identity) {
+    throw new Error(`prepared model bundle manifest identity ${custody.identity} does not match ${manifest?.identity || '<missing>'}`);
+  }
+  if (custody.manifestFingerprint !== canonicalJson(manifest)) {
+    throw new Error('prepared model bundle manifest content does not match the manifest used to establish custody');
+  }
+  const bytes = custody.bytes;
+  const verification = input.bundle.verification;
+  const leases = [];
+  const allocations = [];
+  try {
+    for (const allocation of manifest.allocations) {
+      throwIfAborted(signal);
+      let lease;
+      try {
+        lease = await route.residency.acquireOrCreate({
+          ...modelAllocationDescriptor(manifest, allocation),
+          signal,
+          create({ signal: flightSignal }) {
+            throwIfAborted(flightSignal);
+            let buffer;
+            try {
+              buffer = route.runtime.createBuffer({
+                label: `${manifest.modelId}@${manifest.revision}:${allocation.allocationId}`,
+                size: allocation.byteLength,
+                usage: allocation.usage,
+              });
+              route.runtime.writeBuffer(
+                buffer,
+                bytes.subarray(allocation.byteOffset, allocation.byteOffset + allocation.byteLength),
+              );
+              return buffer;
+            } catch (error) {
+              if (buffer && typeof buffer.destroy === 'function') buffer.destroy();
+              throw error;
+            }
+          },
+          dispose(buffer) {
+            if (typeof buffer.destroy === 'function') buffer.destroy();
+          },
+        });
+      } catch (cause) {
+        const error = new Error(`failed to load model allocation ${allocation.allocationId}: ${String(cause?.message || cause)}`);
+        error.name = cause?.name || 'Error';
+        error.cause = cause;
+        error.phase = 'allocation';
+        error.allocationId = allocation.allocationId;
+        throw error;
+      }
+      leases.push(lease);
+      allocations.push(modelAllocationFromLease(manifest, allocation, lease));
+    }
+  } catch (error) {
+    error.cleanup = releaseLeases(leases);
+    error.verification = verification;
+    throw error;
+  }
+
+  return createModelResourceLease({
+    manifest,
+    route,
+    verification,
+    residentReuseReport: null,
+    leases,
+    allocations,
   });
 }

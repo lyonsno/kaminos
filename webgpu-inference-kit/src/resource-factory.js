@@ -260,8 +260,35 @@ export function createWebGpuResourceFactory(input = {}) {
     return promise;
   }
 
+  function acquireExisting(request = {}) {
+    if (invalidation) return Promise.reject(new Error(`resource factory invalidated: ${invalidation.reason}`));
+    const normalized = descriptor(request);
+    const resident = input.residency.snapshot().resources.find(
+      resource => resource.resourceId === normalized.resourceId && resource.status === 'resident',
+    );
+    if (resident) {
+      return Promise.resolve(input.residency.acquire({
+        ...normalized,
+        routeId: request.routeId,
+        ownership: 'managed',
+      }));
+    }
+    const flight = activeByResource.get(normalized.resourceId);
+    if (flight) {
+      if (flight.fingerprint !== normalized.fingerprint) {
+        return Promise.reject(new Error(`conflicting descriptor for active resource flight ${normalized.resourceId}`));
+      }
+      return addWaiter(flight, request);
+    }
+    const error = new Error(`resource ${normalized.resourceId} is not resident and has no active creation flight`);
+    error.code = 'WEBGPU_RESOURCE_NOT_RESIDENT';
+    error.resourceId = normalized.resourceId;
+    return Promise.reject(error);
+  }
+
   return Object.freeze({
     sessionId: input.sessionId,
+    acquireExisting,
     acquireOrCreate,
     forgetFlight(flightId) {
       const index = flights.findIndex(flight => flight.flightId === flightId);

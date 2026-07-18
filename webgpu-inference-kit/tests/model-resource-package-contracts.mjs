@@ -6,9 +6,11 @@ import {
   WEBGPU_MODEL_RESOURCE_PACKAGE_LEASE_SCHEMA,
   WEBGPU_MODEL_RESOURCE_PACKAGE_SCHEMA,
   createWebGpuInferenceSession,
+  createWebGpuPhaseResourceWorkingSet,
   defineWebGpuModelResourceChunkPlan,
   defineWebGpuModelResourceManifest,
   defineWebGpuModelResourcePackage,
+  defineWebGpuPhaseResourcePlan,
   loadWebGpuModelResourcePackageFromSources,
   validateWebGpuModelResourcePackage,
 } from '../src/index.js';
@@ -53,11 +55,12 @@ function childManifest(resourceId, tensorName, bytes) {
 
 function deviceFixture() {
   const buffers = [];
+  const lost = deferred();
   const device = {
     queue: { writeBuffer() {} },
     features: new Set(),
     limits: {},
-    lost: new Promise(() => {}),
+    lost: lost.promise,
     createBuffer(descriptor) {
       const buffer = {
         descriptor,
@@ -68,7 +71,7 @@ function deviceFixture() {
       return buffer;
     },
   };
-  return { device, buffers };
+  return { device, buffers, lose(info) { lost.resolve(info); } };
 }
 
 function responseFor(bytes) {
@@ -777,5 +780,205 @@ await assert.rejects(
 assert.equal(cancelSession.residency.hasActiveLeases(cancelRoute.routeId), false);
 cancelSession.unregisterRoute(cancelRoute.routeId);
 cancelSession.close();
+
+const childLoaderFixture = deviceFixture();
+const childLoaderSession = await createWebGpuInferenceSession({
+  sessionId: 'model-resource-package-child-loader',
+  device: childLoaderFixture.device,
+  adapterName: 'fixture-adapter',
+});
+const childLoaderRoute = await childLoaderSession.registerRoute({
+  routeId: 'package-child-loader-route',
+});
+assert.equal(
+  typeof childLoaderRoute.createModelResourcePackageLoader,
+  'function',
+  'a registered route must expose package admission with independent child acquisition',
+);
+
+const admittedChunkBytes = Uint8Array.from(byteSets.decoder);
+const admittedSources = {
+  encoder: 'https://models.example/admitted-encoder.bin',
+  decoder: { 'decoder-single': admittedChunkBytes },
+};
+const fetchedChildUrls = [];
+const childLoader = childLoaderRoute.createModelResourcePackageLoader({
+  loaderId: 'phase-package-loader',
+  package: mutableChunkPackage,
+  sources: admittedSources,
+  async fetch(url) {
+    fetchedChildUrls.push(String(url));
+    return responseFor(byteSets.encoder);
+  },
+});
+assert.equal(childLoader.schema, 'kaminos.webgpu-model-resource-package-loader.v0');
+assert.equal(Object.isFrozen(childLoader), true);
+assert.equal(childLoader.packageIdentity, mutableChunkPackage.identity);
+assert.deepEqual(childLoader.resourceIds, ['encoder', 'decoder']);
+assert.equal(childLoader.snapshot().status, 'active');
+assert.equal(childLoader.snapshot().activeLeaseCount, 0);
+assert.equal(childLoaderFixture.buffers.length, 0, 'package admission must not allocate GPU resources');
+
+admittedSources.encoder = 'https://models.example/redirected-after-admission.bin';
+admittedChunkBytes.fill(0xff);
+await assert.rejects(
+  () => childLoader.acquireResource({ resourceId: 'missing' }),
+  /unknown.*package resource|package resource.*missing/i,
+);
+assert.equal(childLoaderFixture.buffers.length, 0, 'unknown child lookup must fail before GPU work');
+
+const decoderChild = await childLoader.acquireResource({
+  resource: { resourceId: 'decoder' },
+  phaseId: 'decode',
+  purpose: 'required',
+});
+assert.equal(decoderChild.schema, 'kaminos.webgpu-model-resource-package-child-lease.v0');
+assert.equal(decoderChild.resourceId, 'decoder');
+assert.equal(decoderChild.loadKind, 'chunks');
+assert.equal(decoderChild.report.status, 'loaded');
+assert.equal(decoderChild.report.packageIdentity, mutableChunkPackage.identity);
+assert.equal(decoderChild.report.phaseId, 'decode');
+assert.equal(decoderChild.report.purpose, 'required');
+assert.equal(decoderChild.authorityReport, decoderChild.chunkReport);
+assert.deepEqual(fetchedChildUrls, [], 'chunk-only acquisition must not fetch an unrelated ordinary child');
+assert.equal(childLoaderFixture.buffers.length, 1);
+assert.equal(childLoader.snapshot().activeLeaseCount, 1);
+assert.deepEqual(childLoader.snapshot().activeResourceIds, ['decoder']);
+
+const encoderChild = await childLoader.acquireResource({ resourceId: 'encoder' });
+assert.equal(encoderChild.resourceId, 'encoder');
+assert.equal(encoderChild.loadKind, 'source');
+assert.equal(encoderChild.authorityReport, encoderChild.acquisitionReport);
+assert.deepEqual(
+  fetchedChildUrls,
+  ['https://models.example/admitted-encoder.bin'],
+  'ordinary child acquisition must use the source captured at admission',
+);
+assert.equal(childLoaderFixture.buffers.length, 2);
+const decoderChildRelease = decoderChild.release();
+assert.equal(decoderChildRelease.schema, 'kaminos.webgpu-model-resource-package-child-lease.v0');
+assert.equal(decoderChildRelease.status, 'released');
+assert.equal(decoderChild.release().status, 'already-released');
+const encoderChildRelease = encoderChild.release();
+assert.equal(encoderChildRelease.schema, 'kaminos.webgpu-model-resource-package-child-lease.v0');
+assert.equal(encoderChildRelease.status, 'released');
+assert.equal(encoderChildRelease.underlyingRelease.status, 'released');
+assert.equal(childLoader.snapshot().activeLeaseCount, 0);
+
+const residentEncoderChild = await childLoader.acquireResource({ resourceId: 'encoder' });
+assert.equal(residentEncoderChild.report.loadPath, 'resident');
+assert.equal(
+  residentEncoderChild.authorityReport.schema,
+  'kaminos.webgpu-model-resource-resident-reuse.v0',
+);
+assert.equal(residentEncoderChild.acquisitionReport, null);
+assert.deepEqual(
+  fetchedChildUrls,
+  ['https://models.example/admitted-encoder.bin'],
+  'direct resident reacquisition must not fetch source bytes',
+);
+assert.equal(residentEncoderChild.release().status, 'released');
+
+const childPlan = defineWebGpuPhaseResourcePlan({
+  planId: 'package-child-phase-plan',
+  resources: [
+    { resourceId: 'encoder', declaredBytes: manifests.encoder.bundle.byteLength },
+    { resourceId: 'decoder', declaredBytes: manifests.decoder.bundle.byteLength },
+  ],
+  phases: [
+    { phaseId: 'encode', requiredResourceIds: ['encoder'], prefetchResourceIds: ['decoder'] },
+    { phaseId: 'decode', requiredResourceIds: ['decoder'] },
+  ],
+});
+const childWorkingSet = createWebGpuPhaseResourceWorkingSet({
+  controllerId: 'package-child-working-set',
+  plan: childPlan,
+  acquireResource: childLoader.acquireResource,
+});
+const fetchedBeforeResidentReacquire = [...fetchedChildUrls];
+const childEncode = await childWorkingSet.transitionToPhase('encode');
+assert.deepEqual(childEncode.acquiredResourceIds, ['encoder', 'decoder']);
+assert.deepEqual(
+  fetchedChildUrls,
+  fetchedBeforeResidentReacquire,
+  'phase reacquisition must not refetch an ordinary child while every allocation remains resident',
+);
+assert.equal(childLoader.snapshot().activeLeaseCount, 2);
+const childDecode = await childWorkingSet.transitionToPhase('decode');
+assert.deepEqual(childDecode.releasedResourceIds, ['encoder']);
+assert.deepEqual(childLoader.snapshot().activeResourceIds, ['decoder']);
+assert.equal(childWorkingSet.close().status, 'closed');
+assert.equal(childLoader.snapshot().activeLeaseCount, 0);
+
+assert.equal(
+  childLoaderSession.residency.evict(manifests.encoder.allocations[0].resourceId).status,
+  'evicted',
+);
+const fetchCountBeforeEvictedFallback = fetchedChildUrls.length;
+const custodyAfterClose = await childLoader.acquireResource({ resourceId: 'encoder' });
+assert.equal(custodyAfterClose.report.loadPath, 'source');
+assert.equal(
+  fetchedChildUrls.length,
+  fetchCountBeforeEvictedFallback + 1,
+  'evicted ordinary children must fall back to the admitted authenticated source',
+);
+const loaderClose = childLoader.close();
+assert.equal(loaderClose.status, 'closed-with-active-leases');
+assert.equal(loaderClose.activeLeaseCount, 1);
+await assert.rejects(
+  () => childLoader.acquireResource({ resourceId: 'decoder' }),
+  /package resource loader is closed/i,
+);
+assert.equal(custodyAfterClose.release().status, 'released', 'closing admission must not steal child lease custody');
+assert.equal(childLoader.snapshot().activeLeaseCount, 0);
+assert.equal(childLoader.close().status, 'already-closed');
+
+assert.throws(
+  () => childLoaderRoute.createModelResourcePackageLoader({
+    loaderId: 'missing-source-loader',
+    package: mutableChunkPackage,
+    sources: { encoder: new Blob([byteSets.encoder]) },
+  }),
+  /missing.*decoder|decoder.*source/i,
+);
+assert.throws(
+  () => childLoaderRoute.createModelResourcePackageLoader({
+    loaderId: 'capped-child-loader',
+    package: mutableChunkPackage,
+    sources: {
+      encoder: new Blob([byteSets.encoder]),
+      decoder: { 'decoder-single': new Blob([byteSets.decoder]) },
+    },
+    maxActiveResources: 1,
+  }),
+  /uncapped|maxActiveResources/i,
+);
+childLoaderSession.unregisterRoute(childLoaderRoute.routeId);
+childLoaderSession.close();
+
+const invalidatedChildFixture = deviceFixture();
+const invalidatedChildSession = await createWebGpuInferenceSession({
+  sessionId: 'model-resource-package-child-invalidation',
+  device: invalidatedChildFixture.device,
+  adapterName: 'fixture-adapter',
+});
+const invalidatedChildRoute = await invalidatedChildSession.registerRoute({
+  routeId: 'package-child-invalidation-route',
+});
+const invalidatedChildLoader = invalidatedChildRoute.createModelResourcePackageLoader({
+  loaderId: 'package-child-invalidation-loader',
+  package: singleResourcePackage,
+  sources: { encoder: new Blob([byteSets.encoder]) },
+});
+const invalidatedChildLease = await invalidatedChildLoader.acquireResource({ resourceId: 'encoder' });
+assert.equal(invalidatedChildLoader.snapshot().activeLeaseCount, 1);
+invalidatedChildFixture.lose({ reason: 'unknown', message: 'package child invalidation fixture' });
+await invalidatedChildSession.deviceLost;
+const invalidatedChildRelease = invalidatedChildLease.release();
+assert.equal(invalidatedChildRelease.schema, 'kaminos.webgpu-model-resource-package-child-lease.v0');
+assert.equal(invalidatedChildRelease.status, 'invalidated');
+assert.equal(invalidatedChildRelease.underlyingRelease.status, 'invalidated');
+assert.equal(invalidatedChildLoader.snapshot().activeLeaseCount, 0);
+assert.equal(invalidatedChildLoader.close().status, 'closed');
 
 console.log('model resource package contracts passed');
