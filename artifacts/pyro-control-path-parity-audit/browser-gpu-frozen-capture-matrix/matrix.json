@@ -1,6 +1,6 @@
 {
   "schema": "kaminos.pyro-control-path.browser-gpu-frozen-capture-matrix.v0",
-  "generatedAt": "2026-07-17T19:27:28.483Z",
+  "generatedAt": "2026-07-18T16:56:03.472Z",
   "enumerationCount": 206,
   "auditedControlCount": 6,
   "rows": [
@@ -95,7 +95,7 @@
           "identity": "exact-source-marker-evidence-v0",
           "stage": "splat-sidecar-support-input",
           "path": "volume-core.js",
-          "line": 2485,
+          "line": 2509,
           "marker": "fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>)",
           "markerSha256": "3bb60b9d816f8f483d104521ba44f9507fbd8ab28340d67ad8d696fde956775a",
           "scopeEnd": "let center = boundarySupportAtCell(c, supportWeights);",
@@ -115,20 +115,20 @@
             }
           ],
           "excludedMarkers": [],
-          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+          "fileSha256": "907f383579802e926fb23696398164ae4ef00aefc2ec4db954994dc48c50785a"
         },
         {
           "identity": "exact-source-marker-evidence-v0",
           "stage": "splat-admission-and-learned-attributes",
           "path": "volume-core.js",
-          "line": 5102,
+          "line": 5193,
           "marker": "let sidecar = boundarySidecar[cellIndex];",
           "markerSha256": "1811d9e7f8ce96a89129462a3f61324de53eb118e4e4f0248551b3aa4af7aac9",
           "scopeEnd": null,
           "scopeSha256": "1811d9e7f8ce96a89129462a3f61324de53eb118e4e4f0248551b3aa4af7aac9",
           "requiredMarkers": [],
           "excludedMarkers": [],
-          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+          "fileSha256": "907f383579802e926fb23696398164ae4ef00aefc2ec4db954994dc48c50785a"
         }
       ],
       "staticEnumeration": {
@@ -271,20 +271,20 @@
           "identity": "exact-source-marker-evidence-v0",
           "stage": "raymarch-uniform",
           "path": "volume-core.js",
-          "line": 7949,
+          "line": 8330,
           "marker": "uniforms[285] = boundaryInspectActive ? boundaryUniforms.topologyGain",
           "markerSha256": "378af206c110a6ffcdaec984d025cc460c4fe7d845c8f87daaeee67a2aeec0f9",
           "scopeEnd": null,
           "scopeSha256": "378af206c110a6ffcdaec984d025cc460c4fe7d845c8f87daaeee67a2aeec0f9",
           "requiredMarkers": [],
           "excludedMarkers": [],
-          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+          "fileSha256": "907f383579802e926fb23696398164ae4ef00aefc2ec4db954994dc48c50785a"
         },
         {
           "identity": "exact-source-marker-evidence-v0",
           "stage": "splat-sidecar-exclusion",
           "path": "volume-core.js",
-          "line": 2485,
+          "line": 2509,
           "marker": "fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>)",
           "markerSha256": "3bb60b9d816f8f483d104521ba44f9507fbd8ab28340d67ad8d696fde956775a",
           "scopeEnd": "boundarySidecarDst[index3(gid)] = vec4<f32>(",
@@ -294,7 +294,7 @@
             "u.topology_shell_shape",
             "boundaryUniforms.topologyGain"
           ],
-          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+          "fileSha256": "907f383579802e926fb23696398164ae4ef00aefc2ec4db954994dc48c50785a"
         }
       ],
       "staticEnumeration": {
@@ -440,40 +440,40 @@
           "identity": "exact-source-marker-evidence-v0",
           "stage": "splat-sidecar-ridge-input",
           "path": "volume-core.js",
-          "line": 2509,
+          "line": 2533,
           "marker": "let ridgeGain = clamp(u.boundary_fire_structure.x, 0.0, 2.0)",
           "markerSha256": "c2c612c81bfcbf936020a99b4271fb216e4ca5b8030ac0b5c8a87cae9211bd44",
           "scopeEnd": null,
           "scopeSha256": "c2c612c81bfcbf936020a99b4271fb216e4ca5b8030ac0b5c8a87cae9211bd44",
           "requiredMarkers": [],
           "excludedMarkers": [],
-          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+          "fileSha256": "907f383579802e926fb23696398164ae4ef00aefc2ec4db954994dc48c50785a"
         },
         {
           "identity": "exact-source-marker-evidence-v0",
           "stage": "splat-admission",
           "path": "volume-core.js",
-          "line": 5107,
+          "line": 5198,
           "marker": "let structuralSignal = sidecar.z * smoothstep(0.055, 0.32, sidecar.y)",
           "markerSha256": "14fa6c01225d42471bdf7573695bb49d0491ab4632de05e23123ed713a86af0e",
           "scopeEnd": null,
           "scopeSha256": "14fa6c01225d42471bdf7573695bb49d0491ab4632de05e23123ed713a86af0e",
           "requiredMarkers": [],
           "excludedMarkers": [],
-          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+          "fileSha256": "907f383579802e926fb23696398164ae4ef00aefc2ec4db954994dc48c50785a"
         },
         {
           "identity": "exact-source-marker-evidence-v0",
           "stage": "learned-splat-attributes",
           "path": "volume-core.js",
-          "line": 5123,
+          "line": 5214,
           "marker": "let attributeFeatures = boundarySplatAttributeFeatures(sidecar, material, fire, micro);",
           "markerSha256": "25ca0723e8ed3ce06dc7dd3bc4d2fec5facd7ad67742cc5f19e8557e5f57cfdc",
           "scopeEnd": null,
           "scopeSha256": "25ca0723e8ed3ce06dc7dd3bc4d2fec5facd7ad67742cc5f19e8557e5f57cfdc",
           "requiredMarkers": [],
           "excludedMarkers": [],
-          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+          "fileSha256": "907f383579802e926fb23696398164ae4ef00aefc2ec4db954994dc48c50785a"
         }
       ],
       "staticEnumeration": {
@@ -618,20 +618,20 @@
           "identity": "exact-source-marker-evidence-v0",
           "stage": "raymarch-uniform",
           "path": "volume-core.js",
-          "line": 7962,
+          "line": 8343,
           "marker": "uniforms[298] = boundaryFireUniforms.tipBreakup;",
           "markerSha256": "4559d48770a63523e06a0f10247d8d4067bc84952b929976674645b7f76318f1",
           "scopeEnd": null,
           "scopeSha256": "4559d48770a63523e06a0f10247d8d4067bc84952b929976674645b7f76318f1",
           "requiredMarkers": [],
           "excludedMarkers": [],
-          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+          "fileSha256": "907f383579802e926fb23696398164ae4ef00aefc2ec4db954994dc48c50785a"
         },
         {
           "identity": "exact-source-marker-evidence-v0",
           "stage": "splat-sidecar-exclusion",
           "path": "volume-core.js",
-          "line": 2485,
+          "line": 2509,
           "marker": "fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>)",
           "markerSha256": "3bb60b9d816f8f483d104521ba44f9507fbd8ab28340d67ad8d696fde956775a",
           "scopeEnd": "boundarySidecarDst[index3(gid)] = vec4<f32>(",
@@ -641,7 +641,7 @@
             "u.boundary_fire_structure.z",
             "boundaryFireUniforms.tipBreakup"
           ],
-          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+          "fileSha256": "907f383579802e926fb23696398164ae4ef00aefc2ec4db954994dc48c50785a"
         }
       ],
       "staticEnumeration": {
@@ -789,7 +789,7 @@
           "identity": "exact-source-marker-evidence-v0",
           "stage": "splat-camera-uniform",
           "path": "volume-core.js",
-          "line": 7668,
+          "line": 8049,
           "marker": "if (boundarySplatCameraBuffer) {",
           "markerSha256": "b2c7783e5f202fffc010049ad05704956e712e0e004f2b9765c4e76c6157d967",
           "scopeEnd": "device.queue.writeBuffer(boundarySplatCameraBuffer, 0, splatCamera);",
@@ -809,35 +809,35 @@
             }
           ],
           "excludedMarkers": [],
-          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+          "fileSha256": "907f383579802e926fb23696398164ae4ef00aefc2ec4db954994dc48c50785a"
         },
         {
           "identity": "exact-source-marker-evidence-v0",
           "stage": "splat-vertex-geometry",
           "path": "volume-core.js",
-          "line": 5159,
+          "line": 5250,
           "marker": "splat.shape.x * boundarySplatCamera.controls.x",
           "markerSha256": "3ac44042f4c6285343c5193f7ffef03d87848d81abb8fe59047369a7da4168d4",
           "scopeEnd": null,
           "scopeSha256": "3ac44042f4c6285343c5193f7ffef03d87848d81abb8fe59047369a7da4168d4",
           "requiredMarkers": [],
           "excludedMarkers": [],
-          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+          "fileSha256": "907f383579802e926fb23696398164ae4ef00aefc2ec4db954994dc48c50785a"
         },
         {
           "identity": "exact-source-marker-evidence-v0",
           "stage": "raymarch-route-exclusion",
           "path": "volume-core.js",
-          "line": 1015,
+          "line": 1032,
           "marker": "const WGSL = /* wgsl */`",
           "markerSha256": "a12ba6730f8df316bd0cfdeab4a2d7638fea49bf64f5789b1a88ab2d14e751e8",
           "scopeEnd": "const BOUNDARY_SPLAT_WGSL = `",
-          "scopeSha256": "10357563cebee2650f294d2c51918f93f7cb3a96631e13556a7b50fa40b02260",
+          "scopeSha256": "a7049f87abb3ba79f6b26493147396ebd744c16ee0d9f4fa57ce0e5319829d0d",
           "requiredMarkers": [],
           "excludedMarkers": [
             "boundarySplatCamera.controls.x"
           ],
-          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+          "fileSha256": "907f383579802e926fb23696398164ae4ef00aefc2ec4db954994dc48c50785a"
         }
       ],
       "staticEnumeration": {
@@ -983,7 +983,7 @@
           "identity": "exact-source-marker-evidence-v0",
           "stage": "splat-camera-uniform",
           "path": "volume-core.js",
-          "line": 7668,
+          "line": 8049,
           "marker": "if (boundarySplatCameraBuffer) {",
           "markerSha256": "b2c7783e5f202fffc010049ad05704956e712e0e004f2b9765c4e76c6157d967",
           "scopeEnd": "device.queue.writeBuffer(boundarySplatCameraBuffer, 0, splatCamera);",
@@ -1003,35 +1003,35 @@
             }
           ],
           "excludedMarkers": [],
-          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+          "fileSha256": "907f383579802e926fb23696398164ae4ef00aefc2ec4db954994dc48c50785a"
         },
         {
           "identity": "exact-source-marker-evidence-v0",
           "stage": "splat-fragment-optics",
           "path": "volume-core.js",
-          "line": 5173,
+          "line": 5264,
           "marker": "let kernelSharpness = clamp(boundarySplatCamera.controls.w, 1.0, 12.0);",
           "markerSha256": "4b32020698187ee86a4f7b4da31373c9d51451250a8e3d938cb268d6585ad24d",
           "scopeEnd": null,
           "scopeSha256": "4b32020698187ee86a4f7b4da31373c9d51451250a8e3d938cb268d6585ad24d",
           "requiredMarkers": [],
           "excludedMarkers": [],
-          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+          "fileSha256": "907f383579802e926fb23696398164ae4ef00aefc2ec4db954994dc48c50785a"
         },
         {
           "identity": "exact-source-marker-evidence-v0",
           "stage": "raymarch-route-exclusion",
           "path": "volume-core.js",
-          "line": 1015,
+          "line": 1032,
           "marker": "const WGSL = /* wgsl */`",
           "markerSha256": "a12ba6730f8df316bd0cfdeab4a2d7638fea49bf64f5789b1a88ab2d14e751e8",
           "scopeEnd": "const BOUNDARY_SPLAT_WGSL = `",
-          "scopeSha256": "10357563cebee2650f294d2c51918f93f7cb3a96631e13556a7b50fa40b02260",
+          "scopeSha256": "a7049f87abb3ba79f6b26493147396ebd744c16ee0d9f4fa57ce0e5319829d0d",
           "requiredMarkers": [],
           "excludedMarkers": [
             "boundarySplatCamera.controls.w"
           ],
-          "fileSha256": "9d411d0e894a05aade003d155f555adcfdda385b2214aefcc744e3acc6ba03d9"
+          "fileSha256": "907f383579802e926fb23696398164ae4ef00aefc2ec4db954994dc48c50785a"
         }
       ],
       "staticEnumeration": {
