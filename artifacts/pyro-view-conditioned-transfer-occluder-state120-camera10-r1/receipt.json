@@ -1,0 +1,429 @@
+{
+  "artifacts": {
+    "README.md": {
+      "bytes": 2907,
+      "path": "/private/tmp/kaminos-pyro-view-conditioned-transfer-compression-0717/artifacts/pyro-view-conditioned-transfer-occluder-state120-camera10-r1/README.md",
+      "sha256": "ba0479d88dd0e5ec9c544c39d6f039a9dac474ad9a14dd49d4787e8be8f3f582"
+    },
+    "annotated-occluder-sheet.png": {
+      "bytes": 411166,
+      "path": "/private/tmp/kaminos-pyro-view-conditioned-transfer-compression-0717/artifacts/pyro-view-conditioned-transfer-occluder-state120-camera10-r1/annotated-occluder-sheet.png",
+      "sha256": "4c0db119e656c523aa1517f0a5ae4a66fe896635f73c71242a4dfb0e7c975e74"
+    },
+    "d12-t2-occluded-residual.png": {
+      "bytes": 76080,
+      "path": "/private/tmp/kaminos-pyro-view-conditioned-transfer-compression-0717/artifacts/pyro-view-conditioned-transfer-occluder-state120-camera10-r1/d12-t2-occluded-residual.png",
+      "sha256": "422fa287284ee44960e4e72ec65e97af272db85c4774676d5f33fc5772afe30a"
+    },
+    "d12-t2-occluded.png": {
+      "bytes": 28394,
+      "path": "/private/tmp/kaminos-pyro-view-conditioned-transfer-compression-0717/artifacts/pyro-view-conditioned-transfer-occluder-state120-camera10-r1/d12-t2-occluded.png",
+      "sha256": "9c34d4d369bd8fa91827b83a9933899c478fabbec0cb9a6d9af2e47262e793e9"
+    },
+    "d12-t2-occlusion-specific-residual.png": {
+      "bytes": 15714,
+      "path": "/private/tmp/kaminos-pyro-view-conditioned-transfer-compression-0717/artifacts/pyro-view-conditioned-transfer-occluder-state120-camera10-r1/d12-t2-occlusion-specific-residual.png",
+      "sha256": "8d4e3b4bde280a26db8061c7c02c3b1c36dd439b5e708464a3284ec6472c4493"
+    },
+    "d12-t4-occluded-residual.png": {
+      "bytes": 81833,
+      "path": "/private/tmp/kaminos-pyro-view-conditioned-transfer-compression-0717/artifacts/pyro-view-conditioned-transfer-occluder-state120-camera10-r1/d12-t4-occluded-residual.png",
+      "sha256": "6209c33d0b8a556dc989e86c51131b72ba9d40402b76d7617c99754b69c4d057"
+    },
+    "d12-t4-occluded.png": {
+      "bytes": 10627,
+      "path": "/private/tmp/kaminos-pyro-view-conditioned-transfer-compression-0717/artifacts/pyro-view-conditioned-transfer-occluder-state120-camera10-r1/d12-t4-occluded.png",
+      "sha256": "2fdb5466f3f0e01a2ff48e9bce5bfc58a849b15d3daaf63a9321bdc609298285"
+    },
+    "d12-t4-occlusion-specific-residual.png": {
+      "bytes": 16492,
+      "path": "/private/tmp/kaminos-pyro-view-conditioned-transfer-compression-0717/artifacts/pyro-view-conditioned-transfer-occluder-state120-camera10-r1/d12-t4-occlusion-specific-residual.png",
+      "sha256": "b403b3e1ab1f476c005f7af698420bdf22a9670a790bfe4676f93f90879eda8a"
+    },
+    "exact-occluded-reference.png": {
+      "bytes": 84963,
+      "path": "/private/tmp/kaminos-pyro-view-conditioned-transfer-compression-0717/artifacts/pyro-view-conditioned-transfer-occluder-state120-camera10-r1/exact-occluded-reference.png",
+      "sha256": "175887e929c8b665dc70110c85a5c8d2f738be07d919b8d4a5cdab330c7e03eb"
+    },
+    "occluder-depth-map.png": {
+      "bytes": 1092,
+      "path": "/private/tmp/kaminos-pyro-view-conditioned-transfer-compression-0717/artifacts/pyro-view-conditioned-transfer-occluder-state120-camera10-r1/occluder-depth-map.png",
+      "sha256": "1ce757ee7c8f03d00255fb890baac3cd3027e52430ba49464e12bbe04e7c616a"
+    },
+    "unoccluded-reference.png": {
+      "bytes": 91033,
+      "path": "/private/tmp/kaminos-pyro-view-conditioned-transfer-compression-0717/artifacts/pyro-view-conditioned-transfer-occluder-state120-camera10-r1/unoccluded-reference.png",
+      "sha256": "defafb7a0b65f52a2ce8c251ef04788ffb2981a948558bcc96c77d9a2e5653e1"
+    }
+  },
+  "command": "/private/tmp/kaminos-mlx-residual-venv/bin/python /private/tmp/kaminos-pyro-view-conditioned-transfer-compression-0717/view-conditioned-transfer-occluder-witness.py --input-manifest /private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/input-manifest.json --geometry interleaved-intragroup-plates-v0 --occluder-rgb 0,0,0 --treatment d12-t2=/private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/reductions/d12-t2/report.json --treatment d12-t4=/private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/reductions/d12-t4/report.json --out-dir artifacts/pyro-view-conditioned-transfer-occluder-state120-camera10-r1",
+  "effective": {
+    "backend": "numpy-cpu-v0",
+    "caps": null,
+    "depthSelectionPolicy": "alternating-quarter-span-v0",
+    "fallbackIdentity": null,
+    "fallbackUsed": false,
+    "geometry": "interleaved-intragroup-plates-v0",
+    "ignoredParameters": null,
+    "occluderRgb": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "timeout": null
+  },
+  "failurePhase": null,
+  "geometry": {
+    "backgroundDepth": "positive-infinity-no-opaque-geometry",
+    "depthSelectionPolicy": "alternating-quarter-span-v0",
+    "finitePixelCount": 13455,
+    "identity": "interleaved-intragroup-plates-v0",
+    "plateCount": 3,
+    "plates": [
+      {
+        "depth": 1.411258339881897,
+        "groupIndex": 0,
+        "pixelCount": 4484,
+        "plateIndex": 0,
+        "sourceDepthCenterSpan": [
+          1.3749672174453735,
+          1.5201317071914673
+        ],
+        "spanFraction": 0.25
+      },
+      {
+        "depth": 2.479254722595215,
+        "groupIndex": 6,
+        "pixelCount": 4488,
+        "plateIndex": 1,
+        "sourceDepthCenterSpan": [
+          2.3703813552856445,
+          2.5155458450317383
+        ],
+        "spanFraction": 0.75
+      },
+      {
+        "depth": 3.2361841797828674,
+        "groupIndex": 11,
+        "pixelCount": 4483,
+        "plateIndex": 2,
+        "sourceDepthCenterSpan": [
+          3.199892997741699,
+          3.345057725906372
+        ],
+        "spanFraction": 0.25
+      }
+    ],
+    "sourceActiveIntersectionPixelCount": 13455
+  },
+  "repo": {
+    "artifactCarrierCommit": null,
+    "artifactCarrierCommitBoundary": "external-first-commit-containing-receipt-v0",
+    "generatorCommit": "620d0a66d63757016a09060ce3c2e65ebc904ec9",
+    "generatorCommitSource": "git-rev-parse-head-v0",
+    "generatorTrackedStatus": null,
+    "generatorTrackedWorktreeDirty": false,
+    "repoRoot": "/private/tmp/kaminos-pyro-view-conditioned-transfer-compression-0717",
+    "worktree": "/private/tmp/kaminos-pyro-view-conditioned-transfer-compression-0717"
+  },
+  "requested": {
+    "geometry": "interleaved-intragroup-plates-v0",
+    "inputManifest": "/private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/input-manifest.json",
+    "occluderRgb": "0,0,0",
+    "treatments": [
+      {
+        "label": "d12-t2",
+        "reportPath": "/private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/reductions/d12-t2/report.json"
+      },
+      {
+        "label": "d12-t4",
+        "reportPath": "/private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/reductions/d12-t4/report.json"
+      }
+    ]
+  },
+  "roles": {
+    "exactOccludedReference": "exact-96-bin-scene-depth-interruption",
+    "occlusionSpecificResidual": "occluded-error-minus-unoccluded-compression-error",
+    "treatments": "persisted-compressed-transfer-scene-depth-interruption",
+    "unoccludedReference": "exact-96-bin-black-background-control"
+  },
+  "schema": "kaminos.view-conditioned-transfer-occluder-witness.v0",
+  "source": {
+    "arraysPath": "/private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/transfer-field.npz",
+    "arraysSha256": "4f37287be81ae00e23ff73c9a1d053ae3c251b492f07c722672bbad686f0a6f7",
+    "identity": {
+      "cameraAngle": 0,
+      "cameraIdentity": "5d20c917cf1dd8c58a3e5b00a77b604ca330cac831187759b3a248a0b85fd3f0",
+      "cameraIndex": 10,
+      "captureReportPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-imported-coefficient-orbit-state120-r2/capture-report.json",
+      "captureReportSha256": "4adf73c479079b4c5180e871b8655e27ec91fffd88f1a43e30b39946846a1735",
+      "descriptorSha256": "4cae2517538cf701ac97aad9382f4d150526de8c11e6513c3b98a82d4b5f0122",
+      "droppedRowCount": 0,
+      "fluidSha256": "98d1d0650d67fcdf32f2fc7f5c353bac5355f7df01f45d1e0211c51eb02a7620",
+      "frontSha256": "27491552ce2c0294125d35658c3dd47289c91d0d068909c0c244e5167d7c7e35",
+      "identity": "state120-exact-expanded-union-coefficient-planes-v0",
+      "nativeCellIndexSha256": "995f195f0079108fd9de2b51c3e011fb758af4c0e3a594c2d24b9dcc5306e9f9",
+      "rowCount": 1899742,
+      "sameStateCaptureId": "filament-orbit-f120-s120",
+      "sampleCap": null,
+      "sourceBackend": "WebGPU:apple",
+      "sourceManifestPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-tiger-layer-coefficient-corpus-r4/training-manifest.json",
+      "sourceManifestRecordedSha256": "2841b79f3ae625bba8b7f36f2b5f7ae40755814b95214a2607a95b3390456483",
+      "sourceManifestSha256": "271b282ecb834e51af1588185118df06752b47cfd1b2db3eb1f99267dd40a757",
+      "sourceRendererRoute": "native-3d-compute-fluid-raymarch-v0",
+      "stateIdentity": "coefficient-state-120",
+      "stateStep": 120
+    },
+    "manifestPath": "/private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/input-manifest.json",
+    "manifestSha256": "c07a37517ad736ea69128984b8ef65bc8682a7df0668c2593246ce547d205c35",
+    "route": {
+      "backend": "numpy-cpu-v0",
+      "effective": "state120-coefficient-plane-export-v0",
+      "fallbackIdentity": null,
+      "fallbackUsed": false,
+      "requested": "state120-coefficient-plane-export-v0"
+    },
+    "shape": [
+      96,
+      242,
+      314
+    ]
+  },
+  "status": "complete",
+  "treatments": [
+    {
+      "activeElementCount": 115693,
+      "depthGroups": 12,
+      "elementCount": 227964,
+      "interiorOccluderPixelCount": 13455,
+      "label": "d12-t2",
+      "linearMetrics": {
+        "mae": 0.01555041885086829,
+        "maxAbsError": 0.5478734541763108,
+        "mse": 0.0011059434072526653
+      },
+      "linearMetricsBasis": "reloaded-persisted-treatment-v0",
+      "metricReference": "exact-occluded-reference.png",
+      "occludedImage": "d12-t2-occluded.png",
+      "occludedLinearMetrics": {
+        "mae": 0.014333092153467803,
+        "maxAbsError": 0.4701406313368388,
+        "mse": 0.0010344930452653273
+      },
+      "occludedResidualImage": "d12-t2-occluded-residual.png",
+      "occludedToUnoccludedMaeRatio": 0.921717433525431,
+      "occluderRegionLinearMetrics": {
+        "mae": 0.01645759545355336,
+        "maxAbsError": 0.3370276880931342,
+        "mse": 0.0012330140232109147
+      },
+      "occluderRegionOccludedToUnoccludedMaeRatio": 0.7053498558399183,
+      "occlusionAuthority": {
+        "interpretation": "Opaque geometry intersecting a composed group is an explicit unproven approximation.",
+        "opaqueGeometryInsideGroupCanBeWrong": true,
+        "representativeDepthPolicy": "arithmetic-mean-source-depth-centers-v0",
+        "sourceDepthCenterSpans": [
+          [
+            1.3749672174453735,
+            1.5201317071914673
+          ],
+          [
+            1.5408694744110107,
+            1.686034083366394
+          ],
+          [
+            1.7067718505859375,
+            1.8519364595413208
+          ],
+          [
+            1.8726742267608643,
+            2.017838716506958
+          ],
+          [
+            2.038576602935791,
+            2.1837410926818848
+          ],
+          [
+            2.2044789791107178,
+            2.3496434688568115
+          ],
+          [
+            2.3703813552856445,
+            2.5155458450317383
+          ],
+          [
+            2.5362837314605713,
+            2.681448221206665
+          ],
+          [
+            2.702186107635498,
+            2.847350597381592
+          ],
+          [
+            2.868088483810425,
+            3.0132529735565186
+          ],
+          [
+            3.0339906215667725,
+            3.1791553497314453
+          ],
+          [
+            3.199892997741699,
+            3.345057725906372
+          ]
+        ],
+        "status": "non-closing"
+      },
+      "occlusionErrorIncreaseMae": -0.0012173266974004875,
+      "occlusionSpecificLinearMetrics": {
+        "mae": 0.002256290454974611,
+        "maxAbsError": 0.5478734541763108,
+        "mse": 0.00016593270567244982
+      },
+      "occlusionSpecificResidualImage": "d12-t2-occlusion-specific-residual.png",
+      "occlusionSpecificToUnoccludedMaeRatio": 0.14509515638214635,
+      "producerInMemoryLinearMetrics": {
+        "mae": 0.015550418785700675,
+        "maxAbsError": 0.5478734271227683,
+        "mse": 0.0011059434070872978
+      },
+      "reportPath": "/private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/reductions/d12-t2/report.json",
+      "reportSha256": "acd4cbeab81eca1305ad83e95a990dedd28a9460afc6deb43cee01a82ab1de38",
+      "serializationMetricDelta": {
+        "mae": 6.516761609509647e-11,
+        "maxAbsError": 2.705354251730796e-08,
+        "mse": 1.6536750267748257e-13
+      },
+      "tileSize": 2,
+      "treatmentPath": "/private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/reductions/d12-t2/treatment.npz",
+      "treatmentSha256": "d5c4106cff105b3c8f0d0abbbe90d431b8b31077084cdab4c1df076beff108fb",
+      "unoccludedLinearMetrics": {
+        "mae": 0.01555041885086829,
+        "maxAbsError": 0.5478734541763108,
+        "mse": 0.0011059434072526653
+      },
+      "unoccludedOccluderRegionLinearMetrics": {
+        "mae": 0.023332528272733456,
+        "maxAbsError": 0.5478734541763108,
+        "mse": 0.0016365346554438262
+      }
+    },
+    {
+      "activeElementCount": 29780,
+      "depthGroups": 12,
+      "elementCount": 57828,
+      "interiorOccluderPixelCount": 13455,
+      "label": "d12-t4",
+      "linearMetrics": {
+        "mae": 0.022496250862023177,
+        "maxAbsError": 0.7107243137810348,
+        "mse": 0.0024773416499165187
+      },
+      "linearMetricsBasis": "reloaded-persisted-treatment-v0",
+      "metricReference": "exact-occluded-reference.png",
+      "occludedImage": "d12-t4-occluded.png",
+      "occludedLinearMetrics": {
+        "mae": 0.02054600337851865,
+        "maxAbsError": 0.7107243137810348,
+        "mse": 0.002275747826830861
+      },
+      "occludedResidualImage": "d12-t4-occluded-residual.png",
+      "occludedToUnoccludedMaeRatio": 0.9133078887026097,
+      "occluderRegionLinearMetrics": {
+        "mae": 0.021320717476662556,
+        "maxAbsError": 0.5346839792989251,
+        "mse": 0.00208882136627226
+      },
+      "occluderRegionOccludedToUnoccludedMaeRatio": 0.6593723210138205,
+      "occlusionAuthority": {
+        "interpretation": "Opaque geometry intersecting a composed group is an explicit unproven approximation.",
+        "opaqueGeometryInsideGroupCanBeWrong": true,
+        "representativeDepthPolicy": "arithmetic-mean-source-depth-centers-v0",
+        "sourceDepthCenterSpans": [
+          [
+            1.3749672174453735,
+            1.5201317071914673
+          ],
+          [
+            1.5408694744110107,
+            1.686034083366394
+          ],
+          [
+            1.7067718505859375,
+            1.8519364595413208
+          ],
+          [
+            1.8726742267608643,
+            2.017838716506958
+          ],
+          [
+            2.038576602935791,
+            2.1837410926818848
+          ],
+          [
+            2.2044789791107178,
+            2.3496434688568115
+          ],
+          [
+            2.3703813552856445,
+            2.5155458450317383
+          ],
+          [
+            2.5362837314605713,
+            2.681448221206665
+          ],
+          [
+            2.702186107635498,
+            2.847350597381592
+          ],
+          [
+            2.868088483810425,
+            3.0132529735565186
+          ],
+          [
+            3.0339906215667725,
+            3.1791553497314453
+          ],
+          [
+            3.199892997741699,
+            3.345057725906372
+          ]
+        ],
+        "status": "non-closing"
+      },
+      "occlusionErrorIncreaseMae": -0.0019502474835045268,
+      "occlusionSpecificLinearMetrics": {
+        "mae": 0.0030525801004594928,
+        "maxAbsError": 0.6603703099144687,
+        "mse": 0.00031201216018469815
+      },
+      "occlusionSpecificResidualImage": "d12-t4-occlusion-specific-residual.png",
+      "occlusionSpecificToUnoccludedMaeRatio": 0.1356928369612323,
+      "producerInMemoryLinearMetrics": {
+        "mae": 0.022496250859422154,
+        "maxAbsError": 0.710724231888926,
+        "mse": 0.0024773416496624567
+      },
+      "reportPath": "/private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/reductions/d12-t4/report.json",
+      "reportSha256": "7104585093421f4595228c1980f5d51ff874a494a3993a2060fa740d806c77d0",
+      "serializationMetricDelta": {
+        "mae": 2.601023563197913e-12,
+        "maxAbsError": 8.18921088718838e-08,
+        "mse": 2.5406196244026624e-13
+      },
+      "tileSize": 4,
+      "treatmentPath": "/private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/reductions/d12-t4/treatment.npz",
+      "treatmentSha256": "2104ae050ffeca914d395f697e70c55a804dd67c7e43bd039c1c9124084d2d97",
+      "unoccludedLinearMetrics": {
+        "mae": 0.022496250862023177,
+        "maxAbsError": 0.7107243137810348,
+        "mse": 0.0024773416499165187
+      },
+      "unoccludedOccluderRegionLinearMetrics": {
+        "mae": 0.03233486877926693,
+        "maxAbsError": 0.6603703099144687,
+        "mse": 0.0032273357793999404
+      }
+    }
+  ]
+}
