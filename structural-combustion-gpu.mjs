@@ -806,7 +806,8 @@ fn nodeVertex(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) 
   let material = materials[nodeIndex];
   var clip = presentation.viewProjection * vec4<f32>(displayedPosition(nodeIndex), 1.0);
   let pinnedScale = select(1.0, 1.35, nodes[nodeIndex].position.w > 0.5);
-  clip.xy += corners[vertexIndex] * 0.0095 * pinnedScale * clip.w;
+  let billboardOffset = corners[vertexIndex] * 0.0095 * pinnedScale * clip.w;
+  clip = vec4<f32>(clip.xy + billboardOffset, clip.z, clip.w);
   var out: VertexOut;
   out.position = clip;
   out.color = vec4<f32>(materialColor(material), 0.96);

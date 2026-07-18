@@ -197,6 +197,24 @@ async function evaluate(send, expression, timeoutMs = 120_000) {
   return result.result.value;
 }
 
+function isExecutionContextReplacement(error) {
+  return /Execution context was destroyed|Cannot find context with specified id|Inspected target navigated or closed/i
+    .test(error?.message || String(error));
+}
+
+async function evaluateAfterNavigation(send, expression, timeoutMs = 120_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (true) {
+    try {
+      return await evaluate(send, expression, Math.max(1, deadline - Date.now()));
+    } catch (error) {
+      if (!isExecutionContextReplacement(error)) throw error;
+      if (Date.now() >= deadline) throw error;
+      await delay(100);
+    }
+  }
+}
+
 async function capture(send, evaluatePage, path) {
   const result = await send('Page.captureScreenshot', {
     format: 'png',
@@ -258,20 +276,44 @@ try {
   await cdp.send('Runtime.enable');
   await cdp.send('Page.enable');
   await cdp.send('Page.bringToFront');
-  const evaluatePage = (expression, timeoutMs) => evaluate(cdp.send, expression, timeoutMs);
+  const evaluatePage = (expression, timeoutMs) => evaluateAfterNavigation(cdp.send, expression, timeoutMs);
+
+  phase = 'stable-navigation';
+  await evaluatePage(`(async () => {
+    const deadline = performance.now() + 30000;
+    while (performance.now() < deadline) {
+      if (document.readyState === 'complete' && location.href === ${JSON.stringify(new URL(config.requestedUrl).href)}) return true;
+      await new Promise(resolveWait => setTimeout(resolveWait, 100));
+    }
+    throw new Error('structural combustion route did not finish its requested navigation');
+  })()`, 35_000);
 
   phase = 'running-state';
   const initialState = await evaluatePage(`(async () => {
     const deadline = performance.now() + 30000;
     while (performance.now() < deadline) {
       const state = window.kaminosStructuralCombustionDebugState?.();
-      if (state?.status === 'failed') throw new Error(JSON.stringify(state));
+      if (state?.status === 'failed') return state;
       if (state?.status === 'running' && state.simStepCount > 8 && state.gpuLoop?.dispatchCount > 0) return state;
       await new Promise(resolveWait => setTimeout(resolveWait, 100));
     }
     throw new Error('structural combustion route did not enter running state');
   })()`, 35_000);
   effectiveUrl = await evaluatePage('location.href');
+  if (initialState.status === 'failed') {
+    phase = initialState.failurePhase || 'page-failure';
+    evidence = {
+      requestedUrl: config.requestedUrl,
+      effectiveUrl,
+      requestedBackend: 'webgpu',
+      effectiveBackend: initialState.backend || 'WebGPU:unknown',
+      pageRoute: initialState.effectiveRoute || initialState.schema,
+      authority: initialState.authority,
+      runtimeErrors,
+      pageFailure: initialState,
+    };
+    throw new Error(initialState.error || `structural combustion page failed during ${phase}`);
+  }
   assert.equal(initialState.schema, PAGE_ROUTE);
   assert.equal(initialState.authority, AUTHORITY);
   assert.equal(initialState.fallback, null);

@@ -1,6 +1,29 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { validateStructuralCombustionEvidence } from '../structural-combustion-evidence.mjs';
+
+const witnessSource = readFileSync(new URL('../structural-combustion-witness.mjs', import.meta.url), 'utf8');
+assert.match(
+  witnessSource,
+  /function isExecutionContextReplacement/,
+  'browser witness names the bounded navigation-context replacement retry class',
+);
+assert.match(
+  witnessSource,
+  /if \(!isExecutionContextReplacement\(error\)\) throw error/,
+  'browser witness retries only execution-context replacement instead of hiding other failures',
+);
+assert.match(
+  witnessSource,
+  /initialState\.status === 'failed'[\s\S]*pageFailure: initialState/,
+  'a failed page state becomes durable evidence instead of a null CDP wrapper failure',
+);
+assert.match(
+  witnessSource,
+  /effectiveUrl = await evaluatePage\('location\.href'\)[\s\S]*initialState\.status === 'failed'/,
+  'effective route identity is captured before a failed page state is reported',
+);
 
 const fixture = {
   requestedUrl: 'http://127.0.0.1:8178/structural-combustion.html',

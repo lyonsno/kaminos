@@ -57,6 +57,16 @@ assert.deepEqual(
 
 const source = readFileSync(new URL('../structural-combustion-gpu.mjs', import.meta.url), 'utf8');
 assert.doesNotMatch(source, /fallProgress/, 'presentation cannot own an independent global fall clock');
+assert.doesNotMatch(
+  source,
+  /clip\.xy\s*\+=/,
+  'portable WGSL cannot use compound assignment on a vector swizzle',
+);
+assert.match(
+  source,
+  /clip\s*=\s*vec4<f32>\(clip\.xy\s*\+\s*billboardOffset,\s*clip\.z,\s*clip\.w\)/,
+  'node billboard presentation reconstructs clip without mutating a swizzle',
+);
 assert.match(source, /struct ComponentMotion/, 'the command graph must carry resident component motion state');
 assert.match(source, /fn carriedNodePosition/, 'exposure, emission, and presentation need one carried-position law');
 assert.match(
