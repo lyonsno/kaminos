@@ -181,6 +181,10 @@
       detectStructuralHapticCapabilities,
       dispatchStructuralHapticImpulse,
     } from './structural-material-3d-live-drag.js';
+    import {
+      buildRenderedStructuralMotionEntry,
+      buildRenderedStructuralMotionTimeline,
+    } from './structural-material-3d-motion-audit.js';
 
     const stage = document.querySelector('#stage');
     const readout = document.querySelector('#readout');
@@ -271,6 +275,9 @@
     let gpuTearPreviousAppliedReceipt = null;
     let gpuTearLatestAppliedReceipt = null;
     let gpuTearDiscardedCount = 0;
+    let renderedMotionSequence = 0;
+    const renderedMotionLedger = [];
+    const renderedMotionAuditErrors = [];
     let gpuHotSidecar = null;
     let gpuHotSidecarPromise = null;
     let hapticImpulseCount = 0;
@@ -283,7 +290,11 @@
     const gpuTearRequestGate = createLayeredStructuralGpuTearRequestGate();
     const latestGpuOperationTracker = createLatestStructuralGpuOperationTracker();
     const liveDragScheduler = createLatestStructuralInteractionScheduler({
-      execute: interaction => requestGpuSympatheticTear(material, interaction),
+      execute: (interaction, scheduler) => requestGpuSympatheticTear(
+        material,
+        interaction,
+        { scheduler },
+      ),
     });
 
     function worldPoint(node) {
@@ -352,6 +363,35 @@
       }
     }
 
+    function renderedStructuralNodeSnapshot(materialState = material) {
+      const materialNodeById = new Map(materialState.nodes.map(node => [node.id, node]));
+      world.updateMatrixWorld(true);
+      return world.children
+        .filter(child => child.userData.structuralPick?.kind === 'node')
+        .map(child => {
+          const id = child.userData.structuralPick.id;
+          const node = materialNodeById.get(id);
+          if (!node) throw new Error(`rendered node ${id} has no material state`);
+          const actualWorldPosition = child.getWorldPosition(new THREE.Vector3());
+          const expectedWorldPosition = world.localToWorld(worldPoint(node));
+          return {
+            id,
+            componentId: node.componentId,
+            actualWorldPosition: {
+              x: actualWorldPosition.x,
+              y: actualWorldPosition.y,
+              z: actualWorldPosition.z,
+            },
+            expectedWorldPosition: {
+              x: expectedWorldPosition.x,
+              y: expectedWorldPosition.y,
+              z: expectedWorldPosition.z,
+            },
+          };
+        })
+        .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
+    }
+
     function updateReadout() {
       const summary = summarizeLayeredStructuralState(material);
       readout.textContent = `broken ${summary.brokenBondCount} | repaired ${summary.repairedBondCount} | depth ${summary.brokenDepthBondCount}/${summary.crossDepthBondCount} | components ${summary.componentCount} | sound ${summary.sound.signature}`;
@@ -388,6 +428,9 @@
     function visibleTearState() {
       if (!material.sympatheticTear) return null;
       const direction = material.sympatheticTear.direction;
+      const kinematicOverridePinnedNodeIds = new Set(
+        material.sympatheticTear.contactResponse?.kinematicOverridePinnedNodeIds || [],
+      );
       const nodeById = new Map(material.nodes.map(node => [node.id, node]));
       const nodeIndexById = new Map(material.nodes.map((node, index) => [node.id, index]));
       const gestureBaseline = material.visualDisplacementGesture?.baselineDisplacements;
@@ -471,6 +514,9 @@
             maxDisplacement: Math.max(...displacementMagnitudes),
             maxPinnedDisplacement: Math.max(0, ...nodes
               .filter(node => node.pinned)
+              .map(node => Math.hypot(node.displacement.x, node.displacement.y, node.displacement.z))),
+            maxNonContactPinnedDisplacement: Math.max(0, ...nodes
+              .filter(node => node.pinned && !kinematicOverridePinnedNodeIds.has(node.id))
               .map(node => Math.hypot(node.displacement.x, node.displacement.y, node.displacement.z))),
             maxUnpinnedDisplacement: Math.max(0, ...nodes
               .filter(node => !node.pinned)
@@ -717,7 +763,11 @@
         });
     }
 
-    function requestGpuSympatheticTear(sourceState, interaction, { applyToWorld = true } = {}) {
+    function requestGpuSympatheticTear(
+      sourceState,
+      interaction,
+      { applyToWorld = true, scheduler = null } = {},
+    ) {
       const requestEpoch = gpuTearRequestGate.begin();
       const operationId = latestGpuOperationTracker.begin('tear', {
         requestedRoute: STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_ROUTE,
@@ -737,6 +787,9 @@
           );
         }
         const effectiveSourceState = applyToWorld ? material : sourceState;
+        const beforeRenderedNodes = applyToWorld
+          ? renderedStructuralNodeSnapshot(effectiveSourceState)
+          : null;
         const execution = applyToWorld
           ? ensureHotSidecar(effectiveSourceState)
             .then(sidecar => sidecar.execute(interaction))
@@ -787,6 +840,31 @@
             material = nextMaterial;
             gpuBindingReceipt = null;
           });
+          try {
+            renderedMotionSequence += 1;
+            const motionScheduler = {
+              interactionId: scheduler?.interactionId || `gpu-tear-operation-${operationId}`,
+              generation: scheduler?.generation ?? null,
+              final: scheduler ? scheduler.final === true : true,
+            };
+            renderedMotionLedger.push(buildRenderedStructuralMotionEntry({
+              sequence: renderedMotionSequence,
+              scheduler: motionScheduler,
+              interaction,
+              receipt,
+              previousState: effectiveSourceState,
+              nextState: nextMaterial,
+              beforeRenderedNodes,
+              afterRenderedNodes: renderedStructuralNodeSnapshot(nextMaterial),
+            }));
+          } catch (error) {
+            renderedMotionAuditErrors.push({
+              sequence: renderedMotionSequence,
+              schedulerInteractionId: scheduler?.interactionId || `gpu-tear-operation-${operationId}`,
+              gestureId: interaction.gestureId || null,
+              message: error instanceof Error ? error.message : String(error),
+            });
+          }
           routeStructuralHaptics(effectiveSourceState, nextMaterial, receipt, interaction);
           gpuTearAppliedCount += 1;
           gpuTearPreviousAppliedReceipt = gpuTearLatestAppliedReceipt;
@@ -1013,6 +1091,9 @@
         gpuTearReceipt = null;
         gpuBindingReceipt = null;
         latestGpuOperationTracker.clear();
+        renderedMotionSequence = 0;
+        renderedMotionLedger.length = 0;
+        renderedMotionAuditErrors.length = 0;
       });
       synchronizeHotSidecar(material);
     });
@@ -1098,6 +1179,10 @@
       visibleTear: visibleTearState(),
       sympatheticBinding: material.sympatheticBinding || null,
       visibleBinding: visibleBindingState(),
+      renderedMotionTimeline: structuredClone(buildRenderedStructuralMotionTimeline({
+        entries: renderedMotionLedger,
+        constructionErrors: renderedMotionAuditErrors,
+      })),
       gpuBindingPending: gpuBindingPromise !== null,
       };
     };

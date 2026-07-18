@@ -302,13 +302,17 @@ export function buildLayeredStructuralGpuTearMaterial(state, receipt, interactio
   });
   const componentByLabel = new Map(components.map(component => [component.label, component]));
   const contactOwnership = resolveContactOwnership(state, interaction, componentLabels);
+  const contactNodeIndexSet = new Set(contactOwnership.contactNodeIndices);
   let detachedNodeCount = 0;
   let localResponseNodeCount = 0;
   let primaryResponseNodeCount = 0;
+  const kinematicOverridePinnedNodeIds = [];
   const nodes = state.nodes.map((node, index) => {
     const label = componentLabels[index];
     const component = componentByLabel.get(label);
     const contactOwned = label === contactOwnership.primaryContactComponentLabel;
+    const kinematicContactOverride = contactOwned && node.pinned && contactNodeIndexSet.has(index);
+    if (kinematicContactOverride) kinematicOverridePinnedNodeIds.push(node.id);
     if (!component.pinned) detachedNodeCount += 1;
     const contactDistance = Math.hypot(
       node.x - contactOwnership.contactPoint.x,
@@ -316,7 +320,7 @@ export function buildLayeredStructuralGpuTearMaterial(state, receipt, interactio
       node.z - contactOwnership.contactPoint.z,
     );
     const normalizedContactDistance = clamp(contactDistance / localResponseRadius, 0, 1);
-    const localInfluence = contactOwned && component.pinned && !node.pinned
+    const localInfluence = contactOwned && component.pinned && (!node.pinned || kinematicContactOverride)
       ? (1 - normalizedContactDistance) ** 2
       : 0;
     const rigidResponseScale = !component.pinned && contactOwned ? separationScale : 0;
@@ -327,7 +331,7 @@ export function buildLayeredStructuralGpuTearMaterial(state, receipt, interactio
     return {
       ...node,
       componentId: `g${label}`,
-      displacement: node.pinned
+      displacement: node.pinned && !kinematicContactOverride
         ? { x: 0, y: 0, z: 0 }
         : {
             x: round(baseline.x + direction.x * responseScale),
@@ -383,12 +387,13 @@ export function buildLayeredStructuralGpuTearMaterial(state, receipt, interactio
         contactNodeIds: contactOwnership.contactNodeIds,
         contactComponentLabels: contactOwnership.contactComponentLabels,
         primaryContactComponentLabel: contactOwnership.primaryContactComponentLabel,
+        kinematicOverridePinnedNodeIds,
         localResponseScale: round(localResponseScale),
         localResponseRadius: round(localResponseRadius),
         nonPrimaryResponseScale: 0,
         localResponseNodeCount,
         primaryResponseNodeCount,
-        semantics: 'single-contact-component-local-or-rigid-response-v0',
+        semantics: 'hand-contact-overrides-local-support-single-component-response-v0',
       },
       gestureId,
       displacementSemantics: 'gesture-baseline-plus-current-absolute-delta',

@@ -50,6 +50,7 @@ assert.match(witnessSource, /visibleTransformBoundToGpuLabels/, 'browser witness
 assert.match(witnessSource, /releasePreservedSeparation/, 'browser witness checks persistent release state');
 assert.match(witnessSource, /contactLocalityMovedGpuBreakCentroid/, 'browser witness rejects x-invariant GPU breakup');
 assert.match(witnessSource, /contactOwnedVisibleResponseMoved/, 'browser witness rejects right-only visible response');
+assert.match(witnessSource, /leftContactRenderedMotionTimeline/, 'browser witness rejects unexplained movement in intermediate accepted interactions');
 assert.match(witnessSource, /displacedPickPreservedRestIdentity/, 'browser witness rejects displaced display coordinates used as rest contact');
 assert.match(witnessSource, /interactiveValidation/, 'product witness requires compact hot-route validation');
 assert.match(witnessSource, /hotResidency/, 'product witness proves the live WebGPU sidecar remains resident');
@@ -62,6 +63,14 @@ assert.match(
 assert.match(pageSource, /__structuralMaterial3dRunGpuSympatheticTear/, '3D route exposes the product-level GPU tear');
 assert.match(pageSource, /__structuralMaterial3dRunGpuContactLocalityWitness/, '3D route exposes reset-identical resident GPU contact locality evidence');
 assert.match(pageSource, /__structuralMaterial3dPickTargets/, '3D route exposes projected structural targets for adversarial displaced-pick evidence');
+assert.match(pageSource, /renderedMotionLedger/, '3D route preserves every accepted rendered-motion transition');
+assert.match(pageSource, /renderedStructuralNodeSnapshot/, 'motion ledger reads actual Three.js node positions');
+assert.match(pageSource, /renderedMotionTimeline/, 'operator witness exposes the full rendered-motion timeline');
+assert.match(
+  pageSource,
+  /gpu-tear-operation-\$\{operationId\}/,
+  'programmatic accepted GPU mutations carry stable operation identity into the motion ledger',
+);
 assert.match(pageSource, /pointerup/, 'effigy drag release remains the world-consequence boundary');
 assert.match(
   pageSource,
@@ -212,6 +221,68 @@ const rightContactResponse = buildLayeredStructuralGpuTearMaterial(
   connectedReceipt,
   contactForce(rightContactNode, 'right-contact-response'),
 );
+const pinnedContactNode = notched.nodes.find(node => node.id === 'n54');
+const pinnedContactResponse = buildLayeredStructuralGpuTearMaterial(
+  notched,
+  connectedReceipt,
+  contactForce(pinnedContactNode, 'pinned-contact-response'),
+);
+assert.ok(
+  Math.hypot(
+    pinnedContactResponse.nodes.find(node => node.id === pinnedContactNode.id).displacement.x,
+    pinnedContactResponse.nodes.find(node => node.id === pinnedContactNode.id).displacement.y,
+    pinnedContactResponse.nodes.find(node => node.id === pinnedContactNode.id).displacement.z,
+  ) > 0,
+  'a directly manipulated contact temporarily supersedes its authored support pin',
+);
+assert.deepEqual(
+  pinnedContactResponse.sympatheticTear.contactResponse.kinematicOverridePinnedNodeIds,
+  [pinnedContactNode.id],
+  'the visible response names the exact authored pin superseded by hand contact',
+);
+for (const node of pinnedContactResponse.nodes) {
+  if (node.pinned && node.id !== pinnedContactNode.id) {
+    assert.deepEqual(node.displacement, { x: 0, y: 0, z: 0 }, 'all non-contact support pins remain fixed');
+  }
+}
+const pinnedBond = notched.bonds.find(bond => {
+  const a = notched.nodes.find(node => node.id === bond.a);
+  const b = notched.nodes.find(node => node.id === bond.b);
+  return a.pinned && b.pinned;
+});
+const pinnedBondA = notched.nodes.find(node => node.id === pinnedBond.a);
+const pinnedBondB = notched.nodes.find(node => node.id === pinnedBond.b);
+const pinnedBondContact = {
+  ...contactForce(pinnedBondA, 'pinned-bond-contact-response'),
+  point: {
+    x: (pinnedBondA.x + pinnedBondB.x) * 0.5,
+    y: (pinnedBondA.y + pinnedBondB.y) * 0.5,
+    z: (pinnedBondA.z + pinnedBondB.z) * 0.5,
+  },
+  contactIdentity: {
+    authority: 'stable-rest-material-contact-v0',
+    kind: 'bond',
+    id: pinnedBond.id,
+    segmentT: 0.5,
+  },
+};
+const pinnedBondResponse = buildLayeredStructuralGpuTearMaterial(
+  notched,
+  connectedReceipt,
+  pinnedBondContact,
+);
+assert.deepEqual(
+  [...pinnedBondResponse.sympatheticTear.contactResponse.kinematicOverridePinnedNodeIds].sort(),
+  [pinnedBond.a, pinnedBond.b].sort(),
+  'a picked support bond temporarily supersedes both endpoint pins',
+);
+for (const nodeId of [pinnedBond.a, pinnedBond.b]) {
+  const node = pinnedBondResponse.nodes.find(candidate => candidate.id === nodeId);
+  assert.ok(
+    Math.hypot(node.displacement.x, node.displacement.y, node.displacement.z) > 0,
+    'the rendered support-bond contact follows the hand at both endpoints',
+  );
+}
 assert.ok(
   leftContactResponse.nodes.some(node => !node.pinned && Math.hypot(
     node.displacement.x,

@@ -9,6 +9,7 @@ import {
   STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE,
 } from './structural-material-3d-webgpu-hot-sidecar.js';
 import { STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_ROUTE } from './structural-material-3d-webgpu-tear.js';
+import { assessStableNodeDisplacementContinuity } from './structural-material-3d-motion-audit.js';
 
 const SCHEMA = 'kaminos.structural-material.webgpu-sympathetic-tear-browser-witness.v0';
 const BODY_MARKER = 'Kaminos Layered Structural Sidecar';
@@ -691,24 +692,15 @@ try {
         repeatAfter.liveDrag?.scheduler?.pendingInteractionId === null) break;
     await new Promise(resolveWait => setTimeout(resolveWait, 20));
   }
-  const beforeDisplacementByLabel = new Map(
-    persisted.visibleTear.components
-      .filter(component => !component.pinned)
-      .map(component => [component.label, component.maxDisplacement]),
-  );
-  const afterDisplacementByLabel = new Map(
-    repeatAfter.visibleTear.components
-      .filter(component => !component.pinned)
-      .map(component => [component.label, component.maxDisplacement]),
-  );
+  const beforeMotionEntry = persisted.renderedMotionTimeline?.entries?.at(-1);
+  const afterMotionEntry = repeatAfter.renderedMotionTimeline?.entries?.at(-1);
+  const repeatDisplacementContinuity = assessStableNodeDisplacementContinuity({
+    beforeNodes: beforeMotionEntry?.nodes,
+    afterNodes: afterMotionEntry?.nodes,
+  });
   report.checks.repeatDragPreservedPriorDisplacement =
     repeatAfter.gpuTearAppliedCount > appliedBeforeRepeat &&
-    [...beforeDisplacementByLabel].every(([label, before]) =>
-      (afterDisplacementByLabel.get(label) ?? -1) >= before - 0.000001
-    ) &&
-    [...beforeDisplacementByLabel].some(([label, before]) =>
-      (afterDisplacementByLabel.get(label) ?? -1) > before + 0.0001
-    );
+    repeatDisplacementContinuity.status === 'passed';
   report.repeatDrag = {
     pointerDown: {
       visibleTear: repeatPointerDown.visibleTear,
@@ -725,6 +717,7 @@ try {
       appliedCount: repeatAfter.gpuTearAppliedCount,
       latestReceipt: repeatAfter.gpuSympatheticTear,
     },
+    displacementContinuity: repeatDisplacementContinuity,
   };
   assertCheck(
     report.checks.repeatDragPreservedPriorDisplacement,
@@ -1080,9 +1073,24 @@ try {
     contactReset?.gpuHotSidecar?.lifecycle?.reinitializeCount > contactResetBefore,
     'left-contact visual reset did not reach resident GPU state',
   );
+  const supportContactPrimeReceipt = await evaluate(
+    'window.__structuralMaterial3dRunGpuSympatheticTear()',
+    true,
+  );
+  const supportContactPrimed = await evaluate('window.__structuralMaterial3dWitness()');
+  assertCheck(
+    supportContactPrimeReceipt?.status === 'passed' &&
+      supportContactPrimeReceipt?.effectiveRoute === STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_ROUTE &&
+      supportContactPrimeReceipt?.effectiveBackend === 'webgpu' &&
+      supportContactPrimeReceipt?.cpuFallbackUsed === false &&
+      supportContactPrimed.summary?.componentCount >= 2,
+    'support-contact chronology did not begin from GPU-authored fractured material',
+  );
+  const leftMotionTimelineStart =
+    supportContactPrimed.renderedMotionTimeline?.entryCount || 0;
   const leftContactPick = await evaluate(`(() => {
     const candidates = window.__structuralMaterial3dPickTargets()
-      .filter(target => target.restPoint.x >= 0.1 && target.restPoint.x <= 0.3)
+      .filter(target => target.restPoint.x === 0)
       .sort((a, b) => {
         const aDistance = Math.hypot(a.restPoint.y - 0.25, a.restPoint.z - 0.33333);
         const bDistance = Math.hypot(b.restPoint.y - 0.25, b.restPoint.z - 0.33333);
@@ -1091,7 +1099,7 @@ try {
     for (const target of candidates) {
       const probe = window.__structuralMaterial3dPickProbe(target.clientX, target.clientY);
       if (probe?.kind === 'node' && probe.id === target.id &&
-          probe.point.x >= 0.1 && probe.point.x <= 0.3) {
+          probe.point.x === 0) {
         return { target, probe };
       }
     }
@@ -1103,8 +1111,8 @@ try {
     y: leftContactPick.target.clientY,
   };
   const leftContactEnd = {
-    x: Math.min(stageRect.left + stageRect.width - 4, leftContactStart.x + stageRect.width * 0.62),
-    y: leftContactStart.y,
+    x: Math.max(stageRect.left + 4, leftContactStart.x - stageRect.width * 0.18),
+    y: Math.min(stageRect.top + stageRect.height - 4, leftContactStart.y + stageRect.height * 0.24),
   };
   const leftFinalCompletedBefore = contactReset.liveDrag?.scheduler?.finalCompletedCount || 0;
   await send('Input.dispatchMouseEvent', {
@@ -1148,6 +1156,11 @@ try {
   leftContactVisualState = await evaluate('window.__structuralMaterial3dWitness()');
   const leftContactVisualReceipt = leftContactVisualState.gpuSympatheticTear;
   report.contactResponseVisual = {
+    topologyPrime: {
+      receipt: supportContactPrimeReceipt,
+      summary: supportContactPrimed.summary,
+      renderedMotionTimelineEntryCount: leftMotionTimelineStart,
+    },
     pick: leftContactPick,
     pointerDown: {
       pick: leftPointerDown.interactionDiagnostics.pick,
@@ -1157,6 +1170,7 @@ try {
     receipt: leftContactVisualReceipt,
     summary: leftContactVisualState.summary,
     visibleTear: leftContactVisualState.visibleTear,
+    renderedMotionTimeline: leftContactVisualState.renderedMotionTimeline,
     camera: await evaluate('window.__structuralMaterial3dCameraWitness().state'),
   };
   const leftContactComponent = leftContactVisualState.visibleTear?.components?.find(
@@ -1167,6 +1181,23 @@ try {
     component => component.label !==
       leftContactVisualState.visibleTear?.contactResponse?.primaryContactComponentLabel,
   ) || [];
+  const leftMotionTimelineEntries =
+    (leftContactVisualState.renderedMotionTimeline?.entries || [])
+      .slice(leftMotionTimelineStart);
+  report.checks.leftContactRenderedMotionTimeline =
+    leftContactVisualState.renderedMotionTimeline?.status === 'passed' &&
+    leftContactVisualState.renderedMotionTimeline?.failureCount === 0 &&
+    leftContactVisualState.renderedMotionTimeline?.constructionErrorCount === 0 &&
+    leftContactVisualState.renderedMotionTimeline?.errorCount === 0 &&
+    leftMotionTimelineEntries.length >= 1 &&
+    leftMotionTimelineEntries.every(entry =>
+      entry.status === 'passed' &&
+      entry.sceneMaterialMismatchNodeIds?.length === 0 &&
+      entry.nonPrimaryActualMovedNodeIds?.length === 0 &&
+      entry.contactAttachment?.status === 'following' &&
+      entry.contactAttachment?.authoredPinned === true &&
+      entry.scheduler?.interactionId
+    );
   report.checks.leftContactResponseVisual = leftContactVisualReceipt?.status === 'passed' &&
     leftContactVisualReceipt?.effectiveRoute === STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_ROUTE &&
     leftContactVisualReceipt?.effectiveBackend === 'webgpu' &&
@@ -1177,11 +1208,18 @@ try {
     leftContactVisualState.visibleTear?.currentGestureBaselineAvailable === true &&
     leftContactVisualState.visibleTear?.contactResponse?.localResponseNodeCount > 0 &&
     leftContactVisualState.visibleTear?.currentResponseCentroid?.x < 0.35 &&
-    leftContactComponent?.maxPinnedDisplacement === 0 &&
+    leftContactVisualState.visibleTear?.contactResponse?.kinematicOverridePinnedNodeIds
+      ?.includes(leftContactPick.probe.id) &&
+    leftContactComponent?.maxPinnedDisplacement > 0 &&
+    leftContactComponent?.maxNonContactPinnedDisplacement === 0 &&
     leftContactComponent?.maxCurrentResponse > 0 &&
     leftNonPrimaryComponents.length >= 1 &&
     leftNonPrimaryComponents.every(component => component.maxCurrentResponse < 0.000000001) &&
     JSON.stringify(report.contactResponseVisual.camera) === JSON.stringify(cameraBefore);
+  assertCheck(
+    report.checks.leftContactRenderedMotionTimeline,
+    'left contact rendered-motion timeline contains missing or unexplained movement',
+  );
   assertCheck(report.checks.leftContactResponseVisual, 'left contact did not own the rendered material response');
   const contactScreenshotEvidence = await captureVisibleScreenshot(send, evaluate, config.loadTimeoutMs);
   report.contactResponseScreenshotPixelProbe = contactScreenshotEvidence.probe;
