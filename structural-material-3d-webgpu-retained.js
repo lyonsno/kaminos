@@ -90,8 +90,24 @@ function float32(value) {
 function effectiveInteraction(interaction = {}, eventEpoch) {
   const vector = effectiveVector(interaction.vector);
   const point = effectivePoint(interaction.point);
+  const contactIdentity = interaction.contactIdentity;
+  const optionalPoint = value => Number.isFinite(value?.x) && Number.isFinite(value?.y) && Number.isFinite(value?.z)
+    ? { x: float32(value.x), y: float32(value.y), z: float32(value.z) }
+    : null;
   return {
     eventEpoch,
+    gestureId: interaction.gestureId == null ? null : String(interaction.gestureId),
+    dragLength: Number.isFinite(interaction.dragLength) ? float32(interaction.dragLength) : null,
+    contactIdentity: contactIdentity
+      ? {
+          authority: contactIdentity.authority == null ? null : String(contactIdentity.authority),
+          kind: contactIdentity.kind == null ? null : String(contactIdentity.kind),
+          id: contactIdentity.id == null ? null : String(contactIdentity.id),
+          segmentT: Number.isFinite(contactIdentity.segmentT) ? float32(contactIdentity.segmentT) : null,
+        }
+      : null,
+    displayPoint: optionalPoint(interaction.displayPoint),
+    visualEnd: optionalPoint(interaction.visualEnd),
     vector: {
       x: float32(vector.x),
       y: float32(vector.y),

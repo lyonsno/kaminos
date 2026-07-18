@@ -278,7 +278,17 @@ export function buildLayeredStructuralGpuTearMaterial(state, receipt, interactio
 
   const direction = normalizedVector(interaction.vector);
   const magnitude = clamp(interaction.magnitude, 0, 5);
-  const separationScale = components.length > 1 && magnitude > 0
+  const gpuNodeDisplacements = receipt.gpuStructuralState?.nodeDisplacements;
+  const residentSolved = receipt.executionRoute === STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE;
+  if (residentSolved) {
+    assertReceipt(Array.isArray(gpuNodeDisplacements), 'omits resident solver node displacements');
+    assertReceipt(gpuNodeDisplacements.length === state.nodes.length, 'resident node displacement length mismatch');
+    assertReceipt(gpuNodeDisplacements.every(displacement =>
+      Number.isFinite(displacement?.x) &&
+      Number.isFinite(displacement?.y) &&
+      Number.isFinite(displacement?.z)), 'contains invalid resident node displacement');
+  }
+  const separationScale = !residentSolved && components.length > 1 && magnitude > 0
     ? clamp(magnitude * 0.082, 0.045, 0.16)
     : 0;
   const localResponseScale = magnitude > 0 ? clamp(magnitude * 0.064, 0.018, 0.115) : 0;
@@ -325,19 +335,37 @@ export function buildLayeredStructuralGpuTearMaterial(state, receipt, interactio
       : 0;
     const rigidResponseScale = !component.pinned && contactOwned ? separationScale : 0;
     const responseScale = rigidResponseScale + localResponseScale * localInfluence;
-    if (localInfluence > 0) localResponseNodeCount += 1;
-    if (contactOwned && responseScale > 0) primaryResponseNodeCount += 1;
+    if (!residentSolved && localInfluence > 0) localResponseNodeCount += 1;
+    if (!residentSolved && contactOwned && responseScale > 0) primaryResponseNodeCount += 1;
     const baseline = baselineDisplacements[index];
+    const residentDisplacement = residentSolved
+      ? {
+          x: round(gpuNodeDisplacements[index].x),
+          y: round(gpuNodeDisplacements[index].y),
+          z: round(gpuNodeDisplacements[index].z),
+        }
+      : null;
+    const residentCurrentMagnitude = residentDisplacement
+      ? Math.hypot(
+          residentDisplacement.x - baseline.x,
+          residentDisplacement.y - baseline.y,
+          residentDisplacement.z - baseline.z,
+        )
+      : 0;
+    if (residentSolved && residentCurrentMagnitude > 0.000001) {
+      if (contactOwned) primaryResponseNodeCount += 1;
+      localResponseNodeCount += 1;
+    }
     return {
       ...node,
       componentId: `g${label}`,
-      displacement: node.pinned && !kinematicContactOverride
+      displacement: residentDisplacement || (node.pinned && !kinematicContactOverride
         ? { x: 0, y: 0, z: 0 }
         : {
             x: round(baseline.x + direction.x * responseScale),
             y: round(baseline.y + direction.y * responseScale),
             z: round(baseline.z + direction.z * responseScale),
-          },
+          }),
     };
   });
   const bonds = state.bonds.map((bond, index) => ({
@@ -376,7 +404,9 @@ export function buildLayeredStructuralGpuTearMaterial(state, receipt, interactio
       direction: { x: round(direction.x), y: round(direction.y), z: round(direction.z) },
       separationScale: round(separationScale),
       contactResponse: {
-        authority: 'gpu-topology-contact-owned-visible-response-v0',
+        authority: residentSolved
+          ? 'gpu-resident-solved-contact-response-v0'
+          : 'gpu-topology-contact-owned-visible-response-v0',
         topologyAuthority: STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_AUTHORITY,
         contactIdentity: contactOwnership.contactIdentity,
         contactPoint: {
@@ -388,15 +418,20 @@ export function buildLayeredStructuralGpuTearMaterial(state, receipt, interactio
         contactComponentLabels: contactOwnership.contactComponentLabels,
         primaryContactComponentLabel: contactOwnership.primaryContactComponentLabel,
         kinematicOverridePinnedNodeIds,
-        localResponseScale: round(localResponseScale),
+        localResponseScale: residentSolved ? null : round(localResponseScale),
         localResponseRadius: round(localResponseRadius),
         nonPrimaryResponseScale: 0,
         localResponseNodeCount,
         primaryResponseNodeCount,
-        semantics: 'hand-contact-overrides-local-support-single-component-response-v0',
+        semantics: residentSolved
+          ? 'resident-live-constraint-contact-response-v0'
+          : 'hand-contact-overrides-local-support-single-component-response-v0',
       },
       gestureId,
-      displacementSemantics: 'gesture-baseline-plus-current-absolute-delta',
+      displacementSemantics: residentSolved
+        ? 'gpu-resident-absolute-node-displacement-v0'
+        : 'gesture-baseline-plus-current-absolute-delta',
+      solver: residentSolved ? { ...receipt.solver } : null,
     },
   };
 }

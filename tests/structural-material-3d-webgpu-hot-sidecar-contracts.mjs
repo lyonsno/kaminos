@@ -39,10 +39,15 @@ const pageSource = readFileSync(pagePath, 'utf8');
 
 assert.equal(
   (hotSource.match(/createComputePipelineAsync/g) || []).length,
-  3,
-  'hot sidecar compiles fracture, binding, and topology pipelines once during initialization',
+  4,
+  'hot sidecar compiles solver, solved fracture, binding, and topology pipelines once during initialization',
 );
 assert.match(hotSource, /operationQueue/, 'hot sidecar serializes execute, reinitialize, and dispose operations');
+assert.match(
+  hotSource,
+  /lastAcceptedExecution\?\.eventEpoch === eventEpoch/,
+  'exact replay is valid only while no later retained-state mutation has advanced the epoch',
+);
 assert.match(
   hotSource,
   /eventHeaderResetCount/,
@@ -63,6 +68,11 @@ assert.match(
   witnessSource,
   /sameGenerationOrderedApplication/,
   'browser witness proves immediate same-generation interactions both apply in order',
+);
+assert.match(
+  witnessSource,
+  /dispatchProjectedStructuralDrag[\s\S]*?__structuralMaterial3dPickTarget/,
+  'each live ordering gesture reacquires a projected target from the currently deformed shell',
 );
 assert.match(witnessSource, /coldInitialization/, 'browser witness separates cold initialization timing');
 assert.match(witnessSource, /disposeIdempotent/, 'browser witness proves idempotent teardown');
@@ -154,7 +164,7 @@ try {
   else globalThis.GPUMapMode = previousMapMode;
 }
 assert.equal(initializationError?.message, 'injected pipeline initialization failure');
-assert.equal(destroyedBuffers.length, 9, 'failed initialization destroys all allocated buffers');
+assert.equal(destroyedBuffers.length, 13, 'failed initialization destroys all allocated buffers');
 assert.equal(destroyedDeviceCount, 1, 'failed initialization destroys its device');
 assert.deepEqual(
   initializationError?.hotSidecarInitialization?.lifecycle,
@@ -162,7 +172,7 @@ assert.deepEqual(
     adapterRequestCount: 1,
     deviceRequestCount: 1,
     pipelineCreateCount: 1,
-    bufferAllocationCount: 9,
+    bufferAllocationCount: 13,
     executionAttemptCount: 0,
     executionCount: 0,
     bindingAttemptCount: 0,
@@ -172,6 +182,8 @@ assert.deepEqual(
     eventHeaderResetCount: 0,
     interactionUploadCount: 0,
     dispatchCount: 0,
+    solverDispatchCount: 0,
+    solverNodeReadbackCount: 0,
     dispatchSubmissionCount: 0,
     topologyDispatchCount: 0,
     compactReadbackCount: 0,
@@ -181,7 +193,7 @@ assert.deepEqual(
     rollbackCount: 0,
     rollbackFailureCount: 0,
     residentStateTrusted: true,
-    bufferDestroyCount: 9,
+    bufferDestroyCount: 13,
     bufferDestroyErrorCount: 0,
     deviceDestroyCount: 1,
     deviceDestroyErrorCount: 0,
@@ -207,8 +219,8 @@ const exactReceipt = {
   lifecycle: {
     adapterRequestCount: 1,
     deviceRequestCount: 1,
-    pipelineCreateCount: 3,
-    bufferAllocationCount: 9,
+    pipelineCreateCount: 4,
+    bufferAllocationCount: 13,
     executionAttemptCount: 1,
     executionCount: 1,
     bindingAttemptCount: 0,
@@ -216,6 +228,8 @@ const exactReceipt = {
     bindingDispatchCount: 0,
     bindEventCount: 0,
     eventHeaderResetCount: 1,
+    solverDispatchCount: 12,
+    solverNodeReadbackCount: 1,
     compactReadbackCount: 1,
     compactReadbackBufferCount: 2,
     fullValidationReadbackCount: 0,
@@ -224,6 +238,21 @@ const exactReceipt = {
   gpuStructuralState: {
     finalBondLiveness: state.bonds.map(() => true),
     componentLabels: state.nodes.map(() => 0),
+    nodeDisplacements: state.nodes.map(() => ({ x: 0, y: 0, z: 0 })),
+  },
+  solver: {
+    route: 'kaminos.structural-material.webgpu-resident-compliant-jacobi.v0',
+    authority: 'retained-webgpu-node-displacement-live-bond-constraints-v0',
+    iterationCount: 12,
+    dispatchCount: 12,
+    generation: { before: 0, after: 1 },
+    metrics: {
+      maxConstraintResidual: 0,
+      meanConstraintResidual: 0,
+      contactTargetError: 0,
+      maxPinnedDisplacement: 0,
+      nonPrimaryCurrentResponse: 0,
+    },
   },
   topology: {
     authority: 'webgpu-minimum-node-component-labels-v0',
@@ -259,7 +288,7 @@ assert.equal(
 assert.equal(
   validateLayeredStructuralHotSidecarReceipt(state, {
     ...exactReceipt,
-    lifecycle: { ...exactReceipt.lifecycle, pipelineCreateCount: 4 },
+    lifecycle: { ...exactReceipt.lifecycle, pipelineCreateCount: 5 },
   }).ok,
   false,
   'pipeline recreation cannot masquerade as warm execution',

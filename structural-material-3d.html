@@ -192,6 +192,10 @@
       buildEffigyTileGeometrySidecar,
       resolveEffigyTileSurfaceContact,
     } from './structural-material-3d-geometry-sidecar.js';
+    import {
+      buildLayeredStructuralResidentSolverInteraction,
+      solveLayeredStructuralCpuConstraints,
+    } from './structural-material-3d-resident-solver.js';
 
     const stage = document.querySelector('#stage');
     const readout = document.querySelector('#readout');
@@ -1479,8 +1483,22 @@
     window.__structuralMaterial3dRunHotSidecarWitness = async () => {
       const scenario = buildLayeredStructuralWitnessScenario();
       const witnessState = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true, profile: EFFIGY_TILE_PROFILE });
+      const cpuSolverInteraction = buildLayeredStructuralResidentSolverInteraction(witnessState, scenario.force);
+      const cpuSolved = solveLayeredStructuralCpuConstraints(witnessState, cpuSolverInteraction);
       const sidecar = await createLayeredStructuralHotWebGpuSidecar({ state: witnessState });
       const first = await sidecar.execute(scenario.force);
+      const cpuGpuSolverParity = {
+        authority: 'cpu-oracle-versus-native-webgpu-node-displacement-v0',
+        comparedNodeCount: witnessState.nodes.length,
+        maxNodeDisplacementError: Math.max(...cpuSolved.nodes.map((node, index) => {
+          const gpu = first.gpuStructuralState.nodeDisplacements[index];
+          return Math.hypot(
+            node.displacement.x - gpu.x,
+            node.displacement.y - gpu.y,
+            node.displacement.z - gpu.z,
+          );
+        })),
+      };
       const second = await sidecar.execute({
         ...scenario.force,
         kind: 'warm-shifted-shear',
@@ -1500,6 +1518,7 @@
           lifecycle: sidecar.initializationLifecycle,
         },
         first,
+        cpuGpuSolverParity,
         second,
         reinitialize,
         afterReinitialize,
@@ -1508,10 +1527,10 @@
         disposeAgain,
         warmReuse: first.lifecycle.deviceRequestCount === 1 &&
           second.lifecycle.deviceRequestCount === 1 &&
-          first.lifecycle.pipelineCreateCount === 3 &&
-          second.lifecycle.pipelineCreateCount === 3 &&
-          first.lifecycle.bufferAllocationCount === 9 &&
-          second.lifecycle.bufferAllocationCount === 9,
+          first.lifecycle.pipelineCreateCount === 4 &&
+          second.lifecycle.pipelineCreateCount === 4 &&
+          first.lifecycle.bufferAllocationCount === 13 &&
+          second.lifecycle.bufferAllocationCount === 13,
         disposeIdempotent: JSON.stringify(dispose) === JSON.stringify(disposeAgain),
       };
     };

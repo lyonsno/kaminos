@@ -110,6 +110,34 @@ const changedSequenceIdentity = layeredStructuralInteractionSequenceIdentity([
   { ...interactions.at(-1), magnitude: 1.71 },
 ]);
 assert.notEqual(requestedSequenceIdentity, changedSequenceIdentity, 'sequence identity changes with effective force input');
+const gestureOneIdentity = layeredStructuralInteractionSequenceIdentity([{
+  ...scenario.force,
+  gestureId: 'gesture-one',
+  dragLength: 0.18,
+  contactIdentity: { authority: 'stable-rest-material-contact-v0', kind: 'node', id: 'n17' },
+}]);
+const gestureTwoIdentity = layeredStructuralInteractionSequenceIdentity([{
+  ...scenario.force,
+  gestureId: 'gesture-two',
+  dragLength: 0.18,
+  contactIdentity: { authority: 'stable-rest-material-contact-v0', kind: 'node', id: 'n17' },
+}]);
+const extendedGestureIdentity = layeredStructuralInteractionSequenceIdentity([{
+  ...scenario.force,
+  gestureId: 'gesture-one',
+  dragLength: 0.24,
+  contactIdentity: { authority: 'stable-rest-material-contact-v0', kind: 'node', id: 'n17' },
+}]);
+assert.notEqual(
+  gestureOneIdentity,
+  gestureTwoIdentity,
+  'a new gesture cannot alias an exact replay from a prior retained-state generation',
+);
+assert.notEqual(
+  gestureOneIdentity,
+  extendedGestureIdentity,
+  'solver travel participates in replay identity even when the legacy force envelope is unchanged',
+);
 
 const oracle = buildLayeredStructuralCpuSequenceOracle(state, interactions);
 assert.equal(oracle.interactionCount, interactions.length);

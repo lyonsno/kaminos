@@ -6,6 +6,10 @@ import { dirname, resolve } from 'node:path';
 import { STRUCTURAL_MATERIAL_3D_ROUTE } from './structural-material-3d-core.js';
 import { STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE } from './structural-material-3d-webgpu-hot-sidecar.js';
 import { STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_ROUTE } from './structural-material-3d-webgpu-tear.js';
+import {
+  STRUCTURAL_MATERIAL_3D_RESIDENT_SOLVER_AUTHORITY,
+  STRUCTURAL_MATERIAL_3D_RESIDENT_SOLVER_ROUTE,
+} from './structural-material-3d-resident-solver.js';
 
 const SCHEMA = 'kaminos.structural-material.webgpu-hot-sidecar-browser-witness.v0';
 const BODY_MARKER = 'Kaminos Layered Structural Sidecar';
@@ -184,9 +188,14 @@ async function waitUntil(evaluate, expression, timeoutMs, message) {
   throw new Error(message);
 }
 
-async function dispatchDrag(send, rect) {
-  const start = { x: rect.left + rect.width * 0.54, y: rect.top + rect.height * 0.52 };
-  const end = { x: rect.left + rect.width * 0.92, y: rect.top + rect.height * 0.52 };
+async function dispatchProjectedStructuralDrag(send, evaluate, rect) {
+  const target = await evaluate('window.__structuralMaterial3dPickTarget()');
+  assertCheck(target, 'live sidecar route exposed no projected structural pick target');
+  const start = { x: target.clientX, y: target.clientY };
+  const end = {
+    x: Math.min(rect.left + rect.width - 2, start.x + rect.width * 0.3),
+    y: start.y,
+  };
   await send('Input.dispatchMouseEvent', {
     type: 'mousePressed', ...start, button: 'left', buttons: 1, clickCount: 1,
   });
@@ -218,6 +227,8 @@ const report = {
   effectivePageRoute: null,
   requestedRoute: STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE,
   effectiveRoute: null,
+  requestedSolverRoute: STRUCTURAL_MATERIAL_3D_RESIDENT_SOLVER_ROUTE,
+  effectiveSolverRoute: null,
   requestedBackend: 'webgpu',
   effectiveBackend: null,
   cpuFallbackUsed: null,
@@ -281,10 +292,11 @@ try {
   report.effectiveRoute = isolated.first.effectiveRoute;
   report.effectiveBackend = isolated.first.effectiveBackend;
   report.cpuFallbackUsed = isolated.first.cpuFallbackUsed;
+  report.effectiveSolverRoute = isolated.first.solver?.route || null;
   report.checks.coldInitialization = isolated.coldInitialization.lifecycle.adapterRequestCount === 1 &&
     isolated.coldInitialization.lifecycle.deviceRequestCount === 1 &&
-    isolated.coldInitialization.lifecycle.pipelineCreateCount === 3 &&
-    isolated.coldInitialization.lifecycle.bufferAllocationCount === 9;
+    isolated.coldInitialization.lifecycle.pipelineCreateCount === 4 &&
+    isolated.coldInitialization.lifecycle.bufferAllocationCount === 13;
   report.checks.warmReuse = isolated.warmReuse === true &&
     isolated.first.lifecycle.executionCount === 1 &&
     isolated.second.lifecycle.executionCount === 2 &&
@@ -292,13 +304,38 @@ try {
     isolated.first.lifecycle.bufferAllocationCount === isolated.second.lifecycle.bufferAllocationCount;
   report.checks.compactInteractiveReadback = isolated.first.lifecycle.compactReadbackBufferCount === 2 &&
     isolated.second.lifecycle.compactReadbackBufferCount === 2 &&
+    isolated.first.lifecycle.solverNodeReadbackCount === 1 &&
+    isolated.second.lifecycle.solverNodeReadbackCount === 2 &&
     isolated.second.lifecycle.fullValidationReadbackCount === 0;
+  report.checks.residentSolverIdentity = [isolated.first, isolated.second, isolated.afterReinitialize]
+    .every(receipt =>
+      receipt.solver?.route === STRUCTURAL_MATERIAL_3D_RESIDENT_SOLVER_ROUTE &&
+      receipt.solver?.authority === STRUCTURAL_MATERIAL_3D_RESIDENT_SOLVER_AUTHORITY &&
+      receipt.solver?.iterationCount === 12 &&
+      receipt.solver?.dispatchCount === 12);
+  report.checks.retainedSolverGeneration = isolated.first.solver?.generation?.before === 0 &&
+    isolated.first.solver?.generation?.after === 1 &&
+    isolated.second.solver?.generation?.before === 1 &&
+    isolated.second.solver?.generation?.after === 2 &&
+    isolated.afterReinitialize.solver?.generation?.before === 0 &&
+    isolated.afterReinitialize.solver?.generation?.after === 1;
+  report.checks.solverContactAndIsolation = [isolated.first, isolated.second, isolated.afterReinitialize]
+    .every(receipt =>
+      receipt.solver?.metrics?.contactTargetError <= 0.000001 &&
+      receipt.solver?.metrics?.maxPinnedDisplacement <= 0.000001 &&
+      receipt.solver?.metrics?.nonPrimaryCurrentResponse <= 0.000001 &&
+      receipt.solver?.metrics?.movedNodeCount > 1 &&
+      Number.isFinite(receipt.solver?.metrics?.maxConstraintResidual));
+  report.checks.cpuGpuSolverParity =
+    isolated.cpuGpuSolverParity?.authority === 'cpu-oracle-versus-native-webgpu-node-displacement-v0' &&
+    isolated.cpuGpuSolverParity?.comparedNodeCount === 180 &&
+    isolated.cpuGpuSolverParity?.maxNodeDisplacementError <= 0.000002;
   report.checks.reinitializeRestoresEpoch = isolated.reinitialize.status === 'passed' &&
     isolated.reinitialize.eventEpoch === 0 &&
     isolated.afterReinitialize.eventEpoch === 1 &&
     isolated.afterReinitialize.lifecycle.reinitializeCount === 1;
   report.checks.disposeIdempotent = isolated.disposeIdempotent === true &&
-    isolated.dispose.lifecycle.bufferDestroyCount === 9 &&
+    isolated.dispose.lifecycle.bufferDestroyCount === 13 &&
     isolated.dispose.lifecycle.deviceDestroyCount === 1;
 
   report.failurePhase = 'live-warm-product-route';
@@ -306,8 +343,8 @@ try {
     const rect = document.querySelector('#stage').getBoundingClientRect();
     return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
   })()`);
-  await dispatchDrag(send, stageRect);
-  await dispatchDrag(send, stageRect);
+  await dispatchProjectedStructuralDrag(send, evaluate, stageRect);
+  await dispatchProjectedStructuralDrag(send, evaluate, stageRect);
   await waitUntil(
     evaluate,
     `(() => {
@@ -327,24 +364,32 @@ try {
     report.liveSecond.effectiveRoute === STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_ROUTE;
   report.checks.liveWarmReuse = report.liveFirst.lifecycle.deviceRequestCount === 1 &&
     report.liveSecond.lifecycle.deviceRequestCount === 1 &&
-    report.liveFirst.lifecycle.pipelineCreateCount === 3 &&
-    report.liveSecond.lifecycle.pipelineCreateCount === 3 &&
-    report.liveFirst.lifecycle.bufferAllocationCount === 9 &&
-    report.liveSecond.lifecycle.bufferAllocationCount === 9 &&
+    report.liveFirst.lifecycle.pipelineCreateCount === 4 &&
+    report.liveSecond.lifecycle.pipelineCreateCount === 4 &&
+    report.liveFirst.lifecycle.bufferAllocationCount === 13 &&
+    report.liveSecond.lifecycle.bufferAllocationCount === 13 &&
     report.liveFirst.lifecycle.executionCount === 1 &&
     report.liveSecond.lifecycle.executionCount === 2;
   report.checks.liveInteractiveValidation = report.liveFirst.interactiveValidation?.ok === true &&
     report.liveSecond.interactiveValidation?.ok === true &&
     report.liveSecond.lifecycle.fullValidationReadbackCount === 0;
+  report.checks.liveResidentSolverIdentity = [report.liveFirst, report.liveSecond].every(receipt =>
+    receipt.solver?.route === STRUCTURAL_MATERIAL_3D_RESIDENT_SOLVER_ROUTE &&
+    receipt.solver?.authority === STRUCTURAL_MATERIAL_3D_RESIDENT_SOLVER_AUTHORITY &&
+    receipt.solver?.iterationCount === 12 &&
+    receipt.solver?.metrics?.contactTargetError <= 0.000001 &&
+    receipt.solver?.metrics?.maxPinnedDisplacement <= 0.000001 &&
+    receipt.solver?.metrics?.nonPrimaryCurrentResponse <= 0.000001);
   report.checks.sameGenerationOrderedApplication = report.liveFirst.eventEpoch === 1 &&
     report.liveSecond.eventEpoch === 2 &&
     livePage.gpuTearAppliedCount === 2 &&
     livePage.gpuTearRecentAppliedReceipts.length === 2 &&
     livePage.gpuTearDiscardedCount === 0;
   report.checks.cameraPreserved = JSON.stringify(cameraBefore) === JSON.stringify(cameraAfter);
-  report.checks.visibleSeparation = livePage.visibleTear?.components?.some(component => !component.pinned) &&
+  report.checks.visibleSeparation = livePage.visibleTear?.components?.some(component =>
+    !component.pinned && component.maxDisplacement > 0.000001) &&
     livePage.visibleTear.components.filter(component => component.pinned)
-      .every(component => component.maxDisplacement < 0.000001);
+      .every(component => component.maxPinnedDisplacement < 0.000001);
 
   report.failurePhase = 'visual-evidence';
   const screenshotEvidence = await captureVisibleScreenshot(send, evaluate, config.loadTimeoutMs);
@@ -373,8 +418,8 @@ try {
   report.checks.resetReusesRuntime = reset.summary.brokenBondCount === 0 &&
     reset.summary.componentCount === 1 &&
     reset.gpuHotSidecar.lifecycle.deviceRequestCount === 1 &&
-    reset.gpuHotSidecar.lifecycle.pipelineCreateCount === 3 &&
-    reset.gpuHotSidecar.lifecycle.bufferAllocationCount === 9 &&
+    reset.gpuHotSidecar.lifecycle.pipelineCreateCount === 4 &&
+    reset.gpuHotSidecar.lifecycle.bufferAllocationCount === 13 &&
     reset.gpuHotSidecar.lifecycle.reinitializeCount === 1;
 
   for (const [name, passed] of Object.entries(report.checks)) {
@@ -394,7 +439,40 @@ try {
   };
 } catch (error) {
   report.error = { name: error.name, message: error.message, stack: error.stack };
-  if (cdp) report.runtimeErrors = cdp.runtimeErrors.slice();
+  if (cdp) {
+    report.runtimeErrors = cdp.runtimeErrors.slice();
+    try {
+      report.lastTrustworthyEvidence = await cdp.evaluate(`(() => {
+        const witness = window.__structuralMaterial3dWitness?.();
+        if (!witness) return { phase: 'page-witness-unavailable' };
+        return {
+          phase: ${JSON.stringify('failure-snapshot')},
+          effectiveRoute: witness.effectiveRoute,
+          gpuTearAppliedCount: witness.gpuTearAppliedCount,
+          gpuTearDiscardedCount: witness.gpuTearDiscardedCount,
+          gpuTearRecentEventEpochs: witness.gpuTearRecentAppliedReceipts?.map(receipt => receipt.eventEpoch) || [],
+          gpuSympatheticTear: witness.gpuSympatheticTear && {
+            status: witness.gpuSympatheticTear.status,
+            failurePhase: witness.gpuSympatheticTear.failurePhase,
+            eventEpoch: witness.gpuSympatheticTear.eventEpoch,
+          },
+          gpuHotSidecar: witness.gpuHotSidecar && {
+            status: witness.gpuHotSidecar.status,
+            eventEpoch: witness.gpuHotSidecar.eventEpoch,
+            solverGeneration: witness.gpuHotSidecar.solverGeneration,
+            lifecycle: witness.gpuHotSidecar.lifecycle,
+          },
+          liveDrag: witness.liveDrag,
+          latestGpuOperation: witness.latestGpuOperation,
+        };
+      })()`);
+    } catch (snapshotError) {
+      report.lastTrustworthyEvidence = {
+        phase: 'failure-snapshot-unavailable',
+        error: snapshotError instanceof Error ? snapshotError.message : String(snapshotError),
+      };
+    }
+  }
   process.exitCode = 1;
 } finally {
   cdp?.socket.close();

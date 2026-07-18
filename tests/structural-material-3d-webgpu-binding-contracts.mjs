@@ -66,8 +66,8 @@ const bondMutationState = cracked.bonds.map((bond, bondIndex) => ({
 const lifecycle = {
   adapterRequestCount: 1,
   deviceRequestCount: 1,
-  pipelineCreateCount: 3,
-  bufferAllocationCount: 9,
+  pipelineCreateCount: 4,
+  bufferAllocationCount: 13,
   executionAttemptCount: 1,
   executionCount: 1,
   bindingAttemptCount: 1,
