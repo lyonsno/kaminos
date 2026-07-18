@@ -7534,8 +7534,14 @@ export function createKaminosVolumePrototype({
       if (!adapter) throw new Error('WebGPU adapter unavailable');
       const maxRequestedFluidBufferBytes = fluidBufferBytes(Math.max(...SUPPORTED_GRID_SIZES));
       const requiredLimits = {};
-      if ((adapter.limits?.maxStorageBufferBindingSize ?? 0) >= maxRequestedFluidBufferBytes) {
-        requiredLimits.maxStorageBufferBindingSize = maxRequestedFluidBufferBytes;
+      requiredLimits.maxBufferSize = adapter.limits.maxBufferSize;
+      requiredLimits.maxStorageBufferBindingSize = adapter.limits.maxStorageBufferBindingSize;
+      requiredLimits.maxComputeWorkgroupStorageSize = adapter.limits.maxComputeWorkgroupStorageSize;
+      requiredLimits.maxComputeInvocationsPerWorkgroup = adapter.limits.maxComputeInvocationsPerWorkgroup;
+      requiredLimits.maxComputeWorkgroupSizeX = adapter.limits.maxComputeWorkgroupSizeX;
+      requiredLimits.maxComputeWorkgroupSizeY = adapter.limits.maxComputeWorkgroupSizeY;
+      if (requiredLimits.maxStorageBufferBindingSize < maxRequestedFluidBufferBytes) {
+        throw new Error('WebGPU adapter cannot bind the largest supported fluid buffer');
       }
       const requiredFeatures = [];
       if (adapter.features?.has?.('timestamp-query')) {

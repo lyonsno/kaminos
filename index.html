@@ -13398,9 +13398,41 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
         await volumePrototype.setForegroundOpportunityMode(true);
         foregroundModeActivated = true;
       },
-      throwOnError: true,
+      onProgress: event => onProgress?.(event),
+      throwOnError: false,
     });
-    if (!sharpResult?.ok || sharpResult.mode !== 'spn') {
+    if (!sharpResult?.ok) {
+      const failureDocument = {
+        schema: 'kaminos.sharp-inline-failure-report.v0',
+        status: 'failed',
+        phase: 'sharp-inference',
+        pipelineId: 'sharp-image-to-splat-live-v0',
+        firingId,
+        error: sharpResult?.error || 'SHARP inline route failed before PLY output',
+        effectiveRoute: {
+          route: 'same-browser-product-realm-shared-device',
+          sharpRevision: inline.mount.revision,
+          moduleUrl: inline.mount.moduleUrl,
+          weightsUrl: inline.mount.weightsUrl,
+        },
+        sharpRunDebug: sharpResult?.runDebug || null,
+        lastTrustworthyEvidence: sharpResult?.runDebug?.outputs || null,
+      };
+      const failureReceipt = await persistSharpInlineRunReport({
+        document: failureDocument,
+        firingId,
+      });
+      return {
+        ok: false,
+        pipelineId: 'sharp-image-to-splat-live-v0',
+        phase: failureDocument.phase,
+        error: failureDocument.error,
+        sharpRunDebug: failureDocument.sharpRunDebug,
+        reportPath: failureReceipt.path,
+        reportReadUrl: failureReceipt.readUrl,
+      };
+    }
+    if (sharpResult.mode !== 'spn') {
       throw new Error('SHARP inline route did not complete the real SPN-to-PLY path');
     }
     onProgress?.({ progress: 0.94, message: 'The model finished; Kaminos is storing the cast.' });

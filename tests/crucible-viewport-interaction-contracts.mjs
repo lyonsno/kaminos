@@ -142,7 +142,7 @@ assert.match(
 );
 assert.match(
   html,
-  /onProgress:\s*event\s*=>\s*\{[\s\S]*event\?\.message\s*\|\|\s*'The model is working on your cast\.'[\s\S]*setKilnRouteBenchStatus/,
+  /const onProgress\s*=\s*event\s*=>\s*\{[\s\S]*event\?\.message\s*\|\|\s*'The model is working on your cast\.'[\s\S]*setKilnRouteBenchStatus/,
   'Progress-only route events must update the caddy instead of being dropped when message is absent',
 );
 assert.doesNotMatch(

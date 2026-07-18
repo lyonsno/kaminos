@@ -20,9 +20,26 @@ assert.match(
 );
 assert.match(
   core,
-  /if \(!device\) \{[\s\S]{0,1200}navigator\.gpu\.requestAdapter[\s\S]{0,1200}adapter\.requestDevice/,
+  /if \(!device\) \{[\s\S]{0,2000}navigator\.gpu\.requestAdapter[\s\S]{0,2000}adapter\.requestDevice/,
   'the renderer must request a device only when the caller did not inject one',
 );
+assert.match(
+  core,
+  /requiredLimits\.maxBufferSize\s*=\s*adapter\.limits\.maxBufferSize[\s\S]{0,500}requiredLimits\.maxStorageBufferBindingSize\s*=\s*adapter\.limits\.maxStorageBufferBindingSize/,
+  'the product-owned device must request SHARP-sized buffers before it becomes the shared volume/inference device',
+);
+for (const limit of [
+  'maxComputeWorkgroupStorageSize',
+  'maxComputeInvocationsPerWorkgroup',
+  'maxComputeWorkgroupSizeX',
+  'maxComputeWorkgroupSizeY',
+]) {
+  assert.match(
+    core,
+    new RegExp(`requiredLimits\\.${limit}\\s*=\\s*adapter\\.limits\\.${limit}`),
+    `the shared device must preserve SHARP's ${limit} requirement`,
+  );
+}
 assert.match(
   core,
   /async function setForegroundOpportunityMode\(active\)[\s\S]{0,500}if \(active === true && activeHoldoverRenderPromise\)[\s\S]{0,300}await activeHoldoverRenderPromise[\s\S]{0,500}fireEpisodeFramesQuiescing = active === true[\s\S]{0,300}cancelAnimationFrame\(raf\)/,

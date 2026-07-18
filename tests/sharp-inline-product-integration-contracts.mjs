@@ -37,6 +37,16 @@ assert.match(
 );
 assert.match(
   page,
+  /const sharpResult = await inline\.run\([\s\S]{0,1000}onProgress:\s*event\s*=>\s*onProgress\?\.\(event\)/,
+  'the product route must forward uncapped SHARP inference progress instead of jumping from setup to storage',
+);
+assert.match(
+  page,
+  /throwOnError:\s*false[\s\S]{0,1200}if \(!sharpResult\?\.ok[\s\S]{0,1800}persistSharpInlineRunReport/,
+  'a pre-PLY SHARP failure must persist its run debug before the product route reports failure',
+);
+assert.match(
+  page,
   /let foregroundModeActivated = false[\s\S]{0,6500}finally \{[\s\S]{0,1200}delete globalThis\.__kaminosSharpForegroundOpportunity[\s\S]{0,1200}if \(foregroundModeActivated\) await volumePrototype\.setForegroundOpportunityMode\(false\)/,
   'the foreground lease mode and hook must always be released after inline inference',
 );
