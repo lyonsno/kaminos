@@ -31,6 +31,48 @@ function clamp(value, minimum, maximum) {
   return Math.max(minimum, Math.min(maximum, value));
 }
 
+function smoothstep(minimum, maximum, value) {
+  const normalized = clamp((value - minimum) / Math.max(0.000001, maximum - minimum), 0, 1);
+  return normalized * normalized * (3 - 2 * normalized);
+}
+
+function mixColor(left, right, amount) {
+  return left.map((value, index) => value + (right[index] - value) * amount);
+}
+
+export function evaluateStructuralBurnAppearance({
+  temperature = 0.08,
+  fuel = 1,
+  char = 0,
+  bondAlive = true,
+  strengthRatio = 1,
+} = {}) {
+  const thermal = Math.max(0, finite(temperature, 0.08));
+  const remainingFuel = clamp(finite(fuel, 1), 0, 1);
+  const charPersistence = clamp(finite(char, 0), 0, 1);
+  const fuelLoss = 1 - remainingFuel;
+  const heat = smoothstep(0.48, 1.15, thermal);
+  const scorch = clamp(charPersistence * 0.72 + fuelLoss * 0.22, 0, 1);
+  const virgin = [0.44, 0.29, 0.14];
+  const scorched = [0.16, 0.07, 0.025];
+  const charred = [0.025, 0.018, 0.015];
+  const ember = [1, 0.15, 0.018];
+  const base = mixColor(mixColor(virgin, scorched, scorch), charred, charPersistence ** 1.2);
+  const emissiveStrength = heat * (1 - charPersistence * 0.35);
+  const materialColor = mixColor(base, ember, Math.min(0.88, emissiveStrength * 0.84));
+  const remainingStrength = clamp(finite(strengthRatio, 1), 0, 1);
+  const bondOpacity = bondAlive
+    ? clamp(0.15 + 0.75 * remainingStrength * (1 - charPersistence * 0.35), 0.08, 0.9)
+    : 0;
+  return {
+    materialColor,
+    emissiveStrength,
+    charPersistence,
+    fuelLoss,
+    bondOpacity,
+  };
+}
+
 export function evaluateStructuralCombustionTerminalChecks({
   decodedStructures,
   sourceHeader,
@@ -475,6 +517,7 @@ struct VertexOut {
 @group(0) @binding(2) var<storage, read> materials: array<NodeMaterial>;
 @group(0) @binding(3) var<storage, read> componentLabels: array<u32>;
 @group(0) @binding(4) var<uniform> presentation: Presentation;
+@group(0) @binding(5) var<storage, read> bondBaselines: array<f32>;
 
 fn displayedPosition(nodeIndex: u32) -> vec3<f32> {
   let node = nodes[nodeIndex];
@@ -486,12 +529,18 @@ fn displayedPosition(nodeIndex: u32) -> vec3<f32> {
     node.displacement.xyz + presentation.world.xyz + vec3<f32>(lateral, -fall, 0.0);
 }
 
-fn materialColor(material: NodeMaterial, control: f32) -> vec3<f32> {
-  let heat = smoothstep(0.18, 1.1, material.thermal.x);
+fn materialColor(material: NodeMaterial) -> vec3<f32> {
+  let heat = smoothstep(0.48, 1.15, material.thermal.x);
   let charMass = clamp(material.thermal.z, 0.0, 1.0);
-  let coolWood = mix(vec3<f32>(0.34, 0.49, 0.42), vec3<f32>(0.55, 0.36, 0.16), 1.0 - control);
-  let hotWood = vec3<f32>(1.0, 0.28, 0.035) * (0.72 + heat * 0.85);
-  return mix(mix(coolWood, hotWood, heat), vec3<f32>(0.055, 0.035, 0.026), charMass * 0.88);
+  let fuelLoss = 1.0 - clamp(material.thermal.y, 0.0, 1.0);
+  let scorch = clamp(charMass * 0.72 + fuelLoss * 0.22, 0.0, 1.0);
+  let virgin = vec3<f32>(0.44, 0.29, 0.14);
+  let scorched = vec3<f32>(0.16, 0.07, 0.025);
+  let charred = vec3<f32>(0.025, 0.018, 0.015);
+  let ember = vec3<f32>(1.0, 0.15, 0.018);
+  let base = mix(mix(virgin, scorched, scorch), charred, pow(charMass, 1.2));
+  let emissive = heat * (1.0 - charMass * 0.35);
+  return mix(base, ember, min(0.88, emissive * 0.84));
 }
 
 @vertex
@@ -501,8 +550,12 @@ fn bondVertex(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) 
   let material = materials[nodeIndex];
   var out: VertexOut;
   out.position = presentation.viewProjection * vec4<f32>(displayedPosition(nodeIndex), 1.0);
-  let baseColor = materialColor(material, presentation.world.w);
-  out.color = vec4<f32>(mix(vec3<f32>(0.12), baseColor, bond.material.w), select(0.12, 0.72, bond.material.w > 0.5));
+  let baseColor = materialColor(material);
+  let charMass = max(materials[bond.endpoints.x].thermal.z, materials[bond.endpoints.y].thermal.z);
+  let strengthRatio = clamp(bond.material.y / max(0.0001, bondBaselines[bondIndex]), 0.0, 1.0);
+  let alive = bond.material.w >= 0.5;
+  let opacity = select(0.0, clamp(0.15 + 0.75 * strengthRatio * (1.0 - charMass * 0.35), 0.08, 0.9), alive);
+  out.color = vec4<f32>(baseColor * mix(0.42, 1.0, strengthRatio), opacity);
   return out;
 }
 
@@ -518,7 +571,7 @@ fn nodeVertex(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) 
   clip.xy += corners[vertexIndex] * 0.0095 * pinnedScale * clip.w;
   var out: VertexOut;
   out.position = clip;
-  out.color = vec4<f32>(materialColor(material, presentation.world.w), 0.96);
+  out.color = vec4<f32>(materialColor(material), 0.96);
   return out;
 }
 
@@ -651,6 +704,7 @@ export async function createGpuStructuralCombustionAssembly({
       { binding: 2, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
       { binding: 3, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
       { binding: 4, visibility: GPUShaderStage.VERTEX, buffer: { type: 'uniform' } },
+      { binding: 5, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
     ],
   });
   const presentationPipelineLayout = device.createPipelineLayout({
@@ -690,6 +744,7 @@ export async function createGpuStructuralCombustionAssembly({
         { binding: 2, resource: { buffer: materialBuffer } },
         { binding: 3, resource: { buffer: socket.descriptor.componentLabelBuffer } },
         { binding: 4, resource: { buffer: socket.presentationBuffer } },
+        { binding: 5, resource: { buffer: socket.baselineBuffer } },
       ],
     }));
   });
