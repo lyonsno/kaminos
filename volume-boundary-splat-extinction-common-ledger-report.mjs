@@ -173,7 +173,18 @@ export function validateExtinctionCommonLedgerReport(report, expected) {
       reject(arm.requestedCandidateCount !== expectedCount, 'arm-requested-count-mismatch');
       reject(arm.effectiveCandidateCount !== arm.requestedCandidateCount, 'arm-requested-effective-count-mismatch');
       reject(!isSha256(arm.membershipSha256), 'arm-membership-hash-invalid');
-      if (!isFull && isSha256(arm.membershipSha256)) sparseMembershipHashes.add(arm.membershipSha256);
+      if (isFull) {
+        reject(
+          arm.membershipSha256 !== expected.fullMembershipSha256ByState?.[state.stateId],
+          'full-membership-state-binding-mismatch',
+        );
+      } else {
+        reject(
+          arm.membershipSha256 !== expected.sparseMembershipSha256ByState?.[state.stateId],
+          'sparse-membership-state-binding-mismatch',
+        );
+        if (isSha256(arm.membershipSha256)) sparseMembershipHashes.add(arm.membershipSha256);
+      }
       reject(arm.recurrenceIdentity !== expected.recurrenceIdentity, 'arm-recurrence-mismatch');
       reject(arm.depthAuthority !== expected.depthAuthority, 'arm-depth-authority-mismatch');
       reject(arm.coefficientAuthority !== expected.coefficientAuthority, 'arm-coefficient-authority-mismatch');
@@ -261,6 +272,10 @@ export function validateExtinctionCommonLedgerReport(report, expected) {
     const fullLedger = armsById.get('full-correct')?.coefficientLedger;
     const dropLedger = armsById.get('sparse-drop')?.coefficientLedger;
     const complementLedger = armsById.get('sparse-positive-complement')?.coefficientLedger;
+    reject(
+      armsById.get('full-correct')?.membershipSha256 === armsById.get('sparse-drop')?.membershipSha256,
+      'full-sparse-membership-alias',
+    );
     for (const arm of arms) {
       reject(
         !approximatelyEqual(arm?.coefficientLedger?.emission?.source, fullLedger?.emission?.source),
