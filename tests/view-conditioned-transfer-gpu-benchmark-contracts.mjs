@@ -52,5 +52,7 @@ assert.match(witness, /pageReport\.workload[\s\S]*outputWidth[\s\S]*314[\s\S]*ou
 assert.match(witness, /addEventListener\(['"]close['"][\s\S]*rejectPending/, 'CDP socket close rejects pending requests');
 assert.match(witness, /addEventListener\(['"]error['"][\s\S]*rejectPending/, 'CDP socket error rejects pending requests');
 assert.match(witness, /phaseTimeout[\s\S]*Promise\.race/, 'transport waits are bounded by the caller timeout');
+assert.match(witness, /symlink[\s\S]*httpRoot[\s\S]*worktree[\s\S]*output/, 'HTTP server exposes only explicit worktree and durable-output mounts');
+assert.match(witness, /--directory[\s\S]*httpRoot/, 'HTTP server uses the isolated mount root rather than a filesystem-wide root');
 
 console.log('view-conditioned transfer GPU benchmark contracts passed');

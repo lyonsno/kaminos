@@ -5,9 +5,9 @@ import { once } from 'node:events';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:net';
 import { createWriteStream } from 'node:fs';
-import { mkdir as mkdirAsync, mkdtemp as mkdtempAsync, readFile as readFileAsync, rm as rmAsync, writeFile as writeFileAsync } from 'node:fs/promises';
+import { mkdir as mkdirAsync, mkdtemp as mkdtempAsync, readFile as readFileAsync, rm as rmAsync, symlink as symlinkAsync, writeFile as writeFileAsync } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
@@ -240,6 +240,7 @@ async function run(args) {
   let server = null;
   let session = null;
   let profile = null;
+  let httpRoot = null;
   let browserLog = null;
   let serverLog = null;
   try {
@@ -276,19 +277,18 @@ async function run(args) {
 
     report.failurePhase = 'http-server-launch';
     const port = await reservePort();
-    const tmpRoot = resolve('/private/tmp');
-    for (const path of [ROOT, outDir]) {
-      if (relative(tmpRoot, path).startsWith('..')) throw new Error(`benchmark path is outside HTTP custody root: ${path}`);
-    }
+    httpRoot = await mkdtempAsync(join(tmpdir(), 'kaminos-transfer-gpu-http-'));
+    await symlinkAsync(ROOT, join(httpRoot, 'worktree'), 'dir');
+    await symlinkAsync(outDir, join(httpRoot, 'output'), 'dir');
     serverLog = createWriteStream(join(outDir, 'http-server.log'));
-    server = spawn(resolve(args.python), ['-m', 'http.server', String(port), '--bind', '127.0.0.1', '--directory', tmpRoot], {
+    server = spawn(resolve(args.python), ['-m', 'http.server', String(port), '--bind', '127.0.0.1', '--directory', httpRoot], {
       cwd: ROOT,
       stdio: ['ignore', 'ignore', 'pipe'],
     });
     server.stderr.pipe(serverLog);
-    const htmlRoute = `http://127.0.0.1:${port}/${relative(tmpRoot, join(ROOT, 'view-conditioned-transfer-gpu-benchmark.html')).split('\\').join('/')}`;
+    const htmlRoute = `http://127.0.0.1:${port}/worktree/view-conditioned-transfer-gpu-benchmark.html`;
     await phaseTimeout(waitForHttp(htmlRoute, server), args.phaseTimeoutMs, 'HTTP server startup');
-    const manifestRoute = `/${relative(tmpRoot, exportedManifestPath).split('\\').join('/')}`;
+    const manifestRoute = `/output/gpu-input/gpu-input-manifest.json`;
     const requestedRoute = `${htmlRoute}?${new URLSearchParams({ manifest: manifestRoute, samples: String(args.samples), warmup: String(args.warmup) })}`;
 
     report.failurePhase = 'browser-launch';
@@ -395,6 +395,7 @@ async function run(args) {
       browserLog?.end();
       serverLog?.end();
       if (profile) await rmAsync(profile, { recursive: true, force: true });
+      if (httpRoot) await rmAsync(httpRoot, { recursive: true, force: true });
     } catch (cleanupError) {
       Object.assign(report, {
         status: 'failed',
