@@ -199,6 +199,10 @@ function schedulerEvidence(telemetry = null, statusOverride = null) {
   };
 }
 
+function canonicalSharpSchedulerTelemetry(result = null) {
+  return result?.sharpRunDebug?.schedulerTelemetry || null;
+}
+
 function liveSchedulerRuntimeEvidence(result = null) {
   const sharpRunDebug = result?.sharpRunDebug || null;
   const schedulerApplication = sharpRunDebug?.schedulerApplication || null;
@@ -229,6 +233,24 @@ function liveSchedulerRuntimeEvidence(result = null) {
       return null;
     }
     return value;
+  };
+  const isNonEmptyString = value => typeof value === 'string' && value.trim() !== '';
+  const isPlainObject = value => value != null && typeof value === 'object' && !Array.isArray(value);
+  const isNonNegativeInteger = value => Number.isInteger(value) && value >= 0;
+  const isFiniteNonNegative = value => Number.isFinite(value) && value >= 0;
+  const validateBoundary = (label, boundary, allowNull = false) => {
+    if (allowNull && boundary == null) return;
+    if (!isPlainObject(boundary)) {
+      validationErrors.push(`${label} boundary must be an object`);
+      return;
+    }
+    for (const field of ['invocationId', 'boundaryId', 'dutyId', 'phase']) {
+      if (!isNonEmptyString(boundary[field])) validationErrors.push(`${label} boundary ${field} must be a non-empty string`);
+    }
+    if (boundary.position !== 'before-encode') validationErrors.push(`${label} boundary position must be before-encode`);
+    if (boundary.metadata != null && !isPlainObject(boundary.metadata)) {
+      validationErrors.push(`${label} boundary metadata must be an object`);
+    }
   };
   const expectedClock = schedulerTelemetry?.eventTrace?.clock || null;
   const routeId = identityValue('scheduler application route identity', schedulerApplication?.routeId);
@@ -304,6 +326,9 @@ function liveSchedulerRuntimeEvidence(result = null) {
   if (foregroundOpportunityReport?.retention !== 'uncapped') {
     validationErrors.push('foreground opportunity report retention must be uncapped');
   }
+  if (foregroundOpportunityReport?.authority !== 'foreground-opportunity-request-and-queue-submit-observation-no-presentation-claim') {
+    validationErrors.push('foreground opportunity report authority is invalid');
+  }
   if (routeId && foregroundOpportunityReport?.routeId !== routeId) {
     validationErrors.push('foreground opportunity report route identity mismatch');
   }
@@ -341,19 +366,190 @@ function liveSchedulerRuntimeEvidence(result = null) {
     ].some(count => count !== 0)) {
     validationErrors.push('foreground opportunity report succeeded with unresolved request or service pressure');
   }
+  if (foregroundOpportunityReport?.status === 'succeeded'
+    && foregroundOpportunityReport?.requestCount !== foregroundOpportunityReport?.receiptCount) {
+    validationErrors.push('foreground opportunity report request and receipt counts mismatch');
+  }
+  if (foregroundOpportunityReport?.requestCount === 0
+    && (foregroundOpportunityReport?.receiptCount !== 0 || foregroundOpportunityReport?.serviceCount !== 0)) {
+    validationErrors.push('foreground opportunity report zero demand contradicts receipt or service rows');
+  }
+  const receiptIds = new Set();
+  const requestSequences = new Set();
   for (const receipt of foregroundOpportunityReport?.receipts || []) {
     if (receipt?.schema !== 'kaminos.webgpu-foreground-opportunity-receipt.v0') {
       validationErrors.push('foreground opportunity receipt schema is invalid');
     }
     if (routeId && receipt?.routeId !== routeId) validationErrors.push('foreground opportunity receipt route identity mismatch');
     if (runId && receipt?.runId !== runId) validationErrors.push('foreground opportunity receipt run identity mismatch');
+    if (!isNonEmptyString(receipt?.requestId)) {
+      validationErrors.push('foreground opportunity receipt requestId must be a non-empty string');
+    } else if (receiptIds.has(receipt.requestId)) {
+      validationErrors.push('foreground opportunity receipt requestId must be unique');
+    } else {
+      receiptIds.add(receipt.requestId);
+    }
+    if (!Number.isInteger(receipt?.requestSequence) || receipt.requestSequence < 1) {
+      validationErrors.push('foreground opportunity receipt requestSequence must be a positive integer');
+    } else if (requestSequences.has(receipt.requestSequence)) {
+      validationErrors.push('foreground opportunity receipt requestSequence must be unique');
+    } else {
+      requestSequences.add(receipt.requestSequence);
+    }
+    if (!['completed', 'failed-before-submission', 'failed-after-submission', 'canceled-before-service', 'canceled-during-service'].includes(receipt?.status)) {
+      validationErrors.push('foreground opportunity receipt status is invalid');
+    }
+    if (!isFiniteNonNegative(receipt?.requestedAtMs) || !isFiniteNonNegative(receipt?.settledAtMs)) {
+      validationErrors.push('foreground opportunity receipt timing must be finite and non-negative');
+    }
+    if (Number.isFinite(receipt?.settledAtMs) && Number.isFinite(receipt?.requestedAtMs)
+      && receipt.settledAtMs < receipt.requestedAtMs) {
+      validationErrors.push('foreground opportunity receipt settled before request');
+    }
+    if (receipt?.startedAtMs != null && !isFiniteNonNegative(receipt.startedAtMs)) {
+      validationErrors.push('foreground opportunity receipt startedAtMs must be null or finite and non-negative');
+    }
+    if (Number.isFinite(receipt?.startedAtMs) && Number.isFinite(receipt?.settledAtMs)
+      && receipt.settledAtMs < receipt.startedAtMs) {
+      validationErrors.push('foreground opportunity receipt settled before service start');
+    }
+    if (!isFiniteNonNegative(receipt?.elapsedMs)) {
+      validationErrors.push('foreground opportunity receipt elapsedMs must be finite and non-negative');
+    } else {
+      const expectedElapsedMs = receipt.startedAtMs == null ? 0 : Math.max(0, receipt.settledAtMs - receipt.startedAtMs);
+      if (!Number.isFinite(expectedElapsedMs) || Math.abs(receipt.elapsedMs - expectedElapsedMs) > 1e-6) {
+        validationErrors.push('foreground opportunity receipt elapsedMs mismatch');
+      }
+    }
+    validateBoundary('foreground opportunity receipt', receipt?.boundary, receipt?.status === 'canceled-before-service');
+    if (!isPlainObject(receipt?.metadata)) validationErrors.push('foreground opportunity receipt metadata must be an object');
+    if (!isNonNegativeInteger(receipt?.submissionCount) || !Array.isArray(receipt?.submissions)) {
+      validationErrors.push('foreground opportunity receipt submissions must have a non-negative count and array');
+    }
+    const submissionIds = new Set();
+    let returnedSubmissionCount = 0;
+    for (const [submissionIndex, submission] of (receipt?.submissions || []).entries()) {
+      if (!isNonEmptyString(submission?.submissionId) || submissionIds.has(submission.submissionId)) {
+        validationErrors.push('foreground opportunity submission identity must be non-empty and unique');
+      } else {
+        submissionIds.add(submission.submissionId);
+      }
+      if (submission?.submissionSequence !== submissionIndex + 1) {
+        validationErrors.push('foreground opportunity submission sequence mismatch');
+      }
+      if (!Number.isInteger(submission?.commandBufferCount) || submission.commandBufferCount < 1) {
+        validationErrors.push('foreground opportunity submission commandBufferCount must be a positive integer');
+      }
+      if (!isFiniteNonNegative(submission?.submittedAtMs) || !isFiniteNonNegative(submission?.returnedAtMs)
+        || submission.returnedAtMs < submission.submittedAtMs) {
+        validationErrors.push('foreground opportunity submission timing is invalid');
+      }
+      if (!['queue-submit-returned', 'queue-submit-threw'].includes(submission?.submissionStatus)) {
+        validationErrors.push('foreground opportunity submission status is invalid');
+      }
+      if (!isPlainObject(submission?.metadata)) validationErrors.push('foreground opportunity submission metadata must be an object');
+      if (submission?.submissionStatus === 'queue-submit-returned') returnedSubmissionCount += 1;
+      const expectedAuthority = submission?.submissionStatus === 'queue-submit-threw'
+        ? 'queue-submit-call-failed-no-gpu-submission-claim'
+        : 'queue-submit-call-returned-no-gpu-completion-or-presentation-claim';
+      if (submission?.authority !== expectedAuthority) validationErrors.push('foreground opportunity submission authority is invalid');
+    }
+    if (receipt?.submissionCount !== returnedSubmissionCount) {
+      validationErrors.push('foreground opportunity receipt submissionCount mismatch');
+    }
+    if (receipt?.authority !== 'foreground-callback-and-queue-submission-observed-no-gpu-completion-or-presentation-claim') {
+      validationErrors.push('foreground opportunity receipt authority is invalid');
+    }
+    if (receipt?.status === 'completed' && (receipt?.failure != null || receipt?.cancellation != null)) {
+      validationErrors.push('completed foreground opportunity receipt carries failure or cancellation');
+    }
+    if (['failed-before-submission', 'failed-after-submission'].includes(receipt?.status) && !isPlainObject(receipt?.failure)) {
+      validationErrors.push('failed foreground opportunity receipt must carry failure evidence');
+    }
+    if (isPlainObject(receipt?.failure)
+      && (!isNonEmptyString(receipt.failure.phase)
+        || !isNonEmptyString(receipt.failure.error?.name)
+        || !isNonEmptyString(receipt.failure.error?.message))) {
+      validationErrors.push('foreground opportunity receipt failure evidence is malformed');
+    }
+    if (['canceled-before-service', 'canceled-during-service'].includes(receipt?.status) && !isPlainObject(receipt?.cancellation)) {
+      validationErrors.push('canceled foreground opportunity receipt must carry cancellation evidence');
+    }
+    if (isPlainObject(receipt?.cancellation) && !isNonEmptyString(receipt.cancellation.reason)) {
+      validationErrors.push('foreground opportunity receipt cancellation evidence is malformed');
+    }
   }
+  if (foregroundOpportunityReport?.status === 'succeeded') {
+    for (let sequence = 1; sequence <= (foregroundOpportunityReport?.requestCount || 0); sequence += 1) {
+      if (!requestSequences.has(sequence)) {
+        validationErrors.push('foreground opportunity receipt sequence set mismatch');
+        break;
+      }
+    }
+  }
+  const servicedReceiptIds = new Set();
+  let expectedServiceSequence = 1;
   for (const service of foregroundOpportunityReport?.services || []) {
     if (service?.schema !== 'kaminos.webgpu-foreground-opportunity-service.v0') {
       validationErrors.push('foreground opportunity service schema is invalid');
     }
     if (routeId && service?.routeId !== routeId) validationErrors.push('foreground opportunity service route identity mismatch');
     if (runId && service?.runId !== runId) validationErrors.push('foreground opportunity service run identity mismatch');
+    if (!['serviced', 'failed', 'no-demand'].includes(service?.status)) {
+      validationErrors.push('foreground opportunity service status is invalid');
+    }
+    validateBoundary('foreground opportunity service', service?.boundary);
+    if (!isNonNegativeInteger(service?.capturedRequestCount)
+      || !isNonNegativeInteger(service?.servicedRequestCount)
+      || service.servicedRequestCount > service.capturedRequestCount) {
+      validationErrors.push('foreground opportunity service request counts are invalid');
+    }
+    if (!Array.isArray(service?.failures)) validationErrors.push('foreground opportunity service failures must be an array');
+    if (service?.status === 'no-demand') {
+      if (service.capturedRequestCount !== 0 || service.servicedRequestCount !== 0 || (service.failures || []).length !== 0) {
+        validationErrors.push('no-demand foreground opportunity service carries demand or failures');
+      }
+      if (service.authority !== 'no-foreground-demand-observed-at-safe-boundary') {
+        validationErrors.push('no-demand foreground opportunity service authority is invalid');
+      }
+    } else {
+      if (service?.serviceSequence !== expectedServiceSequence) {
+        validationErrors.push('foreground opportunity service sequence mismatch');
+      }
+      expectedServiceSequence += 1;
+      if (!isFiniteNonNegative(service?.startedAtMs) || !isFiniteNonNegative(service?.settledAtMs)
+        || service.settledAtMs < service.startedAtMs) {
+        validationErrors.push('foreground opportunity service timing is invalid');
+      }
+      if (!Array.isArray(service?.receiptIds) || service.receiptIds.length !== service?.servicedRequestCount) {
+        validationErrors.push('foreground opportunity service receiptIds mismatch');
+      }
+      for (const serviceReceiptId of service?.receiptIds || []) {
+        if (!receiptIds.has(serviceReceiptId) || servicedReceiptIds.has(serviceReceiptId)) {
+          validationErrors.push('foreground opportunity service receipt identity is missing or duplicated');
+        }
+        servicedReceiptIds.add(serviceReceiptId);
+      }
+      if (service?.status === 'serviced' && (service.failures || []).length !== 0) {
+        validationErrors.push('serviced foreground opportunity service carries failures');
+      }
+      if (service?.status === 'failed' && (service.failures || []).length === 0) {
+        validationErrors.push('failed foreground opportunity service lacks failures');
+      }
+      for (const failure of service?.failures || []) {
+        if (!receiptIds.has(failure?.requestId)
+          || !['failed-before-submission', 'failed-after-submission'].includes(failure?.status)
+          || !isPlainObject(failure?.failure)
+          || !isNonEmptyString(failure.failure.phase)
+          || !isNonEmptyString(failure.failure.error?.name)
+          || !isNonEmptyString(failure.failure.error?.message)) {
+          validationErrors.push('foreground opportunity service failure row is malformed');
+        }
+      }
+      if (service?.authority !== 'foreground-callbacks-settled-before-next-inference-encode-no-gpu-completion-or-presentation-claim') {
+        validationErrors.push('foreground opportunity service authority is invalid');
+      }
+    }
   }
   if (validationErrors.length) {
     return {
@@ -1356,7 +1552,7 @@ function writeAutoCropEvidence(outputPath, context) {
       },
       metadata: fileEvidence(metadataPath),
       inference: context.result || null,
-      scheduler: schedulerEvidence(context.result?.schedulerTelemetry || null),
+      scheduler: schedulerEvidence(canonicalSharpSchedulerTelemetry(context.result)),
       liveSchedulerRuntime: liveSchedulerRuntimeEvidence(context.result || null),
     },
     cropSignal: {
@@ -1474,7 +1670,8 @@ async function runBrowserInference() {
           time: document.getElementById('r-time')?.textContent || null,
           valid: validEl.textContent,
           downloadText: link.textContent || null,
-          schedulerTelemetry: window.__SHARP_LAST_RUN_TELEMETRY__ || null,
+          schedulerTelemetry: sharpRunDebug?.schedulerTelemetry || null,
+          legacySchedulerTelemetryAlias: window.__SHARP_LAST_RUN_TELEMETRY__ || null,
           sharpRunDebug,
           schedulerApplication: sharpRunDebug?.schedulerApplication || null,
           commandDutyReport: sharpRunDebug?.commandDutyReport || null,
@@ -1500,20 +1697,22 @@ async function runBrowserInference() {
       p95FrameGapMs: heartbeatProbe?.p95FrameGapMs || 0,
       longFrameCount: heartbeatProbe?.longFrameCount || 0,
     };
+    const canonicalSchedulerTelemetry = canonicalSharpSchedulerTelemetry(result);
     const backgroundHeartbeat = createSharpBackgroundHeartbeatReport({
-      scheduler: result.schedulerTelemetry || {},
+      scheduler: canonicalSchedulerTelemetry || {},
       probe: heartbeatProbe || {},
       responsiveness: heartbeatResponsiveness,
     });
     lastTrustworthyEvidence.backgroundHeartbeatCandidate = backgroundHeartbeat;
-    lastTrustworthyEvidence.schedulerTelemetry = result.schedulerTelemetry || null;
+    lastTrustworthyEvidence.schedulerTelemetry = canonicalSchedulerTelemetry;
+    lastTrustworthyEvidence.legacySchedulerTelemetryAlias = result.legacySchedulerTelemetryAlias || null;
     try {
       validateKaminosSharpHeartbeat(backgroundHeartbeat);
     } catch (error) {
       preserveInvalidSharpHeartbeatEvidence({
         evidenceStore: lastTrustworthyEvidence,
         backgroundHeartbeat,
-        schedulerTelemetry: result.schedulerTelemetry || null,
+        schedulerTelemetry: canonicalSchedulerTelemetry,
         error,
       });
       throw error;
@@ -1540,7 +1739,7 @@ async function runBrowserInference() {
         revision: sharpRepoRevision(),
         appUrl: url,
       },
-      scheduler: schedulerEvidence(result.schedulerTelemetry || null),
+      scheduler: schedulerEvidence(canonicalSharpSchedulerTelemetry(result)),
       liveSchedulerRuntime: liveSchedulerRuntimeEvidence(result),
       backgroundHeartbeat: result.backgroundHeartbeat,
       result,
@@ -1597,8 +1796,8 @@ try {
     },
     inference: browserResult.result,
     backgroundHeartbeat: browserResult.result.backgroundHeartbeat,
-    schedulerTelemetry: browserResult.result.schedulerTelemetry || null,
-    schedulerStatus: browserResult.result.schedulerTelemetry ? null : 'scheduler-unverified',
+    schedulerTelemetry: canonicalSharpSchedulerTelemetry(browserResult.result),
+    schedulerStatus: canonicalSharpSchedulerTelemetry(browserResult.result) ? null : 'scheduler-unverified',
     liveSchedulerRuntime: liveSchedulerRuntimeEvidence(browserResult.result),
     metadataPath,
     depthPath,

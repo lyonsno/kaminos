@@ -106,6 +106,11 @@ const liveSchedulerRuntimeEvidenceSource = wrapperSource.match(
   /function liveSchedulerRuntimeEvidence\([\s\S]*?\n}\n(?=\nfunction uniqueTelemetryPhases)/,
 );
 assert.ok(liveSchedulerRuntimeEvidenceSource, 'adapter must expose testable live scheduler runtime evidence validation');
+const canonicalSchedulerTelemetrySource = wrapperSource.match(
+  /function canonicalSharpSchedulerTelemetry\([\s\S]*?\n}\n(?=\nfunction liveSchedulerRuntimeEvidence)/,
+);
+assert.ok(canonicalSchedulerTelemetrySource, 'adapter must expose a testable canonical SHARP scheduler telemetry selector');
+const canonicalSharpSchedulerTelemetry = vm.runInNewContext(`(${canonicalSchedulerTelemetrySource[0]})`);
 const liveSchedulerRuntimeEvidence = vm.runInNewContext(`(${liveSchedulerRuntimeEvidenceSource[0]})`);
 const liveSchedulerIdentity = {
   routeId: 'sharp.image-to-splat.webgpu.v1',
@@ -168,8 +173,36 @@ const validLiveSchedulerResult = {
         routeId: liveSchedulerIdentity.routeId,
         runId: liveSchedulerIdentity.runId,
         requestId: 'kiln-frame:1',
+        requestSequence: 1,
         status: 'completed',
+        requestedAtMs: 10,
+        startedAtMs: 12,
+        settledAtMs: 14,
+        elapsedMs: 2,
+        boundary: {
+          invocationId: 'sharp-live-runtime-invocation',
+          boundaryId: 'sharp-live-runtime-boundary-1',
+          dutyId: 'sharp-live-runtime-duty-1',
+          phase: 'spn',
+          position: 'before-encode',
+          metadata: {},
+        },
+        metadata: { workload: 'kiln-frame' },
+        result: { serviced: true },
         submissionCount: 1,
+        submissions: [{
+          submissionId: 'kiln-frame:1:submit',
+          submissionSequence: 1,
+          commandBufferCount: 1,
+          submittedAtMs: 12.5,
+          returnedAtMs: 12.6,
+          submissionStatus: 'queue-submit-returned',
+          metadata: { workload: 'kiln-frame' },
+          authority: 'queue-submit-call-returned-no-gpu-completion-or-presentation-claim',
+        }],
+        cancellation: null,
+        failure: null,
+        authority: 'foreground-callback-and-queue-submission-observed-no-gpu-completion-or-presentation-claim',
       }],
       serviceCount: 1,
       services: [{
@@ -177,12 +210,61 @@ const validLiveSchedulerResult = {
         status: 'serviced',
         routeId: liveSchedulerIdentity.routeId,
         runId: liveSchedulerIdentity.runId,
+        serviceSequence: 1,
+        boundary: {
+          invocationId: 'sharp-live-runtime-invocation',
+          boundaryId: 'sharp-live-runtime-boundary-1',
+          dutyId: 'sharp-live-runtime-duty-1',
+          phase: 'spn',
+          position: 'before-encode',
+          metadata: {},
+        },
+        startedAtMs: 11,
+        settledAtMs: 15,
+        capturedRequestCount: 1,
         servicedRequestCount: 1,
+        receiptIds: ['kiln-frame:1'],
+        failures: [],
+        authority: 'foreground-callbacks-settled-before-next-inference-encode-no-gpu-completion-or-presentation-claim',
       }],
       noDemandBoundaryCount: 0,
+      authority: 'foreground-opportunity-request-and-queue-submit-observation-no-presentation-claim',
     },
   },
 };
+const mixedSchedulerAliasResult = structuredClone(validLiveSchedulerResult);
+mixedSchedulerAliasResult.schedulerTelemetry = {
+  schema: 'sharp-webgpu.scheduler-telemetry.v0',
+  status: 'verified',
+  runId: 'stale-top-level-run',
+  eventTrace: {
+    clock: {
+      clockId: 'stale-top-level-clock',
+      source: 'performance.now',
+      timeOriginEpochMs: 1_699_999_000_000,
+    },
+  },
+};
+assert.equal(
+  canonicalSharpSchedulerTelemetry(mixedSchedulerAliasResult).runId,
+  liveSchedulerIdentity.runId,
+  'all promoted scheduler evidence must select canonical sharpRunDebug telemetry over the top-level alias',
+);
+assert.match(
+  wrapperSource,
+  /scheduler:\s*schedulerEvidence\(canonicalSharpSchedulerTelemetry\(result\)\)/,
+  'metadata scheduler evidence must use canonical SHARP run debug telemetry',
+);
+assert.match(
+  wrapperSource,
+  /schedulerTelemetry:\s*canonicalSharpSchedulerTelemetry\(browserResult\.result\)/,
+  'final adapter report must use canonical SHARP run debug telemetry',
+);
+assert.doesNotMatch(
+  wrapperSource,
+  /scheduler:\s*schedulerEvidence\(result\.schedulerTelemetry/,
+  'promoted metadata/autocrop scheduler evidence must not use the legacy top-level alias',
+);
 const validLiveSchedulerEvidence = liveSchedulerRuntimeEvidence(validLiveSchedulerResult);
 assert.equal(validLiveSchedulerEvidence.status, 'observed');
 assert.equal(validLiveSchedulerEvidence.source, 'sharp-browser-debug');
@@ -217,6 +299,20 @@ for (const [label, mutate, expectedError] of [
   ['foreground run mismatch', value => { value.sharpRunDebug.foregroundOpportunityReport.runId = 'stale-run'; }, /foreground opportunity report run identity mismatch/],
   ['foreground incomplete', value => { value.sharpRunDebug.foregroundOpportunityReport.status = 'incomplete'; }, /foreground opportunity report status/],
   ['foreground capped', value => { value.sharpRunDebug.foregroundOpportunityReport.retention = 'first-100'; }, /foreground opportunity report retention/],
+  ['malformed foreground receipt', value => {
+    value.sharpRunDebug.foregroundOpportunityReport.receipts[0].status = 'nonsense';
+    value.sharpRunDebug.foregroundOpportunityReport.receipts[0].submissionCount = -7;
+  }, /foreground opportunity receipt status/],
+  ['malformed foreground service', value => {
+    value.sharpRunDebug.foregroundOpportunityReport.services[0].status = 'nonsense';
+    value.sharpRunDebug.foregroundOpportunityReport.services[0].servicedRequestCount = -3;
+  }, /foreground opportunity service status/],
+  ['foreground cross-count contradiction', value => {
+    value.sharpRunDebug.foregroundOpportunityReport.requestCount = 0;
+  }, /foreground opportunity report request and receipt counts mismatch/],
+  ['foreground request sequence contradiction', value => {
+    value.sharpRunDebug.foregroundOpportunityReport.receipts[0].requestSequence = 2;
+  }, /foreground opportunity receipt sequence set mismatch/],
 ]) {
   const candidate = structuredClone(validLiveSchedulerResult);
   mutate(candidate);
