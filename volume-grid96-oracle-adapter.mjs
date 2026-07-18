@@ -9,6 +9,7 @@ const COEFFICIENT_ORDER = Object.freeze([
   'ridge.emission.r', 'ridge.emission.g', 'ridge.emission.b', 'ridge.extinction',
   'nonRidge.emission.r', 'nonRidge.emission.g', 'nonRidge.emission.b', 'nonRidge.extinction',
 ]);
+const NATIVE_ROUTE = 'native-3d-compute-fluid-raymarch-v0';
 const isCli = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 export function buildGrid96OracleAdapter({ source, support, descriptors, coefficients }) {
@@ -80,6 +81,10 @@ function validate(source, support, descriptors, coefficients) {
     assert.equal(component.sameStateCaptureId, source.sameStateCaptureId, `${role} same-state identity drifted`);
     assert.equal(component.requestedControlIdentity, source.requestedControlIdentity, `${role} requested controls drifted`);
     assert.equal(component.effectiveControlIdentity, source.effectiveControlIdentity, `${role} effective controls drifted`);
+    assert.equal(component.route?.effective, NATIVE_ROUTE, `${role} source route fell back`);
+    assert.ok(component.route?.backend?.startsWith('WebGPU:'), `${role} source backend is not WebGPU`);
+    assert.ok(component.route?.fallbackReason == null, `${role} source route carries a fallback reason`);
+    assert.equal(component.route?.requested, source.route?.requested, `${role} requested source route drifted`);
   }
   assert.equal(source.requestedControlIdentity, source.effectiveControlIdentity, 'source controls were substituted');
   assert.equal(support.sampleCap, null, 'support applied a sampleCap');
@@ -140,6 +145,7 @@ async function main() {
   const outPath = resolve(arg('--out') || 'grid96-oracle-adapter-manifest.json');
   const reportPath = resolve(arg('--report') || 'grid96-oracle-adapter-report.json');
   let failurePhase = 'argument-validation';
+  let lastTrustworthyEvidence = { argv: process.argv.slice(2) };
   try {
     const paths = {
       source: resolve(arg('--source-manifest')),
@@ -147,6 +153,7 @@ async function main() {
       descriptors: resolve(arg('--descriptor-manifest')),
       coefficients: resolve(arg('--coefficient-manifest')),
     };
+    lastTrustworthyEvidence = { paths };
     failurePhase = 'component-validation';
     const manifest = buildGrid96OracleAdapter(Object.fromEntries(Object.entries(paths).map(([role, path]) => [role, readJson(path)])));
     failurePhase = 'artifact-write';
@@ -161,7 +168,8 @@ async function main() {
   } catch (error) {
     writeJsonAtomic(reportPath, {
       schema: 'kaminos.volume.grid96-oracle-adapter-report.v0', status: 'failed', failurePhase,
-      error: String(error?.stack || error), learnerCampaign: false, trainingStarted: false,
+      error: String(error?.stack || error), lastTrustworthyEvidence,
+      learnerCampaign: false, trainingStarted: false,
     });
     throw error;
   }

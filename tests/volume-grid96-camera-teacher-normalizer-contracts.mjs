@@ -16,6 +16,7 @@ const fluidSha256 = '4'.repeat(64);
 const frontSha256 = '5'.repeat(64);
 const controlsHash = '6'.repeat(64);
 const controlIdentity = 'sha256:exact-grid96-controls';
+const pngPixelHashes = new Map();
 const sourceRoute = {
   requested: 'http://127.0.0.1:19096/?volume_resolution=96',
   effective: 'native-3d-compute-fluid-raymarch-v0',
@@ -46,16 +47,24 @@ function chunk(type, data) {
   return output;
 }
 
-function writePng(index) {
+function writePng(index, fill = index + 1) {
   const width = 314;
   const height = 242;
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);
   ihdr.writeUInt32BE(height, 4);
   ihdr[8] = 8;
-  ihdr[9] = 0;
-  const rows = Buffer.alloc((width + 1) * height);
-  for (let row = 0; row < height; row += 1) rows.fill(index + 1, row * (width + 1) + 1, (row + 1) * (width + 1));
+  ihdr[9] = 6;
+  const rgba = Buffer.alloc(width * height * 4);
+  for (let pixel = 0; pixel < width * height; pixel += 1) {
+    rgba[pixel * 4] = fill;
+    rgba[pixel * 4 + 1] = fill;
+    rgba[pixel * 4 + 2] = fill;
+    rgba[pixel * 4 + 3] = 255;
+  }
+  const stride = width * 4;
+  const rows = Buffer.alloc((stride + 1) * height);
+  for (let row = 0; row < height; row += 1) rgba.copy(rows, row * (stride + 1) + 1, row * stride, (row + 1) * stride);
   const bytes = Buffer.concat([
     Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
     chunk('IHDR', ihdr),
@@ -64,6 +73,7 @@ function writePng(index) {
   ]);
   const path = join(scratch, `camera-${String(index).padStart(2, '0')}-shared-transport-target.png`);
   writeFileSync(path, bytes);
+  pngPixelHashes.set(path, sha256(rgba));
   return path;
 }
 
@@ -83,7 +93,7 @@ function capture(index) {
       target: [0, 0.02, 0],
     },
     cameraPoseHash: sha256(Buffer.from(`camera-${index}`)),
-    pixelHash: sha256(readFileSync(imagePath)),
+    pixelHash: pngPixelHashes.get(imagePath),
     width: 314,
     height: 242,
     metrics: { nonblank: true, litPixels: 100 + index },
@@ -100,14 +110,14 @@ function fixtures() {
     status: 'complete', failurePhase: null, role: 'source', grid: 96,
     sameStateCaptureId: 'exact-full-flame-grid96-state120-v0', simStepCount: 120,
     requestedControlIdentity: controlIdentity, effectiveControlIdentity: controlIdentity,
-    route: sourceRoute,
+    route: { ...sourceRoute },
     sidecars: { fluid: { sha256: fluidSha256 }, front: { sha256: frontSha256 } },
   };
   const support = {
     status: 'complete', failurePhase: null, role: 'support', grid: 96,
     sameStateCaptureId: source.sameStateCaptureId, simStepCount: 120,
     requestedControlIdentity: controlIdentity, effectiveControlIdentity: controlIdentity,
-    route: sourceRoute, sourceManifestSha256: sourceSha256,
+    route: { ...sourceRoute }, sourceManifestSha256: sourceSha256,
     nativeCellIndexSha256: supportSha256, rowCount: 370194, sampleCap: null,
     droppedRowCount: 0, overflowCount: 0,
   };
@@ -115,7 +125,7 @@ function fixtures() {
     status: 'complete', failurePhase: null, role: 'coefficients', grid: 96,
     sameStateCaptureId: source.sameStateCaptureId, simStepCount: 120,
     requestedControlIdentity: controlIdentity, effectiveControlIdentity: controlIdentity,
-    route: sourceRoute, sourceManifestSha256: sourceSha256,
+    route: { ...sourceRoute }, sourceManifestSha256: sourceSha256,
     nativeCellIndexSha256: supportSha256, rowCount: 370194,
     artifact: { sha256: coefficientSha256 },
   };
@@ -161,7 +171,13 @@ assert.equal(built.cameras.cameras.length, 21);
 assert.equal(built.teacher.targets.length, 21);
 assert.equal(built.teacher.executionRoute.backend, 'python-numpy-cpu-v0');
 assert.equal(built.teacher.targets[10].split, 'calibration');
+assert.equal(built.cameras.cameras[0].split, 'heldout');
+assert.equal(built.teacher.targets[0].split, 'heldout');
 assert.equal(built.teacher.targets[0].artifact.semanticRole, 'exact-shared-transmittance-target');
+assert.equal(built.cameras.stateBinding.authority, 'exact-imported-field-hash-and-state-step-binding-v0');
+assert.equal(built.cameras.stateBinding.sourceSameStateCaptureId, valid.source.sameStateCaptureId);
+assert.equal(built.cameras.stateBinding.orbitWitnessSameStateCaptureId, valid.orbit.frozenState.sameStateCaptureId);
+assert.notEqual(built.cameras.stateBinding.sourceSameStateCaptureId, built.cameras.stateBinding.orbitWitnessSameStateCaptureId);
 
 const omittedCompletionPhase = fixtures();
 delete omittedCompletionPhase.orbit.failurePhase;
@@ -175,10 +191,13 @@ for (const [label, mutate, pattern] of [
   ['cached camera pose', value => { value.orbit.captures[1].cameraPoseHash = value.orbit.captures[0].cameraPoseHash; }, /cached|duplicated/],
   ['wrong state', value => { value.orbit.frozenState.baseSimStepCount = 119; }, /state|step/],
   ['wrong source hash', value => { value.orbit.captureConfig.expectedAnchorFluidSha256 = '9'.repeat(64); }, /fluid|source/],
+  ['fallback source route', value => { value.support.route.effective = 'fallback-raymarch-v0'; }, /route|fallback/],
+  ['non-WebGPU source backend', value => { value.coefficients.route.backend = 'CPU'; }, /WebGPU|backend/],
   ['hidden sample cap', value => { value.oracle.effective.sampleCap = 1000; }, /sampleCap|cap/],
   ['dropped rows', value => { value.oracle.effective.droppedRowCount = 1; }, /dropped/],
   ['oracle support drift', value => { value.oracle.descriptorReceipt.indexSha256 = '8'.repeat(64); }, /support|index/],
   ['blank target', value => { writeFileSync(value.orbit.captures[0].imagePath, Buffer.alloc(0)); }, /blank|PNG|target/],
+  ['replaced valid target', value => { writePng(0, 255); }, /pixel|hash|witness/],
 ]) {
   const value = fixtures();
   mutate(value);

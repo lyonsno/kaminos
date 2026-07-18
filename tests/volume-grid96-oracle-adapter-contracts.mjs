@@ -1,4 +1,9 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { buildGrid96OracleAdapter } from '../volume-grid96-oracle-adapter.mjs';
 
@@ -19,14 +24,14 @@ const artifact = (name, shape) => ({
   sha256: name[0].repeat(64), dtype: name.includes('indices') ? 'uint32-le' : 'float32-le', shape,
 });
 const fixtures = () => ({
-  source: { ...base, role: 'source', sidecars: { fluid: { sha256: '3'.repeat(64) }, front: { sha256: '4'.repeat(64) } } },
+  source: { ...base, route: { ...route }, role: 'source', sidecars: { fluid: { sha256: '3'.repeat(64) }, front: { sha256: '4'.repeat(64) } } },
   support: {
-    ...base, role: 'support', sampleCap: null, droppedRowCount: 0, overflowCount: 0,
+    ...base, route: { ...route }, role: 'support', sampleCap: null, droppedRowCount: 0, overflowCount: 0,
     admissionIdentity: 'explicit-ridge-union-promoted-nonridge-source-selector-v0',
     nativeCellIndices: artifact('indices', [3]), features: artifact('features', [3, 24]), admission: artifact('admission', [3, 2]),
   },
   descriptors: {
-    ...base, role: 'descriptors', identity: 'flow-kernel-local-descriptor-socket-v0',
+    ...base, route: { ...route }, role: 'descriptors', identity: 'flow-kernel-local-descriptor-socket-v0',
     kernelIdentity: 'flow-tangent-positive-symmetric-trilinear-v0',
     artifact: {
       ...artifact('descriptors', [3, 100]), socketIdentity: 'flow-kernel-local-descriptor-socket-v0',
@@ -42,7 +47,7 @@ const fixtures = () => ({
     },
   },
   coefficients: {
-    ...base, role: 'coefficients', identity: 'exact-local-layer-emission-extinction-v0',
+    ...base, route: { ...route }, role: 'coefficients', identity: 'exact-local-layer-emission-extinction-v0',
     coefficientBoundary: 'per-sample-pre-tone-map-emission-extinction-v0',
     artifact: artifact('coefficients', [3, 8]),
   },
@@ -65,11 +70,32 @@ for (const [label, mutate, pattern] of [
   ['dropped rows', value => { value.support.droppedRowCount = 1; }, /dropped/],
   ['index drift', value => { value.coefficients.nativeCellIndexSha256 = '9'.repeat(64); }, /support|index/],
   ['row drift', value => { value.descriptors.rowCount = 2; }, /row/],
+  ['fallback source route', value => { value.support.route.effective = 'fallback-raymarch-v0'; }, /route|fallback/],
+  ['non-WebGPU source backend', value => { value.coefficients.route.backend = 'CPU'; }, /WebGPU|backend/],
   ['descriptor fallback', value => { value.descriptors.artifact.admissionIndexAuthority.runtimeReceipt.fallbackReason = 'fallback'; }, /fallback/],
 ]) {
   const value = fixtures();
   mutate(value);
   assert.throws(() => buildGrid96OracleAdapter(value), pattern, label);
 }
+
+const scratch = mkdtempSync(join(tmpdir(), 'grid96-oracle-adapter-failure-'));
+const reportPath = join(scratch, 'report.json');
+const scriptPath = resolve(dirname(fileURLToPath(import.meta.url)), '../volume-grid96-oracle-adapter.mjs');
+const failed = spawnSync(process.execPath, [
+  scriptPath,
+  '--source-manifest', join(scratch, 'missing-source.json'),
+  '--support-manifest', join(scratch, 'missing-support.json'),
+  '--descriptor-manifest', join(scratch, 'missing-descriptors.json'),
+  '--coefficient-manifest', join(scratch, 'missing-coefficients.json'),
+  '--out', join(scratch, 'out.json'),
+  '--report', reportPath,
+], { encoding: 'utf8' });
+assert.notEqual(failed.status, 0);
+const failureReport = JSON.parse(readFileSync(reportPath, 'utf8'));
+assert.equal(failureReport.status, 'failed');
+assert.equal(failureReport.failurePhase, 'component-validation');
+assert.equal(failureReport.lastTrustworthyEvidence.paths.source, join(scratch, 'missing-source.json'));
+rmSync(scratch, { recursive: true, force: true });
 
 console.log('volume-grid96-oracle-adapter contracts: ok');

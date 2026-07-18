@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { inflateSync } from 'node:zlib';
 
 export const GRID96_CAMERA_COHORT_IDENTITY = 'filament-orbit-21-camera-yaw-v0';
 export const GRID96_TEACHER_IDENTITY = 'exact-same-state-shared-transmittance-intrinsic-target-v0';
@@ -14,6 +15,9 @@ const EXPECTED_ANGLES = Object.freeze(Array.from({ length: 21 }, (_, index) => N
 const TARGET_MODE = 'sharedTransmittanceContributionSum';
 const TARGET_WIDTH = 314;
 const TARGET_HEIGHT = 242;
+const NATIVE_ROUTE = 'native-3d-compute-fluid-raymarch-v0';
+const ORACLE_HELD_OUT_SPLIT = 'heldOut';
+const COMPANION_HELD_OUT_SPLIT = 'heldout';
 const isCli = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 export function buildGrid96CameraTeacherComponents(inputs) {
@@ -34,6 +38,15 @@ export function buildGrid96CameraTeacherComponents(inputs) {
     sourceManifestSha256,
   };
   const indices = Array.from({ length: 21 }, (_, index) => index);
+  const stateBinding = {
+    authority: 'exact-imported-field-hash-and-state-step-binding-v0',
+    sourceSameStateCaptureId: source.sameStateCaptureId,
+    orbitWitnessSameStateCaptureId: orbit.frozenState.sameStateCaptureId,
+    simStepCount: source.simStepCount,
+    controlsHash: orbit.frozenState.controlsHash,
+    fluidSha256: source.sidecars.fluid.sha256,
+    frontSha256: source.sidecars.front.sha256,
+  };
   const cameras = {
     ...base,
     role: 'camera-cohort',
@@ -45,11 +58,12 @@ export function buildGrid96CameraTeacherComponents(inputs) {
     heldOutCameraIndices: indices.filter(index => index !== 10),
     orbitWitnessSameStateCaptureId: orbit.frozenState.sameStateCaptureId,
     orbitControlsHash: orbit.frozenState.controlsHash,
+    stateBinding: clone(stateBinding),
     cameras: targets.map(target => ({
       id: `camera-${String(target.cameraIndex).padStart(2, '0')}`,
       index: target.cameraIndex,
       angle: target.cameraAngle,
-      split: target.cameraIndex === 10 ? 'calibration' : 'heldout',
+      split: target.cameraIndex === 10 ? 'calibration' : COMPANION_HELD_OUT_SPLIT,
       pose: {
         position: [...target.cameraPose.position],
         target: [...target.cameraPose.target],
@@ -78,6 +92,7 @@ export function buildGrid96CameraTeacherComponents(inputs) {
     coefficientArtifactSha256: coefficients.artifact.sha256,
     orbitWitnessSameStateCaptureId: orbit.frozenState.sameStateCaptureId,
     orbitControlsHash: orbit.frozenState.controlsHash,
+    stateBinding: clone(stateBinding),
     executionRoute: {
       requested: `python volume-layer-coefficient-render-oracle.py --state-step ${oracle.requested.stateStep} --depth-bins ${oracle.requested.depthBins} --sample-cap none`,
       effective: `python volume-layer-coefficient-render-oracle.py --state-step ${oracle.effective.stateStep} --depth-bins ${oracle.requested.depthBins} --sample-cap none`,
@@ -89,7 +104,7 @@ export function buildGrid96CameraTeacherComponents(inputs) {
     targets: targets.map(target => ({
       cameraIndex: target.cameraIndex,
       cameraId: `camera-${String(target.cameraIndex).padStart(2, '0')}`,
-      split: target.cameraIndex === 10 ? 'calibration' : 'heldout',
+      split: target.cameraIndex === 10 ? 'calibration' : COMPANION_HELD_OUT_SPLIT,
       sameStateCaptureId: source.sameStateCaptureId,
       simStepCount: source.simStepCount,
       sourceManifestSha256,
@@ -98,7 +113,7 @@ export function buildGrid96CameraTeacherComponents(inputs) {
       width: TARGET_WIDTH,
       height: TARGET_HEIGHT,
       orbitPixelHash: target.pixelHash,
-      artifact: pngArtifact(target.imagePath),
+      artifact: pngArtifact(target.imagePath, target.pixelHash),
     })),
   };
   return { cameras, teacher };
@@ -113,6 +128,8 @@ function validateNativeInputs(source, support, coefficients, sourceManifestSha25
     assert.equal(value.simStepCount, 120, `${role} is not exact state 120`);
     assert.equal(value.requestedControlIdentity, source.requestedControlIdentity, `${role} requested controls drifted`);
     assert.equal(value.effectiveControlIdentity, source.effectiveControlIdentity, `${role} effective controls drifted`);
+    validateNativeRoute(value.route, role);
+    assert.equal(value.route.requested, source.route.requested, `${role} requested source route drifted`);
   }
   assert.equal(source.requestedControlIdentity, source.effectiveControlIdentity, 'source controls were substituted');
   assert.equal(support.sourceManifestSha256, sourceManifestSha256, 'support source manifest drifted');
@@ -159,7 +176,7 @@ function validateOrbit(orbit, source) {
     assert.equal(target.frameCount, 120, `camera ${target.cameraIndex} frame step drifted`);
     assert.equal(target.simStepCount, 120, `camera ${target.cameraIndex} simulator step drifted`);
     assert.equal(target.effectiveRaySteps, 160, `camera ${target.cameraIndex} effective ray steps drifted`);
-    assert.equal(target.effectiveRoute, 'native-3d-compute-fluid-raymarch-v0', `camera ${target.cameraIndex} route fell back`);
+    assert.equal(target.effectiveRoute, NATIVE_ROUTE, `camera ${target.cameraIndex} route fell back`);
     assert.ok(target.backend?.startsWith('WebGPU:'), `camera ${target.cameraIndex} backend is not WebGPU`);
     assert.equal(target.width, TARGET_WIDTH, `camera ${target.cameraIndex} target width drifted`);
     assert.equal(target.height, TARGET_HEIGHT, `camera ${target.cameraIndex} target height drifted`);
@@ -167,7 +184,7 @@ function validateOrbit(orbit, source) {
     assert.ok(target.metrics?.litPixels > 0, `camera ${target.cameraIndex} target has no lit pixels`);
     finiteArray(target.cameraPose?.position, 3, `camera ${target.cameraIndex} position`);
     finiteArray(target.cameraPose?.target, 3, `camera ${target.cameraIndex} target`);
-    pngArtifact(target.imagePath);
+    pngArtifact(target.imagePath, target.pixelHash);
   }
   return targets;
 }
@@ -199,24 +216,82 @@ function validateOracle(oracle, orbit, support, coefficients) {
   assert.deepEqual(cameras.map(camera => camera.cameraIndex), Array.from({ length: 21 }, (_, index) => index), 'oracle camera metrics are misordered');
   for (const camera of cameras) {
     assert.equal(camera.cameraAngle, EXPECTED_ANGLES[camera.cameraIndex], `oracle camera ${camera.cameraIndex} angle drifted`);
-    const expectedSplit = camera.cameraIndex === 10 ? 'calibration' : 'heldOut';
+    const expectedSplit = camera.cameraIndex === 10 ? 'calibration' : ORACLE_HELD_OUT_SPLIT;
     assert.equal(camera.split, expectedSplit, `oracle camera ${camera.cameraIndex} split drifted`);
   }
 }
 
-function pngArtifact(path) {
+function validateNativeRoute(route, role) {
+  assert.equal(route?.effective, NATIVE_ROUTE, `${role} source route fell back`);
+  assert.ok(route?.backend?.startsWith('WebGPU:'), `${role} source backend is not WebGPU`);
+  assert.ok(route?.fallbackReason == null, `${role} source route carries a fallback reason`);
+}
+
+function pngArtifact(path, expectedPixelSha256) {
   assert.ok(isAbsolute(path || ''), 'teacher target path must be absolute');
   const bytes = readFileSync(path);
   assert.ok(bytes.length > 0, 'teacher target PNG is blank');
   assert.ok(bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])), 'teacher target is not PNG');
   assert.equal(bytes.readUInt32BE(16), TARGET_WIDTH, 'teacher target PNG width drifted');
   assert.equal(bytes.readUInt32BE(20), TARGET_HEIGHT, 'teacher target PNG height drifted');
+  const decodedPixelSha256 = sha256(decodeRgbaPng(bytes));
+  assert.equal(decodedPixelSha256, expectedPixelSha256, 'teacher target decoded pixel hash differs from orbit witness');
   return {
     path,
     bytes: bytes.length,
     sha256: sha256(bytes),
+    decodedPixelSha256,
     semanticRole: 'exact-shared-transmittance-target',
   };
+}
+
+function decodeRgbaPng(bytes) {
+  assert.equal(bytes.readUInt8(24), 8, 'teacher target PNG must use 8-bit channels');
+  assert.equal(bytes.readUInt8(25), 6, 'teacher target PNG must use RGBA color');
+  assert.equal(bytes.readUInt8(26), 0, 'teacher target PNG compression drifted');
+  assert.equal(bytes.readUInt8(27), 0, 'teacher target PNG filter method drifted');
+  assert.equal(bytes.readUInt8(28), 0, 'teacher target PNG must be non-interlaced');
+  const idat = [];
+  for (let offset = 8; offset < bytes.length;) {
+    const length = bytes.readUInt32BE(offset);
+    const type = bytes.toString('ascii', offset + 4, offset + 8);
+    if (type === 'IDAT') idat.push(bytes.subarray(offset + 8, offset + 8 + length));
+    offset += length + 12;
+    assert.ok(offset <= bytes.length, 'teacher target PNG chunk is truncated');
+    if (type === 'IEND') break;
+  }
+  assert.ok(idat.length > 0, 'teacher target PNG has no image data');
+  const encoded = inflateSync(Buffer.concat(idat));
+  const stride = TARGET_WIDTH * 4;
+  assert.equal(encoded.length, (stride + 1) * TARGET_HEIGHT, 'teacher target PNG scanline size drifted');
+  const decoded = Buffer.alloc(stride * TARGET_HEIGHT);
+  for (let row = 0; row < TARGET_HEIGHT; row += 1) {
+    const filter = encoded[row * (stride + 1)];
+    assert.ok(filter >= 0 && filter <= 4, 'teacher target PNG uses an unknown filter');
+    for (let column = 0; column < stride; column += 1) {
+      const raw = encoded[row * (stride + 1) + column + 1];
+      const left = column >= 4 ? decoded[row * stride + column - 4] : 0;
+      const above = row > 0 ? decoded[(row - 1) * stride + column] : 0;
+      const upperLeft = row > 0 && column >= 4 ? decoded[(row - 1) * stride + column - 4] : 0;
+      const predictor = filter === 0 ? 0
+        : filter === 1 ? left
+          : filter === 2 ? above
+            : filter === 3 ? Math.floor((left + above) / 2)
+              : paeth(left, above, upperLeft);
+      decoded[row * stride + column] = (raw + predictor) & 0xff;
+    }
+  }
+  return decoded;
+}
+
+function paeth(left, above, upperLeft) {
+  const estimate = left + above - upperLeft;
+  const leftDistance = Math.abs(estimate - left);
+  const aboveDistance = Math.abs(estimate - above);
+  const upperLeftDistance = Math.abs(estimate - upperLeft);
+  if (leftDistance <= aboveDistance && leftDistance <= upperLeftDistance) return left;
+  if (aboveDistance <= upperLeftDistance) return above;
+  return upperLeft;
 }
 
 function finiteArray(value, length, label) {
