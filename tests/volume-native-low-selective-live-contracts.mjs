@@ -339,8 +339,12 @@ assert.match(route, /fixed-one-sim-step-per-presented-frame-v0/, 'direct sparse 
 assert.match(core, /fullGridReceiverMaterialization:\s*false[\s\S]*receiverCopyBytes:\s*0[\s\S]*fullGridSidecarIntermediary:\s*true/, 'direct sparse receipt distinguishes copy bypass from full-grid sidecar work');
 assert.match(core, /directModelCueEmission:\s*false[\s\S]*fusedSparseModelOutput:\s*false/, 'direct sparse receipt does not impersonate fused sparse model emission');
 assert.match(core, /runtime\.buffers\.predictedFluid[\s\S]*runtime\.buffers\.(?:nativeUpsampleFront|predictedFront)/, 'direct sparse renderer consumes GPU-resident model fields without CPU transport');
-assert.match(core, /directRendererConsumed:\s*true[\s\S]*productionPathCpuReadback:\s*false/, 'direct sparse receipt proves the dedicated renderer consumed the model buffers without readback');
+assert.match(core, /directRendererConsumed:\s*true[\s\S]*receiverOrdinaryFrameCpuReadback:\s*false/, 'direct sparse receipt proves the dedicated renderer consumes model buffers without ordinary-frame receiver readback');
 assert.match(core, /diagnosticTelemetryReadbackThisFrame/, 'direct sparse route distinguishes sparse diagnostic telemetry from the production path');
+assert.match(core, /wholeFrameCpuReadbackThisFrame[\s\S]*wholeFrameQueueCompletionWaitThisFrame/, 'direct sparse receipt distinguishes whole-frame diagnostic synchronization from receiver work');
+assert.match(core, /wholeFrameDiagnosticsRequested\s*&&\s*device\.queue\?\.onSubmittedWorkDone/, 'ordinary direct frames gate redundant stage fences behind diagnostic cadence');
+assert.match(core, /single-terminal-frame-fence-prevents-unbounded-control-latency-v0/, 'direct route retains one terminal backpressure fence instead of hiding GPU queue latency');
+assert.match(core, /denseReceiverMaterializedThisFrame/, 'dense control receipt distinguishes retained availability from current-frame materialization');
 assert.match(core, /directSparseCandidateCount[\s\S]*directSparseInstanceCount[\s\S]*directSparseOverflowCount[\s\S]*directSparseCapacity/, 'direct sparse receipt preserves compaction capacity and overflow evidence');
 assert.match(witness, /nativeLowDirectSparseCues[\s\S]*fullGridReceiverMaterialization[\s\S]*receiverCopyBytes[\s\S]*fullGridSidecarIntermediary/, 'witness preserves direct sparse route and honest intermediary identity');
 assert.match(witness, /simulationClockAuthority/, 'witness preserves the effective direct-route simulation clock authority');

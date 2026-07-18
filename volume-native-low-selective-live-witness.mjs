@@ -282,7 +282,9 @@ try {
       && (!directSparseCuesRequested || (
         directSparse?.identity === 'native-low-gpu-resident-splat-materialization-bypass-v0'
         && directSparse?.directRendererConsumed === true
-        && directSparse?.productionPathCpuReadback === false
+        && directSparse?.receiverOrdinaryFrameCpuReadback === false
+        && typeof directSparse?.wholeFrameCpuReadbackThisFrame === 'boolean'
+        && typeof directSparse?.wholeFrameQueueCompletionWaitThisFrame === 'boolean'
         && typeof directSparse?.diagnosticTelemetryReadbackThisFrame === 'boolean'
         && directSparse?.diagnosticTelemetryAuthority === 'periodic-32-byte-count-readback-not-production-path-v0'
         && directSparse?.fullGridReceiverMaterialization === false
@@ -385,7 +387,10 @@ try {
     const directSparse = state?.nativeLowDirectSparseCues;
     assert.equal(directSparse?.identity, 'native-low-gpu-resident-splat-materialization-bypass-v0', 'direct sparse route identity missing');
     assert.equal(directSparse?.directRendererConsumed, true, 'direct sparse renderer did not consume model buffers');
-    assert.equal(directSparse?.productionPathCpuReadback, false, 'direct sparse route used CPU readback');
+    assert.equal(directSparse?.receiverOrdinaryFrameCpuReadback, false, 'direct sparse receiver uses CPU readback on ordinary frames');
+    assert.equal(typeof directSparse?.wholeFrameCpuReadbackThisFrame, 'boolean', 'whole-frame readback cadence receipt missing');
+    assert.equal(directSparse?.wholeFrameQueueCompletionWaitThisFrame, true, 'direct route removed terminal backpressure and can accumulate hidden GPU latency');
+    assert.equal(directSparse?.wholeFrameQueueCompletionWaitAuthority, 'single-terminal-frame-fence-prevents-unbounded-control-latency-v0', 'terminal queue-wait authority drifted');
     assert.equal(typeof directSparse?.diagnosticTelemetryReadbackThisFrame, 'boolean', 'direct sparse telemetry cadence receipt missing');
     assert.equal(directSparse?.diagnosticTelemetryAuthority, 'periodic-32-byte-count-readback-not-production-path-v0', 'direct sparse telemetry authority drifted');
     assert.equal(directSparse?.fullGridReceiverMaterialization, false, 'direct sparse route materialized the full receiver');
@@ -398,6 +403,8 @@ try {
     assert.equal(state?.nativeLowMaterializationProfile?.fullGridReceiverMaterialization, false, 'direct sparse materialization profile allowed a full receiver');
     assert.equal(state?.nativeLowMaterializationProfile?.receiverCopyBytes, 0, 'direct sparse materialization profile recorded receiver copies');
     assert.equal(state?.nativeLowMaterializationProfile?.fullGridSidecarIntermediary, true, 'direct sparse materialization profile hid the sidecar intermediary');
+    assert.equal(state?.nativeLowProductionStageLedger?.frozenDenseRouteControl?.denseReceiverMaterializedThisFrame, false, 'direct frame falsely claimed dense control materialization');
+    assert.equal(state?.nativeLowProductionStageLedger?.frozenDenseRouteControl?.denseReceiverWriteBytesThisFrame, 0, 'direct frame falsely claimed dense receiver writes');
   }
   if (coarseSourceHistorySupportFrontRequested) {
     assert.equal(
@@ -769,6 +776,13 @@ try {
     assert.equal(endState?.nativeLowLiveResearchCockpit?.selectedRole, requestedCockpitRole, 'requested direct learned role drifted during observation');
     assert.equal(endState?.nativeLowDirectSparseCues?.directRendererConsumed, true, 'direct learned renderer was not active at observation end');
     assert.equal(typeof endState?.nativeLowDirectSparseCues?.diagnosticTelemetryReadbackThisFrame, 'boolean', 'direct telemetry cadence receipt drifted during observation');
+    assert.equal(endState?.nativeLowDirectSparseCues?.wholeFrameQueueCompletionWaitThisFrame, true, 'terminal backpressure disappeared during observation');
+    assert.equal(
+      startState?.nativeLowDirectSparseCues?.wholeFrameCpuReadbackThisFrame === false
+        || endState?.nativeLowDirectSparseCues?.wholeFrameCpuReadbackThisFrame === false,
+      true,
+      'observation did not include an ordinary readback-free direct frame',
+    );
     assert.equal(Number(endState?.nativeLowDirectSparseCues?.directSparseOverflowCount), 0, 'direct learned renderer overflowed during observation');
   }
   if (frontTopologyAblationRequested) {

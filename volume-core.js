@@ -5751,6 +5751,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let selectiveHeadLiveRuntime = null;
   let selectiveHeadLiveBindGroups = null;
   let nativeLowDirectSparseResources = null;
+  let nativeLowDirectDiagnosticsCache = null;
   const nativeLowSelectiveSharedRuntimes = new Map();
   let bindGroupLayout = null;
   let majorantFluidBindGroupLayout = null;
@@ -12429,7 +12430,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         raymarchEncoded: false,
         raymarchApplied: false,
         directRendererConsumed: true,
-        productionPathCpuReadback: false,
+        receiverOrdinaryFrameCpuReadback: false,
+        receiverPathCpuReadbackThisFrame: diagnosticTelemetryRequested,
+        receiverPathQueueCompletionWaitThisFrame: diagnosticTelemetryRequested,
         diagnosticTelemetryReadbackThisFrame: diagnosticTelemetryRequested,
         diagnosticTelemetryAuthority: 'periodic-32-byte-count-readback-not-production-path-v0',
         fullGridReceiverMaterialization: false,
@@ -12469,7 +12472,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         identity: NATIVE_LOW_DIRECT_SPARSE_CUES_IDENTITY,
         routeIdentity: NATIVE_LOW_DIRECT_SPARSE_CUES_IDENTITY,
         directRendererConsumed: false,
-        productionPathCpuReadback: false,
+        receiverOrdinaryFrameCpuReadback: false,
+        receiverPathCpuReadbackThisFrame: diagnosticTelemetryRequested,
+        receiverPathQueueCompletionWaitThisFrame: diagnosticTelemetryRequested,
         diagnosticTelemetryReadbackThisFrame: diagnosticTelemetryRequested,
         diagnosticTelemetryAuthority: 'periodic-32-byte-count-readback-not-production-path-v0',
         fullGridReceiverMaterialization: false,
@@ -13238,6 +13243,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const cockpitPresentation = presentationRole !== 'comparisonCapture';
     const renderLearnedTreatment = !cockpitPresentation || presentationRole === 'selectedLearnedPackage';
     const nativeLowDirectSparseCuesEnabled = options.nativeLowDirectSparseCuesEnabled === true;
+    const nativeLowDirectSparseTelemetryRequested = options.nativeLowDirectSparseTelemetryRequested === true;
+    const wholeFrameDiagnosticsRequested = !nativeLowDirectSparseCuesEnabled
+      || nativeLowDirectSparseTelemetryRequested
+      || !nativeLowDirectDiagnosticsCache
+      || options.candidateHeadBenchmarkEnabled === true
+      || options.candidateCueBufferLifecycleStressEnabled === true
+      || options.vivisectorCandidateHeadReceiver?.enabled === true;
     const renderNativeControl = !cockpitPresentation || presentationRole === 'native96Control' || presentationRole === 'modelBypass';
     const renderDeterministicMaterialization = presentationRole === 'deterministic96To160';
     const cockpitHistoryOnly = cockpitPresentation && presentationRole !== 'selectedLearnedPackage';
@@ -13262,7 +13274,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       if (requestedComposition !== 'splat-only-v0') throw new Error(`unsupported-native-low-shared-device-composition:${requestedComposition}`);
       cancelAnimationFrame(raf);
       raf = 0;
-      if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+      if (wholeFrameDiagnosticsRequested && device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
       const runtime = await ensureNativeLowSelectiveSharedRuntime({ transferRouteId: requestedTransferRouteId, sourceGrid });
       const runtimeBeforeInference = runtime.debugState();
 
@@ -13273,7 +13285,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         const nativeEncoder = device.createCommandEncoder({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native ${sourceGrid} source step` });
         encodeSim(nativeEncoder);
         device.queue.submit([nativeEncoder.finish()]);
-        if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+        if (wholeFrameDiagnosticsRequested && device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
       }
       const nativeStepMs = performance.now() - nativeStepStart;
       const sourceStep = state.simStepCount;
@@ -13299,7 +13311,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       lastTrustworthyEvidence = { sourceStepIdentity, sourceStep, nativeStepMs, simulationSteppingReceipt };
 
       failurePhase = 'shared-device-model-inference';
-      const timestampSupported = device.features?.has?.('timestamp-query') && typeof device.createQuerySet === 'function';
+      const timestampSupported = wholeFrameDiagnosticsRequested
+        && device.features?.has?.('timestamp-query')
+        && typeof device.createQuerySet === 'function';
       let querySet = null;
       let timestampReadback = null;
       let timestampResolveBuffer = null;
@@ -13429,19 +13443,33 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         );
       }
       device.queue.submit([inferenceEncoder.finish()]);
-      if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+      if (wholeFrameDiagnosticsRequested && device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
       const inferenceWallMs = performance.now() - inferenceStart;
       const validationError = await device.popErrorScope();
       if (validationError) throw new Error(`native-low-shared-device-validation:${validationError.message || String(validationError)}`);
-      let inferenceTiming = { ms: inferenceWallMs, authority: 'queue-onSubmittedWorkDone-wall-proxy' };
-      let nativeLowHeadCostProfile = {
-        identity: 'native-low-head-cost-profile-v0',
-        headCostTimingAuthority: 'queue-onSubmittedWorkDone-wall-proxy-no-stage-split',
-        supportFrontGpuMs: null,
-        supportPositiveResidualGpuMs: null,
-        sourceDeltaAdmissionGpuMs: null,
-        inferenceGpuMs: inferenceWallMs,
-      };
+      let inferenceTiming = wholeFrameDiagnosticsRequested
+        ? { ms: inferenceWallMs, authority: 'queue-onSubmittedWorkDone-wall-proxy', sampledThisFrame: true, sampleAgeFrames: 0 }
+        : {
+            ...nativeLowDirectDiagnosticsCache.inferenceTiming,
+            sampledThisFrame: false,
+            sampleAgeFrames: nativeLowDirectDiagnosticsCache.sampleAgeFrames + 1,
+          };
+      let nativeLowHeadCostProfile = wholeFrameDiagnosticsRequested
+        ? {
+            identity: 'native-low-head-cost-profile-v0',
+            headCostTimingAuthority: 'queue-onSubmittedWorkDone-wall-proxy-no-stage-split',
+            supportFrontGpuMs: null,
+            supportPositiveResidualGpuMs: null,
+            sourceDeltaAdmissionGpuMs: null,
+            inferenceGpuMs: inferenceWallMs,
+            sampledThisFrame: true,
+            sampleAgeFrames: 0,
+          }
+        : {
+            ...nativeLowDirectDiagnosticsCache.nativeLowHeadCostProfile,
+            sampledThisFrame: false,
+            sampleAgeFrames: nativeLowDirectDiagnosticsCache.sampleAgeFrames + 1,
+          };
       if (timestampReadback) {
         nativeLowHeadCostProfile = native96SparseFrontContinuityEnabled && !cockpitHistoryOnly
           ? await readNative96SparseFrontContinuityCostProfile(timestampReadback, NATIVE96_SPARSE_FRONT_CONTINUITY, inferenceWallMs)
@@ -13452,14 +13480,30 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           ms: Number.isFinite(nativeLowHeadCostProfile.inferenceGpuMs) ? nativeLowHeadCostProfile.inferenceGpuMs : inferenceWallMs,
           authority: nativeLowHeadCostProfile.headCostTimingAuthority,
           label: NATIVE_LOW_SHARED_DEVICE_ROUTE,
+          sampledThisFrame: true,
+          sampleAgeFrames: 0,
         };
         timestampResolveBuffer?.destroy();
         querySet.destroy?.();
         if (!Number.isFinite(inferenceTiming.ms)) inferenceTiming.ms = inferenceWallMs;
       }
-      const supportStatsStart = performance.now();
-      const supportStats = await runtime.sampleSupportStats();
-      const supportStatsMs = performance.now() - supportStatsStart;
+      let supportStats = nativeLowDirectDiagnosticsCache?.supportStats || {};
+      let supportStatsMs = 0;
+      if (wholeFrameDiagnosticsRequested) {
+        const supportStatsStart = performance.now();
+        supportStats = await runtime.sampleSupportStats();
+        supportStatsMs = performance.now() - supportStatsStart;
+        if (nativeLowDirectSparseCuesEnabled) {
+          nativeLowDirectDiagnosticsCache = {
+            inferenceTiming: { ...inferenceTiming },
+            nativeLowHeadCostProfile: { ...nativeLowHeadCostProfile },
+            supportStats,
+            sampleAgeFrames: 0,
+          };
+        }
+      } else {
+        nativeLowDirectDiagnosticsCache.sampleAgeFrames += 1;
+      }
       const nativeLowCandidateCueBufferLifecycle = candidateCueBufferLifecycleStressEnabled
         ? await runtime.sampleCandidateCueBufferLifecycle()
         : (runtime.debugState().nativeLowCandidateCueBufferLifecycle || null);
@@ -13571,6 +13615,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       let treatmentRender = null;
       let treatmentVisualUrl = null;
       let treatmentRenderMs = 0;
+      let directPresentationQueueWaitMs = 0;
       let treatmentSplatCandidateCount = nativeLowVivisectorWidth32LiveReceiver?.candidateCount ?? 0;
       let treatmentSplatInstanceCount = nativeLowVivisectorWidth32LiveReceiver?.instanceCount ?? treatmentSplatCandidateCount;
       let treatmentSplatOverflowCount = nativeLowVivisectorWidth32LiveReceiver?.overflowCount ?? 0;
@@ -13594,13 +13639,26 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             restoreControls: true,
           });
           treatmentRenderMs = performance.now() - treatmentRenderStart;
+          if (!treatmentRender?.receiverPathQueueCompletionWaitThisFrame && device.queue?.onSubmittedWorkDone) {
+            const queueWaitStart = performance.now();
+            await device.queue.onSubmittedWorkDone();
+            directPresentationQueueWaitMs = performance.now() - queueWaitStart;
+          }
           nativeLowDirectSparseCues = {
             identity: NATIVE_LOW_DIRECT_SPARSE_CUES_IDENTITY,
             enabled: true,
             requestedRoute: NATIVE_LOW_DIRECT_SPARSE_CUES_IDENTITY,
             effectiveRoute: treatmentRender?.routeIdentity || null,
             directRendererConsumed: treatmentRender?.directRendererConsumed === true,
-            productionPathCpuReadback: false,
+            receiverOrdinaryFrameCpuReadback: false,
+            receiverPathCpuReadbackThisFrame: treatmentRender?.receiverPathCpuReadbackThisFrame === true,
+            receiverPathQueueCompletionWaitThisFrame: treatmentRender?.receiverPathQueueCompletionWaitThisFrame === true,
+            wholeFrameCpuReadbackThisFrame: wholeFrameDiagnosticsRequested,
+            wholeFrameQueueCompletionWaitThisFrame: true,
+            wholeFrameQueueCompletionWaitAuthority: 'single-terminal-frame-fence-prevents-unbounded-control-latency-v0',
+            wholeFrameQueueCompletionWaitMs: directPresentationQueueWaitMs,
+            wholeFrameDiagnosticAuthority: 'periodic-timestamp-support-stats-and-splat-count-readback-v0',
+            wholeFrameDiagnosticSampleAgeFrames: inferenceTiming.sampleAgeFrames ?? 0,
             diagnosticTelemetryReadbackThisFrame: treatmentRender?.diagnosticTelemetryReadbackThisFrame === true,
             diagnosticTelemetryAuthority: treatmentRender?.diagnosticTelemetryAuthority || null,
             fullGridReceiverMaterialization: false,
@@ -13855,7 +13913,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         fullGridSidecarIntermediary: nativeLowDirectSparseCuesEnabled,
         directModelCueEmission: false,
         fusedSparseModelOutput: false,
-        productionPathCpuReadback: false,
+        receiverOrdinaryFrameCpuReadback: false,
+        wholeFrameCpuReadbackThisFrame: wholeFrameDiagnosticsRequested,
+        wholeFrameQueueCompletionWaitThisFrame: nativeLowDirectSparseCuesEnabled || wholeFrameDiagnosticsRequested,
+        wholeFrameQueueCompletionWaitAuthority: nativeLowDirectSparseCuesEnabled
+          ? 'single-terminal-frame-fence-prevents-unbounded-control-latency-v0'
+          : 'legacy-dense-route-multiple-stage-fences-v0',
         presentationRole,
       };
       if (frontTopologyAblationEnabled && !coarseSourceHistorySupportFrontEnabled) {
@@ -14241,8 +14304,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           role: 'frozen-dense-route-control',
           modelIdentity: runtimeState.modelIdentity,
           modelSha256: runtimeState.modelSha256,
-          denseReceiverMaterialized: true,
-          denseReceiverWriteBytes,
+          denseReceiverMaterialized: renderLearnedTreatment && !nativeLowDirectSparseCuesEnabled,
+          denseReceiverMaterializedThisFrame: renderLearnedTreatment && !nativeLowDirectSparseCuesEnabled,
+          denseReceiverWriteBytesThisFrame: activePresentationReceiverWriteBytes,
+          denseReceiverWriteBytesIfMaterialized: denseReceiverWriteBytes,
         },
         debugManifestTransportExcluded: {
           excluded: true,
@@ -15100,6 +15165,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       nativeLowSelectiveSharedRuntimes.clear();
       nativeLowDirectSparseResources?.sidecarBuffer?.destroy();
       nativeLowDirectSparseResources = null;
+      nativeLowDirectDiagnosticsCache = null;
       frameTexture?.destroy();
       browserResidualFeatureTexture?.destroy();
       externalEmitterBuffer?.destroy();
