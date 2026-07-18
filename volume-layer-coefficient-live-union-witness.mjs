@@ -318,6 +318,10 @@ try {
   assert.equal(learnedBaseline.overlay.effectiveOverlayIdentity, baselineOverlayManifest.identity, 'baseline overlay did not become effective');
   assert.equal(learnedFlow.overlay.effectiveOverlayIdentity, flowOverlayManifest.identity, 'flow overlay did not become effective');
 
+  failurePhase = 'boundary-splat-gpu-profile';
+  const boundarySplatGpuProfile = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.sampleBoundarySplatGpuProfile()`);
+  analytical.populationAudit.boundarySplatGpuProfile = boundarySplatGpuProfile;
+
   failurePhase = 'gpu-validation';
   const browserEvents = socket.browserEvents.map(summarizeBrowserEvent);
   const gpuValidationErrors = browserEvents.filter(event => /GPUValidationError|Invalid CommandBuffer|does not fit in \[Buffer/.test(
@@ -420,7 +424,6 @@ async function captureCondition({ label, captureContext, overlay, raymarch = fal
   } else if (!raymarch) {
     populationAudit = await evaluate(socket, `(async () => {
       const audit = await ${VOLUME_PROTOTYPE_EXPRESSION}.sampleBoundarySplatFootprintAudit({ now: ${FIXED_NOW_MS} });
-      const boundarySplatGpuProfile = await ${VOLUME_PROTOTYPE_EXPRESSION}.sampleBoundarySplatGpuProfile();
       return {
         status: audit.ok ? 'effective' : 'failed',
         authority: audit.authority,
@@ -443,7 +446,6 @@ async function captureCondition({ label, captureContext, overlay, raymarch = fal
         capacityAfterRetry: audit.capacityAfterRetry,
         descriptorFrameMetrics: audit.descriptorFrameMetrics,
         projectionMetrics: audit.projectionMetrics,
-        boundarySplatGpuProfile,
         decodedMembershipCounts: audit.decodedMembershipCounts,
         unionReceipt: audit.unionReceipt,
       };
