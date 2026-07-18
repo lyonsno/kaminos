@@ -34,6 +34,18 @@ const EXPECTED = {
   width: 900,
   height: 960,
   cameraSha256: '9'.repeat(64),
+  fullMembershipSha256ByState: {
+    'coefficient-state-114': '72d7974613d4a89e84d28745aad7c7a4438a69d2cd2150e27c58444a836ba93e',
+    'coefficient-state-116': '8e828abb093e7aacfb4c312bc1f1fa966d85237f27d556e4e24f7fc0397c7f19',
+    'coefficient-state-118': 'd427f7ed8809bf6ad950b8755a9a0d1160359e80a91bee5bdac448ba6133ed01',
+    'coefficient-state-120': '515ef62abd28769004da1737fd724f7e04e20c5a01796943b4b160cc858691bd',
+  },
+  sparseMembershipSha256ByState: {
+    'coefficient-state-114': '68fc1ca471bdd6f2e2a65441309992250b31c2afc282912f5d76470715ac2cd3',
+    'coefficient-state-116': 'b44bba4f365dd0fb60f42a13c4b6326c3b1cbbf7cbe8e9d6b9016dbc854134e4',
+    'coefficient-state-118': 'd42fdf2e8694abf525e764a17da08507f747f4caf216cac23b35970b14f47cb3',
+    'coefficient-state-120': 'd6a3aa9cb8515fdc050efd0a44111ece272109768793a83cdc63ca03918b3296',
+  },
 };
 
 function coefficientLedger(armId) {
@@ -82,7 +94,9 @@ function validArm(armId, stateId) {
     role: full ? 'reference' : 'comparison',
     requestedCandidateCount: full ? EXPECTED.fullCandidateCount : EXPECTED.sparseCandidateCount,
     effectiveCandidateCount: full ? EXPECTED.fullCandidateCount : EXPECTED.sparseCandidateCount,
-    membershipSha256: full ? 'f'.repeat(64) : stateId.at(-1).repeat(64),
+    membershipSha256: full
+      ? EXPECTED.fullMembershipSha256ByState[stateId]
+      : EXPECTED.sparseMembershipSha256ByState[stateId],
     recurrenceIdentity: EXPECTED.recurrenceIdentity,
     depthAuthority: EXPECTED.depthAuthority,
     coefficientAuthority: EXPECTED.coefficientAuthority,
@@ -252,6 +266,17 @@ expectRejected('partial arm set', report => { report.states[0].arms.pop(); }, 's
 expectRejected('stale arm state', report => { report.states[0].arms[0].stateId = EXPECTED.stateIds[1]; }, 'arm-state-mismatch');
 expectRejected('stale sparse count', report => { report.states[0].arms[1].effectiveCandidateCount -= 1; }, 'arm-requested-effective-count-mismatch');
 expectRejected('wrong membership', report => { report.states[1].arms[2].membershipSha256 = 'a'.repeat(64); }, 'sparse-membership-mismatch-within-state');
+expectRejected('state-swapped sparse membership', report => {
+  for (const arm of report.states[0].arms.slice(1)) {
+    arm.membershipSha256 = EXPECTED.sparseMembershipSha256ByState['coefficient-state-116'];
+  }
+}, 'sparse-membership-state-binding-mismatch');
+expectRejected('state-swapped full membership', report => {
+  report.states[0].arms[0].membershipSha256 = EXPECTED.fullMembershipSha256ByState['coefficient-state-116'];
+}, 'full-membership-state-binding-mismatch');
+expectRejected('full and sparse membership alias', report => {
+  report.states[0].arms[0].membershipSha256 = report.states[0].arms[1].membershipSha256;
+}, 'full-sparse-membership-alias');
 expectRejected('arm recurrence drift', report => { report.states[0].arms[3].recurrenceIdentity = 'additive-radiance-v0'; }, 'arm-recurrence-mismatch');
 expectRejected('arm coefficient drift', report => { report.states[0].arms[3].coefficientAuthority = 'learned-residual-v0'; }, 'arm-coefficient-authority-mismatch');
 expectRejected('duplicated emission', report => { report.states[0].arms[3].coefficientLedger.emission.residual += 10; }, 'emission-ledger-not-conservative');
@@ -277,7 +302,17 @@ expectRejected('complement does not restore dropped extinction', report => {
   ledger.residual -= 10;
 }, 'drop-complement-extinction-mismatch');
 expectRejected('positive complement drops coefficients', report => { report.states[0].arms[3].coefficientLedger.emission.dropped = 1; }, 'positive-complement-drops-coefficients');
-expectRejected('drop arm hides dropped mass', report => { report.states[0].arms[1].coefficientLedger.emission.dropped = 0; }, 'emission-ledger-not-conservative');
+expectRejected('drop arm breaks conservation', report => { report.states[0].arms[1].coefficientLedger.emission.dropped = 0; }, 'emission-ledger-not-conservative');
+expectRejected('drop arm routes emission through residual', report => {
+  const ledger = report.states[0].arms[1].coefficientLedger.emission;
+  ledger.residual += 10;
+  ledger.dropped -= 10;
+}, 'drop-emission-policy-mismatch');
+expectRejected('drop arm routes extinction through residual', report => {
+  const ledger = report.states[0].arms[1].coefficientLedger.extinction;
+  ledger.residual += 10;
+  ledger.dropped -= 10;
+}, 'drop-extinction-policy-mismatch');
 expectRejected('image residual', report => { report.states[0].arms[3].residual.imageResidualUsed = true; }, 'image-residual-used');
 expectRejected('independent tone mapping', report => { report.states[0].arms[3].residual.independentlyToneMapped = true; }, 'independent-tone-map-used');
 expectRejected('post tone-map addition', report => { report.states[0].arms[3].residual.postToneMapAddition = true; }, 'post-tonemap-addition-used');
