@@ -220,19 +220,38 @@ function releaseLease(entry) {
   if (result != null && typeof result.then === 'function') {
     throw new Error(`phase resource ${entry.resource.resourceId} lease release must complete synchronously`);
   }
-  if (result?.status === 'release-failed') {
+  const releaseStatus = result?.status ?? 'released';
+  if (releaseStatus === 'release-failed') {
     throw new Error(`phase resource ${entry.resource.resourceId} lease release failed`);
   }
-  return result ?? { status: 'released' };
+  if (releaseStatus === 'invalidated') {
+    return { outcome: 'invalidated', releaseStatus };
+  }
+  if (releaseStatus !== 'released' && releaseStatus !== 'already-released') {
+    throw new Error(
+      `phase resource ${entry.resource.resourceId} lease release returned unsupported status ${releaseStatus}`,
+    );
+  }
+  return { outcome: 'released', releaseStatus };
 }
 
 function cleanupEntries(entries) {
   const releasedResourceIds = [];
+  const invalidatedResourceIds = [];
+  const releaseResults = [];
   const failures = [];
   for (const entry of [...entries].reverse()) {
     try {
-      releaseLease(entry);
-      releasedResourceIds.push(entry.resource.resourceId);
+      const release = releaseLease(entry);
+      releaseResults.push({
+        resourceId: entry.resource.resourceId,
+        status: release.releaseStatus,
+      });
+      if (release.outcome === 'invalidated') {
+        invalidatedResourceIds.push(entry.resource.resourceId);
+      } else {
+        releasedResourceIds.push(entry.resource.resourceId);
+      }
     } catch (error) {
       failures.push({
         resourceId: entry.resource.resourceId,
@@ -241,8 +260,12 @@ function cleanupEntries(entries) {
     }
   }
   return deepFreeze({
-    status: failures.length === 0 ? 'released' : 'release-failed',
+    status: failures.length > 0
+      ? 'release-failed'
+      : (invalidatedResourceIds.length > 0 ? 'invalidated' : 'released'),
     releasedResourceIds,
+    invalidatedResourceIds,
+    releaseResults,
     failures,
   });
 }
@@ -370,12 +393,15 @@ export function createWebGpuPhaseResourceWorkingSet(input = {}) {
       const target = new Set(phase.holdResourceIds);
       const departed = [...state.held.values()].filter(entry => !target.has(entry.resource.resourceId));
       const release = cleanupEntries(departed);
-      if (release.status !== 'released') {
+      if (release.status === 'release-failed') {
         const acquiredCleanup = cleanupEntries(acquired);
-        const releasedDeparted = new Set(release.releasedResourceIds);
+        const settledDeparted = new Set([
+          ...release.releasedResourceIds,
+          ...release.invalidatedResourceIds,
+        ]);
         const unresolvedAcquired = failedReleaseResourceIds(acquiredCleanup);
         const degradedHeld = new Map(
-          [...state.held].filter(([resourceId]) => !releasedDeparted.has(resourceId)),
+          [...state.held].filter(([resourceId]) => !settledDeparted.has(resourceId)),
         );
         for (const entry of acquired) {
           if (unresolvedAcquired.has(entry.resource.resourceId)) {
@@ -399,6 +425,7 @@ export function createWebGpuPhaseResourceWorkingSet(input = {}) {
           acquiredResourceIds: acquired.map(entry => entry.resource.resourceId),
           retainedResourceIds,
           releasedResourceIds: release.releasedResourceIds,
+          invalidatedResourceIds: release.invalidatedResourceIds,
           heldResourceIds: heldResourceIds(),
           heldDeclaredBytes: heldDeclaredBytes(),
           ...readResidencyReport(),
@@ -419,7 +446,7 @@ export function createWebGpuPhaseResourceWorkingSet(input = {}) {
       failedResourceId = null;
       return deepFreeze({
         schema: WEBGPU_PHASE_RESOURCE_TRANSITION_SCHEMA,
-        status: 'prepared',
+        status: release.status === 'invalidated' ? 'prepared-after-invalidation' : 'prepared',
         controllerId: input.controllerId,
         planIdentity: plan.identity,
         transitionSequence: state.transitionCount,
@@ -432,6 +459,7 @@ export function createWebGpuPhaseResourceWorkingSet(input = {}) {
         acquiredResourceIds: acquired.map(entry => entry.resource.resourceId),
         retainedResourceIds,
         releasedResourceIds: release.releasedResourceIds,
+        invalidatedResourceIds: release.invalidatedResourceIds,
         heldResourceIds: heldResourceIds(),
         heldDeclaredBytes: heldDeclaredBytes(),
         ...readResidencyReport(),
@@ -467,6 +495,7 @@ export function createWebGpuPhaseResourceWorkingSet(input = {}) {
         acquiredResourceIds: acquired.map(entry => entry.resource.resourceId),
         retainedResourceIds,
         releasedResourceIds: [],
+        invalidatedResourceIds: cleanup.invalidatedResourceIds,
         heldResourceIds: heldResourceIds(),
         heldDeclaredBytes: heldDeclaredBytes(),
         ...readResidencyReport(),
@@ -481,7 +510,7 @@ export function createWebGpuPhaseResourceWorkingSet(input = {}) {
 
   function close() {
     if (state.activeTransition) throw new Error('phase resource working set cannot close during an active transition');
-    if (state.status === 'closed') {
+    if (state.status === 'closed' || state.status === 'closed-after-invalidation') {
       return deepFreeze({
         schema: WEBGPU_PHASE_RESOURCE_WORKING_SET_SCHEMA,
         controllerId: input.controllerId,
@@ -495,13 +524,16 @@ export function createWebGpuPhaseResourceWorkingSet(input = {}) {
       [...state.held].filter(([resourceId]) => unresolved.has(resourceId)),
     );
     state.currentPhaseId = null;
-    state.status = cleanup.status === 'released' ? 'closed' : 'close-failed';
+    state.status = cleanup.status === 'release-failed'
+      ? 'close-failed'
+      : (cleanup.status === 'invalidated' ? 'closed-after-invalidation' : 'closed');
     state.closedAtMs = now();
     return deepFreeze({
       schema: WEBGPU_PHASE_RESOURCE_WORKING_SET_SCHEMA,
       controllerId: input.controllerId,
       status: state.status,
       releasedResourceIds: cleanup.releasedResourceIds,
+      invalidatedResourceIds: cleanup.invalidatedResourceIds,
       failures: cleanup.failures,
       heldResourceIds: heldResourceIds(),
       heldDeclaredBytes: heldDeclaredBytes(),

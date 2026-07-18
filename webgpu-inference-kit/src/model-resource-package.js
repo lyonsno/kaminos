@@ -98,10 +98,22 @@ function releaseChildLeases(childLeases) {
   const failedResourceIds = releases
     .filter(item => item.release.status === 'release-failed')
     .map(item => item.resourceId);
+  const invalidatedResourceIds = releases
+    .filter(item => item.release.status === 'invalidated')
+    .map(item => item.resourceId);
+  const releasedResourceCount = releases.filter(item => (
+    item.release.status == null
+    || item.release.status === 'released'
+    || item.release.status === 'already-released'
+  )).length;
   return deepFreeze({
-    status: failedResourceIds.length === 0 ? 'released' : 'release-failed',
-    releasedResourceCount: releases.length - failedResourceIds.length,
+    status: failedResourceIds.length > 0
+      ? 'release-failed'
+      : (invalidatedResourceIds.length > 0 ? 'invalidated' : 'released'),
+    releasedResourceCount,
+    invalidatedResourceCount: invalidatedResourceIds.length,
     failedResourceIds,
+    invalidatedResourceIds,
     releases,
   });
 }

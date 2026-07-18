@@ -616,7 +616,14 @@ function releaseLeases(leases) {
   const failures = [];
   for (const lease of [...leases].reverse()) {
     try {
-      releases.push(lease.release());
+      const release = lease.release();
+      releases.push(release);
+      if (release?.status === 'release-failed') {
+        failures.push({
+          resourceId: lease.resourceId,
+          message: String(release.message || 'lease release failed'),
+        });
+      }
     } catch (error) {
       failures.push({
         resourceId: lease.resourceId,
@@ -624,8 +631,15 @@ function releaseLeases(leases) {
       });
     }
   }
+  const invalidatedLeaseCount = releases.filter(release => release?.status === 'invalidated').length;
+  const releasedLeaseCount = releases.filter(release => (
+    release?.status == null
+    || release.status === 'released'
+    || release.status === 'already-released'
+  )).length;
   return deepFreeze({
-    releasedLeaseCount: releases.length,
+    releasedLeaseCount,
+    invalidatedLeaseCount,
     failedReleaseCount: failures.length,
     releases,
     failures,
@@ -809,7 +823,9 @@ export async function loadWebGpuModelResources(input = {}) {
         schema: WEBGPU_MODEL_RESOURCE_LEASE_SCHEMA,
         identity: manifest.identity,
         routeId: route.routeId,
-        status: cleanup.failedReleaseCount === 0 ? 'released' : 'release-failed',
+        status: cleanup.failedReleaseCount > 0
+          ? 'release-failed'
+          : (cleanup.invalidatedLeaseCount > 0 ? 'invalidated' : 'released'),
         ...cleanup,
       });
     },

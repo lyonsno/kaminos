@@ -444,6 +444,58 @@ assert.equal(closeRecovery.status, 'closed');
 assert.deepEqual(closeRecovery.releasedResourceIds, ['old-b']);
 assert.deepEqual(closeFailureController.snapshot().heldResourceIds, []);
 
+const invalidatedTransitionController = createWebGpuPhaseResourceWorkingSet({
+  controllerId: 'invalidated-transition-controller',
+  plan: releaseFailurePlan,
+  async acquireResource({ resource: descriptor }) {
+    return {
+      resourceId: descriptor.resourceId,
+      release() {
+        return {
+          status: descriptor.resourceId === 'old-a' ? 'invalidated' : 'released',
+        };
+      },
+    };
+  },
+});
+await invalidatedTransitionController.transitionToPhase('old');
+const invalidatedTransition = await invalidatedTransitionController.transitionToPhase('next');
+assert.equal(invalidatedTransition.status, 'prepared-after-invalidation');
+assert.deepEqual(invalidatedTransition.releasedResourceIds, ['old-b']);
+assert.deepEqual(invalidatedTransition.invalidatedResourceIds, ['old-a']);
+assert.deepEqual(invalidatedTransition.heldResourceIds, ['next']);
+assert.equal(invalidatedTransitionController.snapshot().status, 'active');
+assert.equal(invalidatedTransitionController.snapshot().currentPhaseId, 'next');
+invalidatedTransitionController.close();
+
+const invalidatedResidency = createWebGpuResourceResidency({ sessionId: 'invalidated-working-set-residency' });
+const invalidatedResidencyController = createWebGpuPhaseResourceWorkingSet({
+  controllerId: 'invalidated-residency-controller',
+  plan: releaseFailurePlan,
+  residencySnapshot: () => invalidatedResidency.snapshot(),
+  async acquireResource({ resource: descriptor }) {
+    return invalidatedResidency.acquire({
+      resourceId: descriptor.resourceId,
+      routeId: 'invalidated-working-set-route',
+      declaredBytes: descriptor.declaredBytes,
+      kind: 'model-weight',
+      ownership: 'borrowed',
+      resource: { resourceId: descriptor.resourceId },
+    });
+  },
+});
+await invalidatedResidencyController.transitionToPhase('old');
+invalidatedResidency.invalidateAll({ reason: 'device-lost:test' });
+const invalidatedClose = invalidatedResidencyController.close();
+assert.equal(invalidatedClose.status, 'closed-after-invalidation');
+assert.deepEqual(invalidatedClose.releasedResourceIds, []);
+assert.deepEqual(invalidatedClose.invalidatedResourceIds, ['old-b', 'old-a']);
+assert.deepEqual(invalidatedClose.heldResourceIds, []);
+assert.equal(invalidatedClose.residency.status, 'invalidated');
+assert.equal(invalidatedClose.residency.activeLeaseCount, 0);
+assert.equal(invalidatedResidencyController.snapshot().status, 'closed-after-invalidation');
+assert.deepEqual(invalidatedResidencyController.snapshot().heldResourceIds, []);
+
 const gate = deferred();
 const concurrencyController = createWebGpuPhaseResourceWorkingSet({
   controllerId: 'concurrent-working-set-controller',
