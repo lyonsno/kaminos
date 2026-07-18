@@ -333,6 +333,17 @@ assert.match(witness, /residualDispatchMode[\s\S]*support-positive-indirect-disp
 assert.match(witness, /residualDispatchArgsFinalized[\s\S]*residualDispatchIndirect[\s\S]*residualDispatchFullGridEarlyReturn/, 'witness preserves finalized indirect residual dispatch fields');
 assert.match(witness, /supportCompactedCount[\s\S]*residualDispatchWorkgroups[\s\S]*residualDispatchThreadCount/, 'witness preserves support-positive residual dispatch work size');
 assert.match(witness, /headCostTimingAuthority[\s\S]*webgpu-timestamp-query-stage-split-v0/, 'witness preserves head-cost timing authority');
+assert.match(combined, /native-low-gpu-resident-splat-materialization-bypass-v0/, 'direct sparse route names its receiver-copy bypass authority');
+assert.match(route, /direct_sparse_cues[\s\S]*nativeLowDirectSparseCuesEnabled/, 'operator route exposes an explicit direct sparse cue switch');
+assert.match(route, /fixed-one-sim-step-per-presented-frame-v0/, 'direct sparse cockpit decouples simulation phase from renderer wall latency');
+assert.match(core, /fullGridReceiverMaterialization:\s*false[\s\S]*receiverCopyBytes:\s*0[\s\S]*fullGridSidecarIntermediary:\s*true/, 'direct sparse receipt distinguishes copy bypass from full-grid sidecar work');
+assert.match(core, /directModelCueEmission:\s*false[\s\S]*fusedSparseModelOutput:\s*false/, 'direct sparse receipt does not impersonate fused sparse model emission');
+assert.match(core, /runtime\.buffers\.predictedFluid[\s\S]*runtime\.buffers\.(?:nativeUpsampleFront|predictedFront)/, 'direct sparse renderer consumes GPU-resident model fields without CPU transport');
+assert.match(core, /directRendererConsumed:\s*true[\s\S]*productionPathCpuReadback:\s*false/, 'direct sparse receipt proves the dedicated renderer consumed the model buffers without readback');
+assert.match(core, /diagnosticTelemetryReadbackThisFrame/, 'direct sparse route distinguishes sparse diagnostic telemetry from the production path');
+assert.match(core, /directSparseCandidateCount[\s\S]*directSparseInstanceCount[\s\S]*directSparseOverflowCount[\s\S]*directSparseCapacity/, 'direct sparse receipt preserves compaction capacity and overflow evidence');
+assert.match(witness, /nativeLowDirectSparseCues[\s\S]*fullGridReceiverMaterialization[\s\S]*receiverCopyBytes[\s\S]*fullGridSidecarIntermediary/, 'witness preserves direct sparse route and honest intermediary identity');
+assert.match(witness, /simulationClockAuthority/, 'witness preserves the effective direct-route simulation clock authority');
 assert.match(native64Witness, /native-low-cross-grid-64-witness-v0/, 'native-64 witness names evidence authority');
 assert.match(native64Witness, /native64CrossGridDiscriminant[\s\S]*native64NoModelControl[\s\S]*native64SelectivePredicted/, 'native-64 witness preserves cross-grid discriminant and both panes');
 assert.match(native64Witness, /macroStructureDecision[\s\S]*blankFrameRejection[\s\S]*cachedFrameRejection/, 'native-64 witness preserves visual decision and false-closure checks');

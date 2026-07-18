@@ -47,7 +47,8 @@ const args = parseArgs(process.argv.slice(2));
 const url = required('--url');
 const requestedUrl = new URL(url);
 const cockpitRequested = requestedUrl.searchParams.get('cockpit') === '1';
-const cockpitLearnedRoleRequested = cockpitRequested && requestedUrl.searchParams.get('cockpit_role') === 'selectedLearnedPackage';
+const requestedCockpitRole = requestedUrl.searchParams.get('cockpit_role') || 'native96Control';
+const cockpitLearnedRoleRequested = cockpitRequested && requestedCockpitRole === 'selectedLearnedPackage';
 const requestedTransferRoute = requestedUrl.searchParams.get('native_low_transfer_route') || (cockpitRequested
   ? 'native-low-transfer-160-to-96-deployment-grid-v0'
   : 'native-low-transfer-160-to-128-zero-shot-v0');
@@ -59,7 +60,9 @@ const fixedGateDiscontinuityAssayRequested = requestedUrl.searchParams.get('fixe
 const candidateHeadBenchmarkRequested = requestedUrl.searchParams.get('candidate_head_benchmark') === '1';
 const cueBufferLifecycleStressRequested = requestedUrl.searchParams.get('cue_buffer_lifecycle_stress') === '1';
 const coarseSourceHistorySupportFrontRequested = requestedUrl.searchParams.get('coarse_source_history_support_front') === '1';
-const sparseFrontContinuityRequested = requestedUrl.searchParams.get('sparse_front_continuity') === '1';
+const sparseFrontContinuityRequested = requestedUrl.searchParams.get('sparse_front_continuity') === '1'
+  || (cockpitRequested && requestedUrl.searchParams.get('sparse_front_continuity') !== '0');
+const directSparseCuesRequested = requestedUrl.searchParams.get('direct_sparse_cues') === '1';
 const vivisectorCandidateHeadTrainedRouteRequested = Boolean(requestedUrl.searchParams.get('vivisector_candidate_head_package'))
   || requestedUrl.searchParams.get('candidate_head_trained_route') === 'vivisector-width32';
 const out = resolve(String(args.get('--out') || '/tmp/kaminos-native-low-selective-live.png'));
@@ -168,6 +171,7 @@ try {
     }
     const replacement = state?.nativeLowCoarseSourceHistorySupportFrontReplacement;
     const sparseFront = state?.native96SparseFrontContinuity;
+    const directSparse = state?.nativeLowDirectSparseCues;
     const workProfileReady = sparseFrontContinuityRequested
       ? cockpitRequested && !cockpitLearnedRoleRequested
         ? sparseFront?.identity === 'native96-sparse-front-continuity-v0'
@@ -232,6 +236,7 @@ try {
       && isWebGpuBackend(state?.effectiveBackend)
       && state?.fallbackBackend === null
       && state?.transportMode === TRANSPORT_MODE
+      && (!directSparseCuesRequested || state?.simulationClockAuthority === 'fixed-one-sim-step-per-presented-frame-v0')
       && state?.runtimeTruthAvailable === false
       && state?.syntheticDownsampleApplied === false
       && state?.sameNativeStateIdentity
@@ -271,7 +276,25 @@ try {
       && state?.nativeLowProductionStageLedger?.frozenDenseRouteControl?.retained === true
       && Number(state?.nativeLowProductionStageLedger?.denseReceiverWriteBytes) > 0
       && state?.nativeLowProductionStageLedger?.debugManifestTransportExcluded?.excluded === true
-      && state?.nativeLowProductionStageLedger?.dense160ReceiverWriteAvoidanceCandidate?.status === 'projection-not-implemented'
+      && state?.nativeLowProductionStageLedger?.dense160ReceiverWriteAvoidanceCandidate?.status === (directSparseCuesRequested
+        ? 'receiver-copy-bypass-implemented'
+        : 'projection-not-implemented')
+      && (!directSparseCuesRequested || (
+        directSparse?.identity === 'native-low-gpu-resident-splat-materialization-bypass-v0'
+        && directSparse?.directRendererConsumed === true
+        && directSparse?.productionPathCpuReadback === false
+        && typeof directSparse?.diagnosticTelemetryReadbackThisFrame === 'boolean'
+        && directSparse?.diagnosticTelemetryAuthority === 'periodic-32-byte-count-readback-not-production-path-v0'
+        && directSparse?.fullGridReceiverMaterialization === false
+        && directSparse?.receiverCopyBytes === 0
+        && directSparse?.fullGridSidecarIntermediary === true
+        && directSparse?.directModelCueEmission === false
+        && directSparse?.fusedSparseModelOutput === false
+        && Number(directSparse?.directSparseCandidateCount) >= 0
+        && Number(directSparse?.directSparseInstanceCount) >= 0
+        && Number(directSparse?.directSparseOverflowCount) === 0
+        && Number(directSparse?.directSparseCapacity) >= Number(directSparse?.directSparseInstanceCount)
+      ))
       && state?.nativeLowBreakEvenBudgetLedger?.identity === 'native-low-learned-transfer-break-even-ledger-v0'
       && Number(state?.nativeLowBreakEvenBudgetLedger?.outerKillBoundaryMs) === 24
       && Number(state?.nativeLowBreakEvenBudgetLedger?.credibleBreakEvenTargetMs) === 15
@@ -342,6 +365,10 @@ try {
   assert.ok(isWebGpuBackend(state?.effectiveBackend), `fallback backend used: ${state?.effectiveBackend}`);
   assert.equal(state?.fallbackBackend, null, 'fallback backend evidence is not admissible');
   assert.equal(state?.transportMode, TRANSPORT_MODE, 'wrong shared-device transport mode');
+  if (directSparseCuesRequested) {
+    assert.equal(state?.simulationClockAuthority, 'fixed-one-sim-step-per-presented-frame-v0', 'direct sparse route retained renderer-latency-driven simulation time');
+    assert.ok(Number(state?.simulationStepDeltaMs) > 0, 'direct sparse fixed simulation step is missing');
+  }
   assert.equal(state?.runtimeTruthAvailable, false, 'truth authority leaked into runtime');
   assert.equal(state?.syntheticDownsampleApplied, false, 'synthetic downsample leaked into runtime');
   assert.equal(state?.sourceStepDrift, null, 'source-step drift detected');
@@ -354,6 +381,24 @@ try {
   assert.equal(state?.nativeLowMaterializationProfile?.hiddenSupportCap, false, 'hidden support cap used in materialization profile');
   assert.ok(Number(state?.nativeLowMaterializationProfile?.treatmentRebuildMs) >= 0, 'treatmentRebuildMs missing');
   assert.ok(Number(state?.nativeLowMaterializationProfile?.restoreCopyMs) >= 0, 'restoreCopyMs missing');
+  if (directSparseCuesRequested) {
+    const directSparse = state?.nativeLowDirectSparseCues;
+    assert.equal(directSparse?.identity, 'native-low-gpu-resident-splat-materialization-bypass-v0', 'direct sparse route identity missing');
+    assert.equal(directSparse?.directRendererConsumed, true, 'direct sparse renderer did not consume model buffers');
+    assert.equal(directSparse?.productionPathCpuReadback, false, 'direct sparse route used CPU readback');
+    assert.equal(typeof directSparse?.diagnosticTelemetryReadbackThisFrame, 'boolean', 'direct sparse telemetry cadence receipt missing');
+    assert.equal(directSparse?.diagnosticTelemetryAuthority, 'periodic-32-byte-count-readback-not-production-path-v0', 'direct sparse telemetry authority drifted');
+    assert.equal(directSparse?.fullGridReceiverMaterialization, false, 'direct sparse route materialized the full receiver');
+    assert.equal(directSparse?.receiverCopyBytes, 0, 'direct sparse route copied receiver fields');
+    assert.equal(directSparse?.fullGridSidecarIntermediary, true, 'direct sparse route hid its full-grid sidecar intermediary');
+    assert.equal(directSparse?.directModelCueEmission, false, 'direct sparse route impersonated direct model cue emission');
+    assert.equal(directSparse?.fusedSparseModelOutput, false, 'direct sparse route impersonated fused sparse model output');
+    assert.equal(Number(directSparse?.directSparseOverflowCount), 0, 'direct sparse compaction overflowed');
+    assert.ok(Number(directSparse?.directSparseCapacity) >= Number(directSparse?.directSparseInstanceCount), 'direct sparse capacity is smaller than instance count');
+    assert.equal(state?.nativeLowMaterializationProfile?.fullGridReceiverMaterialization, false, 'direct sparse materialization profile allowed a full receiver');
+    assert.equal(state?.nativeLowMaterializationProfile?.receiverCopyBytes, 0, 'direct sparse materialization profile recorded receiver copies');
+    assert.equal(state?.nativeLowMaterializationProfile?.fullGridSidecarIntermediary, true, 'direct sparse materialization profile hid the sidecar intermediary');
+  }
   if (coarseSourceHistorySupportFrontRequested) {
     assert.equal(
       state?.nativeLowInferenceWorkProfile?.supportClassifierCoverage,
@@ -456,8 +501,9 @@ try {
     assert.equal(cockpit?.cameraStateStableAcrossRoleSwitch, true, 'cockpit camera state is not stable across role switches');
     assert.equal(cockpit?.noHiddenCandidateCap, true, 'cockpit hid candidate work');
     assert.equal(cockpit?.noHiddenInstanceCap, true, 'cockpit hid instance work');
-    failurePhase = 'cockpit-interaction-assay';
-    cockpitInteractionAssay = await evaluate(socket, `(() => {
+    if (!directSparseCuesRequested) {
+      failurePhase = 'cockpit-interaction-assay';
+      cockpitInteractionAssay = await evaluate(socket, `(() => {
       const api = window.__kaminosNativeLowSelectiveLive;
       const before = api.debugState();
       const bypassSwitch = api.setCockpitRole('modelBypass');
@@ -466,20 +512,37 @@ try {
       const flowControl = api.setFlowRate(1.2);
       const discontinuity = api.triggerRadiusDiscontinuity();
       const packageSlotB = api.setPackageSlot('B');
+      const restoreRequestedRole = api.setCockpitRole(${JSON.stringify(requestedCockpitRole)});
       const after = api.debugState();
-      return { before, bypassSwitch, nativeSwitch, radiusControl, flowControl, discontinuity, packageSlotB, after };
+      return { before, bypassSwitch, nativeSwitch, radiusControl, flowControl, discontinuity, packageSlotB, restoreRequestedRole, after };
     })()`);
-    assert.equal(cockpitInteractionAssay?.bypassSwitch?.roleSwitchSourceStepDelta, 0, 'bypass role switch advanced source history');
-    assert.equal(cockpitInteractionAssay?.bypassSwitch?.roleSwitchHistoryEpochChanged, false, 'bypass role switch changed history epoch');
-    assert.equal(cockpitInteractionAssay?.nativeSwitch?.roleSwitchSourceStepDelta, 0, 'native role switch advanced source history');
-    assert.equal(cockpitInteractionAssay?.nativeSwitch?.roleSwitchHistoryEpochChanged, false, 'native role switch changed history epoch');
-    assert.equal(cockpitInteractionAssay?.radiusControl?.controlValueMismatch, false, 'radius control was ignored or replaced');
-    assert.equal(cockpitInteractionAssay?.flowControl?.controlValueMismatch, false, 'flow control was ignored or replaced');
-    assert.equal(cockpitInteractionAssay?.discontinuity?.historyEpochChanged, false, 'radius discontinuity rebuilt history');
-    assert.equal(cockpitInteractionAssay?.discontinuity?.simulationRebuilt, false, 'radius discontinuity rebuilt simulator');
-    assert.equal(cockpitInteractionAssay?.packageSlotB?.stalePackageRejected, true, 'package slot did not reject stale package authority');
-    assert.equal(cockpitInteractionAssay?.packageSlotB?.fallbackPackageRejected, true, 'package slot allowed fallback package authority');
-    assert.equal(cockpitInteractionAssay?.packageSlotB?.packageChecksumMismatch, null, 'package slot checksum mismatch');
+      assert.equal(cockpitInteractionAssay?.bypassSwitch?.roleSwitchSourceStepDelta, 0, 'bypass role switch advanced source history');
+      assert.equal(cockpitInteractionAssay?.bypassSwitch?.roleSwitchHistoryEpochChanged, false, 'bypass role switch changed history epoch');
+      assert.equal(cockpitInteractionAssay?.nativeSwitch?.roleSwitchSourceStepDelta, 0, 'native role switch advanced source history');
+      assert.equal(cockpitInteractionAssay?.nativeSwitch?.roleSwitchHistoryEpochChanged, false, 'native role switch changed history epoch');
+      assert.equal(cockpitInteractionAssay?.radiusControl?.controlValueMismatch, false, 'radius control was ignored or replaced');
+      assert.equal(cockpitInteractionAssay?.flowControl?.controlValueMismatch, false, 'flow control was ignored or replaced');
+      assert.equal(cockpitInteractionAssay?.discontinuity?.historyEpochChanged, false, 'radius discontinuity rebuilt history');
+      assert.equal(cockpitInteractionAssay?.discontinuity?.simulationRebuilt, false, 'radius discontinuity rebuilt simulator');
+      assert.equal(cockpitInteractionAssay?.packageSlotB?.stalePackageRejected, true, 'package slot did not reject stale package authority');
+      assert.equal(cockpitInteractionAssay?.packageSlotB?.fallbackPackageRejected, true, 'package slot allowed fallback package authority');
+      assert.equal(cockpitInteractionAssay?.packageSlotB?.packageChecksumMismatch, null, 'package slot checksum mismatch');
+      failurePhase = 'cockpit-requested-role-restore';
+      const restoreStartedAt = performance.now();
+      while (performance.now() - restoreStartedAt < 60000) {
+        state = await evaluate(socket, 'window.__kaminosNativeLowSelectiveLive.debugState()');
+        if (state?.nativeLowLiveResearchCockpit?.selectedRole === requestedCockpitRole) break;
+        await delay(100);
+      }
+      assert.equal(state?.nativeLowLiveResearchCockpit?.selectedRole, requestedCockpitRole, 'witness did not restore the requested cockpit role');
+    } else {
+      cockpitInteractionAssay = {
+        identity: 'native-low-cockpit-interaction-assay-deferral-v0',
+        status: 'deferred-to-preserve-unperturbed-direct-route-performance-window',
+        controlsMutated: false,
+        roleMutated: false,
+      };
+    }
   }
   if (vivisectorCandidateHeadTrainedRouteRequested) {
     const receiver = state?.nativeLowVivisectorCandidateHeadPackageReceiver;
@@ -531,7 +594,11 @@ try {
   assert.equal(state?.nativeLowProductionStageLedger?.frozenDenseRouteControl?.retained, true, 'frozen dense route control missing');
   assert.ok(Number(state?.nativeLowProductionStageLedger?.denseReceiverWriteBytes) > 0, 'dense receiver write bytes missing');
   assert.equal(state?.nativeLowProductionStageLedger?.debugManifestTransportExcluded?.excluded, true, 'debug manifest transport was not excluded from live ledger');
-  assert.equal(state?.nativeLowProductionStageLedger?.dense160ReceiverWriteAvoidanceCandidate?.status, 'projection-not-implemented', 'sparse receiver candidate projection status missing');
+  assert.equal(
+    state?.nativeLowProductionStageLedger?.dense160ReceiverWriteAvoidanceCandidate?.status,
+    directSparseCuesRequested ? 'receiver-copy-bypass-implemented' : 'projection-not-implemented',
+    'sparse receiver candidate projection status mismatch',
+  );
   assert.equal(state?.nativeLowBreakEvenBudgetLedger?.identity, 'native-low-learned-transfer-break-even-ledger-v0', 'learned-transfer break-even ledger missing');
   assert.equal(Number(state?.nativeLowBreakEvenBudgetLedger?.outerKillBoundaryMs), 24, 'outer kill boundary must be 24ms');
   assert.equal(Number(state?.nativeLowBreakEvenBudgetLedger?.credibleBreakEvenTargetMs), 15, 'credible break-even target must be 15ms');
@@ -690,11 +757,20 @@ try {
   assert.ok(isWebGpuBackend(endState?.effectiveBackend), `backend drift during observation: ${endState?.effectiveBackend}`);
   assert.equal(endState?.fallbackBackend, null, 'fallback backend during observation');
   assert.equal(endState?.transportMode, TRANSPORT_MODE, 'transport mode drift during observation');
+  if (directSparseCuesRequested) {
+    assert.equal(endState?.simulationClockAuthority, 'fixed-one-sim-step-per-presented-frame-v0', 'direct sparse simulation clock drifted during observation');
+  }
   assert.equal(endState?.runtimeBuildIdentity, expectedRuntimeBuildIdentity, 'runtime build identity drift during observation');
   assert.equal(endState?.sourceStepDrift, null, 'source-step drift during observation');
   assert.equal(endState?.simulationSteppingReceipt?.simStepDelta, 1, 'simulator stopped stepping during observation');
   assert.equal(endState?.currentSourceFrameConsumption?.encodedFrameDelta, 1, 'model stopped consuming current source frames during observation');
   assert.equal(endState?.stalePredictionRejection?.repeatedStaticPrediction, false, 'repeated static prediction during observation');
+  if (directSparseCuesRequested) {
+    assert.equal(endState?.nativeLowLiveResearchCockpit?.selectedRole, requestedCockpitRole, 'requested direct learned role drifted during observation');
+    assert.equal(endState?.nativeLowDirectSparseCues?.directRendererConsumed, true, 'direct learned renderer was not active at observation end');
+    assert.equal(typeof endState?.nativeLowDirectSparseCues?.diagnosticTelemetryReadbackThisFrame, 'boolean', 'direct telemetry cadence receipt drifted during observation');
+    assert.equal(Number(endState?.nativeLowDirectSparseCues?.directSparseOverflowCount), 0, 'direct learned renderer overflowed during observation');
+  }
   if (frontTopologyAblationRequested) {
     assert.equal(endState?.nativeLowFrontTopologyAblation?.sameSourceStepIdentity, endState?.sourceStepIdentity, 'frontTopology ablation source identity drift');
     assert.equal(endState?.nativeLowFrontTopologyAblation?.offlineImporterUsed, false, 'offline importer used during observation');
@@ -740,6 +816,9 @@ try {
     treatmentSplatRadianceGain: endState.treatmentSplatRadianceGain,
     treatmentSplatOpacityGain: endState.treatmentSplatOpacityGain,
     nativeLowMaterializationProfile: endState.nativeLowMaterializationProfile,
+    nativeLowDirectSparseCues: endState.nativeLowDirectSparseCues,
+    simulationClockAuthority: endState.simulationClockAuthority,
+    simulationStepDeltaMs: endState.simulationStepDeltaMs,
     nativeLowProductionStageLedger: endState.nativeLowProductionStageLedger,
     nativeLowBreakEvenBudgetLedger: endState.nativeLowBreakEvenBudgetLedger,
     nativeLowCoarseFrontSparseDetailBand: endState.nativeLowCoarseFrontSparseDetailBand,
@@ -757,6 +836,7 @@ try {
     cueBufferLifecycleStressRequested,
     coarseSourceHistorySupportFrontRequested,
     sparseFrontContinuityRequested,
+    directSparseCuesRequested,
     vivisectorCandidateHeadTrainedRouteRequested,
     nativeLowFrontTopologyAblation: endState.nativeLowFrontTopologyAblation,
     fullFrozenTreatmentReference: endState.fullFrozenTreatmentReference,

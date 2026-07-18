@@ -395,6 +395,7 @@
     const cueBufferLifecycleStressMode = !native64ManifestMode && params.get('cue_buffer_lifecycle_stress') === '1';
     const coarseSourceHistorySupportFrontEnabled = !native64ManifestMode && params.get('coarse_source_history_support_front') === '1';
     const native96SparseFrontContinuityEnabled = !native64ManifestMode && (params.get('sparse_front_continuity') === '1' || (cockpitMode && params.get('sparse_front_continuity') !== '0'));
+    const nativeLowDirectSparseCuesEnabled = !native64ManifestMode && params.get('direct_sparse_cues') === '1';
     const manualDualCaptureMode = !native64ManifestMode && (params.get('manual_dual_capture') === '1' || params.get('capture_paused') === '1');
     let requestedTransferRouteId = params.get('native_low_transfer_route') || (cockpitMode ? NATIVE_LOW_TRANSFER_160_TO_96_DEPLOYMENT_GRID_ROUTE : NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE);
     const vivisectorCandidateHeadPackageUrl = params.get('vivisector_candidate_head_package') || '';
@@ -440,6 +441,11 @@
     let latestCockpitTelemetry = null;
     let lastPresentationCompletedAtMs = null;
     let presentationFps = null;
+    let directSparseSimulationNowMs = performance.now();
+    const directSparseSimulationStepMs = 1000 / 60;
+    const simulationClockAuthority = nativeLowDirectSparseCuesEnabled
+      ? 'fixed-one-sim-step-per-presented-frame-v0'
+      : 'wall-clock-performance-now-v0';
     const presentationIntervalMsSamples = [];
     let currentFrameWallMs = null;
     let lastReceiptUpdatedAtMs = null;
@@ -821,6 +827,9 @@
 
     async function tick() {
       const frameStartedAtMs = performance.now();
+      const simulationNowMs = nativeLowDirectSparseCuesEnabled
+        ? (directSparseSimulationNowMs += directSparseSimulationStepMs)
+        : performance.now();
       failurePhase = 'shared-device-capture';
       const prototype = proto();
       if (native64ManifestMode && !prototype?.captureNativeLowCrossGridManifestFrame) {
@@ -831,7 +840,9 @@
       }
       const captureOptions = {
         boundarySplatComposition: requestedComposition,
-        now: performance.now(),
+        now: simulationNowMs,
+        simulationClockAuthority,
+        simulationStepDeltaMs: nativeLowDirectSparseCuesEnabled ? directSparseSimulationStepMs : null,
         captureVisuals: !cockpitMode,
         presentationRole: cockpitMode ? selectedCockpitRole : 'comparisonCapture',
         frontTopologyAblation: frontTopologyAblationMode,
@@ -846,6 +857,8 @@
         candidateCueBufferLifecycleStressEnabled: cueBufferLifecycleStressMode,
         coarseSourceHistorySupportFrontEnabled,
         native96SparseFrontContinuityEnabled,
+        nativeLowDirectSparseCuesEnabled,
+        nativeLowDirectSparseTelemetryRequested: nativeLowDirectSparseCuesEnabled && (frameIndex === 0 || frameIndex % 30 === 0),
         vivisectorCandidateHeadReceiver: vivisectorWidth32ReceiverProjection,
       };
       const receipt = native64ManifestMode
@@ -1716,6 +1729,13 @@
         nativeLowVivisectorWidth32LiveReceiver: receipt.nativeLowVivisectorWidth32LiveReceiver || runner?.nativeLowVivisectorWidth32LiveReceiver || null,
         nativeLowCoarseSourceHistorySupportFrontReplacement: receipt.nativeLowCoarseSourceHistorySupportFrontReplacement || runner?.nativeLowCoarseSourceHistorySupportFrontReplacement || null,
         native96SparseFrontContinuity: receipt.native96SparseFrontContinuity || runner?.native96SparseFrontContinuity || null,
+        nativeLowDirectSparseCues: receipt.nativeLowDirectSparseCues || null,
+        simulationClockAuthority: receipt.simulationClockAuthority || simulationClockAuthority,
+        simulationStepDeltaMs: receipt.simulationStepDeltaMs ?? (nativeLowDirectSparseCuesEnabled ? directSparseSimulationStepMs : null),
+        directSparseCandidateCount: receipt.directSparseCandidateCount ?? null,
+        directSparseInstanceCount: receipt.directSparseInstanceCount ?? null,
+        directSparseOverflowCount: receipt.directSparseOverflowCount ?? null,
+        directSparseCapacity: receipt.directSparseCapacity ?? null,
         nativeLowResidentCueBufferLifecycleStress: latestCueBufferLifecycleStress,
         nativeLowCandidateCueBufferLifecycle: receipt.nativeLowCandidateCueBufferLifecycle || null,
         nativeLowVivisectorCandidateHeadPackageReceiver: vivisectorCandidateHeadPackageReceipt,

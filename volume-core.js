@@ -50,6 +50,8 @@ const EXTERNAL_BOUNDARY_SIDECAR_UPLOAD_IDENTITY = 'chunked-external-boundary-sid
 const BOUNDARY_SPLAT_GPU_PROFILE_IDENTITY = 'boundary-splat-stage-gpu-timestamp-profile-v0';
 const BOUNDARY_SPLAT_ATTRIBUTE_HOOK_IDENTITY = 'boundary-splat-learned-attribute-hook-v0';
 const NATIVE_LOW_LEARNED_SPLAT_CALIBRATION_IDENTITY = 'native-low-learned-splat-calibration-v0';
+const NATIVE_LOW_DIRECT_SPARSE_CUES_IDENTITY = 'native-low-gpu-resident-splat-materialization-bypass-v0';
+const NATIVE_LOW_DIRECT_SPARSE_GRID = 160;
 const BOUNDARY_SPLAT_INITIAL_CAPACITY = 131072;
 const BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES = 48;
 const BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES = BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
@@ -5748,6 +5750,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySplatRenderBindGroup = null;
   let selectiveHeadLiveRuntime = null;
   let selectiveHeadLiveBindGroups = null;
+  let nativeLowDirectSparseResources = null;
   const nativeLowSelectiveSharedRuntimes = new Map();
   let bindGroupLayout = null;
   let majorantFluidBindGroupLayout = null;
@@ -12267,6 +12270,224 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
   }
 
+  function ensureNativeLowDirectSparseResources() {
+    if (nativeLowDirectSparseResources) return nativeLowDirectSparseResources;
+    if (
+      !device
+      || !shader
+      || !boundarySplatShader
+      || !boundarySidecarPipelineLayout
+      || !boundarySidecarWriteBindGroupLayout
+      || !boundarySplatComputePipelineLayout
+    ) throw new Error('native-low-direct-sparse-pipeline-layout-unavailable');
+    const sidecarBuffer = device.createBuffer({
+      label: `kaminos ${NATIVE_LOW_DIRECT_SPARSE_CUES_IDENTITY} sidecar ${NATIVE_LOW_DIRECT_SPARSE_GRID}^3`,
+      size: boundarySidecarBufferBytes(NATIVE_LOW_DIRECT_SPARSE_GRID),
+      usage: GPUBufferUsage.STORAGE,
+    });
+    const sidecarWriteBindGroup = device.createBindGroup({
+      label: `kaminos ${NATIVE_LOW_DIRECT_SPARSE_CUES_IDENTITY} sidecar write`,
+      layout: boundarySidecarWriteBindGroupLayout,
+      entries: [{ binding: 0, resource: { buffer: sidecarBuffer } }],
+    });
+    nativeLowDirectSparseResources = {
+      sidecarBuffer,
+      sidecarWriteBindGroup,
+      sidecarPipeline: device.createComputePipeline({
+        label: `kaminos ${NATIVE_LOW_DIRECT_SPARSE_CUES_IDENTITY} sidecar ${NATIVE_LOW_DIRECT_SPARSE_GRID}^3`,
+        layout: boundarySidecarPipelineLayout,
+        compute: { module: shader, entryPoint: 'csBoundarySidecar', constants: { GRID: NATIVE_LOW_DIRECT_SPARSE_GRID } },
+      }),
+      compactPipeline: device.createComputePipeline({
+        label: `kaminos ${NATIVE_LOW_DIRECT_SPARSE_CUES_IDENTITY} compact ${NATIVE_LOW_DIRECT_SPARSE_GRID}^3`,
+        layout: boundarySplatComputePipelineLayout,
+        compute: { module: boundarySplatShader, entryPoint: 'compactBoundarySplats', constants: { GRID: NATIVE_LOW_DIRECT_SPARSE_GRID } },
+      }),
+      finalizePipeline: device.createComputePipeline({
+        label: `kaminos ${NATIVE_LOW_DIRECT_SPARSE_CUES_IDENTITY} finalize ${NATIVE_LOW_DIRECT_SPARSE_GRID}^3`,
+        layout: boundarySplatComputePipelineLayout,
+        compute: { module: boundarySplatShader, entryPoint: 'finalizeBoundarySplats', constants: { GRID: NATIVE_LOW_DIRECT_SPARSE_GRID } },
+      }),
+    };
+    return nativeLowDirectSparseResources;
+  }
+
+  async function renderNativeLowDirectSparseToCanvas(options = {}) {
+    if (!state.active || !device) return { ok: false, reason: 'inactive' };
+    const runtime = options.runtime;
+    const predictedFluid = runtime?.buffers?.predictedFluid;
+    const predictedFront = options.frontBuffer
+      || runtime?.buffers?.nativeUpsampleFront
+      || runtime?.buffers?.predictedFront;
+    if (!predictedFluid || !predictedFront) {
+      return { ok: false, reason: 'native-low-direct-sparse-model-buffers-unavailable' };
+    }
+    if (!boundarySplatRequested()) {
+      return { ok: false, reason: 'native-low-direct-sparse-splat-mode-off' };
+    }
+    const resources = ensureNativeLowDirectSparseResources();
+    ensureBoundarySplatBuffers();
+    rebuildBoundarySplatBindGroups();
+    if (
+      !boundarySplatBuffer
+      || !boundarySplatDrawBuffer
+      || !boundarySplatIndirectBuffer
+      || !boundarySplatCameraBuffer
+      || !boundarySplatFeatureBuffer
+      || !boundarySplatRenderBindGroup
+      || !boundarySplatRenderPipeline
+    ) return { ok: false, reason: 'native-low-direct-sparse-render-buffers-unavailable' };
+
+    const controlsBefore = { ...controlsSnapshot };
+    const diagnosticTelemetryRequested = options.diagnosticTelemetryRequested === true;
+    const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+    const renderScale = normalizeRenderScale(options.renderScale ?? controlsSnapshot.renderScale);
+    const controlOverrides = options.controlOverrides && typeof options.controlOverrides === 'object'
+      ? { ...options.controlOverrides }
+      : {};
+    const startedAt = performance.now();
+    try {
+      controlsSnapshot = applyRuntimeQualityControls({ ...controlsSnapshot, ...controlOverrides, renderScale });
+      resetTemporalHistory('native-low-direct-sparse-canvas-capture');
+      updateUniforms(fixedNow);
+      const sidecarReadBindGroup = device.createBindGroup({
+        label: `kaminos ${NATIVE_LOW_DIRECT_SPARSE_CUES_IDENTITY} model field read`,
+        layout: boundarySidecarReadBindGroupLayout,
+        entries: [
+          { binding: 0, resource: { buffer: uniformBuffer } },
+          { binding: 1, resource: { buffer: predictedFluid } },
+          { binding: 7, resource: { buffer: predictedFront } },
+        ],
+      });
+      const splatComputeBindGroup = device.createBindGroup({
+        label: `kaminos ${NATIVE_LOW_DIRECT_SPARSE_CUES_IDENTITY} splat compute`,
+        layout: boundarySplatComputeBindGroupLayout,
+        entries: [
+          { binding: 0, resource: { buffer: resources.sidecarBuffer } },
+          { binding: 1, resource: { buffer: predictedFluid } },
+          { binding: 2, resource: { buffer: boundarySplatBuffer } },
+          { binding: 3, resource: { buffer: boundarySplatDrawBuffer } },
+          { binding: 4, resource: { buffer: boundarySplatCameraBuffer } },
+          { binding: 6, resource: { buffer: boundarySplatFeatureBuffer } },
+        ],
+      });
+
+      state.boundarySplatMode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
+      state.boundarySplatRendererIdentity = boundarySplatEffectiveRendererIdentity(state.boundarySplatMode);
+      state.boundarySplatAttributeModelIdentity = boundarySplatEffectiveAttributeModelIdentity(state.boundarySplatMode);
+      state.boundarySplatSourceAuthority = 'gpu-resident-predicted-fluid-front-via-full-grid-sidecar-v0';
+      state.boundarySidecarSource = 'gpu-resident-model-fields';
+      state.boundarySidecarAuthority = BOUNDARY_SIDECAR_BAKE_AUTHORITY;
+      state.boundarySidecarBuilt = true;
+      state.boundarySidecarBuiltThisFrame = true;
+      state.boundarySplatFallbackReason = null;
+      state.boundarySplatFeatureCaptureRequested = boundarySplatFeatureCaptureRequested();
+      state.boundarySplatFeatureCaptureEffective = state.boundarySplatFeatureCaptureRequested
+        && boundarySplatFeatureBufferCapacity === boundarySplatCapacity;
+
+      device.queue.writeBuffer(boundarySplatDrawBuffer, 0, new Uint32Array([6, 0, 0, 0, 0, 0, boundarySplatCapacity, 0]));
+      device.pushErrorScope('validation');
+      const encoder = device.createCommandEncoder({ label: `kaminos ${NATIVE_LOW_DIRECT_SPARSE_CUES_IDENTITY}` });
+      const sidecarPass = encoder.beginComputePass({ label: `kaminos ${NATIVE_LOW_DIRECT_SPARSE_CUES_IDENTITY} sidecar pass` });
+      sidecarPass.setPipeline(resources.sidecarPipeline);
+      sidecarPass.setBindGroup(0, sidecarReadBindGroup);
+      sidecarPass.setBindGroup(3, resources.sidecarWriteBindGroup);
+      const workgroups = Math.ceil(NATIVE_LOW_DIRECT_SPARSE_GRID / 4);
+      sidecarPass.dispatchWorkgroups(workgroups, workgroups, workgroups);
+      sidecarPass.end();
+
+      const compactPass = encoder.beginComputePass({ label: `kaminos ${NATIVE_LOW_DIRECT_SPARSE_CUES_IDENTITY} compact pass` });
+      compactPass.setPipeline(resources.compactPipeline);
+      compactPass.setBindGroup(0, splatComputeBindGroup);
+      compactPass.dispatchWorkgroups(workgroups, workgroups, workgroups);
+      compactPass.end();
+      const finalizePass = encoder.beginComputePass({ label: `kaminos ${NATIVE_LOW_DIRECT_SPARSE_CUES_IDENTITY} finalize pass` });
+      finalizePass.setPipeline(resources.finalizePipeline);
+      finalizePass.setBindGroup(0, splatComputeBindGroup);
+      finalizePass.dispatchWorkgroups(1);
+      finalizePass.end();
+      encoder.copyBufferToBuffer(boundarySplatDrawBuffer, 0, boundarySplatIndirectBuffer, 0, 16);
+      if (diagnosticTelemetryRequested) encodeBoundarySplatTelemetry(encoder, true);
+      const splatEncoded = encodeBoundarySplatDraw(encoder, context.getCurrentTexture().createView());
+      if (!splatEncoded) throw new Error(state.boundarySplatFallbackReason || 'native-low-direct-sparse-draw-unavailable');
+      device.queue.submit([encoder.finish()]);
+      if (diagnosticTelemetryRequested && boundarySplatTelemetryCopyPending) {
+        await resolveBoundarySplatTelemetry();
+        if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+      }
+      const validationError = await device.popErrorScope();
+      if (validationError) throw new Error(`native-low-direct-sparse-validation:${validationError.message || String(validationError)}`);
+      const canvasRect = canvas.getBoundingClientRect();
+      return {
+        ok: true,
+        identity: NATIVE_LOW_DIRECT_SPARSE_CUES_IDENTITY,
+        routeIdentity: NATIVE_LOW_DIRECT_SPARSE_CUES_IDENTITY,
+        renderStage: 'gpu-resident-model-fields-to-full-grid-sidecar-to-compact-splats-v0',
+        boundarySplatCompositionEffective: 'splat-only-v0',
+        splatEncoded: true,
+        splatApplied: true,
+        raymarchEncoded: false,
+        raymarchApplied: false,
+        directRendererConsumed: true,
+        productionPathCpuReadback: false,
+        diagnosticTelemetryReadbackThisFrame: diagnosticTelemetryRequested,
+        diagnosticTelemetryAuthority: 'periodic-32-byte-count-readback-not-production-path-v0',
+        fullGridReceiverMaterialization: false,
+        receiverCopyBytes: 0,
+        fullGridSidecarIntermediary: true,
+        directModelCueEmission: false,
+        fusedSparseModelOutput: false,
+        grid: NATIVE_LOW_DIRECT_SPARSE_GRID,
+        directSparseCandidateCount: state.boundarySplatCandidateCount,
+        directSparseInstanceCount: state.boundarySplatInstanceCount,
+        directSparseOverflowCount: state.boundarySplatOverflowCount,
+        directSparseCapacity: boundarySplatCapacity,
+        boundarySplatCandidateCount: state.boundarySplatCandidateCount,
+        boundarySplatInstanceCount: state.boundarySplatInstanceCount,
+        boundarySplatOverflowCount: state.boundarySplatOverflowCount,
+        boundarySplatCapacity,
+        boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
+        boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
+        boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
+        boundarySidecarIdentity: BOUNDARY_SIDECAR_IDENTITY,
+        boundarySidecarAuthority: state.boundarySidecarAuthority,
+        renderMs: performance.now() - startedAt,
+        canvasCssRect: { x: canvasRect.left, y: canvasRect.top, width: canvasRect.width, height: canvasRect.height },
+        failurePhase: null,
+      };
+    } catch (error) {
+      try {
+        const validationError = await device.popErrorScope();
+        if (validationError && !String(error?.message || '').includes('validation')) {
+          error = new Error(`${error?.message || String(error)}; validation:${validationError.message || String(validationError)}`);
+        }
+      } catch {
+        // The validation scope may already have been resolved.
+      }
+      return {
+        ok: false,
+        identity: NATIVE_LOW_DIRECT_SPARSE_CUES_IDENTITY,
+        routeIdentity: NATIVE_LOW_DIRECT_SPARSE_CUES_IDENTITY,
+        directRendererConsumed: false,
+        productionPathCpuReadback: false,
+        diagnosticTelemetryReadbackThisFrame: diagnosticTelemetryRequested,
+        diagnosticTelemetryAuthority: 'periodic-32-byte-count-readback-not-production-path-v0',
+        fullGridReceiverMaterialization: false,
+        receiverCopyBytes: 0,
+        fullGridSidecarIntermediary: true,
+        directModelCueEmission: false,
+        fusedSparseModelOutput: false,
+        failurePhase: 'native-low-direct-sparse-render',
+        error: error?.message || String(error),
+      };
+    } finally {
+      if (options.restoreControls !== false) {
+        controlsSnapshot = controlsBefore;
+        resetTemporalHistory('native-low-direct-sparse-canvas-restore');
+      }
+    }
+  }
+
   async function renderFrozenScaleToCanvas(options = {}) {
     const fullFieldImportSessionId = String(options.fullFieldImportSessionId || '');
     const importedFieldCustody = Boolean(
@@ -13016,11 +13237,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (!supportedPresentationRoles.has(presentationRole)) throw new Error(`unsupportedNativeLowPresentationRole:${presentationRole}`);
     const cockpitPresentation = presentationRole !== 'comparisonCapture';
     const renderLearnedTreatment = !cockpitPresentation || presentationRole === 'selectedLearnedPackage';
+    const nativeLowDirectSparseCuesEnabled = options.nativeLowDirectSparseCuesEnabled === true;
     const renderNativeControl = !cockpitPresentation || presentationRole === 'native96Control' || presentationRole === 'modelBypass';
     const renderDeterministicMaterialization = presentationRole === 'deterministic96To160';
     const cockpitHistoryOnly = cockpitPresentation && presentationRole !== 'selectedLearnedPackage';
     const advanceSourceStep = options.advanceSourceStep !== false;
     const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+    const simulationClockAuthority = String(options.simulationClockAuthority || 'wall-clock-performance-now-v0');
+    const simulationStepDeltaMs = Number.isFinite(Number(options.simulationStepDeltaMs))
+      ? Number(options.simulationStepDeltaMs)
+      : null;
     const calibration = nativeLowTreatmentSplatCalibrationDebug({
       radianceGain: options.treatmentSplatRadianceGain,
       opacityGain: options.treatmentSplatOpacityGain,
@@ -13348,48 +13574,89 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       let treatmentSplatCandidateCount = nativeLowVivisectorWidth32LiveReceiver?.candidateCount ?? 0;
       let treatmentSplatInstanceCount = nativeLowVivisectorWidth32LiveReceiver?.instanceCount ?? treatmentSplatCandidateCount;
       let treatmentSplatOverflowCount = nativeLowVivisectorWidth32LiveReceiver?.overflowCount ?? 0;
+      let nativeLowDirectSparseCues = null;
       if (!coarseSourceHistorySupportFrontEnabled && renderLearnedTreatment) {
-        failurePhase = 'shared-device-treatment-materialization';
-        const treatmentMaterializeStart = performance.now();
-        const treatmentRebuildStart = performance.now();
-        rebuildFluidState(160, sourceMajorantGrid, 'native-low-shared-device-treatment-materialize', { skipInitialFluid: true });
-        treatmentRebuildMs = performance.now() - treatmentRebuildStart;
-        const treatmentCopyStart = performance.now();
-        const treatmentEncoder = device.createCommandEncoder({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} predicted 160 materialization` });
-        const treatmentFluidTargets = cockpitPresentation ? [fluidBuffers[currentFluid]] : fluidBuffers;
-        const treatmentFrontTargets = cockpitPresentation ? [frontBuffers[currentFront]] : frontBuffers;
-        for (const target of treatmentFluidTargets) {
-          treatmentEncoder.copyBufferToBuffer(runtime.buffers.predictedFluid, 0, target, 0, fluidBufferBytes(160));
-        }
         const treatmentFrontSourceBuffer = native96SparseFrontContinuityEnabled
           ? runtime.buffers.nativeUpsampleFront
           : runtime.buffers.predictedFront;
-        for (const target of treatmentFrontTargets) {
-          treatmentEncoder.copyBufferToBuffer(treatmentFrontSourceBuffer, 0, target, 0, frontFieldBufferBytes(160));
-        }
-        device.queue.submit([treatmentEncoder.finish()]);
-        if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
-        setSharedDeviceCopiedState(sourceStep, sourceFrameAfter);
-        treatmentCopyMs = performance.now() - treatmentCopyStart;
-        treatmentMaterializeMs = performance.now() - treatmentMaterializeStart;
+        if (nativeLowDirectSparseCuesEnabled) {
+          failurePhase = 'native-low-direct-sparse-render';
+          const treatmentRenderStart = performance.now();
+          treatmentRender = await renderNativeLowDirectSparseToCanvas({
+            runtime,
+            frontBuffer: treatmentFrontSourceBuffer,
+            now: fixedNow,
+            diagnosticTelemetryRequested: options.nativeLowDirectSparseTelemetryRequested === true,
+            controlOverrides: {
+              nativeLowTreatmentSplatRadianceGain: calibration.effectiveRadianceGain,
+              nativeLowTreatmentSplatOpacityGain: calibration.effectiveOpacityGain,
+            },
+            restoreControls: true,
+          });
+          treatmentRenderMs = performance.now() - treatmentRenderStart;
+          nativeLowDirectSparseCues = {
+            identity: NATIVE_LOW_DIRECT_SPARSE_CUES_IDENTITY,
+            enabled: true,
+            requestedRoute: NATIVE_LOW_DIRECT_SPARSE_CUES_IDENTITY,
+            effectiveRoute: treatmentRender?.routeIdentity || null,
+            directRendererConsumed: treatmentRender?.directRendererConsumed === true,
+            productionPathCpuReadback: false,
+            diagnosticTelemetryReadbackThisFrame: treatmentRender?.diagnosticTelemetryReadbackThisFrame === true,
+            diagnosticTelemetryAuthority: treatmentRender?.diagnosticTelemetryAuthority || null,
+            fullGridReceiverMaterialization: false,
+            receiverCopyBytes: 0,
+            fullGridSidecarIntermediary: true,
+            directModelCueEmission: false,
+            fusedSparseModelOutput: false,
+            simulationClockAuthority,
+            simulationStepDeltaMs,
+            directSparseCandidateCount: treatmentRender?.directSparseCandidateCount ?? null,
+            directSparseInstanceCount: treatmentRender?.directSparseInstanceCount ?? null,
+            directSparseOverflowCount: treatmentRender?.directSparseOverflowCount ?? null,
+            directSparseCapacity: treatmentRender?.directSparseCapacity ?? boundarySplatCapacity,
+            renderMs: treatmentRenderMs,
+            failurePhase: treatmentRender?.failurePhase ?? null,
+          };
+        } else {
+          failurePhase = 'shared-device-treatment-materialization';
+          const treatmentMaterializeStart = performance.now();
+          const treatmentRebuildStart = performance.now();
+          rebuildFluidState(160, sourceMajorantGrid, 'native-low-shared-device-treatment-materialize', { skipInitialFluid: true });
+          treatmentRebuildMs = performance.now() - treatmentRebuildStart;
+          const treatmentCopyStart = performance.now();
+          const treatmentEncoder = device.createCommandEncoder({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} predicted 160 materialization` });
+          const treatmentFluidTargets = cockpitPresentation ? [fluidBuffers[currentFluid]] : fluidBuffers;
+          const treatmentFrontTargets = cockpitPresentation ? [frontBuffers[currentFront]] : frontBuffers;
+          for (const target of treatmentFluidTargets) {
+            treatmentEncoder.copyBufferToBuffer(runtime.buffers.predictedFluid, 0, target, 0, fluidBufferBytes(160));
+          }
+          for (const target of treatmentFrontTargets) {
+            treatmentEncoder.copyBufferToBuffer(treatmentFrontSourceBuffer, 0, target, 0, frontFieldBufferBytes(160));
+          }
+          device.queue.submit([treatmentEncoder.finish()]);
+          if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+          setSharedDeviceCopiedState(sourceStep, sourceFrameAfter);
+          treatmentCopyMs = performance.now() - treatmentCopyStart;
+          treatmentMaterializeMs = performance.now() - treatmentMaterializeStart;
 
-        failurePhase = 'shared-device-treatment-splat-render';
-        const treatmentRenderStart = performance.now();
-        treatmentRender = await renderFrozenScaleToCanvas({
-          boundarySplatComposition: requestedComposition,
-          now: fixedNow,
-          sameStateCaptureId: `${sourceStepIdentity}:treatment`,
-          baseFrameCount: sourceFrameAfter,
-          baseSimStepCount: sourceStep,
-          controlOverrides: {
-            nativeLowTreatmentSplatRadianceGain: calibration.effectiveRadianceGain,
-            nativeLowTreatmentSplatOpacityGain: calibration.effectiveOpacityGain,
-          },
-          restoreControls: true,
-        });
+          failurePhase = 'shared-device-treatment-splat-render';
+          const treatmentRenderStart = performance.now();
+          treatmentRender = await renderFrozenScaleToCanvas({
+            boundarySplatComposition: requestedComposition,
+            now: fixedNow,
+            sameStateCaptureId: `${sourceStepIdentity}:treatment`,
+            baseFrameCount: sourceFrameAfter,
+            baseSimStepCount: sourceStep,
+            controlOverrides: {
+              nativeLowTreatmentSplatRadianceGain: calibration.effectiveRadianceGain,
+              nativeLowTreatmentSplatOpacityGain: calibration.effectiveOpacityGain,
+            },
+            restoreControls: true,
+          });
+          treatmentRenderMs = performance.now() - treatmentRenderStart;
+        }
         if (!treatmentRender?.ok) throw new Error(`native-low-shared-device-treatment-render:${treatmentRender?.reason || 'unknown'}`);
         treatmentVisualUrl = captureVisuals ? await captureCanvasObjectUrl() : null;
-        treatmentRenderMs = performance.now() - treatmentRenderStart;
         treatmentSplatCandidateCount = treatmentRender.boundarySplatCandidateCount ?? state.boundarySplatCandidateCount;
         treatmentSplatInstanceCount = treatmentRender.boundarySplatInstanceCount ?? state.boundarySplatInstanceCount;
         treatmentSplatOverflowCount = treatmentRender.boundarySplatOverflowCount ?? state.boundarySplatOverflowCount ?? 0;
@@ -13496,7 +13763,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       let restoreRebuildMs = 0;
       let restoreCopyMs = 0;
       let restoreMaterializeMs = 0;
-      if (!coarseSourceHistorySupportFrontEnabled && (renderLearnedTreatment || renderDeterministicMaterialization || frontTopologyAblationEnabled)) {
+      if (!coarseSourceHistorySupportFrontEnabled && (
+        (renderLearnedTreatment && !nativeLowDirectSparseCuesEnabled)
+        || renderDeterministicMaterialization
+        || frontTopologyAblationEnabled
+      )) {
         failurePhase = 'shared-device-source-restore';
         const restoreStart = performance.now();
         const restoreRebuildStart = performance.now();
@@ -13562,16 +13833,28 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         restoreRebuildMs,
         restoreCopyMs,
         restoreMaterializeMs,
-        treatmentCopyBytes: coarseSourceHistorySupportFrontEnabled || !renderLearnedTreatment
+        treatmentCopyBytes: coarseSourceHistorySupportFrontEnabled || !renderLearnedTreatment || nativeLowDirectSparseCuesEnabled
           ? 0
           : (fluidBufferBytes(160) + frontFieldBufferBytes(160)) * (cockpitPresentation ? 1 : 2),
-        treatmentWriteScope: cockpitPresentation ? 'current-render-buffers-only-no-160-simulation-step-v0' : 'both-ping-pong-buffers-v0',
+        treatmentWriteScope: nativeLowDirectSparseCuesEnabled
+          ? 'gpu-resident-model-buffers-direct-sidecar-splat-consumption-v0'
+          : cockpitPresentation
+            ? 'current-render-buffers-only-no-160-simulation-step-v0'
+            : 'both-ping-pong-buffers-v0',
         deterministicWriteBytes: renderDeterministicMaterialization ? fluidBufferBytes(160) + frontFieldBufferBytes(160) : 0,
-        restoreCopyBytes: coarseSourceHistorySupportFrontEnabled || (!renderLearnedTreatment && !renderDeterministicMaterialization && !frontTopologyAblationEnabled)
+        restoreCopyBytes: coarseSourceHistorySupportFrontEnabled || (
+          (!renderLearnedTreatment || nativeLowDirectSparseCuesEnabled)
+          && !renderDeterministicMaterialization
+          && !frontTopologyAblationEnabled
+        )
           ? 0
           : fluidBufferBytes(sourceGrid) * 2 + frontFieldBufferBytes(sourceGrid) * 2,
         denseSupportFrontBypassed: coarseSourceHistorySupportFrontEnabled,
-        fullGridReceiverMaterialization: coarseSourceHistorySupportFrontEnabled ? false : true,
+        fullGridReceiverMaterialization: !coarseSourceHistorySupportFrontEnabled && renderLearnedTreatment && !nativeLowDirectSparseCuesEnabled,
+        receiverCopyBytes: nativeLowDirectSparseCuesEnabled ? 0 : null,
+        fullGridSidecarIntermediary: nativeLowDirectSparseCuesEnabled,
+        directModelCueEmission: false,
+        fusedSparseModelOutput: false,
         productionPathCpuReadback: false,
         presentationRole,
       };
@@ -13777,8 +14060,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             sparseContinuityTreatmentRendererConsumed: renderLearnedTreatment,
             sparseContinuityTreatmentRendererConsumptionAvailable: true,
             sparseContinuityTreatmentConsumedThisFrame: renderLearnedTreatment,
-            fullGridReceiverMaterialization: true,
-            fullGridReceiverMaterializationScope: 'current-visual-bearing-assay-not-production-candidate-v0',
+            fullGridReceiverMaterialization: !nativeLowDirectSparseCuesEnabled,
+            fullGridReceiverMaterializationScope: nativeLowDirectSparseCuesEnabled
+              ? 'bypassed-gpu-resident-model-fields-direct-to-sidecar-and-splats-v0'
+              : 'current-visual-bearing-assay-not-production-candidate-v0',
             productionCandidateNoCpuReadback: true,
             native96Control: { role: 'native96Control', grid: 96, splatInstanceCount: controlSplatInstanceCount },
             deterministicNativeMaterialization: { role: 'deterministicNativeMaterialization', availableAsNativeControlSanityBaseline: true },
@@ -13991,7 +14276,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         },
         dense160ReceiverWriteAvoidanceCandidate: {
           identity: 'direct-sparse-learned-splat-substrate-candidate-v0',
-          status: 'projection-not-implemented',
+          status: nativeLowDirectSparseCuesEnabled ? 'receiver-copy-bypass-implemented' : 'projection-not-implemented',
           supportPositiveCount,
           treatmentSplatInstanceCount,
           candidateStrideBytes: BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES,
@@ -14109,6 +14394,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         transportMode: 'shared-device-gpu-buffers-no-readback-import-v0',
         inputAuthority: NATIVE_LOW_INPUT_AUTHORITY,
         sourceStepIdentity,
+        simulationClockAuthority,
+        simulationStepDeltaMs,
         sameNativeStateIdentity,
         sourceStep,
         sourceSimStepBefore,
@@ -14150,6 +14437,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         supportPrevalence,
         treatmentSplatCandidateCount,
         treatmentSplatInstanceCount,
+        treatmentSplatOverflowCount,
+        nativeLowDirectSparseCues,
+        directSparseCandidateCount: nativeLowDirectSparseCues?.directSparseCandidateCount ?? null,
+        directSparseInstanceCount: nativeLowDirectSparseCues?.directSparseInstanceCount ?? null,
+        directSparseOverflowCount: nativeLowDirectSparseCues?.directSparseOverflowCount ?? null,
+        directSparseCapacity: nativeLowDirectSparseCues?.directSparseCapacity ?? null,
         controlSplatCandidateCount,
         controlSplatInstanceCount,
         calibrationGain: calibration.calibrationGain,
@@ -14219,6 +14512,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           treatmentCopyMs,
           treatmentMaterializeMs,
           treatmentRenderMs,
+          directSparseRenderMs: nativeLowDirectSparseCues?.renderMs ?? null,
           deterministicMaterializeMs,
           deterministicRenderMs,
           frontTopologyAblatedMaterializeMs,
@@ -14804,6 +15098,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       this.setActive(false);
       for (const runtime of nativeLowSelectiveSharedRuntimes.values()) runtime?.destroy?.();
       nativeLowSelectiveSharedRuntimes.clear();
+      nativeLowDirectSparseResources?.sidecarBuffer?.destroy();
+      nativeLowDirectSparseResources = null;
       frameTexture?.destroy();
       browserResidualFeatureTexture?.destroy();
       externalEmitterBuffer?.destroy();
