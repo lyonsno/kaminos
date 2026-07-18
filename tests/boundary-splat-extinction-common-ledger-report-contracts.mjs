@@ -335,6 +335,12 @@ expectRejected('reused HDR payload', report => {
 expectRejected('full payload reused as sparse drop', report => {
   report.states[0].arms[1].capture.linearHdrSha256 = report.states[0].arms[0].capture.linearHdrSha256;
 }, 'drop-capture-aliases-nondrop-arm');
+expectRejected('conservative payload reused as sparse drop', report => {
+  report.states[0].arms[1].capture.linearHdrSha256 = report.states[0].arms[2].capture.linearHdrSha256;
+}, 'drop-capture-aliases-nondrop-arm');
+expectRejected('complement payload reused as sparse drop', report => {
+  report.states[0].arms[1].capture.linearHdrSha256 = report.states[0].arms[3].capture.linearHdrSha256;
+}, 'drop-capture-aliases-nondrop-arm');
 expectRejected('blank output', report => { report.states[0].arms[1].capture.litPixels = 0; }, 'blank-capture');
 expectRejected('partial HDR output', report => { report.states[0].arms[1].capture.rgbaFloatCount -= 4; }, 'capture-payload-partial');
 expectRejected('missing capture nonce', report => { report.states[0].arms[1].capture.captureNonce = ''; }, 'capture-nonce-missing');
@@ -345,9 +351,58 @@ durableFailure.status = 'failed';
 durableFailure.failurePhase = 'hybrid-composition';
 durableFailure.lastTrustworthyEvidence = 'cohort and ownership ledgers authenticated before GPU dispatch';
 durableFailure.durableReportPath = '/durable/failed-extinction-common-ledger-report.json';
+durableFailure.failureContext = {
+  effectiveRouteStatus: 'verified',
+  sourceBindingStatus: 'authenticated',
+  effectiveConfigStatus: 'verified',
+};
 const acceptedFailure = validate(durableFailure);
 assert.equal(acceptedFailure.ok, true, acceptedFailure.errors.join(', '));
 assert.equal(acceptedFailure.status, 'failed');
+
+const earlyDurableFailure = structuredClone(durableFailure);
+earlyDurableFailure.failurePhase = 'route-load';
+earlyDurableFailure.lastTrustworthyEvidence = 'requested route, cohort, and config recorded before effective identities resolved';
+earlyDurableFailure.failureContext = {
+  effectiveRouteStatus: 'unresolved-before-effective-route',
+  sourceBindingStatus: 'unresolved-before-source-binding',
+  effectiveConfigStatus: 'unresolved-before-effective-config',
+};
+delete earlyDurableFailure.route.effectiveRoute;
+delete earlyDurableFailure.route.backend;
+delete earlyDurableFailure.effective;
+const acceptedEarlyFailure = validate(earlyDurableFailure);
+assert.equal(acceptedEarlyFailure.ok, true, acceptedEarlyFailure.errors.join(', '));
+assert.equal(acceptedEarlyFailure.status, 'failed');
+
+const identityFreeFailure = {
+  schema: EXTINCTION_COMMON_LEDGER_SCHEMA,
+  status: 'failed',
+  durableReportPath: '/durable/identity-free-failure.json',
+  failurePhase: 'dispatch',
+  lastTrustworthyEvidence: 'nothing route-bound',
+};
+const rejectedIdentityFreeFailure = validate(identityFreeFailure);
+assert.equal(rejectedIdentityFreeFailure.ok, false, 'failure reports without requested route/source/config identity must fail');
+assert.ok(rejectedIdentityFreeFailure.errors.includes('failure-requested-route-mismatch'));
+assert.ok(rejectedIdentityFreeFailure.errors.includes('failure-cohort-manifest-mismatch'));
+assert.ok(rejectedIdentityFreeFailure.errors.includes('failure-requested-config-mismatch'));
+
+expectRejected('failure without identity status', report => {
+  report.status = 'failed';
+  report.failurePhase = 'hybrid-composition';
+  report.failureContext = null;
+}, 'failure-effective-route-status-invalid');
+expectRejected('failure with missing requested source', report => {
+  report.status = 'failed';
+  report.failurePhase = 'source-binding';
+  report.failureContext = {
+    effectiveRouteStatus: 'verified',
+    sourceBindingStatus: 'unresolved-before-source-binding',
+    effectiveConfigStatus: 'verified',
+  };
+  report.source.cohortManifestSha256 = null;
+}, 'failure-cohort-manifest-mismatch');
 
 expectRejected('failure without phase', report => {
   report.status = 'failed';
