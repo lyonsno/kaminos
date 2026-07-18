@@ -31,7 +31,8 @@ assert.match(opticalWitness, /--optical-recurrence-report/, 'optical wrapper mus
 assert.match(opticalWitness, /buildSplatOpticalCockpitManifest/, 'optical wrapper must build Cockpit Manifest V0 from accepted evidence');
 assert.match(opticalWitness, /validateSplatOpticalCockpitManifest/, 'optical wrapper must validate Cockpit Manifest V0 before publication');
 assert.match(opticalWitness, /writeSplatOpticalRecurrenceFailureReport/, 'optical wrapper must durably replace false or stale completion evidence on failure');
-assert.match(opticalWitness, /ffconcat version 1\.0/, 'dynamic media must enumerate the current accepted capture set');
+assert.match(opticalWitness, /verifyEncodedVideoFrameCount\([^,]+,\s*21\)/, 'dynamic media must independently prove the exact 21-frame orbit');
+assert.match(opticalWitness, /frameCount:\s*videoFrameCount/, 'dynamic media frame completeness must be carried into the manifest');
 assert.doesNotMatch(opticalWitness, /pattern_type['"],\s*['"]glob/, 'dynamic media must not absorb stale frames through an output-directory glob');
 
 const contractPath = join(root, 'volume-splat-optical-recurrence-contract.mjs');
@@ -168,8 +169,10 @@ for (const [label, mutate] of [
 const manifest = buildSplatOpticalCockpitManifest({
   report: validReport,
   artifacts: [
-    { id: 'original-presentation', path: 'presentation.png', bytes: 128, sha256: sha('c'), mediaType: 'image/png', loadRoute: 'matched-presentation-v0' },
-    { id: 'matched-optical', path: 'optical.png', bytes: 256, sha256: sha('d'), mediaType: 'image/png', loadRoute: 'matched-optical-recurrence-v0' },
+    { id: 'original-presentation', path: 'presentation.mp4', bytes: 128, sha256: sha('c'), mediaType: 'video/mp4', frameCount: 21, loadRoute: 'matched-presentation-v0' },
+    { id: 'presentation-contact-sheet', path: 'presentation.png', bytes: 256, sha256: sha('d'), mediaType: 'image/png', loadRoute: 'matched-presentation-v0' },
+    { id: 'matched-optical', path: 'optical.mp4', bytes: 384, sha256: sha('e'), mediaType: 'video/mp4', frameCount: 21, loadRoute: 'matched-optical-recurrence-v0' },
+    { id: 'optical-contact-sheet', path: 'optical.png', bytes: 512, sha256: sha('f'), mediaType: 'image/png', loadRoute: 'matched-optical-recurrence-v0' },
   ],
   authoredForkOutputPath: 'artifacts/authored-forks/radiance-transfer.json',
 });
@@ -187,6 +190,12 @@ arbitraryArtifactManifest.artifacts = arbitraryArtifactManifest.artifacts.map((a
 }));
 recordFalseClosureAcceptance('arbitrary cockpit artifact roles and routes', () => {
   validateSplatOpticalCockpitManifest(arbitraryArtifactManifest);
+});
+
+const partialDynamicWitnessManifest = structuredClone(manifest);
+partialDynamicWitnessManifest.artifacts.find(artifact => artifact.id === 'matched-optical').frameCount = 2;
+recordFalseClosureAcceptance('partial dynamic orbit witness', () => {
+  validateSplatOpticalCockpitManifest(partialDynamicWitnessManifest);
 });
 
 for (const [label, mutate] of [
