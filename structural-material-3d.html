@@ -389,10 +389,33 @@
       if (!material.sympatheticTear) return null;
       const direction = material.sympatheticTear.direction;
       const nodeById = new Map(material.nodes.map(node => [node.id, node]));
+      const nodeIndexById = new Map(material.nodes.map((node, index) => [node.id, index]));
+      const gestureBaseline = material.visualDisplacementGesture?.baselineDisplacements;
+      const currentGestureBaselineAvailable = Array.isArray(gestureBaseline) &&
+        gestureBaseline.length === material.nodes.length;
+      const currentResponse = (node, index) => {
+        if (!currentGestureBaselineAvailable) return null;
+        return {
+          x: node.displacement.x - gestureBaseline[index].x,
+          y: node.displacement.y - gestureBaseline[index].y,
+          z: node.displacement.z - gestureBaseline[index].z,
+        };
+      };
       let responseWeight = 0;
+      let currentResponseWeight = 0;
       const responseCentroid = material.nodes.reduce((centroid, node) => {
         const weight = Math.hypot(node.displacement.x, node.displacement.y, node.displacement.z);
         responseWeight += weight;
+        centroid.x += node.x * weight;
+        centroid.y += node.y * weight;
+        centroid.z += node.z * weight;
+        return centroid;
+      }, { x: 0, y: 0, z: 0 });
+      const currentResponseCentroid = material.nodes.reduce((centroid, node, index) => {
+        const response = currentResponse(node, index);
+        if (!response) return centroid;
+        const weight = Math.hypot(response.x, response.y, response.z);
+        currentResponseWeight += weight;
         centroid.x += node.x * weight;
         centroid.y += node.y * weight;
         centroid.z += node.z * weight;
@@ -403,6 +426,7 @@
         effectiveRoute: material.sympatheticTear.effectiveRoute,
         effectiveSequenceIdentity: material.sympatheticTear.effectiveSequenceIdentity,
         contactResponse: material.sympatheticTear.contactResponse,
+        currentGestureBaselineAvailable,
         responseCentroid: responseWeight > 0
           ? {
               x: responseCentroid.x / responseWeight,
@@ -410,8 +434,19 @@
               z: responseCentroid.z / responseWeight,
             }
           : null,
+        currentResponseCentroid: currentResponseWeight > 0
+          ? {
+              x: currentResponseCentroid.x / currentResponseWeight,
+              y: currentResponseCentroid.y / currentResponseWeight,
+              z: currentResponseCentroid.z / currentResponseWeight,
+            }
+          : null,
         components: material.components.map(component => {
           const nodes = component.nodeIds.map(nodeId => nodeById.get(nodeId));
+          const currentResponses = component.nodeIds.map(nodeId => {
+            const index = nodeIndexById.get(nodeId);
+            return currentResponse(nodeById.get(nodeId), index);
+          });
           const displacementMagnitudes = nodes.map(node => Math.hypot(
             node.displacement.x,
             node.displacement.y,
@@ -422,6 +457,12 @@
             node.displacement.y * direction.y +
             node.displacement.z * direction.z
           );
+          const currentResponseMagnitudes = currentResponses.map(response => response
+            ? Math.hypot(response.x, response.y, response.z)
+            : null);
+          const currentDirectionDots = currentResponses.map(response => response
+            ? response.x * direction.x + response.y * direction.y + response.z * direction.z
+            : null);
           return {
             id: component.id,
             label: component.label,
@@ -435,6 +476,15 @@
               .filter(node => !node.pinned)
               .map(node => Math.hypot(node.displacement.x, node.displacement.y, node.displacement.z))),
             minDirectionDot: Math.min(...directionDots),
+            maxCurrentResponse: currentGestureBaselineAvailable
+              ? Math.max(0, ...currentResponseMagnitudes)
+              : null,
+            minCurrentDirectionDot: currentGestureBaselineAvailable
+              ? Math.min(...currentDirectionDots)
+              : null,
+            currentResponseNodeCount: currentGestureBaselineAvailable
+              ? currentResponseMagnitudes.filter(magnitude => magnitude > 0.000000001).length
+              : null,
           };
         }),
       };

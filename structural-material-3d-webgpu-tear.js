@@ -283,7 +283,6 @@ export function buildLayeredStructuralGpuTearMaterial(state, receipt, interactio
     : 0;
   const localResponseScale = magnitude > 0 ? clamp(magnitude * 0.064, 0.018, 0.115) : 0;
   const localResponseRadius = clamp(finite(interaction.radius, 0.18) * 2.1, 0.3, 0.58);
-  const secondaryReleaseRatio = 0.22;
   const gestureId = typeof interaction.gestureId === 'string' || Number.isFinite(interaction.gestureId)
     ? String(interaction.gestureId)
     : receipt.effectiveSequenceIdentity;
@@ -320,9 +319,7 @@ export function buildLayeredStructuralGpuTearMaterial(state, receipt, interactio
     const localInfluence = contactOwned && component.pinned && !node.pinned
       ? (1 - normalizedContactDistance) ** 2
       : 0;
-    const rigidResponseScale = component.pinned
-      ? 0
-      : separationScale * (contactOwned ? 1 : secondaryReleaseRatio);
+    const rigidResponseScale = !component.pinned && contactOwned ? separationScale : 0;
     const responseScale = rigidResponseScale + localResponseScale * localInfluence;
     if (localInfluence > 0) localResponseNodeCount += 1;
     if (contactOwned && responseScale > 0) primaryResponseNodeCount += 1;
@@ -388,10 +385,10 @@ export function buildLayeredStructuralGpuTearMaterial(state, receipt, interactio
         primaryContactComponentLabel: contactOwnership.primaryContactComponentLabel,
         localResponseScale: round(localResponseScale),
         localResponseRadius: round(localResponseRadius),
-        secondaryReleaseRatio,
+        nonPrimaryResponseScale: 0,
         localResponseNodeCount,
         primaryResponseNodeCount,
-        semantics: 'contact-owned-local-deformation-plus-gpu-labeled-component-release-v0',
+        semantics: 'single-contact-component-local-or-rigid-response-v0',
       },
       gestureId,
       displacementSemantics: 'gesture-baseline-plus-current-absolute-delta',

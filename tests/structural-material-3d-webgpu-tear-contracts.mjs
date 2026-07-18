@@ -300,12 +300,65 @@ const responseMagnitudeForLabel = (state, label) => {
   const node = state.nodes.find(candidate => candidate.componentId === `g${label}` && !candidate.pinned);
   return Math.hypot(node.displacement.x, node.displacement.y, node.displacement.z);
 };
+const assertDisplacementUnchanged = (actual, expected, message) => {
+  assert.ok(
+    ['x', 'y', 'z'].every(axis => Math.abs(actual[axis] - expected[axis]) < 1e-12),
+    message,
+  );
+};
 const labelBSecondaryMagnitude = responseMagnitudeForLabel(splitNearA, labelB);
 const labelBPrimaryMagnitude = responseMagnitudeForLabel(splitNearB, labelB);
-assert.ok(
-  labelBPrimaryMagnitude > labelBSecondaryMagnitude * 3.5,
-  'non-primary split endpoint component receives secondary release instead of full primary response',
+assert.equal(
+  labelBSecondaryMagnitude,
+  0,
+  'a detached non-primary split endpoint preserves its accepted baseline exactly',
 );
+assert.ok(
+  labelBPrimaryMagnitude > 0,
+  'selecting the detached split endpoint gives that component primary movement',
+);
+
+const splitNearASecondReceipt = {
+  ...exactReceipt,
+  eventEpoch: 2,
+  requestedSequenceIdentity: `${sequenceIdentity}:split-near-a-2`,
+  effectiveSequenceIdentity: `${sequenceIdentity}:split-near-a-2`,
+};
+const splitNearASecondForce = {
+  ...splitBondInteraction(0.25),
+  gestureId: 'split-near-a-2',
+  vector: { x: 0, y: 1, z: 0 },
+};
+const splitNearAContinued = buildLayeredStructuralGpuTearMaterial(
+  splitNearA,
+  splitNearASecondReceipt,
+  splitNearASecondForce,
+);
+for (let index = 0; index < splitNearA.nodes.length; index += 1) {
+  if (splitNearA.nodes[index].componentId !== `g${labelB}`) continue;
+  assertDisplacementUnchanged(
+    splitNearAContinued.nodes[index].displacement,
+    splitNearA.nodes[index].displacement,
+    'a second gesture on endpoint A cannot accumulate movement on detached endpoint B',
+  );
+}
+const splitNearBThenA = buildLayeredStructuralGpuTearMaterial(
+  splitNearB,
+  splitNearASecondReceipt,
+  splitNearASecondForce,
+);
+assert.ok(
+  responseMagnitudeForLabel(splitNearB, labelB) > 0,
+  'the first gesture establishes a nonzero accepted baseline on endpoint B',
+);
+for (let index = 0; index < splitNearB.nodes.length; index += 1) {
+  if (splitNearB.nodes[index].componentId !== `g${labelB}`) continue;
+  assertDisplacementUnchanged(
+    splitNearBThenA.nodes[index].displacement,
+    splitNearB.nodes[index].displacement,
+    'switching primary ownership to endpoint A preserves endpoint B historical displacement',
+  );
+}
 
 const firstGestureForce = { ...scenario.force, gestureId: 'gesture-1' };
 const torn = buildLayeredStructuralGpuTearMaterial(notched, exactReceipt, firstGestureForce);
@@ -321,14 +374,21 @@ const direction = {
   y: scenario.force.vector.y / directionLength,
   z: scenario.force.vector.z / directionLength,
 };
+const tornPrimaryComponentId = `g${torn.sympatheticTear.contactResponse.primaryContactComponentLabel}`;
 for (const node of torn.nodes) {
   const dot = node.displacement.x * direction.x +
     node.displacement.y * direction.y +
     node.displacement.z * direction.z;
   if (node.pinned) {
     assert.deepEqual(node.displacement, { x: 0, y: 0, z: 0 }, 'anchored nodes remain fixed');
+  } else if (node.componentId === tornPrimaryComponentId) {
+    assert.ok(dot > 0, 'the detached primary component moves along the causative drag direction');
   } else if (node.componentId !== `g${notchedComponents.anchoredComponentLabel}`) {
-    assert.ok(dot > 0, 'detached component moves along the causative drag direction');
+    assertDisplacementUnchanged(
+      node.displacement,
+      { x: 0, y: 0, z: 0 },
+      'detached non-primary components preserve their accepted baseline',
+    );
   }
 }
 
@@ -373,20 +433,28 @@ assert.equal(
   torn.connectivityEpoch,
   'a visual-only second gesture with unchanged liveness does not advance connectivity epoch',
 );
+const continuedPrimaryComponentId =
+  `g${continued.sympatheticTear.contactResponse.primaryContactComponentLabel}`;
+let continuedPrimaryMovedNodeCount = 0;
 for (let index = 0; index < torn.nodes.length; index += 1) {
   const before = torn.nodes[index];
   const after = continued.nodes[index];
-  if (before.componentId === `g${notchedComponents.anchoredComponentLabel}`) continue;
-  assert.equal(
-    after.displacement.x,
-    before.displacement.x,
-    'a distinct second gesture preserves the first accepted displacement axis',
-  );
-  assert.ok(
-    after.displacement.y > before.displacement.y,
-    'a distinct second gesture composes its new displacement from the prior endpoint',
-  );
+  if (before.pinned) continue;
+  if (before.componentId !== continuedPrimaryComponentId) {
+    assertDisplacementUnchanged(
+      after.displacement,
+      before.displacement,
+      'a distinct gesture preserves every non-primary component baseline exactly',
+    );
+    continue;
+  }
+  assert.equal(after.displacement.x, before.displacement.x);
+  if (after.displacement.y > before.displacement.y) continuedPrimaryMovedNodeCount += 1;
 }
+assert.ok(
+  continuedPrimaryMovedNodeCount > 0,
+  'a distinct second gesture composes movement on its primary component',
+);
 const continuedReplay = buildLayeredStructuralGpuTearMaterial(
   continued,
   secondReceipt,

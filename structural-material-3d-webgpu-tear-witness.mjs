@@ -591,9 +591,14 @@ try {
     JSON.stringify(visibleLabels) === JSON.stringify(gpuLabels) &&
     anchoredVisible.length === 1 &&
     anchoredVisible[0].maxPinnedDisplacement < 0.000001 &&
-    primaryContactVisible?.maxDisplacement > 0 &&
+    pageAfter.visibleTear?.currentGestureBaselineAvailable === true &&
+    primaryContactVisible?.maxCurrentResponse > 0 &&
     detachedVisible.length >= 1 &&
-    detachedVisible.every(component => component.minDirectionDot > 0);
+    visibleComponents.every(component =>
+      component.label === pageAfter.visibleTear?.contactResponse?.primaryContactComponentLabel
+        ? component.minCurrentDirectionDot >= -0.000000001
+        : component.maxCurrentResponse < 0.000000001
+    );
 
   for (const [name, passed] of Object.entries(report.checks)) {
     assertCheck(passed, `GPU sympathetic tear check failed: ${name}; ${notched.error?.message || 'no execution error'}`);
@@ -1098,7 +1103,7 @@ try {
     y: leftContactPick.target.clientY,
   };
   const leftContactEnd = {
-    x: Math.min(stageRect.left + stageRect.width - 4, leftContactStart.x + stageRect.width * 0.36),
+    x: Math.min(stageRect.left + stageRect.width - 4, leftContactStart.x + stageRect.width * 0.62),
     y: leftContactStart.y,
   };
   const leftFinalCompletedBefore = contactReset.liveDrag?.scheduler?.finalCompletedCount || 0;
@@ -1158,16 +1163,24 @@ try {
     component => component.label ===
       leftContactVisualState.visibleTear?.contactResponse?.primaryContactComponentLabel,
   );
+  const leftNonPrimaryComponents = leftContactVisualState.visibleTear?.components?.filter(
+    component => component.label !==
+      leftContactVisualState.visibleTear?.contactResponse?.primaryContactComponentLabel,
+  ) || [];
   report.checks.leftContactResponseVisual = leftContactVisualReceipt?.status === 'passed' &&
     leftContactVisualReceipt?.effectiveRoute === STRUCTURAL_MATERIAL_3D_WEBGPU_TEAR_ROUTE &&
     leftContactVisualReceipt?.effectiveBackend === 'webgpu' &&
     leftContactVisualReceipt?.cpuFallbackUsed === false &&
     leftContactVisualState.visibleTear?.contactResponse?.contactIdentity?.id === leftContactPick.probe.id &&
     leftContactVisualState.forceEnvelope?.contactIdentity?.id === leftContactPick.probe.id &&
+    leftContactVisualState.summary?.componentCount >= 2 &&
+    leftContactVisualState.visibleTear?.currentGestureBaselineAvailable === true &&
     leftContactVisualState.visibleTear?.contactResponse?.localResponseNodeCount > 0 &&
-    leftContactVisualState.visibleTear?.responseCentroid?.x < 0.35 &&
+    leftContactVisualState.visibleTear?.currentResponseCentroid?.x < 0.35 &&
     leftContactComponent?.maxPinnedDisplacement === 0 &&
-    leftContactComponent?.maxUnpinnedDisplacement > 0 &&
+    leftContactComponent?.maxCurrentResponse > 0 &&
+    leftNonPrimaryComponents.length >= 1 &&
+    leftNonPrimaryComponents.every(component => component.maxCurrentResponse < 0.000000001) &&
     JSON.stringify(report.contactResponseVisual.camera) === JSON.stringify(cameraBefore);
   assertCheck(report.checks.leftContactResponseVisual, 'left contact did not own the rendered material response');
   const contactScreenshotEvidence = await captureVisibleScreenshot(send, evaluate, config.loadTimeoutMs);
