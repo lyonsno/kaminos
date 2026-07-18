@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import test from 'node:test';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -10,6 +11,8 @@ const modulePath = join(root, 'volume-persistent-sparse-hybrid-frontier.mjs');
 assert.ok(existsSync(modulePath), 'persistent sparse hybrid frontier consumer is missing');
 const {
   EXPECTED_MANIFEST_SHA256,
+  authenticatePersistentSparseCohort,
+  failedFrontierReceipt,
   validatePersistentSparseCohortManifest,
 } = await import(pathToFileURL(modulePath));
 
@@ -35,7 +38,7 @@ function fixture() {
     authority: 'accepted-report-replayed-native-membership-consumer-arrays-v0',
     role: 'complete-image-selection-control',
     policy: 'optical-hysteresis-adaptive-mean-contribution-footprint-charged-deposition',
-    retargetingStatus: 'forbidden-until-bailiff-analytical-hybrid-frontier-v0',
+    retargetingStatus: 'forbidden-until-analytical-hybrid-frontier-is-positive',
     source: { acceptedReportSha256: 'b'.repeat(64), manifestSha256: 'c'.repeat(64), motionReportSha256: 'd'.repeat(64), implementationBundle: { sha256: 'e'.repeat(64) } },
     selection: { targetPixelsUsed: false, candidateBudget: ROWS, membershipPolicy: 'optical-hysteresis-adaptive-mean', stableIdentity: 'native-cell-index' },
     opticalOwnership: {
@@ -75,6 +78,28 @@ test('exact immutable producer contract is admitted without selection authority'
   assert.equal(receipt.ok, true);
   assert.equal(receipt.selectionRerunAuthorized, false);
   assert.equal(receipt.coefficientConservationEligible, true);
+});
+
+test('unauthorized manifest binding fails before evidence can claim parity', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'persistent-sparse-frontier-'));
+  const manifestPath = join(directory, 'manifest.json');
+  writeFileSync(manifestPath, '{}\n');
+  try {
+    await assert.rejects(
+      authenticatePersistentSparseCohort({ manifestPath, expectedManifestSha256: 'f'.repeat(64) }),
+      error => {
+        assert.equal(error.failurePhase, 'manifest-admission');
+        const receipt = failedFrontierReceipt(error);
+        assert.equal(receipt.status, 'failed');
+        assert.equal(receipt.coefficientConservationEligible, false);
+        assert.equal(receipt.visualClaimEligible, false);
+        assert.equal(receipt.productionEconomicsEligible, false);
+        return true;
+      },
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 for (const [name, mutate, pattern] of [
