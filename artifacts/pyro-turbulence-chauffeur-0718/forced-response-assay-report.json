@@ -1,0 +1,609 @@
+{
+  "schema": "kaminos.boundary-splat-forced-response-assay-report.v0",
+  "status": "cpu-proxy-over-stop-ceiling-needs-gpu-materialization",
+  "requestedRoute": "forced-response-assay-local-synthetic-v0",
+  "effectiveRoute": "boundary-splat-analytical-age-height-forcing-warp-v0",
+  "receiptSchema": "kaminos.boundary-splat-forced-response.v0",
+  "descriptorInventory": {
+    "currentCheckoutFinding": "this branch has boundary splat candidates but no landed instance descriptor buffer or live history ring implementation",
+    "targetDescriptorSchema": "boundary-splat-instance-descriptor-v0",
+    "targetHistorySchema": "boundary-splat-live-history-ring-v0",
+    "requiredFields": [
+      "instanceId",
+      "transform.translation",
+      "transform.yawRadians",
+      "transform.scale",
+      "sourceAttachment",
+      "history.slot",
+      "history.effectiveHistoryOffsetFrames",
+      "history.authority"
+    ]
+  },
+  "simulatorControlInventory": {
+    "smallestMatchedTeacherControls": [
+      "constant translation",
+      "accelerate/stop",
+      "lateral swing",
+      "rotation relative to gravity",
+      "changing wind",
+      "combined trajectory"
+    ],
+    "analyticalInputs": [
+      "gravityWorld",
+      "windWorld",
+      "objectLinearVelocityWorld",
+      "objectLinearAccelerationWorld",
+      "objectAngularVelocityWorld",
+      "recentForcing",
+      "sourceAttachment",
+      "age",
+      "height"
+    ]
+  },
+  "rails": {
+    "residualSplineKnotBudget": 8,
+    "residualHeadAdmission": "not-admitted-until-visible-analytical-miss",
+    "latticeAdmission": "not-admitted-until-visible-spline-spatial-capacity-failure",
+    "forbidden": [
+      "per-splat neural inference",
+      "dense full-grid inference",
+      "long-horizon turbulence prediction"
+    ]
+  },
+  "controlSample": {
+    "schema": "kaminos.boundary-splat-forced-controls.v0",
+    "effectiveControlIdentity": "object-motion-gravity-wind-source-local-forcing-v0",
+    "descriptorIdentity": {
+      "schema": "boundary-splat-instance-descriptor-v0",
+      "historySchema": "boundary-splat-live-history-ring-v0",
+      "historyAuthority": "live-gpu-candidate-history-ring",
+      "instanceId": "forced-plume-0"
+    },
+    "dtSeconds": 0.03333333333333333,
+    "gravityWorld": [
+      0,
+      -9.81,
+      0
+    ],
+    "gravityLocal": [
+      0,
+      -9.81,
+      0
+    ],
+    "windWorld": [
+      0.55,
+      0,
+      -0.28
+    ],
+    "objectLinearVelocityWorld": [
+      0.95,
+      0.02,
+      0.12
+    ],
+    "objectLinearAccelerationWorld": [
+      -2.4,
+      0,
+      0.35
+    ],
+    "objectAngularVelocityWorld": [
+      0.08,
+      1.45,
+      -0.03
+    ],
+    "relativeWindWorld": [
+      -0.3999999999999999,
+      -0.02,
+      -0.4
+    ],
+    "relativeWindLocal": [
+      -0.3999999999999999,
+      -0.02,
+      -0.4
+    ],
+    "accelerationLagLocal": [
+      0.07657777777777779,
+      0,
+      -0.010640000000000002
+    ],
+    "angularVelocityLocal": [
+      0.08,
+      1.45,
+      -0.03
+    ],
+    "sourceAttachment": 0.78,
+    "recentForcing": {
+      "sampleCount": 3,
+      "meanAccelerationWorld": [
+        -2.0333333333333337,
+        0,
+        0.24
+      ],
+      "meanWindWorld": [
+        0.44999999999999996,
+        0,
+        -0.20000000000000004
+      ],
+      "durationSeconds": 0.1
+    },
+    "usesDenseGridInference": false,
+    "usesPerSplatNeuralInference": false,
+    "predictsLongHorizonTurbulence": false
+  },
+  "rigidSample": {
+    "responseIdentity": "boundary-splat-rigid-transformed-history-control-v0",
+    "descriptorIdentity": {
+      "schema": "boundary-splat-instance-descriptor-v0",
+      "historySchema": "boundary-splat-live-history-ring-v0",
+      "historyAuthority": "live-gpu-candidate-history-ring",
+      "instanceId": "forced-plume-0"
+    },
+    "position": [
+      -0.20729182786368983,
+      0.7644599336730389,
+      -0.2908889999134553
+    ],
+    "shape": [
+      0.0172,
+      0.037,
+      0.5366141732283465,
+      0.85
+    ],
+    "colorOpacity": [
+      0.76,
+      0.42976377952755906,
+      0.1,
+      0.02448818897637795
+    ],
+    "highFrequencyOffset": [
+      0.003472380557828511,
+      -0.0019386563737888104,
+      -0.0004602543295465149
+    ],
+    "canonicalPosition": [
+      0.0439811440380717,
+      0.8513385826771653,
+      -0.04497196779651492
+    ],
+    "history": {
+      "source": "canonical-live-history-slot",
+      "schema": "boundary-splat-live-history-ring-v0",
+      "slot": 0,
+      "effectiveHistoryOffsetFrames": 0,
+      "authority": "live-gpu-candidate-history-ring"
+    },
+    "usesDenseGridInference": false,
+    "usesPerSplatNeuralInference": false,
+    "predictsLongHorizonTurbulence": false
+  },
+  "analyticalSample": {
+    "responseIdentity": "boundary-splat-analytical-age-height-forcing-warp-v0",
+    "descriptorIdentity": {
+      "schema": "boundary-splat-instance-descriptor-v0",
+      "historySchema": "boundary-splat-live-history-ring-v0",
+      "historyAuthority": "live-gpu-candidate-history-ring",
+      "instanceId": "forced-plume-0"
+    },
+    "position": [
+      -0.1676092411315926,
+      0.7701367998831444,
+      -0.2997301978852019
+    ],
+    "canonicalPositionBeforeResponse": [
+      -0.20729182786368983,
+      0.7644599336730389,
+      -0.2908889999134553
+    ],
+    "lowFrequencyResponse": [
+      0.03968258673209725,
+      0.005676866210105513,
+      -0.008841197971746612
+    ],
+    "lowFrequencyResponseLocal": [
+      0.03968258673209725,
+      0.005676866210105513,
+      -0.008841197971746612
+    ],
+    "highFrequencyOffset": [
+      0.003472380557828511,
+      -0.0019386563737888104,
+      -0.0004602543295465149
+    ],
+    "sourceAttachmentRetention": 0.5532468813937629,
+    "shape": [
+      0.01727829153329231,
+      0.04281065690132529,
+      0.5366141732283465,
+      0.85
+    ],
+    "colorOpacity": [
+      0.76,
+      0.42976377952755906,
+      0.1,
+      0.022747094410925116
+    ],
+    "controls": {
+      "schema": "kaminos.boundary-splat-forced-controls.v0",
+      "effectiveControlIdentity": "object-motion-gravity-wind-source-local-forcing-v0",
+      "descriptorIdentity": {
+        "schema": "boundary-splat-instance-descriptor-v0",
+        "historySchema": "boundary-splat-live-history-ring-v0",
+        "historyAuthority": "live-gpu-candidate-history-ring",
+        "instanceId": "forced-plume-0"
+      },
+      "dtSeconds": 0.03333333333333333,
+      "gravityWorld": [
+        0,
+        -9.81,
+        0
+      ],
+      "gravityLocal": [
+        0,
+        -9.81,
+        0
+      ],
+      "windWorld": [
+        0.55,
+        0,
+        -0.28
+      ],
+      "objectLinearVelocityWorld": [
+        0.95,
+        0.02,
+        0.12
+      ],
+      "objectLinearAccelerationWorld": [
+        -2.4,
+        0,
+        0.35
+      ],
+      "objectAngularVelocityWorld": [
+        0.08,
+        1.45,
+        -0.03
+      ],
+      "relativeWindWorld": [
+        -0.3999999999999999,
+        -0.02,
+        -0.4
+      ],
+      "relativeWindLocal": [
+        -0.3999999999999999,
+        -0.02,
+        -0.4
+      ],
+      "accelerationLagLocal": [
+        0.07657777777777779,
+        0,
+        -0.010640000000000002
+      ],
+      "angularVelocityLocal": [
+        0.08,
+        1.45,
+        -0.03
+      ],
+      "sourceAttachment": 0.78,
+      "recentForcing": {
+        "sampleCount": 3,
+        "meanAccelerationWorld": [
+          -2.0333333333333337,
+          0,
+          0.24
+        ],
+        "meanWindWorld": [
+          0.44999999999999996,
+          0,
+          -0.20000000000000004
+        ],
+        "durationSeconds": 0.1
+      },
+      "usesDenseGridInference": false,
+      "usesPerSplatNeuralInference": false,
+      "predictsLongHorizonTurbulence": false
+    },
+    "usesDenseGridInference": false,
+    "usesPerSplatNeuralInference": false,
+    "predictsLongHorizonTurbulence": false
+  },
+  "receipt": {
+    "schema": "kaminos.boundary-splat-forced-response.v0",
+    "status": "analytical-control",
+    "responseIdentity": "boundary-splat-analytical-age-height-forcing-warp-v0",
+    "requestedRoute": "forced-response-assay-local-synthetic-v0",
+    "effectiveRoute": "boundary-splat-analytical-age-height-forcing-warp-v0",
+    "descriptorIdentity": {
+      "schema": "boundary-splat-instance-descriptor-v0",
+      "historySchema": "boundary-splat-live-history-ring-v0",
+      "historyAuthority": "live-gpu-candidate-history-ring",
+      "instanceId": "forced-plume-0"
+    },
+    "controlIdentity": "object-motion-gravity-wind-source-local-forcing-v0",
+    "history": {
+      "source": "canonical-live-history-slot",
+      "schema": "boundary-splat-live-history-ring-v0",
+      "slot": 0,
+      "effectiveHistoryOffsetFrames": 0,
+      "authority": "live-gpu-candidate-history-ring"
+    },
+    "sourceAuthority": "canonical-history-plus-invocation-forcing",
+    "modelIdentity": "none-analytical-only",
+    "neuralInference": {
+      "perSplat": false,
+      "denseFullGrid": false,
+      "longHorizonTurbulence": false,
+      "residualHead": "not-admitted",
+      "residualSplineKnotBudget": 8,
+      "deformationLattice": "not-admitted"
+    },
+    "requiredWitnessArms": [
+      "rigid-transformed-history-control",
+      "analytical-age-height-forcing-warp"
+    ],
+    "splatCount": 128,
+    "instanceCount": 100,
+    "timing": {
+      "schema": "kaminos.boundary-splat-forced-response-cost.v0",
+      "responseIdentity": "boundary-splat-analytical-age-height-forcing-warp-v0",
+      "instanceCounts": [
+        1,
+        16,
+        100
+      ],
+      "rows": [
+        {
+          "instanceCount": 1,
+          "splatCountPerInstance": 128,
+          "appliedSplatCount": 128,
+          "samples": [
+            0.8144160000000014,
+            0.4398750000000007,
+            0.19087499999999835,
+            0.1699169999999981,
+            0.199542000000001,
+            0.7563749999999985,
+            0.25295799999999957,
+            0.15870900000000177,
+            0.19216699999999776,
+            0.11849999999999739,
+            0.1113329999999948
+          ],
+          "completeResponseMs": 0.19216699999999776,
+          "p95Ms": 0.8144160000000014,
+          "stageProfile": {
+            "controlCompressionMs": 0.012082999999996957,
+            "responseMaterializationMs": 0.17779199999999662,
+            "controlCompressionP95Ms": 0.02529100000000284,
+            "responseMaterializationP95Ms": 0.7912910000000011
+          },
+          "dominantStage": "responseMaterialization",
+          "targetMs": 1,
+          "firstFrontierMs": 1.5,
+          "stopCeilingMs": 2,
+          "status": "measured",
+          "effectiveRoute": "boundary-splat-analytical-age-height-forcing-warp-v0",
+          "timingAuthority": "cpu-js-analytical-path-proxy-not-gpu-exclusive",
+          "usesDenseGridInference": false,
+          "usesPerSplatNeuralInference": false,
+          "predictsLongHorizonTurbulence": false
+        },
+        {
+          "instanceCount": 16,
+          "splatCountPerInstance": 128,
+          "appliedSplatCount": 2048,
+          "samples": [
+            1.7631250000000023,
+            1.755207999999996,
+            1.758625000000002,
+            1.7155839999999998,
+            1.646166000000001,
+            1.786999999999999,
+            1.716000000000001,
+            1.752167,
+            1.6913749999999936,
+            1.7635000000000005,
+            1.6692090000000022
+          ],
+          "completeResponseMs": 1.752167,
+          "p95Ms": 1.786999999999999,
+          "stageProfile": {
+            "controlCompressionMs": 0.035834000000001254,
+            "responseMaterializationMs": 1.7075420000000037,
+            "controlCompressionP95Ms": 0.06254099999999596,
+            "responseMaterializationP95Ms": 1.7403750000000002
+          },
+          "dominantStage": "responseMaterialization",
+          "targetMs": 1,
+          "firstFrontierMs": 1.5,
+          "stopCeilingMs": 2,
+          "status": "measured",
+          "effectiveRoute": "boundary-splat-analytical-age-height-forcing-warp-v0",
+          "timingAuthority": "cpu-js-analytical-path-proxy-not-gpu-exclusive",
+          "usesDenseGridInference": false,
+          "usesPerSplatNeuralInference": false,
+          "predictsLongHorizonTurbulence": false
+        },
+        {
+          "instanceCount": 100,
+          "splatCountPerInstance": 128,
+          "appliedSplatCount": 12800,
+          "samples": [
+            11.301459000000001,
+            10.601666999999992,
+            9.959791999999993,
+            10.127792,
+            7.6252919999999875,
+            7.517457999999991,
+            7.411000000000001,
+            7.460208000000009,
+            7.556582999999989,
+            7.536458999999979,
+            7.507958000000002
+          ],
+          "completeResponseMs": 7.556582999999989,
+          "p95Ms": 11.301459000000001,
+          "stageProfile": {
+            "controlCompressionMs": 0.1158749999999884,
+            "responseMaterializationMs": 7.443041999999991,
+            "controlCompressionP95Ms": 0.16866699999999923,
+            "responseMaterializationP95Ms": 11.164708999999995
+          },
+          "dominantStage": "responseMaterialization",
+          "targetMs": 1,
+          "firstFrontierMs": 1.5,
+          "stopCeilingMs": 2,
+          "status": "stop-ceiling-exceeded",
+          "effectiveRoute": "boundary-splat-analytical-age-height-forcing-warp-v0",
+          "timingAuthority": "cpu-js-analytical-path-proxy-not-gpu-exclusive",
+          "usesDenseGridInference": false,
+          "usesPerSplatNeuralInference": false,
+          "predictsLongHorizonTurbulence": false
+        }
+      ],
+      "completePathIncludes": [
+        "control-compression",
+        "rigid-transformed-history-control",
+        "analytical-age-height-forcing-warp",
+        "position-shape-opacity-response-materialization"
+      ],
+      "stopCeilingExceeded": true,
+      "boundedRepair": "WGSL response materialization over the compact boundary-splat candidate/instance buffers; keep CPU JS as an evidence proxy only and avoid object allocation in the production path.",
+      "timingAuthority": "cpu-js-analytical-path-proxy-not-gpu-exclusive",
+      "usesDenseGridInference": false,
+      "usesPerSplatNeuralInference": false,
+      "predictsLongHorizonTurbulence": false
+    },
+    "usesDenseGridInference": false,
+    "usesPerSplatNeuralInference": false,
+    "predictsLongHorizonTurbulence": false
+  },
+  "cost": {
+    "schema": "kaminos.boundary-splat-forced-response-cost.v0",
+    "responseIdentity": "boundary-splat-analytical-age-height-forcing-warp-v0",
+    "instanceCounts": [
+      1,
+      16,
+      100
+    ],
+    "rows": [
+      {
+        "instanceCount": 1,
+        "splatCountPerInstance": 128,
+        "appliedSplatCount": 128,
+        "samples": [
+          0.8144160000000014,
+          0.4398750000000007,
+          0.19087499999999835,
+          0.1699169999999981,
+          0.199542000000001,
+          0.7563749999999985,
+          0.25295799999999957,
+          0.15870900000000177,
+          0.19216699999999776,
+          0.11849999999999739,
+          0.1113329999999948
+        ],
+        "completeResponseMs": 0.19216699999999776,
+        "p95Ms": 0.8144160000000014,
+        "stageProfile": {
+          "controlCompressionMs": 0.012082999999996957,
+          "responseMaterializationMs": 0.17779199999999662,
+          "controlCompressionP95Ms": 0.02529100000000284,
+          "responseMaterializationP95Ms": 0.7912910000000011
+        },
+        "dominantStage": "responseMaterialization",
+        "targetMs": 1,
+        "firstFrontierMs": 1.5,
+        "stopCeilingMs": 2,
+        "status": "measured",
+        "effectiveRoute": "boundary-splat-analytical-age-height-forcing-warp-v0",
+        "timingAuthority": "cpu-js-analytical-path-proxy-not-gpu-exclusive",
+        "usesDenseGridInference": false,
+        "usesPerSplatNeuralInference": false,
+        "predictsLongHorizonTurbulence": false
+      },
+      {
+        "instanceCount": 16,
+        "splatCountPerInstance": 128,
+        "appliedSplatCount": 2048,
+        "samples": [
+          1.7631250000000023,
+          1.755207999999996,
+          1.758625000000002,
+          1.7155839999999998,
+          1.646166000000001,
+          1.786999999999999,
+          1.716000000000001,
+          1.752167,
+          1.6913749999999936,
+          1.7635000000000005,
+          1.6692090000000022
+        ],
+        "completeResponseMs": 1.752167,
+        "p95Ms": 1.786999999999999,
+        "stageProfile": {
+          "controlCompressionMs": 0.035834000000001254,
+          "responseMaterializationMs": 1.7075420000000037,
+          "controlCompressionP95Ms": 0.06254099999999596,
+          "responseMaterializationP95Ms": 1.7403750000000002
+        },
+        "dominantStage": "responseMaterialization",
+        "targetMs": 1,
+        "firstFrontierMs": 1.5,
+        "stopCeilingMs": 2,
+        "status": "measured",
+        "effectiveRoute": "boundary-splat-analytical-age-height-forcing-warp-v0",
+        "timingAuthority": "cpu-js-analytical-path-proxy-not-gpu-exclusive",
+        "usesDenseGridInference": false,
+        "usesPerSplatNeuralInference": false,
+        "predictsLongHorizonTurbulence": false
+      },
+      {
+        "instanceCount": 100,
+        "splatCountPerInstance": 128,
+        "appliedSplatCount": 12800,
+        "samples": [
+          11.301459000000001,
+          10.601666999999992,
+          9.959791999999993,
+          10.127792,
+          7.6252919999999875,
+          7.517457999999991,
+          7.411000000000001,
+          7.460208000000009,
+          7.556582999999989,
+          7.536458999999979,
+          7.507958000000002
+        ],
+        "completeResponseMs": 7.556582999999989,
+        "p95Ms": 11.301459000000001,
+        "stageProfile": {
+          "controlCompressionMs": 0.1158749999999884,
+          "responseMaterializationMs": 7.443041999999991,
+          "controlCompressionP95Ms": 0.16866699999999923,
+          "responseMaterializationP95Ms": 11.164708999999995
+        },
+        "dominantStage": "responseMaterialization",
+        "targetMs": 1,
+        "firstFrontierMs": 1.5,
+        "stopCeilingMs": 2,
+        "status": "stop-ceiling-exceeded",
+        "effectiveRoute": "boundary-splat-analytical-age-height-forcing-warp-v0",
+        "timingAuthority": "cpu-js-analytical-path-proxy-not-gpu-exclusive",
+        "usesDenseGridInference": false,
+        "usesPerSplatNeuralInference": false,
+        "predictsLongHorizonTurbulence": false
+      }
+    ],
+    "completePathIncludes": [
+      "control-compression",
+      "rigid-transformed-history-control",
+      "analytical-age-height-forcing-warp",
+      "position-shape-opacity-response-materialization"
+    ],
+    "stopCeilingExceeded": true,
+    "boundedRepair": "WGSL response materialization over the compact boundary-splat candidate/instance buffers; keep CPU JS as an evidence proxy only and avoid object allocation in the production path.",
+    "timingAuthority": "cpu-js-analytical-path-proxy-not-gpu-exclusive",
+    "usesDenseGridInference": false,
+    "usesPerSplatNeuralInference": false,
+    "predictsLongHorizonTurbulence": false
+  }
+}
