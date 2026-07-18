@@ -161,9 +161,14 @@ try {
   assert.equal(stageBReceipt.passes?.rendererApplied, false, 'Stage B renderer applied without evidence');
   const stageBManifestArtifact = routeReceipt.artifacts?.stageBManifest;
   if (stageBManifestArtifact) {
+    const routedStageBManifestPath = new URL(routeReceipt.effectiveRoute).searchParams.get('full_support_stage_b_manifest');
+    assert.ok(routedStageBManifestPath, 'effective route omitted its Stage B manifest mount');
+    const routedStageBManifestUrl = new URL(routedStageBManifestPath, routeReceipt.effectiveRoute).href;
     assert.equal(stageBReceipt.status, 'effective', 'verified Stage B manifest did not become resource-effective');
     assert.equal(stageBReceipt.disabledReason, null, 'verified Stage B manifest retained a disabled reason');
     assert.equal(stageBReceipt.effectiveTreatment, 'matched-optical-recurrence-v0', 'verified Stage B treatment identity was substituted');
+    assert.equal(stageBReceipt.requestedManifestUrl, routedStageBManifestUrl, 'requested Stage B manifest route drifted from the route receipt');
+    assert.equal(stageBReceipt.effectiveManifestUrl, routedStageBManifestUrl, 'effective Stage B manifest route drifted from the mounted resource');
     assert.equal(stageBReceipt.requestedManifestSha256, stageBManifestArtifact.sha256, 'requested Stage B manifest hash drifted from the route receipt');
     assert.equal(stageBReceipt.effectiveManifestSha256, stageBManifestArtifact.sha256, 'effective Stage B manifest hash drifted from the mounted artifact');
     assert.deepEqual(stageBReceipt.passes?.applied, ['manifest-validation', 'resource-binding'], 'verified Stage B resource passes were not reported exactly');

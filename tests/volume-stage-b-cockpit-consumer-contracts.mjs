@@ -242,6 +242,8 @@ assert.match(witness, /producer-evidence-unverified/, 'pre-evidence witness must
 assert.match(witness, /routeReceipt\.artifacts\?\.stageBManifest/, 'browser witness must branch on the effective route receipt instead of assuming evidence absence');
 assert.match(witness, /stageBReceipt\.status[^]*effective/, 'evidence-present route must admit an effective manifest and resource receipt');
 assert.match(witness, /stageBReceipt\.effectiveManifestSha256[^]*stageBManifestArtifact\.sha256/, 'evidence-present witness must bind the effective manifest hash');
+assert.match(witness, /full_support_stage_b_manifest[^]*stageBReceipt\.requestedManifestUrl[^]*routedStageBManifestUrl/, 'evidence-present witness must bind the requested manifest route');
+assert.match(witness, /stageBReceipt\.effectiveManifestUrl[^]*routedStageBManifestUrl/, 'evidence-present witness must bind the effective manifest route');
 assert.match(witness, /rendererApplied[^]*false/, 'pre-evidence witness must reject an unreported renderer application');
 
 console.log('volume Stage B cockpit consumer contracts passed');
