@@ -276,7 +276,7 @@ def export_state_camera(args: argparse.Namespace, report: dict[str, Any]) -> dic
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = AdapterArgumentParser()
+    parser = AdapterArgumentParser(allow_abbrev=False)
     parser.add_argument("--manifest", required=True)
     parser.add_argument("--capture-report", required=True)
     parser.add_argument("--out-dir", required=True)

@@ -199,6 +199,19 @@ class State120AdapterContracts(unittest.TestCase):
             self.assertEqual(report["failurePhase"], "argument-validation")
             self.assertIn("--skip-hash-verification", report["error"])
 
+    def test_cli_forbids_abbreviated_long_options(self):
+        with self.assertRaisesRegex(self.adapter.ArgumentParseFailure, "--out"):
+            self.adapter.parse_args([
+                "--manifest",
+                "source.json",
+                "--capture-report",
+                "capture.json",
+                "--out",
+                "/tmp/abbreviated-output",
+                "--path-scale",
+                "4.0",
+            ])
+
 
 if __name__ == "__main__":
     unittest.main()
