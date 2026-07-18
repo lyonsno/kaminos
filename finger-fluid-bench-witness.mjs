@@ -18,7 +18,9 @@ const resizedSurfaceOut = resolve(args.get('--resized-surface-out') || out.repla
 const invalidRendererOut = resolve(args.get('--invalid-renderer-out') || out.replace(/\.png$/i, '.invalid-renderer.png'));
 const reflectionPhaseAOut = resolve(args.get('--reflection-phase-a-out') || out.replace(/\.png$/i, '.reflection-phase-a.png'));
 const reflectionPhaseBOut = resolve(args.get('--reflection-phase-b-out') || out.replace(/\.png$/i, '.reflection-phase-b.png'));
-const opticalDebugModes = ['depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption', 'reflection', 'reflection_hit_kind', 'reflection_distance'];
+const liquidSupportPhaseAOut = resolve(args.get('--liquid-support-phase-a-out') || out.replace(/\.png$/i, '.liquid-support-phase-a.png'));
+const liquidSupportPhaseBOut = resolve(args.get('--liquid-support-phase-b-out') || out.replace(/\.png$/i, '.liquid-support-phase-b.png'));
+const opticalDebugModes = ['depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption', 'reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution'];
 const opticalDebugOutputs = Object.fromEntries(opticalDebugModes.map(mode => [
   mode,
   resolve(args.get(`--optical-${mode.replace('_', '-')}-out`) || out.replace(/\.png$/i, `.optical-${mode.replace('_', '-')}.png`)),
@@ -54,6 +56,11 @@ let surfaceRegistrationViews = null;
 let sameStateOpticalComparison = null;
 let frozenStateWorldReflectionWitness = null;
 let reflectionHitKindField = null;
+let environmentMapField = null;
+let binaryLiquidSupportField = null;
+let environmentContributionField = null;
+let environmentContributionAliasProbe = null;
+let environmentContributionDistinctness = null;
 let rendererResizeWitness = null;
 let invalidRendererWitness = null;
 let opticalDebugViews = null;
@@ -135,6 +142,11 @@ function writeReport(report = {}) {
     sameStateOpticalComparison,
     frozenStateWorldReflectionWitness,
     reflectionHitKindField,
+    environmentMapField,
+    binaryLiquidSupportField,
+    environmentContributionField,
+    environmentContributionAliasProbe,
+    environmentContributionDistinctness,
     rendererResizeWitness,
     invalidRendererWitness,
     opticalDebugViews,
@@ -146,6 +158,8 @@ function writeReport(report = {}) {
     invalidRendererOut,
     reflectionPhaseAOut,
     reflectionPhaseBOut,
+    liquidSupportPhaseAOut,
+    liquidSupportPhaseBOut,
     preContactOut,
     midContactOut,
     postContactOut,
@@ -274,6 +288,41 @@ function measureCapturedPng(path, label) {
     darkRatio: Number((darkPixels / Math.max(1, pixelCount)).toFixed(5)),
     measurement: 'captured_webgpu_canvas_ffmpeg_rgb24_v0',
   };
+}
+
+function measureBinaryLiquidSupport(path) {
+  const decoded = spawnSync('ffmpeg', ['-v', 'error', '-i', path, '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], {
+    encoding: null,
+    maxBuffer: 128 * 1024 * 1024,
+  });
+  if (decoded.status !== 0 || !decoded.stdout?.length) {
+    throw new Error(`ffmpeg binary liquid-support decode failed: ${decoded.stderr?.toString() || decoded.status}`);
+  }
+  let liquidPixels = 0;
+  let nonBinaryPixels = 0;
+  for (let offset = 0; offset < decoded.stdout.length; offset += 3) {
+    const r = decoded.stdout[offset];
+    const g = decoded.stdout[offset + 1];
+    const b = decoded.stdout[offset + 2];
+    const white = Math.min(r, g, b) >= 250 && Math.max(r, g, b) - Math.min(r, g, b) <= 2;
+    const black = Math.max(r, g, b) <= 2;
+    if (white) liquidPixels += 1;
+    else if (!black) nonBinaryPixels += 1;
+  }
+  const pixelCount = decoded.stdout.length / 3;
+  const field = {
+    path,
+    pixelCount,
+    liquidPixels,
+    liquidRatio: Number((liquidPixels / pixelCount).toFixed(5)),
+    nonBinaryPixels,
+    nonBinaryRatio: Number((nonBinaryPixels / pixelCount).toFixed(7)),
+    measurement: 'gpu_binary_liquid_support_rgb24_v0',
+  };
+  if (liquidPixels < 1000 || nonBinaryPixels !== 0) {
+    throw new Error(`binary liquid-support field is blank, partial, or scene-contaminated: ${JSON.stringify(field)}`);
+  }
+  return field;
 }
 
 function measureSlabValidityField(path) {
@@ -501,7 +550,7 @@ function requireDeferredWorldReflectionEvidence(receipt, label, requireReflectio
   const effectiveOpticalDebugMode = receipt?.effectiveOpticalDebugMode;
   const reflectionDiagnostic = requireReflection
     && requestedOpticalDebugMode === effectiveOpticalDebugMode
-    && ['reflection', 'reflection_hit_kind', 'reflection_distance'].includes(effectiveOpticalDebugMode);
+    && ['reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution'].includes(effectiveOpticalDebugMode);
   const dynamicMeshPresentationIsCurrent = reflectionDiagnostic
     ? deferredSceneEvidence?.dynamicMesh?.presentationMode === 'suppressed_in_reflection_debug_provider_remains_active_v0'
       && deferredSceneEvidence?.dynamicIndexedMeshLastDrawFrameId !== renderFrameId
@@ -528,8 +577,12 @@ function requireDeferredWorldReflectionEvidence(receipt, label, requireReflectio
     throw new Error(`${label} deferred scene evidence missing, stale, or partial: ${JSON.stringify(deferredSceneEvidence)}`);
   }
   const worldSpaceReflectionEvidence = receipt?.worldSpaceReflectionEvidence;
+  const environmentMapEvidence = receipt?.environmentMapEvidence;
   if (!requireReflection && worldSpaceReflectionEvidence !== undefined) {
     throw new Error(`${label} published reflection provider evidence for a renderer frame that did not execute it: ${JSON.stringify(worldSpaceReflectionEvidence)}`);
+  }
+  if (!requireReflection && environmentMapEvidence !== undefined) {
+    throw new Error(`${label} published HDR environment evidence for a renderer frame that did not execute it: ${JSON.stringify(environmentMapEvidence)}`);
   }
   if (requireReflection && (
     worldSpaceReflectionEvidence?.providerRoute !== 'wgsl-indexed-mesh-world-space-reflection-v0'
@@ -547,7 +600,29 @@ function requireDeferredWorldReflectionEvidence(receipt, label, requireReflectio
   )) {
     throw new Error(`${label} world-space reflection evidence missing, stale, or partial: ${JSON.stringify(worldSpaceReflectionEvidence)}`);
   }
-  return { deferredSceneEvidence, worldSpaceReflectionEvidence: requireReflection ? worldSpaceReflectionEvidence : null };
+  if (requireReflection && (
+    environmentMapEvidence?.requestedRoute !== 'radiance-rgbe-equirectangular-environment-v0'
+    || environmentMapEvidence?.effectiveRoute !== 'radiance-rgbe-equirectangular-environment-v0'
+    || environmentMapEvidence?.assetId !== 'polyhaven-studio-small-09-1k'
+    || environmentMapEvidence?.assetSha256 !== 'e7cfda5f4e98e623db12b8bfd0184e048488e4855d9c83e2751fb44a32e80c45'
+    || environmentMapEvidence?.runtimeAssetUrl !== './assets/hdr/studio_small_09_1k.hdr'
+    || environmentMapEvidence?.sourceAssetUrl !== 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr'
+    || environmentMapEvidence?.sourcePageUrl !== 'https://polyhaven.com/a/studio_small_09'
+    || environmentMapEvidence?.license !== 'CC0-1.0'
+    || environmentMapEvidence?.decodeRoute !== 'cpu-radiance-rle-rgbe-v0'
+    || environmentMapEvidence?.samplingRoute !== 'wgsl-manual-bilinear-rgbe-equirectangular-v0'
+    || environmentMapEvidence?.width !== 1024
+    || environmentMapEvidence?.height !== 512
+    || environmentMapEvidence?.gpuTextureFormat !== 'rgba8unorm'
+    || environmentMapEvidence?.fallbackReason
+  )) {
+    throw new Error(`${label} HDR environment evidence missing, stale, substituted, or partial: ${JSON.stringify(environmentMapEvidence)}`);
+  }
+  return {
+    deferredSceneEvidence,
+    worldSpaceReflectionEvidence: requireReflection ? worldSpaceReflectionEvidence : null,
+    environmentMapEvidence: requireReflection ? environmentMapEvidence : null,
+  };
 }
 
 function measureCapturedPngDelta(leftPath, rightPath, label) {
@@ -582,7 +657,7 @@ function measureCapturedPngDelta(leftPath, rightPath, label) {
   };
 }
 
-function measureCapturedPngMaskedDelta(leftPath, rightPath, maskPath, label) {
+function measureBinarySupportMaskedRgb24Delta(leftPath, rightPath, maskPath, label) {
   const decode = path => spawnSync('ffmpeg', ['-v', 'error', '-i', path, '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], {
     encoding: null,
     maxBuffer: 128 * 1024 * 1024,
@@ -605,7 +680,7 @@ function measureCapturedPngMaskedDelta(leftPath, rightPath, maskPath, label) {
     const maskR = mask.stdout[offset];
     const maskG = mask.stdout[offset + 1];
     const maskB = mask.stdout[offset + 2];
-    if (!(maskR > 110 && maskR > maskG * 1.12 && maskG > maskB * 1.18)) continue;
+    if (!(Math.min(maskR, maskG, maskB) >= 250 && Math.max(maskR, maskG, maskB) - Math.min(maskR, maskG, maskB) <= 2)) continue;
     maskPixels += 1;
     const delta = Math.abs(left.stdout[offset] - right.stdout[offset])
       + Math.abs(left.stdout[offset + 1] - right.stdout[offset + 1])
@@ -623,8 +698,15 @@ function measureCapturedPngMaskedDelta(leftPath, rightPath, maskPath, label) {
     changedPixels,
     changedRatio: Number((changedPixels / maskPixels).toFixed(5)),
     meanAbsoluteChannelDelta: Number((absoluteChannelDelta / (maskPixels * 3)).toFixed(3)),
-    measurement: 'frozen_state_optical_thickness_masked_rgb24_delta_v0',
+    measurement: 'binary_liquid_support_masked_rgb24_delta_v0',
   };
+}
+
+function requireHdrProductionContributionDistinct(delta) {
+  if (delta.changedRatio < 0.1 || delta.meanAbsoluteChannelDelta < 10) {
+    throw new Error(`production HDR contribution aliases the direct environment diagnostic: ${JSON.stringify(delta)}`);
+  }
+  return delta;
 }
 
 function measureReflectionHitKinds(hitKindPath, maskPath) {
@@ -645,7 +727,7 @@ function measureReflectionHitKinds(hitKindPath, maskPath) {
     const maskR = mask.stdout[offset];
     const maskG = mask.stdout[offset + 1];
     const maskB = mask.stdout[offset + 2];
-    if (!(maskR > 110 && maskR > maskG * 1.12 && maskG > maskB * 1.18)) continue;
+    if (!(Math.min(maskR, maskG, maskB) >= 250 && Math.max(maskR, maskG, maskB) - Math.min(maskR, maskG, maskB) <= 2)) continue;
     liquidPixels += 1;
     const r = hitKind.stdout[offset];
     const g = hitKind.stdout[offset + 1];
@@ -662,7 +744,133 @@ function measureReflectionHitKinds(hitKindPath, maskPath) {
     analyticPixels,
     indexedMeshPixels,
     indexedMeshRatio: Number((indexedMeshPixels / Math.max(1, liquidPixels)).toFixed(6)),
-    measurement: 'optical_thickness_masked_attributable_reflection_hit_kinds_v0',
+    measurement: 'binary_liquid_support_masked_attributable_reflection_hit_kinds_v0',
+  };
+}
+
+function measureEnvironmentContributionField(contributionPath, maskPath) {
+  const decode = path => spawnSync('ffmpeg', ['-v', 'error', '-i', path, '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], {
+    encoding: null,
+    maxBuffer: 128 * 1024 * 1024,
+  });
+  const contribution = decode(contributionPath);
+  const mask = decode(maskPath);
+  if (
+    contribution.status !== 0
+    || mask.status !== 0
+    || !contribution.stdout?.length
+    || contribution.stdout.length !== mask.stdout?.length
+  ) {
+    throw new Error('production HDR environment-contribution field decode failed or dimensions disagree');
+  }
+  const histogram = new Uint32Array(256);
+  let liquidPixels = 0;
+  let contributionPixels = 0;
+  let luminanceSum = 0;
+  for (let offset = 0; offset < contribution.stdout.length; offset += 3) {
+    const maskR = mask.stdout[offset];
+    const maskG = mask.stdout[offset + 1];
+    const maskB = mask.stdout[offset + 2];
+    if (!(Math.min(maskR, maskG, maskB) >= 250 && Math.max(maskR, maskG, maskB) - Math.min(maskR, maskG, maskB) <= 2)) continue;
+    const luminance = Math.round(
+      contribution.stdout[offset] * 0.2126
+      + contribution.stdout[offset + 1] * 0.7152
+      + contribution.stdout[offset + 2] * 0.0722,
+    );
+    liquidPixels += 1;
+    luminanceSum += luminance;
+    histogram[luminance] += 1;
+    if (luminance >= 5) contributionPixels += 1;
+  }
+  if (liquidPixels < 1000) throw new Error(`production HDR environment-contribution mask is too sparse: ${liquidPixels}`);
+  const percentile = fraction => {
+    const target = liquidPixels * fraction;
+    let cumulative = 0;
+    for (let luminance = 0; luminance < histogram.length; luminance += 1) {
+      cumulative += histogram[luminance];
+      if (cumulative >= target) return luminance;
+    }
+    return 255;
+  };
+  return {
+    contributionPath,
+    maskPath,
+    liquidPixels,
+    contributionPixels,
+    contributionRatio: Number((contributionPixels / liquidPixels).toFixed(5)),
+    meanLuminance: Number((luminanceSum / liquidPixels).toFixed(3)),
+    luminanceP50: percentile(0.5),
+    luminanceP95: percentile(0.95),
+    measurement: 'production_quadrature_fresnel_weighted_hdr_environment_contribution_v0',
+  };
+}
+
+function measureHdrEnvironmentField(environmentPath, maskPath) {
+  const decode = path => spawnSync('ffmpeg', ['-v', 'error', '-i', path, '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], {
+    encoding: null,
+    maxBuffer: 128 * 1024 * 1024,
+  });
+  const environment = decode(environmentPath);
+  const mask = decode(maskPath);
+  if (
+    environment.status !== 0
+    || mask.status !== 0
+    || !environment.stdout?.length
+    || environment.stdout.length !== mask.stdout?.length
+  ) {
+    throw new Error('HDR environment field decode failed or dimensions disagree');
+  }
+
+  const luminanceHistogram = new Uint32Array(256);
+  let liquidPixels = 0;
+  let brightPixels = 0;
+  let shadowPixels = 0;
+  let midtonePixels = 0;
+  let luminanceSum = 0;
+  for (let offset = 0; offset < environment.stdout.length; offset += 3) {
+    const maskR = mask.stdout[offset];
+    const maskG = mask.stdout[offset + 1];
+    const maskB = mask.stdout[offset + 2];
+    if (!(Math.min(maskR, maskG, maskB) >= 250 && Math.max(maskR, maskG, maskB) - Math.min(maskR, maskG, maskB) <= 2)) continue;
+
+    const luminance = Math.round(
+      environment.stdout[offset] * 0.2126
+      + environment.stdout[offset + 1] * 0.7152
+      + environment.stdout[offset + 2] * 0.0722,
+    );
+    liquidPixels += 1;
+    luminanceSum += luminance;
+    luminanceHistogram[luminance] += 1;
+    if (luminance > 148) brightPixels += 1;
+    else if (luminance < 20) shadowPixels += 1;
+    else midtonePixels += 1;
+  }
+  if (liquidPixels < 1000) throw new Error(`HDR environment liquid mask is too sparse: ${liquidPixels}`);
+
+  const percentile = fraction => {
+    const target = liquidPixels * fraction;
+    let cumulative = 0;
+    for (let luminance = 0; luminance < luminanceHistogram.length; luminance += 1) {
+      cumulative += luminanceHistogram[luminance];
+      if (cumulative >= target) return luminance;
+    }
+    return 255;
+  };
+  return {
+    environmentPath,
+    maskPath,
+    liquidPixels,
+    brightPixels,
+    brightRatio: Number((brightPixels / liquidPixels).toFixed(5)),
+    shadowPixels,
+    shadowRatio: Number((shadowPixels / liquidPixels).toFixed(5)),
+    midtonePixels,
+    midtoneRatio: Number((midtonePixels / liquidPixels).toFixed(5)),
+    meanLuminance: Number((luminanceSum / liquidPixels).toFixed(3)),
+    luminanceP05: percentile(0.05),
+    luminanceP50: percentile(0.5),
+    luminanceP95: percentile(0.95),
+    measurement: 'binary_liquid_support_masked_hdr_environment_luminance_field_v0',
   };
 }
 
@@ -1285,6 +1493,7 @@ async function main() {
     }
     if (lastDebugState.runtime?.fallbackReason) throw new Error(`renderer fallback rejected: ${lastDebugState.runtime.fallbackReason}`);
     requireSharedSupportPresentation(lastDebugState.runtime, 'initial runtime');
+    requireDeferredWorldReflectionEvidence(lastDebugState.runtime, 'initial runtime', effectiveRendererMode === 'screen_space_refraction');
     if (effectiveRendererMode === 'screen_space_surface') {
       screenSpaceSurfaceEvidence = lastDebugState.runtime?.screenSpaceSurfaceEvidence || null;
       if (screenSpaceSurfaceEvidence?.route !== 'webgpu-screen-space-liquid-surface-v0') throw new Error(`screen-space route evidence mismatch: ${JSON.stringify(screenSpaceSurfaceEvidence)}`);
@@ -1764,7 +1973,15 @@ async function main() {
       { id: 'operator_oblique', yaw: -0.62, pitch: 0.52, distance: 6.2, target: [0, -0.48, 0.2] },
       { id: 'low_side', yaw: -1.35, pitch: 0.08, distance: 7.0, target: [0, -0.48, 0.2] },
       { id: 'opposite_high', yaw: 2.15, pitch: 0.72, distance: 7.0, target: [0, -0.48, 0.2] },
-      { id: 'support_grazing', yaw: -1.35, pitch: -0.15, distance: 6.4, target: [0, -0.48, 0.2] },
+      {
+        id: 'support_grazing',
+        yaw: -1.35,
+        pitch: -0.15,
+        distance: 6.4,
+        target: [0, -0.48, 0.2],
+        minimumShadedActiveRatio: 0.02,
+        minimumShadedHighlightRatio: 0.003,
+      },
     ];
     const registrationOverlayVisibility = await evaluate(ws, `(() => {
       const overlay = document.getElementById('finger-fluid-bench-overlay');
@@ -1785,7 +2002,19 @@ async function main() {
       const sphereRender = await renderSameState('sphere_debug', spherePath, canvasRect, 'shaded', 0.005);
       const surfaceRender = await renderSameState('screen_space_surface', surfacePath, canvasRect, 'shaded', 0.005);
       const refractionRender = await renderSameState('screen_space_refraction', refractionPath, canvasRect, 'thickness', 0.005);
-      const shadedRefraction = await renderSameState('screen_space_refraction', shadedRefractionPath, canvasRect, 'shaded', 0.025);
+      const shadedRefraction = await renderSameState(
+        'screen_space_refraction',
+        shadedRefractionPath,
+        canvasRect,
+        'shaded',
+        camera.minimumShadedActiveRatio ?? 0.025,
+      );
+      if (shadedRefraction.activity.highlightRatio < (camera.minimumShadedHighlightRatio ?? 0.001)) {
+        throw new Error(`shaded HDR registration lacks a material highlight field at ${camera.id}: ${JSON.stringify({
+          activity: shadedRefraction.activity,
+          minimumShadedHighlightRatio: camera.minimumShadedHighlightRatio ?? 0.001,
+        })}`);
+      }
       if (
         sphereRender.receipt.stepCount !== surfaceRender.receipt.stepCount
         || sphereRender.receipt.stepCount !== refractionRender.receipt.stepCount
@@ -1821,6 +2050,10 @@ async function main() {
           path: shadedRefractionPath,
           receipt: shadedRefraction.receipt,
           activity: shadedRefraction.activity,
+          acceptance: {
+            minimumActiveRatio: camera.minimumShadedActiveRatio ?? 0.025,
+            minimumHighlightRatio: camera.minimumShadedHighlightRatio ?? 0.001,
+          },
         },
       });
     }
@@ -1833,6 +2066,17 @@ async function main() {
     await evaluate(ws, `window.kaminosFingerFluidBenchRenderCurrentStateForWitness?.('screen_space_surface', 'shaded')`);
 
     phase = 'same_state_optical_debug_views';
+    const opticalOverlayVisibility = await evaluate(ws, `(() => {
+      const overlay = document.getElementById('finger-fluid-bench-overlay');
+      const fpsCounter = document.getElementById('fps-counter');
+      const previous = {
+        overlay: overlay?.style.visibility || '',
+        fpsCounter: fpsCounter?.style.visibility || '',
+      };
+      if (overlay) overlay.style.visibility = 'hidden';
+      if (fpsCounter) fpsCounter.style.visibility = 'hidden';
+      return previous;
+    })()`);
     opticalDebugViews = {};
     let previousOpticalDebugMode = null;
     for (const opticalDebugMode of opticalDebugModes) {
@@ -1885,13 +2129,61 @@ async function main() {
       }
       previousOpticalDebugMode = opticalDebugMode;
     }
+    binaryLiquidSupportField = measureBinaryLiquidSupport(opticalDebugOutputs.liquid_support);
+    environmentMapField = measureHdrEnvironmentField(opticalDebugOutputs.environment, opticalDebugOutputs.liquid_support);
+    if (
+      environmentMapField.brightRatio < 0.1
+      || environmentMapField.shadowRatio < 0.1
+      || environmentMapField.midtoneRatio < 0.03
+      || environmentMapField.luminanceP95 - environmentMapField.luminanceP05 < 100
+    ) {
+      throw new Error(`HDR environment diagnostic is blank, partial, or materially dark: ${JSON.stringify(environmentMapField)}`);
+    }
     reflectionHitKindField = measureReflectionHitKinds(
       opticalDebugOutputs.reflection_hit_kind,
-      opticalDebugOutputs.thickness,
+      opticalDebugOutputs.liquid_support,
     );
     if (reflectionHitKindField.environmentPixels < 1000 || reflectionHitKindField.indexedMeshPixels < 500) {
       throw new Error(`reflection hit-kind field does not materially expose environment plus indexed mesh visibility: ${JSON.stringify(reflectionHitKindField)}`);
     }
+    environmentContributionField = measureEnvironmentContributionField(
+      opticalDebugOutputs.environment_contribution,
+      opticalDebugOutputs.liquid_support,
+    );
+    if (environmentContributionField.contributionRatio < 0.05 || environmentContributionField.luminanceP95 < 10) {
+      throw new Error(`production-quadrature HDR environment contribution is blank or materially absent: ${JSON.stringify(environmentContributionField)}`);
+    }
+    const directEnvironmentAlias = measureBinarySupportMaskedRgb24Delta(
+      opticalDebugOutputs.environment,
+      opticalDebugOutputs.environment,
+      opticalDebugOutputs.liquid_support,
+      'intentional_direct_environment_as_production_contribution_alias',
+    );
+    let directEnvironmentAliasError = null;
+    try {
+      requireHdrProductionContributionDistinct(directEnvironmentAlias);
+    } catch (error) {
+      directEnvironmentAliasError = error.message || String(error);
+    }
+    if (!directEnvironmentAliasError) {
+      throw new Error(`environment contribution alias probe failed to reject direct diagnostic substitution: ${JSON.stringify(directEnvironmentAlias)}`);
+    }
+    environmentContributionAliasProbe = {
+      schema: 'kaminos.hdr-environment-contribution-alias-probe.v0',
+      rawEnvironmentPath: opticalDebugOutputs.environment,
+      substitutedContributionPath: opticalDebugOutputs.environment,
+      maskPath: opticalDebugOutputs.liquid_support,
+      rejected: true,
+      rejection: directEnvironmentAliasError,
+      delta: directEnvironmentAlias,
+    };
+    environmentContributionDistinctness = measureBinarySupportMaskedRgb24Delta(
+      opticalDebugOutputs.environment,
+      opticalDebugOutputs.environment_contribution,
+      opticalDebugOutputs.liquid_support,
+      'raw_environment_vs_production_quadrature_fresnel_contribution',
+    );
+    requireHdrProductionContributionDistinct(environmentContributionDistinctness);
 
     phase = 'frozen_state_world_reflection';
     const setReflectionPhase = async phaseValue => evaluate(ws, `(() => {
@@ -1900,18 +2192,29 @@ async function main() {
       return setPhase(${JSON.stringify(phaseValue)});
     })()`);
     const phaseATransform = await setReflectionPhase(0.0);
+    const liquidSupportPhaseA = await renderSameState('screen_space_refraction', liquidSupportPhaseAOut, canvasRect, 'liquid_support', 0.005);
     const phaseA = await renderSameState('screen_space_refraction', reflectionPhaseAOut, canvasRect, 'reflection');
     const phaseBTransform = await setReflectionPhase(1.45);
+    const liquidSupportPhaseB = await renderSameState('screen_space_refraction', liquidSupportPhaseBOut, canvasRect, 'liquid_support', 0.005);
     const phaseB = await renderSameState('screen_space_refraction', reflectionPhaseBOut, canvasRect, 'reflection');
-    const maskedVisualDelta = measureCapturedPngMaskedDelta(
+    const liquidSupportIndependence = measureCapturedPngDelta(
+      liquidSupportPhaseAOut,
+      liquidSupportPhaseBOut,
+      'frozen_liquid_support_across_dynamic_reflection_mesh_motion',
+    );
+    if (liquidSupportIndependence.changedPixels !== 0 || liquidSupportIndependence.meanAbsoluteChannelDelta !== 0) {
+      throw new Error(`dynamic reflection mesh contaminated authoritative liquid support: ${JSON.stringify(liquidSupportIndependence)}`);
+    }
+    const maskedVisualDelta = measureBinarySupportMaskedRgb24Delta(
       reflectionPhaseAOut,
       reflectionPhaseBOut,
-      opticalDebugOutputs.thickness,
+      opticalDebugOutputs.liquid_support,
       'dynamic_indexed_mesh_world_reflection',
     );
     if (
       phaseATransform.stepCount !== phaseBTransform.stepCount
       || phaseA.receipt.stepCount !== phaseB.receipt.stepCount
+      || liquidSupportPhaseA.receipt.stepCount !== liquidSupportPhaseB.receipt.stepCount
       || phaseA.receipt.stepCount !== phaseATransform.stepCount
     ) throw new Error(`frozen-state reflection witness advanced the simulation: ${JSON.stringify({ phaseATransform, phaseBTransform, phaseA: phaseA.receipt, phaseB: phaseB.receipt })}`);
     if (
@@ -1929,14 +2232,24 @@ async function main() {
       schema: 'kaminos.finger-fluid.frozen-state-world-reflection-witness.v0',
       sameSimulationState: true,
       sameCamera: true,
-      maskSource: opticalDebugOutputs.thickness,
+      maskSource: opticalDebugOutputs.liquid_support,
       phaseATransform,
       phaseBTransform,
+      liquidSupportPhaseA,
+      liquidSupportPhaseB,
       phaseA,
       phaseB,
+      liquidSupportIndependence,
       maskedVisualDelta,
     };
     await setReflectionPhase(0.36);
+    await evaluate(ws, `(() => {
+      const overlay = document.getElementById('finger-fluid-bench-overlay');
+      const fpsCounter = document.getElementById('fps-counter');
+      if (overlay) overlay.style.visibility = ${JSON.stringify(opticalOverlayVisibility?.overlay || '')};
+      if (fpsCounter) fpsCounter.style.visibility = ${JSON.stringify(opticalOverlayVisibility?.fpsCounter || '')};
+      return true;
+    })()`);
 
     phase = 'bind_primary_requested_route';
     const primaryRouteCanvas = await renderSameState(

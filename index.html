@@ -10142,6 +10142,9 @@ function renderFingerFluidBenchCurrentStateForWitness(rendererMode, opticalDebug
     ...(runtime.worldSpaceReflectionEvidence ? {
       worldSpaceReflectionEvidence: runtime.worldSpaceReflectionEvidence,
     } : {}),
+    ...(runtime.environmentMapEvidence ? {
+      environmentMapEvidence: runtime.environmentMapEvidence,
+    } : {}),
   };
 }
 
