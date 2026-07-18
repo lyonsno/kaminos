@@ -148,6 +148,12 @@ export {
 } from './model-resource-manifest.js';
 
 export {
+  WEBGPU_MODEL_RESOURCE_SOURCE_PROGRESS_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_SOURCE_REPORT_SCHEMA,
+  acquireWebGpuModelResourceBundle,
+} from './model-resource-source.js';
+
+export {
   WEBGPU_COMMAND_DUTY_DESCRIPTOR_SCHEMA,
   WEBGPU_COMMAND_DUTY_OBSERVATION_SCHEMA,
   WEBGPU_COMMAND_DUTY_REPORT_SCHEMA,

@@ -153,9 +153,9 @@ A shared inference session can verify one content-addressed weight bundle, uploa
 ```js
 import {
   WEBGPU_BUFFER_USAGE,
+  acquireWebGpuModelResourceBundle,
   createWebGpuInferenceSession,
   defineWebGpuModelResourceManifest,
-  prepareWebGpuModelResourceBundle,
 } from "@kaminos/webgpu-inference-kit";
 
 const manifest = defineWebGpuModelResourceManifest({
@@ -195,11 +195,39 @@ const session = await createWebGpuInferenceSession({
 });
 const sharp = await session.registerRoute({ routeId: "sharp.image-to-splat.webgpu-local.v0" });
 const sf3d = await session.registerRoute({ routeId: "sf3d.image-to-mesh.webgpu-local.v0" });
-const preparedWeights = await prepareWebGpuModelResourceBundle(
+
+const cacheStore = await caches.open("kaminos-model-bundles-v1");
+const cacheUrl = key => new URL(
+  `/__kaminos_model_cache__/${encodeURIComponent(key)}`,
+  location.origin,
+).href;
+const modelBundleCache = {
+  cacheId: "cache-storage:kaminos-model-bundles-v1",
+  async get(key) {
+    const response = await cacheStore.match(cacheUrl(key));
+    return response ? response.arrayBuffer() : null;
+  },
+  async put(key, ownedBuffer) {
+    await cacheStore.put(cacheUrl(key), new Response(ownedBuffer));
+  },
+  async delete(key) {
+    await cacheStore.delete(cacheUrl(key));
+  },
+};
+
+const loadController = new AbortController();
+const acquiredWeights = await acquireWebGpuModelResourceBundle(
   manifest,
-  weightBytes.buffer,
-  { ownership: "transfer" },
+  new URL("./vision-model.weights.bin", import.meta.url),
+  {
+    cache: modelBundleCache,
+    signal: loadController.signal,
+    onProgress(event) {
+      console.info("model bytes loaded", event.loadedBytes, event.totalBytes);
+    },
+  },
 );
+const preparedWeights = acquiredWeights.bundle;
 
 const [sharpWeights, sf3dWeights] = await Promise.all([
   sharp.loadModelResources({ manifest, bundle: preparedWeights }),
@@ -217,6 +245,10 @@ sharpWeights.release();
 sf3dWeights.release();
 preparedWeights.release();
 ```
+
+`acquireWebGpuModelResourceBundle()` accepts URL, `Request`, `Response`, `Blob`, `ArrayBuffer`, and typed-array sources. It streams network/blob reads into uncapped progress events, honors `AbortSignal` while fetch, stream, or cache work is pending, verifies the complete byte length and SHA-256 before returning the existing authenticated custody handle, and records requested versus effective source identity. A persistent cache supplies a caller-owned `cacheId` plus `get`, `put`, and optional `delete` methods; keys are derived from the manifest digest and byte length. Invalid cached bytes are rejected and refetched. Cache read/write failure remains visible in the report while a valid source load can still succeed.
+
+The first acquisition implementation assembles the complete source before exact-byte verification. On a cache miss, peak host memory may include that assembled source, the verified custody snapshot, and one independent cache-write buffer. It does not claim streaming verification directly into GPU allocations; ports with very large bundles should account for those three representations until the loader gains a chunk-authenticated bundle format.
 
 Resource sharing is semantic by default. Model id, revision, manifest metadata, allocation metadata, tensor layout and metadata, bundle bytes, range, and usage all participate in the authenticated allocation identity. Equal bytes under different model semantics therefore produce different resident buffers.
 
@@ -258,6 +290,7 @@ Raw bundle input uses an owned byte snapshot, then hashes those exact bytes with
 - `defineWebGpuModelResourceManifest(input)`: freeze an exact model revision, bundle SHA-256, packed allocation ranges, and typed tensor views into a validated loading contract.
 - `verifyWebGpuModelResourceBundle(manifest, bundle)`: hash the effective bytes with Web Crypto and reject length or identity mismatch before GPU work.
 - `prepareWebGpuModelResourceBundle(manifest, bundle, options)`: establish a releasable, manifest-bound verified byte-custody handle using safe-copy or zero-copy `ArrayBuffer` transfer ownership.
+- `acquireWebGpuModelResourceBundle(manifest, source, options)`: fetch or consume browser-native model bytes, stream uncapped progress, honor cancellation, verify exact manifest identity, recover from corrupt persistent cache entries, and return a verified custody handle plus effective-source report.
 - `loadWebGpuModelResources(input)` and `route.loadModelResources(input)`: upload each content-derived allocation through shared single-flight residency and return one independently releasable model lease whose tensor views plug into kernels and phase programs.
 - `runtime.runStage(name, fn, metadata)`: wrap major model phases such as ViT encoder blocks, diffusion steps, triplane decode, mask decode, readback, or mesh/splat finalization.
 - `runtime.finishProfile(options)`: emit a `kaminos.webgpu-runtime-profile.v0` profile that downstream routes and schedulers can consume.
