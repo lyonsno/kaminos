@@ -103,9 +103,9 @@
     <div id="status">Initializing same-device command graph</div>
   </div>
   <div id="donor-label" class="label"><strong>Burn face</strong>live Pyro contact</div>
-  <div id="target-label" class="label"><strong>Loaded lattice</strong>node-local material</div>
-  <div id="control-label" class="label"><strong>Control lattice</strong>matched, outside exposure</div>
-  <div id="propagation-target-label" class="label"><strong>Catch lattice</strong>detached-source path</div>
+  <div id="target-label" class="label"><strong>Loaded beam</strong>node-local material</div>
+  <div id="control-label" class="label"><strong>Control beam</strong>matched, outside exposure</div>
+  <div id="propagation-target-label" class="label"><strong>Catch block</strong>detached-source path</div>
   <div id="propagation-control-label" class="label"><strong>Catch control</strong>matched, noncontact</div>
   <div id="ledger">
     <div class="metric"><b>Simulation</b><span id="sim-step">0</span></div>
@@ -506,6 +506,7 @@
               pyroScale: [0.18, 0.24, 0.18],
               pyroOffset: [0.41, 0.26, 0.41],
               worldOffset: [-0.64, 0.08, 0],
+              displayScale: [1.12, 0.42, 0.36],
               burnRate: 0.003,
               charStrengthLoss: 0.95,
             },
@@ -522,6 +523,7 @@
               pyroScale: [0.18, 0.24, 0.18],
               pyroOffset: [0.72, 0.26, 0.41],
               worldOffset: [0.64, 0.08, 0],
+              displayScale: [1.12, 0.42, 0.36],
             },
             {
               id: 'propagation-target',

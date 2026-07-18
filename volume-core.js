@@ -7540,6 +7540,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           encoder,
           currentTexture.createView(),
           viewProj.elements,
+          { width: state.width, height: state.height },
         );
         state.gpuStructuralCombustionAssembly = gpuStructuralCombustionAssembly.debugState();
       }

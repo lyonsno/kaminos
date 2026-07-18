@@ -97,10 +97,13 @@ assert.equal(
 
 const previousUsage = globalThis.GPUBufferUsage;
 const previousShaderStage = globalThis.GPUShaderStage;
+const previousTextureUsage = globalThis.GPUTextureUsage;
 globalThis.GPUBufferUsage = { STORAGE: 1, COPY_DST: 2, COPY_SRC: 4, UNIFORM: 8, MAP_READ: 16 };
 globalThis.GPUShaderStage = { COMPUTE: 1, VERTEX: 2, FRAGMENT: 4 };
+globalThis.GPUTextureUsage = { RENDER_ATTACHMENT: 1 };
 
 const buffers = [];
+const textures = [];
 let presentationCompilationMessages = [];
 let rejectedComputeEntryPoint = null;
 let rejectedRenderEntryPoint = null;
@@ -111,6 +114,16 @@ const device = {
     const buffer = { descriptor, destroyCount: 0, destroy() { this.destroyCount += 1; } };
     buffers.push(buffer);
     return buffer;
+  },
+  createTexture(descriptor) {
+    const texture = {
+      descriptor,
+      destroyCount: 0,
+      createView() { return { texture: this }; },
+      destroy() { this.destroyCount += 1; },
+    };
+    textures.push(texture);
+    return texture;
   },
   createShaderModule(descriptor) {
     return {
@@ -352,20 +365,26 @@ try {
       presentationEncoder,
       {},
       [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+      { width: 640, height: 360 },
     ),
     true,
   );
-  assert.equal(rendered.length, 4, 'target and control each draw resident bonds and node billboards');
+  assert.equal(rendered.length, 6, 'target and control each draw a solid surface before bonds and node overlays');
+  assert.deepEqual(rendered[0], [36, 24], 'target presents its 4 x 3 x 2 resident structural cells');
+  assert.deepEqual(rendered[3], [36, 24], 'control presents the same matched solid topology');
 
   assembly.freeze();
   assert.throws(() => assembly.encode(encoder, {}), /frozen/i);
   assembly.destroy();
   assert.ok(buffers.every(buffer => buffer.destroyCount === 1));
+  assert.ok(textures.every(texture => texture.destroyCount === 1));
 } finally {
   if (previousUsage === undefined) delete globalThis.GPUBufferUsage;
   else globalThis.GPUBufferUsage = previousUsage;
   if (previousShaderStage === undefined) delete globalThis.GPUShaderStage;
   else globalThis.GPUShaderStage = previousShaderStage;
+  if (previousTextureUsage === undefined) delete globalThis.GPUTextureUsage;
+  else globalThis.GPUTextureUsage = previousTextureUsage;
 }
 
 console.log('GPU structural combustion contracts: ok');

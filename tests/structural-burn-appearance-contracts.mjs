@@ -56,6 +56,24 @@ assert.equal(cooledChar.emissiveStrength, 0, 'cooled char cannot retain decorati
 assert.ok(luminance(cooledChar.materialColor) < luminance(virginTarget.materialColor) * 0.32);
 assert.ok(cooledChar.charPersistence > 0.9, 'cooled material must preserve its burn history');
 
+const exhaustedHotChar = evaluateStructuralBurnAppearance({
+  temperature: 2.4,
+  fuel: 0,
+  char: 1,
+  peakExposure: 2.4,
+  bondAlive: true,
+  strengthRatio: 0.12,
+});
+assert.equal(exhaustedHotChar.emissiveStrength, 0, 'fuel-exhausted char cannot glow as a uniformly red debug surface');
+assert.ok(
+  exhaustedHotChar.materialColor[0] < activelyHot.materialColor[0] * 0.25,
+  'fuel-exhausted hot char must remain charcoal rather than saturated red',
+);
+assert.ok(
+  luminance(exhaustedHotChar.materialColor) > 0.06,
+  'non-emissive charcoal must retain enough reflectance to preserve fragment silhouette',
+);
+
 const brokenBond = evaluateStructuralBurnAppearance({
   temperature: 0.08,
   fuel: 0.06,

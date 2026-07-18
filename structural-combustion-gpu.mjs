@@ -20,7 +20,7 @@ const NODE_MATERIAL_BYTES = 64;
 const COMPONENT_MOTION_BYTES = 32;
 const CARRIED_FIRE_AUDIT_BYTES = 32;
 const PARAMS_BYTES = 144;
-const PRESENTATION_BYTES = 96;
+const PRESENTATION_BYTES = 112;
 const SOURCE_FRAME_HASH = 0x53545243;
 const WORKGROUP_SIZE = 64;
 
@@ -101,11 +101,12 @@ export function evaluateStructuralBurnAppearance({
   const scorch = clamp(charPersistence * 0.72 + fuelLoss * 0.22, 0, 1);
   const virgin = [0.44, 0.29, 0.14];
   const scorched = [0.16, 0.07, 0.025];
-  const charred = [0.025, 0.018, 0.015];
-  const ember = [1, 0.15, 0.018];
+  const charred = [0.105, 0.07, 0.045];
+  const ember = [0.98, 0.24, 0.025];
   const base = mixColor(mixColor(virgin, scorched, scorch), charred, charPersistence ** 1.2);
-  const emissiveStrength = heat * (1 - charPersistence * 0.35);
-  const materialColor = mixColor(base, ember, Math.min(0.88, emissiveStrength * 0.84));
+  const ignitionSupport = smoothstep(0.02, 0.35, remainingFuel);
+  const emissiveStrength = heat * ignitionSupport * (1 - charPersistence * 0.55);
+  const materialColor = mixColor(base, ember, Math.min(0.62, emissiveStrength * 0.62));
   const remainingStrength = clamp(finite(strengthRatio, 1), 0, 1);
   const bondOpacity = bondAlive
     ? clamp(0.15 + 0.75 * remainingStrength * (1 - charPersistence * 0.35), 0.08, 0.9)
@@ -742,11 +743,15 @@ struct Presentation {
   viewProjection: mat4x4<f32>,
   world: vec4<f32>,
   style: vec4<f32>,
+  topology: vec4<u32>,
 }
 
 struct VertexOut {
   @builtin(position) position: vec4<f32>,
   @location(0) color: vec4<f32>,
+  @location(1) normal: vec3<f32>,
+  @location(2) surface: f32,
+  @location(3) emissive: f32,
 }
 
 @group(0) @binding(0) var<storage, read> nodes: array<NodeRecord>;
@@ -774,11 +779,101 @@ fn materialColor(material: NodeMaterial) -> vec3<f32> {
   let scorch = clamp(charMass * 0.72 + fuelLoss * 0.22, 0.0, 1.0);
   let virgin = vec3<f32>(0.44, 0.29, 0.14);
   let scorched = vec3<f32>(0.16, 0.07, 0.025);
-  let charred = vec3<f32>(0.025, 0.018, 0.015);
-  let ember = vec3<f32>(1.0, 0.15, 0.018);
+  let charred = vec3<f32>(0.105, 0.07, 0.045);
+  let ember = vec3<f32>(0.98, 0.24, 0.025);
   let base = mix(mix(virgin, scorched, scorch), charred, pow(charMass, 1.2));
-  let emissive = heat * (1.0 - charMass * 0.35);
-  return mix(base, ember, min(0.88, emissive * 0.84));
+  let ignitionSupport = smoothstep(0.02, 0.35, clamp(material.thermal.y, 0.0, 1.0));
+  let emissive = heat * ignitionSupport * (1.0 - charMass * 0.55);
+  return mix(base, ember, min(0.62, emissive * 0.62));
+}
+
+fn materialEmissive(material: NodeMaterial) -> f32 {
+  let heat = smoothstep(0.48, 1.15, material.thermal.x);
+  let charMass = clamp(material.thermal.z, 0.0, 1.0);
+  let ignitionSupport = smoothstep(0.02, 0.35, clamp(material.thermal.y, 0.0, 1.0));
+  return heat * ignitionSupport * (1.0 - charMass * 0.55);
+}
+
+fn surfaceCell(cellIndex: u32) -> vec3<u32> {
+  let cellsX = presentation.topology.x - 1u;
+  let cellsY = presentation.topology.y - 1u;
+  let cellsPerLayer = cellsX * cellsY;
+  let z = cellIndex / cellsPerLayer;
+  let remainder = cellIndex - z * cellsPerLayer;
+  let y = remainder / cellsX;
+  return vec3<u32>(remainder - y * cellsX, y, z);
+}
+
+fn cellNodeIndex(cell: vec3<u32>, corner: u32) -> u32 {
+  let x = cell.x + (corner & 1u);
+  let y = cell.y + ((corner >> 1u) & 1u);
+  let z = cell.z + ((corner >> 2u) & 1u);
+  return z * presentation.topology.x * presentation.topology.y + y * presentation.topology.x + x;
+}
+
+fn surfaceCornerIndex(vertexIndex: u32) -> u32 {
+  let corners = array<u32, 36>(
+    0u, 4u, 2u, 2u, 4u, 6u,
+    1u, 3u, 5u, 5u, 3u, 7u,
+    0u, 1u, 4u, 4u, 1u, 5u,
+    2u, 6u, 3u, 3u, 6u, 7u,
+    0u, 2u, 1u, 1u, 2u, 3u,
+    4u, 5u, 6u, 6u, 5u, 7u
+  );
+  return corners[vertexIndex];
+}
+
+fn surfaceFaceIsExterior(cell: vec3<u32>, faceIndex: u32) -> bool {
+  let cells = presentation.topology.xyz - vec3<u32>(1u);
+  return (faceIndex == 0u && cell.x == 0u) ||
+    (faceIndex == 1u && cell.x + 1u == cells.x) ||
+    (faceIndex == 2u && cell.y == 0u) ||
+    (faceIndex == 3u && cell.y + 1u == cells.y) ||
+    (faceIndex == 4u && cell.z == 0u) ||
+    (faceIndex == 5u && cell.z + 1u == cells.z);
+}
+
+fn surfaceCellIsFractured(cell: vec3<u32>) -> bool {
+  let rootLabel = componentLabels[cellNodeIndex(cell, 0u)];
+  for (var corner = 1u; corner < 8u; corner = corner + 1u) {
+    if (componentLabels[cellNodeIndex(cell, corner)] != rootLabel) { return true; }
+  }
+  return false;
+}
+
+@vertex
+fn surfaceVertex(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) cellIndex: u32) -> VertexOut {
+  let cell = surfaceCell(cellIndex);
+  let surfaceCorner = surfaceCornerIndex(vertexIndex);
+  let surfaceNodeIndex = cellNodeIndex(cell, surfaceCorner);
+  let material = materials[surfaceNodeIndex];
+  let surfaceComponent = componentLabels[surfaceNodeIndex];
+  let triangleStart = (vertexIndex / 3u) * 3u;
+  let triangleNode0 = cellNodeIndex(cell, surfaceCornerIndex(triangleStart));
+  let triangleNode1 = cellNodeIndex(cell, surfaceCornerIndex(triangleStart + 1u));
+  let triangleNode2 = cellNodeIndex(cell, surfaceCornerIndex(triangleStart + 2u));
+  let triangleConnected = surfaceComponent == componentLabels[triangleNode0] &&
+    surfaceComponent == componentLabels[triangleNode1] &&
+    surfaceComponent == componentLabels[triangleNode2];
+  let faceIndex = vertexIndex / 6u;
+  let surfaceVisible = triangleConnected &&
+    (surfaceFaceIsExterior(cell, faceIndex) || surfaceCellIsFractured(cell));
+  let point0 = displayedPosition(triangleNode0);
+  let point1 = displayedPosition(triangleNode1);
+  let point2 = displayedPosition(triangleNode2);
+  let rawNormal = cross(point1 - point0, point2 - point0);
+  var surfaceNormal = vec3<f32>(0.0, 0.0, 1.0);
+  if (dot(rawNormal, rawNormal) > 0.0000001) { surfaceNormal = normalize(rawNormal); }
+  let charMass = clamp(material.thermal.z, 0.0, 1.0);
+  let grain = 0.94 + 0.06 * sin(nodes[surfaceNodeIndex].position.x * 31.0 + nodes[surfaceNodeIndex].position.z * 17.0);
+  let liftedChar = mix(materialColor(material), vec3<f32>(0.13, 0.095, 0.065), charMass * 0.22);
+  var out: VertexOut;
+  out.position = presentation.viewProjection * vec4<f32>(displayedPosition(surfaceNodeIndex), 1.0);
+  out.color = vec4<f32>(liftedChar * grain, select(0.0, 0.98, surfaceVisible));
+  out.normal = surfaceNormal;
+  out.surface = 1.0;
+  out.emissive = materialEmissive(material);
+  return out;
 }
 
 @vertex
@@ -792,8 +887,11 @@ fn bondVertex(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) 
   let charMass = max(materials[bond.endpoints.x].thermal.z, materials[bond.endpoints.y].thermal.z);
   let strengthRatio = clamp(bond.material.y / max(0.0001, bondBaselines[bondIndex]), 0.0, 1.0);
   let alive = bond.material.w >= 0.5;
-  let opacity = select(0.0, clamp(0.15 + 0.75 * strengthRatio * (1.0 - charMass * 0.35), 0.08, 0.9), alive);
-  out.color = vec4<f32>(baseColor * mix(0.42, 1.0, strengthRatio), opacity);
+  let bondOpacity = select(0.0, clamp(0.15 + 0.75 * strengthRatio * (1.0 - charMass * 0.35), 0.08, 0.9), alive);
+  out.color = vec4<f32>(baseColor * mix(0.42, 1.0, strengthRatio), bondOpacity * 0.2);
+  out.normal = vec3<f32>(0.0);
+  out.surface = 0.0;
+  out.emissive = 0.0;
   return out;
 }
 
@@ -810,12 +908,24 @@ fn nodeVertex(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) 
   clip = vec4<f32>(clip.xy + billboardOffset, clip.z, clip.w);
   var out: VertexOut;
   out.position = clip;
-  out.color = vec4<f32>(materialColor(material), 0.96);
+  out.color = vec4<f32>(materialColor(material), 0.32);
+  out.normal = vec3<f32>(0.0);
+  out.surface = 0.0;
+  out.emissive = 0.0;
   return out;
 }
 
 @fragment
 fn fragmentMain(in: VertexOut) -> @location(0) vec4<f32> {
+  if (in.color.a <= 0.001) { discard; }
+  if (in.surface > 0.5) {
+    let normal = normalize(in.normal);
+    let keyLight = normalize(vec3<f32>(0.38, 0.82, 0.44));
+    let diffuse = max(0.0, dot(normal, keyLight));
+    let litColor = in.color.rgb * (0.46 + diffuse * 0.54);
+    let finalColor = mix(litColor, in.color.rgb, clamp(in.emissive, 0.0, 1.0));
+    return vec4<f32>(finalColor, in.color.a);
+  }
   return in.color;
 }
 `;
@@ -848,6 +958,12 @@ export async function createGpuStructuralCombustionAssembly({
     if (descriptor.nodeStrideBytes !== 32 || descriptor.bondStrideBytes !== 80) {
       throw new Error(`structural combustion structural ABI mismatch for ${structure.id}`);
     }
+    const columns = positiveInteger(structure.state?.columns, 0);
+    const rows = positiveInteger(structure.state?.rows, 0);
+    const layers = positiveInteger(structure.state?.layers, 0);
+    if (columns * rows * layers !== descriptor.nodeCount || columns < 2 || rows < 2 || layers < 2) {
+      throw new Error(`structural combustion solid topology mismatch for ${structure.id}`);
+    }
     const flags = structureFlags(structure);
     return {
       ...structure,
@@ -856,6 +972,10 @@ export async function createGpuStructuralCombustionAssembly({
       exposureEnabled: (flags & STRUCTURAL_EXPOSURE_ENABLED) !== 0,
       emissionEnabled: (flags & STRUCTURAL_EMISSION_ENABLED) !== 0,
       motionEnabled: (flags & STRUCTURAL_MOTION_ENABLED) !== 0,
+      columns,
+      rows,
+      layers,
+      surfaceCellCount: (columns - 1) * (rows - 1) * (layers - 1),
       descriptor,
       materialIndex: 0,
       bindGroups: [new Map(), new Map()],
@@ -953,6 +1073,7 @@ export async function createGpuStructuralCombustionAssembly({
     motionPipeline,
     emitPipeline,
     finalizePipeline,
+    surfacePresentationPipeline,
     bondPresentationPipeline,
     nodePresentationPipeline,
   } = await constructWithOwnedBufferCleanup(ownedBuffers, async () => {
@@ -1057,27 +1178,36 @@ export async function createGpuStructuralCombustionAssembly({
         alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
       },
     }];
-    const renderPipeline = (label, entryPoint, primitive) => createShaderPipeline({
+    const renderPipeline = (label, entryPoint, primitive, depthWriteEnabled) => createShaderPipeline({
       create: () => device.createRenderPipelineAsync({
         label,
         layout: presentationPipelineLayout,
         vertex: { module: presentationModule, entryPoint },
         fragment: { module: presentationModule, entryPoint: 'fragmentMain', targets: presentationTargets },
         primitive,
+        depthStencil: {
+          format: 'depth24plus',
+          depthWriteEnabled,
+          depthCompare: depthWriteEnabled ? 'less' : 'less-equal',
+        },
       }),
       moduleLabel: 'structural combustion dimensional presentation',
       entryPoint,
       source: STRUCTURAL_COMBUSTION_PRESENTATION_SHADER,
     });
-    const [bondPresentationPipeline, nodePresentationPipeline] = await Promise.all([
+    const [surfacePresentationPipeline, bondPresentationPipeline, nodePresentationPipeline] = await Promise.all([
+      renderPipeline('structural combustion resident solid surface', 'surfaceVertex', {
+        topology: 'triangle-list',
+        cullMode: 'back',
+      }, true),
       renderPipeline('structural combustion resident bonds', 'bondVertex', {
         topology: 'line-list',
         cullMode: 'none',
-      }),
+      }, false),
       renderPipeline('structural combustion resident nodes', 'nodeVertex', {
         topology: 'triangle-list',
         cullMode: 'none',
-      }),
+      }, false),
     ]);
     sockets.forEach(socket => {
       socket.presentationBindGroups = socket.materialBuffers.map((materialBuffer, index) => device.createBindGroup({
@@ -1125,6 +1255,7 @@ export async function createGpuStructuralCombustionAssembly({
       motionPipeline,
       emitPipeline,
       finalizePipeline,
+      surfacePresentationPipeline,
       bondPresentationPipeline,
       nodePresentationPipeline,
     };
@@ -1159,6 +1290,28 @@ export async function createGpuStructuralCombustionAssembly({
   let frozen = false;
   let destroyed = false;
   let lastTerminalReceipt = null;
+  let presentationDepthTexture = null;
+  let presentationDepthSize = '';
+
+  function presentationDepthView(viewportSize) {
+    const width = positiveInteger(viewportSize?.width, 0);
+    const height = positiveInteger(viewportSize?.height, 0);
+    if (width < 1 || height < 1) {
+      throw new Error('GPU structural combustion presentation requires a positive viewport size');
+    }
+    const key = `${width}x${height}`;
+    if (!presentationDepthTexture || presentationDepthSize !== key) {
+      presentationDepthTexture?.destroy();
+      presentationDepthTexture = device.createTexture({
+        label: 'structural combustion solid surface depth',
+        size: { width, height, depthOrArrayLayers: 1 },
+        format: 'depth24plus',
+        usage: GPUTextureUsage.RENDER_ATTACHMENT,
+      });
+      presentationDepthSize = key;
+    }
+    return presentationDepthTexture.createView();
+  }
 
   function encodePass(encoder, label, pipeline, group, workgroups) {
     const pass = encoder.beginComputePass({ label });
@@ -1257,25 +1410,36 @@ export async function createGpuStructuralCombustionAssembly({
     };
   }
 
-  function encodePresentation(encoder, view, viewProjection) {
+  function encodePresentation(encoder, view, viewProjection, viewportSize) {
     if (destroyed) throw new Error('GPU structural combustion assembly is destroyed');
     if (!encoder?.beginRenderPass || !view) throw new Error('GPU structural combustion presentation requires an encoder and texture view');
     if (!viewProjection || viewProjection.length !== 16 || [...viewProjection].some(value => !Number.isFinite(value))) {
       throw new Error('GPU structural combustion presentation requires a finite view-projection matrix');
     }
     sockets.forEach(socket => {
-      const values = new Float32Array(PRESENTATION_BYTES / 4);
+      const bytes = new ArrayBuffer(PRESENTATION_BYTES);
+      const values = new Float32Array(bytes);
+      const integers = new Uint32Array(bytes);
       values.set(viewProjection, 0);
       values.set([...(socket.worldOffset || [0, 0, 0]), socket.control ? 1 : 0], 16);
       values.set([...(socket.displayScale || [1.12, 0.68, 0.58]), socket.control ? 1 : 0], 20);
-      device.queue.writeBuffer(socket.presentationBuffer, 0, values);
+      integers.set([socket.columns, socket.rows, socket.layers, socket.surfaceCellCount], 24);
+      device.queue.writeBuffer(socket.presentationBuffer, 0, bytes);
     });
     const pass = encoder.beginRenderPass({
-      label: 'structural combustion dimensional overlay',
+      label: 'structural combustion solid surface and structural overlay',
       colorAttachments: [{ view, loadOp: 'load', storeOp: 'store' }],
+      depthStencilAttachment: {
+        view: presentationDepthView(viewportSize),
+        depthClearValue: 1,
+        depthLoadOp: 'clear',
+        depthStoreOp: 'discard',
+      },
     });
     sockets.forEach(socket => {
       pass.setBindGroup(0, socket.presentationBindGroups[socket.materialIndex]);
+      pass.setPipeline(surfacePresentationPipeline);
+      pass.draw(36, socket.surfaceCellCount);
       pass.setPipeline(bondPresentationPipeline);
       pass.draw(2, socket.descriptor.bondCount);
       pass.setPipeline(nodePresentationPipeline);
@@ -1528,6 +1692,8 @@ export async function createGpuStructuralCombustionAssembly({
       terminalReadbackCount: runtimeReadbackCount,
       hostCausalFeedbackCount: 0,
       structureCount: sockets.length,
+      surfaceCellCount: sockets.reduce((sum, socket) => sum + socket.surfaceCellCount, 0),
+      presentationMode: 'solid-cell-surface-with-structural-overlay-v0',
       emittingObjectId: target.objectId,
       sourceCapacity,
       deviceOwnership: 'borrowed',
@@ -1548,6 +1714,8 @@ export async function createGpuStructuralCombustionAssembly({
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      presentationDepthTexture?.destroy();
+      presentationDepthTexture = null;
       ownedBuffers.forEach(buffer => buffer.destroy());
       sockets.forEach(socket => socket.bindGroups.forEach(cache => cache.clear()));
     },
