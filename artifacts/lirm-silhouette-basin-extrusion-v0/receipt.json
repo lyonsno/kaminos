@@ -1,0 +1,778 @@
+{
+  "schema": "kaminos.lirm-silhouette-extrusion-conditioning-witness.v0",
+  "status": "complete",
+  "phase": "witness_written",
+  "routeIdentity": {
+    "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-extrusion-conditioning-v0",
+    "effectiveRoute": "cpu-sdf-raymarch-rounded-extrusion-v0"
+  },
+  "sourceRouteIdentity": {
+    "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+    "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0"
+  },
+  "sourceReceiptHash": "sha256:3319eb34b16025701ace3cab13c2417f892ce0ff46d4aaabf260c8f04a518ed6",
+  "sourceShapeSpace": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-basin-latent-boundary-20260717",
+  "requestedGenerationIds": [
+    "basin-03-s3p00-n00",
+    "basin-10-s3p00-n00",
+    "basin-12-s3p00-n00",
+    "basin-15-s3p00-n00",
+    "basin-18-s3p00-n00",
+    "basin-19-s1p50-n00",
+    "basin-22-s1p50-n00",
+    "basin-23-s1p50-n00"
+  ],
+  "generatedBodyCount": 8,
+  "resolution": 256,
+  "bodies": [
+    {
+      "schema": "kaminos.lirm-silhouette-extrusion-conditioning-packet.v0",
+      "route": "kaminos/lirm-speciation-armature/silhouette-extrusion-conditioning-v0",
+      "generationId": "basin-03-s3p00-n00",
+      "source": {
+        "shapeSpaceRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+        "receiptHash": "sha256:3319eb34b16025701ace3cab13c2417f892ce0ff46d4aaabf260c8f04a518ed6",
+        "maskHash": "sha256:c3f626715bee6f30f8e8351cf996ca041ebe6ec06791bd52fed38a1aaad8c3e8",
+        "parentShapeIds": [],
+        "noveltyAssay": {
+          "copied": false
+        },
+        "usabilityAssay": {
+          "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+          "usable": true,
+          "nonempty": true,
+          "full": false,
+          "touchesFrame": false,
+          "foregroundOccupancy": 0.318481,
+          "borderForegroundFraction": 0.0,
+          "componentCount": 1,
+          "largestComponentFraction": 1.0
+        },
+        "sourceBasinIndex": 3,
+        "posteriorStrength": 3.0
+      },
+      "volume": {
+        "kind": "rounded_silhouette_extrusion_sdf",
+        "actual3dStructure": true,
+        "sourceDistanceKind": "mask-derived-chamfer-signed-distance",
+        "thickness": 0.28,
+        "roundness": 0.05,
+        "camera": "orthographic-three-quarter-v0"
+      },
+      "renderStats": {
+        "hitPixelCount": 17124,
+        "hitPixelFraction": 0.261292,
+        "distinctDepthLevels": 201,
+        "distinctNormalColors": 2554,
+        "depthRange": [
+          1.754463,
+          2.755944
+        ]
+      },
+      "outputs": {
+        "clay": {
+          "path": "basin-03-s3p00-n00/clay.png",
+          "width": 256,
+          "height": 256,
+          "role": "clay-source"
+        },
+        "clayTransparent": {
+          "path": "basin-03-s3p00-n00/clay-transparent.png",
+          "width": 256,
+          "height": 256,
+          "role": "clay-source"
+        },
+        "depth": {
+          "path": "basin-03-s3p00-n00/depth.png",
+          "width": 256,
+          "height": 256,
+          "role": "depth-control"
+        },
+        "normal": {
+          "path": "basin-03-s3p00-n00/normal.png",
+          "width": 256,
+          "height": 256,
+          "role": "normal-control"
+        },
+        "mask": {
+          "path": "basin-03-s3p00-n00/mask.png",
+          "width": 256,
+          "height": 256,
+          "role": "mask-control"
+        }
+      },
+      "routeCandidates": [
+        {
+          "route": "imagegen_img2img_depth_normal",
+          "inputs": [
+            "clay",
+            "depth",
+            "normal",
+            "mask"
+          ],
+          "purpose": "test whether imagegen elaborates harvested silhouette gestalt from an actual 3D conditioning volume"
+        }
+      ]
+    },
+    {
+      "schema": "kaminos.lirm-silhouette-extrusion-conditioning-packet.v0",
+      "route": "kaminos/lirm-speciation-armature/silhouette-extrusion-conditioning-v0",
+      "generationId": "basin-10-s3p00-n00",
+      "source": {
+        "shapeSpaceRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+        "receiptHash": "sha256:3319eb34b16025701ace3cab13c2417f892ce0ff46d4aaabf260c8f04a518ed6",
+        "maskHash": "sha256:8eacbe26bf71b1fe3c4435904eaf7a85d20b8312c2bab6ab6052655a48b03513",
+        "parentShapeIds": [],
+        "noveltyAssay": {
+          "copied": false
+        },
+        "usabilityAssay": {
+          "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+          "usable": true,
+          "nonempty": true,
+          "full": false,
+          "touchesFrame": false,
+          "foregroundOccupancy": 0.303406,
+          "borderForegroundFraction": 0.0,
+          "componentCount": 1,
+          "largestComponentFraction": 1.0
+        },
+        "sourceBasinIndex": 10,
+        "posteriorStrength": 3.0
+      },
+      "volume": {
+        "kind": "rounded_silhouette_extrusion_sdf",
+        "actual3dStructure": true,
+        "sourceDistanceKind": "mask-derived-chamfer-signed-distance",
+        "thickness": 0.28,
+        "roundness": 0.05,
+        "camera": "orthographic-three-quarter-v0"
+      },
+      "renderStats": {
+        "hitPixelCount": 16684,
+        "hitPixelFraction": 0.254578,
+        "distinctDepthLevels": 208,
+        "distinctNormalColors": 2157,
+        "depthRange": [
+          1.644629,
+          2.789806
+        ]
+      },
+      "outputs": {
+        "clay": {
+          "path": "basin-10-s3p00-n00/clay.png",
+          "width": 256,
+          "height": 256,
+          "role": "clay-source"
+        },
+        "clayTransparent": {
+          "path": "basin-10-s3p00-n00/clay-transparent.png",
+          "width": 256,
+          "height": 256,
+          "role": "clay-source"
+        },
+        "depth": {
+          "path": "basin-10-s3p00-n00/depth.png",
+          "width": 256,
+          "height": 256,
+          "role": "depth-control"
+        },
+        "normal": {
+          "path": "basin-10-s3p00-n00/normal.png",
+          "width": 256,
+          "height": 256,
+          "role": "normal-control"
+        },
+        "mask": {
+          "path": "basin-10-s3p00-n00/mask.png",
+          "width": 256,
+          "height": 256,
+          "role": "mask-control"
+        }
+      },
+      "routeCandidates": [
+        {
+          "route": "imagegen_img2img_depth_normal",
+          "inputs": [
+            "clay",
+            "depth",
+            "normal",
+            "mask"
+          ],
+          "purpose": "test whether imagegen elaborates harvested silhouette gestalt from an actual 3D conditioning volume"
+        }
+      ]
+    },
+    {
+      "schema": "kaminos.lirm-silhouette-extrusion-conditioning-packet.v0",
+      "route": "kaminos/lirm-speciation-armature/silhouette-extrusion-conditioning-v0",
+      "generationId": "basin-12-s3p00-n00",
+      "source": {
+        "shapeSpaceRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+        "receiptHash": "sha256:3319eb34b16025701ace3cab13c2417f892ce0ff46d4aaabf260c8f04a518ed6",
+        "maskHash": "sha256:fd1f383db6146b40b08b147be488427718e274b16e987a6d74c90f051e932ed5",
+        "parentShapeIds": [],
+        "noveltyAssay": {
+          "copied": false
+        },
+        "usabilityAssay": {
+          "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+          "usable": true,
+          "nonempty": true,
+          "full": false,
+          "touchesFrame": false,
+          "foregroundOccupancy": 0.220032,
+          "borderForegroundFraction": 0.0,
+          "componentCount": 1,
+          "largestComponentFraction": 1.0
+        },
+        "sourceBasinIndex": 12,
+        "posteriorStrength": 3.0
+      },
+      "volume": {
+        "kind": "rounded_silhouette_extrusion_sdf",
+        "actual3dStructure": true,
+        "sourceDistanceKind": "mask-derived-chamfer-signed-distance",
+        "thickness": 0.28,
+        "roundness": 0.05,
+        "camera": "orthographic-three-quarter-v0"
+      },
+      "renderStats": {
+        "hitPixelCount": 13355,
+        "hitPixelFraction": 0.203781,
+        "distinctDepthLevels": 191,
+        "distinctNormalColors": 2105,
+        "depthRange": [
+          1.782925,
+          2.835032
+        ]
+      },
+      "outputs": {
+        "clay": {
+          "path": "basin-12-s3p00-n00/clay.png",
+          "width": 256,
+          "height": 256,
+          "role": "clay-source"
+        },
+        "clayTransparent": {
+          "path": "basin-12-s3p00-n00/clay-transparent.png",
+          "width": 256,
+          "height": 256,
+          "role": "clay-source"
+        },
+        "depth": {
+          "path": "basin-12-s3p00-n00/depth.png",
+          "width": 256,
+          "height": 256,
+          "role": "depth-control"
+        },
+        "normal": {
+          "path": "basin-12-s3p00-n00/normal.png",
+          "width": 256,
+          "height": 256,
+          "role": "normal-control"
+        },
+        "mask": {
+          "path": "basin-12-s3p00-n00/mask.png",
+          "width": 256,
+          "height": 256,
+          "role": "mask-control"
+        }
+      },
+      "routeCandidates": [
+        {
+          "route": "imagegen_img2img_depth_normal",
+          "inputs": [
+            "clay",
+            "depth",
+            "normal",
+            "mask"
+          ],
+          "purpose": "test whether imagegen elaborates harvested silhouette gestalt from an actual 3D conditioning volume"
+        }
+      ]
+    },
+    {
+      "schema": "kaminos.lirm-silhouette-extrusion-conditioning-packet.v0",
+      "route": "kaminos/lirm-speciation-armature/silhouette-extrusion-conditioning-v0",
+      "generationId": "basin-15-s3p00-n00",
+      "source": {
+        "shapeSpaceRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+        "receiptHash": "sha256:3319eb34b16025701ace3cab13c2417f892ce0ff46d4aaabf260c8f04a518ed6",
+        "maskHash": "sha256:b4c873987dc12ec0fc6234da90be724f9adf71cf2c966aaabf7cc625c8de6fb7",
+        "parentShapeIds": [],
+        "noveltyAssay": {
+          "copied": false
+        },
+        "usabilityAssay": {
+          "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+          "usable": true,
+          "nonempty": true,
+          "full": false,
+          "touchesFrame": false,
+          "foregroundOccupancy": 0.190796,
+          "borderForegroundFraction": 0.0,
+          "componentCount": 1,
+          "largestComponentFraction": 1.0
+        },
+        "sourceBasinIndex": 15,
+        "posteriorStrength": 3.0
+      },
+      "volume": {
+        "kind": "rounded_silhouette_extrusion_sdf",
+        "actual3dStructure": true,
+        "sourceDistanceKind": "mask-derived-chamfer-signed-distance",
+        "thickness": 0.28,
+        "roundness": 0.05,
+        "camera": "orthographic-three-quarter-v0"
+      },
+      "renderStats": {
+        "hitPixelCount": 10998,
+        "hitPixelFraction": 0.167816,
+        "distinctDepthLevels": 215,
+        "distinctNormalColors": 1539,
+        "depthRange": [
+          1.814345,
+          2.598034
+        ]
+      },
+      "outputs": {
+        "clay": {
+          "path": "basin-15-s3p00-n00/clay.png",
+          "width": 256,
+          "height": 256,
+          "role": "clay-source"
+        },
+        "clayTransparent": {
+          "path": "basin-15-s3p00-n00/clay-transparent.png",
+          "width": 256,
+          "height": 256,
+          "role": "clay-source"
+        },
+        "depth": {
+          "path": "basin-15-s3p00-n00/depth.png",
+          "width": 256,
+          "height": 256,
+          "role": "depth-control"
+        },
+        "normal": {
+          "path": "basin-15-s3p00-n00/normal.png",
+          "width": 256,
+          "height": 256,
+          "role": "normal-control"
+        },
+        "mask": {
+          "path": "basin-15-s3p00-n00/mask.png",
+          "width": 256,
+          "height": 256,
+          "role": "mask-control"
+        }
+      },
+      "routeCandidates": [
+        {
+          "route": "imagegen_img2img_depth_normal",
+          "inputs": [
+            "clay",
+            "depth",
+            "normal",
+            "mask"
+          ],
+          "purpose": "test whether imagegen elaborates harvested silhouette gestalt from an actual 3D conditioning volume"
+        }
+      ]
+    },
+    {
+      "schema": "kaminos.lirm-silhouette-extrusion-conditioning-packet.v0",
+      "route": "kaminos/lirm-speciation-armature/silhouette-extrusion-conditioning-v0",
+      "generationId": "basin-18-s3p00-n00",
+      "source": {
+        "shapeSpaceRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+        "receiptHash": "sha256:3319eb34b16025701ace3cab13c2417f892ce0ff46d4aaabf260c8f04a518ed6",
+        "maskHash": "sha256:235c8667a344e9c761bde33a1f739a58e2fd355593f75604b7d5e903acad3f20",
+        "parentShapeIds": [],
+        "noveltyAssay": {
+          "copied": false
+        },
+        "usabilityAssay": {
+          "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+          "usable": true,
+          "nonempty": true,
+          "full": false,
+          "touchesFrame": false,
+          "foregroundOccupancy": 0.200928,
+          "borderForegroundFraction": 0.0,
+          "componentCount": 1,
+          "largestComponentFraction": 1.0
+        },
+        "sourceBasinIndex": 18,
+        "posteriorStrength": 3.0
+      },
+      "volume": {
+        "kind": "rounded_silhouette_extrusion_sdf",
+        "actual3dStructure": true,
+        "sourceDistanceKind": "mask-derived-chamfer-signed-distance",
+        "thickness": 0.28,
+        "roundness": 0.05,
+        "camera": "orthographic-three-quarter-v0"
+      },
+      "renderStats": {
+        "hitPixelCount": 13533,
+        "hitPixelFraction": 0.206497,
+        "distinctDepthLevels": 172,
+        "distinctNormalColors": 2416,
+        "depthRange": [
+          1.887534,
+          2.834228
+        ]
+      },
+      "outputs": {
+        "clay": {
+          "path": "basin-18-s3p00-n00/clay.png",
+          "width": 256,
+          "height": 256,
+          "role": "clay-source"
+        },
+        "clayTransparent": {
+          "path": "basin-18-s3p00-n00/clay-transparent.png",
+          "width": 256,
+          "height": 256,
+          "role": "clay-source"
+        },
+        "depth": {
+          "path": "basin-18-s3p00-n00/depth.png",
+          "width": 256,
+          "height": 256,
+          "role": "depth-control"
+        },
+        "normal": {
+          "path": "basin-18-s3p00-n00/normal.png",
+          "width": 256,
+          "height": 256,
+          "role": "normal-control"
+        },
+        "mask": {
+          "path": "basin-18-s3p00-n00/mask.png",
+          "width": 256,
+          "height": 256,
+          "role": "mask-control"
+        }
+      },
+      "routeCandidates": [
+        {
+          "route": "imagegen_img2img_depth_normal",
+          "inputs": [
+            "clay",
+            "depth",
+            "normal",
+            "mask"
+          ],
+          "purpose": "test whether imagegen elaborates harvested silhouette gestalt from an actual 3D conditioning volume"
+        }
+      ]
+    },
+    {
+      "schema": "kaminos.lirm-silhouette-extrusion-conditioning-packet.v0",
+      "route": "kaminos/lirm-speciation-armature/silhouette-extrusion-conditioning-v0",
+      "generationId": "basin-19-s1p50-n00",
+      "source": {
+        "shapeSpaceRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+        "receiptHash": "sha256:3319eb34b16025701ace3cab13c2417f892ce0ff46d4aaabf260c8f04a518ed6",
+        "maskHash": "sha256:a92dd584269e65b6db611a11cdeec48a383efefa52a0fb9cbc819af5784db6d3",
+        "parentShapeIds": [],
+        "noveltyAssay": {
+          "copied": false
+        },
+        "usabilityAssay": {
+          "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+          "usable": true,
+          "nonempty": true,
+          "full": false,
+          "touchesFrame": false,
+          "foregroundOccupancy": 0.156982,
+          "borderForegroundFraction": 0.0,
+          "componentCount": 1,
+          "largestComponentFraction": 1.0
+        },
+        "sourceBasinIndex": 19,
+        "posteriorStrength": 1.5
+      },
+      "volume": {
+        "kind": "rounded_silhouette_extrusion_sdf",
+        "actual3dStructure": true,
+        "sourceDistanceKind": "mask-derived-chamfer-signed-distance",
+        "thickness": 0.28,
+        "roundness": 0.05,
+        "camera": "orthographic-three-quarter-v0"
+      },
+      "renderStats": {
+        "hitPixelCount": 9937,
+        "hitPixelFraction": 0.151627,
+        "distinctDepthLevels": 214,
+        "distinctNormalColors": 1816,
+        "depthRange": [
+          1.65836,
+          2.844177
+        ]
+      },
+      "outputs": {
+        "clay": {
+          "path": "basin-19-s1p50-n00/clay.png",
+          "width": 256,
+          "height": 256,
+          "role": "clay-source"
+        },
+        "clayTransparent": {
+          "path": "basin-19-s1p50-n00/clay-transparent.png",
+          "width": 256,
+          "height": 256,
+          "role": "clay-source"
+        },
+        "depth": {
+          "path": "basin-19-s1p50-n00/depth.png",
+          "width": 256,
+          "height": 256,
+          "role": "depth-control"
+        },
+        "normal": {
+          "path": "basin-19-s1p50-n00/normal.png",
+          "width": 256,
+          "height": 256,
+          "role": "normal-control"
+        },
+        "mask": {
+          "path": "basin-19-s1p50-n00/mask.png",
+          "width": 256,
+          "height": 256,
+          "role": "mask-control"
+        }
+      },
+      "routeCandidates": [
+        {
+          "route": "imagegen_img2img_depth_normal",
+          "inputs": [
+            "clay",
+            "depth",
+            "normal",
+            "mask"
+          ],
+          "purpose": "test whether imagegen elaborates harvested silhouette gestalt from an actual 3D conditioning volume"
+        }
+      ]
+    },
+    {
+      "schema": "kaminos.lirm-silhouette-extrusion-conditioning-packet.v0",
+      "route": "kaminos/lirm-speciation-armature/silhouette-extrusion-conditioning-v0",
+      "generationId": "basin-22-s1p50-n00",
+      "source": {
+        "shapeSpaceRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+        "receiptHash": "sha256:3319eb34b16025701ace3cab13c2417f892ce0ff46d4aaabf260c8f04a518ed6",
+        "maskHash": "sha256:6fb9d5cb6b20c17973bba8ca954f2e58a9f46d2cf99ca3c19174d973b04d6675",
+        "parentShapeIds": [],
+        "noveltyAssay": {
+          "copied": false
+        },
+        "usabilityAssay": {
+          "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+          "usable": true,
+          "nonempty": true,
+          "full": false,
+          "touchesFrame": false,
+          "foregroundOccupancy": 0.341248,
+          "borderForegroundFraction": 0.0,
+          "componentCount": 1,
+          "largestComponentFraction": 1.0
+        },
+        "sourceBasinIndex": 22,
+        "posteriorStrength": 1.5
+      },
+      "volume": {
+        "kind": "rounded_silhouette_extrusion_sdf",
+        "actual3dStructure": true,
+        "sourceDistanceKind": "mask-derived-chamfer-signed-distance",
+        "thickness": 0.28,
+        "roundness": 0.05,
+        "camera": "orthographic-three-quarter-v0"
+      },
+      "renderStats": {
+        "hitPixelCount": 17849,
+        "hitPixelFraction": 0.272354,
+        "distinctDepthLevels": 164,
+        "distinctNormalColors": 2432,
+        "depthRange": [
+          1.738302,
+          2.939691
+        ]
+      },
+      "outputs": {
+        "clay": {
+          "path": "basin-22-s1p50-n00/clay.png",
+          "width": 256,
+          "height": 256,
+          "role": "clay-source"
+        },
+        "clayTransparent": {
+          "path": "basin-22-s1p50-n00/clay-transparent.png",
+          "width": 256,
+          "height": 256,
+          "role": "clay-source"
+        },
+        "depth": {
+          "path": "basin-22-s1p50-n00/depth.png",
+          "width": 256,
+          "height": 256,
+          "role": "depth-control"
+        },
+        "normal": {
+          "path": "basin-22-s1p50-n00/normal.png",
+          "width": 256,
+          "height": 256,
+          "role": "normal-control"
+        },
+        "mask": {
+          "path": "basin-22-s1p50-n00/mask.png",
+          "width": 256,
+          "height": 256,
+          "role": "mask-control"
+        }
+      },
+      "routeCandidates": [
+        {
+          "route": "imagegen_img2img_depth_normal",
+          "inputs": [
+            "clay",
+            "depth",
+            "normal",
+            "mask"
+          ],
+          "purpose": "test whether imagegen elaborates harvested silhouette gestalt from an actual 3D conditioning volume"
+        }
+      ]
+    },
+    {
+      "schema": "kaminos.lirm-silhouette-extrusion-conditioning-packet.v0",
+      "route": "kaminos/lirm-speciation-armature/silhouette-extrusion-conditioning-v0",
+      "generationId": "basin-23-s1p50-n00",
+      "source": {
+        "shapeSpaceRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+        "receiptHash": "sha256:3319eb34b16025701ace3cab13c2417f892ce0ff46d4aaabf260c8f04a518ed6",
+        "maskHash": "sha256:2e6a4e6b422229cce52c1f021dc8ebfdd91d2a2e9042252bb7c3ba14d6480ee3",
+        "parentShapeIds": [],
+        "noveltyAssay": {
+          "copied": false
+        },
+        "usabilityAssay": {
+          "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+          "usable": true,
+          "nonempty": true,
+          "full": false,
+          "touchesFrame": false,
+          "foregroundOccupancy": 0.126648,
+          "borderForegroundFraction": 0.0,
+          "componentCount": 3,
+          "largestComponentFraction": 0.659759
+        },
+        "sourceBasinIndex": 23,
+        "posteriorStrength": 1.5
+      },
+      "volume": {
+        "kind": "rounded_silhouette_extrusion_sdf",
+        "actual3dStructure": true,
+        "sourceDistanceKind": "mask-derived-chamfer-signed-distance",
+        "thickness": 0.28,
+        "roundness": 0.05,
+        "camera": "orthographic-three-quarter-v0"
+      },
+      "renderStats": {
+        "hitPixelCount": 9275,
+        "hitPixelFraction": 0.141525,
+        "distinctDepthLevels": 214,
+        "distinctNormalColors": 2272,
+        "depthRange": [
+          1.604369,
+          2.970726
+        ]
+      },
+      "outputs": {
+        "clay": {
+          "path": "basin-23-s1p50-n00/clay.png",
+          "width": 256,
+          "height": 256,
+          "role": "clay-source"
+        },
+        "clayTransparent": {
+          "path": "basin-23-s1p50-n00/clay-transparent.png",
+          "width": 256,
+          "height": 256,
+          "role": "clay-source"
+        },
+        "depth": {
+          "path": "basin-23-s1p50-n00/depth.png",
+          "width": 256,
+          "height": 256,
+          "role": "depth-control"
+        },
+        "normal": {
+          "path": "basin-23-s1p50-n00/normal.png",
+          "width": 256,
+          "height": 256,
+          "role": "normal-control"
+        },
+        "mask": {
+          "path": "basin-23-s1p50-n00/mask.png",
+          "width": 256,
+          "height": 256,
+          "role": "mask-control"
+        }
+      },
+      "routeCandidates": [
+        {
+          "route": "imagegen_img2img_depth_normal",
+          "inputs": [
+            "clay",
+            "depth",
+            "normal",
+            "mask"
+          ],
+          "purpose": "test whether imagegen elaborates harvested silhouette gestalt from an actual 3D conditioning volume"
+        }
+      ]
+    }
+  ],
+  "outputInventory": {
+    "contactSheets": {
+      "clay": {
+        "path": "clay-contact-sheet.png",
+        "hash": "sha256:cfe5097766397b286d39b4d0ca12391102d2b33fdf42a2dcf11256bb4cf4964e",
+        "width": 1024,
+        "height": 512,
+        "columns": 4,
+        "rows": 2,
+        "bodyCount": 8
+      },
+      "depth": {
+        "path": "depth-contact-sheet.png",
+        "hash": "sha256:0a976ba0bd9e6d8206263605576c04f1fd58f065cd1b0ea7de33d29db2466954",
+        "width": 1024,
+        "height": 512,
+        "columns": 4,
+        "rows": 2,
+        "bodyCount": 8
+      },
+      "normal": {
+        "path": "normal-contact-sheet.png",
+        "hash": "sha256:916bdfea63f8a5062f92769e3c84fadb7785f7b31e3fba208981da4a45087d60",
+        "width": 1024,
+        "height": 512,
+        "columns": 4,
+        "rows": 2,
+        "bodyCount": 8
+      }
+    }
+  },
+  "falseClosureGuards": {
+    "flatMaskRelabeledAsDepth": "rejected",
+    "copiedSilhouetteAccepted": "false",
+    "missingOrBlankOutput": "rejected",
+    "actual3dSurfaceEvidence": "depth_and_field_gradient_normal_variation"
+  }
+}

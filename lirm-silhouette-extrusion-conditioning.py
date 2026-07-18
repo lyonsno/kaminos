@@ -19,6 +19,7 @@ REQUESTED_ROUTE = "kaminos/lirm-speciation-armature/silhouette-extrusion-conditi
 EFFECTIVE_ROUTE = "cpu-sdf-raymarch-rounded-extrusion-v0"
 EXPECTED_SOURCE_ROUTE = "numpy-local-sdf-pca-topology-neighborhood-v0"
 LATENT_SAMPLE_SOURCE_ROUTE = "mlx-sdf-vae-prior-sample-v0"
+BASIN_LATENT_SOURCE_ROUTE = "mlx-sdf-vae-posterior-basin-perturbation-v0"
 
 
 def read_pgm(path: Path) -> np.ndarray:
@@ -285,7 +286,7 @@ def accepted_source_rows(source_dir: Path, source_receipt: dict) -> tuple[dict[s
             if not row.get("noveltyAssay", {}).get("copied", True)
         }
         return accepted, effective_route
-    if effective_route == LATENT_SAMPLE_SOURCE_ROUTE:
+    if effective_route in (LATENT_SAMPLE_SOURCE_ROUTE, BASIN_LATENT_SOURCE_ROUTE):
         if source_receipt.get("phase") != "witness_written":
             raise ValueError("latent silhouette source is not complete at witness_written")
         rows = source_receipt.get("generations", [])
@@ -295,11 +296,16 @@ def accepted_source_rows(source_dir: Path, source_receipt: dict) -> tuple[dict[s
             raise ValueError(f"latent source claims {generated_count} samples but contains {len(rows)} generations")
         if accepted_count != sum(bool(row.get("acceptedForDownstream")) for row in rows):
             raise ValueError("latent source accepted sample count does not reconcile")
-        accepted = {
-            row["generationId"]: row
-            for row in rows
-            if row.get("acceptedForDownstream") and not row.get("noveltyAssay", {}).get("copied", True)
-        }
+        accepted = {}
+        for row in rows:
+            novelty_assay = row.get("noveltyAssay")
+            if novelty_assay is None and effective_route == BASIN_LATENT_SOURCE_ROUTE:
+                novelty_assay = {
+                    "copied": row.get("sourceEscapeAssay", {}).get("nearestTraining", {}).get("copied", True),
+                }
+                row = {**row, "noveltyAssay": novelty_assay}
+            if row.get("acceptedForDownstream") and not novelty_assay.get("copied", True):
+                accepted[row["generationId"]] = row
         return accepted, effective_route
     raise ValueError(f"unsupported silhouette source route {effective_route!r}")
 
@@ -337,7 +343,7 @@ def main() -> int:
             mask_bytes = mask_path.read_bytes()
             mask_hash = f"sha256:{hashlib.sha256(mask_bytes).hexdigest()}"
             mask = read_pgm(mask_path)
-            if effective_source_route == LATENT_SAMPLE_SOURCE_ROUTE:
+            if effective_source_route in (LATENT_SAMPLE_SOURCE_ROUTE, BASIN_LATENT_SOURCE_ROUTE):
                 source_sdf = metric_signed_distance(mask)
                 source_distance_kind = "mask-derived-chamfer-signed-distance"
             else:
@@ -381,6 +387,9 @@ def main() -> int:
                     "maskHash": mask_hash,
                     "parentShapeIds": row.get("parentShapeIds", []),
                     "noveltyAssay": row["noveltyAssay"],
+                    "usabilityAssay": row.get("usabilityAssay"),
+                    "sourceBasinIndex": row.get("sourceBasinIndex"),
+                    "posteriorStrength": row.get("strength"),
                 },
                 "volume": {
                     "kind": "rounded_silhouette_extrusion_sdf",

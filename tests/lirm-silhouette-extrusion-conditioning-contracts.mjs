@@ -158,6 +158,56 @@ assert.ok(
   'distinct latent silhouettes must remain geometrically distinct after extrusion',
 );
 
+const basinSourceDir = await mkdtemp(join(tmpdir(), 'kaminos-silhouette-extrusion-basin-source-'));
+await mkdir(join(basinSourceDir, 'generated'));
+await writeFile(join(basinSourceDir, 'generated', 'basin-03-s3p00-n00.pgm'), pgm);
+await writeFile(join(basinSourceDir, 'generated', 'basin-03-s3p00-n00.f32'), Buffer.from(normalizedSdf.buffer));
+await writeFile(join(basinSourceDir, 'receipt.json'), `${JSON.stringify({
+  schema: 'kaminos.lirm-silhouette-basin-latent.v0',
+  status: 'complete',
+  phase: 'witness_written',
+  routeIdentity: {
+    requestedRoute: 'kaminos/lirm-speciation-armature/silhouette-basin-latent-v0',
+    effectiveRoute: 'mlx-sdf-vae-posterior-basin-perturbation-v0',
+  },
+  generatedSampleCount: 1,
+  acceptedSampleCount: 1,
+  generations: [{
+    generationId: 'basin-03-s3p00-n00',
+    sourceBasinIndex: 3,
+    strength: 3,
+    targetBasinRetained: true,
+    acceptedForDownstream: true,
+    sourceEscapeAssay: {
+      nearestTraining: { copied: false },
+    },
+    usabilityAssay: {
+      usable: true,
+      componentCount: 1,
+      largestComponentFraction: 1,
+    },
+    maskPath: 'generated/basin-03-s3p00-n00.pgm',
+    signedDistancePath: 'generated/basin-03-s3p00-n00.f32',
+  }],
+}, null, 2)}\n`);
+const basinOutDir = await mkdtemp(join(tmpdir(), 'kaminos-silhouette-extrusion-basin-out-'));
+const basinRun = spawnSync('python3', [
+  script.pathname,
+  '--shape-space-dir', basinSourceDir,
+  '--generation-ids', 'basin-03-s3p00-n00',
+  '--out-dir', basinOutDir,
+  '--resolution', '96',
+], { encoding: 'utf8' });
+assert.equal(basinRun.status, 0, `basin-posterior silhouette extrusion failed: ${basinRun.stderr || basinRun.stdout}`);
+const basinReceipt = JSON.parse(readFileSync(join(basinOutDir, 'receipt.json'), 'utf8'));
+assert.equal(basinReceipt.status, 'complete');
+assert.equal(basinReceipt.sourceRouteIdentity.effectiveRoute, 'mlx-sdf-vae-posterior-basin-perturbation-v0');
+assert.equal(basinReceipt.generatedBodyCount, 1);
+assert.equal(basinReceipt.bodies[0].source.sourceBasinIndex, 3);
+assert.equal(basinReceipt.bodies[0].source.posteriorStrength, 3);
+assert.equal(basinReceipt.bodies[0].source.usabilityAssay.componentCount, 1);
+assert.equal(basinReceipt.bodies[0].volume.sourceDistanceKind, 'mask-derived-chamfer-signed-distance');
+
 const copiedDir = await mkdtemp(join(tmpdir(), 'kaminos-silhouette-extrusion-copied-'));
 await writeFile(join(copiedDir, 'receipt.json'), readFileSync(join(sourceDir, 'receipt.json')));
 await mkdir(join(copiedDir, 'generated'));

@@ -1,0 +1,89 @@
+{
+  "schema": "kaminos.lirm-silhouette-extrusion-conditioning-packet.v0",
+  "route": "kaminos/lirm-speciation-armature/silhouette-extrusion-conditioning-v0",
+  "generationId": "basin-15-s3p00-n00",
+  "source": {
+    "shapeSpaceRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+    "receiptHash": "sha256:3319eb34b16025701ace3cab13c2417f892ce0ff46d4aaabf260c8f04a518ed6",
+    "maskHash": "sha256:b4c873987dc12ec0fc6234da90be724f9adf71cf2c966aaabf7cc625c8de6fb7",
+    "parentShapeIds": [],
+    "noveltyAssay": {
+      "copied": false
+    },
+    "usabilityAssay": {
+      "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+      "usable": true,
+      "nonempty": true,
+      "full": false,
+      "touchesFrame": false,
+      "foregroundOccupancy": 0.190796,
+      "borderForegroundFraction": 0.0,
+      "componentCount": 1,
+      "largestComponentFraction": 1.0
+    },
+    "sourceBasinIndex": 15,
+    "posteriorStrength": 3.0
+  },
+  "volume": {
+    "kind": "rounded_silhouette_extrusion_sdf",
+    "actual3dStructure": true,
+    "sourceDistanceKind": "mask-derived-chamfer-signed-distance",
+    "thickness": 0.28,
+    "roundness": 0.05,
+    "camera": "orthographic-three-quarter-v0"
+  },
+  "renderStats": {
+    "hitPixelCount": 10998,
+    "hitPixelFraction": 0.167816,
+    "distinctDepthLevels": 215,
+    "distinctNormalColors": 1539,
+    "depthRange": [
+      1.814345,
+      2.598034
+    ]
+  },
+  "outputs": {
+    "clay": {
+      "path": "basin-15-s3p00-n00/clay.png",
+      "width": 256,
+      "height": 256,
+      "role": "clay-source"
+    },
+    "clayTransparent": {
+      "path": "basin-15-s3p00-n00/clay-transparent.png",
+      "width": 256,
+      "height": 256,
+      "role": "clay-source"
+    },
+    "depth": {
+      "path": "basin-15-s3p00-n00/depth.png",
+      "width": 256,
+      "height": 256,
+      "role": "depth-control"
+    },
+    "normal": {
+      "path": "basin-15-s3p00-n00/normal.png",
+      "width": 256,
+      "height": 256,
+      "role": "normal-control"
+    },
+    "mask": {
+      "path": "basin-15-s3p00-n00/mask.png",
+      "width": 256,
+      "height": 256,
+      "role": "mask-control"
+    }
+  },
+  "routeCandidates": [
+    {
+      "route": "imagegen_img2img_depth_normal",
+      "inputs": [
+        "clay",
+        "depth",
+        "normal",
+        "mask"
+      ],
+      "purpose": "test whether imagegen elaborates harvested silhouette gestalt from an actual 3D conditioning volume"
+    }
+  ]
+}
