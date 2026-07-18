@@ -30,6 +30,7 @@ assert.match(page, /firstWrites\s*&&\s*lastWrites[\s\S]*firstWrites\s*\|\|\s*las
 assert.match(page, /runBuilder[\s\S]*runReducedComposition[\s\S]*cadence/, 'reduced schedules include one builder and the requested number of rendered frames');
 assert.match(page, /runDenseComposition[\s\S]*cadence/, 'dense schedules execute the same requested number of rendered frames');
 assert.match(page, /requestedCadences[\s\S]*effectiveCadences/, 'requested and effective cadences are both reported');
+assert.match(page, /pairedWinFraction[\s\S]*pairedMedianRatio[\s\S]*pairedRatioP10[\s\S]*pairedRatioP90/, 'AB/BA cadence stability is reported instead of hidden behind unpaired medians');
 assert.doesNotMatch(page, /requestedCadences\.(slice|splice)|Math\.min\([^\n]*cadence/i, 'page must not silently cap caller cadences');
 assert.match(page, /Natural dense control[\s\S]*Persisted d12-t2 target[\s\S]*GPU-built d12-t2[\s\S]*Amplified residual/, 'visual witness anchors all four image roles');
 assert.match(page, /optimizationClaimAllowed:\s*false/, 'page begins without optimization claim authority');

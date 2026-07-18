@@ -133,6 +133,17 @@
       };
     }
 
+    function summarizePaired(denseValues, reducedValues) {
+      requireValue(denseValues.length === reducedValues.length && denseValues.length > 0, 'paired timing samples are incomplete');
+      const ratios = denseValues.map((value, index) => value / reducedValues[index]);
+      return {
+        pairedWinFraction: denseValues.filter((value, index) => reducedValues[index] < value).length / denseValues.length,
+        pairedMedianRatio: percentile(ratios, 0.50),
+        pairedRatioP10: percentile(ratios, 0.10),
+        pairedRatioP90: percentile(ratios, 0.90),
+      };
+    }
+
     async function sha256Hex(bytes) {
       const hash = await crypto.subtle.digest('SHA-256', bytes);
       return Array.from(new Uint8Array(hash), value => value.toString(16).padStart(2, '0')).join('');
@@ -607,8 +618,10 @@
           const samples = scheduleSamples[String(cadence)];
           const denseTotal = summarize(samples.dense);
           const reducedTotal = summarize(samples.reduced);
-          const densePerFrame = summarize(samples.dense.map(value => value / cadence));
-          const reducedPerFrame = summarize(samples.reduced.map(value => value / cadence));
+          const densePerFrameSamples = samples.dense.map(value => value / cadence);
+          const reducedPerFrameSamples = samples.reduced.map(value => value / cadence);
+          const densePerFrame = summarize(densePerFrameSamples);
+          const reducedPerFrame = summarize(reducedPerFrameSamples);
           return [String(cadence), {
             cadence,
             denseTotal,
@@ -616,6 +629,7 @@
             densePerFrame,
             reducedPerFrame,
             medianDenseToReducedRatio: densePerFrame.medianMs / reducedPerFrame.medianMs,
+            paired: summarizePaired(densePerFrameSamples, reducedPerFrameSamples),
           }];
         })),
       };
@@ -714,7 +728,7 @@
         const term = document.createElement('dt');
         const detail = document.createElement('dd');
         term.textContent = `Update every ${cadence} frame${cadence === 1 ? '' : 's'}`;
-        detail.textContent = `dense ${result.densePerFrame.medianMs.toFixed(4)} vs build+reduced ${result.reducedPerFrame.medianMs.toFixed(4)} ms/frame, ${result.medianDenseToReducedRatio.toFixed(2)}x`;
+        detail.textContent = `dense ${result.densePerFrame.medianMs.toFixed(4)} vs build+reduced ${result.reducedPerFrame.medianMs.toFixed(4)} ms/frame, ${result.medianDenseToReducedRatio.toFixed(2)}x; paired wins ${(100 * result.paired.pairedWinFraction).toFixed(0)}%, median ${result.paired.pairedMedianRatio.toFixed(2)}x`;
         item.append(term, detail);
         cadenceResults.append(item);
       }
