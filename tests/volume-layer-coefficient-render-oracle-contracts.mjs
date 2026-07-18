@@ -70,6 +70,15 @@ assert.match(source, /structuredDotSpectralPower/, 'oracle scores structured dot
 assert.match(source, /targetWispUnderfit/, 'oracle scores target-aligned edge wisps separately');
 assert.match(source, /projectedFragments/, 'oracle reports projected fragment work instead of row count alone');
 assert.match(source, /splitSelectionCap.*None/, 'selective splitting records that no candidate cap was applied');
+assert.match(
+  source,
+  /native-cell-width-from-effective-source-grid-v0/,
+  'oracle records that native deposition scale comes from the effective source grid',
+);
+assert.match(source, /5b507060d8caa6b92475f1e26aa64b69dc2d3952d64fae54f451f5257c21db7c/, 'Grid96 feature compatibility is pinned to exact adapter bytes');
+assert.match(source, /consumer-pinned-exact-grid96-source-adapter-feature-order-v0/, 'Grid96 feature compatibility remains explicitly consumer-interpreted');
+assert.match(source, /cameraCohort/, 'oracle records the complete camera cohort identity');
+assert.match(source, /inputIdentity/, 'oracle records exact manifest and capture identities');
 
 const python = process.env.KAMINOS_MLX_PYTHON || '/private/tmp/kaminos-mlx-residual-venv/bin/python';
 const selfTest = spawnSync(python, [script.pathname, '--self-test'], { encoding: 'utf8' });
@@ -91,6 +100,14 @@ import sys
 spec = importlib.util.spec_from_file_location("coefficient_oracle", sys.argv[1])
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
+assert abs(module.native_cell_width_world(96) - (2.0 / 96.0)) < 1e-12
+assert abs(module.native_cell_width_world(160) - (2.0 / 160.0)) < 1e-12
+try:
+    module.native_cell_width_world(0)
+except ValueError as exc:
+    assert "source grid" in str(exc)
+else:
+    raise AssertionError("nonpositive source grid did not fail loud")
 identity = np.eye(4, dtype=np.float64).reshape(-1, order="F").tolist()
 camera = {
     "cameraIndex": 0,
@@ -107,6 +124,7 @@ _, receipt = module.rasterize_coefficients(
     4,
     "bilinear",
     module.bilinear_footprint_controls(),
+    160,
 )
 mass = receipt["coefficientMass"]
 assert mass["nominalKernelMassConserved"] is True

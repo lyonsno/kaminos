@@ -34,6 +34,10 @@ KERNEL_GEOMETRY = "base-footprint-plus-flow-kernel-second-moment-tangent-covaria
 CALIBRATION_IDENTITY = "camera-10-only-global-optical-path-fit-v0"
 FROZEN_CALIBRATION_IDENTITY = "caller-frozen-global-optical-path-v0"
 ORDER_APPROXIMATION = "camera-depth-96-bin-one-running-transmittance-v0"
+DEPOSITION_SCALE_IDENTITY = "native-cell-width-from-effective-source-grid-v0"
+GRID96_ADAPTER_SHA256 = "5b507060d8caa6b92475f1e26aa64b69dc2d3952d64fae54f451f5257c21db7c"
+GRID96_ADAPTER_IDENTITY = "sha256:1291de8309826aa62e967fc75b1838575d88c91b03fc5123dbee5de297abcd9e"
+GRID96_FEATURE_ORDER_AUTHORITY = "consumer-pinned-exact-grid96-source-adapter-feature-order-v0"
 FOOTPRINT_MODES = {
     "nearest": "checksum-bound-flow-tangent-five-tap-projected-kernel-v0",
     "bilinear": "flow-tangent-five-tap-bilinear-v0",
@@ -89,6 +93,11 @@ def sha256_file(path: Path, chunk_size: int = 8 * 1024 * 1024) -> str:
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise ValueError(message)
+
+
+def native_cell_width_world(source_grid: int) -> float:
+    require(isinstance(source_grid, int) and source_grid > 0, "source grid must be a positive integer")
+    return 2.0 / float(source_grid)
 
 
 def load_json(path: Path, label: str) -> dict[str, Any]:
@@ -154,6 +163,9 @@ def validate_manifest(
         matches = [item for item in states if (item.get("replay") or {}).get("completedSteps") == state_step]
         require(len(matches) == 1, f"manifest must contain exactly one state at step {state_step}")
         state = matches[0]
+    replay = state.get("replay") or {}
+    source_grid = replay.get("grid")
+    require(isinstance(source_grid, int) and source_grid > 0, "state replay source grid must be a positive integer")
     rows = state.get("rows") or {}
     count = rows.get("count")
     require(isinstance(count, int) and count > 0, "state row count must be positive")
@@ -163,11 +175,20 @@ def validate_manifest(
     index_desc = rows.get("nativeCellIndices") or {}
     index_path = validate_artifact(index_desc, manifest_path, "native-cell indices", "uint32-le", [count], verify_hashes)
     indices = np.memmap(index_path, dtype="<u4", mode="r", shape=(count,))
-    require(int(indices.max(initial=0)) < int((state.get("replay") or {}).get("grid", 160)) ** 3, "native-cell index exceeds source grid")
+    require(int(indices.max(initial=0)) < source_grid ** 3, "native-cell index exceeds source grid")
     ordered = np.sort(np.asarray(indices))
     require(not np.any(ordered[1:] == ordered[:-1]), "duplicate native-cell indices are forbidden")
     feature_view = manifest.get("featureView") or {}
-    require(feature_view.get("order") == FEATURE_ORDER, "feature order drifted")
+    if feature_view.get("order") == FEATURE_ORDER:
+        feature_order_authority = "source-manifest-declared-feature-order-v0"
+    else:
+        manifest_sha256 = sha256_file(manifest_path)
+        require(manifest_sha256 == GRID96_ADAPTER_SHA256, "feature order is missing and manifest is not the exact pinned Grid96 adapter")
+        require(manifest.get("identity") == GRID96_ADAPTER_IDENTITY, "pinned Grid96 adapter semantic identity drifted")
+        require(manifest.get("sourceOnlyOracleAdapter") is True, "pinned Grid96 adapter lost source-only authority")
+        require(manifest.get("learnerCampaign") is False and manifest.get("trainingStarted") is False, "pinned Grid96 adapter entered learner authority")
+        require(source_grid == 96, "pinned Grid96 feature-order exception cannot apply to another source grid")
+        feature_order_authority = GRID96_FEATURE_ORDER_AUTHORITY
 
     required_rows = {"nativeCellIndices": index_path}
     if rows.get("features") is not None:
@@ -200,6 +221,8 @@ def validate_manifest(
             "effectiveControls": descriptor.get("effectiveControls"),
             "runtimeReceipt": runtime,
         }
+    descriptor_receipt["featureOrderAuthority"] = feature_order_authority
+    descriptor_receipt["featureOrder"] = FEATURE_ORDER
     return state, required_rows, descriptor_receipt
 
 
@@ -673,6 +696,7 @@ def rasterize_coefficients(
     depth_bins: int,
     footprint_mode: str,
     footprint_controls: dict[str, Any],
+    source_grid: int,
     split_mask: np.ndarray | None = None,
     split_world_offsets: np.ndarray | None = None,
 ) -> tuple[np.ndarray, dict[str, Any]]:
@@ -701,7 +725,8 @@ def rasterize_coefficients(
     tx = tx / length
     ty = ty / length
     center_projected_mask = valid & tangent_valid
-    base_radius = (2.0 / 160.0) * (0.60 + features[:, 3] * 2.65 + features[:, 2] * 0.48)
+    native_cell_width = native_cell_width_world(source_grid)
+    base_radius = native_cell_width * (0.60 + features[:, 3] * 2.65 + features[:, 2] * 0.48)
     pixel_world_scale = np.maximum(length / 0.03, 1.0)
     major_px = np.clip(np.sqrt(base_radius * base_radius + 0.5 * 0.03 * 0.03) * pixel_world_scale, 0.75, 5.0)
     minor_scale = float(footprint_controls["skirtMinorScale"] or 1.0)
@@ -820,6 +845,9 @@ def rasterize_coefficients(
         "depthBins": depth_bins,
         "orderApproximation": ORDER_APPROXIMATION,
         "kernelGeometry": KERNEL_GEOMETRY,
+        "sourceGrid": source_grid,
+        "nativeCellWidthWorld": native_cell_width,
+        "depositionScaleIdentity": DEPOSITION_SCALE_IDENTITY,
         "footprintMode": footprint_identity(footprint_mode),
         "orientation": footprint_identity(footprint_mode),
         "nominalQuadratureWeightSum": 1.0,
@@ -1150,11 +1178,14 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
     manifest = load_json(manifest_path, "training manifest")
     state, paths, descriptor_receipt = validate_manifest(manifest, manifest_path, args.state_step, not args.skip_hash_verification)
     state_step = int((state.get("replay") or {}).get("completedSteps"))
+    source_grid = int((state.get("replay") or {}).get("grid"))
     if args.validate_only:
         return {
             "status": "validated", "stateId": state.get("id"), "stateStep": state_step,
             "rowCount": int((state.get("rows") or {}).get("count")), "descriptor": descriptor_receipt,
             "footprintMode": footprint_identity(args.footprint_mode), "footprintControls": footprint_controls,
+            "sourceGrid": source_grid, "nativeCellWidthWorld": native_cell_width_world(source_grid),
+            "depositionScaleIdentity": DEPOSITION_SCALE_IDENTITY,
         }
     required = {"features", "admission", "coefficients", "kernelDescriptors"}
     require(required.issubset(paths), f"rendering requires row artifacts: {sorted(required - set(paths))}")
@@ -1163,6 +1194,16 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
     phase_state["value"] = "capture-validation"
     capture_report = load_json(capture_path, "capture report")
     cameras = validate_capture_report(capture_report, state_step)
+    camera_cohort_rows = [
+        {
+            "cameraIndex": int(camera["cameraIndex"]),
+            "width": int(camera["width"]),
+            "height": int(camera["height"]),
+            "cameraPoseHash": camera.get("cameraPoseHash"),
+        }
+        for camera in cameras
+    ]
+    camera_cohort_identity = f"sha256:{hashlib.sha256(canonical_json(camera_cohort_rows).encode('ascii')).hexdigest()}"
     capture_config = capture_report.get("captureConfig") or {}
     descriptor_hashes = descriptor_receipt.get("sourceHashes") or {}
     require(
@@ -1194,7 +1235,7 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
     )
     calibration_planes, calibration_raster = rasterize_coefficients(
         descriptors[:, 0:3], descriptors[:, 20:23], features, coefficients, calibration_camera,
-        args.depth_bins, calibration_footprint_mode, calibration_footprint_controls,
+        args.depth_bins, calibration_footprint_mode, calibration_footprint_controls, source_grid,
     )
     target_capture = find_capture(capture_report, 10, "sharedTransmittanceContributionSum", 160)
     target = image_rgb(Path(target_capture["imagePath"]))
@@ -1231,7 +1272,7 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
             camera = cameras[camera_index]
             baseline_planes = calibration_planes if camera_index == 10 else rasterize_coefficients(
                 descriptors[:, 0:3], descriptors[:, 20:23], features, coefficients, camera,
-                args.depth_bins, "bilinear", bilinear_footprint_controls(),
+                args.depth_bins, "bilinear", bilinear_footprint_controls(), source_grid,
             )[0]
             target_capture_for_importance = find_capture(
                 capture_report, camera_index, "sharedTransmittanceContributionSum", 160,
@@ -1287,7 +1328,7 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
         phase_state["value"] = "selective-split-calibration-raster"
         calibration_planes, calibration_raster = rasterize_coefficients(
             descriptors[:, 0:3], descriptors[:, 20:23], features, coefficients, calibration_camera,
-            args.depth_bins, args.footprint_mode, footprint_controls, split_mask, split_world_offsets,
+            args.depth_bins, args.footprint_mode, footprint_controls, source_grid, split_mask, split_world_offsets,
         )
 
     camera_rows = []
@@ -1297,7 +1338,7 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
         phase_state["value"] = f"camera-{index:02d}-raster"
         planes, raster_receipt = (calibration_planes, calibration_raster) if index == 10 else rasterize_coefficients(
             descriptors[:, 0:3], descriptors[:, 20:23], features, coefficients, camera,
-            args.depth_bins, args.footprint_mode, footprint_controls, split_mask, split_world_offsets,
+            args.depth_bins, args.footprint_mode, footprint_controls, source_grid, split_mask, split_world_offsets,
         )
         expanded_linear, ridge_linear, nonridge_linear, trans = compose_planes(planes, path_scale, "total")
         ridge_total_planes = planes.copy()
@@ -1382,6 +1423,9 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
         },
         "effective": {
             "stateId": state.get("id"), "stateStep": state_step, "rowCount": count,
+            "sourceGrid": source_grid,
+            "nativeCellWidthWorld": native_cell_width_world(source_grid),
+            "depositionScaleIdentity": DEPOSITION_SCALE_IDENTITY,
             "candidateAdmissionAuthority": ADMISSION_AUTHORITY, "coefficientBoundary": COEFFICIENT_BOUNDARY,
             "sharedTransmittanceIdentity": SHARED_TRANSMITTANCE, "kernelGeometry": KERNEL_GEOMETRY,
             "orderApproximation": ORDER_APPROXIMATION, "sampleCap": None, "droppedRowCount": 0,
@@ -1393,6 +1437,23 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
                 if args.footprint_mode in {"higher-order", "compound"} else None
             ),
             "independentlyRenderedToneMappedImageAdditivity": False,
+        },
+        "inputIdentity": {
+            "manifest": {
+                "path": str(manifest_path),
+                "sha256": sha256_file(manifest_path),
+                "identity": manifest.get("identity"),
+            },
+            "captureReport": {
+                "path": str(capture_path),
+                "sha256": sha256_file(capture_path),
+                "schema": capture_report.get("schema"),
+            },
+            "cameraCohort": {
+                "identity": camera_cohort_identity,
+                "cameraCount": len(camera_cohort_rows),
+                "cameras": camera_cohort_rows,
+            },
         },
         "descriptorReceipt": descriptor_receipt,
         "frozenStateBinding": {
@@ -1588,6 +1649,7 @@ def self_test() -> None:
         raster_planes, raster_receipt = rasterize_coefficients(
             raster_positions, raster_tangents, raster_features, raster_coefficients,
             raster_camera, 4, raster_mode, raster_controls,
+            160,
             np.asarray([True, False], dtype=np.bool_) if raster_mode == "selective-split" else None,
             np.asarray([[0.0, 0.025, 0.0], [0.0, 0.0, 0.0]], dtype=np.float32) if raster_mode == "selective-split" else None,
         )
@@ -1607,7 +1669,7 @@ def self_test() -> None:
     depth_offsets[0, 2] = 0.2
     depth_planes, _ = rasterize_coefficients(
         depth_positions, depth_tangents, depth_features, depth_coefficients,
-        raster_camera, 9, "selective-split", selective_controls, depth_mask, depth_offsets,
+        raster_camera, 9, "selective-split", selective_controls, 160, depth_mask, depth_offsets,
     )
     depth_mass = np.sum(depth_planes[..., 0], axis=(1, 2))
     occupied_depth_bins = np.flatnonzero(depth_mass > 1e-6)
@@ -1618,7 +1680,7 @@ def self_test() -> None:
         np.asarray([[0.0, 1.0, 0.0]], dtype=np.float32),
         np.zeros((1, len(FEATURE_ORDER)), dtype=np.float32),
         np.ones((1, 8), dtype=np.float32),
-        raster_camera, 4, "selective-split", selective_controls,
+        raster_camera, 4, "selective-split", selective_controls, 160,
         np.asarray([True], dtype=np.bool_),
         np.asarray([[0.2, 0.0, 0.0]], dtype=np.float32),
     )
