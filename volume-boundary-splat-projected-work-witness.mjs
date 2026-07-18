@@ -12,10 +12,20 @@ const SELECTOR_AUTHORITY = 'explicit-source-field-operator-v0';
 const SELECTOR_RECIPE_SHA256 = '541836e6c45ef014ab0b8be23ebd8dce9898900a7639a0c4e21f38336daef8f9';
 const CANDIDATE_STRIDE_BYTES = 96;
 const DRAW_STATE_BYTES = 80;
+const MECHANISM_ANCHOR_CLASS = 'mechanism-anchor';
+const PRODUCTION_ANCHOR_CLASS = 'production-anchor';
+const TIGER_MECHANISM_GREENROOM_JOB = '7ae361b23c60';
+const TIGER_MECHANISM_SCHEMA = 'kaminos.volume.layer-coefficient-live-union-witness.v0';
+const TIGER_MECHANISM_STATE = 'coefficient-state-120-f120-s120';
+const TIGER_MECHANISM_UNION_ROWS = 1899742;
+const TIGER_MECHANISM_BACKEND = 'WebGPU:apple';
+const TIGER_MECHANISM_ROUTE = 'native-3d-compute-fluid-raymarch-v0';
 
 const args = parseArgs(process.argv.slice(2));
+const anchorClass = String(args.get('--anchor-class') || PRODUCTION_ANCHOR_CLASS).trim();
 const authoredBasinManifestPath = stringArg('--authored-basin-manifest');
 const sampleReportPath = stringArg('--sample-report');
+const mechanismReportPath = stringArg('--mechanism-report');
 const outDir = resolve(String(args.get('--out-dir') || '/tmp/kaminos-authored-basin-projected-work'));
 const reportPath = resolve(String(args.get('--report') || `${outDir}/report.json`));
 const runStartedAt = new Date().toISOString();
@@ -23,6 +33,72 @@ let failurePhase = 'argument-validation';
 const lastTrustworthyEvidence = {};
 
 try {
+  if (anchorClass === MECHANISM_ANCHOR_CLASS) {
+    if (!mechanismReportPath) throw new Error('missing-mechanism-report');
+
+    failurePhase = 'read-mechanism-report';
+    const mechanismSource = readJsonWithArtifact(mechanismReportPath);
+    lastTrustworthyEvidence.mechanismReport = mechanismSource.artifact;
+
+    failurePhase = 'normalize-mechanism-anchor';
+    const mechanismAnchor = normalizeMechanismAnchor(mechanismSource.json);
+    lastTrustworthyEvidence.mechanismAnchor = compactMechanismAnchor(mechanismAnchor);
+
+    const report = {
+      schema: SCHEMA,
+      witnessIdentity: WITNESS_IDENTITY,
+      protocolRef: PROTOCOL_REF,
+      status: 'captured',
+      failurePhase: null,
+      runStartedAt,
+      runCompletedAt: new Date().toISOString(),
+      anchorClass: MECHANISM_ANCHOR_CLASS,
+      productionAnchorPredicateUnchanged: true,
+      mechanismAnchor,
+      sourceRowsPreserved: true,
+      preserveAllSourceRows: true,
+      mechanismAnchorSourceRowsPreserved: true,
+      budgets: {
+        requestedCandidateBudget: 'uncapped',
+        effectiveCandidateBudget: TIGER_MECHANISM_UNION_ROWS,
+        hiddenCapInstalled: false,
+      },
+      routeIdentity: mechanismAnchor.routeIdentity,
+      supportIdentity: SUPPORT_IDENTITY,
+      reductionPolicyAllowed: false,
+      forbiddenConclusions: [
+        'cap',
+        'pruning-policy',
+        'merge-policy',
+        'allocator',
+        'lod',
+        'shipping-count',
+        'production-budget',
+        'support-change',
+        'coefficient-change',
+        'covariance-change',
+        'radiance-change',
+        'reduction-policy',
+      ],
+      claimBoundary: 'Mechanism-anchor pressure census for the exact uncapped Tiger state-120 Full Flame union only. Absolute visual quality, attainable basin quality, production occupancy, and representation ceiling are operator-unseen; production-anchor policy still requires a named post-protocol operator-authored fork plus matched same-state sample.',
+      falseClosureChecks: {
+        fallbackRoute: false,
+        overflowOrCopy: false,
+        blankOrPartialReport: false,
+        staleOrCachedOutput: false,
+        sameStateIdentityMismatch: false,
+        sameRouteIdentityMismatch: false,
+        sameControlIdentityMismatch: false,
+        hiddenCapInstalled: false,
+        mechanismAnchorWrongPopulation: false,
+        mechanismAnchorWrongState: false,
+      },
+      lastTrustworthyEvidence,
+    };
+    mkdirSync(outDir, { recursive: true });
+    writeReport(report);
+    console.log(JSON.stringify(report, null, 2));
+  } else if (anchorClass === PRODUCTION_ANCHOR_CLASS) {
   if (!authoredBasinManifestPath) throw new Error('missing-authored-basin-manifest');
   if (!sampleReportPath) throw new Error('missing-sample-report');
 
@@ -83,6 +159,9 @@ try {
   mkdirSync(outDir, { recursive: true });
   writeReport(report);
   console.log(JSON.stringify(report, null, 2));
+  } else {
+    throw new Error(`unsupported-anchor-class:${JSON.stringify(anchorClass)}`);
+  }
 } catch (error) {
   const failure = {
     schema: SCHEMA,
@@ -94,6 +173,8 @@ try {
     failedAt: new Date().toISOString(),
     authoredBasinManifestPath: authoredBasinManifestPath || null,
     sampleReportPath: sampleReportPath || null,
+    mechanismReportPath: mechanismReportPath || null,
+    anchorClass,
     error: error?.stack || error?.message || String(error),
     lastTrustworthyEvidence,
     falseClosureChecks: {
@@ -105,6 +186,8 @@ try {
       sameRouteIdentityMismatch: messageIncludes(error, 'sameRouteIdentityMismatch'),
       sameControlIdentityMismatch: messageIncludes(error, 'sameControlIdentityMismatch'),
       hiddenCapInstalled: messageIncludes(error, 'hiddenCapInstalled'),
+      mechanismAnchorWrongPopulation: messageIncludes(error, 'mechanismAnchorWrongPopulation'),
+      mechanismAnchorWrongState: messageIncludes(error, 'mechanismAnchorWrongState'),
     },
     claimBoundary: 'Failure report only. No projected-work frontier, visual quality, reduction policy, or product count claim is authorized from this output.',
   };
@@ -112,6 +195,268 @@ try {
   writeReport(failure);
   console.error(JSON.stringify(failure, null, 2));
   process.exitCode = 1;
+}
+
+function normalizeMechanismAnchor(report) {
+  assert.equal(report.schema, TIGER_MECHANISM_SCHEMA, 'blankOrPartialReport: wrong mechanism report schema');
+  assert.equal(report.status, 'captured', 'blankOrPartialReport: mechanism report did not capture');
+  assert.equal(report.route?.effectiveRoute, TIGER_MECHANISM_ROUTE, 'fallbackRoute: mechanism effective route drifted');
+  assert.equal(report.route?.backend, TIGER_MECHANISM_BACKEND, 'fallbackRoute: mechanism backend drifted');
+
+  const analytical = (report.conditions || []).find(condition => condition.label === 'analytical-exact');
+  assert.ok(analytical, 'blankOrPartialReport: analytical-exact mechanism condition missing');
+  const render = analytical.render || {};
+  const populationAudit = analytical.populationAudit || {};
+  const unionReceipt = populationAudit.unionReceipt || render.boundarySplatUnionReceipt || {};
+  const counts = normalizedCounts(unionReceipt.counts || populationAudit.decodedMembershipCounts);
+  validateUnionCounts(counts);
+
+  if (counts.union !== TIGER_MECHANISM_UNION_ROWS) {
+    throw new Error(`mechanismAnchorWrongPopulation:${JSON.stringify({
+      expected: TIGER_MECHANISM_UNION_ROWS,
+      actual: counts.union,
+    })}`);
+  }
+  if (report.source?.sameStateCaptureId !== TIGER_MECHANISM_STATE || render.sameStateCaptureId !== TIGER_MECHANISM_STATE) {
+    throw new Error(`mechanismAnchorWrongState:${JSON.stringify({
+      source: report.source?.sameStateCaptureId,
+      render: render.sameStateCaptureId,
+      expected: TIGER_MECHANISM_STATE,
+    })}`);
+  }
+
+  assert.equal(render.boundarySplatMode || unionReceipt.effectiveMode, UNION_MODE, 'fallbackRoute: mechanism union mode drifted');
+  assert.equal(render.boundarySplatFallbackReason ?? unionReceipt.fallbackReason ?? null, null, 'fallbackRoute: mechanism fallback route');
+  assert.equal(populationAudit.overflowCount ?? render.boundarySplatOverflowCount ?? 0, 0, 'overflowOrCopy: mechanism overflow');
+  assert.equal(Number(populationAudit.candidateCount), Number(populationAudit.instanceCount), 'hiddenCapInstalled: mechanism candidate/instance mismatch');
+  assert.equal(Number(populationAudit.candidateCount), counts.union, 'hiddenCapInstalled: mechanism union count not fully rendered');
+  assert.equal(unionReceipt.selectorAuthorityEffective, SELECTOR_AUTHORITY, 'fallbackRoute: mechanism selector authority drifted');
+  assert.equal(unionReceipt.selectorRecipeSha256, SELECTOR_RECIPE_SHA256, 'fallbackRoute: mechanism selector recipe drifted');
+  assert.equal(analytical.metrics?.nonblank, true, 'blankOrPartialReport: mechanism analytical image blank');
+
+  const overlayAudits = (report.conditions || []).filter(condition => condition.overlay);
+  for (const condition of overlayAudits) {
+    const audit = condition.populationAudit || {};
+    assert.equal(audit.lookupMissCount ?? 0, 0, `blankOrPartialReport: ${condition.label} lookup miss`);
+    assert.equal(audit.lookupExtraCount ?? 0, 0, `blankOrPartialReport: ${condition.label} lookup extra`);
+    assert.equal(audit.overflowCount ?? 0, 0, `overflowOrCopy: ${condition.label} overflow`);
+    assert.equal(audit.candidateCount ?? counts.union, counts.union, `hiddenCapInstalled: ${condition.label} candidate count drift`);
+  }
+
+  const sourceMemory = normalizeMechanismSourceMemory(report.source?.importReceipt || {});
+  const candidateMemory = normalizeMemory(
+    {
+      sourceRows: populationAudit.candidateCount,
+      candidateRows: populationAudit.candidateCount,
+    },
+    {
+      peakGpuBufferBytes: Number(render.boundarySplatCapacity || populationAudit.candidateCount) * CANDIDATE_STRIDE_BYTES + DRAW_STATE_BYTES,
+      peakGpuBufferBytesAuthority: 'render.boundarySplatCapacity-times-candidate-stride-plus-draw-state-lower-bound',
+    },
+  );
+
+  return {
+    identity: {
+      schema: report.schema,
+      anchorClass: MECHANISM_ANCHOR_CLASS,
+      sourceGreenroomJob: TIGER_MECHANISM_GREENROOM_JOB,
+      sameStateCaptureId: TIGER_MECHANISM_STATE,
+      stateFrame: report.source?.state?.frameCount,
+      stateSimStep: report.source?.state?.simStepCount,
+      sourceManifestSha256: report.source?.fieldManifest?.sha256,
+      sourceHashAudit: report.source?.sourceHashAudit?.status || null,
+    },
+    routeIdentity: {
+      requestedRoute: report.requestedUrl,
+      effectiveRoute: report.route?.effectiveRoute,
+      backend: report.route?.backend,
+      renderer: render.boundarySplatRendererIdentity,
+      mode: unionReceipt.effectiveMode,
+      supportIdentity: SUPPORT_IDENTITY,
+      compositionIdentity: unionReceipt.compositionIdentity,
+      coefficientIdentity: {
+        analytical: 'analytical-exact',
+        baseline: report.overlays?.baseline?.identity ?? null,
+        flow: report.overlays?.flow?.identity ?? null,
+        ridge: unionReceipt.ridgeLayerIdentity,
+        nonRidge: unionReceipt.nonRidgeLayerIdentity,
+      },
+      covarianceIdentity: render.flowKernelIdentity || 'kernel-moment-covariance',
+      modelIdentity: render.boundarySplatAttributeModelIdentity || 'exact-live-nonridge-union-coefficient-application',
+      sourceAuthority: report.source?.importReceipt?.initializationAuthority || 'checksum-addressed-live-replay-resume-v0',
+      selectorAuthority: unionReceipt.selectorAuthorityEffective,
+      selectorRecipeSha256: unionReceipt.selectorRecipeSha256,
+      timingAuthority: 'not-isolated-in-tiger-coefficient-witness',
+      sourceGreenroomJob: TIGER_MECHANISM_GREENROOM_JOB,
+    },
+    sourceIdentities: {
+      fieldManifest: report.source?.fieldManifest || null,
+      sourceHashes: report.source?.sourceHashes || null,
+      sourceHashAudit: report.source?.sourceHashAudit || null,
+      importReceipt: report.source?.importReceipt || null,
+      camera: report.source?.camera || null,
+      presentationCamera: report.presentation?.camera || null,
+    },
+    counts,
+    diagnostics: {
+      candidateCount: populationAudit.candidateCount,
+      instanceCount: populationAudit.instanceCount,
+      capacity: render.boundarySplatCapacity ?? null,
+      initialOverflowCount: render.boundarySplatInitialOverflowCount ?? null,
+      overflowCount: populationAudit.overflowCount ?? render.boundarySplatOverflowCount ?? null,
+      capacityRetryCount: render.boundarySplatCapacityRetryCount ?? null,
+      fallbackReason: render.boundarySplatFallbackReason ?? unionReceipt.fallbackReason ?? null,
+      copyBytes: unavailable('copy telemetry', 'not-exposed-by-tiger-coefficient-witness'),
+      lookupMissCount: maxConditionValue(report.conditions, 'lookupMissCount'),
+      lookupExtraCount: maxConditionValue(report.conditions, 'lookupExtraCount'),
+      blankOutput: analytical.metrics?.nonblank !== true,
+      partialOutput: report.status !== 'captured',
+    },
+    projectedWork: normalizeMechanismProjectedWork(report, analytical, render, counts),
+    distributions: normalizeMechanismDistributions(report, analytical),
+    memory: {
+      source: sourceMemory,
+      candidates: candidateMemory,
+    },
+    routeReviewIdentity: {
+      knownGoodLocalRunnerChecked: 'yes: Greenroom source job 7ae361b23c60 / kaminos_layer_coefficient_live_union_witness / volume-layer-coefficient-live-union-witness.mjs',
+      effectiveEnvDeviceBackendPreserved: 'backend WebGPU:apple; route native-3d-compute-fluid-raymarch-v0; checksum-addressed-live-replay-resume-v0; selector explicit-source-field-operator-v0; no fallback accepted',
+      firstReceiptLogProvesBackendDevice: 'source report route.backend WebGPU:apple and route.effectiveRoute native-3d-compute-fluid-raymarch-v0',
+      heavyRunAcceptedBeforeProof: 'no: this normalizer consumes existing proven Greenroom source job 7ae361b23c60 and rejects backend/route drift',
+    },
+    operatorFacingDisposition: {
+      absoluteVisualQuality: 'operator-unseen',
+      attainableBasinQuality: 'operator-unseen',
+      productionOccupancy: 'operator-unseen',
+      representationCeiling: 'operator-unseen',
+    },
+  };
+}
+
+function normalizeMechanismProjectedWork(report, analytical, render, counts) {
+  return {
+    projectedSurvivors: {
+      value: counts.union,
+      authority: 'populationAudit.candidateCount equals uncapped union count',
+    },
+    footprintOrTileIntersections: unavailable('footprint or tile intersections', 'not-exposed-for-analytical-exact-condition'),
+    footprintIntersections: unavailable('footprintIntersections', 'not-exposed-for-analytical-exact-condition'),
+    fragmentWork: unavailable('fragment work', 'not-exposed-for-analytical-exact-condition'),
+    overlap: {
+      ridgeOnly: counts.ridgeOnly,
+      nonRidgeOnly: counts.nonRidgeOnly,
+      overlap: counts.overlap,
+      union: counts.union,
+      overlapRatio: counts.overlap / counts.union,
+      authority: 'boundarySplatUnionReceipt.counts',
+    },
+    depthComplexity: unavailable('depth complexity', 'not-exposed-for-analytical-exact-condition'),
+    depthBinOccupancy: unavailable('depth-bin occupancy', 'not-exposed-for-analytical-exact-condition'),
+    sortBinWork: unavailable('sort/bin work', 'not-exposed-by-tiger-coefficient-witness'),
+    sortCost: unavailable('sort cost', 'not-exposed-by-tiger-coefficient-witness'),
+    accumulationCost: unavailable('accumulation cost', 'not-exposed-by-tiger-coefficient-witness'),
+    buildCost: unavailable('build/update cost', 'not-exposed-by-tiger-coefficient-witness'),
+    renderCost: unavailable('render cost', 'not-isolated-by-tiger-coefficient-witness'),
+    reuseCadence: {
+      sourceRowsPreserved: true,
+      sourceReusedAcrossFrames: true,
+      rebuildEveryFrame: false,
+      updateCadenceFrames: null,
+      authority: 'checksum-addressed imported field held frozen for condition renders; exact cadence not exposed',
+      missingSocket: 'exact reuse/update cadence counter',
+      status: 'unavailable',
+    },
+    capacity: {
+      sourceRows: counts.union,
+      renderCapacity: render.boundarySplatCapacity ?? null,
+      initialOverflowCount: render.boundarySplatInitialOverflowCount ?? null,
+      capacityRetryCount: render.boundarySplatCapacityRetryCount ?? null,
+      authority: 'analytical-exact.render boundary splat capacity telemetry',
+    },
+    opticalContribution: {
+      analyticalExact: opticalSummary(analytical),
+      overlays: (report.conditions || [])
+        .filter(condition => condition.metrics)
+        .map(condition => opticalSummary(condition)),
+      authority: 'condition.metrics gpu-rgba8-readback-frozen-sim-state-v0',
+    },
+    authority: 'mechanism-anchor-normalization-with-explicit-missing-sockets',
+  };
+}
+
+function normalizeMechanismDistributions(report, analytical) {
+  const opticalContributionDistribution = {
+    status: 'captured',
+    bins: (report.conditions || [])
+      .filter(condition => condition.metrics)
+      .map(condition => ({
+        label: condition.label,
+        litPixels: condition.metrics.litPixels,
+        litPixelRatio: condition.metrics.litPixelRatio,
+        meanLuma: condition.metrics.meanLuma,
+        maxLuma: condition.metrics.maxLuma,
+        nonblank: condition.metrics.nonblank,
+      })),
+    authority: 'condition.metrics summary distribution; no per-row optical attribution socket exposed',
+  };
+  const projectedFootprintDistribution = unavailable(
+    'projected footprint distribution',
+    analytical.render?.flowKernelDescriptorCaptureRequested === false
+      ? 'flowKernelDescriptorCaptureEffective false'
+      : 'not-exposed-by-tiger-coefficient-witness',
+  );
+  return {
+    opticalContributionDistribution,
+    projectedFootprintDistribution,
+  };
+}
+
+function opticalSummary(condition = {}) {
+  return {
+    label: condition.label,
+    imageAuthority: condition.render?.imageAuthority ?? condition.render?.rgbaCapture?.imageAuthority ?? null,
+    width: condition.metrics?.width ?? null,
+    height: condition.metrics?.height ?? null,
+    pixelCount: condition.metrics?.pixelCount ?? null,
+    litPixels: condition.metrics?.litPixels ?? null,
+    litPixelRatio: condition.metrics?.litPixelRatio ?? null,
+    meanLuma: condition.metrics?.meanLuma ?? null,
+    maxLuma: condition.metrics?.maxLuma ?? null,
+    nonblank: condition.metrics?.nonblank ?? null,
+  };
+}
+
+function normalizeMechanismSourceMemory(importReceipt = {}) {
+  const fluidByteLength = Number(importReceipt.fluidByteLength);
+  const frontByteLength = Number(importReceipt.frontByteLength);
+  return {
+    fluidByteLength: Number.isFinite(fluidByteLength) ? fluidByteLength : null,
+    frontByteLength: Number.isFinite(frontByteLength) ? frontByteLength : null,
+    knownSourceBytes: Number.isFinite(fluidByteLength) && Number.isFinite(frontByteLength)
+      ? fluidByteLength + frontByteLength
+      : null,
+    fluidChunkCount: importReceipt.fluidChunkCount ?? null,
+    frontChunkCount: importReceipt.frontChunkCount ?? null,
+    sourceMemoryAuthority: 'full-field-import receipt fluid/front byte lengths; boundary sidecar and majorant bytes unavailable in source report',
+    boundarySidecarBytes: unavailable('boundary sidecar bytes', 'not-exposed-by-tiger-coefficient-witness'),
+    majorantBytes: unavailable('majorant bytes', 'not-exposed-by-tiger-coefficient-witness'),
+  };
+}
+
+function unavailable(label, authority) {
+  return {
+    status: 'unavailable',
+    value: null,
+    missingSocket: label,
+    authority,
+  };
+}
+
+function maxConditionValue(conditions = [], key) {
+  return conditions.reduce((max, condition) => {
+    const value = Number(condition.populationAudit?.[key] ?? 0);
+    return Number.isFinite(value) ? Math.max(max, value) : max;
+  }, 0);
 }
 
 function normalizeAuthoredBasinManifest(manifest) {
@@ -480,6 +825,17 @@ function compactIdentity(value = {}) {
     sameStateCaptureId: value.sameStateCaptureId ?? value.identity?.sameStateCaptureId ?? null,
     controlIdentity: value.controlIdentity ?? value.identity?.controlIdentity ?? null,
     route: value.route ?? value.identity?.route ?? null,
+  };
+}
+
+function compactMechanismAnchor(value = {}) {
+  return {
+    anchorClass: value.identity?.anchorClass ?? null,
+    sourceGreenroomJob: value.identity?.sourceGreenroomJob ?? null,
+    sameStateCaptureId: value.identity?.sameStateCaptureId ?? null,
+    union: value.counts?.union ?? null,
+    effectiveRoute: value.routeIdentity?.effectiveRoute ?? null,
+    backend: value.routeIdentity?.backend ?? null,
   };
 }
 
