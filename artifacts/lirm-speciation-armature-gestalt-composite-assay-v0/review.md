@@ -24,6 +24,8 @@ After repair, the original Greenroom jobs were collected again without new infer
 
 The first revision confirmation found one residual JavaScript coercion path: `submitted_at: null` became numeric zero before the finite check. A fail-first contract reproduced that acceptance. Timing validation now rejects null, undefined, string, and non-finite timestamp values before destructuring the three numeric timestamps. The original jobs again passed collection without new inference.
 
+The correction was resubmitted as `1dc9006b..817634ba` to an independent read-only GPT-5.5 confirmation pass. It reported no remaining material finding and confirmed that the shared timing helper closes the coercion path for imagegen, Trellis, and Blender witness receipts. Its sandbox prevented fixture creation, so the owning lane's successful contract execution remains the runtime evidence for the test suite.
+
 ## Residual Boundary
 
 The contract tests establish common code-path derivation and evidence identity. Pixel-level cross-map semantic coherence remains a visual/evaluation concern rather than a source-level invariant; the inspected CPU and Trellis contact sheets carry that evidence for this assay.
