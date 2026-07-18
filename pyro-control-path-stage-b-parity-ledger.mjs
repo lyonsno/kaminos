@@ -137,6 +137,21 @@ function validateInputs({ sourceRevision, manifest, witness, priorMatrix }) {
   requireContract(witness.stageBReceipt?.requestedTreatment === witness.stageBReceipt?.effectiveTreatment, 'treatment substitution');
   requireContract(witness.stageBReceipt?.requestedManifestSha256 === witness.stageBReceipt?.effectiveManifestSha256, 'manifest load substitution');
   requireContract(witness.stageBReceipt?.fallbackUsed === false, 'Stage B fallback used');
+  requireContract(
+    witness.stageBReceipt?.resourceState === 'complete',
+    `Stage B resource state incomplete:${witness.stageBReceipt?.resourceState ?? 'missing'}`,
+  );
+  const requestedPasses = witness.stageBReceipt?.passes?.requested;
+  const appliedPasses = witness.stageBReceipt?.passes?.applied;
+  requireContract(Array.isArray(requestedPasses), 'Stage B requested passes missing');
+  requireContract(Array.isArray(appliedPasses), 'Stage B applied passes missing');
+  for (const pass of ['manifest-validation', 'resource-binding', 'resource-load-verification']) {
+    requireContract(requestedPasses.includes(pass), `Stage B required pass not requested:${pass}`);
+    requireContract(appliedPasses.includes(pass), `Stage B requested pass not applied:${pass}`);
+  }
+  for (const pass of requestedPasses) {
+    requireContract(appliedPasses.includes(pass), `Stage B requested pass not applied:${pass}`);
+  }
   requireContract(witness.stageBReceipt?.rendererReceipt?.fallbackReason === null, 'Stage B renderer fallback');
   requireContract(witness.stageBReceipt?.passes?.rendererRequested === true, 'Stage B renderer not requested');
   requireContract(witness.stageBReceipt?.passes?.rendererEncoded === true, 'Stage B renderer not encoded');

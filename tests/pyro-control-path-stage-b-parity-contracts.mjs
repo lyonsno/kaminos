@@ -113,6 +113,34 @@ const witness = {
   },
 };
 
+const incompleteResourceWitness = structuredClone(witness);
+incompleteResourceWitness.stageBReceipt.resourceState = 'missing';
+await assert.rejects(
+  buildStageBControlParityLedger({
+    repoRoot,
+    sourceRevision,
+    manifest,
+    witness: incompleteResourceWitness,
+    priorMatrix: matrix,
+  }),
+  /Stage B resource state incomplete:missing/,
+  'renderer booleans cannot substitute for a complete Stage B resource state',
+);
+
+const strippedAppliedPassWitness = structuredClone(witness);
+strippedAppliedPassWitness.stageBReceipt.passes.applied = [];
+await assert.rejects(
+  buildStageBControlParityLedger({
+    repoRoot,
+    sourceRevision,
+    manifest,
+    witness: strippedAppliedPassWitness,
+    priorMatrix: matrix,
+  }),
+  /Stage B requested pass not applied:manifest-validation/,
+  'requested renderer passes cannot substitute for applied resource verification',
+);
+
 const ledger = await buildStageBControlParityLedger({
   repoRoot,
   sourceRevision,
