@@ -173,9 +173,67 @@ const mismatchedChunkManifestPackage = {
 };
 assert.equal(
   validateWebGpuModelResourcePackage(mismatchedChunkManifestPackage).errors.some(
-    error => /chunkPlan\.manifest must match/.test(error),
+    error => /exact normalized chunkPlan\.manifest/.test(error),
   ),
   true,
+);
+const divergentDecoderManifest = defineWebGpuModelResourceManifest({
+  modelId: manifests.decoder.modelId,
+  revision: manifests.decoder.revision,
+  bundle: {
+    byteLength: 1_000,
+    sha256: manifests.decoder.bundle.sha256,
+  },
+  resourceSharing: manifests.decoder.resourceSharing,
+  metadata: manifests.decoder.metadata,
+  allocations: manifests.decoder.allocations.map(allocation => ({
+    allocationId: allocation.allocationId,
+    byteOffset: allocation.byteOffset,
+    byteLength: allocation.byteLength,
+    usage: allocation.usage,
+    metadata: allocation.metadata,
+    tensors: allocation.tensors.map(tensor => ({
+      name: tensor.name,
+      dtype: tensor.dtype,
+      shape: tensor.shape,
+      byteOffset: tensor.byteOffset,
+      byteLength: tensor.byteLength,
+      metadata: tensor.metadata,
+    })),
+  })),
+});
+assert.equal(divergentDecoderManifest.identity, manifests.decoder.identity);
+assert.equal(
+  divergentDecoderManifest.allocations[0].semanticResourceId,
+  manifests.decoder.allocations[0].semanticResourceId,
+  'the falsifier must preserve the partial manifest identity projection used by the R1 candidate',
+);
+const forgedSameIdentityPackage = {
+  ...mixedPackage,
+  resources: [
+    mixedPackage.resources[0],
+    { ...mixedPackage.resources[1], manifest: divergentDecoderManifest },
+  ],
+  totalByteLength: byteSets.encoder.byteLength + divergentDecoderManifest.bundle.byteLength,
+  largestResourceByteLength: divergentDecoderManifest.bundle.byteLength,
+};
+const forgedSameIdentityValidation = validateWebGpuModelResourcePackage(forgedSameIdentityPackage);
+assert.equal(forgedSameIdentityValidation.ok, false);
+assert.equal(
+  forgedSameIdentityValidation.errors.some(error => /exact normalized chunkPlan\.manifest/.test(error)),
+  true,
+);
+assert.throws(
+  () => defineWebGpuModelResourcePackage({
+    packageId: mixedPackage.packageId,
+    modelId: mixedPackage.modelId,
+    revision: mixedPackage.revision,
+    resources: [
+      { resourceId: 'encoder', manifest: manifests.encoder },
+      { resourceId: 'decoder', manifest: divergentDecoderManifest, chunkPlan: decoderChunkPlan },
+    ],
+  }),
+  /exact normalized chunkPlan\.manifest/,
 );
 await assert.rejects(
   () => loadWebGpuModelResourcePackageFromSources({

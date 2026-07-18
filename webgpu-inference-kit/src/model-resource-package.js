@@ -1,4 +1,5 @@
 import {
+  defineWebGpuModelResourceManifest,
   validateWebGpuModelResourceManifest,
 } from './model-resource-manifest.js';
 import {
@@ -41,6 +42,18 @@ function manifestSemanticIdentity(manifest) {
     .map(allocation => encodeURIComponent(allocation.semanticResourceId))
     .join(',');
   return `${encodeURIComponent(manifest.identity)}#allocations:${allocations}`;
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value != null && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function normalizedManifestFingerprint(manifest) {
+  return canonicalJson(defineWebGpuModelResourceManifest(manifest));
 }
 
 function packageIdentity(input) {
@@ -161,10 +174,10 @@ export function validateWebGpuModelResourcePackage(modelPackage) {
       if (!chunkValidation.ok) {
         errors.push(...chunkValidation.errors.map(error => `${prefix}.chunkPlan: ${error}`));
       } else if (
-        manifestSemanticIdentity(resource.chunkPlan.manifest)
-        !== manifestSemanticIdentity(resource.manifest)
+        normalizedManifestFingerprint(resource.chunkPlan.manifest)
+        !== normalizedManifestFingerprint(resource.manifest)
       ) {
-        errors.push(`${prefix}.chunkPlan.manifest must match the package resource manifest`);
+        errors.push(`${prefix}.manifest must match the exact normalized chunkPlan.manifest`);
       }
     }
     if (resource.manifest.modelId !== modelPackage.modelId) {
@@ -230,10 +243,18 @@ export function defineWebGpuModelResourcePackage(input = {}) {
     const chunkPlan = resource?.chunkPlan
       ? defineWebGpuModelResourceChunkPlan(resource.chunkPlan)
       : null;
+    if (
+      chunkPlan
+      && resource?.manifest != null
+      && normalizedManifestFingerprint(resource.manifest)
+        !== normalizedManifestFingerprint(chunkPlan.manifest)
+    ) {
+      throw new Error(`package resource ${resource?.resourceId || '<missing>'} manifest must match the exact normalized chunkPlan.manifest`);
+    }
     return {
       resourceId: resource?.resourceId,
       loadKind: chunkPlan ? 'chunks' : 'source',
-      manifest: resource?.manifest ?? chunkPlan?.manifest,
+      manifest: chunkPlan?.manifest ?? resource?.manifest,
       ...(chunkPlan ? { chunkPlan } : {}),
     };
   });
