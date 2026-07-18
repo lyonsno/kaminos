@@ -145,6 +145,62 @@ require(
     np.allclose(np.sum(depth_planes, axis=(0, 1, 2)), np.sum(depth_plan["childCoefficients"], axis=0), atol=1e-6),
     "in-frame bilinear deposition did not conserve coefficient charge",
 )
+require(
+    np.allclose(depth_receipt["totalCoefficientCharge"], depth_receipt["retainedCoefficientCharge"], atol=1e-6),
+    "in-frame receipt does not identify all source charge as retained",
+)
+require(
+    np.allclose(depth_receipt["outOfFrameCoefficientCharge"], np.zeros(8), atol=1e-6)
+    and np.allclose(depth_receipt["invalidProjectionCoefficientCharge"], np.zeros(8), atol=1e-6),
+    "in-frame receipt invented clipped or invalid coefficient charge",
+)
+
+off_frame_plan = {
+    "childPositions": np.asarray([
+        [0.0, 0.0, -1.0],
+        [0.0, 0.0, -2.0],
+        [100.0, 0.0, -1000.0],
+    ], dtype=np.float64),
+    "childCoefficients": np.asarray([
+        [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    ], dtype=np.float32),
+}
+off_frame_planes, off_frame_receipt = MODULE.rasterize_world_children(
+    off_frame_plan, depth_camera, 4, "nearest"
+)
+off_frame_occupied_depths = np.flatnonzero(np.any(off_frame_planes != 0.0, axis=(1, 2, 3)))
+require(
+    off_frame_occupied_depths.size == 2,
+    "an invisible off-frame child changed visible depth quantization",
+)
+require(
+    np.allclose(off_frame_receipt["totalCoefficientCharge"], [1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+    "raster receipt lost total child coefficient charge",
+)
+require(
+    np.allclose(off_frame_receipt["retainedCoefficientCharge"], [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+    "raster receipt misreported retained in-frame charge",
+)
+require(
+    np.allclose(off_frame_receipt["outOfFrameCoefficientCharge"], [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+    "raster receipt hid out-of-frame coefficient charge",
+)
+require(
+    np.allclose(off_frame_receipt["invalidProjectionCoefficientCharge"], np.zeros(8)),
+    "valid off-frame child was mislabeled as an invalid projection",
+)
+require(
+    np.allclose(
+        np.asarray(off_frame_receipt["retainedCoefficientCharge"])
+        + np.asarray(off_frame_receipt["outOfFrameCoefficientCharge"])
+        + np.asarray(off_frame_receipt["invalidProjectionCoefficientCharge"]),
+        off_frame_receipt["totalCoefficientCharge"],
+        atol=1e-6,
+    ),
+    "camera coefficient accounting does not close",
+)
 
 permuted = MODULE.world_child_plan(
     native_ids=native_ids[::-1],
@@ -178,6 +234,84 @@ except ValueError:
     pass
 else:
     raise AssertionError("negative optical coefficients escaped validation")
+
+with tempfile.TemporaryDirectory() as temporary:
+    root = Path(temporary)
+    manifest_path = root / "manifest.json"
+    capture_path = root / "capture.json"
+    baseline_path = root / "baseline.json"
+    gallery_path = root / "baseline-gallery" / "index.html"
+    gallery_path.parent.mkdir()
+    gallery_path.write_text("baseline")
+    capture_path.write_text(json.dumps({
+        "frozenState": {
+            "sameStateCaptureId": "capture-120",
+            "controlsHash": "controls-good",
+        },
+        "replayAuthority": {
+            "warmupReceipt": {
+                "fluidSha256": "fluid-good",
+                "frontSha256": "front-good",
+            },
+        },
+    }))
+    baseline = {
+        "schema": MODULE.BASELINE_SCHEMA,
+        "status": "complete",
+        "requested": {
+            "manifest": str(manifest_path),
+            "captureReport": str(capture_path),
+            "depthBins": 96,
+        },
+        "effective": {
+            "stateId": "state-120",
+            "rowCount": 2,
+            "sampleCap": None,
+            "droppedRowCount": 0,
+            "footprintMode": "flow-tangent-five-tap-nearest-v0",
+            "depthBins": 96,
+            "orderApproximation": "camera-depth-96-bin-one-running-transmittance-v0",
+        },
+        "calibration": {"cameraIndex": 10, "pathScale": 1.0},
+        "frozenStateBinding": {
+            "sameStateCaptureId": "capture-120",
+            "controlsHash": "controls-good",
+            "fluidSha256": "fluid-wrong",
+            "frontSha256": "front-good",
+            "hashMatch": False,
+        },
+        "artifacts": {"gallery": str(gallery_path)},
+    }
+    baseline_path.write_text(json.dumps(baseline))
+    source_state = {
+        "id": "state-120",
+        "rows": {"count": 2},
+        "replay": {
+            "fluidSha256": "fluid-good",
+            "frontSha256": "front-good",
+        },
+    }
+    try:
+        MODULE.validate_baseline(
+            baseline, baseline_path, manifest_path.resolve(), capture_path.resolve(), source_state
+        )
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("baseline with false frozen source binding was accepted")
+
+    baseline["frozenStateBinding"]["fluidSha256"] = "fluid-good"
+    baseline["frozenStateBinding"]["hashMatch"] = True
+    baseline["effective"]["depthBins"] = 64
+    baseline["effective"]["orderApproximation"] = "camera-depth-64-bin-one-running-transmittance-v0"
+    try:
+        MODULE.validate_baseline(
+            baseline, baseline_path, manifest_path.resolve(), capture_path.resolve(), source_state
+        )
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("baseline with drifted depth-bin identity was accepted")
 
 with tempfile.TemporaryDirectory() as temporary:
     report_path = Path(temporary) / "failure.json"

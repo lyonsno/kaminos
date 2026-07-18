@@ -364,34 +364,55 @@ def rasterize_world_children(
     pixel_x = (ndc[:, 0] * 0.5 + 0.5) * width
     pixel_y = (1.0 - (ndc[:, 1] * 0.5 + 0.5)) * height
     finite_depth = np.isfinite(depth)
-    depth_rows = np.flatnonzero(project_valid & finite_depth)
-    require(depth_rows.size > 0, f"camera {camera['cameraIndex']} projected zero world children")
+    if footprint_mode == "nearest":
+        samples = [(np.floor(pixel_x).astype(np.int32), np.floor(pixel_y).astype(np.int32), np.ones(positions.shape[0], dtype=np.float32))]
+    else:
+        samples = ORACLE.bilinear_pixel_samples(pixel_x, pixel_y)
+    eligible = project_valid & finite_depth
+    visible = np.zeros(positions.shape[0], dtype=bool)
+    for sample_x, sample_y, sample_weight in samples:
+        in_bounds = (sample_x >= 0) & (sample_x < width) & (sample_y >= 0) & (sample_y < height)
+        visible |= eligible & (sample_weight > 0.0) & in_bounds
+    depth_rows = np.flatnonzero(visible)
+    require(depth_rows.size > 0, f"camera {camera['cameraIndex']} projected zero in-frame world children")
     near = float(np.percentile(depth[depth_rows], 0.01))
     far = float(np.percentile(depth[depth_rows], 99.99))
     depth_index = np.clip(((depth - near) / max(far - near, 1e-6) * (depth_bins - 1)).astype(np.int32), 0, depth_bins - 1)
     raster_size = depth_bins * height * width
     planes = np.zeros((depth_bins, height, width, 8), dtype=np.float32)
-    if footprint_mode == "nearest":
-        samples = [(np.floor(pixel_x).astype(np.int32), np.floor(pixel_y).astype(np.int32), np.ones(positions.shape[0], dtype=np.float32))]
-    else:
-        samples = ORACLE.bilinear_pixel_samples(pixel_x, pixel_y)
     in_bounds_deposits = 0
     out_of_frame_deposits = 0
-    deposited_charge = np.zeros(8, dtype=np.float64)
+    total_charge = np.sum(coefficients, axis=0, dtype=np.float64)
+    retained_charge = np.zeros(8, dtype=np.float64)
+    out_of_frame_charge = np.zeros(8, dtype=np.float64)
+    invalid_projection_charge = np.sum(coefficients[~eligible], axis=0, dtype=np.float64)
     for sample_x, sample_y, sample_weight in samples:
-        eligible = project_valid & finite_depth & (sample_weight > 0.0)
+        sample_eligible = eligible & (sample_weight > 0.0)
         in_bounds = (sample_x >= 0) & (sample_x < width) & (sample_y >= 0) & (sample_y < height)
-        selected = eligible & in_bounds
+        selected = sample_eligible & in_bounds
         rows = np.flatnonzero(selected)
         in_bounds_deposits += int(rows.size)
-        out_of_frame_deposits += int(np.count_nonzero(eligible & ~in_bounds))
+        clipped_rows = np.flatnonzero(sample_eligible & ~in_bounds)
+        out_of_frame_deposits += int(clipped_rows.size)
         flat = ((depth_index[rows] * height + sample_y[rows]) * width + sample_x[rows]).astype(np.int64)
         weights = sample_weight[rows]
-        deposited_charge += np.sum(coefficients[rows] * weights[:, None], axis=0, dtype=np.float64)
+        retained_charge += np.sum(coefficients[rows] * weights[:, None], axis=0, dtype=np.float64)
+        out_of_frame_charge += np.sum(
+            coefficients[clipped_rows] * sample_weight[clipped_rows, None], axis=0, dtype=np.float64
+        )
         for channel in range(8):
             planes[..., channel] += ORACLE.scatter_channel(
                 flat, coefficients[rows, channel] * weights, raster_size
             ).reshape(depth_bins, height, width)
+    accounted_charge = retained_charge + out_of_frame_charge + invalid_projection_charge
+    closure_error = np.abs(accounted_charge - total_charge)
+    total_scalar_charge = float(np.sum(total_charge))
+    per_channel_fraction = np.divide(
+        retained_charge,
+        total_charge,
+        out=np.ones_like(retained_charge),
+        where=total_charge > 0.0,
+    )
     return planes, {
         "identity": RASTER_IDENTITY,
         "cameraIndex": int(camera["cameraIndex"]),
@@ -404,7 +425,18 @@ def rasterize_world_children(
         "nominalDepositEvaluations": int(positions.shape[0] * (1 if footprint_mode == "nearest" else 4)),
         "inBoundsDepositEvaluations": in_bounds_deposits,
         "outOfFrameDepositEvaluations": out_of_frame_deposits,
-        "depositedCoefficientCharge": deposited_charge.tolist(),
+        "depthCalibrationChildCount": int(depth_rows.size),
+        "depthCalibrationAuthority": "in-frame-positive-footprint-children-only-v0",
+        "totalCoefficientCharge": total_charge.tolist(),
+        "retainedCoefficientCharge": retained_charge.tolist(),
+        "depositedCoefficientCharge": retained_charge.tolist(),
+        "outOfFrameCoefficientCharge": out_of_frame_charge.tolist(),
+        "invalidProjectionCoefficientCharge": invalid_projection_charge.tolist(),
+        "retainedCoefficientChargeFraction": (
+            float(np.sum(retained_charge) / total_scalar_charge) if total_scalar_charge > 0.0 else 1.0
+        ),
+        "retainedCoefficientChargeFractionByChannel": per_channel_fraction.tolist(),
+        "coefficientChargeClosureMaxAbsError": float(np.max(closure_error, initial=0.0)),
     }
 
 
@@ -433,6 +465,7 @@ def validate_baseline(
     manifest_path: Path,
     capture_path: Path,
     state: dict[str, Any],
+    depth_bins: int = 96,
 ) -> tuple[Path, float]:
     require(baseline.get("schema") == BASELINE_SCHEMA and baseline.get("status") == "complete", "baseline oracle is not complete")
     requested = baseline.get("requested") or {}
@@ -443,6 +476,21 @@ def validate_baseline(
     require(effective.get("rowCount") == int((state.get("rows") or {}).get("count")), "baseline row count differs")
     require(effective.get("sampleCap") is None and effective.get("droppedRowCount") == 0, "baseline was capped or dropped rows")
     require(effective.get("footprintMode") == "flow-tangent-five-tap-nearest-v0", "baseline is not the projected-five nearest control")
+    require(requested.get("depthBins") == depth_bins and effective.get("depthBins") == depth_bins, "baseline depth-bin identity differs")
+    require(
+        effective.get("orderApproximation") == f"camera-depth-{depth_bins}-bin-one-running-transmittance-v0",
+        "baseline order approximation differs",
+    )
+    binding = baseline.get("frozenStateBinding") or {}
+    replay = state.get("replay") or {}
+    capture = load_json(capture_path, "capture report")
+    capture_frozen = capture.get("frozenState") or {}
+    capture_warmup = ((capture.get("replayAuthority") or {}).get("warmupReceipt") or {})
+    require(binding.get("hashMatch") is True, "baseline frozen source binding is not authoritative")
+    require(binding.get("sameStateCaptureId") == capture_frozen.get("sameStateCaptureId"), "baseline same-state capture identity differs")
+    require(binding.get("controlsHash") == capture_frozen.get("controlsHash"), "baseline controls hash differs")
+    require(binding.get("fluidSha256") == replay.get("fluidSha256") == capture_warmup.get("fluidSha256"), "baseline fluid hash differs")
+    require(binding.get("frontSha256") == replay.get("frontSha256") == capture_warmup.get("frontSha256"), "baseline front hash differs")
     calibration = baseline.get("calibration") or {}
     require(calibration.get("cameraIndex") == 10 and float(calibration.get("pathScale", 0.0)) > 0.0, "baseline calibration is invalid")
     gallery = Path((baseline.get("artifacts") or {}).get("gallery", "")).resolve()
@@ -461,7 +509,9 @@ def run(args: argparse.Namespace, progress: dict[str, str]) -> dict[str, Any]:
     capture = load_json(capture_path, "capture report")
     cameras = ORACLE.validate_capture_report(capture, args.state_step)
     baseline = load_json(baseline_path, "baseline oracle report")
-    baseline_dir, path_scale = validate_baseline(baseline, baseline_path, manifest_path, capture_path, state)
+    baseline_dir, path_scale = validate_baseline(
+        baseline, baseline_path, manifest_path, capture_path, state, args.depth_bins
+    )
     count = int((state.get("rows") or {}).get("count"))
     required = {"features", "coefficients", "kernelDescriptors", "nativeCellIndices"}
     require(required.issubset(paths), f"source rows are incomplete: {sorted(required - set(paths))}")
@@ -560,6 +610,7 @@ def run(args: argparse.Namespace, progress: dict[str, str]) -> dict[str, Any]:
             "stateStep": args.state_step,
             "rowCount": count,
             "descriptorReceipt": descriptor_receipt,
+            "baselineFrozenStateBinding": baseline.get("frozenStateBinding"),
         },
         "execution": {
             "sampleCap": None,
@@ -567,6 +618,7 @@ def run(args: argparse.Namespace, progress: dict[str, str]) -> dict[str, Any]:
             "cameraCount": len(cameras),
             "cameraIndices": [int(camera["cameraIndex"]) for camera in cameras],
             "depthBins": args.depth_bins,
+            "orderApproximation": f"camera-depth-{args.depth_bins}-bin-one-running-transmittance-v0",
             "footprintMode": args.footprint_mode,
             "pathScale": path_scale,
             "pathScaleRefitPerArm": False,
