@@ -32,6 +32,8 @@ export const NATIVE_LOW_VIVISECTOR_WIDTH32_LIVE_RECEIVER = 'native-low-vivisecto
 export const NATIVE_LOW_RESIDENT_CUE_BUFFER_LIFECYCLE_STRESS = 'native-low-resident-cue-buffer-lifecycle-stress-v0';
 export const NATIVE_LOW_COARSE_SOURCE_HISTORY_SUPPORT_FRONT_REPLACEMENT = 'native-low-coarse-source-history-support-front-replacement-v0';
 export const NATIVE96_SPARSE_FRONT_CONTINUITY = 'native96-sparse-front-continuity-v0';
+export const NATIVE96_F16_FRONT_TEACHER_CANDIDATES = 'native96-f16-front-teacher-candidates-v0';
+export const NATIVE96_FRONT_AUTHORITY_GATED_F32_FRONT_TEACHER_CANDIDATES = 'native96-front-authority-gated-f32-front-teacher-candidates-v0';
 export const NATIVE_LOW_RUNTIME_BUILD_IDENTITY = 'native-low-live-research-cockpit-v1';
 export const NATIVE_LOW_TRAINED_PACKAGE_ROUTE_REGISTRY_IDENTITY = 'native-low-trained-package-route-registry-v0';
 export const NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE = 'native-low-transfer-160-to-128-zero-shot-v0';
@@ -87,6 +89,7 @@ const SLOTS_PER_CELL = 4;
 const FEATURE_COUNT = 185;
 const HIDDEN_WIDTH = 48;
 const STATS_BYTES = 16;
+const SOURCE_HISTORY_STATS_BYTES = 8 * Uint32Array.BYTES_PER_ELEMENT;
 const INDIRECT_ARGS_BYTES = 16;
 const RESIDUAL_WORKGROUP_SIZE = 64;
 const CANDIDATE_HEAD_BENCHMARK_WIDTHS = Object.freeze([16, 24, 32]);
@@ -98,6 +101,10 @@ const CANDIDATE_CUE_LIFECYCLE_PARAMS_BYTES = 4 * Uint32Array.BYTES_PER_ELEMENT;
 const NATIVE96_EXACT_FRONT_TEACHER_PARENT_COMMIT = 'cf15a42d847cb727d5aad4fc4ef212cf6f40c5ce';
 const NATIVE96_EXACT_FRONT_TEACHER_MODEL_SHA256 = '2eb3d311d8964d21ba471bba973b38ac1f32ee25b0a73926a6ee7b43ca78e95b';
 const NATIVE96_EXACT_FRONT_TEACHER_SOURCE_PACKED_SHA256 = '97e25caa711395f26e8b39f22c506e38e772bfc1a12cf518d5e048511d2bee08';
+const NATIVE96_F16_FRONT_TEACHER_IDENTITY = 'native96-front-student-width48-f16-v0';
+const NATIVE96_F16_FRONT_TEACHER_URL = new URL('./models/native96-front-student-width48-f16-v0/front-student-width48.f16', import.meta.url).href;
+const NATIVE96_F16_FRONT_TEACHER_SHA256 = '8650b2231cf4fd0d8e1a6414ff25a4aeee1ca143f3cb70905299e74c5942b4be';
+const NATIVE96_F16_FRONT_TEACHER_BYTE_LENGTH = 18698;
 const VIVISECTOR_WIDTH32_WEIGHT_FLOAT_COUNT = 1944;
 const VIVISECTOR_WIDTH32_WEIGHT_BYTES = VIVISECTOR_WIDTH32_WEIGHT_FLOAT_COUNT * Float32Array.BYTES_PER_ELEMENT;
 const VIVISECTOR_FEATURE_MEAN_OFFSET = 0;
@@ -743,6 +750,32 @@ fn featherNative96SparseFrontContinuity(@builtin(global_invocation_id) gid: vec3
 }
 `;
 
+const NATIVE96_F16_SPARSE_FRONT_CONTINUITY_WGSL = NATIVE96_SPARSE_FRONT_CONTINUITY_WGSL
+  .replace(/^/, 'enable f16;\n')
+  .replace('var<storage, read> exactFrontTeacherModel: array<f32>;', 'var<storage, read> exactFrontTeacherModel: array<f16>;')
+  .replace('features: array<f32, 185>,', 'features: array<f16, 185>,')
+  .replace(
+    'fn standardize(raw: f32, featureIndex: u32) -> f32 {\n  return (raw - exactFrontTeacherModel[featureIndex]) / exactFrontTeacherModel[185u + featureIndex];\n}',
+    'fn standardize(raw: f32, featureIndex: u32) -> f16 {\n  return (f16(raw) - exactFrontTeacherModel[featureIndex]) / exactFrontTeacherModel[185u + featureIndex];\n}',
+  )
+  .replace('fn inferFrontTeacher(features: array<f32, 185>) -> f32 {', 'fn inferFrontTeacher(features: array<f16, 185>) -> f32 {')
+  .replace('var hidden: array<f32, 48>;', 'var hidden: array<f16, 48>;')
+  .replace(
+    'return result * exactFrontTeacherModel[FRONT_TARGET_STD_OFFSET] + exactFrontTeacherModel[FRONT_TARGET_MEAN_OFFSET];',
+    'return f32(result * exactFrontTeacherModel[FRONT_TARGET_STD_OFFSET] + exactFrontTeacherModel[FRONT_TARGET_MEAN_OFFSET]);',
+  )
+  .replace('var features: array<f32, 185>;', 'var features: array<f16, 185>;');
+
+const NATIVE96_FRONT_AUTHORITY_GATED_SPARSE_FRONT_CONTINUITY_WGSL = NATIVE96_SPARSE_FRONT_CONTINUITY_WGSL
+  .replace(
+    '@group(0) @binding(7) var<storage, read_write> sparseFrontContinuityFront: array<f32>;',
+    '@group(0) @binding(7) var<storage, read_write> sparseFrontContinuityFront: array<f32>;\n@group(0) @binding(8) var<storage, read_write> sourceHistoryStats: array<atomic<u32>>;',
+  )
+  .replace(
+    'let highIndex = sourceHistoryCandidates[compactIndex];\n  let z = highIndex / (HIGH_GRID * HIGH_GRID);',
+    'let highIndex = sourceHistoryCandidates[compactIndex];\n  let frontAuthorityThreshold = bitcast<f32>(atomicLoad(&sourceHistoryStats[4]));\n  if (sparseFrontContinuityFront[highIndex] <= frontAuthorityThreshold) { return; }\n  atomicAdd(&sourceHistoryStats[2], 1u);\n  let z = highIndex / (HIGH_GRID * HIGH_GRID);',
+  );
+
 const VIVISECTOR_WIDTH32_RECEIVER_WGSL = `
 const LOW_GRID: u32 = ${LOW_GRID}u;
 const HIGH_GRID: u32 = ${HIGH_GRID}u;
@@ -918,6 +951,16 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
   ) {
     throw new Error(`native96ExactFrontTeacherChecksumMismatch:${exactFrontTeacherSha256}`);
   }
+  const f16FrontTeacherResponse = await fetch(NATIVE96_F16_FRONT_TEACHER_URL, { cache: 'no-store' });
+  if (!f16FrontTeacherResponse.ok) throw new Error(`native96F16FrontTeacherFetchFailed:${f16FrontTeacherResponse.status}`);
+  const f16FrontTeacherBytes = await f16FrontTeacherResponse.arrayBuffer();
+  const f16FrontTeacherSha256 = await sha256Hex(f16FrontTeacherBytes);
+  if (
+    f16FrontTeacherBytes.byteLength !== NATIVE96_F16_FRONT_TEACHER_BYTE_LENGTH
+    || f16FrontTeacherSha256 !== NATIVE96_F16_FRONT_TEACHER_SHA256
+  ) {
+    throw new Error(`native96F16FrontTeacherChecksumMismatch:${f16FrontTeacherSha256}`);
+  }
   const lowCells = lowGrid ** 3;
   const highCells = HIGH_GRID ** 3;
   const lowFluidBytes = lowCells * SLOTS_PER_CELL * 4 * Float32Array.BYTES_PER_ELEMENT;
@@ -933,7 +976,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
   const nativeUpsampleFront = makeBuffer('native-low shared-device native-upsample front 160^3', highFrontBytes);
   const stats = makeBuffer('native-low shared-device support stats', STATS_BYTES);
   const sourceHistoryCandidates = makeBuffer('native-low fixed source-delta high-cell candidates', highCells * Uint32Array.BYTES_PER_ELEMENT);
-  const sourceHistoryStats = makeBuffer('native-low fixed source-delta stats', STATS_BYTES);
+  const sourceHistoryStats = makeBuffer('native-low fixed source-delta stats', SOURCE_HISTORY_STATS_BYTES);
   const candidateCueRecords = makeBuffer('native-low candidate-head benchmark compact cue records', highCells * CANDIDATE_CUE_RECORD_STRIDE_BYTES);
   const candidateCueLifecycleStats = makeBuffer('native-low candidate-head cue buffer lifecycle stats', CANDIDATE_CUE_LIFECYCLE_STATS_BYTES);
   const candidateCueLifecycleParams = makeBuffer('native-low candidate-head cue buffer lifecycle params', CANDIDATE_CUE_LIFECYCLE_PARAMS_BYTES);
@@ -955,6 +998,14 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
     GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
   );
   device.queue.writeBuffer(native96ExactFrontTeacherModel, 0, exactFrontTeacherBytes);
+  const native96F16FrontTeacherModel = makeBuffer(
+    `native-low shared-device f16 native96 front teacher ${NATIVE96_F16_FRONT_TEACHER_IDENTITY}`,
+    Math.ceil(f16FrontTeacherBytes.byteLength / 4) * 4,
+    GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  );
+  const paddedF16FrontTeacherBytes = new Uint8Array(Math.ceil(f16FrontTeacherBytes.byteLength / 4) * 4);
+  paddedF16FrontTeacherBytes.set(new Uint8Array(f16FrontTeacherBytes));
+  device.queue.writeBuffer(native96F16FrontTeacherModel, 0, paddedF16FrontTeacherBytes);
   const shader = device.createShaderModule({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} WGSL`, code: specializeLowGridWgsl(WGSL, lowGrid) });
   const compilation = await shader.getCompilationInfo();
   const errors = compilation.messages.filter(message => message.type === 'error');
@@ -1173,6 +1224,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
       { binding: 5, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
       { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
       { binding: 7, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      { binding: 8, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
     ],
   });
   const native96SparseFrontContinuityPipelineLayout = device.createPipelineLayout({
@@ -1189,6 +1241,38 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
     layout: native96SparseFrontContinuityPipelineLayout,
     compute: { module: native96SparseFrontContinuityShader, entryPoint: 'evalNative96ExactFrontTeacherCandidates' },
   });
+  const native96FrontAuthorityGateShader = device.createShaderModule({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native96 front-authority-gated f32 teacher WGSL`,
+    code: specializeLowGridWgsl(NATIVE96_FRONT_AUTHORITY_GATED_SPARSE_FRONT_CONTINUITY_WGSL, lowGrid),
+  });
+  const frontAuthorityGateCompilation = await native96FrontAuthorityGateShader.getCompilationInfo();
+  const frontAuthorityGateErrors = frontAuthorityGateCompilation.messages.filter(message => message.type === 'error');
+  if (frontAuthorityGateErrors.length) {
+    throw new Error(`native96 front-authority gate WGSL failed:${frontAuthorityGateErrors.map(error => `${error.lineNum}:${error.linePos} ${error.message}`).join('; ')}`);
+  }
+  const native96FrontAuthorityGateCandidatePipeline = device.createComputePipeline({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native96 front-authority-gated f32 teacher candidates`,
+    layout: native96SparseFrontContinuityPipelineLayout,
+    compute: { module: native96FrontAuthorityGateShader, entryPoint: 'evalNative96ExactFrontTeacherCandidates' },
+  });
+  const shaderF16Available = device.features?.has?.('shader-f16') === true;
+  let native96F16FrontTeacherCandidatePipeline = null;
+  if (shaderF16Available) {
+    const native96F16FrontTeacherShader = device.createShaderModule({
+      label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native96 f16 front teacher WGSL`,
+      code: specializeLowGridWgsl(NATIVE96_F16_SPARSE_FRONT_CONTINUITY_WGSL, lowGrid),
+    });
+    const f16Compilation = await native96F16FrontTeacherShader.getCompilationInfo();
+    const f16Errors = f16Compilation.messages.filter(message => message.type === 'error');
+    if (f16Errors.length) {
+      throw new Error(`native96 f16 front WGSL failed:${f16Errors.map(error => `${error.lineNum}:${error.linePos} ${error.message}`).join('; ')}`);
+    }
+    native96F16FrontTeacherCandidatePipeline = device.createComputePipeline({
+      label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native96 f16 front teacher candidates`,
+      layout: native96SparseFrontContinuityPipelineLayout,
+      compute: { module: native96F16FrontTeacherShader, entryPoint: 'evalNative96ExactFrontTeacherCandidates' },
+    });
+  }
   const native96SparseFrontFeatherPipeline = device.createComputePipeline({
     label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native96 sparse-front feather`,
     layout: native96SparseFrontContinuityPipelineLayout,
@@ -1272,6 +1356,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
     failurePhase: null,
   };
   let coarseSourceHistorySupportFrontActive = false;
+  let currentFrontAuthorityGateEffective = false;
   let candidateCueRecordReuseCount = 0;
   let candidateCueLifecycleToken = 0;
   let lastCandidateCueBufferLifecycle = {
@@ -1643,6 +1728,10 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
     modelSha256,
     native96ExactFrontTeacherModelIdentity: NATIVE96_EXACT_FRONT_TEACHER_MODEL.identity,
     native96ExactFrontTeacherModelSha256: exactFrontTeacherSha256,
+    native96F16FrontTeacherModelIdentity: NATIVE96_F16_FRONT_TEACHER_IDENTITY,
+    native96F16FrontTeacherModelSha256: f16FrontTeacherSha256,
+    native96F16FrontTeacherByteLength: NATIVE96_F16_FRONT_TEACHER_BYTE_LENGTH,
+    shaderF16Available,
     native96ExactFrontTeacherParentCommit: NATIVE96_EXACT_FRONT_TEACHER_PARENT_COMMIT,
     featureAuthority: NATIVE_LOW_FEATURE_AUTHORITY,
     inputAuthority: NATIVE_LOW_INPUT_AUTHORITY,
@@ -1652,10 +1741,16 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
     runtimeBuildIdentity: NATIVE_LOW_RUNTIME_BUILD_IDENTITY,
     buffers: { lowSnapshotFluid, lowSnapshotFront, predictedFluid, predictedFront, nativeUpsampleFront, residualDispatchArgs, sourceHistoryCandidates, sourceHistoryDispatchArgs, candidateCueRecords, candidateCueLifecycleStats, candidateCueLifecycleParams },
     encodeFromNativeLow(encoder, sourceFluid, sourceFront, options = {}) {
+      currentFrontAuthorityGateEffective = options.native96SparseFrontContinuityEnabled === true
+        && options.native96FrontAuthorityGateEnabled === true;
       const currentHistoryEpochIdentity = String(options.historyEpochIdentity || 'native-low-source-history-epoch-unspecified-v0');
       const priorHistoryEpochIdentity = lastHistoryEpochIdentity;
       const historyEpochChanged = priorHistoryEpochIdentity !== null && priorHistoryEpochIdentity !== currentHistoryEpochIdentity;
       const historyEpochValidForAdmission = encodedFrameCount > 0 && !historyEpochChanged;
+      const frontAuthorityThresholdEffective = options.native96FrontAuthorityGateEnabled === true
+        ? Math.max(0, Number(options.native96FrontAuthorityThreshold ?? 0.01))
+        : 0;
+      const frontAuthorityThresholdBits = new Uint32Array(new Float32Array([frontAuthorityThresholdEffective]).buffer)[0];
       const sourceHistoryResetReason = !historyEpochValidForAdmission
         ? (historyEpochChanged ? 'epoch-changed-first-frame-invalidated' : 'first-frame-no-prior-history')
         : 'prior-history-valid';
@@ -1670,7 +1765,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
       };
       device.queue.writeBuffer(stats, 0, new Uint32Array(4));
       device.queue.writeBuffer(residualDispatchArgs, 0, new Uint32Array(4));
-      device.queue.writeBuffer(sourceHistoryStats, 0, new Uint32Array([0, 0, 0, historyEpochValidForAdmission ? 1 : 0]));
+      device.queue.writeBuffer(sourceHistoryStats, 0, new Uint32Array([0, 0, 0, historyEpochValidForAdmission ? 1 : 0, frontAuthorityThresholdBits]));
       device.queue.writeBuffer(sourceHistoryDispatchArgs, 0, new Uint32Array(4));
       const sourceHistoryBindGroup = device.createBindGroup({
         label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} fixed source-delta admission bind group`,
@@ -1845,7 +1940,30 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
       }
       coarseSourceHistorySupportFrontActive = options.coarseSourceHistorySupportFrontEnabled === true;
       const native96SparseFrontContinuityActive = options.native96SparseFrontContinuityEnabled === true;
+      if (!native96SparseFrontContinuityActive) {
+        lastNative96SparseFrontContinuity = {
+          identity: NATIVE96_SPARSE_FRONT_CONTINUITY,
+          enabled: false,
+          authority: 'not-executed-current-frame-v0',
+          frontAuthorityGateRequested: false,
+          frontAuthorityGateEffective: false,
+          frontAuthorityThresholdEffective: null,
+          teacherFrontAuthorityAdmittedCount: null,
+          teacherFrontAuthorityAdmittedCoverage: null,
+          teacherCandidateReduction: null,
+          runtimeTruthUsed: false,
+          failurePhase: null,
+        };
+      }
       if (native96SparseFrontContinuityActive) {
+        const f16FrontTeacherRequested = options.native96F16FrontTeacherEnabled === true;
+        const frontAuthorityGateRequested = options.native96FrontAuthorityGateEnabled === true;
+        if (f16FrontTeacherRequested && frontAuthorityGateRequested) {
+          throw new Error('native96-front-authority-gate-f16-combination-not-validated');
+        }
+        if (f16FrontTeacherRequested && !native96F16FrontTeacherCandidatePipeline) {
+          throw new Error('f16-fallback-forbidden:shader-f16-unavailable');
+        }
         const continuityBindGroup = device.createBindGroup({
           label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native96 sparse-front continuity bind group`,
           layout: native96SparseFrontContinuityLayout,
@@ -1854,10 +1972,11 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
             { binding: 1, resource: { buffer: sourceFront } },
             { binding: 2, resource: { buffer: sourceHistoryCandidates } },
             { binding: 3, resource: { buffer: sourceHistoryDispatchArgs } },
-            { binding: 4, resource: { buffer: native96ExactFrontTeacherModel } },
+            { binding: 4, resource: { buffer: f16FrontTeacherRequested ? native96F16FrontTeacherModel : native96ExactFrontTeacherModel } },
             { binding: 5, resource: { buffer: predictedFluid } },
             { binding: 6, resource: { buffer: predictedFront } },
             { binding: 7, resource: { buffer: nativeUpsampleFront } },
+            { binding: 8, resource: { buffer: sourceHistoryStats } },
           ],
         });
         const teacherTimestampWrites = options.stageTimestampWrites?.native96ExactFrontTeacher || null;
@@ -1868,10 +1987,14 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
         initializePass.dispatchWorkgroups(Math.ceil(HIGH_GRID / 4), Math.ceil(HIGH_GRID / 4), Math.ceil(HIGH_GRID / 4));
         initializePass.end();
         const teacherPass = encoder.beginComputePass({
-          label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native96 exact front teacher candidates`,
+          label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} ${f16FrontTeacherRequested ? 'native96 f16' : 'native96 exact f32'} front teacher candidates`,
           ...(teacherTimestampWrites ? { timestampWrites: teacherTimestampWrites } : {}),
         });
-        teacherPass.setPipeline(native96ExactFrontTeacherCandidatePipeline);
+        teacherPass.setPipeline(frontAuthorityGateRequested
+          ? native96FrontAuthorityGateCandidatePipeline
+          : f16FrontTeacherRequested
+            ? native96F16FrontTeacherCandidatePipeline
+            : native96ExactFrontTeacherCandidatePipeline);
         teacherPass.setBindGroup(0, continuityBindGroup);
         teacherPass.dispatchWorkgroupsIndirect(sourceHistoryDispatchArgs, 0);
         teacherPass.end();
@@ -1887,6 +2010,30 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
           identity: NATIVE96_SPARSE_FRONT_CONTINUITY,
           enabled: true,
           authority: 'exact-front-teacher-over-uncapped-source-history-candidates-plus-feathered-continuity-v0',
+          requestedTeacherExecutionRoute: f16FrontTeacherRequested
+            ? NATIVE96_F16_FRONT_TEACHER_CANDIDATES
+            : frontAuthorityGateRequested
+              ? NATIVE96_FRONT_AUTHORITY_GATED_F32_FRONT_TEACHER_CANDIDATES
+            : 'native96-exact-f32-front-teacher-candidates-v0',
+          effectiveTeacherExecutionRoute: f16FrontTeacherRequested
+            ? NATIVE96_F16_FRONT_TEACHER_CANDIDATES
+            : frontAuthorityGateRequested
+              ? NATIVE96_FRONT_AUTHORITY_GATED_F32_FRONT_TEACHER_CANDIDATES
+            : 'native96-exact-f32-front-teacher-candidates-v0',
+          runtimeArithmeticDtype: f16FrontTeacherRequested ? 'f16' : 'f32',
+          shaderF16Required: f16FrontTeacherRequested,
+          shaderF16Available,
+          f16Fallback: false,
+          f16FrontTeacherModelIdentity: f16FrontTeacherRequested ? NATIVE96_F16_FRONT_TEACHER_IDENTITY : null,
+          f16FrontTeacherModelSha256: f16FrontTeacherRequested ? f16FrontTeacherSha256 : null,
+          f16FrontTeacherByteLength: f16FrontTeacherRequested ? NATIVE96_F16_FRONT_TEACHER_BYTE_LENGTH : null,
+          frontAuthorityGateRequested,
+          frontAuthorityGateEffective: frontAuthorityGateRequested,
+          frontAuthorityThresholdEffective: frontAuthorityGateRequested ? frontAuthorityThresholdEffective : null,
+          teacherFrontAuthorityAdmittedCount: null,
+          teacherFrontAuthorityAdmittedCoverage: null,
+          teacherCandidateReduction: null,
+          runtimeTruthUsed: false,
           native96ExactFrontTeacherParentCommit: NATIVE96_EXACT_FRONT_TEACHER_PARENT_COMMIT,
           exactFrontTeacherModelIdentity: NATIVE96_EXACT_FRONT_TEACHER_MODEL.identity,
           exactFrontTeacherModelSha256: exactFrontTeacherSha256,
@@ -2040,8 +2187,9 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
     },
     async sampleSupportStats() {
       const values = await readU32Buffer(device, stats, STATS_BYTES, 'native-low shared-device support stats readback');
-      const sourceHistoryValues = await readU32Buffer(device, sourceHistoryStats, STATS_BYTES, 'native-low fixed source-delta stats readback');
+      const sourceHistoryValues = await readU32Buffer(device, sourceHistoryStats, SOURCE_HISTORY_STATS_BYTES, 'native-low fixed source-delta stats readback');
       const uncappedCandidateCount = Number(sourceHistoryValues[1] || 0);
+      const teacherFrontAuthorityAdmittedCount = Number(sourceHistoryValues[2] || 0);
       const sourceHistoryDispatchWorkgroups = Math.ceil(uncappedCandidateCount / RESIDUAL_WORKGROUP_SIZE);
       const sourceHistoryAvailable = Number(sourceHistoryValues[3] || 0) > 0;
       const uncappedCandidateCoverage = uncappedCandidateCount / highCells;
@@ -2070,6 +2218,12 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
         uncappedLowCandidateCount: Number(sourceHistoryValues[0] || 0),
         uncappedCandidateCount,
         uncappedCandidateCoverage,
+        teacherFrontAuthorityAdmittedCount: currentFrontAuthorityGateEffective
+          ? teacherFrontAuthorityAdmittedCount
+          : null,
+        teacherFrontAuthorityAdmittedCoverage: currentFrontAuthorityGateEffective
+          ? teacherFrontAuthorityAdmittedCount / highCells
+          : null,
         calibrationCoverage: 0.1,
         calibrationCandidateCount: 409600,
         calibrationEnergyCapture: 0.830176,
@@ -2093,6 +2247,16 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
           : null,
         selectedNextImplementation: 'fixed-gate-candidate-head-dispatch-with-mohel-warning-under-emitter-shifts',
       };
+      if (currentFrontAuthorityGateEffective) {
+        lastNative96SparseFrontContinuity = {
+          ...lastNative96SparseFrontContinuity,
+          teacherFrontAuthorityAdmittedCount,
+          teacherFrontAuthorityAdmittedCoverage: teacherFrontAuthorityAdmittedCount / highCells,
+          teacherCandidateReduction: uncappedCandidateCount > 0
+            ? 1 - teacherFrontAuthorityAdmittedCount / uncappedCandidateCount
+            : 0,
+        };
+      }
       lastStats = {
         supportPositiveCount: coarseSourceHistorySupportFrontActive ? uncappedCandidateCount : Number(values[0] || 0),
         supportPrevalence: (coarseSourceHistorySupportFrontActive ? uncappedCandidateCount : Number(values[0] || 0)) / highCells,
@@ -2439,6 +2603,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
       stats.destroy();
       model.destroy();
       native96ExactFrontTeacherModel.destroy();
+      native96F16FrontTeacherModel.destroy();
     },
   };
 }

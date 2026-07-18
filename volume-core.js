@@ -7128,6 +7128,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (adapter.features?.has?.('timestamp-query')) {
       requiredFeatures.push('timestamp-query');
     }
+    if (adapter.features?.has?.('shader-f16')) {
+      requiredFeatures.push('shader-f16');
+    }
     const deviceDescriptor = {};
     if (Object.keys(requiredLimits).length) deviceDescriptor.requiredLimits = requiredLimits;
     if (requiredFeatures.length) deviceDescriptor.requiredFeatures = requiredFeatures;
@@ -13160,7 +13163,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
   }
 
-  async function readNative96SparseFrontContinuityCostProfile(source, label, fallbackMs = null) {
+  async function readNative96SparseFrontContinuityCostProfile(source, label, fallbackMs = null, f16Teacher = false) {
     await source.mapAsync(GPUMapMode.READ);
     const values = new BigUint64Array(source.getMappedRange().slice(0));
     source.unmap();
@@ -13192,6 +13195,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       sourceDeltaAdmissionGpuMs,
       sourceDeltaAdmissionStage: 'fixed-source-delta-admission-plus-finalize-v0',
       exactFrontTeacherEvalGpuMs,
+      f16FrontTeacherEvalGpuMs: f16Teacher ? exactFrontTeacherEvalGpuMs : null,
+      runtimeArithmeticDtype: f16Teacher ? 'f16' : 'f32',
       exactFrontTeacherEvalStage: 'exact-front-teacher-candidate-dispatch-indirect-v0',
       continuityReconstructionGpuMs,
       continuityReconstructionStage: 'feathered-front-continuity-full-grid-v0',
@@ -13425,6 +13430,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         candidateCueBufferLifecycleStressEnabled,
         coarseSourceHistorySupportFrontEnabled,
         native96SparseFrontContinuityEnabled,
+        native96F16FrontTeacherEnabled: options.native96F16FrontTeacherEnabled === true,
+        native96FrontAuthorityGateEnabled: options.native96FrontAuthorityGateEnabled === true,
+        native96FrontAuthorityThreshold: Number(options.native96FrontAuthorityThreshold ?? 0.01),
         historyOnly: cockpitHistoryOnly,
         vivisectorCandidateHeadReceiver: options.vivisectorCandidateHeadReceiver || null,
       });
@@ -13481,11 +13489,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             sampleAgeFrames: nativeLowDirectDiagnosticsCache.sampleAgeFrames + 1,
           };
       if (timestampReadback) {
-        nativeLowHeadCostProfile = native96SparseFrontContinuityEnabled && !cockpitHistoryOnly
-          ? await readNative96SparseFrontContinuityCostProfile(timestampReadback, NATIVE96_SPARSE_FRONT_CONTINUITY, inferenceWallMs)
+        const timestampHeadCostProfile = native96SparseFrontContinuityEnabled && !cockpitHistoryOnly
+          ? await readNative96SparseFrontContinuityCostProfile(
+              timestampReadback,
+              NATIVE96_SPARSE_FRONT_CONTINUITY,
+              inferenceWallMs,
+              options.native96F16FrontTeacherEnabled === true,
+            )
           : coarseSourceHistorySupportFrontEnabled || cockpitHistoryOnly
           ? await readNativeLowSourceDeltaOnlyCostProfile(timestampReadback, NATIVE_LOW_SHARED_DEVICE_ROUTE, inferenceWallMs)
           : await readNativeLowHeadCostProfile(timestampReadback, NATIVE_LOW_SHARED_DEVICE_ROUTE, inferenceWallMs);
+        nativeLowHeadCostProfile = {
+          ...timestampHeadCostProfile,
+          sampledThisFrame: true,
+          sampleAgeFrames: 0,
+        };
         inferenceTiming = {
           ms: Number.isFinite(nativeLowHeadCostProfile.inferenceGpuMs) ? nativeLowHeadCostProfile.inferenceGpuMs : inferenceWallMs,
           authority: nativeLowHeadCostProfile.headCostTimingAuthority,
@@ -14113,6 +14131,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             modelOutputConsumed: renderLearnedTreatment,
             historyOnlyResidentPackageUpdate: cockpitHistoryOnly,
             requestedRoute: NATIVE96_SPARSE_FRONT_CONTINUITY,
+            requestedTeacherExecutionRoute: options.native96F16FrontTeacherEnabled === true
+              ? 'native96-f16-front-teacher-candidates-v0'
+              : options.native96FrontAuthorityGateEnabled === true
+                ? 'native96-front-authority-gated-f32-front-teacher-candidates-v0'
+              : 'native96-exact-f32-front-teacher-candidates-v0',
             effectiveRoute: NATIVE96_SPARSE_FRONT_CONTINUITY,
             requestedBackend: runtimeState.requestedBackend,
             effectiveBackend: runtimeState.effectiveBackend,
@@ -14129,6 +14152,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             candidateListSource: 'real-uncapped-fixed-gate-sourceHistoryCandidates-v0',
             uncappedCandidateCount: nativeLowFixedSourceDeltaAdmission?.uncappedCandidateCount ?? null,
             uncappedCandidateCoverage: nativeLowFixedSourceDeltaAdmission?.uncappedCandidateCoverage ?? null,
+            teacherFrontAuthorityAdmittedCount: options.native96FrontAuthorityGateEnabled === true
+              ? nativeLowFixedSourceDeltaAdmission?.teacherFrontAuthorityAdmittedCount ?? null
+              : null,
+            teacherFrontAuthorityAdmittedCoverage: options.native96FrontAuthorityGateEnabled === true
+              ? nativeLowFixedSourceDeltaAdmission?.teacherFrontAuthorityAdmittedCoverage ?? null
+              : null,
+            teacherCandidateReduction: options.native96FrontAuthorityGateEnabled === true && Number(nativeLowFixedSourceDeltaAdmission?.uncappedCandidateCount) > 0
+              ? 1 - Number(nativeLowFixedSourceDeltaAdmission?.teacherFrontAuthorityAdmittedCount || 0) / Number(nativeLowFixedSourceDeltaAdmission.uncappedCandidateCount)
+              : null,
+            teacherFrontAuthorityCountSampledThisFrame: options.native96FrontAuthorityGateEnabled === true
+              ? nativeLowHeadCostProfile.sampledThisFrame === true
+              : null,
+            teacherFrontAuthorityCountSampleAgeFrames: options.native96FrontAuthorityGateEnabled === true
+              ? Number(nativeLowHeadCostProfile.sampleAgeFrames ?? 0)
+              : null,
             candidateCount: nativeLowFixedSourceDeltaAdmission?.uncappedCandidateCount ?? null,
             instanceCount: nativeLowFixedSourceDeltaAdmission?.uncappedCandidateCount ?? null,
             overflowCount: 0,

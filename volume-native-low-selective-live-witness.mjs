@@ -62,6 +62,11 @@ const cueBufferLifecycleStressRequested = requestedUrl.searchParams.get('cue_buf
 const coarseSourceHistorySupportFrontRequested = requestedUrl.searchParams.get('coarse_source_history_support_front') === '1';
 const sparseFrontContinuityRequested = requestedUrl.searchParams.get('sparse_front_continuity') === '1'
   || (cockpitRequested && requestedUrl.searchParams.get('sparse_front_continuity') !== '0');
+const f16FrontTeacherRequested = sparseFrontContinuityRequested
+  && requestedUrl.searchParams.get('f16_front_teacher') === '1';
+const frontAuthorityGateRequested = sparseFrontContinuityRequested
+  && requestedUrl.searchParams.get('front_authority_gate') === '1';
+const requestedFrontAuthorityThreshold = Math.max(0, Number(requestedUrl.searchParams.get('front_authority_threshold') || 0.01));
 const directSparseCuesRequested = requestedUrl.searchParams.get('direct_sparse_cues') === '1';
 const vivisectorCandidateHeadTrainedRouteRequested = Boolean(requestedUrl.searchParams.get('vivisector_candidate_head_package'))
   || requestedUrl.searchParams.get('candidate_head_trained_route') === 'vivisector-width32';
@@ -494,6 +499,37 @@ try {
       assert.ok(Number(sparseFront?.exactFrontTeacherEvalGpuMs) >= 0, 'sparse-front teacher timing missing');
       assert.ok(Number(sparseFront?.continuityReconstructionGpuMs) >= 0, 'sparse-front continuity timing missing');
       assert.ok(Number(sparseFront?.totalSparseFrontContinuityGpuMs) >= 0, 'sparse-front total timing missing');
+      if (f16FrontTeacherRequested) {
+        assert.equal(sparseFront?.requestedTeacherExecutionRoute, 'native96-f16-front-teacher-candidates-v0', 'f16 teacher route was not requested effectively');
+        assert.equal(sparseFront?.effectiveTeacherExecutionRoute, 'native96-f16-front-teacher-candidates-v0', 'f16 teacher route fell back');
+        assert.equal(sparseFront?.runtimeArithmeticDtype, 'f16', 'f16 teacher used the wrong arithmetic dtype');
+        assert.equal(sparseFront?.shaderF16Required, true, 'f16 teacher did not report its shader-f16 requirement');
+        assert.equal(sparseFront?.shaderF16Available, true, 'f16 teacher ran without shader-f16 availability');
+        assert.equal(sparseFront?.f16Fallback, false, 'f16 teacher silently fell back');
+        assert.equal(sparseFront?.f16FrontTeacherModelIdentity, 'native96-front-student-width48-f16-v0', 'f16 teacher model identity drifted');
+        assert.equal(sparseFront?.f16FrontTeacherModelSha256, '8650b2231cf4fd0d8e1a6414ff25a4aeee1ca143f3cb70905299e74c5942b4be', 'f16 teacher model checksum drifted');
+        assert.equal(Number(sparseFront?.f16FrontTeacherByteLength), 18698, 'f16 teacher model byte length drifted');
+        assert.ok(Number(state?.nativeLowHeadCostProfile?.f16FrontTeacherEvalGpuMs) >= 0, 'f16 teacher timing missing from head cost profile');
+      }
+      if (frontAuthorityGateRequested) {
+        assert.equal(sparseFront?.requestedTeacherExecutionRoute, 'native96-front-authority-gated-f32-front-teacher-candidates-v0', 'front-authority teacher route was not requested effectively');
+        assert.equal(sparseFront?.effectiveTeacherExecutionRoute, 'native96-front-authority-gated-f32-front-teacher-candidates-v0', 'front-authority teacher route fell back');
+        assert.equal(sparseFront?.frontAuthorityGateRequested, true, 'front-authority gate request receipt missing');
+        assert.equal(sparseFront?.frontAuthorityGateEffective, true, 'front-authority gate was not effective');
+        assert.equal(sparseFront?.runtimeTruthUsed, false, 'front-authority gate used runtime truth');
+        assert.equal(Number(sparseFront?.frontAuthorityThresholdEffective), requestedFrontAuthorityThreshold, 'effective front-authority threshold drifted');
+        assert.ok(sparseFront?.teacherFrontAuthorityAdmittedCount !== null && Number.isFinite(Number(sparseFront.teacherFrontAuthorityAdmittedCount)), 'front-authority admitted teacher count missing');
+        assert.ok(Number(sparseFront?.teacherFrontAuthorityAdmittedCount) <= Number(sparseFront?.uncappedCandidateCount), 'front-authority gate admitted more than the source candidate population');
+        assert.ok(Number(sparseFront?.teacherCandidateReduction) >= 0 && Number(sparseFront?.teacherCandidateReduction) <= 1, 'front-authority teacher reduction is invalid');
+        assert.equal(typeof sparseFront?.teacherFrontAuthorityCountSampledThisFrame, 'boolean', 'front-authority count freshness flag missing');
+        assert.ok(Number.isInteger(Number(sparseFront?.teacherFrontAuthorityCountSampleAgeFrames)) && Number(sparseFront.teacherFrontAuthorityCountSampleAgeFrames) >= 0, 'front-authority count sample age missing');
+      } else {
+        assert.equal(sparseFront?.teacherFrontAuthorityAdmittedCount, null, 'ungated sparse-front route reported a teacher admission count');
+        assert.equal(sparseFront?.teacherFrontAuthorityAdmittedCoverage, null, 'ungated sparse-front route reported teacher admission coverage');
+        assert.equal(sparseFront?.teacherCandidateReduction, null, 'ungated sparse-front route reported a teacher candidate reduction');
+        assert.equal(sparseFront?.teacherFrontAuthorityCountSampledThisFrame, null, 'ungated sparse-front route reported gate-count freshness');
+        assert.equal(sparseFront?.teacherFrontAuthorityCountSampleAgeFrames, null, 'ungated sparse-front route reported a gate-count sample age');
+      }
     }
     assert.equal(Number(sparseFront?.sparseFrontContinuityDecisionBands?.profitableTargetMs), 10, 'sparse-front profitable target missing');
     assert.equal(Number(sparseFront?.sparseFrontContinuityDecisionBands?.credibleBreakEvenTargetMs), 15, 'sparse-front credible target missing');
@@ -863,6 +899,9 @@ try {
     cueBufferLifecycleStressRequested,
     coarseSourceHistorySupportFrontRequested,
     sparseFrontContinuityRequested,
+    f16FrontTeacherRequested,
+    frontAuthorityGateRequested,
+    requestedFrontAuthorityThreshold,
     directSparseCuesRequested,
     vivisectorCandidateHeadTrainedRouteRequested,
     nativeLowFrontTopologyAblation: endState.nativeLowFrontTopologyAblation,

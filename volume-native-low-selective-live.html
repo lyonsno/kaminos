@@ -395,6 +395,9 @@
     const cueBufferLifecycleStressMode = !native64ManifestMode && params.get('cue_buffer_lifecycle_stress') === '1';
     const coarseSourceHistorySupportFrontEnabled = !native64ManifestMode && params.get('coarse_source_history_support_front') === '1';
     const native96SparseFrontContinuityEnabled = !native64ManifestMode && (params.get('sparse_front_continuity') === '1' || (cockpitMode && params.get('sparse_front_continuity') !== '0'));
+    const native96F16FrontTeacherEnabled = native96SparseFrontContinuityEnabled && params.get('f16_front_teacher') === '1';
+    const native96FrontAuthorityGateEnabled = native96SparseFrontContinuityEnabled && params.get('front_authority_gate') === '1';
+    const native96FrontAuthorityThreshold = Math.max(0, Number(params.get('front_authority_threshold') || 0.01));
     const nativeLowDirectSparseCuesEnabled = !native64ManifestMode && params.get('direct_sparse_cues') === '1';
     const manualDualCaptureMode = !native64ManifestMode && (params.get('manual_dual_capture') === '1' || params.get('capture_paused') === '1');
     let requestedTransferRouteId = params.get('native_low_transfer_route') || (cockpitMode ? NATIVE_LOW_TRANSFER_160_TO_96_DEPLOYMENT_GRID_ROUTE : NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE);
@@ -760,7 +763,7 @@
       };
       latestCockpitTelemetry = {
         identity: 'native-low-live-research-cockpit-telemetry-v0',
-        sampleAuthority: 'current-unsmoothed-frame-sample-v0',
+        sampleAuthority: 'current-frame-with-periodic-diagnostic-counters-v0',
         smoothingWindow: 0,
         simulationStep: receipt?.sourceStep ?? null,
         historyEpoch: receipt?.nativeLowFixedSourceDeltaAdmission?.historyEpochIdentity || null,
@@ -777,6 +780,10 @@
         coverage: selectedRendererCoverage,
         sourceDeltaAdmissionCandidateCount: admission?.uncappedCandidateCount ?? null,
         sourceDeltaAdmissionCoverage: admission?.uncappedCandidateCoverage ?? null,
+        teacherFrontAuthorityAdmittedCount: receipt?.native96SparseFrontContinuity?.teacherFrontAuthorityAdmittedCount ?? null,
+        frontAuthorityThresholdEffective: receipt?.native96SparseFrontContinuity?.frontAuthorityThresholdEffective ?? null,
+        teacherFrontAuthorityCountSampledThisFrame: receipt?.native96SparseFrontContinuity?.teacherFrontAuthorityCountSampledThisFrame ?? null,
+        teacherFrontAuthorityCountSampleAgeFrames: receipt?.native96SparseFrontContinuity?.teacherFrontAuthorityCountSampleAgeFrames ?? null,
         candidateInstanceEquality,
         overflowCount,
         requestedBackend: receipt?.requestedBackend || 'WebGPU',
@@ -811,6 +818,7 @@
         `work           ${selectedCandidateCount ?? '--'} / ${selectedInstanceCount ?? '--'} / overflow ${overflowCount}`,
         `render coverage ${Number.isFinite(latestCockpitTelemetry.coverage) ? (latestCockpitTelemetry.coverage * 100).toFixed(3) : '--'}%`,
         `delta admission ${latestCockpitTelemetry.sourceDeltaAdmissionCandidateCount ?? '--'} / ${Number.isFinite(latestCockpitTelemetry.sourceDeltaAdmissionCoverage) ? (latestCockpitTelemetry.sourceDeltaAdmissionCoverage * 100).toFixed(3) : '--'}%`,
+        `teacher gate    ${latestCockpitTelemetry.teacherFrontAuthorityAdmittedCount ?? '--'} @ ${latestCockpitTelemetry.frontAuthorityThresholdEffective ?? '--'} / age ${latestCockpitTelemetry.teacherFrontAuthorityCountSampleAgeFrames ?? '--'}`,
         `backend        ${latestCockpitTelemetry.effectiveBackend || '--'}`,
         `package        ${latestCockpitTelemetry.effectivePackageIdentity || '--'}`,
         `model sha      ${latestCockpitTelemetry.modelSha256 || '--'}`,
@@ -857,6 +865,9 @@
         candidateCueBufferLifecycleStressEnabled: cueBufferLifecycleStressMode,
         coarseSourceHistorySupportFrontEnabled,
         native96SparseFrontContinuityEnabled,
+        native96F16FrontTeacherEnabled,
+        native96FrontAuthorityGateEnabled,
+        native96FrontAuthorityThreshold,
         nativeLowDirectSparseCuesEnabled,
         nativeLowDirectSparseTelemetryRequested: nativeLowDirectSparseCuesEnabled && (frameIndex === 0 || frameIndex % 30 === 0),
         vivisectorCandidateHeadReceiver: vivisectorWidth32ReceiverProjection,
