@@ -11,6 +11,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const SCHEMA = 'kaminos.volume.native-grid-causal-comparison.v0';
 const ORACLE_SCHEMA = 'kaminos.volume.layer-coefficient-render-oracle.v0';
@@ -22,6 +23,10 @@ const COEFFICIENT_BOUNDARY = 'per-sample-pre-tone-map-emission-extinction-v0';
 const SHARED_TRANSMITTANCE = 'ridge-plus-non-ridge-extinction-one-running-transmittance-v0';
 const KERNEL_GEOMETRY = 'base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0';
 const ORDER_APPROXIMATION = 'camera-depth-96-bin-one-running-transmittance-v0';
+const GRID96_ADAPTER_SHA256 = '5b507060d8caa6b92475f1e26aa64b69dc2d3952d64fae54f451f5257c21db7c';
+const GRID96_ADAPTER_IDENTITY = 'sha256:1291de8309826aa62e967fc75b1838575d88c91b03fc5123dbee5de297abcd9e';
+const GRID96_FEATURE_ORDER_AUTHORITY = 'consumer-pinned-exact-grid96-source-adapter-feature-order-v0';
+const ORACLE_CWD = dirname(fileURLToPath(import.meta.url));
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 const requested = Object.fromEntries(process.argv.slice(2).reduce((rows, value, index, argv) => {
@@ -59,7 +64,13 @@ function readJson(path, label) {
   return value;
 }
 
-function validateReceipt(path, reportPath) {
+function routeValue(tokens, option) {
+  const index = tokens.indexOf(option);
+  require(index >= 0 && index + 1 < tokens.length, `Greenroom effective route omitted ${option}`);
+  return tokens[index + 1];
+}
+
+function validateReceipt(path, reportPath, report, manifestPath) {
   const receipt = readJson(path, 'Greenroom receipt');
   require(receipt.status === 'done', 'Greenroom receipt did not complete');
   require(receipt.job_type === JOB_TYPE, 'Greenroom job type drifted');
@@ -67,10 +78,22 @@ function validateReceipt(path, reportPath) {
   require(receipt.effective_timeout == null, 'Greenroom route imposed a timeout');
   require(receipt.ignored_params == null || Object.keys(receipt.ignored_params).length === 0, 'Greenroom ignored requested parameters');
   require(resolve(receipt.output_dir) === dirname(resolve(reportPath)), 'Greenroom output directory does not own the oracle report');
+  require(resolve(receipt.input_path) === resolve(manifestPath), 'Greenroom input path does not own the oracle manifest');
+  require(resolve(receipt.effective_cwd) === resolve(ORACLE_CWD), 'Greenroom effective cwd drifted from the oracle source worktree');
   require(receipt.effective_env?.PYTHONPATH === '.', 'Greenroom PYTHONPATH route drifted');
-  require(receipt.effective_route?.includes('volume-layer-coefficient-render-oracle.py'), 'Greenroom effective runner drifted');
-  require(receipt.effective_route?.includes('--footprint-mode bilinear'), 'Greenroom effective footprint mode drifted');
-  require(!receipt.effective_route?.includes('--path-scale'), 'cross-grid route froze rather than independently calibrated the optical scalar');
+  const tokens = String(receipt.effective_route || '').trim().split(/\s+/);
+  require(tokens[0] === '/private/tmp/kaminos-mlx-residual-venv/bin/python' && tokens[1] === 'volume-layer-coefficient-render-oracle.py', 'Greenroom effective runner drifted');
+  require(resolve(routeValue(tokens, '--manifest')) === resolve(manifestPath), 'Greenroom manifest route drifted');
+  require(resolve(routeValue(tokens, '--capture-report')) === resolve(report.inputIdentity.captureReport.path), 'Greenroom capture report route drifted');
+  require(resolve(routeValue(tokens, '--out-dir')) === dirname(resolve(reportPath)), 'Greenroom output route drifted');
+  require(resolve(routeValue(tokens, '--report')) === resolve(reportPath), 'Greenroom report route drifted');
+  require(routeValue(tokens, '--state-step') === '120', 'Greenroom state step route drifted');
+  require(routeValue(tokens, '--depth-bins') === '96', 'Greenroom depth-bin route drifted');
+  require(routeValue(tokens, '--footprint-mode') === 'bilinear', 'Greenroom effective footprint mode drifted');
+  require(!tokens.includes('--path-scale'), 'cross-grid route froze rather than independently calibrated the optical scalar');
+  for (const field of ['started_at', 'finished_at']) require(Number.isFinite(receipt[field]), `Greenroom receipt ${field} is missing`);
+  for (const field of ['startedAtUnix', 'finishedAtUnix']) require(Number.isFinite(report[field]), `oracle report ${field} is missing`);
+  require(receipt.started_at <= report.startedAtUnix && report.startedAtUnix <= report.finishedAtUnix && report.finishedAtUnix <= receipt.finished_at, 'Greenroom receipt does not time-bind the oracle report');
   return receipt;
 }
 
@@ -87,6 +110,7 @@ function validateOracle(path, expectedGrid, manifestPath) {
   require(report.status === 'complete' && report.failurePhase == null, `Grid${expectedGrid} oracle is incomplete`);
   const effective = report.effective || {};
   require(effective.sourceGrid === expectedGrid, `Grid${expectedGrid} report is resized or mislabeled`);
+  require(Number.isFinite(effective.nativeCellWidthWorld) && Math.abs(effective.nativeCellWidthWorld - (2 / expectedGrid)) < 1e-15, `Grid${expectedGrid} native cell width does not equal 2/grid`);
   require(effective.stateStep === 120, `Grid${expectedGrid} state step drifted`);
   require(Number.isInteger(effective.rowCount) && effective.rowCount > 0, `Grid${expectedGrid} has no candidate rows`);
   require(effective.sampleCap == null && effective.droppedRowCount === 0, `Grid${expectedGrid} rows were capped or dropped`);
@@ -104,16 +128,28 @@ function validateOracle(path, expectedGrid, manifestPath) {
   const inputManifest = report.inputIdentity?.manifest || {};
   require(resolve(inputManifest.path) === resolve(manifestPath), `Grid${expectedGrid} effective manifest path drifted`);
   require(inputManifest.sha256 === sha256File(manifestPath), `Grid${expectedGrid} effective manifest hash drifted`);
+  if (expectedGrid === 96) {
+    require(inputManifest.sha256 === GRID96_ADAPTER_SHA256, 'Grid96 adapter bytes are not the exact source-pinned object');
+    require(inputManifest.identity === GRID96_ADAPTER_IDENTITY, 'Grid96 adapter semantic identity drifted');
+    require(report.descriptorReceipt?.featureOrderAuthority === GRID96_FEATURE_ORDER_AUTHORITY, 'Grid96 feature order authority is not the source-pinned adapter exception');
+  }
   const capture = report.inputIdentity?.captureReport || {};
   require(existsSync(capture.path) && capture.sha256 === sha256File(capture.path), `Grid${expectedGrid} capture report hash drifted`);
   const cohort = report.inputIdentity?.cameraCohort || {};
   require(cohort.cameraCount === 21 && Array.isArray(cohort.cameras) && cohort.cameras.length === 21, `Grid${expectedGrid} camera cohort is partial`);
   require(new Set(cohort.cameras.map(row => row.cameraIndex)).size === 21, `Grid${expectedGrid} camera cohort repeats an index`);
-  require(cohort.cameras.every((row, index) => row.cameraIndex === index && row.width === 314 && row.height === 242 && row.cameraPoseHash), `Grid${expectedGrid} camera cohort geometry drifted`);
+  require(cohort.cameras.every((row, index) => row.cameraIndex === index && row.width === 314 && row.height === 242 && row.cameraPoseHash && row.effectiveCameraPoseHash), `Grid${expectedGrid} camera cohort geometry drifted`);
   const cameras = report.metrics?.cameras || [];
   require(cameras.length === 21 && cameras.every((row, index) => row.cameraIndex === index), `Grid${expectedGrid} metric rows are partial or reordered`);
   require(cameras[10].split === 'calibration' && cameras.filter(row => row.split === 'heldOut').length === 20, `Grid${expectedGrid} calibration or held-view roles drifted`);
+  const finiteMetric = (value, label) => require(Number.isFinite(value) && value >= 0, `Grid${expectedGrid} metric ${label} is missing, nonfinite, or negative`);
+  for (const row of cameras) {
+    for (const field of ['mae', 'targetTopTailLumaUnderfit', 'targetWispUnderfit', 'structuredDotSpectralPower']) finiteMetric(row.expanded?.[field], `camera ${row.cameraIndex} expanded.${field}`);
+    finiteMetric(row.raster?.projectedFragments, `camera ${row.cameraIndex} raster.projectedFragments`);
+  }
   require(report.artifacts?.cameraCount === 21, `Grid${expectedGrid} artifact count drifted`);
+  require(resolve(report.artifacts?.gallery) === join(dirname(resolve(path)), 'index.html'), `Grid${expectedGrid} gallery escaped its oracle report directory`);
+  require(report.artifacts?.imageLedger && typeof report.artifacts.imageLedger === 'object', `Grid${expectedGrid} image ledger is missing`);
   return report;
 }
 
@@ -133,9 +169,10 @@ function summarize(report) {
   };
 }
 
-function copyImages(stage, grid, report) {
-  const sourceRoot = dirname(resolve(report.artifacts.gallery));
+function copyImages(stage, grid, report, reportPath) {
+  const sourceRoot = dirname(resolve(reportPath));
   const rows = [];
+  const ledger = {};
   for (let index = 0; index < 21; index += 1) {
     const sourcePrefix = `camera-${String(index).padStart(2, '0')}`;
     const outputs = {};
@@ -146,13 +183,19 @@ function copyImages(stage, grid, report) {
     ]) {
       const source = join(sourceRoot, `${sourcePrefix}-${suffix}.png`);
       validatePng(source, `Grid${grid} camera ${index} ${role}`);
+      const sourceRelative = basename(source);
+      const sourceDescriptor = report.artifacts.imageLedger[sourceRelative] || {};
+      require(sourceDescriptor.path === sourceRelative, `Grid${grid} image ledger path drifted for ${sourceRelative}`);
+      require(sourceDescriptor.bytes === statSync(source).size, `Grid${grid} image byte count drifted for ${sourceRelative}`);
+      require(sourceDescriptor.sha256 === sha256File(source), `Grid${grid} image hash drifted for ${sourceRelative}`);
       const relative = join('images', `grid${grid}-camera-${String(index).padStart(2, '0')}-${role}.png`);
       copyFileSync(source, join(stage, relative));
+      ledger[relative] = { path: relative, bytes: sourceDescriptor.bytes, sha256: sourceDescriptor.sha256, source: sourceRelative };
       outputs[role] = relative;
     }
     rows.push(outputs);
   }
-  return rows;
+  return { rows, ledger };
 }
 
 function pageHtml(rows, summary) {
@@ -202,12 +245,6 @@ try {
   const cockpitSha = sha256File(paths['grid160-cockpit-manifest']);
   require(companion.components?.comparison?.sha256 === cockpitSha, 'Grid160 cockpit manifest is not the companion-bound comparison object');
 
-  failurePhase = 'greenroom-receipt-validation';
-  const receipts = {
-    grid96: validateReceipt(paths['grid96-receipt'], paths['grid96-report']),
-    grid160: validateReceipt(paths['grid160-receipt'], paths['grid160-report']),
-  };
-
   failurePhase = 'cross-grid-identity-validation';
   const reports = {
     grid96: validateOracle(paths['grid96-report'], 96, paths['grid96-adapter']),
@@ -217,6 +254,12 @@ try {
   const cohortCanonical96 = stableJson(reports.grid96.inputIdentity.cameraCohort.cameras);
   const cohortCanonical160 = stableJson(reports.grid160.inputIdentity.cameraCohort.cameras);
   require(cohortCanonical96 === cohortCanonical160, 'native grids share a camera label but not camera rows');
+
+  failurePhase = 'greenroom-receipt-validation';
+  const receipts = {
+    grid96: validateReceipt(paths['grid96-receipt'], paths['grid96-report'], reports.grid96, paths['grid96-adapter']),
+    grid160: validateReceipt(paths['grid160-receipt'], paths['grid160-report'], reports.grid160, paths['grid160-oracle-manifest']),
+  };
   lastTrustworthyEvidence = {
     companion: { path: paths['grid96-companion'], sha256: sha256File(paths['grid96-companion']), identity: companion.identity },
     cockpit: { path: paths['grid160-cockpit-manifest'], sha256: cockpitSha },
@@ -227,8 +270,11 @@ try {
   const stage = join(dirname(outDir), `.${basename(outDir)}.stage-${process.pid}`);
   rmSync(stage, { recursive: true, force: true });
   mkdirSync(join(stage, 'images'), { recursive: true });
-  const imageRows = { grid96: copyImages(stage, 96, reports.grid96), grid160: copyImages(stage, 160, reports.grid160) };
-  const rows = Array.from({ length: 21 }, (_, index) => ({ index, grid96: imageRows.grid96[index], grid160: imageRows.grid160[index] }));
+  const copied = {
+    grid96: copyImages(stage, 96, reports.grid96, paths['grid96-report']),
+    grid160: copyImages(stage, 160, reports.grid160, paths['grid160-report']),
+  };
+  const rows = Array.from({ length: 21 }, (_, index) => ({ index, grid96: copied.grid96.rows[index], grid160: copied.grid160.rows[index] }));
   const metrics = { grid96: summarize(reports.grid96), grid160: summarize(reports.grid160) };
   const report = {
     schema: SCHEMA,
@@ -251,7 +297,7 @@ try {
     },
     massAuthority: { grid96: reports.grid96.massAccounting, grid160: reports.grid160.massAccounting },
     metrics: { grid96: { heldOut: metrics.grid96 }, grid160: { heldOut: metrics.grid160 } },
-    artifacts: { page: 'index.html', imageCount: 126, cameraCount: 21 },
+    artifacts: { page: 'index.html', imageCount: 126, cameraCount: 21, imageLedger: { ...copied.grid96.ledger, ...copied.grid160.ledger } },
     claimBoundary: {
       supports: 'native-source-lattice-versus-matched-deposit-space-bilinear-causal-comparison-v0',
       doesNotSupport: ['resized-grid inference', 'learner behavior', 'shipping renderer economics', 'broad footprint blur promotion'],

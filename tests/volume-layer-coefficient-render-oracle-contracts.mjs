@@ -78,6 +78,8 @@ assert.match(
 assert.match(source, /5b507060d8caa6b92475f1e26aa64b69dc2d3952d64fae54f451f5257c21db7c/, 'Grid96 feature compatibility is pinned to exact adapter bytes');
 assert.match(source, /consumer-pinned-exact-grid96-source-adapter-feature-order-v0/, 'Grid96 feature compatibility remains explicitly consumer-interpreted');
 assert.match(source, /cameraCohort/, 'oracle records the complete camera cohort identity');
+assert.match(source, /effectiveCameraPoseHash/, 'oracle hashes the actual camera matrix payload it rasterizes');
+assert.match(source, /imageLedger/, 'oracle binds every published comparison image by hash and byte count');
 assert.match(source, /inputIdentity/, 'oracle records exact manifest and capture identities');
 
 const python = process.env.KAMINOS_MLX_PYTHON || '/private/tmp/kaminos-mlx-residual-venv/bin/python';

@@ -100,6 +100,15 @@ def native_cell_width_world(source_grid: int) -> float:
     return 2.0 / float(source_grid)
 
 
+def effective_camera_pose_hash(camera_pose: Any) -> str:
+    require(isinstance(camera_pose, dict), "camera pose payload is missing")
+    for key, length in (("position", 3), ("target", 3), ("projectionMatrix", 16), ("matrixWorldInverse", 16)):
+        values = camera_pose.get(key)
+        require(isinstance(values, list) and len(values) == length, f"camera pose {key} must contain {length} values")
+        require(all(isinstance(value, (int, float)) and math.isfinite(value) for value in values), f"camera pose {key} contains nonfinite values")
+    return hashlib.sha256(canonical_json(camera_pose).encode("ascii")).hexdigest()
+
+
 def load_json(path: Path, label: str) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text())
@@ -255,8 +264,11 @@ def validate_capture_report(capture: dict[str, Any], state_step: int) -> list[di
     require(set(cameras) == set(range(21)), "capture must contain all 21 kernel-moment cameras")
     for index in range(21):
         require(REQUIRED_MODES.issubset(modes_by_camera.get(index, set())), f"camera {index} is partial")
-    hashes = [cameras[index].get("cameraPoseHash") for index in range(21)]
-    require(len(set(hashes)) == 21, "camera orbit reused a cached pose")
+    declared_hashes = [cameras[index].get("cameraPoseHash") for index in range(21)]
+    require(all(isinstance(value, str) and len(value) == 64 for value in declared_hashes), "camera orbit is missing declared pose hashes")
+    require(len(set(declared_hashes)) == 21, "camera orbit reused a cached declared pose")
+    effective_hashes = [effective_camera_pose_hash(cameras[index].get("cameraPose")) for index in range(21)]
+    require(len(set(effective_hashes)) == 21, "camera orbit reused an effective matrix payload")
     return [cameras[index] for index in range(21)]
 
 
@@ -1200,6 +1212,7 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
             "width": int(camera["width"]),
             "height": int(camera["height"]),
             "cameraPoseHash": camera.get("cameraPoseHash"),
+            "effectiveCameraPoseHash": effective_camera_pose_hash(camera.get("cameraPose")),
         }
         for camera in cameras
     ]
@@ -1400,6 +1413,16 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
     mass_accounting = summarize_coefficient_mass([
         row["raster"]["coefficientMass"] for row in metrics_rows
     ])
+    image_ledger = {}
+    for row in camera_rows:
+        for relative in row["images"].values():
+            path = out_dir / relative
+            image_ledger[relative] = {
+                "path": relative,
+                "bytes": path.stat().st_size,
+                "sha256": sha256_file(path),
+            }
+
     report = {
         "schema": REPORT_SCHEMA,
         "status": "complete",
@@ -1489,7 +1512,11 @@ def run_oracle(args: argparse.Namespace, phase_state: dict[str, str] | None = No
                 "ridgeTotalMae": float(np.mean([row["ridgeTotal"]["mae"] for row in held])),
             },
         },
-        "artifacts": {"gallery": str(out_dir / "index.html"), "cameraCount": len(camera_rows)},
+        "artifacts": {
+            "gallery": str(out_dir / "index.html"),
+            "cameraCount": len(camera_rows),
+            "imageLedger": image_ledger,
+        },
         "ceiling": {
             "truthful": True,
             "notExactFullCovariance": True,
