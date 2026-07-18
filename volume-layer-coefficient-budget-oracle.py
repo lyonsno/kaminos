@@ -12,6 +12,7 @@ import math
 import os
 import traceback
 import types
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +21,12 @@ MANIFEST_SCHEMA = "kaminos.volume.layer-coefficient-bilinear-motion-manifest.v0"
 MOTION_REPORT_SCHEMA = "kaminos.volume.layer-coefficient-bilinear-motion-render.v0"
 SELECTION_AUTHORITY = "camera-independent-exact-local-optical-coefficient-selection-v0"
 HYSTERESIS_AUTHORITY = "prior-native-cell-membership-schmitt-admission-v0"
+ADAPTIVE_HYSTERESIS_AUTHORITY = "previous-state-causal-survival-adaptive-schmitt-admission-v0"
+ADAPTIVE_PREDICTION_SOURCE = "previous-state-causal-native-cell-survival-v0"
+CAUSAL_SURVIVAL_MODEL_AUTHORITY = "standardized-ridge-native-cell-survival-v0"
+CAUSAL_SURVIVAL_TARGET_AUTHORITY = "next-state-stateless-optical-cohort-membership-v0"
+CAUSAL_SURVIVAL_FEATURE_AUTHORITY = "previous-state-local-features-coefficients-flow-optical-margin-v0"
+CAUSAL_SURVIVAL_FEATURE_COUNT = 41
 UNIFORM_AUTHORITY = "camera-independent-native-cell-hash-uniform-selection-v0"
 COMPARISON_AUTHORITY = "fixed-candidate-budget-matched-policy-comparator-v0"
 DEPOSITS_PER_CANDIDATE = 20
@@ -163,6 +170,301 @@ def native_id_set_receipt(native_ids: np.ndarray) -> dict[str, Any]:
     }
 
 
+def native_id_transition_receipt(previous_ids: np.ndarray, selected_ids: np.ndarray) -> dict[str, Any]:
+    previous = np.asarray(previous_ids, dtype=np.uint32)
+    selected = np.asarray(selected_ids, dtype=np.uint32)
+    require(previous.ndim == 1 and selected.ndim == 1, "native-ID transition inputs must be one-dimensional")
+    require(np.unique(previous).size == previous.size, "previous native-ID transition identities must be unique")
+    require(np.unique(selected).size == selected.size, "selected native-ID transition identities must be unique")
+    retained = np.intersect1d(selected, previous, assume_unique=True)
+    entered = np.setdiff1d(selected, previous, assume_unique=True)
+    exited = np.setdiff1d(previous, selected, assume_unique=True)
+    return {
+        "previous": native_id_set_receipt(previous),
+        "selected": native_id_set_receipt(selected),
+        "retained": native_id_set_receipt(retained),
+        "entered": native_id_set_receipt(entered),
+        "exited": native_id_set_receipt(exited),
+    }
+
+
+def native_id_float_receipt(native_ids: np.ndarray, values: np.ndarray) -> dict[str, Any]:
+    ids = np.asarray(native_ids, dtype=np.uint32)
+    floats = np.asarray(values, dtype=np.float32)
+    require(ids.ndim == 1 and floats.ndim == 1, "native-ID float receipt inputs must be one-dimensional")
+    require(ids.size == floats.size, "native-ID float receipt row population drifted")
+    require(np.unique(ids).size == ids.size, "native-ID float receipt identities must be unique")
+    require(np.all(np.isfinite(floats)), "native-ID float receipt values must be finite")
+    order = np.argsort(ids, kind="stable")
+    ordered_ids = np.asarray(ids[order], dtype="<u4")
+    ordered_floats = np.asarray(floats[order], dtype="<f4")
+    payload = np.asarray([ids.size], dtype="<u8").tobytes() + ordered_ids.tobytes() + ordered_floats.tobytes()
+    return {
+        "count": int(ids.size),
+        "distinctCount": int(np.unique(ids).size),
+        "sha256": hashlib.sha256(payload).hexdigest(),
+    }
+
+
+def fit_causal_survival_ridge(
+    features: np.ndarray,
+    labels: np.ndarray,
+    ridge_alpha: float,
+    receipt: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    feature_matrix = np.asarray(features, dtype=np.float64)
+    target = np.asarray(labels, dtype=np.float64)
+    require(feature_matrix.ndim == 2, "causal survival features must be a matrix")
+    require(feature_matrix.shape[0] > 0 and feature_matrix.shape[1] > 0, "causal survival features must be nonempty")
+    require(target.ndim == 1 and target.size == feature_matrix.shape[0], "causal survival labels must match feature rows")
+    require(np.all(np.isfinite(feature_matrix)), "causal survival features must be finite")
+    require(np.all(np.isfinite(target)), "causal survival labels must be finite")
+    require(np.all((target >= 0.0) & (target <= 1.0)), "causal survival labels must be in [0,1]")
+    require(math.isfinite(ridge_alpha) and ridge_alpha > 0.0, "causal survival ridge alpha must be positive and finite")
+
+    feature_mean = np.mean(feature_matrix, axis=0, dtype=np.float64)
+    feature_scale = np.std(feature_matrix, axis=0, dtype=np.float64)
+    feature_scale = np.where(feature_scale > 1e-8, feature_scale, 1.0)
+    normalized = (feature_matrix - feature_mean) / feature_scale
+    design = np.concatenate((np.ones((normalized.shape[0], 1), dtype=np.float64), normalized), axis=1)
+    gram = design.T @ design / design.shape[0]
+    right_hand_side = design.T @ target / design.shape[0]
+    regularization = np.eye(design.shape[1], dtype=np.float64) * ridge_alpha
+    regularization[0, 0] = 0.0
+    parameters = np.linalg.solve(gram + regularization, right_hand_side)
+    model = {
+        "authority": CAUSAL_SURVIVAL_MODEL_AUTHORITY,
+        "targetAuthority": CAUSAL_SURVIVAL_TARGET_AUTHORITY,
+        "ridgeAlpha": float(ridge_alpha),
+        "featureMean": feature_mean.astype(np.float32),
+        "featureScale": feature_scale.astype(np.float32),
+        "intercept": float(parameters[0]),
+        "weights": parameters[1:].astype(np.float32),
+    }
+    if receipt is not None:
+        model_payload = (
+            np.asarray(model["featureMean"], dtype="<f4").tobytes()
+            + np.asarray(model["featureScale"], dtype="<f4").tobytes()
+            + np.asarray([model["intercept"]], dtype="<f8").tobytes()
+            + np.asarray(model["weights"], dtype="<f4").tobytes()
+        )
+        receipt.update({
+            "authority": CAUSAL_SURVIVAL_MODEL_AUTHORITY,
+            "targetAuthority": CAUSAL_SURVIVAL_TARGET_AUTHORITY,
+            "trainingRows": int(feature_matrix.shape[0]),
+            "featureCount": int(feature_matrix.shape[1]),
+            "positiveFraction": float(np.mean(target)),
+            "ridgeAlpha": float(ridge_alpha),
+            "modelSha256": hashlib.sha256(model_payload).hexdigest(),
+        })
+    return model
+
+
+def fit_causal_survival_ridge_blocks(
+    blocks: Iterable[tuple[np.ndarray, np.ndarray]],
+    ridge_alpha: float,
+    receipt: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    require(math.isfinite(ridge_alpha) and ridge_alpha > 0.0, "causal survival ridge alpha must be positive and finite")
+
+    row_count = 0
+    block_count = 0
+    feature_count: int | None = None
+    feature_sum: np.ndarray | None = None
+    feature_square_sum: np.ndarray | None = None
+    feature_cross: np.ndarray | None = None
+    feature_target_cross: np.ndarray | None = None
+    target_sum = 0.0
+    for block_index, block in enumerate(blocks):
+        require(isinstance(block, tuple) and len(block) == 2, f"causal survival block {block_index} must be a feature-label pair")
+        features, labels = block
+        feature_matrix = np.asarray(features, dtype=np.float64)
+        target = np.asarray(labels, dtype=np.float64)
+        require(feature_matrix.ndim == 2 and feature_matrix.shape[0] > 0 and feature_matrix.shape[1] > 0, f"causal survival feature block {block_index} must be a nonempty matrix")
+        require(target.ndim == 1 and target.size == feature_matrix.shape[0], f"causal survival label block {block_index} must match feature rows")
+        require(np.all(np.isfinite(feature_matrix)), f"causal survival feature block {block_index} must be finite")
+        require(np.all(np.isfinite(target)), f"causal survival label block {block_index} must be finite")
+        require(np.all((target >= 0.0) & (target <= 1.0)), f"causal survival label block {block_index} must be in [0,1]")
+        if feature_count is None:
+            feature_count = int(feature_matrix.shape[1])
+            feature_sum = np.zeros(feature_count, dtype=np.float64)
+            feature_square_sum = np.zeros(feature_count, dtype=np.float64)
+            feature_cross = np.zeros((feature_count, feature_count), dtype=np.float64)
+            feature_target_cross = np.zeros(feature_count, dtype=np.float64)
+        require(feature_matrix.shape[1] == feature_count, "blockwise causal survival feature widths drifted")
+        require(
+            feature_sum is not None
+            and feature_square_sum is not None
+            and feature_cross is not None
+            and feature_target_cross is not None,
+            "blockwise causal survival accumulators are missing",
+        )
+        block_count += 1
+        row_count += int(feature_matrix.shape[0])
+        feature_sum += np.sum(feature_matrix, axis=0, dtype=np.float64)
+        feature_square_sum += np.einsum("ij,ij->j", feature_matrix, feature_matrix, dtype=np.float64)
+        feature_cross += feature_matrix.T @ feature_matrix
+        feature_target_cross += feature_matrix.T @ target
+        target_sum += float(np.sum(target, dtype=np.float64))
+        del feature_matrix, target, features, labels, block
+
+    require(
+        row_count > 0
+        and feature_count is not None
+        and feature_sum is not None
+        and feature_square_sum is not None
+        and feature_cross is not None
+        and feature_target_cross is not None,
+        "blockwise causal survival fit accumulated no rows",
+    )
+    feature_mean = feature_sum / row_count
+    feature_variance = np.maximum(feature_square_sum / row_count - feature_mean * feature_mean, 0.0)
+    feature_scale = np.sqrt(feature_variance)
+    feature_scale = np.where(feature_scale > 1e-8, feature_scale, 1.0)
+    normalized_cross = (
+        feature_cross - np.outer(feature_sum, feature_sum) / row_count
+    ) / (row_count * np.outer(feature_scale, feature_scale))
+    normalized_target_cross = (
+        feature_target_cross - feature_mean * target_sum
+    ) / (row_count * feature_scale)
+    design_gram = np.zeros((feature_count + 1, feature_count + 1), dtype=np.float64)
+    design_gram[0, 0] = 1.0
+    design_gram[1:, 1:] = normalized_cross
+    right_hand_side = np.concatenate((
+        np.asarray([target_sum / row_count], dtype=np.float64),
+        normalized_target_cross,
+    ))
+    regularization = np.eye(feature_count + 1, dtype=np.float64) * ridge_alpha
+    regularization[0, 0] = 0.0
+    regularized_gram = design_gram + regularization
+    regularized_condition_number = float(np.linalg.cond(regularized_gram))
+    require(math.isfinite(regularized_condition_number), "causal survival regularized condition number is nonfinite")
+    parameters = np.linalg.solve(regularized_gram, right_hand_side)
+    model = {
+        "authority": CAUSAL_SURVIVAL_MODEL_AUTHORITY,
+        "targetAuthority": CAUSAL_SURVIVAL_TARGET_AUTHORITY,
+        "ridgeAlpha": float(ridge_alpha),
+        "featureMean": feature_mean.astype(np.float32),
+        "featureScale": feature_scale.astype(np.float32),
+        "intercept": float(parameters[0]),
+        "weights": parameters[1:].astype(np.float32),
+    }
+    if receipt is not None:
+        model_payload = (
+            np.asarray(model["featureMean"], dtype="<f4").tobytes()
+            + np.asarray(model["featureScale"], dtype="<f4").tobytes()
+            + np.asarray([model["intercept"]], dtype="<f8").tobytes()
+            + np.asarray(model["weights"], dtype="<f4").tobytes()
+        )
+        receipt.update({
+            "authority": CAUSAL_SURVIVAL_MODEL_AUTHORITY,
+            "targetAuthority": CAUSAL_SURVIVAL_TARGET_AUTHORITY,
+            "trainingRows": row_count,
+            "trainingBlocks": block_count,
+            "featureCount": feature_count,
+            "positiveFraction": float(target_sum / row_count),
+            "ridgeAlpha": float(ridge_alpha),
+            "fitStrategy": "iterator-exact-sufficient-statistics-v0",
+            "regularizedConditionNumber": regularized_condition_number,
+            "modelSha256": hashlib.sha256(model_payload).hexdigest(),
+        })
+    return model
+
+
+def predict_causal_survival_ridge(model: dict[str, Any], features: np.ndarray) -> np.ndarray:
+    require(model.get("authority") == CAUSAL_SURVIVAL_MODEL_AUTHORITY, "causal survival model authority drifted")
+    require(model.get("targetAuthority") == CAUSAL_SURVIVAL_TARGET_AUTHORITY, "causal survival model target authority drifted")
+    feature_matrix = np.asarray(features, dtype=np.float64)
+    feature_mean = np.asarray(model.get("featureMean"), dtype=np.float64)
+    feature_scale = np.asarray(model.get("featureScale"), dtype=np.float64)
+    weights = np.asarray(model.get("weights"), dtype=np.float64)
+    require(feature_matrix.ndim == 2, "causal survival prediction features must be a matrix")
+    require(feature_mean.ndim == feature_scale.ndim == weights.ndim == 1, "causal survival model vectors must be one-dimensional")
+    require(feature_matrix.shape[1] == feature_mean.size == feature_scale.size == weights.size, "causal survival prediction feature width drifted")
+    require(np.all(np.isfinite(feature_matrix)), "causal survival prediction features must be finite")
+    require(np.all(np.isfinite(feature_mean)) and np.all(np.isfinite(feature_scale)), "causal survival normalization is nonfinite")
+    require(np.all(feature_scale > 0.0) and np.all(np.isfinite(weights)), "causal survival model parameters are invalid")
+    intercept = float(model.get("intercept"))
+    require(math.isfinite(intercept), "causal survival model intercept is nonfinite")
+    prediction = intercept + ((feature_matrix - feature_mean) / feature_scale) @ weights
+    return np.clip(prediction, 0.0, 1.0).astype(np.float32)
+
+
+def causal_survival_transition_split(
+    state_count: int,
+    training_transition_count: int,
+    calibration_transition_count: int,
+) -> dict[str, Any]:
+    require(isinstance(state_count, int) and state_count >= 4, "causal survival split requires at least four states")
+    transition_count = state_count - 1
+    require(
+        isinstance(training_transition_count, int) and training_transition_count > 0,
+        "causal survival split requires positive training transitions",
+    )
+    require(
+        isinstance(calibration_transition_count, int) and calibration_transition_count >= 0,
+        "causal survival calibration transition count must be nonnegative",
+    )
+    held_start = training_transition_count + calibration_transition_count
+    require(held_start < transition_count, "causal survival split must preserve at least one held transition")
+    return {
+        "trainingTransitionIndices": list(range(training_transition_count)),
+        "calibrationTransitionIndices": list(range(training_transition_count, held_start)),
+        "heldTransitionIndices": list(range(held_start, transition_count)),
+        "heldStateStartIndex": held_start,
+    }
+
+
+def native_id_membership_labels(source_ids: np.ndarray, destination_ids: np.ndarray) -> np.ndarray:
+    source = np.asarray(source_ids, dtype=np.uint32)
+    destination = np.asarray(destination_ids, dtype=np.uint32)
+    require(source.ndim == destination.ndim == 1, "native survival identity cohorts must be one-dimensional")
+    require(np.unique(source).size == source.size, "native survival source identities must be unique")
+    require(np.unique(destination).size == destination.size, "native survival destination identities must be unique")
+    if destination.size == 0:
+        return np.zeros(source.size, dtype=np.float32)
+    ordered_destination = np.sort(destination)
+    positions = np.searchsorted(ordered_destination, source)
+    present = positions < ordered_destination.size
+    matched_positions = np.minimum(positions, ordered_destination.size - 1)
+    present &= ordered_destination[matched_positions] == source
+    return present.astype(np.float32)
+
+
+def causal_survival_feature_matrix(
+    source_features: np.ndarray,
+    source_coefficients: np.ndarray,
+    source_descriptors: np.ndarray,
+    selected_rows: np.ndarray,
+    optical_scores: np.ndarray,
+    entry_threshold: float,
+) -> np.ndarray:
+    features = np.asarray(source_features)
+    coefficients = np.asarray(source_coefficients)
+    descriptors = np.asarray(source_descriptors)
+    rows = np.asarray(selected_rows, dtype=np.int64)
+    scores = np.asarray(optical_scores)
+    require(features.ndim == 2 and features.shape[1] == 24, "causal source features must have shape [rows,24]")
+    require(coefficients.ndim == 2 and coefficients.shape == (features.shape[0], 8), "causal source coefficients must have shape [rows,8]")
+    require(descriptors.ndim == 2 and descriptors.shape == (features.shape[0], 8), "causal source descriptors must have shape [rows,8]")
+    require(scores.ndim == 1 and scores.size == features.shape[0], "causal optical scores must match source rows")
+    require(rows.ndim == 1 and np.unique(rows).size == rows.size, "causal selected rows must be a unique vector")
+    require(np.all((rows >= 0) & (rows < features.shape[0])), "causal selected rows exceed the source population")
+    require(math.isfinite(entry_threshold) and entry_threshold > 0.0, "causal optical entry threshold must be positive and finite")
+    descriptor_columns = np.asarray([0, 1, 2, 4, 5, 6, 7], dtype=np.int64)
+    selected_scores = np.asarray(scores[rows], dtype=np.float32)
+    matrix = np.concatenate((
+        np.asarray(features[rows], dtype=np.float32),
+        np.asarray(coefficients[rows], dtype=np.float32),
+        np.asarray(descriptors[rows][:, descriptor_columns], dtype=np.float32),
+        selected_scores[:, None],
+        (selected_scores / entry_threshold)[:, None],
+    ), axis=1)
+    require(matrix.shape == (rows.size, CAUSAL_SURVIVAL_FEATURE_COUNT), "causal survival feature width drifted")
+    require(np.all(np.isfinite(matrix)), "causal survival feature matrix is nonfinite")
+    return matrix
+
+
 def select_stable_uniform(native_ids: np.ndarray, budget: int) -> np.ndarray:
     require(0 < budget <= native_ids.size, "stable-uniform budget is outside the candidate population")
     order = np.lexsort((native_ids, stable_hash(native_ids)))
@@ -248,6 +550,131 @@ def select_optical_hysteresis(
             "entryThreshold": entry_threshold,
             "exitThreshold": exit_threshold,
             "previous": native_id_set_receipt(previous_ids),
+            "selected": native_id_set_receipt(selected_ids),
+            "retained": native_id_set_receipt(retained_ids),
+            "entered": native_id_set_receipt(entered_ids),
+            "exited": native_id_set_receipt(exited_ids),
+        })
+    return selected_rows
+
+
+def select_optical_adaptive_hysteresis(
+    native_ids: np.ndarray,
+    coefficients: np.ndarray,
+    budget: int,
+    previous_optical_ids: np.ndarray | None,
+    previous_survival_probabilities: np.ndarray | None,
+    minimum_ratio: float,
+    maximum_ratio: float,
+    receipt: dict[str, Any] | None = None,
+) -> np.ndarray:
+    require(native_ids.size == coefficients.shape[0], "adaptive optical selection row population drifted")
+    require(np.unique(native_ids).size == native_ids.size, "current adaptive optical native IDs must be unique")
+    require(0 < budget <= native_ids.size, "adaptive optical budget is outside the candidate population")
+    require(0.0 <= minimum_ratio <= maximum_ratio < 1.0, "adaptive hysteresis ratios must satisfy 0 <= minimum <= maximum < 1")
+    scores = optical_energy_scores(coefficients)
+    order = optical_score_order(native_ids, scores)
+    entry_threshold = float(scores[order[budget - 1]])
+
+    previous_ids = (
+        np.empty(0, dtype=native_ids.dtype)
+        if previous_optical_ids is None
+        else np.asarray(previous_optical_ids, dtype=native_ids.dtype)
+    )
+    survival_probabilities = (
+        np.empty(0, dtype=np.float32)
+        if previous_survival_probabilities is None
+        else np.asarray(previous_survival_probabilities, dtype=np.float32)
+    )
+    require(previous_ids.ndim == 1, "previous adaptive optical native IDs must be one-dimensional")
+    require(survival_probabilities.ndim == 1, "previous adaptive survival predictions must be one-dimensional")
+    require(np.unique(previous_ids).size == previous_ids.size, "previous adaptive optical native IDs must be unique")
+    require(
+        previous_ids.size == survival_probabilities.size,
+        "previous adaptive optical IDs and survival predictions must have equal populations",
+    )
+    require(np.all(np.isfinite(survival_probabilities)), "previous adaptive survival predictions must be finite")
+    require(
+        np.all((survival_probabilities >= 0.0) & (survival_probabilities <= 1.0)),
+        "previous adaptive survival predictions must be in [0,1]",
+    )
+
+    if previous_ids.size == 0:
+        selected_rows = select_optical_energy(native_ids, coefficients, budget)
+        if receipt is not None:
+            selected_ids = native_ids[selected_rows]
+            receipt.update({
+                "authority": ADAPTIVE_HYSTERESIS_AUTHORITY,
+                "predictionSource": ADAPTIVE_PREDICTION_SOURCE,
+                "initializedFromStatelessOptical": True,
+                "minimumRatio": float(minimum_ratio),
+                "maximumRatio": float(maximum_ratio),
+                "effectiveRatioDistribution": {
+                    "count": 0,
+                    "minimum": None,
+                    "mean": None,
+                    "maximum": None,
+                },
+                "matchedMeanRatio": None,
+                "entryThreshold": entry_threshold,
+                "previous": native_id_set_receipt(previous_ids),
+                "survivalPredictions": native_id_float_receipt(previous_ids, survival_probabilities),
+                "selected": native_id_set_receipt(selected_ids),
+                "retained": native_id_set_receipt(np.empty(0, dtype=np.uint32)),
+                "entered": native_id_set_receipt(selected_ids),
+                "exited": native_id_set_receipt(np.empty(0, dtype=np.uint32)),
+            })
+        return selected_rows
+
+    previous_order = np.argsort(previous_ids, kind="stable")
+    sorted_previous_ids = previous_ids[previous_order]
+    sorted_survival_probabilities = survival_probabilities[previous_order]
+    previous_positions = np.searchsorted(sorted_previous_ids, native_ids)
+    previous_mask = previous_positions < sorted_previous_ids.size
+    matched_positions = np.minimum(previous_positions, sorted_previous_ids.size - 1)
+    previous_mask &= sorted_previous_ids[matched_positions] == native_ids
+    current_survival_probabilities = np.zeros(native_ids.size, dtype=np.float32)
+    current_survival_probabilities[previous_mask] = sorted_survival_probabilities[matched_positions[previous_mask]]
+    current_ratios = minimum_ratio + (maximum_ratio - minimum_ratio) * current_survival_probabilities
+    effective_ratios = np.asarray(current_ratios[previous_mask], dtype=np.float32)
+    matched_mean_ratio = (
+        float(np.mean(effective_ratios, dtype=np.float64))
+        if effective_ratios.size > 0
+        else None
+    )
+    exit_thresholds = entry_threshold * (1.0 - current_ratios)
+    retained = np.flatnonzero(previous_mask & (scores >= exit_thresholds))
+    retained_order = optical_score_order(native_ids[retained], scores[retained])
+    retained = retained[retained_order[:budget]]
+
+    selected = np.zeros(native_ids.size, dtype=bool)
+    selected[retained] = True
+    remaining = budget - retained.size
+    if remaining > 0:
+        selected[order[~selected[order]][:remaining]] = True
+    selected_rows = np.flatnonzero(selected)
+    require(selected_rows.size == budget, "adaptive optical selector failed to spend the fixed candidate budget")
+    if receipt is not None:
+        selected_ids = native_ids[selected_rows]
+        retained_ids = np.intersect1d(selected_ids, previous_ids, assume_unique=True)
+        entered_ids = np.setdiff1d(selected_ids, previous_ids, assume_unique=True)
+        exited_ids = np.setdiff1d(previous_ids, selected_ids, assume_unique=True)
+        receipt.update({
+            "authority": ADAPTIVE_HYSTERESIS_AUTHORITY,
+            "predictionSource": ADAPTIVE_PREDICTION_SOURCE,
+            "initializedFromStatelessOptical": effective_ratios.size == 0,
+            "minimumRatio": float(minimum_ratio),
+            "maximumRatio": float(maximum_ratio),
+            "effectiveRatioDistribution": {
+                "count": int(effective_ratios.size),
+                "minimum": float(np.min(effective_ratios)) if effective_ratios.size > 0 else None,
+                "mean": matched_mean_ratio,
+                "maximum": float(np.max(effective_ratios)) if effective_ratios.size > 0 else None,
+            },
+            "matchedMeanRatio": matched_mean_ratio,
+            "entryThreshold": entry_threshold,
+            "previous": native_id_set_receipt(previous_ids),
+            "survivalPredictions": native_id_float_receipt(previous_ids, survival_probabilities),
             "selected": native_id_set_receipt(selected_ids),
             "retained": native_id_set_receipt(retained_ids),
             "entered": native_id_set_receipt(entered_ids),
@@ -453,6 +880,147 @@ const rows={payload};const slider=document.querySelector('#step');function show(
 </script></body></html>"""
 
 
+def stateless_optical_context(
+    state: dict[str, Any],
+    manifest_path: Path,
+    candidate_budget: int,
+) -> dict[str, Any]:
+    rows = MOTION.load_rows(state, manifest_path)
+    native_ids = np.asarray(rows["nativeCellIndices"], dtype=np.uint32)
+    coefficients = np.asarray(rows["coefficients"])
+    scores = optical_energy_scores(coefficients)
+    order = optical_score_order(native_ids, scores)
+    require(0 < candidate_budget <= native_ids.size, "causal optical candidate budget exceeds a state population")
+    selected_rows = np.sort(order[:candidate_budget])
+    return {
+        "state": state,
+        "rows": rows,
+        "nativeIds": native_ids,
+        "coefficients": coefficients,
+        "opticalScores": scores,
+        "entryThreshold": float(scores[order[candidate_budget - 1]]),
+        "selectedRows": selected_rows,
+        "selectedIds": native_ids[selected_rows],
+    }
+
+
+def causal_survival_transition_examples(
+    states: list[dict[str, Any]],
+    manifest_path: Path,
+    transition_index: int,
+    candidate_budget: int,
+) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
+    require(0 <= transition_index < len(states) - 1, "causal survival transition index is outside the state sequence")
+    source = stateless_optical_context(states[transition_index], manifest_path, candidate_budget)
+    destination = stateless_optical_context(states[transition_index + 1], manifest_path, candidate_budget)
+    feature_matrix = causal_survival_feature_matrix(
+        source["rows"]["features"],
+        source["coefficients"],
+        source["rows"]["kernelDescriptors"],
+        source["selectedRows"],
+        source["opticalScores"],
+        source["entryThreshold"],
+    )
+    labels = native_id_membership_labels(source["selectedIds"], destination["selectedIds"])
+    receipt = {
+        "transitionIndex": transition_index,
+        "fromStateId": str(states[transition_index]["id"]),
+        "toStateId": str(states[transition_index + 1]["id"]),
+        "fromSteps": int((states[transition_index].get("replay") or {}).get("completedSteps")),
+        "toSteps": int((states[transition_index + 1].get("replay") or {}).get("completedSteps")),
+        "trainingRows": int(feature_matrix.shape[0]),
+        "featureCount": int(feature_matrix.shape[1]),
+        "positiveFraction": float(np.mean(labels)),
+        "sourceCohort": native_id_set_receipt(source["selectedIds"]),
+        "destinationCohort": native_id_set_receipt(destination["selectedIds"]),
+        "targetAuthority": CAUSAL_SURVIVAL_TARGET_AUTHORITY,
+        "targetPixelsUsed": False,
+        "cameraUsed": False,
+    }
+    return feature_matrix, labels, receipt
+
+
+def survival_prediction_metrics(predictions: np.ndarray, labels: np.ndarray) -> dict[str, Any]:
+    predicted = np.asarray(predictions, dtype=np.float64)
+    target = np.asarray(labels, dtype=np.float64)
+    require(predicted.ndim == target.ndim == 1 and predicted.size == target.size > 0, "survival prediction metrics require matched nonempty vectors")
+    require(np.all(np.isfinite(predicted)) and np.all((predicted >= 0.0) & (predicted <= 1.0)), "survival predictions must be finite probabilities")
+    require(np.all(np.isfinite(target)) and np.all((target >= 0.0) & (target <= 1.0)), "survival labels must be finite probabilities")
+    constant = float(np.mean(target))
+    brier = float(np.mean((predicted - target) ** 2))
+    constant_brier = float(np.mean((constant - target) ** 2))
+    return {
+        "rows": int(target.size),
+        "positiveFraction": constant,
+        "predictionMean": float(np.mean(predicted)),
+        "predictionP05": float(np.percentile(predicted, 5)),
+        "predictionP50": float(np.percentile(predicted, 50)),
+        "predictionP95": float(np.percentile(predicted, 95)),
+        "mae": float(np.mean(np.abs(predicted - target))),
+        "brier": brier,
+        "constantBrier": constant_brier,
+        "brierImprovementOverConstant": float(constant_brier - brier),
+        "thresholdAccuracy": float(np.mean((predicted >= 0.5) == (target >= 0.5))),
+    }
+
+
+def train_causal_survival_model(
+    states: list[dict[str, Any]],
+    manifest_path: Path,
+    candidate_budget: int,
+    split: dict[str, Any],
+    ridge_alpha: float,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    training_transitions: list[dict[str, Any]] = []
+
+    def training_blocks() -> Iterable[tuple[np.ndarray, np.ndarray]]:
+        for transition_index in split["trainingTransitionIndices"]:
+            features, labels, transition_receipt = causal_survival_transition_examples(
+                states,
+                manifest_path,
+                transition_index,
+                candidate_budget,
+            )
+            training_transitions.append(transition_receipt)
+            yield features, labels
+            del features, labels
+
+    model_receipt: dict[str, Any] = {}
+    model = fit_causal_survival_ridge_blocks(
+        training_blocks(),
+        ridge_alpha,
+        receipt=model_receipt,
+    )
+
+    calibration_transitions: list[dict[str, Any]] = []
+    for transition_index in split["calibrationTransitionIndices"]:
+        features, labels, transition_receipt = causal_survival_transition_examples(
+            states,
+            manifest_path,
+            transition_index,
+            candidate_budget,
+        )
+        transition_receipt["metrics"] = survival_prediction_metrics(
+            predict_causal_survival_ridge(model, features),
+            labels,
+        )
+        calibration_transitions.append(transition_receipt)
+    model_receipt.update({
+        "featureAuthority": CAUSAL_SURVIVAL_FEATURE_AUTHORITY,
+        "featureCount": CAUSAL_SURVIVAL_FEATURE_COUNT,
+        "trainingTransitions": training_transitions,
+        "calibrationTransitions": calibration_transitions,
+        "chronologicalSplit": split,
+        "modelParameters": {
+            "featureMean": np.asarray(model["featureMean"]).tolist(),
+            "featureScale": np.asarray(model["featureScale"]).tolist(),
+            "intercept": model["intercept"],
+            "weights": np.asarray(model["weights"]).tolist(),
+        },
+    })
+    return model, model_receipt
+
+
 def selected_state(
     state: dict[str, Any],
     manifest_path: Path,
@@ -531,6 +1099,12 @@ def run(
     budget_fraction: float,
     mode: str,
     hysteresis_ratio: float,
+    adaptive_survival: bool,
+    adaptive_minimum_ratio: float,
+    adaptive_maximum_ratio: float,
+    adaptive_training_transitions: int,
+    adaptive_calibration_transitions: int,
+    adaptive_ridge_alpha: float,
     implementation_bundle_sha256: str,
     bound_implementation_bundle: dict[str, Any],
 ) -> dict[str, Any]:
@@ -540,11 +1114,30 @@ def run(
     require(mode in {"frozen", "sequence"}, "mode must be frozen or sequence")
     states = manifest.get("states") or []
     require(len(states) >= 2, "budget oracle requires at least two captured exact states")
-    selected_states = [states[-1]] if mode == "frozen" else states
     budget_anchor_state = states[-1]
     budget_anchor_rows = MOTION.load_rows(budget_anchor_state, manifest_path)
     budget_anchor_population = int(budget_anchor_rows["nativeCellIndices"].shape[0])
     candidate_budget = max(1, int(np.floor(budget_anchor_population * budget_fraction)))
+    adaptive_split: dict[str, Any] | None = None
+    adaptive_model: dict[str, Any] | None = None
+    adaptive_model_receipt: dict[str, Any] | None = None
+    if adaptive_survival:
+        require(mode == "sequence", "causal adaptive survival requires sequence mode")
+        adaptive_split = causal_survival_transition_split(
+            len(states),
+            adaptive_training_transitions,
+            adaptive_calibration_transitions,
+        )
+        adaptive_model, adaptive_model_receipt = train_causal_survival_model(
+            states,
+            manifest_path,
+            candidate_budget,
+            adaptive_split,
+            adaptive_ridge_alpha,
+        )
+        selected_states = states[adaptive_split["heldStateStartIndex"]:]
+    else:
+        selected_states = [states[-1]] if mode == "frozen" else states
     path_scale = float((motion_report.get("transport") or {}).get("globalPathScale"))
     full_by_state = {str(row["stateId"]): row for row in motion_report.get("states") or []}
     require(all(str(state["id"]) in full_by_state for state in selected_states), "motion report is partial for selected states")
@@ -553,29 +1146,144 @@ def run(
     images_dir = out_dir / "images"
     images_dir.mkdir(parents=True, exist_ok=True)
     report_states: list[dict[str, Any]] = []
-    policies = ["stable-uniform", "optical-energy", "optical-hysteresis"]
+    policies = (
+        [
+            "optical-energy",
+            "optical-hysteresis-025",
+            "optical-hysteresis-035",
+            "optical-hysteresis-adaptive-mean",
+            "optical-adaptive-hysteresis",
+        ]
+        if adaptive_survival
+        else ["stable-uniform", "optical-energy", "optical-hysteresis"]
+    )
     temporal_by_policy: dict[str, list[dict[str, Any]]] = {policy: [] for policy in policies}
     previous_by_policy: dict[str, dict[str, Any]] = {}
     previous_hysteresis_ids: np.ndarray | None = None
+    previous_hysteresis_ids_by_ratio: dict[str, np.ndarray | None] = {
+        "optical-hysteresis-025": None,
+        "optical-hysteresis-035": None,
+    }
+    previous_adaptive_ids: np.ndarray | None = None
+    previous_adaptive_predictions: np.ndarray | None = None
+    previous_adaptive_mean_ids: np.ndarray | None = None
+    adaptive_held_predictions: list[dict[str, Any]] = []
     target_hashes: set[str] = set()
     render_hashes: dict[str, set[str]] = {policy: set() for policy in policies}
 
-    for state in selected_states:
+    selected_state_start_index = adaptive_split["heldStateStartIndex"] if adaptive_split is not None else 0
+    for selected_state_offset, state in enumerate(selected_states):
         state_id = str(state["id"])
         rows = MOTION.load_rows(state, manifest_path)
         ids = np.asarray(rows["nativeCellIndices"], dtype=np.uint32)
         coefficients = np.asarray(rows["coefficients"])
         selection_receipts: dict[str, dict[str, Any]] = {}
-        selections = fixed_budget_selections(
-            ids,
-            coefficients,
-            budget_fraction,
-            candidate_budget=candidate_budget,
-            previous_optical_ids=previous_hysteresis_ids,
-            hysteresis_ratio=hysteresis_ratio,
-            selection_receipts=selection_receipts,
-        )
-        previous_hysteresis_ids = ids[selections["optical-hysteresis"]].copy()
+        if adaptive_survival:
+            optical_rows = select_optical_energy(ids, coefficients, candidate_budget)
+            selection_receipts["optical-energy"] = {
+                "authority": SELECTION_AUTHORITY,
+                "selected": native_id_set_receipt(ids[optical_rows]),
+            }
+            selections = {"optical-energy": optical_rows}
+            for policy, ratio in (("optical-hysteresis-025", 0.25), ("optical-hysteresis-035", 0.35)):
+                policy_receipt: dict[str, Any] = {}
+                policy_rows = select_optical_hysteresis(
+                    ids,
+                    coefficients,
+                    candidate_budget,
+                    previous_hysteresis_ids_by_ratio[policy],
+                    ratio,
+                    receipt=policy_receipt,
+                )
+                selections[policy] = policy_rows
+                selection_receipts[policy] = policy_receipt
+                previous_hysteresis_ids_by_ratio[policy] = ids[policy_rows].copy()
+            adaptive_receipt: dict[str, Any] = {}
+            adaptive_rows = select_optical_adaptive_hysteresis(
+                ids,
+                coefficients,
+                candidate_budget,
+                previous_adaptive_ids,
+                previous_adaptive_predictions,
+                adaptive_minimum_ratio,
+                adaptive_maximum_ratio,
+                receipt=adaptive_receipt,
+            )
+            selections["optical-adaptive-hysteresis"] = adaptive_rows
+            selection_receipts["optical-adaptive-hysteresis"] = adaptive_receipt
+            adaptive_mean_receipt: dict[str, Any] = {}
+            matched_mean_ratio = adaptive_receipt["matchedMeanRatio"]
+            if matched_mean_ratio is None:
+                adaptive_mean_rows = select_optical_energy(ids, coefficients, candidate_budget)
+                selected_adaptive_mean_ids = ids[adaptive_mean_rows]
+                adaptive_mean_receipt.update({
+                    "initializedFromStatelessOptical": True,
+                    **native_id_transition_receipt(
+                        np.empty(0, dtype=np.uint32)
+                        if previous_adaptive_mean_ids is None
+                        else previous_adaptive_mean_ids,
+                        selected_adaptive_mean_ids,
+                    ),
+                })
+            else:
+                adaptive_mean_rows = select_optical_hysteresis(
+                    ids,
+                    coefficients,
+                    candidate_budget,
+                    previous_adaptive_mean_ids,
+                    float(matched_mean_ratio),
+                    receipt=adaptive_mean_receipt,
+                )
+            adaptive_mean_receipt.update({
+                "authority": "adaptive-prediction-matched-mean-scalar-hysteresis-v0",
+                "predictionSource": ADAPTIVE_PREDICTION_SOURCE,
+                "matchedMeanRatio": matched_mean_ratio,
+                "adaptiveRatioDistribution": dict(adaptive_receipt["effectiveRatioDistribution"]),
+            })
+            selections["optical-hysteresis-adaptive-mean"] = adaptive_mean_rows
+            selection_receipts["optical-hysteresis-adaptive-mean"] = adaptive_mean_receipt
+            previous_adaptive_mean_ids = ids[adaptive_mean_rows].copy()
+            require(adaptive_model is not None, "causal adaptive model is missing after training")
+            state_scores = optical_energy_scores(coefficients)
+            state_order = optical_score_order(ids, state_scores)
+            state_entry_threshold = float(state_scores[state_order[candidate_budget - 1]])
+            adaptive_features = causal_survival_feature_matrix(
+                rows["features"],
+                coefficients,
+                rows["kernelDescriptors"],
+                adaptive_rows,
+                state_scores,
+                state_entry_threshold,
+            )
+            current_adaptive_predictions = predict_causal_survival_ridge(adaptive_model, adaptive_features)
+            current_adaptive_ids = ids[adaptive_rows].copy()
+            state_sequence_index = selected_state_start_index + selected_state_offset
+            if state_sequence_index < len(states) - 1:
+                destination = stateless_optical_context(states[state_sequence_index + 1], manifest_path, candidate_budget)
+                held_labels = native_id_membership_labels(current_adaptive_ids, destination["selectedIds"])
+                adaptive_held_predictions.append({
+                    "fromStateId": state_id,
+                    "toStateId": str(states[state_sequence_index + 1]["id"]),
+                    "predictionSource": ADAPTIVE_PREDICTION_SOURCE,
+                    "targetAuthority": CAUSAL_SURVIVAL_TARGET_AUTHORITY,
+                    "targetPixelsUsed": False,
+                    "cameraUsed": False,
+                    "predictionReceipt": native_id_float_receipt(current_adaptive_ids, current_adaptive_predictions),
+                    "metrics": survival_prediction_metrics(current_adaptive_predictions, held_labels),
+                })
+            previous_adaptive_ids = current_adaptive_ids
+            previous_adaptive_predictions = current_adaptive_predictions
+        else:
+            selections = fixed_budget_selections(
+                ids,
+                coefficients,
+                budget_fraction,
+                candidate_budget=candidate_budget,
+                previous_optical_ids=previous_hysteresis_ids,
+                hysteresis_ratio=hysteresis_ratio,
+                selection_receipts=selection_receipts,
+            )
+            previous_hysteresis_ids = ids[selections["optical-hysteresis"]].copy()
         target = MOTION.target_image(state, manifest_path)
         target_path = images_dir / f"{state_id}-target.png"
         ORACLE.write_png(target_path, target)
@@ -661,13 +1369,52 @@ def run(
             "maximumDepositsPerCandidate": DEPOSITS_PER_CANDIDATE,
             "workEquivalence": "equal-selected-candidates-and-equal-nominal-deposit-evaluations; actual-in-bounds-deposits-reported-as-outcome",
             "policies": policies,
-            "hysteresis": {
+            "hysteresis": ({
                 "authority": HYSTERESIS_AUTHORITY,
                 "ratio": hysteresis_ratio,
                 "entryThreshold": "current-state optical-energy kth score",
                 "exitThreshold": "entry-threshold-times-one-minus-ratio",
                 "identitySource": "previous selected native-cell ids",
-            },
+            } if not adaptive_survival else None),
+            "fixedHysteresisBaselines": ([
+                {
+                    "policy": "optical-hysteresis-025",
+                    "authority": HYSTERESIS_AUTHORITY,
+                    "ratio": 0.25,
+                    "entryThreshold": "current-state optical-energy kth score",
+                    "exitThreshold": "entry-threshold-times-one-minus-ratio",
+                    "identitySource": "previous selected native-cell ids",
+                },
+                {
+                    "policy": "optical-hysteresis-035",
+                    "authority": HYSTERESIS_AUTHORITY,
+                    "ratio": 0.35,
+                    "entryThreshold": "current-state optical-energy kth score",
+                    "exitThreshold": "entry-threshold-times-one-minus-ratio",
+                    "identitySource": "previous selected native-cell ids",
+                },
+            ] if adaptive_survival else None),
+            "adaptiveSurvival": ({
+                "authority": ADAPTIVE_HYSTERESIS_AUTHORITY,
+                "predictionSource": ADAPTIVE_PREDICTION_SOURCE,
+                "minimumRatio": adaptive_minimum_ratio,
+                "maximumRatio": adaptive_maximum_ratio,
+                "entryThreshold": "current-state optical-energy kth score",
+                "exitThreshold": "per-node entry-threshold-times-one-minus-learned-bounded-ratio",
+                "identitySource": "previous selected native-cell ids",
+                "targetUsedForSelection": False,
+                "cameraUsedForSelection": False,
+                "model": adaptive_model_receipt,
+                "heldPredictionMetrics": adaptive_held_predictions,
+                "matchedMeanControl": {
+                    "policy": "optical-hysteresis-adaptive-mean",
+                    "authority": "adaptive-prediction-matched-mean-scalar-hysteresis-v0",
+                    "ratio": "per-state mean of current-matched bounded adaptive ratios; null uses stateless optical",
+                    "nodeHeterogeneity": False,
+                    "candidateBudgetMatched": True,
+                    "nominalDepositWorkMatched": True,
+                },
+            } if adaptive_survival else None),
         },
         "transport": {
             "depthBins": MOTION.DEPTH_BINS,
@@ -692,6 +1439,12 @@ def main() -> int:
     parser.add_argument("--implementation-bundle-sha256", required=True)
     parser.add_argument("--budget-fraction", type=float, default=0.25)
     parser.add_argument("--hysteresis-ratio", type=float, default=0.1)
+    parser.add_argument("--adaptive-survival", action="store_true")
+    parser.add_argument("--adaptive-minimum-ratio", type=float, default=0.25)
+    parser.add_argument("--adaptive-maximum-ratio", type=float, default=0.35)
+    parser.add_argument("--adaptive-training-transitions", type=int, default=7)
+    parser.add_argument("--adaptive-calibration-transitions", type=int, default=1)
+    parser.add_argument("--adaptive-ridge-alpha", type=float, default=1e-3)
     parser.add_argument("--mode", choices=("frozen", "sequence"), default="frozen")
     args = parser.parse_args()
     manifest_path = Path(args.manifest).expanduser().resolve()
@@ -726,6 +1479,12 @@ def main() -> int:
             args.budget_fraction,
             args.mode,
             args.hysteresis_ratio,
+            args.adaptive_survival,
+            args.adaptive_minimum_ratio,
+            args.adaptive_maximum_ratio,
+            args.adaptive_training_transitions,
+            args.adaptive_calibration_transitions,
+            args.adaptive_ridge_alpha,
             implementation_bundle_sha256,
             implementation_bundle_at_start,
         )
