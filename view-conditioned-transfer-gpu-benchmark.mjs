@@ -14,6 +14,9 @@ const ROOT = dirname(fileURLToPath(import.meta.url));
 const SCHEMA = 'kaminos.view-conditioned-transfer-gpu-benchmark.v0';
 const REPORT_NAME = 'gpu-benchmark-report.json';
 const SCREENSHOT_NAME = 'gpu-benchmark-witness.png';
+const EXPECTED_DENSE_SHAPE = [96, 242, 314];
+const EXPECTED_REDUCED_SHAPE = [12, 121, 157];
+const EXPECTED_OUTPUT_SHAPE = [242, 314];
 
 function parseArgs(argv) {
   const values = {};
@@ -26,6 +29,7 @@ function parseArgs(argv) {
     ['--warmup', 'warmup'],
     ['--python', 'python'],
     ['--chrome', 'chrome'],
+    ['--phase-timeout-ms', 'phaseTimeoutMs'],
   ]);
   for (let index = 0; index < argv.length; index += 1) {
     const key = argv[index];
@@ -39,12 +43,30 @@ function parseArgs(argv) {
   }
   if (!/^\d+$/.test(values.samples) || Number(values.samples) < 1) throw new Error('--samples must be a positive integer');
   if (!/^\d+$/.test(values.warmup)) throw new Error('--warmup must be a nonnegative integer');
+  if (!/^\d+$/.test(values.phaseTimeoutMs) || Number(values.phaseTimeoutMs) < 1) throw new Error('--phase-timeout-ms must be a positive integer');
   values.samples = Number(values.samples);
   values.warmup = Number(values.warmup);
+  values.phaseTimeoutMs = Number(values.phaseTimeoutMs);
   return values;
 }
 
 const delay = milliseconds => new Promise(resolveDelay => setTimeout(resolveDelay, milliseconds));
+
+function phaseTimeout(promise, milliseconds, label) {
+  let timeout = null;
+  const expired = new Promise((_, reject) => {
+    timeout = setTimeout(() => reject(new Error(`${label} exceeded caller phase timeout ${milliseconds}ms`)), milliseconds);
+  });
+  return Promise.race([promise, expired]).finally(() => clearTimeout(timeout));
+}
+
+function sameShape(actual, expected) {
+  return Array.isArray(actual) && actual.length === expected.length && actual.every((value, index) => value === expected[index]);
+}
+
+function requireShape(actual, expected, label) {
+  if (!sameShape(actual, expected)) throw new Error(`${label} must be [${expected.join(',')}], got ${JSON.stringify(actual)}`);
+}
 
 async function sha256File(path) {
   return createHash('sha256').update(await readFileAsync(path)).digest('hex');
@@ -54,9 +76,16 @@ async function writeJson(path, value) {
   await writeFileAsync(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-async function runProcess(command, args, options = {}) {
+async function runProcess(command, args, phaseTimeoutMs, label, options = {}) {
   const child = spawn(command, args, { stdio: 'inherit', ...options });
-  const [code, signal] = await once(child, 'exit');
+  let exit;
+  try {
+    exit = await phaseTimeout(once(child, 'exit'), phaseTimeoutMs, label);
+  } catch (error) {
+    child.kill('SIGKILL');
+    throw error;
+  }
+  const [code, signal] = exit;
   if (code !== 0) throw new Error(`${command} exited ${code ?? `by signal ${signal}`}`);
 }
 
@@ -99,10 +128,16 @@ async function waitForDevtools(profile, child) {
 }
 
 class CdpSession {
-  constructor(url) {
+  constructor(url, phaseTimeoutMs) {
     this.socket = new WebSocket(url);
+    this.phaseTimeoutMs = phaseTimeoutMs;
     this.nextId = 1;
     this.pending = new Map();
+  }
+
+  rejectPending(error) {
+    for (const pending of this.pending.values()) pending.reject(error);
+    this.pending.clear();
   }
 
   async open() {
@@ -118,14 +153,17 @@ class CdpSession {
       if (message.error) pending.reject(new Error(message.error.message));
       else pending.resolve(message.result || {});
     });
+    this.socket.addEventListener('close', () => this.rejectPending(new Error('CDP socket closed with requests pending')));
+    this.socket.addEventListener('error', () => this.rejectPending(new Error('CDP socket failed with requests pending')));
   }
 
   send(method, params = {}) {
     const id = this.nextId++;
-    return new Promise((resolveRequest, rejectRequest) => {
+    const response = new Promise((resolveRequest, rejectRequest) => {
       this.pending.set(id, { resolve: resolveRequest, reject: rejectRequest });
       this.socket.send(JSON.stringify({ id, method, params }));
     });
+    return phaseTimeout(response, this.phaseTimeoutMs, `CDP ${method}`).finally(() => this.pending.delete(id));
   }
 
   close() {
@@ -153,11 +191,17 @@ async function waitForPageResult(session, chrome, server) {
   throw new Error(`benchmark dependency exited early: chrome=${chrome.exitCode}, server=${server.exitCode}`);
 }
 
-async function terminate(child) {
+async function terminate(child, phaseTimeoutMs, label) {
   if (!child || child.exitCode !== null) return;
   const exited = once(child, 'exit');
   child.kill('SIGTERM');
-  await exited;
+  try {
+    await phaseTimeout(exited, phaseTimeoutMs, `${label} termination`);
+  } catch (error) {
+    child.kill('SIGKILL');
+    if (child.exitCode === null) await phaseTimeout(once(child, 'exit'), phaseTimeoutMs, `${label} forced termination`);
+    throw error;
+  }
 }
 
 async function run(args) {
@@ -179,6 +223,7 @@ async function run(args) {
       outDir,
       samples: args.samples,
       warmup: args.warmup,
+      phaseTimeoutMs: args.phaseTimeoutMs,
       python: resolve(args.python),
       chrome: resolve(args.chrome),
     },
@@ -206,10 +251,17 @@ async function run(args) {
       '--treatment-report', resolve(args.treatmentReport),
       '--treatment-label', args.treatmentLabel,
       '--out-dir', inputDir,
-    ], { cwd: ROOT });
+    ], args.phaseTimeoutMs, 'authenticated input export', { cwd: ROOT });
     const exportedManifestPath = join(inputDir, 'gpu-input-manifest.json');
     const exportedManifest = JSON.parse(await readFileAsync(exportedManifestPath, 'utf8'));
     if (exportedManifest.status !== 'complete' || exportedManifest.failurePhase !== null) throw new Error('exported GPU input is not complete');
+    report.failurePhase = 'export-authority-validation';
+    if (args.treatmentLabel !== 'd12-t2' || exportedManifest.treatment.label !== args.treatmentLabel) throw new Error(`effective treatment must be d12-t2, got requested=${args.treatmentLabel} effective=${exportedManifest.treatment.label}`);
+    if (exportedManifest.effective.tileSize !== 2) throw new Error(`effective treatment tile size must be 2, got ${exportedManifest.effective.tileSize}`);
+    requireShape(exportedManifest.effective.denseShape, EXPECTED_DENSE_SHAPE, 'exportedManifest.effective.denseShape');
+    requireShape(exportedManifest.effective.reducedShape, EXPECTED_REDUCED_SHAPE, 'exportedManifest.effective.reducedShape');
+    requireShape(exportedManifest.effective.outputShape, EXPECTED_OUTPUT_SHAPE, 'exportedManifest.effective.outputShape');
+    requireShape(exportedManifest.artifacts.occluderDepth?.shape, EXPECTED_OUTPUT_SHAPE, 'exportedManifest.artifacts.occluderDepth.shape');
 
     report.failurePhase = 'source-receipt';
     report.sources = {
@@ -235,7 +287,7 @@ async function run(args) {
     });
     server.stderr.pipe(serverLog);
     const htmlRoute = `http://127.0.0.1:${port}/${relative(tmpRoot, join(ROOT, 'view-conditioned-transfer-gpu-benchmark.html')).split('\\').join('/')}`;
-    await waitForHttp(htmlRoute, server);
+    await phaseTimeout(waitForHttp(htmlRoute, server), args.phaseTimeoutMs, 'HTTP server startup');
     const manifestRoute = `/${relative(tmpRoot, exportedManifestPath).split('\\').join('/')}`;
     const requestedRoute = `${htmlRoute}?${new URLSearchParams({ manifest: manifestRoute, samples: String(args.samples), warmup: String(args.warmup) })}`;
 
@@ -255,14 +307,18 @@ async function run(args) {
     report.browserLaunchCount = 1;
     await writeJson(reportPath, report);
     chrome.stderr.pipe(browserLog);
-    const devtoolsPort = await waitForDevtools(profile, chrome);
+    const devtoolsPort = await phaseTimeout(waitForDevtools(profile, chrome), args.phaseTimeoutMs, 'Chrome DevTools startup');
 
     report.failurePhase = 'cdp-connect';
-    const targets = await fetch(`http://127.0.0.1:${devtoolsPort}/json/list`).then(response => response.json());
+    const targets = await phaseTimeout(
+      fetch(`http://127.0.0.1:${devtoolsPort}/json/list`).then(response => response.json()),
+      args.phaseTimeoutMs,
+      'Chrome target discovery',
+    );
     const pageTarget = targets.find(target => target.type === 'page');
     if (!pageTarget?.webSocketDebuggerUrl) throw new Error('Chrome exposed no page target');
-    session = new CdpSession(pageTarget.webSocketDebuggerUrl);
-    await session.open();
+    session = new CdpSession(pageTarget.webSocketDebuggerUrl, args.phaseTimeoutMs);
+    await phaseTimeout(session.open(), args.phaseTimeoutMs, 'CDP socket open');
     await session.send('Page.enable');
     await session.send('Runtime.enable');
     await session.send('Emulation.setDeviceMetricsOverride', {
@@ -271,7 +327,7 @@ async function run(args) {
 
     report.failurePhase = 'benchmark-navigation';
     await session.send('Page.navigate', { url: requestedRoute });
-    const pageReport = await waitForPageResult(session, chrome, server);
+    const pageReport = await phaseTimeout(waitForPageResult(session, chrome, server), args.phaseTimeoutMs, 'GPU benchmark page');
     const effectiveRoute = await evaluate(session, 'location.href');
 
     report.failurePhase = 'authority-validation';
@@ -280,6 +336,9 @@ async function run(args) {
     if (!pageReport.outputValidation?.dense?.passed || !pageReport.outputValidation?.reduced?.passed) throw new Error('GPU output did not match CPU references');
     if (!pageReport.optimizationClaimAllowed) throw new Error('page withheld optimization claim authority');
     if (pageReport.inputManifest?.sha256 !== report.sources.exportedManifest.sha256) throw new Error('browser measured a different exported manifest');
+    if (pageReport.inputManifest?.treatmentLabel !== 'd12-t2') throw new Error(`browser treatment identity drifted: ${pageReport.inputManifest?.treatmentLabel}`);
+    if (pageReport.workload?.outputWidth !== 314 || pageReport.workload?.outputHeight !== 242) throw new Error(`browser workload output must be 314x242, got ${pageReport.workload?.outputWidth}x${pageReport.workload?.outputHeight}`);
+    if (pageReport.workload?.denseDepthBins !== 96 || pageReport.workload?.reducedDepthGroups !== 12 || pageReport.workload?.reducedTileSize !== 2) throw new Error('browser workload treatment dimensions drifted');
 
     report.failurePhase = 'visual-capture';
     const capture = await session.send('Page.captureScreenshot', {
@@ -331,8 +390,8 @@ async function run(args) {
   } finally {
     try {
       session?.close();
-      if (chrome) await terminate(chrome); // chrome.kill is performed inside terminate.
-      if (server) await terminate(server); // server.kill is performed inside terminate.
+      if (chrome) await terminate(chrome, args.phaseTimeoutMs, 'Chrome'); // chrome.kill is performed inside terminate.
+      if (server) await terminate(server, args.phaseTimeoutMs, 'HTTP server'); // server.kill is performed inside terminate.
       browserLog?.end();
       serverLog?.end();
       if (profile) await rmAsync(profile, { recursive: true, force: true });

@@ -40,7 +40,7 @@
       </figure>
       <figure>
         <canvas id="reduced" width="314" height="242"></canvas>
-        <figcaption><span>Prediction role: d12-t2 reduced</span><span id="reduced-time">pending</span></figcaption>
+        <figcaption><span id="treatment-caption">Prediction role: authenticating</span><span id="reduced-time">pending</span></figcaption>
       </figure>
     </section>
     <dl>
@@ -59,6 +59,9 @@
     const SCHEMA = 'kaminos.view-conditioned-transfer-gpu-page.v0';
     const DENSE_IDENTITY = 'dense-96-bin-compositor-v0';
     const REDUCED_IDENTITY = 'reduced-depth-tile-compositor-v0';
+    const EXPECTED_DENSE_SHAPE = [96, 242, 314];
+    const EXPECTED_REDUCED_SHAPE = [12, 121, 157];
+    const EXPECTED_OUTPUT_SHAPE = [242, 314];
     const initialReport = {
       schema: SCHEMA,
       status: 'running',
@@ -71,6 +74,10 @@
 
     function requireValue(condition, message) {
       if (!condition) throw new Error(message);
+    }
+
+    function sameShape(actual, expected) {
+      return Array.isArray(actual) && actual.length === expected.length && actual.every((value, index) => value === expected[index]);
     }
 
     function parsePositiveInteger(params, name, allowZero = false) {
@@ -298,6 +305,15 @@
       requireValue(manifest.status === 'complete' && manifest.failurePhase === null, 'input manifest is not complete');
       requireValue(manifest.effective.denseCompositor === DENSE_IDENTITY, 'dense compositor identity drifted');
       requireValue(manifest.effective.reducedCompositor === REDUCED_IDENTITY, 'reduced compositor identity drifted');
+      requireValue(manifest.treatment.label === 'd12-t2', 'authenticated treatment is not d12-t2');
+      requireValue(manifest.effective.tileSize === 2, 'authenticated treatment tile size is not two');
+      const denseShape = manifest.effective.denseShape;
+      const reducedShape = manifest.effective.reducedShape;
+      requireValue(sameShape(denseShape, EXPECTED_DENSE_SHAPE), 'denseShape must be [96,242,314]');
+      requireValue(sameShape(reducedShape, EXPECTED_REDUCED_SHAPE), 'reducedShape must be [12,121,157]');
+      requireValue(sameShape(manifest.effective.outputShape, EXPECTED_OUTPUT_SHAPE), 'output shape must be [242,314]');
+      requireValue(sameShape(manifest.artifacts.occluderDepth.shape, [242, 314]), 'occluderDepth shape must be [242,314]');
+      document.getElementById('treatment-caption').textContent = `Prediction role: ${manifest.treatment.label} reduced`;
       initialReport.inputManifest = {
         url: manifestUrl.href,
         sha256: await sha256Hex(manifestBytes),
@@ -309,8 +325,8 @@
       initialReport.failurePhase = 'binary-authentication';
       const binaryEntries = await Promise.all(Object.entries(manifest.artifacts).map(async ([name, descriptor]) => [name, await loadBinary(manifestUrl, descriptor)]));
       const binaries = Object.fromEntries(binaryEntries);
-      const [depthCount, outputHeight, outputWidth] = manifest.effective.denseShape;
-      const [reducedDepthCount, reducedHeight, reducedWidth] = manifest.effective.reducedShape;
+      const [depthCount, outputHeight, outputWidth] = denseShape;
+      const [reducedDepthCount, reducedHeight, reducedWidth] = reducedShape;
       requireValue(depthCount === 96, 'dense depth count is not 96');
       requireValue(reducedDepthCount === 12, 'reduced depth count is not 12');
       const outputByteLength = outputWidth * outputHeight * 16;
