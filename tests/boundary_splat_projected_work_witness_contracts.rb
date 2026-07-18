@@ -75,6 +75,7 @@ class BoundarySplatProjectedWorkWitnessContracts < Minitest::Test
         witness_path,
         '--anchor-class', 'mechanism-anchor',
         '--mechanism-report', input_path,
+        '--mechanism-greenroom-job', 'mechanism-fixture-job',
         '--out-dir', dir,
         '--report', output_path,
       )
@@ -85,6 +86,8 @@ class BoundarySplatProjectedWorkWitnessContracts < Minitest::Test
       assert_equal('mechanism-anchor', report.fetch('anchorClass'))
       assert_equal(true, report.fetch('productionAnchorPredicateUnchanged'))
       assert_equal(1_899_742, report.dig('budgets', 'effectiveCandidateBudget'))
+      assert_equal('mechanism-fixture-job', report.dig('mechanismAnchor', 'identity', 'sourceGreenroomJob'))
+      assert_match(/mechanism-fixture-job/, report.dig('mechanismAnchor', 'routeReviewIdentity', 'knownGoodLocalRunnerChecked'))
       assert_equal('unavailable', report.dig('mechanismAnchor', 'projectedWork', 'footprintOrTileIntersections', 'status'))
       assert_equal('operator-unseen', report.dig('mechanismAnchor', 'operatorFacingDisposition', 'productionOccupancy'))
     end

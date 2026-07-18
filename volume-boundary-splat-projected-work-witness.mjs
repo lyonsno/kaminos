@@ -23,6 +23,7 @@ const TIGER_MECHANISM_ROUTE = 'native-3d-compute-fluid-raymarch-v0';
 
 const args = parseArgs(process.argv.slice(2));
 const anchorClass = String(args.get('--anchor-class') || PRODUCTION_ANCHOR_CLASS).trim();
+const mechanismGreenroomJob = String(args.get('--mechanism-greenroom-job') || TIGER_MECHANISM_GREENROOM_JOB).trim();
 const authoredBasinManifestPath = stringArg('--authored-basin-manifest');
 const sampleReportPath = stringArg('--sample-report');
 const mechanismReportPath = stringArg('--mechanism-report');
@@ -41,7 +42,7 @@ try {
     lastTrustworthyEvidence.mechanismReport = mechanismSource.artifact;
 
     failurePhase = 'normalize-mechanism-anchor';
-    const mechanismAnchor = normalizeMechanismAnchor(mechanismSource.json);
+    const mechanismAnchor = normalizeMechanismAnchor(mechanismSource.json, { sourceGreenroomJob: mechanismGreenroomJob });
     lastTrustworthyEvidence.mechanismAnchor = compactMechanismAnchor(mechanismAnchor);
 
     const report = {
@@ -197,7 +198,7 @@ try {
   process.exitCode = 1;
 }
 
-function normalizeMechanismAnchor(report) {
+function normalizeMechanismAnchor(report, { sourceGreenroomJob = TIGER_MECHANISM_GREENROOM_JOB } = {}) {
   assert.equal(report.schema, TIGER_MECHANISM_SCHEMA, 'blankOrPartialReport: wrong mechanism report schema');
   assert.equal(report.status, 'captured', 'blankOrPartialReport: mechanism report did not capture');
   assert.equal(report.route?.effectiveRoute, TIGER_MECHANISM_ROUTE, 'fallbackRoute: mechanism effective route drifted');
@@ -259,7 +260,7 @@ function normalizeMechanismAnchor(report) {
     identity: {
       schema: report.schema,
       anchorClass: MECHANISM_ANCHOR_CLASS,
-      sourceGreenroomJob: TIGER_MECHANISM_GREENROOM_JOB,
+      sourceGreenroomJob,
       sameStateCaptureId: TIGER_MECHANISM_STATE,
       stateFrame: report.source?.state?.frameCount,
       stateSimStep: report.source?.state?.simStepCount,
@@ -287,7 +288,7 @@ function normalizeMechanismAnchor(report) {
       selectorAuthority: unionReceipt.selectorAuthorityEffective,
       selectorRecipeSha256: unionReceipt.selectorRecipeSha256,
       timingAuthority: 'not-isolated-in-tiger-coefficient-witness',
-      sourceGreenroomJob: TIGER_MECHANISM_GREENROOM_JOB,
+      sourceGreenroomJob,
     },
     sourceIdentities: {
       fieldManifest: report.source?.fieldManifest || null,
@@ -319,10 +320,10 @@ function normalizeMechanismAnchor(report) {
       candidates: candidateMemory,
     },
     routeReviewIdentity: {
-      knownGoodLocalRunnerChecked: 'yes: Greenroom source job 7ae361b23c60 / kaminos_layer_coefficient_live_union_witness / volume-layer-coefficient-live-union-witness.mjs',
+      knownGoodLocalRunnerChecked: `yes: Greenroom source job ${sourceGreenroomJob} / kaminos_layer_coefficient_live_union_witness / volume-layer-coefficient-live-union-witness.mjs`,
       effectiveEnvDeviceBackendPreserved: 'backend WebGPU:apple; route native-3d-compute-fluid-raymarch-v0; checksum-addressed-live-replay-resume-v0; selector explicit-source-field-operator-v0; no fallback accepted',
       firstReceiptLogProvesBackendDevice: 'source report route.backend WebGPU:apple and route.effectiveRoute native-3d-compute-fluid-raymarch-v0',
-      heavyRunAcceptedBeforeProof: 'no: this normalizer consumes existing proven Greenroom source job 7ae361b23c60 and rejects backend/route drift',
+      heavyRunAcceptedBeforeProof: `no: this normalizer consumes proven Greenroom source job ${sourceGreenroomJob} and rejects backend/route drift`,
     },
     operatorFacingDisposition: {
       absoluteVisualQuality: 'operator-unseen',
