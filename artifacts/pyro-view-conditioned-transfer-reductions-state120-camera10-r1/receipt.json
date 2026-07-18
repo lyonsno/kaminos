@@ -2,9 +2,9 @@
   "analyticalTargetRole": "context-only-not-metric-reference",
   "artifacts": {
     "README.md": {
-      "bytes": 3450,
+      "bytes": 3756,
       "path": "/private/tmp/kaminos-pyro-view-conditioned-transfer-compression-0717/artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/README.md",
-      "sha256": "49af5c52a11612c9bc165925512035af01add224fa94bd3ef3691307f9fee670"
+      "sha256": "86d9e69a52f31691d642b5504dfbb1913a3fbfd8d1940d28ac5ba2dae8b92950"
     },
     "adapted-reference.png": {
       "bytes": 91033,
@@ -82,11 +82,17 @@
       "sha256": "2fe5a614df665e5de63780c9da48f46aef3f4525484bac2b3b8010a1d3d9445c"
     }
   },
-  "command": "python view-conditioned-transfer-witness.py --input-manifest /private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/input-manifest.json --analytical-target artifacts/pyro-gaussian-footprint-kneecapper-0716/expanded-union-footprint-oracle-state120-r1/images/camera-10-target.png --treatment d1-t1=/private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/reductions/d1-t1/report.json --treatment d24-t1=/private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/reductions/d24-t1/report.json --treatment d24-t2=/private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/reductions/d24-t2/report.json --treatment d12-t2=/private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/reductions/d12-t2/report.json --treatment d12-t4=/private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/reductions/d12-t4/report.json --treatment d6-t8=/private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/reductions/d6-t8/report.json --out-dir artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1 --commit ab2ad100dd5bef802f6864727ddc060ba959f739",
+  "command": "/private/tmp/kaminos-mlx-residual-venv/bin/python /private/tmp/kaminos-pyro-view-conditioned-transfer-compression-0717/view-conditioned-transfer-witness.py --input-manifest /private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/input-manifest.json --analytical-target artifacts/pyro-gaussian-footprint-kneecapper-0716/expanded-union-footprint-oracle-state120-r1/images/camera-10-target.png --treatment d1-t1=/private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/reductions/d1-t1/report.json --treatment d24-t1=/private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/reductions/d24-t1/report.json --treatment d24-t2=/private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/reductions/d24-t2/report.json --treatment d12-t2=/private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/reductions/d12-t2/report.json --treatment d12-t4=/private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/reductions/d12-t4/report.json --treatment d6-t8=/private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/reductions/d6-t8/report.json --out-dir artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1",
   "failurePhase": null,
   "metricReferenceRole": "exact-adapted-96-bin-transfer-reference",
   "repo": {
-    "commit": "ab2ad100dd5bef802f6864727ddc060ba959f739",
+    "artifactCarrierCommit": null,
+    "artifactCarrierCommitBoundary": "external-first-commit-containing-receipt-v0",
+    "generatorCommit": "7e78938042396a72d648e0d444cb0f5ad5dfc5a7",
+    "generatorCommitSource": "git-rev-parse-head-v0",
+    "generatorTrackedStatus": "D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/README.md\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/adapted-reference.png\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/analytical-target.png\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/annotated-reduction-sheet.png\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/d1-t1-residual.png\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/d1-t1.png\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/d12-t2-residual.png\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/d12-t2.png\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/d12-t4-residual.png\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/d12-t4.png\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/d24-t1-residual.png\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/d24-t1.png\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/d24-t2-residual.png\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/d24-t2.png\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/d6-t8-residual.png\n D artifacts/pyro-view-conditioned-transfer-reductions-state120-camera10-r1/d6-t8.png",
+    "generatorTrackedWorktreeDirty": true,
+    "repoRoot": "/private/tmp/kaminos-pyro-view-conditioned-transfer-compression-0717",
     "worktree": "/private/tmp/kaminos-pyro-view-conditioned-transfer-compression-0717"
   },
   "requested": {
@@ -118,6 +124,12 @@
         "reportPath": "/private/tmp/kaminos-pyro-view-conditioned-transfer-state120-camera10-r1/reductions/d6-t8/report.json"
       }
     ]
+  },
+  "runtime": {
+    "numpyVersion": "2.5.1",
+    "pillowVersion": "12.3.0",
+    "pythonExecutable": "/private/tmp/kaminos-mlx-residual-venv/bin/python",
+    "pythonVersion": "3.14.3 (main, Feb  3 2026, 15:32:20) [Clang 17.0.0 (clang-1700.6.3.2)]"
   },
   "schema": "kaminos.view-conditioned-transfer-witness.v0",
   "source": {

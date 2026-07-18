@@ -358,6 +358,7 @@ def run(args: argparse.Namespace, command: str) -> dict[str, Any]:
     treatments_requested = [parse_treatment(value) for value in args.treatment]
     require(bool(treatments_requested), "at least one treatment is required")
     require(len({label for label, _ in treatments_requested}) == len(treatments_requested), "treatment labels must be unique")
+    generator_identity = git_generator_identity()
     output_names = {SHEET_NAME, "analytical-target.png", "adapted-reference.png", "README.md"}
     for label, _ in treatments_requested:
         output_names.update({f"{label}.png", f"{label}-residual.png"})
@@ -373,7 +374,7 @@ def run(args: argparse.Namespace, command: str) -> dict[str, Any]:
         "status": "running",
         "failurePhase": "input-validation",
         "command": command,
-        "repo": git_generator_identity(),
+        "repo": generator_identity,
         "runtime": {
             "pythonExecutable": sys.executable,
             "pythonVersion": sys.version,
