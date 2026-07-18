@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import inspect
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -31,6 +32,10 @@ require(
 require(
     "contribution_footprint" in inspect.signature(MODULE.run).parameters,
     "the governed oracle cannot launch the contribution-footprint arm",
+)
+require(
+    "contribution_footprint_minimum_scale" in inspect.signature(MODULE.run).parameters,
+    "the governed oracle hides the requested contribution-footprint minimum scale",
 )
 
 work_contract = MODULE.deposition_work_contract([
@@ -84,6 +89,31 @@ offscreen_scales = MODULE.quota_balanced_contribution_footprint_scales(
 )
 require(offscreen_scales[offscreen_quotas < 0].tolist() == [1.0, 1.0], "offscreen rows entered footprint ranking")
 
+strong_scales = MODULE.quota_balanced_contribution_footprint_scales(
+    native_ids,
+    scores,
+    quota_keys,
+    minimum_scale=0.5,
+)
+require(np.all((strong_scales >= 0.5) & (strong_scales <= 1.0)), "caller-owned footprint scale escaped its requested range")
+for quota in np.unique(quota_keys):
+    rows = np.flatnonzero(quota_keys == quota)
+    order = rows[np.argsort(-scores[rows], kind="stable")]
+    require(abs(float(strong_scales[order[0]]) - 0.5) <= 1e-6, "requested narrow footprint did not reach the quota peak")
+
+for invalid_scale in (0.0, -0.25, 1.01, float("nan")):
+    try:
+        MODULE.quota_balanced_contribution_footprint_scales(
+            native_ids,
+            scores,
+            quota_keys,
+            minimum_scale=invalid_scale,
+        )
+    except Exception:
+        pass
+    else:
+        raise AssertionError(f"invalid footprint minimum scale was silently accepted: {invalid_scale}")
+
 camera = {
     "cameraIndex": 0,
     "width": 32,
@@ -104,7 +134,119 @@ features = np.zeros((4, 24), dtype=np.float32)
 features[:, 2:4] = 0.5
 coefficients = np.zeros((4, 8), dtype=np.float32)
 coefficients[:, 0] = np.asarray([1.0, 2.0, 3.0, 4.0], dtype=np.float32)
+kernel_descriptors = np.concatenate(
+    (
+        positions,
+        np.arange(4, dtype=np.float32)[:, None],
+        tangents,
+        np.ones((4, 1), dtype=np.float32),
+    ),
+    axis=1,
+)
 raster_scales = np.asarray([0.75, 0.8, 0.9, 1.0], dtype=np.float32)
+planned_scales, plan_receipt = MODULE.contribution_footprint_plan(
+    np.arange(4, dtype=np.uint32),
+    kernel_descriptors,
+    coefficients,
+    camera,
+    minimum_scale=0.625,
+)
+require(planned_scales.shape == (4,), "footprint plan changed candidate population")
+require(plan_receipt["requestedMinimumFootprintScale"] == 0.625, "footprint plan hid the requested minimum scale")
+require(plan_receipt["effectiveMinimumFootprintScale"] == 0.625, "footprint plan silently substituted the effective minimum scale")
+
+offscreen_descriptors = kernel_descriptors.copy()
+offscreen_descriptors[:, 0] = 100.0
+_, offscreen_plan_receipt = MODULE.contribution_footprint_plan(
+    np.arange(4, dtype=np.uint32),
+    offscreen_descriptors,
+    coefficients,
+    camera,
+    minimum_scale=0.5,
+)
+require(offscreen_plan_receipt["requestedMinimumFootprintScale"] == 0.5, "offscreen plan hid its requested scale")
+require(offscreen_plan_receipt["effectiveMinimumFootprintScale"] == 1.0, "offscreen plan invented an applied narrow scale")
+
+original_motion = MODULE.MOTION
+original_contribution_deposition_plan = MODULE.contribution_deposition_plan
+original_contribution_footprint_plan = MODULE.contribution_footprint_plan
+dispatch_calls: list[tuple[str, int, float | None]] = []
+
+
+class SelectedStateMotionStub:
+    DEPTH_BINS = original_motion.DEPTH_BINS
+
+    @staticmethod
+    def load_rows(_state, _manifest_path):
+        return {
+            "features": features,
+            "coefficients": coefficients,
+            "nativeCellIndices": np.arange(4, dtype=np.uint32),
+            "kernelDescriptors": kernel_descriptors,
+        }
+
+    @staticmethod
+    def target_image(_state, _manifest_path):
+        rows, columns = np.indices((32, 32), dtype=np.uint8)
+        return np.stack((rows * 7, columns * 5, (rows + columns) * 3), axis=2)
+
+    @staticmethod
+    def camera_contract(_state):
+        return camera
+
+    flow_tap_placements = staticmethod(original_motion.flow_tap_placements)
+    flow_tap_weights = staticmethod(original_motion.flow_tap_weights)
+    bilinear_deposit_accounting = staticmethod(original_motion.bilinear_deposit_accounting)
+
+
+def tracked_deposition_plan(*args):
+    dispatch_calls.append(("deposition", len(args), None))
+    require(len(args) == 4, "footprint minimum scale leaked into the variable-tap branch")
+    return np.full(4, 5, dtype=np.int8), {"authority": "tracked-deposition"}
+
+
+def tracked_footprint_plan(*args):
+    scale = float(args[4]) if len(args) == 5 else None
+    dispatch_calls.append(("footprint", len(args), scale))
+    require(len(args) == 5, "governed footprint dispatch silently used the default scale")
+    return np.full(4, scale, dtype=np.float32), {
+        "requestedMinimumFootprintScale": scale,
+        "effectiveMinimumFootprintScale": scale,
+    }
+
+
+try:
+    MODULE.MOTION = SelectedStateMotionStub
+    MODULE.contribution_deposition_plan = tracked_deposition_plan
+    MODULE.contribution_footprint_plan = tracked_footprint_plan
+    with tempfile.TemporaryDirectory() as temporary_directory:
+        images_dir = Path(temporary_directory)
+        state = {"id": "dispatch-state", "replay": {"completedSteps": 1}}
+        MODULE.selected_state(
+            state,
+            Path("unused-manifest.json"),
+            np.arange(4, dtype=np.int64),
+            64.0,
+            MODULE.CONTRIBUTION_DEPOSITION_POLICY,
+            images_dir,
+            0.5,
+        )
+        footprint_receipt, _ = MODULE.selected_state(
+            state,
+            Path("unused-manifest.json"),
+            np.arange(4, dtype=np.int64),
+            64.0,
+            MODULE.CONTRIBUTION_FOOTPRINT_POLICY,
+            images_dir,
+            0.5,
+        )
+    require(dispatch_calls == [("deposition", 4, None), ("footprint", 5, 0.5)], "governed policy dispatch misrouted the footprint scale")
+    require(footprint_receipt["contributionFootprint"]["effectiveMinimumFootprintScale"] == 0.5, "governed receipt disagrees with applied footprint scale")
+finally:
+    MODULE.MOTION = original_motion
+    MODULE.contribution_deposition_plan = original_contribution_deposition_plan
+    MODULE.contribution_footprint_plan = original_contribution_footprint_plan
+
 planes, telemetry = MODULE.ORACLE.rasterize_coefficients(
     positions,
     tangents,

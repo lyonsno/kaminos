@@ -612,6 +612,7 @@ def quota_balanced_contribution_footprint_scales(
     native_ids: np.ndarray,
     contribution_scores: np.ndarray,
     quota_keys: np.ndarray,
+    minimum_scale: float = CONTRIBUTION_FOOTPRINT_MINIMUM_SCALE,
 ) -> np.ndarray:
     ids = np.asarray(native_ids, dtype=np.uint32)
     scores = np.asarray(contribution_scores, dtype=np.float64)
@@ -620,20 +621,21 @@ def quota_balanced_contribution_footprint_scales(
     require(ids.size == scores.size == quotas.size > 0, "contribution footprint row populations must match and be nonempty")
     require(np.unique(ids).size == ids.size, "contribution footprint native identities must be unique")
     require(np.all(np.isfinite(scores)), "contribution footprint scores must be finite")
+    require(math.isfinite(minimum_scale) and 0.0 < minimum_scale <= 1.0, "contribution footprint minimum scale must be finite and in (0,1]")
     scales = np.ones(ids.size, dtype=np.float32)
     for quota in np.unique(quotas[quotas >= 0]):
         rows = np.flatnonzero(quotas == quota)
         order = rows[np.lexsort((ids[rows], stable_hash(ids[rows]), -scores[rows]))]
         if order.size == 1:
-            scales[order] = CONTRIBUTION_FOOTPRINT_MINIMUM_SCALE
+            scales[order] = minimum_scale
             continue
         rank = np.arange(order.size, dtype=np.float32) / float(order.size - 1)
-        scales[order] = CONTRIBUTION_FOOTPRINT_MINIMUM_SCALE + (
-            1.0 - CONTRIBUTION_FOOTPRINT_MINIMUM_SCALE
+        scales[order] = minimum_scale + (
+            1.0 - minimum_scale
         ) * rank
     require(
         np.all(np.isfinite(scales))
-        and np.all(scales >= CONTRIBUTION_FOOTPRINT_MINIMUM_SCALE)
+        and np.all(scales >= minimum_scale)
         and np.all(scales <= 1.0),
         "contribution footprint scales escaped the reviewed range",
     )
@@ -708,10 +710,11 @@ def contribution_footprint_plan(
     kernel_descriptors: np.ndarray,
     coefficients: np.ndarray,
     camera: dict[str, Any],
+    minimum_scale: float = CONTRIBUTION_FOOTPRINT_MINIMUM_SCALE,
 ) -> tuple[np.ndarray, dict[str, Any]]:
     ids = np.asarray(native_ids, dtype=np.uint32)
     scores, quota_keys, visible = contribution_quota_context(ids, kernel_descriptors, coefficients, camera)
-    scales = quota_balanced_contribution_footprint_scales(ids, scores, quota_keys)
+    scales = quota_balanced_contribution_footprint_scales(ids, scores, quota_keys, minimum_scale)
     return scales, {
         "authority": "fixed-five-target-free-contribution-ranked-footprint-v0",
         "scoreAuthority": CONTRIBUTION_SCORE_AUTHORITY,
@@ -723,7 +726,8 @@ def contribution_footprint_plan(
         "tapCount": FLOW_TAPS_PER_CANDIDATE,
         "nominalTapEvaluations": ids.size * FLOW_TAPS_PER_CANDIDATE,
         "nominalDepositEvaluations": ids.size * DEPOSITS_PER_CANDIDATE,
-        "minimumFootprintScale": CONTRIBUTION_FOOTPRINT_MINIMUM_SCALE,
+        "requestedMinimumFootprintScale": minimum_scale,
+        "effectiveMinimumFootprintScale": float(np.min(scales[visible])) if np.any(visible) else 1.0,
         "scaleDistribution": {
             "minimum": float(np.min(scales)),
             "p50": float(np.percentile(scales, 50)),
@@ -1307,6 +1311,7 @@ def selected_state(
     path_scale: float,
     policy: str,
     images_dir: Path,
+    contribution_footprint_minimum_scale: float,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     rows = MOTION.load_rows(state, manifest_path)
     target = MOTION.target_image(state, manifest_path)
@@ -1337,6 +1342,7 @@ def selected_state(
             selected_rows["kernelDescriptors"],
             selected_rows["coefficients"],
             camera,
+            contribution_footprint_minimum_scale,
         )
     planes, telemetry = ORACLE.rasterize_coefficients(
         selected_rows["kernelDescriptors"][:, 0:3],
@@ -1466,6 +1472,7 @@ def run(
     adaptive_ridge_alpha: float,
     contribution_deposition: bool,
     contribution_footprint: bool,
+    contribution_footprint_minimum_scale: float,
     implementation_bundle_sha256: str,
     bound_implementation_bundle: dict[str, Any],
 ) -> tuple[dict[str, Any], str]:
@@ -1473,6 +1480,11 @@ def run(
     require(not contribution_deposition or adaptive_survival, "contribution deposition requires the matched-mean adaptive-survival sequence")
     require(not contribution_footprint or adaptive_survival, "contribution footprint requires the matched-mean adaptive-survival sequence")
     require(not (contribution_deposition and contribution_footprint), "contribution deposition and footprint assays must run separately")
+    require(
+        math.isfinite(contribution_footprint_minimum_scale)
+        and 0.0 < contribution_footprint_minimum_scale <= 1.0,
+        "contribution footprint minimum scale must be finite and in (0,1]",
+    )
     states = manifest.get("states") or []
     require(len(states) >= 2, "budget oracle requires at least two captured exact states")
     budget_anchor_state = states[-1]
@@ -1671,7 +1683,15 @@ def run(
         target_hashes.add(MOTION.sha256_pixels(target))
         arms: dict[str, Any] = {}
         for policy, row_indices in selections.items():
-            receipt, temporal = selected_state(state, manifest_path, row_indices, path_scale, policy, images_dir)
+            receipt, temporal = selected_state(
+                state,
+                manifest_path,
+                row_indices,
+                path_scale,
+                policy,
+                images_dir,
+                contribution_footprint_minimum_scale,
+            )
             receipt["populationRows"] = int(ids.size)
             receipt["budgetFractionEffective"] = float(row_indices.size / ids.size)
             receipt["fullSupportMetrics"] = full_by_state[state_id]["metrics"]
@@ -1813,7 +1833,11 @@ def run(
                     "quotaAuthority": CONTRIBUTION_QUOTA_AUTHORITY,
                     "tapCount": FLOW_TAPS_PER_CANDIDATE,
                     "tapWeights": CONTRIBUTION_TAP_PATTERNS[5]["weights"],
-                    "minimumScale": CONTRIBUTION_FOOTPRINT_MINIMUM_SCALE,
+                    "requestedMinimumScale": contribution_footprint_minimum_scale,
+                    "effectiveMinimumScaleByState": {
+                        row["stateId"]: row["arms"][CONTRIBUTION_FOOTPRINT_POLICY]["contributionFootprint"]["effectiveMinimumFootprintScale"]
+                        for row in report_states
+                    },
                     "allocationAndFootprintSpacingCoupled": False,
                     "candidateBudgetMatched": True,
                     "nominalDepositWorkMatched": True,
@@ -1860,6 +1884,7 @@ def main() -> int:
     parser.add_argument("--adaptive-ridge-alpha", type=float, default=1e-3)
     parser.add_argument("--contribution-deposition", action="store_true")
     parser.add_argument("--contribution-footprint", action="store_true")
+    parser.add_argument("--contribution-footprint-minimum-scale", type=float, default=CONTRIBUTION_FOOTPRINT_MINIMUM_SCALE)
     parser.add_argument("--mode", choices=("frozen", "sequence"), default="frozen")
     args = parser.parse_args()
     manifest_path = Path(args.manifest).expanduser().resolve()
@@ -1916,6 +1941,7 @@ def main() -> int:
             args.adaptive_ridge_alpha,
             args.contribution_deposition,
             args.contribution_footprint,
+            args.contribution_footprint_minimum_scale,
             implementation_bundle_sha256,
             implementation_bundle_at_start,
         )
