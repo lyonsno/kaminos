@@ -297,18 +297,66 @@ def scatter_channel(flat_indices: np.ndarray, weights: np.ndarray, size: int) ->
 
 
 def bilinear_pixel_samples(
-    x: np.ndarray, y: np.ndarray
+    x: np.ndarray,
+    y: np.ndarray,
+    bilinear_neighbor_limit: int = 4,
 ) -> list[tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    require(
+        type(bilinear_neighbor_limit) is int
+        and 1 <= bilinear_neighbor_limit <= 4,
+        "bilinear neighbor limit must be an integer in [1,4]",
+    )
     x0 = np.floor(x).astype(np.int32)
     y0 = np.floor(y).astype(np.int32)
     fx = (x - x0).astype(np.float32)
     fy = (y - y0).astype(np.float32)
+    weights = np.stack(
+        (
+            (1.0 - fx) * (1.0 - fy),
+            fx * (1.0 - fy),
+            (1.0 - fx) * fy,
+            fx * fy,
+        ),
+        axis=-1,
+    )
+    if bilinear_neighbor_limit < 4:
+        order = np.argsort(-weights, axis=-1, kind="stable")
+        keep = np.zeros(weights.shape, dtype=bool)
+        np.put_along_axis(
+            keep,
+            order[..., :bilinear_neighbor_limit],
+            True,
+            axis=-1,
+        )
+        weights = np.where(keep, weights, 0.0)
+        retained = np.sum(weights, axis=-1, keepdims=True)
+        weights = np.divide(
+            weights,
+            retained,
+            out=np.zeros_like(weights),
+            where=retained > 0.0,
+        )
     return [
-        (x0, y0, (1.0 - fx) * (1.0 - fy)),
-        (x0 + 1, y0, fx * (1.0 - fy)),
-        (x0, y0 + 1, (1.0 - fx) * fy),
-        (x0 + 1, y0 + 1, fx * fy),
+        (x0, y0, weights[..., 0]),
+        (x0 + 1, y0, weights[..., 1]),
+        (x0, y0 + 1, weights[..., 2]),
+        (x0 + 1, y0 + 1, weights[..., 3]),
     ]
+
+
+def contribution_footprint_quadrature_rule(bilinear_neighbor_limit: int) -> str:
+    require(
+        type(bilinear_neighbor_limit) is int
+        and 1 <= bilinear_neighbor_limit <= 4,
+        "bilinear neighbor limit must be an integer in [1,4]",
+    )
+    if bilinear_neighbor_limit == 4:
+        return "contribution-ranked-five-flow-taps-variable-footprint-times-four-bilinear-neighbors-clipped-to-frame-v0"
+    neighbor_name = {1: "one", 2: "two", 3: "three"}[bilinear_neighbor_limit]
+    return (
+        "contribution-ranked-five-flow-taps-variable-footprint-"
+        f"top-{neighbor_name}-of-four-bilinear-neighbors-renormalized-clipped-to-frame-v0"
+    )
 
 
 def rasterize_coefficients(
@@ -322,7 +370,21 @@ def rasterize_coefficients(
     tap_counts: np.ndarray | None = None,
     tap_patterns: dict[int, dict[str, Any]] | None = None,
     tap_scales: np.ndarray | None = None,
+    bilinear_neighbor_limit: int = 4,
 ) -> tuple[np.ndarray, dict[str, Any]]:
+    require(
+        type(bilinear_neighbor_limit) is int
+        and 1 <= bilinear_neighbor_limit <= 4,
+        "bilinear neighbor limit must be an integer in [1,4]",
+    )
+    require(
+        footprint_mode == "bilinear" or bilinear_neighbor_limit == 4,
+        "charged bilinear neighbor reduction requires bilinear footprint mode",
+    )
+    require(
+        tap_counts is None or bilinear_neighbor_limit == 4,
+        "charged bilinear neighbor reduction requires fixed-five tap layout",
+    )
     width, height = int(camera["width"]), int(camera["height"])
     pose = camera["cameraPose"]
     ndc, depth, valid = project(positions, pose["matrixWorldInverse"], pose["projectionMatrix"])
@@ -367,7 +429,13 @@ def rasterize_coefficients(
         quadrature_rule = (
             "five-flow-taps-times-four-bilinear-neighbors-clipped-to-frame-v0"
             if tap_scales is None
-            else "contribution-ranked-five-flow-taps-variable-footprint-times-four-bilinear-neighbors-clipped-to-frame-v0"
+            and bilinear_neighbor_limit == 4
+            else contribution_footprint_quadrature_rule(bilinear_neighbor_limit)
+            if tap_scales is not None
+            else (
+                "five-flow-taps-"
+                f"top-{bilinear_neighbor_limit}-of-four-bilinear-neighbors-renormalized-clipped-to-frame-v0"
+            )
         )
         nominal_tap_evaluations = positions.shape[0] * len(fixed_offsets)
     else:
@@ -387,6 +455,9 @@ def rasterize_coefficients(
         nominal_tap_evaluations = int(np.sum(counts, dtype=np.int64))
     raster_size = depth_bins * height * width
     planes = np.zeros((depth_bins, height, width, 8), dtype=np.float32)
+    effective_positive_weight_deposits = 0
+    actual_in_bounds_charged_deposits = 0
+    out_of_frame_charged_deposits = 0
     for group_rows, offsets, offset_weights, group_scales in quadrature_groups:
         for offset, footprint_weight in zip(offsets, offset_weights):
             scaled_offset = offset * group_scales
@@ -401,9 +472,15 @@ def rasterize_coefficients(
                 pixel_samples = bilinear_pixel_samples(
                     pixel_x + tx * major_px * scaled_offset,
                     pixel_y + ty * major_px * scaled_offset,
+                    bilinear_neighbor_limit,
                 )
             for sx, sy, sample_weight in pixel_samples:
-                selected = group_rows & valid & tangent_valid & (sample_weight > 0.0) & (sx >= 0) & (sx < width) & (sy >= 0) & (sy < height)
+                positive = group_rows & valid & tangent_valid & (sample_weight > 0.0)
+                in_bounds = (sx >= 0) & (sx < width) & (sy >= 0) & (sy < height)
+                effective_positive_weight_deposits += int(np.count_nonzero(positive))
+                actual_in_bounds_charged_deposits += int(np.count_nonzero(positive & in_bounds))
+                out_of_frame_charged_deposits += int(np.count_nonzero(positive & ~in_bounds))
+                selected = positive & in_bounds
                 rows = np.flatnonzero(selected)
                 flat = ((depth_index[rows] * height + sy[rows]) * width + sx[rows]).astype(np.int64)
                 weighted = footprint_weight * sample_weight[rows]
@@ -422,6 +499,16 @@ def rasterize_coefficients(
         "quadratureRule": quadrature_rule,
         "nominalTapEvaluations": int(nominal_tap_evaluations),
         "nominalDepositEvaluations": int(nominal_tap_evaluations * (1 if footprint_mode == "nearest" else 4)),
+        "requestedBilinearNeighborsPerTap": int(
+            1 if footprint_mode == "nearest" else bilinear_neighbor_limit
+        ),
+        "requestedChargedDepositEvaluations": int(
+            nominal_tap_evaluations
+            * (1 if footprint_mode == "nearest" else bilinear_neighbor_limit)
+        ),
+        "effectivePositiveWeightDepositEvaluations": int(effective_positive_weight_deposits),
+        "actualInBoundsChargedDepositEvaluations": int(actual_in_bounds_charged_deposits),
+        "outOfFrameChargedDepositEvaluations": int(out_of_frame_charged_deposits),
     }
 
 

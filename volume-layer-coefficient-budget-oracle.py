@@ -37,6 +37,9 @@ CONTRIBUTION_DEPOSIT_RULE = "quota-balanced-variable-flow-taps-times-four-biline
 CONTRIBUTION_FOOTPRINT_POLICY = "optical-hysteresis-adaptive-mean-contribution-footprint"
 CONTRIBUTION_FOOTPRINT_DEPOSIT_RULE = "contribution-ranked-five-flow-taps-variable-footprint-times-four-bilinear-neighbors-clipped-to-frame-v0"
 CONTRIBUTION_FOOTPRINT_MINIMUM_SCALE = 0.75
+CONTRIBUTION_CHARGED_DEPOSITION_POLICY = "optical-hysteresis-adaptive-mean-contribution-footprint-charged-deposition"
+CONTRIBUTION_CHARGED_DEPOSITION_RULE = "contribution-ranked-five-flow-taps-variable-footprint-top-three-of-four-bilinear-neighbors-renormalized-clipped-to-frame-v0"
+CONTRIBUTION_CHARGED_DEPOSITION_NEIGHBOR_LIMIT = 3
 CONTRIBUTION_SCORE_AUTHORITY = "local-emission-divided-by-one-plus-local-extinction-v0"
 CONTRIBUTION_QUOTA_AUTHORITY = "projected-eight-by-eight-screen-times-eight-depth-quota-v0"
 CONTRIBUTION_TAP_PATTERNS = {
@@ -148,22 +151,35 @@ def require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
-def deposition_work_contract(policies: Iterable[str]) -> dict[str, Any]:
+def deposition_work_contract(
+    policies: Iterable[str],
+    charged_deposition_neighbor_limit: int = CONTRIBUTION_CHARGED_DEPOSITION_NEIGHBOR_LIMIT,
+) -> dict[str, Any]:
     policy_rows = list(policies)
     require(policy_rows and len(set(policy_rows)) == len(policy_rows), "deposition policies must be nonempty and unique")
+    if CONTRIBUTION_CHARGED_DEPOSITION_POLICY in policy_rows:
+        require(
+            type(charged_deposition_neighbor_limit) is int
+            and charged_deposition_neighbor_limit == CONTRIBUTION_CHARGED_DEPOSITION_NEIGHBOR_LIMIT,
+            "governed charged deposition requires exactly three bilinear neighbors",
+        )
     maxima = {
         policy: (
             CONTRIBUTION_MAXIMUM_DEPOSITS_PER_CANDIDATE
             if policy == CONTRIBUTION_DEPOSITION_POLICY
+            else FLOW_TAPS_PER_CANDIDATE * charged_deposition_neighbor_limit
+            if policy == CONTRIBUTION_CHARGED_DEPOSITION_POLICY
             else DEPOSITS_PER_CANDIDATE
         )
         for policy in policy_rows
     }
     return {
         "nominalDepositsPerCandidate": DEPOSITS_PER_CANDIDATE,
+        "logicalTapsPerCandidate": FLOW_TAPS_PER_CANDIDATE,
         "maximumDepositsPerCandidate": max(maxima.values()),
         "maximumDepositsPerCandidateByPolicy": maxima,
         "contributionDepositionCouplesTapCountAndFootprintSpacing": CONTRIBUTION_DEPOSITION_POLICY in maxima,
+        "chargedDepositionReducesBilinearNeighborsOnly": CONTRIBUTION_CHARGED_DEPOSITION_POLICY in maxima,
     }
 
 
@@ -1034,6 +1050,38 @@ def validate_adjacent_state_motion(
         require(math.isfinite(numeric) and numeric >= 0.0, f"{label} must be finite and nonnegative")
         return numeric
 
+    def validate_arm_work(policy: str, arm: dict[str, Any], selected: int, label: str) -> None:
+        telemetry = arm.get("rasterTelemetry")
+        require(isinstance(telemetry, dict), f"{policy} {label} raster work telemetry is missing")
+        deposit_rule = arm.get("depositRule")
+        require(telemetry.get("quadratureRule") == deposit_rule, f"{policy} {label} raster and arm deposit rules disagree")
+        requested = nonnegative_integer(
+            arm.get("requestedChargedDepositEvaluationBudget"),
+            f"{policy} {label} requested charged work",
+        )
+        effective = nonnegative_integer(
+            arm.get("positiveWeightDepositEvaluationCount"),
+            f"{policy} {label} effective charged work",
+        )
+        actual = nonnegative_integer(
+            arm.get("actualInBoundsPositiveWeightDepositCount"),
+            f"{policy} {label} in-bounds charged work",
+        )
+        out_of_frame = nonnegative_integer(
+            arm.get("outOfFramePositiveWeightDepositCount"),
+            f"{policy} {label} out-of-frame charged work",
+        )
+        require(telemetry.get("requestedChargedDepositEvaluations") == requested, f"{policy} {label} requested charged work receipt disagrees")
+        require(telemetry.get("effectivePositiveWeightDepositEvaluations") == effective, f"{policy} {label} effective charged work receipt disagrees")
+        require(telemetry.get("actualInBoundsChargedDepositEvaluations") == actual, f"{policy} {label} in-bounds charged work receipt disagrees")
+        require(telemetry.get("outOfFrameChargedDepositEvaluations") == out_of_frame, f"{policy} {label} out-of-frame charged work receipt disagrees")
+        require(actual + out_of_frame == effective, f"{policy} {label} charged work partition is inconsistent")
+        if policy == CONTRIBUTION_CHARGED_DEPOSITION_POLICY:
+            require(arm.get("bilinearNeighborLimit") == CONTRIBUTION_CHARGED_DEPOSITION_NEIGHBOR_LIMIT, f"{policy} {label} changed the fixed three-neighbor regime")
+            require(deposit_rule == CONTRIBUTION_CHARGED_DEPOSITION_RULE, f"{policy} {label} published the wrong charged-deposition rule")
+            require(arm.get("maximumDepositsPerCandidate") == 15, f"{policy} {label} changed the fixed fifteen-deposit ceiling")
+            require(requested == selected * 15, f"{policy} {label} requested work is not five taps times three neighbors")
+
     for policy in policies:
         transitions = temporal_by_policy[policy]
         require(len(transitions) == expected_transitions, f"{policy} adjacent-state motion ledger is partial")
@@ -1050,6 +1098,8 @@ def validate_adjacent_state_motion(
             current_budget = nonnegative_integer(current_arm.get("candidateBudget"), f"{policy} current candidate budget")
             require(previous_selected == previous_budget, f"{policy} previous state did not spend its candidate budget")
             require(current_selected == current_budget, f"{policy} current state did not spend its candidate budget")
+            validate_arm_work(policy, previous_arm, previous_selected, "previous")
+            validate_arm_work(policy, current_arm, current_selected, "current")
             expected_step_delta = int(current_state["steps"]) - int(previous_state["steps"])
             require(row.get("fromStateId") == previous_state["stateId"], f"{policy} adjacent-state source identity is misrouted")
             require(row.get("toStateId") == current_state["stateId"], f"{policy} adjacent-state destination identity is misrouted")
@@ -1124,8 +1174,23 @@ def validate_adjacent_state_motion(
             require(isinstance(velocity, dict), f"{policy} placement velocity evidence is missing")
             require(velocity.get("sharedNodeCount") == shared_count, f"{policy} velocity shared-node count disagrees with turnover")
             visible_taps = nonnegative_integer(velocity.get("sharedVisibleTapCount"), f"{policy} shared visible tap count")
-            maximum_taps = maximum_deposits // 4
-            require(maximum_taps * 4 == maximum_deposits, f"{policy} maximum deposit count is not four-way bilinear work")
+            previous_nominal_taps = nonnegative_integer(
+                previous_arm.get("nominalTapEvaluationBudget"),
+                f"{policy} previous nominal tap work",
+            )
+            current_nominal_taps = nonnegative_integer(
+                current_arm.get("nominalTapEvaluationBudget"),
+                f"{policy} current nominal tap work",
+            )
+            require(
+                previous_nominal_taps == previous_count * FLOW_TAPS_PER_CANDIDATE,
+                f"{policy} previous nominal tap work changed the fixed-five placement contract",
+            )
+            require(
+                current_nominal_taps == current_count * FLOW_TAPS_PER_CANDIDATE,
+                f"{policy} current nominal tap work changed the fixed-five placement contract",
+            )
+            maximum_taps = FLOW_TAPS_PER_CANDIDATE
             require(visible_taps <= shared_count * maximum_taps, f"{policy} shared visible taps exceed the arm maximum")
             require(velocity.get("unit") == "screen-pixels-per-simulator-step", f"{policy} placement velocity unit drifted")
             if visible_taps == 0:
@@ -1312,6 +1377,7 @@ def selected_state(
     policy: str,
     images_dir: Path,
     contribution_footprint_minimum_scale: float,
+    charged_deposition_neighbor_limit: int = CONTRIBUTION_CHARGED_DEPOSITION_NEIGHBOR_LIMIT,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     rows = MOTION.load_rows(state, manifest_path)
     target = MOTION.target_image(state, manifest_path)
@@ -1336,13 +1402,27 @@ def selected_state(
             camera,
         )
         tap_patterns = CONTRIBUTION_TAP_PATTERNS
-    elif policy == CONTRIBUTION_FOOTPRINT_POLICY:
+    elif policy in {
+        CONTRIBUTION_FOOTPRINT_POLICY,
+        CONTRIBUTION_CHARGED_DEPOSITION_POLICY,
+    }:
         tap_scales, deposition_plan = contribution_footprint_plan(
             selected_rows["nativeCellIndices"],
             selected_rows["kernelDescriptors"],
             selected_rows["coefficients"],
             camera,
             contribution_footprint_minimum_scale,
+        )
+    bilinear_neighbor_limit = (
+        charged_deposition_neighbor_limit
+        if policy == CONTRIBUTION_CHARGED_DEPOSITION_POLICY
+        else 4
+    )
+    if policy == CONTRIBUTION_CHARGED_DEPOSITION_POLICY:
+        require(
+            type(charged_deposition_neighbor_limit) is int
+            and charged_deposition_neighbor_limit == CONTRIBUTION_CHARGED_DEPOSITION_NEIGHBOR_LIMIT,
+            "governed charged deposition requires exactly three bilinear neighbors",
         )
     planes, telemetry = ORACLE.rasterize_coefficients(
         selected_rows["kernelDescriptors"][:, 0:3],
@@ -1355,6 +1435,7 @@ def selected_state(
         tap_counts=tap_counts,
         tap_patterns=tap_patterns,
         tap_scales=tap_scales,
+        bilinear_neighbor_limit=bilinear_neighbor_limit,
     )
     linear, _, _, _ = ORACLE.compose_planes(planes, path_scale, "total")
     render = ORACLE.tone_map(linear)
@@ -1386,16 +1467,20 @@ def selected_state(
         tap_weights,
         camera["width"],
         camera["height"],
+        bilinear_neighbor_limit=bilinear_neighbor_limit,
     )
     multiplicity = deposit_accounting["actualInBoundsPositiveWeightDeposits"]
-    deposit_rule = (
-        CONTRIBUTION_DEPOSIT_RULE
+    deposit_rule = str(telemetry["quadratureRule"])
+    if policy == CONTRIBUTION_CHARGED_DEPOSITION_POLICY:
+        require(
+            deposit_rule == CONTRIBUTION_CHARGED_DEPOSITION_RULE,
+            "charged raster published the wrong deposition rule",
+        )
+    maximum_deposits = (
+        28
         if tap_counts is not None
-        else CONTRIBUTION_FOOTPRINT_DEPOSIT_RULE
-        if tap_scales is not None
-        else "five-flow-taps-times-four-bilinear-neighbors-clipped-to-frame-v0"
+        else FLOW_TAPS_PER_CANDIDATE * bilinear_neighbor_limit
     )
-    maximum_deposits = 28 if tap_counts is not None else DEPOSITS_PER_CANDIDATE
     nominal_deposit_budget = int(
         np.sum(tap_counts, dtype=np.int64) * 4
         if tap_counts is not None
@@ -1406,6 +1491,25 @@ def selected_state(
         int(np.sum(deposit_accounting["nominalDepositEvaluations"], dtype=np.int64)) == nominal_deposit_budget,
         "deposit accounting disagrees with nominal work",
     )
+    requested_charged_deposit_budget = int(
+        np.sum(deposit_accounting["requestedChargedDepositEvaluations"], dtype=np.int64)
+    )
+    require(
+        requested_charged_deposit_budget
+        == row_indices.size * FLOW_TAPS_PER_CANDIDATE * bilinear_neighbor_limit,
+        "deposit accounting disagrees with requested charged work",
+    )
+    positive_weight_deposit_count = int(
+        np.sum(deposit_accounting["positiveWeightDepositEvaluations"], dtype=np.int64)
+    )
+    actual_in_bounds_deposit_count = actual_deposit_count(multiplicity)
+    out_of_frame_deposit_count = int(
+        np.sum(deposit_accounting["outOfFramePositiveWeightDeposits"], dtype=np.int64)
+    )
+    require(telemetry["requestedChargedDepositEvaluations"] == requested_charged_deposit_budget, "raster and motion requested charged work disagree")
+    require(telemetry["effectivePositiveWeightDepositEvaluations"] == positive_weight_deposit_count, "raster and motion effective charged work disagree")
+    require(telemetry["actualInBoundsChargedDepositEvaluations"] == actual_in_bounds_deposit_count, "raster and motion in-bounds charged work disagree")
+    require(telemetry["outOfFrameChargedDepositEvaluations"] == out_of_frame_deposit_count, "raster and motion out-of-frame charged work disagree")
     steps = int((state.get("replay") or {}).get("completedSteps"))
     temporal = {
         "stateId": state_id,
@@ -1424,15 +1528,14 @@ def selected_state(
         "selectedRows": int(row_indices.size),
         "candidateBudget": int(row_indices.size),
         "nominalDepositEvaluationBudget": nominal_deposit_budget,
+        "nominalTapEvaluationBudget": int(row_indices.size * FLOW_TAPS_PER_CANDIDATE),
+        "requestedChargedDepositEvaluationBudget": requested_charged_deposit_budget,
         "depositRule": deposit_rule,
         "maximumDepositsPerCandidate": maximum_deposits,
-        "positiveWeightDepositEvaluationCount": int(
-            np.sum(deposit_accounting["positiveWeightDepositEvaluations"], dtype=np.int64)
-        ),
-        "actualInBoundsPositiveWeightDepositCount": actual_deposit_count(multiplicity),
-        "outOfFramePositiveWeightDepositCount": int(
-            np.sum(deposit_accounting["outOfFramePositiveWeightDeposits"], dtype=np.int64)
-        ),
+        "bilinearNeighborLimit": bilinear_neighbor_limit,
+        "positiveWeightDepositEvaluationCount": positive_weight_deposit_count,
+        "actualInBoundsPositiveWeightDepositCount": actual_in_bounds_deposit_count,
+        "outOfFramePositiveWeightDepositCount": out_of_frame_deposit_count,
         "invalidProjectionNominalDepositCount": int(
             np.sum(deposit_accounting["invalidProjectionNominalDeposits"], dtype=np.int64)
         ),
@@ -1444,7 +1547,22 @@ def selected_state(
         "metrics": ORACLE.image_metrics(render, target),
         "rasterTelemetry": telemetry,
         "contributionDeposition": deposition_plan if tap_counts is not None else None,
-        "contributionFootprint": deposition_plan if tap_scales is not None else None,
+        "contributionFootprint": (
+            deposition_plan
+            if tap_scales is not None and policy == CONTRIBUTION_FOOTPRINT_POLICY
+            else None
+        ),
+        "contributionChargedDeposition": (
+            {
+                **deposition_plan,
+                "bilinearNeighborLimit": bilinear_neighbor_limit,
+                "logicalTapCount": FLOW_TAPS_PER_CANDIDATE,
+                "maximumDepositsPerCandidate": maximum_deposits,
+            }
+            if deposition_plan is not None
+            and policy == CONTRIBUTION_CHARGED_DEPOSITION_POLICY
+            else None
+        ),
         "images": {
             "render": str(render_path),
             "residual": str(residual_path),
@@ -1473,17 +1591,30 @@ def run(
     contribution_deposition: bool,
     contribution_footprint: bool,
     contribution_footprint_minimum_scale: float,
+    contribution_charged_deposition: bool,
+    charged_deposition_neighbor_limit: int,
     implementation_bundle_sha256: str,
     bound_implementation_bundle: dict[str, Any],
 ) -> tuple[dict[str, Any], str]:
     require(mode in {"frozen", "sequence"}, "mode must be frozen or sequence")
     require(not contribution_deposition or adaptive_survival, "contribution deposition requires the matched-mean adaptive-survival sequence")
     require(not contribution_footprint or adaptive_survival, "contribution footprint requires the matched-mean adaptive-survival sequence")
-    require(not (contribution_deposition and contribution_footprint), "contribution deposition and footprint assays must run separately")
+    require(not contribution_charged_deposition or adaptive_survival, "charged deposition requires the matched-mean adaptive-survival sequence")
+    require(not contribution_charged_deposition or contribution_footprint, "charged deposition requires its matched contribution-footprint control")
+    require(
+        not contribution_deposition
+        or not (contribution_footprint or contribution_charged_deposition),
+        "variable-tap contribution deposition must run separately from fixed-five footprint assays",
+    )
     require(
         math.isfinite(contribution_footprint_minimum_scale)
         and 0.0 < contribution_footprint_minimum_scale <= 1.0,
         "contribution footprint minimum scale must be finite and in (0,1]",
+    )
+    require(
+        type(charged_deposition_neighbor_limit) is int
+        and charged_deposition_neighbor_limit == CONTRIBUTION_CHARGED_DEPOSITION_NEIGHBOR_LIMIT,
+        "governed charged deposition requires exactly three bilinear neighbors",
     )
     states = manifest.get("states") or []
     require(len(states) >= 2, "budget oracle requires at least two captured exact states")
@@ -1534,6 +1665,8 @@ def run(
         policies.append(CONTRIBUTION_DEPOSITION_POLICY)
     if contribution_footprint:
         policies.append(CONTRIBUTION_FOOTPRINT_POLICY)
+    if contribution_charged_deposition:
+        policies.append(CONTRIBUTION_CHARGED_DEPOSITION_POLICY)
     temporal_by_policy: dict[str, list[dict[str, Any]]] = {policy: [] for policy in policies}
     previous_by_policy: dict[str, dict[str, Any]] = {}
     previous_hysteresis_ids: np.ndarray | None = None
@@ -1635,6 +1768,16 @@ def run(
                     "membershipPolicy": "optical-hysteresis-adaptive-mean",
                     "depositionPolicy": CONTRIBUTION_FOOTPRINT_DEPOSIT_RULE,
                 }
+            if contribution_charged_deposition:
+                selections[CONTRIBUTION_CHARGED_DEPOSITION_POLICY] = adaptive_mean_rows.copy()
+                selection_receipts[CONTRIBUTION_CHARGED_DEPOSITION_POLICY] = {
+                    **adaptive_mean_receipt,
+                    "authority": "matched-mean-membership-plus-target-free-fixed-five-charged-deposition-v0",
+                    "membershipPolicy": "optical-hysteresis-adaptive-mean",
+                    "footprintPolicy": CONTRIBUTION_FOOTPRINT_POLICY,
+                    "depositionPolicy": CONTRIBUTION_CHARGED_DEPOSITION_RULE,
+                    "bilinearNeighborLimit": charged_deposition_neighbor_limit,
+                }
             previous_adaptive_mean_ids = ids[adaptive_mean_rows].copy()
             require(adaptive_model is not None, "causal adaptive model is missing after training")
             state_scores = optical_energy_scores(coefficients)
@@ -1691,6 +1834,7 @@ def run(
                 policy,
                 images_dir,
                 contribution_footprint_minimum_scale,
+                charged_deposition_neighbor_limit,
             )
             receipt["populationRows"] = int(ids.size)
             receipt["budgetFractionEffective"] = float(row_indices.size / ids.size)
@@ -1706,6 +1850,10 @@ def run(
         require(
             len({arm["nominalDepositEvaluationBudget"] for arm in arms.values()}) == 1,
             f"{state_id} arms evaluated unequal nominal deposit workloads",
+        )
+        require(
+            len({arm["nominalTapEvaluationBudget"] for arm in arms.values()}) == 1,
+            f"{state_id} arms evaluated unequal logical tap workloads",
         )
         report_states.append({
             "stateId": state_id,
@@ -1766,8 +1914,8 @@ def run(
             "candidateBudget": candidate_budget,
             "budgetAnchorStateId": str(budget_anchor_state["id"]),
             "budgetAnchorPopulation": budget_anchor_population,
-            **deposition_work_contract(policies),
-            "workEquivalence": "equal-selected-candidates-and-equal-nominal-deposit-evaluations; actual-in-bounds-deposits-reported-as-outcome",
+            **deposition_work_contract(policies, charged_deposition_neighbor_limit),
+            "workEquivalence": "equal-selected-candidates-equal-five-logical-taps-and-equal-four-neighbor-nominal-baseline; requested-and-effective-charged-deposit-work-reported-per-arm",
             "policies": policies,
             "hysteresis": ({
                 "authority": HYSTERESIS_AUTHORITY,
@@ -1844,6 +1992,25 @@ def run(
                     "actualInBoundsDepositsReportedAsOutcome": True,
                     "targetUsedForDeposition": False,
                 } if contribution_footprint else None),
+                "contributionChargedDeposition": ({
+                    "policy": CONTRIBUTION_CHARGED_DEPOSITION_POLICY,
+                    "membershipPolicy": "optical-hysteresis-adaptive-mean",
+                    "footprintPolicy": CONTRIBUTION_FOOTPRINT_POLICY,
+                    "scoreAuthority": CONTRIBUTION_SCORE_AUTHORITY,
+                    "quotaAuthority": CONTRIBUTION_QUOTA_AUTHORITY,
+                    "tapCount": FLOW_TAPS_PER_CANDIDATE,
+                    "tapWeights": CONTRIBUTION_TAP_PATTERNS[5]["weights"],
+                    "bilinearNeighborLimit": charged_deposition_neighbor_limit,
+                    "maximumDepositsPerCandidate": (
+                        FLOW_TAPS_PER_CANDIDATE * charged_deposition_neighbor_limit
+                    ),
+                    "candidateBudgetMatched": True,
+                    "logicalTapWorkMatched": True,
+                    "nominalFourNeighborWorkMatched": True,
+                    "requestedChargedWorkReported": True,
+                    "effectiveChargedWorkReported": True,
+                    "targetUsedForDeposition": False,
+                } if contribution_charged_deposition else None),
             } if adaptive_survival else None),
         },
         "transport": {
@@ -1885,6 +2052,12 @@ def main() -> int:
     parser.add_argument("--contribution-deposition", action="store_true")
     parser.add_argument("--contribution-footprint", action="store_true")
     parser.add_argument("--contribution-footprint-minimum-scale", type=float, default=CONTRIBUTION_FOOTPRINT_MINIMUM_SCALE)
+    parser.add_argument("--contribution-charged-deposition", action="store_true")
+    parser.add_argument(
+        "--charged-deposition-neighbor-limit",
+        type=int,
+        default=CONTRIBUTION_CHARGED_DEPOSITION_NEIGHBOR_LIMIT,
+    )
     parser.add_argument("--mode", choices=("frozen", "sequence"), default="frozen")
     args = parser.parse_args()
     manifest_path = Path(args.manifest).expanduser().resolve()
@@ -1942,6 +2115,8 @@ def main() -> int:
             args.contribution_deposition,
             args.contribution_footprint,
             args.contribution_footprint_minimum_scale,
+            args.contribution_charged_deposition,
+            args.charged_deposition_neighbor_limit,
             implementation_bundle_sha256,
             implementation_bundle_at_start,
         )

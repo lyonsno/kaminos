@@ -227,12 +227,18 @@ def bilinear_deposit_accounting(
     tap_weights: np.ndarray,
     width: int,
     height: int,
+    bilinear_neighbor_limit: int = 4,
 ) -> dict[str, np.ndarray]:
     points = np.asarray(placements, dtype=np.float32)
     weights = np.asarray(tap_weights, dtype=np.float32)
     require(points.ndim == 3 and points.shape[2] == 2, "bilinear placements must have shape [rows,taps,2]")
     require(weights.shape == points.shape[:2], "bilinear tap weights must match placement slots")
     require(np.all(np.isfinite(weights)) and np.all(weights >= 0.0), "bilinear tap weights must be finite and nonnegative")
+    require(
+        type(bilinear_neighbor_limit) is int
+        and 1 <= bilinear_neighbor_limit <= 4,
+        "bilinear neighbor limit must be an integer in [1,4]",
+    )
     active = weights > 0.0
     finite = np.isfinite(placements).all(axis=2)
     x = np.where(finite, points[..., 0], 0.0)
@@ -241,11 +247,37 @@ def bilinear_deposit_accounting(
     y0 = np.floor(y).astype(np.int32)
     fx = (x - x0).astype(np.float32)
     fy = (y - y0).astype(np.float32)
+    sample_weights = np.stack(
+        (
+            (1.0 - fx) * (1.0 - fy),
+            fx * (1.0 - fy),
+            (1.0 - fx) * fy,
+            fx * fy,
+        ),
+        axis=-1,
+    )
+    if bilinear_neighbor_limit < 4:
+        order = np.argsort(-sample_weights, axis=-1, kind="stable")
+        keep = np.zeros(sample_weights.shape, dtype=bool)
+        np.put_along_axis(
+            keep,
+            order[..., :bilinear_neighbor_limit],
+            True,
+            axis=-1,
+        )
+        sample_weights = np.where(keep, sample_weights, 0.0)
+        retained = np.sum(sample_weights, axis=-1, keepdims=True)
+        sample_weights = np.divide(
+            sample_weights,
+            retained,
+            out=np.zeros_like(sample_weights),
+            where=retained > 0.0,
+        )
     samples = (
-        (0, 0, (1.0 - fx) * (1.0 - fy)),
-        (1, 0, fx * (1.0 - fy)),
-        (0, 1, (1.0 - fx) * fy),
-        (1, 1, fx * fy),
+        (0, 0, sample_weights[..., 0]),
+        (1, 0, sample_weights[..., 1]),
+        (0, 1, sample_weights[..., 2]),
+        (1, 1, sample_weights[..., 3]),
     )
     positive_count = np.zeros(points.shape[0], dtype=np.int32)
     actual_count = np.zeros(points.shape[0], dtype=np.int32)
@@ -260,10 +292,16 @@ def bilinear_deposit_accounting(
         retained_mass += np.sum(np.where(in_bounds, weights * sample_weight, 0.0), axis=1).astype(np.float32)
     return {
         "nominalDepositEvaluations": np.sum(active, axis=1).astype(np.int32) * 4,
+        "requestedChargedDepositEvaluations": (
+            np.sum(active, axis=1).astype(np.int32) * bilinear_neighbor_limit
+        ),
         "positiveWeightDepositEvaluations": positive_count,
         "actualInBoundsPositiveWeightDeposits": actual_count,
         "outOfFramePositiveWeightDeposits": out_of_frame_count,
         "invalidProjectionNominalDeposits": np.sum(active & ~finite, axis=1).astype(np.int32) * 4,
+        "invalidProjectionChargedDeposits": (
+            np.sum(active & ~finite, axis=1).astype(np.int32) * bilinear_neighbor_limit
+        ),
         "retainedQuadratureWeightFraction": retained_mass,
     }
 
