@@ -62,6 +62,9 @@ const BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY = 'depth-binned-exponential-self
 const BOUNDARY_SPLAT_OPTICAL_DEPTH_INTERVAL_IDENTITY = 'projected-ndc-zero-to-one-depth-interval-v0';
 const BOUNDARY_SPLAT_OPTICAL_ORDERING_IDENTITY = 'far-to-near-alpha-over-v0';
 const BOUNDARY_SPLAT_OPTICAL_ALPHA_IDENTITY = 'one-minus-exp-negative-summed-optical-depth-v0';
+const COARSE_RESIDUAL_RAYMARCH_PRESENTATION_ASSAY_IDENTITY = 'coarse-residual-raymarch-under-full-resolution-splats-presentation-assay-v0';
+const COARSE_RESIDUAL_RAYMARCH_PRESENTATION_RESOLVE_IDENTITY = 'coarse-linear-raymarch-plus-full-resolution-splat-raymarch-grade-v0';
+const COARSE_RESIDUAL_RAYMARCH_RESOLUTION_OWNERSHIP_IDENTITY = 'full-resolution-splats-independent-coarse-linear-raymarch-v0';
 const BOUNDARY_SPLAT_INITIAL_CAPACITY = 131072;
 const BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES = 64;
 const BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES = BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
@@ -266,6 +269,10 @@ function normalizeSelectiveHeadLiveRenderComposition(value) {
   if (normalized === 'splat-only') return 'splat-only-v0';
   if (normalized === 'raymarch-only') return 'raymarch-only-v0';
   return SELECTIVE_HEAD_LIVE_DEFAULT_RENDER_COMPOSITION;
+}
+
+function normalizeCoarseResidualRaymarchScale(value) {
+  return clampFinite(value, 0.05, 1, 0.10);
 }
 
 function selectiveHeadLiveRenderCompositionRequest(rawValue) {
@@ -4012,6 +4019,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 struct RaymarchResult {
   color: vec4<f32>,
+  linearRadianceTransmittance: vec4<f32>,
   residualFeature: vec4<f32>,
 };
 
@@ -4020,9 +4028,10 @@ struct ResidualSourceOutput {
   @location(1) residualFeature: vec4<f32>,
 };
 
-fn makeRaymarchResult(color: vec4<f32>, residualFeature: vec4<f32>) -> RaymarchResult {
+fn makeRaymarchResult(color: vec4<f32>, linearRadianceTransmittance: vec4<f32>, residualFeature: vec4<f32>) -> RaymarchResult {
   var result: RaymarchResult;
   result.color = color;
+  result.linearRadianceTransmittance = linearRadianceTransmittance;
   result.residualFeature = residualFeature;
   return result;
 }
@@ -4039,7 +4048,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
   let rd = normalize(farWorld - nearWorld);
   let hit = boxHit(ro, rd, vec3<f32>(1.0, 1.0, 1.0));
   if (hit.y <= max(hit.x, 0.0)) {
-    return makeRaymarchResult(vec4<f32>(0.004, 0.005, 0.006, 1.0), vec4<f32>(0.0));
+    return makeRaymarchResult(vec4<f32>(0.004, 0.005, 0.006, 1.0), vec4<f32>(0.004, 0.005, 0.006, 1.0), vec4<f32>(0.0));
   }
 
   let steps = clamp(u.viewport_steps_density.z, 24.0, 192.0);
@@ -5275,13 +5284,19 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     clamp(1.0 - exp(-residualInterfaceAuthority * 0.90), 0.0, 1.0),
     clamp(1.0 - exp(-residualSmokeAuthority * 0.56), 0.0, 1.0)
   );
-  return makeRaymarchResult(vec4<f32>(resolvedColor, 1.0), residualFeature);
+  return makeRaymarchResult(vec4<f32>(resolvedColor, 1.0), vec4<f32>(color, trans), residualFeature);
 }
 
 @fragment
 fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let result = raymarchVolume(in);
   return result.color;
+}
+
+@fragment
+fn fsLinearRadiance(in: VSOut) -> @location(0) vec4<f32> {
+  let result = raymarchVolume(in);
+  return result.linearRadianceTransmittance;
 }
 
 @fragment
@@ -5734,6 +5749,61 @@ fn boundarySplatOpticalPresentationFs(in: BoundarySplatOpticalPresentationVertex
     let binColor = select(vec3<f32>(0.0), accumulated.rgb / max(opticalDepth, 1e-6), opticalDepth > 1e-6);
     color = binColor * binAlpha + color * (1.0 - binAlpha);
   }
+  let ndc = in.uv * 2.0 - vec2<f32>(1.0);
+  let vignette = 1.0 - smoothstep(0.28, 1.48, length(ndc));
+  let exposed = vec3<f32>(1.0) - exp(-color * 0.96);
+  let grade = exposed * (0.80 + 0.18 * vignette);
+  let current = pow(max(grade, vec3<f32>(0.0)), vec3<f32>(0.84));
+  return vec4<f32>(current, 1.0);
+}
+`;
+
+const COARSE_RESIDUAL_RAYMARCH_PRESENTATION_WGSL = `
+struct CoarseResidualRaymarchPresentationVertexOut {
+  @builtin(position) position: vec4<f32>,
+  @location(0) uv: vec2<f32>,
+};
+
+@group(0) @binding(0) var coarseResidualRaymarch: texture_2d<f32>;
+@group(0) @binding(1) var fullResolutionSplatHdr: texture_2d<f32>;
+
+@vertex
+fn coarseResidualRaymarchPresentationVs(@builtin(vertex_index) vertexIndex: u32) -> CoarseResidualRaymarchPresentationVertexOut {
+  var positions = array<vec2<f32>, 3>(
+    vec2<f32>(-1.0, -1.0),
+    vec2<f32>(3.0, -1.0),
+    vec2<f32>(-1.0, 3.0),
+  );
+  let position = positions[vertexIndex];
+  var out: CoarseResidualRaymarchPresentationVertexOut;
+  out.position = vec4<f32>(position, 0.0, 1.0);
+  out.uv = position * 0.5 + vec2<f32>(0.5);
+  return out;
+}
+
+fn loadCoarseResidualBilinear(uv: vec2<f32>) -> vec4<f32> {
+  let dimensions = vec2<i32>(textureDimensions(coarseResidualRaymarch));
+  let coordinate = clamp(uv, vec2<f32>(0.0), vec2<f32>(1.0)) * vec2<f32>(dimensions) - vec2<f32>(0.5);
+  let base = vec2<i32>(floor(coordinate));
+  let fraction = fract(coordinate);
+  let limit = dimensions - vec2<i32>(1);
+  let p00 = clamp(base, vec2<i32>(0), limit);
+  let p10 = clamp(base + vec2<i32>(1, 0), vec2<i32>(0), limit);
+  let p01 = clamp(base + vec2<i32>(0, 1), vec2<i32>(0), limit);
+  let p11 = clamp(base + vec2<i32>(1, 1), vec2<i32>(0), limit);
+  let row0 = mix(textureLoad(coarseResidualRaymarch, p00, 0), textureLoad(coarseResidualRaymarch, p10, 0), fraction.x);
+  let row1 = mix(textureLoad(coarseResidualRaymarch, p01, 0), textureLoad(coarseResidualRaymarch, p11, 0), fraction.x);
+  return mix(row0, row1, fraction.y);
+}
+
+@fragment
+fn coarseResidualRaymarchPresentationFs(in: CoarseResidualRaymarchPresentationVertexOut) -> @location(0) vec4<f32> {
+  let sampleUv = vec2<f32>(in.uv.x, 1.0 - in.uv.y);
+  let splatDimensions = vec2<i32>(textureDimensions(fullResolutionSplatHdr));
+  let splatPixel = clamp(vec2<i32>(sampleUv * vec2<f32>(splatDimensions)), vec2<i32>(0), splatDimensions - vec2<i32>(1));
+  let raymarchRadiance = max(loadCoarseResidualBilinear(sampleUv).rgb, vec3<f32>(0.0));
+  let splatRadiance = max(textureLoad(fullResolutionSplatHdr, splatPixel, 0).rgb, vec3<f32>(0.0));
+  let color = raymarchRadiance + splatRadiance;
   let ndc = in.uv * 2.0 - vec2<f32>(1.0);
   let vignette = 1.0 - smoothstep(0.28, 1.48, length(ndc));
   let exposed = vec3<f32>(1.0) - exp(-color * 0.96);
@@ -6327,10 +6397,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySplatPresentationReadbackPipeline = null;
   let boundarySplatOpticalPresentationRenderPipeline = null;
   let boundarySplatOpticalPresentationReadbackPipeline = null;
+  let coarseResidualRaymarchPipeline = null;
+  let coarseResidualRaymarchPresentationShader = null;
+  let coarseResidualRaymarchPresentationPipeline = null;
   let boundarySplatHdrTexture = null;
   let boundarySplatHdrTextureSize = '';
   let boundarySplatOpticalTexture = null;
   let boundarySplatOpticalTextureSize = '';
+  let coarseResidualRaymarchTexture = null;
+  let coarseResidualRaymarchTextureSize = '';
   let bindGroups = [];
   let majorantFrontBindGroups = [];
   let boundarySidecarReadBindGroups = [];
@@ -7514,6 +7589,29 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     pipeline = makePipeline(format, `kaminos volume canvas native-3d-compute-fluid-raymarch-v0 ${gridSize}^3`);
     readbackPipeline = makePipeline('rgba8unorm', `kaminos volume readback native-3d-compute-fluid-raymarch-v0 ${gridSize}^3`);
+    coarseResidualRaymarchPipeline = device.createRenderPipeline({
+      label: `kaminos ${COARSE_RESIDUAL_RAYMARCH_PRESENTATION_ASSAY_IDENTITY} linear HDR raymarch ${gridSize}^3`,
+      layout: pipelineLayout,
+      vertex: { module: shader, entryPoint: 'vs' },
+      fragment: {
+        module: shader,
+        entryPoint: 'fsLinearRadiance',
+        constants: renderPipelineConstants,
+        targets: [{ format: BOUNDARY_SPLAT_HDR_TARGET_FORMAT }],
+      },
+      primitive: { topology: 'triangle-list' },
+    });
+    coarseResidualRaymarchPresentationPipeline = device.createRenderPipeline({
+      label: `kaminos ${COARSE_RESIDUAL_RAYMARCH_PRESENTATION_RESOLVE_IDENTITY} canvas resolve`,
+      layout: 'auto',
+      vertex: { module: coarseResidualRaymarchPresentationShader, entryPoint: 'coarseResidualRaymarchPresentationVs' },
+      fragment: {
+        module: coarseResidualRaymarchPresentationShader,
+        entryPoint: 'coarseResidualRaymarchPresentationFs',
+        targets: [{ format }],
+      },
+      primitive: { topology: 'triangle-list' },
+    });
     browserResidualSourcePipeline = device.createRenderPipeline({
       label: `kaminos volume browser residual shader-material-authority source ${gridSize}^3`,
       layout: pipelineLayout,
@@ -7891,6 +7989,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         .join('\n');
       throw new Error(`Boundary splat optical presentation WGSL compilation failed:\n${detail}`);
     }
+    coarseResidualRaymarchPresentationShader = device.createShaderModule({
+      label: `kaminos ${COARSE_RESIDUAL_RAYMARCH_PRESENTATION_RESOLVE_IDENTITY} wgsl`,
+      code: COARSE_RESIDUAL_RAYMARCH_PRESENTATION_WGSL,
+    });
+    const coarseHybridCompilationInfo = await coarseResidualRaymarchPresentationShader.getCompilationInfo();
+    const coarseHybridCompilationErrors = coarseHybridCompilationInfo.messages.filter(message => message.type === 'error');
+    if (coarseHybridCompilationErrors.length > 0) {
+      const detail = coarseHybridCompilationErrors
+        .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
+        .join('\n');
+      throw new Error(`Coarse residual raymarch presentation WGSL compilation failed:\n${detail}`);
+    }
     bindGroupLayout = device.createBindGroupLayout({
       label: 'kaminos fluid bind group layout',
       entries: [
@@ -8233,6 +8343,25 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
     });
     boundarySplatHdrTextureSize = key;
+  }
+
+  function ensureCoarseResidualRaymarchTexture(scale) {
+    const effectiveScale = normalizeCoarseResidualRaymarchScale(scale);
+    const width = Math.max(1, Math.floor(state.width * effectiveScale));
+    const height = Math.max(1, Math.floor(state.height * effectiveScale));
+    const key = `${width}x${height}@${effectiveScale}`;
+    if (coarseResidualRaymarchTexture && coarseResidualRaymarchTextureSize === key) {
+      return { width, height, effectiveScale };
+    }
+    coarseResidualRaymarchTexture?.destroy();
+    coarseResidualRaymarchTexture = device.createTexture({
+      label: `kaminos ${COARSE_RESIDUAL_RAYMARCH_PRESENTATION_ASSAY_IDENTITY} linear radiance`,
+      size: { width, height, depthOrArrayLayers: 1 },
+      format: BOUNDARY_SPLAT_HDR_TARGET_FORMAT,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
+    });
+    coarseResidualRaymarchTextureSize = key;
+    return { width, height, effectiveScale };
   }
 
   function ensureBoundarySplatOpticalTexture() {
@@ -9959,6 +10088,86 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       requested: boundarySplatPresentationModeRequested,
       effective: boundarySplatPresentationModeEffective,
     });
+    return true;
+  }
+
+  function encodeCoarseResidualRaymarchPresentationAssay(encoder, targetView, options = {}) {
+    const requestedScale = Number(options.raymarchScale);
+    const effectiveScale = normalizeCoarseResidualRaymarchScale(requestedScale);
+    if (!coarseResidualRaymarchPipeline || !coarseResidualRaymarchPresentationPipeline || !boundarySplatHdrPipeline) {
+      state.sparseHybridPresentationReceipt = {
+        identity: 'sparse-hybrid-presentation-receipt-v0',
+        requestedRoute: COARSE_RESIDUAL_RAYMARCH_PRESENTATION_ASSAY_IDENTITY,
+        effectiveRoute: 'unavailable',
+        fallbackReason: 'coarse-residual-raymarch-presentation-route-unavailable',
+        selfTransmittanceParityEligible: false,
+      };
+      return false;
+    }
+    ensureBoundarySplatHdrTexture();
+    const coarse = ensureCoarseResidualRaymarchTexture(effectiveScale);
+    uniforms[20] = coarse.width;
+    uniforms[21] = coarse.height;
+    device.queue.writeBuffer(uniformBuffer, 0, uniforms);
+    encodeDraw(
+      encoder,
+      coarseResidualRaymarchTexture.createView(),
+      `kaminos ${COARSE_RESIDUAL_RAYMARCH_PRESENTATION_ASSAY_IDENTITY} coarse linear raymarch`,
+      coarseResidualRaymarchPipeline,
+      { bindGroup: options.bindGroup },
+    );
+    const splatApplied = encodeBoundarySplatDraw(
+      encoder,
+      boundarySplatHdrTexture.createView(),
+      boundarySplatHdrPipeline,
+      { loadOp: 'clear', clearValue: { r: 0, g: 0, b: 0, a: 0 } },
+    );
+    if (!splatApplied) return false;
+    const resolveBindGroup = device.createBindGroup({
+      label: `kaminos ${COARSE_RESIDUAL_RAYMARCH_PRESENTATION_RESOLVE_IDENTITY} bind group`,
+      layout: coarseResidualRaymarchPresentationPipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: coarseResidualRaymarchTexture.createView() },
+        { binding: 1, resource: boundarySplatHdrTexture.createView() },
+      ],
+    });
+    const resolvePass = encoder.beginRenderPass({
+      label: `kaminos ${COARSE_RESIDUAL_RAYMARCH_PRESENTATION_RESOLVE_IDENTITY} pass`,
+      colorAttachments: [{
+        view: targetView,
+        clearValue: { r: 0, g: 0, b: 0, a: 1 },
+        loadOp: 'clear',
+        storeOp: 'store',
+      }],
+    });
+    resolvePass.setPipeline(coarseResidualRaymarchPresentationPipeline);
+    resolvePass.setBindGroup(0, resolveBindGroup);
+    resolvePass.draw(3);
+    resolvePass.end();
+    state.volumeReconstructionStyle = COARSE_RESIDUAL_RAYMARCH_PRESENTATION_ASSAY_IDENTITY;
+    state.sparseHybridPresentationReceipt = {
+      identity: 'sparse-hybrid-presentation-receipt-v0',
+      requestedRoute: COARSE_RESIDUAL_RAYMARCH_PRESENTATION_ASSAY_IDENTITY,
+      effectiveRoute: COARSE_RESIDUAL_RAYMARCH_PRESENTATION_ASSAY_IDENTITY,
+      fallbackReason: null,
+      conclusionScope: 'presentation-only-no-self-transmittance-claim-v0',
+      resolutionOwnershipIdentity: 'full-resolution-splats-independent-coarse-linear-raymarch-v0',
+      requestedRaymarchScale: requestedScale,
+      effectiveRaymarchScale: effectiveScale,
+      raymarchScaleClamped: requestedScale !== effectiveScale,
+      splatScale: 1,
+      splatWidth: state.width,
+      splatHeight: state.height,
+      raymarchWidth: coarse.width,
+      raymarchHeight: coarse.height,
+      splatFormat: BOUNDARY_SPLAT_HDR_TARGET_FORMAT,
+      raymarchFormat: BOUNDARY_SPLAT_HDR_TARGET_FORMAT,
+      intermediateClamped: false,
+      resolveIdentity: COARSE_RESIDUAL_RAYMARCH_PRESENTATION_RESOLVE_IDENTITY,
+      curve: { exposure: 0.96, vignetteBase: 0.80, vignetteGain: 0.18, power: 0.84 },
+      blendIdentity: 'linear-radiance-sum-before-single-presentation-resolve-v0',
+      selfTransmittanceParityEligible: false,
+    };
     return true;
   }
 
@@ -14547,9 +14756,23 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       && fullFieldImportSessionId === state.fullFieldImportReceipt.sessionId
     );
     if ((!state.active && !importedFieldCustody) || !device) return { ok: false, reason: 'inactive', ...state };
+    state.sparseHybridPresentationReceipt = null;
     const compositionExplicit = options.boundarySplatComposition != null;
     const boundarySplatCompositionRequestedRaw = options.boundarySplatComposition ?? 'splat-only-v0';
-    const compositionRequest = selectiveHeadLiveRenderCompositionRequest(boundarySplatCompositionRequestedRaw);
+    const coarseResidualPresentationAssay = boundarySplatCompositionRequestedRaw === COARSE_RESIDUAL_RAYMARCH_PRESENTATION_ASSAY_IDENTITY;
+    const compositionRequest = coarseResidualPresentationAssay
+      ? {
+        raw: boundarySplatCompositionRequestedRaw,
+        requested: COARSE_RESIDUAL_RAYMARCH_PRESENTATION_ASSAY_IDENTITY,
+        fallbackReason: null,
+        definition: {
+          raymarch: true,
+          splat: true,
+          raymarchFireAuthority: 0,
+          compositionAuthority: 'diagnostic-coarse-broad-smoke-raymarch-plus-full-resolution-splat-fire-presentation-only-v0',
+        },
+      }
+      : selectiveHeadLiveRenderCompositionRequest(boundarySplatCompositionRequestedRaw);
     if (compositionRequest.fallbackReason) {
       return {
         ok: false,
@@ -14569,10 +14792,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       await device.queue.onSubmittedWorkDone();
     }
     const controlsBefore = { ...controlsSnapshot };
-    const renderScale = normalizeRenderScale(options.renderScale ?? controlsSnapshot.renderScale);
+    const coarseResidualRaymarchScaleRequested = Number(
+      options.coarseResidualRaymarchScale ?? options.renderScale ?? 0.10,
+    );
+    const renderScale = coarseResidualPresentationAssay
+      ? 1
+      : normalizeRenderScale(options.renderScale ?? controlsSnapshot.renderScale);
     const controlOverrides = {
       ...(options.controlOverrides && typeof options.controlOverrides === 'object' ? options.controlOverrides : {}),
-      selectiveHeadLiveRenderComposition: compositionRequest.requested,
+      selectiveHeadLiveRenderComposition: coarseResidualPresentationAssay
+        ? 'smoke-raymarch-under-splats-v0'
+        : compositionRequest.requested,
     };
     const boundarySplatCompositionRequested = boundarySplatCompositionRequestedRaw === 'raymarch-under-splats-v0'
       ? boundarySplatCompositionRequestedRaw
@@ -14628,7 +14858,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
           };
         }
-        if (compositionDefinition.raymarch) {
+        if (coarseResidualPresentationAssay) {
+          splatEncoded = encodeCoarseResidualRaymarchPresentationAssay(
+            encoder,
+            currentTexture.createView(),
+            {
+              raymarchScale: coarseResidualRaymarchScaleRequested,
+              bindGroup: selectiveHeadLiveRoleGroups('render'),
+            },
+          );
+          raymarchEncoded = splatEncoded;
+        } else if (compositionDefinition.raymarch) {
           encodeDraw(
             encoder,
             currentTexture.createView(),
@@ -14637,13 +14877,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           raymarchEncoded = true;
         }
         if (compositionDefinition.splat) {
-          splatEncoded = encodeBoundarySplatPresentation(
-            encoder,
-            currentTexture.createView(),
-            boundarySplatRenderPipeline,
-            boundarySplatPresentationRenderPipeline,
-            { loadOp: raymarchEncoded ? 'load' : 'clear' },
-          );
+          if (!coarseResidualPresentationAssay) {
+            splatEncoded = encodeBoundarySplatPresentation(
+              encoder,
+              currentTexture.createView(),
+              boundarySplatRenderPipeline,
+              boundarySplatPresentationRenderPipeline,
+              { loadOp: raymarchEncoded ? 'load' : 'clear' },
+            );
+          }
         }
         if (compositionDefinition.splat && !splatEncoded) {
           return {
@@ -14723,7 +14965,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         encodeBoundarySplats(retryEncoder);
         const retryTexture = context.getCurrentTexture();
         let retryRaymarchEncoded = false;
-        if (compositionDefinition.raymarch) {
+        let retrySplatEncoded = false;
+        if (coarseResidualPresentationAssay) {
+          retrySplatEncoded = encodeCoarseResidualRaymarchPresentationAssay(
+            retryEncoder,
+            retryTexture.createView(),
+            {
+              raymarchScale: coarseResidualRaymarchScaleRequested,
+              bindGroup: selectiveHeadLiveRoleGroups('render'),
+            },
+          );
+          retryRaymarchEncoded = retrySplatEncoded;
+        } else if (compositionDefinition.raymarch) {
           encodeDraw(
             retryEncoder,
             retryTexture.createView(),
@@ -14731,13 +14984,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           );
           retryRaymarchEncoded = true;
         }
-        const retrySplatEncoded = encodeBoundarySplatPresentation(
-          retryEncoder,
-          retryTexture.createView(),
-          boundarySplatRenderPipeline,
-          boundarySplatPresentationRenderPipeline,
-          { loadOp: retryRaymarchEncoded ? 'load' : 'clear' },
-        );
+        if (!coarseResidualPresentationAssay) {
+          retrySplatEncoded = encodeBoundarySplatPresentation(
+            retryEncoder,
+            retryTexture.createView(),
+            boundarySplatRenderPipeline,
+            boundarySplatPresentationRenderPipeline,
+            { loadOp: retryRaymarchEncoded ? 'load' : 'clear' },
+          );
+        }
         if (!retrySplatEncoded) {
           return {
             ok: false,
@@ -14868,8 +15123,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         boundarySplatCapacityRetryCount,
         boundarySplatFallbackReason: state.boundarySplatFallbackReason,
         boundarySplatMode: normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode),
+        sparseHybridPresentationReceipt: coarseResidualPresentationAssay && state.sparseHybridPresentationReceipt
+          ? {
+            ...state.sparseHybridPresentationReceipt,
+            curve: state.sparseHybridPresentationReceipt.curve ? { ...state.sparseHybridPresentationReceipt.curve } : null,
+          }
+          : null,
       };
     } finally {
+      if (coarseResidualPresentationAssay && device) {
+        uniforms[20] = state.width;
+        uniforms[21] = state.height;
+        device.queue.writeBuffer(uniformBuffer, 0, uniforms);
+      }
       if (options.restoreControls !== false) {
         controlsSnapshot = controlsBefore;
         resetTemporalHistory('same-state-render-scale-canvas-restore');
@@ -15430,6 +15696,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       frameTexture?.destroy();
       boundarySplatHdrTexture?.destroy();
       boundarySplatOpticalTexture?.destroy();
+      coarseResidualRaymarchTexture?.destroy();
       browserResidualFeatureTexture?.destroy();
       externalEmitterBuffer?.destroy();
       boundarySplatCameraBuffer?.destroy();
