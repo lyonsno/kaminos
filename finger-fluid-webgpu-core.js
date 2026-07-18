@@ -28,6 +28,7 @@ export const KAMINOS_FINGER_FLUID_DEFERRED_SCENE_ROUTE = 'webgpu-deferred-indexe
 export const KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE = 'wgsl-indexed-mesh-world-space-reflection-v0';
 export const KAMINOS_FINGER_FLUID_REFLECTION_QUERY_SCHEMA = 'kaminos.reflection-query-provider.v0';
 export const KAMINOS_FINGER_FLUID_REFLECTION_ACCELERATION_ROUTE = 'uncapped-exact-triangle-scan-v0';
+export const KAMINOS_FINGER_FLUID_REFLECTION_QUADRATURE_ROUTE = 'deterministic-five-ray-cone-quadrature-v0';
 export const KAMINOS_FINGER_FLUID_STABILITY_CONTRACT = 'bounded-pbf-energy-v0';
 export const KAMINOS_FINGER_FLUID_TRUTH_GAUNTLET_CONTRACT = 'kaminos-fluid-truth-gauntlet-v0';
 
@@ -194,6 +195,8 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime) {
       evidence?.route !== KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE
       || evidence?.shaderRoute !== KAMINOS_FINGER_FLUID_SCREEN_SPACE_SHADER_ROUTE
       || evidence?.supportDepthRoute !== KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE
+      || evidence?.accumulationTexture?.format !== 'rgba16float'
+      || evidence?.accumulationTexture?.channels?.join('|') !== 'optical_thickness|material_weighted_thickness|depth_weight|depth_weighted_view_depth_sum'
       || !Number.isInteger(evidence?.analyticSupportDepthPassCount)
       || evidence.analyticSupportDepthPassCount <= 0
       || !Number.isInteger(evidence?.accumulationPassCount)
@@ -225,7 +228,11 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime) {
       || !Number.isInteger(evidence?.slabGeometryPassCount)
       || evidence.slabGeometryPassCount <= 0
       || evidence?.frontDepthTexture?.format !== 'rgba16float'
+      || evidence?.frontDepthTexture?.channels?.join('|') !== 'projected_particle_sphere_front_view_depth_min|nearest_particle_center_view_depth_min'
       || evidence?.backDepthTexture?.format !== 'rgba16float'
+      || evidence?.backDepthTexture?.channel !== 'projected_particle_sphere_back_view_depth_max'
+      || evidence?.accumulationTexture?.format !== 'rgba16float'
+      || evidence?.accumulationTexture?.channels?.join('|') !== 'optical_thickness|material_weighted_thickness|depth_weight|depth_weighted_view_depth_sum'
       || evidence?.invalidSlabDisposition !== 'entry_interface_only_no_exit_claim_v0'
       || !Number.isInteger(evidence?.accumulationPassCount)
       || evidence.accumulationPassCount <= 0
@@ -244,6 +251,8 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime) {
       || reflectionEvidence?.effectiveProviderRoute !== KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE
       || reflectionEvidence?.providerRoute !== KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE
       || reflectionEvidence?.accelerationRoute !== KAMINOS_FINGER_FLUID_REFLECTION_ACCELERATION_ROUTE
+      || reflectionEvidence?.quadratureRoute !== KAMINOS_FINGER_FLUID_REFLECTION_QUADRATURE_ROUTE
+      || reflectionEvidence?.hitKindDiagnosticScope !== 'center_ray_only_v0'
       || reflectionEvidence?.fallbackReason
       || reflectionEvidence?.candidateCapMode !== 'uncapped_exact_dynamic_mesh_triangle_population_v0'
       || reflectionEvidence?.exactTriangleCount !== DYNAMIC_REFLECTION_MESH_TRIANGLE_COUNT
@@ -1739,9 +1748,10 @@ fn fs_accumulate(input: AccumVertexOutput) -> AccumFragmentOutput {
   let opticalThickness = thickness * (0.55 + 0.45 * smoothstep(0.0, ${MAX_FLUID_SPEED}, input.speed));
   let depthWeight = edge * surfaceWeight;
   let supportSafeViewDepth = input.viewDepth;
+  let frontSurfaceViewDepth = max(0.001, input.viewDepth - cap * input.radius);
   var output: AccumFragmentOutput;
-  output.accumulation = vec4<f32>(opticalThickness, input.tracer * opticalThickness, depthWeight, supportSafeViewDepth);
-  output.frontDepth = vec4<f32>(max(0.001, input.viewDepth - cap * input.radius));
+  output.accumulation = vec4<f32>(opticalThickness, input.tracer * opticalThickness, depthWeight, supportSafeViewDepth * depthWeight);
+  output.frontDepth = vec4<f32>(frontSurfaceViewDepth, supportSafeViewDepth, frontSurfaceViewDepth, frontSurfaceViewDepth);
   output.backDepth = vec4<f32>(input.viewDepth + cap * input.radius);
   return output;
 }
@@ -1773,6 +1783,11 @@ fn readAccum(pixel: vec2<i32>) -> vec4<f32> {
 fn readFrontDepth(pixel: vec2<i32>) -> f32 {
   let dims = vec2<i32>(textureDimensions(opticalSlabFrontDepth));
   return textureLoad(opticalSlabFrontDepth, clamp(pixel, vec2<i32>(0), dims - vec2<i32>(1)), 0).x;
+}
+
+fn readSupportOrderingDepth(pixel: vec2<i32>) -> f32 {
+  let dims = vec2<i32>(textureDimensions(opticalSlabFrontDepth));
+  return textureLoad(opticalSlabFrontDepth, clamp(pixel, vec2<i32>(0), dims - vec2<i32>(1)), 0).y;
 }
 
 fn readBackDepth(pixel: vec2<i32>) -> f32 {
@@ -1909,8 +1924,33 @@ fn shadeSurfaceHit(hit: ReflectionHit, outgoingRay: vec3<f32>) -> vec3<f32> {
   return vec3<f32>(0.54, 0.32, 0.08) * (0.26 + diffuse * 0.88) + vec3<f32>(0.92, 0.68, 0.28) * edge * 0.35;
 }
 
+fn sampleWorldReflection(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> vec3<f32> {
+  let hit = traceClosestSurface(rayOrigin, rayDirection);
+  return shadeSurfaceHit(hit, rayDirection)
+    + integrateParticipatingRadiance(rayOrigin, rayDirection, hit.distance);
+}
+
+fn integrateWorldReflectionQuadrature(
+  worldPosition: vec3<f32>,
+  cameraRay: vec3<f32>,
+  worldNormal: vec3<f32>,
+  coneRadius: f32,
+) -> vec3<f32> {
+  let centerDirection = normalize(reflect(cameraRay, worldNormal));
+  let helperAxis = select(vec3<f32>(0.0, 1.0, 0.0), vec3<f32>(1.0, 0.0, 0.0), abs(centerDirection.y) > 0.92);
+  let tangent = normalize(cross(helperAxis, centerDirection));
+  let bitangent = normalize(cross(centerDirection, tangent));
+  let rayOrigin = worldPosition + worldNormal * 0.026;
+  let center = sampleWorldReflection(rayOrigin, centerDirection);
+  let tangentPositive = sampleWorldReflection(rayOrigin, normalize(centerDirection + tangent * coneRadius));
+  let tangentNegative = sampleWorldReflection(rayOrigin, normalize(centerDirection + tangent * -coneRadius));
+  let bitangentPositive = sampleWorldReflection(rayOrigin, normalize(centerDirection + bitangent * coneRadius));
+  let bitangentNegative = sampleWorldReflection(rayOrigin, normalize(centerDirection + bitangent * -coneRadius));
+  return center * 0.36 + (tangentPositive + tangentNegative + bitangentPositive + bitangentNegative) * 0.16;
+}
+
 fn weightedDepth(sampleValue: vec4<f32>) -> f32 {
-  return sampleValue.w;
+  return sampleValue.w / max(sampleValue.z, 0.0001);
 }
 
 fn edgePreservingDepth(pixel: vec2<i32>, centerAccum: vec4<f32>) -> f32 {
@@ -1945,6 +1985,38 @@ fn coherentSlabDepth(pixel: vec2<i32>, centerDepth: f32, backSurface: bool) -> f
   let candidate = select(readFrontDepth(pixel), readBackDepth(pixel), backSurface);
   let populated = select((candidate < 29.5), (candidate > 0.001), backSurface);
   return select(centerDepth, candidate, populated && abs(candidate - centerDepth) < 0.72);
+}
+
+fn reconstructWorldReflectionNormal(pixel: vec2<i32>) -> vec3<f32> {
+  let leftPixel = pixel + vec2<i32>(-6, 0);
+  let rightPixel = pixel + vec2<i32>(6, 0);
+  let screenUpPixel = pixel + vec2<i32>(0, -6);
+  let screenDownPixel = pixel + vec2<i32>(0, 6);
+  let left = reconstructWorldPosition(leftPixel, edgePreservingDepth(leftPixel, readAccum(leftPixel)));
+  let right = reconstructWorldPosition(rightPixel, edgePreservingDepth(rightPixel, readAccum(rightPixel)));
+  let screenUp = reconstructWorldPosition(screenUpPixel, edgePreservingDepth(screenUpPixel, readAccum(screenUpPixel)));
+  let screenDown = reconstructWorldPosition(screenDownPixel, edgePreservingDepth(screenDownPixel, readAccum(screenDownPixel)));
+  var worldNormal = normalize(cross(right - left, screenDown - screenUp));
+  let center = reconstructWorldPosition(pixel, edgePreservingDepth(pixel, readAccum(pixel)));
+  let viewToCamera = normalize(params.cameraPosition.xyz - center);
+  worldNormal = select(worldNormal, -worldNormal, dot(worldNormal, viewToCamera) < 0.0);
+  return worldNormal;
+}
+
+fn reconstructWorldReflectionDetailNormal(pixel: vec2<i32>) -> vec3<f32> {
+  let leftPixel = pixel + vec2<i32>(-2, 0);
+  let rightPixel = pixel + vec2<i32>(2, 0);
+  let screenUpPixel = pixel + vec2<i32>(0, -2);
+  let screenDownPixel = pixel + vec2<i32>(0, 2);
+  let left = reconstructWorldPosition(leftPixel, edgePreservingDepth(leftPixel, readAccum(leftPixel)));
+  let right = reconstructWorldPosition(rightPixel, edgePreservingDepth(rightPixel, readAccum(rightPixel)));
+  let screenUp = reconstructWorldPosition(screenUpPixel, edgePreservingDepth(screenUpPixel, readAccum(screenUpPixel)));
+  let screenDown = reconstructWorldPosition(screenDownPixel, edgePreservingDepth(screenDownPixel, readAccum(screenDownPixel)));
+  var worldNormal = normalize(cross(right - left, screenDown - screenUp));
+  let center = reconstructWorldPosition(pixel, edgePreservingDepth(pixel, readAccum(pixel)));
+  let viewToCamera = normalize(params.cameraPosition.xyz - center);
+  worldNormal = select(worldNormal, -worldNormal, dot(worldNormal, viewToCamera) < 0.0);
+  return worldNormal;
 }
 
 fn reconstructEntryNormal(pixel: vec2<i32>, centerDepth: f32) -> vec3<f32> {
@@ -2029,7 +2101,7 @@ fn fs_composite(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOutp
   let pixel = vec2<i32>(fragmentPosition.xy);
   let centerAccum = readAccum(pixel);
   if (centerAccum.z < 0.018 || centerAccum.x < 0.012) { discard; }
-  let supportOrderingDepth = weightedDepth(centerAccum);
+  let supportOrderingDepth = readSupportOrderingDepth(pixel);
   let shadingDepth = edgePreservingDepth(pixel, centerAccum);
   let normal = reconstructSurfaceNormal(pixel, shadingDepth);
   let viewDir = vec3<f32>(0.0, 0.0, 1.0);
@@ -2063,7 +2135,7 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   let centerAccum = readAccum(pixel);
   if (centerAccum.z < 0.018 || centerAccum.x < 0.012) { discard; }
 
-  let supportOrderingDepth = weightedDepth(centerAccum);
+  let supportOrderingDepth = readSupportOrderingDepth(pixel);
   let shadingDepth = edgePreservingDepth(pixel, centerAccum);
   let slab = evaluateOpticalSlab(pixel, centerAccum);
   let normal = reconstructEntryNormal(pixel, slab.entryDepth);
@@ -2093,19 +2165,8 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   let offsetPixels = mix(entryOnlyOffset, twoInterfaceOffset, exitValidity);
   let refractedUv = clamp(sceneUv + offsetPixels / dimsFloat, vec2<f32>(0.001), vec2<f32>(0.999));
   let refractedScene = textureSampleLevel(refractionSceneColor, refractionSceneSampler, refractedUv, 0.0);
-  let ndv = clamp(dot(normal, viewDir), 0.0, 1.0);
-  let f0 = 0.02037;
-  let fresnel = f0 + (1.0 - f0) * pow(1.0 - ndv, 5.0);
   let absorptionPath = mix(thickness * 0.12, geometricPathLength, exitValidity);
   let absorption = exp(-vec3<f32>(0.46, 0.15, 0.055) * absorptionPath);
-  let worldPosition = reconstructWorldPosition(pixel, shadingDepth);
-  var worldNormal = worldSurfaceNormal(normal);
-  let cameraRay = normalize(worldPosition - params.cameraPosition.xyz);
-  worldNormal = select(worldNormal, -worldNormal, dot(worldNormal, cameraRay) > 0.0);
-  let reflectionDirection = normalize(reflect(cameraRay, worldNormal));
-  let reflectionHit = traceClosestSurface(worldPosition + worldNormal * 0.026, reflectionDirection);
-  let reflectionRadiance = shadeSurfaceHit(reflectionHit, reflectionDirection)
-    + integrateParticipatingRadiance(worldPosition, reflectionDirection, reflectionHit.distance);
   let opticalDebugMode = i32(round(params.cameraUp.w));
 
   if (opticalDebugMode == 1) {
@@ -2141,26 +2202,42 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
     let encodedOffset = offsetPixels / 56.0 + vec2<f32>(0.5);
     return refractionOutput(vec4<f32>(encodedOffset, length(offsetPixels) / 28.0, 1.0), supportOrderingDepth);
   }
-  if (opticalDebugMode == 10) {
-    return refractionOutput(vec4<f32>(vec3<f32>(fresnel), 1.0), supportOrderingDepth);
-  }
   if (opticalDebugMode == 11) {
     return refractionOutput(vec4<f32>(absorption, 1.0), supportOrderingDepth);
   }
-  if (opticalDebugMode == 12) {
-    return refractionOutput(vec4<f32>(reflectionRadiance, 1.0), supportOrderingDepth);
+
+  let reflectionEntryDepth = coherentSlabDepth(pixel, shadingDepth, false);
+  let worldPosition = reconstructWorldPosition(pixel, reflectionEntryDepth);
+  let worldNormal = reconstructWorldReflectionNormal(pixel);
+  let viewToCamera = normalize(params.cameraPosition.xyz - worldPosition);
+  let cameraRay = -viewToCamera;
+  let ndv = clamp(dot(worldNormal, viewToCamera), 0.0, 1.0);
+  let f0 = 0.02037;
+  let fresnel = f0 + (1.0 - f0) * pow(1.0 - ndv, 5.0);
+  if (opticalDebugMode == 10) {
+    return refractionOutput(vec4<f32>(vec3<f32>(fresnel), 1.0), supportOrderingDepth);
   }
-  if (opticalDebugMode == 13) {
-    let hitKindColor = select(
-      select(vec3<f32>(0.10, 0.32, 0.92), vec3<f32>(0.96, 0.62, 0.10), reflectionHit.kind == REFLECTION_HIT_ANALYTIC),
-      vec3<f32>(0.96, 0.12, 0.38),
-      reflectionHit.kind == REFLECTION_HIT_INDEXED_MESH,
-    );
-    return refractionOutput(vec4<f32>(hitKindColor, 1.0), supportOrderingDepth);
-  }
-  if (opticalDebugMode == 14) {
+  if (opticalDebugMode == 13 || opticalDebugMode == 14) {
+    let reflectionDirection = normalize(reflect(cameraRay, worldNormal));
+    let reflectionHit = traceClosestSurface(worldPosition + worldNormal * 0.026, reflectionDirection);
+    if (opticalDebugMode == 13) {
+      let hitKindColor = select(
+        select(vec3<f32>(0.10, 0.32, 0.92), vec3<f32>(0.96, 0.62, 0.10), reflectionHit.kind == REFLECTION_HIT_ANALYTIC),
+        vec3<f32>(0.96, 0.12, 0.38),
+        reflectionHit.kind == REFLECTION_HIT_INDEXED_MESH,
+      );
+      return refractionOutput(vec4<f32>(hitKindColor, 1.0), supportOrderingDepth);
+    }
     let distanceView = 1.0 - exp(-reflectionHit.distance * 0.18);
     return refractionOutput(vec4<f32>(distanceView, distanceView * 0.72, 1.0 - distanceView, 1.0), supportOrderingDepth);
+  }
+
+  let reflectionDetailNormal = reconstructWorldReflectionDetailNormal(pixel);
+  let unresolvedNormalVariance = sqrt(max(1.0 - dot(worldNormal, reflectionDetailNormal), 0.0));
+  let reflectionConeRadius = clamp(0.018 + unresolvedNormalVariance * 0.12, 0.018, 0.11);
+  let reflectionRadiance = integrateWorldReflectionQuadrature(worldPosition, cameraRay, worldNormal, reflectionConeRadius);
+  if (opticalDebugMode == 12) {
+    return refractionOutput(vec4<f32>(reflectionRadiance, 1.0), supportOrderingDepth);
   }
 
   let absorptionLoss = vec3<f32>(1.0) - absorption;
@@ -3022,6 +3099,7 @@ export async function createWebGPUFingerFluidSolver({
     entries: [
       { binding: 1, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
       { binding: 4, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
+      { binding: 7, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
     ],
   });
   const analyticSupportPresentationLayout = device.createBindGroupLayout({
@@ -3093,7 +3171,7 @@ export async function createWebGPUFingerFluidSolver({
             format: 'rgba16float',
             blend: {
               color: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
-              alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'min' },
+              alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
             },
           },
           {
@@ -3364,6 +3442,7 @@ export async function createWebGPUFingerFluidSolver({
       entries: [
         { binding: 1, resource: { buffer: renderParamsBuffer } },
         { binding: 4, resource: screenSpaceSurfaceAccumulationTexture.createView() },
+        { binding: 7, resource: screenSpaceOpticalSlabFrontDepthTexture.createView() },
       ],
     });
     screenSpaceRefractionCompositeBindGroup = device.createBindGroup({
@@ -3683,7 +3762,7 @@ export async function createWebGPUFingerFluidSolver({
         colorAttachments: [
           {
             view: screenSpaceSurfaceAccumulationTexture.createView(),
-            clearValue: { r: 0, g: 0, b: 0, a: 30 },
+            clearValue: { r: 0, g: 0, b: 0, a: 0 },
             loadOp: 'clear',
             storeOp: 'store',
           },
@@ -4210,6 +4289,8 @@ export async function createWebGPUFingerFluidSolver({
           effectiveProviderRoute: KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE,
           providerRoute: KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE,
           accelerationRoute: KAMINOS_FINGER_FLUID_REFLECTION_ACCELERATION_ROUTE,
+          quadratureRoute: KAMINOS_FINGER_FLUID_REFLECTION_QUADRATURE_ROUTE,
+          hitKindDiagnosticScope: 'center_ray_only_v0',
           fallbackReason: null,
           compositePassCount: worldSpaceReflectionCompositePassCount,
           reflectionProviderFrameId: lastReflectionProviderFrameId,
@@ -4243,7 +4324,7 @@ export async function createWebGPUFingerFluidSolver({
           label: 'kaminos-finger-fluid-surface-accumulation',
           format: 'rgba16float',
           extent: configuredExtent,
-          channels: ['optical_thickness', 'material_weighted_thickness', 'depth_weight', 'nearest_particle_center_view_depth'],
+          channels: ['optical_thickness', 'material_weighted_thickness', 'depth_weight', 'depth_weighted_view_depth_sum'],
         } : null,
         accumulationPassCount: screenSpaceSurfaceAccumulationPassCount,
         compositePassCount: screenSpaceSurfaceCompositePassCount,
@@ -4261,13 +4342,19 @@ export async function createWebGPUFingerFluidSolver({
           label: 'kaminos-finger-fluid-optical-slab-front-depth',
           format: 'rgba16float',
           extent: configuredExtent,
-          channel: 'projected_particle_sphere_front_view_depth_min',
+          channels: ['projected_particle_sphere_front_view_depth_min', 'nearest_particle_center_view_depth_min'],
         } : null,
         backDepthTexture: configuredExtent ? {
           label: 'kaminos-finger-fluid-optical-slab-back-depth',
           format: 'rgba16float',
           extent: configuredExtent,
           channel: 'projected_particle_sphere_back_view_depth_max',
+        } : null,
+        accumulationTexture: configuredExtent ? {
+          label: 'kaminos-finger-fluid-surface-accumulation',
+          format: 'rgba16float',
+          extent: configuredExtent,
+          channels: ['optical_thickness', 'material_weighted_thickness', 'depth_weight', 'depth_weighted_view_depth_sum'],
         } : null,
         slabGeometry: 'projected_particle_interval_hull_not_watertight_surface_v0',
         invalidSlabDisposition: 'entry_interface_only_no_exit_claim_v0',

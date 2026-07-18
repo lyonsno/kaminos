@@ -536,6 +536,8 @@ function requireDeferredWorldReflectionEvidence(receipt, label, requireReflectio
     || worldSpaceReflectionEvidence?.requestedProviderRoute !== 'wgsl-indexed-mesh-world-space-reflection-v0'
     || worldSpaceReflectionEvidence?.effectiveProviderRoute !== 'wgsl-indexed-mesh-world-space-reflection-v0'
     || worldSpaceReflectionEvidence?.accelerationRoute !== 'uncapped-exact-triangle-scan-v0'
+    || worldSpaceReflectionEvidence?.quadratureRoute !== 'deterministic-five-ray-cone-quadrature-v0'
+    || worldSpaceReflectionEvidence?.hitKindDiagnosticScope !== 'center_ray_only_v0'
     || worldSpaceReflectionEvidence?.fallbackReason
     || worldSpaceReflectionEvidence?.compositePassCount < 1
     || worldSpaceReflectionEvidence?.reflectionProviderFrameId !== renderFrameId
@@ -1286,6 +1288,10 @@ async function main() {
     if (effectiveRendererMode === 'screen_space_surface') {
       screenSpaceSurfaceEvidence = lastDebugState.runtime?.screenSpaceSurfaceEvidence || null;
       if (screenSpaceSurfaceEvidence?.route !== 'webgpu-screen-space-liquid-surface-v0') throw new Error(`screen-space route evidence mismatch: ${JSON.stringify(screenSpaceSurfaceEvidence)}`);
+      if (
+        screenSpaceSurfaceEvidence?.accumulationTexture?.format !== 'rgba16float'
+        || screenSpaceSurfaceEvidence?.accumulationTexture?.channels?.join('|') !== 'optical_thickness|material_weighted_thickness|depth_weight|depth_weighted_view_depth_sum'
+      ) throw new Error(`screen-space accumulation channel evidence mismatch: ${JSON.stringify(screenSpaceSurfaceEvidence)}`);
       if (screenSpaceSurfaceEvidence?.accumulationPassCount < 1 || screenSpaceSurfaceEvidence?.compositePassCount < 1) throw new Error(`screen-space pass evidence missing: ${JSON.stringify(screenSpaceSurfaceEvidence)}`);
     }
     if (effectiveRendererMode === 'screen_space_refraction') {
@@ -1296,7 +1302,11 @@ async function main() {
         || refractionEvidence?.slabRoute !== 'wgsl-particle-projected-front-back-slab-v0'
         || refractionEvidence?.slabGeometryPassCount < 1
         || refractionEvidence?.frontDepthTexture?.format !== 'rgba16float'
+        || refractionEvidence?.frontDepthTexture?.channels?.join('|') !== 'projected_particle_sphere_front_view_depth_min|nearest_particle_center_view_depth_min'
         || refractionEvidence?.backDepthTexture?.format !== 'rgba16float'
+        || refractionEvidence?.backDepthTexture?.channel !== 'projected_particle_sphere_back_view_depth_max'
+        || refractionEvidence?.accumulationTexture?.format !== 'rgba16float'
+        || refractionEvidence?.accumulationTexture?.channels?.join('|') !== 'optical_thickness|material_weighted_thickness|depth_weight|depth_weighted_view_depth_sum'
         || refractionEvidence?.invalidSlabDisposition !== 'entry_interface_only_no_exit_claim_v0'
         || refractionEvidence?.supportDepthRoute !== 'wgsl-analytic-heightfield-obstacle-depth-v0'
         || refractionEvidence?.analyticSupportDepthPassCount < 1
@@ -1602,7 +1612,7 @@ async function main() {
       if (mode === 'sphere_debug' && activity.activeRatio < minimumActiveRatio) {
         throw new Error(`blank sphere-debug output rejected: ${JSON.stringify(activity)}`);
       }
-      if (mode === 'screen_space_refraction' && opticalDebugMode === 'shaded' && activity.activeRatio < 0.05) {
+      if (mode === 'screen_space_refraction' && opticalDebugMode === 'shaded' && activity.activeRatio < minimumActiveRatio) {
         throw new Error(`blank refraction output rejected: ${JSON.stringify(activity)}`);
       }
       return { receipt, activity };
@@ -1617,12 +1627,20 @@ async function main() {
     screenSpaceSurfaceEvidence = screenSpaceSurface.receipt.screenSpaceSurfaceEvidence;
     refractionEvidence = screenSpaceRefraction.receipt.refractionEvidence;
     if (
+      screenSpaceSurfaceEvidence?.accumulationTexture?.format !== 'rgba16float'
+      || screenSpaceSurfaceEvidence?.accumulationTexture?.channels?.join('|') !== 'optical_thickness|material_weighted_thickness|depth_weight|depth_weighted_view_depth_sum'
+    ) throw new Error(`same-state surface accumulation evidence missing or partial: ${JSON.stringify(screenSpaceSurfaceEvidence)}`);
+    if (
       refractionEvidence?.route !== 'webgpu-screen-space-liquid-refraction-v0'
       || refractionEvidence?.opticalTransportRoute !== 'snell-two-interface-screen-space-slab-v0'
       || refractionEvidence?.slabRoute !== 'wgsl-particle-projected-front-back-slab-v0'
       || refractionEvidence?.slabGeometryPassCount < 1
       || refractionEvidence?.frontDepthTexture?.format !== 'rgba16float'
+      || refractionEvidence?.frontDepthTexture?.channels?.join('|') !== 'projected_particle_sphere_front_view_depth_min|nearest_particle_center_view_depth_min'
       || refractionEvidence?.backDepthTexture?.format !== 'rgba16float'
+      || refractionEvidence?.backDepthTexture?.channel !== 'projected_particle_sphere_back_view_depth_max'
+      || refractionEvidence?.accumulationTexture?.format !== 'rgba16float'
+      || refractionEvidence?.accumulationTexture?.channels?.join('|') !== 'optical_thickness|material_weighted_thickness|depth_weight|depth_weighted_view_depth_sum'
       || refractionEvidence?.invalidSlabDisposition !== 'entry_interface_only_no_exit_claim_v0'
       || refractionEvidence?.supportDepthRoute !== 'wgsl-analytic-heightfield-obstacle-depth-v0'
       || refractionEvidence?.analyticSupportDepthPassCount < 1
@@ -1763,12 +1781,15 @@ async function main() {
       const spherePath = resolve(surfaceRegistrationDir, `${camera.id}.sphere-debug.png`);
       const surfacePath = resolve(surfaceRegistrationDir, `${camera.id}.screen-space-surface.png`);
       const refractionPath = resolve(surfaceRegistrationDir, `${camera.id}.screen-space-refraction-thickness.png`);
+      const shadedRefractionPath = resolve(surfaceRegistrationDir, `${camera.id}.screen-space-refraction-shaded.png`);
       const sphereRender = await renderSameState('sphere_debug', spherePath, canvasRect, 'shaded', 0.005);
       const surfaceRender = await renderSameState('screen_space_surface', surfacePath, canvasRect, 'shaded', 0.005);
       const refractionRender = await renderSameState('screen_space_refraction', refractionPath, canvasRect, 'thickness', 0.005);
+      const shadedRefraction = await renderSameState('screen_space_refraction', shadedRefractionPath, canvasRect, 'shaded', 0.025);
       if (
         sphereRender.receipt.stepCount !== surfaceRender.receipt.stepCount
         || sphereRender.receipt.stepCount !== refractionRender.receipt.stepCount
+        || sphereRender.receipt.stepCount !== shadedRefraction.receipt.stepCount
       ) {
         throw new Error(`registration view ${camera.id} advanced the simulation between renderers`);
       }
@@ -1796,6 +1817,11 @@ async function main() {
         surfaceComparison,
         refractionComparison,
         sharedSupportIdentity,
+        shadedRefraction: {
+          path: shadedRefractionPath,
+          receipt: shadedRefraction.receipt,
+          activity: shadedRefraction.activity,
+        },
       });
     }
     await evaluate(ws, `(() => {

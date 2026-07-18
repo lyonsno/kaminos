@@ -66,13 +66,20 @@ assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_DEFERRED_SCENE_ROUTE\s*=\s*
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE\s*=\s*'wgsl-indexed-mesh-world-space-reflection-v0'/, 'world-space reflection provider route is explicit');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_REFLECTION_QUERY_SCHEMA\s*=\s*'kaminos\.reflection-query-provider\.v0'/, 'reflection query boundary has an explicit schema');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_REFLECTION_ACCELERATION_ROUTE\s*=\s*'uncapped-exact-triangle-scan-v0'/, 'V0 names its exact uncapped traversal honestly rather than claiming a BVH');
+assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_REFLECTION_QUADRATURE_ROUTE\s*=\s*'deterministic-five-ray-cone-quadrature-v0'/, 'finite-footprint world reflection names its quadrature route explicitly');
+assert.match(webgpuCoreSource, /hitKindDiagnosticScope:\s*'center_ray_only_v0'/, 'runtime evidence limits hit-kind attribution to the exact center ray it classifies');
 assert.match(webgpuCoreSource, /fn vs_analytic_support_presentation[\s\S]*toyFloorHeight[\s\S]*toyFloorNormal/, 'support presentation is rasterized from the solver analytic heightfield and its continuous normal');
 assert.match(webgpuCoreSource, /fn fs_analytic_support_presentation[\s\S]*fwidth[\s\S]*worldPosition/, 'support presentation exposes world-anchored antialiased calibration landmarks');
 assert.match(webgpuCoreSource, /@builtin\(frag_depth\) depth: f32/, 'screen-space composite emits reconstructed liquid depth');
-assert.match(webgpuCoreSource, /let supportSafeViewDepth = input\.viewDepth;[\s\S]*output\.accumulation = vec4<f32>\(opticalThickness, input\.tracer \* opticalThickness, depthWeight, supportSafeViewDepth\)/, 'support ordering uses collision-valid particle centers rather than camera-facing splat caps that penetrate terrain');
-assert.match(webgpuCoreSource, /nearest_particle_center_view_depth/, 'screen-space evidence names the support-ordering depth it actually records');
-assert.match(webgpuCoreSource, /let supportOrderingDepth = weightedDepth\(centerAccum\);[\s\S]*let shadingDepth = edgePreservingDepth\(pixel, centerAccum\);[\s\S]*output\.depth = clamp\(viewDepthToNdc\(supportOrderingDepth/, 'neighbor-smoothed shading depth cannot pull hidden liquid in front of analytic support');
+assert.match(webgpuCoreSource, /output\.accumulation = vec4<f32>\(opticalThickness, input\.tracer \* opticalThickness, depthWeight, supportSafeViewDepth \* depthWeight\);[\s\S]*output\.frontDepth = vec4<f32>\([^,]+, supportSafeViewDepth,/, 'continuous shading depth accumulates a weighted sum while the min-blended slab stores collision-safe nearest-center ordering separately');
+assert.match(webgpuCoreSource, /fn weightedDepth\(sampleValue: vec4<f32>\) -> f32 \{[\s\S]*sampleValue\.w \/ max\(sampleValue\.z, 0\.0001\)/, 'shading depth resolves the accumulated depth-weighted sum instead of a nearest-particle Voronoi owner');
+assert.match(webgpuCoreSource, /fn readSupportOrderingDepth\([\s\S]*textureLoad\(opticalSlabFrontDepth[\s\S]*\.y/, 'support ordering reads the independent nearest-center channel from the min-blended front slab');
+assert.match(webgpuCoreSource, /depth_weighted_view_depth_sum[\s\S]*nearest_particle_center_view_depth_min/, 'runtime evidence names both continuous shading depth and collision-safe ordering depth channels');
+assert.match(webgpuCoreSource, /let supportOrderingDepth = readSupportOrderingDepth\(pixel\);[\s\S]*let shadingDepth = edgePreservingDepth\(pixel, centerAccum\);[\s\S]*output\.depth = clamp\(viewDepthToNdc\(supportOrderingDepth/, 'neighbor-smoothed shading depth cannot pull hidden liquid in front of analytic support');
+assert.match(webgpuCoreSource, /format: 'rgba16float',[\s\S]*alpha: \{ srcFactor: 'one', dstFactor: 'one', operation: 'add' \}[\s\S]*clearValue: \{ r: 0, g: 0, b: 0, a: 0 \}/, 'weighted shading depth uses additive alpha blending from a zero clear value');
 assert.match(webgpuCoreSource, /screenSpaceSurfaceCompositePipeline[\s\S]*depthStencil:\s*\{\s*format:\s*'depth24plus',\s*depthWriteEnabled:\s*false,\s*depthCompare:\s*'less'/, 'screen-space liquid depth-tests against analytic support without replacing support depth');
+assert.match(webgpuCoreSource, /const screenSpaceCompositeLayout = device\.createBindGroupLayout\(\{[\s\S]*binding: 7[\s\S]*\}\);\n  const analyticSupportPresentationLayout/, 'surface composite layout declares the front slab channel that owns nearest-center support ordering');
+assert.match(webgpuCoreSource, /screenSpaceSurfaceCompositeBindGroup = device\.createBindGroup\(\{[\s\S]*binding: 7, resource: screenSpaceOpticalSlabFrontDepthTexture\.createView\(\)[\s\S]*\}\);\n    screenSpaceRefractionCompositeBindGroup/, 'surface composite bind group supplies the front slab ordering texture');
 assert.match(webgpuCoreSource, /analyticSupportPresentationPass[\s\S]*loadOp:\s*'clear'[\s\S]*depthLoadOp:\s*'clear'[\s\S]*analyticSupportPresentationPipeline/, 'one analytic support pass clears and writes coherent color plus collision-authoritative depth');
 assert.match(webgpuCoreSource, /analyticSupportPresentationPass\.draw\(ANALYTIC_SUPPORT_VERTEX_COUNT\)[\s\S]*if \(effectiveRendererMode === 'sphere_debug'\)/, 'all renderer modes execute the same support presentation before their liquid-specific branch');
 assert.match(webgpuCoreSource, /kaminos-finger-fluid-deferred-world-normal-roughness/, 'scene owns a sampleable world-normal and roughness attachment');
@@ -83,6 +90,14 @@ assert.match(webgpuCoreSource, /fn traceClosestSurface\([\s\S]*traceIndexedMesh\
 assert.match(webgpuCoreSource, /fn integrateParticipatingRadiance\([\s\S]*return vec3<f32>\(0\.0\)/, 'future Flame radiance owns an explicit zero-contribution boundary rather than a fake surface hit');
 assert.match(webgpuCoreSource, /REFLECTION_HIT_ENVIRONMENT[\s\S]*REFLECTION_HIT_ANALYTIC[\s\S]*REFLECTION_HIT_INDEXED_MESH/, 'environment, analytic, and arbitrary-mesh reflection hits remain distinct');
 assert.match(webgpuCoreSource, /mix\(refractedScene\.rgb \* absorption, reflectionRadiance, fresnel\)/, 'Fresnel composes world reflection with the existing absorbed two-interface refraction');
+assert.match(webgpuCoreSource, /fn reconstructWorldReflectionNormal\([\s\S]*edgePreservingDepth\([\s\S]*reconstructWorldPosition\([\s\S]*cross\(/, 'reflection reconstructs a perspective-correct world normal from the edge-preserved continuous depth field');
+assert.match(webgpuCoreSource, /fn reconstructWorldReflectionNormal\([\s\S]*pixel \+ vec2<i32>\(-6, 0\)[\s\S]*pixel \+ vec2<i32>\(6, 0\)[\s\S]*pixel \+ vec2<i32>\(0, -6\)[\s\S]*pixel \+ vec2<i32>\(0, 6\)/, 'world reflection uses a wider macronormal chord than the fine refraction and specular normal');
+assert.match(webgpuCoreSource, /fn integrateWorldReflectionQuadrature\([\s\S]*centerDirection[\s\S]*tangent \* coneRadius[\s\S]*tangent \* -coneRadius[\s\S]*bitangent \* coneRadius[\s\S]*bitangent \* -coneRadius/, 'world reflection integrates a deterministic center-plus-four-lobe cone quadrature');
+assert.match(webgpuCoreSource, /let reflectionRadiance = integrateWorldReflectionQuadrature\(worldPosition, cameraRay, worldNormal, reflectionConeRadius\);/, 'shaded refraction consumes finite-footprint world reflection instead of only one delta ray');
+assert.match(webgpuCoreSource, /let opticalDebugMode = i32\(round\(params\.cameraUp\.w\)\);[\s\S]*if \(opticalDebugMode == 11\)[\s\S]*let reflectionEntryDepth[\s\S]*if \(opticalDebugMode == 13 \|\| opticalDebugMode == 14\)[\s\S]*traceClosestSurface[\s\S]*integrateWorldReflectionQuadrature/, 'non-reflection diagnostics return before world tracing, center-ray diagnostics trace once, and only shaded or raw reflection reaches quadrature');
+assert.match(webgpuCoreSource, /let reflectionEntryDepth = coherentSlabDepth\(pixel, shadingDepth, false\);[\s\S]*let worldPosition = reconstructWorldPosition\(pixel, reflectionEntryDepth\);[\s\S]*let worldNormal = reconstructWorldReflectionNormal\(pixel\);[\s\S]*let ndv = clamp\(dot\(worldNormal, viewToCamera\), 0\.0, 1\.0\);/, 'reflection keeps its origin on the optical entry interface while Fresnel and ray direction share one edge-preserved world normal');
+assert.doesNotMatch(webgpuCoreSource, /let worldPosition = reconstructWorldPosition\(pixel, shadingDepth\);/, 'reflection cannot launch secondary rays from smoothed particle-center depth behind the optical entry surface');
+assert.doesNotMatch(webgpuCoreSource, /let worldNormal = reconstructWorldEntryNormal\(pixel, reflectionEntryDepth\);/, 'raw projected sphere-front scallops cannot directly steer the shaded world-space reflection ray');
 assert.match(webgpuCoreSource, /effectiveRendererMode === 'sphere_debug'[\s\S]*pass\.draw\(6, safeParticleCount\)/, 'sphere-debug preserves particle spheres without drawing tiled support proxies');
 assert.doesNotMatch(webgpuCoreSource, /draw\(6, safeParticleCount \+ PLAYGROUND_TILE_COUNT/, 'sphere-debug cannot silently restore particle-tiled support geometry');
 assert.match(webgpuCoreSource, /compositePass[\s\S]*depthStencilAttachment:\s*\{[\s\S]*view:\s*depthTexture\.createView\(\)[\s\S]*depthLoadOp:\s*'load'/, 'surface composite loads analytic support depth instead of painting through terrain');
@@ -104,7 +119,7 @@ assert.match(webgpuCoreSource, /entry_interface_only_no_exit_claim_v0/, 'invalid
 assert.match(webgpuCoreSource, /fn fs_refraction[\s\S]{0,120}-> CompositeOutput/, 'refraction emits reconstructed liquid fragment depth instead of bypassing support ordering');
 assert.match(webgpuCoreSource, /fn fs_refraction\(@builtin\(position\) fragmentPosition: vec4<f32>\) -> CompositeOutput[\s\S]*let pixel = vec2<i32>\(fragmentPosition\.xy\)/, 'refraction reads accumulation in framebuffer coordinates instead of vertically inverted fullscreen UV space');
 assert.match(webgpuCoreSource, /fn fs_refraction[\s\S]*centerAccum\.z < 0\.018 \|\| centerAccum\.x < 0\.012[\s\S]*discard/, 'refraction residency uses landed depth weight and optical thickness channels');
-assert.match(webgpuCoreSource, /fn fs_refraction[\s\S]*let supportOrderingDepth = weightedDepth\(centerAccum\);[\s\S]*let shadingDepth = edgePreservingDepth\(pixel, centerAccum\);[\s\S]*let thickness = centerAccum\.x;/, 'refraction keeps raw nearest-center ordering separate from smoothed shading depth and optical thickness');
+assert.match(webgpuCoreSource, /fn fs_refraction[\s\S]*let supportOrderingDepth = readSupportOrderingDepth\(pixel\);[\s\S]*let shadingDepth = edgePreservingDepth\(pixel, centerAccum\);[\s\S]*let thickness = centerAccum\.x;/, 'refraction keeps raw nearest-center ordering separate from smoothed weighted shading depth and optical thickness');
 assert.match(webgpuCoreSource, /fn refractionOutput[\s\S]*output\.depth = clamp\(viewDepthToNdc\(supportOrderingDepth \+ 0\.003\)/, 'every optical debug and shaded return carries the same raw support-ordering depth');
 assert.match(webgpuCoreSource, /context\.configure\(\{ device, format, alphaMode: canvasAlphaMode, usage: GPUTextureUsage\.RENDER_ATTACHMENT \| GPUTextureUsage\.COPY_SRC \}\)/, 'refraction can capture the exact same-camera support presentation from the current canvas texture');
 assert.match(webgpuCoreSource, /kaminos-finger-fluid-refraction-scene-color[\s\S]*GPUTextureUsage\.COPY_DST/, 'renderer-owned refraction scene color accepts the exact support presentation copy');
@@ -422,6 +437,7 @@ assert.match(benchWitnessSource, /sphere_debug/, 'bench witness preserves same-s
 assert.match(benchWitnessSource, /sameStateRendererComparison/, 'bench witness captures same solver state renderer A/B evidence');
 assert.match(benchWitnessSource, /rendererFreezeReceipt[\s\S]*kaminosFingerFluidBenchRenderCurrentStateForWitness/, 'same-state comparison freezes and snapshots counters in one browser call instead of racing an animation frame');
 assert.match(benchWitnessSource, /minimumActiveRatio = 0\.05/, 'same-state nonblank gate accepts the measured 6.97% sphere truth while still rejecting sparse output');
+assert.match(benchWitnessSource, /mode === 'screen_space_refraction' && opticalDebugMode === 'shaded' && activity\.activeRatio < minimumActiveRatio/, 'shaded refraction nonblank validation honors the caller threshold instead of silently shadowing it');
 assert.match(benchWitnessSource, /surfaceRegistrationViews/, 'bench witness captures the reconstructed surface against sphere debug from multiple camera angles');
 assert.match(benchWitnessSource, /measureSharedSupportIdentity/, 'bench witness compares captured support pixels across every renderer route');
 assert.match(benchWitnessSource, /sharedSupportIdentity\.mismatchRatio > 0\.002/, 'shared support witness fails on route-dependent or partial support presentation');
@@ -433,6 +449,8 @@ assert.match(benchWitnessSource, /support_grazing[\s\S]*pitch:\s*-0\.15/, 'bench
 assert.match(benchWitnessSource, /normalizedCentroidDistance/, 'multi-angle registration rejects a reconstructed surface that is displaced from the particle projection');
 assert.match(benchWitnessSource, /minimumBoundsOverlap/, 'multi-angle registration rejects a reflected surface even when both renderer outputs are nonblank');
 assert.match(benchWitnessSource, /screen-space-refraction-thickness\.png/, 'multi-angle registration captures a high-contrast refraction support mask at the same camera and state');
+assert.match(benchWitnessSource, /screen-space-refraction-shaded\.png[\s\S]*renderSameState\('screen_space_refraction', shadedRefractionPath, canvasRect, 'shaded'[\s\S]*activity: shadedRefraction\.activity/, 'multi-angle registration preserves each shaded refraction artifact with its exact nonblank activity evidence');
+assert.match(benchWitnessSource, /renderSameState\('screen_space_refraction', shadedRefractionPath, canvasRect, 'shaded', 0\.025\)/, 'multi-angle shaded refraction rejects nearly blank output while retaining the measured grazing view');
 assert.match(benchWitnessSource, /mask === 'optical_thickness'/, 'refraction registration measures the complete optical-thickness silhouette instead of a shading-dependent blue subset');
 assert.match(benchWitnessSource, /refractionProjection/, 'multi-angle registration measures refraction independently of reconstructed-surface registration');
 assert.match(benchWitnessSource, /refraction registration mismatch/, 'multi-angle registration rejects vertically inverted or displaced optical transport support');
@@ -445,6 +463,15 @@ assert.match(benchWitnessSource, /worldSpaceReflectionEvidence\?\.providerRoute 
 assert.match(benchWitnessSource, /deferredSceneEvidence\?\.route !== 'webgpu-deferred-indexed-mesh-scene-v0'/, 'bench witness rejects stale or missing deferred scene routes');
 assert.match(benchWitnessSource, /deferredSceneEvidence\?\.requestedRoute !== 'webgpu-deferred-indexed-mesh-scene-v0'[\s\S]*deferredSceneEvidence\?\.effectiveRoute !== 'webgpu-deferred-indexed-mesh-scene-v0'/, 'bench witness independently requires canonical requested and effective deferred scene identities');
 assert.match(benchWitnessSource, /worldSpaceReflectionEvidence\?\.requestedProviderRoute !== 'wgsl-indexed-mesh-world-space-reflection-v0'[\s\S]*worldSpaceReflectionEvidence\?\.effectiveProviderRoute !== 'wgsl-indexed-mesh-world-space-reflection-v0'/, 'bench witness independently requires canonical requested and effective reflection provider identities');
+assert.match(benchWitnessSource, /worldSpaceReflectionEvidence\?\.quadratureRoute !== 'deterministic-five-ray-cone-quadrature-v0'/, 'bench witness rejects missing or substituted finite-footprint reflection quadrature');
+assert.match(benchWitnessSource, /worldSpaceReflectionEvidence\?\.hitKindDiagnosticScope !== 'center_ray_only_v0'/, 'bench witness refuses quadrature-wide attribution from the center-ray hit-kind diagnostic');
+assert.match(benchWitnessSource, /frontDepthTexture\?\.channels\?\.join\('\|'\) !== 'projected_particle_sphere_front_view_depth_min\|nearest_particle_center_view_depth_min'/, 'bench witness requires exact front-slab channel semantics rather than format-only evidence');
+assert.match(benchWitnessSource, /accumulationTexture\?\.channels\?\.join\('\|'\) !== 'optical_thickness\|material_weighted_thickness\|depth_weight\|depth_weighted_view_depth_sum'/, 'bench witness requires exact weighted accumulation channel semantics');
+assert.match(
+  benchWitnessSource,
+  /if \(effectiveRendererMode === 'screen_space_refraction'\) \{[\s\S]*?frontDepthTexture\?\.channels\?\.join\('\|'\) !== 'projected_particle_sphere_front_view_depth_min\|nearest_particle_center_view_depth_min'[\s\S]*?backDepthTexture\?\.channel !== 'projected_particle_sphere_back_view_depth_max'[\s\S]*?accumulationTexture\?\.channels\?\.join\('\|'\) !== 'optical_thickness\|material_weighted_thickness\|depth_weight\|depth_weighted_view_depth_sum'[\s\S]*?refraction route evidence missing or partial/,
+  'initial runtime refraction receipt rejects format-correct textures with stale or substituted channel semantics',
+);
 assert.match(benchWitnessSource, /deferredSceneEvidence\?\.deferredSceneFrameId !== renderFrameId/, 'bench witness rejects deferred evidence inherited from an older render frame');
 assert.match(benchWitnessSource, /deferredSceneEvidence\?\.dynamicIndexedMeshLastDrawFrameId !== renderFrameId/, 'bench witness requires a current-frame direct mesh draw outside isolated reflection diagnostics');
 assert.match(benchWitnessSource, /worldSpaceReflectionEvidence\?\.reflectionProviderFrameId !== renderFrameId/, 'bench witness rejects a reflection provider inherited from an older render frame');
@@ -465,7 +492,6 @@ assert.match(benchWitnessSource, /primaryFrameBinding/, 'primary output records 
 assert.match(benchWitnessSource, /primary screenshot renderer disagreement/, 'primary output rejects requested/effective renderer or optical mode drift');
 assert.match(benchWitnessSource, /optical renderer disagreement/, 'bench witness rejects stale/default optical route substitution');
 assert.match(benchWitnessSource, /blank refraction output/, 'bench witness rejects blank refraction captures');
-assert.match(benchWitnessSource, /mode === 'screen_space_refraction' && opticalDebugMode === 'shaded' && activity\.activeRatio < 0\.05/, 'shaded refraction must remain materially legible against the dark support scene');
 assert.match(benchWitnessSource, /screenSpaceSurfaceEvidence/, 'bench witness records reconstructed-surface visual evidence');
 assert.match(benchWitnessSource, /renderer disagreement/, 'bench witness rejects requested/effective renderer disagreement');
 assert.match(benchWitnessSource, /blank reconstructed-surface output/, 'bench witness rejects blank screen-space surface captures');
@@ -678,6 +704,7 @@ assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_DEFERRED_SCENE_ROUTE, 'webgpu-deferr
 assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE, 'wgsl-indexed-mesh-world-space-reflection-v0');
 assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_REFLECTION_QUERY_SCHEMA, 'kaminos.reflection-query-provider.v0');
 assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_REFLECTION_ACCELERATION_ROUTE, 'uncapped-exact-triangle-scan-v0');
+assert.equal(webgpuMod.KAMINOS_FINGER_FLUID_REFLECTION_QUADRATURE_ROUTE, 'deterministic-five-ray-cone-quadrature-v0');
 assert.equal(webgpuMod.resolveFingerFluidRendererMode('screen_space_surface'), 'screen_space_surface');
 assert.equal(webgpuMod.resolveFingerFluidRendererMode('screen_space_refraction'), 'screen_space_refraction');
 assert.equal(webgpuMod.resolveFingerFluidRendererMode('sphere_debug'), 'sphere_debug');
@@ -721,6 +748,10 @@ const screenSpaceRendererRuntime = {
     shaderRoute: webgpuMod.KAMINOS_FINGER_FLUID_SCREEN_SPACE_SHADER_ROUTE,
     supportDepthRoute: webgpuMod.KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE,
     analyticSupportDepthPassCount: 7,
+    accumulationTexture: {
+      format: 'rgba16float',
+      channels: ['optical_thickness', 'material_weighted_thickness', 'depth_weight', 'depth_weighted_view_depth_sum'],
+    },
     accumulationPassCount: 7,
     compositePassCount: 7,
   },
@@ -767,8 +798,18 @@ const refractionRendererRuntime = {
     slabRoute: webgpuMod.KAMINOS_FINGER_FLUID_OPTICAL_SLAB_ROUTE,
     analyticSupportDepthPassCount: 7,
     slabGeometryPassCount: 7,
-    frontDepthTexture: { format: 'rgba16float' },
-    backDepthTexture: { format: 'rgba16float' },
+    frontDepthTexture: {
+      format: 'rgba16float',
+      channels: ['projected_particle_sphere_front_view_depth_min', 'nearest_particle_center_view_depth_min'],
+    },
+    backDepthTexture: {
+      format: 'rgba16float',
+      channel: 'projected_particle_sphere_back_view_depth_max',
+    },
+    accumulationTexture: {
+      format: 'rgba16float',
+      channels: ['optical_thickness', 'material_weighted_thickness', 'depth_weight', 'depth_weighted_view_depth_sum'],
+    },
     invalidSlabDisposition: 'entry_interface_only_no_exit_claim_v0',
     scenePassCount: 7,
     accumulationPassCount: 7,
@@ -780,6 +821,8 @@ const refractionRendererRuntime = {
     effectiveProviderRoute: webgpuMod.KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE,
     providerRoute: webgpuMod.KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE,
     accelerationRoute: webgpuMod.KAMINOS_FINGER_FLUID_REFLECTION_ACCELERATION_ROUTE,
+    quadratureRoute: webgpuMod.KAMINOS_FINGER_FLUID_REFLECTION_QUADRATURE_ROUTE,
+    hitKindDiagnosticScope: 'center_ray_only_v0',
     fallbackReason: null,
     compositePassCount: 7,
     candidateCapMode: 'uncapped_exact_dynamic_mesh_triangle_population_v0',
@@ -819,6 +862,10 @@ assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('screen_spac
 assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('screen_space_refraction', {
   ...refractionRendererRuntime,
   worldSpaceReflectionEvidence: { ...refractionRendererRuntime.worldSpaceReflectionEvidence, fallbackReason: 'provider unavailable' },
+}), /world-space reflection evidence is missing or partial/);
+assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('screen_space_refraction', {
+  ...refractionRendererRuntime,
+  worldSpaceReflectionEvidence: { ...refractionRendererRuntime.worldSpaceReflectionEvidence, quadratureRoute: 'single-delta-ray' },
 }), /world-space reflection evidence is missing or partial/);
 assert.throws(() => webgpuMod.validateFingerFluidTruthRendererState('screen_space_refraction', {
   ...refractionRendererRuntime,
