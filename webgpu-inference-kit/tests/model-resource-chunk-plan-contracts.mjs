@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 
 import {
   WEBGPU_BUFFER_USAGE,
+  WEBGPU_MODEL_RESOURCE_CHUNK_ALLOCATION_PROVENANCE_SCHEMA,
   WEBGPU_MODEL_RESOURCE_CHUNK_PLAN_SCHEMA,
   WEBGPU_MODEL_RESOURCE_CHUNK_PLAN_VERIFICATION_SCHEMA,
   createWebGpuInferenceSession,
@@ -229,6 +230,12 @@ const loading = sharp.loadModelResourceChunksFromSources({
     return responseFor(bytesByUrl.get(String(url)));
   },
 });
+const joinedLoading = sf3d.loadModelResourceChunksFromSources({
+  plan,
+  sources,
+  cache,
+  async fetch() { throw new Error('successful active-flight reuse must not fetch'); },
+});
 for (let index = 0; index < plan.chunkIds.length; index += 1) {
   await waitFor(() => fetchStarts.length === index + 1);
   assert.deepEqual(
@@ -239,6 +246,7 @@ for (let index = 0; index < plan.chunkIds.length; index += 1) {
   gates.get(sources[plan.chunkIds[index]]).resolve();
 }
 const sharpLease = await loading;
+const sf3dJoinedLease = await joinedLoading;
 assert.equal(sharpLease.chunkReport.status, 'loaded');
 assert.equal(sharpLease.verification.schema, WEBGPU_MODEL_RESOURCE_CHUNK_PLAN_VERIFICATION_SCHEMA);
 assert.equal(sharpLease.chunkReport.allocations.length, 2);
@@ -249,6 +257,22 @@ assert.equal(Math.max(...fixture.writes.map(write => write.bytes.byteLength)), 8
 assert.deepEqual([...fixture.writes[0].bytes, ...fixture.writes[1].bytes], [...bundle.slice(0, 16)]);
 assert.deepEqual([...fixture.writes[2].bytes, ...fixture.writes[3].bytes], [...bundle.slice(16, 32)]);
 assert.equal(fixture.buffers.length, 2);
+assert.deepEqual(
+  sf3dJoinedLease.chunkReport.allocations.map(allocation => allocation.chunks.length),
+  [2, 2],
+  'a successful flight joiner must retain the creator chunk verification provenance',
+);
+assert.equal(
+  sf3dJoinedLease.chunkReport.allocations[0].provenance.schema,
+  WEBGPU_MODEL_RESOURCE_CHUNK_ALLOCATION_PROVENANCE_SCHEMA,
+);
+assert.equal(
+  sf3dJoinedLease.chunkReport.allocations[0].provenance,
+  sharpLease.chunkReport.allocations[0].provenance,
+  'a successful flight joiner must reference the immutable creator provenance object',
+);
+assert.equal(Object.isFrozen(sf3dJoinedLease.chunkReport.allocations[0].provenance), true);
+assert.equal(sf3dJoinedLease.release().status, 'released');
 
 const sf3dLease = await sf3d.loadModelResourceChunksFromSources({
   plan,
@@ -258,6 +282,16 @@ const sf3dLease = await sf3d.loadModelResourceChunksFromSources({
 });
 assert.equal(fixture.buffers.length, 2, 'a second route must reuse chunk-backed resident allocations');
 assert.equal(sharpLease.tensors['encoder.weight'].buffer, sf3dLease.tensors['encoder.weight'].buffer);
+assert.deepEqual(
+  sf3dLease.chunkReport.allocations.map(allocation => allocation.chunks.length),
+  [2, 2],
+  'resident reuse must retain the chunk verification provenance that authorized publication',
+);
+assert.equal(
+  sf3dLease.chunkReport.allocations[0].provenance,
+  sharpLease.chunkReport.allocations[0].provenance,
+  'resident reuse must reference the immutable provenance retained with the resident buffer',
+);
 assert.equal(sharpLease.release().status, 'released');
 assert.equal(sf3dLease.release().status, 'released');
 
@@ -424,7 +458,7 @@ assert.deepEqual(
 const stalled = deferred();
 const secondStarted = deferred();
 const controller = new AbortController();
-const canceled = failureRoute.loadModelResourceChunksFromSources({
+const canceledCreator = failureRoute.loadModelResourceChunksFromSources({
   plan,
   sources,
   signal: controller.signal,
@@ -435,15 +469,31 @@ const canceled = failureRoute.loadModelResourceChunksFromSources({
     return responseFor(bytesByUrl.get(String(url)));
   },
 });
+const canceledJoiner = joinedFailureRoute.loadModelResourceChunksFromSources({
+  plan,
+  sources,
+  signal: controller.signal,
+  async fetch() { throw new Error('joined canceled waiter must not fetch'); },
+});
 await secondStarted.promise;
 controller.abort('cancel-chunk-plan');
-await assert.rejects(canceled, error => {
-  assert.equal(error.name, 'AbortError');
-  assert.equal(error.chunkReport.status, 'canceled');
-  assert.equal(error.chunkReport.failedChunkId, 'encoder-1');
-  assert.equal(error.chunkReport.failedAllocation.chunks.length, 1);
-  return true;
-});
+const canceledResults = await Promise.allSettled([canceledCreator, canceledJoiner]);
+assert.deepEqual(canceledResults.map(result => result.status), ['rejected', 'rejected']);
+assert.deepEqual(
+  canceledResults.map(result => result.reason.chunkReport.routeId),
+  [failureRoute.routeId, joinedFailureRoute.routeId],
+  'shared creator failure identity must still produce caller-specific immutable reports',
+);
+for (const result of canceledResults) {
+  assert.equal(result.reason.name, 'AbortError');
+  assert.equal(result.reason.chunkReport.status, 'canceled');
+  assert.equal(result.reason.chunkReport.failedChunkId, 'encoder-1');
+  assert.deepEqual(
+    result.reason.chunkReport.failedAllocation.chunks.map(chunk => chunk.chunkId),
+    ['encoder-0'],
+    'every canceled waiter must retain the creator failed-chunk and partial verified-chunk identity',
+  );
+}
 assert.equal(failureFixture.buffers.at(-1).destroyCount, 1);
 assert.equal(failureSession.residency.snapshot().activeLeaseCount, 0);
 

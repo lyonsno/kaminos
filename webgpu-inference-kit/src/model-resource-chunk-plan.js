@@ -8,6 +8,7 @@ import {
   acquireWebGpuVerifiedResourceSource,
   describeWebGpuModelResourceSource,
 } from './model-resource-source.js';
+import { WEBGPU_RESOURCE_CANCELLATION_MODES } from './resource-factory.js';
 
 export const WEBGPU_MODEL_RESOURCE_CHUNK_PLAN_SCHEMA = 'kaminos.webgpu-model-resource-chunk-plan.v0';
 export const WEBGPU_MODEL_RESOURCE_CHUNK_CUSTODY_SCHEMA = 'kaminos.webgpu-model-resource-chunk-custody.v0';
@@ -16,8 +17,10 @@ export const WEBGPU_MODEL_RESOURCE_CHUNK_PLAN_VERIFICATION_SCHEMA = 'kaminos.web
 export const WEBGPU_MODEL_RESOURCE_CHUNK_SOURCE_REPORT_SCHEMA = 'kaminos.webgpu-model-resource-chunk-source-report.v0';
 export const WEBGPU_MODEL_RESOURCE_CHUNK_LOAD_REPORT_SCHEMA = 'kaminos.webgpu-model-resource-chunk-load-report.v0';
 export const WEBGPU_MODEL_RESOURCE_CHUNK_PROGRESS_SCHEMA = 'kaminos.webgpu-model-resource-chunk-progress.v0';
+export const WEBGPU_MODEL_RESOURCE_CHUNK_ALLOCATION_PROVENANCE_SCHEMA = 'kaminos.webgpu-model-resource-chunk-allocation-provenance.v0';
 
 const chunkCustody = new WeakMap();
+const chunkAllocationProvenance = new WeakMap();
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
@@ -447,10 +450,12 @@ function releaseLeases(leases) {
 
 function errorWithChunkReport(cause, report) {
   const error = cause instanceof Error ? cause : new Error(String(cause));
-  try {
-    error.chunkReport = report;
-    if (error.chunkReport === report) return error;
-  } catch {}
+  if (!Object.hasOwn(error, 'chunkReport')) {
+    try {
+      error.chunkReport = report;
+      if (error.chunkReport === report) return error;
+    } catch {}
+  }
   const wrapped = new Error(error.message);
   wrapped.name = error.name;
   wrapped.cause = error;
@@ -540,6 +545,7 @@ export async function loadWebGpuModelResourceChunksFromSources(input = {}) {
             }),
           },
           signal: input.signal,
+          cancellationMode: WEBGPU_RESOURCE_CANCELLATION_MODES.creatorSettlement,
           async create({ signal: flightSignal }) {
             createdByRequest = true;
             let buffer;
@@ -605,6 +611,15 @@ export async function loadWebGpuModelResourceChunksFromSources(input = {}) {
               failedAllocationId = null;
               failedChunkId = null;
               failedChunkReport = null;
+              chunkAllocationProvenance.set(buffer, deepFreeze({
+                schema: WEBGPU_MODEL_RESOURCE_CHUNK_ALLOCATION_PROVENANCE_SCHEMA,
+                status: 'verified-creator-publication',
+                planIdentity: plan.identity,
+                manifestIdentity: plan.manifest.identity,
+                allocationId: allocation.allocationId,
+                resourceId: allocation.resourceId,
+                chunks: [...chunkReports],
+              }));
               return buffer;
             } catch (error) {
               try {
@@ -650,11 +665,18 @@ export async function loadWebGpuModelResourceChunksFromSources(input = {}) {
         throw errorWithChunkReport(error, report);
       }
       leases.push(lease);
+      const provenance = chunkAllocationProvenance.get(lease.resource);
+      if (!provenance) {
+        lease.release();
+        leases.pop();
+        throw new Error(`chunk-authenticated resource ${allocation.resourceId} has no verification provenance`);
+      }
       const allocationReport = deepFreeze({
         allocationId: allocation.allocationId,
         resourceId: allocation.resourceId,
         status: createdByRequest ? 'created-from-verified-chunks' : 'resident-or-flight-reused',
-        chunks: chunkReports,
+        chunks: provenance.chunks,
+        provenance,
       });
       loadedAllocations.push({ allocation, manifestAllocation, lease, report: allocationReport });
     }

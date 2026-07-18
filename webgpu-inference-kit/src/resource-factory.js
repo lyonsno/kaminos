@@ -1,5 +1,9 @@
 export const WEBGPU_RESOURCE_FACTORY_SCHEMA = 'kaminos.webgpu-resource-factory.v0';
 export const WEBGPU_RESOURCE_FLIGHT_SCHEMA = 'kaminos.webgpu-resource-flight.v0';
+export const WEBGPU_RESOURCE_CANCELLATION_MODES = Object.freeze({
+  callerImmediate: 'caller-immediate',
+  creatorSettlement: 'creator-settlement',
+});
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
@@ -57,13 +61,33 @@ export function createWebGpuResourceFactory(input = {}) {
     const kind = request.kind ?? 'other';
     if (!isNonEmptyString(kind)) throw new Error('kind must be a non-empty string');
     const metadata = cloneJson(request.metadata ?? null, 'metadata');
+    const cancellationMode = request.cancellationMode
+      ?? WEBGPU_RESOURCE_CANCELLATION_MODES.callerImmediate;
+    if (!Object.values(WEBGPU_RESOURCE_CANCELLATION_MODES).includes(cancellationMode)) {
+      throw new Error('cancellationMode must be caller-immediate or creator-settlement');
+    }
     return {
       resourceId: request.resourceId,
       declaredBytes: request.declaredBytes,
       kind,
       metadata,
-      fingerprint: canonicalJson({ declaredBytes: request.declaredBytes, kind, ownership: 'managed', metadata }),
+      cancellationMode,
+      fingerprint: canonicalJson({
+        declaredBytes: request.declaredBytes,
+        kind,
+        ownership: 'managed',
+        metadata,
+        cancellationMode,
+      }),
     };
+  }
+
+  function activeWaiterCount(flight) {
+    let count = 0;
+    for (const waiter of flight.waiters.values()) {
+      if (!waiter.cancelled) count += 1;
+    }
+    return count;
   }
 
   function flightSnapshot(flight) {
@@ -76,7 +100,7 @@ export function createWebGpuResourceFactory(input = {}) {
       declaredBytes: flight.declaredBytes,
       kind: flight.kind,
       metadata: cloneJson(flight.metadata, 'metadata'),
-      waiterCount: flight.waiters.size,
+      waiterCount: activeWaiterCount(flight),
       requestedWaiterCount: flight.requestedWaiterCount,
       cancelledWaiterCount: flight.cancelledWaiterCount,
       routeIds: [...flight.routeIds].sort(),
@@ -103,24 +127,35 @@ export function createWebGpuResourceFactory(input = {}) {
     flight.requestedWaiterCount += 1;
     flight.routeIds.add(request.routeId);
     return new Promise((resolve, reject) => {
-      const waiter = { waiterId, request, resolve, reject, abortListener: null };
+      const waiter = {
+        waiterId,
+        request,
+        resolve,
+        reject,
+        abortListener: null,
+        cancelled: false,
+        abortReason: null,
+      };
       function cancel() {
-        if (!flight.waiters.delete(waiterId)) return;
+        if (waiter.cancelled || !flight.waiters.has(waiterId)) return;
+        waiter.cancelled = true;
+        waiter.abortReason = request.signal?.reason;
         flight.cancelledWaiterCount += 1;
         request.signal?.removeEventListener('abort', waiter.abortListener);
-        reject(abortError(request.signal?.reason));
-        if (flight.waiters.size === 0 && flight.status === 'active') {
+        if (flight.cancellationMode === WEBGPU_RESOURCE_CANCELLATION_MODES.callerImmediate) {
+          flight.waiters.delete(waiterId);
+          reject(abortError(waiter.abortReason));
+        }
+        if (activeWaiterCount(flight) === 0 && flight.status === 'active') {
           flight.controller.abort('all-resource-waiters-cancelled');
         }
       }
       waiter.abortListener = cancel;
+      flight.waiters.set(waiterId, waiter);
       if (request.signal?.aborted) {
-        reject(abortError(request.signal.reason));
-        flight.cancelledWaiterCount += 1;
-        if (flight.waiters.size === 0) flight.controller.abort('all-resource-waiters-cancelled');
+        cancel();
         return;
       }
-      flight.waiters.set(waiterId, waiter);
       request.signal?.addEventListener('abort', cancel, { once: true });
     });
   }
@@ -143,13 +178,18 @@ export function createWebGpuResourceFactory(input = {}) {
         generation: flight.generation,
       }))
       .then(resource => {
-        if (invalidation || flight.waiters.size === 0) {
+        if (invalidation || activeWaiterCount(flight) === 0) {
           flight.status = invalidation ? 'invalidated' : 'cancelled';
           request.dispose(resource);
+          settleWaiters(flight, waiter => waiter.reject(abortError(waiter.abortReason)));
           return;
         }
         let first = true;
         settleWaiters(flight, waiter => {
+          if (waiter.cancelled) {
+            waiter.reject(abortError(waiter.abortReason));
+            return;
+          }
           try {
             waiter.resolve(input.residency.acquire({
               resourceId: flight.resourceId,
@@ -168,7 +208,7 @@ export function createWebGpuResourceFactory(input = {}) {
         flight.status = 'succeeded';
       }, error => {
         flight.failure = { name: String(error?.name || 'Error'), message: String(error?.message || error) };
-        flight.status = flight.waiters.size === 0 ? 'cancelled' : (invalidation ? 'invalidated' : 'failed');
+        flight.status = activeWaiterCount(flight) === 0 ? 'cancelled' : (invalidation ? 'invalidated' : 'failed');
         settleWaiters(flight, waiter => waiter.reject(error));
       })
       .finally(() => {

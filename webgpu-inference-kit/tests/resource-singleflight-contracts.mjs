@@ -3,7 +3,11 @@ import * as kit from '../src/index.js';
 
 assert.equal(typeof kit.createWebGpuResourceFactory, 'function');
 
-const { createWebGpuResourceFactory, createWebGpuResourceResidency } = kit;
+const {
+  WEBGPU_RESOURCE_CANCELLATION_MODES,
+  createWebGpuResourceFactory,
+  createWebGpuResourceResidency,
+} = kit;
 
 function deferred() {
   let resolve;
@@ -98,8 +102,38 @@ allAbortGate.reject(new Error('creator observed abort'));
 await factory.drain();
 assert.equal(factory.snapshot().activeFlightCount, 0);
 
+const creatorSettlementAbort = new AbortController();
+let creatorSettlementSignal;
+const creatorSettlementRequests = ['creator', 'joiner'].map((routeId, index) => factory.acquireOrCreate({
+  resourceId: 'creator-settlement',
+  routeId,
+  declaredBytes: 12,
+  signal: creatorSettlementAbort.signal,
+  cancellationMode: WEBGPU_RESOURCE_CANCELLATION_MODES.creatorSettlement,
+  async create({ signal }) {
+    assert.equal(index, 0, 'only the creator callback may run');
+    creatorSettlementSignal = signal;
+    const rejectWithCreatorIdentity = () => {
+      const error = new DOMException('creator retained exact cancellation identity', 'AbortError');
+      error.creatorFailureIdentity = 'chunk-1';
+      return error;
+    };
+    if (signal.aborted) throw rejectWithCreatorIdentity();
+    await new Promise((_, reject) => signal.addEventListener('abort', () => {
+      reject(rejectWithCreatorIdentity());
+    }, { once: true }));
+  },
+  dispose() {},
+}));
+creatorSettlementAbort.abort('all-report-bearing-waiters-left');
+const creatorSettlementResults = await Promise.allSettled(creatorSettlementRequests);
+assert.equal(creatorSettlementSignal.aborted, true);
+assert.deepEqual(creatorSettlementResults.map(result => result.status), ['rejected', 'rejected']);
+assert.equal(creatorSettlementResults[0].reason, creatorSettlementResults[1].reason);
+assert.equal(creatorSettlementResults[1].reason.creatorFailureIdentity, 'chunk-1');
+
 assert.equal(factory.snapshot().retention, 'uncapped-until-explicit-forget-flight');
-assert.equal(factory.snapshot().flights.length, 5);
+assert.equal(factory.snapshot().flights.length, 6);
 assert.equal(factory.forgetFlight(factory.snapshot().flights[0].flightId), true);
 
 const lost = deferred();
