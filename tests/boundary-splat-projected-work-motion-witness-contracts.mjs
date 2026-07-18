@@ -15,6 +15,26 @@ assert.match(
 );
 assert.match(
   witness,
+  /const VOLUME_PROTOTYPE_EXPRESSION = [`'"]\(document\.querySelector\('#basin'\)\?\.contentWindow\?\.__kaminosVolumePrototype \|\| window\.__kaminosVolumePrototype\)[`'"]/,
+  'the witness must resolve the effective child renderer before any stale outer-shell prototype',
+);
+assert.match(
+  witness,
+  /const OPERATOR_WINDOW_EXPRESSION = [`'"]\(document\.querySelector\('#basin'\)\?\.contentWindow \|\| window\)[`'"]/,
+  'camera and HUD operations must resolve the same routed child operator window',
+);
+assert.doesNotMatch(
+  witness,
+  /expression:\s*[`'"]window\.__kaminosVolumePrototype/,
+  'runtime evaluations must not bypass the routed prototype expression',
+);
+assert.doesNotMatch(
+  witness,
+  /expression:\s*[`'"]window\.kaminosSetCameraDebugPose/,
+  'camera evaluation must not bypass the routed operator window',
+);
+assert.match(
+  witness,
   /--projected-work-targets/,
   'the witness must expose the same target list as an explicit CLI input',
 );

@@ -16,6 +16,8 @@ const SOURCE_PRESERVING_SELECTOR = 'boundary-splat-live-union-source-preserving-
 const PROJECTED_WORK_SELECTOR = 'boundary-splat-live-union-projected-footprint-hash-thinning-v0';
 const EXPECTED_ROUTE = 'native-3d-compute-fluid-raymarch-v0';
 const PROJECTED_WORK_TARGETS = [0, 12, 24];
+const VOLUME_PROTOTYPE_EXPRESSION = `(document.querySelector('#basin')?.contentWindow?.__kaminosVolumePrototype || window.__kaminosVolumePrototype)`;
+const OPERATOR_WINDOW_EXPRESSION = `(document.querySelector('#basin')?.contentWindow || window)`;
 const EXPECTED_LEARNED_MODEL = 'sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472';
 const REJECTED_LEARNED_MODELS = new Set([
   'sha256:54a41ba9d04132b8340884adef37a092c367c8cc8443e67907bd5f4f8573b911',
@@ -372,7 +374,7 @@ async function waitForPrototype() {
   for (let attempt = 0; attempt < 200; attempt += 1) {
     const result = await wsRequest('Runtime.evaluate', {
       expression: `(() => {
-        const proto = window.__kaminosVolumePrototype;
+        const proto = ${VOLUME_PROTOTYPE_EXPRESSION};
         if (!proto?.debugState || !proto?.renderFrozenScaleToCanvas || !proto?.controlledStepFrame) return null;
         return proto.debugState();
       })()`,
@@ -388,7 +390,7 @@ async function waitForPrototype() {
 
 async function debugState() {
   const result = await wsRequest('Runtime.evaluate', {
-    expression: 'window.__kaminosVolumePrototype?.debugState?.()',
+    expression: `${VOLUME_PROTOTYPE_EXPRESSION}?.debugState?.()`,
     returnByValue: true,
     awaitPromise: true,
   });
@@ -398,7 +400,7 @@ async function debugState() {
 async function hideHud() {
   await wsRequest('Runtime.evaluate', {
     expression: `(() => {
-      const el = document.getElementById('fps-counter');
+      const el = ${OPERATOR_WINDOW_EXPRESSION}.document.getElementById('fps-counter');
       if (el) el.style.visibility = 'hidden';
       return { ok: true, selector: '#fps-counter', found: !!el };
     })()`,
@@ -408,7 +410,7 @@ async function hideHud() {
 
 async function setCameraPose(pose) {
   const result = await wsRequest('Runtime.evaluate', {
-    expression: `window.kaminosSetCameraDebugPose(${JSON.stringify(pose)})`,
+    expression: `${OPERATOR_WINDOW_EXPRESSION}.kaminosSetCameraDebugPose(${JSON.stringify(pose)})`,
     returnByValue: true,
     awaitPromise: true,
   });
@@ -428,7 +430,7 @@ async function captureProjectedWorkSequence(config) {
     const camera = await setCameraPose(pose);
     if (wallStepMs > 0 && frameIndex > 0) await delay(wallStepMs);
     const frameEval = await wsRequest('Runtime.evaluate', {
-      expression: `window.__kaminosVolumePrototype.controlledStepFrame(${JSON.stringify({
+      expression: `${VOLUME_PROTOTYPE_EXPRESSION}.controlledStepFrame(${JSON.stringify({
         controlledStepFrameIndex: frameIndex,
         advanceSim: frameIndex > 0,
         sameBrowserSessionId,
@@ -590,7 +592,7 @@ async function captureProjectedWorkArm({ frameDir, frameIndex, scaleSet, camera,
 
 function compactProjectedWorkRenderExpression(renderOptions) {
   return `(async () => {
-    const render = await window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify(renderOptions)});
+    const render = await ${VOLUME_PROTOTYPE_EXPRESSION}.renderFrozenScaleToCanvas(${JSON.stringify(renderOptions)});
     const capture = render?.rgbaCapture;
     if (!capture?.rgba) return render;
     const rgba = Uint8ClampedArray.from(capture.rgba);
@@ -647,7 +649,7 @@ async function captureSequence(config) {
     const camera = await setCameraPose(pose);
     if (wallStepMs > 0 && frameIndex > 0) await delay(wallStepMs);
     const frameEval = await wsRequest('Runtime.evaluate', {
-      expression: `window.__kaminosVolumePrototype.controlledStepFrame(${JSON.stringify({
+      expression: `${VOLUME_PROTOTYPE_EXPRESSION}.controlledStepFrame(${JSON.stringify({
         controlledStepFrameIndex: frameIndex,
         advanceSim: frameIndex > 0,
         sameBrowserSessionId,
@@ -737,7 +739,7 @@ async function captureSequence(config) {
 
 async function captureRenderer({ frameDir, frameIndex, scaleSet, camera, requestedRenderer, boundarySplatMode }) {
   const canvasEval = await wsRequest('Runtime.evaluate', {
-    expression: `window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
+    expression: `${VOLUME_PROTOTYPE_EXPRESSION}.renderFrozenScaleToCanvas(${JSON.stringify({
       renderScale: 1,
       now: scaleSet.fixedNowMs,
       sameStateCaptureId: scaleSet.sameStateCaptureId,
