@@ -19,6 +19,7 @@ export const KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE = 'webgpu-particle
 export const KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE = 'wgsl-pbf-linked-cell-fluid-v0';
 export const KAMINOS_FINGER_FLUID_RENDER_SHADER_ROUTE = 'wgsl-fluid-particle-sphere-v0';
 export const KAMINOS_FINGER_FLUID_SCREEN_SPACE_SHADER_ROUTE = 'wgsl-fluid-screen-space-surface-v0';
+export const KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE = 'wgsl-analytic-heightfield-obstacle-depth-v0';
 export const KAMINOS_FINGER_FLUID_STABILITY_CONTRACT = 'bounded-pbf-energy-v0';
 export const KAMINOS_FINGER_FLUID_TRUTH_GAUNTLET_CONTRACT = 'kaminos-fluid-truth-gauntlet-v0';
 
@@ -58,6 +59,13 @@ const PLAYGROUND_SKIRT_COLUMNS = 22;
 const PLAYGROUND_SKIRT_ROWS = 5;
 const PLAYGROUND_SKIRT_COUNT = PLAYGROUND_SKIRT_COLUMNS * PLAYGROUND_SKIRT_ROWS;
 const PLAYGROUND_OBSTACLE_COUNT = 1;
+const ANALYTIC_SUPPORT_GRID_COLUMNS = 64;
+const ANALYTIC_SUPPORT_GRID_ROWS = 64;
+const ANALYTIC_SUPPORT_TERRAIN_VERTEX_COUNT = ANALYTIC_SUPPORT_GRID_COLUMNS * ANALYTIC_SUPPORT_GRID_ROWS * 6;
+const ANALYTIC_SUPPORT_SPHERE_COLUMNS = 24;
+const ANALYTIC_SUPPORT_SPHERE_ROWS = 12;
+const ANALYTIC_SUPPORT_SPHERE_VERTEX_COUNT = ANALYTIC_SUPPORT_SPHERE_COLUMNS * ANALYTIC_SUPPORT_SPHERE_ROWS * 6;
+const ANALYTIC_SUPPORT_VERTEX_COUNT = ANALYTIC_SUPPORT_TERRAIN_VERTEX_COUNT + ANALYTIC_SUPPORT_SPHERE_VERTEX_COUNT;
 const INTERFACE_THRESHOLD = 0.32;
 const INTERFACE_ENTER_THRESHOLD = 0.38;
 const INTERFACE_EXIT_THRESHOLD = 0.22;
@@ -130,6 +138,9 @@ export function validateFingerFluidTruthRendererState(requestedMode, runtime) {
     if (
       evidence?.route !== KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE
       || evidence?.shaderRoute !== KAMINOS_FINGER_FLUID_SCREEN_SPACE_SHADER_ROUTE
+      || evidence?.supportDepthRoute !== KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE
+      || !Number.isInteger(evidence?.analyticSupportDepthPassCount)
+      || evidence.analyticSupportDepthPassCount <= 0
       || !Number.isInteger(evidence?.accumulationPassCount)
       || evidence.accumulationPassCount <= 0
       || !Number.isInteger(evidence?.compositePassCount)
@@ -1312,6 +1323,55 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
 }
 `;
 
+const ANALYTIC_SUPPORT_DEPTH_SHADER = /* wgsl */`
+struct RenderParams {
+  viewProjection: mat4x4<f32>,
+  cameraRight: vec4<f32>,
+  cameraUp: vec4<f32>,
+  viewport: vec4<f32>,
+}
+
+@group(0) @binding(1) var<uniform> params: RenderParams;
+
+${PLAYGROUND_WGSL}
+
+fn triangleCorner(vertexInCell: u32) -> vec2<f32> {
+  let corners = array<vec2<f32>, 6>(
+    vec2<f32>(0.0, 0.0), vec2<f32>(1.0, 0.0), vec2<f32>(0.0, 1.0),
+    vec2<f32>(0.0, 1.0), vec2<f32>(1.0, 0.0), vec2<f32>(1.0, 1.0)
+  );
+  return corners[vertexInCell];
+}
+
+@vertex
+fn vs_analytic_support_depth(@builtin(vertex_index) vertexIndex: u32) -> @builtin(position) vec4<f32> {
+  var worldPosition = vec3<f32>(0.0);
+  if (vertexIndex < ${ANALYTIC_SUPPORT_TERRAIN_VERTEX_COUNT}u) {
+    let cellIndex = vertexIndex / 6u;
+    let corner = triangleCorner(vertexIndex % 6u);
+    let cellX = cellIndex % ${ANALYTIC_SUPPORT_GRID_COLUMNS}u;
+    let cellZ = cellIndex / ${ANALYTIC_SUPPORT_GRID_COLUMNS}u;
+    let u = (f32(cellX) + corner.x) / f32(${ANALYTIC_SUPPORT_GRID_COLUMNS});
+    let v = (f32(cellZ) + corner.y) / f32(${ANALYTIC_SUPPORT_GRID_ROWS});
+    let x = mix(${BOUNDS_MIN[0]}, ${BOUNDS_MAX[0]}, u);
+    let z = mix(${BOUNDS_MIN[2]}, ${BOUNDS_MAX[2]}, v);
+    worldPosition = vec3<f32>(x, toyFloorHeight(vec3<f32>(x, 0.0, z)), z);
+  } else {
+    let sphereVertex = vertexIndex - ${ANALYTIC_SUPPORT_TERRAIN_VERTEX_COUNT}u;
+    let sphereCell = sphereVertex / 6u;
+    let corner = triangleCorner(sphereVertex % 6u);
+    let longitudeCell = sphereCell % ${ANALYTIC_SUPPORT_SPHERE_COLUMNS}u;
+    let latitudeCell = sphereCell / ${ANALYTIC_SUPPORT_SPHERE_COLUMNS}u;
+    let longitude = (f32(longitudeCell) + corner.x) / f32(${ANALYTIC_SUPPORT_SPHERE_COLUMNS}) * 6.28318530718;
+    let latitude = (f32(latitudeCell) + corner.y) / f32(${ANALYTIC_SUPPORT_SPHERE_ROWS}) * 3.14159265359;
+    let radial = sin(latitude);
+    let normal = vec3<f32>(radial * cos(longitude), cos(latitude), radial * sin(longitude));
+    worldPosition = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]}) + normal * ${OBSTACLE_RADIUS};
+  }
+  return params.viewProjection * vec4<f32>(worldPosition, 1.0);
+}
+`;
+
 const SCREEN_SPACE_SURFACE_SHADER = /* wgsl */`
 struct Particle {
   position: vec4<f32>,
@@ -1384,7 +1444,8 @@ fn fs_accumulate(input: AccumVertexOutput) -> @location(0) vec4<f32> {
   let thickness = edge * surfaceWeight * (0.35 + cap * 1.85);
   let opticalThickness = thickness * (0.55 + 0.45 * smoothstep(0.0, ${MAX_FLUID_SPEED}, input.speed));
   let depthWeight = edge * surfaceWeight;
-  return vec4<f32>(input.viewDepth * depthWeight, depthWeight, opticalThickness, input.tracer * opticalThickness);
+  let supportSafeViewDepth = input.viewDepth;
+  return vec4<f32>(opticalThickness, input.tracer * opticalThickness, depthWeight, supportSafeViewDepth);
 }
 
 struct FullscreenVertexOutput {
@@ -1412,13 +1473,13 @@ fn readAccum(pixel: vec2<i32>) -> vec4<f32> {
 }
 
 fn weightedDepth(sampleValue: vec4<f32>) -> f32 {
-  return sampleValue.x / max(sampleValue.y, 0.0001);
+  return sampleValue.w;
 }
 
 fn edgePreservingDepth(pixel: vec2<i32>, centerAccum: vec4<f32>) -> f32 {
   let centerDepth = weightedDepth(centerAccum);
-  var depthSum = centerDepth * centerAccum.y * 2.0;
-  var weightSum = centerAccum.y * 2.0;
+  var depthSum = centerDepth * centerAccum.z * 2.0;
+  var weightSum = centerAccum.z * 2.0;
   for (var y = -1; y <= 1; y = y + 1) {
     for (var x = -1; x <= 1; x = x + 1) {
       if (x == 0 && y == 0) { continue; }
@@ -1426,7 +1487,7 @@ fn edgePreservingDepth(pixel: vec2<i32>, centerAccum: vec4<f32>) -> f32 {
       let sampleDepth = weightedDepth(sampleValue);
       let continuity = exp(-abs(sampleDepth - centerDepth) * 11.0);
       let spatial = select(0.74, 1.0, abs(x) + abs(y) == 1);
-      let weight = sampleValue.y * continuity * spatial;
+      let weight = sampleValue.z * continuity * spatial;
       depthSum = depthSum + sampleDepth * weight;
       weightSum = weightSum + weight;
     }
@@ -1443,13 +1504,25 @@ fn reconstructSurfaceNormal(pixel: vec2<i32>, centerDepth: f32) -> vec3<f32> {
   return normalize(vec3<f32>(-gradient.x * 7.2, gradient.y * 7.2, 1.0 + centerDepth * 0.015));
 }
 
+struct CompositeOutput {
+  @location(0) color: vec4<f32>,
+  @builtin(frag_depth) depth: f32,
+}
+
+fn viewDepthToNdc(viewDepth: f32) -> f32 {
+  let near = 0.08;
+  let far = 30.0;
+  return far / (far - near) - (near * far) / ((far - near) * max(viewDepth, near));
+}
+
 @fragment
-fn fs_composite(@builtin(position) fragmentPosition: vec4<f32>) -> @location(0) vec4<f32> {
+fn fs_composite(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOutput {
   let pixel = vec2<i32>(fragmentPosition.xy);
   let centerAccum = readAccum(pixel);
-  if (centerAccum.y < 0.018 || centerAccum.z < 0.012) { discard; }
-  let depth = edgePreservingDepth(pixel, centerAccum);
-  let normal = reconstructSurfaceNormal(pixel, depth);
+  if (centerAccum.z < 0.018 || centerAccum.x < 0.012) { discard; }
+  let supportOrderingDepth = weightedDepth(centerAccum);
+  let shadingDepth = edgePreservingDepth(pixel, centerAccum);
+  let normal = reconstructSurfaceNormal(pixel, shadingDepth);
   let viewDir = vec3<f32>(0.0, 0.0, 1.0);
   let light = normalize(vec3<f32>(-0.28, 0.64, 0.72));
   let halfVector = normalize(light + viewDir);
@@ -1457,8 +1530,8 @@ fn fs_composite(@builtin(position) fragmentPosition: vec4<f32>) -> @location(0) 
   let fresnel = pow(1.0 - ndv, 5.0) * 0.82 + 0.04;
   let diffuse = max(dot(normal, light), 0.0);
   let specular = pow(max(dot(normal, halfVector), 0.0), 92.0) * (0.62 + fresnel);
-  let thickness = centerAccum.z;
-  let tracer = centerAccum.w / max(thickness, 0.0001);
+  let thickness = centerAccum.x;
+  let tracer = centerAccum.y / max(thickness, 0.0001);
   let absorption = exp(-vec3<f32>(0.42, 0.18, 0.06) * thickness * 0.10);
   let shallow = vec3<f32>(0.34, 0.96, 1.08);
   let deep = vec3<f32>(0.05, 0.36, 0.72);
@@ -1466,7 +1539,10 @@ fn fs_composite(@builtin(position) fragmentPosition: vec4<f32>) -> @location(0) 
   let body = mix(shallow, deep, smoothstep(1.2, 8.0, thickness)) * absorption;
   let color = body * (0.54 + diffuse * 0.84) + mineral * 0.08 + vec3<f32>(0.78, 0.98, 1.0) * fresnel * 0.52 + vec3<f32>(1.0) * specular * 1.25;
   let alpha = clamp(0.34 + thickness * 0.070 + fresnel * 0.22, 0.34, 0.88);
-  return vec4<f32>(color, alpha);
+  var output: CompositeOutput;
+  output.color = vec4<f32>(color, alpha);
+  output.depth = clamp(viewDepthToNdc(supportOrderingDepth + 0.003), 0.0, 1.0);
+  return output;
 }
 `;
 
@@ -2222,6 +2298,7 @@ export async function createWebGPUFingerFluidSolver({
   });
   const renderModule = device.createShaderModule({ label: KAMINOS_FINGER_FLUID_RENDER_SHADER_ROUTE, code: RENDER_SHADER });
   const screenSpaceModule = device.createShaderModule({ label: KAMINOS_FINGER_FLUID_SCREEN_SPACE_SHADER_ROUTE, code: SCREEN_SPACE_SURFACE_SHADER });
+  const analyticSupportDepthModule = device.createShaderModule({ label: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE, code: ANALYTIC_SUPPORT_DEPTH_SHADER });
   const screenSpaceAccumulationLayout = device.createBindGroupLayout({
     label: 'kaminos-finger-fluid-screen-space-accumulation-layout',
     entries: [
@@ -2238,11 +2315,19 @@ export async function createWebGPUFingerFluidSolver({
       { binding: 4, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
     ],
   });
+  const analyticSupportDepthLayout = device.createBindGroupLayout({
+    label: 'kaminos-finger-fluid-analytic-support-depth-layout',
+    entries: [
+      { binding: 1, visibility: GPUShaderStage.VERTEX, buffer: { type: 'uniform' } },
+    ],
+  });
   const screenSpaceAccumulationPipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [screenSpaceAccumulationLayout] });
   const screenSpaceCompositePipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [screenSpaceCompositeLayout] });
+  const analyticSupportDepthPipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [analyticSupportDepthLayout] });
   let renderPipeline;
   let screenSpaceSurfaceAccumulationPipeline;
   let screenSpaceSurfaceCompositePipeline;
+  let analyticSupportDepthPipeline;
   try {
     renderPipeline = await device.createRenderPipelineAsync({
       label: KAMINOS_FINGER_FLUID_GPU_RENDERER_ROUTE,
@@ -2273,7 +2358,7 @@ export async function createWebGPUFingerFluidSolver({
           format: 'rgba16float',
           blend: {
             color: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
-            alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
+            alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'min' },
           },
         }],
       },
@@ -2295,6 +2380,14 @@ export async function createWebGPUFingerFluidSolver({
         }],
       },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
+      depthStencil: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'less' },
+    });
+    analyticSupportDepthPipeline = await device.createRenderPipelineAsync({
+      label: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE,
+      layout: analyticSupportDepthPipelineLayout,
+      vertex: { module: analyticSupportDepthModule, entryPoint: 'vs_analytic_support_depth' },
+      primitive: { topology: 'triangle-list', cullMode: 'none' },
+      depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
     });
   } catch (error) {
     return createUnavailableSolver(`WebGPU render pipeline validation failed: ${error.message || String(error)}`);
@@ -2307,6 +2400,13 @@ export async function createWebGPUFingerFluidSolver({
       { binding: 1, resource: { buffer: renderParamsBuffer } },
       { binding: 2, resource: { buffer: neighborTopologyBuffer } },
       { binding: 3, resource: { buffer: materialTracerBuffer } },
+    ],
+  });
+  const analyticSupportDepthBindGroup = device.createBindGroup({
+    label: 'kaminos-finger-fluid-analytic-support-depth-bind-group',
+    layout: analyticSupportDepthLayout,
+    entries: [
+      { binding: 1, resource: { buffer: renderParamsBuffer } },
     ],
   });
 
@@ -2334,6 +2434,7 @@ export async function createWebGPUFingerFluidSolver({
   let screenSpaceSurfaceRenderFrameCount = 0;
   let screenSpaceSurfaceAccumulationPassCount = 0;
   let screenSpaceSurfaceCompositePassCount = 0;
+  let analyticSupportDepthPassCount = 0;
   let lastEffectiveRendererMode = safeRendererMode;
   let lastRequestedRendererMode = safeRendererMode;
   let lastRendererFallbackReason = null;
@@ -2574,11 +2675,27 @@ export async function createWebGPUFingerFluidSolver({
       supportPass.draw(6, PLAYGROUND_TILE_COUNT + PLAYGROUND_SKIRT_COUNT + PLAYGROUND_OBSTACLE_COUNT, 0, safeParticleCount);
       supportPass.end();
 
+      const analyticSupportDepthPass = encoder.beginRenderPass({
+        label: `${KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE}:analytic-support-depth`,
+        colorAttachments: [],
+        depthStencilAttachment: {
+          view: depthTexture.createView(),
+          depthClearValue: 1,
+          depthLoadOp: 'clear',
+          depthStoreOp: 'store',
+        },
+      });
+      analyticSupportDepthPass.setPipeline(analyticSupportDepthPipeline);
+      analyticSupportDepthPass.setBindGroup(0, analyticSupportDepthBindGroup);
+      analyticSupportDepthPass.draw(ANALYTIC_SUPPORT_VERTEX_COUNT);
+      analyticSupportDepthPass.end();
+      analyticSupportDepthPassCount += 1;
+
       const accumulationPass = encoder.beginRenderPass({
         label: `${KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE}:particle-depth-optical-thickness`,
         colorAttachments: [{
           view: screenSpaceSurfaceAccumulationTexture.createView(),
-          clearValue: { r: 0, g: 0, b: 0, a: 0 },
+          clearValue: { r: 0, g: 0, b: 0, a: 30 },
           loadOp: 'clear',
           storeOp: 'store',
         }],
@@ -2596,6 +2713,11 @@ export async function createWebGPUFingerFluidSolver({
           loadOp: 'load',
           storeOp: 'store',
         }],
+        depthStencilAttachment: {
+          view: depthTexture.createView(),
+          depthLoadOp: 'load',
+          depthStoreOp: 'store',
+        },
       });
       compositePass.setPipeline(screenSpaceSurfaceCompositePipeline);
       compositePass.setBindGroup(0, screenSpaceSurfaceCompositeBindGroup);
@@ -3002,6 +3124,7 @@ export async function createWebGPUFingerFluidSolver({
       screenSpaceSurfaceRendererRoute: KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE,
       renderShaderRoute: KAMINOS_FINGER_FLUID_RENDER_SHADER_ROUTE,
       screenSpaceSurfaceShaderRoute: KAMINOS_FINGER_FLUID_SCREEN_SPACE_SHADER_ROUTE,
+      analyticSupportDepthRoute: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE,
       particleCount: safeParticleCount,
       gridDimensions: [...GRID_DIMS],
       gridCellCount: GRID_CELL_COUNT,
@@ -3026,14 +3149,17 @@ export async function createWebGPUFingerFluidSolver({
       screenSpaceSurfaceRenderFrameCount,
       screenSpaceSurfaceAccumulationPassCount,
       screenSpaceSurfaceCompositePassCount,
+      analyticSupportDepthPassCount,
       screenSpaceSurfaceEvidence: {
         route: KAMINOS_FINGER_FLUID_SCREEN_SPACE_RENDERER_ROUTE,
         shaderRoute: KAMINOS_FINGER_FLUID_SCREEN_SPACE_SHADER_ROUTE,
+        supportDepthRoute: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_DEPTH_ROUTE,
+        analyticSupportDepthPassCount,
         accumulationTexture: configuredExtent ? {
           label: 'kaminos-finger-fluid-surface-accumulation',
           format: 'rgba16float',
           extent: configuredExtent,
-          channels: ['weighted_particle_depth', 'depth_weight', 'optical_thickness', 'material_weighted_thickness'],
+          channels: ['optical_thickness', 'material_weighted_thickness', 'depth_weight', 'nearest_particle_center_view_depth'],
         } : null,
         accumulationPassCount: screenSpaceSurfaceAccumulationPassCount,
         compositePassCount: screenSpaceSurfaceCompositePassCount,

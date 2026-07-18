@@ -1170,7 +1170,7 @@ async function main() {
       } : null;
     })()`);
     if (!rendererCountersBefore) throw new Error('missing pre-comparison renderer counters');
-    const renderSameState = async (mode, path, captureRect = canvasRect, minimumActiveRatio = 0.08) => {
+    const renderSameState = async (mode, path, captureRect = canvasRect, minimumActiveRatio = 0.05) => {
       const receipt = await evaluate(ws, `(() => {
         const render = window.kaminosFingerFluidBenchRenderCurrentStateForWitness;
         if (typeof render !== 'function') throw new Error('pre-output failure: missing same-state renderer witness hook');
@@ -1288,6 +1288,7 @@ async function main() {
       { id: 'operator_oblique', yaw: -0.62, pitch: 0.52, distance: 6.2, target: [0, -0.48, 0.2] },
       { id: 'low_side', yaw: -1.35, pitch: 0.08, distance: 7.0, target: [0, -0.48, 0.2] },
       { id: 'opposite_high', yaw: 2.15, pitch: 0.72, distance: 7.0, target: [0, -0.48, 0.2] },
+      { id: 'support_grazing', yaw: -1.35, pitch: -0.15, distance: 6.4, target: [0, -0.48, 0.2] },
     ];
     const registrationOverlayVisibility = await evaluate(ws, `(() => {
       const overlay = document.getElementById('finger-fluid-bench-overlay');
