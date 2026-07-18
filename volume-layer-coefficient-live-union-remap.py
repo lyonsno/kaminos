@@ -28,6 +28,9 @@ COEFFICIENT_ORDER = [
 ]
 COEFFICIENT_DTYPE = "float32-le"
 COEFFICIENT_SEMANTIC_ROLE = "learned-post-admission-layer-emission-extinction-prediction"
+EXACT_TRAINING_SCHEMA = "kaminos.volume.layer-coefficient-training-manifest.v0"
+EXACT_TRAINING_AUTHORITY = "analytical-ridge-or-nonridge-admission-plus-exact-local-coefficients-v0"
+EXACT_COEFFICIENT_AUTHORITY = "exact-local-layer-emission-extinction-v0"
 SOURCE_HASH_KEYS = {
     "fluidSha256",
     "frontSha256",
@@ -245,6 +248,123 @@ def package_runtime_overlay(overlay_report_path: Path, source_index_path: Path, 
     return runtime
 
 
+def validate_exact_artifact(artifact: dict[str, Any], *, row_count: int, columns: int | None, role: str) -> Path:
+    shape = [row_count] if columns is None else [row_count, columns]
+    item_bytes = 4 if columns is None else columns * 4
+    dtype = "uint32-le" if columns is None else "float32-le"
+    require(artifact.get("shape") == shape, f"exact {'native-cell index' if columns is None else 'coefficient'} shape drifted")
+    require(artifact.get("dtype") == dtype, f"exact {'native-cell index' if columns is None else 'coefficient'} dtype drifted")
+    require(artifact.get("semanticRole") == role, f"exact {'native-cell index' if columns is None else 'coefficient'} semantic role drifted")
+    require(artifact.get("bytes") == row_count * item_bytes, f"exact {'native-cell index' if columns is None else 'coefficient'} byte count drifted")
+    path = Path(artifact.get("path", "")).expanduser().resolve()
+    require(path.is_file() and path.stat().st_size == artifact.get("bytes"), f"exact {'native-cell index' if columns is None else 'coefficient'} artifact is missing or partial")
+    require(sha256_file(path) == artifact.get("sha256"), f"exact {'native-cell index' if columns is None else 'coefficient'} sha256 differs")
+    return path
+
+
+def package_exact_runtime_overlay(training_manifest_path: Path, state_id: str, output_dir: Path, grid: int) -> dict[str, Any]:
+    manifest = json.loads(training_manifest_path.read_text(encoding="utf-8"))
+    require(manifest.get("schema") == EXACT_TRAINING_SCHEMA, "exact training manifest schema drifted")
+    require(manifest.get("status") == "complete" and manifest.get("failurePhase") is None, "exact training manifest is incomplete")
+    require(manifest.get("authority") == EXACT_TRAINING_AUTHORITY, "exact training manifest authority drifted")
+    states = [state for state in manifest.get("states", []) if state.get("id") == state_id]
+    require(len(states) == 1, f"exact state selection differs:{state_id}:{len(states)}")
+    state = states[0]
+    rows = state.get("rows") or {}
+    replay = state.get("replay") or {}
+    row_count = rows.get("count")
+    require(isinstance(row_count, int) and row_count > 0, "exact row count is invalid")
+    require(isinstance(grid, int) and grid > 0, "grid must be positive")
+    require(replay.get("grid") == grid, f"exact replay grid differs:{replay.get('grid')}:{grid}")
+    coefficient = rows.get("coefficients") or {}
+    native_cell = rows.get("nativeCellIndices") or {}
+    coefficient_path = validate_exact_artifact(
+        coefficient,
+        row_count=row_count,
+        columns=8,
+        role="exact-local-layer-emission-extinction",
+    )
+    index_path = validate_exact_artifact(
+        native_cell,
+        row_count=row_count,
+        columns=None,
+        role="analytical-admission-native-cell-indices",
+    )
+    source_hashes = (rows.get("kernelDescriptors") or {}).get("sourceHashes")
+    require(isinstance(source_hashes, dict) and set(source_hashes) == SOURCE_HASH_KEYS, "exact source hashes differ")
+    require(
+        all(isinstance(value, str) and len(value) == 64 and all(character in "0123456789abcdef" for character in value) for value in source_hashes.values()),
+        "exact source hashes differ",
+    )
+    coefficients = np.memmap(coefficient_path, dtype="<f4", mode="r", shape=(row_count, 8))
+    require(np.all(np.isfinite(coefficients)), "exact coefficient artifact contains nonfinite values")
+    require(float(np.min(coefficients)) >= 0.0, "exact coefficient artifact contains negative values")
+    source_ids = np.memmap(index_path, dtype="<u4", mode="r", shape=(row_count,))
+    grid_cell_count = grid ** 3
+    lookup = build_dense_lookup(source_ids, grid_cell_count)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    coefficient_output = output_dir / "coefficients.f32"
+    index_output = output_dir / "native-cell-indices.u32"
+    lookup_output = output_dir / "native-cell-row-plus-one.u32"
+    for source_path, destination_path in ((coefficient_path, coefficient_output), (index_path, index_output)):
+        temporary = destination_path.with_name(f".{destination_path.name}.partial")
+        shutil.copyfile(source_path, temporary)
+        os.replace(temporary, destination_path)
+    lookup_temporary = lookup_output.with_name(f".{lookup_output.name}.partial")
+    lookup.tofile(lookup_temporary)
+    os.replace(lookup_temporary, lookup_output)
+    runtime_state = {
+        "id": state_id,
+        "rowCount": row_count,
+        "admissionIndexSha256": native_cell.get("sha256"),
+        "sourceHashes": source_hashes,
+        "effectiveRoute": replay.get("effectiveRoute"),
+        "prototypeIdentity": replay.get("prototypeIdentity"),
+        "backend": replay.get("backend"),
+    }
+    runtime = {
+        "schema": RUNTIME_SCHEMA,
+        "status": "complete",
+        "failurePhase": None,
+        "authority": AUTHORITY,
+        "selector": {
+            "authority": SELECTOR_AUTHORITY,
+            "recipeSha256": SELECTOR_RECIPE_SHA256,
+            "compositionIdentity": COMPOSITION_IDENTITY,
+        },
+        "source": {
+            "overlayIdentity": f"exact-local-layer-emission-extinction:{state_id}",
+            "coefficientAuthority": EXACT_COEFFICIENT_AUTHORITY,
+            "trainingManifestPath": str(training_manifest_path),
+            "trainingManifestSha256": sha256_file(training_manifest_path),
+            "model": None,
+            "state": runtime_state,
+        },
+        "routing": {
+            "grid": grid,
+            "gridCellCount": grid_cell_count,
+            "admittedRowCount": row_count,
+            "lookupEncoding": LOOKUP_ENCODING,
+            "missingRowValue": 0,
+            "coefficientRowOffset": -1,
+            "coefficientOrder": COEFFICIENT_ORDER,
+        },
+        "artifacts": {
+            "coefficients": artifact_receipt(coefficient_output, [row_count, 8], "float32-le", "compact-live-union-layer-coefficients"),
+            "nativeCellIndices": artifact_receipt(index_output, [row_count], "uint32-le", "checksum-bound-admitted-native-cell-identities"),
+            "denseLookup": artifact_receipt(lookup_output, [grid_cell_count], "uint32-le", "native-cell-to-compact-coefficient-row-plus-one"),
+        },
+        "execution": {
+            "sampleCap": None,
+            "droppedRowCount": 0,
+            "unmappedAdmittedRowCount": 0,
+        },
+    }
+    runtime["identity"] = canonical_identity(runtime)
+    atomic_json(output_dir / "runtime-overlay.json", runtime)
+    return runtime
+
+
 def run_self_test() -> dict[str, Any]:
     source = np.asarray([10, 20, 30, 40], dtype=np.uint32)
     destination = np.asarray([30, 10, 40, 20], dtype=np.uint32)
@@ -302,6 +422,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--overlay-report")
+    parser.add_argument("--exact-training-manifest")
+    parser.add_argument("--state-id")
     parser.add_argument("--source-native-cell-indices")
     parser.add_argument("--output-dir")
     parser.add_argument("--grid", type=int)
@@ -309,10 +431,46 @@ def main() -> int:
     if args.self_test:
         print(json.dumps(run_self_test(), sort_keys=True))
         return 0
-    required = [args.overlay_report, args.source_native_cell_indices, args.output_dir, args.grid]
-    if any(value is None for value in required):
-        parser.error("--overlay-report, --source-native-cell-indices, --output-dir, and --grid are required")
+    if bool(args.overlay_report) == bool(args.exact_training_manifest):
+        parser.error("exactly one of --overlay-report or --exact-training-manifest is required")
+    if args.output_dir is None or args.grid is None:
+        parser.error("--output-dir and --grid are required")
     output_dir = Path(args.output_dir).expanduser().resolve()
+    if args.exact_training_manifest:
+        if not args.state_id:
+            parser.error("--state-id is required with --exact-training-manifest")
+        training_manifest_path = Path(args.exact_training_manifest).expanduser().resolve()
+        try:
+            runtime = package_exact_runtime_overlay(
+                training_manifest_path,
+                args.state_id,
+                output_dir,
+                args.grid,
+            )
+        except Exception as error:
+            failure = {
+                "schema": RUNTIME_SCHEMA,
+                "status": "failed",
+                "failurePhase": "package-exact-runtime-overlay",
+                "authority": AUTHORITY,
+                "reason": str(error),
+                "requested": {
+                    "trainingManifestPath": str(training_manifest_path),
+                    "stateId": args.state_id,
+                    "outputDir": str(output_dir),
+                    "grid": args.grid,
+                },
+                "lastTrustworthyEvidence": {
+                    "trainingManifestExists": training_manifest_path.is_file(),
+                    "trainingManifestSha256": sha256_file(training_manifest_path) if training_manifest_path.is_file() else None,
+                },
+            }
+            atomic_json(output_dir / "runtime-overlay.json", failure)
+            raise
+        print(json.dumps(runtime, sort_keys=True))
+        return 0
+    if args.source_native_cell_indices is None:
+        parser.error("--source-native-cell-indices is required with --overlay-report")
     overlay_report_path = Path(args.overlay_report).expanduser().resolve()
     source_index_path = Path(args.source_native_cell_indices).expanduser().resolve()
     try:

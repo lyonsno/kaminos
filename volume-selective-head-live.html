@@ -362,7 +362,7 @@
       volume_quality_reason: 'selective-head-continuous-live-assay',
     });
     for (const [key, value] of params) {
-      if (key.startsWith('volume_')) basinQuery.set(key, value);
+      if (key.startsWith('volume_') || key.startsWith('full_support_')) basinQuery.set(key, value);
     }
     if (params.has('settings_preset_authority') && !sourceSettingsPresetRequestedId) {
       warmupError ||= 'settings preset authority was requested without a settings preset id';

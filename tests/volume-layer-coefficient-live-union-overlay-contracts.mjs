@@ -8,6 +8,7 @@ const runtimeUrl = new URL('../volume-layer-coefficient-live-union-overlay.mjs',
 assert.ok(existsSync(fileURLToPath(runtimeUrl)), 'live-union coefficient browser loader must exist');
 
 const {
+  auditLayerCoefficientLiveUnionPopulation,
   createLayerCoefficientLiveUnionGpuResources,
   loadLayerCoefficientLiveUnionOverlay,
 } = await import(runtimeUrl);
@@ -89,6 +90,12 @@ const manifest = {
   },
 };
 manifest.identity = canonicalIdentity(manifest);
+const expectedLiveSource = {
+  grid: 2,
+  admissionIndexSha256: sha256(nativeCellIndices),
+  sourceOverlayIdentity: manifest.source.overlayIdentity,
+  sourceHashes,
+};
 
 const manifestUrl = 'https://fixture.invalid/runtime-overlay.json';
 const responseMap = new Map([
@@ -107,11 +114,7 @@ const fetchImpl = async url => {
 const loaded = await loadLayerCoefficientLiveUnionOverlay({
   manifestUrl,
   fetchImpl,
-  expectedSource: {
-    grid: 2,
-    admissionIndexSha256: sha256(nativeCellIndices),
-    sourceHashes,
-  },
+  expectedSource: expectedLiveSource,
 });
 assert.equal(loaded.receipt.status, 'complete');
 assert.equal(loaded.receipt.authority, 'checksum-bound-live-union-overlay-loader-v0');
@@ -123,6 +126,66 @@ assert.equal(loaded.receipt.sampleCap, null);
 assert.equal(loaded.coefficients.length, 16);
 assert.deepEqual([...loaded.nativeCellIndices], [2, 6]);
 assert.deepEqual([...loaded.denseLookup], [0, 0, 1, 0, 0, 0, 2, 0]);
+
+const exactPopulationAudit = {
+  stableNativeCellIdSha256: sha256(nativeCellIndices),
+  stableNativeCellIds: [2, 6],
+  stableNativeCellIdAuthority: 'gpu-compacted-native-grid-linear-index-v0',
+  candidateCount: 2,
+  instanceCount: 2,
+  overflowCount: 0,
+  unionReceipt: { identity: 'test-live-union-receipt-v0' },
+};
+const exactPopulation = auditLayerCoefficientLiveUnionPopulation({
+  overlay: loaded,
+  audit: exactPopulationAudit,
+  exactUnionModeEffective: true,
+});
+assert.equal(exactPopulation.status, 'effective');
+assert.equal(exactPopulation.lookupMissCount, 0);
+assert.equal(exactPopulation.lookupExtraCount, 0);
+assert.deepEqual(exactPopulation.failures, []);
+
+const wrongIdentity = auditLayerCoefficientLiveUnionPopulation({
+  overlay: loaded,
+  audit: { ...exactPopulationAudit, stableNativeCellIdSha256: '0'.repeat(64) },
+  exactUnionModeEffective: true,
+});
+assert.equal(wrongIdentity.status, 'failed');
+assert.match(wrongIdentity.failures.join('|'), /stable-native-cell-sha256-mismatch/);
+
+const partialPopulation = auditLayerCoefficientLiveUnionPopulation({
+  overlay: loaded,
+  audit: { ...exactPopulationAudit, candidateCount: 2, instanceCount: 1, overflowCount: 1 },
+  exactUnionModeEffective: true,
+});
+assert.equal(partialPopulation.status, 'failed');
+assert.match(partialPopulation.failures.join('|'), /partial-live-union-population/);
+
+const missingLookupOverlay = { ...loaded, denseLookup: new Uint32Array([0, 0, 1, 0, 0, 0, 0, 0]) };
+const missingLookup = auditLayerCoefficientLiveUnionPopulation({
+  overlay: missingLookupOverlay,
+  audit: exactPopulationAudit,
+  exactUnionModeEffective: true,
+});
+assert.equal(missingLookup.status, 'failed');
+assert.equal(missingLookup.lookupMissCount, 1);
+assert.equal(missingLookup.lookupExtraCount, 1);
+
+const staleExtra = auditLayerCoefficientLiveUnionPopulation({
+  overlay: loaded,
+  audit: {
+    ...exactPopulationAudit,
+    stableNativeCellIdSha256: sha256(Buffer.from(new Uint32Array([2]).buffer)),
+    stableNativeCellIds: [2],
+    candidateCount: 1,
+    instanceCount: 1,
+  },
+  exactUnionModeEffective: true,
+});
+assert.equal(staleExtra.status, 'failed');
+assert.equal(staleExtra.lookupExtraCount, 1);
+assert.match(staleExtra.failures.join('|'), /lookup-extras/);
 
 const writes = [];
 const buffers = [];
@@ -170,7 +233,7 @@ async function rejection(label, mutateManifest, mutateResponses, expected) {
       : { ok: false, status: 404, json: async () => ({}), arrayBuffer: async () => new ArrayBuffer(0) };
   };
   await assert.rejects(
-    loadLayerCoefficientLiveUnionOverlay({ manifestUrl, fetchImpl: candidateFetch, expectedSource: { grid: 2, admissionIndexSha256: sha256(nativeCellIndices), sourceHashes } }),
+    loadLayerCoefficientLiveUnionOverlay({ manifestUrl, fetchImpl: candidateFetch, expectedSource: expectedLiveSource }),
     expected,
     label,
   );
@@ -206,7 +269,7 @@ await assert.rejects(
   loadLayerCoefficientLiveUnionOverlay({
     manifestUrl,
     fetchImpl,
-    expectedSource: { grid: 2, admissionIndexSha256: sha256(nativeCellIndices), sourceHashes: { ...sourceHashes, fluidSha256: 'f'.repeat(64) } },
+    expectedSource: { ...expectedLiveSource, sourceHashes: { ...sourceHashes, fluidSha256: 'f'.repeat(64) } },
   }),
   /source hash mismatch: fluidSha256/,
   'live source checksum mismatch fails before artifact loading',
@@ -216,13 +279,21 @@ await assert.rejects(
     manifestUrl,
     fetchImpl,
     expectedSource: {
-      grid: 2,
-      admissionIndexSha256: sha256(nativeCellIndices),
+      ...expectedLiveSource,
       sourceHashes: { ...sourceHashes, staleSha256: '7'.repeat(64) },
     },
   }),
   /expected source hash key set drift/,
   'live source identity cannot carry extra stale source hashes',
+);
+await assert.rejects(
+  loadLayerCoefficientLiveUnionOverlay({
+    manifestUrl,
+    fetchImpl,
+    expectedSource: { ...expectedLiveSource, sourceOverlayIdentity: 'sha256:wrong-producer' },
+  }),
+  /source overlay identity mismatch/,
+  'underlying coefficient producer substitution fails before artifact loading',
 );
 
 console.log('volume layer coefficient live-union overlay contracts passed');

@@ -82,6 +82,20 @@ canvas { display: block; }
 #volume-authored-mix-panel[data-collapsed="true"] #volume-authored-mix-body { display: none; }
 .volume-authored-mix-kicker { color: #728187; font: 9px 'SF Mono', monospace; text-transform: uppercase; letter-spacing: 1px; }
 .volume-authored-mix-title { margin: 4px 0 14px; color: #e6ecee; font-size: 13px; font-weight: 700; text-transform: none; letter-spacing: 0; }
+.volume-full-support-stage { margin: 0 0 14px; padding: 10px 0 13px; border-bottom: 1px solid #293033; }
+.volume-full-support-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.volume-full-support-heading strong { color: #dfe7e9; font-size: 11px; }
+.volume-full-support-heading span { color: #77868a; font: 9px 'SF Mono', monospace; }
+.volume-full-support-row { display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: center; gap: 8px; margin: 6px 0; }
+.volume-full-support-row label { color: #879398; font-size: 10px; }
+.volume-full-support-row select { min-width: 0; width: 100%; padding: 6px 7px; background: #15191a; border: 1px solid #354045; border-radius: 4px; color: #d5dfe1; font-size: 10px; }
+.volume-full-support-fixed { min-width: 0; color: #b8c3c6; font: 9px 'SF Mono', monospace; line-height: 1.35; overflow-wrap: anywhere; }
+.volume-full-support-actions { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.volume-full-support-actions button { padding: 6px 9px; border: 1px solid #405158; border-radius: 4px; background: #18333d; color: #dff6ff; font-size: 10px; cursor: pointer; }
+.volume-full-support-actions button:disabled { background: #171a1b; border-color: #2b3032; color: #687276; cursor: not-allowed; }
+#volume-full-support-receipt { margin-top: 8px; padding: 7px; border-left: 2px solid #59676b; background: #121617; color: #9fadb1; font: 9px 'SF Mono', monospace; line-height: 1.4; overflow-wrap: anywhere; white-space: normal; }
+#volume-full-support-receipt[data-status="effective"] { border-color: #4aa36a; color: #bde6c9; }
+#volume-full-support-receipt[data-status="failed"] { border-color: #d16454; color: #efb2a8; }
 #volume-authored-mix-control-root .slider-row { margin: 8px 0; }
 #volume-authored-mix-control-root .slider-label { min-width: 92px; color: #879398; }
 #volume-authored-mix-control-root .slider-val { color: #aab4b7; }
@@ -2610,6 +2624,24 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
   <div id="volume-authored-mix-body">
     <div class="volume-authored-mix-kicker">Volume</div>
     <h2 class="volume-authored-mix-title">Authored Mix</h2>
+    <section class="volume-full-support-stage" aria-label="Full support coefficient authoring">
+      <div class="volume-full-support-heading"><strong>Full Support</strong><span>Stage A</span></div>
+      <div class="volume-full-support-row">
+        <label for="volume-full-support-source">Coefficients</label>
+        <select id="volume-full-support-source">
+          <option value="analytical-exact">Analytical exact</option>
+          <option value="learned-baseline">Learned baseline</option>
+          <option value="learned-flow">Learned flow</option>
+        </select>
+      </div>
+      <div class="volume-full-support-row"><label>Deposition</label><div class="volume-full-support-fixed">Exact bilinear, 5 taps x 4 neighbors</div></div>
+      <div class="volume-full-support-row"><label>Transport</label><div class="volume-full-support-fixed">Self-extinction + additive RGB</div></div>
+      <div class="volume-full-support-actions">
+        <button id="volume-full-support-apply" type="button">Apply source</button>
+        <button id="volume-full-support-stage-b" type="button" disabled title="Bailiff producer manifest is not available">Matched optical recurrence: awaiting source manifest</button>
+      </div>
+      <div id="volume-full-support-receipt" data-status="idle">No Stage A source requested.</div>
+    </section>
     <div id="volume-authored-mix-control-root" data-volume-control-root="authored-mix"></div>
   </div>
 </aside>
@@ -2630,7 +2662,8 @@ import * as THREE from 'three';
 import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture } from 'three/tsl';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { createKaminosVolumePrototype } from './volume-core.js?v=prototype-scene-ontology-0715';
+import { createKaminosVolumePrototype } from './volume-core.js?v=full-support-stage-a-0717';
+import { FULL_SUPPORT_STAGE_A, admitFullSupportStageA } from './volume-full-support-cockpit.mjs';
 import { DEFAULT_VOLUME_SCENE, volumeSceneReceipt } from './volume-scene-ontology.mjs';
 import {
   resolveVolumeSettingsPresetVisualView,
@@ -17712,6 +17745,232 @@ async function initKaminosVolumeRoute() {
   document.getElementById('volume-boundary-sidecar-view')?.addEventListener('change', syncControls);
   document.getElementById('volume-boundary-splat-mode')?.addEventListener('input', syncControls);
   document.getElementById('volume-boundary-splat-mode')?.addEventListener('change', syncControls);
+  const fullSupportReceipt = document.getElementById('volume-full-support-receipt');
+  const renderFullSupportReceipt = receipt => {
+    window.__kaminosFullSupportStageAReceipt = receipt;
+    if (!fullSupportReceipt) return;
+    fullSupportReceipt.dataset.status = receipt?.status || 'failed';
+    const failures = receipt?.failures?.length ? ` | ${receipt.failures.join(', ')}` : '';
+    fullSupportReceipt.textContent = receipt?.status === 'effective'
+      ? `${receipt.effectiveSource} | ${receipt.effectiveDeposition} | ${receipt.effectiveTransport} | ${Number(receipt.rowCount).toLocaleString()} rows | overflow ${receipt.overflowCount}`
+      : `${receipt?.status || 'failed'}${failures}`;
+  };
+  const fullSupportManifestUrl = source => {
+    const parameter = {
+      'analytical-exact': 'full_support_exact_manifest',
+      'learned-baseline': 'full_support_baseline_manifest',
+      'learned-flow': 'full_support_flow_manifest',
+    }[source];
+    const routedUrl = parameter ? params.get(parameter) : null;
+    return routedUrl ? new URL(routedUrl, window.location.href).href : null;
+  };
+  const applyFullSupportSource = async () => {
+    const source = document.getElementById('volume-full-support-source')?.value || 'analytical-exact';
+    const manifestUrl = fullSupportManifestUrl(source);
+    if (!manifestUrl) {
+      const failure = { status: 'failed', failures: [`missing-manifest-url:${source}`] };
+      renderFullSupportReceipt(failure);
+      return failure;
+    }
+    const splatMode = document.getElementById('volume-boundary-splat-mode');
+    splatMode.value = 'kernel_moment_full_flame_union';
+    syncControls({ target: splatMode });
+    volumePrototype.setFullSupportDepositionMode(FULL_SUPPORT_STAGE_A.deposition.identity);
+    const derivedState = volumePrototype.debugState();
+    const materialized = await volumePrototype.renderFrozenScaleToCanvas({
+      fullFieldImportSessionId: derivedState.fullFieldImportReceipt?.sessionId,
+      renderScale: 1,
+      boundarySplatComposition: 'splat-only-v0',
+      controlOverrides: { boundarySplatMode: 'kernel_moment_full_flame_union' },
+      sameStateCaptureId: `full-support-stage-a-f${derivedState.frameCount}-s${derivedState.simStepCount}`,
+      baseFrameCount: derivedState.frameCount,
+      baseSimStepCount: derivedState.simStepCount,
+      restoreControls: false,
+      resumeRenderLoop: true,
+    });
+    const materializationFailure = materialized?.ok !== true
+      ? (materialized?.reason || 'frozen-derived-state-materialization-failed')
+      : materialized.simStepCount !== FULL_SUPPORT_STAGE_A.state.simStepCount
+        ? 'frozen-derived-state-step-substitution'
+        : materialized.fullSupportDepositionEffective !== FULL_SUPPORT_STAGE_A.deposition.identity
+          ? 'deposition-materialization-substitution'
+          : null;
+    if (materializationFailure) {
+      const failure = { status: 'failed', failures: [materializationFailure] };
+      renderFullSupportReceipt(failure);
+      return failure;
+    }
+    const expectedSource = {
+      grid: FULL_SUPPORT_STAGE_A.state.grid,
+      admissionIndexSha256: FULL_SUPPORT_STAGE_A.state.nativeCellIndexSha256,
+      sourceOverlayIdentity: FULL_SUPPORT_STAGE_A.sources[source].sourceOverlayIdentity,
+      sourceHashes: {
+        fluidSha256: '98d1d0650d67fcdf32f2fc7f5c353bac5355f7df01f45d1e0211c51eb02a7620',
+        frontSha256: '27491552ce2c0294125d35658c3dd47289c91d0d068909c0c244e5167d7c7e35',
+        boundarySidecarSha256: '33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216',
+        majorantSha256: '0b73c83d00b34d7fd2176f3d0709800b5b9a6617f04c736a359c3d30b2d71da1',
+      },
+    };
+    renderFullSupportReceipt({ status: 'loading', failures: [] });
+    const loadReceipt = await volumePrototype.loadBoundarySplatLiveUnionCoefficientOverlay({
+      manifestUrl,
+      overlayIdentity: FULL_SUPPORT_STAGE_A.sources[source]?.overlayIdentity || manifestUrl,
+      expectedSource,
+    });
+    if (loadReceipt.status !== 'awaiting-population-audit') {
+      const failure = { status: 'failed', failures: [loadReceipt.fallbackReason || 'overlay-load-failed'] };
+      renderFullSupportReceipt(failure);
+      return failure;
+    }
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const sourceAudit = await volumePrototype.auditBoundarySplatLiveUnionSourceHashes({
+      expectedSourceHashes: expectedSource.sourceHashes,
+    });
+    const overlayReceipt = await volumePrototype.auditBoundarySplatLiveUnionCoefficientOverlayPopulation();
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const state = volumePrototype.debugState();
+    const admitted = admitFullSupportStageA({
+      requestedSource: source,
+      effectiveSource: overlayReceipt.status === 'effective' ? source : null,
+      requestedDeposition: FULL_SUPPORT_STAGE_A.deposition.identity,
+      effectiveDeposition: state.fullSupportDepositionEffective,
+      requestedTransport: FULL_SUPPORT_STAGE_A.transport.identity,
+      effectiveTransport: state.fullSupportTransportIdentity,
+      sourceAudit,
+      overlay: {
+        ...overlayReceipt,
+        droppedRowCount: overlayReceipt.droppedRowCount,
+        sampleCap: overlayReceipt.sampleCap,
+      },
+      population: {
+        candidateCount: overlayReceipt.candidateCount,
+        instanceCount: overlayReceipt.instanceCount,
+        overflowCount: overlayReceipt.overflowCount,
+      },
+    });
+    renderFullSupportReceipt(admitted);
+    return admitted;
+  };
+
+  const fullSupportBytesToBase64 = bytes => {
+    let binary = '';
+    for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(offset, Math.min(bytes.length, offset + 0x8000)));
+    }
+    return btoa(binary);
+  };
+  const fullSupportSha256 = async bytes => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)))
+    .map(value => value.toString(16).padStart(2, '0'))
+    .join('');
+  const uploadFullSupportField = async ({ sessionId, kind, url }) => {
+    const response = await fetch(url, { cache: 'no-store' });
+    if (!response.ok || !response.body) throw new Error(`${kind}-field-fetch-failed:${response.status}`);
+    const reader = response.body.getReader();
+    let byteOffset = 0;
+    let chunkCount = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const receipt = await volumePrototype.writeDebugFullFieldImportChunk({
+        sessionId,
+        kind,
+        byteOffset,
+        base64: fullSupportBytesToBase64(value),
+      });
+      if (receipt?.ok !== true || receipt.byteOffset !== byteOffset) {
+        throw new Error(`${kind}-field-import-failed-at:${byteOffset}`);
+      }
+      byteOffset += value.byteLength;
+      chunkCount += 1;
+    }
+    return { kind, byteLength: byteOffset, chunkCount };
+  };
+  const bootstrapFullSupportStageAState = async () => {
+    const manifestUrl = params.get('full_support_source_field_manifest');
+    const fluidUrl = params.get('full_support_source_fluid');
+    const frontUrl = params.get('full_support_source_front');
+    if (!manifestUrl && !fluidUrl && !frontUrl) return null;
+    if (!manifestUrl || !fluidUrl || !frontUrl) throw new Error('full-support-source-route-incomplete');
+    renderFullSupportReceipt({ status: 'loading', failures: ['loading-checksum-bound-state-120'] });
+    const manifestResponse = await fetch(manifestUrl, { cache: 'no-store' });
+    if (!manifestResponse.ok) throw new Error(`full-support-source-manifest-fetch-failed:${manifestResponse.status}`);
+    const manifestBytes = await manifestResponse.arrayBuffer();
+    const sourceManifest = JSON.parse(new TextDecoder().decode(manifestBytes));
+    if (
+      sourceManifest.schema !== 'kaminos.volume.full-grid-field-export.v0'
+      || sourceManifest.status !== 'captured'
+      || sourceManifest.completeFieldCoverage !== true
+      || sourceManifest.grid !== FULL_SUPPORT_STAGE_A.state.grid
+    ) throw new Error('full-support-source-manifest-contract-mismatch');
+    volumePrototype.setSelectiveHeadLiveCapturePaused(true);
+    await volumePrototype.setActive(false);
+    const sourceManifestSha256 = await fullSupportSha256(manifestBytes);
+    const begin = volumePrototype.beginDebugFullFieldImport({
+      grid: sourceManifest.grid,
+      initializationAuthority: 'checksum-addressed-live-replay-resume-v0',
+      filterIdentity: 'exact-field-live-replay-application-v0',
+      layoutIdentity: 'fluid-front-grid-x-fastest-y-then-z-f32-v0',
+      sourceManifestPath: manifestUrl,
+      sourceManifestSha256,
+      source: {
+        identity: 'coefficient-state-120',
+        authority: 'checksum-addressed-held-out-coefficient-state-v0',
+      },
+      receiverInitialSimStepCount: 120,
+      fluid: sourceManifest.sidecars.fluid,
+      front: sourceManifest.sidecars.front,
+    });
+    if (begin?.ok !== true) throw new Error(`full-support-source-import-begin-failed:${begin?.reason || 'unknown'}`);
+    const uploaded = [];
+    uploaded.push(await uploadFullSupportField({ sessionId: begin.sessionId, kind: 'fluid', url: fluidUrl }));
+    uploaded.push(await uploadFullSupportField({ sessionId: begin.sessionId, kind: 'front', url: frontUrl }));
+    const imported = await volumePrototype.finishDebugFullFieldImport({ sessionId: begin.sessionId });
+    if (imported?.ok !== true || imported.status !== 'applied') {
+      throw new Error(`full-support-source-import-finish-failed:${imported?.reason || 'unknown'}`);
+    }
+    const lookFreeze = document.getElementById('volume-look-freeze');
+    lookFreeze.value = '1';
+    syncControls({ target: lookFreeze });
+    const resumed = volumePrototype.resumeDebugImportedFieldLive({ sessionId: begin.sessionId });
+    if (resumed?.ok !== true) throw new Error(`full-support-source-presentation-failed:${resumed?.reason || 'unknown'}`);
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const presentedState = volumePrototype.debugState();
+    if (presentedState.simStepCount !== 120 || presentedState.lookFreeze !== 1) {
+      throw new Error(`full-support-source-state-drift:${presentedState.simStepCount}:${presentedState.lookFreeze}`);
+    }
+    const requestedSource = params.get('full_support_source') || 'analytical-exact';
+    const sourceSelect = document.getElementById('volume-full-support-source');
+    if (![...sourceSelect.options].some(option => option.value === requestedSource)) {
+      throw new Error(`full-support-source-unknown:${requestedSource}`);
+    }
+    sourceSelect.value = requestedSource;
+    const sourceReceipt = await applyFullSupportSource();
+    if (sourceReceipt?.status !== 'effective') throw new Error(`full-support-source-admission-failed:${sourceReceipt?.failures?.join(',') || 'unknown'}`);
+    const receipt = {
+      schema: 'kaminos.pyro.full-support-cockpit-bootstrap.v0',
+      status: 'effective',
+      sourceManifestUrl: manifestUrl,
+      sourceManifestSha256,
+      imported,
+      resumed,
+      uploaded,
+      presentedState: {
+        simStepCount: presentedState.simStepCount,
+        lookFreeze: presentedState.lookFreeze,
+        effectiveRoute: presentedState.effectiveRoute,
+      },
+      sourceReceipt,
+    };
+    window.__kaminosFullSupportStageABootstrapReceipt = receipt;
+    return receipt;
+  };
+  document.getElementById('volume-full-support-apply')?.addEventListener('click', () => {
+    applyFullSupportSource().catch(error => {
+      renderFullSupportReceipt({ status: 'failed', failures: [error?.message || String(error)] });
+    });
+  });
+  window.__kaminosApplyFullSupportSource = applyFullSupportSource;
+  window.__kaminosBootstrapFullSupportStageAState = bootstrapFullSupportStageAState;
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     document.getElementById(field.id)?.addEventListener('input', syncControls);
     document.getElementById(field.id)?.addEventListener('change', syncControls);
@@ -17808,6 +18067,11 @@ async function initKaminosVolumeRoute() {
       setInfo(`Volume route controls loaded; renderer failed: ${err?.message || err}`);
     }
   }
+  bootstrapFullSupportStageAState().catch(error => {
+    const failure = { status: 'failed', failures: [error?.message || String(error)] };
+    window.__kaminosFullSupportStageABootstrapReceipt = failure;
+    renderFullSupportReceipt(failure);
+  });
   syncControls();
   setInterval(refreshVolumeReadout, 500);
 }

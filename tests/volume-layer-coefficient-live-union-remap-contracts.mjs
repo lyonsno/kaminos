@@ -143,11 +143,25 @@ const loadedRuntime = await loadLayerCoefficientLiveUnionOverlay({
     grid: 3,
     admissionIndexSha256: sha256(indexBytes),
     sourceHashes,
+    sourceOverlayIdentity: baseOverlay.identity,
   },
 });
 assert.equal(loadedRuntime.receipt.status, 'complete');
 assert.equal(loadedRuntime.receipt.lookupPopulation, 4);
 assert.equal(loadedRuntime.receipt.lookupMissCount, 0);
+await assert.rejects(
+  loadLayerCoefficientLiveUnionOverlay({
+    manifestUrl: pathToFileURL(join(happy.outputDir, 'runtime-overlay.json')).href,
+    fetchImpl: localFetch,
+    expectedSource: {
+      grid: 3,
+      admissionIndexSha256: sha256(indexBytes),
+      sourceHashes,
+      sourceOverlayIdentity: 'sha256:substituted-producer',
+    },
+  }),
+  /source overlay identity mismatch/,
+);
 
 const rejectionCases = [
   ['capped', (overlay) => { overlay.execution.sampleCap = 3; }, 'prediction overlay applied a hidden sampleCap'],
@@ -174,5 +188,80 @@ for (const [name, mutate, expectedReason] of rejectionCases) {
   assert.equal(failure.lastTrustworthyEvidence.sourceNativeCellIndicesSha256, sha256(indexBytes));
   assert.equal(typeof failure.lastTrustworthyEvidence.claimedOverlayIdentity, 'string');
 }
+
+const exactTrainingManifestPath = join(fixtureRoot, 'exact-training-manifest.json');
+const exactTrainingManifest = {
+  schema: 'kaminos.volume.layer-coefficient-training-manifest.v0',
+  identity: `sha256:${'f'.repeat(64)}`,
+  authority: 'analytical-ridge-or-nonridge-admission-plus-exact-local-coefficients-v0',
+  status: 'complete',
+  failurePhase: null,
+  states: [{
+    id: 'coefficient-state-test',
+    replay: {
+      grid: 3,
+      effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
+      prototypeIdentity: 'kaminos-volume-prototype-v0',
+      backend: 'WebGPU:fixture',
+    },
+    rows: {
+      count: 4,
+      nativeCellIndices: {
+        path: indexPath,
+        bytes: indexBytes.byteLength,
+        sha256: sha256(indexBytes),
+        dtype: 'uint32-le',
+        shape: [4],
+        semanticRole: 'analytical-admission-native-cell-indices',
+      },
+      coefficients: {
+        path: coefficientPath,
+        bytes: coefficientBytes.byteLength,
+        sha256: sha256(coefficientBytes),
+        dtype: 'float32-le',
+        shape: [4, 8],
+        semanticRole: 'exact-local-layer-emission-extinction',
+      },
+      kernelDescriptors: { sourceHashes },
+    },
+  }],
+};
+writeFileSync(exactTrainingManifestPath, `${JSON.stringify(exactTrainingManifest, null, 2)}\n`);
+const exactOutputDir = join(fixtureRoot, 'exact-runtime');
+const exactPackage = spawnSync(python, [
+  fileURLToPath(scriptUrl),
+  '--exact-training-manifest', exactTrainingManifestPath,
+  '--state-id', 'coefficient-state-test',
+  '--output-dir', exactOutputDir,
+  '--grid', '3',
+], { encoding: 'utf8', timeout: 30_000 });
+assert.equal(exactPackage.status, 0, `${exactPackage.stderr}\n${exactPackage.stdout}`);
+const exactRuntime = JSON.parse(readFileSync(join(exactOutputDir, 'runtime-overlay.json'), 'utf8'));
+assert.equal(exactRuntime.status, 'complete');
+assert.equal(exactRuntime.source.coefficientAuthority, 'exact-local-layer-emission-extinction-v0');
+assert.equal(exactRuntime.source.overlayIdentity, 'exact-local-layer-emission-extinction:coefficient-state-test');
+assert.equal(exactRuntime.source.state.rowCount, 4);
+assert.equal(exactRuntime.source.state.admissionIndexSha256, sha256(indexBytes));
+assert.deepEqual(exactRuntime.source.state.sourceHashes, sourceHashes);
+assert.equal(exactRuntime.execution.sampleCap, null);
+assert.equal(exactRuntime.execution.droppedRowCount, 0);
+
+const partialExactManifest = structuredClone(exactTrainingManifest);
+partialExactManifest.states[0].rows.count = 3;
+const partialExactManifestPath = join(fixtureRoot, 'partial-exact-training-manifest.json');
+writeFileSync(partialExactManifestPath, `${JSON.stringify(partialExactManifest, null, 2)}\n`);
+const partialExactOutputDir = join(fixtureRoot, 'partial-exact-runtime');
+const rejectedExact = spawnSync(python, [
+  fileURLToPath(scriptUrl),
+  '--exact-training-manifest', partialExactManifestPath,
+  '--state-id', 'coefficient-state-test',
+  '--output-dir', partialExactOutputDir,
+  '--grid', '3',
+], { encoding: 'utf8', timeout: 30_000 });
+assert.notEqual(rejectedExact.status, 0, 'partial exact coefficient state must fail closed');
+const exactFailure = JSON.parse(readFileSync(join(partialExactOutputDir, 'runtime-overlay.json'), 'utf8'));
+assert.equal(exactFailure.status, 'failed');
+assert.equal(exactFailure.failurePhase, 'package-exact-runtime-overlay');
+assert.match(exactFailure.reason, /exact coefficient shape drifted/);
 
 console.log('volume layer coefficient live-union remap contracts passed');
