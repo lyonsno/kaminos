@@ -332,6 +332,9 @@ expectRejected('cached output', report => { report.states[0].arms[1].capture.fre
 expectRejected('reused HDR payload', report => {
   report.states[1].arms[1].capture.linearHdrSha256 = report.states[0].arms[1].capture.linearHdrSha256;
 }, 'capture-sha256-reused-across-states');
+expectRejected('full payload reused as sparse drop', report => {
+  report.states[0].arms[1].capture.linearHdrSha256 = report.states[0].arms[0].capture.linearHdrSha256;
+}, 'drop-capture-aliases-nondrop-arm');
 expectRejected('blank output', report => { report.states[0].arms[1].capture.litPixels = 0; }, 'blank-capture');
 expectRejected('partial HDR output', report => { report.states[0].arms[1].capture.rgbaFloatCount -= 4; }, 'capture-payload-partial');
 expectRejected('missing capture nonce', report => { report.states[0].arms[1].capture.captureNonce = ''; }, 'capture-nonce-missing');
