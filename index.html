@@ -10257,6 +10257,7 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
     supportGeometryCount: gpuState.playground?.supportGeometryCount,
     playground: gpuState.playground,
     playgroundZoneDiagnostics: gpuState.playgroundZoneDiagnostics,
+    laminarInletDiagnostics: gpuState.laminarInletDiagnostics,
     interfaceCarrier: gpuState.interfaceCarrier,
     activeExtent3d: gpuState.diagnostics?.activeExtent3d || null,
   });
@@ -10271,6 +10272,9 @@ async function startFingerFluidBench() {
     const canvas = document.getElementById('finger-fluid-bench-canvas');
     try {
       fingerFluidBenchConfig = fingerFluidBenchConfigFromRoute();
+      if (fingerFluidBenchConfig.effectiveTruthScene === 'laminar_inlets') {
+        fingerFluidBenchCamera = { yaw: -0.46, pitch: 0.38, distance: 5.35, target: [0, -0.28, -0.72] };
+      }
     } catch (error) {
       fingerFluidBenchState = createFingerFluidBenchState({
         status: 'error',

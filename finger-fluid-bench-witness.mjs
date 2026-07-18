@@ -1114,16 +1114,19 @@ async function main() {
     if (lastDebugState.runtime?.particleShiftContract !== 'wgsl-opt-in-support-tangential-particle-shift-v0') throw new Error(`particle-shift contract mismatch: ${lastDebugState.runtime?.particleShiftContract}`);
     if (lastDebugState.runtime?.chemistryContract !== 'wgsl-passive-material-tracer-diffusion-v0') throw new Error(`passive tracer contract mismatch: ${lastDebugState.runtime?.chemistryContract}`);
     const requestedRoute = new URL(url);
+    const requestedTruthScene = requestedRoute.searchParams.get('finger_fluid_truth_scene') || 'multi_regime_playground';
     const requestedColorMode = requestedRoute.searchParams.get('finger_fluid_color_mode') || 'phase';
     const requestedRendererMode = requestedRoute.searchParams.get('finger_fluid_renderer') || 'screen_space_surface';
     const requestedOpticalDebugMode = requestedRoute.searchParams.get('finger_fluid_optical_debug') || 'shaded';
     const requestedParticleShiftStrength = Number(requestedRoute.searchParams.get('finger_fluid_particle_shift') ?? 0);
     const requestedChemistryDiffusion = Number(requestedRoute.searchParams.get('finger_fluid_chemistry_diffusion') ?? 0);
+    const effectiveTruthScene = lastDebugState.runtime?.truthScene;
     const effectiveColorMode = lastDebugState.runtime?.effectiveColorMode;
     const effectiveRendererMode = lastDebugState.runtime?.effectiveRendererMode;
     const effectiveOpticalDebugMode = lastDebugState.runtime?.effectiveOpticalDebugMode;
     const effectiveParticleShiftStrength = lastDebugState.runtime?.effectiveParticleShiftStrength;
     const effectiveChemistryDiffusion = lastDebugState.runtime?.effectiveChemistryDiffusion;
+    if (requestedTruthScene !== effectiveTruthScene) throw new Error(`silent truth-scene fallback rejected: ${JSON.stringify({ requestedTruthScene, effectiveTruthScene })}`);
     if (requestedColorMode !== effectiveColorMode) throw new Error(`silent color-mode fallback rejected: ${JSON.stringify({ requestedColorMode, effectiveColorMode })}`);
     if (requestedRendererMode !== effectiveRendererMode) throw new Error(`renderer disagreement rejected: ${JSON.stringify({ requestedRendererMode, effectiveRendererMode, fallbackReason: lastDebugState.runtime?.fallbackReason })}`);
     if (requestedOpticalDebugMode !== effectiveOpticalDebugMode) throw new Error(`optical renderer disagreement rejected: ${JSON.stringify({ requestedOpticalDebugMode, effectiveOpticalDebugMode })}`);
@@ -1176,7 +1179,7 @@ async function main() {
       || playground.supportGeometryCountUnit !== 'vertices'
       || playground.terrainVertexCount <= 0
       || playground.obstacleVertexCount <= 0
-      || playground.supportGeometryCount !== playground.terrainVertexCount + playground.obstacleVertexCount
+      || playground.supportGeometryCount !== playground.terrainVertexCount + playground.obstacleVertexCount + (playground.inletFixtureVertexCount || 0)
       || playground.particleSupportDrawCount !== 0
     ) {
       throw new Error(`shared analytic playground presentation is missing or stale: ${JSON.stringify(playground)}`);
@@ -1275,46 +1278,95 @@ async function main() {
     if (!Number.isFinite(averageSupportedTangentialSpeed) || averageSupportedTangentialSpeed < 0.32) {
       throw new Error(`supported transport lacks material tangential speed: ${JSON.stringify({ averageSupportedTangentialSpeed })}`);
     }
-    const zoneDiagnostics = lastDebugState.runtime?.playgroundZoneDiagnostics;
-    if (zoneDiagnostics?.schema !== 'kaminos.finger-fluid.playground-zone-diagnostics.v0') throw new Error(`playground zone diagnostics missing: ${JSON.stringify(zoneDiagnostics)}`);
-    const minimumMaterialOccupancy = Math.ceil(lastDebugState.runtime.particleCount * 0.01);
-    if (zoneDiagnostics.materialOccupancyThreshold !== minimumMaterialOccupancy) throw new Error(`playground material-occupancy threshold is not source-honest: ${JSON.stringify(zoneDiagnostics)}`);
-    if (zoneDiagnostics.materiallyOccupiedZoneCount < 5) throw new Error(`playground did not retain five materially occupied regimes: ${JSON.stringify(zoneDiagnostics)}`);
-    if (lastDebugState.runtime?.sourceRecirculationCount < 1) throw new Error(`finite source recirculation did not execute: ${lastDebugState.runtime?.sourceRecirculationCount}`);
-    if (zoneDiagnostics.particleCount !== lastDebugState.runtime.particleCount || zoneDiagnostics.zones?.length !== 6) {
-      throw new Error(`playground zone accounting is incomplete: ${JSON.stringify(zoneDiagnostics)}`);
-    }
-    const zonesByName = new Map(zoneDiagnostics.zones.map(zone => [zone.name, zone]));
-    const requireZone = name => {
-      const zone = zonesByName.get(name);
-      if (!zone) throw new Error(`required playground zone is missing: ${name}`);
-      return zone;
-    };
-    const sourceShelf = requireZone('source_shelf');
-    const spillway = requireZone('spillway');
-    if (sourceShelf.averageKineticEnergy < 0.55 || sourceShelf.activeTransportRatio < 0.55) {
-      throw new Error(`source-shelf transport fell below the absolute motion floor: ${JSON.stringify(sourceShelf)}`);
-    }
-    if (spillway.averageKineticEnergy < 0.35 || spillway.activeTransportRatio < 0.4) {
-      throw new Error(`spillway transport fell below the absolute motion floor: ${JSON.stringify(spillway)}`);
-    }
-    const meanZoneEnergy = names => names.reduce((sum, name) => sum + (zonesByName.get(name)?.averageKineticEnergy || 0), 0) / names.length;
-    const settledPoolNames = ['shallow_pool', 'deep_pool', 'catch_basin'];
-    const settledPools = settledPoolNames.map(requireZone);
-    const receivingTransportZones = ['shallow_pool', 'deep_pool', 'obstacle_channel', 'catch_basin']
-      .map(requireZone)
-      .filter(zone => zone.supportedTransportParticleCount >= 24 && zone.averageSupportedTangentialSpeed >= 0.3);
-    if (receivingTransportZones.length < 2) {
-      throw new Error(`support-adjacent transport did not spread through two receiving regimes: ${JSON.stringify(receivingTransportZones)}`);
-    }
-    const quietSupportedPoolCount = settledPools.filter(zone => zone.averageKineticEnergy <= 0.12 && zone.supportedRestingRatio >= 0.12).length;
-    if (!compositionRequested && quietSupportedPoolCount < 2) {
-      throw new Error(`supported rest did not become local and quiet in at least two pools: ${JSON.stringify(settledPools)}`);
-    }
-    const settledPoolAverageEnergy = meanZoneEnergy(settledPoolNames);
-    const activeTransportAverageEnergy = meanZoneEnergy(['source_shelf', 'spillway']);
-    if (!Number.isFinite(settledPoolAverageEnergy) || !Number.isFinite(activeTransportAverageEnergy) || activeTransportAverageEnergy <= settledPoolAverageEnergy * 4) {
-      throw new Error(`rest-state relaxation did not separate supported pools from active transport: ${JSON.stringify({ settledPoolAverageEnergy, activeTransportAverageEnergy })}`);
+    if (effectiveTruthScene === 'multi_regime_playground') {
+      const zoneDiagnostics = lastDebugState.runtime?.playgroundZoneDiagnostics;
+      if (zoneDiagnostics?.schema !== 'kaminos.finger-fluid.playground-zone-diagnostics.v0') throw new Error(`playground zone diagnostics missing: ${JSON.stringify(zoneDiagnostics)}`);
+      const minimumMaterialOccupancy = Math.ceil(lastDebugState.runtime.particleCount * 0.01);
+      if (zoneDiagnostics.materialOccupancyThreshold !== minimumMaterialOccupancy) throw new Error(`playground material-occupancy threshold is not source-honest: ${JSON.stringify(zoneDiagnostics)}`);
+      if (zoneDiagnostics.materiallyOccupiedZoneCount < 5) throw new Error(`playground did not retain five materially occupied regimes: ${JSON.stringify(zoneDiagnostics)}`);
+      if (lastDebugState.runtime?.sourceRecirculationCount < 1) throw new Error(`finite source recirculation did not execute: ${lastDebugState.runtime?.sourceRecirculationCount}`);
+      if (zoneDiagnostics.particleCount !== lastDebugState.runtime.particleCount || zoneDiagnostics.zones?.length !== 6) {
+        throw new Error(`playground zone accounting is incomplete: ${JSON.stringify(zoneDiagnostics)}`);
+      }
+      const zonesByName = new Map(zoneDiagnostics.zones.map(zone => [zone.name, zone]));
+      const requireZone = name => {
+        const zone = zonesByName.get(name);
+        if (!zone) throw new Error(`required playground zone is missing: ${name}`);
+        return zone;
+      };
+      const sourceShelf = requireZone('source_shelf');
+      const spillway = requireZone('spillway');
+      if (sourceShelf.averageKineticEnergy < 0.55 || sourceShelf.activeTransportRatio < 0.55) {
+        throw new Error(`source-shelf transport fell below the absolute motion floor: ${JSON.stringify(sourceShelf)}`);
+      }
+      if (spillway.averageKineticEnergy < 0.35 || spillway.activeTransportRatio < 0.4) {
+        throw new Error(`spillway transport fell below the absolute motion floor: ${JSON.stringify(spillway)}`);
+      }
+      const meanZoneEnergy = names => names.reduce((sum, name) => sum + (zonesByName.get(name)?.averageKineticEnergy || 0), 0) / names.length;
+      const settledPoolNames = ['shallow_pool', 'deep_pool', 'catch_basin'];
+      const settledPools = settledPoolNames.map(requireZone);
+      const receivingTransportZones = ['shallow_pool', 'deep_pool', 'obstacle_channel', 'catch_basin']
+        .map(requireZone)
+        .filter(zone => zone.supportedTransportParticleCount >= 24 && zone.averageSupportedTangentialSpeed >= 0.3);
+      if (receivingTransportZones.length < 2) {
+        throw new Error(`support-adjacent transport did not spread through two receiving regimes: ${JSON.stringify(receivingTransportZones)}`);
+      }
+      const quietSupportedPoolCount = settledPools.filter(zone => zone.averageKineticEnergy <= 0.12 && zone.supportedRestingRatio >= 0.12).length;
+      if (!compositionRequested && quietSupportedPoolCount < 2) {
+        throw new Error(`supported rest did not become local and quiet in at least two pools: ${JSON.stringify(settledPools)}`);
+      }
+      const settledPoolAverageEnergy = meanZoneEnergy(settledPoolNames);
+      const activeTransportAverageEnergy = meanZoneEnergy(['source_shelf', 'spillway']);
+      if (!Number.isFinite(settledPoolAverageEnergy) || !Number.isFinite(activeTransportAverageEnergy) || activeTransportAverageEnergy <= settledPoolAverageEnergy * 4) {
+        throw new Error(`rest-state relaxation did not separate supported pools from active transport: ${JSON.stringify({ settledPoolAverageEnergy, activeTransportAverageEnergy })}`);
+      }
+    } else if (effectiveTruthScene === 'laminar_inlets') {
+      const laminarInlets = lastDebugState.runtime?.laminarInlets;
+      const inletDiagnostics = lastDebugState.runtime?.laminarInletDiagnostics;
+      if (lastDebugState.runtime?.laminarInletContract !== 'wgsl-descriptor-laminar-inlet-recycling-v0'
+        || laminarInlets?.requestedMode !== 'descriptor_laminar_inlets'
+        || laminarInlets?.effectiveMode !== 'descriptor_laminar_inlets') {
+        throw new Error(`laminar inlet route identity mismatch: ${JSON.stringify({ contract: lastDebugState.runtime?.laminarInletContract, laminarInlets })}`);
+      }
+      if (inletDiagnostics?.schema !== 'kaminos.finger-fluid.laminar-inlet-diagnostics.v0'
+        || inletDiagnostics.contract !== 'wgsl-descriptor-laminar-inlet-recycling-v0'
+        || inletDiagnostics.particleCount !== lastDebugState.runtime.particleCount
+        || inletDiagnostics.accountedParticleCount !== lastDebugState.runtime.particleCount
+        || inletDiagnostics.inlets?.length !== 3) {
+        throw new Error(`laminar inlet diagnostics missing or partial: ${JSON.stringify(inletDiagnostics)}`);
+      }
+      if (lastDebugState.runtime?.sourceRecirculationCount < 1) throw new Error(`finite laminar inlet reservoir did not recycle: ${lastDebugState.runtime?.sourceRecirculationCount}`);
+      const inletFixtures = lastDebugState.runtime?.playground?.inletFixtures;
+      if (lastDebugState.runtime?.playground?.inletFixtureContract !== 'wgsl-analytic-laminar-inlet-fixture-presentation-v0'
+        || lastDebugState.runtime?.playground?.inletFixtureCollisionMode !== 'implicit_prescribed_inlet_core_no_separate_mesh_collision_v0'
+        || lastDebugState.runtime?.playground?.inletFixtureVertexCount <= 0
+        || inletFixtures?.length !== 3
+        || inletFixtures.reduce((sum, fixture) => sum + fixture.vertexCount, 0) !== lastDebugState.runtime.playground.inletFixtureVertexCount
+        || inletFixtures[2]?.presentation !== 'homogenized_visual_boundary_not_resolved_pore_geometry') {
+        throw new Error(`laminar inlet fixture presentation is missing or falsely resolved: ${JSON.stringify(lastDebugState.runtime?.playground)}`);
+      }
+      const expectedProfiles = ['round_poiseuille', 'slot_poiseuille', 'porous_darcy'];
+      for (const [sourceIndex, inlet] of inletDiagnostics.inlets.entries()) {
+        if (inlet.profile !== expectedProfiles[sourceIndex]
+          || inlet.taggedParticleCount !== inlet.expectedParticleCount
+          || inlet.allocationErrorRatio !== 0
+          || inlet.inletCoreParticleCount < 32
+          || inlet.mouthParticleCount < 16) {
+          throw new Error(`laminar inlet source accounting is incomplete: ${JSON.stringify(inlet)}`);
+        }
+        if (!Number.isFinite(inlet.profileNormalizedRmse) || inlet.profileNormalizedRmse > 0.18 || inlet.positiveAxialFlowRatio < 0.9) {
+          throw new Error(`laminar inlet profile fit escaped its analytic contract: ${JSON.stringify(inlet)}`);
+        }
+        if (!Number.isFinite(inlet.fluxRelativeError) || inlet.fluxRelativeError > 0.2 || inlet.measuredFlux <= 0 || inlet.expectedFlux <= 0) {
+          throw new Error(`laminar inlet flux escaped its analytic contract: ${JSON.stringify(inlet)}`);
+        }
+        if (!Number.isFinite(inlet.meanCrossflowRatio) || inlet.meanCrossflowRatio > 0.12) {
+          throw new Error(`laminar inlet developed material crossflow before release: ${JSON.stringify(inlet)}`);
+        }
+      }
+      if (inletDiagnostics.inlets[2].resolutionMode !== 'homogenized_sub_kernel_porous_flux') {
+        throw new Error(`porous inlet falsely claims individually resolved pores: ${JSON.stringify(inletDiagnostics.inlets[2])}`);
+      }
     }
     const interfaceCarrier = lastDebugState.runtime?.interfaceCarrier;
     if (interfaceCarrier?.schema !== 'kaminos.liquid-interface-carrier.v0') throw new Error(`interface carrier schema mismatch: ${interfaceCarrier?.schema}`);
