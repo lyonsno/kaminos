@@ -195,6 +195,7 @@
     } from './structural-material-3d-webgpu-bind.js';
     import {
       DEFAULT_STRUCTURAL_MATERIAL_NATIVE_HAPTIC_URL,
+      buildLayeredStructuralBindContactPreview,
       buildLayeredStructuralHapticImpulse,
       buildLayeredStructuralPickedBinding,
       createStructuralInteractionModeController,
@@ -302,6 +303,7 @@
     let dragStart = null;
     let latestStructuralPick = null;
     let forceEnvelope = null;
+    let bindContactPreview = null;
     let lastPoint = { x: 0.92, y: 0.52, z: 0.85 };
     const cameraInvariantViolations = [];
     let gpuParityReceipt = null;
@@ -322,6 +324,8 @@
     let renderedMotionSequence = 0;
     const renderedMotionLedger = [];
     const renderedMotionAuditErrors = [];
+    let renderSequence = 0;
+    const renderTimingLedger = [];
     let gpuHotSidecar = null;
     let gpuHotSidecarPromise = null;
     let hapticImpulseCount = 0;
@@ -374,9 +378,13 @@
       return new THREE.Line(geometry, lineMaterial);
     }
 
-    function geometryForEffigyFace(face) {
+    function geometryForEffigyFace(face, previewOffset = null) {
       const positions = new Float32Array(face.currentVertices.flatMap(vertex => {
-        const rendered = worldCoordinate(vertex);
+        const rendered = worldCoordinate({
+          x: vertex.x + (previewOffset?.x || 0),
+          y: vertex.y + (previewOffset?.y || 0),
+          z: vertex.z + (previewOffset?.z || 0),
+        });
         return [rendered.x, rendered.y, rendered.z];
       }));
       const geometry = new THREE.BufferGeometry();
@@ -386,8 +394,47 @@
       return geometry;
     }
 
+    function updateForceIndicator() {
+      let forceLine = world.children.find(child => child.userData.forceIndicatorKind === 'line');
+      let forceContact = world.children.find(child => child.userData.forceIndicatorKind === 'contact');
+      if (!forceEnvelope) {
+        if (forceLine) forceLine.visible = false;
+        if (forceContact) forceContact.visible = false;
+        return;
+      }
+      const contactPoint = forceEnvelope.displayPoint || forceEnvelope.start || forceEnvelope.point;
+      const visualEnd = forceEnvelope.visualEnd || forceEnvelope.point;
+      const start = worldCoordinate(contactPoint);
+      const end = worldCoordinate(visualEnd);
+      if (!forceLine) {
+        forceLine = lineBetween(start, end, forceMaterial);
+        forceLine.userData.forceIndicatorKind = 'line';
+        world.add(forceLine);
+      } else {
+        const position = forceLine.geometry.getAttribute('position');
+        position.setXYZ(0, start.x, start.y, start.z);
+        position.setXYZ(1, end.x, end.y, end.z);
+        position.needsUpdate = true;
+      }
+      forceLine.visible = true;
+      if (!forceContact) {
+        forceContact = new THREE.Mesh(new THREE.SphereGeometry(0.055, 18, 10), forceNodeMaterial);
+        forceContact.userData.forceIndicatorKind = 'contact';
+        world.add(forceContact);
+      }
+      forceContact.position.copy(start);
+      forceContact.scale.setScalar((0.055 + forceEnvelope.radius * 0.05) / 0.055);
+      forceContact.visible = true;
+    }
+
     function renderMaterial() {
       clearWorld();
+      bindContactPreview = forceEnvelope?.operationMode === 'bind' && materialPointerId !== null
+        ? buildLayeredStructuralBindContactPreview(material, forceEnvelope)
+        : null;
+      const bindPreviewOffsetByNodeId = new Map(
+        (bindContactPreview?.nodeOffsets || []).map(entry => [entry.nodeId, entry.offset]),
+      );
       const previousGeometrySidecar = geometrySidecar;
       const nextGeometrySidecar = buildEffigyTileGeometrySidecar(material, { profile: 'rib-upper-v0' });
       if (nextGeometrySidecar.status !== 'passed') {
@@ -437,7 +484,10 @@
                 : nodeStress / maxStress > 0.42
                   ? tileStressedMaterial
                   : tileShellMaterial;
-        const mesh = new THREE.Mesh(geometryForEffigyFace(face), faceMaterial);
+        const mesh = new THREE.Mesh(
+          geometryForEffigyFace(face, bindPreviewOffsetByNodeId.get(face.structuralNodeId)),
+          faceMaterial,
+        );
         mesh.userData.effigySurfacePick = {
           authority: EFFIGY_TILE_GEOMETRY_AUTHORITY,
           faceId: face.id,
@@ -446,8 +496,20 @@
         world.add(mesh);
       }
       for (const bond of material.bonds) {
-        const a = worldPoint(nodeById.get(bond.a));
-        const b = worldPoint(nodeById.get(bond.b));
+        const nodeA = nodeById.get(bond.a);
+        const nodeB = nodeById.get(bond.b);
+        const offsetA = bindPreviewOffsetByNodeId.get(bond.a);
+        const offsetB = bindPreviewOffsetByNodeId.get(bond.b);
+        const a = worldCoordinate({
+          x: nodeA.x + nodeA.displacement.x + (offsetA?.x || 0),
+          y: nodeA.y + nodeA.displacement.y + (offsetA?.y || 0),
+          z: nodeA.z + nodeA.displacement.z + (offsetA?.z || 0),
+        });
+        const b = worldCoordinate({
+          x: nodeB.x + nodeB.displacement.x + (offsetB?.x || 0),
+          y: nodeB.y + nodeB.displacement.y + (offsetB?.y || 0),
+          z: nodeB.z + nodeB.displacement.z + (offsetB?.z || 0),
+        });
         const stress = (bond.lastStress || 0) / maxStress;
         const lineMaterial = bond.alive
           ? bond.bondKind === 'depth'
@@ -467,22 +529,18 @@
           nodeGeometry,
           node.pinned ? pinnedMaterial : node.componentId === anchoredComponentId ? nodeMaterial : looseMaterial,
         );
-        mesh.position.copy(worldPoint(node));
+        const previewOffset = bindPreviewOffsetByNodeId.get(node.id);
+        mesh.position.copy(worldCoordinate({
+          x: node.x + node.displacement.x + (previewOffset?.x || 0),
+          y: node.y + node.displacement.y + (previewOffset?.y || 0),
+          z: node.z + node.displacement.z + (previewOffset?.z || 0),
+        }));
         mesh.scale.setScalar(node.pinned ? 1.32 : 1);
         mesh.userData.structuralPick = { kind: 'node', id: node.id };
         mesh.visible = showStructuralOverlay;
         world.add(mesh);
       }
-      if (forceEnvelope) {
-        const contactPoint = forceEnvelope.displayPoint || forceEnvelope.start || forceEnvelope.point;
-        const visualEnd = forceEnvelope.visualEnd || forceEnvelope.point;
-        const start = new THREE.Vector3((contactPoint.x - 0.5) * 2.35, (0.5 - contactPoint.y) * 1.25, (contactPoint.z - 0.5) * 0.95);
-        const end = new THREE.Vector3((visualEnd.x - 0.5) * 2.35, (0.5 - visualEnd.y) * 1.25, (visualEnd.z - 0.5) * 0.95);
-        world.add(lineBetween(start, end, forceMaterial));
-        const contact = new THREE.Mesh(new THREE.SphereGeometry(0.055 + forceEnvelope.radius * 0.05, 18, 10), forceNodeMaterial);
-        contact.position.copy(start);
-        world.add(contact);
-      }
+      updateForceIndicator();
     }
 
     function renderedStructuralNodeSnapshot(materialState = material) {
@@ -669,14 +727,162 @@
       };
     }
 
+    function visibleBindContactPreview() {
+      if (!bindContactPreview) return null;
+      const offsetByNodeId = new Map(bindContactPreview.nodeOffsets.map(entry => [entry.nodeId, entry.offset]));
+      const nodeById = new Map(material.nodes.map(node => [node.id, node]));
+      world.updateMatrixWorld(true);
+      let renderedMaxAcceptedDelta = 0;
+      let renderedMaxPreviewError = 0;
+      for (const child of world.children) {
+        const nodeId = child.userData.structuralPick?.kind === 'node'
+          ? child.userData.structuralPick.id
+          : null;
+        if (!nodeId || !offsetByNodeId.has(nodeId)) continue;
+        const node = nodeById.get(nodeId);
+        const offset = offsetByNodeId.get(nodeId);
+        const actual = child.getWorldPosition(new THREE.Vector3());
+        const accepted = world.localToWorld(worldPoint(node));
+        const expectedPreview = world.localToWorld(worldCoordinate({
+          x: node.x + node.displacement.x + offset.x,
+          y: node.y + node.displacement.y + offset.y,
+          z: node.z + node.displacement.z + offset.z,
+        }));
+        renderedMaxAcceptedDelta = Math.max(renderedMaxAcceptedDelta, actual.distanceTo(accepted));
+        renderedMaxPreviewError = Math.max(renderedMaxPreviewError, actual.distanceTo(expectedPreview));
+      }
+      return {
+        ...structuredClone(bindContactPreview),
+        renderedMaxAcceptedDelta,
+        renderedMaxPreviewError,
+        structuralMutationAuthority: false,
+      };
+    }
+
+    function offsetsDiffer(a, b) {
+      return ['x', 'y', 'z'].some(axis => Math.abs((a?.[axis] || 0) - (b?.[axis] || 0)) > 0.000000001);
+    }
+
+    function updateBindPreviewGeometry() {
+      const previousOffsets = new Map(
+        (bindContactPreview?.nodeOffsets || []).map(entry => [entry.nodeId, entry.offset]),
+      );
+      bindContactPreview = buildLayeredStructuralBindContactPreview(material, forceEnvelope);
+      const nextOffsets = new Map(bindContactPreview.nodeOffsets.map(entry => [entry.nodeId, entry.offset]));
+      const changedNodeIds = new Set([...previousOffsets.keys(), ...nextOffsets.keys()].filter(nodeId =>
+        offsetsDiffer(previousOffsets.get(nodeId), nextOffsets.get(nodeId))));
+      const nodeById = new Map(material.nodes.map(node => [node.id, node]));
+      const bondById = new Map(material.bonds.map(bond => [bond.id, bond]));
+      const faceById = new Map(geometrySidecar.faces.map(face => [face.id, face]));
+
+      for (const child of world.children) {
+        const facePick = child.userData.effigySurfacePick;
+        if (facePick && changedNodeIds.has(facePick.structuralNodeId)) {
+          const face = faceById.get(facePick.faceId);
+          const offset = nextOffsets.get(facePick.structuralNodeId);
+          const position = child.geometry.getAttribute('position');
+          face.currentVertices.forEach((vertex, index) => {
+            const rendered = worldCoordinate({
+              x: vertex.x + (offset?.x || 0),
+              y: vertex.y + (offset?.y || 0),
+              z: vertex.z + (offset?.z || 0),
+            });
+            position.setXYZ(index, rendered.x, rendered.y, rendered.z);
+          });
+          position.needsUpdate = true;
+          child.geometry.computeVertexNormals();
+          continue;
+        }
+
+        const structuralPick = child.userData.structuralPick;
+        if (structuralPick?.kind === 'node' && changedNodeIds.has(structuralPick.id)) {
+          const node = nodeById.get(structuralPick.id);
+          const offset = nextOffsets.get(node.id);
+          child.position.copy(worldCoordinate({
+            x: node.x + node.displacement.x + (offset?.x || 0),
+            y: node.y + node.displacement.y + (offset?.y || 0),
+            z: node.z + node.displacement.z + (offset?.z || 0),
+          }));
+          continue;
+        }
+        if (structuralPick?.kind === 'bond') {
+          const bond = bondById.get(structuralPick.id);
+          if (!changedNodeIds.has(bond.a) && !changedNodeIds.has(bond.b)) continue;
+          const nodeA = nodeById.get(bond.a);
+          const nodeB = nodeById.get(bond.b);
+          const offsetA = nextOffsets.get(bond.a);
+          const offsetB = nextOffsets.get(bond.b);
+          const a = worldCoordinate({
+            x: nodeA.x + nodeA.displacement.x + (offsetA?.x || 0),
+            y: nodeA.y + nodeA.displacement.y + (offsetA?.y || 0),
+            z: nodeA.z + nodeA.displacement.z + (offsetA?.z || 0),
+          });
+          const b = worldCoordinate({
+            x: nodeB.x + nodeB.displacement.x + (offsetB?.x || 0),
+            y: nodeB.y + nodeB.displacement.y + (offsetB?.y || 0),
+            z: nodeB.z + nodeB.displacement.z + (offsetB?.z || 0),
+          });
+          const position = child.geometry.getAttribute('position');
+          position.setXYZ(0, a.x, a.y, a.z);
+          position.setXYZ(1, b.x, b.y, b.z);
+          position.needsUpdate = true;
+        }
+      }
+      updateForceIndicator();
+    }
+
+    function recordRenderTiming(renderPath, startedAt, materialCompletedAt, readoutCompletedAt, completedAt) {
+      const entry = {
+        sequence: ++renderSequence,
+        renderPath,
+        operationMode: structuralInteractionMode.snapshot().mode,
+        pointerActive: materialPointerId !== null,
+        bindPreviewActive: bindContactPreview?.status === 'active',
+        materialRebuildMs: materialCompletedAt - startedAt,
+        readoutMs: readoutCompletedAt - materialCompletedAt,
+        sceneSubmissionMs: completedAt - readoutCompletedAt,
+        totalMs: completedAt - startedAt,
+      };
+      renderTimingLedger.push(entry);
+      return entry;
+    }
+
     function renderScene() {
       renderer.render(scene, camera);
     }
 
     function render() {
+      const startedAt = performance.now();
       renderMaterial();
+      const materialCompletedAt = performance.now();
       updateReadout();
+      const readoutCompletedAt = performance.now();
       renderScene();
+      const completedAt = performance.now();
+      return recordRenderTiming(
+        'full-structural-rebuild',
+        startedAt,
+        materialCompletedAt,
+        readoutCompletedAt,
+        completedAt,
+      );
+    }
+
+    function renderBindPreview() {
+      const startedAt = performance.now();
+      updateBindPreviewGeometry();
+      const materialCompletedAt = performance.now();
+      updateReadout();
+      const readoutCompletedAt = performance.now();
+      renderScene();
+      const completedAt = performance.now();
+      return recordRenderTiming(
+        'incremental-bind-preview',
+        startedAt,
+        materialCompletedAt,
+        readoutCompletedAt,
+        completedAt,
+      );
     }
 
     controls.addEventListener('change', renderScene);
@@ -706,7 +912,7 @@
       camera.updateProjectionMatrix();
     }
 
-    function runStructuralMutation(action, mutation) {
+    function runStructuralMutation(action, mutation, renderConsumer = render) {
       const before = cameraState();
       const result = mutation();
       const after = cameraState();
@@ -715,7 +921,7 @@
         cameraInvariantViolations.push({ action, before, after });
         throw new Error(`structural action changed operator camera state: ${action}`);
       }
-      render();
+      renderConsumer();
       return result;
     }
 
@@ -871,6 +1077,9 @@
     }
 
     function applyDrag(point) {
+      const renderConsumer = dragStart?.operationMode === 'bind'
+        ? renderBindPreview
+        : render;
       return runStructuralMutation('material-drag', () => {
         forceEnvelope = {
           ...createLayeredStructuralPickedDragInteraction({
@@ -888,7 +1097,7 @@
         };
         lastPoint = forceEnvelope.point;
         return forceEnvelope;
-      });
+      }, renderConsumer);
     }
 
     function consumeLiveDragPromise(promise, failurePhase) {
@@ -1201,8 +1410,7 @@
       if (!selection.changed) return selection;
       cancelMaterialGesture();
       updateStructuralInteractionModeControls();
-      updateReadout();
-      renderScene();
+      render();
       return selection;
     }
 
@@ -1282,6 +1490,7 @@
       event.stopImmediatePropagation();
       cancelMaterialGesture();
       synchronizeHotSidecar(material);
+      render();
     }, true);
     document.querySelector('#reset').addEventListener('click', () => {
       runStructuralMutation('reset', () => {
@@ -1378,6 +1587,9 @@
       visibleTear: visibleTearState(),
       sympatheticBinding: material.sympatheticBinding || null,
       visibleBinding: visibleBindingState(),
+      bindContactPreview: visibleBindContactPreview(),
+      renderTiming: renderTimingLedger.at(-1) || null,
+      renderTimingLedger: structuredClone(renderTimingLedger),
       renderedMotionTimeline: structuredClone(buildRenderedStructuralMotionTimeline({
         entries: renderedMotionLedger,
         constructionErrors: renderedMotionAuditErrors,

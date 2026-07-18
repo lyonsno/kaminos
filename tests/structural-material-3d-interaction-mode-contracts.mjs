@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { buildLayeredStructuralWitnessScenario } from '../structural-material-3d-core.js';
+
 const root = new URL('..', import.meta.url).pathname;
 const pageSource = readFileSync(join(root, 'structural-material-3d.html'), 'utf8');
 const hotSidecarSource = readFileSync(join(root, 'structural-material-3d-webgpu-hot-sidecar.js'), 'utf8');
@@ -18,6 +20,11 @@ assert.equal(
   typeof liveDrag.buildLayeredStructuralPickedBinding,
   'function',
   'Bind gestures need a pure picked-contact command rather than crack-midpoint fallback',
+);
+assert.equal(
+  typeof liveDrag.buildLayeredStructuralBindContactPreview,
+  'function',
+  'Bind needs an immediate visual contact response independent of GPU repair cadence',
 );
 
 const modes = liveDrag.createStructuralInteractionModeController();
@@ -65,6 +72,63 @@ assert.throws(
   () => liveDrag.buildLayeredStructuralPickedBinding({ operationMode: 'shear' }),
   /requires a bind-mode picked interaction/i,
 );
+
+const cracked = buildLayeredStructuralWitnessScenario().states.cracked;
+const previewNode = cracked.nodes
+  .filter(node => !node.pinned)
+  .sort((a, b) => Math.hypot(
+    b.displacement.x,
+    b.displacement.y,
+    b.displacement.z,
+  ) - Math.hypot(
+    a.displacement.x,
+    a.displacement.y,
+    a.displacement.z,
+  ))[0];
+const previewInteraction = {
+  operationMode: 'bind',
+  gestureId: 'preview-bind-1',
+  point: { x: previewNode.x, y: previewNode.y, z: previewNode.z },
+  radius: 0.28,
+  inputLoad: 0.72,
+  contactRamp: 1,
+  contactIdentity: {
+    authority: 'stable-rest-material-contact-v0',
+    kind: 'node',
+    id: previewNode.id,
+    segmentT: null,
+  },
+};
+const beforeConnectivity = cracked.bonds.map(bond => ({
+  id: bond.id,
+  alive: bond.alive,
+  repaired: bond.repaired,
+}));
+const bindPreview = liveDrag.buildLayeredStructuralBindContactPreview(cracked, previewInteraction);
+assert.equal(bindPreview.status, 'active');
+assert.equal(bindPreview.authority, 'visual-only-bind-contact-compliance-not-connectivity-v0');
+assert.equal(bindPreview.sourceTopologyEpoch, cracked.topologyEpoch);
+assert.equal(bindPreview.sourceConnectivityEpoch, cracked.connectivityEpoch);
+assert.ok(bindPreview.maxOffset > 0, 'active Bind produces visible pre-repair compliance');
+assert.ok(bindPreview.nodeOffsets.some(entry => entry.nodeId === previewNode.id && entry.weight === 1));
+const contactOffset = bindPreview.nodeOffsets.find(entry => entry.nodeId === previewNode.id).offset;
+assert.ok(
+  contactOffset.x * previewNode.displacement.x +
+    contactOffset.y * previewNode.displacement.y +
+    contactOffset.z * previewNode.displacement.z < 0,
+  'Bind preview moves displaced material toward rest rather than farther apart',
+);
+assert.deepEqual(
+  cracked.bonds.map(bond => ({ id: bond.id, alive: bond.alive, repaired: bond.repaired })),
+  beforeConnectivity,
+  'visual Bind compliance cannot mutate source connectivity',
+);
+const zeroPreview = liveDrag.buildLayeredStructuralBindContactPreview(cracked, {
+  ...previewInteraction,
+  inputLoad: 0,
+  contactRamp: 0,
+});
+assert.equal(zeroPreview.maxOffset, 0, 'zero-input Bind cannot visually counterfeit repair');
 
 assert.match(pageSource, /role="group"[^>]*aria-label="Structural operation"/, 'operation buttons expose one grouped mode selector');
 assert.match(pageSource, /id="fracture"[^>]*aria-pressed="true"/, 'Shear is visibly and accessibly selected by default');
@@ -119,7 +183,13 @@ assert.match(
   /residentPageBindingAgreementAfterCancel/,
   'browser evidence compares resident connectivity with the page after cancelled Bind rollback',
 );
-assert.match(greenroomSource, /bind-interaction-mode-greenroom-r5/, 'Bind invalidation evidence has a dedicated non-overwriting Greenroom artifact identity');
+assert.match(pageSource, /visibleBindContactPreview/, 'the product witness exposes visual-only Bind compliance separately from structural state');
+assert.match(pageSource, /renderTimingLedger/, 'the product witness separates material rebuild and scene submission timing');
+assert.match(witnessSource, /bindPreviewPrecededGpuAcceptance/, 'browser evidence requires shell response before held GPU Bind acceptance');
+assert.match(witnessSource, /bindPreviewAdvancedWhileGpuHeld/, 'browser evidence requires multiple immediate preview states during one held GPU transaction');
+assert.match(witnessSource, /bindPreviewRenderWithinFrameBudget/, 'browser evidence rejects a preview path that misses one 60 Hz frame before GPU acceptance');
+assert.match(witnessSource, /bindPreviewPreservedConnectivity/, 'browser evidence rejects preview-authored connectivity');
+assert.match(greenroomSource, /bind-interaction-mode-greenroom-r9/, 'continuous Bind response has a dedicated non-overwriting Greenroom artifact identity');
 assert.match(greenroomSource, /structural-material-3d-resident-solver-greenroom-launch/, 'Bind mode evidence retains the accepted native-WebGPU route shield');
 assert.match(witnessSource, /visualState:\s*'post-picked-bind'/, 'visual evidence names the bound state whose color predicate it applies');
 assert.match(witnessSource, /capture:\s*lastCapture/, 'a failed pixel predicate still preserves the last trustworthy screenshot');

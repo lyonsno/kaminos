@@ -1,5 +1,6 @@
 export const STRUCTURAL_MATERIAL_3D_LIVE_DRAG_ROUTE = 'kaminos.structural-material.live-sympathetic-drag.v0';
 export const STRUCTURAL_MATERIAL_3D_INTERACTION_MODE_ROUTE = 'kaminos.structural-material.interaction-mode.v0';
+export const STRUCTURAL_MATERIAL_3D_BIND_CONTACT_PREVIEW_ROUTE = 'kaminos.structural-material.bind-contact-preview.v0';
 export const STRUCTURAL_MATERIAL_3D_HAPTIC_ROUTE = 'kaminos.structural-material.causal-haptics.v0';
 export const STRUCTURAL_MATERIAL_NATIVE_HAPTIC_ROUTE = 'kaminos.structural-material.native-trackpad-haptics.v0';
 export const DEFAULT_STRUCTURAL_MATERIAL_NATIVE_HAPTIC_URL = 'http://127.0.0.1:8396';
@@ -79,6 +80,79 @@ export function buildLayeredStructuralPickedBinding(interaction = {}) {
     radius: round(clamp(interaction.radius, 0.12, 0.34)),
     strength: round(clamp(0.85 + finite(interaction.inputLoad) * 0.8, 0.85, 1.65)),
     contactIdentity: { ...contactIdentity },
+  };
+}
+
+export function buildLayeredStructuralBindContactPreview(state, interaction = {}) {
+  if (interaction.operationMode !== 'bind') {
+    throw new Error('Bind contact preview requires a bind-mode picked interaction');
+  }
+  if (!Array.isArray(state?.nodes) || !Array.isArray(state?.bonds)) {
+    throw new Error('Bind contact preview requires structural state');
+  }
+  const point = interaction.point;
+  if (![point?.x, point?.y, point?.z].every(Number.isFinite)) {
+    throw new Error('Bind contact preview requires a finite rest-space contact point');
+  }
+  const radius = clamp(interaction.radius, 0.12, 0.34);
+  const inputLoad = clamp(interaction.inputLoad, 0, 1);
+  const contactRamp = clamp(interaction.contactRamp, 0, 1);
+  const influenceRadius = radius * 1.4;
+  const correctionScale = inputLoad * (0.35 + contactRamp * 0.45);
+  const contactIdentity = interaction.contactIdentity ? { ...interaction.contactIdentity } : null;
+  const exactContactNodeIds = new Set();
+  if (contactIdentity?.kind === 'node') exactContactNodeIds.add(contactIdentity.id);
+  if (contactIdentity?.kind === 'bond') {
+    const bond = state.bonds.find(candidate => candidate.id === contactIdentity.id);
+    if (bond) {
+      exactContactNodeIds.add(bond.a);
+      exactContactNodeIds.add(bond.b);
+    }
+  }
+
+  const nodeOffsets = state.nodes.flatMap(node => {
+    const distance = Math.hypot(node.x - point.x, node.y - point.y, node.z - point.z);
+    const spatialWeight = distance >= influenceRadius
+      ? 0
+      : (1 - distance / influenceRadius) ** 2;
+    const weight = exactContactNodeIds.has(node.id) ? 1 : spatialWeight;
+    const displacementMagnitude = Math.hypot(
+      finite(node.displacement?.x),
+      finite(node.displacement?.y),
+      finite(node.displacement?.z),
+    );
+    if (weight <= 0 || displacementMagnitude <= 0) return [];
+    const fraction = Math.min(0.8, correctionScale * weight);
+    return [{
+      nodeId: node.id,
+      weight: round(weight),
+      offset: {
+        x: round(-finite(node.displacement?.x) * fraction),
+        y: round(-finite(node.displacement?.y) * fraction),
+        z: round(-finite(node.displacement?.z) * fraction),
+      },
+    }];
+  });
+  const maxOffset = nodeOffsets.reduce((maximum, entry) => Math.max(
+    maximum,
+    Math.hypot(entry.offset.x, entry.offset.y, entry.offset.z),
+  ), 0);
+
+  return {
+    schema: 'kaminos.structural-material.bind-contact-preview.v0',
+    route: STRUCTURAL_MATERIAL_3D_BIND_CONTACT_PREVIEW_ROUTE,
+    authority: 'visual-only-bind-contact-compliance-not-connectivity-v0',
+    status: 'active',
+    gestureId: interaction.gestureId || null,
+    sourceTopologyEpoch: state.topologyEpoch,
+    sourceConnectivityEpoch: state.connectivityEpoch,
+    contactIdentity,
+    point: { x: round(point.x), y: round(point.y), z: round(point.z) },
+    radius: round(radius),
+    inputLoad: round(inputLoad),
+    correctionScale: round(correctionScale),
+    nodeOffsets,
+    maxOffset: round(maxOffset),
   };
 }
 

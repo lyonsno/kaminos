@@ -519,6 +519,108 @@ try {
     config.loadTimeoutMs,
     'GPU Bind never reached the post-execution cancellation boundary',
   );
+  const heldBindPreviewSamples = [];
+  let heldBindPreview = null;
+  for (const fraction of [0.34, 0.67, 1]) {
+    const samplePoint = {
+      x: cancelledBindDrag.start.x +
+        (cancelledBindDrag.end.x - cancelledBindDrag.start.x) * fraction,
+      y: cancelledBindDrag.start.y +
+        (cancelledBindDrag.end.y - cancelledBindDrag.start.y) * fraction,
+    };
+    await send('Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      ...samplePoint,
+      button: 'left',
+      buttons: 1,
+    });
+    await new Promise(resolveWait => setTimeout(resolveWait, 16));
+    heldBindPreview = await evaluate('window.__structuralMaterial3dWitness()');
+    heldBindPreviewSamples.push({
+      fraction,
+      inputLoad: heldBindPreview.bindContactPreview?.inputLoad ?? null,
+      maxOffset: heldBindPreview.bindContactPreview?.maxOffset ?? null,
+      renderedMaxAcceptedDelta:
+        heldBindPreview.bindContactPreview?.renderedMaxAcceptedDelta ?? null,
+      renderedMaxPreviewError:
+        heldBindPreview.bindContactPreview?.renderedMaxPreviewError ?? null,
+      summary: heldBindPreview.summary,
+      acceptedConnectivity: heldBindPreview.gpuHotSidecar?.acceptedConnectivity,
+      latestGpuOperation: heldBindPreview.latestGpuOperation,
+      scheduler: heldBindPreview.liveDrag?.scheduler,
+      renderTiming: heldBindPreview.renderTiming,
+    });
+  }
+  report.bindPreviewHeldGpuSamples = heldBindPreviewSamples;
+  report.bindPreviewDuringHeldGpuAcceptance = heldBindPreview.bindContactPreview;
+  report.checks.bindPreviewPrecededGpuAcceptance =
+    heldBindPreview.latestGpuOperation?.kind === 'binding' &&
+    heldBindPreview.latestGpuOperation?.status === 'pending' &&
+    heldBindPreview.bindContactPreview?.status === 'active' &&
+    heldBindPreview.bindContactPreview?.authority === 'visual-only-bind-contact-compliance-not-connectivity-v0' &&
+    heldBindPreview.bindContactPreview?.maxOffset > 0.000001 &&
+    heldBindPreview.bindContactPreview?.renderedMaxAcceptedDelta > 0.000001 &&
+    heldBindPreview.bindContactPreview?.renderedMaxPreviewError <= 0.000001;
+  report.checks.bindPreviewAdvancedWhileGpuHeld =
+    heldBindPreviewSamples.length === 3 &&
+    heldBindPreviewSamples.every(sample =>
+      sample.latestGpuOperation?.kind === 'binding' &&
+      sample.latestGpuOperation?.status === 'pending' &&
+      sample.renderedMaxPreviewError <= 0.000001 &&
+      JSON.stringify(sample.summary) === JSON.stringify(beforeCancelledBinding.summary) &&
+      JSON.stringify(sample.acceptedConnectivity) ===
+        JSON.stringify(beforeCancelledBinding.gpuHotSidecar?.acceptedConnectivity)) &&
+    heldBindPreviewSamples.every((sample, index) => index === 0 || (
+      sample.inputLoad > heldBindPreviewSamples[index - 1].inputLoad &&
+      sample.maxOffset > heldBindPreviewSamples[index - 1].maxOffset &&
+      sample.renderedMaxAcceptedDelta >
+        heldBindPreviewSamples[index - 1].renderedMaxAcceptedDelta
+    )) &&
+    heldBindPreviewSamples.at(-1).scheduler?.coalescedCount >
+      heldBindPreviewSamples[0].scheduler?.coalescedCount;
+  report.checks.bindPreviewRenderWithinFrameBudget = heldBindPreviewSamples.every(sample =>
+    sample.renderTiming?.renderPath === 'incremental-bind-preview' &&
+    sample.renderTiming?.bindPreviewActive === true &&
+    sample.renderTiming?.pointerActive === true &&
+    Number.isFinite(sample.renderTiming?.materialRebuildMs) &&
+    Number.isFinite(sample.renderTiming?.sceneSubmissionMs) &&
+    sample.renderTiming?.totalMs <= 1000 / 60);
+  report.checks.bindPreviewPreservedConnectivity =
+    JSON.stringify(heldBindPreview.summary) === JSON.stringify(beforeCancelledBinding.summary) &&
+    heldBindPreview.geometrySidecar?.topologyEpoch === beforeCancelledBinding.geometrySidecar?.topologyEpoch &&
+    heldBindPreview.geometrySidecar?.connectivityEpoch === beforeCancelledBinding.geometrySidecar?.connectivityEpoch &&
+    JSON.stringify(heldBindPreview.gpuHotSidecar?.acceptedConnectivity) ===
+      JSON.stringify(beforeCancelledBinding.gpuHotSidecar?.acceptedConnectivity) &&
+    heldBindPreview.bindContactPreview?.sourceTopologyEpoch === beforeCancelledBinding.geometrySidecar?.topologyEpoch &&
+    heldBindPreview.bindContactPreview?.sourceConnectivityEpoch === beforeCancelledBinding.geometrySidecar?.connectivityEpoch &&
+    heldBindPreview.bindContactPreview?.structuralMutationAuthority === false;
+  assertCheck(
+    report.checks.bindPreviewPrecededGpuAcceptance,
+    'held GPU Bind did not produce immediate rendered contact compliance',
+  );
+  assertCheck(
+    report.checks.bindPreviewAdvancedWhileGpuHeld,
+    'Bind preview did not advance continuously while GPU acceptance was held',
+  );
+  assertCheck(
+    report.checks.bindPreviewRenderWithinFrameBudget,
+    'Bind preview render missed the 60 Hz frame budget while GPU acceptance was held',
+  );
+  assertCheck(
+    report.checks.bindPreviewPreservedConnectivity,
+    'Bind contact preview changed structural connectivity before GPU acceptance',
+  );
+  const bindPreviewCapture = await send('Page.captureScreenshot', {
+    format: 'png',
+    captureBeyondViewport: false,
+  });
+  const bindPreviewScreenshot = config.screenshot.replace(/\.png$/i, '-bind-preview.png');
+  writeFileSync(bindPreviewScreenshot, Buffer.from(bindPreviewCapture.data, 'base64'));
+  report.bindPreviewScreenshot = {
+    path: bindPreviewScreenshot,
+    byteLength: Buffer.from(bindPreviewCapture.data, 'base64').byteLength,
+    pixelProbe: await probeScreenshot(evaluate, bindPreviewCapture.data),
+  };
   await evaluate(`(() => {
     document.querySelector('#fracture').click();
     window.__structuralMaterial3dReleaseBindingPostExecutionHoldForWitness();
@@ -560,6 +662,7 @@ try {
     cancelledBinding.structural?.gpuHotSidecar?.lifecycle?.rollbackCount ===
       beforeCancelledBinding.gpuHotSidecar?.lifecycle?.rollbackCount + 1 &&
     cancelledBinding.structural?.gpuHotSidecar?.lifecycle?.residentStateTrusted === true &&
+    cancelledBinding.structural?.bindContactPreview === null &&
     cancelledBinding.structural?.interactionMode?.mode === 'shear';
   assertCheck(
     report.checks.cancelledInFlightBindingRejected,
