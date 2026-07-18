@@ -40,6 +40,7 @@ const fixture = {
         movedSourceAccepted: true,
         propagationTargetExposed: true,
         propagationAfterDetachment: true,
+        propagationWithinMovedSourceWindow: true,
         propagationTargetIgnited: true,
         propagationControlCool: true,
       },

@@ -156,6 +156,7 @@ export function evaluateStructuralCarriedFireTerminalChecks({
   const targetExposureSteps = propagationTarget.nodes.map(node => node.firstExposureStep).filter(Boolean);
   const targetIgnitionSteps = propagationTarget.nodes.map(node => node.ignitionStep).filter(Boolean);
   const firstTargetExposure = targetExposureSteps.length ? Math.min(...targetExposureSteps) : 0;
+  const firstTargetIgnition = targetIgnitionSteps.length ? Math.min(...targetIgnitionSteps) : 0;
   return {
     detachedEmitterMoved: moved,
     movedSourceAccepted: moved && carriedAudit.movedSourceRecords > 0 &&
@@ -167,8 +168,10 @@ export function evaluateStructuralCarriedFireTerminalChecks({
     propagationTargetExposed: firstTargetExposure > 0 &&
       propagationTarget.nodes.some(node => node.peakExposure > 0),
     propagationAfterDetachment: firstDetachmentStep > 0 && firstTargetExposure > firstDetachmentStep,
-    propagationTargetIgnited: targetIgnitionSteps.length > 0 &&
-      Math.min(...targetIgnitionSteps) >= firstTargetExposure,
+    propagationWithinMovedSourceWindow: firstTargetExposure >= carriedAudit.firstMovedSourceStep &&
+      firstTargetExposure <= carriedAudit.lastMovedSourceStep,
+    propagationTargetIgnited: firstTargetIgnition >= firstTargetExposure &&
+      firstTargetIgnition <= receiverAudit.audit.lastAcceptedStep,
     propagationControlCool: propagationControl.nodes.every(
       node => node.ignitionStep === 0 && node.temperature <= 0.085 && node.firstExposureStep === 0,
     ),

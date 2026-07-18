@@ -10,6 +10,7 @@ const REQUIRED_CARRIED_CHECKS = [
   'movedSourceAccepted',
   'propagationTargetExposed',
   'propagationAfterDetachment',
+  'propagationWithinMovedSourceWindow',
   'propagationTargetIgnited',
   'propagationControlCool',
 ];

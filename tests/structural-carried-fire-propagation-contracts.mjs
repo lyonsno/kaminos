@@ -49,6 +49,7 @@ assert.deepEqual(checks, {
   movedSourceAccepted: true,
   propagationTargetExposed: true,
   propagationAfterDetachment: true,
+  propagationWithinMovedSourceWindow: true,
   propagationTargetIgnited: true,
   propagationControlCool: true,
   noHostFeedback: true,
@@ -65,6 +66,25 @@ const premature = evaluateStructuralCarriedFireTerminalChecks({
   hostCausalFeedbackCount: 0,
 });
 assert.equal(premature.propagationAfterDetachment, false, 'pre-detachment exposure cannot close carried-fire propagation');
+
+const prepublication = evaluateStructuralCarriedFireTerminalChecks({
+  decodedStructures: [
+    emitter,
+    {
+      ...propagationTarget,
+      nodes: [{ ...propagationTarget.nodes[0], firstExposureStep: 120, ignitionStep: 121 }],
+    },
+    propagationControl,
+  ],
+  receiverAudit: { audit: { auditObjectId: 21, acceptedRecords: 90, rejectedRecords: 0, lastAcceptedStep: 180 } },
+  carriedAudit: { movedSourceRecords: 12, firstMovedSourceStep: 150, lastMovedSourceStep: 170 },
+  hostCausalFeedbackCount: 0,
+});
+assert.equal(
+  prepublication.propagationWithinMovedSourceWindow,
+  false,
+  'post-detachment background exposure cannot precede moved-source publication and still close propagation',
+);
 
 const unaudited = evaluateStructuralCarriedFireTerminalChecks({
   decodedStructures: [emitter, propagationTarget, propagationControl],
