@@ -418,6 +418,11 @@ def run(args: argparse.Namespace, command: str) -> dict[str, Any]:
         exact_occluded_u8 = oracle.tone_map(exact_occluded_linear)
         rendered_items: list[dict[str, Any]] = []
         for unoccluded_treatment, metadata, reduction in loaded:
+            inherited_unoccluded_metrics = metadata.pop("linearMetrics")
+            inherited_unoccluded_basis = metadata.pop("linearMetricsBasis")
+            inherited_producer_metrics = metadata.pop("producerInMemoryLinearMetrics")
+            inherited_serialization_delta = metadata.pop("serializationMetricDelta")
+            metadata.pop("metricReference")
             occluded_treatment = reducer.render_reduced_transfer_with_occluder(reduction, depth_map, occluder_rgb)
             occluded_metrics = reducer.image_metrics(occluded_treatment, exact_occluded_linear)
             unoccluded_metrics = reducer.image_metrics(unoccluded_treatment, unoccluded_linear)
@@ -441,7 +446,12 @@ def run(args: argparse.Namespace, command: str) -> dict[str, Any]:
                 else specific_metrics["mae"] / unoccluded_metrics["mae"]
             )
             metadata.update({
+                "unoccludedMetricReference": "unoccluded-reference.png",
+                "occludedMetricReference": "exact-occluded-reference.png",
                 "unoccludedLinearMetrics": unoccluded_metrics,
+                "unoccludedLinearMetricsBasis": inherited_unoccluded_basis,
+                "producerUnoccludedInMemoryLinearMetrics": inherited_producer_metrics,
+                "unoccludedSerializationMetricDelta": inherited_serialization_delta,
                 "occludedLinearMetrics": occluded_metrics,
                 "unoccludedOccluderRegionLinearMetrics": unoccluded_region_metrics,
                 "occluderRegionLinearMetrics": occluded_region_metrics,
@@ -451,8 +461,14 @@ def run(args: argparse.Namespace, command: str) -> dict[str, Any]:
                 "occlusionSpecificToUnoccludedMaeRatio": specific_ratio,
                 "occlusionErrorIncreaseMae": occluded_metrics["mae"] - unoccluded_metrics["mae"],
                 "interiorOccluderPixelCount": interior_count,
-                "metricReference": "exact-occluded-reference.png",
             })
+            require(
+                all(
+                    np.isclose(unoccluded_metrics[key], inherited_unoccluded_metrics[key], rtol=1e-7, atol=1e-9)
+                    for key in unoccluded_metrics
+                ),
+                f"{metadata['label']} explicit unoccluded metrics drifted from authenticated loader metrics",
+            )
             occluded_u8 = oracle.tone_map(occluded_treatment)
             rendered_items.append({
                 "metadata": metadata,

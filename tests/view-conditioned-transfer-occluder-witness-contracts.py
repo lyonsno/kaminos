@@ -175,7 +175,13 @@ class TransferOccluderWitnessContracts(unittest.TestCase):
                 self.assertIn("occludedToUnoccludedMaeRatio", item)
                 self.assertIn("occluderRegionOccludedToUnoccludedMaeRatio", item)
                 self.assertIn("occlusionSpecificToUnoccludedMaeRatio", item)
-                self.assertEqual(item["metricReference"], "exact-occluded-reference.png")
+                self.assertEqual(item["unoccludedMetricReference"], "unoccluded-reference.png")
+                self.assertEqual(item["occludedMetricReference"], "exact-occluded-reference.png")
+                self.assertNotIn("metricReference", item)
+                self.assertNotIn("linearMetrics", item)
+                self.assertNotIn("linearMetricsBasis", item)
+                self.assertNotIn("producerInMemoryLinearMetrics", item)
+                self.assertNotIn("serializationMetricDelta", item)
             expected_images = {
                 "unoccluded-reference.png",
                 "exact-occluded-reference.png",
