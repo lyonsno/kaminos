@@ -67,6 +67,18 @@ function artifact(name, shape, channelOrder) {
 }
 
 const url = 'http://127.0.0.1:19096/?kaminos_volume_smoke=1&volume_resolution=96';
+const expectedPresetId = 'vsp-5d9fedbab31583860d39a34751ff5cd847116cd6fe6eeee6b4379909ef4bb2a2';
+const expectedSourceCommit = '1dfd4ca96164860fd983f7267856bccd91e322db';
+const expectedPresetFileSha256 = '4928df29729e9316d059ccee6c46a946c07743d322363489d99518ecdd9a3172';
+const stateExclusions = {
+  fluidField: true,
+  frontField: true,
+  boundarySidecar: true,
+  splatInstances: true,
+  historyBuffers: true,
+  pressureState: true,
+  replayState: true,
+};
 const exportManifest = {
   schema: 'kaminos.volume.full-grid-field-export.v0',
   identity: 'full-grid-fluid-front-boundary-sidecars-v0',
@@ -78,11 +90,26 @@ const exportManifest = {
   url,
   sourceCapture: {
     schema: 'kaminos.operator-exact-live-splat-basin-capture.v1',
-    identity: 'operator-live-splat-basin-capture-v1',
+    identity: 'settings-preset-replay-capture-v0',
     payloadSha256: 'a'.repeat(64),
     hashMatches: true,
     effectiveReplayRoute: url,
     routeRebind: { queryPreserved: true },
+    controlOverrides: {
+      volume_resolution: { preset: '128', effective: '96' },
+      volume_render_scale: { preset: '0.296917052331791', effective: '1' },
+    },
+    controlOverrideContract: {
+      authority: 'exact-required-control-overrides-v0',
+      required: { volume_resolution: '96', volume_render_scale: '1' },
+    },
+    sourcePreset: {
+      presetId: expectedPresetId,
+      contentHash: `sha256:${expectedPresetId.slice(4)}`,
+      artifactFileSha256: expectedPresetFileSha256,
+      sourceCommit: expectedSourceCommit,
+      stateExclusions,
+    },
   },
   initialFieldImport: null,
   importedAdvance: null,
@@ -142,6 +169,11 @@ assert.equal(source.sameStateCaptureId, 'grid96-full-flame-state120');
 assert.equal(source.simStepCount, 120);
 assert.equal(source.requestedControlIdentity, source.effectiveControlIdentity);
 assert.equal(source.route.fallbackReason, null);
+assert.equal(source.sourceBasin.presetId, expectedPresetId);
+assert.equal(source.sourceBasin.sourceCommit, expectedSourceCommit);
+assert.equal(source.sourceBasin.artifactFileSha256, expectedPresetFileSha256);
+assert.equal(source.sourceBasin.controlOverrideAuthority, 'exact-required-control-overrides-v0');
+assert.deepEqual(source.sourceBasin.controlOverrides, exportManifest.sourceCapture.controlOverrides);
 assert.equal(source.sidecars.majorant.shape[0], 24);
 assert.equal(source.claimBoundary.cheaperDemoClaim, false);
 assert.equal(source.claimBoundary.learnerCampaign, false);
@@ -165,6 +197,34 @@ assert.throws(
   () => buildGrid96NativeSource({ ...exportManifest, sidecars: { ...exportManifest.sidecars, majorant: null } }, buildOptions),
   /majorant artifact is missing/,
   'a source without the shared conservative majorant cannot close',
+);
+assert.throws(
+  () => buildGrid96NativeSource({
+    ...exportManifest,
+    sourceCapture: {
+      ...exportManifest.sourceCapture,
+      controlOverrideContract: {
+        ...exportManifest.sourceCapture.controlOverrideContract,
+        required: { ...exportManifest.sourceCapture.controlOverrideContract.required, volume_density: '99' },
+      },
+    },
+  }, buildOptions),
+  /override contract drifted/,
+  'scope-expanding replay overrides cannot survive into native source authority',
+);
+assert.throws(
+  () => buildGrid96NativeSource({
+    ...exportManifest,
+    sourceCapture: {
+      ...exportManifest.sourceCapture,
+      sourcePreset: {
+        ...exportManifest.sourceCapture.sourcePreset,
+        stateExclusions: { ...stateExclusions, replayState: false },
+      },
+    },
+  }, buildOptions),
+  /state exclusions drifted/,
+  'captured simulator state cannot impersonate a settings-only native replay',
 );
 
 const badManifestPath = join(scratch, 'bad-source-export.json');

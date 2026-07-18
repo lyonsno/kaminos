@@ -19,6 +19,25 @@ const EXPORT_SCOPE = 'full-field-with-boundary-v0';
 const REPLAY_IDENTITY = 'deterministic-replay-same-route-controls-fixed-step-v0';
 const REPLAY_AUTHORITY = 'same-route-controls-fixed-step-replay';
 const BASIN_SCHEMA = 'kaminos.operator-exact-live-splat-basin-capture.v1';
+const BASIN_IDENTITY = 'settings-preset-replay-capture-v0';
+const FULL_FLAME_PRESET_ID = 'vsp-5d9fedbab31583860d39a34751ff5cd847116cd6fe6eeee6b4379909ef4bb2a2';
+const FULL_FLAME_SOURCE_COMMIT = '1dfd4ca96164860fd983f7267856bccd91e322db';
+const FULL_FLAME_PRESET_FILE_SHA256 = '4928df29729e9316d059ccee6c46a946c07743d322363489d99518ecdd9a3172';
+const CONTROL_OVERRIDE_AUTHORITY = 'exact-required-control-overrides-v0';
+const REQUIRED_CONTROL_OVERRIDES = Object.freeze({ volume_resolution: '96', volume_render_scale: '1' });
+const EFFECTIVE_CONTROL_OVERRIDES = Object.freeze({
+  volume_resolution: Object.freeze({ preset: '128', effective: '96' }),
+  volume_render_scale: Object.freeze({ preset: '0.296917052331791', effective: '1' }),
+});
+const REQUIRED_STATE_EXCLUSIONS = Object.freeze({
+  fluidField: true,
+  frontField: true,
+  boundarySidecar: true,
+  splatInstances: true,
+  historyBuffers: true,
+  pressureState: true,
+  replayState: true,
+});
 const HEX_SHA256 = /^[0-9a-f]{64}$/;
 const FORBIDDEN_LINEAGE = /(?:resize|resampl|upsampl|downsampl|receiver-initial|selective-composition|phase-aligned-held)/i;
 const FLUID_CHANNELS = Object.freeze([
@@ -111,10 +130,31 @@ export function buildGrid96NativeSource(exportManifest, {
 
   const basin = exportManifest.sourceCapture;
   assert.equal(basin?.schema, BASIN_SCHEMA, 'source export is not bound to an exact operator basin capture');
+  assert.equal(basin.identity, BASIN_IDENTITY, 'source basin replay adapter identity drifted');
   assertHash(basin.payloadSha256, 'source basin payload');
   assert.equal(basin.hashMatches, true, 'source basin payload hash was not verified');
   assert.equal(basin.effectiveReplayRoute, exportManifest.url, 'source basin replay route differs from the captured URL');
   if (basin.routeRebind) assert.equal(basin.routeRebind.queryPreserved, true, 'source basin route rebind did not preserve controls');
+  assert.equal(basin.controlOverrideContract?.authority, CONTROL_OVERRIDE_AUTHORITY, 'source basin override authority drifted');
+  assert.equal(
+    stableJson(basin.controlOverrideContract?.required),
+    stableJson(REQUIRED_CONTROL_OVERRIDES),
+    'source basin override contract drifted',
+  );
+  assert.equal(
+    stableJson(basin.controlOverrides),
+    stableJson(EFFECTIVE_CONTROL_OVERRIDES),
+    'source basin effective overrides drifted',
+  );
+  assert.equal(basin.sourcePreset?.presetId, FULL_FLAME_PRESET_ID, 'source basin Full Flame preset identity drifted');
+  assert.equal(basin.sourcePreset?.contentHash, `sha256:${FULL_FLAME_PRESET_ID.slice(4)}`, 'source basin content hash drifted');
+  assert.equal(basin.sourcePreset?.sourceCommit, FULL_FLAME_SOURCE_COMMIT, 'source basin source commit drifted');
+  assert.equal(basin.sourcePreset?.artifactFileSha256, FULL_FLAME_PRESET_FILE_SHA256, 'source basin artifact bytes drifted');
+  assert.equal(
+    stableJson(basin.sourcePreset?.stateExclusions),
+    stableJson(REQUIRED_STATE_EXCLUSIONS),
+    'source basin settings-only state exclusions drifted',
+  );
 
   const replay = exportManifest.deterministicReplay;
   assert.equal(replay?.identity, REPLAY_IDENTITY, 'source replay identity drifted');
@@ -175,6 +215,14 @@ export function buildGrid96NativeSource(exportManifest, {
       identity: basin.identity || null,
       payloadSha256: basin.payloadSha256,
       replayRoute: basin.effectiveReplayRoute,
+      presetId: basin.sourcePreset.presetId,
+      contentHash: basin.sourcePreset.contentHash,
+      sourceCommit: basin.sourcePreset.sourceCommit,
+      artifactFileSha256: basin.sourcePreset.artifactFileSha256,
+      stateExclusions: basin.sourcePreset.stateExclusions,
+      controlOverrideAuthority: basin.controlOverrideContract.authority,
+      controlOverrideRequired: basin.controlOverrideContract.required,
+      controlOverrides: basin.controlOverrides,
     },
     sourceExport: {
       path: resolve(sourceExportManifestPath),

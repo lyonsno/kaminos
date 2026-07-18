@@ -50,6 +50,8 @@ assert.match(exporter, /exportScope,[\s\S]*derivedBoundaryCoverage:/, 'manifest 
 assert.match(exporter, /JSON\.parse\(String\(args\.get\('--render-control-overrides-json'\)/, 'render control overrides use structured JSON parsing instead of ad hoc text splitting');
 assert.match(exporter, /sourceCapture/, 'export manifest records source-capture custody');
 assert.match(exporter, /payloadSha256/, 'exporter validates and records the exact capture payload hash');
+assert.match(exporter, /controlOverrideContract:\s*capture\.controlOverrideContract/, 'exporter propagates the exact replay override contract');
+assert.match(exporter, /sourcePreset:\s*capture\.sourcePreset/, 'exporter propagates exact preset source authority');
 assert.match(exporter, /deterministicReplay/, 'exporter preserves deterministic replay identity');
 assert.match(exporter, /boundarySidecar/, 'exporter drains the active boundary-sidecar field authority');
 assert.match(exporter, /boundary-splats\.f32/, 'exporter drains the effective compact learned-splat output');

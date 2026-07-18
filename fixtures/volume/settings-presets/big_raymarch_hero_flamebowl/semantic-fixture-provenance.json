@@ -1,0 +1,17 @@
+{
+  "identity": "kaminos-volume-settings-preset-provenance-v1",
+  "presetId": "vsp-5d9fedbab31583860d39a34751ff5cd847116cd6fe6eeee6b4379909ef4bb2a2",
+  "contentHash": "sha256:5d9fedbab31583860d39a34751ff5cd847116cd6fe6eeee6b4379909ef4bb2a2",
+  "sourceCommit": "1dfd4ca96164860fd983f7267856bccd91e322db",
+  "historicalArtifactFileSha256": "87882933e928c1310f914bbe6507999449644ec7108a96da6e8adc470a97e3a8",
+  "routeAuthority": {
+    "identity": "kaminos-volume-settings-preset-route-authority-v1",
+    "activationParam": {
+      "key": "kaminos_volume_smoke",
+      "value": "1"
+    },
+    "extraParams": {
+      "volume_quality_reason": "operator-settings-only-capture"
+    }
+  }
+}
