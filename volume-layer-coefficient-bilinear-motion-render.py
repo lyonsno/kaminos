@@ -132,6 +132,7 @@ def flow_tap_placements(
     camera: dict[str, Any],
     tap_counts: np.ndarray | None = None,
     tap_patterns: dict[int, dict[str, Any]] | None = None,
+    tap_scales: np.ndarray | None = None,
 ) -> np.ndarray:
     descriptors = rows["kernelDescriptors"]
     positions = np.asarray(descriptors[:, 0:3])
@@ -161,11 +162,15 @@ def flow_tap_placements(
         & (pixel_y >= 0.0)
         & (pixel_y < height)
     )
+    require(tap_counts is None or tap_scales is None, "tap-count and footprint-scale placement treatments are mutually exclusive")
     if tap_counts is None:
         offsets = np.asarray(FLOW_TAP_OFFSETS, dtype=np.float32)
+        scales = np.ones(positions.shape[0], dtype=np.float32) if tap_scales is None else np.asarray(tap_scales, dtype=np.float32)
+        require(scales.ndim == 1 and scales.size == positions.shape[0], "tap-scale placement plan must match rows")
+        require(np.all(np.isfinite(scales)) and np.all(scales > 0.0), "tap-scale placement plan must be positive and finite")
         placements = np.stack([
-            pixel_x[:, None] + tx[:, None] * major_px[:, None] * offsets[None, :],
-            pixel_y[:, None] + ty[:, None] * major_px[:, None] * offsets[None, :],
+            pixel_x[:, None] + tx[:, None] * major_px[:, None] * scales[:, None] * offsets[None, :],
+            pixel_y[:, None] + ty[:, None] * major_px[:, None] * scales[:, None] * offsets[None, :],
         ], axis=2).astype(np.float32)
         placements[~visible] = np.nan
         return placements

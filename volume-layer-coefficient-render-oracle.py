@@ -321,6 +321,7 @@ def rasterize_coefficients(
     footprint_mode: str,
     tap_counts: np.ndarray | None = None,
     tap_patterns: dict[int, dict[str, Any]] | None = None,
+    tap_scales: np.ndarray | None = None,
 ) -> tuple[np.ndarray, dict[str, Any]]:
     width, height = int(camera["width"]), int(camera["height"])
     pose = camera["cameraPose"]
@@ -357,9 +358,17 @@ def rasterize_coefficients(
     major_px = np.clip(np.sqrt(base_radius * base_radius + 0.5 * 0.03 * 0.03) * pixel_world_scale, 0.75, 5.0)
     fixed_offsets = (-1.0, -0.5, 0.0, 0.5, 1.0)
     fixed_weights = (0.075, 0.225, 0.4, 0.225, 0.075)
+    require(tap_counts is None or tap_scales is None, "tap-count and footprint-scale treatments are mutually exclusive")
     if tap_counts is None:
-        quadrature_groups = [(np.ones(positions.shape[0], dtype=bool), fixed_offsets, fixed_weights)]
-        quadrature_rule = "five-flow-taps-times-four-bilinear-neighbors-clipped-to-frame-v0"
+        scales = np.ones(positions.shape[0], dtype=np.float32) if tap_scales is None else np.asarray(tap_scales, dtype=np.float32)
+        require(scales.ndim == 1 and scales.size == positions.shape[0], "tap-scale plan must match raster rows")
+        require(np.all(np.isfinite(scales)) and np.all(scales > 0.0), "tap-scale plan must be positive and finite")
+        quadrature_groups = [(np.ones(positions.shape[0], dtype=bool), fixed_offsets, fixed_weights, scales)]
+        quadrature_rule = (
+            "five-flow-taps-times-four-bilinear-neighbors-clipped-to-frame-v0"
+            if tap_scales is None
+            else "contribution-ranked-five-flow-taps-variable-footprint-times-four-bilinear-neighbors-clipped-to-frame-v0"
+        )
         nominal_tap_evaluations = positions.shape[0] * len(fixed_offsets)
     else:
         counts = np.asarray(tap_counts)
@@ -372,25 +381,26 @@ def rasterize_coefficients(
             weights = tuple(pattern["weights"])
             require(len(offsets) == len(weights) == tap_count, f"{tap_count}-tap raster pattern width drifted")
             require(abs(float(sum(weights)) - 1.0) <= 1e-6, f"{tap_count}-tap raster weights do not conserve coefficient mass")
-            quadrature_groups.append((counts == tap_count, offsets, weights))
+            quadrature_groups.append((counts == tap_count, offsets, weights, np.ones(positions.shape[0], dtype=np.float32)))
         require(np.all(np.isin(counts, (3, 5, 7))), "tap-count plan contains an unreviewed count")
         quadrature_rule = "quota-balanced-variable-flow-taps-times-four-bilinear-neighbors-clipped-to-frame-v0"
         nominal_tap_evaluations = int(np.sum(counts, dtype=np.int64))
     raster_size = depth_bins * height * width
     planes = np.zeros((depth_bins, height, width, 8), dtype=np.float32)
-    for group_rows, offsets, offset_weights in quadrature_groups:
+    for group_rows, offsets, offset_weights, group_scales in quadrature_groups:
         for offset, footprint_weight in zip(offsets, offset_weights):
+            scaled_offset = offset * group_scales
             if footprint_mode == "nearest":
                 pixel_samples = [(
-                    x + np.rint(tx * major_px * offset).astype(np.int32),
-                    y + np.rint(ty * major_px * offset).astype(np.int32),
+                    x + np.rint(tx * major_px * scaled_offset).astype(np.int32),
+                    y + np.rint(ty * major_px * scaled_offset).astype(np.int32),
                     np.ones_like(pixel_x, dtype=np.float32),
                 )]
             else:
                 require(footprint_mode == "bilinear", f"unknown footprint mode {footprint_mode}")
                 pixel_samples = bilinear_pixel_samples(
-                    pixel_x + tx * major_px * offset,
-                    pixel_y + ty * major_px * offset,
+                    pixel_x + tx * major_px * scaled_offset,
+                    pixel_y + ty * major_px * scaled_offset,
                 )
             for sx, sy, sample_weight in pixel_samples:
                 selected = group_rows & valid & tangent_valid & (sample_weight > 0.0) & (sx >= 0) & (sx < width) & (sy >= 0) & (sy < height)

@@ -34,6 +34,9 @@ DEPOSITS_PER_CANDIDATE = 20
 FLOW_TAPS_PER_CANDIDATE = 5
 CONTRIBUTION_DEPOSITION_POLICY = "optical-hysteresis-adaptive-mean-contribution-deposition"
 CONTRIBUTION_DEPOSIT_RULE = "quota-balanced-variable-flow-taps-times-four-bilinear-neighbors-clipped-to-frame-v0"
+CONTRIBUTION_FOOTPRINT_POLICY = "optical-hysteresis-adaptive-mean-contribution-footprint"
+CONTRIBUTION_FOOTPRINT_DEPOSIT_RULE = "contribution-ranked-five-flow-taps-variable-footprint-times-four-bilinear-neighbors-clipped-to-frame-v0"
+CONTRIBUTION_FOOTPRINT_MINIMUM_SCALE = 0.75
 CONTRIBUTION_SCORE_AUTHORITY = "local-emission-divided-by-one-plus-local-extinction-v0"
 CONTRIBUTION_QUOTA_AUTHORITY = "projected-eight-by-eight-screen-times-eight-depth-quota-v0"
 CONTRIBUTION_TAP_PATTERNS = {
@@ -605,12 +608,44 @@ def quota_balanced_contribution_tap_counts(
     return counts
 
 
-def contribution_deposition_plan(
+def quota_balanced_contribution_footprint_scales(
+    native_ids: np.ndarray,
+    contribution_scores: np.ndarray,
+    quota_keys: np.ndarray,
+) -> np.ndarray:
+    ids = np.asarray(native_ids, dtype=np.uint32)
+    scores = np.asarray(contribution_scores, dtype=np.float64)
+    quotas = np.asarray(quota_keys, dtype=np.int64)
+    require(ids.ndim == scores.ndim == quotas.ndim == 1, "contribution footprint inputs must be vectors")
+    require(ids.size == scores.size == quotas.size > 0, "contribution footprint row populations must match and be nonempty")
+    require(np.unique(ids).size == ids.size, "contribution footprint native identities must be unique")
+    require(np.all(np.isfinite(scores)), "contribution footprint scores must be finite")
+    scales = np.ones(ids.size, dtype=np.float32)
+    for quota in np.unique(quotas[quotas >= 0]):
+        rows = np.flatnonzero(quotas == quota)
+        order = rows[np.lexsort((ids[rows], stable_hash(ids[rows]), -scores[rows]))]
+        if order.size == 1:
+            scales[order] = CONTRIBUTION_FOOTPRINT_MINIMUM_SCALE
+            continue
+        rank = np.arange(order.size, dtype=np.float32) / float(order.size - 1)
+        scales[order] = CONTRIBUTION_FOOTPRINT_MINIMUM_SCALE + (
+            1.0 - CONTRIBUTION_FOOTPRINT_MINIMUM_SCALE
+        ) * rank
+    require(
+        np.all(np.isfinite(scales))
+        and np.all(scales >= CONTRIBUTION_FOOTPRINT_MINIMUM_SCALE)
+        and np.all(scales <= 1.0),
+        "contribution footprint scales escaped the reviewed range",
+    )
+    return scales
+
+
+def contribution_quota_context(
     native_ids: np.ndarray,
     kernel_descriptors: np.ndarray,
     coefficients: np.ndarray,
     camera: dict[str, Any],
-) -> tuple[np.ndarray, dict[str, Any]]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     ids = np.asarray(native_ids, dtype=np.uint32)
     descriptors = np.asarray(kernel_descriptors)
     values = np.asarray(coefficients)
@@ -633,7 +668,17 @@ def contribution_deposition_plan(
         depth_index = np.clip(((depth - near) / max(far - near, 1e-6) * 8.0).astype(np.int64), 0, 7)
     quota_keys = ((depth_index * 8 + screen_y) * 8 + screen_x).astype(np.int64)
     quota_keys[~visible] = -1
-    scores = local_transmitted_emission_scores(values)
+    return local_transmitted_emission_scores(values), quota_keys, visible
+
+
+def contribution_deposition_plan(
+    native_ids: np.ndarray,
+    kernel_descriptors: np.ndarray,
+    coefficients: np.ndarray,
+    camera: dict[str, Any],
+) -> tuple[np.ndarray, dict[str, Any]]:
+    ids = np.asarray(native_ids, dtype=np.uint32)
+    scores, quota_keys, visible = contribution_quota_context(ids, kernel_descriptors, coefficients, camera)
     tap_counts = quota_balanced_contribution_tap_counts(ids, scores, quota_keys)
     unique_counts, count_population = np.unique(tap_counts, return_counts=True)
     nominal_taps = int(np.sum(tap_counts, dtype=np.int64))
@@ -649,6 +694,42 @@ def contribution_deposition_plan(
         "nominalTapEvaluations": nominal_taps,
         "nominalDepositEvaluations": nominal_taps * 4,
         "matchedFixedFiveDepositEvaluations": ids.size * DEPOSITS_PER_CANDIDATE,
+        "scoreDistribution": {
+            "minimum": float(np.min(scores)),
+            "p50": float(np.percentile(scores, 50)),
+            "p95": float(np.percentile(scores, 95)),
+            "maximum": float(np.max(scores)),
+        },
+    }
+
+
+def contribution_footprint_plan(
+    native_ids: np.ndarray,
+    kernel_descriptors: np.ndarray,
+    coefficients: np.ndarray,
+    camera: dict[str, Any],
+) -> tuple[np.ndarray, dict[str, Any]]:
+    ids = np.asarray(native_ids, dtype=np.uint32)
+    scores, quota_keys, visible = contribution_quota_context(ids, kernel_descriptors, coefficients, camera)
+    scales = quota_balanced_contribution_footprint_scales(ids, scores, quota_keys)
+    return scales, {
+        "authority": "fixed-five-target-free-contribution-ranked-footprint-v0",
+        "scoreAuthority": CONTRIBUTION_SCORE_AUTHORITY,
+        "quotaAuthority": CONTRIBUTION_QUOTA_AUTHORITY,
+        "targetUsed": False,
+        "candidateRows": int(ids.size),
+        "visibleRows": int(np.count_nonzero(visible)),
+        "quotaCount": int(np.unique(quota_keys[visible]).size),
+        "tapCount": FLOW_TAPS_PER_CANDIDATE,
+        "nominalTapEvaluations": ids.size * FLOW_TAPS_PER_CANDIDATE,
+        "nominalDepositEvaluations": ids.size * DEPOSITS_PER_CANDIDATE,
+        "minimumFootprintScale": CONTRIBUTION_FOOTPRINT_MINIMUM_SCALE,
+        "scaleDistribution": {
+            "minimum": float(np.min(scales)),
+            "p50": float(np.percentile(scales, 50)),
+            "p95": float(np.percentile(scales, 95)),
+            "maximum": float(np.max(scales)),
+        },
         "scoreDistribution": {
             "minimum": float(np.min(scores)),
             "p50": float(np.percentile(scores, 50)),
@@ -1240,6 +1321,7 @@ def selected_state(
     camera = MOTION.camera_contract(state)
     tap_counts: np.ndarray | None = None
     tap_patterns: dict[int, dict[str, Any]] | None = None
+    tap_scales: np.ndarray | None = None
     deposition_plan: dict[str, Any] | None = None
     if policy == CONTRIBUTION_DEPOSITION_POLICY:
         tap_counts, deposition_plan = contribution_deposition_plan(
@@ -1249,6 +1331,13 @@ def selected_state(
             camera,
         )
         tap_patterns = CONTRIBUTION_TAP_PATTERNS
+    elif policy == CONTRIBUTION_FOOTPRINT_POLICY:
+        tap_scales, deposition_plan = contribution_footprint_plan(
+            selected_rows["nativeCellIndices"],
+            selected_rows["kernelDescriptors"],
+            selected_rows["coefficients"],
+            camera,
+        )
     planes, telemetry = ORACLE.rasterize_coefficients(
         selected_rows["kernelDescriptors"][:, 0:3],
         selected_rows["kernelDescriptors"][:, 4:7],
@@ -1259,6 +1348,7 @@ def selected_state(
         "bilinear",
         tap_counts=tap_counts,
         tap_patterns=tap_patterns,
+        tap_scales=tap_scales,
     )
     linear, _, _, _ = ORACLE.compose_planes(planes, path_scale, "total")
     render = ORACLE.tone_map(linear)
@@ -1278,6 +1368,7 @@ def selected_state(
         camera,
         tap_counts=tap_counts,
         tap_patterns=tap_patterns,
+        tap_scales=tap_scales,
     )
     tap_weights = MOTION.flow_tap_weights(
         row_indices.size,
@@ -1291,7 +1382,13 @@ def selected_state(
         camera["height"],
     )
     multiplicity = deposit_accounting["actualInBoundsPositiveWeightDeposits"]
-    deposit_rule = CONTRIBUTION_DEPOSIT_RULE if tap_counts is not None else "five-flow-taps-times-four-bilinear-neighbors-clipped-to-frame-v0"
+    deposit_rule = (
+        CONTRIBUTION_DEPOSIT_RULE
+        if tap_counts is not None
+        else CONTRIBUTION_FOOTPRINT_DEPOSIT_RULE
+        if tap_scales is not None
+        else "five-flow-taps-times-four-bilinear-neighbors-clipped-to-frame-v0"
+    )
     maximum_deposits = 28 if tap_counts is not None else DEPOSITS_PER_CANDIDATE
     nominal_deposit_budget = int(
         np.sum(tap_counts, dtype=np.int64) * 4
@@ -1340,7 +1437,8 @@ def selected_state(
         },
         "metrics": ORACLE.image_metrics(render, target),
         "rasterTelemetry": telemetry,
-        "contributionDeposition": deposition_plan,
+        "contributionDeposition": deposition_plan if tap_counts is not None else None,
+        "contributionFootprint": deposition_plan if tap_scales is not None else None,
         "images": {
             "render": str(render_path),
             "residual": str(residual_path),
@@ -1367,11 +1465,14 @@ def run(
     adaptive_calibration_transitions: int,
     adaptive_ridge_alpha: float,
     contribution_deposition: bool,
+    contribution_footprint: bool,
     implementation_bundle_sha256: str,
     bound_implementation_bundle: dict[str, Any],
 ) -> tuple[dict[str, Any], str]:
     require(mode in {"frozen", "sequence"}, "mode must be frozen or sequence")
     require(not contribution_deposition or adaptive_survival, "contribution deposition requires the matched-mean adaptive-survival sequence")
+    require(not contribution_footprint or adaptive_survival, "contribution footprint requires the matched-mean adaptive-survival sequence")
+    require(not (contribution_deposition and contribution_footprint), "contribution deposition and footprint assays must run separately")
     states = manifest.get("states") or []
     require(len(states) >= 2, "budget oracle requires at least two captured exact states")
     budget_anchor_state = states[-1]
@@ -1419,6 +1520,8 @@ def run(
     )
     if contribution_deposition:
         policies.append(CONTRIBUTION_DEPOSITION_POLICY)
+    if contribution_footprint:
+        policies.append(CONTRIBUTION_FOOTPRINT_POLICY)
     temporal_by_policy: dict[str, list[dict[str, Any]]] = {policy: [] for policy in policies}
     previous_by_policy: dict[str, dict[str, Any]] = {}
     previous_hysteresis_ids: np.ndarray | None = None
@@ -1511,6 +1614,14 @@ def run(
                     "authority": "matched-mean-membership-plus-target-free-contribution-deposition-v0",
                     "membershipPolicy": "optical-hysteresis-adaptive-mean",
                     "depositionPolicy": CONTRIBUTION_DEPOSIT_RULE,
+                }
+            if contribution_footprint:
+                selections[CONTRIBUTION_FOOTPRINT_POLICY] = adaptive_mean_rows.copy()
+                selection_receipts[CONTRIBUTION_FOOTPRINT_POLICY] = {
+                    **adaptive_mean_receipt,
+                    "authority": "matched-mean-membership-plus-target-free-contribution-footprint-v0",
+                    "membershipPolicy": "optical-hysteresis-adaptive-mean",
+                    "depositionPolicy": CONTRIBUTION_FOOTPRINT_DEPOSIT_RULE,
                 }
             previous_adaptive_mean_ids = ids[adaptive_mean_rows].copy()
             require(adaptive_model is not None, "causal adaptive model is missing after training")
@@ -1695,6 +1806,20 @@ def run(
                     "nominalDepositWorkMatched": True,
                     "targetUsedForDeposition": False,
                 } if contribution_deposition else None),
+                "contributionFootprint": ({
+                    "policy": CONTRIBUTION_FOOTPRINT_POLICY,
+                    "membershipPolicy": "optical-hysteresis-adaptive-mean",
+                    "scoreAuthority": CONTRIBUTION_SCORE_AUTHORITY,
+                    "quotaAuthority": CONTRIBUTION_QUOTA_AUTHORITY,
+                    "tapCount": FLOW_TAPS_PER_CANDIDATE,
+                    "tapWeights": CONTRIBUTION_TAP_PATTERNS[5]["weights"],
+                    "minimumScale": CONTRIBUTION_FOOTPRINT_MINIMUM_SCALE,
+                    "allocationAndFootprintSpacingCoupled": False,
+                    "candidateBudgetMatched": True,
+                    "nominalDepositWorkMatched": True,
+                    "actualInBoundsDepositsReportedAsOutcome": True,
+                    "targetUsedForDeposition": False,
+                } if contribution_footprint else None),
             } if adaptive_survival else None),
         },
         "transport": {
@@ -1734,6 +1859,7 @@ def main() -> int:
     parser.add_argument("--adaptive-calibration-transitions", type=int, default=1)
     parser.add_argument("--adaptive-ridge-alpha", type=float, default=1e-3)
     parser.add_argument("--contribution-deposition", action="store_true")
+    parser.add_argument("--contribution-footprint", action="store_true")
     parser.add_argument("--mode", choices=("frozen", "sequence"), default="frozen")
     args = parser.parse_args()
     manifest_path = Path(args.manifest).expanduser().resolve()
@@ -1789,6 +1915,7 @@ def main() -> int:
             args.adaptive_calibration_transitions,
             args.adaptive_ridge_alpha,
             args.contribution_deposition,
+            args.contribution_footprint,
             implementation_bundle_sha256,
             implementation_bundle_at_start,
         )
