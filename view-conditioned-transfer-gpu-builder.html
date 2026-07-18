@@ -1,0 +1,738 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Kaminos transfer builder GPU witness</title>
+  <style>
+    :root { color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #101315; color: #eef1f2; }
+    main { width: min(1160px, 100%); margin: 0 auto; padding: 24px; }
+    header { display: flex; align-items: baseline; justify-content: space-between; gap: 24px; border-bottom: 1px solid #394146; padding-bottom: 14px; }
+    h1 { margin: 0; font: 700 22px/1.2 system-ui, sans-serif; letter-spacing: 0; }
+    #status { margin: 0; color: #f0c25a; text-align: right; }
+    .identity { margin: 14px 0 18px; color: #aab4b9; font-size: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    figure { margin: 0; border: 1px solid #394146; background: #080a0b; }
+    canvas { display: block; width: 100%; aspect-ratio: 314 / 242; image-rendering: pixelated; }
+    figcaption { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border-top: 1px solid #394146; color: #d7dde0; font-size: 12px; }
+    dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin: 16px 0 0; background: #394146; border: 1px solid #394146; }
+    dl div { min-width: 0; padding: 10px 12px; background: #171b1e; }
+    dt { color: #8f9ba1; font-size: 10px; text-transform: uppercase; }
+    dd { margin: 4px 0 0; overflow-wrap: anywhere; font-size: 13px; }
+    #failure { display: none; margin-top: 16px; padding: 12px; border: 1px solid #a84747; background: #241516; color: #ffc6c6; white-space: pre-wrap; }
+    body[data-state="failed"] #failure { display: block; }
+    @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } dl { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  </style>
+</head>
+<body data-state="running">
+  <main>
+    <header>
+      <h1>GPU-resident transfer builder witness</h1>
+      <p id="status">Loading authenticated inputs</p>
+    </header>
+    <p class="identity">State 120, camera 10: exact dense control, authenticated persisted target, and GPU-built d12-t2 under identical opaque scene depth</p>
+    <section class="grid">
+      <figure>
+        <canvas id="dense" width="314" height="242"></canvas>
+        <figcaption><span>Natural dense control: 96-bin direct composition</span><span id="dense-time">pending</span></figcaption>
+      </figure>
+      <figure>
+        <canvas id="persisted" width="314" height="242"></canvas>
+        <figcaption><span>Persisted d12-t2 target: authenticated CPU reduction</span><span id="persisted-validation">pending</span></figcaption>
+      </figure>
+      <figure>
+        <canvas id="built" width="314" height="242"></canvas>
+        <figcaption><span>GPU-built d12-t2: resident dense-to-reduced route</span><span id="built-validation">pending</span></figcaption>
+      </figure>
+      <figure>
+        <canvas id="residual" width="314" height="242"></canvas>
+        <figcaption><span>Amplified residual: |GPU-built - persisted| x100</span><span id="residual-max">pending</span></figcaption>
+      </figure>
+    </section>
+    <dl>
+      <div><dt>Timing source</dt><dd id="timing-source">pending</dd></div>
+      <div><dt>Samples</dt><dd id="sample-count">pending</dd></div>
+      <div><dt>Cadences</dt><dd id="cadences">pending</dd></div>
+      <div><dt>Builder validation</dt><dd id="builder-validation">pending</dd></div>
+      <div><dt>Composition validation</dt><dd id="composition-validation">pending</dd></div>
+      <div><dt>Dense identity</dt><dd>dense-96-bin-compositor-v0</dd></div>
+      <div><dt>Builder identity</dt><dd>gpu-resident-d12-t2-builder-v0</dd></div>
+      <div><dt>Untimed setup</dt><dd id="setup-time">pending</dd></div>
+      <div><dt>Builder median</dt><dd id="builder-time">pending</dd></div>
+    </dl>
+    <dl id="cadence-results"></dl>
+    <pre id="failure"></pre>
+  </main>
+  <script type="module">
+    const SCHEMA = 'kaminos.view-conditioned-transfer-gpu-builder-page.v0';
+    const DENSE_IDENTITY = 'dense-96-bin-compositor-v0';
+    const REDUCED_IDENTITY = 'reduced-depth-tile-compositor-v0';
+    const BUILDER_IDENTITY = 'gpu-resident-d12-t2-builder-v0';
+    const EXPECTED_DENSE_SHAPE = [96, 242, 314];
+    const EXPECTED_REDUCED_SHAPE = [12, 121, 157];
+    const EXPECTED_OUTPUT_SHAPE = [242, 314];
+    const DENSE_SLICES_PER_GROUP = 8;
+    const initialReport = {
+      schema: SCHEMA,
+      status: 'running',
+      failurePhase: 'query-validation',
+      timestampStatus: 'pending',
+      builderOutputValidation: null,
+      compositorOutputValidation: null,
+      optimizationClaimAllowed: false,
+    };
+    window.__TRANSFER_GPU_BUILDER__ = initialReport;
+
+    function requireValue(condition, message) {
+      if (!condition) throw new Error(message);
+    }
+
+    function sameShape(actual, expected) {
+      return Array.isArray(actual) && actual.length === expected.length && actual.every((value, index) => value === expected[index]);
+    }
+
+    function parsePositiveInteger(params, name, allowZero = false) {
+      const raw = params.get(name);
+      requireValue(raw !== null && /^\d+$/.test(raw), `missing or invalid ${name}`);
+      const value = Number(raw);
+      requireValue(Number.isSafeInteger(value) && (allowZero ? value >= 0 : value > 0), `${name} is out of range`);
+      return value;
+    }
+
+    function parseCadences(params) {
+      const raw = params.get('cadences');
+      requireValue(raw !== null && raw.length > 0, 'cadences query parameter is required');
+      const values = raw.split(',').map(value => {
+        requireValue(/^\d+$/.test(value), `cadence must be a positive integer: ${value}`);
+        const cadence = Number(value);
+        requireValue(Number.isSafeInteger(cadence) && cadence > 0, `cadence must be a positive integer: ${value}`);
+        return cadence;
+      });
+      requireValue(new Set(values).size === values.length, 'cadences must be unique');
+      return values;
+    }
+
+    function percentile(values, fraction) {
+      const sorted = [...values].sort((a, b) => a - b);
+      const index = Math.min(sorted.length - 1, Math.max(0, Math.floor((sorted.length - 1) * fraction)));
+      return sorted[index];
+    }
+
+    function summarize(values) {
+      return {
+        sampleCount: values.length,
+        minMs: Math.min(...values),
+        p10Ms: percentile(values, 0.10),
+        medianMs: percentile(values, 0.50),
+        p90Ms: percentile(values, 0.90),
+        maxMs: Math.max(...values),
+        meanMs: values.reduce((sum, value) => sum + value, 0) / values.length,
+        samplesMs: values,
+      };
+    }
+
+    async function sha256Hex(bytes) {
+      const hash = await crypto.subtle.digest('SHA-256', bytes);
+      return Array.from(new Uint8Array(hash), value => value.toString(16).padStart(2, '0')).join('');
+    }
+
+    async function loadBinary(baseUrl, descriptor) {
+      const url = new URL(descriptor.path, baseUrl);
+      const response = await fetch(url);
+      requireValue(response.ok, `binary fetch failed ${response.status}: ${descriptor.path}`);
+      const bytes = await response.arrayBuffer();
+      requireValue(bytes.byteLength === descriptor.bytes, `binary byte count drifted: ${descriptor.path}`);
+      requireValue(await sha256Hex(bytes) === descriptor.sha256, `binary hash drifted: ${descriptor.path}`);
+      return bytes;
+    }
+
+    function makeStorageBuffer(device, label, bytes) {
+      const buffer = device.createBuffer({
+        label,
+        size: Math.ceil(bytes.byteLength / 4) * 4,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
+      device.queue.writeBuffer(buffer, 0, bytes);
+      return buffer;
+    }
+
+    function makeWritableStorageBuffer(device, label, byteLength) {
+      return device.createBuffer({
+        label,
+        size: byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+      });
+    }
+
+    function createBuilderPipeline(device, denseShape, reducedShape) {
+      const [denseDepthCount, denseHeight, denseWidth] = denseShape;
+      const [reducedDepthCount, reducedHeight, reducedWidth] = reducedShape;
+      requireValue(denseDepthCount === reducedDepthCount * DENSE_SLICES_PER_GROUP, 'dense depth partition does not match d12-t2');
+      requireValue(denseHeight === reducedHeight * 2 && denseWidth === reducedWidth * 2, 'dense screen partition does not match d12-t2');
+      const code = `
+        @group(0) @binding(0) var<storage, read> denseRidge: array<vec4f>;
+        @group(0) @binding(1) var<storage, read> denseNonridge: array<vec4f>;
+        @group(0) @binding(2) var<storage, read> denseTransmittance: array<f32>;
+        @group(0) @binding(3) var<storage, read_write> builtRidge: array<vec4f>;
+        @group(0) @binding(4) var<storage, read_write> builtNonridge: array<vec4f>;
+        @group(0) @binding(5) var<storage, read_write> builtTransmittance: array<f32>;
+
+        @compute @workgroup_size(8, 8, 1)
+        fn main(@builtin(global_invocation_id) gid: vec3u) {
+          if (gid.x >= ${reducedWidth}u || gid.y >= ${reducedHeight}u || gid.z >= ${reducedDepthCount}u) { return; }
+          let groupStart = gid.z * ${DENSE_SLICES_PER_GROUP}u;
+          var tileRadianceRidge = vec3f(0.0);
+          var tileRadianceNonridge = vec3f(0.0);
+          var tileTransmittance = 0.0;
+          var tilePixelCount = 0.0;
+          for (var tileY = 0u; tileY < 2u; tileY += 1u) {
+            for (var tileX = 0u; tileX < 2u; tileX += 1u) {
+              let sourceX = gid.x * 2u + tileX;
+              let sourceY = gid.y * 2u + tileY;
+              var throughput = 1.0;
+              var pixelRidge = vec3f(0.0);
+              var pixelNonridge = vec3f(0.0);
+              for (var localDepth = 0u; localDepth < ${DENSE_SLICES_PER_GROUP}u; localDepth += 1u) {
+                let depthIndex = groupStart + localDepth;
+                let sourceIndex = (depthIndex * ${denseHeight}u + sourceY) * ${denseWidth}u + sourceX;
+                pixelRidge += throughput * denseRidge[sourceIndex].xyz;
+                pixelNonridge += throughput * denseNonridge[sourceIndex].xyz;
+                throughput *= denseTransmittance[sourceIndex];
+              }
+              tileRadianceRidge += pixelRidge;
+              tileRadianceNonridge += pixelNonridge;
+              tileTransmittance += throughput;
+              tilePixelCount += 1.0;
+            }
+          }
+          let outputIndex = (gid.z * ${reducedHeight}u + gid.y) * ${reducedWidth}u + gid.x;
+          builtRidge[outputIndex] = vec4f(tileRadianceRidge / tilePixelCount, 0.0);
+          builtNonridge[outputIndex] = vec4f(tileRadianceNonridge / tilePixelCount, 0.0);
+          builtTransmittance[outputIndex] = tileTransmittance / tilePixelCount;
+        }
+      `;
+      const module = device.createShaderModule({ label: `${BUILDER_IDENTITY} shader`, code });
+      return device.createComputePipeline({
+        label: BUILDER_IDENTITY,
+        layout: 'auto',
+        compute: { module, entryPoint: 'main' },
+      });
+    }
+
+    function createPipeline(device, identity, depthCount, sourceWidth, sourceHeight, outputWidth, outputHeight, tileSize) {
+      const code = `
+        @group(0) @binding(0) var<storage, read> ridge: array<vec4f>;
+        @group(0) @binding(1) var<storage, read> nonridge: array<vec4f>;
+        @group(0) @binding(2) var<storage, read> transmittance: array<f32>;
+        @group(0) @binding(3) var<storage, read> depths: array<f32>;
+        @group(0) @binding(4) var<storage, read> occluderDepth: array<f32>;
+        @group(0) @binding(5) var<storage, read_write> output: array<vec4f>;
+
+        @compute @workgroup_size(8, 8)
+        fn main(@builtin(global_invocation_id) gid: vec3u) {
+          if (gid.x >= ${outputWidth}u || gid.y >= ${outputHeight}u) { return; }
+          let outputIndex = gid.y * ${outputWidth}u + gid.x;
+          let sourceX = gid.x / ${tileSize}u;
+          let sourceY = gid.y / ${tileSize}u;
+          var throughput = 1.0;
+          var accumulated = vec3f(0.0);
+          for (var depthIndex = 0u; depthIndex < ${depthCount}u; depthIndex += 1u) {
+            if (depths[depthIndex] < occluderDepth[outputIndex]) {
+              let sourceIndex = (depthIndex * ${sourceHeight}u + sourceY) * ${sourceWidth}u + sourceX;
+              accumulated += throughput * (ridge[sourceIndex].xyz + nonridge[sourceIndex].xyz);
+              throughput *= transmittance[sourceIndex];
+            }
+          }
+          output[outputIndex] = vec4f(accumulated, 1.0);
+        }
+      `;
+      const module = device.createShaderModule({ label: `${identity} shader`, code });
+      return device.createComputePipeline({
+        label: identity,
+        layout: 'auto',
+        compute: { module, entryPoint: 'main' },
+      });
+    }
+
+    function createRoute(device, identity, pipeline, buffers, outputByteLength) {
+      const output = device.createBuffer({
+        label: `${identity} output`,
+        size: outputByteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+      });
+      const bindGroup = device.createBindGroup({
+        label: `${identity} bindings`,
+        layout: pipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: buffers.ridge } },
+          { binding: 1, resource: { buffer: buffers.nonridge } },
+          { binding: 2, resource: { buffer: buffers.transmittance } },
+          { binding: 3, resource: { buffer: buffers.depths } },
+          { binding: 4, resource: { buffer: buffers.occluderDepth } },
+          { binding: 5, resource: { buffer: output } },
+        ],
+      });
+      return { identity, pipeline, bindGroup, output };
+    }
+
+    function createBuilderRoute(device, pipeline, denseBuffers, reducedByteLengths) {
+      const outputs = {
+        ridge: makeWritableStorageBuffer(device, 'built Ridge transfer', reducedByteLengths.ridge),
+        nonridge: makeWritableStorageBuffer(device, 'built Non-Ridge transfer', reducedByteLengths.nonridge),
+        transmittance: makeWritableStorageBuffer(device, 'built shared transmittance', reducedByteLengths.transmittance),
+      };
+      const bindGroup = device.createBindGroup({
+        label: `${BUILDER_IDENTITY} bindings`,
+        layout: pipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: denseBuffers.ridge } },
+          { binding: 1, resource: { buffer: denseBuffers.nonridge } },
+          { binding: 2, resource: { buffer: denseBuffers.transmittance } },
+          { binding: 3, resource: { buffer: outputs.ridge } },
+          { binding: 4, resource: { buffer: outputs.nonridge } },
+          { binding: 5, resource: { buffer: outputs.transmittance } },
+        ],
+      });
+      return { identity: BUILDER_IDENTITY, pipeline, bindGroup, outputs };
+    }
+
+    function writeTimestamp(querySet, beginningOfPassWriteIndex, endOfPassWriteIndex) {
+      const writes = { querySet };
+      if (beginningOfPassWriteIndex !== null) writes.beginningOfPassWriteIndex = beginningOfPassWriteIndex;
+      if (endOfPassWriteIndex !== null) writes.endOfPassWriteIndex = endOfPassWriteIndex;
+      return writes;
+    }
+
+    function encodePass(encoder, label, pipeline, bindGroup, workgroups, timestampWrites = undefined) {
+      const descriptor = { label };
+      if (timestampWrites) descriptor.timestampWrites = timestampWrites;
+      const pass = encoder.beginComputePass(descriptor);
+      pass.setPipeline(pipeline);
+      pass.setBindGroup(0, bindGroup);
+      pass.dispatchWorkgroups(...workgroups);
+      pass.end();
+    }
+
+    function runBuilder(encoder, route, reducedWidth, reducedHeight, timestampWrites = undefined) {
+      encodePass(
+        encoder,
+        `${route.identity} compute`,
+        route.pipeline,
+        route.bindGroup,
+        [Math.ceil(reducedWidth / 8), Math.ceil(reducedHeight / 8), 12],
+        timestampWrites,
+      );
+    }
+
+    function runReducedComposition(encoder, route, width, height, cadence, firstWrites, lastWrites) {
+      for (let frame = 0; frame < cadence; frame += 1) {
+        const writes = frame === cadence - 1 ? lastWrites : (frame === 0 ? firstWrites : undefined);
+        encodePass(encoder, `${route.identity} frame ${frame}`, route.pipeline, route.bindGroup, [Math.ceil(width / 8), Math.ceil(height / 8)], writes);
+      }
+    }
+
+    function runDenseComposition(encoder, route, width, height, cadence, firstWrites, lastWrites) {
+      const singlePassWrites = firstWrites && lastWrites ? { ...firstWrites, ...lastWrites } : firstWrites || lastWrites;
+      for (let frame = 0; frame < cadence; frame += 1) {
+        const writes = frame === 0 && frame === cadence - 1
+          ? singlePassWrites
+          : (frame === 0 ? firstWrites : (frame === cadence - 1 ? lastWrites : undefined));
+        encodePass(encoder, `${route.identity} frame ${frame}`, route.pipeline, route.bindGroup, [Math.ceil(width / 8), Math.ceil(height / 8)], writes);
+      }
+    }
+
+    async function executeSequence(device, label, encode, measured) {
+      let querySet = null;
+      let resolveBuffer = null;
+      let readbackBuffer = null;
+      const encoder = device.createCommandEncoder({ label: `${label} command` });
+      if (measured) {
+        querySet = device.createQuerySet({ label: `${label} timestamp query`, type: 'timestamp', count: 2 });
+        resolveBuffer = device.createBuffer({
+          label: `${label} timestamp resolve`, size: 16,
+          usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
+        });
+        readbackBuffer = device.createBuffer({
+          label: `${label} timestamp readback`, size: 16,
+          usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+        });
+      }
+      encode(
+        encoder,
+        measured ? writeTimestamp(querySet, 0, null) : undefined,
+        measured ? writeTimestamp(querySet, null, 1) : undefined,
+      );
+      if (measured) {
+        encoder.resolveQuerySet(querySet, 0, 2, resolveBuffer, 0);
+        encoder.copyBufferToBuffer(resolveBuffer, 0, readbackBuffer, 0, 16);
+      }
+      device.queue.submit([encoder.finish()]);
+      if (!measured) {
+        await device.queue.onSubmittedWorkDone();
+        return null;
+      }
+      await readbackBuffer.mapAsync(GPUMapMode.READ);
+      const timestamps = new BigUint64Array(readbackBuffer.getMappedRange().slice(0));
+      readbackBuffer.unmap();
+      requireValue(timestamps[0] > 0n && timestamps[1] > timestamps[0], `${label} timestamp query was incomplete or nonmonotonic`);
+      const milliseconds = Number(timestamps[1] - timestamps[0]) / 1_000_000;
+      resolveBuffer.destroy();
+      readbackBuffer.destroy();
+      querySet.destroy?.();
+      return milliseconds;
+    }
+
+    async function readBuffer(device, buffer, byteLength, label) {
+      const readback = device.createBuffer({
+        label: `${label} readback`, size: byteLength,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+      });
+      const encoder = device.createCommandEncoder({ label: `${label} copy` });
+      encoder.copyBufferToBuffer(buffer, 0, readback, 0, byteLength);
+      device.queue.submit([encoder.finish()]);
+      await readback.mapAsync(GPUMapMode.READ);
+      const values = new Float32Array(readback.getMappedRange().slice(0));
+      readback.unmap();
+      readback.destroy();
+      return values;
+    }
+
+    async function readOutput(device, route, byteLength) {
+      return readBuffer(device, route.output, byteLength, `${route.identity} output`);
+    }
+
+    function validateOutput(actual, expected, thresholds = { expectedMae: 0.00005, expectedMaxAbsError: 0.0005 }) {
+      requireValue(actual.length === expected.length, 'GPU output element count drifted');
+      let sum = 0;
+      let max = 0;
+      let finite = true;
+      for (let index = 0; index < actual.length; index += 1) {
+        finite &&= Number.isFinite(actual[index]);
+        const error = Math.abs(actual[index] - expected[index]);
+        sum += error;
+        max = Math.max(max, error);
+      }
+      const expectedMae = sum / actual.length;
+      const expectedMaxAbsError = max;
+      return {
+        finite,
+        expectedMae,
+        expectedMaxAbsError,
+        passed: finite && expectedMae <= thresholds.expectedMae && expectedMaxAbsError <= thresholds.expectedMaxAbsError,
+        thresholds,
+      };
+    }
+
+    function draw(canvas, values) {
+      const context = canvas.getContext('2d');
+      const image = context.createImageData(canvas.width, canvas.height);
+      for (let pixel = 0; pixel < canvas.width * canvas.height; pixel += 1) {
+        for (let channel = 0; channel < 3; channel += 1) {
+          const linear = Math.max(0, values[pixel * 4 + channel]);
+          image.data[pixel * 4 + channel] = Math.min(255, Math.round(255 * Math.pow(linear * 0.88, 0.84)));
+        }
+        image.data[pixel * 4 + 3] = 255;
+      }
+      context.putImageData(image, 0, 0);
+    }
+
+    function drawResidual(canvas, actual, expected, amplification) {
+      const context = canvas.getContext('2d');
+      const image = context.createImageData(canvas.width, canvas.height);
+      for (let index = 0; index < actual.length; index += 4) {
+        for (let channel = 0; channel < 3; channel += 1) {
+          image.data[index + channel] = Math.min(255, Math.round(255 * amplification * Math.abs(actual[index + channel] - expected[index + channel])));
+        }
+        image.data[index + 3] = 255;
+      }
+      context.putImageData(image, 0, 0);
+    }
+
+    async function main() {
+      const params = new URLSearchParams(location.search);
+      const manifestParameter = params.get('manifest');
+      requireValue(manifestParameter, 'manifest query parameter is required');
+      const requestedSamples = parsePositiveInteger(params, 'samples');
+      const requestedWarmup = parsePositiveInteger(params, 'warmup', true);
+      const requestedCadences = parseCadences(params);
+      initialReport.requestedSamples = requestedSamples;
+      initialReport.requestedWarmup = requestedWarmup;
+      initialReport.requestedCadences = requestedCadences;
+      initialReport.requestedManifest = manifestParameter;
+
+      initialReport.failurePhase = 'manifest-authentication';
+      const manifestUrl = new URL(manifestParameter, location.href);
+      const manifestResponse = await fetch(manifestUrl);
+      requireValue(manifestResponse.ok, `manifest fetch failed ${manifestResponse.status}`);
+      const manifestBytes = await manifestResponse.arrayBuffer();
+      const manifest = JSON.parse(new TextDecoder().decode(manifestBytes));
+      requireValue(manifest.schema === 'kaminos.view-conditioned-transfer-gpu-input.v0', 'input manifest schema drifted');
+      requireValue(manifest.status === 'complete' && manifest.failurePhase === null, 'input manifest is not complete');
+      requireValue(manifest.effective.denseCompositor === DENSE_IDENTITY, 'dense compositor identity drifted');
+      requireValue(manifest.effective.reducedCompositor === REDUCED_IDENTITY, 'reduced compositor identity drifted');
+      requireValue(manifest.treatment.label === 'd12-t2', 'authenticated treatment is not d12-t2');
+      requireValue(manifest.effective.tileSize === 2, 'authenticated treatment tile size is not two');
+      const denseShape = manifest.effective.denseShape;
+      const reducedShape = manifest.effective.reducedShape;
+      requireValue(sameShape(denseShape, EXPECTED_DENSE_SHAPE), 'denseShape must be [96,242,314]');
+      requireValue(sameShape(reducedShape, EXPECTED_REDUCED_SHAPE), 'reducedShape must be [12,121,157]');
+      requireValue(sameShape(manifest.effective.outputShape, EXPECTED_OUTPUT_SHAPE), 'output shape must be [242,314]');
+      requireValue(sameShape(manifest.artifacts.occluderDepth.shape, [242, 314]), 'occluderDepth shape must be [242,314]');
+      initialReport.inputManifest = {
+        url: manifestUrl.href,
+        sha256: await sha256Hex(manifestBytes),
+        sourceManifestSha256: manifest.source.manifestSha256,
+        treatmentReportSha256: manifest.treatment.reportSha256,
+        treatmentLabel: manifest.treatment.label,
+      };
+
+      initialReport.failurePhase = 'binary-authentication';
+      const binaryEntries = await Promise.all(Object.entries(manifest.artifacts).map(async ([name, descriptor]) => [name, await loadBinary(manifestUrl, descriptor)]));
+      const binaries = Object.fromEntries(binaryEntries);
+      const [depthCount, outputHeight, outputWidth] = denseShape;
+      const [reducedDepthCount, reducedHeight, reducedWidth] = reducedShape;
+      requireValue(depthCount === 96, 'dense depth count is not 96');
+      requireValue(reducedDepthCount === 12, 'reduced depth count is not 12');
+      const outputByteLength = outputWidth * outputHeight * 16;
+      const reducedByteLengths = {
+        ridge: binaries.reducedRidge.byteLength,
+        nonridge: binaries.reducedNonridge.byteLength,
+        transmittance: binaries.reducedTransmittance.byteLength,
+      };
+
+      initialReport.failurePhase = 'webgpu-device';
+      requireValue(navigator.gpu, 'WebGPU is unavailable');
+      const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+      requireValue(adapter, 'WebGPU adapter is unavailable');
+      requireValue(adapter.features.has('timestamp-query'), 'timestamp-query is unavailable on the effective adapter');
+      const requestedDeviceDescriptor = { requiredFeatures: ['timestamp-query'] };
+      const device = await adapter.requestDevice(requestedDeviceDescriptor);
+      requireValue(device.features.has('timestamp-query'), 'timestamp-query was not enabled on the effective device');
+      const adapterInfo = typeof adapter.requestAdapterInfo === 'function' ? await adapter.requestAdapterInfo() : (adapter.info ?? {});
+      initialReport.timestampStatus = 'available';
+      initialReport.backend = {
+        requestedFeatures: requestedDeviceDescriptor.requiredFeatures,
+        effectiveFeatures: Array.from(device.features).sort(),
+        adapterInfo,
+        limits: {
+          maxBufferSize: device.limits.maxBufferSize,
+          maxStorageBufferBindingSize: device.limits.maxStorageBufferBindingSize,
+          maxStorageBuffersPerShaderStage: device.limits.maxStorageBuffersPerShaderStage,
+        },
+        fallbackUsed: false,
+      };
+
+      initialReport.failurePhase = 'gpu-upload-and-pipeline-setup';
+      const setupStart = performance.now();
+      const occluderDepth = makeStorageBuffer(device, 'shared opaque scene depth', binaries.occluderDepth);
+      const denseBuffers = {
+        ridge: makeStorageBuffer(device, 'dense ridge', binaries.denseRidge),
+        nonridge: makeStorageBuffer(device, 'dense nonridge', binaries.denseNonridge),
+        transmittance: makeStorageBuffer(device, 'dense transmittance', binaries.denseTransmittance),
+        depths: makeStorageBuffer(device, 'dense depths', binaries.denseDepths),
+        occluderDepth,
+      };
+      const persistedBuffers = {
+        ridge: makeStorageBuffer(device, 'reduced ridge', binaries.reducedRidge),
+        nonridge: makeStorageBuffer(device, 'reduced nonridge', binaries.reducedNonridge),
+        transmittance: makeStorageBuffer(device, 'reduced transmittance', binaries.reducedTransmittance),
+        depths: makeStorageBuffer(device, 'reduced depths', binaries.reducedDepths),
+        occluderDepth,
+      };
+      const densePipeline = createPipeline(device, DENSE_IDENTITY, depthCount, outputWidth, outputHeight, outputWidth, outputHeight, 1);
+      const reducedPipeline = createPipeline(device, REDUCED_IDENTITY, reducedDepthCount, reducedWidth, reducedHeight, outputWidth, outputHeight, manifest.effective.tileSize);
+      const builderPipeline = createBuilderPipeline(device, denseShape, reducedShape);
+      const builder = createBuilderRoute(device, builderPipeline, denseBuffers, reducedByteLengths);
+      const builtBuffers = {
+        ridge: builder.outputs.ridge,
+        nonridge: builder.outputs.nonridge,
+        transmittance: builder.outputs.transmittance,
+        depths: persistedBuffers.depths,
+        occluderDepth,
+      };
+      const routes = {
+        dense: createRoute(device, DENSE_IDENTITY, densePipeline, denseBuffers, outputByteLength),
+        persisted: createRoute(device, 'persisted-d12-t2-compositor-v0', reducedPipeline, persistedBuffers, outputByteLength),
+        built: createRoute(device, 'gpu-built-d12-t2-compositor-v0', reducedPipeline, builtBuffers, outputByteLength),
+      };
+      await device.queue.onSubmittedWorkDone();
+      const setupMilliseconds = performance.now() - setupStart;
+
+      initialReport.failurePhase = 'warmup';
+      for (let index = 0; index < requestedWarmup; index += 1) {
+        await executeSequence(device, 'builder warmup', (encoder) => runBuilder(encoder, builder, reducedWidth, reducedHeight), false);
+        await executeSequence(device, 'dense warmup', (encoder) => runDenseComposition(encoder, routes.dense, outputWidth, outputHeight, 1), false);
+        await executeSequence(device, 'built reduced warmup', (encoder) => runReducedComposition(encoder, routes.built, outputWidth, outputHeight, 1), false);
+      }
+
+      initialReport.failurePhase = 'timestamp-sampling';
+      const builderSamples = [];
+      const scheduleSamples = Object.fromEntries(requestedCadences.map(cadence => [String(cadence), { dense: [], reduced: [] }]));
+      for (let roundIndex = 0; roundIndex < requestedSamples; roundIndex += 1) {
+        builderSamples.push(await executeSequence(
+          device,
+          'builder-only',
+          (encoder, firstWrites, lastWrites) => runBuilder(encoder, builder, reducedWidth, reducedHeight, { ...firstWrites, ...lastWrites }),
+          true,
+        ));
+        for (const cadence of requestedCadences) {
+          const order = roundIndex % 2 === 0 ? ['dense', 'reduced'] : ['reduced', 'dense'];
+          for (const role of order) {
+            if (role === 'dense') {
+              scheduleSamples[String(cadence)].dense.push(await executeSequence(
+                device,
+                `dense cadence ${cadence}`,
+                (encoder, firstWrites, lastWrites) => runDenseComposition(encoder, routes.dense, outputWidth, outputHeight, cadence, firstWrites, lastWrites),
+                true,
+              ));
+            } else {
+              scheduleSamples[String(cadence)].reduced.push(await executeSequence(
+                device,
+                `builder plus reduced cadence ${cadence}`,
+                (encoder, firstWrites, lastWrites) => {
+                  runBuilder(encoder, builder, reducedWidth, reducedHeight, firstWrites);
+                  runReducedComposition(encoder, routes.built, outputWidth, outputHeight, cadence, undefined, lastWrites);
+                },
+                true,
+              ));
+            }
+          }
+        }
+      }
+      const timing = {
+        builder: summarize(builderSamples),
+        schedules: Object.fromEntries(requestedCadences.map(cadence => {
+          const samples = scheduleSamples[String(cadence)];
+          const denseTotal = summarize(samples.dense);
+          const reducedTotal = summarize(samples.reduced);
+          const densePerFrame = summarize(samples.dense.map(value => value / cadence));
+          const reducedPerFrame = summarize(samples.reduced.map(value => value / cadence));
+          return [String(cadence), {
+            cadence,
+            denseTotal,
+            reducedTotal,
+            densePerFrame,
+            reducedPerFrame,
+            medianDenseToReducedRatio: densePerFrame.medianMs / reducedPerFrame.medianMs,
+          }];
+        })),
+      };
+      const effectiveSamples = {
+        builder: timing.builder.sampleCount,
+        schedules: Object.fromEntries(requestedCadences.map(cadence => [String(cadence), {
+          dense: timing.schedules[String(cadence)].denseTotal.sampleCount,
+          reduced: timing.schedules[String(cadence)].reducedTotal.sampleCount,
+        }])),
+      };
+      requireValue(effectiveSamples.builder === requestedSamples, 'effective builder sample count was silently reduced');
+      for (const cadence of requestedCadences) {
+        requireValue(effectiveSamples.schedules[String(cadence)].dense === requestedSamples, `dense cadence ${cadence} sample count was silently reduced`);
+        requireValue(effectiveSamples.schedules[String(cadence)].reduced === requestedSamples, `reduced cadence ${cadence} sample count was silently reduced`);
+      }
+
+      initialReport.failurePhase = 'output-validation';
+      await executeSequence(device, 'validation builder', (encoder) => runBuilder(encoder, builder, reducedWidth, reducedHeight), false);
+      await executeSequence(device, 'validation dense', (encoder) => runDenseComposition(encoder, routes.dense, outputWidth, outputHeight, 1), false);
+      await executeSequence(device, 'validation persisted', (encoder) => runReducedComposition(encoder, routes.persisted, outputWidth, outputHeight, 1), false);
+      await executeSequence(device, 'validation built', (encoder) => runReducedComposition(encoder, routes.built, outputWidth, outputHeight, 1), false);
+      const builderThresholds = { expectedMae: 0.0000002, expectedMaxAbsError: 0.00002 };
+      const builtRidge = await readBuffer(device, builder.outputs.ridge, reducedByteLengths.ridge, 'built Ridge transfer');
+      const builtNonridge = await readBuffer(device, builder.outputs.nonridge, reducedByteLengths.nonridge, 'built Non-Ridge transfer');
+      const builtTransmittance = await readBuffer(device, builder.outputs.transmittance, reducedByteLengths.transmittance, 'built shared transmittance');
+      const persistedRidge = new Float32Array(binaries.reducedRidge);
+      const persistedNonridge = new Float32Array(binaries.reducedNonridge);
+      const persistedTransmittance = new Float32Array(binaries.reducedTransmittance);
+      const builderOutputValidation = {
+        ridge: validateOutput(builtRidge, persistedRidge, builderThresholds),
+        nonridge: validateOutput(builtNonridge, persistedNonridge, builderThresholds),
+        transmittance: validateOutput(builtTransmittance, persistedTransmittance, builderThresholds),
+      };
+      requireValue(Object.values(builderOutputValidation).every(result => result.passed), `GPU-built transfer failed persisted d12-t2 reference: ${JSON.stringify(builderOutputValidation)}`);
+      const denseActual = await readOutput(device, routes.dense, outputByteLength);
+      const persistedActual = await readOutput(device, routes.persisted, outputByteLength);
+      const builtActual = await readOutput(device, routes.built, outputByteLength);
+      const denseExpected = new Float32Array(binaries.denseExpected);
+      const reducedExpected = new Float32Array(binaries.reducedExpected);
+      const compositorOutputValidation = {
+        dense: validateOutput(denseActual, denseExpected),
+        persisted: validateOutput(persistedActual, reducedExpected),
+        built: validateOutput(builtActual, reducedExpected),
+        builtVsPersisted: validateOutput(builtActual, persistedActual, builderThresholds),
+      };
+      requireValue(Object.values(compositorOutputValidation).every(result => result.passed), `GPU compositor output validation failed: ${JSON.stringify(compositorOutputValidation)}`);
+      draw(document.getElementById('dense'), denseActual);
+      draw(document.getElementById('persisted'), persistedActual);
+      draw(document.getElementById('built'), builtActual);
+      drawResidual(document.getElementById('residual'), builtActual, persistedActual, 100);
+
+      const report = {
+        ...initialReport,
+        status: 'complete',
+        failurePhase: null,
+        requestedSamples,
+        effectiveSamples,
+        requestedWarmup,
+        effectiveWarmup: requestedWarmup,
+        requestedCadences,
+        effectiveCadences: requestedCadences,
+        builderIdentity: BUILDER_IDENTITY,
+        compositorIdentities: { dense: DENSE_IDENTITY, reduced: REDUCED_IDENTITY },
+        workload: {
+          outputWidth, outputHeight, outputPixels: outputWidth * outputHeight,
+          denseDepthBins: depthCount, reducedDepthGroups: reducedDepthCount,
+          reducedTileSize: manifest.effective.tileSize,
+          sharedOccluderDepth: true,
+        },
+        setupMilliseconds,
+        timestampStatus: 'available',
+        timingSource: 'webgpu-timestamp-query-command-sequence-v0',
+        timing,
+        builderOutputValidation,
+        compositorOutputValidation,
+        optimizationClaimAllowed: true,
+      };
+      window.__TRANSFER_GPU_BUILDER__ = report;
+      document.body.dataset.state = 'complete';
+      document.getElementById('status').textContent = 'Authenticated GPU measurement complete';
+      document.getElementById('timing-source').textContent = report.timingSource;
+      document.getElementById('sample-count').textContent = `${requestedSamples} each, AB/BA schedules`;
+      document.getElementById('cadences').textContent = requestedCadences.join(', ');
+      document.getElementById('dense-time').textContent = `${timing.schedules[String(requestedCadences[0])].densePerFrame.medianMs.toFixed(4)} ms/frame`;
+      document.getElementById('persisted-validation').textContent = `MAE ${compositorOutputValidation.persisted.expectedMae.toExponential(2)}`;
+      document.getElementById('built-validation').textContent = `MAE ${compositorOutputValidation.built.expectedMae.toExponential(2)}`;
+      document.getElementById('residual-max').textContent = `raw max ${compositorOutputValidation.builtVsPersisted.expectedMaxAbsError.toExponential(2)}`;
+      document.getElementById('builder-validation').textContent = `max ${Math.max(...Object.values(builderOutputValidation).map(value => value.expectedMaxAbsError)).toExponential(2)}`;
+      document.getElementById('composition-validation').textContent = `max ${compositorOutputValidation.built.expectedMaxAbsError.toExponential(2)}`;
+      document.getElementById('setup-time').textContent = `${setupMilliseconds.toFixed(1)} ms`;
+      document.getElementById('builder-time').textContent = `${timing.builder.medianMs.toFixed(4)} ms`;
+      const cadenceResults = document.getElementById('cadence-results');
+      for (const cadence of requestedCadences) {
+        const result = timing.schedules[String(cadence)];
+        const item = document.createElement('div');
+        const term = document.createElement('dt');
+        const detail = document.createElement('dd');
+        term.textContent = `Update every ${cadence} frame${cadence === 1 ? '' : 's'}`;
+        detail.textContent = `dense ${result.densePerFrame.medianMs.toFixed(4)} vs build+reduced ${result.reducedPerFrame.medianMs.toFixed(4)} ms/frame, ${result.medianDenseToReducedRatio.toFixed(2)}x`;
+        item.append(term, detail);
+        cadenceResults.append(item);
+      }
+    }
+
+    main().catch(error => {
+      const failure = {
+        ...initialReport,
+        status: 'failed',
+        error: `${error?.name || 'Error'}: ${error?.message || String(error)}`,
+        stack: error?.stack || null,
+        optimizationClaimAllowed: false,
+      };
+      window.__TRANSFER_GPU_BUILDER__ = failure;
+      document.body.dataset.state = 'failed';
+      document.getElementById('status').textContent = `Failed during ${failure.failurePhase}`;
+      document.getElementById('failure').textContent = `${failure.error}\n\n${failure.stack || ''}`;
+    });
+  </script>
+</body>
+</html>
