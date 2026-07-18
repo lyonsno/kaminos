@@ -802,12 +802,21 @@ const admittedSources = {
   decoder: { 'decoder-single': admittedChunkBytes },
 };
 const fetchedChildUrls = [];
+const observedChildAuthorizations = [];
+const observedCustomFetchPairs = [];
+const admittedFetchOptions = {
+  headers: { authorization: 'ordinary-admitted' },
+  custom: { pairs: [['routing', 'admitted']] },
+};
 const childLoader = childLoaderRoute.createModelResourcePackageLoader({
   loaderId: 'phase-package-loader',
   package: mutableChunkPackage,
   sources: admittedSources,
-  async fetch(url) {
+  fetchOptions: admittedFetchOptions,
+  async fetch(url, options) {
     fetchedChildUrls.push(String(url));
+    observedChildAuthorizations.push(new Headers(options.headers).get('authorization'));
+    observedCustomFetchPairs.push(options.custom.pairs[0][1]);
     return responseFor(byteSets.encoder);
   },
 });
@@ -821,6 +830,8 @@ assert.equal(childLoaderFixture.buffers.length, 0, 'package admission must not a
 
 admittedSources.encoder = 'https://models.example/redirected-after-admission.bin';
 admittedChunkBytes.fill(0xff);
+admittedFetchOptions.headers.authorization = 'ordinary-mutated-after-admission';
+admittedFetchOptions.custom.pairs[0][1] = 'custom-mutated-after-admission';
 await assert.rejects(
   () => childLoader.acquireResource({ resourceId: 'missing' }),
   /unknown.*package resource|package resource.*missing/i,
@@ -854,6 +865,12 @@ assert.deepEqual(
   ['https://models.example/admitted-encoder.bin'],
   'ordinary child acquisition must use the source captured at admission',
 );
+assert.deepEqual(
+  observedChildAuthorizations,
+  ['ordinary-admitted'],
+  'ordinary child fetch must use nested request options captured at admission',
+);
+assert.deepEqual(observedCustomFetchPairs, ['admitted']);
 assert.equal(childLoaderFixture.buffers.length, 2);
 const decoderChildRelease = decoderChild.release();
 assert.equal(decoderChildRelease.schema, 'kaminos.webgpu-model-resource-package-child-lease.v0');
@@ -953,8 +970,70 @@ assert.throws(
   }),
   /uncapped|maxActiveResources/i,
 );
+const accessorFetchOptions = {};
+Object.defineProperty(accessorFetchOptions, 'headers', {
+  enumerable: true,
+  get() { return { authorization: 'accessor-must-not-run-later' }; },
+});
+assert.throws(
+  () => childLoaderRoute.createModelResourcePackageLoader({
+    loaderId: 'accessor-fetch-options-loader',
+    package: singleResourcePackage,
+    sources: { encoder: new Blob([byteSets.encoder]) },
+    fetchOptions: accessorFetchOptions,
+  }),
+  /fetchOptions.*data propert|enumerable data propert/i,
+);
+assert.throws(
+  () => childLoaderRoute.createModelResourcePackageLoader({
+    loaderId: 'signal-fetch-options-loader',
+    package: singleResourcePackage,
+    sources: { encoder: new Blob([byteSets.encoder]) },
+    fetchOptions: { signal: new AbortController().signal },
+  }),
+  /fetchOptions\.signal.*acquireResource|invocation signal/i,
+);
 childLoaderSession.unregisterRoute(childLoaderRoute.routeId);
 childLoaderSession.close();
+
+const chunkFetchOptionsFixture = deviceFixture();
+const chunkFetchOptionsSession = await createWebGpuInferenceSession({
+  sessionId: 'model-resource-package-chunk-fetch-options',
+  device: chunkFetchOptionsFixture.device,
+  adapterName: 'fixture-adapter',
+});
+const chunkFetchOptionsRoute = await chunkFetchOptionsSession.registerRoute({
+  routeId: 'package-chunk-fetch-options-route',
+});
+const chunkFetchOptions = { headers: new Headers({ authorization: 'chunk-admitted' }) };
+const observedChunkAuthorizations = [];
+const chunkSourceUrls = {
+  'decoder-0': 'https://models.example/chunk-fetch-options-0.bin',
+  'decoder-1': 'https://models.example/chunk-fetch-options-1.bin',
+};
+const chunkFetchOptionsLoader = chunkFetchOptionsRoute.createModelResourcePackageLoader({
+  loaderId: 'package-chunk-fetch-options-loader',
+  package: chunkOnlyPackage,
+  sources: { decoder: chunkSourceUrls },
+  fetchOptions: chunkFetchOptions,
+  async fetch(url, options) {
+    observedChunkAuthorizations.push(new Headers(options.headers).get('authorization'));
+    return responseFor(url === chunkSourceUrls['decoder-0']
+      ? byteSets.decoder.slice(0, 4)
+      : byteSets.decoder.slice(4));
+  },
+});
+chunkFetchOptions.headers.set('authorization', 'chunk-mutated-after-admission');
+const chunkFetchOptionsLease = await chunkFetchOptionsLoader.acquireResource({ resourceId: 'decoder' });
+assert.deepEqual(
+  observedChunkAuthorizations,
+  ['chunk-admitted', 'chunk-admitted'],
+  'every chunk fetch must use nested request options captured at package admission',
+);
+assert.equal(chunkFetchOptionsLease.release().status, 'released');
+assert.equal(chunkFetchOptionsLoader.close().status, 'closed');
+chunkFetchOptionsSession.unregisterRoute(chunkFetchOptionsRoute.routeId);
+chunkFetchOptionsSession.close();
 
 const invalidatedChildFixture = deviceFixture();
 const invalidatedChildSession = await createWebGpuInferenceSession({
@@ -980,5 +1059,90 @@ assert.equal(invalidatedChildRelease.status, 'invalidated');
 assert.equal(invalidatedChildRelease.underlyingRelease.status, 'invalidated');
 assert.equal(invalidatedChildLoader.snapshot().activeLeaseCount, 0);
 assert.equal(invalidatedChildLoader.close().status, 'closed');
+
+const partialResidentBytes = Uint8Array.from({ length: 8 }, (_, index) => index + 91);
+const partialResidentManifest = defineWebGpuModelResourceManifest({
+  modelId: modelPackage.modelId,
+  revision: modelPackage.revision,
+  bundle: {
+    byteLength: partialResidentBytes.byteLength,
+    sha256: createHash('sha256').update(partialResidentBytes).digest('hex'),
+  },
+  allocations: [
+    {
+      allocationId: 'partial-resident-a',
+      byteOffset: 0,
+      byteLength: 4,
+      usage: WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst,
+      tensors: [{
+        name: 'partial.a',
+        dtype: 'u32',
+        shape: [1],
+        byteOffset: 0,
+        byteLength: 4,
+      }],
+    },
+    {
+      allocationId: 'partial-resident-b',
+      byteOffset: 4,
+      byteLength: 4,
+      usage: WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst,
+      tensors: [{
+        name: 'partial.b',
+        dtype: 'u32',
+        shape: [1],
+        byteOffset: 0,
+        byteLength: 4,
+      }],
+    },
+  ],
+});
+const partialResidentPackage = defineWebGpuModelResourcePackage({
+  packageId: 'acme/large-browser-model:partial-resident-fallback',
+  modelId: modelPackage.modelId,
+  revision: modelPackage.revision,
+  resources: [{ resourceId: 'partial', manifest: partialResidentManifest }],
+});
+const partialResidentFixture = deviceFixture();
+const partialResidentSession = await createWebGpuInferenceSession({
+  sessionId: 'model-resource-package-partial-resident',
+  device: partialResidentFixture.device,
+  adapterName: 'fixture-adapter',
+});
+const partialResidentRoute = await partialResidentSession.registerRoute({
+  routeId: 'package-partial-resident-route',
+});
+let partialResidentFetchCount = 0;
+const partialResidentLoader = partialResidentRoute.createModelResourcePackageLoader({
+  loaderId: 'package-partial-resident-loader',
+  package: partialResidentPackage,
+  sources: { partial: 'https://models.example/partial-resident.bin' },
+  async fetch() {
+    partialResidentFetchCount += 1;
+    return responseFor(partialResidentBytes);
+  },
+});
+const partialResidentInitial = await partialResidentLoader.acquireResource({ resourceId: 'partial' });
+const retainedPartialBuffer = partialResidentInitial.allocations[0].buffer;
+assert.equal(partialResidentInitial.release().status, 'released');
+assert.equal(
+  partialResidentSession.residency.evict(partialResidentManifest.allocations[1].resourceId).status,
+  'evicted',
+);
+const partialResidentFallback = await partialResidentLoader.acquireResource({ resourceId: 'partial' });
+assert.equal(partialResidentFallback.report.loadPath, 'source');
+assert.equal(partialResidentFetchCount, 2);
+assert.equal(partialResidentFallback.allocations[0].buffer, retainedPartialBuffer);
+assert.equal(partialResidentRoute.residency.snapshot().activeLeaseCount, 2);
+assert.equal(
+  partialResidentFixture.buffers.length,
+  3,
+  'partial resident fallback must reuse the surviving allocation and recreate only the evicted allocation',
+);
+assert.equal(partialResidentFallback.release().status, 'released');
+assert.equal(partialResidentRoute.residency.snapshot().activeLeaseCount, 0);
+assert.equal(partialResidentLoader.close().status, 'closed');
+partialResidentSession.unregisterRoute(partialResidentRoute.routeId);
+partialResidentSession.close();
 
 console.log('model resource package contracts passed');
