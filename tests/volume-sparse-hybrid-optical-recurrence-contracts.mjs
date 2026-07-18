@@ -34,6 +34,12 @@ assert.doesNotMatch(
   /let accumulated\s*=\s*residualAccumulated\s*\/\s*4\.0\s*\+\s*splatAccumulated/,
   'already-integrated raymarch emission must never be reinterpreted as a source-function numerator',
 );
+assert.match(
+  core,
+  /let residualSourceNumerator\s*=\s*select\(\s*residualSubintervalEmission,[\s\S]*residualSubintervalOpticalDepth\s*>\s*1e-6[\s\S]*let binEmission\s*=\s*select\(\s*accumulated\.rgb,[\s\S]*opticalDepth\s*>\s*1e-6/,
+  'zero-extinction residual emission must use the shared-bin transport limit instead of bypassing splat extinction',
+);
+assert.doesNotMatch(core, /residualVacuumEmission/, 'residual emission must not bypass the shared optical recurrence');
 assert.match(core, /COARSE_RESIDUAL_SHARED_OPTICAL_DEPTH_INTERVAL_IDENTITY\s*=\s*['"]camera-ray-entry-to-exit-sixteen-equal-intervals-v0['"]/, 'splat and residual recurrence must share linear camera-ray depth semantics');
 assert.match(core, /boundarySplatSharedOpticalPipelines[\s\S]*SHARED_LINEAR_OPTICAL_DEPTH:\s*1/, 'shared route must not reuse projected-NDC bins against linear residual intervals');
 assert.match(core, /coefficientConservationEligible:\s*false/, 'unproven learned splat coefficients must not claim exact coefficient conservation');
