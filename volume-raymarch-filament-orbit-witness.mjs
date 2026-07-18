@@ -43,6 +43,7 @@ const expectedWarmupAuthority = args.get('--expected-warmup-authority') ? String
 const expectedWarmupTarget = optionalInteger('--expected-warmup-target');
 const expectedAnchorFluidSha256 = optionalSha256('--expected-anchor-fluid-sha256');
 const expectedAnchorFrontSha256 = optionalSha256('--expected-anchor-front-sha256');
+const expectedCandidatePayloadSha256 = optionalSha256('--expected-candidate-payload-sha256');
 const timeoutMs = Number(args.get('--timeout-ms') || 240000);
 const settleMs = Number(args.get('--settle-ms') || 1800);
 const debugPort = Number(args.get('--debug-port') || randomInt(42000, 62000));
@@ -130,6 +131,7 @@ try {
     assert.ok(expectedWarmupTarget !== null && expectedWarmupTarget > 0, 'checksum-anchor bridge must request a positive exact warmup target');
     assert.ok(expectedAnchorFluidSha256 && expectedAnchorFrontSha256, 'checksum-anchor bridge must request both exact field hashes');
     assert.ok(expectedControlsHash, 'checksum-anchor bridge must request an exact controls hash');
+    if (sparseHybridRequested) assert.ok(expectedCandidatePayloadSha256, 'checksum-bound sparse hybrid replay must request the accepted candidate payload hash');
     assert.equal(expectedFrameCount, expectedWarmupTarget, 'checksum-anchor bridge frame authority must equal the warmup target');
     assert.equal(expectedSimStepCount, expectedWarmupTarget, 'checksum-anchor bridge simulation authority must equal the warmup target');
     assert.equal(route.searchParams.get('warmup_steps'), String(expectedWarmupTarget), 'checksum-anchor bridge URL must request the exact warmup target');
@@ -228,7 +230,11 @@ try {
     for (const camera of initialization.cameras) {
       for (const raymarchScale of sparseHybridScales) {
         failurePhase = `camera-${camera.index}-sparse-hybrid-${raymarchScale}`;
-        captures.push(await captureAndPersist(camera, 'sparseHybridPresentation', maxRaySteps, raymarchScale));
+        const capture = await captureAndPersist(camera, 'sparseHybridPresentation', maxRaySteps, raymarchScale);
+        if (expectedCandidatePayloadSha256 !== null) {
+          assert.equal(capture.footprintAudit?.candidatePayloadSha256, expectedCandidatePayloadSha256, 'candidate payload hash disagrees with requested authority');
+        }
+        captures.push(capture);
       }
     }
   } else for (const camera of initialization.cameras) {
@@ -305,6 +311,7 @@ try {
       candidatePayload: {
         count: firstCapture.footprintAudit?.candidateCount,
         sha256: firstCapture.footprintAudit?.candidatePayloadSha256,
+        expectedSha256: expectedCandidatePayloadSha256,
         coefficientSha256: firstCapture.footprintAudit?.coefficientPayloadSha256,
         covarianceSha256: firstCapture.footprintAudit?.covariancePayloadSha256,
       },
@@ -317,6 +324,7 @@ try {
       browserEvents: socket.browserEvents,
     };
     assert.ok(firstCapture.footprintAudit?.candidatePayloadSha256, 'sparse hybrid source payload hash missing');
+    assert.ok(sparseReport.captures.every(capture => capture.footprintAudit?.candidatePayloadSha256 === firstCapture.footprintAudit?.candidatePayloadSha256), 'candidate payload changed across sparse hybrid scale-camera captures');
     assert.ok(sparseReport.captures.every(capture => capture.sparseHybridPresentationReceipt?.fallbackReason == null), 'sparse hybrid route fallback present');
     assert.ok(sparseReport.captures.every(capture => capture.frameCount === sparseReport.frozenState.baseFrameCount && capture.simStepCount === sparseReport.frozenState.baseSimStepCount), 'sparse hybrid capture advanced simulator state');
     assert.ok(new Set(sparseReport.captures.map(capture => capture.cameraPoseHash)).size === 21, 'sparse hybrid camera orbit is partial or duplicated');
@@ -395,6 +403,7 @@ try {
       expectedWarmupTarget,
       expectedAnchorFluidSha256,
       expectedAnchorFrontSha256,
+      expectedCandidatePayloadSha256,
     },
     frozenState: initialization.summary.frozenState,
     finalState,
@@ -1474,6 +1483,7 @@ function parseArgs(argv) {
     '--expected-warmup-target',
     '--expected-anchor-fluid-sha256',
     '--expected-anchor-front-sha256',
+    '--expected-candidate-payload-sha256',
     '--timeout-ms',
     '--settle-ms',
     '--debug-port',
