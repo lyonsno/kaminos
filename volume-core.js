@@ -16232,6 +16232,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       flowKernelDescriptorCaptureRequested: state.flowKernelDescriptorCaptureRequested,
       flowKernelDescriptorCaptureEffective: state.flowKernelDescriptorCaptureEffective,
       flowKernelDescriptorCapture,
+      boundarySidecarSource: state.boundarySidecarSource,
       boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
       boundarySidecarOverrideReceipt: state.boundarySidecarOverrideReceipt,
       boundarySplatCapacity: state.boundarySplatCapacity,

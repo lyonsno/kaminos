@@ -59,6 +59,16 @@ assert.match(
 );
 assert.match(
   source,
+  /requestedConfigFromUrl[\s\S]*boundarySidecarSource[\s\S]*volume_boundary_sidecar_source[\s\S]*validateEffectiveState[\s\S]*boundarySidecarSource/,
+  'witness must parse and assert the requested live structure source instead of accepting stale baked or mix state',
+);
+assert.match(
+  source,
+  /compactState[\s\S]*boundarySidecarSource[\s\S]*validateReadbackSample[\s\S]*boundarySidecarSource[\s\S]*compactReadbackSample[\s\S]*boundarySidecarSource/,
+  'compact transition and final GPU evidence must preserve effective structure-source identity',
+);
+assert.match(
+  source,
   /validateEffectiveState[\s\S]*boundarySplatRequestedInstanceCount[\s\S]*boundarySplatHistoryDepth[\s\S]*boundarySplatHistorySlots/,
   'witness rejects stale/default instance and history allocation state',
 );

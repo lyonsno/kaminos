@@ -291,6 +291,9 @@ function requestedConfigFromUrl(url) {
   const requestedPbrScene = params.has('volume_boundary_splat_pbr_scene')
     ? String(params.get('volume_boundary_splat_pbr_scene') || 'off').toLowerCase().replace(/_/g, '-')
     : null;
+  const boundarySidecarSource = params.has('volume_boundary_sidecar_source')
+    ? String(params.get('volume_boundary_sidecar_source') || '').toLowerCase()
+    : null;
   const boundarySplatInstances = params.has('volume_boundary_splat_instances')
     ? Number(params.get('volume_boundary_splat_instances'))
     : null;
@@ -310,6 +313,7 @@ function requestedConfigFromUrl(url) {
     boundarySplatPbrScene: requestedPbrScene === null
       ? null
       : ['fire-field', 'pbr-fire-field', 'court'].includes(requestedPbrScene) ? 'fire-field' : 'off',
+    boundarySidecarSource,
     boundarySplatInstances,
     boundarySplatHistoryDepth,
   };
@@ -336,6 +340,9 @@ function validateEffectiveState(state, pageUrl) {
   if (expected.boundarySplatMode !== null && state?.boundarySplatMode !== expected.boundarySplatMode) mismatches.push(['boundarySplatMode', expected.boundarySplatMode, state?.boundarySplatMode]);
   if (expected.boundarySplatComposition !== null && state?.boundarySplatComposition !== expected.boundarySplatComposition) mismatches.push(['boundarySplatComposition', expected.boundarySplatComposition, state?.boundarySplatComposition]);
   if (expected.boundarySplatPbrScene !== null && state?.boundarySplatPbrScene !== expected.boundarySplatPbrScene) mismatches.push(['boundarySplatPbrScene', expected.boundarySplatPbrScene, state?.boundarySplatPbrScene]);
+  if (expected.boundarySidecarSource !== null && state?.boundarySidecarSource !== expected.boundarySidecarSource) {
+    mismatches.push(['boundarySidecarSource', expected.boundarySidecarSource, state?.boundarySidecarSource]);
+  }
   if (expected.boundarySplatInstances !== null && Number(state?.boundarySplatRequestedInstanceCount) !== expected.boundarySplatInstances) {
     mismatches.push(['boundarySplatRequestedInstanceCount', expected.boundarySplatInstances, state?.boundarySplatRequestedInstanceCount]);
   }
@@ -377,6 +384,8 @@ function compactState(state) {
     boundarySplatAttributeModelIdentity: state?.boundarySplatAttributeModelIdentity || null,
     boundarySplatComposition: state?.boundarySplatComposition || null,
     boundarySplatPbrScene: state?.boundarySplatPbrScene || null,
+    boundarySidecarSource: state?.boundarySidecarSource || null,
+    boundarySplatSourceAuthority: state?.boundarySplatSourceAuthority || null,
     boundarySplatRequestedInstanceCount: Number(state?.boundarySplatRequestedInstanceCount || 0),
     boundarySplatHistoryDepth: Number(state?.boundarySplatHistoryDepth || 0),
     boundarySplatHistorySlots: Number(state?.boundarySplatHistorySlots || 0),
@@ -617,6 +626,9 @@ function validateReadbackSample(sample) {
   if (sample?.boundarySplatAttributeModelIdentity !== BOUNDARY_SPLAT_LEARNED_ATTRIBUTE_MODEL_IDENTITY) {
     mismatches.push(['boundarySplatAttributeModelIdentity', BOUNDARY_SPLAT_LEARNED_ATTRIBUTE_MODEL_IDENTITY, sample?.boundarySplatAttributeModelIdentity]);
   }
+  if (expected.boundarySidecarSource !== null && sample?.boundarySidecarSource !== expected.boundarySidecarSource) {
+    mismatches.push(['boundarySidecarSource', expected.boundarySidecarSource, sample?.boundarySidecarSource]);
+  }
   if (!(Number(sample?.boundarySplatCandidateCount) > 0)) mismatches.push(['boundarySplatCandidateCount', '>0', sample?.boundarySplatCandidateCount]);
   if (!(Number(sample?.boundarySplatInstanceCount) > 0)) mismatches.push(['boundarySplatInstanceCount', '>0', sample?.boundarySplatInstanceCount]);
   if (expected.boundarySplatInstances !== null && Number(sample?.boundarySplatRequestedInstanceCount) !== expected.boundarySplatInstances) {
@@ -665,6 +677,8 @@ function compactReadbackSample(sample) {
     boundarySplatMode: sample?.boundarySplatMode || null,
     boundarySplatRendererIdentity: sample?.boundarySplatRendererIdentity || null,
     boundarySplatAttributeModelIdentity: sample?.boundarySplatAttributeModelIdentity || null,
+    boundarySidecarSource: sample?.boundarySidecarSource || null,
+    boundarySplatSourceAuthority: sample?.boundarySplatSourceAuthority || null,
     boundarySplatRequestedInstanceCount: Number(sample?.boundarySplatRequestedInstanceCount || 0),
     boundarySplatHistoryDepth: Number(sample?.boundarySplatHistoryDepth || 0),
     boundarySplatHistorySlots: Number(sample?.boundarySplatHistorySlots || 0),

@@ -19,6 +19,15 @@ assert.match(
   /async function sampleFrame[\s\S]*return \{[\s\S]*boundarySplatRequestedInstanceCount:\s*state\.boundarySplatRequestedInstanceCount[\s\S]*boundarySplatHistoryDepth:\s*state\.boundarySplatHistoryDepth[\s\S]*boundarySplatHistorySlots:\s*state\.boundarySplatHistorySlots/,
   'runtime GPU readback must carry the exact instance and history allocation authority it rendered',
 );
+const successfulSampleFrameReturn = core.slice(
+  core.indexOf('const fireLumaMean'),
+  core.indexOf('function compactRenderScaleSample'),
+);
+assert.match(
+  successfulSampleFrameReturn,
+  /return \{[\s\S]*boundarySidecarSource:\s*state\.boundarySidecarSource/,
+  'runtime GPU readback must carry the effective live, baked, or mix structure-source identity it rendered',
+);
 assert.match(
   source,
   /splat-mode-transition-raymarch-render-not-effective/,
