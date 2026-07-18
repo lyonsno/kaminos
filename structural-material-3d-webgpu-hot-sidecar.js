@@ -4,6 +4,7 @@ import {
   STRUCTURAL_MATERIAL_3D_WEBGPU_EVENT_HEADER_BYTES,
   STRUCTURAL_MATERIAL_3D_WEBGPU_EVENT_STRIDE_BYTES,
   STRUCTURAL_MATERIAL_3D_WEBGPU_INTERACTION_BYTES,
+  STRUCTURAL_MATERIAL_3D_WEBGPU_NODE_STRIDE_BYTES,
   STRUCTURAL_MATERIAL_3D_WEBGPU_RESPONSE_STRIDE_BYTES,
   STRUCTURAL_MATERIAL_3D_WEBGPU_WORKGROUP_SIZE,
   layeredStructuralGpuAbiDescriptor,
@@ -31,6 +32,8 @@ export const STRUCTURAL_MATERIAL_3D_WEBGPU_BINDING_AUTHORITY =
   'webgpu-resident-authored-edge-reactivation-v0';
 export const STRUCTURAL_MATERIAL_3D_WEBGPU_BINDING_SCHEMA =
   'kaminos.structural-material.webgpu-resident-binding-receipt.v0';
+export const STRUCTURAL_MATERIAL_3D_WEBGPU_RESIDENT_SCHEMA =
+  'kaminos.structural-material.webgpu-resident-buffers.v0';
 
 export const STRUCTURAL_MATERIAL_3D_WEBGPU_BINDING_SHADER = /* wgsl */ `
 struct BondRecord {
@@ -260,7 +263,10 @@ export function validateLayeredStructuralHotSidecarReceipt(state, receipt) {
   if (receipt?.mode !== 'interactive') reasons.push('mode');
   if (receipt?.objectIdentity !== expectedObjectIdentity) reasons.push('object-identity');
   if (!Number.isInteger(receipt?.eventEpoch) || receipt.eventEpoch < 1) reasons.push('event-epoch');
-  if (lifecycle.adapterRequestCount !== 1 || lifecycle.deviceRequestCount !== 1) reasons.push('device-lifecycle');
+  const expectedDeviceRequests = lifecycle.deviceOwnership === 'borrowed' ? 0 : 1;
+  if (!['owned', 'borrowed'].includes(lifecycle.deviceOwnership) ||
+      lifecycle.adapterRequestCount !== expectedDeviceRequests ||
+      lifecycle.deviceRequestCount !== expectedDeviceRequests) reasons.push('device-lifecycle');
   if (lifecycle.pipelineCreateCount !== 3) reasons.push('pipeline-lifecycle');
   if (lifecycle.bufferAllocationCount !== 9) reasons.push('buffer-lifecycle');
   if (lifecycle.executionCount < 1) reasons.push('execution-lifecycle');
@@ -334,7 +340,10 @@ export function validateLayeredStructuralHotBindingReceipt(state, receipt) {
   if (receipt?.authority !== STRUCTURAL_MATERIAL_3D_WEBGPU_BINDING_AUTHORITY) reasons.push('authority');
   if (receipt?.objectIdentity !== expectedObjectIdentity) reasons.push('object-identity');
   if (!Number.isInteger(receipt?.eventEpoch) || receipt.eventEpoch < 1) reasons.push('event-epoch');
-  if (lifecycle.adapterRequestCount !== 1 || lifecycle.deviceRequestCount !== 1) reasons.push('device-lifecycle');
+  const expectedDeviceRequests = lifecycle.deviceOwnership === 'borrowed' ? 0 : 1;
+  if (!['owned', 'borrowed'].includes(lifecycle.deviceOwnership) ||
+      lifecycle.adapterRequestCount !== expectedDeviceRequests ||
+      lifecycle.deviceRequestCount !== expectedDeviceRequests) reasons.push('device-lifecycle');
   if (lifecycle.pipelineCreateCount !== 3) reasons.push('pipeline-lifecycle');
   if (lifecycle.bufferAllocationCount !== 9) reasons.push('buffer-lifecycle');
   if (lifecycle.bindingCount < 1 || lifecycle.bindingAttemptCount < lifecycle.bindingCount) {
@@ -423,8 +432,9 @@ export function validateLayeredStructuralHotBindingReceipt(state, receipt) {
   return { ok: reasons.length === 0, reasons, expectedObjectIdentity };
 }
 
-function makeLifecycle() {
+function makeLifecycle(deviceOwnership = 'owned') {
   return {
+    deviceOwnership,
     adapterRequestCount: 0,
     deviceRequestCount: 0,
     pipelineCreateCount: 0,
@@ -440,6 +450,7 @@ function makeLifecycle() {
     dispatchCount: 0,
     dispatchSubmissionCount: 0,
     topologyDispatchCount: 0,
+    residentEncodeCount: 0,
     compactReadbackCount: 0,
     compactReadbackBufferCount: 2,
     fullValidationReadbackCount: 0,
@@ -458,19 +469,21 @@ function makeLifecycle() {
 export async function createLayeredStructuralHotWebGpuSidecar(options = {}) {
   let state = options.state;
   const objectIdentity = layeredStructuralHotSidecarObjectIdentity(state);
+  const deviceOwnership = options.device ? 'borrowed' : 'owned';
   const gpu = Object.prototype.hasOwnProperty.call(options, 'gpu')
     ? options.gpu
     : globalThis.navigator?.gpu;
   const usage = globalThis.GPUBufferUsage;
   const mapMode = globalThis.GPUMapMode;
-  const lifecycle = makeLifecycle();
+  const lifecycle = makeLifecycle(deviceOwnership);
   const coldTimingsMs = {};
   const buffers = [];
-  let device = null;
+  let device = options.device || null;
   let disposed = false;
   let disposeRequested = false;
   let disposePromise = null;
   let eventEpoch = 0;
+  let residentGeneration = 1;
   let operationQueue = Promise.resolve();
   const hotReceiptValidator = options.hotReceiptValidator || validateLayeredStructuralHotSidecarReceipt;
   const bindingReceiptValidator = options.bindingReceiptValidator || validateLayeredStructuralHotBindingReceipt;
@@ -478,23 +491,29 @@ export async function createLayeredStructuralHotWebGpuSidecar(options = {}) {
   if (!state?.nodes?.length || !state?.bonds?.length) {
     throw new Error('hot structural sidecar requires a nonempty topology-fixed state');
   }
-  if (!gpu?.requestAdapter || !usage || !mapMode) {
+  if (!usage || !mapMode || (deviceOwnership === 'owned' && !gpu?.requestAdapter)) {
     throw new Error('WebGPU unavailable; CPU fallback is forbidden for the hot structural sidecar');
+  }
+  if (deviceOwnership === 'borrowed' && !device?.queue) {
+    throw new Error('borrowed hot structural sidecar requires a GPUDevice and GPUQueue');
   }
 
   const packed = packLayeredStructuralGpuSnapshot(state, {});
   const coldStart = layeredStructuralGpuNow();
-  lifecycle.adapterRequestCount += 1;
-  const adapterStart = layeredStructuralGpuNow();
-  const adapter = await gpu.requestAdapter({ powerPreference: options.powerPreference || 'high-performance' });
-  coldTimingsMs.adapterRequest = layeredStructuralGpuNow() - adapterStart;
-  if (!adapter) throw new Error('WebGPU adapter unavailable for hot structural sidecar');
-  const adapterIdentity = layeredStructuralGpuAdapterIdentity(adapter);
+  let adapterIdentity = options.adapterIdentity || { source: 'caller-owned-device' };
+  if (deviceOwnership === 'owned') {
+    lifecycle.adapterRequestCount += 1;
+    const adapterStart = layeredStructuralGpuNow();
+    const adapter = await gpu.requestAdapter({ powerPreference: options.powerPreference || 'high-performance' });
+    coldTimingsMs.adapterRequest = layeredStructuralGpuNow() - adapterStart;
+    if (!adapter) throw new Error('WebGPU adapter unavailable for hot structural sidecar');
+    adapterIdentity = layeredStructuralGpuAdapterIdentity(adapter);
 
-  lifecycle.deviceRequestCount += 1;
-  const deviceStart = layeredStructuralGpuNow();
-  device = await adapter.requestDevice();
-  coldTimingsMs.deviceRequest = layeredStructuralGpuNow() - deviceStart;
+    lifecycle.deviceRequestCount += 1;
+    const deviceStart = layeredStructuralGpuNow();
+    device = await adapter.requestDevice();
+    coldTimingsMs.deviceRequest = layeredStructuralGpuNow() - deviceStart;
+  }
 
   const makeBuffer = descriptor => {
     const buffer = device.createBuffer(descriptor);
@@ -528,11 +547,13 @@ export async function createLayeredStructuralHotWebGpuSidecar(options = {}) {
         lifecycle.bufferDestroyErrorCount += 1;
       }
     }
-    try {
-      device?.destroy();
-      if (device) lifecycle.deviceDestroyCount += 1;
-    } catch {
-      lifecycle.deviceDestroyErrorCount += 1;
+    if (deviceOwnership === 'owned') {
+      try {
+        device?.destroy();
+        if (device) lifecycle.deviceDestroyCount += 1;
+      } catch {
+        lifecycle.deviceDestroyErrorCount += 1;
+      }
     }
     lifecycle.disposed = true;
     error.hotSidecarInitialization = {
@@ -1116,6 +1137,7 @@ export async function createLayeredStructuralHotWebGpuSidecar(options = {}) {
       const nextPacked = packLayeredStructuralGpuSnapshot(nextState, {});
       state = nextState;
       eventEpoch = 0;
+      residentGeneration += 1;
       device.queue.writeBuffer(nodeBuffer, 0, nextPacked.nodeData);
       device.queue.writeBuffer(bondBuffer, 0, nextPacked.bondData);
       device.queue.writeBuffer(eventHeaderBuffer, 0, new Uint32Array(4));
@@ -1137,6 +1159,60 @@ export async function createLayeredStructuralHotWebGpuSidecar(options = {}) {
     });
   };
 
+  const encodeResidentInteraction = (encoder, interaction) => {
+    if (disposed || disposeRequested) throw new Error('hot structural sidecar resident buffers are disposed');
+    if (!encoder?.beginComputePass) throw new Error('hot structural resident interaction requires a GPUCommandEncoder');
+    if (!lifecycle.residentStateTrusted) throw new Error('hot structural sidecar resident state is untrusted');
+    eventEpoch += 1;
+    const interactionData = packLayeredStructuralGpuInteraction(state, interaction, {
+      eventCapacity: packed.eventCapacity,
+      eventEpoch,
+    });
+    device.queue.writeBuffer(interactionBuffer, 0, interactionData);
+    device.queue.writeBuffer(eventHeaderBuffer, 0, new Uint32Array(4));
+    device.queue.writeBuffer(
+      componentLabelBuffer,
+      0,
+      Uint32Array.from({ length: packed.nodeCount }, (_, index) => index),
+    );
+    lifecycle.eventHeaderResetCount += 1;
+    lifecycle.interactionUploadCount += 1;
+
+    const fracturePass = encoder.beginComputePass({
+      label: `hot-structural-resident-fracture:${eventEpoch}`,
+    });
+    fracturePass.setPipeline(fracturePipeline);
+    fracturePass.setBindGroup(0, fractureBindGroup);
+    fracturePass.dispatchWorkgroups(
+      Math.ceil(packed.bondCount / STRUCTURAL_MATERIAL_3D_WEBGPU_WORKGROUP_SIZE),
+    );
+    fracturePass.end();
+    lifecycle.dispatchCount += 1;
+
+    for (let passIndex = 0; passIndex < packed.nodeCount; passIndex += 1) {
+      const topologyPass = encoder.beginComputePass({
+        label: `hot-structural-resident-topology:${eventEpoch}:${passIndex + 1}`,
+      });
+      topologyPass.setPipeline(topologyPipeline);
+      topologyPass.setBindGroup(0, topologyBindGroup);
+      topologyPass.dispatchWorkgroups(
+        Math.ceil(packed.bondCount / STRUCTURAL_MATERIAL_3D_WEBGPU_WORKGROUP_SIZE),
+      );
+      topologyPass.end();
+      lifecycle.topologyDispatchCount += 1;
+    }
+    lifecycle.residentEncodeCount += 1;
+    return {
+      status: 'encoded',
+      routeIdentity: STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE,
+      objectIdentity,
+      generation: residentGeneration,
+      eventEpoch,
+      readbackCount: 0,
+      deviceOwnership,
+    };
+  };
+
   const dispose = () => {
     if (disposePromise) return disposePromise;
     disposeRequested = true;
@@ -1150,11 +1226,13 @@ export async function createLayeredStructuralHotWebGpuSidecar(options = {}) {
             lifecycle.bufferDestroyErrorCount += 1;
           }
         }
-        try {
-          device.destroy();
-          lifecycle.deviceDestroyCount += 1;
-        } catch {
-          lifecycle.deviceDestroyErrorCount += 1;
+        if (deviceOwnership === 'owned') {
+          try {
+            device.destroy();
+            lifecycle.deviceDestroyCount += 1;
+          } catch {
+            lifecycle.deviceDestroyErrorCount += 1;
+          }
         }
         disposed = true;
         lifecycle.disposed = true;
@@ -1162,7 +1240,7 @@ export async function createLayeredStructuralHotWebGpuSidecar(options = {}) {
       return {
         status: lifecycle.bufferDestroyCount === lifecycle.bufferAllocationCount &&
           lifecycle.bufferDestroyErrorCount === 0 &&
-          lifecycle.deviceDestroyCount === 1 &&
+          lifecycle.deviceDestroyCount === (deviceOwnership === 'owned' ? 1 : 0) &&
           lifecycle.deviceDestroyErrorCount === 0
           ? 'passed'
           : 'failed',
@@ -1187,7 +1265,33 @@ export async function createLayeredStructuralHotWebGpuSidecar(options = {}) {
     execute,
     bind,
     reinitialize,
+    encodeResidentInteraction,
     dispose,
+    residentDescriptor() {
+      if (disposed || disposeRequested) throw new Error('hot structural sidecar resident buffers are disposed');
+      return {
+        schema: STRUCTURAL_MATERIAL_3D_WEBGPU_RESIDENT_SCHEMA,
+        routeIdentity: STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_ROUTE,
+        authority: STRUCTURAL_MATERIAL_3D_WEBGPU_HOT_SIDECAR_AUTHORITY,
+        objectIdentity,
+        generation: residentGeneration,
+        deviceOwnership,
+        device,
+        queue: device.queue,
+        nodeBuffer,
+        bondBuffer,
+        componentLabelBuffer,
+        nodeCount: packed.nodeCount,
+        bondCount: packed.bondCount,
+        nodeStrideBytes: STRUCTURAL_MATERIAL_3D_WEBGPU_NODE_STRIDE_BYTES,
+        bondStrideBytes: STRUCTURAL_MATERIAL_3D_WEBGPU_BOND_STRIDE_BYTES,
+        nodeBufferBytes: packed.nodeData.byteLength,
+        bondBufferBytes: packed.bondData.byteLength,
+        componentLabelBufferBytes: packed.nodeCount * Uint32Array.BYTES_PER_ELEMENT,
+        abi: layeredStructuralGpuAbiDescriptor(),
+        disposed: false,
+      };
+    },
     snapshot() {
       return {
         status: disposed ? 'disposed' : 'initialized',

@@ -158,6 +158,7 @@ assert.equal(destroyedDeviceCount, 1, 'failed initialization destroys its device
 assert.deepEqual(
   initializationError?.hotSidecarInitialization?.lifecycle,
   {
+    deviceOwnership: 'owned',
     adapterRequestCount: 1,
     deviceRequestCount: 1,
     pipelineCreateCount: 1,
@@ -173,6 +174,7 @@ assert.deepEqual(
     dispatchCount: 0,
     dispatchSubmissionCount: 0,
     topologyDispatchCount: 0,
+    residentEncodeCount: 0,
     compactReadbackCount: 0,
     compactReadbackBufferCount: 2,
     fullValidationReadbackCount: 0,
@@ -204,6 +206,7 @@ const exactReceipt = {
   eventEpoch: 1,
   interaction: scenario.force,
   lifecycle: {
+    deviceOwnership: 'owned',
     adapterRequestCount: 1,
     deviceRequestCount: 1,
     pipelineCreateCount: 3,
