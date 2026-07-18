@@ -24,6 +24,15 @@ TRANSFER_IDENTITY = "ordered-ridge-nonridge-shared-transmittance-v0"
 ADAPTER_ROUTE = "state120-coefficient-plane-export-v0"
 
 
+class ArgumentParseFailure(ValueError):
+    pass
+
+
+class AdapterArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        raise ArgumentParseFailure(message)
+
+
 def load_oracle():
     require(ORACLE_PATH.is_file(), f"coefficient oracle is missing: {ORACLE_PATH}")
     spec = importlib.util.spec_from_file_location("volume_layer_coefficient_render_oracle", ORACLE_PATH)
@@ -266,8 +275,8 @@ def export_state_camera(args: argparse.Namespace, report: dict[str, Any]) -> dic
     return report
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = AdapterArgumentParser()
     parser.add_argument("--manifest", required=True)
     parser.add_argument("--capture-report", required=True)
     parser.add_argument("--out-dir", required=True)
@@ -275,7 +284,37 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--camera-index", type=int, default=10, choices=range(21))
     parser.add_argument("--depth-bins", type=int, default=96)
     parser.add_argument("--path-scale", type=float, required=True)
-    return parser.parse_args()
+    return parser.parse_args(argv)
+
+
+def resolve_out_dir_argument(argv: list[str]) -> Path | None:
+    value: str | None = None
+    for index, token in enumerate(argv):
+        if token == "--out-dir" and index + 1 < len(argv):
+            value = argv[index + 1]
+        elif token.startswith("--out-dir="):
+            value = token.split("=", 1)[1]
+    return Path(value).resolve() if value else None
+
+
+def write_argument_failure(out_dir: Path, argv: list[str], error: Exception) -> None:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    remove_primary_outputs(out_dir)
+    write_json(out_dir / "adapter-report.json", {
+        "schema": ADAPTER_REPORT_SCHEMA,
+        "status": "failed",
+        "failurePhase": "argument-validation",
+        "error": f"{type(error).__name__}: {error}",
+        "requested": {
+            "argv": argv,
+            "outDir": str(out_dir),
+            "sourceHashVerification": "required-complete",
+            "sampleCap": None,
+        },
+        "effective": None,
+        "source": None,
+        "artifacts": None,
+    })
 
 
 def run_cli(args: argparse.Namespace) -> dict[str, Any]:
@@ -320,7 +359,18 @@ def run_cli(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def main() -> int:
-    args = parse_args()
+    argv = sys.argv[1:]
+    try:
+        args = parse_args(argv)
+    except ArgumentParseFailure as exc:
+        out_dir = resolve_out_dir_argument(argv)
+        if out_dir is not None:
+            try:
+                write_argument_failure(out_dir, argv, exc)
+            except Exception as report_exc:
+                print(f"state-120 transfer adapter argument-report failure: {report_exc}", file=sys.stderr)
+        print(f"state-120 transfer adapter argument failure: {exc}", file=sys.stderr)
+        return 2
     try:
         run_cli(args)
     except Exception as exc:

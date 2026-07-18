@@ -169,6 +169,10 @@ class State120AdapterContracts(unittest.TestCase):
 
     def test_cli_forbids_skip_hash_verification(self):
         with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "adapter-report.json").write_text('{"status":"complete"}\n')
+            (root / "input-manifest.json").write_text('{"status":"complete"}\n')
+            (root / "transfer-field.npz").write_bytes(b"stale-product")
             completed = subprocess.run(
                 [
                     sys.executable,
@@ -187,9 +191,13 @@ class State120AdapterContracts(unittest.TestCase):
                 text=True,
             )
             self.assertNotEqual(completed.returncode, 0)
-            self.assertIn("unrecognized arguments: --skip-hash-verification", completed.stderr)
-            self.assertFalse((Path(tmp) / "input-manifest.json").exists())
-            self.assertFalse((Path(tmp) / "transfer-field.npz").exists())
+            self.assertIn("unrecognized arguments", completed.stderr)
+            self.assertFalse((root / "input-manifest.json").exists())
+            self.assertFalse((root / "transfer-field.npz").exists())
+            report = json.loads((root / "adapter-report.json").read_text())
+            self.assertEqual(report["status"], "failed")
+            self.assertEqual(report["failurePhase"], "argument-validation")
+            self.assertIn("--skip-hash-verification", report["error"])
 
 
 if __name__ == "__main__":
