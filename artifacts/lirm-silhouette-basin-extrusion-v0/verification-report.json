@@ -1,0 +1,9 @@
+{
+  "schema": "kaminos.lirm-silhouette-extrusion-output-verification.v0",
+  "status": "complete",
+  "phase": "output_inventory_verified",
+  "lastTrustworthyEvidence": "all_packet_outputs_hash_verified",
+  "witnessPath": "artifacts/lirm-silhouette-basin-extrusion-v0",
+  "verifiedBodyCount": 8,
+  "verifiedOutputCount": 40
+}

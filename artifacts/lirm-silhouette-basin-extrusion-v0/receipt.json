@@ -32,7 +32,11 @@
       "source": {
         "shapeSpaceRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
         "receiptHash": "sha256:3319eb34b16025701ace3cab13c2417f892ce0ff46d4aaabf260c8f04a518ed6",
-        "maskHash": "sha256:c3f626715bee6f30f8e8351cf996ca041ebe6ec06791bd52fed38a1aaad8c3e8",
+        "sourceReceiptMaskHash": "sha256:195e83e582fd667e580ed698302b16f010ea3d3628562b6acf3f9ff144c69e6d",
+        "maskArrayHash": "sha256:195e83e582fd667e580ed698302b16f010ea3d3628562b6acf3f9ff144c69e6d",
+        "maskFileHash": "sha256:c3f626715bee6f30f8e8351cf996ca041ebe6ec06791bd52fed38a1aaad8c3e8",
+        "sourceReceiptSignedDistanceHash": "sha256:e060adc66c673061dbbe59caead18cd7e450d8e73fff4b99b51a186bc79a0ed2",
+        "signedDistanceFileHash": "sha256:e060adc66c673061dbbe59caead18cd7e450d8e73fff4b99b51a186bc79a0ed2",
         "parentShapeIds": [],
         "noveltyAssay": {
           "copied": false
@@ -49,7 +53,8 @@
           "largestComponentFraction": 1.0
         },
         "sourceBasinIndex": 3,
-        "posteriorStrength": 3.0
+        "posteriorStrength": 3.0,
+        "targetBasinRetained": true
       },
       "volume": {
         "kind": "rounded_silhouette_extrusion_sdf",
@@ -72,30 +77,40 @@
       "outputs": {
         "clay": {
           "path": "basin-03-s3p00-n00/clay.png",
+          "hash": "sha256:1391724dd200854dca1b098731f8e28850a925f139543229ef563da7641d04ea",
+          "byteSize": 9815,
           "width": 256,
           "height": 256,
           "role": "clay-source"
         },
         "clayTransparent": {
           "path": "basin-03-s3p00-n00/clay-transparent.png",
+          "hash": "sha256:e5dddebd5e4d55c675d04360be3421092564da46689f7c1de37ec69e3de3289d",
+          "byteSize": 9982,
           "width": 256,
           "height": 256,
           "role": "clay-source"
         },
         "depth": {
           "path": "basin-03-s3p00-n00/depth.png",
+          "hash": "sha256:3d92b83cbef2cf6c5cd6623a9c813f04cccf057c7af1c99ee619906fc5b2d87b",
+          "byteSize": 10801,
           "width": 256,
           "height": 256,
           "role": "depth-control"
         },
         "normal": {
           "path": "basin-03-s3p00-n00/normal.png",
+          "hash": "sha256:86fd26d67c69d1fb4ac6b9e15dde270c5da7d574a9502e2412f018a6a692e787",
+          "byteSize": 14462,
           "width": 256,
           "height": 256,
           "role": "normal-control"
         },
         "mask": {
           "path": "basin-03-s3p00-n00/mask.png",
+          "hash": "sha256:524e9deeb86d096058040da196840e47f1599954cf1d2d108918f047b189bb28",
+          "byteSize": 1302,
           "width": 256,
           "height": 256,
           "role": "mask-control"
@@ -121,7 +136,11 @@
       "source": {
         "shapeSpaceRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
         "receiptHash": "sha256:3319eb34b16025701ace3cab13c2417f892ce0ff46d4aaabf260c8f04a518ed6",
-        "maskHash": "sha256:8eacbe26bf71b1fe3c4435904eaf7a85d20b8312c2bab6ab6052655a48b03513",
+        "sourceReceiptMaskHash": "sha256:e322b772fba34f6c22626bf0e43a01e0907659d06301ea81b50e4859364a3189",
+        "maskArrayHash": "sha256:e322b772fba34f6c22626bf0e43a01e0907659d06301ea81b50e4859364a3189",
+        "maskFileHash": "sha256:8eacbe26bf71b1fe3c4435904eaf7a85d20b8312c2bab6ab6052655a48b03513",
+        "sourceReceiptSignedDistanceHash": "sha256:5e75dd873c5a90b75d6ebb065700b02280826cef4dadc71dfc61a57bf17db791",
+        "signedDistanceFileHash": "sha256:5e75dd873c5a90b75d6ebb065700b02280826cef4dadc71dfc61a57bf17db791",
         "parentShapeIds": [],
         "noveltyAssay": {
           "copied": false
@@ -138,7 +157,8 @@
           "largestComponentFraction": 1.0
         },
         "sourceBasinIndex": 10,
-        "posteriorStrength": 3.0
+        "posteriorStrength": 3.0,
+        "targetBasinRetained": false
       },
       "volume": {
         "kind": "rounded_silhouette_extrusion_sdf",
@@ -161,30 +181,40 @@
       "outputs": {
         "clay": {
           "path": "basin-10-s3p00-n00/clay.png",
+          "hash": "sha256:d68ad278bbea648c447539de4fc2d96545a286c7a22b1cf8d4ae93e5a733ac11",
+          "byteSize": 8227,
           "width": 256,
           "height": 256,
           "role": "clay-source"
         },
         "clayTransparent": {
           "path": "basin-10-s3p00-n00/clay-transparent.png",
+          "hash": "sha256:951b314de4c9479a8c2dde03e561065cd2b8b277ee210f8b5eccb39ca17041ea",
+          "byteSize": 8463,
           "width": 256,
           "height": 256,
           "role": "clay-source"
         },
         "depth": {
           "path": "basin-10-s3p00-n00/depth.png",
+          "hash": "sha256:540f2c38bac311464b17eb0e9a181c0ef60dabedf7a431de728b86aa95d00c6b",
+          "byteSize": 8983,
           "width": 256,
           "height": 256,
           "role": "depth-control"
         },
         "normal": {
           "path": "basin-10-s3p00-n00/normal.png",
+          "hash": "sha256:83d01fc71aafac2fdabf637f3601a7b4fa3f273fd287e6f96cb939d7a03cd648",
+          "byteSize": 12550,
           "width": 256,
           "height": 256,
           "role": "normal-control"
         },
         "mask": {
           "path": "basin-10-s3p00-n00/mask.png",
+          "hash": "sha256:6ca9293eea91751f4042ef2f3755897fff9cd2a9c90a2a88b7548ab55e8e9dc2",
+          "byteSize": 1266,
           "width": 256,
           "height": 256,
           "role": "mask-control"
@@ -210,7 +240,11 @@
       "source": {
         "shapeSpaceRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
         "receiptHash": "sha256:3319eb34b16025701ace3cab13c2417f892ce0ff46d4aaabf260c8f04a518ed6",
-        "maskHash": "sha256:fd1f383db6146b40b08b147be488427718e274b16e987a6d74c90f051e932ed5",
+        "sourceReceiptMaskHash": "sha256:9d1d9f137d4922de7c5784b7ef833c356abdc263b38779a43b4a94faa77859ec",
+        "maskArrayHash": "sha256:9d1d9f137d4922de7c5784b7ef833c356abdc263b38779a43b4a94faa77859ec",
+        "maskFileHash": "sha256:fd1f383db6146b40b08b147be488427718e274b16e987a6d74c90f051e932ed5",
+        "sourceReceiptSignedDistanceHash": "sha256:05eb06fc358aabb2ac97e497e2a82273f5eda5808c19ae8f291340d8e3746c58",
+        "signedDistanceFileHash": "sha256:05eb06fc358aabb2ac97e497e2a82273f5eda5808c19ae8f291340d8e3746c58",
         "parentShapeIds": [],
         "noveltyAssay": {
           "copied": false
@@ -227,7 +261,8 @@
           "largestComponentFraction": 1.0
         },
         "sourceBasinIndex": 12,
-        "posteriorStrength": 3.0
+        "posteriorStrength": 3.0,
+        "targetBasinRetained": true
       },
       "volume": {
         "kind": "rounded_silhouette_extrusion_sdf",
@@ -250,30 +285,40 @@
       "outputs": {
         "clay": {
           "path": "basin-12-s3p00-n00/clay.png",
+          "hash": "sha256:b0692141e79aa21c1bac23bded80c51a4697d1a1524a3d70d18db8f271af1372",
+          "byteSize": 8380,
           "width": 256,
           "height": 256,
           "role": "clay-source"
         },
         "clayTransparent": {
           "path": "basin-12-s3p00-n00/clay-transparent.png",
+          "hash": "sha256:5a8e3b88ca8df44c0435549e8948bcd2810119d64c2ea7ba7418c9deefaded26",
+          "byteSize": 8429,
           "width": 256,
           "height": 256,
           "role": "clay-source"
         },
         "depth": {
           "path": "basin-12-s3p00-n00/depth.png",
+          "hash": "sha256:e9b293a980057d33d4c0b0563a04eeb4d634b736fa1c7790a3c86a469f507565",
+          "byteSize": 8122,
           "width": 256,
           "height": 256,
           "role": "depth-control"
         },
         "normal": {
           "path": "basin-12-s3p00-n00/normal.png",
+          "hash": "sha256:3b97b394456f225cd577112aadd99070a9da137fcc10ef33a25e6b587119ea6b",
+          "byteSize": 12512,
           "width": 256,
           "height": 256,
           "role": "normal-control"
         },
         "mask": {
           "path": "basin-12-s3p00-n00/mask.png",
+          "hash": "sha256:de8c99ad5c10d6001540ee358cc98767bfa9b733c044b21041c19e93b8603fba",
+          "byteSize": 1272,
           "width": 256,
           "height": 256,
           "role": "mask-control"
@@ -299,7 +344,11 @@
       "source": {
         "shapeSpaceRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
         "receiptHash": "sha256:3319eb34b16025701ace3cab13c2417f892ce0ff46d4aaabf260c8f04a518ed6",
-        "maskHash": "sha256:b4c873987dc12ec0fc6234da90be724f9adf71cf2c966aaabf7cc625c8de6fb7",
+        "sourceReceiptMaskHash": "sha256:ea0bd5a49f8fe002fde4fcc82af172c644b0c6361111d0010435281b7592593b",
+        "maskArrayHash": "sha256:ea0bd5a49f8fe002fde4fcc82af172c644b0c6361111d0010435281b7592593b",
+        "maskFileHash": "sha256:b4c873987dc12ec0fc6234da90be724f9adf71cf2c966aaabf7cc625c8de6fb7",
+        "sourceReceiptSignedDistanceHash": "sha256:651be97a12a300428b06877a05b90bd37547df12d8159139c3ec760cf21953ef",
+        "signedDistanceFileHash": "sha256:651be97a12a300428b06877a05b90bd37547df12d8159139c3ec760cf21953ef",
         "parentShapeIds": [],
         "noveltyAssay": {
           "copied": false
@@ -316,7 +365,8 @@
           "largestComponentFraction": 1.0
         },
         "sourceBasinIndex": 15,
-        "posteriorStrength": 3.0
+        "posteriorStrength": 3.0,
+        "targetBasinRetained": true
       },
       "volume": {
         "kind": "rounded_silhouette_extrusion_sdf",
@@ -339,30 +389,40 @@
       "outputs": {
         "clay": {
           "path": "basin-15-s3p00-n00/clay.png",
+          "hash": "sha256:d2ed310f28923f90a7a6182d18da34a8d07c6146814d0c7e4ea275f85d45c2a3",
+          "byteSize": 6085,
           "width": 256,
           "height": 256,
           "role": "clay-source"
         },
         "clayTransparent": {
           "path": "basin-15-s3p00-n00/clay-transparent.png",
+          "hash": "sha256:2bbe07a13f6d82805ec26313c6aac70b38f586554d45be1ec9d1203a9cb142cd",
+          "byteSize": 6031,
           "width": 256,
           "height": 256,
           "role": "clay-source"
         },
         "depth": {
           "path": "basin-15-s3p00-n00/depth.png",
+          "hash": "sha256:a7e1fde3ffd9018b90ddeb6c893a4a80bae8ce934b06307629da9f64ceff3a05",
+          "byteSize": 8522,
           "width": 256,
           "height": 256,
           "role": "depth-control"
         },
         "normal": {
           "path": "basin-15-s3p00-n00/normal.png",
+          "hash": "sha256:579a8ead324545f5768ab203622095f1f49497590acf2cc97977ff421ef7c6b3",
+          "byteSize": 9003,
           "width": 256,
           "height": 256,
           "role": "normal-control"
         },
         "mask": {
           "path": "basin-15-s3p00-n00/mask.png",
+          "hash": "sha256:f88f23ed4620d2ab696e2f8ba8eb3520fc8b97984258e312bda916f4667ecc5f",
+          "byteSize": 1132,
           "width": 256,
           "height": 256,
           "role": "mask-control"
@@ -388,7 +448,11 @@
       "source": {
         "shapeSpaceRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
         "receiptHash": "sha256:3319eb34b16025701ace3cab13c2417f892ce0ff46d4aaabf260c8f04a518ed6",
-        "maskHash": "sha256:235c8667a344e9c761bde33a1f739a58e2fd355593f75604b7d5e903acad3f20",
+        "sourceReceiptMaskHash": "sha256:7bf3c1a775f95e9981e3931b354e0d11af24a4dc3959ea5c455d480cb9a9d21c",
+        "maskArrayHash": "sha256:7bf3c1a775f95e9981e3931b354e0d11af24a4dc3959ea5c455d480cb9a9d21c",
+        "maskFileHash": "sha256:235c8667a344e9c761bde33a1f739a58e2fd355593f75604b7d5e903acad3f20",
+        "sourceReceiptSignedDistanceHash": "sha256:69cf9adf4c41a558a66f8fcf82a0780deb8d238dc383069d250cf3e9ab2f0eca",
+        "signedDistanceFileHash": "sha256:69cf9adf4c41a558a66f8fcf82a0780deb8d238dc383069d250cf3e9ab2f0eca",
         "parentShapeIds": [],
         "noveltyAssay": {
           "copied": false
@@ -405,7 +469,8 @@
           "largestComponentFraction": 1.0
         },
         "sourceBasinIndex": 18,
-        "posteriorStrength": 3.0
+        "posteriorStrength": 3.0,
+        "targetBasinRetained": true
       },
       "volume": {
         "kind": "rounded_silhouette_extrusion_sdf",
@@ -428,30 +493,40 @@
       "outputs": {
         "clay": {
           "path": "basin-18-s3p00-n00/clay.png",
+          "hash": "sha256:88fa475088e5c9ba6fb153f4c7d818779b833e5c9bed294219a19c64c5cae6b2",
+          "byteSize": 10117,
           "width": 256,
           "height": 256,
           "role": "clay-source"
         },
         "clayTransparent": {
           "path": "basin-18-s3p00-n00/clay-transparent.png",
+          "hash": "sha256:e9f3b4f0ff7eb59cf3b1cb86005742215255ab023ffe2e461e2d05fcc55e573f",
+          "byteSize": 10107,
           "width": 256,
           "height": 256,
           "role": "clay-source"
         },
         "depth": {
           "path": "basin-18-s3p00-n00/depth.png",
+          "hash": "sha256:21c8a081ad07e3f1581117a4c4cf616e44bb24fa24fb5b49e8c7dd9378b7ca81",
+          "byteSize": 10577,
           "width": 256,
           "height": 256,
           "role": "depth-control"
         },
         "normal": {
           "path": "basin-18-s3p00-n00/normal.png",
+          "hash": "sha256:d5c4e2c33a96c090ac7bc85fce59aa437653406e18b106a2a1f58708d3ed181a",
+          "byteSize": 14822,
           "width": 256,
           "height": 256,
           "role": "normal-control"
         },
         "mask": {
           "path": "basin-18-s3p00-n00/mask.png",
+          "hash": "sha256:e248b7d79c4b19128935a5d73935136d10fc75cb247a243fc14343517a5db3ae",
+          "byteSize": 1456,
           "width": 256,
           "height": 256,
           "role": "mask-control"
@@ -477,7 +552,11 @@
       "source": {
         "shapeSpaceRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
         "receiptHash": "sha256:3319eb34b16025701ace3cab13c2417f892ce0ff46d4aaabf260c8f04a518ed6",
-        "maskHash": "sha256:a92dd584269e65b6db611a11cdeec48a383efefa52a0fb9cbc819af5784db6d3",
+        "sourceReceiptMaskHash": "sha256:45db11040152654d3d676b3f652f2f30f716f3af4076bd8a3cf6dbbbab270346",
+        "maskArrayHash": "sha256:45db11040152654d3d676b3f652f2f30f716f3af4076bd8a3cf6dbbbab270346",
+        "maskFileHash": "sha256:a92dd584269e65b6db611a11cdeec48a383efefa52a0fb9cbc819af5784db6d3",
+        "sourceReceiptSignedDistanceHash": "sha256:b9f55e0f86402d0f8a79877902ec67c5ac883ebce83a03a416259661ba2a0367",
+        "signedDistanceFileHash": "sha256:b9f55e0f86402d0f8a79877902ec67c5ac883ebce83a03a416259661ba2a0367",
         "parentShapeIds": [],
         "noveltyAssay": {
           "copied": false
@@ -494,7 +573,8 @@
           "largestComponentFraction": 1.0
         },
         "sourceBasinIndex": 19,
-        "posteriorStrength": 1.5
+        "posteriorStrength": 1.5,
+        "targetBasinRetained": true
       },
       "volume": {
         "kind": "rounded_silhouette_extrusion_sdf",
@@ -517,30 +597,40 @@
       "outputs": {
         "clay": {
           "path": "basin-19-s1p50-n00/clay.png",
+          "hash": "sha256:5a64e2ece9ccea03215548ca9d13f5df5006d813deff71fa3f8b8a7a9895f18b",
+          "byteSize": 7188,
           "width": 256,
           "height": 256,
           "role": "clay-source"
         },
         "clayTransparent": {
           "path": "basin-19-s1p50-n00/clay-transparent.png",
+          "hash": "sha256:ed7be0130046f48098cb7d47de83a928797d95a7289dd62334f8c6da5dbd3d2e",
+          "byteSize": 7297,
           "width": 256,
           "height": 256,
           "role": "clay-source"
         },
         "depth": {
           "path": "basin-19-s1p50-n00/depth.png",
+          "hash": "sha256:0cae201aa33b4b1f7e407882bc9c047b9bab39b4321f12a42fe9b28bcfa94494",
+          "byteSize": 7500,
           "width": 256,
           "height": 256,
           "role": "depth-control"
         },
         "normal": {
           "path": "basin-19-s1p50-n00/normal.png",
+          "hash": "sha256:1b133fdae270ba1052e7ab8c93c49463fa0b0f9e0dcb681b4c16be4be70208ad",
+          "byteSize": 10313,
           "width": 256,
           "height": 256,
           "role": "normal-control"
         },
         "mask": {
           "path": "basin-19-s1p50-n00/mask.png",
+          "hash": "sha256:35f3a79f4f0d1cadd236b25a7daeae4f13b2def681a84b1c3935362c829e4557",
+          "byteSize": 1184,
           "width": 256,
           "height": 256,
           "role": "mask-control"
@@ -566,7 +656,11 @@
       "source": {
         "shapeSpaceRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
         "receiptHash": "sha256:3319eb34b16025701ace3cab13c2417f892ce0ff46d4aaabf260c8f04a518ed6",
-        "maskHash": "sha256:6fb9d5cb6b20c17973bba8ca954f2e58a9f46d2cf99ca3c19174d973b04d6675",
+        "sourceReceiptMaskHash": "sha256:a881af2fb5e239291f54d8587061b0c2040fa9d8497eddf6ee9fb40994117c28",
+        "maskArrayHash": "sha256:a881af2fb5e239291f54d8587061b0c2040fa9d8497eddf6ee9fb40994117c28",
+        "maskFileHash": "sha256:6fb9d5cb6b20c17973bba8ca954f2e58a9f46d2cf99ca3c19174d973b04d6675",
+        "sourceReceiptSignedDistanceHash": "sha256:1f512b3e49765c3d812b84d257b975d1a7006eefbc4df8c5d15402f12e4b3f6e",
+        "signedDistanceFileHash": "sha256:1f512b3e49765c3d812b84d257b975d1a7006eefbc4df8c5d15402f12e4b3f6e",
         "parentShapeIds": [],
         "noveltyAssay": {
           "copied": false
@@ -583,7 +677,8 @@
           "largestComponentFraction": 1.0
         },
         "sourceBasinIndex": 22,
-        "posteriorStrength": 1.5
+        "posteriorStrength": 1.5,
+        "targetBasinRetained": true
       },
       "volume": {
         "kind": "rounded_silhouette_extrusion_sdf",
@@ -606,30 +701,40 @@
       "outputs": {
         "clay": {
           "path": "basin-22-s1p50-n00/clay.png",
+          "hash": "sha256:4ef60ae236df00146b5870233f733b26045027fab5e9c4ad41b8d71e589ef506",
+          "byteSize": 9324,
           "width": 256,
           "height": 256,
           "role": "clay-source"
         },
         "clayTransparent": {
           "path": "basin-22-s1p50-n00/clay-transparent.png",
+          "hash": "sha256:0be69d0e61098f43683797bfbf7b930e0b2950cdd240e596f6e0ed573524611c",
+          "byteSize": 9547,
           "width": 256,
           "height": 256,
           "role": "clay-source"
         },
         "depth": {
           "path": "basin-22-s1p50-n00/depth.png",
+          "hash": "sha256:0edab7eea158ee9b73cf5e2431329d23f71ddcc58f7c18a9fa7126ba18c88f6a",
+          "byteSize": 9537,
           "width": 256,
           "height": 256,
           "role": "depth-control"
         },
         "normal": {
           "path": "basin-22-s1p50-n00/normal.png",
+          "hash": "sha256:f42d0d1c39f2a20add8bcafa442ee6cc0e2a7d0db59cdff6293afad4b4230687",
+          "byteSize": 13973,
           "width": 256,
           "height": 256,
           "role": "normal-control"
         },
         "mask": {
           "path": "basin-22-s1p50-n00/mask.png",
+          "hash": "sha256:393f2749f336297fdc63e602e1f4bea38d2b96ed3ca3e0279daf41fe2cea3e07",
+          "byteSize": 1338,
           "width": 256,
           "height": 256,
           "role": "mask-control"
@@ -655,7 +760,11 @@
       "source": {
         "shapeSpaceRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
         "receiptHash": "sha256:3319eb34b16025701ace3cab13c2417f892ce0ff46d4aaabf260c8f04a518ed6",
-        "maskHash": "sha256:2e6a4e6b422229cce52c1f021dc8ebfdd91d2a2e9042252bb7c3ba14d6480ee3",
+        "sourceReceiptMaskHash": "sha256:bc30385abc671905022b72193b9e98f3ba3bb0b381fa0b1851dcde2bcce45242",
+        "maskArrayHash": "sha256:bc30385abc671905022b72193b9e98f3ba3bb0b381fa0b1851dcde2bcce45242",
+        "maskFileHash": "sha256:2e6a4e6b422229cce52c1f021dc8ebfdd91d2a2e9042252bb7c3ba14d6480ee3",
+        "sourceReceiptSignedDistanceHash": "sha256:a93e5e000907b91d81a02ea94aacae18deeea538b8560c9ab3becfae1873a125",
+        "signedDistanceFileHash": "sha256:a93e5e000907b91d81a02ea94aacae18deeea538b8560c9ab3becfae1873a125",
         "parentShapeIds": [],
         "noveltyAssay": {
           "copied": false
@@ -672,7 +781,8 @@
           "largestComponentFraction": 0.659759
         },
         "sourceBasinIndex": 23,
-        "posteriorStrength": 1.5
+        "posteriorStrength": 1.5,
+        "targetBasinRetained": true
       },
       "volume": {
         "kind": "rounded_silhouette_extrusion_sdf",
@@ -695,30 +805,40 @@
       "outputs": {
         "clay": {
           "path": "basin-23-s1p50-n00/clay.png",
+          "hash": "sha256:9284ec572fdc77772a31e140d764e902c30c85d0207924c1e2436993125bc42f",
+          "byteSize": 8599,
           "width": 256,
           "height": 256,
           "role": "clay-source"
         },
         "clayTransparent": {
           "path": "basin-23-s1p50-n00/clay-transparent.png",
+          "hash": "sha256:9614bf6cf17bd30d7372a37b609667834c434855dc9cda96a6cbbc1c0edad0dd",
+          "byteSize": 8552,
           "width": 256,
           "height": 256,
           "role": "clay-source"
         },
         "depth": {
           "path": "basin-23-s1p50-n00/depth.png",
+          "hash": "sha256:9e688f8a0cd794fd47930d316f581a7d81dcea7d6900f0f8855edd700293e2fb",
+          "byteSize": 8117,
           "width": 256,
           "height": 256,
           "role": "depth-control"
         },
         "normal": {
           "path": "basin-23-s1p50-n00/normal.png",
+          "hash": "sha256:b7e47df2afa989afa8abc9b4b46291525ade533456e2c31356a5a7f89aaf0e1b",
+          "byteSize": 12092,
           "width": 256,
           "height": 256,
           "role": "normal-control"
         },
         "mask": {
           "path": "basin-23-s1p50-n00/mask.png",
+          "hash": "sha256:b0fe38a73bbc1f77291d6e9fb5f82e58106a38824fe224966be8a0b93c6ee915",
+          "byteSize": 1140,
           "width": 256,
           "height": 256,
           "role": "mask-control"

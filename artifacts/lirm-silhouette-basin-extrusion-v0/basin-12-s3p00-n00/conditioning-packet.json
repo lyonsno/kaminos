@@ -5,7 +5,11 @@
   "source": {
     "shapeSpaceRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
     "receiptHash": "sha256:3319eb34b16025701ace3cab13c2417f892ce0ff46d4aaabf260c8f04a518ed6",
-    "maskHash": "sha256:fd1f383db6146b40b08b147be488427718e274b16e987a6d74c90f051e932ed5",
+    "sourceReceiptMaskHash": "sha256:9d1d9f137d4922de7c5784b7ef833c356abdc263b38779a43b4a94faa77859ec",
+    "maskArrayHash": "sha256:9d1d9f137d4922de7c5784b7ef833c356abdc263b38779a43b4a94faa77859ec",
+    "maskFileHash": "sha256:fd1f383db6146b40b08b147be488427718e274b16e987a6d74c90f051e932ed5",
+    "sourceReceiptSignedDistanceHash": "sha256:05eb06fc358aabb2ac97e497e2a82273f5eda5808c19ae8f291340d8e3746c58",
+    "signedDistanceFileHash": "sha256:05eb06fc358aabb2ac97e497e2a82273f5eda5808c19ae8f291340d8e3746c58",
     "parentShapeIds": [],
     "noveltyAssay": {
       "copied": false
@@ -22,7 +26,8 @@
       "largestComponentFraction": 1.0
     },
     "sourceBasinIndex": 12,
-    "posteriorStrength": 3.0
+    "posteriorStrength": 3.0,
+    "targetBasinRetained": true
   },
   "volume": {
     "kind": "rounded_silhouette_extrusion_sdf",
@@ -45,30 +50,40 @@
   "outputs": {
     "clay": {
       "path": "basin-12-s3p00-n00/clay.png",
+      "hash": "sha256:b0692141e79aa21c1bac23bded80c51a4697d1a1524a3d70d18db8f271af1372",
+      "byteSize": 8380,
       "width": 256,
       "height": 256,
       "role": "clay-source"
     },
     "clayTransparent": {
       "path": "basin-12-s3p00-n00/clay-transparent.png",
+      "hash": "sha256:5a8e3b88ca8df44c0435549e8948bcd2810119d64c2ea7ba7418c9deefaded26",
+      "byteSize": 8429,
       "width": 256,
       "height": 256,
       "role": "clay-source"
     },
     "depth": {
       "path": "basin-12-s3p00-n00/depth.png",
+      "hash": "sha256:e9b293a980057d33d4c0b0563a04eeb4d634b736fa1c7790a3c86a469f507565",
+      "byteSize": 8122,
       "width": 256,
       "height": 256,
       "role": "depth-control"
     },
     "normal": {
       "path": "basin-12-s3p00-n00/normal.png",
+      "hash": "sha256:3b97b394456f225cd577112aadd99070a9da137fcc10ef33a25e6b587119ea6b",
+      "byteSize": 12512,
       "width": 256,
       "height": 256,
       "role": "normal-control"
     },
     "mask": {
       "path": "basin-12-s3p00-n00/mask.png",
+      "hash": "sha256:de8c99ad5c10d6001540ee358cc98767bfa9b733c044b21041c19e93b8603fba",
+      "byteSize": 1272,
       "width": 256,
       "height": 256,
       "role": "mask-control"

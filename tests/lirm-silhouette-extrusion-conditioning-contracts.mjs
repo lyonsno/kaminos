@@ -29,6 +29,7 @@ for (let y = 0; y < size; y += 1) {
 }
 const pgm = Buffer.concat([Buffer.from(`P5\n${size} ${size}\n255\n`), Buffer.from(mask)]);
 const expectedMaskHash = `sha256:${createHash('sha256').update(pgm).digest('hex')}`;
+const expectedMaskArrayHash = `sha256:${createHash('sha256').update(Buffer.from(mask.map((value) => value ? 1 : 0))).digest('hex')}`;
 writeFileSync(join(sourceDir, 'generated', 'shape-a.pgm'), pgm);
 writeFileSync(join(sourceDir, 'generated', 'shape-a.f32'), Buffer.from(sdf.buffer));
 await writeFile(join(sourceDir, 'receipt.json'), `${JSON.stringify({
@@ -67,7 +68,7 @@ assert.equal(receipt.routeIdentity.effectiveRoute, 'cpu-sdf-raymarch-rounded-ext
 assert.equal(receipt.sourceRouteIdentity.effectiveRoute, 'numpy-local-sdf-pca-topology-neighborhood-v0');
 assert.equal(receipt.generatedBodyCount, 1);
 assert.equal(receipt.bodies[0].generationId, 'shape-a');
-assert.equal(receipt.bodies[0].source.maskHash, expectedMaskHash, 'packet must bind the exact generated silhouette bytes');
+assert.equal(receipt.bodies[0].source.maskFileHash, expectedMaskHash, 'packet must bind the exact generated silhouette file bytes');
 assert.equal(receipt.bodies[0].volume.kind, 'rounded_silhouette_extrusion_sdf');
 assert.equal(receipt.bodies[0].volume.actual3dStructure, true);
 assert.ok(receipt.bodies[0].renderStats.hitPixelCount > 100);
@@ -86,10 +87,39 @@ for (const kind of ['clay', 'depth', 'normal']) {
   );
 }
 for (const kind of ['clay', 'depth', 'normal', 'mask']) {
-  const path = join(outDir, receipt.bodies[0].outputs[kind].path);
+  const output = receipt.bodies[0].outputs[kind];
+  const path = join(outDir, output.path);
   assert.ok(existsSync(path), `${kind} output must exist`);
-  assert.ok(readFileSync(path).length > 100, `${kind} output must be nonblank`);
+  const bytes = readFileSync(path);
+  assert.ok(bytes.length > 100, `${kind} output must be nonblank`);
+  assert.equal(output.byteSize, bytes.length, `${kind} byte size must bind its exact output`);
+  assert.equal(
+    output.hash,
+    `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
+    `${kind} hash must bind its exact output bytes`,
+  );
 }
+const verified = spawnSync('python3', [
+  script.pathname,
+  '--verify-output-dir', outDir,
+], { encoding: 'utf8' });
+assert.equal(verified.status, 0, `fresh conditioning outputs must verify: ${verified.stderr || verified.stdout}`);
+const verificationReportPath = join(outDir, 'verification-report.json');
+let verificationReport = JSON.parse(readFileSync(verificationReportPath, 'utf8'));
+assert.equal(verificationReport.status, 'complete');
+assert.equal(verificationReport.verifiedBodyCount, 1);
+
+const mutatedDepthPath = join(outDir, receipt.bodies[0].outputs.depth.path);
+writeFileSync(mutatedDepthPath, Buffer.concat([readFileSync(mutatedDepthPath), Buffer.from([0])]));
+const mutatedVerification = spawnSync('python3', [
+  script.pathname,
+  '--verify-output-dir', outDir,
+], { encoding: 'utf8' });
+assert.notEqual(mutatedVerification.status, 0, 'mutated conditioning output must fail verification');
+verificationReport = JSON.parse(readFileSync(verificationReportPath, 'utf8'));
+assert.equal(verificationReport.status, 'failed');
+assert.equal(verificationReport.failurePhase, 'output_inventory_verification');
+assert.match(verificationReport.error, /depth.*(byte size|hash) mismatch/i);
 
 const latentSourceDir = await mkdtemp(join(tmpdir(), 'kaminos-silhouette-extrusion-latent-source-'));
 await mkdir(join(latentSourceDir, 'generated'));
@@ -162,7 +192,8 @@ const basinSourceDir = await mkdtemp(join(tmpdir(), 'kaminos-silhouette-extrusio
 await mkdir(join(basinSourceDir, 'generated'));
 await writeFile(join(basinSourceDir, 'generated', 'basin-03-s3p00-n00.pgm'), pgm);
 await writeFile(join(basinSourceDir, 'generated', 'basin-03-s3p00-n00.f32'), Buffer.from(normalizedSdf.buffer));
-await writeFile(join(basinSourceDir, 'receipt.json'), `${JSON.stringify({
+const expectedSignedDistanceHash = `sha256:${createHash('sha256').update(Buffer.from(normalizedSdf.buffer)).digest('hex')}`;
+const basinSourceReceipt = {
   schema: 'kaminos.lirm-silhouette-basin-latent.v0',
   status: 'complete',
   phase: 'witness_written',
@@ -186,10 +217,13 @@ await writeFile(join(basinSourceDir, 'receipt.json'), `${JSON.stringify({
       componentCount: 1,
       largestComponentFraction: 1,
     },
+    maskHash: expectedMaskArrayHash,
+    signedDistanceHash: expectedSignedDistanceHash,
     maskPath: 'generated/basin-03-s3p00-n00.pgm',
     signedDistancePath: 'generated/basin-03-s3p00-n00.f32',
   }],
-}, null, 2)}\n`);
+};
+await writeFile(join(basinSourceDir, 'receipt.json'), `${JSON.stringify(basinSourceReceipt, null, 2)}\n`);
 const basinOutDir = await mkdtemp(join(tmpdir(), 'kaminos-silhouette-extrusion-basin-out-'));
 const basinRun = spawnSync('python3', [
   script.pathname,
@@ -206,7 +240,45 @@ assert.equal(basinReceipt.generatedBodyCount, 1);
 assert.equal(basinReceipt.bodies[0].source.sourceBasinIndex, 3);
 assert.equal(basinReceipt.bodies[0].source.posteriorStrength, 3);
 assert.equal(basinReceipt.bodies[0].source.usabilityAssay.componentCount, 1);
+assert.equal(basinReceipt.bodies[0].source.sourceReceiptMaskHash, expectedMaskArrayHash);
+assert.equal(basinReceipt.bodies[0].source.maskArrayHash, expectedMaskArrayHash);
+assert.equal(basinReceipt.bodies[0].source.maskFileHash, expectedMaskHash);
+assert.equal(basinReceipt.bodies[0].source.sourceReceiptSignedDistanceHash, expectedSignedDistanceHash);
+assert.equal(basinReceipt.bodies[0].source.signedDistanceFileHash, expectedSignedDistanceHash);
 assert.equal(basinReceipt.bodies[0].volume.sourceDistanceKind, 'mask-derived-chamfer-signed-distance');
+
+const malformedBasinRows = [
+  ['sourceBasinIndex', (row) => { delete row.sourceBasinIndex; }],
+  ['strength', (row) => { delete row.strength; }],
+  ['targetBasinRetained', (row) => { delete row.targetBasinRetained; }],
+  ['usabilityAssay', (row) => { delete row.usabilityAssay; }],
+  ['usabilityAssay.usable', (row) => { row.usabilityAssay.usable = false; }],
+  ['sourceEscapeAssay.nearestTraining.copied', (row) => { delete row.sourceEscapeAssay.nearestTraining.copied; }],
+  ['maskHash', (row) => { delete row.maskHash; }],
+  ['signedDistanceHash', (row) => { delete row.signedDistanceHash; }],
+  ['maskPath', (row) => { delete row.maskPath; }],
+  ['signedDistancePath', (row) => { delete row.signedDistancePath; }],
+];
+for (const [label, mutate] of malformedBasinRows) {
+  const malformedDir = await mkdtemp(join(tmpdir(), 'kaminos-silhouette-extrusion-basin-malformed-'));
+  await mkdir(join(malformedDir, 'generated'));
+  await writeFile(join(malformedDir, 'generated', 'basin-03-s3p00-n00.pgm'), pgm);
+  await writeFile(join(malformedDir, 'generated', 'basin-03-s3p00-n00.f32'), Buffer.from(normalizedSdf.buffer));
+  const malformedReceipt = structuredClone(basinSourceReceipt);
+  mutate(malformedReceipt.generations[0]);
+  await writeFile(join(malformedDir, 'receipt.json'), `${JSON.stringify(malformedReceipt, null, 2)}\n`);
+  const malformedRun = spawnSync('python3', [
+    script.pathname,
+    '--shape-space-dir', malformedDir,
+    '--generation-ids', 'basin-03-s3p00-n00',
+    '--out-dir', join(malformedDir, 'out'),
+    '--resolution', '96',
+  ], { encoding: 'utf8' });
+  assert.notEqual(malformedRun.status, 0, `basin row missing or invalid ${label} must be rejected`);
+  const malformedOutputReceipt = JSON.parse(readFileSync(join(malformedDir, 'out', 'receipt.json'), 'utf8'));
+  assert.equal(malformedOutputReceipt.status, 'failed');
+  assert.match(malformedOutputReceipt.error, new RegExp(label.replaceAll('.', '\\.'), 'i'));
+}
 
 const copiedDir = await mkdtemp(join(tmpdir(), 'kaminos-silhouette-extrusion-copied-'));
 await writeFile(join(copiedDir, 'receipt.json'), readFileSync(join(sourceDir, 'receipt.json')));

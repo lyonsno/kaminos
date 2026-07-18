@@ -261,13 +261,121 @@ def compose_contact_sheet(images: list[np.ndarray], columns: int = 4) -> tuple[n
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Render actual 3D rounded silhouette extrusion conditioning maps.")
-    parser.add_argument("--shape-space-dir", required=True, type=Path)
-    parser.add_argument("--generation-ids", required=True)
-    parser.add_argument("--out-dir", required=True, type=Path)
+    parser.add_argument("--shape-space-dir", type=Path)
+    parser.add_argument("--generation-ids")
+    parser.add_argument("--out-dir", type=Path)
+    parser.add_argument("--verify-output-dir", type=Path)
     parser.add_argument("--resolution", type=int, default=256)
     parser.add_argument("--thickness", type=float, default=0.28)
     parser.add_argument("--roundness", type=float, default=0.05)
     return parser.parse_args()
+
+
+def file_contract(path: Path) -> dict:
+    payload = path.read_bytes()
+    return {
+        "hash": f"sha256:{hashlib.sha256(payload).hexdigest()}",
+        "byteSize": len(payload),
+    }
+
+
+def resolve_output_path(root: Path, relative_path: str) -> Path:
+    root = root.resolve()
+    path = (root / relative_path).resolve()
+    if not path.is_relative_to(root):
+        raise ValueError(f"conditioning output escapes witness root: {relative_path}")
+    return path
+
+
+def verify_output_inventory(out_dir: Path) -> dict:
+    report_path = out_dir / "verification-report.json"
+    report = {
+        "schema": "kaminos.lirm-silhouette-extrusion-output-verification.v0",
+        "status": "running",
+        "phase": "output_inventory_verification",
+        "lastTrustworthyEvidence": "verification_initialized",
+        "witnessPath": str(out_dir),
+    }
+    report_path.write_text(json.dumps(report, indent=2) + "\n")
+    try:
+        receipt = json.loads((out_dir / "receipt.json").read_text())
+        if receipt.get("schema") != SCHEMA or receipt.get("status") != "complete":
+            raise ValueError("conditioning receipt is not a complete extrusion witness")
+        bodies = receipt.get("bodies")
+        if not isinstance(bodies, list) or receipt.get("generatedBodyCount") != len(bodies):
+            raise ValueError("conditioning body inventory does not reconcile")
+        verified_output_count = 0
+        for body in bodies:
+            generation_id = body.get("generationId")
+            packet_path = resolve_output_path(out_dir, f"{generation_id}/conditioning-packet.json")
+            if json.loads(packet_path.read_text()) != body:
+                raise ValueError(f"{generation_id} conditioning packet does not match receipt body")
+            outputs = body.get("outputs")
+            if not isinstance(outputs, dict) or not outputs:
+                raise ValueError(f"{generation_id} has no conditioning outputs")
+            for kind, output in outputs.items():
+                path = resolve_output_path(out_dir, output.get("path", ""))
+                if not path.is_file():
+                    raise ValueError(f"{generation_id} {kind} output is missing")
+                actual = file_contract(path)
+                if output.get("byteSize") != actual["byteSize"]:
+                    raise ValueError(f"{generation_id} {kind} byte size mismatch")
+                if output.get("hash") != actual["hash"]:
+                    raise ValueError(f"{generation_id} {kind} hash mismatch")
+                verified_output_count += 1
+        report.update({
+            "status": "complete",
+            "phase": "output_inventory_verified",
+            "lastTrustworthyEvidence": "all_packet_outputs_hash_verified",
+            "verifiedBodyCount": len(bodies),
+            "verifiedOutputCount": verified_output_count,
+        })
+        report_path.write_text(json.dumps(report, indent=2) + "\n")
+        return report
+    except Exception as error:
+        report.update({
+            "status": "failed",
+            "failurePhase": "output_inventory_verification",
+            "error": str(error),
+        })
+        report_path.write_text(json.dumps(report, indent=2) + "\n")
+        raise
+
+
+def validate_basin_source_row(row: dict) -> None:
+    generation_id = row.get("generationId", "<unknown>")
+    required_scalars = {
+        "generationId": str,
+        "sourceBasinIndex": int,
+        "strength": (int, float),
+        "targetBasinRetained": bool,
+        "maskHash": str,
+        "signedDistanceHash": str,
+        "maskPath": str,
+        "signedDistancePath": str,
+    }
+    for field, expected_type in required_scalars.items():
+        value = row.get(field)
+        if isinstance(value, bool) and expected_type is not bool:
+            value = None
+        if not isinstance(value, expected_type) or (isinstance(value, str) and not value):
+            raise ValueError(f"{generation_id} basin field {field} is missing or invalid")
+    if not row["maskHash"].startswith("sha256:"):
+        raise ValueError(f"{generation_id} basin field maskHash is missing or invalid")
+    if not row["signedDistanceHash"].startswith("sha256:"):
+        raise ValueError(f"{generation_id} basin field signedDistanceHash is missing or invalid")
+    usability = row.get("usabilityAssay")
+    if not isinstance(usability, dict):
+        raise ValueError(f"{generation_id} basin field usabilityAssay is missing or invalid")
+    if usability.get("usable") is not True:
+        raise ValueError(f"{generation_id} basin field usabilityAssay.usable must be true")
+    nearest_training = row.get("sourceEscapeAssay", {}).get("nearestTraining", {})
+    if not isinstance(nearest_training.get("copied"), bool):
+        raise ValueError(
+            f"{generation_id} basin field sourceEscapeAssay.nearestTraining.copied is missing or invalid"
+        )
+    if nearest_training["copied"]:
+        raise ValueError(f"{generation_id} basin field sourceEscapeAssay.nearestTraining.copied must be false")
 
 
 def accepted_source_rows(source_dir: Path, source_receipt: dict) -> tuple[dict[str, dict], str]:
@@ -298,6 +406,8 @@ def accepted_source_rows(source_dir: Path, source_receipt: dict) -> tuple[dict[s
             raise ValueError("latent source accepted sample count does not reconcile")
         accepted = {}
         for row in rows:
+            if effective_route == BASIN_LATENT_SOURCE_ROUTE and row.get("acceptedForDownstream"):
+                validate_basin_source_row(row)
             novelty_assay = row.get("noveltyAssay")
             if novelty_assay is None and effective_route == BASIN_LATENT_SOURCE_ROUTE:
                 novelty_assay = {
@@ -312,6 +422,17 @@ def accepted_source_rows(source_dir: Path, source_receipt: dict) -> tuple[dict[s
 
 def main() -> int:
     args = parse_args()
+    if args.verify_output_dir is not None:
+        try:
+            report = verify_output_inventory(args.verify_output_dir)
+            print(json.dumps(report))
+            return 0
+        except Exception as error:
+            print(str(error), file=sys.stderr)
+            return 1
+    if args.shape_space_dir is None or args.generation_ids is None or args.out_dir is None:
+        print("generation requires --shape-space-dir, --generation-ids, and --out-dir", file=sys.stderr)
+        return 2
     args.out_dir.mkdir(parents=True, exist_ok=True)
     initialized = {
         "schema": SCHEMA,
@@ -340,15 +461,30 @@ def main() -> int:
         for generation_id in requested_ids:
             row = accepted[generation_id]
             mask_path = args.shape_space_dir / row["maskPath"]
-            mask_bytes = mask_path.read_bytes()
-            mask_hash = f"sha256:{hashlib.sha256(mask_bytes).hexdigest()}"
+            mask_file_hash = file_contract(mask_path)["hash"]
             mask = read_pgm(mask_path)
+            mask_array_hash = f"sha256:{hashlib.sha256(np.ascontiguousarray(mask, dtype=np.uint8).tobytes()).hexdigest()}"
+            source_receipt_mask_hash = row.get("maskHash")
+            if source_receipt_mask_hash is not None and source_receipt_mask_hash != mask_array_hash:
+                raise ValueError(f"{generation_id} source receipt mask hash does not match decoded mask")
+            signed_distance_path = None
+            signed_distance_file_hash = None
+            source_receipt_signed_distance_hash = row.get("signedDistanceHash")
+            if effective_source_route != LATENT_SAMPLE_SOURCE_ROUTE:
+                signed_distance_path = args.shape_space_dir / row["signedDistancePath"]
+                signed_distance_file_hash = file_contract(signed_distance_path)["hash"]
+                if (
+                    source_receipt_signed_distance_hash is not None
+                    and source_receipt_signed_distance_hash != signed_distance_file_hash
+                ):
+                    raise ValueError(f"{generation_id} source receipt signed-distance hash does not match file")
             if effective_source_route in (LATENT_SAMPLE_SOURCE_ROUTE, BASIN_LATENT_SOURCE_ROUTE):
                 source_sdf = metric_signed_distance(mask)
                 source_distance_kind = "mask-derived-chamfer-signed-distance"
             else:
+                assert signed_distance_path is not None
                 source_sdf = read_sdf(
-                    args.shape_space_dir / row["signedDistancePath"],
+                    signed_distance_path,
                     mask.shape[1],
                     mask.shape[0],
                 )
@@ -371,6 +507,7 @@ def main() -> int:
             outputs = {
                 kind: {
                     "path": f"{generation_id}/{filename}",
+                    **file_contract(body_dir / filename),
                     "width": args.resolution,
                     "height": args.resolution,
                     "role": "clay-source" if kind.startswith("clay") else f"{kind}-control",
@@ -384,12 +521,17 @@ def main() -> int:
                 "source": {
                     "shapeSpaceRoute": effective_source_route,
                     "receiptHash": source_receipt_hash,
-                    "maskHash": mask_hash,
+                    "sourceReceiptMaskHash": source_receipt_mask_hash,
+                    "maskArrayHash": mask_array_hash,
+                    "maskFileHash": mask_file_hash,
+                    "sourceReceiptSignedDistanceHash": source_receipt_signed_distance_hash,
+                    "signedDistanceFileHash": signed_distance_file_hash,
                     "parentShapeIds": row.get("parentShapeIds", []),
                     "noveltyAssay": row["noveltyAssay"],
                     "usabilityAssay": row.get("usabilityAssay"),
                     "sourceBasinIndex": row.get("sourceBasinIndex"),
                     "posteriorStrength": row.get("strength"),
+                    "targetBasinRetained": row.get("targetBasinRetained"),
                 },
                 "volume": {
                     "kind": "rounded_silhouette_extrusion_sdf",
