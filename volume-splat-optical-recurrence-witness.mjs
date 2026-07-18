@@ -6,10 +6,12 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
+  rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { basename, dirname, relative, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   buildSplatOpticalCockpitManifest,
@@ -96,8 +98,8 @@ try {
     encodeOrbitMedia('presentation', presentationCaptures),
     encodeOrbitMedia('optical', opticalCaptures),
   ];
-  const artifacts = media.flatMap(({ id, route, videoPath, sheetPath }) => [
-    { id: id === 'presentation' ? 'original-presentation' : 'matched-optical', ...artifact(videoPath, dirname(manifestPath)), mediaType: 'video/mp4', loadRoute: route },
+  const artifacts = media.flatMap(({ id, route, videoPath, videoFrameCount, sheetPath }) => [
+    { id: id === 'presentation' ? 'original-presentation' : 'matched-optical', ...artifact(videoPath, dirname(manifestPath)), mediaType: 'video/mp4', frameCount: videoFrameCount, loadRoute: route },
     { id: `${id}-contact-sheet`, ...artifact(sheetPath, dirname(manifestPath)), mediaType: 'image/png', loadRoute: route },
   ]);
   lastTrustworthyEvidence.encodedArtifacts = artifacts;
@@ -136,29 +138,49 @@ function encodeOrbitMedia(id, captures) {
   if (imagePaths.length !== 21 || new Set(imagePaths).size !== 21 || imagePaths.some(path => !existsSync(path))) {
     throw new Error(`${id} media input is missing, partial, or duplicated`);
   }
-  const concatPath = resolve(outDir, `${id}-current-captures.ffconcat`);
-  writeFileSync(concatPath, `ffconcat version 1.0\n${imagePaths.map(path => `file '${escapeConcatPath(path)}'`).join('\n')}\n`);
+  const sequenceDir = resolve(outDir, `${id}-current-captures`);
+  rmSync(sequenceDir, { recursive: true, force: true });
+  mkdirSync(sequenceDir, { recursive: true });
+  imagePaths.forEach((path, index) => {
+    symlinkSync(path, join(sequenceDir, `frame-${String(index).padStart(3, '0')}.png`));
+  });
+  const sequencePattern = join(sequenceDir, 'frame-%03d.png');
   const videoPath = resolve(outDir, `${id}-orbit.mp4`);
   const sheetPath = resolve(outDir, `${id}-contact-sheet.png`);
   runFfmpeg([
-    '-y', '-f', 'concat', '-safe', '0', '-i', concatPath, '-r', '6',
+    '-y', '-framerate', '6', '-start_number', '0', '-i', sequencePattern, '-frames:v', '21',
     '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', videoPath,
   ]);
+  const videoFrameCount = verifyEncodedVideoFrameCount(videoPath, 21);
   runFfmpeg([
-    '-y', '-f', 'concat', '-safe', '0', '-i', concatPath,
+    '-y', '-framerate', '1', '-start_number', '0', '-i', sequencePattern,
     '-vf', 'tile=7x3', '-frames:v', '1', sheetPath,
   ]);
-  return { id, route, videoPath, sheetPath };
-}
-
-function escapeConcatPath(path) {
-  return path.replaceAll("'", "'\\''");
+  return { id, route, videoPath, videoFrameCount, sheetPath };
 }
 
 function runFfmpeg(args) {
   const result = spawnSync('ffmpeg', args, { stdio: 'inherit' });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`ffmpeg failed with status ${result.status}`);
+}
+
+function verifyEncodedVideoFrameCount(path, expectedFrameCount) {
+  const result = spawnSync('ffprobe', [
+    '-v', 'error',
+    '-select_streams', 'v:0',
+    '-count_frames',
+    '-show_entries', 'stream=nb_read_frames',
+    '-of', 'default=noprint_wrappers=1:nokey=1',
+    path,
+  ], { encoding: 'utf8' });
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(`ffprobe failed with status ${result.status}: ${result.stderr.trim()}`);
+  const frameCount = Number.parseInt(result.stdout.trim(), 10);
+  if (frameCount !== expectedFrameCount) {
+    throw new Error(`encoded orbit is partial: expected ${expectedFrameCount} frames, found ${result.stdout.trim() || 'unknown'}`);
+  }
+  return frameCount;
 }
 
 function artifact(path, relativeTo) {
