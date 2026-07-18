@@ -35,6 +35,56 @@ async function fileEvidence(path) {
   };
 }
 
+function assertEffectiveRunner(effectiveRoute, expectedRunner, label) {
+  const route = String(effectiveRoute ?? '').trim();
+  const executable = route.split(/\s+/, 1)[0];
+  if (!route || executable !== expectedRunner) {
+    throw new Error(`effective ${label} route did not use expected runner: ${effectiveRoute ?? 'missing'}`);
+  }
+  return route;
+}
+
+function assertCommandOption(effectiveRoute, option, expectedValue, label) {
+  const tokens = String(effectiveRoute).trim().split(/\s+/);
+  const indices = tokens.flatMap((token, index) => token === option ? [index] : []);
+  if (expectedValue === true) {
+    if (indices.length !== 1) throw new Error(`effective ${label} route must contain ${option} exactly once`);
+    return;
+  }
+  if (expectedValue === false) {
+    if (indices.length !== 0) throw new Error(`effective ${label} route must not contain ${option}`);
+    return;
+  }
+  if (indices.length !== 1 || tokens[indices[0] + 1] !== String(expectedValue)) {
+    throw new Error(`effective ${label} route mismatch for ${option}: expected ${expectedValue}`);
+  }
+}
+
+function validateRunTiming(status, outputStat, label) {
+  const submittedAt = Number(status?.submitted_at);
+  const startedAt = Number(status?.started_at);
+  const finishedAt = Number(status?.finished_at);
+  if (![submittedAt, startedAt, finishedAt].every(Number.isFinite)) {
+    throw new Error(`${label} timing is incomplete`);
+  }
+  if (submittedAt > startedAt || startedAt > finishedAt) {
+    throw new Error(`${label} timing is not monotonic`);
+  }
+  const outputMtime = outputStat.mtimeMs / 1000;
+  const timestampToleranceSeconds = 2;
+  if (outputMtime < startedAt - timestampToleranceSeconds
+    || outputMtime > finishedAt + timestampToleranceSeconds) {
+    throw new Error(`${label} primary output mtime is outside job window`);
+  }
+  return {
+    submittedAt,
+    startedAt,
+    finishedAt,
+    durationSeconds: finishedAt - startedAt,
+    outputMtime,
+  };
+}
+
 function assertCompositeReceipt(receipt) {
   if (receipt?.schema !== 'kaminos.lirm-speciation-armature-gestalt-composite-witness.v0') {
     throw new Error(`unexpected composite receipt schema: ${receipt?.schema ?? 'missing'}`);
@@ -178,9 +228,7 @@ export async function validateGestaltImagegenCompletion({ cell, status }) {
   }
   if (resolve(status.input_path) !== resolve(cell.input.path)) throw new Error('effective input path mismatch');
   if (resolve(status.output_dir) !== resolve(cell.outputDir)) throw new Error('effective output directory mismatch');
-  if (!status.effective_route?.startsWith(cell.expectedRunner)) {
-    throw new Error(`effective route did not use expected runner: ${status.effective_route ?? 'missing'}`);
-  }
+  assertEffectiveRunner(status.effective_route, cell.expectedRunner, 'imagegen');
   const expectedParams = {
     prompt_file: cell.prompt.path,
     model: cell.settings.model,
@@ -197,6 +245,10 @@ export async function validateGestaltImagegenCompletion({ cell, status }) {
       throw new Error(`effective param mismatch for ${key}: ${status.params?.[key]} != ${expected}`);
     }
   }
+  const input = await fileEvidence(cell.input.path);
+  if (input.sha256 !== cell.input.sha256) throw new Error(`imagegen input hash drift: ${cell.cellId}`);
+  const prompt = await fileEvidence(cell.prompt.path);
+  if (prompt.sha256 !== cell.prompt.sha256) throw new Error(`imagegen prompt hash drift: ${cell.cellId}`);
   let outputStat;
   try {
     outputStat = await stat(cell.outputPath);
@@ -204,6 +256,7 @@ export async function validateGestaltImagegenCompletion({ cell, status }) {
     throw new Error(`missing primary output: ${cell.outputPath}`);
   }
   if (!outputStat.isFile() || outputStat.size === 0) throw new Error(`empty primary output: ${cell.outputPath}`);
+  const timing = validateRunTiming(status, outputStat, 'imagegen');
   const output = await fileEvidence(cell.outputPath);
   return {
     schema: GESTALT_IMAGEGEN_COMPLETION_SCHEMA,
@@ -214,13 +267,10 @@ export async function validateGestaltImagegenCompletion({ cell, status }) {
     effectiveJobType: status.job_type,
     effectiveRoute: status.effective_route,
     effectiveParams: status.params,
-    submittedAt: status.submitted_at ?? null,
-    startedAt: status.started_at ?? null,
-    finishedAt: status.finished_at ?? null,
-    durationSeconds: status.started_at && status.finished_at ? status.finished_at - status.started_at : null,
+    ...timing,
     warnings: status.warnings ?? [],
-    input: cell.input,
-    prompt: cell.prompt,
+    input,
+    prompt,
     output,
   };
 }
@@ -368,9 +418,7 @@ export async function validateGestaltTrellisCompletion({ cell, status }) {
   if (status.job_type !== cell.jobType) throw new Error(`effective job type mismatch: ${status.job_type}`);
   if (resolve(status.input_path) !== cell.input.path) throw new Error(`effective input mismatch: ${status.input_path}`);
   if (resolve(status.output_dir) !== cell.outputDir) throw new Error(`effective output directory mismatch: ${status.output_dir}`);
-  if (!String(status.effective_route ?? '').startsWith(cell.expectedRunner)) {
-    throw new Error(`effective Trellis route mismatch: ${status.effective_route}`);
-  }
+  const effectiveRoute = assertEffectiveRunner(status.effective_route, cell.expectedRunner, 'Trellis');
   const expectedParams = {
     seed: String(cell.settings.seed),
     steps: String(cell.settings.steps),
@@ -382,8 +430,13 @@ export async function validateGestaltTrellisCompletion({ cell, status }) {
       throw new Error(`effective Trellis param mismatch for ${key}: ${status.params?.[key]} != ${expected}`);
     }
   }
+  assertCommandOption(effectiveRoute, '--resolution', cell.settings.resolution, 'Trellis');
+  assertCommandOption(effectiveRoute, '--no-cascade', cell.settings.cascade === false, 'Trellis');
+  assertCommandOption(effectiveRoute, '--simplify-first', cell.settings.simplifyFirst === true, 'Trellis');
   const input = await fileEvidence(cell.input.path);
   if (input.sha256 !== cell.input.sha256) throw new Error(`Trellis input hash drift: ${cell.cellId}`);
+  const outputStat = await stat(cell.outputPath);
+  const timing = validateRunTiming(status, outputStat, 'Trellis');
   const output = await fileEvidence(cell.outputPath);
   return {
     schema: GESTALT_TRELLIS_COMPLETION_SCHEMA,
@@ -398,11 +451,7 @@ export async function validateGestaltTrellisCompletion({ cell, status }) {
     effectiveJobType: status.job_type,
     effectiveRoute: status.effective_route,
     effectiveParams: status.params,
-    startedAt: status.started_at ?? null,
-    finishedAt: status.finished_at ?? null,
-    durationSeconds: status.started_at != null && status.finished_at != null
-      ? status.finished_at - status.started_at
-      : null,
+    ...timing,
     warnings: status.warnings ?? [],
     input,
     output,
@@ -479,9 +528,7 @@ export async function validateGestaltWitnessCompletion({ cell, status }) {
   if (status.job_type !== cell.jobType) throw new Error(`effective witness job type mismatch: ${status.job_type}`);
   if (resolve(status.input_path) !== cell.input.path) throw new Error(`effective witness input mismatch: ${status.input_path}`);
   if (resolve(status.output_dir) !== cell.outputDir) throw new Error(`effective witness output directory mismatch: ${status.output_dir}`);
-  if (!String(status.effective_route ?? '').startsWith(cell.expectedRunner)) {
-    throw new Error(`effective witness route mismatch: ${status.effective_route}`);
-  }
+  assertEffectiveRunner(status.effective_route, cell.expectedRunner, 'witness');
   const expectedParams = {
     witness_script: cell.witnessScript.path,
     yaw: String(cell.yaw),
@@ -494,6 +541,10 @@ export async function validateGestaltWitnessCompletion({ cell, status }) {
   }
   const input = await fileEvidence(cell.input.path);
   if (input.sha256 !== cell.input.sha256) throw new Error(`witness GLB hash drift: ${cell.cellId}`);
+  const witnessScript = await fileEvidence(cell.witnessScript.path);
+  if (witnessScript.sha256 !== cell.witnessScript.sha256) throw new Error(`witness script hash drift: ${cell.witnessId}`);
+  const outputStat = await stat(cell.outputPath);
+  const timing = validateRunTiming(status, outputStat, 'witness');
   const output = await fileEvidence(cell.outputPath);
   return {
     schema: 'kaminos.lirm-speciation-gestalt-trellis-witness-completion.v0',
@@ -510,7 +561,9 @@ export async function validateGestaltWitnessCompletion({ cell, status }) {
     requestedRoute: cell.requestedRoute,
     effectiveRoute: status.effective_route,
     effectiveParams: status.params,
+    ...timing,
     input,
+    witnessScript,
     output,
     visualInspectionClaim: 'not-yet-inspected',
   };

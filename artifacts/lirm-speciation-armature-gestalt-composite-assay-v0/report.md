@@ -62,6 +62,12 @@ All five casts are nonblank and coherent across left, front, right, and opposite
 
 The first 20 Blender jobs used a registered route whose cwd pointed at a deleted prior worktree. Every job failed at launch before primary output. The failure is preserved in `trellis/witness-submission-report-stale-cwd-failure.json` and `trellis/witness-completion-report-stale-cwd-failure.json` and contributes no visual evidence. Route `kaminos_blender_glb_witness_molten_0718` binds the current worktree explicitly and produced the accepted witness set.
 
+## Review And Receipt Hardening
+
+The path-restricted automated Gemini review attempt exhausted both configured quotas and produced no review result. A read-only GPT-5.5 review over the same five authored files found four false-closure paths: stable-path input or prompt mutation, executable-prefix route spoofing, unverified Trellis hardcoded settings, and nullable timing with no output-freshness proof.
+
+`review.md` records the findings and their dispositions. The repaired validators rehash live inputs, prompts, and witness scripts; require exact executable identity; verify Trellis's fixed command flags; require complete monotonic job timing; and require each primary output's mtime to fall inside its job window. The original completed jobs were replayed through those contracts without new inference: all eight image outputs, five Trellis GLBs, and twenty witness frames passed with zero rejection.
+
 ## Verdict
 
 The complete route works:

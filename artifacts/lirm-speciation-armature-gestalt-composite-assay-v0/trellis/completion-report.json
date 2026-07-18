@@ -41,9 +41,11 @@
         "target_faces": "200000",
         "texture_size": "1024"
       },
+      "submittedAt": 1784360124.8836741,
       "startedAt": 1784360125.392141,
       "finishedAt": 1784360211.942453,
       "durationSeconds": 86.55031180381775,
+      "outputMtime": 1784360211.6756318,
       "warnings": [],
       "input": {
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-imagegen-20260718/cells/lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046/output.png",
@@ -95,9 +97,11 @@
         "target_faces": "200000",
         "texture_size": "1024"
       },
+      "submittedAt": 1784360124.915831,
       "startedAt": 1784360211.94559,
       "finishedAt": 1784360300.0722308,
       "durationSeconds": 88.12664079666138,
+      "outputMtime": 1784360299.8397436,
       "warnings": [],
       "input": {
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-imagegen-20260718/cells/lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046/output.png",
@@ -149,9 +153,11 @@
         "target_faces": "200000",
         "texture_size": "1024"
       },
+      "submittedAt": 1784360124.9461818,
       "startedAt": 1784360300.0749,
       "finishedAt": 1784360397.068994,
       "durationSeconds": 96.99409413337708,
+      "outputMtime": 1784360396.733374,
       "warnings": [],
       "input": {
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-imagegen-20260718/cells/lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046/output.png",
@@ -203,9 +209,11 @@
         "target_faces": "200000",
         "texture_size": "1024"
       },
+      "submittedAt": 1784360124.977227,
       "startedAt": 1784360397.071856,
       "finishedAt": 1784360480.135316,
       "durationSeconds": 83.06345987319946,
+      "outputMtime": 1784360479.8895805,
       "warnings": [],
       "input": {
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-imagegen-20260718/cells/lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046/output.png",
@@ -257,9 +265,11 @@
         "target_faces": "200000",
         "texture_size": "1024"
       },
+      "submittedAt": 1784360125.0080671,
       "startedAt": 1784360480.1373298,
       "finishedAt": 1784360553.720304,
       "durationSeconds": 73.58297419548035,
+      "outputMtime": 1784360553.4900649,
       "warnings": [],
       "input": {
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-imagegen-20260718/cells/lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046/output.png",

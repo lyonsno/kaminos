@@ -108,6 +108,7 @@ assert.throws(() => parseGreenroomCliOutput('submission wandered away\n'), /unre
 const cell = plan.cells[0];
 await import('node:fs/promises').then(({ mkdir }) => mkdir(cell.outputDir, { recursive: true }));
 await writeFile(cell.outputPath, 'generated-image');
+const nowSeconds = Date.now() / 1000;
 const status = {
   job_id: 'abc123',
   status: 'done',
@@ -127,6 +128,9 @@ const status = {
   },
   exit_code: 0,
   effective_route: `/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths ${cell.input.path} --prompt-file ${cell.prompt.path} --output ${cell.outputPath}`,
+  submitted_at: nowSeconds - 6,
+  started_at: nowSeconds - 5,
+  finished_at: nowSeconds + 5,
   warnings: [],
 };
 const completion = await validateGestaltImagegenCompletion({ cell, status });
@@ -138,7 +142,36 @@ await assert.rejects(
 );
 await assert.rejects(
   () => validateGestaltImagegenCompletion({ cell, status: { ...status, effective_route: 'fake-runner' } }),
-  /effective route/,
+  /route/,
+);
+await assert.rejects(
+  () => validateGestaltImagegenCompletion({
+    cell,
+    status: { ...status, effective_route: `${cell.expectedRunner}-fallback --pretend` },
+  }),
+  /route/,
+);
+await assert.rejects(
+  () => validateGestaltImagegenCompletion({
+    cell: { ...cell, input: { ...cell.input, sha256: 'sha256:wrong-input' } },
+    status,
+  }),
+  /input hash drift/,
+);
+await assert.rejects(
+  () => validateGestaltImagegenCompletion({
+    cell: { ...cell, prompt: { ...cell.prompt, sha256: 'sha256:wrong-prompt' } },
+    status,
+  }),
+  /prompt hash drift/,
+);
+await assert.rejects(
+  () => validateGestaltImagegenCompletion({ cell, status: { ...status, started_at: undefined } }),
+  /timing/,
+);
+await assert.rejects(
+  () => validateGestaltImagegenCompletion({ cell, status: { ...status, submitted_at: 0, started_at: 1, finished_at: 2 } }),
+  /outside job window/,
 );
 await import('node:fs/promises').then(({ unlink }) => unlink(cell.outputPath));
 await assert.rejects(
@@ -225,17 +258,40 @@ const trellisStatus = {
   exit_code: 0,
   started_at: 100.25,
   finished_at: 187.75,
-  effective_route: `${trellisCell.expectedRunner} -u generate.py --image ${trellisCell.input.path} --output ${trellisCell.outputDir}`,
+  submitted_at: 99.75,
+  effective_route: `${trellisCell.expectedRunner} -u generate.py --image ${trellisCell.input.path} --output ${trellisCell.outputPath} --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first`,
   warnings: [],
 };
+// The fixture output is created now, so put the synthetic run window around its mtime.
+trellisStatus.submitted_at = nowSeconds - 6;
+trellisStatus.started_at = nowSeconds - 5;
+trellisStatus.finished_at = nowSeconds + 5;
 const trellisCompletion = await validateGestaltTrellisCompletion({ cell: trellisCell, status: trellisStatus });
 assert.equal(trellisCompletion.spatialCoherence, 'unverified-pending-rendered-witness');
-assert.equal(trellisCompletion.durationSeconds, 87.5);
-assert.equal(trellisCompletion.startedAt, 100.25);
-assert.equal(trellisCompletion.finishedAt, 187.75);
+assert.equal(trellisCompletion.durationSeconds, 10);
+assert.equal(trellisCompletion.startedAt, nowSeconds - 5);
+assert.equal(trellisCompletion.finishedAt, nowSeconds + 5);
 await assert.rejects(
   () => validateGestaltTrellisCompletion({ cell: trellisCell, status: { ...trellisStatus, job_type: 'fallback' } }),
   /job type/,
+);
+await assert.rejects(
+  () => validateGestaltTrellisCompletion({
+    cell: trellisCell,
+    status: { ...trellisStatus, effective_route: `${trellisCell.expectedRunner}-fallback --pretend` },
+  }),
+  /Trellis route/,
+);
+await assert.rejects(
+  () => validateGestaltTrellisCompletion({
+    cell: trellisCell,
+    status: { ...trellisStatus, effective_route: trellisStatus.effective_route.replace(' --no-cascade', '') },
+  }),
+  /no-cascade/,
+);
+await assert.rejects(
+  () => validateGestaltTrellisCompletion({ cell: trellisCell, status: { ...trellisStatus, finished_at: undefined } }),
+  /timing/,
 );
 const witnessScript = join(root, 'blender-witness.py');
 await writeFile(witnessScript, 'print("witness")');
@@ -266,12 +322,33 @@ const witnessStatus = {
   params: { witness_script: witnessCell.witnessScript.path, yaw: String(witnessCell.yaw), pitch: String(witnessCell.pitch) },
   exit_code: 0,
   effective_route: `${witnessCell.expectedRunner} --background --python ${witnessCell.witnessScript.path}`,
+  submitted_at: nowSeconds - 6,
+  started_at: nowSeconds - 5,
+  finished_at: nowSeconds + 5,
 };
 const witnessCompletion = await validateGestaltWitnessCompletion({ cell: witnessCell, status: witnessStatus });
 assert.equal(witnessCompletion.visualInspectionClaim, 'not-yet-inspected');
 await assert.rejects(
   () => validateGestaltWitnessCompletion({ cell: witnessCell, status: { ...witnessStatus, effective_route: 'fallback-renderer' } }),
   /witness route/,
+);
+await assert.rejects(
+  () => validateGestaltWitnessCompletion({
+    cell: witnessCell,
+    status: { ...witnessStatus, effective_route: `${witnessCell.expectedRunner}-fallback --pretend` },
+  }),
+  /witness route/,
+);
+await assert.rejects(
+  () => validateGestaltWitnessCompletion({
+    cell: { ...witnessCell, witnessScript: { ...witnessCell.witnessScript, sha256: 'sha256:wrong-script' } },
+    status: witnessStatus,
+  }),
+  /script hash drift/,
+);
+await assert.rejects(
+  () => validateGestaltWitnessCompletion({ cell: witnessCell, status: { ...witnessStatus, started_at: null } }),
+  /timing/,
 );
 
 console.log('lirm speciation gestalt imagegen contracts passed');
