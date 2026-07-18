@@ -1,0 +1,534 @@
+{
+  "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-plan.v0",
+  "status": "planned",
+  "requiredViews": [
+    {
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2
+    },
+    {
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2
+    },
+    {
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2
+    },
+    {
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2
+    }
+  ],
+  "evidencePredicate": {
+    "expectedWitnessCount": 20,
+    "blankOrMissingFrameCountsAsSuccess": false,
+    "routeFallbackAllowed": false,
+    "spatialClaimRequiresHumanVisualInspection": true
+  },
+  "cells": [
+    {
+      "witnessId": "lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046-left",
+      "cellId": "lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046",
+      "generationId": "basin-03-s3p00-n00",
+      "sourceBasinIndex": 3,
+      "stance": "preserve-gestalt",
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046/output.glb",
+        "bytes": 9723692,
+        "sha256": "sha256:ce5b64444907e073bbcf38e3e042899e2f0d502c8cab0d60b6b1007553a245a8"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046/left",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046/left/render.png",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046-front",
+      "cellId": "lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046",
+      "generationId": "basin-03-s3p00-n00",
+      "sourceBasinIndex": 3,
+      "stance": "preserve-gestalt",
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046/output.glb",
+        "bytes": 9723692,
+        "sha256": "sha256:ce5b64444907e073bbcf38e3e042899e2f0d502c8cab0d60b6b1007553a245a8"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046/front",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046/front/render.png",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046-right",
+      "cellId": "lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046",
+      "generationId": "basin-03-s3p00-n00",
+      "sourceBasinIndex": 3,
+      "stance": "preserve-gestalt",
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046/output.glb",
+        "bytes": 9723692,
+        "sha256": "sha256:ce5b64444907e073bbcf38e3e042899e2f0d502c8cab0d60b6b1007553a245a8"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046/right",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046/right/render.png",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046-opposite",
+      "cellId": "lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046",
+      "generationId": "basin-03-s3p00-n00",
+      "sourceBasinIndex": 3,
+      "stance": "preserve-gestalt",
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046/output.glb",
+        "bytes": 9723692,
+        "sha256": "sha256:ce5b64444907e073bbcf38e3e042899e2f0d502c8cab0d60b6b1007553a245a8"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046/opposite",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046/opposite/render.png",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046-left",
+      "cellId": "lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046",
+      "generationId": "basin-03-s3p00-n00",
+      "sourceBasinIndex": 3,
+      "stance": "lineage-seed",
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046/output.glb",
+        "bytes": 9499012,
+        "sha256": "sha256:d1b0371f09ac3eb7c539532926f03190c5fddfd722a000b0b9f56aa1ce75825a"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046/left",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046/left/render.png",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046-front",
+      "cellId": "lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046",
+      "generationId": "basin-03-s3p00-n00",
+      "sourceBasinIndex": 3,
+      "stance": "lineage-seed",
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046/output.glb",
+        "bytes": 9499012,
+        "sha256": "sha256:d1b0371f09ac3eb7c539532926f03190c5fddfd722a000b0b9f56aa1ce75825a"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046/front",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046/front/render.png",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046-right",
+      "cellId": "lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046",
+      "generationId": "basin-03-s3p00-n00",
+      "sourceBasinIndex": 3,
+      "stance": "lineage-seed",
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046/output.glb",
+        "bytes": 9499012,
+        "sha256": "sha256:d1b0371f09ac3eb7c539532926f03190c5fddfd722a000b0b9f56aa1ce75825a"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046/right",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046/right/render.png",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046-opposite",
+      "cellId": "lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046",
+      "generationId": "basin-03-s3p00-n00",
+      "sourceBasinIndex": 3,
+      "stance": "lineage-seed",
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046/output.glb",
+        "bytes": 9499012,
+        "sha256": "sha256:d1b0371f09ac3eb7c539532926f03190c5fddfd722a000b0b9f56aa1ce75825a"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046/opposite",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046/opposite/render.png",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046-left",
+      "cellId": "lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046",
+      "generationId": "basin-10-s3p00-n00",
+      "sourceBasinIndex": 10,
+      "stance": "lineage-seed",
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046/output.glb",
+        "bytes": 9814284,
+        "sha256": "sha256:1b5efd2cafc26d5593705abad0a9ddec293ddb7e4405e7cd4a85029aa617030d"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046/left",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046/left/render.png",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046-front",
+      "cellId": "lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046",
+      "generationId": "basin-10-s3p00-n00",
+      "sourceBasinIndex": 10,
+      "stance": "lineage-seed",
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046/output.glb",
+        "bytes": 9814284,
+        "sha256": "sha256:1b5efd2cafc26d5593705abad0a9ddec293ddb7e4405e7cd4a85029aa617030d"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046/front",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046/front/render.png",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046-right",
+      "cellId": "lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046",
+      "generationId": "basin-10-s3p00-n00",
+      "sourceBasinIndex": 10,
+      "stance": "lineage-seed",
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046/output.glb",
+        "bytes": 9814284,
+        "sha256": "sha256:1b5efd2cafc26d5593705abad0a9ddec293ddb7e4405e7cd4a85029aa617030d"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046/right",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046/right/render.png",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046-opposite",
+      "cellId": "lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046",
+      "generationId": "basin-10-s3p00-n00",
+      "sourceBasinIndex": 10,
+      "stance": "lineage-seed",
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046/output.glb",
+        "bytes": 9814284,
+        "sha256": "sha256:1b5efd2cafc26d5593705abad0a9ddec293ddb7e4405e7cd4a85029aa617030d"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046/opposite",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046/opposite/render.png",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046-left",
+      "cellId": "lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046",
+      "generationId": "basin-15-s3p00-n00",
+      "sourceBasinIndex": 15,
+      "stance": "lineage-seed",
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046/output.glb",
+        "bytes": 8929476,
+        "sha256": "sha256:8c9acec75125eb1e801f9440db79c257efd03d89f49da25133315b00d2835e93"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046/left",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046/left/render.png",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046-front",
+      "cellId": "lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046",
+      "generationId": "basin-15-s3p00-n00",
+      "sourceBasinIndex": 15,
+      "stance": "lineage-seed",
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046/output.glb",
+        "bytes": 8929476,
+        "sha256": "sha256:8c9acec75125eb1e801f9440db79c257efd03d89f49da25133315b00d2835e93"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046/front",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046/front/render.png",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046-right",
+      "cellId": "lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046",
+      "generationId": "basin-15-s3p00-n00",
+      "sourceBasinIndex": 15,
+      "stance": "lineage-seed",
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046/output.glb",
+        "bytes": 8929476,
+        "sha256": "sha256:8c9acec75125eb1e801f9440db79c257efd03d89f49da25133315b00d2835e93"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046/right",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046/right/render.png",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046-opposite",
+      "cellId": "lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046",
+      "generationId": "basin-15-s3p00-n00",
+      "sourceBasinIndex": 15,
+      "stance": "lineage-seed",
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046/output.glb",
+        "bytes": 8929476,
+        "sha256": "sha256:8c9acec75125eb1e801f9440db79c257efd03d89f49da25133315b00d2835e93"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046/opposite",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046/opposite/render.png",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046-left",
+      "cellId": "lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046",
+      "generationId": "basin-22-s1p50-n00",
+      "sourceBasinIndex": 22,
+      "stance": "lineage-seed",
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046/output.glb",
+        "bytes": 9586284,
+        "sha256": "sha256:5b481bfddb75dffc27c2c518f3cfcc5ea0407a4545c3fcff7bb61c3e27a55088"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046/left",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046/left/render.png",
+      "view": "left",
+      "yaw": -0.85,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046-front",
+      "cellId": "lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046",
+      "generationId": "basin-22-s1p50-n00",
+      "sourceBasinIndex": 22,
+      "stance": "lineage-seed",
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046/output.glb",
+        "bytes": 9586284,
+        "sha256": "sha256:5b481bfddb75dffc27c2c518f3cfcc5ea0407a4545c3fcff7bb61c3e27a55088"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046/front",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046/front/render.png",
+      "view": "front",
+      "yaw": 0,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046-right",
+      "cellId": "lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046",
+      "generationId": "basin-22-s1p50-n00",
+      "sourceBasinIndex": 22,
+      "stance": "lineage-seed",
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046/output.glb",
+        "bytes": 9586284,
+        "sha256": "sha256:5b481bfddb75dffc27c2c518f3cfcc5ea0407a4545c3fcff7bb61c3e27a55088"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046/right",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046/right/render.png",
+      "view": "right",
+      "yaw": 0.85,
+      "pitch": 0.2
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046-opposite",
+      "cellId": "lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046",
+      "generationId": "basin-22-s1p50-n00",
+      "sourceBasinIndex": 22,
+      "stance": "lineage-seed",
+      "jobType": "kaminos_blender_glb_witness_molten_0718",
+      "expectedRunner": "/Applications/Blender.app/Contents/MacOS/Blender",
+      "requestedRoute": "gpu-greenroom/kaminos_blender_glb_witness_molten_0718",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046/output.glb",
+        "bytes": 9586284,
+        "sha256": "sha256:5b481bfddb75dffc27c2c518f3cfcc5ea0407a4545c3fcff7bb61c3e27a55088"
+      },
+      "witnessScript": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+        "bytes": 4193,
+        "sha256": "sha256:d04d9a840d51c5ff677889e9498703941b455b8a98c92cc846d3bbba711d803c"
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046/opposite",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046/opposite/render.png",
+      "view": "opposite",
+      "yaw": 3.141593,
+      "pitch": 0.2
+    }
+  ]
+}

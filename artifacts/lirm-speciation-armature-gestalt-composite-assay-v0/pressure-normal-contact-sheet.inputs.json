@@ -1,0 +1,90 @@
+{
+  "width": 2048,
+  "cellWidth": 512,
+  "cellHeight": 570,
+  "imageHeight": 512,
+  "imageOffsetY": 8,
+  "headerHeight": 50,
+  "cells": [
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/baselines/lirm-armature-22/normal-implicit.png",
+      "title": "B03 baseline",
+      "viewLabel": "lirm-armature-22 procedural"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-03-s3p00-n00-p025/normal-composite.png",
+      "title": "B03 p0.25",
+      "viewLabel": "lirm-armature-22 composite"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-03-s3p00-n00-p046/normal-composite.png",
+      "title": "B03 p0.46",
+      "viewLabel": "lirm-armature-22 composite"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-03-s3p00-n00-p067/normal-composite.png",
+      "title": "B03 p0.67",
+      "viewLabel": "lirm-armature-22 composite"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/baselines/lirm-armature-22/normal-implicit.png",
+      "title": "B10 baseline",
+      "viewLabel": "lirm-armature-22 procedural"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-10-s3p00-n00-p025/normal-composite.png",
+      "title": "B10 p0.25",
+      "viewLabel": "lirm-armature-22 composite"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-10-s3p00-n00-p046/normal-composite.png",
+      "title": "B10 p0.46",
+      "viewLabel": "lirm-armature-22 composite"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-10-s3p00-n00-p067/normal-composite.png",
+      "title": "B10 p0.67",
+      "viewLabel": "lirm-armature-22 composite"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/baselines/lirm-armature-22/normal-implicit.png",
+      "title": "B15 baseline",
+      "viewLabel": "lirm-armature-22 procedural"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-15-s3p00-n00-p025/normal-composite.png",
+      "title": "B15 p0.25",
+      "viewLabel": "lirm-armature-22 composite"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-15-s3p00-n00-p046/normal-composite.png",
+      "title": "B15 p0.46",
+      "viewLabel": "lirm-armature-22 composite"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-15-s3p00-n00-p067/normal-composite.png",
+      "title": "B15 p0.67",
+      "viewLabel": "lirm-armature-22 composite"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/baselines/lirm-armature-22/normal-implicit.png",
+      "title": "B22 baseline",
+      "viewLabel": "lirm-armature-22 procedural"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-22-s1p50-n00-p025/normal-composite.png",
+      "title": "B22 p0.25",
+      "viewLabel": "lirm-armature-22 composite"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-22-s1p50-n00-p046/normal-composite.png",
+      "title": "B22 p0.46",
+      "viewLabel": "lirm-armature-22 composite"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-22-s1p50-n00-p067/normal-composite.png",
+      "title": "B22 p0.67",
+      "viewLabel": "lirm-armature-22 composite"
+    }
+  ]
+}

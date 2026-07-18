@@ -1,0 +1,90 @@
+{
+  "width": 2048,
+  "cellWidth": 512,
+  "cellHeight": 548,
+  "imageHeight": 512,
+  "imageOffsetY": 0,
+  "headerHeight": 36,
+  "cells": [
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-03-s3p00-n00-p046/trellis-source.png",
+      "title": "basin-03-s3p00-n00",
+      "viewLabel": "3D SCAFFOLD"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-03-s3p00-n00-p046/depth-composite.png",
+      "title": "basin-03-s3p00-n00",
+      "viewLabel": "DEPTH"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-imagegen-20260718/cells/lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046/output.png",
+      "title": "basin-03-s3p00-n00",
+      "viewLabel": "PRESERVE"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-imagegen-20260718/cells/lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046/output.png",
+      "title": "basin-03-s3p00-n00",
+      "viewLabel": "LINEAGE"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-10-s3p00-n00-p046/trellis-source.png",
+      "title": "basin-10-s3p00-n00",
+      "viewLabel": "3D SCAFFOLD"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-10-s3p00-n00-p046/depth-composite.png",
+      "title": "basin-10-s3p00-n00",
+      "viewLabel": "DEPTH"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-imagegen-20260718/cells/lirm-armature-22__basin-10-s3p00-n00-p046-preserve-gestalt-seed717046/output.png",
+      "title": "basin-10-s3p00-n00",
+      "viewLabel": "PRESERVE"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-imagegen-20260718/cells/lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046/output.png",
+      "title": "basin-10-s3p00-n00",
+      "viewLabel": "LINEAGE"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-15-s3p00-n00-p046/trellis-source.png",
+      "title": "basin-15-s3p00-n00",
+      "viewLabel": "3D SCAFFOLD"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-15-s3p00-n00-p046/depth-composite.png",
+      "title": "basin-15-s3p00-n00",
+      "viewLabel": "DEPTH"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-imagegen-20260718/cells/lirm-armature-22__basin-15-s3p00-n00-p046-preserve-gestalt-seed717046/output.png",
+      "title": "basin-15-s3p00-n00",
+      "viewLabel": "PRESERVE"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-imagegen-20260718/cells/lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046/output.png",
+      "title": "basin-15-s3p00-n00",
+      "viewLabel": "LINEAGE"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-22-s1p50-n00-p046/trellis-source.png",
+      "title": "basin-22-s1p50-n00",
+      "viewLabel": "3D SCAFFOLD"
+    },
+    {
+      "sourcePath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-22-s1p50-n00-p046/depth-composite.png",
+      "title": "basin-22-s1p50-n00",
+      "viewLabel": "DEPTH"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-imagegen-20260718/cells/lirm-armature-22__basin-22-s1p50-n00-p046-preserve-gestalt-seed717046/output.png",
+      "title": "basin-22-s1p50-n00",
+      "viewLabel": "PRESERVE"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-imagegen-20260718/cells/lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046/output.png",
+      "title": "basin-22-s1p50-n00",
+      "viewLabel": "LINEAGE"
+    }
+  ]
+}

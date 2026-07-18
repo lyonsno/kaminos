@@ -1,0 +1,221 @@
+{
+  "schema": "kaminos.lirm-speciation-armature-gestalt-composite-contact-sheets.v0",
+  "sourceWitness": {
+    "path": "witness/receipt.json",
+    "byteSize": 122511,
+    "sha256": "sha256:3aa94671217f6c6ead5c25e734a64cd4eb88bd975e0e376ce04ff008ef6550e8"
+  },
+  "assembler": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-trellis-guidance-pressure-assay-v1/assemble-contact-sheet.swift",
+    "sha256": "sha256:6c8bc6704d21be850c552c8ca12f3073e675cb550b427840ffcf4cd04ca2f3db"
+  },
+  "sheets": [
+    {
+      "name": "pressure-clay-contact-sheet",
+      "rows": 4,
+      "cells": 16,
+      "manifest": {
+        "path": "pressure-clay-contact-sheet.inputs.json",
+        "byteSize": 4751,
+        "sha256": "sha256:9882a85d7b681d17d4878bdf0c988e1f46ee73514f538f7417f6135ce86cd01a"
+      },
+      "output": {
+        "path": "pressure-clay-contact-sheet.png",
+        "byteSize": 1643252,
+        "sha256": "sha256:24739d2a13f1efb5d6850f27118196936cdfa3dbf3ce8810e7fc99fcf82c43ae"
+      }
+    },
+    {
+      "name": "armature-retention-clay-contact-sheet",
+      "rows": 2,
+      "cells": 8,
+      "manifest": {
+        "path": "armature-retention-clay-contact-sheet.inputs.json",
+        "byteSize": 2415,
+        "sha256": "sha256:302819fe6cb1ee5983b100ea37426db6ce763ac08e3dfd93a806942c79d2e4f7"
+      },
+      "output": {
+        "path": "armature-retention-clay-contact-sheet.png",
+        "byteSize": 786248,
+        "sha256": "sha256:851a18b2936f354fe66b2f5499a44086ca20bf42ab2c39217526914521e5ace1"
+      }
+    },
+    {
+      "name": "pressure-depth-contact-sheet",
+      "rows": 4,
+      "cells": 16,
+      "manifest": {
+        "path": "pressure-depth-contact-sheet.inputs.json",
+        "byteSize": 4767,
+        "sha256": "sha256:2964678f60856b1208bc61485425134e7f3e32eba7ba583fb49e705defcb16a5"
+      },
+      "output": {
+        "path": "pressure-depth-contact-sheet.png",
+        "byteSize": 987779,
+        "sha256": "sha256:faefbe45df3aec85ae5ad0a6366997036df9732d294da5a72faf73202ebc8f5d"
+      }
+    },
+    {
+      "name": "armature-retention-depth-contact-sheet",
+      "rows": 2,
+      "cells": 8,
+      "manifest": {
+        "path": "armature-retention-depth-contact-sheet.inputs.json",
+        "byteSize": 2423,
+        "sha256": "sha256:057e5b5c26c524d2d22a4767b50f700b78d8e67a77033f2ab03ef5f65c7bd0ca"
+      },
+      "output": {
+        "path": "armature-retention-depth-contact-sheet.png",
+        "byteSize": 461493,
+        "sha256": "sha256:77a09831789adb66a0b3fe9349504d3ab2351b0784f2f5f21d58722abf35b842"
+      }
+    },
+    {
+      "name": "pressure-normal-contact-sheet",
+      "rows": 4,
+      "cells": 16,
+      "manifest": {
+        "path": "pressure-normal-contact-sheet.inputs.json",
+        "byteSize": 4783,
+        "sha256": "sha256:774a151702e87d43a6babe93bf9203e9d2c16f678653cdc28c3c3eb07e89bc4a"
+      },
+      "output": {
+        "path": "pressure-normal-contact-sheet.png",
+        "byteSize": 1888373,
+        "sha256": "sha256:eae96fba69fa07b8a8a155c1f092c743ad3a644f232208eb52fba93804c7ec03"
+      }
+    },
+    {
+      "name": "armature-retention-normal-contact-sheet",
+      "rows": 2,
+      "cells": 8,
+      "manifest": {
+        "path": "armature-retention-normal-contact-sheet.inputs.json",
+        "byteSize": 2431,
+        "sha256": "sha256:23e3adfb313f73920a2e10559d9b93f082557700318f007bfb53f1d98177efe5"
+      },
+      "output": {
+        "path": "armature-retention-normal-contact-sheet.png",
+        "byteSize": 879252,
+        "sha256": "sha256:f08321756843d24e1b4b0b8fa9292f755d4b5b38e0860856fd1e06de72d1e683"
+      }
+    },
+    {
+      "name": "pressure-mask-contact-sheet",
+      "rows": 4,
+      "cells": 16,
+      "manifest": {
+        "path": "pressure-mask-contact-sheet.inputs.json",
+        "byteSize": 4751,
+        "sha256": "sha256:463b83ecd920581917e1b1b0c23349c2b27befa581d6a5a08ef6f5a79d3fb052"
+      },
+      "output": {
+        "path": "pressure-mask-contact-sheet.png",
+        "byteSize": 348389,
+        "sha256": "sha256:88abd548be9a71a081e07c3362eb71d7e8e85689887cf027e830b6dcff599749"
+      }
+    },
+    {
+      "name": "armature-retention-mask-contact-sheet",
+      "rows": 2,
+      "cells": 8,
+      "manifest": {
+        "path": "armature-retention-mask-contact-sheet.inputs.json",
+        "byteSize": 2415,
+        "sha256": "sha256:639b4725eb3229c1387fca039a91b611c713a95f05daeb2f649a90bb236179d7"
+      },
+      "output": {
+        "path": "armature-retention-mask-contact-sheet.png",
+        "byteSize": 163489,
+        "sha256": "sha256:dc2f0764fe8b21f86205ad2a88e70787bb1b8a58fd039f244de7ff49cc9fa919"
+      }
+    }
+  ],
+  "outputEvidence": [
+    {
+      "path": "pressure-clay-contact-sheet.inputs.json",
+      "byteSize": 4751,
+      "sha256": "sha256:9882a85d7b681d17d4878bdf0c988e1f46ee73514f538f7417f6135ce86cd01a"
+    },
+    {
+      "path": "pressure-clay-contact-sheet.png",
+      "byteSize": 1643252,
+      "sha256": "sha256:24739d2a13f1efb5d6850f27118196936cdfa3dbf3ce8810e7fc99fcf82c43ae"
+    },
+    {
+      "path": "armature-retention-clay-contact-sheet.inputs.json",
+      "byteSize": 2415,
+      "sha256": "sha256:302819fe6cb1ee5983b100ea37426db6ce763ac08e3dfd93a806942c79d2e4f7"
+    },
+    {
+      "path": "armature-retention-clay-contact-sheet.png",
+      "byteSize": 786248,
+      "sha256": "sha256:851a18b2936f354fe66b2f5499a44086ca20bf42ab2c39217526914521e5ace1"
+    },
+    {
+      "path": "pressure-depth-contact-sheet.inputs.json",
+      "byteSize": 4767,
+      "sha256": "sha256:2964678f60856b1208bc61485425134e7f3e32eba7ba583fb49e705defcb16a5"
+    },
+    {
+      "path": "pressure-depth-contact-sheet.png",
+      "byteSize": 987779,
+      "sha256": "sha256:faefbe45df3aec85ae5ad0a6366997036df9732d294da5a72faf73202ebc8f5d"
+    },
+    {
+      "path": "armature-retention-depth-contact-sheet.inputs.json",
+      "byteSize": 2423,
+      "sha256": "sha256:057e5b5c26c524d2d22a4767b50f700b78d8e67a77033f2ab03ef5f65c7bd0ca"
+    },
+    {
+      "path": "armature-retention-depth-contact-sheet.png",
+      "byteSize": 461493,
+      "sha256": "sha256:77a09831789adb66a0b3fe9349504d3ab2351b0784f2f5f21d58722abf35b842"
+    },
+    {
+      "path": "pressure-normal-contact-sheet.inputs.json",
+      "byteSize": 4783,
+      "sha256": "sha256:774a151702e87d43a6babe93bf9203e9d2c16f678653cdc28c3c3eb07e89bc4a"
+    },
+    {
+      "path": "pressure-normal-contact-sheet.png",
+      "byteSize": 1888373,
+      "sha256": "sha256:eae96fba69fa07b8a8a155c1f092c743ad3a644f232208eb52fba93804c7ec03"
+    },
+    {
+      "path": "armature-retention-normal-contact-sheet.inputs.json",
+      "byteSize": 2431,
+      "sha256": "sha256:23e3adfb313f73920a2e10559d9b93f082557700318f007bfb53f1d98177efe5"
+    },
+    {
+      "path": "armature-retention-normal-contact-sheet.png",
+      "byteSize": 879252,
+      "sha256": "sha256:f08321756843d24e1b4b0b8fa9292f755d4b5b38e0860856fd1e06de72d1e683"
+    },
+    {
+      "path": "pressure-mask-contact-sheet.inputs.json",
+      "byteSize": 4751,
+      "sha256": "sha256:463b83ecd920581917e1b1b0c23349c2b27befa581d6a5a08ef6f5a79d3fb052"
+    },
+    {
+      "path": "pressure-mask-contact-sheet.png",
+      "byteSize": 348389,
+      "sha256": "sha256:88abd548be9a71a081e07c3362eb71d7e8e85689887cf027e830b6dcff599749"
+    },
+    {
+      "path": "armature-retention-mask-contact-sheet.inputs.json",
+      "byteSize": 2415,
+      "sha256": "sha256:639b4725eb3229c1387fca039a91b611c713a95f05daeb2f649a90bb236179d7"
+    },
+    {
+      "path": "armature-retention-mask-contact-sheet.png",
+      "byteSize": 163489,
+      "sha256": "sha256:dc2f0764fe8b21f86205ad2a88e70787bb1b8a58fd039f244de7ff49cc9fa919"
+    }
+  ],
+  "falseClosureGuards": {
+    "allSourcesRequiredNonblank": true,
+    "operatorSmokeClaim": "not_yet_requested",
+    "visualInspectionClaim": "not_yet_inspected"
+  }
+}

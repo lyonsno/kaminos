@@ -1,0 +1,116 @@
+{
+  "schema": "kaminos.lirm-speciation-gestalt-imagegen-submission.v0",
+  "status": "submitted",
+  "planPath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/imagegen/plan.json",
+  "requestedCount": 8,
+  "submitted": [
+    {
+      "cellId": "lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046",
+      "jobId": "b0477c32760d",
+      "recoveredAfterSubmitParserFailure": true,
+      "response": {
+        "job_id": "b0477c32760d",
+        "status": "done",
+        "job_type": "mflux_flux2_edit_promptfile",
+        "input_path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-03-s3p00-n00-p046/trellis-source.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-imagegen-20260718/cells/lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046",
+        "params": {
+          "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/imagegen/prompts/preserve-gestalt.txt",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "width": "512",
+          "height": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "seed": "717046",
+          "mlx_cache_limit_gb": "48"
+        },
+        "submitted_at": 1784353791.6625001,
+        "started_at": 1784353791.859872,
+        "finished_at": 1784353824.8034759,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-03-s3p00-n00-p046/trellis-source.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/imagegen/prompts/preserve-gestalt.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-imagegen-20260718/cells/lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717046 --mlx-cache-limit-gb 48",
+        "pid": 33494,
+        "warnings": []
+      }
+    },
+    {
+      "cellId": "lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046",
+      "jobId": "e15c1652b02c",
+      "recoveredAfterSubmitParserFailure": true,
+      "response": {
+        "job_id": "e15c1652b02c",
+        "status": "done",
+        "job_type": "mflux_flux2_edit_promptfile",
+        "input_path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-03-s3p00-n00-p046/trellis-source.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-imagegen-20260718/cells/lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046",
+        "params": {
+          "prompt_file": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/imagegen/prompts/lineage-seed.txt",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "width": "512",
+          "height": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "seed": "717046",
+          "mlx_cache_limit_gb": "48"
+        },
+        "submitted_at": 1784353912.265134,
+        "started_at": 1784353912.310018,
+        "finished_at": 1784353943.147292,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/witness/lirm-armature-22__basin-03-s3p00-n00-p046/trellis-source.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/imagegen/prompts/lineage-seed.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-imagegen-20260718/cells/lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717046 --mlx-cache-limit-gb 48",
+        "pid": 33494,
+        "warnings": []
+      }
+    },
+    {
+      "cellId": "lirm-armature-22__basin-10-s3p00-n00-p046-preserve-gestalt-seed717046",
+      "jobId": "741ba8f5d595",
+      "response": {
+        "job_id": "741ba8f5d595"
+      }
+    },
+    {
+      "cellId": "lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046",
+      "jobId": "c1cc87bfd646",
+      "response": {
+        "job_id": "c1cc87bfd646"
+      }
+    },
+    {
+      "cellId": "lirm-armature-22__basin-15-s3p00-n00-p046-preserve-gestalt-seed717046",
+      "jobId": "68ca139f7308",
+      "response": {
+        "job_id": "68ca139f7308"
+      }
+    },
+    {
+      "cellId": "lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046",
+      "jobId": "a520bb4e78e7",
+      "response": {
+        "job_id": "a520bb4e78e7"
+      }
+    },
+    {
+      "cellId": "lirm-armature-22__basin-22-s1p50-n00-p046-preserve-gestalt-seed717046",
+      "jobId": "a609a5261f8e",
+      "response": {
+        "job_id": "a609a5261f8e"
+      }
+    },
+    {
+      "cellId": "lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046",
+      "jobId": "063ffd6a04bd",
+      "response": {
+        "job_id": "063ffd6a04bd"
+      }
+    }
+  ],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "8/8 jobs submitted"
+}

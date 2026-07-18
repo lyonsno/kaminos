@@ -1,6 +1,9 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
+
+import { createSignedDistanceField } from './lirm-silhouette-archetype-corpus-core.js';
 
 export const LIRM_SPECIATION_ARMATURE_WITNESS_SCHEMA = 'kaminos.lirm-speciation-armature-witness.v0';
 export const LIRM_SPECIATION_ARMATURE_CANDIDATE_SCHEMA = 'kaminos.lirm-speciation-armature-candidate.v0';
@@ -20,6 +23,10 @@ export const LIRM_SPECIATION_ARMATURE_CONDITIONING_PACKAGE_ROUTE = 'kaminos/lirm
 export const LIRM_SPECIATION_ARMATURE_WRITE_RESULT_SCHEMA = 'kaminos.lirm-speciation-armature-write-result.v0';
 export const LIRM_SPECIATION_ARMATURE_PROXY_RENDER_WRITE_RESULT_SCHEMA = 'kaminos.lirm-speciation-armature-proxy-render-write-result.v0';
 export const LIRM_SPECIATION_ARMATURE_IMPLICIT_BODY_WRITE_RESULT_SCHEMA = 'kaminos.lirm-speciation-armature-implicit-body-write-result.v0';
+export const LIRM_SPECIATION_ARMATURE_GESTALT_COMPOSITE_BUNDLE_SCHEMA = 'kaminos.lirm-speciation-armature-gestalt-composite-bundle.v0';
+export const LIRM_SPECIATION_ARMATURE_GESTALT_COMPOSITE_WITNESS_SCHEMA = 'kaminos.lirm-speciation-armature-gestalt-composite-witness.v0';
+export const LIRM_SPECIATION_ARMATURE_GESTALT_COMPOSITE_WRITE_RESULT_SCHEMA = 'kaminos.lirm-speciation-armature-gestalt-composite-write-result.v0';
+export const LIRM_SPECIATION_ARMATURE_GESTALT_COMPOSITE_ROUTE = 'kaminos/lirm-speciation-armature/gestalt-composite-v0';
 export const LIRM_SPECIATION_ARMATURE_CONDITIONING_PACKAGE_WRITE_RESULT_SCHEMA = 'kaminos.lirm-speciation-armature-conditioning-package-write-result.v0';
 
 const ROOT_PARENT_ID = 'root-soft-crawling-hoard-thief';
@@ -1183,7 +1190,139 @@ function primitiveDistance(point, primitive) {
   return sdSphere(point, primitive);
 }
 
-function evaluateImplicitField(point, primitives) {
+function silhouetteMaskHash(mask) {
+  const hash = createHash('sha256');
+  hash.update(`${mask.width}x${mask.height}:`);
+  hash.update(Buffer.from(mask.data.map(value => value ? 1 : 0)));
+  return `sha256:${hash.digest('hex')}`;
+}
+
+function validateGestaltEnvelope(value) {
+  if (!value || typeof value.id !== 'string' || !/^[A-Za-z0-9._-]+$/.test(value.id)) {
+    throw new Error('gestalt envelope id must be a filesystem-safe nonempty string');
+  }
+  const mask = value.mask;
+  if (!mask || !Number.isInteger(mask.width) || !Number.isInteger(mask.height) || mask.width < 8 || mask.height < 8) {
+    throw new Error('gestalt envelope mask must be at least 8x8');
+  }
+  if (!Array.isArray(mask.data) || mask.data.length !== mask.width * mask.height) {
+    throw new Error('gestalt envelope mask dimensions do not match its data');
+  }
+  const foregroundCount = mask.data.reduce((count, item) => count + (item ? 1 : 0), 0);
+  if (foregroundCount === 0 || foregroundCount === mask.data.length) {
+    throw new Error('gestalt envelope mask requires foreground and background');
+  }
+  const pressure = Number(value.pressure);
+  if (!Number.isFinite(pressure) || pressure <= 0) {
+    throw new Error('gestalt envelope pressure must be greater than zero');
+  }
+  if (pressure > 1) throw new Error('gestalt envelope pressure must not exceed one');
+  const depthRadius = Number(value.depthRadius ?? 0.2);
+  if (!Number.isFinite(depthRadius) || depthRadius <= 0) {
+    throw new Error('gestalt envelope depthRadius must be positive');
+  }
+  const normalizedMask = {
+    width: mask.width,
+    height: mask.height,
+    data: mask.data.map(item => item ? 1 : 0),
+  };
+  return {
+    id: value.id,
+    mask: normalizedMask,
+    maskHash: silhouetteMaskHash(normalizedMask),
+    pressure,
+    depthRadius,
+    roundness: Math.max(0, Number(value.roundness ?? 0.035)),
+    lineage: value.lineage || {},
+    signedDistance: createSignedDistanceField(normalizedMask),
+  };
+}
+
+export function createLirmGestaltEnvelopeFromLatentGeneration({
+  shapeSpaceReceipt,
+  generationId,
+  mask,
+  pressure,
+  depthRadius = 0.22,
+  roundness = 0.045,
+  envelopeId = generationId,
+} = {}) {
+  if (shapeSpaceReceipt?.schema !== 'kaminos.lirm-silhouette-basin-latent.v0') {
+    throw new Error('latent gestalt source must use kaminos.lirm-silhouette-basin-latent.v0');
+  }
+  const effectiveRoute = shapeSpaceReceipt.routeIdentity?.effectiveRoute;
+  if (effectiveRoute !== 'mlx-sdf-vae-posterior-basin-perturbation-v0') {
+    throw new Error(`latent gestalt source has unexpected effective route: ${effectiveRoute || 'missing'}`);
+  }
+  const generation = shapeSpaceReceipt.generations?.find(item => item.generationId === generationId);
+  if (!generation) {
+    throw new Error(`latent gestalt generation not found: ${generationId || 'missing'}`);
+  }
+  if (generation.acceptedForDownstream !== true) {
+    throw new Error(`latent gestalt generation is not accepted for downstream use: ${generationId}`);
+  }
+  if (!mask || !Number.isInteger(mask.width) || !Number.isInteger(mask.height) || !Array.isArray(mask.data)) {
+    throw new Error('latent gestalt generation requires a decoded binary mask');
+  }
+  const sourceMaskHash = `sha256:${createHash('sha256')
+    .update(Buffer.from(mask.data.map(value => value ? 1 : 0)))
+    .digest('hex')}`;
+  if (sourceMaskHash !== generation.maskHash) {
+    throw new Error(`latent gestalt mask hash mismatch for ${generationId}: expected ${generation.maskHash}, got ${sourceMaskHash}`);
+  }
+  return {
+    id: envelopeId,
+    mask,
+    pressure,
+    depthRadius,
+    roundness,
+    lineage: {
+      sourceReceiptSchema: shapeSpaceReceipt.schema,
+      requestedRoute: shapeSpaceReceipt.routeIdentity?.requestedRoute,
+      effectiveRoute,
+      generationId,
+      sourceBasinIndex: generation.sourceBasinIndex,
+      sourceShapeId: generation.sourceShapeId,
+      sourceMaskHash,
+      posteriorStrength: generation.strength,
+      sourceMaskPath: generation.maskPath,
+      acceptedForDownstream: generation.acceptedForDownstream,
+    },
+  };
+}
+
+function bilinearSample(field, px, py) {
+  const x = clamp(px, 0, field.width - 1);
+  const y = clamp(py, 0, field.height - 1);
+  const x0 = Math.floor(x);
+  const y0 = Math.floor(y);
+  const x1 = Math.min(field.width - 1, x0 + 1);
+  const y1 = Math.min(field.height - 1, y0 + 1);
+  const tx = x - x0;
+  const ty = y - y0;
+  const at = (xx, yy) => field.data[yy * field.width + xx];
+  return at(x0, y0) * (1 - tx) * (1 - ty)
+    + at(x1, y0) * tx * (1 - ty)
+    + at(x0, y1) * (1 - tx) * ty
+    + at(x1, y1) * tx * ty;
+}
+
+function gestaltEnvelopeDistance(point, envelope) {
+  const worldWidth = 2.35;
+  const worldHeight = 1.9;
+  const px = (point.x / worldWidth + 0.5) * (envelope.signedDistance.width - 1);
+  const py = (0.5 - point.y / worldHeight) * (envelope.signedDistance.height - 1);
+  const sampled = bilinearSample(envelope.signedDistance, px, py);
+  const pixelScale = Math.max(worldWidth / envelope.signedDistance.width, worldHeight / envelope.signedDistance.height);
+  const planar = -sampled * pixelScale;
+  const outsideX = Math.max(Math.abs(point.x) - worldWidth * 0.5, 0);
+  const outsideY = Math.max(Math.abs(point.y) - worldHeight * 0.5, 0);
+  const planarWithBounds = planar + Math.hypot(outsideX, outsideY);
+  const slab = Math.abs(point.z) - envelope.depthRadius;
+  return Math.max(planarWithBounds, slab) - envelope.roundness;
+}
+
+function evaluateImplicitField(point, primitives, gestaltEnvelope = null) {
   let fieldDistance = Infinity;
   let closestDistance = Infinity;
   let closestPrimitive = primitives[0];
@@ -1195,21 +1334,25 @@ function evaluateImplicitField(point, primitives) {
     }
     fieldDistance = fieldDistance === Infinity ? distance : smoothMin(fieldDistance, distance, 0.075);
   }
+  if (gestaltEnvelope) {
+    const envelopeDistance = gestaltEnvelopeDistance(point, gestaltEnvelope);
+    fieldDistance = fieldDistance * (1 - gestaltEnvelope.pressure) + envelopeDistance * gestaltEnvelope.pressure;
+  }
   return { distance: fieldDistance, closestDistance, primitive: closestPrimitive };
 }
 
-function implicitNormal(point, primitives) {
+function implicitNormal(point, primitives, gestaltEnvelope = null) {
   const e = 0.006;
-  const dx = evaluateImplicitField(vec3(point.x + e, point.y, point.z), primitives).distance
-    - evaluateImplicitField(vec3(point.x - e, point.y, point.z), primitives).distance;
-  const dy = evaluateImplicitField(vec3(point.x, point.y + e, point.z), primitives).distance
-    - evaluateImplicitField(vec3(point.x, point.y - e, point.z), primitives).distance;
-  const dz = evaluateImplicitField(vec3(point.x, point.y, point.z + e), primitives).distance
-    - evaluateImplicitField(vec3(point.x, point.y, point.z - e), primitives).distance;
+  const dx = evaluateImplicitField(vec3(point.x + e, point.y, point.z), primitives, gestaltEnvelope).distance
+    - evaluateImplicitField(vec3(point.x - e, point.y, point.z), primitives, gestaltEnvelope).distance;
+  const dy = evaluateImplicitField(vec3(point.x, point.y + e, point.z), primitives, gestaltEnvelope).distance
+    - evaluateImplicitField(vec3(point.x, point.y - e, point.z), primitives, gestaltEnvelope).distance;
+  const dz = evaluateImplicitField(vec3(point.x, point.y, point.z + e), primitives, gestaltEnvelope).distance
+    - evaluateImplicitField(vec3(point.x, point.y, point.z - e), primitives, gestaltEnvelope).distance;
   return norm3(vec3(dx, dy, dz));
 }
 
-function raymarchImplicitPixel({ pixelX, pixelY, width, height, primitives }) {
+function raymarchImplicitPixel({ pixelX, pixelY, width, height, primitives, gestaltEnvelope = null }) {
   const screenX = ((pixelX + 0.5) / width - 0.5) * 2.65;
   const screenY = (0.5 - (pixelY + 0.5) / height) * 2.05;
   const cameraYaw = 0.42;
@@ -1219,9 +1362,9 @@ function raymarchImplicitPixel({ pixelX, pixelY, width, height, primitives }) {
   const maxTravel = 3.0;
   for (let step = 0; step < 88 && travel < maxTravel; step += 1) {
     const point = add3(origin, mul3(direction, travel));
-    const field = evaluateImplicitField(point, primitives);
+    const field = evaluateImplicitField(point, primitives, gestaltEnvelope);
     if (field.distance < 0.0065) {
-      const normal = implicitNormal(point, primitives);
+      const normal = implicitNormal(point, primitives, gestaltEnvelope);
       return {
         hit: true,
         point,
@@ -1297,16 +1440,19 @@ function implicitMapFill(hit, kind) {
   return implicitClayFill(hit);
 }
 
-function renderImplicitMapsSvg({ candidate, primitives }) {
+function renderImplicitMapsSvg({ candidate, primitives, gestaltEnvelope = null }) {
   const pixelWidth = 192;
   const pixelHeight = 144;
   const displayWidth = 320;
   const displayHeight = 240;
+  const fieldKind = gestaltEnvelope ? 'smooth-sdf-metaball-silhouette-morph' : 'smooth-sdf-metaball';
+  const outputSuffix = gestaltEnvelope ? 'composite' : 'implicit';
+  const envelopeAttribute = gestaltEnvelope ? ` data-gestalt-envelope-id="${xml(gestaltEnvelope.id)}"` : '';
   const mapKinds = ['clay', 'depth', 'normal', 'mask', 'semantic'];
   const rectsByKind = Object.fromEntries(mapKinds.map(kind => [kind, []]));
   for (let y = 0; y < pixelHeight; y += 1) {
     for (let x = 0; x < pixelWidth; x += 1) {
-      const hit = raymarchImplicitPixel({ pixelX: x, pixelY: y, width: pixelWidth, height: pixelHeight, primitives });
+      const hit = raymarchImplicitPixel({ pixelX: x, pixelY: y, width: pixelWidth, height: pixelHeight, primitives, gestaltEnvelope });
       if (!hit.hit) continue;
       for (const kind of mapKinds) {
         rectsByKind[kind].push(`<rect x="${x}" y="${y}" width="1" height="1" fill="${implicitMapFill(hit, kind)}"/>`);
@@ -1331,9 +1477,9 @@ function renderImplicitMapsSvg({ candidate, primitives }) {
     const title = `${candidate.id} ${kind} implicit 3D control`;
     return {
       kind,
-      path: `${candidate.id}/${kind}-implicit.svg`,
-      svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${displayWidth}" height="${displayHeight}" viewBox="0 0 ${pixelWidth} ${pixelHeight}" role="img" aria-label="${xml(title)}" data-implicit-render="${xml(kind)}" data-render-mode="raymarched-implicit-field" data-field-kind="smooth-sdf-metaball"${attrs[kind]}>
-  <metadata>candidate=${xml(candidate.id)}; terminal mouth is a semantic surface primitive; pixels are ray hits against an implicit 3D field</metadata>
+      path: `${candidate.id}/${kind}-${outputSuffix}.svg`,
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${displayWidth}" height="${displayHeight}" viewBox="0 0 ${pixelWidth} ${pixelHeight}" role="img" aria-label="${xml(title)}" data-implicit-render="${xml(kind)}" data-render-mode="raymarched-implicit-field" data-field-kind="${fieldKind}"${envelopeAttribute}${attrs[kind]}>
+  <metadata>candidate=${xml(candidate.id)}; terminal mouth is a semantic surface primitive; pixels are ray hits against an implicit 3D field${gestaltEnvelope ? `; gestaltEnvelope=${xml(gestaltEnvelope.id)}; pressure=${gestaltEnvelope.pressure}` : ''}</metadata>
   <rect width="100%" height="100%" fill="${backgrounds[kind]}"/>
   <g data-layer="implicit-surface-pixels" data-candidate-id="${xml(candidate.id)}" data-pixel-grid="${pixelWidth}x${pixelHeight}" data-primitive-count="${primitives.length}" style="shape-rendering:crispEdges">
     ${rectsByKind[kind].join('\n    ')}
@@ -1343,10 +1489,12 @@ function renderImplicitMapsSvg({ candidate, primitives }) {
   });
 }
 
-function renderImplicitTrellisSourceSvg({ candidate, primitives }) {
+function renderImplicitTrellisSourceSvg({ candidate, primitives, gestaltEnvelope = null }) {
   const pixelWidth = 256;
   const pixelHeight = 192;
   const displaySize = 512;
+  const fieldKind = gestaltEnvelope ? 'smooth-sdf-metaball-silhouette-morph' : 'smooth-sdf-metaball';
+  const envelopeAttribute = gestaltEnvelope ? ` data-gestalt-envelope-id="${xml(gestaltEnvelope.id)}"` : '';
   const rects = [];
   let minX = pixelWidth;
   let minY = pixelHeight;
@@ -1354,7 +1502,7 @@ function renderImplicitTrellisSourceSvg({ candidate, primitives }) {
   let maxY = -1;
   for (let y = 0; y < pixelHeight; y += 1) {
     for (let x = 0; x < pixelWidth; x += 1) {
-      const hit = raymarchImplicitPixel({ pixelX: x, pixelY: y, width: pixelWidth, height: pixelHeight, primitives });
+      const hit = raymarchImplicitPixel({ pixelX: x, pixelY: y, width: pixelWidth, height: pixelHeight, primitives, gestaltEnvelope });
       if (!hit.hit) continue;
       minX = Math.min(minX, x);
       minY = Math.min(minY, y);
@@ -1384,8 +1532,8 @@ function renderImplicitTrellisSourceSvg({ candidate, primitives }) {
       sourcePixelGrid: `${pixelWidth}x${pixelHeight}`,
       displayedPixels: `${displaySize}x${displaySize}`,
     },
-    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${displaySize}" height="${displaySize}" viewBox="${viewBox}" role="img" aria-label="${xml(title)}" data-trellis-source="implicit-clay-tight" data-background="transparent" data-crop="tight-surface-bounds" data-render-mode="raymarched-implicit-field" data-field-kind="smooth-sdf-metaball">
-  <metadata>candidate=${xml(candidate.id)}; tight transparent crop for Trellis mesh probing; not a depth/normal/control map</metadata>
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${displaySize}" height="${displaySize}" viewBox="${viewBox}" role="img" aria-label="${xml(title)}" data-trellis-source="implicit-clay-tight" data-background="transparent" data-crop="tight-surface-bounds" data-render-mode="raymarched-implicit-field" data-field-kind="${fieldKind}"${envelopeAttribute}>
+  <metadata>candidate=${xml(candidate.id)}; tight transparent crop for Trellis mesh probing; not a depth/normal/control map${gestaltEnvelope ? `; gestaltEnvelope=${xml(gestaltEnvelope.id)}; pressure=${gestaltEnvelope.pressure}` : ''}</metadata>
   <g data-layer="implicit-trellis-source-pixels" data-candidate-id="${xml(candidate.id)}" data-pixel-grid="${pixelWidth}x${pixelHeight}" data-primitive-count="${primitives.length}" style="shape-rendering:crispEdges">
     ${rects.join('\n    ')}
   </g>
@@ -1435,6 +1583,277 @@ export function createLirmSpeciationArmatureImplicitBodyBundle({ witness, candid
       projectionProxyClaim: 'superseded_by_implicit_surface',
     },
   };
+}
+
+export function createLirmSpeciationArmatureGestaltCompositeBundle({ witness, candidate, candidateId, gestaltEnvelope } = {}) {
+  const selectedCandidate = candidate || witness?.candidates?.find(item => item.id === candidateId);
+  if (!witness || !selectedCandidate) {
+    throw new Error('createLirmSpeciationArmatureGestaltCompositeBundle requires a witness and candidate or candidateId');
+  }
+  const envelope = validateGestaltEnvelope(gestaltEnvelope);
+  const compositeId = `${selectedCandidate.id}__${envelope.id}`;
+  const renderCandidate = { ...selectedCandidate, id: compositeId };
+  const implicitPrimitives = createImplicitPrimitives(selectedCandidate);
+  const renderMaps = renderImplicitMapsSvg({ candidate: renderCandidate, primitives: implicitPrimitives, gestaltEnvelope: envelope });
+  const trellisSource = renderImplicitTrellisSourceSvg({ candidate: renderCandidate, primitives: implicitPrimitives, gestaltEnvelope: envelope });
+  const silhouetteLineage = {
+    id: envelope.id,
+    maskHash: envelope.maskHash,
+    ...envelope.lineage,
+  };
+  return {
+    schema: LIRM_SPECIATION_ARMATURE_GESTALT_COMPOSITE_BUNDLE_SCHEMA,
+    route: LIRM_SPECIATION_ARMATURE_GESTALT_COMPOSITE_ROUTE,
+    compositeId,
+    sourceWitnessId: witness.witnessId,
+    sourceWitnessRoute: witness.route,
+    candidateId: selectedCandidate.id,
+    seed: selectedCandidate.seed,
+    gestalt: selectedCandidate.bodyPlan.gestalt,
+    silhouette: selectedCandidate.bodyPlan.silhouette,
+    renderMode: 'raymarched-implicit-field',
+    fieldModel: {
+      kind: 'smooth-sdf-metaball-silhouette-morph',
+      actual3dStructure: true,
+      surfaceThreshold: 0.0065,
+      smoothUnionK: 0.075,
+      gestaltPressure: envelope.pressure,
+      gestaltDepthRadius: envelope.depthRadius,
+      composition: 'signed-distance-linear-morph-v0',
+      primitiveSources: ['procedural_armature_implicit_field', 'silhouette_envelope_rounded_volume'],
+    },
+    camera: {
+      projection: 'orthographic',
+      view: 'front-three-quarter',
+      coordinateFrame: 'normalized-implicit-body',
+      raySource: 'software-sdf-raymarch',
+    },
+    gestaltEnvelope: {
+      id: envelope.id,
+      maskHash: envelope.maskHash,
+      width: envelope.mask.width,
+      height: envelope.mask.height,
+      pressure: envelope.pressure,
+      depthRadius: envelope.depthRadius,
+      roundness: envelope.roundness,
+      lineage: envelope.lineage,
+    },
+    dualLineage: {
+      armature: {
+        witnessId: witness.witnessId,
+        candidateId: selectedCandidate.id,
+        candidateSeed: selectedCandidate.seed,
+      },
+      silhouette: silhouetteLineage,
+    },
+    implicitPrimitiveCount: implicitPrimitives.length,
+    semanticHandles: selectedCandidate.semanticHandles,
+    contactPoints: selectedCandidate.contactPoints,
+    renderMaps,
+    trellisSource,
+    falseClosureGuards: {
+      finishedCreatureClaim: 'forbidden',
+      generatorFiringClaim: 'not_yet_fired',
+      implicitBodyClaim: 'raymarched_composite_control_surface_only',
+      flatExtrusionClaim: 'forbidden',
+      dualLineageVerified: true,
+    },
+  };
+}
+
+function pgmBytes(mask) {
+  const header = Buffer.from(`P5\n${mask.width} ${mask.height}\n255\n`, 'ascii');
+  const pixels = Buffer.from(mask.data.map(value => value ? 255 : 0));
+  return Buffer.concat([header, pixels]);
+}
+
+export function decodeBinaryPgmMask(value) {
+  const bytes = Buffer.isBuffer(value) ? value : Buffer.from(value || []);
+  let offset = 0;
+  const isWhitespace = byte => byte === 9 || byte === 10 || byte === 13 || byte === 32;
+  const nextToken = () => {
+    while (offset < bytes.length) {
+      if (isWhitespace(bytes[offset])) {
+        offset += 1;
+        continue;
+      }
+      if (bytes[offset] === 35) {
+        while (offset < bytes.length && bytes[offset] !== 10 && bytes[offset] !== 13) offset += 1;
+        continue;
+      }
+      break;
+    }
+    const start = offset;
+    while (offset < bytes.length && !isWhitespace(bytes[offset]) && bytes[offset] !== 35) offset += 1;
+    return bytes.subarray(start, offset).toString('ascii');
+  };
+  const magic = nextToken();
+  if (magic !== 'P5') throw new Error('gestalt mask PGM must use binary P5 encoding');
+  const width = Number(nextToken());
+  const height = Number(nextToken());
+  const maxValue = Number(nextToken());
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
+    throw new Error('gestalt mask PGM has invalid dimensions');
+  }
+  if (maxValue !== 255) throw new Error('gestalt mask PGM must use max value 255');
+  if (!isWhitespace(bytes[offset])) throw new Error('gestalt mask PGM is missing the binary payload separator');
+  const separator = bytes[offset];
+  offset += 1;
+  if (separator === 13 && bytes[offset] === 10) offset += 1;
+  const pixelCount = width * height;
+  if (bytes.length - offset !== pixelCount) {
+    throw new Error(`gestalt mask PGM payload size mismatch: expected ${pixelCount}, got ${bytes.length - offset}`);
+  }
+  return {
+    width,
+    height,
+    data: Array.from(bytes.subarray(offset), byte => byte >= 128 ? 1 : 0),
+  };
+}
+
+async function createOutputEvidence(absolutePath, relativePath) {
+  const bytes = await readFile(absolutePath);
+  return {
+    path: relativePath,
+    byteSize: bytes.byteLength,
+    sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
+  };
+}
+
+export async function writeLirmSpeciationArmatureGestaltCompositeWitness(options = {}) {
+  const outDir = options.outDir || join(process.cwd(), 'artifacts', 'lirm-speciation-armature-gestalt-composites-v0');
+  const witness = options.witness || createLirmSpeciationArmatureWitness({
+    seed: String(options.seed || DEFAULT_SEED),
+    candidateCount: Math.max(1, Number(options.candidateCount || DEFAULT_CANDIDATE_COUNT)),
+    columns: Math.max(1, Number(options.columns || DEFAULT_COLUMNS)),
+  });
+  const compositions = options.compositions;
+  if (!Array.isArray(compositions) || compositions.length === 0) {
+    throw new Error('writeLirmSpeciationArmatureGestaltCompositeWitness requires nonempty compositions');
+  }
+  await mkdir(outDir, { recursive: true });
+  const receiptPath = join(outDir, 'receipt.json');
+  const initialized = {
+    schema: LIRM_SPECIATION_ARMATURE_GESTALT_COMPOSITE_WITNESS_SCHEMA,
+    route: LIRM_SPECIATION_ARMATURE_GESTALT_COMPOSITE_ROUTE,
+    status: 'running',
+    phase: 'writer_initialized',
+    lastTrustworthyEvidence: 'writer_initialized',
+    requestedCompositionCount: compositions.length,
+  };
+  await writeFile(receiptPath, `${JSON.stringify(initialized, null, 2)}\n`);
+  try {
+    const bundles = [];
+    const outputBundles = [];
+    const outputEvidence = [];
+    for (const composition of compositions) {
+      const bundle = createLirmSpeciationArmatureGestaltCompositeBundle({
+        witness,
+        candidateId: composition.candidateId,
+        gestaltEnvelope: composition.gestaltEnvelope,
+      });
+      const compositeDir = join(outDir, bundle.compositeId);
+      await mkdir(compositeDir, { recursive: true });
+      const gestaltMaskRelativePath = `${bundle.compositeId}/gestalt-mask.pgm`;
+      const bundleRelativePath = `${bundle.compositeId}/bundle.json`;
+      const gestaltMaskPath = join(outDir, gestaltMaskRelativePath);
+      const bundlePath = join(outDir, bundleRelativePath);
+      await writeFile(gestaltMaskPath, pgmBytes(composition.gestaltEnvelope.mask));
+      await writeFile(bundlePath, `${JSON.stringify({
+        ...bundle,
+        renderMaps: bundle.renderMaps.map(map => ({ kind: map.kind, path: map.path })),
+        trellisSource: { ...bundle.trellisSource, svg: undefined },
+      }, null, 2)}\n`);
+      outputEvidence.push(
+        await createOutputEvidence(gestaltMaskPath, gestaltMaskRelativePath),
+        await createOutputEvidence(bundlePath, bundleRelativePath),
+      );
+      for (const map of bundle.renderMaps) {
+        const svgPath = join(outDir, map.path);
+        const pngPath = svgPath.replace(/\.svg$/, '.png');
+        await writeFile(svgPath, map.svg);
+        rasterizeSvgWithSips(svgPath, pngPath);
+        outputEvidence.push(
+          await createOutputEvidence(svgPath, map.path),
+          await createOutputEvidence(pngPath, map.path.replace(/\.svg$/, '.png')),
+        );
+      }
+      const trellisSvgPath = join(outDir, bundle.trellisSource.path);
+      const trellisRasterPath = join(outDir, bundle.trellisSource.rasterPath);
+      await writeFile(trellisSvgPath, bundle.trellisSource.svg);
+      rasterizeSvgWithSips(trellisSvgPath, trellisRasterPath);
+      outputEvidence.push(
+        await createOutputEvidence(trellisSvgPath, bundle.trellisSource.path),
+        await createOutputEvidence(trellisRasterPath, bundle.trellisSource.rasterPath),
+      );
+      bundles.push(bundle);
+      outputBundles.push({
+        compositeId: bundle.compositeId,
+        bundle: `${bundle.compositeId}/bundle.json`,
+        gestaltMask: `${bundle.compositeId}/gestalt-mask.pgm`,
+        maps: bundle.renderMaps.map(map => ({
+          kind: map.kind,
+          path: map.path,
+          rasterPath: map.path.replace(/\.svg$/, '.png'),
+        })),
+        trellisSource: {
+          path: bundle.trellisSource.path,
+          rasterPath: bundle.trellisSource.rasterPath,
+        },
+      });
+    }
+    const receipt = {
+      ...initialized,
+      status: 'complete',
+      phase: 'witness_written',
+      lastTrustworthyEvidence: 'all_composite_outputs_written',
+      sourceWitnessId: witness.witnessId,
+      generatedCompositionCount: bundles.length,
+      bundles: bundles.map(bundle => ({
+        schema: bundle.schema,
+        compositeId: bundle.compositeId,
+        candidateId: bundle.candidateId,
+        fieldModel: bundle.fieldModel,
+        gestaltEnvelope: bundle.gestaltEnvelope,
+        dualLineage: bundle.dualLineage,
+        renderMaps: bundle.renderMaps.map(map => ({ kind: map.kind, path: map.path })),
+        trellisSource: {
+          path: bundle.trellisSource.path,
+          rasterPath: bundle.trellisSource.rasterPath,
+        },
+      })),
+      falseClosureGuards: {
+        finishedCreatureClaim: 'forbidden',
+        generatorFiringClaim: 'not_yet_fired',
+        flatExtrusionClaim: 'forbidden',
+        dualLineageVerifiedCount: bundles.filter(bundle => bundle.falseClosureGuards.dualLineageVerified).length,
+      },
+      outputInventory: {
+        receipt: 'receipt.json',
+        bundles: outputBundles,
+      },
+      outputEvidence,
+    };
+    await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
+    return {
+      schema: LIRM_SPECIATION_ARMATURE_GESTALT_COMPOSITE_WRITE_RESULT_SCHEMA,
+      route: LIRM_SPECIATION_ARMATURE_GESTALT_COMPOSITE_ROUTE,
+      outDir,
+      receiptPath,
+      bundleCount: bundles.length,
+      compositeIds: bundles.map(bundle => bundle.compositeId),
+    };
+  } catch (error) {
+    await writeFile(receiptPath, `${JSON.stringify({
+      ...initialized,
+      status: 'failed',
+      phase: 'compose_or_render',
+      failurePhase: 'compose_or_render',
+      lastTrustworthyEvidence: 'writer_initialized',
+      errorMessage: String(error?.message || error),
+    }, null, 2)}\n`);
+    throw error;
+  }
 }
 
 export async function writeLirmSpeciationArmatureImplicitBodyWitness(options = {}) {

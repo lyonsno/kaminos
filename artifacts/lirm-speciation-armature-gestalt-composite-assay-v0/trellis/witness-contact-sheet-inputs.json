@@ -1,0 +1,110 @@
+{
+  "width": 2048,
+  "cellWidth": 512,
+  "cellHeight": 455,
+  "imageHeight": 419,
+  "imageOffsetY": 0,
+  "headerHeight": 36,
+  "cells": [
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046/left/render.png",
+      "title": "BASIN 03 / PRESERVE",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046/front/render.png",
+      "title": "BASIN 03 / PRESERVE",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046/right/render.png",
+      "title": "BASIN 03 / PRESERVE",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046/opposite/render.png",
+      "title": "BASIN 03 / PRESERVE",
+      "viewLabel": "OPPOSITE"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046/left/render.png",
+      "title": "BASIN 03 / LINEAGE",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046/front/render.png",
+      "title": "BASIN 03 / LINEAGE",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046/right/render.png",
+      "title": "BASIN 03 / LINEAGE",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046/opposite/render.png",
+      "title": "BASIN 03 / LINEAGE",
+      "viewLabel": "OPPOSITE"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046/left/render.png",
+      "title": "BASIN 10 / LINEAGE",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046/front/render.png",
+      "title": "BASIN 10 / LINEAGE",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046/right/render.png",
+      "title": "BASIN 10 / LINEAGE",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046/opposite/render.png",
+      "title": "BASIN 10 / LINEAGE",
+      "viewLabel": "OPPOSITE"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046/left/render.png",
+      "title": "BASIN 15 / LINEAGE",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046/front/render.png",
+      "title": "BASIN 15 / LINEAGE",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046/right/render.png",
+      "title": "BASIN 15 / LINEAGE",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046/opposite/render.png",
+      "title": "BASIN 15 / LINEAGE",
+      "viewLabel": "OPPOSITE"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046/left/render.png",
+      "title": "BASIN 22 / LINEAGE",
+      "viewLabel": "LEFT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046/front/render.png",
+      "title": "BASIN 22 / LINEAGE",
+      "viewLabel": "FRONT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046/right/render.png",
+      "title": "BASIN 22 / LINEAGE",
+      "viewLabel": "RIGHT"
+    },
+    {
+      "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046/opposite/render.png",
+      "title": "BASIN 22 / LINEAGE",
+      "viewLabel": "OPPOSITE"
+    }
+  ]
+}

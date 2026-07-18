@@ -1,0 +1,149 @@
+{
+  "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-submission.v0",
+  "status": "submitted",
+  "requestedCount": 20,
+  "submitted": [
+    {
+      "witnessId": "lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046-left",
+      "jobId": "1b02b422d19f",
+      "response": {
+        "job_id": "1b02b422d19f"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046-front",
+      "jobId": "4d6bca8a9667",
+      "response": {
+        "job_id": "4d6bca8a9667"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046-right",
+      "jobId": "1d43565d3fef",
+      "response": {
+        "job_id": "1d43565d3fef"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046-opposite",
+      "jobId": "697ef7d2b7ad",
+      "response": {
+        "job_id": "697ef7d2b7ad"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046-left",
+      "jobId": "755749c8979f",
+      "response": {
+        "job_id": "755749c8979f"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046-front",
+      "jobId": "a1e7998f7539",
+      "response": {
+        "job_id": "a1e7998f7539"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046-right",
+      "jobId": "1d0dffb3930a",
+      "response": {
+        "job_id": "1d0dffb3930a"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046-opposite",
+      "jobId": "1189bd2aebc6",
+      "response": {
+        "job_id": "1189bd2aebc6"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046-left",
+      "jobId": "3cc85093bf56",
+      "response": {
+        "job_id": "3cc85093bf56"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046-front",
+      "jobId": "e26b08185dbf",
+      "response": {
+        "job_id": "e26b08185dbf"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046-right",
+      "jobId": "a97e9d6a5dd5",
+      "response": {
+        "job_id": "a97e9d6a5dd5"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046-opposite",
+      "jobId": "26d13263f867",
+      "response": {
+        "job_id": "26d13263f867"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046-left",
+      "jobId": "f72f97fd3c0c",
+      "response": {
+        "job_id": "f72f97fd3c0c"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046-front",
+      "jobId": "cfb5f5c87e02",
+      "response": {
+        "job_id": "cfb5f5c87e02"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046-right",
+      "jobId": "17be644a96cf",
+      "response": {
+        "job_id": "17be644a96cf"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046-opposite",
+      "jobId": "956a29eb2516",
+      "response": {
+        "job_id": "956a29eb2516"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046-left",
+      "jobId": "a78211f3ac5f",
+      "response": {
+        "job_id": "a78211f3ac5f"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046-front",
+      "jobId": "8a8983ab4608",
+      "response": {
+        "job_id": "8a8983ab4608"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046-right",
+      "jobId": "53c4475a5978",
+      "response": {
+        "job_id": "53c4475a5978"
+      }
+    },
+    {
+      "witnessId": "lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046-opposite",
+      "jobId": "9f0f3b390d6a",
+      "response": {
+        "job_id": "9f0f3b390d6a"
+      }
+    }
+  ],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "20/20 render jobs submitted"
+}

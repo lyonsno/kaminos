@@ -1,0 +1,25 @@
+{
+  "schema": "kaminos.lirm-speciation-armature-gestalt-composite-manifest.v0",
+  "purpose": "Separate silhouette-envelope pressure from procedural-armature identity before generator firing.",
+  "compositions": [
+    { "candidateId": "lirm-armature-22", "generationId": "basin-03-s3p00-n00", "envelopeId": "basin-03-s3p00-n00-p025", "pressure": 0.25, "depthRadius": 0.22, "roundness": 0.045 },
+    { "candidateId": "lirm-armature-22", "generationId": "basin-03-s3p00-n00", "envelopeId": "basin-03-s3p00-n00-p046", "pressure": 0.46, "depthRadius": 0.22, "roundness": 0.045 },
+    { "candidateId": "lirm-armature-22", "generationId": "basin-03-s3p00-n00", "envelopeId": "basin-03-s3p00-n00-p067", "pressure": 0.67, "depthRadius": 0.22, "roundness": 0.045 },
+
+    { "candidateId": "lirm-armature-22", "generationId": "basin-10-s3p00-n00", "envelopeId": "basin-10-s3p00-n00-p025", "pressure": 0.25, "depthRadius": 0.22, "roundness": 0.045 },
+    { "candidateId": "lirm-armature-22", "generationId": "basin-10-s3p00-n00", "envelopeId": "basin-10-s3p00-n00-p046", "pressure": 0.46, "depthRadius": 0.22, "roundness": 0.045 },
+    { "candidateId": "lirm-armature-22", "generationId": "basin-10-s3p00-n00", "envelopeId": "basin-10-s3p00-n00-p067", "pressure": 0.67, "depthRadius": 0.22, "roundness": 0.045 },
+
+    { "candidateId": "lirm-armature-22", "generationId": "basin-15-s3p00-n00", "envelopeId": "basin-15-s3p00-n00-p025", "pressure": 0.25, "depthRadius": 0.22, "roundness": 0.045 },
+    { "candidateId": "lirm-armature-22", "generationId": "basin-15-s3p00-n00", "envelopeId": "basin-15-s3p00-n00-p046", "pressure": 0.46, "depthRadius": 0.22, "roundness": 0.045 },
+    { "candidateId": "lirm-armature-22", "generationId": "basin-15-s3p00-n00", "envelopeId": "basin-15-s3p00-n00-p067", "pressure": 0.67, "depthRadius": 0.22, "roundness": 0.045 },
+
+    { "candidateId": "lirm-armature-22", "generationId": "basin-22-s1p50-n00", "envelopeId": "basin-22-s1p50-n00-p025", "pressure": 0.25, "depthRadius": 0.22, "roundness": 0.045 },
+    { "candidateId": "lirm-armature-22", "generationId": "basin-22-s1p50-n00", "envelopeId": "basin-22-s1p50-n00-p046", "pressure": 0.46, "depthRadius": 0.22, "roundness": 0.045 },
+    { "candidateId": "lirm-armature-22", "generationId": "basin-22-s1p50-n00", "envelopeId": "basin-22-s1p50-n00-p067", "pressure": 0.67, "depthRadius": 0.22, "roundness": 0.045 },
+
+    { "candidateId": "lirm-armature-08", "generationId": "basin-10-s3p00-n00", "envelopeId": "basin-10-s3p00-n00-p046", "pressure": 0.46, "depthRadius": 0.22, "roundness": 0.045 },
+    { "candidateId": "lirm-armature-16", "generationId": "basin-10-s3p00-n00", "envelopeId": "basin-10-s3p00-n00-p046", "pressure": 0.46, "depthRadius": 0.22, "roundness": 0.045 },
+    { "candidateId": "lirm-armature-24", "generationId": "basin-10-s3p00-n00", "envelopeId": "basin-10-s3p00-n00-p046", "pressure": 0.46, "depthRadius": 0.22, "roundness": 0.045 }
+  ]
+}

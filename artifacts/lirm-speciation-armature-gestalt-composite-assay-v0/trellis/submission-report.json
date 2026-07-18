@@ -1,0 +1,45 @@
+{
+  "schema": "kaminos.lirm-speciation-gestalt-trellis-submission.v0",
+  "status": "submitted",
+  "planPath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/trellis/plan.json",
+  "requestedCount": 5,
+  "submitted": [
+    {
+      "cellId": "lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046",
+      "jobId": "57d9f59e56a9",
+      "response": {
+        "job_id": "57d9f59e56a9"
+      }
+    },
+    {
+      "cellId": "lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046",
+      "jobId": "c3a1e584e8d7",
+      "response": {
+        "job_id": "c3a1e584e8d7"
+      }
+    },
+    {
+      "cellId": "lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046",
+      "jobId": "27d42a8a6173",
+      "response": {
+        "job_id": "27d42a8a6173"
+      }
+    },
+    {
+      "cellId": "lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046",
+      "jobId": "ee11ced74e5d",
+      "response": {
+        "job_id": "ee11ced74e5d"
+      }
+    },
+    {
+      "cellId": "lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046",
+      "jobId": "cffac66f1ab7",
+      "response": {
+        "job_id": "cffac66f1ab7"
+      }
+    }
+  ],
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "5/5 jobs submitted"
+}

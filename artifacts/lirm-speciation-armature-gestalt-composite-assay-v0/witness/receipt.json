@@ -1,0 +1,2905 @@
+{
+  "schema": "kaminos.lirm-speciation-armature-gestalt-composite-witness.v0",
+  "route": "kaminos/lirm-speciation-armature/gestalt-composite-v0",
+  "status": "complete",
+  "phase": "witness_written",
+  "lastTrustworthyEvidence": "all_composite_outputs_written",
+  "requestedCompositionCount": 15,
+  "sourceWitnessId": "lirm-speciation-armature-64073572",
+  "generatedCompositionCount": 15,
+  "bundles": [
+    {
+      "schema": "kaminos.lirm-speciation-armature-gestalt-composite-bundle.v0",
+      "compositeId": "lirm-armature-22__basin-03-s3p00-n00-p025",
+      "candidateId": "lirm-armature-22",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball-silhouette-morph",
+        "actual3dStructure": true,
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "gestaltPressure": 0.25,
+        "gestaltDepthRadius": 0.22,
+        "composition": "signed-distance-linear-morph-v0",
+        "primitiveSources": [
+          "procedural_armature_implicit_field",
+          "silhouette_envelope_rounded_volume"
+        ]
+      },
+      "gestaltEnvelope": {
+        "id": "basin-03-s3p00-n00-p025",
+        "maskHash": "sha256:99432c8f70e79d0c532121b6533de7a8a9770ce69dae67d990621283c81bc860",
+        "width": 128,
+        "height": 128,
+        "pressure": 0.25,
+        "depthRadius": 0.22,
+        "roundness": 0.045,
+        "lineage": {
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-03-s3p00-n00",
+          "sourceBasinIndex": 3,
+          "sourceShapeId": "sha256:c94a0f196267fff7bb21dedd7f1c754155cb8f628902b62978a7758eeb3bf922",
+          "sourceMaskHash": "sha256:195e83e582fd667e580ed698302b16f010ea3d3628562b6acf3f9ff144c69e6d",
+          "posteriorStrength": 3,
+          "sourceMaskPath": "generated/basin-03-s3p00-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "dualLineage": {
+        "armature": {
+          "witnessId": "lirm-speciation-armature-64073572",
+          "candidateId": "lirm-armature-22",
+          "candidateSeed": "molten-lirm-seed-0707:22"
+        },
+        "silhouette": {
+          "id": "basin-03-s3p00-n00-p025",
+          "maskHash": "sha256:99432c8f70e79d0c532121b6533de7a8a9770ce69dae67d990621283c81bc860",
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-03-s3p00-n00",
+          "sourceBasinIndex": 3,
+          "sourceShapeId": "sha256:c94a0f196267fff7bb21dedd7f1c754155cb8f628902b62978a7758eeb3bf922",
+          "sourceMaskHash": "sha256:195e83e582fd667e580ed698302b16f010ea3d3628562b6acf3f9ff144c69e6d",
+          "posteriorStrength": 3,
+          "sourceMaskPath": "generated/basin-03-s3p00-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-22__basin-03-s3p00-n00-p025/clay-composite.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-22__basin-03-s3p00-n00-p025/depth-composite.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-22__basin-03-s3p00-n00-p025/normal-composite.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-22__basin-03-s3p00-n00-p025/mask-composite.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-22__basin-03-s3p00-n00-p025/semantic-composite.svg"
+        }
+      ],
+      "trellisSource": {
+        "path": "lirm-armature-22__basin-03-s3p00-n00-p025/trellis-source.svg",
+        "rasterPath": "lirm-armature-22__basin-03-s3p00-n00-p025/trellis-source.png"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-gestalt-composite-bundle.v0",
+      "compositeId": "lirm-armature-22__basin-03-s3p00-n00-p046",
+      "candidateId": "lirm-armature-22",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball-silhouette-morph",
+        "actual3dStructure": true,
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "gestaltPressure": 0.46,
+        "gestaltDepthRadius": 0.22,
+        "composition": "signed-distance-linear-morph-v0",
+        "primitiveSources": [
+          "procedural_armature_implicit_field",
+          "silhouette_envelope_rounded_volume"
+        ]
+      },
+      "gestaltEnvelope": {
+        "id": "basin-03-s3p00-n00-p046",
+        "maskHash": "sha256:99432c8f70e79d0c532121b6533de7a8a9770ce69dae67d990621283c81bc860",
+        "width": 128,
+        "height": 128,
+        "pressure": 0.46,
+        "depthRadius": 0.22,
+        "roundness": 0.045,
+        "lineage": {
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-03-s3p00-n00",
+          "sourceBasinIndex": 3,
+          "sourceShapeId": "sha256:c94a0f196267fff7bb21dedd7f1c754155cb8f628902b62978a7758eeb3bf922",
+          "sourceMaskHash": "sha256:195e83e582fd667e580ed698302b16f010ea3d3628562b6acf3f9ff144c69e6d",
+          "posteriorStrength": 3,
+          "sourceMaskPath": "generated/basin-03-s3p00-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "dualLineage": {
+        "armature": {
+          "witnessId": "lirm-speciation-armature-64073572",
+          "candidateId": "lirm-armature-22",
+          "candidateSeed": "molten-lirm-seed-0707:22"
+        },
+        "silhouette": {
+          "id": "basin-03-s3p00-n00-p046",
+          "maskHash": "sha256:99432c8f70e79d0c532121b6533de7a8a9770ce69dae67d990621283c81bc860",
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-03-s3p00-n00",
+          "sourceBasinIndex": 3,
+          "sourceShapeId": "sha256:c94a0f196267fff7bb21dedd7f1c754155cb8f628902b62978a7758eeb3bf922",
+          "sourceMaskHash": "sha256:195e83e582fd667e580ed698302b16f010ea3d3628562b6acf3f9ff144c69e6d",
+          "posteriorStrength": 3,
+          "sourceMaskPath": "generated/basin-03-s3p00-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-22__basin-03-s3p00-n00-p046/clay-composite.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-22__basin-03-s3p00-n00-p046/depth-composite.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-22__basin-03-s3p00-n00-p046/normal-composite.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-22__basin-03-s3p00-n00-p046/mask-composite.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-22__basin-03-s3p00-n00-p046/semantic-composite.svg"
+        }
+      ],
+      "trellisSource": {
+        "path": "lirm-armature-22__basin-03-s3p00-n00-p046/trellis-source.svg",
+        "rasterPath": "lirm-armature-22__basin-03-s3p00-n00-p046/trellis-source.png"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-gestalt-composite-bundle.v0",
+      "compositeId": "lirm-armature-22__basin-03-s3p00-n00-p067",
+      "candidateId": "lirm-armature-22",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball-silhouette-morph",
+        "actual3dStructure": true,
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "gestaltPressure": 0.67,
+        "gestaltDepthRadius": 0.22,
+        "composition": "signed-distance-linear-morph-v0",
+        "primitiveSources": [
+          "procedural_armature_implicit_field",
+          "silhouette_envelope_rounded_volume"
+        ]
+      },
+      "gestaltEnvelope": {
+        "id": "basin-03-s3p00-n00-p067",
+        "maskHash": "sha256:99432c8f70e79d0c532121b6533de7a8a9770ce69dae67d990621283c81bc860",
+        "width": 128,
+        "height": 128,
+        "pressure": 0.67,
+        "depthRadius": 0.22,
+        "roundness": 0.045,
+        "lineage": {
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-03-s3p00-n00",
+          "sourceBasinIndex": 3,
+          "sourceShapeId": "sha256:c94a0f196267fff7bb21dedd7f1c754155cb8f628902b62978a7758eeb3bf922",
+          "sourceMaskHash": "sha256:195e83e582fd667e580ed698302b16f010ea3d3628562b6acf3f9ff144c69e6d",
+          "posteriorStrength": 3,
+          "sourceMaskPath": "generated/basin-03-s3p00-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "dualLineage": {
+        "armature": {
+          "witnessId": "lirm-speciation-armature-64073572",
+          "candidateId": "lirm-armature-22",
+          "candidateSeed": "molten-lirm-seed-0707:22"
+        },
+        "silhouette": {
+          "id": "basin-03-s3p00-n00-p067",
+          "maskHash": "sha256:99432c8f70e79d0c532121b6533de7a8a9770ce69dae67d990621283c81bc860",
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-03-s3p00-n00",
+          "sourceBasinIndex": 3,
+          "sourceShapeId": "sha256:c94a0f196267fff7bb21dedd7f1c754155cb8f628902b62978a7758eeb3bf922",
+          "sourceMaskHash": "sha256:195e83e582fd667e580ed698302b16f010ea3d3628562b6acf3f9ff144c69e6d",
+          "posteriorStrength": 3,
+          "sourceMaskPath": "generated/basin-03-s3p00-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-22__basin-03-s3p00-n00-p067/clay-composite.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-22__basin-03-s3p00-n00-p067/depth-composite.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-22__basin-03-s3p00-n00-p067/normal-composite.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-22__basin-03-s3p00-n00-p067/mask-composite.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-22__basin-03-s3p00-n00-p067/semantic-composite.svg"
+        }
+      ],
+      "trellisSource": {
+        "path": "lirm-armature-22__basin-03-s3p00-n00-p067/trellis-source.svg",
+        "rasterPath": "lirm-armature-22__basin-03-s3p00-n00-p067/trellis-source.png"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-gestalt-composite-bundle.v0",
+      "compositeId": "lirm-armature-22__basin-10-s3p00-n00-p025",
+      "candidateId": "lirm-armature-22",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball-silhouette-morph",
+        "actual3dStructure": true,
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "gestaltPressure": 0.25,
+        "gestaltDepthRadius": 0.22,
+        "composition": "signed-distance-linear-morph-v0",
+        "primitiveSources": [
+          "procedural_armature_implicit_field",
+          "silhouette_envelope_rounded_volume"
+        ]
+      },
+      "gestaltEnvelope": {
+        "id": "basin-10-s3p00-n00-p025",
+        "maskHash": "sha256:7aa7d6082fba4f887623831585302babe9872c3a3a97a0786cbd172ba2cd5e3c",
+        "width": 128,
+        "height": 128,
+        "pressure": 0.25,
+        "depthRadius": 0.22,
+        "roundness": 0.045,
+        "lineage": {
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-10-s3p00-n00",
+          "sourceBasinIndex": 10,
+          "sourceShapeId": "sha256:a3b315c846a34c1cc3a5dd0a8f1252bf7bfcd4a87a1ffa17d524ff3945ac38bd",
+          "sourceMaskHash": "sha256:e322b772fba34f6c22626bf0e43a01e0907659d06301ea81b50e4859364a3189",
+          "posteriorStrength": 3,
+          "sourceMaskPath": "generated/basin-10-s3p00-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "dualLineage": {
+        "armature": {
+          "witnessId": "lirm-speciation-armature-64073572",
+          "candidateId": "lirm-armature-22",
+          "candidateSeed": "molten-lirm-seed-0707:22"
+        },
+        "silhouette": {
+          "id": "basin-10-s3p00-n00-p025",
+          "maskHash": "sha256:7aa7d6082fba4f887623831585302babe9872c3a3a97a0786cbd172ba2cd5e3c",
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-10-s3p00-n00",
+          "sourceBasinIndex": 10,
+          "sourceShapeId": "sha256:a3b315c846a34c1cc3a5dd0a8f1252bf7bfcd4a87a1ffa17d524ff3945ac38bd",
+          "sourceMaskHash": "sha256:e322b772fba34f6c22626bf0e43a01e0907659d06301ea81b50e4859364a3189",
+          "posteriorStrength": 3,
+          "sourceMaskPath": "generated/basin-10-s3p00-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-22__basin-10-s3p00-n00-p025/clay-composite.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-22__basin-10-s3p00-n00-p025/depth-composite.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-22__basin-10-s3p00-n00-p025/normal-composite.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-22__basin-10-s3p00-n00-p025/mask-composite.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-22__basin-10-s3p00-n00-p025/semantic-composite.svg"
+        }
+      ],
+      "trellisSource": {
+        "path": "lirm-armature-22__basin-10-s3p00-n00-p025/trellis-source.svg",
+        "rasterPath": "lirm-armature-22__basin-10-s3p00-n00-p025/trellis-source.png"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-gestalt-composite-bundle.v0",
+      "compositeId": "lirm-armature-22__basin-10-s3p00-n00-p046",
+      "candidateId": "lirm-armature-22",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball-silhouette-morph",
+        "actual3dStructure": true,
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "gestaltPressure": 0.46,
+        "gestaltDepthRadius": 0.22,
+        "composition": "signed-distance-linear-morph-v0",
+        "primitiveSources": [
+          "procedural_armature_implicit_field",
+          "silhouette_envelope_rounded_volume"
+        ]
+      },
+      "gestaltEnvelope": {
+        "id": "basin-10-s3p00-n00-p046",
+        "maskHash": "sha256:7aa7d6082fba4f887623831585302babe9872c3a3a97a0786cbd172ba2cd5e3c",
+        "width": 128,
+        "height": 128,
+        "pressure": 0.46,
+        "depthRadius": 0.22,
+        "roundness": 0.045,
+        "lineage": {
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-10-s3p00-n00",
+          "sourceBasinIndex": 10,
+          "sourceShapeId": "sha256:a3b315c846a34c1cc3a5dd0a8f1252bf7bfcd4a87a1ffa17d524ff3945ac38bd",
+          "sourceMaskHash": "sha256:e322b772fba34f6c22626bf0e43a01e0907659d06301ea81b50e4859364a3189",
+          "posteriorStrength": 3,
+          "sourceMaskPath": "generated/basin-10-s3p00-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "dualLineage": {
+        "armature": {
+          "witnessId": "lirm-speciation-armature-64073572",
+          "candidateId": "lirm-armature-22",
+          "candidateSeed": "molten-lirm-seed-0707:22"
+        },
+        "silhouette": {
+          "id": "basin-10-s3p00-n00-p046",
+          "maskHash": "sha256:7aa7d6082fba4f887623831585302babe9872c3a3a97a0786cbd172ba2cd5e3c",
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-10-s3p00-n00",
+          "sourceBasinIndex": 10,
+          "sourceShapeId": "sha256:a3b315c846a34c1cc3a5dd0a8f1252bf7bfcd4a87a1ffa17d524ff3945ac38bd",
+          "sourceMaskHash": "sha256:e322b772fba34f6c22626bf0e43a01e0907659d06301ea81b50e4859364a3189",
+          "posteriorStrength": 3,
+          "sourceMaskPath": "generated/basin-10-s3p00-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-22__basin-10-s3p00-n00-p046/clay-composite.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-22__basin-10-s3p00-n00-p046/depth-composite.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-22__basin-10-s3p00-n00-p046/normal-composite.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-22__basin-10-s3p00-n00-p046/mask-composite.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-22__basin-10-s3p00-n00-p046/semantic-composite.svg"
+        }
+      ],
+      "trellisSource": {
+        "path": "lirm-armature-22__basin-10-s3p00-n00-p046/trellis-source.svg",
+        "rasterPath": "lirm-armature-22__basin-10-s3p00-n00-p046/trellis-source.png"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-gestalt-composite-bundle.v0",
+      "compositeId": "lirm-armature-22__basin-10-s3p00-n00-p067",
+      "candidateId": "lirm-armature-22",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball-silhouette-morph",
+        "actual3dStructure": true,
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "gestaltPressure": 0.67,
+        "gestaltDepthRadius": 0.22,
+        "composition": "signed-distance-linear-morph-v0",
+        "primitiveSources": [
+          "procedural_armature_implicit_field",
+          "silhouette_envelope_rounded_volume"
+        ]
+      },
+      "gestaltEnvelope": {
+        "id": "basin-10-s3p00-n00-p067",
+        "maskHash": "sha256:7aa7d6082fba4f887623831585302babe9872c3a3a97a0786cbd172ba2cd5e3c",
+        "width": 128,
+        "height": 128,
+        "pressure": 0.67,
+        "depthRadius": 0.22,
+        "roundness": 0.045,
+        "lineage": {
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-10-s3p00-n00",
+          "sourceBasinIndex": 10,
+          "sourceShapeId": "sha256:a3b315c846a34c1cc3a5dd0a8f1252bf7bfcd4a87a1ffa17d524ff3945ac38bd",
+          "sourceMaskHash": "sha256:e322b772fba34f6c22626bf0e43a01e0907659d06301ea81b50e4859364a3189",
+          "posteriorStrength": 3,
+          "sourceMaskPath": "generated/basin-10-s3p00-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "dualLineage": {
+        "armature": {
+          "witnessId": "lirm-speciation-armature-64073572",
+          "candidateId": "lirm-armature-22",
+          "candidateSeed": "molten-lirm-seed-0707:22"
+        },
+        "silhouette": {
+          "id": "basin-10-s3p00-n00-p067",
+          "maskHash": "sha256:7aa7d6082fba4f887623831585302babe9872c3a3a97a0786cbd172ba2cd5e3c",
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-10-s3p00-n00",
+          "sourceBasinIndex": 10,
+          "sourceShapeId": "sha256:a3b315c846a34c1cc3a5dd0a8f1252bf7bfcd4a87a1ffa17d524ff3945ac38bd",
+          "sourceMaskHash": "sha256:e322b772fba34f6c22626bf0e43a01e0907659d06301ea81b50e4859364a3189",
+          "posteriorStrength": 3,
+          "sourceMaskPath": "generated/basin-10-s3p00-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-22__basin-10-s3p00-n00-p067/clay-composite.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-22__basin-10-s3p00-n00-p067/depth-composite.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-22__basin-10-s3p00-n00-p067/normal-composite.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-22__basin-10-s3p00-n00-p067/mask-composite.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-22__basin-10-s3p00-n00-p067/semantic-composite.svg"
+        }
+      ],
+      "trellisSource": {
+        "path": "lirm-armature-22__basin-10-s3p00-n00-p067/trellis-source.svg",
+        "rasterPath": "lirm-armature-22__basin-10-s3p00-n00-p067/trellis-source.png"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-gestalt-composite-bundle.v0",
+      "compositeId": "lirm-armature-22__basin-15-s3p00-n00-p025",
+      "candidateId": "lirm-armature-22",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball-silhouette-morph",
+        "actual3dStructure": true,
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "gestaltPressure": 0.25,
+        "gestaltDepthRadius": 0.22,
+        "composition": "signed-distance-linear-morph-v0",
+        "primitiveSources": [
+          "procedural_armature_implicit_field",
+          "silhouette_envelope_rounded_volume"
+        ]
+      },
+      "gestaltEnvelope": {
+        "id": "basin-15-s3p00-n00-p025",
+        "maskHash": "sha256:6f58d966c1d282783f7640c88cfecc16cc9c77eacfe0a36d706a8e3efba95cbc",
+        "width": 128,
+        "height": 128,
+        "pressure": 0.25,
+        "depthRadius": 0.22,
+        "roundness": 0.045,
+        "lineage": {
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-15-s3p00-n00",
+          "sourceBasinIndex": 15,
+          "sourceShapeId": "sha256:c666d443376617273e62d3ddda1fc3e2d0bb71c102572bde2fee84c9eda518f2",
+          "sourceMaskHash": "sha256:ea0bd5a49f8fe002fde4fcc82af172c644b0c6361111d0010435281b7592593b",
+          "posteriorStrength": 3,
+          "sourceMaskPath": "generated/basin-15-s3p00-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "dualLineage": {
+        "armature": {
+          "witnessId": "lirm-speciation-armature-64073572",
+          "candidateId": "lirm-armature-22",
+          "candidateSeed": "molten-lirm-seed-0707:22"
+        },
+        "silhouette": {
+          "id": "basin-15-s3p00-n00-p025",
+          "maskHash": "sha256:6f58d966c1d282783f7640c88cfecc16cc9c77eacfe0a36d706a8e3efba95cbc",
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-15-s3p00-n00",
+          "sourceBasinIndex": 15,
+          "sourceShapeId": "sha256:c666d443376617273e62d3ddda1fc3e2d0bb71c102572bde2fee84c9eda518f2",
+          "sourceMaskHash": "sha256:ea0bd5a49f8fe002fde4fcc82af172c644b0c6361111d0010435281b7592593b",
+          "posteriorStrength": 3,
+          "sourceMaskPath": "generated/basin-15-s3p00-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-22__basin-15-s3p00-n00-p025/clay-composite.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-22__basin-15-s3p00-n00-p025/depth-composite.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-22__basin-15-s3p00-n00-p025/normal-composite.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-22__basin-15-s3p00-n00-p025/mask-composite.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-22__basin-15-s3p00-n00-p025/semantic-composite.svg"
+        }
+      ],
+      "trellisSource": {
+        "path": "lirm-armature-22__basin-15-s3p00-n00-p025/trellis-source.svg",
+        "rasterPath": "lirm-armature-22__basin-15-s3p00-n00-p025/trellis-source.png"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-gestalt-composite-bundle.v0",
+      "compositeId": "lirm-armature-22__basin-15-s3p00-n00-p046",
+      "candidateId": "lirm-armature-22",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball-silhouette-morph",
+        "actual3dStructure": true,
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "gestaltPressure": 0.46,
+        "gestaltDepthRadius": 0.22,
+        "composition": "signed-distance-linear-morph-v0",
+        "primitiveSources": [
+          "procedural_armature_implicit_field",
+          "silhouette_envelope_rounded_volume"
+        ]
+      },
+      "gestaltEnvelope": {
+        "id": "basin-15-s3p00-n00-p046",
+        "maskHash": "sha256:6f58d966c1d282783f7640c88cfecc16cc9c77eacfe0a36d706a8e3efba95cbc",
+        "width": 128,
+        "height": 128,
+        "pressure": 0.46,
+        "depthRadius": 0.22,
+        "roundness": 0.045,
+        "lineage": {
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-15-s3p00-n00",
+          "sourceBasinIndex": 15,
+          "sourceShapeId": "sha256:c666d443376617273e62d3ddda1fc3e2d0bb71c102572bde2fee84c9eda518f2",
+          "sourceMaskHash": "sha256:ea0bd5a49f8fe002fde4fcc82af172c644b0c6361111d0010435281b7592593b",
+          "posteriorStrength": 3,
+          "sourceMaskPath": "generated/basin-15-s3p00-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "dualLineage": {
+        "armature": {
+          "witnessId": "lirm-speciation-armature-64073572",
+          "candidateId": "lirm-armature-22",
+          "candidateSeed": "molten-lirm-seed-0707:22"
+        },
+        "silhouette": {
+          "id": "basin-15-s3p00-n00-p046",
+          "maskHash": "sha256:6f58d966c1d282783f7640c88cfecc16cc9c77eacfe0a36d706a8e3efba95cbc",
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-15-s3p00-n00",
+          "sourceBasinIndex": 15,
+          "sourceShapeId": "sha256:c666d443376617273e62d3ddda1fc3e2d0bb71c102572bde2fee84c9eda518f2",
+          "sourceMaskHash": "sha256:ea0bd5a49f8fe002fde4fcc82af172c644b0c6361111d0010435281b7592593b",
+          "posteriorStrength": 3,
+          "sourceMaskPath": "generated/basin-15-s3p00-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-22__basin-15-s3p00-n00-p046/clay-composite.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-22__basin-15-s3p00-n00-p046/depth-composite.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-22__basin-15-s3p00-n00-p046/normal-composite.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-22__basin-15-s3p00-n00-p046/mask-composite.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-22__basin-15-s3p00-n00-p046/semantic-composite.svg"
+        }
+      ],
+      "trellisSource": {
+        "path": "lirm-armature-22__basin-15-s3p00-n00-p046/trellis-source.svg",
+        "rasterPath": "lirm-armature-22__basin-15-s3p00-n00-p046/trellis-source.png"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-gestalt-composite-bundle.v0",
+      "compositeId": "lirm-armature-22__basin-15-s3p00-n00-p067",
+      "candidateId": "lirm-armature-22",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball-silhouette-morph",
+        "actual3dStructure": true,
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "gestaltPressure": 0.67,
+        "gestaltDepthRadius": 0.22,
+        "composition": "signed-distance-linear-morph-v0",
+        "primitiveSources": [
+          "procedural_armature_implicit_field",
+          "silhouette_envelope_rounded_volume"
+        ]
+      },
+      "gestaltEnvelope": {
+        "id": "basin-15-s3p00-n00-p067",
+        "maskHash": "sha256:6f58d966c1d282783f7640c88cfecc16cc9c77eacfe0a36d706a8e3efba95cbc",
+        "width": 128,
+        "height": 128,
+        "pressure": 0.67,
+        "depthRadius": 0.22,
+        "roundness": 0.045,
+        "lineage": {
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-15-s3p00-n00",
+          "sourceBasinIndex": 15,
+          "sourceShapeId": "sha256:c666d443376617273e62d3ddda1fc3e2d0bb71c102572bde2fee84c9eda518f2",
+          "sourceMaskHash": "sha256:ea0bd5a49f8fe002fde4fcc82af172c644b0c6361111d0010435281b7592593b",
+          "posteriorStrength": 3,
+          "sourceMaskPath": "generated/basin-15-s3p00-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "dualLineage": {
+        "armature": {
+          "witnessId": "lirm-speciation-armature-64073572",
+          "candidateId": "lirm-armature-22",
+          "candidateSeed": "molten-lirm-seed-0707:22"
+        },
+        "silhouette": {
+          "id": "basin-15-s3p00-n00-p067",
+          "maskHash": "sha256:6f58d966c1d282783f7640c88cfecc16cc9c77eacfe0a36d706a8e3efba95cbc",
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-15-s3p00-n00",
+          "sourceBasinIndex": 15,
+          "sourceShapeId": "sha256:c666d443376617273e62d3ddda1fc3e2d0bb71c102572bde2fee84c9eda518f2",
+          "sourceMaskHash": "sha256:ea0bd5a49f8fe002fde4fcc82af172c644b0c6361111d0010435281b7592593b",
+          "posteriorStrength": 3,
+          "sourceMaskPath": "generated/basin-15-s3p00-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-22__basin-15-s3p00-n00-p067/clay-composite.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-22__basin-15-s3p00-n00-p067/depth-composite.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-22__basin-15-s3p00-n00-p067/normal-composite.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-22__basin-15-s3p00-n00-p067/mask-composite.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-22__basin-15-s3p00-n00-p067/semantic-composite.svg"
+        }
+      ],
+      "trellisSource": {
+        "path": "lirm-armature-22__basin-15-s3p00-n00-p067/trellis-source.svg",
+        "rasterPath": "lirm-armature-22__basin-15-s3p00-n00-p067/trellis-source.png"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-gestalt-composite-bundle.v0",
+      "compositeId": "lirm-armature-22__basin-22-s1p50-n00-p025",
+      "candidateId": "lirm-armature-22",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball-silhouette-morph",
+        "actual3dStructure": true,
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "gestaltPressure": 0.25,
+        "gestaltDepthRadius": 0.22,
+        "composition": "signed-distance-linear-morph-v0",
+        "primitiveSources": [
+          "procedural_armature_implicit_field",
+          "silhouette_envelope_rounded_volume"
+        ]
+      },
+      "gestaltEnvelope": {
+        "id": "basin-22-s1p50-n00-p025",
+        "maskHash": "sha256:1ca80854ae1712e9c941ecc9cd5f5526cc34a116842ee22e9417c804ae6c7ef7",
+        "width": 128,
+        "height": 128,
+        "pressure": 0.25,
+        "depthRadius": 0.22,
+        "roundness": 0.045,
+        "lineage": {
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-22-s1p50-n00",
+          "sourceBasinIndex": 22,
+          "sourceShapeId": "sha256:e440ded118d042fdf7d492d7253bd481bb917df9d3a75355709ff662bbd2c4a1",
+          "sourceMaskHash": "sha256:a881af2fb5e239291f54d8587061b0c2040fa9d8497eddf6ee9fb40994117c28",
+          "posteriorStrength": 1.5,
+          "sourceMaskPath": "generated/basin-22-s1p50-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "dualLineage": {
+        "armature": {
+          "witnessId": "lirm-speciation-armature-64073572",
+          "candidateId": "lirm-armature-22",
+          "candidateSeed": "molten-lirm-seed-0707:22"
+        },
+        "silhouette": {
+          "id": "basin-22-s1p50-n00-p025",
+          "maskHash": "sha256:1ca80854ae1712e9c941ecc9cd5f5526cc34a116842ee22e9417c804ae6c7ef7",
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-22-s1p50-n00",
+          "sourceBasinIndex": 22,
+          "sourceShapeId": "sha256:e440ded118d042fdf7d492d7253bd481bb917df9d3a75355709ff662bbd2c4a1",
+          "sourceMaskHash": "sha256:a881af2fb5e239291f54d8587061b0c2040fa9d8497eddf6ee9fb40994117c28",
+          "posteriorStrength": 1.5,
+          "sourceMaskPath": "generated/basin-22-s1p50-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-22__basin-22-s1p50-n00-p025/clay-composite.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-22__basin-22-s1p50-n00-p025/depth-composite.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-22__basin-22-s1p50-n00-p025/normal-composite.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-22__basin-22-s1p50-n00-p025/mask-composite.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-22__basin-22-s1p50-n00-p025/semantic-composite.svg"
+        }
+      ],
+      "trellisSource": {
+        "path": "lirm-armature-22__basin-22-s1p50-n00-p025/trellis-source.svg",
+        "rasterPath": "lirm-armature-22__basin-22-s1p50-n00-p025/trellis-source.png"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-gestalt-composite-bundle.v0",
+      "compositeId": "lirm-armature-22__basin-22-s1p50-n00-p046",
+      "candidateId": "lirm-armature-22",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball-silhouette-morph",
+        "actual3dStructure": true,
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "gestaltPressure": 0.46,
+        "gestaltDepthRadius": 0.22,
+        "composition": "signed-distance-linear-morph-v0",
+        "primitiveSources": [
+          "procedural_armature_implicit_field",
+          "silhouette_envelope_rounded_volume"
+        ]
+      },
+      "gestaltEnvelope": {
+        "id": "basin-22-s1p50-n00-p046",
+        "maskHash": "sha256:1ca80854ae1712e9c941ecc9cd5f5526cc34a116842ee22e9417c804ae6c7ef7",
+        "width": 128,
+        "height": 128,
+        "pressure": 0.46,
+        "depthRadius": 0.22,
+        "roundness": 0.045,
+        "lineage": {
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-22-s1p50-n00",
+          "sourceBasinIndex": 22,
+          "sourceShapeId": "sha256:e440ded118d042fdf7d492d7253bd481bb917df9d3a75355709ff662bbd2c4a1",
+          "sourceMaskHash": "sha256:a881af2fb5e239291f54d8587061b0c2040fa9d8497eddf6ee9fb40994117c28",
+          "posteriorStrength": 1.5,
+          "sourceMaskPath": "generated/basin-22-s1p50-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "dualLineage": {
+        "armature": {
+          "witnessId": "lirm-speciation-armature-64073572",
+          "candidateId": "lirm-armature-22",
+          "candidateSeed": "molten-lirm-seed-0707:22"
+        },
+        "silhouette": {
+          "id": "basin-22-s1p50-n00-p046",
+          "maskHash": "sha256:1ca80854ae1712e9c941ecc9cd5f5526cc34a116842ee22e9417c804ae6c7ef7",
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-22-s1p50-n00",
+          "sourceBasinIndex": 22,
+          "sourceShapeId": "sha256:e440ded118d042fdf7d492d7253bd481bb917df9d3a75355709ff662bbd2c4a1",
+          "sourceMaskHash": "sha256:a881af2fb5e239291f54d8587061b0c2040fa9d8497eddf6ee9fb40994117c28",
+          "posteriorStrength": 1.5,
+          "sourceMaskPath": "generated/basin-22-s1p50-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-22__basin-22-s1p50-n00-p046/clay-composite.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-22__basin-22-s1p50-n00-p046/depth-composite.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-22__basin-22-s1p50-n00-p046/normal-composite.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-22__basin-22-s1p50-n00-p046/mask-composite.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-22__basin-22-s1p50-n00-p046/semantic-composite.svg"
+        }
+      ],
+      "trellisSource": {
+        "path": "lirm-armature-22__basin-22-s1p50-n00-p046/trellis-source.svg",
+        "rasterPath": "lirm-armature-22__basin-22-s1p50-n00-p046/trellis-source.png"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-gestalt-composite-bundle.v0",
+      "compositeId": "lirm-armature-22__basin-22-s1p50-n00-p067",
+      "candidateId": "lirm-armature-22",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball-silhouette-morph",
+        "actual3dStructure": true,
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "gestaltPressure": 0.67,
+        "gestaltDepthRadius": 0.22,
+        "composition": "signed-distance-linear-morph-v0",
+        "primitiveSources": [
+          "procedural_armature_implicit_field",
+          "silhouette_envelope_rounded_volume"
+        ]
+      },
+      "gestaltEnvelope": {
+        "id": "basin-22-s1p50-n00-p067",
+        "maskHash": "sha256:1ca80854ae1712e9c941ecc9cd5f5526cc34a116842ee22e9417c804ae6c7ef7",
+        "width": 128,
+        "height": 128,
+        "pressure": 0.67,
+        "depthRadius": 0.22,
+        "roundness": 0.045,
+        "lineage": {
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-22-s1p50-n00",
+          "sourceBasinIndex": 22,
+          "sourceShapeId": "sha256:e440ded118d042fdf7d492d7253bd481bb917df9d3a75355709ff662bbd2c4a1",
+          "sourceMaskHash": "sha256:a881af2fb5e239291f54d8587061b0c2040fa9d8497eddf6ee9fb40994117c28",
+          "posteriorStrength": 1.5,
+          "sourceMaskPath": "generated/basin-22-s1p50-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "dualLineage": {
+        "armature": {
+          "witnessId": "lirm-speciation-armature-64073572",
+          "candidateId": "lirm-armature-22",
+          "candidateSeed": "molten-lirm-seed-0707:22"
+        },
+        "silhouette": {
+          "id": "basin-22-s1p50-n00-p067",
+          "maskHash": "sha256:1ca80854ae1712e9c941ecc9cd5f5526cc34a116842ee22e9417c804ae6c7ef7",
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-22-s1p50-n00",
+          "sourceBasinIndex": 22,
+          "sourceShapeId": "sha256:e440ded118d042fdf7d492d7253bd481bb917df9d3a75355709ff662bbd2c4a1",
+          "sourceMaskHash": "sha256:a881af2fb5e239291f54d8587061b0c2040fa9d8497eddf6ee9fb40994117c28",
+          "posteriorStrength": 1.5,
+          "sourceMaskPath": "generated/basin-22-s1p50-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-22__basin-22-s1p50-n00-p067/clay-composite.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-22__basin-22-s1p50-n00-p067/depth-composite.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-22__basin-22-s1p50-n00-p067/normal-composite.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-22__basin-22-s1p50-n00-p067/mask-composite.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-22__basin-22-s1p50-n00-p067/semantic-composite.svg"
+        }
+      ],
+      "trellisSource": {
+        "path": "lirm-armature-22__basin-22-s1p50-n00-p067/trellis-source.svg",
+        "rasterPath": "lirm-armature-22__basin-22-s1p50-n00-p067/trellis-source.png"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-gestalt-composite-bundle.v0",
+      "compositeId": "lirm-armature-08__basin-10-s3p00-n00-p046",
+      "candidateId": "lirm-armature-08",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball-silhouette-morph",
+        "actual3dStructure": true,
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "gestaltPressure": 0.46,
+        "gestaltDepthRadius": 0.22,
+        "composition": "signed-distance-linear-morph-v0",
+        "primitiveSources": [
+          "procedural_armature_implicit_field",
+          "silhouette_envelope_rounded_volume"
+        ]
+      },
+      "gestaltEnvelope": {
+        "id": "basin-10-s3p00-n00-p046",
+        "maskHash": "sha256:7aa7d6082fba4f887623831585302babe9872c3a3a97a0786cbd172ba2cd5e3c",
+        "width": 128,
+        "height": 128,
+        "pressure": 0.46,
+        "depthRadius": 0.22,
+        "roundness": 0.045,
+        "lineage": {
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-10-s3p00-n00",
+          "sourceBasinIndex": 10,
+          "sourceShapeId": "sha256:a3b315c846a34c1cc3a5dd0a8f1252bf7bfcd4a87a1ffa17d524ff3945ac38bd",
+          "sourceMaskHash": "sha256:e322b772fba34f6c22626bf0e43a01e0907659d06301ea81b50e4859364a3189",
+          "posteriorStrength": 3,
+          "sourceMaskPath": "generated/basin-10-s3p00-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "dualLineage": {
+        "armature": {
+          "witnessId": "lirm-speciation-armature-64073572",
+          "candidateId": "lirm-armature-08",
+          "candidateSeed": "molten-lirm-seed-0707:8"
+        },
+        "silhouette": {
+          "id": "basin-10-s3p00-n00-p046",
+          "maskHash": "sha256:7aa7d6082fba4f887623831585302babe9872c3a3a97a0786cbd172ba2cd5e3c",
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-10-s3p00-n00",
+          "sourceBasinIndex": 10,
+          "sourceShapeId": "sha256:a3b315c846a34c1cc3a5dd0a8f1252bf7bfcd4a87a1ffa17d524ff3945ac38bd",
+          "sourceMaskHash": "sha256:e322b772fba34f6c22626bf0e43a01e0907659d06301ea81b50e4859364a3189",
+          "posteriorStrength": 3,
+          "sourceMaskPath": "generated/basin-10-s3p00-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-08__basin-10-s3p00-n00-p046/clay-composite.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-08__basin-10-s3p00-n00-p046/depth-composite.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-08__basin-10-s3p00-n00-p046/normal-composite.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-08__basin-10-s3p00-n00-p046/mask-composite.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-08__basin-10-s3p00-n00-p046/semantic-composite.svg"
+        }
+      ],
+      "trellisSource": {
+        "path": "lirm-armature-08__basin-10-s3p00-n00-p046/trellis-source.svg",
+        "rasterPath": "lirm-armature-08__basin-10-s3p00-n00-p046/trellis-source.png"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-gestalt-composite-bundle.v0",
+      "compositeId": "lirm-armature-16__basin-10-s3p00-n00-p046",
+      "candidateId": "lirm-armature-16",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball-silhouette-morph",
+        "actual3dStructure": true,
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "gestaltPressure": 0.46,
+        "gestaltDepthRadius": 0.22,
+        "composition": "signed-distance-linear-morph-v0",
+        "primitiveSources": [
+          "procedural_armature_implicit_field",
+          "silhouette_envelope_rounded_volume"
+        ]
+      },
+      "gestaltEnvelope": {
+        "id": "basin-10-s3p00-n00-p046",
+        "maskHash": "sha256:7aa7d6082fba4f887623831585302babe9872c3a3a97a0786cbd172ba2cd5e3c",
+        "width": 128,
+        "height": 128,
+        "pressure": 0.46,
+        "depthRadius": 0.22,
+        "roundness": 0.045,
+        "lineage": {
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-10-s3p00-n00",
+          "sourceBasinIndex": 10,
+          "sourceShapeId": "sha256:a3b315c846a34c1cc3a5dd0a8f1252bf7bfcd4a87a1ffa17d524ff3945ac38bd",
+          "sourceMaskHash": "sha256:e322b772fba34f6c22626bf0e43a01e0907659d06301ea81b50e4859364a3189",
+          "posteriorStrength": 3,
+          "sourceMaskPath": "generated/basin-10-s3p00-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "dualLineage": {
+        "armature": {
+          "witnessId": "lirm-speciation-armature-64073572",
+          "candidateId": "lirm-armature-16",
+          "candidateSeed": "molten-lirm-seed-0707:16"
+        },
+        "silhouette": {
+          "id": "basin-10-s3p00-n00-p046",
+          "maskHash": "sha256:7aa7d6082fba4f887623831585302babe9872c3a3a97a0786cbd172ba2cd5e3c",
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-10-s3p00-n00",
+          "sourceBasinIndex": 10,
+          "sourceShapeId": "sha256:a3b315c846a34c1cc3a5dd0a8f1252bf7bfcd4a87a1ffa17d524ff3945ac38bd",
+          "sourceMaskHash": "sha256:e322b772fba34f6c22626bf0e43a01e0907659d06301ea81b50e4859364a3189",
+          "posteriorStrength": 3,
+          "sourceMaskPath": "generated/basin-10-s3p00-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-16__basin-10-s3p00-n00-p046/clay-composite.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-16__basin-10-s3p00-n00-p046/depth-composite.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-16__basin-10-s3p00-n00-p046/normal-composite.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-16__basin-10-s3p00-n00-p046/mask-composite.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-16__basin-10-s3p00-n00-p046/semantic-composite.svg"
+        }
+      ],
+      "trellisSource": {
+        "path": "lirm-armature-16__basin-10-s3p00-n00-p046/trellis-source.svg",
+        "rasterPath": "lirm-armature-16__basin-10-s3p00-n00-p046/trellis-source.png"
+      }
+    },
+    {
+      "schema": "kaminos.lirm-speciation-armature-gestalt-composite-bundle.v0",
+      "compositeId": "lirm-armature-24__basin-10-s3p00-n00-p046",
+      "candidateId": "lirm-armature-24",
+      "fieldModel": {
+        "kind": "smooth-sdf-metaball-silhouette-morph",
+        "actual3dStructure": true,
+        "surfaceThreshold": 0.0065,
+        "smoothUnionK": 0.075,
+        "gestaltPressure": 0.46,
+        "gestaltDepthRadius": 0.22,
+        "composition": "signed-distance-linear-morph-v0",
+        "primitiveSources": [
+          "procedural_armature_implicit_field",
+          "silhouette_envelope_rounded_volume"
+        ]
+      },
+      "gestaltEnvelope": {
+        "id": "basin-10-s3p00-n00-p046",
+        "maskHash": "sha256:7aa7d6082fba4f887623831585302babe9872c3a3a97a0786cbd172ba2cd5e3c",
+        "width": 128,
+        "height": 128,
+        "pressure": 0.46,
+        "depthRadius": 0.22,
+        "roundness": 0.045,
+        "lineage": {
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-10-s3p00-n00",
+          "sourceBasinIndex": 10,
+          "sourceShapeId": "sha256:a3b315c846a34c1cc3a5dd0a8f1252bf7bfcd4a87a1ffa17d524ff3945ac38bd",
+          "sourceMaskHash": "sha256:e322b772fba34f6c22626bf0e43a01e0907659d06301ea81b50e4859364a3189",
+          "posteriorStrength": 3,
+          "sourceMaskPath": "generated/basin-10-s3p00-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "dualLineage": {
+        "armature": {
+          "witnessId": "lirm-speciation-armature-64073572",
+          "candidateId": "lirm-armature-24",
+          "candidateSeed": "molten-lirm-seed-0707:24"
+        },
+        "silhouette": {
+          "id": "basin-10-s3p00-n00-p046",
+          "maskHash": "sha256:7aa7d6082fba4f887623831585302babe9872c3a3a97a0786cbd172ba2cd5e3c",
+          "sourceReceiptSchema": "kaminos.lirm-silhouette-basin-latent.v0",
+          "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-basin-latent-v0",
+          "effectiveRoute": "mlx-sdf-vae-posterior-basin-perturbation-v0",
+          "generationId": "basin-10-s3p00-n00",
+          "sourceBasinIndex": 10,
+          "sourceShapeId": "sha256:a3b315c846a34c1cc3a5dd0a8f1252bf7bfcd4a87a1ffa17d524ff3945ac38bd",
+          "sourceMaskHash": "sha256:e322b772fba34f6c22626bf0e43a01e0907659d06301ea81b50e4859364a3189",
+          "posteriorStrength": 3,
+          "sourceMaskPath": "generated/basin-10-s3p00-n00.pgm",
+          "acceptedForDownstream": true
+        }
+      },
+      "renderMaps": [
+        {
+          "kind": "clay",
+          "path": "lirm-armature-24__basin-10-s3p00-n00-p046/clay-composite.svg"
+        },
+        {
+          "kind": "depth",
+          "path": "lirm-armature-24__basin-10-s3p00-n00-p046/depth-composite.svg"
+        },
+        {
+          "kind": "normal",
+          "path": "lirm-armature-24__basin-10-s3p00-n00-p046/normal-composite.svg"
+        },
+        {
+          "kind": "mask",
+          "path": "lirm-armature-24__basin-10-s3p00-n00-p046/mask-composite.svg"
+        },
+        {
+          "kind": "semantic",
+          "path": "lirm-armature-24__basin-10-s3p00-n00-p046/semantic-composite.svg"
+        }
+      ],
+      "trellisSource": {
+        "path": "lirm-armature-24__basin-10-s3p00-n00-p046/trellis-source.svg",
+        "rasterPath": "lirm-armature-24__basin-10-s3p00-n00-p046/trellis-source.png"
+      }
+    }
+  ],
+  "falseClosureGuards": {
+    "finishedCreatureClaim": "forbidden",
+    "generatorFiringClaim": "not_yet_fired",
+    "flatExtrusionClaim": "forbidden",
+    "dualLineageVerifiedCount": 15
+  },
+  "outputInventory": {
+    "receipt": "receipt.json",
+    "bundles": [
+      {
+        "compositeId": "lirm-armature-22__basin-03-s3p00-n00-p025",
+        "bundle": "lirm-armature-22__basin-03-s3p00-n00-p025/bundle.json",
+        "gestaltMask": "lirm-armature-22__basin-03-s3p00-n00-p025/gestalt-mask.pgm",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-22__basin-03-s3p00-n00-p025/clay-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-03-s3p00-n00-p025/clay-composite.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-22__basin-03-s3p00-n00-p025/depth-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-03-s3p00-n00-p025/depth-composite.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-22__basin-03-s3p00-n00-p025/normal-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-03-s3p00-n00-p025/normal-composite.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-22__basin-03-s3p00-n00-p025/mask-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-03-s3p00-n00-p025/mask-composite.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-22__basin-03-s3p00-n00-p025/semantic-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-03-s3p00-n00-p025/semantic-composite.png"
+          }
+        ],
+        "trellisSource": {
+          "path": "lirm-armature-22__basin-03-s3p00-n00-p025/trellis-source.svg",
+          "rasterPath": "lirm-armature-22__basin-03-s3p00-n00-p025/trellis-source.png"
+        }
+      },
+      {
+        "compositeId": "lirm-armature-22__basin-03-s3p00-n00-p046",
+        "bundle": "lirm-armature-22__basin-03-s3p00-n00-p046/bundle.json",
+        "gestaltMask": "lirm-armature-22__basin-03-s3p00-n00-p046/gestalt-mask.pgm",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-22__basin-03-s3p00-n00-p046/clay-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-03-s3p00-n00-p046/clay-composite.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-22__basin-03-s3p00-n00-p046/depth-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-03-s3p00-n00-p046/depth-composite.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-22__basin-03-s3p00-n00-p046/normal-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-03-s3p00-n00-p046/normal-composite.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-22__basin-03-s3p00-n00-p046/mask-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-03-s3p00-n00-p046/mask-composite.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-22__basin-03-s3p00-n00-p046/semantic-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-03-s3p00-n00-p046/semantic-composite.png"
+          }
+        ],
+        "trellisSource": {
+          "path": "lirm-armature-22__basin-03-s3p00-n00-p046/trellis-source.svg",
+          "rasterPath": "lirm-armature-22__basin-03-s3p00-n00-p046/trellis-source.png"
+        }
+      },
+      {
+        "compositeId": "lirm-armature-22__basin-03-s3p00-n00-p067",
+        "bundle": "lirm-armature-22__basin-03-s3p00-n00-p067/bundle.json",
+        "gestaltMask": "lirm-armature-22__basin-03-s3p00-n00-p067/gestalt-mask.pgm",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-22__basin-03-s3p00-n00-p067/clay-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-03-s3p00-n00-p067/clay-composite.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-22__basin-03-s3p00-n00-p067/depth-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-03-s3p00-n00-p067/depth-composite.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-22__basin-03-s3p00-n00-p067/normal-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-03-s3p00-n00-p067/normal-composite.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-22__basin-03-s3p00-n00-p067/mask-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-03-s3p00-n00-p067/mask-composite.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-22__basin-03-s3p00-n00-p067/semantic-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-03-s3p00-n00-p067/semantic-composite.png"
+          }
+        ],
+        "trellisSource": {
+          "path": "lirm-armature-22__basin-03-s3p00-n00-p067/trellis-source.svg",
+          "rasterPath": "lirm-armature-22__basin-03-s3p00-n00-p067/trellis-source.png"
+        }
+      },
+      {
+        "compositeId": "lirm-armature-22__basin-10-s3p00-n00-p025",
+        "bundle": "lirm-armature-22__basin-10-s3p00-n00-p025/bundle.json",
+        "gestaltMask": "lirm-armature-22__basin-10-s3p00-n00-p025/gestalt-mask.pgm",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-22__basin-10-s3p00-n00-p025/clay-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-10-s3p00-n00-p025/clay-composite.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-22__basin-10-s3p00-n00-p025/depth-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-10-s3p00-n00-p025/depth-composite.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-22__basin-10-s3p00-n00-p025/normal-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-10-s3p00-n00-p025/normal-composite.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-22__basin-10-s3p00-n00-p025/mask-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-10-s3p00-n00-p025/mask-composite.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-22__basin-10-s3p00-n00-p025/semantic-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-10-s3p00-n00-p025/semantic-composite.png"
+          }
+        ],
+        "trellisSource": {
+          "path": "lirm-armature-22__basin-10-s3p00-n00-p025/trellis-source.svg",
+          "rasterPath": "lirm-armature-22__basin-10-s3p00-n00-p025/trellis-source.png"
+        }
+      },
+      {
+        "compositeId": "lirm-armature-22__basin-10-s3p00-n00-p046",
+        "bundle": "lirm-armature-22__basin-10-s3p00-n00-p046/bundle.json",
+        "gestaltMask": "lirm-armature-22__basin-10-s3p00-n00-p046/gestalt-mask.pgm",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-22__basin-10-s3p00-n00-p046/clay-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-10-s3p00-n00-p046/clay-composite.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-22__basin-10-s3p00-n00-p046/depth-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-10-s3p00-n00-p046/depth-composite.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-22__basin-10-s3p00-n00-p046/normal-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-10-s3p00-n00-p046/normal-composite.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-22__basin-10-s3p00-n00-p046/mask-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-10-s3p00-n00-p046/mask-composite.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-22__basin-10-s3p00-n00-p046/semantic-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-10-s3p00-n00-p046/semantic-composite.png"
+          }
+        ],
+        "trellisSource": {
+          "path": "lirm-armature-22__basin-10-s3p00-n00-p046/trellis-source.svg",
+          "rasterPath": "lirm-armature-22__basin-10-s3p00-n00-p046/trellis-source.png"
+        }
+      },
+      {
+        "compositeId": "lirm-armature-22__basin-10-s3p00-n00-p067",
+        "bundle": "lirm-armature-22__basin-10-s3p00-n00-p067/bundle.json",
+        "gestaltMask": "lirm-armature-22__basin-10-s3p00-n00-p067/gestalt-mask.pgm",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-22__basin-10-s3p00-n00-p067/clay-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-10-s3p00-n00-p067/clay-composite.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-22__basin-10-s3p00-n00-p067/depth-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-10-s3p00-n00-p067/depth-composite.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-22__basin-10-s3p00-n00-p067/normal-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-10-s3p00-n00-p067/normal-composite.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-22__basin-10-s3p00-n00-p067/mask-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-10-s3p00-n00-p067/mask-composite.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-22__basin-10-s3p00-n00-p067/semantic-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-10-s3p00-n00-p067/semantic-composite.png"
+          }
+        ],
+        "trellisSource": {
+          "path": "lirm-armature-22__basin-10-s3p00-n00-p067/trellis-source.svg",
+          "rasterPath": "lirm-armature-22__basin-10-s3p00-n00-p067/trellis-source.png"
+        }
+      },
+      {
+        "compositeId": "lirm-armature-22__basin-15-s3p00-n00-p025",
+        "bundle": "lirm-armature-22__basin-15-s3p00-n00-p025/bundle.json",
+        "gestaltMask": "lirm-armature-22__basin-15-s3p00-n00-p025/gestalt-mask.pgm",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-22__basin-15-s3p00-n00-p025/clay-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-15-s3p00-n00-p025/clay-composite.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-22__basin-15-s3p00-n00-p025/depth-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-15-s3p00-n00-p025/depth-composite.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-22__basin-15-s3p00-n00-p025/normal-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-15-s3p00-n00-p025/normal-composite.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-22__basin-15-s3p00-n00-p025/mask-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-15-s3p00-n00-p025/mask-composite.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-22__basin-15-s3p00-n00-p025/semantic-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-15-s3p00-n00-p025/semantic-composite.png"
+          }
+        ],
+        "trellisSource": {
+          "path": "lirm-armature-22__basin-15-s3p00-n00-p025/trellis-source.svg",
+          "rasterPath": "lirm-armature-22__basin-15-s3p00-n00-p025/trellis-source.png"
+        }
+      },
+      {
+        "compositeId": "lirm-armature-22__basin-15-s3p00-n00-p046",
+        "bundle": "lirm-armature-22__basin-15-s3p00-n00-p046/bundle.json",
+        "gestaltMask": "lirm-armature-22__basin-15-s3p00-n00-p046/gestalt-mask.pgm",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-22__basin-15-s3p00-n00-p046/clay-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-15-s3p00-n00-p046/clay-composite.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-22__basin-15-s3p00-n00-p046/depth-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-15-s3p00-n00-p046/depth-composite.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-22__basin-15-s3p00-n00-p046/normal-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-15-s3p00-n00-p046/normal-composite.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-22__basin-15-s3p00-n00-p046/mask-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-15-s3p00-n00-p046/mask-composite.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-22__basin-15-s3p00-n00-p046/semantic-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-15-s3p00-n00-p046/semantic-composite.png"
+          }
+        ],
+        "trellisSource": {
+          "path": "lirm-armature-22__basin-15-s3p00-n00-p046/trellis-source.svg",
+          "rasterPath": "lirm-armature-22__basin-15-s3p00-n00-p046/trellis-source.png"
+        }
+      },
+      {
+        "compositeId": "lirm-armature-22__basin-15-s3p00-n00-p067",
+        "bundle": "lirm-armature-22__basin-15-s3p00-n00-p067/bundle.json",
+        "gestaltMask": "lirm-armature-22__basin-15-s3p00-n00-p067/gestalt-mask.pgm",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-22__basin-15-s3p00-n00-p067/clay-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-15-s3p00-n00-p067/clay-composite.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-22__basin-15-s3p00-n00-p067/depth-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-15-s3p00-n00-p067/depth-composite.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-22__basin-15-s3p00-n00-p067/normal-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-15-s3p00-n00-p067/normal-composite.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-22__basin-15-s3p00-n00-p067/mask-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-15-s3p00-n00-p067/mask-composite.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-22__basin-15-s3p00-n00-p067/semantic-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-15-s3p00-n00-p067/semantic-composite.png"
+          }
+        ],
+        "trellisSource": {
+          "path": "lirm-armature-22__basin-15-s3p00-n00-p067/trellis-source.svg",
+          "rasterPath": "lirm-armature-22__basin-15-s3p00-n00-p067/trellis-source.png"
+        }
+      },
+      {
+        "compositeId": "lirm-armature-22__basin-22-s1p50-n00-p025",
+        "bundle": "lirm-armature-22__basin-22-s1p50-n00-p025/bundle.json",
+        "gestaltMask": "lirm-armature-22__basin-22-s1p50-n00-p025/gestalt-mask.pgm",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-22__basin-22-s1p50-n00-p025/clay-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-22-s1p50-n00-p025/clay-composite.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-22__basin-22-s1p50-n00-p025/depth-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-22-s1p50-n00-p025/depth-composite.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-22__basin-22-s1p50-n00-p025/normal-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-22-s1p50-n00-p025/normal-composite.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-22__basin-22-s1p50-n00-p025/mask-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-22-s1p50-n00-p025/mask-composite.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-22__basin-22-s1p50-n00-p025/semantic-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-22-s1p50-n00-p025/semantic-composite.png"
+          }
+        ],
+        "trellisSource": {
+          "path": "lirm-armature-22__basin-22-s1p50-n00-p025/trellis-source.svg",
+          "rasterPath": "lirm-armature-22__basin-22-s1p50-n00-p025/trellis-source.png"
+        }
+      },
+      {
+        "compositeId": "lirm-armature-22__basin-22-s1p50-n00-p046",
+        "bundle": "lirm-armature-22__basin-22-s1p50-n00-p046/bundle.json",
+        "gestaltMask": "lirm-armature-22__basin-22-s1p50-n00-p046/gestalt-mask.pgm",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-22__basin-22-s1p50-n00-p046/clay-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-22-s1p50-n00-p046/clay-composite.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-22__basin-22-s1p50-n00-p046/depth-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-22-s1p50-n00-p046/depth-composite.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-22__basin-22-s1p50-n00-p046/normal-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-22-s1p50-n00-p046/normal-composite.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-22__basin-22-s1p50-n00-p046/mask-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-22-s1p50-n00-p046/mask-composite.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-22__basin-22-s1p50-n00-p046/semantic-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-22-s1p50-n00-p046/semantic-composite.png"
+          }
+        ],
+        "trellisSource": {
+          "path": "lirm-armature-22__basin-22-s1p50-n00-p046/trellis-source.svg",
+          "rasterPath": "lirm-armature-22__basin-22-s1p50-n00-p046/trellis-source.png"
+        }
+      },
+      {
+        "compositeId": "lirm-armature-22__basin-22-s1p50-n00-p067",
+        "bundle": "lirm-armature-22__basin-22-s1p50-n00-p067/bundle.json",
+        "gestaltMask": "lirm-armature-22__basin-22-s1p50-n00-p067/gestalt-mask.pgm",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-22__basin-22-s1p50-n00-p067/clay-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-22-s1p50-n00-p067/clay-composite.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-22__basin-22-s1p50-n00-p067/depth-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-22-s1p50-n00-p067/depth-composite.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-22__basin-22-s1p50-n00-p067/normal-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-22-s1p50-n00-p067/normal-composite.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-22__basin-22-s1p50-n00-p067/mask-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-22-s1p50-n00-p067/mask-composite.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-22__basin-22-s1p50-n00-p067/semantic-composite.svg",
+            "rasterPath": "lirm-armature-22__basin-22-s1p50-n00-p067/semantic-composite.png"
+          }
+        ],
+        "trellisSource": {
+          "path": "lirm-armature-22__basin-22-s1p50-n00-p067/trellis-source.svg",
+          "rasterPath": "lirm-armature-22__basin-22-s1p50-n00-p067/trellis-source.png"
+        }
+      },
+      {
+        "compositeId": "lirm-armature-08__basin-10-s3p00-n00-p046",
+        "bundle": "lirm-armature-08__basin-10-s3p00-n00-p046/bundle.json",
+        "gestaltMask": "lirm-armature-08__basin-10-s3p00-n00-p046/gestalt-mask.pgm",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-08__basin-10-s3p00-n00-p046/clay-composite.svg",
+            "rasterPath": "lirm-armature-08__basin-10-s3p00-n00-p046/clay-composite.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-08__basin-10-s3p00-n00-p046/depth-composite.svg",
+            "rasterPath": "lirm-armature-08__basin-10-s3p00-n00-p046/depth-composite.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-08__basin-10-s3p00-n00-p046/normal-composite.svg",
+            "rasterPath": "lirm-armature-08__basin-10-s3p00-n00-p046/normal-composite.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-08__basin-10-s3p00-n00-p046/mask-composite.svg",
+            "rasterPath": "lirm-armature-08__basin-10-s3p00-n00-p046/mask-composite.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-08__basin-10-s3p00-n00-p046/semantic-composite.svg",
+            "rasterPath": "lirm-armature-08__basin-10-s3p00-n00-p046/semantic-composite.png"
+          }
+        ],
+        "trellisSource": {
+          "path": "lirm-armature-08__basin-10-s3p00-n00-p046/trellis-source.svg",
+          "rasterPath": "lirm-armature-08__basin-10-s3p00-n00-p046/trellis-source.png"
+        }
+      },
+      {
+        "compositeId": "lirm-armature-16__basin-10-s3p00-n00-p046",
+        "bundle": "lirm-armature-16__basin-10-s3p00-n00-p046/bundle.json",
+        "gestaltMask": "lirm-armature-16__basin-10-s3p00-n00-p046/gestalt-mask.pgm",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-16__basin-10-s3p00-n00-p046/clay-composite.svg",
+            "rasterPath": "lirm-armature-16__basin-10-s3p00-n00-p046/clay-composite.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-16__basin-10-s3p00-n00-p046/depth-composite.svg",
+            "rasterPath": "lirm-armature-16__basin-10-s3p00-n00-p046/depth-composite.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-16__basin-10-s3p00-n00-p046/normal-composite.svg",
+            "rasterPath": "lirm-armature-16__basin-10-s3p00-n00-p046/normal-composite.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-16__basin-10-s3p00-n00-p046/mask-composite.svg",
+            "rasterPath": "lirm-armature-16__basin-10-s3p00-n00-p046/mask-composite.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-16__basin-10-s3p00-n00-p046/semantic-composite.svg",
+            "rasterPath": "lirm-armature-16__basin-10-s3p00-n00-p046/semantic-composite.png"
+          }
+        ],
+        "trellisSource": {
+          "path": "lirm-armature-16__basin-10-s3p00-n00-p046/trellis-source.svg",
+          "rasterPath": "lirm-armature-16__basin-10-s3p00-n00-p046/trellis-source.png"
+        }
+      },
+      {
+        "compositeId": "lirm-armature-24__basin-10-s3p00-n00-p046",
+        "bundle": "lirm-armature-24__basin-10-s3p00-n00-p046/bundle.json",
+        "gestaltMask": "lirm-armature-24__basin-10-s3p00-n00-p046/gestalt-mask.pgm",
+        "maps": [
+          {
+            "kind": "clay",
+            "path": "lirm-armature-24__basin-10-s3p00-n00-p046/clay-composite.svg",
+            "rasterPath": "lirm-armature-24__basin-10-s3p00-n00-p046/clay-composite.png"
+          },
+          {
+            "kind": "depth",
+            "path": "lirm-armature-24__basin-10-s3p00-n00-p046/depth-composite.svg",
+            "rasterPath": "lirm-armature-24__basin-10-s3p00-n00-p046/depth-composite.png"
+          },
+          {
+            "kind": "normal",
+            "path": "lirm-armature-24__basin-10-s3p00-n00-p046/normal-composite.svg",
+            "rasterPath": "lirm-armature-24__basin-10-s3p00-n00-p046/normal-composite.png"
+          },
+          {
+            "kind": "mask",
+            "path": "lirm-armature-24__basin-10-s3p00-n00-p046/mask-composite.svg",
+            "rasterPath": "lirm-armature-24__basin-10-s3p00-n00-p046/mask-composite.png"
+          },
+          {
+            "kind": "semantic",
+            "path": "lirm-armature-24__basin-10-s3p00-n00-p046/semantic-composite.svg",
+            "rasterPath": "lirm-armature-24__basin-10-s3p00-n00-p046/semantic-composite.png"
+          }
+        ],
+        "trellisSource": {
+          "path": "lirm-armature-24__basin-10-s3p00-n00-p046/trellis-source.svg",
+          "rasterPath": "lirm-armature-24__basin-10-s3p00-n00-p046/trellis-source.png"
+        }
+      }
+    ]
+  },
+  "outputEvidence": [
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p025/gestalt-mask.pgm",
+      "byteSize": 16399,
+      "sha256": "sha256:c3f626715bee6f30f8e8351cf996ca041ebe6ec06791bd52fed38a1aaad8c3e8"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p025/bundle.json",
+      "byteSize": 11577,
+      "sha256": "sha256:470efeac8022dab28210d34249b01600061202d43de7e9afe9fba1309f6206b1"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p025/clay-composite.svg",
+      "byteSize": 362253,
+      "sha256": "sha256:1a720f9e610b9ec5f71316de166dbfd0339db03fdb928e4d7798abebd5d0d802"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p025/clay-composite.png",
+      "byteSize": 30241,
+      "sha256": "sha256:fdf185d8354d55d7b5ac5637c56e7888f3e992d894ad183e24da30611163dfd7"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p025/depth-composite.svg",
+      "byteSize": 372329,
+      "sha256": "sha256:96d348c8220685992674f8fd8cd358cd8c08dae0d05ff32ee8efd8b5761252db"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p025/depth-composite.png",
+      "byteSize": 16524,
+      "sha256": "sha256:9743651b3a0e5322ed3c8067e70c4411eed75fdb1959c5fea583195e32b1adba"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p025/normal-composite.svg",
+      "byteSize": 368792,
+      "sha256": "sha256:6edb80ef8005ae6149f7d6ae534afd7cc17cedd5f851d6d63af92cc539f31232"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p025/normal-composite.png",
+      "byteSize": 37939,
+      "sha256": "sha256:8acb22d6e9de8ebee069bb553b5665d8517037aeebe16d055b2f52cb6c17efd0"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p025/mask-composite.svg",
+      "byteSize": 372285,
+      "sha256": "sha256:a0f2ad414b8d948f5fcd73026dc245277f4c3f3b56be8a74e1424e0b255336ee"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p025/mask-composite.png",
+      "byteSize": 5466,
+      "sha256": "sha256:0a5e377fa3bf371f26356cc7756d0aec87193a716741b7771915af8d57b8b253"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p025/semantic-composite.svg",
+      "byteSize": 398228,
+      "sha256": "sha256:699e2b450edd012d30a72c1f5bb924bc41f0718c6004a782d74e3ff572a2cd24"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p025/semantic-composite.png",
+      "byteSize": 6348,
+      "sha256": "sha256:3c5f3f208f9c8b83153680c0726e7bfc61db69dd52617377536c4863aacb7382"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p025/trellis-source.svg",
+      "byteSize": 652716,
+      "sha256": "sha256:e3c1982388ac9f3eb6b4d66b8870c72b220dd78c5feb3e4dabd70e11a79c20f2"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p025/trellis-source.png",
+      "byteSize": 108995,
+      "sha256": "sha256:599ed70cef9f5bd16edd240622b2494daf775fdd08572d52ba8a16966bec19b9"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p046/gestalt-mask.pgm",
+      "byteSize": 16399,
+      "sha256": "sha256:c3f626715bee6f30f8e8351cf996ca041ebe6ec06791bd52fed38a1aaad8c3e8"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p046/bundle.json",
+      "byteSize": 11577,
+      "sha256": "sha256:b928b831fd962946e8ce2a27d2310c3807e69c31d5643b9dc13aa75b7a5ddc77"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p046/clay-composite.svg",
+      "byteSize": 411864,
+      "sha256": "sha256:d64ee80c8b014c7e1b0bebe2614fe890a894579a0208336809ce2237845864d7"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p046/clay-composite.png",
+      "byteSize": 33659,
+      "sha256": "sha256:33517838c989cb6c5bf30c27bc0baf6ed5b0d0fe2a0d11154a02b0e49a01d767"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p046/depth-composite.svg",
+      "byteSize": 423601,
+      "sha256": "sha256:4caea0630b483d764f62f267c44a7c4ad641edd6ba611ce3923d8aefafb12cb0"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p046/depth-composite.png",
+      "byteSize": 18898,
+      "sha256": "sha256:404a8cbba2e337ad1ca570d218c9eb5b9baef36ebf523893771640e2acbf8d9a"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p046/normal-composite.svg",
+      "byteSize": 419434,
+      "sha256": "sha256:e4763b7b56d761705064bed72d2c8c5f31dc700e09adbbc8331d0bfa1776ae95"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p046/normal-composite.png",
+      "byteSize": 41673,
+      "sha256": "sha256:76ef7b8d9bee67b36ef3d65171967f24849c2cbea3c85c64ba5f98068610acb5"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p046/mask-composite.svg",
+      "byteSize": 423557,
+      "sha256": "sha256:0c26bd44f77759d29a75a148defe1c6ecdc4e06d7788f4b7e3d323d7a72f4b90"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p046/mask-composite.png",
+      "byteSize": 5668,
+      "sha256": "sha256:2dd38f00cdc3ac9a9ecffd4a314b74f016896ec7d92cf7dfdf398faf06a9dbf0"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p046/semantic-composite.svg",
+      "byteSize": 453090,
+      "sha256": "sha256:410dc904be900ed924199d7c4a6e1fc30cd70e839b698fc6e8e86b8182b224a6"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p046/semantic-composite.png",
+      "byteSize": 7281,
+      "sha256": "sha256:aaaf7363f84d4d20fd087869fb778a236e338b3e99b0c7cb9951689e2ca2461b"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p046/trellis-source.svg",
+      "byteSize": 740330,
+      "sha256": "sha256:e071919ae7c0ec9ebc24fc61c67bb9bbef223eb96642d39652401cf23408b336"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p046/trellis-source.png",
+      "byteSize": 124874,
+      "sha256": "sha256:11ad009ba064755d5db34c38e85c003ec01dd06e4a906aa24998cabd4b2cb618"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p067/gestalt-mask.pgm",
+      "byteSize": 16399,
+      "sha256": "sha256:c3f626715bee6f30f8e8351cf996ca041ebe6ec06791bd52fed38a1aaad8c3e8"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p067/bundle.json",
+      "byteSize": 11577,
+      "sha256": "sha256:2524787efb47270649dbcfe36e9fc261a4808caeb6628ed27a5da240340d76f7"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p067/clay-composite.svg",
+      "byteSize": 491400,
+      "sha256": "sha256:89f549b56c09ad69925ff85ecb84016c5b9d639869f98fcaadd50924ba4dd4c1"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p067/clay-composite.png",
+      "byteSize": 33260,
+      "sha256": "sha256:ddccc1fda2171cbd2849286911e13e9dca0d9346c6f73f66057d89035b01386b"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p067/depth-composite.svg",
+      "byteSize": 504578,
+      "sha256": "sha256:7db8c4080fc35b9ecd46f8ca8f09a761e2cd97f973a87f63154a2da034e41148"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p067/depth-composite.png",
+      "byteSize": 21788,
+      "sha256": "sha256:1ed28552cbb61465a787b5a3c2c0bd0f61d0da1450129e19cd92f3e8a49f07be"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p067/normal-composite.svg",
+      "byteSize": 500733,
+      "sha256": "sha256:7ccd737b0f70f7f6ade52e1384920261dba9c20f217baa390d9e196962f2a9ec"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p067/normal-composite.png",
+      "byteSize": 42713,
+      "sha256": "sha256:daf5f66009d8fafa21de462466a2b03e625ef98db8b08c188786629950e3a1ba"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p067/mask-composite.svg",
+      "byteSize": 504534,
+      "sha256": "sha256:7e8fe8a22c0152409d8824d4e307a8154c329d9ef2dd401d63e3eb049c0fa104"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p067/mask-composite.png",
+      "byteSize": 5758,
+      "sha256": "sha256:864999af10af1af597ca9d112a05dd646e4487fdce9bb22aa557910fcbed773f"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p067/semantic-composite.svg",
+      "byteSize": 539682,
+      "sha256": "sha256:e13c738a74cdb3045a38efd8631cad56a98fef28fd25ddfdb9c5bbaaf3185286"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p067/semantic-composite.png",
+      "byteSize": 7374,
+      "sha256": "sha256:1c78f1bb108729994cc17cb318bbde2b9b4fbc6b639e1a8dd722851e6e898c4a"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p067/trellis-source.svg",
+      "byteSize": 884735,
+      "sha256": "sha256:71e861e0416a9ebe828a7664506b910671b7b4c17c43a0aca29cd5e93541ccf6"
+    },
+    {
+      "path": "lirm-armature-22__basin-03-s3p00-n00-p067/trellis-source.png",
+      "byteSize": 140557,
+      "sha256": "sha256:c59dd49e7d8f288739650f2bc2f1e3ee4ab3f6b101048dc05c773b734d0dcba2"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p025/gestalt-mask.pgm",
+      "byteSize": 16399,
+      "sha256": "sha256:8eacbe26bf71b1fe3c4435904eaf7a85d20b8312c2bab6ab6052655a48b03513"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p025/bundle.json",
+      "byteSize": 11579,
+      "sha256": "sha256:836b6d05fedc9487c35396e85eb85c86a3e31efcaec2e96d991cb9cbc16bb478"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p025/clay-composite.svg",
+      "byteSize": 398495,
+      "sha256": "sha256:16b199749562641b6d523b503752adb3f0c6b40b82826b623d02919dd256b992"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p025/clay-composite.png",
+      "byteSize": 31577,
+      "sha256": "sha256:f657ebc676c719d0c09169d1572c106c98ea5251e79080f6a909e0b4c8eddf37"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p025/depth-composite.svg",
+      "byteSize": 409323,
+      "sha256": "sha256:bc1539d22ebdef87aee4cd9863f8361b35d84473dc66ed81d6ac05727526f7b4"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p025/depth-composite.png",
+      "byteSize": 18322,
+      "sha256": "sha256:ceeca5b2a39f505730b2e6c4ab37ad11c434a8d830f1bf6f09e29b2d1c87ec2c"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p025/normal-composite.svg",
+      "byteSize": 405409,
+      "sha256": "sha256:d3387e29ac60b1bd9a4e74a13f1168616e799c3692974deb2a804c1e39adf3f6"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p025/normal-composite.png",
+      "byteSize": 39654,
+      "sha256": "sha256:c3aacdfadb5676b44f1fe16b7dcf2ba0d67f7273f2c50854a7b2b27469416700"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p025/mask-composite.svg",
+      "byteSize": 409279,
+      "sha256": "sha256:28a46a0a5199b9e11208232798acefb8987cf0f8493143c218ca52e4af350527"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p025/mask-composite.png",
+      "byteSize": 5803,
+      "sha256": "sha256:1531e9e5eaf8654dc4977ad5f7fbfc40c8d62d9eeeeadfd23571b31cc7f5da68"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p025/semantic-composite.svg",
+      "byteSize": 437777,
+      "sha256": "sha256:a6eeaa9dbab444ae1ff838b16009c324415cb49944b1f55ead35d50a9ceecec8"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p025/semantic-composite.png",
+      "byteSize": 6949,
+      "sha256": "sha256:18b7a1ecccb210d5680782a8f85bc5d2c2fde6d19c37379accc31560a15c52b8"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p025/trellis-source.svg",
+      "byteSize": 717811,
+      "sha256": "sha256:f3bf68d99e417871724ec56c173cb7caa1532c391b45fed66db46195b809a8dc"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p025/trellis-source.png",
+      "byteSize": 113882,
+      "sha256": "sha256:10d774828084372196e36724d120e4c59b3867b6970974451741d6fdc6773884"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p046/gestalt-mask.pgm",
+      "byteSize": 16399,
+      "sha256": "sha256:8eacbe26bf71b1fe3c4435904eaf7a85d20b8312c2bab6ab6052655a48b03513"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p046/bundle.json",
+      "byteSize": 11579,
+      "sha256": "sha256:a5388b2f62dda06e50849e60d4b565f927aae29f8dbd9dc6f0c1c45a32bbd81a"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p046/clay-composite.svg",
+      "byteSize": 451857,
+      "sha256": "sha256:3facd7f5664bde21194dad0489b181d5107936085ca8132db5d530979be4b6fd"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p046/clay-composite.png",
+      "byteSize": 33339,
+      "sha256": "sha256:cdc46529a9a1baa9facd6bc4d4eae6e8d92bdee04c8304840025d581808c4c78"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p046/depth-composite.svg",
+      "byteSize": 463493,
+      "sha256": "sha256:43c4fd249da2b1da1d58e9e2c38b1ed6cb17042d186f6ebba18daa0fe7c315be"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p046/depth-composite.png",
+      "byteSize": 20221,
+      "sha256": "sha256:68bf9fc09abf7e59dfc4fca1bf7bcf2859569efec48b210f38abdd954ebb732e"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p046/normal-composite.svg",
+      "byteSize": 459277,
+      "sha256": "sha256:9a1b36b875fb5eacefc26ca520acee5cdbe0adcf1be0f0b2571ddf005c38174e"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p046/normal-composite.png",
+      "byteSize": 41986,
+      "sha256": "sha256:accfc2be1098ab42b35b9ed9f7ec50060f6d00425b673a4d120bcea74b88ac56"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p046/mask-composite.svg",
+      "byteSize": 463449,
+      "sha256": "sha256:bad7f044f08abf102caa1df561c5b915ce66259ba5509a357595fde194a87d41"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p046/mask-composite.png",
+      "byteSize": 5808,
+      "sha256": "sha256:dd29da32d9906883d35d924697565981c5e0d54c75068ff7e6adadb305f42c01"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p046/semantic-composite.svg",
+      "byteSize": 495712,
+      "sha256": "sha256:2ff2815fb5461b3d5a5c5f64d850340e500d9e411c92105f6ff9615df60b664e"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p046/semantic-composite.png",
+      "byteSize": 6663,
+      "sha256": "sha256:bdc72e41866f4282576e1dc86ea9e0ca233ff63768725d940575bbcfa3b86787"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p046/trellis-source.svg",
+      "byteSize": 812828,
+      "sha256": "sha256:6554602b138fd86d843b7244cefaf2af2594212b6242e1afcd914e3e0d350e0f"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p046/trellis-source.png",
+      "byteSize": 125814,
+      "sha256": "sha256:f0c5415ca9d78fd64ccfcebab53538fe1553ae1077bde25362d1648c98da5413"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p067/gestalt-mask.pgm",
+      "byteSize": 16399,
+      "sha256": "sha256:8eacbe26bf71b1fe3c4435904eaf7a85d20b8312c2bab6ab6052655a48b03513"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p067/bundle.json",
+      "byteSize": 11579,
+      "sha256": "sha256:3c939eafa02d69dd7032ba9f815bd0642234b30b29cd644ad356a89051b02ef8"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p067/clay-composite.svg",
+      "byteSize": 521943,
+      "sha256": "sha256:8c6ab5984236f1f53be0d58def47e84293de2ac40c47130e9adfa387b89d930a"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p067/clay-composite.png",
+      "byteSize": 34864,
+      "sha256": "sha256:ba27206308704e3973f0519f739b25cf15b0c170e0e621a62875f15de7bf3362"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p067/depth-composite.svg",
+      "byteSize": 534733,
+      "sha256": "sha256:4f5f840c1a70a60c8949e6e5375b9123d2e38136f1630b8ce92e97f556a76a2f"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p067/depth-composite.png",
+      "byteSize": 22289,
+      "sha256": "sha256:d4da8affbc41711acf5e3d339075f10b674c03e6c1f799fc64e96307aec48b6a"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p067/normal-composite.svg",
+      "byteSize": 530950,
+      "sha256": "sha256:b34b996b64fb525685e767583046b33ec76d0218083f231fb07a441d177fd615"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p067/normal-composite.png",
+      "byteSize": 43155,
+      "sha256": "sha256:f19a77e2e4d9abda344abf56ae854a71fb4c1abba6f9c55482b726110a3226f0"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p067/mask-composite.svg",
+      "byteSize": 534689,
+      "sha256": "sha256:15ded021651c7cedbe0d4768705d0758c436b4fd4b3e36a7399c2790b989e3a6"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p067/mask-composite.png",
+      "byteSize": 5993,
+      "sha256": "sha256:6c30e98e0af5af86dabcefe51d84a9644ee034460aade848c2d7413f28a18288"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p067/semantic-composite.svg",
+      "byteSize": 571902,
+      "sha256": "sha256:11de5f4539c676e8aaa3a47c493c17e966dda42cf2e61666f7f73ff60f31978f"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p067/semantic-composite.png",
+      "byteSize": 7377,
+      "sha256": "sha256:0557e09595a61f36d74fdce585764d81bce49b96c00712840d4ce406b1244e73"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p067/trellis-source.svg",
+      "byteSize": 936384,
+      "sha256": "sha256:ce824b3cae379ea659804cbc59a26064581798c2e097ffa605284a5a8d828080"
+    },
+    {
+      "path": "lirm-armature-22__basin-10-s3p00-n00-p067/trellis-source.png",
+      "byteSize": 125590,
+      "sha256": "sha256:39a6110787af6429c57c749112265d6dc994755ffd1a0cfc4d5b0dceb459cba7"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p025/gestalt-mask.pgm",
+      "byteSize": 16399,
+      "sha256": "sha256:b4c873987dc12ec0fc6234da90be724f9adf71cf2c966aaabf7cc625c8de6fb7"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p025/bundle.json",
+      "byteSize": 11579,
+      "sha256": "sha256:74490c66fad416e9ce099442c1a8c6bf8afd57ae51df00e3c704d33206fee385"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p025/clay-composite.svg",
+      "byteSize": 317030,
+      "sha256": "sha256:9bbee2ab3d8070f1201a4d0b728602ea019d73597d3b8c3679c4147fc0bdf9bf"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p025/clay-composite.png",
+      "byteSize": 27324,
+      "sha256": "sha256:337376d67f4c61978a6a0896917bf1bbd6c2e35ef228edc434a9d1adf3ac1f14"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p025/depth-composite.svg",
+      "byteSize": 326189,
+      "sha256": "sha256:ca9216dacb9f2fef2013b4d74397ecb055ba05f6225bc41306a28d8778f5e8c2"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p025/depth-composite.png",
+      "byteSize": 15347,
+      "sha256": "sha256:e703605f52fdac1b1766174578ca43c861aa906dde3bd8ff3e7cddcd0a9c834c"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p025/normal-composite.svg",
+      "byteSize": 322993,
+      "sha256": "sha256:1b209c5f962b5941ee435cf6fc752db5e21933538356659975d84df43833826d"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p025/normal-composite.png",
+      "byteSize": 33921,
+      "sha256": "sha256:5e5b6b021b7f0d58d42c6bbad6c4dec4ef21250642e8678b7da42e94c80b5071"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p025/mask-composite.svg",
+      "byteSize": 326145,
+      "sha256": "sha256:4aaa23f8cbb812504075a97c0e81cebaa3fad813d68ef32504b69249b57bb988"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p025/mask-composite.png",
+      "byteSize": 5211,
+      "sha256": "sha256:5cd933da533b6ff46af1e45fb672773ae0eb4b7c3f6e02e50a799dbfc4af68bc"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p025/semantic-composite.svg",
+      "byteSize": 348868,
+      "sha256": "sha256:f77fa7b3b00430d34247a8e1bc50d69bf81cd5177017efb5d288a5609d5bb23d"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p025/semantic-composite.png",
+      "byteSize": 6383,
+      "sha256": "sha256:0be618053dff0127c74739789fc4101a500c00694a845b1663b2db441ce63732"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p025/trellis-source.svg",
+      "byteSize": 570257,
+      "sha256": "sha256:9acc14908eeb32c5d97d1319bebfe28aa8e6f83a31fe87e1b5b7fa685b8af2a7"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p025/trellis-source.png",
+      "byteSize": 94832,
+      "sha256": "sha256:c8b603ead5b4a7334f8a7f92387625b6e5c55c7128d932e8d76bacf8c1e26ec2"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p046/gestalt-mask.pgm",
+      "byteSize": 16399,
+      "sha256": "sha256:b4c873987dc12ec0fc6234da90be724f9adf71cf2c966aaabf7cc625c8de6fb7"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p046/bundle.json",
+      "byteSize": 11579,
+      "sha256": "sha256:6a887fb778443d55bf07b0093d49e5975bb9d09b3a61cfe7e362ee9056329e76"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p046/clay-composite.svg",
+      "byteSize": 320540,
+      "sha256": "sha256:659aee20401e5179f92a83143251db646a5ddb452d1e970de2ac64b7f10cef80"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p046/clay-composite.png",
+      "byteSize": 27786,
+      "sha256": "sha256:e3e8f5b1448b6a0a205885e381fd3fde2167a0318d7b6509905a84118967cf68"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p046/depth-composite.svg",
+      "byteSize": 330052,
+      "sha256": "sha256:46a94d96e80df12fea9fdd6f355da40762a5aad3456ec56770f7e6ce2c927db7"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p046/depth-composite.png",
+      "byteSize": 15502,
+      "sha256": "sha256:9b85ac401ef01bee0792e60177c5a852c7e217521a36c809175b89f63f0c0178"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p046/normal-composite.svg",
+      "byteSize": 326961,
+      "sha256": "sha256:fc9e78e898ab525c06f8a9ae7ffb16200489e85b55ccea406098f9954dc25b8c"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p046/normal-composite.png",
+      "byteSize": 33423,
+      "sha256": "sha256:4c202df73482284a475d08e1b25d4943736afcb0595942bd432eef54e8f021b1"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p046/mask-composite.svg",
+      "byteSize": 330008,
+      "sha256": "sha256:36ea0d0e463ee7c745753b2f32b9ab1660235f54e0bf8f0cbc631a406d7b2a80"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p046/mask-composite.png",
+      "byteSize": 5303,
+      "sha256": "sha256:f6cd9a028d756ac0fa61091882fbd696887bfd43bc8b11deddb7fbc8d7ed32c6"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p046/semantic-composite.svg",
+      "byteSize": 353011,
+      "sha256": "sha256:cc4da919006ad34c5a07088afbd58d18333f72bdd70dae00d5e60b09a94d871f"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p046/semantic-composite.png",
+      "byteSize": 6827,
+      "sha256": "sha256:8080f9cee4175b7bfcae1d71b3ad71b0efaee21531d5dbee31fa0332b4bdbb39"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p046/trellis-source.svg",
+      "byteSize": 577787,
+      "sha256": "sha256:651539ae30e811629d9a607d3bbd0002f033b608ccb54342fd0c2786faa1c747"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p046/trellis-source.png",
+      "byteSize": 105146,
+      "sha256": "sha256:f954132f6a7050bd06cfa303a6b148332cc404d568235dbd4f329c332f651b60"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p067/gestalt-mask.pgm",
+      "byteSize": 16399,
+      "sha256": "sha256:b4c873987dc12ec0fc6234da90be724f9adf71cf2c966aaabf7cc625c8de6fb7"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p067/bundle.json",
+      "byteSize": 11579,
+      "sha256": "sha256:2bad8e867228fa0afe88dab8f9cce4be3ff4df766aa7f0b5ac1a892b847bac94"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p067/clay-composite.svg",
+      "byteSize": 348241,
+      "sha256": "sha256:0bc9f5f74f65abfe2855cc31471c12c6384034382dd7bdbb566277b2a58fe8e0"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p067/clay-composite.png",
+      "byteSize": 26191,
+      "sha256": "sha256:e5f8ba19fa112f4c505c3ab658be124fc13acbb9922185f2cc882abedfd24f34"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p067/depth-composite.svg",
+      "byteSize": 358395,
+      "sha256": "sha256:b62b0c76b47ce64d3382370a9381874c594cb21cf1baaa55064caf3c5cd4717d"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p067/depth-composite.png",
+      "byteSize": 16247,
+      "sha256": "sha256:1cda50b87adae3a40f98e802f50e8c93e57436b7843479f47b6cbcaf5de4e252"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p067/normal-composite.svg",
+      "byteSize": 356001,
+      "sha256": "sha256:d43e583bfe2e8022818419ea0b68ff9e25b1fd4699d8d06aa95309e0ad911e5a"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p067/normal-composite.png",
+      "byteSize": 31796,
+      "sha256": "sha256:f43387b912d9ade67a2852a6457deabca8f9d6b394e38dc2e92b5018d19a7e7c"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p067/mask-composite.svg",
+      "byteSize": 358351,
+      "sha256": "sha256:5178b48bc66038147f53c474e516445f14e523a13d661b527561cad0077602fb"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p067/mask-composite.png",
+      "byteSize": 5097,
+      "sha256": "sha256:9fb52b1e871607069ed12341427890663d3787ffedfc6b646f338fce779c480e"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p067/semantic-composite.svg",
+      "byteSize": 383304,
+      "sha256": "sha256:7fde1f4f812472895c778d773433fb8acd1ea0a8d2e24433c0554f834802f7f5"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p067/semantic-composite.png",
+      "byteSize": 6872,
+      "sha256": "sha256:982da19f3e649ea2b939290749064b1c7ab488ff769018dec497fb04e09f1451"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p067/trellis-source.svg",
+      "byteSize": 629111,
+      "sha256": "sha256:60d3cef8b57b227818b91ab322d31fa563efb3b21936601e3486128173f3277b"
+    },
+    {
+      "path": "lirm-armature-22__basin-15-s3p00-n00-p067/trellis-source.png",
+      "byteSize": 94480,
+      "sha256": "sha256:05b927d0e32a75af0d75e4de6172f8a4ed613c3fd55fa22a7ef4a25a7f879742"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p025/gestalt-mask.pgm",
+      "byteSize": 16399,
+      "sha256": "sha256:6fb9d5cb6b20c17973bba8ca954f2e58a9f46d2cf99ca3c19174d973b04d6675"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p025/bundle.json",
+      "byteSize": 11583,
+      "sha256": "sha256:399cdc032efeb40eebf41d6c25739f7ed714cba23d035666e92f74880235e8c9"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p025/clay-composite.svg",
+      "byteSize": 366205,
+      "sha256": "sha256:0901ae0815f1fb457b3e455bab9af26836db2e3a35a96b3152be4654970c7bee"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p025/clay-composite.png",
+      "byteSize": 27977,
+      "sha256": "sha256:69035260260e1e8f3fbcdfd5d52d628a471023141d3078710b075a9d76e193ba"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p025/depth-composite.svg",
+      "byteSize": 376112,
+      "sha256": "sha256:9a2b720e91b8c3ae2a584a0eb38840762b2d77a902c94c4bb337859e217635e3"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p025/depth-composite.png",
+      "byteSize": 16154,
+      "sha256": "sha256:48bbd0fcef520f6639989af7be04f481df3c9bf8929eb658b883b8320f205952"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p025/normal-composite.svg",
+      "byteSize": 372472,
+      "sha256": "sha256:8ba029d3c8224aaab2f6fd0186238032bb182aa22cbe06612fe971f32de7e5bc"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p025/normal-composite.png",
+      "byteSize": 35528,
+      "sha256": "sha256:c1122868225648443df684cc938263b400a1edecbada031dfe725f943ce288a8"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p025/mask-composite.svg",
+      "byteSize": 376068,
+      "sha256": "sha256:680ab8f42bca896b08e9a7062de8ec567f961767dd4b9d4b42a540f686ff0497"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p025/mask-composite.png",
+      "byteSize": 5008,
+      "sha256": "sha256:e9c2d17e0f376091574ad104875621f03c1da96ea9470dc7b2a4ef0d663c69cc"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p025/semantic-composite.svg",
+      "byteSize": 402276,
+      "sha256": "sha256:1f8e0702cd0b35641ab5886ce3ddb23ce29bcde755d510ff82e130de3c400d56"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p025/semantic-composite.png",
+      "byteSize": 5878,
+      "sha256": "sha256:9d7dfcb636dd5f0095cf85c8da915e5626332bd038b835a64e197f63420255d5"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p025/trellis-source.svg",
+      "byteSize": 659193,
+      "sha256": "sha256:edbd9f607ff4e857e7c88a219d8c2119da94debe55f993d323633b18b91b674f"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p025/trellis-source.png",
+      "byteSize": 54177,
+      "sha256": "sha256:35b758feec9787feddf226fcb55e7ca3ec909fbb7b1e99f65c80f3cebcfa28e0"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p046/gestalt-mask.pgm",
+      "byteSize": 16399,
+      "sha256": "sha256:6fb9d5cb6b20c17973bba8ca954f2e58a9f46d2cf99ca3c19174d973b04d6675"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p046/bundle.json",
+      "byteSize": 11583,
+      "sha256": "sha256:45bdf3014c1791fc0cbeb5671fd230a3370a54decd6439fdb209d591d66fdb79"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p046/clay-composite.svg",
+      "byteSize": 410435,
+      "sha256": "sha256:92f19b136a0e3af444fc6296153cd5e5913250e49103c1cade98077ba1abd853"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p046/clay-composite.png",
+      "byteSize": 29299,
+      "sha256": "sha256:dc63f904d849dae2662ccf8f1bb955762cc84837913236f003243f830d6b553b"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p046/depth-composite.svg",
+      "byteSize": 420583,
+      "sha256": "sha256:08d377473dbd3dc0e7bd14c633cf4c38b1de738dd0cc1ab1bf22333c44dd03aa"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p046/depth-composite.png",
+      "byteSize": 17145,
+      "sha256": "sha256:d79e4f5cc53f7d79755ee172e82bdd7a1dae1b460ab9dbc477dfc48361a9d066"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p046/normal-composite.svg",
+      "byteSize": 416145,
+      "sha256": "sha256:772808785bc8caed74c775cfc7e3af0ff20de2c7a19493e188ff8e24be9789d1"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p046/normal-composite.png",
+      "byteSize": 37352,
+      "sha256": "sha256:b302d688bb173d154b050595303fe65cfe98dc068baa6d278cd4df2df799fab7"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p046/mask-composite.svg",
+      "byteSize": 420539,
+      "sha256": "sha256:b43387c8c83f0b28af0122bf8016c186c0d8e249486a91c427d909b730e7dd54"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p046/mask-composite.png",
+      "byteSize": 5146,
+      "sha256": "sha256:c62ba64c99e96d7feeab925ebb00865e1a72b10cbcf5d4f7656417f4b0267476"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p046/semantic-composite.svg",
+      "byteSize": 449867,
+      "sha256": "sha256:c53c9bb58e4909609eeb5ec304c01814fe983b3ebffce6fa55ea98d1554bf0e9"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p046/semantic-composite.png",
+      "byteSize": 5974,
+      "sha256": "sha256:e190eec1b03b8ba398696f70700efd6548c0f9363303d9121563c534a3ad261c"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p046/trellis-source.svg",
+      "byteSize": 736508,
+      "sha256": "sha256:b9cc3c30a9b8d2659f4cf36e42402f72da8351cbce6665fb816279420b3456e1"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p046/trellis-source.png",
+      "byteSize": 108580,
+      "sha256": "sha256:5339064a157a54fc65f85e2ccafac505ce6e7377ec99eb49f66296f4953293b6"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p067/gestalt-mask.pgm",
+      "byteSize": 16399,
+      "sha256": "sha256:6fb9d5cb6b20c17973bba8ca954f2e58a9f46d2cf99ca3c19174d973b04d6675"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p067/bundle.json",
+      "byteSize": 11583,
+      "sha256": "sha256:9f2ed2f134851b164f738efb6edfb022e29eb649a79465d55fe760aba5a37961"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p067/clay-composite.svg",
+      "byteSize": 514013,
+      "sha256": "sha256:825a55f0305b9380c21de2a0264e3964eca64e0308036e561b7fa29a7fd3a633"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p067/clay-composite.png",
+      "byteSize": 33499,
+      "sha256": "sha256:0c60c02b5725c853edcaaacd42ff16edb66d2b04d16ee7cc952ed4876dec5024"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p067/depth-composite.svg",
+      "byteSize": 525879,
+      "sha256": "sha256:445ba0d79eb43251192a78b883f05cba2f159cfabf591e4b02729ae6561af877"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p067/depth-composite.png",
+      "byteSize": 22379,
+      "sha256": "sha256:ad7e0a37706ae1d4fcde0a35d7e295e3a016fcdccedf8fbaa034ba53ba540394"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p067/normal-composite.svg",
+      "byteSize": 521397,
+      "sha256": "sha256:9fc1edc4ff3498bfecc781b06d8ceb92146f42258526a2f8d88ccd9d3b60d77f"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p067/normal-composite.png",
+      "byteSize": 42349,
+      "sha256": "sha256:e3dc4f8aca39224c026eecfbb0c01f5331f75e66cd130c066c714a4af79e3685"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p067/mask-composite.svg",
+      "byteSize": 525835,
+      "sha256": "sha256:881ccb53e32b8289e0de002e105ee52934bda8b25e71236c8507dac23c1584d2"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p067/mask-composite.png",
+      "byteSize": 6406,
+      "sha256": "sha256:539259cac6bfde2e2069594e5f7bc0fb597a0768d295f0eb0648b9910f202e6d"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p067/semantic-composite.svg",
+      "byteSize": 562513,
+      "sha256": "sha256:a2e7460f2c30fc1f41822e693bd6a2fc171da71939b3ea072c1a534012780746"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p067/semantic-composite.png",
+      "byteSize": 8324,
+      "sha256": "sha256:92493128b0bedf15546cccfc12bfc9d26c084f7d03f74ae0b8fa2691c44cc086"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p067/trellis-source.svg",
+      "byteSize": 922475,
+      "sha256": "sha256:5e21c77e488f64e3f40c916fc673cce01434ab41de5deafb27f66d325d9f7ca4"
+    },
+    {
+      "path": "lirm-armature-22__basin-22-s1p50-n00-p067/trellis-source.png",
+      "byteSize": 136770,
+      "sha256": "sha256:6ef93d25185c1e0abc1e7d83cc5b7414c4e422c6de82332f436fbe23889a1dee"
+    },
+    {
+      "path": "lirm-armature-08__basin-10-s3p00-n00-p046/gestalt-mask.pgm",
+      "byteSize": 16399,
+      "sha256": "sha256:8eacbe26bf71b1fe3c4435904eaf7a85d20b8312c2bab6ab6052655a48b03513"
+    },
+    {
+      "path": "lirm-armature-08__basin-10-s3p00-n00-p046/bundle.json",
+      "byteSize": 11674,
+      "sha256": "sha256:b461d8776ec4da06223bb97dba44443263127d27d10b37cce3c472491f752a8a"
+    },
+    {
+      "path": "lirm-armature-08__basin-10-s3p00-n00-p046/clay-composite.svg",
+      "byteSize": 384551,
+      "sha256": "sha256:dd6dec82efd96766a16cd8d92ac29195d23a7b7ab6f6a6d678df8cc413d91c39"
+    },
+    {
+      "path": "lirm-armature-08__basin-10-s3p00-n00-p046/clay-composite.png",
+      "byteSize": 31260,
+      "sha256": "sha256:dc9508a3886e10dfef17515c6df9f5d46be0bb8f9a15c325e731129ca15705c6"
+    },
+    {
+      "path": "lirm-armature-08__basin-10-s3p00-n00-p046/depth-composite.svg",
+      "byteSize": 396251,
+      "sha256": "sha256:bfd90559801032a8fc18e12de85d2e701bee048d149e02aae61925a3cc30b0ca"
+    },
+    {
+      "path": "lirm-armature-08__basin-10-s3p00-n00-p046/depth-composite.png",
+      "byteSize": 17683,
+      "sha256": "sha256:eefb28d547920caeed947d26c2c1c5f411c115cbf26b48462d8a5a2579f6a0eb"
+    },
+    {
+      "path": "lirm-armature-08__basin-10-s3p00-n00-p046/normal-composite.svg",
+      "byteSize": 393291,
+      "sha256": "sha256:13502c77cf87b8f80b6d1a66576eb413601c69456e5970bc13ec6d42db62b42f"
+    },
+    {
+      "path": "lirm-armature-08__basin-10-s3p00-n00-p046/normal-composite.png",
+      "byteSize": 37911,
+      "sha256": "sha256:cc8218a67cba4d22cb6f8392146394130555265657db3098dc479f0ec92dcd05"
+    },
+    {
+      "path": "lirm-armature-08__basin-10-s3p00-n00-p046/mask-composite.svg",
+      "byteSize": 396207,
+      "sha256": "sha256:ecdbb2dfb990b134dbc5259c75502186b02b6645250ff3a854ca8c5f0de55cb2"
+    },
+    {
+      "path": "lirm-armature-08__basin-10-s3p00-n00-p046/mask-composite.png",
+      "byteSize": 5490,
+      "sha256": "sha256:798d13ef11caeb042f384deb7f940e61c2b951c1ef320fb682ab30519f3aa4a8"
+    },
+    {
+      "path": "lirm-armature-08__basin-10-s3p00-n00-p046/semantic-composite.svg",
+      "byteSize": 423810,
+      "sha256": "sha256:12d32d59c9db15a78e6133cf3d81c66b7d0eeabb3588d51d7827b9380416e09a"
+    },
+    {
+      "path": "lirm-armature-08__basin-10-s3p00-n00-p046/semantic-composite.png",
+      "byteSize": 8067,
+      "sha256": "sha256:8f9c30c13609674ee6e2b7ed01033feb11051fa71ef8ee64ab1d41d0ea181187"
+    },
+    {
+      "path": "lirm-armature-08__basin-10-s3p00-n00-p046/trellis-source.svg",
+      "byteSize": 688292,
+      "sha256": "sha256:500e5c92654e31f746b184ffb70c6ddace506753d3c4684b042fbb986b49311f"
+    },
+    {
+      "path": "lirm-armature-08__basin-10-s3p00-n00-p046/trellis-source.png",
+      "byteSize": 113083,
+      "sha256": "sha256:2c42d10f432b6bf268c580bcf3d49075186ec3ba228a92ed0526120ef0e6b782"
+    },
+    {
+      "path": "lirm-armature-16__basin-10-s3p00-n00-p046/gestalt-mask.pgm",
+      "byteSize": 16399,
+      "sha256": "sha256:8eacbe26bf71b1fe3c4435904eaf7a85d20b8312c2bab6ab6052655a48b03513"
+    },
+    {
+      "path": "lirm-armature-16__basin-10-s3p00-n00-p046/bundle.json",
+      "byteSize": 11630,
+      "sha256": "sha256:622a5f2c7f5ca362e93b6bcabb0bd3e7c03d6c02dee6ae7a6bd5ed7a4d64bcdf"
+    },
+    {
+      "path": "lirm-armature-16__basin-10-s3p00-n00-p046/clay-composite.svg",
+      "byteSize": 340930,
+      "sha256": "sha256:94205c3d6a295e62409625ac76ae55f66ae8c9348f369a0c591d1ef555e9874a"
+    },
+    {
+      "path": "lirm-armature-16__basin-10-s3p00-n00-p046/clay-composite.png",
+      "byteSize": 27921,
+      "sha256": "sha256:c35a8fd983ea47ae2b1c711449697da5aba32f13bd8a1fc9f56a22c8351fcbe1"
+    },
+    {
+      "path": "lirm-armature-16__basin-10-s3p00-n00-p046/depth-composite.svg",
+      "byteSize": 350600,
+      "sha256": "sha256:20c38dccc0d4c62f04c4923dc9f2f931e928aaccee1754a10328f0510c3d3184"
+    },
+    {
+      "path": "lirm-armature-16__basin-10-s3p00-n00-p046/depth-composite.png",
+      "byteSize": 15202,
+      "sha256": "sha256:870e9a562a73bc8975fe80e8cd40ebc619afaa04de136fbd8e1c6044290cbe04"
+    },
+    {
+      "path": "lirm-armature-16__basin-10-s3p00-n00-p046/normal-composite.svg",
+      "byteSize": 347715,
+      "sha256": "sha256:b14f31ab871fbb537ead34798cd6b80bd518f6e124b247d0b35b8be93ee95bc9"
+    },
+    {
+      "path": "lirm-armature-16__basin-10-s3p00-n00-p046/normal-composite.png",
+      "byteSize": 33298,
+      "sha256": "sha256:a08c4abf1bfd99d64ce9e42315472a27fa3e9118f1e89b89ff8e9d989fc3d0f8"
+    },
+    {
+      "path": "lirm-armature-16__basin-10-s3p00-n00-p046/mask-composite.svg",
+      "byteSize": 350556,
+      "sha256": "sha256:ac3eb89c7a351c6382850ea7a4461d08dbf80bf212fca656ba5fa577f5584848"
+    },
+    {
+      "path": "lirm-armature-16__basin-10-s3p00-n00-p046/mask-composite.png",
+      "byteSize": 5015,
+      "sha256": "sha256:2cd8f5b07e6d98e43e45b581f5b6fbe83280ae933a5bd1a7c0868193d195697f"
+    },
+    {
+      "path": "lirm-armature-16__basin-10-s3p00-n00-p046/semantic-composite.svg",
+      "byteSize": 374984,
+      "sha256": "sha256:8f888e5849450b756727b14c9922ddbce996ea2e1307a77176d52cecfe9559a2"
+    },
+    {
+      "path": "lirm-armature-16__basin-10-s3p00-n00-p046/semantic-composite.png",
+      "byteSize": 7560,
+      "sha256": "sha256:7ce9bccc49effdc2ade6970510573a8115c6615f353fd699bb6e16aaf7bbdc15"
+    },
+    {
+      "path": "lirm-armature-16__basin-10-s3p00-n00-p046/trellis-source.svg",
+      "byteSize": 613173,
+      "sha256": "sha256:a5969a50d9f9e7f600bf649d5af5438771a30fb571825095e9c493de76293f58"
+    },
+    {
+      "path": "lirm-armature-16__basin-10-s3p00-n00-p046/trellis-source.png",
+      "byteSize": 95109,
+      "sha256": "sha256:d47f101d2dd83bdaaac68d9b4fe55c02ac94a5b946bf92011d3c85735637fcc8"
+    },
+    {
+      "path": "lirm-armature-24__basin-10-s3p00-n00-p046/gestalt-mask.pgm",
+      "byteSize": 16399,
+      "sha256": "sha256:8eacbe26bf71b1fe3c4435904eaf7a85d20b8312c2bab6ab6052655a48b03513"
+    },
+    {
+      "path": "lirm-armature-24__basin-10-s3p00-n00-p046/bundle.json",
+      "byteSize": 14208,
+      "sha256": "sha256:4febd75ae19fc72798b8b3af58b2aa034b9c97935c20c03a80af1b234b84bb1b"
+    },
+    {
+      "path": "lirm-armature-24__basin-10-s3p00-n00-p046/clay-composite.svg",
+      "byteSize": 465879,
+      "sha256": "sha256:01d6c05e44a090fd2a2f9330204ae19216062eddda94e3be739bf40092f6d4f0"
+    },
+    {
+      "path": "lirm-armature-24__basin-10-s3p00-n00-p046/clay-composite.png",
+      "byteSize": 35377,
+      "sha256": "sha256:82331e1876691dda7c0284f80bd507341c774fb37b1882d705e53659e90b8de6"
+    },
+    {
+      "path": "lirm-armature-24__basin-10-s3p00-n00-p046/depth-composite.svg",
+      "byteSize": 479706,
+      "sha256": "sha256:ccc236ac9b095ae0eacf649d7027936459b0c8f405baa9f38fce2f99be96cb9d"
+    },
+    {
+      "path": "lirm-armature-24__basin-10-s3p00-n00-p046/depth-composite.png",
+      "byteSize": 20245,
+      "sha256": "sha256:4327d618d2f2d7f370295c5990c0bb80a2a6ecb5e3df6f1dfdec93fc2a57df1a"
+    },
+    {
+      "path": "lirm-armature-24__basin-10-s3p00-n00-p046/normal-composite.svg",
+      "byteSize": 476452,
+      "sha256": "sha256:e7e971f1956e3190eb619d94d88fd300adf550c0a765d983b7ef5dd053dac2a6"
+    },
+    {
+      "path": "lirm-armature-24__basin-10-s3p00-n00-p046/normal-composite.png",
+      "byteSize": 42289,
+      "sha256": "sha256:6c653f460ad37ead4f7e3208ba18c7347068a54ec1cf5a33d66cfb4d78963832"
+    },
+    {
+      "path": "lirm-armature-24__basin-10-s3p00-n00-p046/mask-composite.svg",
+      "byteSize": 479662,
+      "sha256": "sha256:be985fbdfcd0cdc80b7190988fca3028a4b26d1e5c68d0695a3f5fae10a4928a"
+    },
+    {
+      "path": "lirm-armature-24__basin-10-s3p00-n00-p046/mask-composite.png",
+      "byteSize": 5616,
+      "sha256": "sha256:72e82feb8f8e6aa9000b1cc06e581408ec6aaca1974c90307291d606995eb1d7"
+    },
+    {
+      "path": "lirm-armature-24__basin-10-s3p00-n00-p046/semantic-composite.svg",
+      "byteSize": 513075,
+      "sha256": "sha256:9e957fd42fddcf4089414cbf7c221fb375e25fb27a7567b2b1499e6d065f7926"
+    },
+    {
+      "path": "lirm-armature-24__basin-10-s3p00-n00-p046/semantic-composite.png",
+      "byteSize": 8846,
+      "sha256": "sha256:960bdbc4b2e10665ce93d18bfa584e79f1b2222267212fb73ede8a5746157156"
+    },
+    {
+      "path": "lirm-armature-24__basin-10-s3p00-n00-p046/trellis-source.svg",
+      "byteSize": 833208,
+      "sha256": "sha256:b724c29375dd959bdaaeffac40b0e5b8bf43e8b9ca157da1e9f0580f3d8ce214"
+    },
+    {
+      "path": "lirm-armature-24__basin-10-s3p00-n00-p046/trellis-source.png",
+      "byteSize": 128244,
+      "sha256": "sha256:b3dd3e2c46329de7bc5dba7ac2cc2b56959bbaaada6522966720e92ac58c768f"
+    }
+  ]
+}

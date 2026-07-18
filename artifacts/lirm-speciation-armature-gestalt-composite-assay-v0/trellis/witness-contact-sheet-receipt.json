@@ -1,0 +1,132 @@
+{
+  "schema": "kaminos.lirm-speciation-gestalt-trellis-witness-contact-sheet.v0",
+  "status": "complete-inspected",
+  "visualInspectionClaim": "All five GLBs remain coherent across left, front, right, and opposite azimuth witnesses. No blank, flat-card, duplicated-view, or catastrophic hidden-side collapse is visible. Basin 03's prompt pair remains related but distinct, while basins 10, 15, and 22 preserve different mass, stance, and silhouette regimes in 3D.",
+  "plan": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/trellis/witness-plan.json",
+    "bytes": 33897,
+    "sha256": "sha256:a6fe16903d9c8ce099eb396321564c0d5c502770cf8ab8adeb28a37ee657423b"
+  },
+  "completion": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/trellis/witness-completion-report.json",
+    "bytes": 45368,
+    "sha256": "sha256:75aae5a8907818f58300a82023d4bed424c827df8759d70adb553bc10b51ecab"
+  },
+  "manifest": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/trellis/witness-contact-sheet-inputs.json",
+    "bytes": 6223,
+    "sha256": "sha256:dababd5ea1a43e62395a0c7f2959d3427f45bdcc9202125fdcab25892371a17d"
+  },
+  "assembler": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-trellis-guidance-pressure-assay-v1/assemble-contact-sheet.swift",
+    "bytes": 3443,
+    "sha256": "sha256:6c8bc6704d21be850c552c8ca12f3073e675cb550b427840ffcf4cd04ca2f3db"
+  },
+  "sheet": {
+    "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-speciation-armature-gestalt-composite-assay-v0/trellis/gestalt-trellis-witness-contact-sheet.png",
+    "bytes": 3289804,
+    "sha256": "sha256:6029fd9fdb902421de863cabd0c358722a83d5d82b93014d0e18569ed63469c0"
+  },
+  "sourceEvidence": [
+    {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046/left/render.png",
+      "bytes": 734385,
+      "sha256": "sha256:6f59278dc389d0908dac9d96be1f4ac41effaa32544b85faf099544195cd9d7c"
+    },
+    {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046/front/render.png",
+      "bytes": 696542,
+      "sha256": "sha256:8b01fa36b77d43a7fb3a964fdd57a15cac8939ecca4a42dd9fe0c2a93c5de4b5"
+    },
+    {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046/right/render.png",
+      "bytes": 755500,
+      "sha256": "sha256:7f60ac7aadf023dd03c8ae6f2396c3e942a7cafcfdef4f1119b2188f48416070"
+    },
+    {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-preserve-gestalt-seed717046/opposite/render.png",
+      "bytes": 704332,
+      "sha256": "sha256:253a7eaeb542958b59f41a26b58a1f71e917cc60dbe84954aa45baf18708b6f0"
+    },
+    {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046/left/render.png",
+      "bytes": 731687,
+      "sha256": "sha256:9d416918f837f2df6ddcc5ca92e37adcc2c500592aee6770e7e2c7ad90a9bd1c"
+    },
+    {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046/front/render.png",
+      "bytes": 694115,
+      "sha256": "sha256:0ea34b26a00e1e3ed1e14826a12114b99fd9c995ab8894aa2a34d3a1a4392cf9"
+    },
+    {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046/right/render.png",
+      "bytes": 752593,
+      "sha256": "sha256:bdff7834e0be79e36c86bccbc5e65b681906e9459b44944d93f8438fa6615f62"
+    },
+    {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-03-s3p00-n00-p046-lineage-seed-seed717046/opposite/render.png",
+      "bytes": 674808,
+      "sha256": "sha256:5372430cc9ed4a8b2ec460f817a5682eeb9e44f6ede53dad8c70d1211021c56d"
+    },
+    {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046/left/render.png",
+      "bytes": 743821,
+      "sha256": "sha256:ce32dcd04132869fa4cde6491efc065b9629c0e268693def4ed499aedbc89af9"
+    },
+    {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046/front/render.png",
+      "bytes": 704853,
+      "sha256": "sha256:9d086ac95731335b2e54bc463ec3ff350d7cd4d6973e88df6e5ecc96cf1a1f7e"
+    },
+    {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046/right/render.png",
+      "bytes": 763516,
+      "sha256": "sha256:baf0aa8839f7fe5667aa557df932c05702b2a2c544eb0479145264374c838217"
+    },
+    {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-10-s3p00-n00-p046-lineage-seed-seed717046/opposite/render.png",
+      "bytes": 671885,
+      "sha256": "sha256:be63d5b3e85e57a70ac2d8a3a17fb91af58e78a13732a62f3883129ade3ac22e"
+    },
+    {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046/left/render.png",
+      "bytes": 701151,
+      "sha256": "sha256:f7d750b7f88126164fe2da55ab55ee8f9a98c7f41d088c583391f3948baea1bd"
+    },
+    {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046/front/render.png",
+      "bytes": 684014,
+      "sha256": "sha256:90ad04b58b4ad12c1e6c310db542e4001a0a5ba41016b7d973d59ae716d74bb2"
+    },
+    {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046/right/render.png",
+      "bytes": 716090,
+      "sha256": "sha256:29a419ba1c6b5a08536380b2c1036b821c8bace236c56383d7b57698141e67e6"
+    },
+    {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-15-s3p00-n00-p046-lineage-seed-seed717046/opposite/render.png",
+      "bytes": 661077,
+      "sha256": "sha256:62113ae664ab98473daf34c78d69b87f1c582c07a3741f09f293bb22fc6e0c56"
+    },
+    {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046/left/render.png",
+      "bytes": 679438,
+      "sha256": "sha256:dc55f5678f259ccd7dae2c3c9f1eb40600c5de62a7ab6019a51f74024e4f1cf9"
+    },
+    {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046/front/render.png",
+      "bytes": 655214,
+      "sha256": "sha256:a7ed5b872b9883f187996a975235a8952d76a4a797e28b0d0abc5409cd5d47a7"
+    },
+    {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046/right/render.png",
+      "bytes": 696293,
+      "sha256": "sha256:3b7bf42c00cee10a0cc2ff360ef0ddeb5c874f9db421f16fc7c90caa9d9c9dad"
+    },
+    {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-speciation-gestalt-composite-trellis-20260718/witness/lirm-armature-22__basin-22-s1p50-n00-p046-lineage-seed-seed717046/opposite/render.png",
+      "bytes": 656401,
+      "sha256": "sha256:1cec7c49921c164871e7978f0f991d22a9835c8c649499fec904b5a5b81add43"
+    }
+  ]
+}
