@@ -1,0 +1,63 @@
+{
+  "schema": "kaminos.lirm-silhouette-morphology-basin-trellis-submission.v1",
+  "planPath": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/trellis-plan.json",
+  "submittedCellCount": 5,
+  "submissionFailureCount": 0,
+  "cells": [
+    {
+      "cellId": "basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032.png",
+        "sha256": "3b257228b6de32796b0adc758526710b9d0dc4f91dda18956c736eececa785ae",
+        "bytes": 241871
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/output.glb",
+      "jobId": "a549cbc54993"
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032",
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032.png",
+        "sha256": "b84a198f7d90a4b1ec062a4df94a64c76530238b9ff87df692d500f6ee84f283",
+        "bytes": 180060
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/output.glb",
+      "jobId": "24f9ccf6da5b"
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032.png",
+        "sha256": "1d9bff00c8d4a1527add5213f0d3745a1f07c02a53673a2f863e50a559889ce0",
+        "bytes": 252512
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/output.glb",
+      "jobId": "9f265ecee317"
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032",
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032.png",
+        "sha256": "79d2701a87d929f85dd270b8485afbc5d5c3508d8a99ed2269a66571154e3f04",
+        "bytes": 160795
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/output.glb",
+      "jobId": "74bafb248743"
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "input": {
+        "path": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717032.png",
+        "sha256": "0181430c1ebaa338eca3b74990da9e3223f7984b0da2fb65c0fe58fa068d6e1c",
+        "bytes": 262095
+      },
+      "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-trellis-v1-20260717/basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717032/output.glb",
+      "jobId": "23ae3d019281"
+    }
+  ]
+}

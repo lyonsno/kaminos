@@ -1,0 +1,827 @@
+{
+  "schema": "kaminos.lirm-silhouette-imagegen-basin-assay-report.v1",
+  "generatedAt": "2026-07-18T04:06:02Z",
+  "planPath": "/private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/plan.json",
+  "planSha256": "94aaafc181587f82494bf34c9f0df803605fd3c00b88cc37c7fc38195538760f",
+  "plannedCellCount": 24,
+  "verifiedCellCount": 24,
+  "allVerified": true,
+  "cells": [
+    {
+      "cellId": "basin-03-s3p00-n00-lineage-seed-clay-normal-seed717032",
+      "jobId": "e430647bbab7",
+      "shape": "basin-03-s3p00-n00",
+      "stance": "lineage-seed",
+      "referenceSet": "clay-normal",
+      "seed": 717032,
+      "verified": true,
+      "failureCodes": [],
+      "failurePhase": null,
+      "lastTrustworthyEvidence": "verified_generated_output",
+      "observedGreenroomStatus": "done",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/e430647bbab7/request.json",
+      "requestSha256": "06f9cd5c3eb79b3704ffb30c37749cf285b82ce9cccea2f1c7b5b6480156bd38",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/e430647bbab7/receipt.json",
+      "receiptSha256": "cb48d261341fb06e6f0a6c4f356b1f8a6f9bb5accce1c477cefe79ba414db3de",
+      "effectiveRouteIdentity": {
+        "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+        "route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-03-s3p00-n00/clay.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-03-s3p00-n00/normal.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/prompts/lineage-seed.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-03-s3p00-n00-lineage-seed-clay-normal-seed717032/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717032 --mlx-cache-limit-gb 48"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-03-s3p00-n00-lineage-seed-clay-normal-seed717032/output.png",
+        "sha256": "15d6c06db0e76e4a2943f203c147d788755140853da93a64e2bf39e39c5c1644",
+        "bytes": 261471,
+        "visual": {
+          "width": 512,
+          "height": 512,
+          "colorType": 2,
+          "sampledUniqueRgb": 4391,
+          "sampledDynamicRange": 255,
+          "nonblank": true
+        }
+      }
+    },
+    {
+      "cellId": "basin-03-s3p00-n00-lineage-seed-clay-normal-seed717033",
+      "jobId": "e9e7ddca35bf",
+      "shape": "basin-03-s3p00-n00",
+      "stance": "lineage-seed",
+      "referenceSet": "clay-normal",
+      "seed": 717033,
+      "verified": true,
+      "failureCodes": [],
+      "failurePhase": null,
+      "lastTrustworthyEvidence": "verified_generated_output",
+      "observedGreenroomStatus": "done",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/e9e7ddca35bf/request.json",
+      "requestSha256": "b28ef5d2bcbee17e577b5d2c96c5223bea78df71ddbdce424133c2b738067b78",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/e9e7ddca35bf/receipt.json",
+      "receiptSha256": "f8003cac6250e61466cafff54688c7ae51b854af99cd032121c17b669345918b",
+      "effectiveRouteIdentity": {
+        "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+        "route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-03-s3p00-n00/clay.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-03-s3p00-n00/normal.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/prompts/lineage-seed.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-03-s3p00-n00-lineage-seed-clay-normal-seed717033/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717033 --mlx-cache-limit-gb 48"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-03-s3p00-n00-lineage-seed-clay-normal-seed717033/output.png",
+        "sha256": "9e986bbc290865225262338c309d50b0d94df31cc92f27e4b3fe14496f96eae1",
+        "bytes": 209088,
+        "visual": {
+          "width": 512,
+          "height": 512,
+          "colorType": 2,
+          "sampledUniqueRgb": 4245,
+          "sampledDynamicRange": 255,
+          "nonblank": true
+        }
+      }
+    },
+    {
+      "cellId": "basin-03-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032",
+      "jobId": "4ad190e80755",
+      "shape": "basin-03-s3p00-n00",
+      "stance": "non-tetrapod-crawler",
+      "referenceSet": "clay-normal",
+      "seed": 717032,
+      "verified": true,
+      "failureCodes": [],
+      "failurePhase": null,
+      "lastTrustworthyEvidence": "verified_generated_output",
+      "observedGreenroomStatus": "done",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/4ad190e80755/request.json",
+      "requestSha256": "85b79c11e8805cda3c492c3ecf010ebd1aa6e5c8f84887606ef20d0e4d98b1f9",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/4ad190e80755/receipt.json",
+      "receiptSha256": "a30b71bf2187e706941308089c9c5e6ef9b74512f83b2110426cb23f97b5b219",
+      "effectiveRouteIdentity": {
+        "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+        "route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-03-s3p00-n00/clay.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-03-s3p00-n00/normal.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/prompts/non-tetrapod-crawler.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-03-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717032 --mlx-cache-limit-gb 48"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-03-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/output.png",
+        "sha256": "6dc0f725518e42cf204ca08869e984c38f9e2dd0f593d453c75d48cfe31573c7",
+        "bytes": 246051,
+        "visual": {
+          "width": 512,
+          "height": 512,
+          "colorType": 2,
+          "sampledUniqueRgb": 3740,
+          "sampledDynamicRange": 255,
+          "nonblank": true
+        }
+      }
+    },
+    {
+      "cellId": "basin-03-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717033",
+      "jobId": "ec26ae73743b",
+      "shape": "basin-03-s3p00-n00",
+      "stance": "non-tetrapod-crawler",
+      "referenceSet": "clay-normal",
+      "seed": 717033,
+      "verified": true,
+      "failureCodes": [],
+      "failurePhase": null,
+      "lastTrustworthyEvidence": "verified_generated_output",
+      "observedGreenroomStatus": "done",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/ec26ae73743b/request.json",
+      "requestSha256": "196bf81d35db18ed2bdbd81f89939bf6710cc643d7c25f7706f4e920550ad8c0",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/ec26ae73743b/receipt.json",
+      "receiptSha256": "2fc888d49d2708da6bb7c7a89a71413a945acb902c50ef69c104a2e7dfdecaf3",
+      "effectiveRouteIdentity": {
+        "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+        "route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-03-s3p00-n00/clay.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-03-s3p00-n00/normal.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/prompts/non-tetrapod-crawler.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-03-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717033/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717033 --mlx-cache-limit-gb 48"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-03-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717033/output.png",
+        "sha256": "1e4376825280f2db53b73054c40979dbf25fd972502b7d62fec5e68619ce8050",
+        "bytes": 182657,
+        "visual": {
+          "width": 512,
+          "height": 512,
+          "colorType": 2,
+          "sampledUniqueRgb": 3041,
+          "sampledDynamicRange": 254,
+          "nonblank": true
+        }
+      }
+    },
+    {
+      "cellId": "basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "jobId": "0808ed4a8802",
+      "shape": "basin-03-s3p00-n00",
+      "stance": "silhouette-metabolizer",
+      "referenceSet": "clay-normal",
+      "seed": 717032,
+      "verified": true,
+      "failureCodes": [],
+      "failurePhase": null,
+      "lastTrustworthyEvidence": "verified_generated_output",
+      "observedGreenroomStatus": "done",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/0808ed4a8802/request.json",
+      "requestSha256": "659efec0bcce598475a3067ec6c81b6d9a7fe4b24abbc873121546207661f673",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/0808ed4a8802/receipt.json",
+      "receiptSha256": "dc65443d125814e217932267f6f6f69c6358816a266e5ae8f22b1f50b133e75d",
+      "effectiveRouteIdentity": {
+        "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+        "route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-03-s3p00-n00/clay.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-03-s3p00-n00/normal.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/prompts/silhouette-metabolizer.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717032 --mlx-cache-limit-gb 48"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/output.png",
+        "sha256": "3b257228b6de32796b0adc758526710b9d0dc4f91dda18956c736eececa785ae",
+        "bytes": 241871,
+        "visual": {
+          "width": 512,
+          "height": 512,
+          "colorType": 2,
+          "sampledUniqueRgb": 4143,
+          "sampledDynamicRange": 255,
+          "nonblank": true
+        }
+      }
+    },
+    {
+      "cellId": "basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717033",
+      "jobId": "14904d82e6a3",
+      "shape": "basin-03-s3p00-n00",
+      "stance": "silhouette-metabolizer",
+      "referenceSet": "clay-normal",
+      "seed": 717033,
+      "verified": true,
+      "failureCodes": [],
+      "failurePhase": null,
+      "lastTrustworthyEvidence": "verified_generated_output",
+      "observedGreenroomStatus": "done",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/14904d82e6a3/request.json",
+      "requestSha256": "160f38f63b1323ead934d254eb253b7b233eae580d8ff61758d986ea10c5089b",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/14904d82e6a3/receipt.json",
+      "receiptSha256": "6f4510c4e8a9c038dd49a70d1fd879a244c72952113be2585df8f94d10ed94a6",
+      "effectiveRouteIdentity": {
+        "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+        "route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-03-s3p00-n00/clay.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-03-s3p00-n00/normal.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/prompts/silhouette-metabolizer.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717033/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717033 --mlx-cache-limit-gb 48"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717033/output.png",
+        "sha256": "02906c468dfb1a1ce3dc2a88c5f18bbf15b03f707c252aa8e7e07b66aea11dce",
+        "bytes": 209663,
+        "visual": {
+          "width": 512,
+          "height": 512,
+          "colorType": 2,
+          "sampledUniqueRgb": 3624,
+          "sampledDynamicRange": 253,
+          "nonblank": true
+        }
+      }
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-lineage-seed-clay-normal-seed717032",
+      "jobId": "a3a960f7ef81",
+      "shape": "basin-10-s3p00-n00",
+      "stance": "lineage-seed",
+      "referenceSet": "clay-normal",
+      "seed": 717032,
+      "verified": true,
+      "failureCodes": [],
+      "failurePhase": null,
+      "lastTrustworthyEvidence": "verified_generated_output",
+      "observedGreenroomStatus": "done",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/a3a960f7ef81/request.json",
+      "requestSha256": "97e455a656035941afdf3f3a7e1bd0423a6ca09d1d5980406c03a391a528dbb2",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/a3a960f7ef81/receipt.json",
+      "receiptSha256": "9950f50bd32be84b206b5a4963b129b1aa82520568cc1892e8ac877ef30f7d09",
+      "effectiveRouteIdentity": {
+        "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+        "route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-10-s3p00-n00/clay.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-10-s3p00-n00/normal.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/prompts/lineage-seed.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-10-s3p00-n00-lineage-seed-clay-normal-seed717032/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717032 --mlx-cache-limit-gb 48"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-10-s3p00-n00-lineage-seed-clay-normal-seed717032/output.png",
+        "sha256": "ee5c755031fa60865215d08e19996ae7b2b45af21b634cf1ca83f2e483b7d0bf",
+        "bytes": 219142,
+        "visual": {
+          "width": 512,
+          "height": 512,
+          "colorType": 2,
+          "sampledUniqueRgb": 3690,
+          "sampledDynamicRange": 255,
+          "nonblank": true
+        }
+      }
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-lineage-seed-clay-normal-seed717033",
+      "jobId": "9c5632f11523",
+      "shape": "basin-10-s3p00-n00",
+      "stance": "lineage-seed",
+      "referenceSet": "clay-normal",
+      "seed": 717033,
+      "verified": true,
+      "failureCodes": [],
+      "failurePhase": null,
+      "lastTrustworthyEvidence": "verified_generated_output",
+      "observedGreenroomStatus": "done",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/9c5632f11523/request.json",
+      "requestSha256": "55561e54d75017a6f103e188bcafe1800cfc1ad2cab4dc01fb437f891ccb3873",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/9c5632f11523/receipt.json",
+      "receiptSha256": "e68ff1c0dff555a177019a87ea8782a423ded743eca11c272020c42749e13e6e",
+      "effectiveRouteIdentity": {
+        "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+        "route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-10-s3p00-n00/clay.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-10-s3p00-n00/normal.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/prompts/lineage-seed.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-10-s3p00-n00-lineage-seed-clay-normal-seed717033/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717033 --mlx-cache-limit-gb 48"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-10-s3p00-n00-lineage-seed-clay-normal-seed717033/output.png",
+        "sha256": "a11f4c37b14c756f0f966c00d5f19bf60f091b49dc46996ff4b570c54de97239",
+        "bytes": 187770,
+        "visual": {
+          "width": 512,
+          "height": 512,
+          "colorType": 2,
+          "sampledUniqueRgb": 3756,
+          "sampledDynamicRange": 253,
+          "nonblank": true
+        }
+      }
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032",
+      "jobId": "6d38a338590a",
+      "shape": "basin-10-s3p00-n00",
+      "stance": "non-tetrapod-crawler",
+      "referenceSet": "clay-normal",
+      "seed": 717032,
+      "verified": true,
+      "failureCodes": [],
+      "failurePhase": null,
+      "lastTrustworthyEvidence": "verified_generated_output",
+      "observedGreenroomStatus": "done",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/6d38a338590a/request.json",
+      "requestSha256": "4ed500a143504941e405ab54a0ff9cfe8c29a0835d5007f7ffa5f775439f48a1",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/6d38a338590a/receipt.json",
+      "receiptSha256": "9801538ab5752e4ffe834ae5b858def6ab8ca10659d91d1d282ccd64e0c812ef",
+      "effectiveRouteIdentity": {
+        "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+        "route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-10-s3p00-n00/clay.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-10-s3p00-n00/normal.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/prompts/non-tetrapod-crawler.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717032 --mlx-cache-limit-gb 48"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/output.png",
+        "sha256": "b84a198f7d90a4b1ec062a4df94a64c76530238b9ff87df692d500f6ee84f283",
+        "bytes": 180060,
+        "visual": {
+          "width": 512,
+          "height": 512,
+          "colorType": 2,
+          "sampledUniqueRgb": 2811,
+          "sampledDynamicRange": 248,
+          "nonblank": true
+        }
+      }
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717033",
+      "jobId": "460063e5eb06",
+      "shape": "basin-10-s3p00-n00",
+      "stance": "non-tetrapod-crawler",
+      "referenceSet": "clay-normal",
+      "seed": 717033,
+      "verified": true,
+      "failureCodes": [],
+      "failurePhase": null,
+      "lastTrustworthyEvidence": "verified_generated_output",
+      "observedGreenroomStatus": "done",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/460063e5eb06/request.json",
+      "requestSha256": "a23a026a68cdead412e7c5ece896a359b52b1d4dcca76f8ec72465ca18357766",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/460063e5eb06/receipt.json",
+      "receiptSha256": "6f91a2f4708eac1e473d87bf078c42b58ec8a9650114df70f62223bd55c0b22e",
+      "effectiveRouteIdentity": {
+        "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+        "route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-10-s3p00-n00/clay.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-10-s3p00-n00/normal.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/prompts/non-tetrapod-crawler.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717033/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717033 --mlx-cache-limit-gb 48"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717033/output.png",
+        "sha256": "c92ff818e508c0e7d178bacab7c79ce69a3b02dc132620934209be1868b3d7e1",
+        "bytes": 172958,
+        "visual": {
+          "width": 512,
+          "height": 512,
+          "colorType": 2,
+          "sampledUniqueRgb": 3081,
+          "sampledDynamicRange": 252,
+          "nonblank": true
+        }
+      }
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "jobId": "f1f3b122ed31",
+      "shape": "basin-10-s3p00-n00",
+      "stance": "silhouette-metabolizer",
+      "referenceSet": "clay-normal",
+      "seed": 717032,
+      "verified": true,
+      "failureCodes": [],
+      "failurePhase": null,
+      "lastTrustworthyEvidence": "verified_generated_output",
+      "observedGreenroomStatus": "done",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/f1f3b122ed31/request.json",
+      "requestSha256": "c0f315e9c7315dc9bee69b9f74404a1d5a3c07a0594724553bb14bffbd22ff43",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/f1f3b122ed31/receipt.json",
+      "receiptSha256": "5b7e70232c29ff3373835f5a2ba95dd5985ea29f0635a3f88adf213ac81e8147",
+      "effectiveRouteIdentity": {
+        "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+        "route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-10-s3p00-n00/clay.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-10-s3p00-n00/normal.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/prompts/silhouette-metabolizer.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717032 --mlx-cache-limit-gb 48"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/output.png",
+        "sha256": "1d9bff00c8d4a1527add5213f0d3745a1f07c02a53673a2f863e50a559889ce0",
+        "bytes": 252512,
+        "visual": {
+          "width": 512,
+          "height": 512,
+          "colorType": 2,
+          "sampledUniqueRgb": 4736,
+          "sampledDynamicRange": 255,
+          "nonblank": true
+        }
+      }
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717033",
+      "jobId": "1e8b69ce77f2",
+      "shape": "basin-10-s3p00-n00",
+      "stance": "silhouette-metabolizer",
+      "referenceSet": "clay-normal",
+      "seed": 717033,
+      "verified": true,
+      "failureCodes": [],
+      "failurePhase": null,
+      "lastTrustworthyEvidence": "verified_generated_output",
+      "observedGreenroomStatus": "done",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/1e8b69ce77f2/request.json",
+      "requestSha256": "8ebb9ea0f80ff9b7551135d742651d1e9964dd369074658eb96fc9619e277fdf",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/1e8b69ce77f2/receipt.json",
+      "receiptSha256": "1819fe32a537582e8a4c69f21e25d6bdbb46c4b881609fc3b873dc76b749d7e0",
+      "effectiveRouteIdentity": {
+        "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+        "route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-10-s3p00-n00/clay.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-10-s3p00-n00/normal.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/prompts/silhouette-metabolizer.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717033/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717033 --mlx-cache-limit-gb 48"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717033/output.png",
+        "sha256": "acc699d269d4fe6a9016bcf262cdcd5ea0f6ae53ed9b4fd042e40fdb02b0b52e",
+        "bytes": 228944,
+        "visual": {
+          "width": 512,
+          "height": 512,
+          "colorType": 2,
+          "sampledUniqueRgb": 4233,
+          "sampledDynamicRange": 253,
+          "nonblank": true
+        }
+      }
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-lineage-seed-clay-normal-seed717032",
+      "jobId": "57e37817411b",
+      "shape": "basin-15-s3p00-n00",
+      "stance": "lineage-seed",
+      "referenceSet": "clay-normal",
+      "seed": 717032,
+      "verified": true,
+      "failureCodes": [],
+      "failurePhase": null,
+      "lastTrustworthyEvidence": "verified_generated_output",
+      "observedGreenroomStatus": "done",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/57e37817411b/request.json",
+      "requestSha256": "17ca395abcb6351462cbe707b70eb05f7b4477f5339eb632438a26663eaa3f9a",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/57e37817411b/receipt.json",
+      "receiptSha256": "d418ea47e1f30d3eee657cc4fba5b39f8c582050f0241e99d8713844fbff82d5",
+      "effectiveRouteIdentity": {
+        "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+        "route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-15-s3p00-n00/clay.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-15-s3p00-n00/normal.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/prompts/lineage-seed.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-15-s3p00-n00-lineage-seed-clay-normal-seed717032/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717032 --mlx-cache-limit-gb 48"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-15-s3p00-n00-lineage-seed-clay-normal-seed717032/output.png",
+        "sha256": "4b60a887b2c2df4c06e204e9290c69721bf1ef24d4aaddff5a75cb1945c02a03",
+        "bytes": 244178,
+        "visual": {
+          "width": 512,
+          "height": 512,
+          "colorType": 2,
+          "sampledUniqueRgb": 4490,
+          "sampledDynamicRange": 255,
+          "nonblank": true
+        }
+      }
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-lineage-seed-clay-normal-seed717033",
+      "jobId": "82d321860284",
+      "shape": "basin-15-s3p00-n00",
+      "stance": "lineage-seed",
+      "referenceSet": "clay-normal",
+      "seed": 717033,
+      "verified": true,
+      "failureCodes": [],
+      "failurePhase": null,
+      "lastTrustworthyEvidence": "verified_generated_output",
+      "observedGreenroomStatus": "done",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/82d321860284/request.json",
+      "requestSha256": "ac0964a78947b716c4b9adecc720742af4238768dac478f66f2559f2cc01fc92",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/82d321860284/receipt.json",
+      "receiptSha256": "558d2888985bdaf312f85ae19975acd950633739bd634f5b9139ac478b5309b6",
+      "effectiveRouteIdentity": {
+        "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+        "route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-15-s3p00-n00/clay.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-15-s3p00-n00/normal.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/prompts/lineage-seed.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-15-s3p00-n00-lineage-seed-clay-normal-seed717033/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717033 --mlx-cache-limit-gb 48"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-15-s3p00-n00-lineage-seed-clay-normal-seed717033/output.png",
+        "sha256": "21c34016ee6cbbb6cc1579f71128b9ac9e513951c65d66803b639b1794688854",
+        "bytes": 193844,
+        "visual": {
+          "width": 512,
+          "height": 512,
+          "colorType": 2,
+          "sampledUniqueRgb": 4149,
+          "sampledDynamicRange": 255,
+          "nonblank": true
+        }
+      }
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032",
+      "jobId": "903c8b26e155",
+      "shape": "basin-15-s3p00-n00",
+      "stance": "non-tetrapod-crawler",
+      "referenceSet": "clay-normal",
+      "seed": 717032,
+      "verified": true,
+      "failureCodes": [],
+      "failurePhase": null,
+      "lastTrustworthyEvidence": "verified_generated_output",
+      "observedGreenroomStatus": "done",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/903c8b26e155/request.json",
+      "requestSha256": "72b3e0fb10f212af1dfe969d0a898f7442874193200fe59586ab616cff9120d3",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/903c8b26e155/receipt.json",
+      "receiptSha256": "f8f495efafcaa27de48b48718c33ea5d114b6702bb7981ff126c376bf9f564f8",
+      "effectiveRouteIdentity": {
+        "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+        "route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-15-s3p00-n00/clay.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-15-s3p00-n00/normal.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/prompts/non-tetrapod-crawler.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717032 --mlx-cache-limit-gb 48"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032/output.png",
+        "sha256": "79d2701a87d929f85dd270b8485afbc5d5c3508d8a99ed2269a66571154e3f04",
+        "bytes": 160795,
+        "visual": {
+          "width": 512,
+          "height": 512,
+          "colorType": 2,
+          "sampledUniqueRgb": 2080,
+          "sampledDynamicRange": 255,
+          "nonblank": true
+        }
+      }
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717033",
+      "jobId": "20e1f49bbfc2",
+      "shape": "basin-15-s3p00-n00",
+      "stance": "non-tetrapod-crawler",
+      "referenceSet": "clay-normal",
+      "seed": 717033,
+      "verified": true,
+      "failureCodes": [],
+      "failurePhase": null,
+      "lastTrustworthyEvidence": "verified_generated_output",
+      "observedGreenroomStatus": "done",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/20e1f49bbfc2/request.json",
+      "requestSha256": "337f6f5233543ab9c799ba66181550979c80b59e8b11a7e88bd7ffd1597a6246",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/20e1f49bbfc2/receipt.json",
+      "receiptSha256": "723e39501050a19a274f7a10e97733536657aa2bf63d571cbe3b5295c41c3f02",
+      "effectiveRouteIdentity": {
+        "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+        "route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-15-s3p00-n00/clay.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-15-s3p00-n00/normal.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/prompts/non-tetrapod-crawler.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717033/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717033 --mlx-cache-limit-gb 48"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717033/output.png",
+        "sha256": "48b101e02fc1713a435c50cb4bda7efa3513fe655a0c88a20ce8f492bf5a044b",
+        "bytes": 175759,
+        "visual": {
+          "width": 512,
+          "height": 512,
+          "colorType": 2,
+          "sampledUniqueRgb": 2781,
+          "sampledDynamicRange": 255,
+          "nonblank": true
+        }
+      }
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "jobId": "cdec5f006880",
+      "shape": "basin-15-s3p00-n00",
+      "stance": "silhouette-metabolizer",
+      "referenceSet": "clay-normal",
+      "seed": 717032,
+      "verified": true,
+      "failureCodes": [],
+      "failurePhase": null,
+      "lastTrustworthyEvidence": "verified_generated_output",
+      "observedGreenroomStatus": "done",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/cdec5f006880/request.json",
+      "requestSha256": "bcdb5d69554a61bbe56b0d50f1322d12c07d4af0d4152c3190451fd53512ecc5",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/cdec5f006880/receipt.json",
+      "receiptSha256": "70eeb25e3695e180ec637037f87c8f1525ce80f2982f604e9e37467ec3dbe71d",
+      "effectiveRouteIdentity": {
+        "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+        "route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-15-s3p00-n00/clay.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-15-s3p00-n00/normal.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/prompts/silhouette-metabolizer.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-15-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717032 --mlx-cache-limit-gb 48"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-15-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032/output.png",
+        "sha256": "3fe421a52e4caeea97b076135f7b6aab21fb7089e6efbf6169aa9eadbecba147",
+        "bytes": 169507,
+        "visual": {
+          "width": 512,
+          "height": 512,
+          "colorType": 2,
+          "sampledUniqueRgb": 2786,
+          "sampledDynamicRange": 253,
+          "nonblank": true
+        }
+      }
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-silhouette-metabolizer-clay-normal-seed717033",
+      "jobId": "08ee1af783c3",
+      "shape": "basin-15-s3p00-n00",
+      "stance": "silhouette-metabolizer",
+      "referenceSet": "clay-normal",
+      "seed": 717033,
+      "verified": true,
+      "failureCodes": [],
+      "failurePhase": null,
+      "lastTrustworthyEvidence": "verified_generated_output",
+      "observedGreenroomStatus": "done",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/08ee1af783c3/request.json",
+      "requestSha256": "a3b15fe92d6cdc95401de6718c903c984b4541bf13cff495511e9a2a6c0e55c7",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/08ee1af783c3/receipt.json",
+      "receiptSha256": "fe57e22c94306fe8de354d1c820a9f78464408c08ce16c2d9199ebe96d7623da",
+      "effectiveRouteIdentity": {
+        "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+        "route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-15-s3p00-n00/clay.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-15-s3p00-n00/normal.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/prompts/silhouette-metabolizer.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-15-s3p00-n00-silhouette-metabolizer-clay-normal-seed717033/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717033 --mlx-cache-limit-gb 48"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-15-s3p00-n00-silhouette-metabolizer-clay-normal-seed717033/output.png",
+        "sha256": "7d0895a220c944c7cacbba874242cc698f23b077e37ffa47172476900efe0e07",
+        "bytes": 166968,
+        "visual": {
+          "width": 512,
+          "height": 512,
+          "colorType": 2,
+          "sampledUniqueRgb": 3035,
+          "sampledDynamicRange": 255,
+          "nonblank": true
+        }
+      }
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-lineage-seed-clay-normal-seed717032",
+      "jobId": "ec6e0734543f",
+      "shape": "basin-22-s1p50-n00",
+      "stance": "lineage-seed",
+      "referenceSet": "clay-normal",
+      "seed": 717032,
+      "verified": true,
+      "failureCodes": [],
+      "failurePhase": null,
+      "lastTrustworthyEvidence": "verified_generated_output",
+      "observedGreenroomStatus": "done",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/ec6e0734543f/request.json",
+      "requestSha256": "14ea6625aa8cc5cc95bffbf9cc73d986323ef0c15484bacfb0c4049bab7a9f58",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/ec6e0734543f/receipt.json",
+      "receiptSha256": "fd28e7a824e93bf22f5864bf6345000abed715549ecb6edc6615482be7d290d1",
+      "effectiveRouteIdentity": {
+        "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+        "route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-22-s1p50-n00/clay.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-22-s1p50-n00/normal.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/prompts/lineage-seed.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-22-s1p50-n00-lineage-seed-clay-normal-seed717032/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717032 --mlx-cache-limit-gb 48"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-22-s1p50-n00-lineage-seed-clay-normal-seed717032/output.png",
+        "sha256": "fb252b04048aeef206130b40259333636e6c045357e33e09c8f12d1139a6c3e5",
+        "bytes": 275685,
+        "visual": {
+          "width": 512,
+          "height": 512,
+          "colorType": 2,
+          "sampledUniqueRgb": 5076,
+          "sampledDynamicRange": 255,
+          "nonblank": true
+        }
+      }
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-lineage-seed-clay-normal-seed717033",
+      "jobId": "623e36a4d814",
+      "shape": "basin-22-s1p50-n00",
+      "stance": "lineage-seed",
+      "referenceSet": "clay-normal",
+      "seed": 717033,
+      "verified": true,
+      "failureCodes": [],
+      "failurePhase": null,
+      "lastTrustworthyEvidence": "verified_generated_output",
+      "observedGreenroomStatus": "done",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/623e36a4d814/request.json",
+      "requestSha256": "164748e8af43452d460494926c50440f8a244d295fe36f1a0130bab9d130e2d5",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/623e36a4d814/receipt.json",
+      "receiptSha256": "b22dfd9010d0e7e9c21da8b79e4297c52fa49ff49f7d966a8437c6ac9e4477bb",
+      "effectiveRouteIdentity": {
+        "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+        "route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-22-s1p50-n00/clay.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-22-s1p50-n00/normal.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/prompts/lineage-seed.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-22-s1p50-n00-lineage-seed-clay-normal-seed717033/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717033 --mlx-cache-limit-gb 48"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-22-s1p50-n00-lineage-seed-clay-normal-seed717033/output.png",
+        "sha256": "2a5d6a96045ad58e7092f0fed4f9256c82dbee604e11bc1fd5597194515bda41",
+        "bytes": 223187,
+        "visual": {
+          "width": 512,
+          "height": 512,
+          "colorType": 2,
+          "sampledUniqueRgb": 4362,
+          "sampledDynamicRange": 255,
+          "nonblank": true
+        }
+      }
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-non-tetrapod-crawler-clay-normal-seed717032",
+      "jobId": "88933428207f",
+      "shape": "basin-22-s1p50-n00",
+      "stance": "non-tetrapod-crawler",
+      "referenceSet": "clay-normal",
+      "seed": 717032,
+      "verified": true,
+      "failureCodes": [],
+      "failurePhase": null,
+      "lastTrustworthyEvidence": "verified_generated_output",
+      "observedGreenroomStatus": "done",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/88933428207f/request.json",
+      "requestSha256": "8d4f454989033150bea4450983f7cd2ffe0b94d05086a12344c5c0ebf56c23d8",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/88933428207f/receipt.json",
+      "receiptSha256": "585ef3b875a1fcace618e43fec35bbbe04454790858606a6acf48f59f74b2505",
+      "effectiveRouteIdentity": {
+        "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+        "route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-22-s1p50-n00/clay.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-22-s1p50-n00/normal.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/prompts/non-tetrapod-crawler.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-22-s1p50-n00-non-tetrapod-crawler-clay-normal-seed717032/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717032 --mlx-cache-limit-gb 48"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-22-s1p50-n00-non-tetrapod-crawler-clay-normal-seed717032/output.png",
+        "sha256": "a5d071946aa0bd252843cf58acc644527bcfdf2313386db26844bc880c530158",
+        "bytes": 236802,
+        "visual": {
+          "width": 512,
+          "height": 512,
+          "colorType": 2,
+          "sampledUniqueRgb": 3580,
+          "sampledDynamicRange": 254,
+          "nonblank": true
+        }
+      }
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-non-tetrapod-crawler-clay-normal-seed717033",
+      "jobId": "a76067ffcc75",
+      "shape": "basin-22-s1p50-n00",
+      "stance": "non-tetrapod-crawler",
+      "referenceSet": "clay-normal",
+      "seed": 717033,
+      "verified": true,
+      "failureCodes": [],
+      "failurePhase": null,
+      "lastTrustworthyEvidence": "verified_generated_output",
+      "observedGreenroomStatus": "done",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/a76067ffcc75/request.json",
+      "requestSha256": "294b547bb88744716d9ceadacffef41b8f73435fac8a7abd2b91d1bebb2a2803",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/a76067ffcc75/receipt.json",
+      "receiptSha256": "280cd4ac7dd5035cb0801d9f00dcb83c18875eabf732cd45f2611871fbc20451",
+      "effectiveRouteIdentity": {
+        "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+        "route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-22-s1p50-n00/clay.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-22-s1p50-n00/normal.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/prompts/non-tetrapod-crawler.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-22-s1p50-n00-non-tetrapod-crawler-clay-normal-seed717033/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717033 --mlx-cache-limit-gb 48"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-22-s1p50-n00-non-tetrapod-crawler-clay-normal-seed717033/output.png",
+        "sha256": "c44cda772665cddcc881e349b829c3b465207832a38017a4874b532b7ab5f83f",
+        "bytes": 195192,
+        "visual": {
+          "width": 512,
+          "height": 512,
+          "colorType": 2,
+          "sampledUniqueRgb": 3385,
+          "sampledDynamicRange": 255,
+          "nonblank": true
+        }
+      }
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "jobId": "80a559e80318",
+      "shape": "basin-22-s1p50-n00",
+      "stance": "silhouette-metabolizer",
+      "referenceSet": "clay-normal",
+      "seed": 717032,
+      "verified": true,
+      "failureCodes": [],
+      "failurePhase": null,
+      "lastTrustworthyEvidence": "verified_generated_output",
+      "observedGreenroomStatus": "done",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/80a559e80318/request.json",
+      "requestSha256": "b7f6059b41ccba170929a6ce2eed197b4155fb087088158514dd7e03b7983f77",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/80a559e80318/receipt.json",
+      "receiptSha256": "be19082d133747b24645379b1a31e0f0a1ffbd0f1970ef46266a52d5f92e8814",
+      "effectiveRouteIdentity": {
+        "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+        "route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-22-s1p50-n00/clay.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-22-s1p50-n00/normal.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/prompts/silhouette-metabolizer.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717032/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717032 --mlx-cache-limit-gb 48"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717032/output.png",
+        "sha256": "0181430c1ebaa338eca3b74990da9e3223f7984b0da2fb65c0fe58fa068d6e1c",
+        "bytes": 262095,
+        "visual": {
+          "width": 512,
+          "height": 512,
+          "colorType": 2,
+          "sampledUniqueRgb": 4487,
+          "sampledDynamicRange": 255,
+          "nonblank": true
+        }
+      }
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717033",
+      "jobId": "943bfb227820",
+      "shape": "basin-22-s1p50-n00",
+      "stance": "silhouette-metabolizer",
+      "referenceSet": "clay-normal",
+      "seed": 717033,
+      "verified": true,
+      "failureCodes": [],
+      "failurePhase": null,
+      "lastTrustworthyEvidence": "verified_generated_output",
+      "observedGreenroomStatus": "done",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/943bfb227820/request.json",
+      "requestSha256": "1bfbe76158fb454c624296f3f466e0e70cfd5483d8e6bee291e9bb855737f1af",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/943bfb227820/receipt.json",
+      "receiptSha256": "62700b20c870a49ff5a45f80efb6514541dcc74d13e0c53ce4ed5933f5eb674a",
+      "effectiveRouteIdentity": {
+        "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+        "route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-22-s1p50-n00/clay.png /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-basin-extrusion-v0/basin-22-s1p50-n00/normal.png --prompt-file /private/tmp/kaminos-molten-silhouette-basin-0717/artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/prompts/silhouette-metabolizer.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717033/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 717033 --mlx-cache-limit-gb 48"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-morphology-basin-imagegen-v1-tranche2-20260717/cells/basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717033/output.png",
+        "sha256": "f81becc2cf761299ca012430a7948679b9b22f9d08717620dbc7c2638e0ff176",
+        "bytes": 212594,
+        "visual": {
+          "width": 512,
+          "height": 512,
+          "colorType": 2,
+          "sampledUniqueRgb": 4336,
+          "sampledDynamicRange": 255,
+          "nonblank": true
+        }
+      }
+    }
+  ]
+}

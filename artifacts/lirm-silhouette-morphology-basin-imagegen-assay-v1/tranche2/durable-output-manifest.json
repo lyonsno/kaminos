@@ -1,0 +1,272 @@
+{
+  "schema": "kaminos.lirm-silhouette-morphology-basin-imagegen-durable-outputs.v1",
+  "sourcePlan": "plan.json",
+  "sourceReceipts": "route-receipts.json",
+  "outputCount": 24,
+  "outputs": [
+    {
+      "cellId": "basin-03-s3p00-n00-lineage-seed-clay-normal-seed717032",
+      "shape": "basin-03-s3p00-n00",
+      "stance": "lineage-seed",
+      "referenceSet": "clay-normal",
+      "seed": 717032,
+      "jobId": "e430647bbab7",
+      "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-03-s3p00-n00-lineage-seed-clay-normal-seed717032.png",
+      "sha256": "15d6c06db0e76e4a2943f203c147d788755140853da93a64e2bf39e39c5c1644",
+      "bytes": 261471
+    },
+    {
+      "cellId": "basin-03-s3p00-n00-lineage-seed-clay-normal-seed717033",
+      "shape": "basin-03-s3p00-n00",
+      "stance": "lineage-seed",
+      "referenceSet": "clay-normal",
+      "seed": 717033,
+      "jobId": "e9e7ddca35bf",
+      "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-03-s3p00-n00-lineage-seed-clay-normal-seed717033.png",
+      "sha256": "9e986bbc290865225262338c309d50b0d94df31cc92f27e4b3fe14496f96eae1",
+      "bytes": 209088
+    },
+    {
+      "cellId": "basin-03-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032",
+      "shape": "basin-03-s3p00-n00",
+      "stance": "non-tetrapod-crawler",
+      "referenceSet": "clay-normal",
+      "seed": 717032,
+      "jobId": "4ad190e80755",
+      "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-03-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032.png",
+      "sha256": "6dc0f725518e42cf204ca08869e984c38f9e2dd0f593d453c75d48cfe31573c7",
+      "bytes": 246051
+    },
+    {
+      "cellId": "basin-03-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717033",
+      "shape": "basin-03-s3p00-n00",
+      "stance": "non-tetrapod-crawler",
+      "referenceSet": "clay-normal",
+      "seed": 717033,
+      "jobId": "ec26ae73743b",
+      "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-03-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717033.png",
+      "sha256": "1e4376825280f2db53b73054c40979dbf25fd972502b7d62fec5e68619ce8050",
+      "bytes": 182657
+    },
+    {
+      "cellId": "basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "shape": "basin-03-s3p00-n00",
+      "stance": "silhouette-metabolizer",
+      "referenceSet": "clay-normal",
+      "seed": 717032,
+      "jobId": "0808ed4a8802",
+      "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032.png",
+      "sha256": "3b257228b6de32796b0adc758526710b9d0dc4f91dda18956c736eececa785ae",
+      "bytes": 241871
+    },
+    {
+      "cellId": "basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717033",
+      "shape": "basin-03-s3p00-n00",
+      "stance": "silhouette-metabolizer",
+      "referenceSet": "clay-normal",
+      "seed": 717033,
+      "jobId": "14904d82e6a3",
+      "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-03-s3p00-n00-silhouette-metabolizer-clay-normal-seed717033.png",
+      "sha256": "02906c468dfb1a1ce3dc2a88c5f18bbf15b03f707c252aa8e7e07b66aea11dce",
+      "bytes": 209663
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-lineage-seed-clay-normal-seed717032",
+      "shape": "basin-10-s3p00-n00",
+      "stance": "lineage-seed",
+      "referenceSet": "clay-normal",
+      "seed": 717032,
+      "jobId": "a3a960f7ef81",
+      "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-10-s3p00-n00-lineage-seed-clay-normal-seed717032.png",
+      "sha256": "ee5c755031fa60865215d08e19996ae7b2b45af21b634cf1ca83f2e483b7d0bf",
+      "bytes": 219142
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-lineage-seed-clay-normal-seed717033",
+      "shape": "basin-10-s3p00-n00",
+      "stance": "lineage-seed",
+      "referenceSet": "clay-normal",
+      "seed": 717033,
+      "jobId": "9c5632f11523",
+      "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-10-s3p00-n00-lineage-seed-clay-normal-seed717033.png",
+      "sha256": "a11f4c37b14c756f0f966c00d5f19bf60f091b49dc46996ff4b570c54de97239",
+      "bytes": 187770
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032",
+      "shape": "basin-10-s3p00-n00",
+      "stance": "non-tetrapod-crawler",
+      "referenceSet": "clay-normal",
+      "seed": 717032,
+      "jobId": "6d38a338590a",
+      "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032.png",
+      "sha256": "b84a198f7d90a4b1ec062a4df94a64c76530238b9ff87df692d500f6ee84f283",
+      "bytes": 180060
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717033",
+      "shape": "basin-10-s3p00-n00",
+      "stance": "non-tetrapod-crawler",
+      "referenceSet": "clay-normal",
+      "seed": 717033,
+      "jobId": "460063e5eb06",
+      "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-10-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717033.png",
+      "sha256": "c92ff818e508c0e7d178bacab7c79ce69a3b02dc132620934209be1868b3d7e1",
+      "bytes": 172958
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "shape": "basin-10-s3p00-n00",
+      "stance": "silhouette-metabolizer",
+      "referenceSet": "clay-normal",
+      "seed": 717032,
+      "jobId": "f1f3b122ed31",
+      "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032.png",
+      "sha256": "1d9bff00c8d4a1527add5213f0d3745a1f07c02a53673a2f863e50a559889ce0",
+      "bytes": 252512
+    },
+    {
+      "cellId": "basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717033",
+      "shape": "basin-10-s3p00-n00",
+      "stance": "silhouette-metabolizer",
+      "referenceSet": "clay-normal",
+      "seed": 717033,
+      "jobId": "1e8b69ce77f2",
+      "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-10-s3p00-n00-silhouette-metabolizer-clay-normal-seed717033.png",
+      "sha256": "acc699d269d4fe6a9016bcf262cdcd5ea0f6ae53ed9b4fd042e40fdb02b0b52e",
+      "bytes": 228944
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-lineage-seed-clay-normal-seed717032",
+      "shape": "basin-15-s3p00-n00",
+      "stance": "lineage-seed",
+      "referenceSet": "clay-normal",
+      "seed": 717032,
+      "jobId": "57e37817411b",
+      "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-15-s3p00-n00-lineage-seed-clay-normal-seed717032.png",
+      "sha256": "4b60a887b2c2df4c06e204e9290c69721bf1ef24d4aaddff5a75cb1945c02a03",
+      "bytes": 244178
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-lineage-seed-clay-normal-seed717033",
+      "shape": "basin-15-s3p00-n00",
+      "stance": "lineage-seed",
+      "referenceSet": "clay-normal",
+      "seed": 717033,
+      "jobId": "82d321860284",
+      "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-15-s3p00-n00-lineage-seed-clay-normal-seed717033.png",
+      "sha256": "21c34016ee6cbbb6cc1579f71128b9ac9e513951c65d66803b639b1794688854",
+      "bytes": 193844
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032",
+      "shape": "basin-15-s3p00-n00",
+      "stance": "non-tetrapod-crawler",
+      "referenceSet": "clay-normal",
+      "seed": 717032,
+      "jobId": "903c8b26e155",
+      "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717032.png",
+      "sha256": "79d2701a87d929f85dd270b8485afbc5d5c3508d8a99ed2269a66571154e3f04",
+      "bytes": 160795
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717033",
+      "shape": "basin-15-s3p00-n00",
+      "stance": "non-tetrapod-crawler",
+      "referenceSet": "clay-normal",
+      "seed": 717033,
+      "jobId": "20e1f49bbfc2",
+      "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-15-s3p00-n00-non-tetrapod-crawler-clay-normal-seed717033.png",
+      "sha256": "48b101e02fc1713a435c50cb4bda7efa3513fe655a0c88a20ce8f492bf5a044b",
+      "bytes": 175759
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "shape": "basin-15-s3p00-n00",
+      "stance": "silhouette-metabolizer",
+      "referenceSet": "clay-normal",
+      "seed": 717032,
+      "jobId": "cdec5f006880",
+      "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-15-s3p00-n00-silhouette-metabolizer-clay-normal-seed717032.png",
+      "sha256": "3fe421a52e4caeea97b076135f7b6aab21fb7089e6efbf6169aa9eadbecba147",
+      "bytes": 169507
+    },
+    {
+      "cellId": "basin-15-s3p00-n00-silhouette-metabolizer-clay-normal-seed717033",
+      "shape": "basin-15-s3p00-n00",
+      "stance": "silhouette-metabolizer",
+      "referenceSet": "clay-normal",
+      "seed": 717033,
+      "jobId": "08ee1af783c3",
+      "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-15-s3p00-n00-silhouette-metabolizer-clay-normal-seed717033.png",
+      "sha256": "7d0895a220c944c7cacbba874242cc698f23b077e37ffa47172476900efe0e07",
+      "bytes": 166968
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-lineage-seed-clay-normal-seed717032",
+      "shape": "basin-22-s1p50-n00",
+      "stance": "lineage-seed",
+      "referenceSet": "clay-normal",
+      "seed": 717032,
+      "jobId": "ec6e0734543f",
+      "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-22-s1p50-n00-lineage-seed-clay-normal-seed717032.png",
+      "sha256": "fb252b04048aeef206130b40259333636e6c045357e33e09c8f12d1139a6c3e5",
+      "bytes": 275685
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-lineage-seed-clay-normal-seed717033",
+      "shape": "basin-22-s1p50-n00",
+      "stance": "lineage-seed",
+      "referenceSet": "clay-normal",
+      "seed": 717033,
+      "jobId": "623e36a4d814",
+      "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-22-s1p50-n00-lineage-seed-clay-normal-seed717033.png",
+      "sha256": "2a5d6a96045ad58e7092f0fed4f9256c82dbee604e11bc1fd5597194515bda41",
+      "bytes": 223187
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-non-tetrapod-crawler-clay-normal-seed717032",
+      "shape": "basin-22-s1p50-n00",
+      "stance": "non-tetrapod-crawler",
+      "referenceSet": "clay-normal",
+      "seed": 717032,
+      "jobId": "88933428207f",
+      "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-22-s1p50-n00-non-tetrapod-crawler-clay-normal-seed717032.png",
+      "sha256": "a5d071946aa0bd252843cf58acc644527bcfdf2313386db26844bc880c530158",
+      "bytes": 236802
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-non-tetrapod-crawler-clay-normal-seed717033",
+      "shape": "basin-22-s1p50-n00",
+      "stance": "non-tetrapod-crawler",
+      "referenceSet": "clay-normal",
+      "seed": 717033,
+      "jobId": "a76067ffcc75",
+      "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-22-s1p50-n00-non-tetrapod-crawler-clay-normal-seed717033.png",
+      "sha256": "c44cda772665cddcc881e349b829c3b465207832a38017a4874b532b7ab5f83f",
+      "bytes": 195192
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717032",
+      "shape": "basin-22-s1p50-n00",
+      "stance": "silhouette-metabolizer",
+      "referenceSet": "clay-normal",
+      "seed": 717032,
+      "jobId": "80a559e80318",
+      "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717032.png",
+      "sha256": "0181430c1ebaa338eca3b74990da9e3223f7984b0da2fb65c0fe58fa068d6e1c",
+      "bytes": 262095
+    },
+    {
+      "cellId": "basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717033",
+      "shape": "basin-22-s1p50-n00",
+      "stance": "silhouette-metabolizer",
+      "referenceSet": "clay-normal",
+      "seed": 717033,
+      "jobId": "943bfb227820",
+      "path": "artifacts/lirm-silhouette-morphology-basin-imagegen-assay-v1/tranche2/outputs/basin-22-s1p50-n00-silhouette-metabolizer-clay-normal-seed717033.png",
+      "sha256": "f81becc2cf761299ca012430a7948679b9b22f9d08717620dbc7c2638e0ff176",
+      "bytes": 212594
+    }
+  ]
+}
