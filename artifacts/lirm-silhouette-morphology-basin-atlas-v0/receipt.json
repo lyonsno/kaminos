@@ -125,8 +125,10 @@
       "effectiveRoute": "kaminos/lirm-speciation-armature/silhouette-archetype-corpus-v0"
     }
   ],
+  "acceptedSourceRowCount": 2421,
   "uniqueShapeCount": 2417,
   "deduplicatedShapeCount": 4,
+  "assignmentRowCount": 2421,
   "eligibleMedoidCandidateCount": 2402,
   "excludedMedoidCandidateCount": 15,
   "exclusionReasonCounts": {
@@ -150,7 +152,7 @@
     },
     "assignments": {
       "path": "assignments.jsonl",
-      "sha256": "sha256:a22efd1e8b9b4d0c21699ac5ee20e77cc158be5a1a7aec9a3fb7c7fe4e8b2295"
+      "sha256": "sha256:fb8fcf3ce7f35258422befb057f998fe87885941fbc1c6c88f85f01da36fabcc"
     },
     "contactSheet": {
       "path": "contact-sheet.png",

@@ -383,10 +383,11 @@ def rasterize_svg(svg_path: Path, png_path: Path) -> None:
         raise RuntimeError(f"atlas rasterization failed: {detail}")
 
 
-def load_corpora(corpus_dirs: list[Path]) -> tuple[list[dict], list[dict]]:
+def load_corpora(corpus_dirs: list[Path]) -> tuple[list[dict], list[dict], list[dict]]:
     records = []
     corpora = []
-    seen_shapes = set()
+    source_rows = []
+    shape_indexes = {}
     for corpus_index, corpus_dir in enumerate(corpus_dirs):
         receipt_path = corpus_dir / "receipt.json"
         index_path = corpus_dir / "training-index.jsonl"
@@ -411,26 +412,44 @@ def load_corpora(corpus_dirs: list[Path]) -> tuple[list[dict], list[dict]]:
         })
         for row_index, row in enumerate(rows):
             shape_id = str(row.get("shapeId", ""))
-            if shape_id in seen_shapes:
-                continue
+            if not shape_id:
+                raise ValueError(f"{index_path} row {row_index} has no shapeId")
             mask_path = corpus_dir / str(row.get("mask", {}).get("path", ""))
             if not mask_path.is_file():
                 raise FileNotFoundError(f"missing mask {mask_path}")
             mask = read_pgm(mask_path)
-            descriptor = describe_silhouette(mask)
-            seen_shapes.add(shape_id)
-            records.append({
+            mask_hash = sha256_bytes(mask.astype(np.uint8).tobytes())
+            if shape_id in shape_indexes:
+                shape_index = shape_indexes[shape_id]
+                if records[shape_index]["maskHash"] != mask_hash:
+                    raise ValueError(
+                        f"{index_path} row {row_index} reuses shapeId {shape_id} with different mask bytes"
+                    )
+            else:
+                shape_index = len(records)
+                shape_indexes[shape_id] = shape_index
+                records.append({
+                    "corpusIndex": corpus_index,
+                    "corpusLabel": label,
+                    "rowIndex": row_index,
+                    "shapeId": shape_id,
+                    "maskPath": str(mask_path),
+                    "maskHash": mask_hash,
+                    "descriptor": describe_silhouette(mask),
+                })
+            source_rows.append({
+                "sourceRowId": f"{corpus_index}:{row_index}",
                 "corpusIndex": corpus_index,
                 "corpusLabel": label,
                 "rowIndex": row_index,
                 "shapeId": shape_id,
                 "maskPath": str(mask_path),
-                "maskHash": sha256_bytes(mask.astype(np.uint8).tobytes()),
-                "descriptor": descriptor,
+                "maskHash": mask_hash,
+                "uniqueShapeIndex": shape_index,
             })
     if len(records) < 4:
         raise ValueError("morphology basin atlas requires at least four unique silhouettes")
-    return records, corpora
+    return records, corpora, source_rows
 
 
 def main() -> int:
@@ -460,7 +479,7 @@ def main() -> int:
     try:
         receipt["phase"] = "loading_corpora"
         write_json(receipt_path, receipt)
-        records, corpora = load_corpora([Path(value).resolve() for value in args.corpus_dir])
+        records, corpora, source_rows = load_corpora([Path(value).resolve() for value in args.corpus_dir])
         receipt["lastTrustworthyEvidence"] = "corpus_receipts_and_training_indexes_validated"
         write_json(receipt_path, receipt)
         descriptors = [record["descriptor"] for record in records]
@@ -509,11 +528,17 @@ def main() -> int:
                 "atlasEligibility": descriptor["atlasEligibility"],
             })
         assignment_rows = []
-        for index, record in enumerate(records):
+        for source_row in source_rows:
+            index = source_row["uniqueShapeIndex"]
+            record = records[index]
             assignment_rows.append({
+                "sourceRowId": source_row["sourceRowId"],
                 "shapeId": record["shapeId"],
-                "maskHash": record["maskHash"],
-                "corpusIndex": record["corpusIndex"],
+                "maskHash": source_row["maskHash"],
+                "corpusIndex": source_row["corpusIndex"],
+                "corpusLabel": source_row["corpusLabel"],
+                "rowIndex": source_row["rowIndex"],
+                "uniqueShapeIndex": index,
                 "basinIndex": int(assignments[index]),
                 "distanceToMedoid": round(float(assignment_distances[index]), 6),
                 "metrics": {key: round(float(value), 6) for key, value in record["descriptor"]["metrics"].items()},
@@ -532,8 +557,10 @@ def main() -> int:
             "phase": "witness_written",
             "effectiveConfig": {"basins": len(selected), "columns": args.columns, "descriptorCount": len(DESCRIPTOR_NAMES), "descriptorNames": DESCRIPTOR_NAMES},
             "sourceCorpora": corpora,
+            "acceptedSourceRowCount": len(source_rows),
             "uniqueShapeCount": len(records),
             "deduplicatedShapeCount": sum(corpus["acceptedSourceCount"] for corpus in corpora) - len(records),
+            "assignmentRowCount": len(assignment_rows),
             "eligibleMedoidCandidateCount": int(len(eligible_indexes)),
             "excludedMedoidCandidateCount": int(len(records) - len(eligible_indexes)),
             "exclusionReasonCounts": {
@@ -564,7 +591,10 @@ def main() -> int:
             },
         })
         receipt["falseClosureGuards"].update({
-            "allTrainingIndexesConsumed": True,
+            "allTrainingIndexesConsumed": (
+                len(source_rows) == sum(corpus["acceptedSourceCount"] for corpus in corpora)
+                and len(assignment_rows) == len(source_rows)
+            ),
             "descriptorValuesFinite": True,
             "uniqueShapeIds": len({record["shapeId"] for record in records}) == len(records),
             "atlasEligibilityAssayed": all("atlasEligibility" in descriptor for descriptor in descriptors),

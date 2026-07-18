@@ -132,6 +132,10 @@ with tempfile.TemporaryDirectory(prefix="kaminos-morphology-basin-contract-") as
             "shapeId": f"sha256:{index:064x}",
             "mask": {"path": str(relative_path)},
         })
+    index_rows.append({
+        "shapeId": index_rows[0]["shapeId"],
+        "mask": {"path": index_rows[0]["mask"]["path"]},
+    })
     (corpus_path / "training-index.jsonl").write_text(
         "".join(f"{json.dumps(row)}\n" for row in index_rows)
     )
@@ -157,6 +161,8 @@ with tempfile.TemporaryDirectory(prefix="kaminos-morphology-basin-contract-") as
     receipt = json.loads((output_path / "receipt.json").read_text())
     assert receipt["status"] == "complete"
     assert receipt["uniqueShapeCount"] == len(fixture_masks)
+    assert receipt["acceptedSourceRowCount"] == len(index_rows)
+    assert receipt["assignmentRowCount"] == len(index_rows)
     assert receipt["eligibleMedoidCandidateCount"] == 4
     assert receipt["excludedMedoidCandidateCount"] == 4
     assert receipt["exclusionReasonCounts"] == {
@@ -166,8 +172,12 @@ with tempfile.TemporaryDirectory(prefix="kaminos-morphology-basin-contract-") as
     assert receipt["falseClosureGuards"]["medoidsAllEligible"] is True
     assert (output_path / "contact-sheet.png").stat().st_size > 0
     assignment_rows = [json.loads(line) for line in (output_path / "assignments.jsonl").read_text().splitlines()]
-    assert len(assignment_rows) == len(fixture_masks)
-    assert sum(not row["atlasEligibility"]["eligible"] for row in assignment_rows) == 4
+    assert len(assignment_rows) == len(index_rows)
+    duplicate_assignments = [row for row in assignment_rows if row["shapeId"] == index_rows[0]["shapeId"]]
+    assert len(duplicate_assignments) == 2
+    assert len({row["sourceRowId"] for row in duplicate_assignments}) == 2
+    assert len({row["basinIndex"] for row in duplicate_assignments}) == 1
+    assert sum(not row["atlasEligibility"]["eligible"] for row in assignment_rows) == 5
 
     failure_path = temporary_path / "failed-atlas"
     failed = subprocess.run([
