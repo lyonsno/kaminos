@@ -20,6 +20,9 @@ const webgpuCoreSource = readFileSync(webgpuCorePath, 'utf8');
 const benchWitnessSource = readFileSync(benchWitnessPath, 'utf8');
 const truthWitnessSource = readFileSync(truthWitnessPath, 'utf8');
 const indexSource = readFileSync(indexPath, 'utf8');
+const computeDensityLambdaSource = webgpuCoreSource.match(
+  /fn compute_density_lambda[\s\S]*?(?=@compute @workgroup_size\([^\n]+\)\nfn solve_position_delta)/,
+)?.[0] ?? '';
 
 assert.match(benchCoreSource, /KAMINOS_FINGER_FLUID_BENCH_STATE_SCHEMA\s*=\s*'kaminos\.finger-fluid-bench\.state\.v0'/, 'bench state schema is explicit');
 assert.match(benchCoreSource, /KAMINOS_FINGER_FLUID_BENCH_ROUTE\s*=\s*'kaminos\/finger-fluid-bench'/, 'bench route identity is explicit');
@@ -34,7 +37,8 @@ assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_NEIGHBOR_GRID_CONTRACT\s*=\
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_DENSITY_CONTRACT\s*=\s*'wgsl-pbf-density-constraint-v0'/, 'PBF density contract is explicit');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT\s*=\s*'wgsl-analytic-boundary-density-support-v0'/, 'analytic solids participate in a versioned pressure-support contract');
 assert.match(webgpuCoreSource, /fn analytic_boundary_density_support\(position: vec3<f32>\) -> vec4<f32>/, 'terrain and sphere boundary support share one analytic density/gradient function');
-assert.match(webgpuCoreSource, /fn compute_density_lambda[\s\S]*let boundarySupport = analytic_boundary_density_support\(position\)[\s\S]*density = density \+ boundarySupport\.w[\s\S]*gradientSquared = gradientSquared \+ dot\(boundarySupport\.xyz, boundarySupport\.xyz\)/, 'analytic boundary density and gradient enter the lambda solve');
+assert.match(computeDensityLambdaSource, /let boundarySupport = analytic_boundary_density_support\(position\)[\s\S]*density = density \+ boundarySupport\.w[\s\S]*gradientSelf = gradientSelf \+ boundarySupport\.xyz/, 'analytic boundary density and gradient enter the lambda solve');
+assert.doesNotMatch(computeDensityLambdaSource, /gradientSquared = gradientSquared \+ dot\(boundarySupport\.xyz, boundarySupport\.xyz\)/, 'static boundary support is not counted as a separately movable neighbor in the lambda denominator');
 assert.match(webgpuCoreSource, /fn solve_position_delta[\s\S]*let boundarySupport = analytic_boundary_density_support\(position\)[\s\S]*correction = correction \+ lambda \* boundarySupport\.xyz/, 'analytic boundary support enters position correction before collision fallback');
 assert.match(webgpuCoreSource, /boundaryRelativeDensityErrorMean[\s\S]*boundaryRelativeDensityErrorP95[\s\S]*bulkRelativeDensityErrorMean[\s\S]*maximumBoundaryPenetration/, 'truth snapshots distinguish boundary pressure quality from bulk convergence and penetration');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_VORTICITY_CONTRACT\s*=\s*'wgsl-neighbor-vorticity-confinement-v0'/, 'neighbor-derived vorticity contract is explicit');
@@ -442,6 +446,17 @@ assert.equal(typeof webgpuMod.createFingerFluidTruthSceneParticles, 'function');
 assert.equal(typeof webgpuMod.measureFingerFluidTruthSnapshot, 'function');
 assert.equal(typeof webgpuMod.evaluateFingerFluidTruthTrajectory, 'function');
 assert.equal(typeof webgpuMod.evaluateAnalyticBoundaryKernelSupport, 'function');
+assert.equal(typeof webgpuMod.evaluateStaticBoundaryLambdaDenominator, 'function');
+assert.equal(
+  webgpuMod.evaluateStaticBoundaryLambdaDenominator([1, 2, 2], 0.012),
+  9.012,
+  'a static solid contributes once through the particle self-gradient rather than once again as a movable neighbor',
+);
+assert.throws(
+  () => webgpuMod.evaluateAnalyticBoundaryKernelSupport([{ distance: 0, normal: [0, 0, 0] }]),
+  /invalid boundary normal/,
+  'a zero-length normal cannot manufacture boundary density without a usable constraint gradient',
+);
 const oneWallSupport = webgpuMod.evaluateAnalyticBoundaryKernelSupport([
   { distance: 0, normal: [0, 1, 0] },
 ], { kernelRadius: 0.185, restDensity: 24.3 });
