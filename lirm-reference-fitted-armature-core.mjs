@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { deflateSync } from 'node:zlib';
@@ -312,7 +312,7 @@ function smoothMin(a, b, radius = 0.065) {
   return b * (1 - h) + a * h - radius * h * (1 - h);
 }
 
-function createReferencePrimitives(parameters) {
+export function createReferenceArmaturePrimitives(parameters) {
   const p = parameterObject(parameters);
   const primitives = [];
   const segmentCount = 5;
@@ -343,7 +343,8 @@ function createReferencePrimitives(parameters) {
   for (const longitudinal of limbZs) {
     for (const side of [-1, 1]) {
       const shoulder = v3(side * p.bodyWidth * 0.45, -p.bodyHeight * 0.18, longitudinal * p.bodyLength);
-      const foot = v3(side * p.limbSpread, p.contactHeight, longitudinal * p.bodyLength + (longitudinal > 0 ? 0.06 : -0.03));
+      const contactTarget = v3(side * p.limbSpread, p.contactHeight, longitudinal * p.bodyLength + (longitudinal > 0 ? 0.06 : -0.03));
+      const foot = add(shoulder, mul(normalize(sub(contactTarget, shoulder)), p.limbLength));
       primitives.push({ kind: 'capsule', role: 'contactLimb', a: shoulder, b: foot, radius: p.limbThickness });
       primitives.push({
         kind: 'ellipsoid', role: 'groundContact', center: foot,
@@ -365,7 +366,7 @@ function fieldDistance(point, primitives) {
 
 export function renderReferenceArmature({ parameters, camera, width = 40, height = 32 }) {
   const exact = canonicalCamera(camera);
-  const primitives = createReferencePrimitives(parameters);
+  const primitives = createReferenceArmaturePrimitives(parameters);
   const semanticRoles = [...new Set(primitives.map(primitive => primitive.role))];
   const frame = cameraFrame(exact);
   const mask = new Uint8Array(width * height);
@@ -566,6 +567,14 @@ export function validateReferenceFitReport(report, { requireFiles = true } = {})
     }
   }
   if (!report.metrics?.initial?.heldOut || !report.metrics?.fitted?.heldOut) throw new Error('report requires held-out metrics');
+  const startedAt = Date.parse(report.timing?.startedAt);
+  const finishedAt = Date.parse(report.timing?.finishedAt);
+  const durationSeconds = Number(report.timing?.durationSeconds);
+  if (!Number.isFinite(startedAt) || !Number.isFinite(finishedAt) || finishedAt < startedAt
+    || !Number.isFinite(durationSeconds) || durationSeconds < 0
+    || Math.abs(durationSeconds - (finishedAt - startedAt) / 1000) > 0.02) {
+    throw new Error('report timing is missing, non-monotonic, or inconsistent');
+  }
   if (report.acceptance?.heldOutSilhouetteImprovementCount < 3 || report.acceptance?.heldOutDepthImproved !== true) {
     throw new Error('report does not satisfy held-out acceptance predicate');
   }
@@ -576,12 +585,27 @@ export function validateReferenceFitReport(report, { requireFiles = true } = {})
     if (typeof artifact?.path !== 'string' || !Number.isInteger(artifact.bytes) || artifact.bytes <= 0) throw new Error('report requires nonempty witness artifacts');
     if (requireFiles) {
       if (!existsSync(artifact.path)) throw new Error(`missing witness artifact: ${artifact.path}`);
+      if (statSync(artifact.path).size !== artifact.bytes) throw new Error(`witness artifact byte drift: ${artifact.path}`);
     }
   }
   if (report.status === 'assay-passed-inspected') {
     const inspection = report.acceptance?.visualInspection;
     if (!inspection || inspection.disposition !== 'accepted' || !Array.isArray(inspection.artifacts) || inspection.artifacts.length !== 2) {
       throw new Error('inspected status requires accepted inspection disposition and artifact hashes');
+    }
+    for (let index = 0; index < artifacts.length; index += 1) {
+      const expected = artifacts[index];
+      const inspected = inspection.artifacts[index];
+      if (inspected?.path !== expected.path || inspected?.bytes !== expected.bytes) {
+        throw new Error(`inspection artifact inventory mismatch: ${expected.path}`);
+      }
+      if (typeof inspected.sha256 !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(inspected.sha256)) {
+        throw new Error(`inspection artifact hash is missing or malformed: ${expected.path}`);
+      }
+      if (requireFiles) {
+        const currentHash = `sha256:${createHash('sha256').update(readFileSync(expected.path)).digest('hex')}`;
+        if (currentHash !== inspected.sha256) throw new Error(`inspection artifact hash mismatch: ${expected.path}`);
+      }
     }
   }
   return report;
@@ -629,7 +653,7 @@ export async function runReferenceFittedArmatureAssay({
 } = {}) {
   const outputRoot = resolve(outDir);
   await mkdir(outputRoot, { recursive: true });
-  assertReferenceFitCameraSplit({ fitViewIds, heldOutViewIds });
+  const startedAtMs = Date.now();
   const reportPath = resolve(outputRoot, 'report.json');
   const report = {
     schema: 'kaminos.lirm-reference-fitted-armature-assay.v0',
@@ -639,13 +663,23 @@ export async function runReferenceFittedArmatureAssay({
     effectiveRoute: null,
     requestedCameraIds: REFERENCE_FIT_CAMERAS.map(camera => camera.id),
     effectiveCameraIds: null,
-    fitViewIds,
-    heldOutViewIds,
-    lastTrustworthyEvidence: 'camera split validated; donor not yet admitted',
+    requestedFitViewIds: Array.isArray(fitViewIds) ? [...fitViewIds] : fitViewIds,
+    requestedHeldOutViewIds: Array.isArray(heldOutViewIds) ? [...heldOutViewIds] : heldOutViewIds,
+    fitViewIds: null,
+    heldOutViewIds: null,
+    timing: { startedAt: new Date(startedAtMs).toISOString(), finishedAt: null, durationSeconds: null },
+    lastTrustworthyEvidence: 'invocation arguments recorded; camera split not yet validated',
     outputInventory: { primaryWitness: null, depthWitness: null, donorEvidence: [] },
   };
   await writeJsonAtomic(reportPath, report);
+  let activePhase = 'camera-split-validation';
   try {
+    assertReferenceFitCameraSplit({ fitViewIds, heldOutViewIds });
+    report.fitViewIds = [...fitViewIds];
+    report.heldOutViewIds = [...heldOutViewIds];
+    report.lastTrustworthyEvidence = 'camera split validated; donor not yet admitted';
+    activePhase = 'donor-admission';
+    await writeJsonAtomic(reportPath, report);
     if (!existsSync(donorPath)) throw new Error(`missing donor: ${donorPath}`);
     const donor = await loadGlbTriangleSoup(donorPath);
     report.donor = {
@@ -654,6 +688,7 @@ export async function runReferenceFittedArmatureAssay({
     };
     report.plan = createReferenceFitAssayPlan({ donorPath, donorSha256: donor.sha256, fitViewIds, heldOutViewIds });
     report.lastTrustworthyEvidence = `${donor.triangleCount} donor triangles admitted and normalized`;
+    activePhase = 'donor-evidence';
     await writeJsonAtomic(reportPath, report);
 
     const donorById = {};
@@ -665,6 +700,7 @@ export async function runReferenceFittedArmatureAssay({
     report.effectiveCameraIds = REFERENCE_FIT_CAMERAS.map(camera => camera.id);
     report.effectiveRoute = REFERENCE_FIT_ROUTE;
     report.lastTrustworthyEvidence = 'all eight exact-camera donor mask/depth views admitted';
+    activePhase = 'fit-or-witness';
     await writeJsonAtomic(reportPath, report);
 
     const initialParameters = Object.fromEntries(REFERENCE_FIT_PARAMETER_SPECS.map(spec => [spec.id, spec.initial]));
@@ -711,13 +747,19 @@ export async function runReferenceFittedArmatureAssay({
     };
     report.falseClosureGuards = report.plan.falseClosureGuards;
     report.lastTrustworthyEvidence = 'fit and held-out metrics computed; visual witness written but not inspected';
+    const finishedAtMs = Date.now();
+    report.timing.finishedAt = new Date(finishedAtMs).toISOString();
+    report.timing.durationSeconds = (finishedAtMs - startedAtMs) / 1000;
     if (report.status === 'assay-passed-uninspected') validateReferenceFitReport(report);
     await writeJsonAtomic(reportPath, report);
     return report;
   } catch (error) {
     report.status = 'failed';
-    report.failurePhase = report.donor ? (report.effectiveCameraIds ? 'fit-or-witness' : 'donor-evidence') : 'donor-admission';
+    report.failurePhase = activePhase;
     report.error = String(error?.stack ?? error);
+    const finishedAtMs = Date.now();
+    report.timing.finishedAt = new Date(finishedAtMs).toISOString();
+    report.timing.durationSeconds = (finishedAtMs - startedAtMs) / 1000;
     await writeJsonAtomic(reportPath, report);
     throw error;
   }

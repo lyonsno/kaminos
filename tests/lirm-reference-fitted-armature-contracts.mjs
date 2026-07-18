@@ -8,6 +8,7 @@ const {
   REFERENCE_FIT_CAMERAS,
   REFERENCE_FIT_PARAMETER_SPECS,
   assertReferenceFitCameraSplit,
+  createReferenceArmaturePrimitives,
   createReferenceFitAssayPlan,
   recordReferenceFitVisualInspection,
   renderReferenceArmature,
@@ -86,6 +87,21 @@ assert.ok(render.semanticRoles.includes('bodyMass'));
 assert.ok(render.semanticRoles.includes('headOrientation'));
 assert.ok(render.semanticRoles.includes('contactLimb'));
 
+const longerLimbParameters = { ...initialParameters, limbLength: initialParameters.limbLength + 0.2 };
+const initialPrimitives = createReferenceArmaturePrimitives(initialParameters);
+const longerLimbPrimitives = createReferenceArmaturePrimitives(longerLimbParameters);
+const capsuleLength = primitive => Math.hypot(
+  primitive.b.x - primitive.a.x,
+  primitive.b.y - primitive.a.y,
+  primitive.b.z - primitive.a.z,
+);
+const initialContactLimb = initialPrimitives.find(primitive => primitive.role === 'contactLimb');
+const longerContactLimb = longerLimbPrimitives.find(primitive => primitive.role === 'contactLimb');
+assert.ok(
+  capsuleLength(longerContactLimb) > capsuleLength(initialContactLimb) + 0.1,
+  'limbLength must materially extend semantic contact-limb geometry',
+);
+
 const failureDir = await mkdtemp(join(tmpdir(), 'kaminos-reference-fit-missing-donor-'));
 await assert.rejects(
   () => runReferenceFittedArmatureAssay({
@@ -108,6 +124,25 @@ assert.deepEqual(failure.requestedCameraIds, REFERENCE_FIT_CAMERAS.map(camera =>
 assert.equal(failure.effectiveCameraIds, null);
 assert.equal(failure.outputInventory.primaryWitness, null);
 
+const splitFailureDir = await mkdtemp(join(tmpdir(), 'kaminos-reference-fit-invalid-split-'));
+await assert.rejects(
+  () => runReferenceFittedArmatureAssay({
+    donorPath: join(splitFailureDir, 'unused.glb'),
+    outDir: splitFailureDir,
+    fitViewIds,
+    heldOutViewIds: ['az000', 'az135', 'az225', 'az315'],
+    width: 24,
+    height: 24,
+  }),
+  /overlap/,
+);
+const splitFailure = JSON.parse(readFileSync(join(splitFailureDir, 'report.json'), 'utf8'));
+assert.equal(splitFailure.status, 'failed');
+assert.equal(splitFailure.failurePhase, 'camera-split-validation');
+assert.equal(splitFailure.lastTrustworthyEvidence, 'invocation arguments recorded; camera split not yet validated');
+assert.deepEqual(splitFailure.requestedFitViewIds, fitViewIds);
+assert.equal(splitFailure.effectiveCameraIds, null);
+
 const reportFixture = {
   schema: 'kaminos.lirm-reference-fitted-armature-assay.v0',
   status: 'assay-passed-uninspected',
@@ -126,6 +161,7 @@ const reportFixture = {
     fitted: { heldOut: { meanIou: 0.6, meanDepthMae: 0.1, byView: Object.fromEntries(heldOutViewIds.map(id => [id, { iou: 0.6 }])) } },
   },
   acceptance: { heldOutSilhouetteImprovementCount: 4, heldOutDepthImproved: true, visualInspection: 'pending' },
+  timing: { startedAt: '2026-07-18T00:00:00.000Z', finishedAt: '2026-07-18T00:00:01.500Z', durationSeconds: 1.5 },
   outputInventory: {
     primaryWitness: { path: '/durable/silhouette.png', bytes: 100 },
     depthWitness: { path: '/durable/depth.png', bytes: 100 },
@@ -144,6 +180,10 @@ assert.throws(
 assert.throws(
   () => validateReferenceFitReport({ ...reportFixture, status: 'assay-passed-inspected' }, { requireFiles: false }),
   /inspection disposition/,
+);
+assert.throws(
+  () => validateReferenceFitReport({ ...reportFixture, timing: null }, { requireFiles: false }),
+  /timing/,
 );
 
 const inspectionDir = await mkdtemp(join(tmpdir(), 'kaminos-reference-fit-inspection-'));
@@ -172,5 +212,12 @@ assert.equal(inspected.status, 'assay-passed-inspected');
 assert.equal(inspected.acceptance.visualInspection.disposition, 'accepted');
 assert.equal(inspected.acceptance.visualInspection.artifacts.length, 2);
 assert.ok(inspected.acceptance.visualInspection.artifacts.every(item => item.sha256.startsWith('sha256:')));
+const corruptedInspection = structuredClone(inspected);
+corruptedInspection.acceptance.visualInspection.artifacts[0].sha256 = `sha256:${'0'.repeat(64)}`;
+assert.throws(
+  () => validateReferenceFitReport(corruptedInspection),
+  /inspection artifact hash mismatch/,
+  'inspected status must reject a stale or corrupted witness hash',
+);
 
 console.log('LIRM reference-fitted armature contracts passed');

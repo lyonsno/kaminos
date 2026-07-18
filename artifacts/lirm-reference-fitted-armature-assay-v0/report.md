@@ -17,8 +17,7 @@ The donor is the existing basin 22 lineage Trellis cast:
 - Fit cameras: `az000`, `az090`, `az180`, `az270`
 - Held-out cameras: `az045`, `az135`, `az225`, `az315`
 - Solver: four-pass deterministic bounded coordinate search
-- Runtime: 6.50 seconds
-- Peak resident memory: 421 MB
+- Assay runtime: 5.107 seconds
 
 The GLB is parsed directly. All mesh primitives and node transforms are normalized once, then rasterized through eight explicit orthographic cameras. The same camera table renders the armature. Camera fallback, partial view coverage, missing outputs, donor hash absence, and fit/held-out overlap fail the assay.
 
@@ -34,11 +33,11 @@ Those parameters drive smooth-unioned ellipsoid body masses, a head-orientation 
 
 | Evidence split | Metric | Initial | Fitted | Delta |
 | --- | --- | ---: | ---: | ---: |
-| Fit views | Mean silhouette IoU | 0.6259 | 0.8250 | +0.1991 |
-| Fit views | Mean depth MAE | 0.0450 | 0.0334 | -0.0117 |
-| Held-out views | Mean silhouette IoU | 0.6754 | 0.8006 | +0.1252 |
-| Held-out views | Mean depth MAE | 0.0409 | 0.0280 | -0.0130 |
-| Held-out views | Mean occupancy error | 0.1460 | 0.0269 | -0.1191 |
+| Fit views | Mean silhouette IoU | 0.6773 | 0.8424 | +0.1650 |
+| Fit views | Mean depth MAE | 0.0450 | 0.0339 | -0.0111 |
+| Held-out views | Mean silhouette IoU | 0.6982 | 0.8027 | +0.1045 |
+| Held-out views | Mean depth MAE | 0.0390 | 0.0273 | -0.0117 |
+| Held-out views | Mean occupancy error | 0.1973 | 0.0328 | -0.1645 |
 
 All four held-out silhouettes improve. The fitted body visibly lengthens and thickens, the contact footprint narrows, and the initial splayed arch collapses toward the donor's squat crawler gestalt across every azimuth.
 
@@ -54,7 +53,7 @@ Columns are donor depth, initial depth, fitted depth, fitted depth error, and in
 
 The first gate is satisfied: external three-dimensional evidence can recover gross creature proportions as a compact, editable semantic program, and the recovered program generalizes to unseen views. This creates a credible convergence route between stochastic creature casts and production-controlled morphology.
 
-Two parameters reach their lower bounds: `headScale` and `curveAmplitude`. The donor wants a straighter body and an anterior mass that is more integrated with the torso than the current explicit head primitive permits. That is a useful model-family residual. It identifies the next vocabulary pressure without weakening the held-out result.
+No parameter reaches a declared bound. The fitted program preserves all thirteen semantic levers, including the now-effective `limbLength`, as a compact editable crawler program. The visible residual is concentrated in the donor's asymmetric appendages and local dorsal structure. Those details require topology-family choice or a richer semantic program; parameter fitting alone cannot express them.
 
 ## Bounded claim
 
