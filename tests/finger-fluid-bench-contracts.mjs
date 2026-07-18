@@ -36,6 +36,9 @@ assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE\s*=\s*'web
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_NEIGHBOR_GRID_CONTRACT\s*=\s*'wgsl-linked-cell-neighbor-grid-v0'/, 'linked-cell neighbor grid contract is explicit');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_DENSITY_CONTRACT\s*=\s*'wgsl-pbf-density-constraint-v0'/, 'PBF density contract is explicit');
 assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT\s*=\s*'wgsl-analytic-boundary-density-support-v0'/, 'analytic solids participate in a versioned pressure-support contract');
+assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_SUPPORT_FRICTION_CONTRACT\s*=\s*'wgsl-analytic-contact-partial-slip-v0'/, 'analytic support friction has an explicit partial-slip contract');
+assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION\s*=\s*1\.6/, 'measured partial slip is the explicit native bench default');
+assert.match(webgpuCoreSource, /KAMINOS_FINGER_FLUID_ENERGY_LEDGER_CONTRACT\s*=\s*'wgsl-per-pass-kinetic-energy-ledger-v0'/, 'per-pass kinetic-energy attribution has an explicit contract');
 assert.match(webgpuCoreSource, /fn analytic_boundary_density_support\(position: vec3<f32>\) -> vec4<f32>/, 'terrain and sphere boundary support share one analytic density/gradient function');
 assert.match(computeDensityLambdaSource, /let boundarySupport = analytic_boundary_density_support\(position\)[\s\S]*density = density \+ boundarySupport\.w[\s\S]*gradientSelf = gradientSelf \+ boundarySupport\.xyz/, 'analytic boundary density and gradient enter the lambda solve');
 assert.doesNotMatch(computeDensityLambdaSource, /gradientSquared = gradientSquared \+ dot\(boundarySupport\.xyz, boundarySupport\.xyz\)/, 'static boundary support is not counted as a separately movable neighbor in the lambda denominator');
@@ -83,6 +86,9 @@ assert.match(webgpuCoreSource, /let radial = 0\.15 \* \(p\.x \* p\.x \+ p\.z \* 
 assert.match(webgpuCoreSource, /fn floorNormal\(p: vec3<f32>\) -> vec3<f32>/, 'height-field collision exposes an analytic terrain normal');
 assert.match(webgpuCoreSource, /p = p \+ normal \* \(penetration \/ max\(normal\.y, 0\.15\)\)/, 'terrain penetration resolves along the support normal');
 assert.match(webgpuCoreSource, /velocity = velocity - normal \* normalSpeed/, 'terrain contact removes inward normal velocity without vertical teleport energy');
+assert.match(webgpuCoreSource, /supportTangentialRetention\s*=\s*exp\(-params\.particleShift\.y \* supportContact \* params\.dt\)/, 'support friction damps only contact-weighted tangential velocity with a time-step-invariant exponential law');
+assert.match(webgpuCoreSource, /ENERGY_DIAGNOSTICS_SHADER/, 'kinetic-energy attribution owns a separate diagnostic shader instead of consuming another main solver storage binding');
+assert.match(webgpuCoreSource, /fn measure_projection_energy[\s\S]*fn measure_viscosity_energy[\s\S]*fn measure_vorticity_energy[\s\S]*fn measure_cohesion_energy/, 'energy diagnostics measure all four solver stages explicitly');
 assert.match(webgpuCoreSource, /const OBSTACLE_CENTER = \[0\.85, -0\.43, 0\.02\]/, 'obstacle center has one JavaScript source of truth');
 assert.match(webgpuCoreSource, /const OBSTACLE_RADIUS = 0\.52/, 'obstacle radius has one JavaScript source of truth');
 assert.match(webgpuCoreSource, /const VORTICITY_UPDATE_INTERVAL = 3/, 'vorticity cadence is explicit rather than silently omitted under load');
@@ -394,6 +400,17 @@ assert.match(truthWitnessSource, /totalKineticEnergy/, 'truth witness measures e
 assert.match(truthWitnessSource, /occupiedCellCount/, 'truth witness records support-volume occupancy rather than particle count alone');
 assert.match(truthWitnessSource, /requestedUrl/, 'truth witness records the exact requested route');
 assert.match(truthWitnessSource, /effectiveUrl/, 'truth witness records the effective browser route');
+assert.match(truthWitnessSource, /requestedSupportFriction\s*!==\s*effectiveSupportFriction/, 'truth witness rejects silent support-friction fallback');
+assert.match(truthWitnessSource, /energyLedger/, 'truth witness records per-pass kinetic-energy attribution at every requested checkpoint');
+assert.match(truthWitnessSource, /energyLedger\.stepCount\s*!==\s*state\.runtime\.diagnostics\?\.stepCount/, 'energy attribution is bound to the captured diagnostics step rather than a later live animation step');
+assert.match(truthWitnessSource, /supportDiagnostics[\s\S]*averageSupportedTangentialSpeed[\s\S]*supportedRestingParticleRatio[\s\S]*movingLockedParticleRatio/, 'truth checkpoints preserve support-slip, rest, and topology-lock evidence together');
+assert.match(truthWitnessSource, /--checkpoint-steps/, 'truth witness accepts explicit minimum solver-step horizons independently of wall-clock checkpoint offsets');
+assert.match(truthWitnessSource, /checkpointStepTargets/, 'truth witness records the effective solver-step horizon for every checkpoint');
+assert.match(truthWitnessSource, /checkpointStepTargets\.length\s*!==\s*checkpointOffsetsMs\.length/, 'truth witness rejects partial wall-time/solver-step checkpoint identity');
+assert.match(truthWitnessSource, /runtime\?\.stepCount\s*>=\s*targetStep/, 'truth witness waits for the live simulation to reach the requested solver-step horizon');
+assert.match(truthWitnessSource, /state\.runtime\.diagnostics\.stepCount\s*<\s*targetStep/, 'truth witness rejects diagnostics captured before the requested solver-step horizon');
+assert.match(indexSource, /finger_fluid_support_friction/, 'bench route exposes an explicit support-friction request');
+assert.match(indexSource, /params\.get\('finger_fluid_support_friction'\)\s*\?\?\s*KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION/, 'route omission resolves to the measured partial-slip default rather than free slip');
 
 const mod = await import(benchCorePath);
 assert.equal(mod.KAMINOS_FINGER_FLUID_BENCH_STATE_SCHEMA, 'kaminos.finger-fluid-bench.state.v0');
@@ -447,6 +464,49 @@ assert.equal(typeof webgpuMod.measureFingerFluidTruthSnapshot, 'function');
 assert.equal(typeof webgpuMod.evaluateFingerFluidTruthTrajectory, 'function');
 assert.equal(typeof webgpuMod.evaluateAnalyticBoundaryKernelSupport, 'function');
 assert.equal(typeof webgpuMod.evaluateStaticBoundaryLambdaDenominator, 'function');
+assert.equal(webgpuMod.resolveFingerFluidSupportFriction('1.6'), 1.6);
+assert.equal(webgpuMod.resolveFingerFluidSupportFriction(), 1.6);
+assert.equal(webgpuMod.resolveFingerFluidSupportFriction(0), 0);
+assert.equal(webgpuMod.resolveFingerFluidSupportFriction(200), 200, 'support friction has no unmeasured artificial upper cap');
+assert.throws(() => webgpuMod.resolveFingerFluidSupportFriction(-0.01), /support friction/i);
+assert.throws(() => webgpuMod.resolveFingerFluidSupportFriction(Number.POSITIVE_INFINITY), /support friction/i);
+assert.throws(() => webgpuMod.resolveFingerFluidSupportFriction('partial'), /support friction/i);
+const supportFrictionVelocity = webgpuMod.applySupportFrictionVelocity(
+  [1, 0.25, 0],
+  [0, 1, 0],
+  1,
+  1.6,
+  1 / 60,
+);
+assert.equal(supportFrictionVelocity[1], 0.25, 'support friction preserves normal escape velocity exactly');
+assert.ok(supportFrictionVelocity[0] > 0 && supportFrictionVelocity[0] < 1, 'support friction reduces tangential slip without freezing it');
+assert.deepEqual(
+  webgpuMod.applySupportFrictionVelocity([1, 0.25, 0], [0, 1, 0], 0, 1.6, 1 / 60),
+  [1, 0.25, 0],
+  'airborne particles are unaffected by support friction',
+);
+const supportFrictionFullStep = webgpuMod.applySupportFrictionVelocity([1, 0.25, 0], [0, 1, 0], 1, 1.6, 1 / 60);
+const supportFrictionHalfStepA = webgpuMod.applySupportFrictionVelocity([1, 0.25, 0], [0, 1, 0], 1, 1.6, 1 / 120);
+const supportFrictionHalfStepB = webgpuMod.applySupportFrictionVelocity(supportFrictionHalfStepA, [0, 1, 0], 1, 1.6, 1 / 120);
+assert.ok(Math.abs(supportFrictionFullStep[0] - supportFrictionHalfStepB[0]) < 1e-12, 'support friction is invariant to solver substep count');
+const energyLedger = webgpuMod.summarizeFingerFluidEnergyLedger(new Float32Array([
+  1, 0.8, 0.9, 0.7,
+  3, 2.4, 2.7, 2.1,
+]), 2, 19);
+assert.equal(energyLedger.contract, 'wgsl-per-pass-kinetic-energy-ledger-v0');
+assert.equal(energyLedger.stepCount, 19);
+assert.ok(Math.abs(energyLedger.averageKineticEnergy.projection - 2) < 1e-6);
+assert.ok(Math.abs(energyLedger.averageKineticEnergy.viscosity - 1.6) < 1e-6);
+assert.ok(Math.abs(energyLedger.averageKineticEnergy.vorticity - 1.8) < 1e-6);
+assert.ok(Math.abs(energyLedger.averageKineticEnergy.cohesion - 1.4) < 1e-6);
+assert.ok(Math.abs(energyLedger.stageDelta.viscosity + 0.4) < 1e-6);
+assert.ok(Math.abs(energyLedger.stageDelta.vorticity - 0.2) < 1e-6);
+assert.ok(Math.abs(energyLedger.stageDelta.cohesion + 0.4) < 1e-6);
+assert.throws(
+  () => webgpuMod.summarizeFingerFluidEnergyLedger(new Float32Array([1, 2, 3]), 1, 1),
+  /energy ledger/i,
+  'partial GPU energy readback cannot masquerade as complete attribution',
+);
 assert.equal(
   webgpuMod.evaluateStaticBoundaryLambdaDenominator([1, 2, 2], 0.012),
   9.012,

@@ -2693,11 +2693,13 @@ import {
   createFingerFluidBenchState,
 } from './finger-fluid-bench-core.js';
 import {
+  KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION,
   createWebGPUFingerFluidSolver,
   resolveFingerFluidColorMode,
   resolveFingerFluidTruthScene,
   resolveFingerFluidRendererMode,
   resolveFingerFluidParticleShiftStrength,
+  resolveFingerFluidSupportFriction,
   resolveFingerFluidChemistryDiffusion,
 } from './finger-fluid-webgpu-core.js';
 
@@ -2839,6 +2841,7 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
   const requestedColorMode = params.get('finger_fluid_color_mode') || 'phase';
   const requestedRendererMode = params.get('finger_fluid_renderer') || 'screen_space_surface';
   const requestedParticleShiftStrength = Number(params.get('finger_fluid_particle_shift') ?? 0);
+  const requestedSupportFriction = Number(params.get('finger_fluid_support_friction') ?? KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION);
   const requestedChemistryDiffusion = Number(params.get('finger_fluid_chemistry_diffusion') ?? 0);
   return {
     schema: 'kaminos.finger-fluid-bench.route-config.v0',
@@ -2851,6 +2854,8 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     sphereDebugRoute: 'finger_fluid_renderer=sphere_debug',
     requestedParticleShiftStrength,
     effectiveParticleShiftStrength: resolveFingerFluidParticleShiftStrength(requestedParticleShiftStrength),
+    requestedSupportFriction,
+    effectiveSupportFriction: resolveFingerFluidSupportFriction(requestedSupportFriction),
     requestedChemistryDiffusion,
     effectiveChemistryDiffusion: resolveFingerFluidChemistryDiffusion(requestedChemistryDiffusion),
   };
@@ -10163,6 +10168,8 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
   gpuState.requestedRendererMode = fingerFluidBenchConfig.requestedRendererMode;
   gpuState.requestedParticleShiftStrength = fingerFluidBenchConfig.requestedParticleShiftStrength;
   gpuState.effectiveParticleShiftStrength = gpuState.particleShiftStrength;
+  gpuState.requestedSupportFriction = fingerFluidBenchConfig.requestedSupportFriction;
+  gpuState.effectiveSupportFriction = gpuState.supportFriction;
   gpuState.requestedChemistryDiffusion = fingerFluidBenchConfig.requestedChemistryDiffusion;
   gpuState.effectiveChemistryDiffusion = gpuState.chemistryDiffusion;
   fingerFluidBenchLastFrameMs = performance.now() - frameStart;
@@ -10189,6 +10196,10 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
     neighborGridContract: gpuState.neighborGridContract,
     densityContract: gpuState.densityContract,
     boundaryPressureContract: gpuState.boundaryPressureContract,
+    supportFrictionContract: gpuState.supportFrictionContract,
+    supportFriction: gpuState.supportFriction,
+    energyLedgerContract: gpuState.energyLedgerContract,
+    energyLedger: gpuState.energyLedger,
     vorticityConfinementContract: gpuState.vorticityConfinementContract,
     freeSurfaceContract: gpuState.freeSurfaceContract,
     restStateContract: gpuState.restStateContract,
@@ -10255,6 +10266,7 @@ async function startFingerFluidBench() {
       colorMode: fingerFluidBenchConfig.effectiveColorMode,
       rendererMode: fingerFluidBenchConfig.effectiveRendererMode,
       particleShiftStrength: fingerFluidBenchConfig.effectiveParticleShiftStrength,
+      supportFriction: fingerFluidBenchConfig.effectiveSupportFriction,
       chemistryDiffusion: fingerFluidBenchConfig.effectiveChemistryDiffusion,
       transparentBackground: fingerFluidPyroCompositionRequested(),
     });

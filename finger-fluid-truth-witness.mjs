@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import {
+  KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION,
   evaluateFingerFluidTruthTrajectory,
   validateFingerFluidTruthRendererState,
 } from './finger-fluid-webgpu-core.js';
@@ -14,9 +15,17 @@ const requestedUrl = args.get('--url') || 'http://127.0.0.1:8100/index.html?kami
 const requestedUrlObject = new URL(requestedUrl);
 const requestedTruthScene = requestedUrlObject.searchParams.get('finger_fluid_truth_scene') || 'multi_regime_playground';
 const requestedRendererMode = requestedUrlObject.searchParams.get('finger_fluid_renderer') || 'screen_space_surface';
+const requestedSupportFriction = Number(requestedUrlObject.searchParams.get('finger_fluid_support_friction') ?? KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION);
 const checkpointOffsetsMs = String(args.get('--checkpoints-ms') || '500,2500,7000')
   .split(',')
   .map(value => Number(value.trim()));
+const requestedCheckpointSteps = args.get('--checkpoint-steps');
+const checkpointStepTargets = requestedCheckpointSteps === undefined
+  ? checkpointOffsetsMs.map(offsetMs => Math.ceil(offsetMs * 0.03))
+  : String(requestedCheckpointSteps).split(',').map(value => Number(value.trim()));
+const checkpointStepTargetSource = requestedCheckpointSteps === undefined
+  ? 'derived-minimum-30-solver-steps-per-second-v0'
+  : 'explicit-cli-minimum-solver-steps-v0';
 const outDir = resolve(args.get('--out-dir') || `/tmp/kaminos-fluid-truth-${requestedTruthScene}-${process.pid}`);
 const reportPath = resolve(args.get('--report') || join(outDir, 'report.json'));
 const debugPort = Number(args.get('--debug-port') || 9521);
@@ -56,8 +65,11 @@ function writeReport(extra = {}) {
     effectiveTruthScene,
     requestedRendererMode,
     effectiveRendererMode,
+    requestedSupportFriction,
     initialRendererAuthority,
     checkpointOffsetsMs,
+    checkpointStepTargets,
+    checkpointStepTargetSource,
     viewport: { width: viewportWidth, height: viewportHeight, deviceScaleFactor },
     debugPort,
     chrome,
@@ -190,7 +202,7 @@ function measureCapturedCanvas(path) {
   };
 }
 
-async function requestCheckpoint(socket, checkpointIndex, elapsedMs) {
+async function requestCheckpoint(socket, checkpointIndex, elapsedMs, targetStep) {
   const before = await evaluate(socket, `(() => {
     const read = window.kaminosFingerFluidBenchDebugState || window.__kaminosFingerFluidBenchDebugState;
     return typeof read === 'function' ? read() : null;
@@ -222,6 +234,13 @@ async function requestCheckpoint(socket, checkpointIndex, elapsedMs) {
   if (state.runtime.diagnosticsRequestCount !== (before?.runtime?.diagnosticsRequestCount || 0) + 1) {
     throw new Error(`checkpoint diagnostics request identity skipped or duplicated: ${JSON.stringify({ before: before?.runtime, after: state.runtime })}`);
   }
+  if (state.runtime.diagnostics.stepCount < targetStep) {
+    throw new Error(`checkpoint diagnostics were captured before the minimum solver-step horizon: ${JSON.stringify({
+      targetStep,
+      diagnosticsStepCount: state.runtime.diagnostics.stepCount,
+      liveStepCount: state.runtime.stepCount,
+    })}`);
+  }
   const requestedTruthScene = state.runtime?.requestedTruthScene;
   const effectiveTruthScene = state.runtime?.effectiveTruthScene;
   if (requestedTruthScene !== effectiveTruthScene) {
@@ -229,6 +248,16 @@ async function requestCheckpoint(socket, checkpointIndex, elapsedMs) {
   }
   if (effectiveTruthScene !== globalThis.effectiveTruthScene) {
     throw new Error(`truth scene changed during trajectory: ${JSON.stringify({ expected: globalThis.effectiveTruthScene, effectiveTruthScene })}`);
+  }
+  const effectiveSupportFriction = state.runtime?.effectiveSupportFriction;
+  if (state.runtime?.requestedSupportFriction !== effectiveSupportFriction) {
+    throw new Error(`support friction silently fell back: ${JSON.stringify({
+      requestedSupportFriction: state.runtime?.requestedSupportFriction,
+      effectiveSupportFriction,
+    })}`);
+  }
+  if (effectiveSupportFriction !== requestedSupportFriction) {
+    throw new Error(`support friction changed during trajectory: ${JSON.stringify({ requestedSupportFriction, effectiveSupportFriction })}`);
   }
   const rendererAuthority = validateFingerFluidTruthRendererState(requestedRendererMode, state.runtime);
   if (rendererAuthority.effectiveRendererMode !== effectiveRendererMode) {
@@ -284,6 +313,32 @@ async function requestCheckpoint(socket, checkpointIndex, elapsedMs) {
   if (effectiveTruthScene !== 'multi_regime_playground' && fluidTruthSnapshot.sourceRecirculationCount !== 0) {
     throw new Error(`closed-population scene leaked into source recirculation: ${JSON.stringify(fluidTruthSnapshot)}`);
   }
+  const energyLedger = state.runtime?.energyLedger;
+  const energyStages = ['projection', 'viscosity', 'vorticity', 'cohesion'];
+  if (
+    energyLedger?.contract !== 'wgsl-per-pass-kinetic-energy-ledger-v0'
+    || energyLedger.stepCount !== state.runtime.diagnostics?.stepCount
+    || energyLedger.particleCount !== state.runtime.particleCount
+    || !energyStages.every(stage => Number.isFinite(energyLedger.averageKineticEnergy?.[stage]))
+    || !energyStages.every(stage => Number.isFinite(energyLedger.totalKineticEnergy?.[stage]))
+    || !['viscosity', 'vorticity', 'cohesion'].every(stage => Number.isFinite(energyLedger.stageDelta?.[stage]))
+  ) {
+    throw new Error(`energy ledger is missing, stale, or partial: ${JSON.stringify(energyLedger)}`);
+  }
+  const supportDiagnostics = {
+    averageSupportedTangentialSpeed: state.runtime.diagnostics?.averageSupportedTangentialSpeed,
+    supportedTransportParticleRatio: state.runtime.diagnostics?.supportedTransportParticleRatio,
+    supportedRestingParticleRatio: state.runtime.diagnostics?.supportedRestingParticleRatio,
+    movingLockedParticleRatio: state.runtime.diagnostics?.movingLockedParticleRatio,
+  };
+  if (
+    !Object.values(supportDiagnostics).every(Number.isFinite)
+    || supportDiagnostics.averageSupportedTangentialSpeed < 0
+    || !['supportedTransportParticleRatio', 'supportedRestingParticleRatio', 'movingLockedParticleRatio']
+      .every(field => supportDiagnostics[field] >= 0 && supportDiagnostics[field] <= 1)
+  ) {
+    throw new Error(`support-slip diagnostics are missing or invalid: ${JSON.stringify(supportDiagnostics)}`);
+  }
 
   const canvasRect = await evaluate(socket, `(() => {
     const canvas = document.getElementById('finger-fluid-bench-canvas');
@@ -309,14 +364,46 @@ async function requestCheckpoint(socket, checkpointIndex, elapsedMs) {
   return {
     checkpointIndex,
     elapsedMs: Number(elapsedMs.toFixed(1)),
+    minimumStepCount: targetStep,
     diagnosticsRequestCount: state.runtime.diagnosticsRequestCount,
     diagnosticsCompletionCount: state.runtime.diagnosticsCompletionCount,
-    stepCount: state.runtime.stepCount,
+    stepCount: state.runtime.diagnostics.stepCount,
+    liveStepCount: state.runtime.stepCount,
     rendererAuthority,
+    supportFriction: effectiveSupportFriction,
+    energyLedger,
+    supportDiagnostics,
     fluidTruthSnapshot,
     visual,
     outputPath,
   };
+}
+
+async function waitForMinimumStep(socket, targetStep) {
+  let lastProgressReportAt = 0;
+  while (true) {
+    const state = await evaluate(socket, `(() => {
+      const read = window.kaminosFingerFluidBenchDebugState || window.__kaminosFingerFluidBenchDebugState;
+      return typeof read === 'function' ? read() : null;
+    })()`);
+    lastDebugState = state;
+    const runtime = state?.runtime;
+    if (runtime?.stepCount >= targetStep) return state;
+    if (state?.status && state.status !== 'running') {
+      throw new Error(`fluid bench stopped before minimum solver-step horizon: ${JSON.stringify({ targetStep, status: state.status, runtime })}`);
+    }
+    const now = Date.now();
+    if (now - lastProgressReportAt >= 1000) {
+      lastProgressReportAt = now;
+      writeReport({
+        waitingForMinimumStep: {
+          targetStep,
+          observedStepCount: runtime?.stepCount ?? null,
+        },
+      });
+    }
+    await delay(50);
+  }
 }
 
 async function main() {
@@ -325,6 +412,15 @@ async function main() {
   }
   if (checkpointOffsetsMs.some((value, index) => index > 0 && value <= checkpointOffsetsMs[index - 1])) {
     throw new Error(`Truth checkpoints must be strictly increasing: ${JSON.stringify(checkpointOffsetsMs)}`);
+  }
+  if (checkpointStepTargets.length !== checkpointOffsetsMs.length) {
+    throw new Error(`Truth checkpoint step targets must match checkpoint offsets: ${JSON.stringify({ checkpointOffsetsMs, checkpointStepTargets })}`);
+  }
+  if (checkpointStepTargets.some(value => !Number.isSafeInteger(value) || value < 0)) {
+    throw new Error(`Truth checkpoint step targets must be non-negative safe integers: ${JSON.stringify(checkpointStepTargets)}`);
+  }
+  if (checkpointStepTargets.some((value, index) => index > 0 && value <= checkpointStepTargets[index - 1])) {
+    throw new Error(`Truth checkpoint step targets must be strictly increasing: ${JSON.stringify(checkpointStepTargets)}`);
   }
   phase = 'launch_browser';
   const chromeProcess = spawn(chrome, [
@@ -378,6 +474,14 @@ async function main() {
     if (requestedTruthScene !== effectiveTruthScene) {
       throw new Error(`truth scene silently fell back: ${JSON.stringify({ requestedTruthScene, effectiveTruthScene })}`);
     }
+    const effectiveSupportFriction = lastDebugState.runtime?.effectiveSupportFriction;
+    if (lastDebugState.runtime?.requestedSupportFriction !== effectiveSupportFriction || effectiveSupportFriction !== requestedSupportFriction) {
+      throw new Error(`support friction request/effective disagreement: ${JSON.stringify({
+        requestedSupportFriction,
+        runtimeRequestedSupportFriction: lastDebugState.runtime?.requestedSupportFriction,
+        effectiveSupportFriction,
+      })}`);
+    }
     if (lastDebugState.runtime?.solverRoute !== 'webgpu-pbf-linked-cell-fluid-v0' || lastDebugState.runtime?.solver_backend !== 'webgpu_compute') {
       throw new Error(`truth witness reached a fallback solver: ${JSON.stringify(lastDebugState.runtime)}`);
     }
@@ -394,10 +498,13 @@ async function main() {
     const startedAt = performance.now();
     for (let checkpointIndex = 0; checkpointIndex < checkpointOffsetsMs.length; checkpointIndex += 1) {
       const targetOffsetMs = checkpointOffsetsMs[checkpointIndex];
+      const targetStep = checkpointStepTargets[checkpointIndex];
       const remainingMs = targetOffsetMs - (performance.now() - startedAt);
       if (remainingMs > 0) await delay(remainingMs);
+      phase = `wait_for_checkpoint_${checkpointIndex + 1}_step_${targetStep}`;
+      await waitForMinimumStep(socket, targetStep);
       phase = `checkpoint_${checkpointIndex + 1}`;
-      trajectory.push(await requestCheckpoint(socket, checkpointIndex, performance.now() - startedAt));
+      trajectory.push(await requestCheckpoint(socket, checkpointIndex, performance.now() - startedAt, targetStep));
       lastDebugState = await evaluate(socket, `(() => {
         const read = window.kaminosFingerFluidBenchDebugState || window.__kaminosFingerFluidBenchDebugState;
         return typeof read === 'function' ? read() : null;
