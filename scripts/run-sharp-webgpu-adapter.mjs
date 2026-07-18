@@ -199,6 +199,22 @@ function schedulerEvidence(telemetry = null, statusOverride = null) {
   };
 }
 
+function liveSchedulerRuntimeEvidence(result = null) {
+  const sharpRunDebug = result?.sharpRunDebug || null;
+  const schedulerApplication = result?.schedulerApplication || sharpRunDebug?.schedulerApplication || null;
+  const commandDutyReport = result?.commandDutyReport || sharpRunDebug?.commandDutyReport || null;
+  const hostPhaseReport = result?.hostPhaseReport || sharpRunDebug?.hostPhaseReport || null;
+  return {
+    schema: 'kaminos.sharp-webgpu-live-scheduler-runtime-evidence.v0',
+    source: schedulerApplication || commandDutyReport || hostPhaseReport
+      ? 'sharp-browser-debug'
+      : 'not-observed',
+    schedulerApplication,
+    commandDutyReport,
+    hostPhaseReport,
+  };
+}
+
 function uniqueTelemetryPhases(telemetry) {
   const phases = [];
   for (const event of telemetry?.events || []) {
@@ -828,6 +844,7 @@ function writeJson(path, value) {
 function reportBase(extra = {}) {
   const breathingRoom = schedulerEvidence(extra.schedulerTelemetry || null, extra.schedulerStatus);
   const pipelineScheduler = pipelineSchedulerEvidence(breathingRoom);
+  const liveSchedulerRuntime = extra.liveSchedulerRuntime || liveSchedulerRuntimeEvidence(extra.inference || extra.result || null);
   return {
     schema: 'kaminos.sharp-webgpu-adapter-report.v0',
     ok: extra.ok ?? false,
@@ -854,6 +871,7 @@ function reportBase(extra = {}) {
       requestedScheduler,
     },
     breathingRoom,
+    liveSchedulerRuntime,
     schedulerVerification: pipelineScheduler.schedulerVerification,
     pipelineScheduler,
     lastTrustworthyEvidence,
@@ -1160,6 +1178,7 @@ function writeAutoCropEvidence(outputPath, context) {
       metadata: fileEvidence(metadataPath),
       inference: context.result || null,
       scheduler: schedulerEvidence(context.result?.schedulerTelemetry || null),
+      liveSchedulerRuntime: liveSchedulerRuntimeEvidence(context.result || null),
     },
     cropSignal: {
       provenance: 'generated PLY vertex bounds plus SHARP depth output captured in the same adapter run',
@@ -1266,6 +1285,7 @@ async function runBrowserInference() {
       const link = document.getElementById('download-ply');
       const validEl = document.getElementById('r-valid');
       if (link?.href?.startsWith('blob:') && validEl?.textContent === 'OK') {
+        const sharpRunDebug = window.__sharpDebug?.lastRun || null;
         return JSON.stringify({
           ok: true,
           model: document.getElementById('r-model')?.textContent || null,
@@ -1276,6 +1296,10 @@ async function runBrowserInference() {
           valid: validEl.textContent,
           downloadText: link.textContent || null,
           schedulerTelemetry: window.__SHARP_LAST_RUN_TELEMETRY__ || null,
+          sharpRunDebug,
+          schedulerApplication: sharpRunDebug?.schedulerApplication || null,
+          commandDutyReport: sharpRunDebug?.commandDutyReport || null,
+          hostPhaseReport: sharpRunDebug?.hostPhaseReport || null,
         });
       }
       return false;
@@ -1337,6 +1361,7 @@ async function runBrowserInference() {
         appUrl: url,
       },
       scheduler: schedulerEvidence(result.schedulerTelemetry || null),
+      liveSchedulerRuntime: liveSchedulerRuntimeEvidence(result),
       backgroundHeartbeat: result.backgroundHeartbeat,
       result,
       input: fileEvidence(input),
@@ -1394,6 +1419,7 @@ try {
     backgroundHeartbeat: browserResult.result.backgroundHeartbeat,
     schedulerTelemetry: browserResult.result.schedulerTelemetry || null,
     schedulerStatus: browserResult.result.schedulerTelemetry ? null : 'scheduler-unverified',
+    liveSchedulerRuntime: liveSchedulerRuntimeEvidence(browserResult.result),
     metadataPath,
     depthPath,
     autoCropEvidencePath,
