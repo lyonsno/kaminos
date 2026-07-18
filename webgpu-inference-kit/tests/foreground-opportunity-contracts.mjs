@@ -349,6 +349,26 @@ await assert.rejects(
   }),
   /pendingRequestCount/i,
 );
+await assert.rejects(
+  () => createWebGpuInferenceRuntime({
+    routeId: 'sharp.image-to-splat.webgpu-local.v0',
+    runtimeLabel: 'invalid-external-foreground-route',
+    device: runtimeDevice,
+    queue: runtimeQueue,
+    adapterName: 'Invalid External Foreground Route',
+    kernel: { profile: 'invalid-external-foreground-route' },
+    foregroundOpportunities: {
+      ...externalMethods,
+      snapshot() {
+        return {
+          ...externalSnapshot(),
+          routeId: 'some-other-route.webgpu-local.v0',
+        };
+      },
+    },
+  }),
+  /route mismatch/i,
+);
 let externalSnapshotIsValid = true;
 const mutableExternalRuntime = await createWebGpuInferenceRuntime({
   routeId: 'sharp.image-to-splat.webgpu-local.v0',
