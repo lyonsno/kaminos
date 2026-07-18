@@ -278,6 +278,7 @@ const [index, session, selectiveLive, witness, core] = await Promise.all([
 assert.match(index, /id="volume-stage-b-view"/, 'Stage B viewer must expose the producer-declared view sockets');
 assert.match(index, /id="volume-stage-b-status"[^]*stage-b-resources-missing/, 'Stage B must visibly name its missing resource state before admission');
 assert.match(index, /bootstrapStageBConsumer/, 'cockpit must bootstrap manifest validation and resource binding');
+assert.match(index, /if \(receipt\.status === 'effective'\) return applyStageBTreatment\(receipt\);[\s\S]*renderStageBReceipt\(receipt\)/, 'complete resources must publish only the post-render receipt');
 assert.match(index, /full_support_stage_b_manifest_sha256/, 'cockpit route must bind the requested producer manifest hash');
 assert.doesNotMatch(index, /Matched optical recurrence:\s*awaiting source manifest/i, 'stale manifest-dependency language must be removed');
 assert.match(session, /--stage-b-manifest/, 'session launcher must accept a caller-provided Stage B manifest');

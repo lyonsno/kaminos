@@ -18151,8 +18151,9 @@ async function initKaminosVolumeRoute() {
       resourceLoadReceipts,
     });
     configureStageBView(receipt);
+    if (receipt.status === 'effective') return applyStageBTreatment(receipt);
     renderStageBReceipt(receipt);
-    return receipt.status === 'effective' ? applyStageBTreatment(receipt) : receipt;
+    return receipt;
   };
   stageBApply?.addEventListener('click', () => void applyStageBTreatment(window.__kaminosStageBCockpitReceipt));
   window.__kaminosBootstrapStageBConsumer = bootstrapStageBConsumer;
