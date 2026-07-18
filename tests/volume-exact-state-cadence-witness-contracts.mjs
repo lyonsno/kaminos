@@ -34,6 +34,54 @@ assert.match(source, /presentationDisposition/, 'witness records whether a visib
 assert.match(source, /presentationHoldReceipt/, 'witness preserves the held source and attempted underflow instead of hiding contention');
 assert.match(source, /--require-held-presentation/, 'witness can make the repaired underflow path a required acceptance predicate');
 assert.match(source, /--force-underflow-ms/, 'witness can autonomously create lifecycle pressure instead of depending on operator timing');
+assert.match(source, /--exercise-splat-toggle/, 'witness can reproduce the operator raymarch-to-splat control transition');
+assert.match(
+  source,
+  /exerciseBoundarySplatModeTransition[\s\S]*dispatchBoundarySplatModeControl\('off'\)[\s\S]*dispatchBoundarySplatModeControl\(requestedMode\)/,
+  'toggle witness drives the route through raymarch and back to the requested splat mode',
+);
+assert.match(
+  source,
+  /dispatchBoundarySplatModeControl[\s\S]*volume-boundary-splat-mode[\s\S]*new Event\('change', \{ bubbles: true \}\)/,
+  'toggle witness uses the real stable-geometry selector change handler',
+);
+assert.match(
+  source,
+  /splatModeTransition[\s\S]*before[\s\S]*raymarch[\s\S]*restored/,
+  'toggle evidence preserves before, raymarch, and restored authority states in the durable report',
+);
+assert.match(source, /splat-mode-transition-off-not-effective/, 'toggle witness fails loud when raymarch never becomes effective');
+assert.match(source, /splat-mode-transition-restore-not-effective/, 'toggle witness fails loud when the requested splat mode does not recover');
+assert.match(
+  source,
+  /requestedConfigFromUrl[\s\S]*boundarySplatInstances[\s\S]*volume_boundary_splat_instances[\s\S]*boundarySplatHistoryDepth[\s\S]*volume_boundary_splat_history_depth/,
+  'witness parses requested descriptor count and history depth instead of accepting any positive population',
+);
+assert.match(
+  source,
+  /validateEffectiveState[\s\S]*boundarySplatRequestedInstanceCount[\s\S]*boundarySplatHistoryDepth[\s\S]*boundarySplatHistorySlots/,
+  'witness rejects stale/default instance and history allocation state',
+);
+assert.match(
+  source,
+  /exerciseBoundarySplatModeTransition[\s\S]*captureRaymarchTransitionReceipt[\s\S]*raymarchApplied[\s\S]*splatApplied/,
+  'raymarch leg requires a submitted GPU pass receipt rather than only an off control bit',
+);
+assert.match(source, /splat-mode-transition-raymarch-render-not-effective/, 'toggle witness fails loud when the off leg does not submit raymarch without splats');
+assert.match(
+  source,
+  /claimCurrentCameraForSplatTransition[\s\S]*debug-manual-camera-pose[\s\S]*cameraPoseAgreement/,
+  'toggle witness must claim and preserve a manual camera pose across the real control round trip',
+);
+const waitForBoundarySplatModeSource = source.slice(
+  source.indexOf('async function waitForBoundarySplatMode'),
+  source.indexOf('async function forcePresentationUnderflow'),
+);
+assert.match(
+  waitForBoundarySplatModeSource,
+  /BOUNDARY_SPLAT_LEARNED_RENDERER_IDENTITY[\s\S]*BOUNDARY_SPLAT_LEARNED_ATTRIBUTE_MODEL_IDENTITY/,
+  'learned restoration cannot settle on the mode bit before renderer and model authority refresh',
+);
 assert.doesNotMatch(source, /Page\.setWebLifecycleState/, 'forced underflow pressure cannot use a headless lifecycle transition that may never resume RAF');
 assert.match(
   source,

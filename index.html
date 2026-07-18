@@ -2746,6 +2746,7 @@ let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
 let volumePrototype = null;
 let volumeBridge = null;
+let boundarySplatCameraAuthority = 'unclaimed-camera-pose';
 let motionAgencyState = null;
 let motionDecisionState = null;
 let motionPhraseControlState = null;
@@ -5079,20 +5080,50 @@ window.kaminosSetCameraDebugPose = function(pose = {}) {
   controls.update();
   camera.updateMatrixWorld?.();
   updateHybridSplatOverlayFrame();
+  claimBoundarySplatManualCameraAuthority('debug-manual-camera-pose');
   return window.kaminosCameraDebugState();
 };
 
+function claimBoundarySplatManualCameraAuthority(authority = 'operator-manual-camera-pose') {
+  boundarySplatCameraAuthority = authority;
+  window.__kaminosBoundarySplatCameraAuthority = authority;
+  if (window.__kaminosBoundarySplatCompositionCamera && camera && controls) {
+    window.__kaminosBoundarySplatCompositionCamera = {
+      ...window.__kaminosBoundarySplatCompositionCamera,
+      position: camera.position.toArray(),
+      target: controls.target.toArray(),
+      requestedEffectiveAgreement: false,
+      authority,
+    };
+  }
+  return authority;
+}
+
 function boundarySplatCompositionCameraPose(params = new URLSearchParams(window.location.search)) {
-  const requestedPbrScene = normalizeBoundarySplatPbrScene(params.get('volume_boundary_splat_pbr_scene'));
+  const currentMode = normalizeBoundarySplatMode(
+    document.getElementById('volume-boundary-splat-mode')?.value
+      ?? params.get('volume_boundary_splat_mode'),
+  );
+  if (currentMode === 'off') return null;
+  const requestedPbrScene = normalizeBoundarySplatPbrScene(
+    document.getElementById('volume-boundary-splat-pbr-scene')?.value
+      ?? params.get('volume_boundary_splat_pbr_scene'),
+  );
+  const count = Math.max(1, Math.min(128, Number(
+    document.getElementById('volume-boundary-splat-instances')?.value
+      ?? params.get('volume_boundary_splat_instances'),
+  ) || 1));
   if (requestedPbrScene === 'fire-field') {
-    const count = Math.max(1, Math.min(128, Number(params.get('volume_boundary_splat_instances')) || 16));
     return {
       identity: 'boundary-splat-pbr-fire-field-camera-v0',
       requestedComposition: String(params.get('volume_boundary_splat_composition') || 'field'),
       effectiveComposition: 'field',
       requestedPbrScene,
-      position: count > 36 ? [5.55, 2.35, 8.45] : [4.2, 1.55, 6.25],
-      target: [0.18, -0.46, 0.05],
+      instanceCount: count,
+      position: count <= 4
+        ? [0, 0.35, 4.2]
+        : count > 36 ? [5.55, 2.35, 8.45] : [4.2, 1.55, 6.25],
+      target: count <= 4 ? [0, -0.18, 0] : [0.18, -0.46, 0.05],
     };
   }
   const requested = String(params.get('volume_boundary_splat_composition') || '').toLowerCase().replace(/_/g, '-');
@@ -5101,12 +5132,19 @@ function boundarySplatCompositionCameraPose(params = new URLSearchParams(window.
     identity: 'boundary-splat-composed-field-camera-v1',
     requestedComposition: requested,
     effectiveComposition: 'field',
-    position: [0, 10.5, 13.5],
-    target: [0, 0, 0],
+    requestedPbrScene,
+    instanceCount: count,
+    position: count <= 4
+      ? [0, 0.28, 4.2]
+      : count <= 16 ? [0, 4.5, 8.5] : [0, 10.5, 13.5],
+    target: count <= 4 ? [0, -0.18, 0] : [0, 0, 0],
   };
 }
 
-function applyBoundarySplatCompositionCamera(params = new URLSearchParams(window.location.search)) {
+function applyBoundarySplatCompositionCamera(
+  params = new URLSearchParams(window.location.search),
+  options = {},
+) {
   const pose = boundarySplatCompositionCameraPose(params);
   if (!pose || !camera || !controls) return null;
   controls.maxDistance = Math.max(Number(controls.maxDistance) || 0, 30);
@@ -5125,8 +5163,10 @@ function applyBoundarySplatCompositionCamera(params = new URLSearchParams(window
     position: effectivePosition,
     target: effectiveTarget,
     requestedEffectiveAgreement,
-    authority: 'url-owned-effective-camera-pose',
+    authority: options.authority || 'url-owned-effective-camera-pose',
   };
+  boundarySplatCameraAuthority = window.__kaminosBoundarySplatCompositionCamera.authority;
+  window.__kaminosBoundarySplatCameraAuthority = boundarySplatCameraAuthority;
   return window.__kaminosBoundarySplatCompositionCamera;
 }
 
@@ -8663,6 +8703,14 @@ async function initScene() {
   controls.minDistance = 0.5;
   controls.maxDistance = 10;
   controls.target.set(0, 0, 0);
+  controls.addEventListener('start', () => {
+    claimBoundarySplatManualCameraAuthority('operator-manual-camera-pose');
+  });
+  controls.addEventListener('end', () => {
+    if (boundarySplatCameraAuthority === 'operator-manual-camera-pose') {
+      claimBoundarySplatManualCameraAuthority('operator-manual-camera-pose');
+    }
+  });
 
   pmremGenerator = new THREE.PMREMGenerator(renderer);
 
@@ -17146,7 +17194,9 @@ function refreshVolumeReadout() {
 window.__kaminosRefreshVolumeReadout = refreshVolumeReadout;
 
 function frameVolumeCamera() {
-  const composedCamera = applyBoundarySplatCompositionCamera();
+  const composedCamera = applyBoundarySplatCompositionCamera(undefined, {
+    authority: 'operator-frame-command-effective-camera-pose',
+  });
   if (composedCamera) return;
   const sceneName = document.getElementById('volume-scene')?.value || 'compact_plume';
   const frame = sceneName === 'bonfire_plume' ? BONFIRE_VOLUME_CAMERA_FRAME : DEFAULT_VOLUME_CAMERA_FRAME;
@@ -17874,6 +17924,11 @@ async function initKaminosVolumeRoute() {
     'volume-radiance',
     'volume-absorption',
   ]);
+  const splatCameraControlIds = new Set([
+    'volume-boundary-splat-mode',
+    'volume-boundary-splat-instances',
+    'volume-boundary-splat-pbr-scene',
+  ]);
   const syncControls = event => {
     if (event?.target?.id === 'volume-scene') {
       applyVolumeScenePreset(event.target.value);
@@ -17885,7 +17940,19 @@ async function initKaminosVolumeRoute() {
       routedVolumeRayBudgetPreset = '';
     }
     updateVolumeControlLabels();
-    volumePrototype.setControls(readVolumeControls());
+    const effectiveControls = readVolumeControls();
+    volumePrototype.setControls(effectiveControls);
+    if (
+      event?.type === 'change'
+      && splatCameraControlIds.has(event?.target?.id)
+      && effectiveControls.boundarySplatMode !== 'off'
+      && boundarySplatCameraAuthority !== 'operator-manual-camera-pose'
+      && boundarySplatCameraAuthority !== 'debug-manual-camera-pose'
+    ) {
+      applyBoundarySplatCompositionCamera(undefined, {
+        authority: 'operator-control-effective-camera-pose',
+      });
+    }
     refreshVolumeReadout();
     saveVolumeBasinSnapshot(event?.target?.id || 'control-change');
   };

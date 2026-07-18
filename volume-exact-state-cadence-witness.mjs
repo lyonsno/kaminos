@@ -14,6 +14,7 @@ const EFFECTIVE_ROUTE = 'native-3d-compute-fluid-raymarch-v0';
 const EXACT_STATE_CADENCE_GPU_IDENTITY = 'kaminos.volume.exact-state-cadence-gpu.v0';
 const ONE_SIMULATOR_AUTHORITY = 'single-authoritative-simulator-completed-state-history-v0';
 const PHASE_SOURCE = 'completed-exact-state-continuation-history';
+const BOUNDARY_SPLAT_ANALYTIC_RENDERER_IDENTITY = 'live-boundary-sidecar-analytic-splats-v0';
 const BOUNDARY_SPLAT_LEARNED_RENDERER_IDENTITY = 'live-boundary-sidecar-learned-attribute-splats-v0';
 const BOUNDARY_SPLAT_LEARNED_ATTRIBUTE_MODEL_IDENTITY = BOUNDARY_SPLAT_ATTRIBUTE_MODEL_IDENTITY;
 const OWNED_SERVER_IDENTITY = 'exact-state-cadence-owned-http-server-v0';
@@ -37,9 +38,13 @@ const sampleIntervalMs = Number(args.get('--sample-interval-ms') ?? 50);
 const requireHeldPresentation = ['1', 'true', 'yes', 'on'].includes(
   String(args.get('--require-held-presentation') || '').toLowerCase(),
 );
+const exerciseSplatToggle = ['1', 'true', 'yes', 'on'].includes(
+  String(args.get('--exercise-splat-toggle') || '').toLowerCase(),
+);
 const forceUnderflowMs = Number(args.get('--force-underflow-ms') ?? 0);
 const requestedWitnessConfig = {
   requireHeldPresentation,
+  exerciseSplatToggle,
   forceUnderflowMs,
   sampleCount,
   sampleIntervalMs,
@@ -113,6 +118,11 @@ try {
   validateEffectiveState(initialState, effectivePageUrl);
   lastTrustworthyEvidence.initialState = compactState(initialState);
   lastTrustworthyEvidence.effectivePageUrl = effectivePageUrl;
+
+  if (exerciseSplatToggle) {
+    failurePhase = 'splat-mode-transition';
+    lastTrustworthyEvidence.splatModeTransition = await exerciseBoundarySplatModeTransition(effectivePageUrl);
+  }
 
   failurePhase = 'cadence-sampling';
   const rows = [];
@@ -281,6 +291,12 @@ function requestedConfigFromUrl(url) {
   const requestedPbrScene = params.has('volume_boundary_splat_pbr_scene')
     ? String(params.get('volume_boundary_splat_pbr_scene') || 'off').toLowerCase().replace(/_/g, '-')
     : null;
+  const boundarySplatInstances = params.has('volume_boundary_splat_instances')
+    ? Number(params.get('volume_boundary_splat_instances'))
+    : null;
+  const boundarySplatHistoryDepth = params.has('volume_boundary_splat_history_depth')
+    ? Number(params.get('volume_boundary_splat_history_depth'))
+    : null;
   return {
     requested: true,
     depth: Number(params.get('volume_cadence_depth')),
@@ -294,6 +310,8 @@ function requestedConfigFromUrl(url) {
     boundarySplatPbrScene: requestedPbrScene === null
       ? null
       : ['fire-field', 'pbr-fire-field', 'court'].includes(requestedPbrScene) ? 'fire-field' : 'off',
+    boundarySplatInstances,
+    boundarySplatHistoryDepth,
   };
 }
 
@@ -318,6 +336,15 @@ function validateEffectiveState(state, pageUrl) {
   if (expected.boundarySplatMode !== null && state?.boundarySplatMode !== expected.boundarySplatMode) mismatches.push(['boundarySplatMode', expected.boundarySplatMode, state?.boundarySplatMode]);
   if (expected.boundarySplatComposition !== null && state?.boundarySplatComposition !== expected.boundarySplatComposition) mismatches.push(['boundarySplatComposition', expected.boundarySplatComposition, state?.boundarySplatComposition]);
   if (expected.boundarySplatPbrScene !== null && state?.boundarySplatPbrScene !== expected.boundarySplatPbrScene) mismatches.push(['boundarySplatPbrScene', expected.boundarySplatPbrScene, state?.boundarySplatPbrScene]);
+  if (expected.boundarySplatInstances !== null && Number(state?.boundarySplatRequestedInstanceCount) !== expected.boundarySplatInstances) {
+    mismatches.push(['boundarySplatRequestedInstanceCount', expected.boundarySplatInstances, state?.boundarySplatRequestedInstanceCount]);
+  }
+  if (expected.boundarySplatHistoryDepth !== null && Number(state?.boundarySplatHistoryDepth) !== expected.boundarySplatHistoryDepth) {
+    mismatches.push(['boundarySplatHistoryDepth', expected.boundarySplatHistoryDepth, state?.boundarySplatHistoryDepth]);
+  }
+  if (expected.boundarySplatHistoryDepth !== null && Number(state?.boundarySplatHistorySlots) !== expected.boundarySplatHistoryDepth) {
+    mismatches.push(['boundarySplatHistorySlots', expected.boundarySplatHistoryDepth, state?.boundarySplatHistorySlots]);
+  }
   if (expected.boundarySplatMode === 'learned') {
     if (state?.boundarySplatRendererIdentity !== BOUNDARY_SPLAT_LEARNED_RENDERER_IDENTITY) mismatches.push(['boundarySplatRendererIdentity', BOUNDARY_SPLAT_LEARNED_RENDERER_IDENTITY, state?.boundarySplatRendererIdentity]);
     if (state?.boundarySplatAttributeModelIdentity !== BOUNDARY_SPLAT_LEARNED_ATTRIBUTE_MODEL_IDENTITY) mismatches.push(['boundarySplatAttributeModelIdentity', BOUNDARY_SPLAT_LEARNED_ATTRIBUTE_MODEL_IDENTITY, state?.boundarySplatAttributeModelIdentity]);
@@ -350,10 +377,16 @@ function compactState(state) {
     boundarySplatAttributeModelIdentity: state?.boundarySplatAttributeModelIdentity || null,
     boundarySplatComposition: state?.boundarySplatComposition || null,
     boundarySplatPbrScene: state?.boundarySplatPbrScene || null,
+    boundarySplatRequestedInstanceCount: Number(state?.boundarySplatRequestedInstanceCount || 0),
+    boundarySplatHistoryDepth: Number(state?.boundarySplatHistoryDepth || 0),
+    boundarySplatHistorySlots: Number(state?.boundarySplatHistorySlots || 0),
     boundarySplatCandidateCount: Number(state?.boundarySplatCandidateCount || 0),
     boundarySplatSourceCandidateCount: Number(state?.boundarySplatSourceCandidateCount || 0),
     boundarySplatSelectedCandidateCount: Number(state?.boundarySplatSelectedCandidateCount || 0),
     boundarySplatInstanceCount: Number(state?.boundarySplatInstanceCount || 0),
+    boundarySplatOverflowCount: Number(state?.boundarySplatOverflowCount || 0),
+    boundarySplatCopyBytesThisFrame: Number(state?.boundarySplatCopyBytesThisFrame || 0),
+    boundarySplatFallbackReason: state?.boundarySplatFallbackReason || null,
     timing: state?.timing ? { ...state.timing } : null,
     simCostLedger: state?.simCostLedger ? { ...state.simCostLedger } : null,
     controlGeneration: Number(state?.exactStateCadenceControlGeneration),
@@ -538,6 +571,7 @@ async function captureCanvas(label) {
 
 function validateReadbackSample(sample) {
   const mismatches = [];
+  const expected = requestedConfigFromUrl(browserPageUrl || requestedRoute);
   if (sample?.simAdvanced !== false) mismatches.push(['simAdvanced', false, sample?.simAdvanced]);
   if (sample?.sampleAuthority !== 'render-only-exact-state-cadence-presentation-readback') {
     mismatches.push(['sampleAuthority', 'render-only-exact-state-cadence-presentation-readback', sample?.sampleAuthority]);
@@ -585,6 +619,15 @@ function validateReadbackSample(sample) {
   }
   if (!(Number(sample?.boundarySplatCandidateCount) > 0)) mismatches.push(['boundarySplatCandidateCount', '>0', sample?.boundarySplatCandidateCount]);
   if (!(Number(sample?.boundarySplatInstanceCount) > 0)) mismatches.push(['boundarySplatInstanceCount', '>0', sample?.boundarySplatInstanceCount]);
+  if (expected.boundarySplatInstances !== null && Number(sample?.boundarySplatRequestedInstanceCount) !== expected.boundarySplatInstances) {
+    mismatches.push(['boundarySplatRequestedInstanceCount', expected.boundarySplatInstances, sample?.boundarySplatRequestedInstanceCount]);
+  }
+  if (expected.boundarySplatHistoryDepth !== null && Number(sample?.boundarySplatHistoryDepth) !== expected.boundarySplatHistoryDepth) {
+    mismatches.push(['boundarySplatHistoryDepth', expected.boundarySplatHistoryDepth, sample?.boundarySplatHistoryDepth]);
+  }
+  if (expected.boundarySplatHistoryDepth !== null && Number(sample?.boundarySplatHistorySlots) !== expected.boundarySplatHistoryDepth) {
+    mismatches.push(['boundarySplatHistorySlots', expected.boundarySplatHistoryDepth, sample?.boundarySplatHistorySlots]);
+  }
   if (Number(sample?.boundarySplatOverflowCount || 0) !== 0) mismatches.push(['boundarySplatOverflowCount', 0, sample?.boundarySplatOverflowCount]);
   if (Number(sample?.boundarySplatCopyBytesThisFrame || 0) !== 0) mismatches.push(['boundarySplatCopyBytesThisFrame', 0, sample?.boundarySplatCopyBytesThisFrame]);
   if (sample?.boundarySplatFallbackReason != null) mismatches.push(['boundarySplatFallbackReason', null, sample?.boundarySplatFallbackReason]);
@@ -622,6 +665,9 @@ function compactReadbackSample(sample) {
     boundarySplatMode: sample?.boundarySplatMode || null,
     boundarySplatRendererIdentity: sample?.boundarySplatRendererIdentity || null,
     boundarySplatAttributeModelIdentity: sample?.boundarySplatAttributeModelIdentity || null,
+    boundarySplatRequestedInstanceCount: Number(sample?.boundarySplatRequestedInstanceCount || 0),
+    boundarySplatHistoryDepth: Number(sample?.boundarySplatHistoryDepth || 0),
+    boundarySplatHistorySlots: Number(sample?.boundarySplatHistorySlots || 0),
     boundarySplatCandidateCount: Number(sample?.boundarySplatCandidateCount || 0),
     boundarySplatInstanceCount: Number(sample?.boundarySplatInstanceCount || 0),
     boundarySplatOverflowCount: Number(sample?.boundarySplatOverflowCount || 0),
@@ -670,6 +716,182 @@ async function collectPageDiagnostic(state = null) {
     stateError: state?.error || null,
     stateBackend: state?.backend || null,
   }));
+}
+
+async function exerciseBoundarySplatModeTransition(effectivePageUrl) {
+  const requestedMode = requestedConfigFromUrl(effectivePageUrl).boundarySplatMode;
+  if (!['analytic', 'learned'].includes(requestedMode)) {
+    throw new Error(`splat-mode-transition-route-not-splat:${requestedMode}`);
+  }
+  const evidence = {
+    identity: 'operator-control-splat-mode-roundtrip-v0',
+    requestedMode,
+    before: compactState(await debugState()),
+    raymarch: null,
+    restored: null,
+  };
+  lastTrustworthyEvidence.splatModeTransition = evidence;
+  evidence.manualCameraClaim = await claimCurrentCameraForSplatTransition();
+
+  evidence.raymarchDispatch = await dispatchBoundarySplatModeControl('off');
+  const raymarchState = await waitForBoundarySplatMode('off');
+  evidence.raymarch = compactState(raymarchState);
+  evidence.raymarchControl = await boundarySplatModeControlState();
+  evidence.raymarchRender = await captureRaymarchTransitionReceipt();
+  if (
+    evidence.raymarchDispatch?.ok !== true
+    || evidence.raymarchControl?.value !== 'off'
+    || raymarchState?.boundarySplatMode !== 'off'
+  ) {
+    throw new Error(`splat-mode-transition-off-not-effective:${JSON.stringify(evidence)}`);
+  }
+
+  evidence.restoredDispatch = await dispatchBoundarySplatModeControl(requestedMode);
+  const restoredState = await waitForBoundarySplatMode(requestedMode, requestedMode === 'learned');
+  evidence.restored = compactState(restoredState);
+  evidence.restoredControl = await boundarySplatModeControlState();
+  evidence.restoredCamera = await cameraStateForSplatTransition();
+  evidence.cameraPoseAgreement = cameraPoseAgreement(
+    evidence.manualCameraClaim?.camera,
+    evidence.restoredCamera,
+  );
+  lastTrustworthyEvidence.splatModeTransition = evidence;
+  if (
+    evidence.restoredDispatch?.ok !== true
+    || evidence.restoredControl?.value !== requestedMode
+    || restoredState?.boundarySplatMode !== requestedMode
+    || evidence.manualCameraClaim?.ok !== true
+    || evidence.cameraPoseAgreement !== true
+  ) {
+    throw new Error(`splat-mode-transition-restore-not-effective:${JSON.stringify(evidence)}`);
+  }
+  try {
+    validateEffectiveState(restoredState, effectivePageUrl);
+  } catch (error) {
+    throw new Error(
+      `splat-mode-transition-restore-not-effective:${JSON.stringify(evidence)}:${error?.message || String(error)}`,
+      { cause: error },
+    );
+  }
+  return evidence;
+}
+
+async function claimCurrentCameraForSplatTransition() {
+  return evaluate(`(() => {
+    const camera = window.kaminosCameraDebugState?.();
+    if (!camera?.position || !camera?.target) return { ok: false, reason: 'camera-debug-state-missing' };
+    window.kaminosSetCameraDebugPose?.({ position: camera.position, target: camera.target });
+    return {
+      ok: window.__kaminosBoundarySplatCameraAuthority === 'debug-manual-camera-pose',
+      authority: window.__kaminosBoundarySplatCameraAuthority || null,
+      camera: window.kaminosCameraDebugState?.() || null,
+    };
+  })()`);
+}
+
+async function cameraStateForSplatTransition() {
+  return evaluate('window.kaminosCameraDebugState?.() || null');
+}
+
+function cameraPoseAgreement(left, right, epsilon = 1e-6) {
+  return ['position', 'target'].every(key => (
+    Array.isArray(left?.[key])
+    && Array.isArray(right?.[key])
+    && left[key].length === right[key].length
+    && left[key].every((value, index) => Math.abs(value - right[key][index]) <= epsilon)
+  ));
+}
+
+async function captureRaymarchTransitionReceipt() {
+  const sample = await evaluate(
+    "window.__kaminosVolumePrototype.sampleFrame({ advanceSim: false, includeRgba: false, boundarySplatComposition: 'raymarch-only-v0' })",
+    true,
+  );
+  const receipt = {
+    ok: sample?.ok === true,
+    sampleAuthority: sample?.sampleAuthority || null,
+    simAdvanced: sample?.simAdvanced ?? null,
+    frameCount: Number(sample?.frameCount),
+    simStepCount: Number(sample?.simStepCount),
+    litPixels: Number(sample?.litPixels || 0),
+    composition: sample?.boundarySplatReadbackCompositionEffective || null,
+    passReceipt: sample?.boundarySplatReadbackPassReceipt || null,
+  };
+  if (
+    receipt.ok !== true
+    || receipt.sampleAuthority !== 'render-only-exact-state-cadence-presentation-readback'
+    || receipt.simAdvanced !== false
+    || !(receipt.litPixels > 0)
+    || receipt.composition !== 'raymarch-only-v0'
+    || receipt.passReceipt?.raymarchApplied !== true
+    || receipt.passReceipt?.splatApplied !== false
+  ) {
+    throw new Error(`splat-mode-transition-raymarch-render-not-effective:${JSON.stringify(receipt)}`);
+  }
+  return receipt;
+}
+
+async function dispatchBoundarySplatModeControl(mode) {
+  return evaluate(`(() => {
+    const control = document.getElementById('volume-boundary-splat-mode');
+    if (!control) return { ok: false, reason: 'splat-mode-control-missing' };
+    const before = control.value;
+    control.value = ${JSON.stringify(mode)};
+    control.dispatchEvent(new Event('change', { bubbles: true }));
+    return {
+      ok: control.value === ${JSON.stringify(mode)},
+      requested: ${JSON.stringify(mode)},
+      before,
+      after: control.value,
+      label: document.getElementById('volume-boundary-splat-mode-val')?.textContent || null,
+      eventAuthority: 'real-control-change-handler-v0',
+    };
+  })()`);
+}
+
+async function boundarySplatModeControlState() {
+  return evaluate(`(() => {
+    const control = document.getElementById('volume-boundary-splat-mode');
+    const row = control?.closest('.slider-row');
+    const rect = row?.getBoundingClientRect();
+    return {
+      present: Boolean(control),
+      value: control?.value || null,
+      disabled: Boolean(control?.disabled),
+      label: document.getElementById('volume-boundary-splat-mode-val')?.textContent || null,
+      rowGeometry: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
+    };
+  })()`);
+}
+
+async function waitForBoundarySplatMode(expectedMode, requirePopulation = false) {
+  let lastState = null;
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    lastState = await debugState();
+    const populationSettled = !requirePopulation || (
+      Number(lastState?.boundarySplatSourceCandidateCount) > 0
+      && Number(lastState?.boundarySplatSelectedCandidateCount) > 0
+      && Number(lastState?.boundarySplatInstanceCount) > 0
+    );
+    const rendererAuthoritySettled = expectedMode === 'learned'
+      ? lastState?.boundarySplatRendererIdentity === BOUNDARY_SPLAT_LEARNED_RENDERER_IDENTITY
+        && lastState?.boundarySplatAttributeModelIdentity === BOUNDARY_SPLAT_LEARNED_ATTRIBUTE_MODEL_IDENTITY
+      : expectedMode === 'off'
+        ? lastState?.boundarySplatRendererIdentity === BOUNDARY_SPLAT_ANALYTIC_RENDERER_IDENTITY
+          && lastState?.boundarySplatAttributeModelIdentity == null
+        : true;
+    if (
+      lastState?.boundarySplatMode === expectedMode
+      && populationSettled
+      && rendererAuthoritySettled
+      && lastState?.boundarySplatFallbackReason == null
+    ) return lastState;
+    await delay(125);
+  }
+  const failureName = expectedMode === 'off'
+    ? 'splat-mode-transition-off-not-effective'
+    : 'splat-mode-transition-restore-not-effective';
+  throw new Error(`${failureName}:${JSON.stringify(compactState(lastState))}`);
 }
 
 async function forcePresentationUnderflow(effectivePageUrl) {
@@ -1090,6 +1312,10 @@ function classifyFailure(error, phase) {
     'owned-server-did-not-bind',
     'owned-browser-did-not-open-cdp',
     'requested-effective-route-mismatch',
+    'splat-mode-transition-route-not-splat',
+    'splat-mode-transition-off-not-effective',
+    'splat-mode-transition-raymarch-render-not-effective',
+    'splat-mode-transition-restore-not-effective',
     'stale-default-or-fallback-cadence-config',
     'cadence-runtime-refused',
     'volume-runtime-initialization-error',

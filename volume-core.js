@@ -11296,6 +11296,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       [0.45, 0, -0.12, 0.72],
       [1.35, 0, 0.18, 0.72],
     ];
+    if (composition === 'field' && requestedInstanceCount <= fourFlameProofLayout.length) {
+      return fourFlameProofLayout.slice(0, requestedInstanceCount);
+    }
     if (composition !== 'field' && requestedInstanceCount <= fourFlameProofLayout.length) {
       return fourFlameProofLayout.slice(0, requestedInstanceCount);
     }
@@ -15623,7 +15626,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     let boundarySplatReadbackPassReceipt = null;
     let boundarySplatReadbackCompositionEffective = null;
-    if (boundarySplatRequested()) {
+    const explicitRaymarchReadback = boundarySplatReadbackCompositionRequest?.requested === 'raymarch-only-v0';
+    if (boundarySplatRequested() || explicitRaymarchReadback) {
       const composition = boundarySplatReadbackCompositionRequest
         ? {
           ...boundarySplatReadbackCompositionRequest,
@@ -15695,7 +15699,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         splatApplied,
         fallbackReason: state.selectiveHeadLiveCompositionFallbackReason,
       });
-      encodeBoundarySplatTelemetry(encoder, true);
+      if (boundarySplatRequested()) encodeBoundarySplatTelemetry(encoder, true);
     } else {
       encodeDraw(encoder, frameTexture.createView(), 'kaminos volume one-off readback pass', readbackPipeline);
     }
@@ -16231,6 +16235,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
       boundarySidecarOverrideReceipt: state.boundarySidecarOverrideReceipt,
       boundarySplatCapacity: state.boundarySplatCapacity,
+      boundarySplatRequestedInstanceCount: state.boundarySplatRequestedInstanceCount,
+      boundarySplatHistoryDepth: state.boundarySplatHistoryDepth,
+      boundarySplatHistorySlots: state.boundarySplatHistorySlots,
       boundarySplatInstanceCount: boundarySplatSample?.instanceCount ?? state.boundarySplatInstanceCount,
       boundarySplatCandidateCount: boundarySplatSample?.candidateCount ?? state.boundarySplatCandidateCount,
       boundarySplatOverflowCount: boundarySplatSample?.overflowCount ?? state.boundarySplatOverflowCount,

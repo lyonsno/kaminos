@@ -11,10 +11,16 @@ assert.match(page, /volume_boundary_splat_instances/, 'operator route must expos
 assert.match(page, /volume_boundary_splat_composition/, 'operator route must encode the composed-field camera and layout instead of relying on hidden browser pose state');
 assert.match(page, /function frameVolumeCamera\(\)[\s\S]*applyBoundarySplatCompositionCamera[\s\S]*if \(composedCamera\) return/, 'generic smoke framing must not overwrite the composed-field route camera');
 assert.match(page, /url-owned-effective-camera-pose/, 'camera telemetry must identify the actual post-controls pose as effective route authority');
+assert.match(page, /volume-boundary-splat-pbr-scene[\s\S]*volume-boundary-splat-instances[\s\S]*boundarySplatCompositionCameraPose/, 'composition framing must consume current operator world and instance controls instead of stale URL values');
+assert.match(page, /position:\s*count <= 4[\s\S]*\[0, 0\.28, 4\.2\]/, 'four-flame field framing must use a close operator-visible camera pose');
+assert.match(page, /controls\.addEventListener\('start'[\s\S]*claimBoundarySplatManualCameraAuthority\('operator-manual-camera-pose'\)/, 'manual OrbitControls interaction must claim camera authority before a splat control can reframe');
+assert.match(page, /splatCameraControlIds[\s\S]*event\?\.type === 'change'[\s\S]*boundarySplatCameraAuthority !== 'operator-manual-camera-pose'[\s\S]*applyBoundarySplatCompositionCamera/, 'settled splat controls may refresh an owned composition frame but must preserve a manual camera pose');
+assert.match(page, /operator-frame-command-effective-camera-pose/, 'the explicit frame command must remain the operator-owned way to reclaim composition framing');
 assert.match(page, /id="volume-boundary-splat-instances"/, 'operator UI must expose a splat instance control');
 assert.match(page, /id="volume-boundary-splat-instances"[^>]*max="128"/, 'operator UI must expose a measured scale-demo range beyond the original four-flame proof');
 assert.match(core, /const BOUNDARY_SPLAT_MAX_INSTANCES = 128/, 'runtime must lift the product cap to the measured 128-instance scale-demo ceiling');
 assert.match(core, /function boundarySplatInstanceLayout/, 'runtime must generate instance layouts instead of hardcoding four clone positions');
+assert.match(core, /composition === 'field' && requestedInstanceCount <= fourFlameProofLayout\.length[\s\S]*fourFlameProofLayout\.slice/, 'the field route must preserve the proven four-flame scale when the visible count is four or fewer');
 assert.match(core, /BOUNDARY_SPLAT_FIELD_COMPOSITION_IDENTITY\s*=\s*'boundary-splat-composed-field-v0'/, 'runtime must publish a stable composed-field identity');
 assert.match(core, /boundarySplatLayoutBounds/, 'runtime telemetry must preserve the effective field bounds');
 assert.match(core, /Array\.from\(\{ length: requestedInstanceCount \}/, 'descriptor generation must cover all requested instances up to the measured scale ceiling');
