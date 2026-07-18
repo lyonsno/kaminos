@@ -39,7 +39,7 @@ function responseFor(bytes) {
   });
 }
 
-function deviceFixture() {
+function deviceFixture(input = {}) {
   const buffers = [];
   const writes = [];
   const device = {
@@ -54,6 +54,7 @@ function deviceFixture() {
           bufferOffset,
           bytes: Uint8Array.from(view.subarray(dataOffset, dataOffset + byteLength)),
         });
+        input.onWrite?.({ writes, write: writes.at(-1) });
       },
     },
     features: new Set(),
@@ -496,6 +497,68 @@ for (const result of canceledResults) {
 }
 assert.equal(failureFixture.buffers.at(-1).destroyCount, 1);
 assert.equal(failureSession.residency.snapshot().activeLeaseCount, 0);
+
+let postWriteAbortController;
+const postWriteAbortFixture = deviceFixture({
+  onWrite({ writes }) {
+    if (writes.length === 2) postWriteAbortController.abort('cancel-after-final-verified-write');
+  },
+});
+const postWriteAbortSession = await createWebGpuInferenceSession({
+  sessionId: 'chunk-plan-post-write-abort',
+  device: postWriteAbortFixture.device,
+  adapterName: 'fixture-adapter',
+});
+const postWriteAbortCreatorRoute = await postWriteAbortSession.registerRoute({
+  routeId: 'chunk-plan-post-write-creator',
+});
+const postWriteAbortJoinerRoute = await postWriteAbortSession.registerRoute({
+  routeId: 'chunk-plan-post-write-joiner',
+});
+postWriteAbortController = new AbortController();
+const postWriteAbortSources = Object.fromEntries(
+  plan.chunkIds.map(chunkId => [chunkId, new Blob([chunkBytes[chunkId]])]),
+);
+const postWriteAbortResults = await Promise.allSettled([
+  postWriteAbortCreatorRoute.loadModelResourceChunksFromSources({
+    plan,
+    sources: postWriteAbortSources,
+    signal: postWriteAbortController.signal,
+  }),
+  postWriteAbortJoinerRoute.loadModelResourceChunksFromSources({
+    plan,
+    sources: postWriteAbortSources,
+    signal: postWriteAbortController.signal,
+  }),
+]);
+assert.deepEqual(postWriteAbortResults.map(result => result.status), ['rejected', 'rejected']);
+assert.deepEqual(postWriteAbortResults.map(result => result.reason.name), ['AbortError', 'AbortError']);
+assert.deepEqual(
+  postWriteAbortResults.map(result => result.reason.chunkReport.failedChunkId),
+  [null, null],
+  'post-write cancellation must not mislabel the final verified chunk as failed',
+);
+assert.deepEqual(
+  postWriteAbortResults.map(result => result.reason.chunkReport.routeId),
+  [postWriteAbortCreatorRoute.routeId, postWriteAbortJoinerRoute.routeId],
+);
+assert.deepEqual(
+  postWriteAbortResults.map(result => (
+    result.reason.chunkReport.failedAllocation.chunks.map(chunk => chunk.chunkId)
+  )),
+  [
+    ['encoder-0', 'encoder-1'],
+    ['encoder-0', 'encoder-1'],
+  ],
+  'every post-write canceled waiter must retain the creator complete trustworthy chunk evidence',
+);
+assert.equal(postWriteAbortFixture.buffers.length, 1);
+assert.equal(postWriteAbortFixture.buffers[0].destroyCount, 1);
+assert.equal(postWriteAbortSession.residency.snapshot().activeLeaseCount, 0);
+await postWriteAbortSession.drain();
+postWriteAbortSession.unregisterRoute(postWriteAbortCreatorRoute.routeId);
+postWriteAbortSession.unregisterRoute(postWriteAbortJoinerRoute.routeId);
+postWriteAbortSession.close();
 
 const singleBytes = bundle.slice(0, 16);
 const singleManifest = defineWebGpuModelResourceManifest({

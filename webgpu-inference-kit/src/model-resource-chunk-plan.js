@@ -608,9 +608,11 @@ export async function loadWebGpuModelResourceChunksFromSources(input = {}) {
                   acquired.bundle.release();
                 }
               }
-              failedAllocationId = null;
+              failedAllocationId = allocation.allocationId;
               failedChunkId = null;
               failedChunkReport = null;
+              throwIfAborted(flightSignal);
+              failedAllocationId = null;
               chunkAllocationProvenance.set(buffer, deepFreeze({
                 schema: WEBGPU_MODEL_RESOURCE_CHUNK_ALLOCATION_PROVENANCE_SCHEMA,
                 status: 'verified-creator-publication',
