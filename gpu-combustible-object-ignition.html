@@ -142,6 +142,7 @@
     const ORBIT_MIN_PITCH = -1.18;
     const ORBIT_MAX_PITCH = 1.18;
     const ORBIT_INITIAL = Object.freeze({
+      position: Object.freeze([0, 0.1, 3.2]),
       yaw: 0,
       pitch: Math.atan2(0.1, 3.2),
       distance: Math.hypot(0.1, 3.2),
@@ -181,6 +182,7 @@
         pitch: cameraControl.pitch,
         distance: cameraControl.distance,
         target: cameraTarget.toArray(),
+        position: camera.position.toArray(),
         interactionCount: cameraControl.interactionCount,
         lastInteraction: cameraControl.lastInteraction,
       };
@@ -220,12 +222,18 @@
 
     function applyOrbitCamera() {
       clampCameraControl();
-      const horizontal = Math.cos(cameraControl.pitch) * cameraControl.distance;
-      camera.position.set(
-        cameraTarget.x + Math.sin(cameraControl.yaw) * horizontal,
-        cameraTarget.y + Math.sin(cameraControl.pitch) * cameraControl.distance,
-        cameraTarget.z + Math.cos(cameraControl.yaw) * horizontal,
-      );
+      if (cameraControl.yaw === ORBIT_INITIAL.yaw &&
+        cameraControl.pitch === ORBIT_INITIAL.pitch &&
+        cameraControl.distance === ORBIT_INITIAL.distance) {
+        camera.position.set(...ORBIT_INITIAL.position);
+      } else {
+        const horizontal = Math.cos(cameraControl.pitch) * cameraControl.distance;
+        camera.position.set(
+          cameraTarget.x + Math.sin(cameraControl.yaw) * horizontal,
+          cameraTarget.y + Math.sin(cameraControl.pitch) * cameraControl.distance,
+          cameraTarget.z + Math.cos(cameraControl.yaw) * horizontal,
+        );
+      }
       camera.lookAt(cameraTarget);
       camera.updateMatrixWorld();
       updateCameraLabels();

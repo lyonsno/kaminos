@@ -90,7 +90,13 @@ assert.match(pageSource, /gpu-combustible-object-orbit-camera-v0/, 'the route na
 assert.match(pageSource, /setPointerCapture/, 'orbit drag retains pointer custody outside the canvas bounds');
 assert.match(pageSource, /addEventListener\('wheel',[\s\S]*passive:\s*false/, 'wheel and trackpad zoom are active rather than page scroll');
 assert.match(pageSource, /ORBIT_MIN_DISTANCE[\s\S]*ORBIT_MAX_DISTANCE/, 'camera zoom has explicit near and far inspection bounds');
+assert.match(
+  pageSource,
+  /camera\.position\.set\(\.\.\.ORBIT_INITIAL\.position\)/,
+  'the untouched and reset camera restores the original position without spherical reconstruction drift',
+);
 assert.match(pageSource, /cameraControl:/, 'debug state exposes effective camera identity and interaction state');
+assert.match(pageSource, /position:\s*camera\.position\.toArray\(\)/, 'camera receipts expose the effective position');
 assert.match(pageSource, /controls:\s*cameraControls/, 'the volume render loop updates the real operator camera controls');
 assert.match(runtimeSource, /presentationTransform/, 'the GPU object overlay consumes the anchored camera transform');
 assert.match(runtimeSource, /anchorNdcDepth/, 'the GPU object overlay reconstructs its anchor on the scene-depth plane');
