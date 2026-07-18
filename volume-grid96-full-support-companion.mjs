@@ -179,7 +179,21 @@ function validateNativeComponent(component, role, sourceRoute) {
     assertSourceRoute(component.route, role);
     if (sourceRoute) assert.equal(component.route.requested, sourceRoute.requested, `${role} requested source route differs from source`);
   }
-  if (FORBIDDEN_NATIVE_LINEAGE.test(JSON.stringify(component))) throw new Error(`${role} native component contains resize or resample lineage`);
+  if (containsForbiddenNativeLineage(component)) throw new Error(`${role} native component contains resize or resample lineage`);
+}
+
+function containsForbiddenNativeLineage(value) {
+  if (typeof value === 'string') return FORBIDDEN_NATIVE_LINEAGE.test(value);
+  if (Array.isArray(value)) return value.some(item => containsForbiddenNativeLineage(item));
+  if (!value || typeof value !== 'object') return false;
+  return Object.entries(value).some(([childKey, childValue]) => {
+    const assertedByKey = FORBIDDEN_NATIVE_LINEAGE.test(childKey)
+      && childValue !== false
+      && childValue != null
+      && childValue !== 0
+      && childValue !== '';
+    return assertedByKey || containsForbiddenNativeLineage(childValue);
+  });
 }
 
 function validateSameStateAndSource(components, sourceManifestSha256) {

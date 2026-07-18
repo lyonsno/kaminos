@@ -132,6 +132,7 @@ function component(role, details = {}) {
 
 const sourcePath = writeJson('source.json', component('source', {
   authority: 'native-grid96-full-field-export-v0',
+  resizedGrid160Evidence: false,
   completeFieldCoverage: true,
   fullGridCellCount: 96 ** 3,
   sidecars: {
