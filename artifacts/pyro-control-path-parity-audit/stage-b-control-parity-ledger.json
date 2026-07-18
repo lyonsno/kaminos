@@ -1,0 +1,1741 @@
+{
+  "schema": "kaminos.pyro-control-path.stage-b-parity-ledger.v0",
+  "scope": "stage-b-six-control-executable-slice",
+  "generatedAt": "2026-07-18T17:10:47.586Z",
+  "source": {
+    "revision": "fcccec02af5fc00ea63ff7817a58018777b5a49c",
+    "files": {
+      "indexHtml": {
+        "path": "index.html",
+        "sha256": "b8437409222610d328eb741b5653810b73b63f220f55b7980e58893cca20f6ac",
+        "byteLength": 1002548
+      },
+      "volumeCore": {
+        "path": "volume-core.js",
+        "sha256": "fb924be33f0cd5b3b2c1699326c29ef24dddaf72b0277e8ffa762bca4b2dee8d",
+        "byteLength": 911472
+      },
+      "stageBConsumer": {
+        "path": "volume-stage-b-cockpit-consumer.mjs",
+        "sha256": "390369b965829c639943b10d80c1d5d3ce426290b15100676b787d778415695b",
+        "byteLength": 18274
+      },
+      "stageBManifestProducer": {
+        "path": "volume-stage-b-provisional-manifest.mjs",
+        "sha256": "99cf3383640fd31535b0388ad85fa478a7377b5111b52baf1f12db6affb884ce",
+        "byteLength": 7722
+      },
+      "liveUnionOverlay": {
+        "path": "volume-layer-coefficient-live-union-overlay.mjs",
+        "sha256": "003ff3665d8c34a020900de911652cc013c322f60f49f053a9425006d4c6e643",
+        "byteLength": 16932
+      }
+    },
+    "manifestSha256": "36ad2c8e831b6ac2f39d990f24262475e7ff5f4ee5e38fdd2ef106c1bc47db7a",
+    "witnessSha256": "2847a096ee2461ad3b776cd0c4dfada0b92be9e87e43d929d7b3afedc7e64097"
+  },
+  "runtime": {
+    "sameStateCaptureId": "filament-orbit-f120-s120",
+    "simStepCount": 120,
+    "lookFreeze": 1,
+    "backend": "WebGPU:apple",
+    "requestedRoute": "/volume-selective-head-live.html",
+    "effectiveWrapperRoute": "exact-basin-selective-head-live-v0",
+    "effectiveRendererRoute": "native-3d-compute-fluid-raymarch-v0",
+    "requestedTreatment": "matched-optical-recurrence-v0",
+    "effectiveTreatment": "matched-optical-recurrence-v0",
+    "requestedEffectiveIdentity": true,
+    "controlsRequestedSha256": "4df68da037500e4b1a7b046b48f7927708642cc6294102a3c46f1acb3e01a7e7",
+    "controlsEffectiveSha256": "4df68da037500e4b1a7b046b48f7927708642cc6294102a3c46f1acb3e01a7e7",
+    "candidatePayloadSha256": "995f195f0079108fd9de2b51c3e011fb758af4c0e3a594c2d24b9dcc5306e9f9",
+    "supportSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216",
+    "coefficientSha256": "1526ace8d701790749f6037feda64f54c39be01688286360737b741154be705c",
+    "covarianceSha256": "4cae2517538cf701ac97aad9382f4d150526de8c11e6513c3b98a82d4b5f0122",
+    "candidateCount": 1899742,
+    "capacity": 2000000,
+    "overflowCount": 0,
+    "layerCount": 16,
+    "depositCount": 37994840,
+    "appliedPasses": [
+      "manifest-validation",
+      "resource-binding",
+      "resource-load-verification"
+    ],
+    "rendererRequested": true,
+    "rendererEncoded": true,
+    "rendererApplied": true,
+    "fallback": null,
+    "postLoadMutation": "locked-control-cohort-no-post-load-mutation-v0",
+    "lockedAxes": [
+      "support",
+      "candidate-membership",
+      "candidate-count",
+      "positions",
+      "covariance",
+      "radius",
+      "sharpness",
+      "coefficients",
+      "learned-attributes",
+      "authored-layers",
+      "simulator-state",
+      "raymarch-target",
+      "camera-orbit"
+    ],
+    "mutableAxes": [
+      "presentation-view",
+      "difference-gain",
+      "debug-view"
+    ]
+  },
+  "enumeration": {
+    "totalControlCount": 206,
+    "auditedControlCount": 6,
+    "nextUncappedEnumerationCount": 200,
+    "uncapped": true
+  },
+  "contractEvidence": [
+    {
+      "identity": "revision-bound-source-scope-evidence-v0",
+      "control": "stage-b-contract",
+      "stage": "locked-axes",
+      "path": "volume-stage-b-cockpit-consumer.mjs",
+      "line": 12,
+      "startMarkerSha256": "d821611e5fb22c8dcccb236dcdf3629600f86760c4763cd8c0a474d0652cefc0",
+      "endMarkerSha256": "09588df4b484e1ca6b300b3ea5e51c1f1b7018b41a17b549edac50f532ead4db",
+      "scopeSha256": "5c2a168748da60617c0139b81c3ede55829c138646ff56642e5a1f45ffd5bd3b",
+      "requiredMarkerSha256": [
+        "156b16db8c68fd5a3db73aae50aacf8bea236a29625e901aa0b98346dac773a0",
+        "9e5a644b6b71d534ca35a70bc962ded3d406dd93b74ebbd40695c12bde530b25",
+        "72768d22c054291a79d22d152a1e0d18ca6667fa97c49ad50525a16e4af33844",
+        "aedb6d78435d32b121d2f29f78c652e660011f1ac51d835a442f755395aa7814",
+        "95d5bc1522604419de02c4eeb750267153612d02e0a31326b584ad8b29ebd1b1",
+        "8625317210a8858768a1de1cb1760d51856a13a9bbe95b16b69b7bf8e54e07d6",
+        "4305a75e57c4e9caf35b12541d0daa230d49efbf9f53d599217c1e5db1e774e7",
+        "97df9fe1eaa106557f650795f6850fd8d3076b65d7ec9adc63225d32726e57ab",
+        "a9e1970fe92f980a85db4387ed4b07df8fc63230b67437291753f07fe7297f61",
+        "cb1d9fb7a24be951721ea592981a8b5090c2c6a7cb8ceeaee5426e7177a2f88c",
+        "8703fc4c69412407a33eee20ac54376fa765a09ff1d843f37fcfc4e182419d70",
+        "b536b4545c59340555d834958694e363c3c697fef4661b7772358e90853a6f07",
+        "ab4e90e8c4d4ff8c0cac668ced371bda21c75765cb052c5719762c5de3c08e3b"
+      ],
+      "excludedMarkerSha256": []
+    },
+    {
+      "identity": "revision-bound-source-scope-evidence-v0",
+      "control": "stage-b-contract",
+      "stage": "resource-identities",
+      "path": "volume-stage-b-provisional-manifest.mjs",
+      "line": 38,
+      "startMarkerSha256": "c6953a735c74b5ea10fb3c8e4611f1a07f76bc0a41f2434211ce10bbc9e1af4a",
+      "endMarkerSha256": "27cbc3129cdabcfe345922aa93011f5fd369245a32d4e698644cb857bea54c60",
+      "scopeSha256": "d0334c368a8dffc6b902790fa858f3d1aa5683e8a56f014c198f4499bdb90d7b",
+      "requiredMarkerSha256": [
+        "7705db1d6027397577555daa2223cb74726317a498cf87215b315e84dcbd9094",
+        "53c7622cf36bffea3c658c78d985c176ffc25828d759562baf6f0d1e14dbdff4",
+        "b57cc2cc537f10aa0eb91b6b23970b6dfdc7940ebd5f12473f0e1349a3d4b207",
+        "bf081f578c5ab526be1997ff67c9af9a4b5601cef3bebee111cddf693168e21f"
+      ],
+      "excludedMarkerSha256": []
+    }
+  ],
+  "rows": [
+    {
+      "control": "volume_reaction_boundary_support_front",
+      "requested": {
+        "requested": "0.66",
+        "effective": "0.66",
+        "requestedNumber": 0.66,
+        "effectiveNumber": 0.66,
+        "effectiveEqualsRequested": true
+      },
+      "sourceFieldHash": "1809eb921c9c4db9d786cf06af2e9c352676fdada95bb1bc95e66e0d649fa13b",
+      "stages": {
+        "raymarch": {
+          "coupling": "direct-live",
+          "classification": "proved-raymarch-coupling",
+          "ordinaryRouteReadsControl": true,
+          "livePostLoad": false
+        },
+        "candidate": {
+          "coupling": "producer-time-frozen",
+          "classification": "source-sidecar-to-admission-coupling",
+          "livePostLoad": false,
+          "resourceIdentity": "sha256:33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216"
+        },
+        "coefficients": {
+          "coupling": "cohort-only-frozen",
+          "classification": "admission-row-cohort-selects-external-coefficients",
+          "livePostLoad": false,
+          "resourceIdentity": "sha256:1526ace8d701790749f6037feda64f54c39be01688286360737b741154be705c"
+        },
+        "covariance": {
+          "coupling": "cohort-only-frozen",
+          "classification": "admission-row-cohort-only-no-direct-covariance-term",
+          "livePostLoad": false,
+          "resourceIdentity": "sha256:4cae2517538cf701ac97aad9382f4d150526de8c11e6513c3b98a82d4b5f0122"
+        },
+        "deposition": {
+          "coupling": "cohort-only-frozen",
+          "classification": "candidate-cohort-controls-deposit-population",
+          "livePostLoad": false,
+          "depositionIdentity": "flow-tangent-five-tap-bilinear-v0"
+        },
+        "presentation": {
+          "coupling": "cohort-only-frozen",
+          "classification": "candidate-and-coefficient-cohort-reaches-optical-presentation",
+          "livePostLoad": false,
+          "presentationIdentity": "raymarch-matched-exponential-power-grade-v0"
+        }
+      },
+      "evidence": [
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_support_front",
+          "stage": "route-ingress",
+          "path": "index.html",
+          "line": 11864,
+          "startMarkerSha256": "4860458e1d9e533e2e314a0886670d4f3f619c2e706f6b64cdb8c39224ece6d8",
+          "endMarkerSha256": null,
+          "scopeSha256": "4860458e1d9e533e2e314a0886670d4f3f619c2e706f6b64cdb8c39224ece6d8",
+          "requiredMarkerSha256": [
+            "4860458e1d9e533e2e314a0886670d4f3f619c2e706f6b64cdb8c39224ece6d8"
+          ],
+          "excludedMarkerSha256": []
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_support_front",
+          "stage": "raymarch-upload",
+          "path": "volume-core.js",
+          "line": 10438,
+          "startMarkerSha256": "6536439e19d097eb623e1ef40332fde0cf5fdac4cded6d361ae7fdaae4a63e60",
+          "endMarkerSha256": null,
+          "scopeSha256": "6536439e19d097eb623e1ef40332fde0cf5fdac4cded6d361ae7fdaae4a63e60",
+          "requiredMarkerSha256": [
+            "6536439e19d097eb623e1ef40332fde0cf5fdac4cded6d361ae7fdaae4a63e60"
+          ],
+          "excludedMarkerSha256": []
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_support_front",
+          "stage": "raymarch-consumer",
+          "path": "volume-core.js",
+          "line": 1420,
+          "startMarkerSha256": "a12ba6730f8df316bd0cfdeab4a2d7638fea49bf64f5789b1a88ab2d14e751e8",
+          "endMarkerSha256": "cea783cb1b4c0c350fad7a404e9d6a83ecf3d5c9faee8e1cf5cb12649fb02d2e",
+          "scopeSha256": "aca2a8072d9044e76e7fba16ac690c6f85f493ddd186d8e72e00edfee5faef37",
+          "requiredMarkerSha256": [
+            "0a22c4df06c8f956f0130b53c116f925ec97ac9a10ba5e0d38d14218299b577b"
+          ],
+          "excludedMarkerSha256": []
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_support_front",
+          "stage": "candidate",
+          "path": "volume-core.js",
+          "line": 3113,
+          "startMarkerSha256": "3bb60b9d816f8f483d104521ba44f9507fbd8ab28340d67ad8d696fde956775a",
+          "endMarkerSha256": "2fc0a05b420ae1a45f85a0e9d5deee3bdb5f0a5e8e9e0546fff292aed4de7275",
+          "scopeSha256": "190aaec03d2abaeba8ae21c776aecda96d1f744e47fe7954dc19071288ae7735",
+          "requiredMarkerSha256": [
+            "41a55334487f21d86bfc87c3af30041227cd3405e5828cccaddd855b90f927e0",
+            "073273b18d2fc1904a56fdd2192a2983901450f3cfccb265c963202a9546a8f2",
+            "363b94b9dd599a3faf419ac60d23cd2d19bbe81f6104982a5f7adbfc48abc99b"
+          ],
+          "excludedMarkerSha256": []
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_support_front",
+          "stage": "candidate",
+          "path": "volume-core.js",
+          "line": 6261,
+          "startMarkerSha256": "a2af0b22cf22463634f5977994eb1aa452aba91db95ff6f3888e58999464d817",
+          "endMarkerSha256": "f4fd31ec85505ea9e951903ccfa5f9f067e705ff9debfa2eef62ba58ab921e6e",
+          "scopeSha256": "1b1cf890d372bd5b0abb12ecd7db5a8f6ed3a76737d84c52d492db3e057b3016",
+          "requiredMarkerSha256": [
+            "4acab52c758db881e04a4d6dc5adb9bf6254e16df547b4fff6c3cc777c6b878d",
+            "b6752923d266ca261c9d26fbcb3b3fc77a99a38ec20b27da538907da693605f2"
+          ],
+          "excludedMarkerSha256": []
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_support_front",
+          "stage": "coefficients",
+          "path": "volume-core.js",
+          "line": 6474,
+          "startMarkerSha256": "d68ecbcb33d2618f972711d6780f24c096f943c8b08b9bfcd93bf537eb275217",
+          "endMarkerSha256": "e6cd26d17f2a69ab2012a87a5ea01b114073c9596507c67aa2611baeb59f9d02",
+          "scopeSha256": "29ad0f1856e9de3b8ec009e231c7f70c56534caee3567280ddfa54be1db10653",
+          "requiredMarkerSha256": [
+            "1c8105f62f21d80eb9a891696a6f3e34b673115d3dd4d8d2294fd5fd81ce530f",
+            "29d76d9402f03f02b4a0dd5189cbb0b4cddba4d8fcd6cef6b8db2f7fa2583018"
+          ],
+          "excludedMarkerSha256": []
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_support_front",
+          "stage": "covariance",
+          "path": "volume-core.js",
+          "line": 6161,
+          "startMarkerSha256": "8fdb34cfe49d7ed3ce4e715122f15f358d5b06d05b1181670e2de2bb93d9b863",
+          "endMarkerSha256": "d6bfcd783f562303d4abc7b3922272d4b336f53eb49c5eb5ae189adefca4cacb",
+          "scopeSha256": "2140afbe468062dd9c49166f805ba735d109b1b7f3fdd74284fd818161331643",
+          "requiredMarkerSha256": [
+            "4cf2b24a335fc0d67d22f48cf4f75764e1b68b9bea2ba6826f7a82128b58e7e3",
+            "d632a8604321486afb1a7fdfdd51650d5f54e13545d12bb424755bd88697531f"
+          ],
+          "excludedMarkerSha256": []
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_support_front",
+          "stage": "deposition",
+          "path": "volume-core.js",
+          "line": 6474,
+          "startMarkerSha256": "d68ecbcb33d2618f972711d6780f24c096f943c8b08b9bfcd93bf537eb275217",
+          "endMarkerSha256": "d8517f952648a91328a917d133780b8c4c23d2fa713e1bf703858fc7a216b8c8",
+          "scopeSha256": "dec47a651be888a5f31114c17f9420a75f38a2b500c9acc9ca5e1055745edfa5",
+          "requiredMarkerSha256": [
+            "2d02b54291e822e80fd844223aec9e3ea92fc3809f7c6b9d8f3af744ec4ca106",
+            "08f9a069f8f8e3ce372b56b4c94dd0ab8d1e293bd855cbc11ac3e9f19b9d2111",
+            "3df3d9d4a53755f17f7c4761818482c933f1ffec4c5442e578c30cc1b63ff518",
+            "cc93b70aeb933237045a60126b5696face29eaecbad30c8b66bf86ae9aaa3b58"
+          ],
+          "excludedMarkerSha256": [
+            "62c4dc971ad9530c9c561735461106d893b2b0ac792935eeef41d33207265883",
+            "d4092d6f420d8b67884557d83f32025c12cab7f78989b4fbc019e98119c8dcd3"
+          ]
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_support_front",
+          "stage": "presentation",
+          "path": "volume-core.js",
+          "line": 6590,
+          "startMarkerSha256": "209833f0d5855470133b88bd9ea5b1825b55ab8a15c39febb44665ccd1d50ce6",
+          "endMarkerSha256": "e1d2f5b51e5b41c3f71a0e55a192201d31edf074c5afeb8fff890b3d7713b89e",
+          "scopeSha256": "09d9e39ed59d9a5bbd57aabcc54f69e1d0a750e2356d5804b644afbe4e6e2fe8",
+          "requiredMarkerSha256": [
+            "14a7860c06d214eecfd0d1649b15329b8bbe111bc0a74303185f6bc7bc6b0c9e",
+            "1c5f2dfe936cdc4f1406e9aaca1f6a0576e04e3031a952a5785a3ba36342d1ad",
+            "5cc96f5f2911f0672a8476eacb32be349f7936dc63b4e76e23b8ad649b603b03",
+            "4286a7babadce54da0479eb8d68417a5a45da0c7a4cd05ecd1f81468e7c827c2"
+          ],
+          "excludedMarkerSha256": []
+        }
+      ],
+      "priorFrozenCapture": {
+        "routeIdentity": "exact-basin-selective-head-live-v0",
+        "sourceStateIdentity": {
+          "identity": "selective-head-live-frozen-source-state-v0",
+          "routeIdentity": "exact-basin-selective-head-live-v0",
+          "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0",
+          "sameStateAuthority": "same-state-selective-render-composition-v0",
+          "warmupAuthority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+          "warmupTarget": 96,
+          "capturePaused": true,
+          "simStepCount": 96,
+          "backend": "WebGPU:apple",
+          "warmupReceipt": {
+            "ok": true,
+            "authority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+            "completedSteps": 96,
+            "grid": 160,
+            "fluidUrl": "http://127.0.0.1:18537/fluid.f32",
+            "frontUrl": "http://127.0.0.1:18537/front.f32",
+            "fluidSha256": "d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1",
+            "frontSha256": "1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8",
+            "fluidByteLength": 262144000,
+            "frontByteLength": 16384000,
+            "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0"
+          }
+        },
+        "requested": {
+          "baseline": "0.4",
+          "treatment": "1.6",
+          "baselineUrlValue": "0.4",
+          "treatmentUrlValue": "1.6",
+          "baselineEffectiveValue": 0.4,
+          "treatmentEffectiveValue": 1.6,
+          "effectiveEqualsRequested": true
+        },
+        "appliedPasses": {
+          "splatApplied": true,
+          "raymarchApplied": true
+        },
+        "candidateCountDelta": 0,
+        "pixelDelta": {
+          "identity": "canvas-png-rgb24-pixel-delta-summary-v0",
+          "decoder": "ffmpeg-rgb24:ffmpeg",
+          "materialDeltaThreshold": "at-least-one-channel-differs-by-more-than-one-8-bit-level",
+          "materialChangedCompositionCount": 3,
+          "changedPixelRatioMean": 0.4435199136955292,
+          "meanAbsoluteChannelDeltaMean": 8.306154233870968,
+          "rootMeanSquareChannelDeltaMean": 18.948769055687944,
+          "nonblackPixelCountDeltaMean": 0
+        },
+        "changedCompositions": [
+          "splat-only-v0",
+          "smoke-raymarch-under-splats-v0",
+          "full-raymarch-under-splats-diagnostic-v0"
+        ],
+        "comparisonArtifact": {
+          "path": "artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-support-front/comparison.json",
+          "sha256": "f9f07686a02342bf943afe61746cccd3c02f951a4a319a5726f6b42ea0a5b65b"
+        },
+        "sourceFieldHashes": [
+          {
+            "identity": "enumerated-ui-source-field-v0",
+            "sha256": "70f75d8c860b75f742b5f5174a853eebcb5a64bdb0ab0331d87fe638c66cbcda",
+            "line": 1076,
+            "routeHydrated": true,
+            "listenedBySyncControls": true
+          },
+          {
+            "identity": "frozen-capture-comparison-artifact-v0",
+            "sha256": "f9f07686a02342bf943afe61746cccd3c02f951a4a319a5726f6b42ea0a5b65b"
+          }
+        ],
+        "stageBPixelDelta": null,
+        "stageBPixelDeltaReason": "Stage B source cohort is immutable and no post-load control perturbation was permitted"
+      },
+      "fallback": null,
+      "postLoadMutation": null,
+      "falsifier": null
+    },
+    {
+      "control": "volume_reaction_boundary_topology",
+      "requested": {
+        "requested": "0.96",
+        "effective": "0.96",
+        "requestedNumber": 0.96,
+        "effectiveNumber": 0.96,
+        "effectiveEqualsRequested": true
+      },
+      "sourceFieldHash": "800478e022ff3b1c50e7afc24b69506540313214d47b8c2b0c886908473a0644",
+      "stages": {
+        "raymarch": {
+          "coupling": "direct-live",
+          "classification": "proved-raymarch-coupling",
+          "ordinaryRouteReadsControl": true,
+          "livePostLoad": false
+        },
+        "candidate": {
+          "coupling": "none",
+          "classification": "intentional-raymarch-only-current-route",
+          "livePostLoad": false,
+          "resourceIdentity": "sha256:995f195f0079108fd9de2b51c3e011fb758af4c0e3a594c2d24b9dcc5306e9f9"
+        },
+        "coefficients": {
+          "coupling": "none",
+          "classification": "raymarch-only-no-coefficient-route",
+          "livePostLoad": false,
+          "resourceIdentity": "sha256:1526ace8d701790749f6037feda64f54c39be01688286360737b741154be705c"
+        },
+        "covariance": {
+          "coupling": "none",
+          "classification": "no-direct-covariance-term",
+          "livePostLoad": false,
+          "resourceIdentity": "sha256:4cae2517538cf701ac97aad9382f4d150526de8c11e6513c3b98a82d4b5f0122"
+        },
+        "deposition": {
+          "coupling": "none",
+          "classification": "raymarch-only-no-deposition-route",
+          "livePostLoad": false,
+          "depositionIdentity": "flow-tangent-five-tap-bilinear-v0"
+        },
+        "presentation": {
+          "coupling": "none",
+          "classification": "intentional-raymarch-only-current-route",
+          "livePostLoad": false,
+          "presentationIdentity": "raymarch-matched-exponential-power-grade-v0"
+        }
+      },
+      "evidence": [
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_topology",
+          "stage": "route-ingress",
+          "path": "index.html",
+          "line": 11869,
+          "startMarkerSha256": "2cd52cea9af21cd5179df62fb44945fcd6532bfc26140b1da6a3f037bf5b8d23",
+          "endMarkerSha256": null,
+          "scopeSha256": "2cd52cea9af21cd5179df62fb44945fcd6532bfc26140b1da6a3f037bf5b8d23",
+          "requiredMarkerSha256": [
+            "2cd52cea9af21cd5179df62fb44945fcd6532bfc26140b1da6a3f037bf5b8d23"
+          ],
+          "excludedMarkerSha256": []
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_topology",
+          "stage": "raymarch-upload",
+          "path": "volume-core.js",
+          "line": 10441,
+          "startMarkerSha256": "740df689d495ebb462a24fe0f002ea37d0df35eb0da7866a392200a118119841",
+          "endMarkerSha256": null,
+          "scopeSha256": "740df689d495ebb462a24fe0f002ea37d0df35eb0da7866a392200a118119841",
+          "requiredMarkerSha256": [
+            "740df689d495ebb462a24fe0f002ea37d0df35eb0da7866a392200a118119841"
+          ],
+          "excludedMarkerSha256": []
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_topology",
+          "stage": "raymarch-consumer",
+          "path": "volume-core.js",
+          "line": 1420,
+          "startMarkerSha256": "a12ba6730f8df316bd0cfdeab4a2d7638fea49bf64f5789b1a88ab2d14e751e8",
+          "endMarkerSha256": "cea783cb1b4c0c350fad7a404e9d6a83ecf3d5c9faee8e1cf5cb12649fb02d2e",
+          "scopeSha256": "aca2a8072d9044e76e7fba16ac690c6f85f493ddd186d8e72e00edfee5faef37",
+          "requiredMarkerSha256": [
+            "f43ea224bac922fa0643cc099782033d373735fc18cb995759f68566ed74ae10"
+          ],
+          "excludedMarkerSha256": []
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_topology",
+          "stage": "candidate",
+          "path": "volume-core.js",
+          "line": 6261,
+          "startMarkerSha256": "a2af0b22cf22463634f5977994eb1aa452aba91db95ff6f3888e58999464d817",
+          "endMarkerSha256": "f4fd31ec85505ea9e951903ccfa5f9f067e705ff9debfa2eef62ba58ab921e6e",
+          "scopeSha256": "1b1cf890d372bd5b0abb12ecd7db5a8f6ed3a76737d84c52d492db3e057b3016",
+          "requiredMarkerSha256": [],
+          "excludedMarkerSha256": [
+            "abeed248c583c0465b5e95655c45bc43c9eb6a98ec4360a3e16bc81c10db9062",
+            "788fcf12c0a04c8624a2692729248bc8f406664b3415b2398c5a4ddfebc248aa"
+          ]
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_topology",
+          "stage": "coefficients",
+          "path": "volume-core.js",
+          "line": 6474,
+          "startMarkerSha256": "d68ecbcb33d2618f972711d6780f24c096f943c8b08b9bfcd93bf537eb275217",
+          "endMarkerSha256": "e6cd26d17f2a69ab2012a87a5ea01b114073c9596507c67aa2611baeb59f9d02",
+          "scopeSha256": "29ad0f1856e9de3b8ec009e231c7f70c56534caee3567280ddfa54be1db10653",
+          "requiredMarkerSha256": [
+            "1c8105f62f21d80eb9a891696a6f3e34b673115d3dd4d8d2294fd5fd81ce530f",
+            "29d76d9402f03f02b4a0dd5189cbb0b4cddba4d8fcd6cef6b8db2f7fa2583018"
+          ],
+          "excludedMarkerSha256": []
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_topology",
+          "stage": "covariance",
+          "path": "volume-core.js",
+          "line": 6161,
+          "startMarkerSha256": "8fdb34cfe49d7ed3ce4e715122f15f358d5b06d05b1181670e2de2bb93d9b863",
+          "endMarkerSha256": "d6bfcd783f562303d4abc7b3922272d4b336f53eb49c5eb5ae189adefca4cacb",
+          "scopeSha256": "2140afbe468062dd9c49166f805ba735d109b1b7f3fdd74284fd818161331643",
+          "requiredMarkerSha256": [
+            "4cf2b24a335fc0d67d22f48cf4f75764e1b68b9bea2ba6826f7a82128b58e7e3",
+            "d632a8604321486afb1a7fdfdd51650d5f54e13545d12bb424755bd88697531f"
+          ],
+          "excludedMarkerSha256": []
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_topology",
+          "stage": "deposition",
+          "path": "volume-core.js",
+          "line": 6474,
+          "startMarkerSha256": "d68ecbcb33d2618f972711d6780f24c096f943c8b08b9bfcd93bf537eb275217",
+          "endMarkerSha256": "d8517f952648a91328a917d133780b8c4c23d2fa713e1bf703858fc7a216b8c8",
+          "scopeSha256": "dec47a651be888a5f31114c17f9420a75f38a2b500c9acc9ca5e1055745edfa5",
+          "requiredMarkerSha256": [
+            "2d02b54291e822e80fd844223aec9e3ea92fc3809f7c6b9d8f3af744ec4ca106",
+            "08f9a069f8f8e3ce372b56b4c94dd0ab8d1e293bd855cbc11ac3e9f19b9d2111",
+            "3df3d9d4a53755f17f7c4761818482c933f1ffec4c5442e578c30cc1b63ff518",
+            "cc93b70aeb933237045a60126b5696face29eaecbad30c8b66bf86ae9aaa3b58"
+          ],
+          "excludedMarkerSha256": [
+            "62c4dc971ad9530c9c561735461106d893b2b0ac792935eeef41d33207265883",
+            "d4092d6f420d8b67884557d83f32025c12cab7f78989b4fbc019e98119c8dcd3"
+          ]
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_topology",
+          "stage": "presentation",
+          "path": "volume-core.js",
+          "line": 6590,
+          "startMarkerSha256": "209833f0d5855470133b88bd9ea5b1825b55ab8a15c39febb44665ccd1d50ce6",
+          "endMarkerSha256": "e1d2f5b51e5b41c3f71a0e55a192201d31edf074c5afeb8fff890b3d7713b89e",
+          "scopeSha256": "09d9e39ed59d9a5bbd57aabcc54f69e1d0a750e2356d5804b644afbe4e6e2fe8",
+          "requiredMarkerSha256": [
+            "14a7860c06d214eecfd0d1649b15329b8bbe111bc0a74303185f6bc7bc6b0c9e",
+            "1c5f2dfe936cdc4f1406e9aaca1f6a0576e04e3031a952a5785a3ba36342d1ad",
+            "5cc96f5f2911f0672a8476eacb32be349f7936dc63b4e76e23b8ad649b603b03",
+            "4286a7babadce54da0479eb8d68417a5a45da0c7a4cd05ecd1f81468e7c827c2"
+          ],
+          "excludedMarkerSha256": []
+        }
+      ],
+      "priorFrozenCapture": {
+        "routeIdentity": "exact-basin-selective-head-live-v0",
+        "sourceStateIdentity": {
+          "identity": "selective-head-live-frozen-source-state-v0",
+          "routeIdentity": "exact-basin-selective-head-live-v0",
+          "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0",
+          "sameStateAuthority": "same-state-selective-render-composition-v0",
+          "warmupAuthority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+          "warmupTarget": 96,
+          "capturePaused": true,
+          "simStepCount": 96,
+          "backend": "WebGPU:apple",
+          "warmupReceipt": {
+            "ok": true,
+            "authority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+            "completedSteps": 96,
+            "grid": 160,
+            "fluidUrl": "http://127.0.0.1:18537/fluid.f32",
+            "frontUrl": "http://127.0.0.1:18537/front.f32",
+            "fluidSha256": "d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1",
+            "frontSha256": "1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8",
+            "fluidByteLength": 262144000,
+            "frontByteLength": 16384000,
+            "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0"
+          }
+        },
+        "requested": {
+          "baseline": "0",
+          "treatment": "2.5",
+          "baselineUrlValue": "0",
+          "treatmentUrlValue": "2.5",
+          "baselineEffectiveValue": 0,
+          "treatmentEffectiveValue": 2.5,
+          "effectiveEqualsRequested": true
+        },
+        "appliedPasses": {
+          "splatApplied": true,
+          "raymarchApplied": true
+        },
+        "candidateCountDelta": 0,
+        "pixelDelta": {
+          "identity": "canvas-png-rgb24-pixel-delta-summary-v0",
+          "decoder": "ffmpeg-rgb24:ffmpeg",
+          "materialDeltaThreshold": "at-least-one-channel-differs-by-more-than-one-8-bit-level",
+          "materialChangedCompositionCount": 2,
+          "changedPixelRatioMean": 0.36404021646859075,
+          "meanAbsoluteChannelDeltaMean": 10.100139036266741,
+          "rootMeanSquareChannelDeltaMean": 22.51495430471698,
+          "nonblackPixelCountDeltaMean": 0
+        },
+        "changedCompositions": [
+          "smoke-raymarch-under-splats-v0",
+          "full-raymarch-under-splats-diagnostic-v0"
+        ],
+        "comparisonArtifact": {
+          "path": "artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-topology/comparison.json",
+          "sha256": "bce221ac72ac6b7f853de9f4bf0c1dcb4821e9959258c4477d588e04c5cef27d"
+        },
+        "sourceFieldHashes": [
+          {
+            "identity": "enumerated-ui-source-field-v0",
+            "sha256": "86acfe321c8b344f90b5364fa8064c522e84a77a761df64f48a3f423fd4e5269",
+            "line": 1101,
+            "routeHydrated": true,
+            "listenedBySyncControls": true
+          },
+          {
+            "identity": "frozen-capture-comparison-artifact-v0",
+            "sha256": "bce221ac72ac6b7f853de9f4bf0c1dcb4821e9959258c4477d588e04c5cef27d"
+          }
+        ],
+        "stageBPixelDelta": null,
+        "stageBPixelDeltaReason": "Stage B source cohort is immutable and no post-load control perturbation was permitted"
+      },
+      "fallback": null,
+      "postLoadMutation": null,
+      "falsifier": null
+    },
+    {
+      "control": "volume_reaction_boundary_fire_ridge",
+      "requested": {
+        "requested": "1.52",
+        "effective": "1.52",
+        "requestedNumber": 1.52,
+        "effectiveNumber": 1.52,
+        "effectiveEqualsRequested": true
+      },
+      "sourceFieldHash": "69a3c4e9b4e1a287a564194ee947fa7b68c197a4d5e50e12c2327d87e5df682a",
+      "stages": {
+        "raymarch": {
+          "coupling": "direct-live",
+          "classification": "proved-raymarch-coupling",
+          "ordinaryRouteReadsControl": true,
+          "livePostLoad": false
+        },
+        "candidate": {
+          "coupling": "producer-time-frozen",
+          "classification": "source-sidecar-to-admission-coupling",
+          "livePostLoad": false,
+          "resourceIdentity": "sha256:33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216"
+        },
+        "coefficients": {
+          "coupling": "cohort-only-frozen",
+          "classification": "admission-row-cohort-selects-external-coefficients",
+          "livePostLoad": false,
+          "resourceIdentity": "sha256:1526ace8d701790749f6037feda64f54c39be01688286360737b741154be705c"
+        },
+        "covariance": {
+          "coupling": "cohort-only-frozen",
+          "classification": "admission-row-cohort-only-no-direct-covariance-term",
+          "livePostLoad": false,
+          "resourceIdentity": "sha256:4cae2517538cf701ac97aad9382f4d150526de8c11e6513c3b98a82d4b5f0122"
+        },
+        "deposition": {
+          "coupling": "cohort-only-frozen",
+          "classification": "candidate-cohort-controls-deposit-population",
+          "livePostLoad": false,
+          "depositionIdentity": "flow-tangent-five-tap-bilinear-v0"
+        },
+        "presentation": {
+          "coupling": "cohort-only-frozen",
+          "classification": "candidate-and-coefficient-cohort-reaches-optical-presentation",
+          "livePostLoad": false,
+          "presentationIdentity": "raymarch-matched-exponential-power-grade-v0"
+        }
+      },
+      "evidence": [
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_fire_ridge",
+          "stage": "route-ingress",
+          "path": "index.html",
+          "line": 11875,
+          "startMarkerSha256": "79a16912f8e56637351ddd7171bc7d47e9e0e65485df6fe3802af3ea0c3abd4c",
+          "endMarkerSha256": null,
+          "scopeSha256": "79a16912f8e56637351ddd7171bc7d47e9e0e65485df6fe3802af3ea0c3abd4c",
+          "requiredMarkerSha256": [
+            "79a16912f8e56637351ddd7171bc7d47e9e0e65485df6fe3802af3ea0c3abd4c"
+          ],
+          "excludedMarkerSha256": []
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_fire_ridge",
+          "stage": "raymarch-upload",
+          "path": "volume-core.js",
+          "line": 10452,
+          "startMarkerSha256": "ac0fb46d05312b3875272e433eb67b28691a337d993e95512ac0e4bb5d38bdff",
+          "endMarkerSha256": null,
+          "scopeSha256": "ac0fb46d05312b3875272e433eb67b28691a337d993e95512ac0e4bb5d38bdff",
+          "requiredMarkerSha256": [
+            "ac0fb46d05312b3875272e433eb67b28691a337d993e95512ac0e4bb5d38bdff"
+          ],
+          "excludedMarkerSha256": []
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_fire_ridge",
+          "stage": "raymarch-consumer",
+          "path": "volume-core.js",
+          "line": 1420,
+          "startMarkerSha256": "a12ba6730f8df316bd0cfdeab4a2d7638fea49bf64f5789b1a88ab2d14e751e8",
+          "endMarkerSha256": "cea783cb1b4c0c350fad7a404e9d6a83ecf3d5c9faee8e1cf5cb12649fb02d2e",
+          "scopeSha256": "aca2a8072d9044e76e7fba16ac690c6f85f493ddd186d8e72e00edfee5faef37",
+          "requiredMarkerSha256": [
+            "efef1bb6acecc4d04be39edbfd15c79c5468aa808b40a9e3adb5ca59b69d5023"
+          ],
+          "excludedMarkerSha256": []
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_fire_ridge",
+          "stage": "candidate",
+          "path": "volume-core.js",
+          "line": 3113,
+          "startMarkerSha256": "3bb60b9d816f8f483d104521ba44f9507fbd8ab28340d67ad8d696fde956775a",
+          "endMarkerSha256": "2fc0a05b420ae1a45f85a0e9d5deee3bdb5f0a5e8e9e0546fff292aed4de7275",
+          "scopeSha256": "190aaec03d2abaeba8ae21c776aecda96d1f744e47fe7954dc19071288ae7735",
+          "requiredMarkerSha256": [
+            "c2c612c81bfcbf936020a99b4271fb216e4ca5b8030ac0b5c8a87cae9211bd44",
+            "76f39abb055dd240e54d92eddd10946c5aa28d1f66d4ae54771b8af5aa6c81e7",
+            "363b94b9dd599a3faf419ac60d23cd2d19bbe81f6104982a5f7adbfc48abc99b"
+          ],
+          "excludedMarkerSha256": []
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_fire_ridge",
+          "stage": "candidate",
+          "path": "volume-core.js",
+          "line": 6261,
+          "startMarkerSha256": "a2af0b22cf22463634f5977994eb1aa452aba91db95ff6f3888e58999464d817",
+          "endMarkerSha256": "f4fd31ec85505ea9e951903ccfa5f9f067e705ff9debfa2eef62ba58ab921e6e",
+          "scopeSha256": "1b1cf890d372bd5b0abb12ecd7db5a8f6ed3a76737d84c52d492db3e057b3016",
+          "requiredMarkerSha256": [
+            "4acab52c758db881e04a4d6dc5adb9bf6254e16df547b4fff6c3cc777c6b878d",
+            "574a4f378fdebaaaae68c7cc3fe403149a37db16b3fad38b700aca6a32870e77"
+          ],
+          "excludedMarkerSha256": []
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_fire_ridge",
+          "stage": "coefficients",
+          "path": "volume-core.js",
+          "line": 6474,
+          "startMarkerSha256": "d68ecbcb33d2618f972711d6780f24c096f943c8b08b9bfcd93bf537eb275217",
+          "endMarkerSha256": "e6cd26d17f2a69ab2012a87a5ea01b114073c9596507c67aa2611baeb59f9d02",
+          "scopeSha256": "29ad0f1856e9de3b8ec009e231c7f70c56534caee3567280ddfa54be1db10653",
+          "requiredMarkerSha256": [
+            "1c8105f62f21d80eb9a891696a6f3e34b673115d3dd4d8d2294fd5fd81ce530f",
+            "29d76d9402f03f02b4a0dd5189cbb0b4cddba4d8fcd6cef6b8db2f7fa2583018"
+          ],
+          "excludedMarkerSha256": []
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_fire_ridge",
+          "stage": "covariance",
+          "path": "volume-core.js",
+          "line": 6161,
+          "startMarkerSha256": "8fdb34cfe49d7ed3ce4e715122f15f358d5b06d05b1181670e2de2bb93d9b863",
+          "endMarkerSha256": "d6bfcd783f562303d4abc7b3922272d4b336f53eb49c5eb5ae189adefca4cacb",
+          "scopeSha256": "2140afbe468062dd9c49166f805ba735d109b1b7f3fdd74284fd818161331643",
+          "requiredMarkerSha256": [
+            "4cf2b24a335fc0d67d22f48cf4f75764e1b68b9bea2ba6826f7a82128b58e7e3",
+            "d632a8604321486afb1a7fdfdd51650d5f54e13545d12bb424755bd88697531f"
+          ],
+          "excludedMarkerSha256": []
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_fire_ridge",
+          "stage": "deposition",
+          "path": "volume-core.js",
+          "line": 6474,
+          "startMarkerSha256": "d68ecbcb33d2618f972711d6780f24c096f943c8b08b9bfcd93bf537eb275217",
+          "endMarkerSha256": "d8517f952648a91328a917d133780b8c4c23d2fa713e1bf703858fc7a216b8c8",
+          "scopeSha256": "dec47a651be888a5f31114c17f9420a75f38a2b500c9acc9ca5e1055745edfa5",
+          "requiredMarkerSha256": [
+            "2d02b54291e822e80fd844223aec9e3ea92fc3809f7c6b9d8f3af744ec4ca106",
+            "08f9a069f8f8e3ce372b56b4c94dd0ab8d1e293bd855cbc11ac3e9f19b9d2111",
+            "3df3d9d4a53755f17f7c4761818482c933f1ffec4c5442e578c30cc1b63ff518",
+            "cc93b70aeb933237045a60126b5696face29eaecbad30c8b66bf86ae9aaa3b58"
+          ],
+          "excludedMarkerSha256": [
+            "62c4dc971ad9530c9c561735461106d893b2b0ac792935eeef41d33207265883",
+            "d4092d6f420d8b67884557d83f32025c12cab7f78989b4fbc019e98119c8dcd3"
+          ]
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_fire_ridge",
+          "stage": "presentation",
+          "path": "volume-core.js",
+          "line": 6590,
+          "startMarkerSha256": "209833f0d5855470133b88bd9ea5b1825b55ab8a15c39febb44665ccd1d50ce6",
+          "endMarkerSha256": "e1d2f5b51e5b41c3f71a0e55a192201d31edf074c5afeb8fff890b3d7713b89e",
+          "scopeSha256": "09d9e39ed59d9a5bbd57aabcc54f69e1d0a750e2356d5804b644afbe4e6e2fe8",
+          "requiredMarkerSha256": [
+            "14a7860c06d214eecfd0d1649b15329b8bbe111bc0a74303185f6bc7bc6b0c9e",
+            "1c5f2dfe936cdc4f1406e9aaca1f6a0576e04e3031a952a5785a3ba36342d1ad",
+            "5cc96f5f2911f0672a8476eacb32be349f7936dc63b4e76e23b8ad649b603b03",
+            "4286a7babadce54da0479eb8d68417a5a45da0c7a4cd05ecd1f81468e7c827c2"
+          ],
+          "excludedMarkerSha256": []
+        }
+      ],
+      "priorFrozenCapture": {
+        "routeIdentity": "exact-basin-selective-head-live-v0",
+        "sourceStateIdentity": {
+          "identity": "selective-head-live-frozen-source-state-v0",
+          "routeIdentity": "exact-basin-selective-head-live-v0",
+          "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0",
+          "sameStateAuthority": "same-state-selective-render-composition-v0",
+          "warmupAuthority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+          "warmupTarget": 96,
+          "capturePaused": true,
+          "simStepCount": 96,
+          "backend": "WebGPU:apple",
+          "warmupReceipt": {
+            "ok": true,
+            "authority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+            "completedSteps": 96,
+            "grid": 160,
+            "fluidUrl": "http://127.0.0.1:18537/fluid.f32",
+            "frontUrl": "http://127.0.0.1:18537/front.f32",
+            "fluidSha256": "d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1",
+            "frontSha256": "1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8",
+            "fluidByteLength": 262144000,
+            "frontByteLength": 16384000,
+            "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0"
+          }
+        },
+        "requested": {
+          "baseline": "0",
+          "treatment": "2",
+          "baselineUrlValue": "0",
+          "treatmentUrlValue": "2",
+          "baselineEffectiveValue": 0,
+          "treatmentEffectiveValue": 2,
+          "effectiveEqualsRequested": true
+        },
+        "appliedPasses": {
+          "splatApplied": true,
+          "raymarchApplied": true
+        },
+        "candidateCountDelta": 0,
+        "pixelDelta": {
+          "identity": "canvas-png-rgb24-pixel-delta-summary-v0",
+          "decoder": "ffmpeg-rgb24:ffmpeg",
+          "materialDeltaThreshold": "at-least-one-channel-differs-by-more-than-one-8-bit-level",
+          "materialChangedCompositionCount": 3,
+          "changedPixelRatioMean": 0.3080562040181098,
+          "meanAbsoluteChannelDeltaMean": 25.192240703405016,
+          "rootMeanSquareChannelDeltaMean": 56.00451812699449,
+          "nonblackPixelCountDeltaMean": 0
+        },
+        "changedCompositions": [
+          "splat-only-v0",
+          "smoke-raymarch-under-splats-v0",
+          "full-raymarch-under-splats-diagnostic-v0"
+        ],
+        "comparisonArtifact": {
+          "path": "artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-fire/ridge-comparison.json",
+          "sha256": "a94f2bcb26b365b8909c2d7c786388ae2c4537fa8c7df7101795eebbba3c1502"
+        },
+        "sourceFieldHashes": [
+          {
+            "identity": "enumerated-ui-source-field-v0",
+            "sha256": "5676b48117c8e407279260995df1952001d4328a116c889d56123d5cdf841802",
+            "line": 1191,
+            "routeHydrated": true,
+            "listenedBySyncControls": true
+          },
+          {
+            "identity": "frozen-capture-comparison-artifact-v0",
+            "sha256": "a94f2bcb26b365b8909c2d7c786388ae2c4537fa8c7df7101795eebbba3c1502"
+          }
+        ],
+        "stageBPixelDelta": null,
+        "stageBPixelDeltaReason": "Stage B source cohort is immutable and no post-load control perturbation was permitted"
+      },
+      "fallback": null,
+      "postLoadMutation": null,
+      "falsifier": null
+    },
+    {
+      "control": "volume_reaction_boundary_fire_tip",
+      "requested": {
+        "requested": "2",
+        "effective": "2",
+        "requestedNumber": 2,
+        "effectiveNumber": 2,
+        "effectiveEqualsRequested": true
+      },
+      "sourceFieldHash": "f8fb4c5910124370a6bf8ebb6a531d842a45f20c4189bf967b47af07d1fc6883",
+      "stages": {
+        "raymarch": {
+          "coupling": "direct-live",
+          "classification": "proved-raymarch-coupling",
+          "ordinaryRouteReadsControl": true,
+          "livePostLoad": false
+        },
+        "candidate": {
+          "coupling": "none",
+          "classification": "intentional-raymarch-only-current-route",
+          "livePostLoad": false,
+          "resourceIdentity": "sha256:995f195f0079108fd9de2b51c3e011fb758af4c0e3a594c2d24b9dcc5306e9f9"
+        },
+        "coefficients": {
+          "coupling": "none",
+          "classification": "raymarch-only-no-coefficient-route",
+          "livePostLoad": false,
+          "resourceIdentity": "sha256:1526ace8d701790749f6037feda64f54c39be01688286360737b741154be705c"
+        },
+        "covariance": {
+          "coupling": "none",
+          "classification": "no-direct-covariance-term",
+          "livePostLoad": false,
+          "resourceIdentity": "sha256:4cae2517538cf701ac97aad9382f4d150526de8c11e6513c3b98a82d4b5f0122"
+        },
+        "deposition": {
+          "coupling": "none",
+          "classification": "raymarch-only-no-deposition-route",
+          "livePostLoad": false,
+          "depositionIdentity": "flow-tangent-five-tap-bilinear-v0"
+        },
+        "presentation": {
+          "coupling": "none",
+          "classification": "intentional-raymarch-only-current-route",
+          "livePostLoad": false,
+          "presentationIdentity": "raymarch-matched-exponential-power-grade-v0"
+        }
+      },
+      "evidence": [
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_fire_tip",
+          "stage": "route-ingress",
+          "path": "index.html",
+          "line": 11877,
+          "startMarkerSha256": "c65f755fd549c9c51a65dc6ec358e7ef88927347c40756e217ee461724e48a0f",
+          "endMarkerSha256": null,
+          "scopeSha256": "c65f755fd549c9c51a65dc6ec358e7ef88927347c40756e217ee461724e48a0f",
+          "requiredMarkerSha256": [
+            "c65f755fd549c9c51a65dc6ec358e7ef88927347c40756e217ee461724e48a0f"
+          ],
+          "excludedMarkerSha256": []
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_fire_tip",
+          "stage": "raymarch-upload",
+          "path": "volume-core.js",
+          "line": 10454,
+          "startMarkerSha256": "4559d48770a63523e06a0f10247d8d4067bc84952b929976674645b7f76318f1",
+          "endMarkerSha256": null,
+          "scopeSha256": "4559d48770a63523e06a0f10247d8d4067bc84952b929976674645b7f76318f1",
+          "requiredMarkerSha256": [
+            "4559d48770a63523e06a0f10247d8d4067bc84952b929976674645b7f76318f1"
+          ],
+          "excludedMarkerSha256": []
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_fire_tip",
+          "stage": "raymarch-consumer",
+          "path": "volume-core.js",
+          "line": 1420,
+          "startMarkerSha256": "a12ba6730f8df316bd0cfdeab4a2d7638fea49bf64f5789b1a88ab2d14e751e8",
+          "endMarkerSha256": "cea783cb1b4c0c350fad7a404e9d6a83ecf3d5c9faee8e1cf5cb12649fb02d2e",
+          "scopeSha256": "aca2a8072d9044e76e7fba16ac690c6f85f493ddd186d8e72e00edfee5faef37",
+          "requiredMarkerSha256": [
+            "6615f9da1d7c5e88811097d10bad055a7b391cc220be7b8d8aeee90665a10989"
+          ],
+          "excludedMarkerSha256": []
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_fire_tip",
+          "stage": "candidate",
+          "path": "volume-core.js",
+          "line": 6261,
+          "startMarkerSha256": "a2af0b22cf22463634f5977994eb1aa452aba91db95ff6f3888e58999464d817",
+          "endMarkerSha256": "f4fd31ec85505ea9e951903ccfa5f9f067e705ff9debfa2eef62ba58ab921e6e",
+          "scopeSha256": "1b1cf890d372bd5b0abb12ecd7db5a8f6ed3a76737d84c52d492db3e057b3016",
+          "requiredMarkerSha256": [],
+          "excludedMarkerSha256": [
+            "445a7083a671214d753ee922f149e3ba025839eb0ba5d10eca1005f47b118a2c",
+            "4f6cd7e51a8a886e24053581a8f13e4bbe618d235beeedd52a9d5e30e1656fea"
+          ]
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_fire_tip",
+          "stage": "coefficients",
+          "path": "volume-core.js",
+          "line": 6474,
+          "startMarkerSha256": "d68ecbcb33d2618f972711d6780f24c096f943c8b08b9bfcd93bf537eb275217",
+          "endMarkerSha256": "e6cd26d17f2a69ab2012a87a5ea01b114073c9596507c67aa2611baeb59f9d02",
+          "scopeSha256": "29ad0f1856e9de3b8ec009e231c7f70c56534caee3567280ddfa54be1db10653",
+          "requiredMarkerSha256": [
+            "1c8105f62f21d80eb9a891696a6f3e34b673115d3dd4d8d2294fd5fd81ce530f",
+            "29d76d9402f03f02b4a0dd5189cbb0b4cddba4d8fcd6cef6b8db2f7fa2583018"
+          ],
+          "excludedMarkerSha256": []
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_fire_tip",
+          "stage": "covariance",
+          "path": "volume-core.js",
+          "line": 6161,
+          "startMarkerSha256": "8fdb34cfe49d7ed3ce4e715122f15f358d5b06d05b1181670e2de2bb93d9b863",
+          "endMarkerSha256": "d6bfcd783f562303d4abc7b3922272d4b336f53eb49c5eb5ae189adefca4cacb",
+          "scopeSha256": "2140afbe468062dd9c49166f805ba735d109b1b7f3fdd74284fd818161331643",
+          "requiredMarkerSha256": [
+            "4cf2b24a335fc0d67d22f48cf4f75764e1b68b9bea2ba6826f7a82128b58e7e3",
+            "d632a8604321486afb1a7fdfdd51650d5f54e13545d12bb424755bd88697531f"
+          ],
+          "excludedMarkerSha256": []
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_fire_tip",
+          "stage": "deposition",
+          "path": "volume-core.js",
+          "line": 6474,
+          "startMarkerSha256": "d68ecbcb33d2618f972711d6780f24c096f943c8b08b9bfcd93bf537eb275217",
+          "endMarkerSha256": "d8517f952648a91328a917d133780b8c4c23d2fa713e1bf703858fc7a216b8c8",
+          "scopeSha256": "dec47a651be888a5f31114c17f9420a75f38a2b500c9acc9ca5e1055745edfa5",
+          "requiredMarkerSha256": [
+            "2d02b54291e822e80fd844223aec9e3ea92fc3809f7c6b9d8f3af744ec4ca106",
+            "08f9a069f8f8e3ce372b56b4c94dd0ab8d1e293bd855cbc11ac3e9f19b9d2111",
+            "3df3d9d4a53755f17f7c4761818482c933f1ffec4c5442e578c30cc1b63ff518",
+            "cc93b70aeb933237045a60126b5696face29eaecbad30c8b66bf86ae9aaa3b58"
+          ],
+          "excludedMarkerSha256": [
+            "62c4dc971ad9530c9c561735461106d893b2b0ac792935eeef41d33207265883",
+            "d4092d6f420d8b67884557d83f32025c12cab7f78989b4fbc019e98119c8dcd3"
+          ]
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_reaction_boundary_fire_tip",
+          "stage": "presentation",
+          "path": "volume-core.js",
+          "line": 6590,
+          "startMarkerSha256": "209833f0d5855470133b88bd9ea5b1825b55ab8a15c39febb44665ccd1d50ce6",
+          "endMarkerSha256": "e1d2f5b51e5b41c3f71a0e55a192201d31edf074c5afeb8fff890b3d7713b89e",
+          "scopeSha256": "09d9e39ed59d9a5bbd57aabcc54f69e1d0a750e2356d5804b644afbe4e6e2fe8",
+          "requiredMarkerSha256": [
+            "14a7860c06d214eecfd0d1649b15329b8bbe111bc0a74303185f6bc7bc6b0c9e",
+            "1c5f2dfe936cdc4f1406e9aaca1f6a0576e04e3031a952a5785a3ba36342d1ad",
+            "5cc96f5f2911f0672a8476eacb32be349f7936dc63b4e76e23b8ad649b603b03",
+            "4286a7babadce54da0479eb8d68417a5a45da0c7a4cd05ecd1f81468e7c827c2"
+          ],
+          "excludedMarkerSha256": []
+        }
+      ],
+      "priorFrozenCapture": {
+        "routeIdentity": "exact-basin-selective-head-live-v0",
+        "sourceStateIdentity": {
+          "identity": "selective-head-live-frozen-source-state-v0",
+          "routeIdentity": "exact-basin-selective-head-live-v0",
+          "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0",
+          "sameStateAuthority": "same-state-selective-render-composition-v0",
+          "warmupAuthority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+          "warmupTarget": 96,
+          "capturePaused": true,
+          "simStepCount": 96,
+          "backend": "WebGPU:apple",
+          "warmupReceipt": {
+            "ok": true,
+            "authority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+            "completedSteps": 96,
+            "grid": 160,
+            "fluidUrl": "http://127.0.0.1:18537/fluid.f32",
+            "frontUrl": "http://127.0.0.1:18537/front.f32",
+            "fluidSha256": "d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1",
+            "frontSha256": "1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8",
+            "fluidByteLength": 262144000,
+            "frontByteLength": 16384000,
+            "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0"
+          }
+        },
+        "requested": {
+          "baseline": "0",
+          "treatment": "2",
+          "baselineUrlValue": "0",
+          "treatmentUrlValue": "2",
+          "baselineEffectiveValue": 0,
+          "treatmentEffectiveValue": 2,
+          "effectiveEqualsRequested": true
+        },
+        "appliedPasses": {
+          "splatApplied": true,
+          "raymarchApplied": true
+        },
+        "candidateCountDelta": 0,
+        "pixelDelta": {
+          "identity": "canvas-png-rgb24-pixel-delta-summary-v0",
+          "decoder": "ffmpeg-rgb24:ffmpeg",
+          "materialDeltaThreshold": "at-least-one-channel-differs-by-more-than-one-8-bit-level",
+          "materialChangedCompositionCount": 2,
+          "changedPixelRatioMean": 0.4285748266836446,
+          "meanAbsoluteChannelDeltaMean": 16.8730452685814,
+          "rootMeanSquareChannelDeltaMean": 26.399845270985008,
+          "nonblackPixelCountDeltaMean": 0
+        },
+        "changedCompositions": [
+          "smoke-raymarch-under-splats-v0",
+          "full-raymarch-under-splats-diagnostic-v0"
+        ],
+        "comparisonArtifact": {
+          "path": "artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-fire/tip-comparison.json",
+          "sha256": "14cf0fa80aaa97d0cf226a2bbb49e434f923701933255282f5380667bc06721d"
+        },
+        "sourceFieldHashes": [
+          {
+            "identity": "enumerated-ui-source-field-v0",
+            "sha256": "86b9d2bcc9c9dbffd87cdcec4d69e66841be969071f40b1190079b93d52f4e78",
+            "line": 1201,
+            "routeHydrated": true,
+            "listenedBySyncControls": true
+          },
+          {
+            "identity": "frozen-capture-comparison-artifact-v0",
+            "sha256": "14cf0fa80aaa97d0cf226a2bbb49e434f923701933255282f5380667bc06721d"
+          }
+        ],
+        "stageBPixelDelta": null,
+        "stageBPixelDeltaReason": "Stage B source cohort is immutable and no post-load control perturbation was permitted"
+      },
+      "fallback": null,
+      "postLoadMutation": null,
+      "falsifier": null
+    },
+    {
+      "control": "volume_boundary_splat_radius",
+      "requested": {
+        "requested": "0.98",
+        "effective": "0.98",
+        "requestedNumber": 0.98,
+        "effectiveNumber": 0.98,
+        "effectiveEqualsRequested": true
+      },
+      "sourceFieldHash": "2c3b995e90265ee1387e69ac54dc9df77b404d54a0f1634c52e5e4c2c8bd2021",
+      "stages": {
+        "raymarch": {
+          "coupling": "none",
+          "classification": "intentional-splat-only",
+          "ordinaryRouteReadsControl": false,
+          "livePostLoad": false
+        },
+        "candidate": {
+          "coupling": "none",
+          "classification": "post-admission-splat-control",
+          "livePostLoad": false,
+          "resourceIdentity": "sha256:995f195f0079108fd9de2b51c3e011fb758af4c0e3a594c2d24b9dcc5306e9f9"
+        },
+        "coefficients": {
+          "coupling": "declared-locked-but-bypassed",
+          "classification": "external-coefficient-route-bypasses-control",
+          "livePostLoad": false,
+          "resourceIdentity": "sha256:1526ace8d701790749f6037feda64f54c39be01688286360737b741154be705c"
+        },
+        "covariance": {
+          "coupling": "declared-locked-but-bypassed",
+          "classification": "descriptor-covariance-does-not-read-control",
+          "livePostLoad": false,
+          "resourceIdentity": "sha256:4cae2517538cf701ac97aad9382f4d150526de8c11e6513c3b98a82d4b5f0122"
+        },
+        "deposition": {
+          "coupling": "declared-locked-but-bypassed",
+          "classification": "five-tap-bilinear-route-bypasses-control",
+          "livePostLoad": false,
+          "depositionIdentity": "flow-tangent-five-tap-bilinear-v0"
+        },
+        "presentation": {
+          "coupling": "declared-locked-but-bypassed",
+          "classification": "Stage-B-optical-presentation-bypasses-control",
+          "livePostLoad": false,
+          "presentationIdentity": "raymarch-matched-exponential-power-grade-v0"
+        }
+      },
+      "evidence": [
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_boundary_splat_radius",
+          "stage": "route-ingress",
+          "path": "index.html",
+          "line": 11887,
+          "startMarkerSha256": "a418bb50d02a4da6ec04dd5615e869042e0bffd39b5b1cc38f6219e13c02e5e1",
+          "endMarkerSha256": null,
+          "scopeSha256": "a418bb50d02a4da6ec04dd5615e869042e0bffd39b5b1cc38f6219e13c02e5e1",
+          "requiredMarkerSha256": [
+            "a418bb50d02a4da6ec04dd5615e869042e0bffd39b5b1cc38f6219e13c02e5e1"
+          ],
+          "excludedMarkerSha256": []
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_boundary_splat_radius",
+          "stage": "gpu-upload",
+          "path": "volume-core.js",
+          "line": 10093,
+          "startMarkerSha256": "b2c7783e5f202fffc010049ad05704956e712e0e004f2b9765c4e76c6157d967",
+          "endMarkerSha256": "39122f9c8e8f1935ba96bef94bcff4ac9b2d03e7c7afaf941c43baa2d4c55b1c",
+          "scopeSha256": "17e483c75574a1c20397d62583893b270989b64a4fea426da51cfcc82bfa5bc6",
+          "requiredMarkerSha256": [
+            "912b866f869161717ac10f13590853c0970948b3625cb9da3af0341212e216d9",
+            "39122f9c8e8f1935ba96bef94bcff4ac9b2d03e7c7afaf941c43baa2d4c55b1c"
+          ],
+          "excludedMarkerSha256": []
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_boundary_splat_radius",
+          "stage": "raymarch",
+          "path": "volume-core.js",
+          "line": 1420,
+          "startMarkerSha256": "a12ba6730f8df316bd0cfdeab4a2d7638fea49bf64f5789b1a88ab2d14e751e8",
+          "endMarkerSha256": "cea783cb1b4c0c350fad7a404e9d6a83ecf3d5c9faee8e1cf5cb12649fb02d2e",
+          "scopeSha256": "aca2a8072d9044e76e7fba16ac690c6f85f493ddd186d8e72e00edfee5faef37",
+          "requiredMarkerSha256": [],
+          "excludedMarkerSha256": [
+            "943ac20ddb49de42981e1f31d96e1838b332a3938829d248489011fa058ebd0d"
+          ]
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_boundary_splat_radius",
+          "stage": "candidate",
+          "path": "volume-core.js",
+          "line": 6261,
+          "startMarkerSha256": "a2af0b22cf22463634f5977994eb1aa452aba91db95ff6f3888e58999464d817",
+          "endMarkerSha256": "f4fd31ec85505ea9e951903ccfa5f9f067e705ff9debfa2eef62ba58ab921e6e",
+          "scopeSha256": "1b1cf890d372bd5b0abb12ecd7db5a8f6ed3a76737d84c52d492db3e057b3016",
+          "requiredMarkerSha256": [],
+          "excludedMarkerSha256": [
+            "943ac20ddb49de42981e1f31d96e1838b332a3938829d248489011fa058ebd0d"
+          ]
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_boundary_splat_radius",
+          "stage": "coefficients",
+          "path": "volume-core.js",
+          "line": 6474,
+          "startMarkerSha256": "d68ecbcb33d2618f972711d6780f24c096f943c8b08b9bfcd93bf537eb275217",
+          "endMarkerSha256": "e6cd26d17f2a69ab2012a87a5ea01b114073c9596507c67aa2611baeb59f9d02",
+          "scopeSha256": "29ad0f1856e9de3b8ec009e231c7f70c56534caee3567280ddfa54be1db10653",
+          "requiredMarkerSha256": [
+            "1c8105f62f21d80eb9a891696a6f3e34b673115d3dd4d8d2294fd5fd81ce530f",
+            "29d76d9402f03f02b4a0dd5189cbb0b4cddba4d8fcd6cef6b8db2f7fa2583018"
+          ],
+          "excludedMarkerSha256": [
+            "943ac20ddb49de42981e1f31d96e1838b332a3938829d248489011fa058ebd0d"
+          ]
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_boundary_splat_radius",
+          "stage": "covariance",
+          "path": "volume-core.js",
+          "line": 6161,
+          "startMarkerSha256": "8fdb34cfe49d7ed3ce4e715122f15f358d5b06d05b1181670e2de2bb93d9b863",
+          "endMarkerSha256": "d6bfcd783f562303d4abc7b3922272d4b336f53eb49c5eb5ae189adefca4cacb",
+          "scopeSha256": "2140afbe468062dd9c49166f805ba735d109b1b7f3fdd74284fd818161331643",
+          "requiredMarkerSha256": [
+            "4cf2b24a335fc0d67d22f48cf4f75764e1b68b9bea2ba6826f7a82128b58e7e3",
+            "d632a8604321486afb1a7fdfdd51650d5f54e13545d12bb424755bd88697531f"
+          ],
+          "excludedMarkerSha256": [
+            "943ac20ddb49de42981e1f31d96e1838b332a3938829d248489011fa058ebd0d"
+          ]
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_boundary_splat_radius",
+          "stage": "deposition",
+          "path": "volume-core.js",
+          "line": 6474,
+          "startMarkerSha256": "d68ecbcb33d2618f972711d6780f24c096f943c8b08b9bfcd93bf537eb275217",
+          "endMarkerSha256": "d8517f952648a91328a917d133780b8c4c23d2fa713e1bf703858fc7a216b8c8",
+          "scopeSha256": "dec47a651be888a5f31114c17f9420a75f38a2b500c9acc9ca5e1055745edfa5",
+          "requiredMarkerSha256": [
+            "2d02b54291e822e80fd844223aec9e3ea92fc3809f7c6b9d8f3af744ec4ca106",
+            "08f9a069f8f8e3ce372b56b4c94dd0ab8d1e293bd855cbc11ac3e9f19b9d2111",
+            "3df3d9d4a53755f17f7c4761818482c933f1ffec4c5442e578c30cc1b63ff518",
+            "cc93b70aeb933237045a60126b5696face29eaecbad30c8b66bf86ae9aaa3b58"
+          ],
+          "excludedMarkerSha256": [
+            "943ac20ddb49de42981e1f31d96e1838b332a3938829d248489011fa058ebd0d",
+            "62c4dc971ad9530c9c561735461106d893b2b0ac792935eeef41d33207265883",
+            "d4092d6f420d8b67884557d83f32025c12cab7f78989b4fbc019e98119c8dcd3"
+          ]
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_boundary_splat_radius",
+          "stage": "presentation",
+          "path": "volume-core.js",
+          "line": 6590,
+          "startMarkerSha256": "209833f0d5855470133b88bd9ea5b1825b55ab8a15c39febb44665ccd1d50ce6",
+          "endMarkerSha256": "e1d2f5b51e5b41c3f71a0e55a192201d31edf074c5afeb8fff890b3d7713b89e",
+          "scopeSha256": "09d9e39ed59d9a5bbd57aabcc54f69e1d0a750e2356d5804b644afbe4e6e2fe8",
+          "requiredMarkerSha256": [
+            "14a7860c06d214eecfd0d1649b15329b8bbe111bc0a74303185f6bc7bc6b0c9e",
+            "1c5f2dfe936cdc4f1406e9aaca1f6a0576e04e3031a952a5785a3ba36342d1ad",
+            "5cc96f5f2911f0672a8476eacb32be349f7936dc63b4e76e23b8ad649b603b03",
+            "4286a7babadce54da0479eb8d68417a5a45da0c7a4cd05ecd1f81468e7c827c2"
+          ],
+          "excludedMarkerSha256": [
+            "943ac20ddb49de42981e1f31d96e1838b332a3938829d248489011fa058ebd0d"
+          ]
+        }
+      ],
+      "priorFrozenCapture": {
+        "routeIdentity": "exact-basin-selective-head-live-v0",
+        "sourceStateIdentity": {
+          "identity": "selective-head-live-frozen-source-state-v0",
+          "routeIdentity": "exact-basin-selective-head-live-v0",
+          "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0",
+          "sameStateAuthority": "same-state-selective-render-composition-v0",
+          "warmupAuthority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+          "warmupTarget": 96,
+          "capturePaused": true,
+          "simStepCount": 96,
+          "backend": "WebGPU:apple",
+          "warmupReceipt": {
+            "ok": true,
+            "authority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+            "completedSteps": 96,
+            "grid": 160,
+            "fluidUrl": "http://127.0.0.1:18537/fluid.f32",
+            "frontUrl": "http://127.0.0.1:18537/front.f32",
+            "fluidSha256": "d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1",
+            "frontSha256": "1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8",
+            "fluidByteLength": 262144000,
+            "frontByteLength": 16384000,
+            "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0"
+          }
+        },
+        "requested": {
+          "baseline": "0.35",
+          "treatment": "1.5",
+          "baselineUrlValue": "0.35",
+          "treatmentUrlValue": "1.5",
+          "baselineEffectiveValue": 0.35,
+          "treatmentEffectiveValue": 1.5,
+          "effectiveEqualsRequested": true
+        },
+        "appliedPasses": {
+          "splatApplied": true,
+          "raymarchApplied": true
+        },
+        "candidateCountDelta": 0,
+        "pixelDelta": {
+          "identity": "canvas-png-rgb24-pixel-delta-summary-v0",
+          "decoder": "ffmpeg-rgb24:ffmpeg",
+          "materialDeltaThreshold": "at-least-one-channel-differs-by-more-than-one-8-bit-level",
+          "materialChangedCompositionCount": 3,
+          "changedPixelRatioMean": 0.33175173316355405,
+          "meanAbsoluteChannelDeltaMean": 17.391779410724393,
+          "rootMeanSquareChannelDeltaMean": 41.88865690818745,
+          "nonblackPixelCountDeltaMean": 0
+        },
+        "changedCompositions": [
+          "splat-only-v0",
+          "smoke-raymarch-under-splats-v0",
+          "full-raymarch-under-splats-diagnostic-v0"
+        ],
+        "comparisonArtifact": {
+          "path": "artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-splat-geometry/radius-comparison.json",
+          "sha256": "a5857ecf4ecca58052af6480be410d7237a58ade4ca7a226d34bdaaf893b0678"
+        },
+        "sourceFieldHashes": [
+          {
+            "identity": "enumerated-ui-source-field-v0",
+            "sha256": "8eaa6919e324c6f96f28466110c514b9dbbaa0466b9438b5ece9c983f86c7af9",
+            "line": 1164,
+            "routeHydrated": true,
+            "listenedBySyncControls": true
+          },
+          {
+            "identity": "frozen-capture-comparison-artifact-v0",
+            "sha256": "a5857ecf4ecca58052af6480be410d7237a58ade4ca7a226d34bdaaf893b0678"
+          }
+        ],
+        "stageBPixelDelta": null,
+        "stageBPixelDeltaReason": "Stage B source cohort is immutable and no post-load control perturbation was permitted"
+      },
+      "fallback": null,
+      "postLoadMutation": null,
+      "falsifier": {
+        "identity": "Stage-B-requested-effective-downstream-bypass-falsifier-v0",
+        "tripped": true,
+        "catches": "requested-effective-and-gpu-upload-survive-while-stage-b-consumer-bypasses-control",
+        "receiptSurvives": true,
+        "normalizationSurvives": true,
+        "gpuUniformUploadSurvives": true,
+        "downstreamStageBUse": false
+      }
+    },
+    {
+      "control": "volume_boundary_splat_sharpness",
+      "requested": {
+        "requested": "12",
+        "effective": "12",
+        "requestedNumber": 12,
+        "effectiveNumber": 12,
+        "effectiveEqualsRequested": true
+      },
+      "sourceFieldHash": "d88bbf05a7d1ce174844b4104c9969cffb459ccf2b7661682e165fe3c5ea87d4",
+      "stages": {
+        "raymarch": {
+          "coupling": "none",
+          "classification": "intentional-splat-only",
+          "ordinaryRouteReadsControl": false,
+          "livePostLoad": false
+        },
+        "candidate": {
+          "coupling": "none",
+          "classification": "post-admission-splat-control",
+          "livePostLoad": false,
+          "resourceIdentity": "sha256:995f195f0079108fd9de2b51c3e011fb758af4c0e3a594c2d24b9dcc5306e9f9"
+        },
+        "coefficients": {
+          "coupling": "declared-locked-but-bypassed",
+          "classification": "external-coefficient-route-bypasses-control",
+          "livePostLoad": false,
+          "resourceIdentity": "sha256:1526ace8d701790749f6037feda64f54c39be01688286360737b741154be705c"
+        },
+        "covariance": {
+          "coupling": "declared-locked-but-bypassed",
+          "classification": "descriptor-covariance-does-not-read-control",
+          "livePostLoad": false,
+          "resourceIdentity": "sha256:4cae2517538cf701ac97aad9382f4d150526de8c11e6513c3b98a82d4b5f0122"
+        },
+        "deposition": {
+          "coupling": "declared-locked-but-bypassed",
+          "classification": "five-tap-bilinear-route-bypasses-control",
+          "livePostLoad": false,
+          "depositionIdentity": "flow-tangent-five-tap-bilinear-v0"
+        },
+        "presentation": {
+          "coupling": "declared-locked-but-bypassed",
+          "classification": "Stage-B-optical-presentation-bypasses-control",
+          "livePostLoad": false,
+          "presentationIdentity": "raymarch-matched-exponential-power-grade-v0"
+        }
+      },
+      "evidence": [
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_boundary_splat_sharpness",
+          "stage": "route-ingress",
+          "path": "index.html",
+          "line": 11888,
+          "startMarkerSha256": "275927091b217b0dd9ac57f17d4810c93dfd0b31346efea21655ccbd7e4cc9e9",
+          "endMarkerSha256": null,
+          "scopeSha256": "275927091b217b0dd9ac57f17d4810c93dfd0b31346efea21655ccbd7e4cc9e9",
+          "requiredMarkerSha256": [
+            "275927091b217b0dd9ac57f17d4810c93dfd0b31346efea21655ccbd7e4cc9e9"
+          ],
+          "excludedMarkerSha256": []
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_boundary_splat_sharpness",
+          "stage": "gpu-upload",
+          "path": "volume-core.js",
+          "line": 10093,
+          "startMarkerSha256": "b2c7783e5f202fffc010049ad05704956e712e0e004f2b9765c4e76c6157d967",
+          "endMarkerSha256": "39122f9c8e8f1935ba96bef94bcff4ac9b2d03e7c7afaf941c43baa2d4c55b1c",
+          "scopeSha256": "17e483c75574a1c20397d62583893b270989b64a4fea426da51cfcc82bfa5bc6",
+          "requiredMarkerSha256": [
+            "214208a23ea33a7fd2a47d6a1d12e55c84f1235c0937fb702ae8823ed4ed21f3",
+            "39122f9c8e8f1935ba96bef94bcff4ac9b2d03e7c7afaf941c43baa2d4c55b1c"
+          ],
+          "excludedMarkerSha256": []
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_boundary_splat_sharpness",
+          "stage": "raymarch",
+          "path": "volume-core.js",
+          "line": 1420,
+          "startMarkerSha256": "a12ba6730f8df316bd0cfdeab4a2d7638fea49bf64f5789b1a88ab2d14e751e8",
+          "endMarkerSha256": "cea783cb1b4c0c350fad7a404e9d6a83ecf3d5c9faee8e1cf5cb12649fb02d2e",
+          "scopeSha256": "aca2a8072d9044e76e7fba16ac690c6f85f493ddd186d8e72e00edfee5faef37",
+          "requiredMarkerSha256": [],
+          "excludedMarkerSha256": [
+            "9df3818369e858363d0731e2e3d4fa8e34f02ce7488edb62f41e91085f53b7d7"
+          ]
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_boundary_splat_sharpness",
+          "stage": "candidate",
+          "path": "volume-core.js",
+          "line": 6261,
+          "startMarkerSha256": "a2af0b22cf22463634f5977994eb1aa452aba91db95ff6f3888e58999464d817",
+          "endMarkerSha256": "f4fd31ec85505ea9e951903ccfa5f9f067e705ff9debfa2eef62ba58ab921e6e",
+          "scopeSha256": "1b1cf890d372bd5b0abb12ecd7db5a8f6ed3a76737d84c52d492db3e057b3016",
+          "requiredMarkerSha256": [],
+          "excludedMarkerSha256": [
+            "9df3818369e858363d0731e2e3d4fa8e34f02ce7488edb62f41e91085f53b7d7"
+          ]
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_boundary_splat_sharpness",
+          "stage": "coefficients",
+          "path": "volume-core.js",
+          "line": 6474,
+          "startMarkerSha256": "d68ecbcb33d2618f972711d6780f24c096f943c8b08b9bfcd93bf537eb275217",
+          "endMarkerSha256": "e6cd26d17f2a69ab2012a87a5ea01b114073c9596507c67aa2611baeb59f9d02",
+          "scopeSha256": "29ad0f1856e9de3b8ec009e231c7f70c56534caee3567280ddfa54be1db10653",
+          "requiredMarkerSha256": [
+            "1c8105f62f21d80eb9a891696a6f3e34b673115d3dd4d8d2294fd5fd81ce530f",
+            "29d76d9402f03f02b4a0dd5189cbb0b4cddba4d8fcd6cef6b8db2f7fa2583018"
+          ],
+          "excludedMarkerSha256": [
+            "9df3818369e858363d0731e2e3d4fa8e34f02ce7488edb62f41e91085f53b7d7"
+          ]
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_boundary_splat_sharpness",
+          "stage": "covariance",
+          "path": "volume-core.js",
+          "line": 6161,
+          "startMarkerSha256": "8fdb34cfe49d7ed3ce4e715122f15f358d5b06d05b1181670e2de2bb93d9b863",
+          "endMarkerSha256": "d6bfcd783f562303d4abc7b3922272d4b336f53eb49c5eb5ae189adefca4cacb",
+          "scopeSha256": "2140afbe468062dd9c49166f805ba735d109b1b7f3fdd74284fd818161331643",
+          "requiredMarkerSha256": [
+            "4cf2b24a335fc0d67d22f48cf4f75764e1b68b9bea2ba6826f7a82128b58e7e3",
+            "d632a8604321486afb1a7fdfdd51650d5f54e13545d12bb424755bd88697531f"
+          ],
+          "excludedMarkerSha256": [
+            "9df3818369e858363d0731e2e3d4fa8e34f02ce7488edb62f41e91085f53b7d7"
+          ]
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_boundary_splat_sharpness",
+          "stage": "deposition",
+          "path": "volume-core.js",
+          "line": 6474,
+          "startMarkerSha256": "d68ecbcb33d2618f972711d6780f24c096f943c8b08b9bfcd93bf537eb275217",
+          "endMarkerSha256": "d8517f952648a91328a917d133780b8c4c23d2fa713e1bf703858fc7a216b8c8",
+          "scopeSha256": "dec47a651be888a5f31114c17f9420a75f38a2b500c9acc9ca5e1055745edfa5",
+          "requiredMarkerSha256": [
+            "2d02b54291e822e80fd844223aec9e3ea92fc3809f7c6b9d8f3af744ec4ca106",
+            "08f9a069f8f8e3ce372b56b4c94dd0ab8d1e293bd855cbc11ac3e9f19b9d2111",
+            "3df3d9d4a53755f17f7c4761818482c933f1ffec4c5442e578c30cc1b63ff518",
+            "cc93b70aeb933237045a60126b5696face29eaecbad30c8b66bf86ae9aaa3b58"
+          ],
+          "excludedMarkerSha256": [
+            "9df3818369e858363d0731e2e3d4fa8e34f02ce7488edb62f41e91085f53b7d7",
+            "62c4dc971ad9530c9c561735461106d893b2b0ac792935eeef41d33207265883",
+            "d4092d6f420d8b67884557d83f32025c12cab7f78989b4fbc019e98119c8dcd3"
+          ]
+        },
+        {
+          "identity": "revision-bound-source-scope-evidence-v0",
+          "control": "volume_boundary_splat_sharpness",
+          "stage": "presentation",
+          "path": "volume-core.js",
+          "line": 6590,
+          "startMarkerSha256": "209833f0d5855470133b88bd9ea5b1825b55ab8a15c39febb44665ccd1d50ce6",
+          "endMarkerSha256": "e1d2f5b51e5b41c3f71a0e55a192201d31edf074c5afeb8fff890b3d7713b89e",
+          "scopeSha256": "09d9e39ed59d9a5bbd57aabcc54f69e1d0a750e2356d5804b644afbe4e6e2fe8",
+          "requiredMarkerSha256": [
+            "14a7860c06d214eecfd0d1649b15329b8bbe111bc0a74303185f6bc7bc6b0c9e",
+            "1c5f2dfe936cdc4f1406e9aaca1f6a0576e04e3031a952a5785a3ba36342d1ad",
+            "5cc96f5f2911f0672a8476eacb32be349f7936dc63b4e76e23b8ad649b603b03",
+            "4286a7babadce54da0479eb8d68417a5a45da0c7a4cd05ecd1f81468e7c827c2"
+          ],
+          "excludedMarkerSha256": [
+            "9df3818369e858363d0731e2e3d4fa8e34f02ce7488edb62f41e91085f53b7d7"
+          ]
+        }
+      ],
+      "priorFrozenCapture": {
+        "routeIdentity": "exact-basin-selective-head-live-v0",
+        "sourceStateIdentity": {
+          "identity": "selective-head-live-frozen-source-state-v0",
+          "routeIdentity": "exact-basin-selective-head-live-v0",
+          "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0",
+          "sameStateAuthority": "same-state-selective-render-composition-v0",
+          "warmupAuthority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+          "warmupTarget": 96,
+          "capturePaused": true,
+          "simStepCount": 96,
+          "backend": "WebGPU:apple",
+          "warmupReceipt": {
+            "ok": true,
+            "authority": "checksum-bound-exact-basin-step96-field-anchor-v0",
+            "completedSteps": 96,
+            "grid": 160,
+            "fluidUrl": "http://127.0.0.1:18537/fluid.f32",
+            "frontUrl": "http://127.0.0.1:18537/front.f32",
+            "fluidSha256": "d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1",
+            "frontSha256": "1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8",
+            "fluidByteLength": 262144000,
+            "frontByteLength": 16384000,
+            "modelIdentity": "exact-basin-selective-carrier-heads-160-to-128-v0"
+          }
+        },
+        "requested": {
+          "baseline": "1",
+          "treatment": "12",
+          "baselineUrlValue": "1",
+          "treatmentUrlValue": "12",
+          "baselineEffectiveValue": 1,
+          "treatmentEffectiveValue": 12,
+          "effectiveEqualsRequested": true
+        },
+        "appliedPasses": {
+          "splatApplied": true,
+          "raymarchApplied": true
+        },
+        "candidateCountDelta": 0,
+        "pixelDelta": {
+          "identity": "canvas-png-rgb24-pixel-delta-summary-v0",
+          "decoder": "ffmpeg-rgb24:ffmpeg",
+          "materialDeltaThreshold": "at-least-one-channel-differs-by-more-than-one-8-bit-level",
+          "materialChangedCompositionCount": 3,
+          "changedPixelRatioMean": 0.277277606819468,
+          "meanAbsoluteChannelDeltaMean": 9.079333203640822,
+          "rootMeanSquareChannelDeltaMean": 24.395606260025474,
+          "nonblackPixelCountDeltaMean": 0
+        },
+        "changedCompositions": [
+          "splat-only-v0",
+          "smoke-raymarch-under-splats-v0",
+          "full-raymarch-under-splats-diagnostic-v0"
+        ],
+        "comparisonArtifact": {
+          "path": "artifacts/pyro-control-path-parity-audit/browser-gpu-frozen-capture-splat-geometry/sharpness-comparison.json",
+          "sha256": "117221ced184f01c0b740de4b8a8aa4ebe5adb6da2607e307a7505820e277af7"
+        },
+        "sourceFieldHashes": [
+          {
+            "identity": "enumerated-ui-source-field-v0",
+            "sha256": "eb3b1de889a215c95b802069f8f69f2b7501e3ced7348dddc6722d5756a54593",
+            "line": 1169,
+            "routeHydrated": true,
+            "listenedBySyncControls": true
+          },
+          {
+            "identity": "frozen-capture-comparison-artifact-v0",
+            "sha256": "117221ced184f01c0b740de4b8a8aa4ebe5adb6da2607e307a7505820e277af7"
+          }
+        ],
+        "stageBPixelDelta": null,
+        "stageBPixelDeltaReason": "Stage B source cohort is immutable and no post-load control perturbation was permitted"
+      },
+      "fallback": null,
+      "postLoadMutation": null,
+      "falsifier": {
+        "identity": "Stage-B-requested-effective-downstream-bypass-falsifier-v0",
+        "tripped": true,
+        "catches": "requested-effective-and-gpu-upload-survive-while-stage-b-consumer-bypasses-control",
+        "receiptSurvives": true,
+        "normalizationSurvives": true,
+        "gpuUniformUploadSurvives": true,
+        "downstreamStageBUse": false
+      }
+    }
+  ],
+  "materialFindings": [
+    {
+      "id": "stage-b-radius-sharpness-bypass",
+      "severity": "material-hidden-coupling-loss",
+      "claim": "radius and sharpness survive request/effective receipts and GPU upload but are not consumed by the five-tap bilinear Stage B coefficient, deposition, optical, or presentation path",
+      "consequence": "ordinary splat pixel deltas do not establish radius/sharpness control over the provisional Stage B treatment"
+    },
+    {
+      "id": "stage-b-covariance-lock-does-not-prove-covariance-consumption",
+      "severity": "material-evidence-scope-warning",
+      "claim": "the manifest locks covariance, but five-tap deposition reads tangentCoherence and sidecar fields rather than covarianceA or covarianceB",
+      "consequence": "covariance identity is cohort provenance, not proof that Stage B deposition consumes covariance terms"
+    }
+  ],
+  "provisionalDiagnosticGate": {
+    "exhaustiveParityRequired": false,
+    "currentDiagnosticMayProceed": true,
+    "authority": "producer-evidence-unverified/operator-exploration-only",
+    "integrationConstraint": "do not interpret ordinary splat radius/sharpness witnesses as Stage B treatment coupling"
+  }
+}
